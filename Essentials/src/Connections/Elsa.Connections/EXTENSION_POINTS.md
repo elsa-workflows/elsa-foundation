@@ -29,6 +29,11 @@ Use `services.AddConnections()` to register defaults, then replace these service
   - A create's rollback deletes its row only at the version it added it at, so a connection saved since is kept.
     A row that another request deleted and a second create re-added, still unsaved, is at that same version and
     can be deleted; that second create's save then fails with 409 and rolls itself back (#2855 item 2.1).
+  - A create's or update's rollback keeps an owned secret a stored connection still references, but that check only
+    protects a commit the next read can see. When a durable store fails with the commit's outcome unknown and the
+    commit is not yet visible, the rollback can delete a secret the committed row uses, so the connection fails to
+    resolve that credential. Retrying the create or update with the inline value writes the secret again. The
+    in-memory repository commits visibly or not at all; the durable repository is tracked in #2854.
   - A custom `ISecretAuditSink` that throws after Secrets committed a write makes that write look failed: it is
     reported as not written (500), or as a false 409 when the failure reads as a concurrent change (#3153).
   - A secret with no active version (revoked or expired) is rotated without an expected version, and Secrets has

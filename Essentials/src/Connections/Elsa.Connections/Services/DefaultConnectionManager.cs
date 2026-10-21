@@ -14,8 +14,12 @@ namespace Elsa.Connections.Services;
 /// <list type="bullet">
 /// <item>
 /// <description>
-/// Create and Update validate the request, then ask the permission gate, then write. Create adds the connection row,
-/// writes the owned secrets and saves the row.
+/// Create and Update check the request's shape, then ask the permission gate, then run the checks that read secrets,
+/// then write. Before the gate, Create checks the name, owner, type, scheme, settings and credential sources. Update
+/// first reads the stored connection (a missing one returns null) and checks its type and scheme, then the request's
+/// settings, against that type, and its credential sources. After the gate come the bind-secret gate, whether each
+/// referenced secret is available, and whether an existing secret holds a managed credential name. Create adds the
+/// connection row, writes the owned secrets and saves the row.
 /// </description>
 /// </item>
 /// <item>
@@ -83,7 +87,7 @@ internal sealed class DefaultConnectionManager(
         }
         catch (Exception exception) when (IsStoreFault(exception))
         {
-            throw PreSaveFailure(ConnectionName.Normalize(request.Name), "created", exception);
+            throw PreSaveFailure(ConnectionName.Normalize(request.Name), "create", exception);
         }
     }
 
@@ -99,8 +103,8 @@ internal sealed class DefaultConnectionManager(
         if (schemes.Find(request.AuthScheme) is null)
             throw new ArgumentException($"Unknown authentication scheme '{request.AuthScheme}'.", nameof(request));
         ValidateSettings(type, request.Settings);
-        await permissionGate.EnsureManageAsync(tenantId, cancellationToken);
         ValidateCredentialSources(request.SecretFields);
+        await permissionGate.EnsureManageAsync(tenantId, cancellationToken);
         await EnsureBindSecretAsync(tenantId, request.SecretFields, cancellationToken);
         await ValidateExistingSecretReferencesAsync(tenantId, request.SecretFields, cancellationToken);
 
@@ -218,13 +222,15 @@ internal sealed class DefaultConnectionManager(
         }
         catch (ConnectionCredentialWriteException failure)
         {
-            logger.LogError(failure.InnerException, "{Failure}", failure.Message);
+            logger.LogError(failure.InnerException,
+                "Could not finish updating connection '{ConnectionName}': credential fields {FieldNames} failed after the update was saved.",
+                failure.ConnectionName, failure.FieldNames);
             throw;
         }
         catch (Exception exception) when (IsStoreFault(exception))
         {
             // Nothing after the save escapes raw (the post-save steps throw only the exceptions excluded here), so this is a pre-save failure.
-            throw PreSaveFailure(ConnectionName.Normalize(name), "updated", exception);
+            throw PreSaveFailure(ConnectionName.Normalize(name), "update", exception);
         }
     }
 
@@ -239,16 +245,19 @@ internal sealed class DefaultConnectionManager(
             or NullReferenceException or InvalidCastException or NotImplementedException or NotSupportedException
             or ObjectDisposedException);
 
-    private ConnectionStoreException PreSaveFailure(string connectionName, string verb, Exception exception)
+    /// <param name="operation"><c>create</c> or <c>update</c>.</param>
+    private ConnectionStoreException PreSaveFailure(string connectionName, string operation, Exception exception)
     {
-        var failure = new ConnectionStoreException(
+        var retryable = exception is not SecretStoreConfigurationException;
+        logger.LogError(exception,
+            "Could not {Operation} connection '{ConnectionName}': a store failed before the change was confirmed saved. Retryable: {Retryable}.",
+            operation, connectionName, retryable);
+        return new ConnectionStoreException(
             connectionName,
-            exception is SecretStoreConfigurationException
-                ? $"Connection '{connectionName}' was not {verb}: the secret store cannot hold its credentials as configured. Retrying will not help; the secret store configuration must be fixed."
-                : $"Connection '{connectionName}' may not have been {verb}: the connection or secret store failed before the change was confirmed saved. Retry; if the retry reports a credential secret name as taken, use a different connection name or bind an existing secret.",
+            retryable
+                ? $"Connection '{connectionName}' may not have been {operation}d: the connection or secret store failed before the change was confirmed saved. Retry; if the retry reports a credential secret name as taken, use a different connection name or bind an existing secret."
+                : $"Connection '{connectionName}' was not {operation}d: the secret store cannot hold its credentials as configured. Retrying will not help; the secret store configuration must be fixed.",
             exception);
-        logger.LogError(exception, "{Failure}", failure.Message);
-        return failure;
     }
 
     private async ValueTask<ConnectionMetadata?> UpdateCoreAsync(string tenantId, string name, UpdateConnectionRequest request, CancellationToken cancellationToken)
@@ -261,6 +270,10 @@ internal sealed class DefaultConnectionManager(
             ?? throw new ArgumentException($"Unknown connection type '{document.Definition.TypeName}'.", nameof(request));
         if (schemes.Find(document.Definition.AuthScheme) is null)
             throw new ArgumentException($"Unknown authentication scheme '{document.Definition.AuthScheme}'.", nameof(request));
+        if (request.Settings is not null)
+            ValidateSettings(type, request.Settings);
+        if (request.SecretFields is not null)
+            ValidateCredentialSources(request.SecretFields);
 
         await permissionGate.EnsureManageAsync(tenantId, cancellationToken);
 
@@ -271,7 +284,6 @@ internal sealed class DefaultConnectionManager(
             document.Definition.DisplayName = request.DisplayName.Trim();
         if (request.Settings is not null)
         {
-            ValidateSettings(type, request.Settings);
             if (RetargetsBoundCredential(document, request.Settings))
                 await permissionGate.EnsureBindSecretAsync(tenantId, cancellationToken);
             document.Definition.Settings = new Dictionary<string, string>(request.Settings, StringComparer.OrdinalIgnoreCase);
@@ -284,7 +296,6 @@ internal sealed class DefaultConnectionManager(
         {
             if (request.SecretFields is not null)
             {
-                ValidateCredentialSources(request.SecretFields);
                 await EnsureBindSecretAsync(tenantId, request.SecretFields, cancellationToken);
                 await ValidateExistingSecretReferencesAsync(tenantId, request.SecretFields, cancellationToken);
                 previousSecretFields = document.Definition.SecretFields;
@@ -323,7 +334,9 @@ internal sealed class DefaultConnectionManager(
             catch (ConnectionCredentialWriteException cleanupFailure) when (rotationFailed)
             {
                 // The rotation failure is the one the caller needs to see; it must not be replaced by a cleanup failure.
-                logger.LogWarning(cleanupFailure.InnerException, "Not reported because a credential write failed first: {Failure}", cleanupFailure.Message);
+                logger.LogWarning(cleanupFailure.InnerException,
+                    "Could not delete the replaced secrets of connection '{ConnectionName}' credential fields {FieldNames}; not reported because a credential write failed first. They stay Active and unreferenced.",
+                    cleanupFailure.ConnectionName, cleanupFailure.FieldNames);
             }
         }
 

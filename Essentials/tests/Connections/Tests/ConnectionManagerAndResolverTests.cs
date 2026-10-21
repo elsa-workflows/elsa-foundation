@@ -739,7 +739,7 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
         Assert.Contains("will not help", failure.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("Retry;", failure.Message, StringComparison.Ordinal);
         Assert.Null(await _manager.FindAsync(Tenant, "misconfigured"));
-        AssertLoggedError(failure);
+        AssertLoggedError(failure, "create", retryable: false);
     }
 
     public static TheoryData<Exception> ProgrammerErrors() => new()
@@ -777,7 +777,7 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
         var failure = await Assert.ThrowsAsync<ConnectionStoreException>(() => CreateConnectionAsync("logged-create").AsTask());
 
         Assert.Same(outage, failure.InnerException);
-        AssertLoggedError(failure);
+        AssertLoggedError(failure, "create");
     }
 
     [Fact]
@@ -990,7 +990,7 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
         Assert.Equal(1, (await _secrets.FindAsync(Tenant, "connection:save-outage:token"))!.CurrentVersion);
         Assert.NotNull(await _secrets.FindAsync(Tenant, "connection:save-outage:secondary"));
         Assert.Null(await _secrets.FindAsync(Tenant, "connection:save-outage:extra"));
-        AssertLoggedError(failure);
+        AssertLoggedError(failure, "update");
     }
 
     [Fact]
@@ -1217,7 +1217,8 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
         Assert.Null(await _secrets.FindAsync(Tenant, "connection:cleanup-after-failure:second"));
         Assert.NotNull(await _secrets.FindAsync(Tenant, "connection:cleanup-after-failure:first"));
         // The swallowed cleanup failure leaves a trace, and the reported rotation failure is logged at Error.
-        Assert.Contains(_logger.Warnings, entry => entry.Exception == deleteFault && entry.Message.Contains("'first'"));
+        Assert.Contains(_logger.Warnings, entry => entry.Exception == deleteFault &&
+            entry.Fields.GetValueOrDefault("FieldNames") is IEnumerable<string> fields && fields.Contains("first"));
         AssertLoggedError(failure);
     }
 
@@ -1452,12 +1453,24 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     private ValueTask<ConnectionMetadata> CreateConnectionAsync(string name, IDictionary<string, ConnectionSecretFieldInput>? secretFields = null) =>
         _manager.CreateAsync(Tenant, BearerConnection(name, secretFields ?? new Dictionary<string, ConnectionSecretFieldInput>()));
 
-    /// <summary>Checks that the failure's inner exception was logged once at Error, with the failure's message.</summary>
-    private void AssertLoggedError(Exception failure)
+    /// <summary>Checks that the store's failure was logged once at Error, naming the operation and whether a retry can help.</summary>
+    private void AssertLoggedError(ConnectionStoreException failure, string operation, bool retryable = true)
+    {
+        var entry = AssertSingleError(failure, failure.ConnectionName);
+        Assert.Equal(operation, entry.Fields["Operation"]);
+        Assert.Equal(retryable, entry.Fields["Retryable"]);
+    }
+
+    /// <summary>Checks that the store's failure was logged once at Error, naming the credential fields.</summary>
+    private void AssertLoggedError(ConnectionCredentialWriteException failure) =>
+        Assert.Equal(failure.FieldNames, AssertSingleError(failure, failure.ConnectionName).Fields["FieldNames"]);
+
+    private LogEntry AssertSingleError(Exception failure, string connectionName)
     {
         var entry = Assert.Single(_logger.Entries, entry => entry.Level == LogLevel.Error);
         Assert.Same(failure.InnerException, entry.Exception);
-        Assert.Equal(failure.Message, entry.Message);
+        Assert.Equal(connectionName, entry.Fields["ConnectionName"]);
+        return entry;
     }
 
     /// <summary>Stands in for another request that deletes the connection and saves one of its own under the name.</summary>

@@ -6,8 +6,9 @@ using Xunit;
 namespace Elsa.Connections.Tests;
 
 /// <summary>
-/// The compare-and-swap contract of <see cref="IConnectionRepository.SaveAsync"/> and the expected-version
-/// <c>DeleteAsync</c> that the connection manager depends on. Every repository derives a test class from this one. Expected versions are read before each
+/// The add-at-own-version rule of <see cref="IConnectionRepository.TryAddAsync"/>, the compare-and-swap contract of
+/// <see cref="IConnectionRepository.SaveAsync"/> and the expected-version <c>DeleteAsync</c> that the connection manager
+/// depends on. Every repository derives a test class from this one. Expected versions are read before each
 /// save because a durable repository may write the new version back onto the document it was given.
 /// </summary>
 public abstract class ConnectionRepositoryContractTests(IConnectionRepository repository)
@@ -69,6 +70,18 @@ public abstract class ConnectionRepositoryContractTests(IConnectionRepository re
     }
 
     [Fact]
+    public async Task TryAddAsync_StoresTheDocumentAtItsOwnVersion()
+    {
+        var document = NewDocument();
+        var addedVersion = document.State.Version;
+
+        Assert.True(await repository.TryAddAsync(document));
+
+        Assert.True(await repository.DeleteAsync(Tenant, _name, addedVersion));
+        Assert.Null(await repository.FindAsync(Tenant, _name));
+    }
+
+    [Fact]
     public async Task DeleteAsync_AtAnOlderVersionKeepsTheDocumentSavedSince()
     {
         var loaded = await AddAndLoadAsync();
@@ -89,19 +102,21 @@ public abstract class ConnectionRepositoryContractTests(IConnectionRepository re
 
     private async Task<ConnectionDocument> AddAndLoadAsync()
     {
-        Assert.True(await repository.TryAddAsync(new ConnectionDocument
-        {
-            Definition = new ConnectionDefinition
-            {
-                TenantId = Tenant,
-                Name = _name,
-                DisplayName = _name,
-                TypeName = ConnectionTypeNames.Http,
-                AuthScheme = HttpAuthSchemes.Bearer
-            },
-            State = new ConnectionState { CreatedAt = DateTimeOffset.UnixEpoch }
-        }));
+        Assert.True(await repository.TryAddAsync(NewDocument()));
 
         return (await repository.FindAsync(Tenant, _name))!;
     }
+
+    private ConnectionDocument NewDocument() => new()
+    {
+        Definition = new ConnectionDefinition
+        {
+            TenantId = Tenant,
+            Name = _name,
+            DisplayName = _name,
+            TypeName = ConnectionTypeNames.Http,
+            AuthScheme = HttpAuthSchemes.Bearer
+        },
+        State = new ConnectionState { CreatedAt = DateTimeOffset.UnixEpoch }
+    };
 }

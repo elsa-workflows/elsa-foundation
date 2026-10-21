@@ -23,6 +23,13 @@ public interface IConnectionRepository
 
     ValueTask<IReadOnlyList<ConnectionDocument>> ListAsync(string tenantId, ConnectionQuery? query = null, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Adds the document when the tenant holds no connection under its name, and returns false, adding nothing, when it
+    /// does. The document is stored at its own <see cref="ConnectionState.Version"/>, unchanged, so a caller that read the
+    /// version before the add can delete the document with
+    /// <see cref="DeleteAsync(string, string, int, CancellationToken)"/> at that version. The manager rolls a failed create
+    /// back that way; a repository that bumped the version on insert would leave every failed create's row behind.
+    /// </summary>
     ValueTask<bool> TryAddAsync(ConnectionDocument document, CancellationToken cancellationToken = default);
 
     /// <summary>

@@ -6,9 +6,13 @@ namespace Elsa.Connections.Core.Contracts;
 /// <summary>
 /// Lifecycle facade for service connections. Runtime value resolution lives on <see cref="IConnectionResolver"/>.
 /// Every write member asks the permission gate before it writes anything, and the gate throws
-/// <see cref="ConnectionUnavailableException"/> when the caller is refused. Create and Update validate the request
-/// first, so an invalid request is an <see cref="ArgumentException"/> whatever the caller's permissions. Revoke,
-/// Delete and Test ask the gate first.
+/// <see cref="ConnectionUnavailableException"/> when the caller is refused. Create and Update check the request's
+/// shape before the gate, so a malformed request is an <see cref="ArgumentException"/> whatever the caller's
+/// permissions: Create checks the name, owner, type, scheme, settings and credential sources; Update reads the stored
+/// connection first (a missing one returns null), checks its type and scheme, then the request's settings, against
+/// that type, and its credential sources. The checks that read secrets (a referenced secret that is unavailable, an
+/// existing secret that holds a managed credential name) run after the gate, so a refused caller gets
+/// <see cref="ConnectionUnavailableException"/> for those. Revoke, Delete and Test ask the gate first.
 /// </summary>
 public interface IConnectionManager
 {

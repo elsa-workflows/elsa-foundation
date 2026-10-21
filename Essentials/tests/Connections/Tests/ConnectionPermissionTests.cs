@@ -264,6 +264,37 @@ public sealed class ConnectionPermissionTests
     }
 
     [Fact]
+    public async Task Create_WithInvalidCredentialSources_IsAnArgumentExceptionEvenWhenManageIsRefused()
+    {
+        await using var provider = CreateProvider(new RecordingGate { DenyManage = true });
+        await using var scope = provider.CreateAsyncScope();
+        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
+        var request = BearerRequest("invalid-source");
+        request.SecretFields = InvalidCredentialSources;
+
+        await Assert.ThrowsAsync<ArgumentException>(() => manager.CreateAsync(Tenant, request).AsTask());
+    }
+
+    [Theory]
+    [InlineData("credential sources")]
+    [InlineData("settings")]
+    public async Task Update_WithAnInvalidRequest_IsAnArgumentExceptionEvenWhenManageIsRefused(string invalidPart)
+    {
+        var gate = new RecordingGate();
+        await using var provider = CreateProvider(gate);
+        await using var scope = provider.CreateAsyncScope();
+        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
+        await manager.CreateAsync(Tenant, BearerRequest("update-invalid"));
+        gate.DenyManage = true;
+        var request = invalidPart == "settings"
+            // An http connection needs a base URL or allowed hosts.
+            ? new UpdateConnectionRequest { Settings = new Dictionary<string, string>() }
+            : new UpdateConnectionRequest { SecretFields = InvalidCredentialSources };
+
+        await Assert.ThrowsAsync<ArgumentException>(() => manager.UpdateAsync(Tenant, "update-invalid", request).AsTask());
+    }
+
+    [Fact]
     public async Task HttpContextGate_RefusesWhenThereIsNoPrincipal()
     {
         var authorization = new FakeAuthorization();
@@ -310,6 +341,11 @@ public sealed class ConnectionPermissionTests
         {
             [HttpConnectionSecretFields.Token] = new() { Value = "tok" }
         }
+    };
+
+    private static Dictionary<string, ConnectionSecretFieldInput> InvalidCredentialSources => new()
+    {
+        [HttpConnectionSecretFields.Token] = new() { SourceKind = "unknown-source", Value = "tok" }
     };
 
     private static ServiceProvider CreateProvider(RecordingGate gate, bool workflows = false) =>
