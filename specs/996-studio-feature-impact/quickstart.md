@@ -112,3 +112,7 @@ Before delivery, root owns exact-head diff review and the independent source/rev
 ## Root-approved baseline reuse
 
 For baseline observation only, root may reuse an owned normal composition after proving unchanged Feature Management module/styles and relevant host/API source against the approved baseline. Preserve the actual host build revision and unrelated differences rather than claiming an exact whole-application baseline. Use a fresh browser context and the staging/Reset/no-file-change observation above. Baseline Apply is optional; the new implementation's separate fresh-root Studio and Server reviewed Apply/correct-file proof remains required. See the bounded [research refinement](research.md#root-qa-refinement-reuse-source-proven-baseline-composition).
+
+## Recorded implementation qualification
+
+Root completed this sequence on integrated product6b287aec5. Module69, backend-preservation45 and architecture584 tests pass, with all prescribed local type/lint/build/restore/map commands independently retained. Actual private host proof and cleanup are recorded in `/Users/sipke/Documents/Codex/2026-10-19/studio-ux-audit/execution/3074-private-host-proof.md`. Baseline single/bulk receipts retain source-equivalent7fb Feature/API boundaries and actual2381/943 whole-host context; no baseline Apply is claimed. Read-only/409/complex graph and delayed-response cases remain rendered/service evidence. PR3155's final review/hosted CI and resulting-main proof remain separate open delivery gates.

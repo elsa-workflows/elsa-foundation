@@ -93,3 +93,7 @@ The integrated940 host run proved both reviewed requests changed only their sele
 Root read all five design artifacts against the approved specification, issue acceptance and source-readiness record. Independent planning R1 identified stale roots after a later cascade overwrites their requested state; the revised effective-root rule, independent setting provenance and exact A/B regression resolve that finding. Independent bounded R2 is clean. The validation guide now distinguishes baseline observation from the new review acceptance and preserves actual two-host Cancel/Apply proof.
 
 Approved for official task generation only. No product edit or implementation gate is complete. Root retains safe private Apply selection, integration, shared-machine qualification and final acceptance.
+
+## Implementation qualification
+
+The final product checkpoint was integrated with current main da9 at6b287aec5 and passed the prescribed serial affected-client, preservation, workspace, host, architecture and map gates. Actual private normal-host review/Cancel/correct-file Apply, completion/remount/focus/departure and cleanup are accepted with their source boundaries in the external `3074-private-host-proof.md`. The terminal spec status is included in PR3155 per the lifecycle rule; final exact-head review/CI and resulting-main qualification remain open in tasks.md. The existing parent inspector responsive defect is separately owned by #3154 and is not attributed to the new review dialog.

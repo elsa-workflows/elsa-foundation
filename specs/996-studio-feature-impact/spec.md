@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-21
 
-**Status**: In progress
+**Status**: Implemented
 
 **Input**: User description: "Show the exact target host and full cascade before applying feature administration changes."
 
