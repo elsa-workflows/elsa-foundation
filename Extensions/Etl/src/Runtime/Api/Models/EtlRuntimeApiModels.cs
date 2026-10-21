@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Elsa.Etl.Api;
 
 namespace Elsa.Etl.Runtime.Api.Models;
 
@@ -94,6 +95,11 @@ public interface IEtlRuntimeOperations
     Task<EtlRunPage<EtlRunSummaryView>> ListRunsAsync(EtlRunPageRequest request, CancellationToken cancellationToken);
     Task<EtlRunDetailView> GetRunAsync(EtlRunRequest request, CancellationToken cancellationToken);
     Task<EtlRunPage<EtlRunPartitionView>> ListPartitionsAsync(EtlRunPartitionsRequest request, CancellationToken cancellationToken);
-    Task<EtlRunPage<EtlRunConnectorPartitionView>> ListConnectorPartitionsAsync(EtlRunPartitionsRequest request, CancellationToken cancellationToken);
+    Task<EtlRunPage<EtlRunConnectorPartitionView>> ListConnectorPartitionsAsync(EtlRunPartitionsRequest request, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromException<EtlRunPage<EtlRunConnectorPartitionView>>(
+            new EtlApiException(503, "etl.provider-unavailable"));
+    }
     Task<EtlRunCancellationView> CancelAsync(EtlRunRequest request, CancellationToken cancellationToken);
 }
