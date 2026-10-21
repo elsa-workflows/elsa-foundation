@@ -113,9 +113,13 @@ The projection the state view endpoint returns; see [contracts/journal-and-permi
 
 ## Studio view model additions
 
-- `CompensationRecoveryState` adds `Retrying`, `ResolvedAbsent`, `ResolvedKept` and `NotUndone`.
+As shipped in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/compensationRuntime.ts` and `workflowTypes.ts`:
+
+- `CompensationRecoveryState` adds `Retrying` (a handler running again after a failed attempt), `ResolvedAbsent` and `ResolvedKept` (an entry an operator settled without running it, as effect absent or effect accepted) and `NotUndone` (an entry an abandoned recovery left as it was). A row carries no separate resolution field; the outcome is its recovery state.
 - `CompensationScopeRunPhase` adds `Abandoned`.
-- Each row gains `actions?: { retry?: { sourceActivityExecutionId, incidentId }, decisions?: { incidentId, codes } }` and `resolution?: { outcome, incidentId }`.
-- `CompensationScopeRuntime` gains `source: "journal" | "derived"`, `abandonment?` and `history: OperatorActionRecord[]`.
-- `OperatorActionRecord`: `{ kind: Retry | Resolve | Abandon, outcome?, actor, reason?, at, incidentId, planId, jobId }`.
-- `WorkflowInstanceDetails` gains `permissions?: { canManage: boolean; canInspectValues: boolean }`; absent means "cannot manage".
+- `CompensationRowRuntime` gains `entryId?` and `operationKey?` (when the row comes from the journal) and `actions?: CompensationRowActions`, present while the row waits for an operator.
+- `CompensationRowActions`: `{ incidentId, sourceActivityExecutionId?, decisions: string[], target: "handler" | "step" }`. `sourceActivityExecutionId` is the faulted activity a retry runs again; `target` says whether the wait is on a handler out of attempts or on a forward step with no handler. Studio shows the actions only when the run says the caller may manage it.
+- `CompensationRecoveryCause` gains `messageWithheld?`, set when the journal withheld the failure message (FR-415).
+- `CompensationScopeRuntime` gains `source?: "journal" | "derived"`, `journalUnavailable?: "StateCleared" | "Unavailable"` (why a derived view has no journal), `scopeLabel?` (for action labels), `enclosingScope?: CompensationScopeReference` (the scope that decides next if this one faults), `remaining?: Array<{ step, handlerNodeId? }>` (the steps still to undo, in recovery order) and `history?: CompensationOperatorHistoryEntry[]`. It has no abandonment field: an abandoned recovery is the `Abandoned` phase, and the journal's own `abandonment` stays in the `CompensationJournal` read model.
+- `CompensationOperatorHistoryEntry`: `{ incidentId, kind: "Retry" | "ResolvedAbsent" | "ResolvedKept" | "Abandoned" | "Decision", decision?, actor?, appliedAt?, reason?, step?, notApplied? }`, newest first, read from the incidents the actions resolved (OD14). `Retry` is an operator retry; `Decision` is any decision code other than the three compensation ones, carried in `decision`; `notApplied` marks a decision the scope never applied because it was cancelled first.
+- `WorkflowInstanceDetails` gains `permissions?: WorkflowInstancePermissions | null` (`{ canManage: boolean; canInspectValues: boolean }`); absent means "cannot manage".

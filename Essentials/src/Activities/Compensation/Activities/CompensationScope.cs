@@ -226,7 +226,7 @@ public sealed class CompensationScope : StructuralActivity,
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
         var navigator = Navigator(runtimeContext);
         var state = LoadState(runtimeContext);
-        var metadata = runtimeContext.SchedulerWorkItem.CommandMetadata;
+        var metadata = context.ChildSchedulingMetadata;
 
         if (!IsOwnChild(runtimeContext, metadata))
             return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
@@ -251,7 +251,7 @@ public sealed class CompensationScope : StructuralActivity,
         return ValueTask.FromResult(OnFault(
             RequireRuntimeContext(context.ParentContext),
             new ChildFault(context.FaultedChildActivityExecutionId, context.FaultedChildExecutableNodeId, context.FaultedChildIterationId,
-                context.IncidentId, context.FaultCode, context.FaultCategory)));
+                context.IncidentId, context.FaultCode, context.FaultCategory, context.ChildSchedulingMetadata)));
     }
 
     /// <summary>
@@ -265,15 +265,16 @@ public sealed class CompensationScope : StructuralActivity,
         return ValueTask.FromResult(OnFault(
             RequireRuntimeContext(context.ParentContext),
             new ChildFault(context.FaultedChildActivityExecutionId, context.FaultedChildExecutableNodeId, context.FaultedChildIterationId,
-                context.IncidentId, context.Fault.Code, context.Fault.Category)));
+                context.IncidentId, context.Fault.Code, context.Fault.Category, context.ChildSchedulingMetadata)));
     }
 
     /// <summary>
     /// A fault from inside a step or handler that is a Sequence or a loop, which do not handle their children's faults
     /// (spec 258 R-3). It is handled as a fault of that step or handler: the via child stands for it, and absorbing the
-    /// fault cancels the via child's subtree. The delivery's command metadata carries the via child's routing keys. An
-    /// operator retry of the faulted descendant runs again under the same via child, so a waiting scope tells the via
-    /// child's later outcome from a repeat delivery by the fault's incident, not by the via child's id.
+    /// fault cancels the via child's subtree. The callback carries the via child's committed scheduling provenance,
+    /// which supplies its routing keys independently of delivery metadata. An operator retry of the faulted descendant
+    /// runs again under the same via child, so a waiting scope tells the via child's later outcome from a repeat delivery
+    /// by the fault's incident, not by the via child's id.
     /// </summary>
     public ValueTask<RuntimeStructuralContinuation> OnDescendantFaultedAsync(ActivityDescendantFaultedContext context)
     {
@@ -281,14 +282,14 @@ public sealed class CompensationScope : StructuralActivity,
         return ValueTask.FromResult(OnFault(
             RequireRuntimeContext(context.ParentContext),
             new ChildFault(context.ViaChildActivityExecutionId, context.ViaChildExecutableNodeId, IterationId: null,
-                context.IncidentId, context.FaultCode, context.FaultCategory)));
+                context.IncidentId, context.FaultCode, context.FaultCategory, context.ViaChildSchedulingMetadata)));
     }
 
     private RuntimeStructuralContinuation OnFault(IRuntimeActivityExecutionContext runtimeContext, ChildFault fault)
     {
         var navigator = Navigator(runtimeContext);
         var state = LoadState(runtimeContext);
-        var metadata = runtimeContext.SchedulerWorkItem.CommandMetadata;
+        var metadata = fault.SchedulingMetadata;
 
         // Any fault the scope does not own stays a blocking incident; the run's incident strategy decides.
         if (!IsOwnChild(runtimeContext, metadata))
@@ -1127,5 +1128,12 @@ public sealed class CompensationScope : StructuralActivity,
         ?? throw new CompensationScopeExecutionException("Compensation scope requires an Elsa runtime activity execution context.");
 
     // A fault the scope evaluates: a direct child's, or a descendant's standing in for the step or handler it came through.
-    private sealed record ChildFault(string ActivityExecutionId, string ExecutableNodeId, string? IterationId, string? IncidentId, string? FaultCode, string? FaultCategory);
+    private sealed record ChildFault(
+        string ActivityExecutionId,
+        string ExecutableNodeId,
+        string? IterationId,
+        string? IncidentId,
+        string? FaultCode,
+        string? FaultCategory,
+        IReadOnlyDictionary<string, string> SchedulingMetadata);
 }

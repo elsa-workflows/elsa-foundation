@@ -21,7 +21,7 @@ Scope "Order": [ Reserve inventory ↔ Release inventory,
 | O1 | `W`, then make the cancel succeed | `RetryFaultedActivity/1` on the last attempt | no reservations; one cancel effect | `Compensated`; `e2` 4 attempts; incident `OperatorRetry` with submitter, reason, job and plan |
 | O2 | An uncertain *Reserve delivery* with no handler (spec 251 J6) | `DecideIntervention/1` `effect-absent` | inventory released; delivery as the participant left it | entry `ResolvedManually/EffectAbsent`; earlier entries undone; `Compensated`; incident `OperatorDecision` |
 | O2h | `W` | `effect-absent` | inventory released; delivery still reserved (the operator said it was undone elsewhere) | `e2` `ResolvedManually/EffectAbsent`; recovery continued; `Compensated` |
-| O3 | Same as O2 | `effect-accepted` | delivery kept; inventory kept | entry `ResolvedManually/EffectAccepted`; scope ran *Confirm order* next (here it fails: recovery undoes inventory only, never delivery) |
+| O3 | Same as O2, with *Confirm order* failing | `effect-accepted` | delivery kept; inventory released | entry `ResolvedManually/EffectAccepted`; scope ran *Confirm order* next, which fails, so recovery undoes inventory only, never delivery; `Compensated` |
 | O3h | `W` | `effect-accepted` | inventory released; delivery kept | `e2` `ResolvedManually/EffectAccepted`; `Compensated` |
 | O4 | `W` | `compensation.abandon` | inventory and delivery still reserved | phase `Abandoned`; scope faulted `compensation.scope.abandoned` (`outcome-unknown`); run `Faulted` under the default strategy; journal readable |
 | O4n | Outer [P ↔ undo P, inner scope (= `W` shape), X] | abandon the inner scope | P undone after the outer decision | outer journals the inner scope step `Uncertain`, waits (no handler) offering the decisions; resolving it `effect-absent` undoes P |
@@ -51,15 +51,15 @@ O1 + O2h + O4 over REST against the real Workbench process, with a process kill 
 
 `Studio/tests/live/operator-actions-journey.spec.ts`, beside `compensation-journey.spec.ts`, against a running Studio and Workbench (`ELSA_STUDIO_URL`):
 
-1. Sign in as an operator with manage. Author and publish the order workflow, with *Cancel delivery* as a `Fault` activity (always fails), and run it.
-2. Open the run: the scope reads "Needs action", the row "Needs action (attempt 3 of 3)", the banner names *Confirm order*. The journal panel says "From the scope's journal".
-3. **Retry** with a reason: the dialog shows target and effect; after polling the row reads "Needs action (attempt 4 of 3)" again (the handler still fails). History lists the retry.
-4. **Resolve** "Effect absent or undone" with a reason: the row reads "Resolved: effect absent"; *Release inventory* runs; the scope reads "Compensated". History lists both actions.
-5. Run it again and **Abandon** with a reason: the scope reads "Abandoned", the rows "Not undone", the run "Faulted".
-6. Failure path: open a waiting run in two tabs; resolve in the first, then in the second. The second shows "Someone else already acted on this" and the view refreshes.
-7. Reload mid-poll: the same run and occurrence reopen and the action completes without a second submission.
-8. Sign in as a read-only user: no action buttons; the journal and history are visible; a direct `fetch` to the submit endpoint returns 403.
-9. Run axe on each view at 390 and 1200 px.
+1. Sign in as an operator with manage. Author and publish the order workflow, with *Cancel delivery* as a `Fault` activity (always fails), and start it with the designer's **Test Run**.
+2. Open the run: the scope reads "Needs action", the row "Needs action (1st) · Attempt 3 of 3", the banner names *Confirm order*. The journal panel says "From the scope's journal".
+3. **Retry** with a reason: the dialog shows target and effect; after polling the row reads "Needs action (1st) · Attempt 4 of 3" (the handler still fails). History lists the retry.
+4. **Resolve** "Effect absent or undone" with a reason, and reload while Studio follows the plan (step 7): the row reads "Resolved: effect absent"; *Release inventory* runs; the scope reads "Compensated". History lists both actions.
+5. Run it again; open it in two tabs; **Retry** in the first. Then **Resolve** in the second: it shows "Someone else already acted on this" and the view refreshes. (A resolve in the first tab would finish the recovery and end the run, and the second tab would be told the run has ended.)
+6. On that run, waiting again, **Abandon** with a reason: the scope reads "Abandoned", the rows "Not undone", the run "Faulted".
+7. Reload mid-poll: the same run reopens and the action completes without a second submission.
+8. Sign in as a read-only user: no action buttons; the journal and history are visible; a direct submission to the alteration endpoint returns 403. This step runs when `ELSA_STUDIO_READONLY_USER` and `ELSA_STUDIO_READONLY_PASSWORD` name such a user (the Workbench seeds only an administrator).
+9. Run axe on each view and dialog at 1200 and 390 px.
 
 ## Mocked browser suite
 
@@ -91,7 +91,13 @@ Each safeguard was removed by hand, `Elsa.Activities.Compensation.Tests` rebuilt
 | Validator allowance for `OperatorDecision` | `IncidentStateTransitionValidator` | O2h failed in all 3 modes |
 | Abandon fault (complete instead) | `CompensationScope.OnAbandoned` | O4 failed in all 3 modes |
 | Cause-message gate | `CompensationJournalProjector` | J1's projector test `The_cause_message_is_shown_only_with_the_values_grant(false)` failed; the J1 journey checks only the `messageWithheld` flag |
-| Studio's `canManage` gate | Studio | Not run: Studio ships in PR 2 |
+| Studio's `canManage` gate | Studio (PR 2) | See below |
+
+### Results for PR 2 (20 October 2026)
+
+| Safeguard removed | Where | Result |
+|---|---|---|
+| Studio's `canManage` gate (`canAct` from the alteration links only) | `workflow-editor/useOperatorActions.tsx` | The Vitest `offers Retry and each offered decision in the incident dialog, only when the caller may manage the run` failed, and the mocked browser tests `a reader who may not manage the run sees the journal and history but no action` and `shows a refusal and a missing permission as messages, and changes nothing` failed. Live step 8 was not run: no user without manage permission exists on the Workbench. Reverted with `git checkout`; the suites pass again. |
 
 ## Run locally
 
@@ -101,5 +107,7 @@ dotnet test Essentials/tests/Workflows/Runtime/Api/Tests --filter "ActivityState
 dotnet test Essentials/tests/Activities/Runtime/Tests --filter InterventionDecision
 dotnet test Essentials/tests/Activities/Compensation/Tests
 dotnet test Essentials/tests/Workbench/Tests --filter Compensation
-cd Studio/src/essentials/Elsa.Studio.Workflows/Client && npx vitest run compensation operatorAction alterations
+cd Studio/src/essentials/Elsa.Studio.Workflows/Client && npx vitest run compensation operatorAction alterations runSelection
+cd Studio && pnpm test:browser -- compensation-scope.spec.ts
+cd Studio && ELSA_STUDIO_URL=http://localhost:5089 npx playwright test --config tests/live/playwright.live.config.ts operator-actions-journey.spec.ts
 ```

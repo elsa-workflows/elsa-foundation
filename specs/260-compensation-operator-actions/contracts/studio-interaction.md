@@ -18,11 +18,11 @@ Extends [spec 250 contracts/studio-interaction.md](../../250-native-compensation
 |---|---|---|
 | Pending | Waiting to undo | Hourglass |
 | Running, attempt 1 | Undoing | CircleDot |
-| Running, attempt > 1 | Retrying (attempt n of m) | RotateCw |
+| Running, attempt > 1 | Retrying · Attempt n of m | RotateCw |
 | Forward uncertain | Uncertain | AlertTriangle |
 | Compensated | Compensated (nth) | Undo2 |
 | Confirmed | Confirmed | BadgeCheck |
-| NeedsAction | Needs action (attempt n of m) | Hand |
+| NeedsAction | Needs action · Attempt n of m | Hand |
 | ResolvedAbsent | Resolved: effect absent | UserCheck |
 | ResolvedKept | Resolved: effect kept | UserCheck |
 | NotUndone | Not undone (recovery abandoned) | CircleSlash |
@@ -30,7 +30,7 @@ Extends [spec 250 contracts/studio-interaction.md](../../250-native-compensation
 | Applying | Applying… | Loader |
 | Scope phase Abandoned | Abandoned | OctagonX |
 
-Existing states keep their labels and icons. Each chip's accessible name reads "Recovery: {label}".
+Existing states keep their labels and icons; the attempt suffix keeps the M2 form with the recovery order, for example "Needs action (1st) · Attempt 3 of 3" (research R19). Each chip's accessible name reads "Recovery: {label}".
 
 ## Where the actions are
 
@@ -112,7 +112,8 @@ Reason (required)  [                                   ]
 |---|---|
 | HTTP 401 | "Your session has expired. Sign in again to act on this run." |
 | HTTP 403 | "You do not have permission to change this run." Studio then refreshes the run details and hides actions if `canManage` is now false. |
-| HTTP 404 on the run or journal | "This run is unavailable or you do not have access to it." |
+| HTTP 404 on the run | "This run is unavailable or you do not have access to it." |
+| HTTP 404 or another failure reading the journal | No message: the view is derived from run data and says "the scope's journal is not available" |
 | HTTP 409 `AlterationIdempotencyConflict` | "This action was already submitted with different details. Refresh and try again." |
 | HTTP 429 | "The runtime is busy. Try again in {Retry-After} seconds." |
 | `NoBlockingIncident`, `InterventionNotPending`, `SourceActivityNotFaulted` | "Someone else already acted on this. The run has been refreshed." |
@@ -124,6 +125,7 @@ Reason (required)  [                                   ]
 | `TargetNotFound` | "This run is unavailable for operator actions." |
 | `InvalidDecideInterventionPayload`, `InvalidRetryFaultedActivityPayload` | "Check the reason: 1 to 500 characters, no control characters." |
 | Polling timeout | "The action is still queued. Studio will keep checking while this page is open." |
+| Not shown 60 s after the job succeeded | "The runtime accepted the action, but the run does not show it yet. Refresh to check again." |
 | Anything else | "The action could not be applied ({code})." |
 
 A refused action changes nothing; the message says so where it helps ("Nothing was changed").
@@ -143,7 +145,7 @@ Retry · alice · 20 Oct 10:42 · "Delivery service restored" · Show incident
 
 ## Navigation and reload
 
-- The run view keeps the selected occurrence in the URL (`?selected={activityExecutionId}`), replacing component-only state (`WorkflowInstances.tsx:719`). A reload or a deep link opens the same scope and occurrence.
+- The run view keeps the selected occurrence in the URL (`?selected={activityExecutionId}`), replacing component-only state (`WorkflowInstances.tsx:719`). A reload or a deep link opens the same scope and occurrence. The older `?activityExecutionId=` deep link is still read.
 - After an action, focus returns to the row's action button, or to the row's state chip if the button is gone.
 
 ## Accessibility

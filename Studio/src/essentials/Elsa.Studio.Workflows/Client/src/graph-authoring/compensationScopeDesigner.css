@@ -45,6 +45,7 @@
   font: inherit;
   font-size: .75rem;
   line-height: 1.3;
+  text-align: start;
 }
 
 button.wf-compensation-state {
@@ -83,6 +84,113 @@ button.wf-compensation-state {
 
 .wf-compensation-state[data-state="HandedOver"] {
   border-style: dotted;
+}
+
+/* Spec 260: operator actions and their results. Every state also carries text and an icon. */
+.wf-compensation-state[data-state="Retrying"] {
+  border-color: color-mix(in srgb, var(--studio-warning) 55%, var(--studio-border));
+}
+
+.wf-compensation-state[data-state="ResolvedAbsent"],
+.wf-compensation-state[data-state="ResolvedKept"] {
+  border-color: color-mix(in srgb, var(--studio-accent) 55%, var(--studio-border));
+}
+
+.wf-compensation-state[data-state="NotUndone"],
+.wf-compensation-phase[data-phase="Abandoned"] {
+  border-color: color-mix(in srgb, var(--studio-danger) 60%, var(--studio-border));
+  border-style: dashed;
+}
+
+.wf-compensation-state[data-state="Submitted"] {
+  border-style: dotted;
+}
+
+.wf-compensation-operator-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: .3rem;
+  max-width: 100%;
+}
+
+.wf-compensation-operator-action {
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  padding: .25rem .55rem;
+  border: 1px solid color-mix(in srgb, var(--studio-accent) 45%, var(--studio-border));
+  border-radius: var(--studio-radius-sm, .25rem);
+  color: var(--studio-text);
+  background: var(--studio-surface);
+  font: inherit;
+  font-size: .75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.wf-compensation-operator-action[data-tone="danger"] {
+  border-color: color-mix(in srgb, var(--studio-danger) 55%, var(--studio-border));
+  color: var(--studio-danger-fg);
+}
+
+.wf-compensation-source,
+.wf-compensation-remaining {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  margin: 0;
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size, .8125rem);
+}
+
+.wf-compensation-remaining {
+  color: var(--studio-text);
+}
+
+.wf-compensation-history {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  margin-top: .5rem;
+}
+
+.wf-compensation-history h4 {
+  margin: 0;
+}
+
+.wf-compensation-history ul {
+  display: flex;
+  flex-direction: column;
+  gap: .4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wf-compensation-history li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .25rem .6rem;
+  min-width: 0;
+  padding: .5rem .75rem;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius, .5rem);
+  background: var(--studio-surface);
+  font-size: .8125rem;
+  overflow-wrap: anywhere;
+}
+
+.wf-compensation-history-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  font-weight: 600;
+}
+
+.wf-compensation-history-none,
+.wf-compensation-history-note {
+  color: var(--studio-text-muted);
 }
 
 .wf-compensation-occurrence {
