@@ -11,7 +11,8 @@ public sealed class RuntimeDelayedScheduleOptions
 
     /// <summary>
     /// How far ahead of the runtime clock a due time may be. An evaluation that stages a later one faults with
-    /// <c>runtime.delayed-schedule.too-far</c>.
+    /// <c>runtime.delayed-schedule.too-far</c>. A compensation scope caps its handler retry waits at 24 hours, not at this
+    /// value, so a host that composes compensation must not set it below the longest wait its scopes can reach.
     /// </summary>
     public TimeSpan MaxDelay { get; set; } = DefaultMaxDelay;
 }

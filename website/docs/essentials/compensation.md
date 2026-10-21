@@ -51,7 +51,7 @@ A compensation that fails because a service is briefly unavailable often succeed
 |---|---|---|
 | **Handler retry delay** (`handlerRetryDelay`) | `00:00:00` | The wait before the second attempt. Zero retries at once. At most 24 hours. |
 | **Handler retry backoff multiplier** (`handlerRetryBackoffMultiplier`) | `2` | How much each further wait grows. At least 1; 1 keeps the wait fixed. |
-| **Handler retry max delay** (`handlerRetryMaxDelay`) | `00:05:00` | The longest any one wait may be. At least the delay and at most 24 hours. |
+| **Handler retry max delay** (`handlerRetryMaxDelay`) | `00:05:00` | The longest any one wait may be. At least the delay and at most 24 hours. A host that lowers the runtime's `RuntimeDelayedScheduleOptions.MaxDelay` must keep it at or above this value, or the scope faults when it schedules the retry. |
 
 After the n-th failed attempt the scope waits `min(max delay, delay × multiplier^(n − 1))`. With a delay of 30 seconds, a multiplier of 2, a max delay of 90 seconds and four attempts, the waits before attempts 2, 3 and 4 are 30, 60 and 90 seconds.
 
