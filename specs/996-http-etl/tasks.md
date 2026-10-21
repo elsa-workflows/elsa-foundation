@@ -51,7 +51,8 @@ Independent proof: two worker processes with shared SQLite/object storage and a 
 
 - [x] T012 [US2] Implement fenced page attachment, body/effect identity and route acknowledgement/acceptance in `Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/` and runtime execution; prove stale/conflicting/duplicate writes and unchanged budget accounting.
   - Completed storage/runtime proof: [fenced retry checkpoint](evidence/fenced-retry-checkpoint.md). Reopened-store eligibility, exact acknowledgement replay/conflict and rollback accounting verified; actual two-process interruption remains T013.
-- [ ] T013 [US2] Extend shared fixtures and `Extensions/Etl/tests/WorkerHost/` for two-process HTTP recovery after page publication, reservation, first/second-route acknowledgement, lost response and before acceptance; cover deduplicating and ordinary receivers honestly.
+- [x] T013 [US2] Extend shared fixtures and `Extensions/Etl/tests/WorkerHost/` for two-process HTTP recovery after page publication, reservation, first/second-route acknowledgement, lost response and before acceptance; cover deduplicating and ordinary receivers honestly.
+  - Completed actual child-process/real-receiver matrix: [HTTP process checkpoint](evidence/http-process-checkpoint.md). Five durable boundaries plus lost response with deduplicating/ordinary receivers, stable identity, preserved quota and single internal acceptance; seven cases passed. Frozen predecessor binaries remain T003.
 - [ ] T014 [US2] Prove cache corruption/missing objects, changed uncommitted response, exhausted partitions, all-filtered batches and physical-attempt replacement in `Extensions/Etl/tests/Tests/`; run targeted safeguard-removal and byte-exact restoration controls.
 - [ ] T015 [US2] Test cancellation/late acknowledgement/terminal races through ETL stores and actual native adapters in `Extensions/Etl/tests/Tests/`; no physical rollback or stopped-worker assertion.
 

@@ -2,6 +2,7 @@ using Elsa.Etl.Core.Runtime;
 using Elsa.Etl.Persistence.EntityFrameworkCore;
 using Elsa.Etl.Runtime;
 using Elsa.Etl.Runtime.Output;
+using Elsa.Etl.Tests.WorkerHost;
 using Elsa.Etl.Tests.Support;
 using Elsa.Persistence.EntityFramework;
 using Microsoft.Data.Sqlite;
@@ -20,11 +21,17 @@ if (!Enum.IsDefined(configuration.WritePause))
     throw new InvalidDataException("Unsupported fixture write-pause stage.");
 if (!Enum.IsDefined(configuration.StoreGate))
     throw new InvalidDataException("Unsupported fixture runtime-store gate.");
+if (!Enum.IsDefined(configuration.ConnectorGate))
+    throw new InvalidDataException("Unsupported fixture connector-store gate.");
 ArgumentNullException.ThrowIfNull(configuration.Scope);
 ArgumentNullException.ThrowIfNull(configuration.Bindings);
+var httpBindings = configuration.HttpBindings ?? [];
 if (configuration.Bindings.Any(binding => binding.TenantId != configuration.Scope.TenantId ||
         !StringComparer.Ordinal.Equals(binding.PersistencePartition, configuration.Scope.PersistencePartition)))
     throw new InvalidDataException("Every ETL worker file binding must use the configured scope.");
+if (httpBindings.Any(binding => binding.TenantId != configuration.Scope.TenantId ||
+        !StringComparer.Ordinal.Equals(binding.PersistencePartition, configuration.Scope.PersistencePartition)))
+    throw new InvalidDataException("Every ETL worker HTTP binding must use the configured scope.");
 var root = Path.GetFullPath(configuration.Root);
 Directory.CreateDirectory(root);
 Directory.CreateDirectory(Path.Combine(root, "snapshots"));
@@ -35,6 +42,7 @@ var runtime = new EtlRuntimeFeature
 {
     SnapshotRoot = Path.Combine(root, "snapshots"),
     FileBindings = configuration.Bindings,
+    HttpBindings = httpBindings,
     // Keep each child process to one active attempt so journal gates can coordinate which
     // process owns each partition; the process still runs the real runtime worker loop.
     MaxConcurrentAttempts = 1
@@ -60,6 +68,7 @@ var persistence = new EtlRuntimeEntityFrameworkCoreFeature
 persistence.ConfigureServices(builder.Services);
 builder.Services.Configure<EfMigrateOptions>(options => options.Policy = EfMigratePolicy.Validate);
 var acceptanceGate = new AcceptanceGate(root, role, configuration.StoreGate);
+var connectorGate = new ConnectorWorkerGate(root, role, configuration.ConnectorGate);
 if (configuration.StoreGate == EtlWorkerStoreGate.AfterDeliveryClaim)
     builder.Services.AddSingleton<IEtlResultDelivery>(new JournalOnlyResultDelivery(acceptanceGate));
 
@@ -71,7 +80,10 @@ builder.Services.Remove(storeDescriptor);
 builder.Services.Add(new ServiceDescriptor(typeof(IEtlRuntimeStore), services =>
 {
     var inner = (IEtlRuntimeStore)ActivatorUtilities.CreateInstance(services, storeImplementationType);
-    return new AcceptanceGateStore(inner, acceptanceGate);
+    var acceptanceStore = new AcceptanceGateStore(inner, acceptanceGate);
+    var connectorStore = inner as IEtlConnectorRuntimeStore
+        ?? throw new InvalidOperationException("The ETL fixture SQLite store must provide connector persistence.");
+    return new ConnectorWorkerGateStore(acceptanceStore, connectorStore, connectorGate);
 }, storeDescriptor.Lifetime));
 
 using var host = builder.Build();
