@@ -73,7 +73,7 @@ ancestor states it already loads (`RuntimeContainerScopeService.cs:45-57`).
 | §2.6.2 replacement contracts | PASS | None added or changed |
 | §2.17 duplication beats dependency | PASS | The ten-line `ActivityResult` reference readers are copied into Graph.Design and not referenced from Validations (R-9). |
 | §2.24.2 sanctioned patterns | PASS | Existing patterns only: placement-time id rewriting (as `RewriteStructure`), a provider-side validator, and runtime projection of durable rows. No new extension point. |
-| §2.22 / §2.22.1 docs and extension points | ACTION | Graph README (body value model), the Elsa 3 Mapping README and migration readiness guide, and spec 246 D-8 notes. No contributor or replacement contract changes, so `EXTENSION_POINTS.md` and the generated maps are unchanged. |
+| §2.22 / §2.22.1 docs and extension points | ACTION | The authoring reference `docs/reference/activity-definition-authoring-composition.md` (body value model), the glossary row for "Graph activity", the Elsa 3 Mapping README and migration readiness guide, and spec 246 D-8 notes. No contributor or replacement contract changes, so `EXTENSION_POINTS.md` and the generated maps are unchanged. |
 | §2.23.1–§2.23.2 tests | PASS | Behaviour tests for each story, each refusal code, remap shape, the legacy flag path, resume and FR-011 non-regression. No new features, so no registration tests. |
 | §2.23.5 exception boundaries | PASS | Remap and validation produce diagnostics, not exceptions. Runtime resolution failures keep their existing domain exceptions. |
 | ADR 0038 content-addressed executables | PASS | The closed-scope flag is in the hashed descriptor and node field (R-5, D-3). Node metadata is not used for behaviour. |
@@ -121,8 +121,8 @@ Essentials/src/Activities/Graph/
 ├── Design/Services/GraphActivityProvider.cs           # scopeModel, fingerprint 3.0.0, overlay outputs, validator calls
 ├── Design/Services/GraphBodyReferenceValidator.cs     # new: D-9
 ├── Runtime/Models/GraphActivityDescriptor.cs          # ScopeModel
-├── Runtime/Services/GraphActivityScope.cs             # BoundaryVariableName on variable rows
-└── README.md                                          # body value model
+└── Runtime/Services/GraphActivityScope.cs             # BoundaryVariableName on variable rows
+docs/reference/activity-definition-authoring-composition.md  # body value model (closed scope, references, captures)
 Essentials/src/Workflows/Publishing/
 ├── Core/Models/ActivityTemplateCompileModels.cs       # OutputBindings on the occurrence compilation
 └── Elsa.Workflows.Publishing/Services/
