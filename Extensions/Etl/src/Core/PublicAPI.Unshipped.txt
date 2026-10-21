@@ -1284,3 +1284,101 @@ override Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.ToString() -> string!
 static Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorPositionResult? left, Elsa.Etl.Core.Runtime.EtlConnectorPositionResult? right) -> bool
 static Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorPositionResult? left, Elsa.Etl.Core.Runtime.EtlConnectorPositionResult? right) -> bool
 static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.HttpRequestHash(Elsa.Etl.Core.Runtime.EtlHttpRequest! request) -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor
+Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor!
+Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.BatchId.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.BatchId.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.Deconstruct(out string! BatchId, out Elsa.Etl.Core.Runtime.EtlConnectorBatchRange! Range, out long InputBytes, out string! InputHash) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.Equals(Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.EtlConnectorBatchDescriptor(string! BatchId, Elsa.Etl.Core.Runtime.EtlConnectorBatchRange! Range, long InputBytes, string! InputHash) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.InputBytes.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.InputBytes.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.InputHash.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.InputHash.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.Range.get -> Elsa.Etl.Core.Runtime.EtlConnectorBatchRange!
+Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.Range.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchRange
+Elsa.Etl.Core.Runtime.EtlConnectorBatchRange.EtlConnectorBatchRange() -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchRange.EtlConnectorBatchRange(Elsa.Etl.Core.Runtime.EtlConnectorBatchRange! original) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation!
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.Batch.get -> Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor!
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.Batch.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.Deconstruct(out Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor! Batch, out bool Settled) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.Equals(Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.EtlConnectorBatchReservation(Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor! Batch, bool Settled) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.Settled.get -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.Settled.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange
+Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.Deconstruct(out long StartOrdinal, out long EndOrdinalExclusive) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.EndOrdinalExclusive.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.EndOrdinalExclusive.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.Equals(Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.EtlConnectorFileBatchRange(long StartOrdinal, long EndOrdinalExclusive) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.StartOrdinal.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.StartOrdinal.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.Deconstruct(out long PageSequence, out string! RequestHash, out string! PageContentHash, out int StartItem, out int EndItemExclusive) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.EndItemExclusive.get -> int
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.EndItemExclusive.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.Equals(Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.EtlConnectorHttpBatchRange(long PageSequence, string! RequestHash, string! PageContentHash, int StartItem, int EndItemExclusive) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.PageContentHash.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.PageContentHash.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.PageSequence.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.PageSequence.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.RequestHash.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.RequestHash.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.StartItem.get -> int
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.StartItem.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.OwedBatch.get -> Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation?
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.OwedBatch.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorReservationResult
+Elsa.Etl.Core.Runtime.EtlConnectorReservationResult.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorReservationResult!
+Elsa.Etl.Core.Runtime.EtlConnectorReservationResult.Deconstruct(out Elsa.Etl.Core.Runtime.EtlStoreStatus Status, out Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation? Reservation) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorReservationResult.Equals(Elsa.Etl.Core.Runtime.EtlConnectorReservationResult? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorReservationResult.EtlConnectorReservationResult(Elsa.Etl.Core.Runtime.EtlStoreStatus Status, Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation? Reservation) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorReservationResult.Reservation.get -> Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation?
+Elsa.Etl.Core.Runtime.EtlConnectorReservationResult.Reservation.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorReservationResult.Status.get -> Elsa.Etl.Core.Runtime.EtlStoreStatus
+Elsa.Etl.Core.Runtime.EtlConnectorReservationResult.Status.init -> void
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.ReserveConnectorBatchAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor! batch, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorReservationResult!>
+abstract Elsa.Etl.Core.Runtime.EtlConnectorBatchRange.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorBatchRange!
+override Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorBatchRange.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorBatchRange.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorBatchRange.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange!
+override Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange!
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorReservationResult.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorReservationResult.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorReservationResult.ToString() -> string!
+override sealed Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.Equals(Elsa.Etl.Core.Runtime.EtlConnectorBatchRange? other) -> bool
+override sealed Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.Equals(Elsa.Etl.Core.Runtime.EtlConnectorBatchRange? other) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor? left, Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor? left, Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorBatchRange.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorBatchRange? left, Elsa.Etl.Core.Runtime.EtlConnectorBatchRange? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorBatchRange.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorBatchRange? left, Elsa.Etl.Core.Runtime.EtlConnectorBatchRange? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation? left, Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation? left, Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange? left, Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange? left, Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorReservationResult.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorReservationResult? left, Elsa.Etl.Core.Runtime.EtlConnectorReservationResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorReservationResult.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorReservationResult? left, Elsa.Etl.Core.Runtime.EtlConnectorReservationResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorBatchId(Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission! admission, Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun! prepared, int partitionOrdinal, Elsa.Etl.Core.Runtime.EtlConnectorBatchRange! range, long inputBytes, string! inputHash) -> string!
+virtual Elsa.Etl.Core.Runtime.EtlConnectorBatchRange.EqualityContract.get -> System.Type!
+virtual Elsa.Etl.Core.Runtime.EtlConnectorBatchRange.Equals(Elsa.Etl.Core.Runtime.EtlConnectorBatchRange? other) -> bool
+virtual Elsa.Etl.Core.Runtime.EtlConnectorBatchRange.PrintMembers(System.Text.StringBuilder! builder) -> bool

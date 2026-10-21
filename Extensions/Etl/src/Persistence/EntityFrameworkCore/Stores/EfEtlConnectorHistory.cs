@@ -18,19 +18,22 @@ internal sealed partial class EfEtlRuntimeStore
             .GroupBy(partition => partition.RunKey)
             .Select(group => new { PageBytes = group.Sum(partition => partition.PageBytes), MetadataBytes = group.Sum(partition => partition.MetadataBytes) })
             .SingleOrDefaultAsync(cancellationToken);
-        return ReadConnectorState(invocation, connector, totals?.PageBytes ?? 0, totals?.MetadataBytes ?? 0);
+        var state = ReadConnectorState(invocation, connector, totals?.PageBytes ?? 0, totals?.MetadataBytes ?? 0);
+        await ValidateConnectorOutstandingAsync(connector, state.Pipeline, cancellationToken);
+        return state;
     }
 
     private async ValueTask<EtlConnectorPosition> ReadConnectorPositionAsync(EtlConnectorPartitionRecord row, EtlPipelineV2 pipeline,
         EtlConnectorRunBindings bindings, EtlConnectorPreparedRun? prepared, CancellationToken cancellationToken, bool auditHistory = false)
     {
         var position = ReadConnectorPosition(row, pipeline, bindings, prepared);
-        if (row.PageBytes < 0 || row.MetadataBytes < MetadataBytes(row.PositionJson))
+        if (row.PageBytes < 0 || row.BatchMetadataBytes < 0 || row.MetadataBytes < checked(MetadataBytes(row.PositionJson) + row.BatchMetadataBytes))
             throw new InvalidDataException("The connector partition accounting is invalid.");
+        if (auditHistory) await AuditConnectorBatchHistoryAsync(row, cancellationToken);
         if (position is not EtlConnectorHttpPosition http)
         {
             if (row.PageCount != 0 || row.PageBytes != 0 || row.CurrentRequestSequence is not null || row.CurrentRequestHash is not null ||
-                row.MetadataBytes != MetadataBytes(row.PositionJson))
+                row.MetadataBytes != checked(MetadataBytes(row.PositionJson) + row.BatchMetadataBytes))
                 throw new InvalidDataException("A file partition has HTTP request accounting.");
             if (auditHistory && (await Pages(row).AnyAsync(cancellationToken) || await Requests(row).AnyAsync(cancellationToken)))
                 throw new InvalidDataException("A file partition has HTTP request history.");
@@ -71,7 +74,7 @@ internal sealed partial class EfEtlRuntimeStore
     private async ValueTask AuditHttpHistoryAsync(EtlConnectorPartitionRecord row, EtlConnectorHttpPosition http,
         EtlPipelineV2 pipeline, CancellationToken cancellationToken)
     {
-        long requestCount = 0, metadataBytes = MetadataBytes(row.PositionJson), pageBytes = 0, sequence = 0;
+        long requestCount = 0, metadataBytes = checked(MetadataBytes(row.PositionJson) + row.BatchMetadataBytes), pageBytes = 0, sequence = 0;
         // Full audit at ownership acquisition and successful terminal settlement, including fresh
         // processes. No process-local cache is required for the normal bounded transition path.
         await foreach (var retained in Requests(row).OrderBy(request => request.PageSequence).AsAsyncEnumerable().WithCancellation(cancellationToken))

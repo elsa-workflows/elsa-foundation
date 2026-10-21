@@ -181,14 +181,17 @@ internal sealed partial class EfEtlRuntimeStore
             where partition.ScopeKey == scopeKey && (runKey == null || partition.RunKey == runKey) &&
                 run.Status == (int)EtlRunStatus.Running && !partition.Completed &&
                 (partition.ExpiresAtUtcTicks == null || partition.ExpiresAtUtcTicks <= now)
-            orderby run.CreatedAtUtcTicks, partition.RunKey, partition.PartitionOrdinal
+            orderby (partition.OwedBatchId != null) descending, run.CreatedAtUtcTicks, partition.RunKey, partition.PartitionOrdinal
             select new { Run = run, Connector = connector, Partition = partition }).FirstOrDefaultAsync(cancellationToken);
         if (candidate is null) return null;
         runId = EtlRuntimeRecordCodec.DecodeIdentity(candidate.Run.RunId, "run id");
         ValidateRun(candidate.Run, scope, runId);
-        var state = await ReadConnectorStateAsync(EtlRuntimeRecordCodec.ReadInvocation(candidate.Run.InvocationJson), candidate.Connector, cancellationToken);
+        var invocation = EtlRuntimeRecordCodec.ReadInvocation(candidate.Run.InvocationJson);
+        var state = await ReadConnectorStateAsync(invocation, candidate.Connector, cancellationToken);
         var position = await ReadConnectorPositionAsync(candidate.Partition, state.Pipeline, state.Bindings, state.Prepared, cancellationToken, auditHistory: true);
         var row = candidate.Partition;
+        var owed = await ReadConnectorOwedBatchAsync(row, new(invocation, state.Bindings),
+            state.Pipeline, state.Prepared!, position, cancellationToken);
         now = NowTicks();
         row.Owner = EtlRuntimeRecordCodec.EncodeIdentity(workerId, "worker id");
         row.Fence = checked(row.Fence + 1);
@@ -197,7 +200,7 @@ internal sealed partial class EfEtlRuntimeStore
         await db.SaveChangesAsync(cancellationToken);
         if (row.ExpiresAtUtcTicks <= NowTicks()) return null;
         await tx.CommitAsync(cancellationToken);
-        return new(scope, runId, row.PartitionOrdinal, workerId, row.Fence, EtlRuntimeRecordCodec.ReadUtc(row.ExpiresAtUtcTicks.Value), position);
+        return new(scope, runId, row.PartitionOrdinal, workerId, row.Fence, EtlRuntimeRecordCodec.ReadUtc(row.ExpiresAtUtcTicks.Value), position) { OwedBatch = owed };
     }
 
     public ValueTask<EtlStoreStatus> RenewConnectorPartitionAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default) =>
@@ -315,7 +318,8 @@ internal sealed partial class EfEtlRuntimeStore
         var rows = await db.ConnectorPartitions.Where(x => x.ScopeKey == key.ScopeKey && x.RunKey == key.RunKey)
             .Take(options.MaximumPartitionsPerRun == int.MaxValue ? int.MaxValue : options.MaximumPartitionsPerRun + 1).ToListAsync(cancellationToken);
         var count = InitialPositions(state.Pipeline, state.Bindings, state.Prepared!).Count();
-        if (rows.Count != count) return false;
+        if (rows.Count != count || await db.ConnectorBatches.AnyAsync(batch => batch.ScopeKey == key.ScopeKey &&
+            batch.RunKey == key.RunKey && !batch.Settled, cancellationToken)) return false;
         foreach (var row in rows)
             if (!EtlConnectorRecordCodec.Complete(await ReadConnectorPositionAsync(row, state.Pipeline, state.Bindings, state.Prepared, cancellationToken, auditHistory: true))) return false;
         return true;

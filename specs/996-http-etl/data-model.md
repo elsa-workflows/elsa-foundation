@@ -52,13 +52,17 @@ The HTTP page companion table retains immutable metadata keyed by scope/run/part
 with a unique request digest per partition. Its payload is an object reference, not inline response
 JSON. Total retained-input accounting includes every retained page body. A separate authored metadata limit
 (default 64 MiB, bounded by the host default ceiling of 256 MiB) accounts for UTF-8 bytes of all
-request/page JSON and each current partition-position JSON across the run. Fixed SQL row/index/file
+request/page JSON, retained batch-descriptor JSON and each current partition-position JSON across the run. Fixed SQL row/index/file
 overhead is excluded; admission/preparation/terminal envelopes retain their independent bounds.
 Partition and run counters are updated in the same transaction as metadata and position changes;
 replay does not recharge. Empty-page progression keeps
 that history for replay and loop checks. Source request identities are separate from worker attempts
 and lease fences. Nonempty progress must be proved by atomic batch acceptance, not the empty-page
-operation.
+operation. Connector batch reservations use typed file ranges or HTTP page/item ranges, with identity bound
+to the immutable admission, prepared inputs and measured canonical input. One indexed owed-batch pointer per
+partition retains responsibility and shared record/byte charges through claim expiry and release; replacement
+workers recover that descriptor before dispatch. Cancellation retains the reservation as evidence without
+authorizing further dispatch. Reservations alone do not acknowledge outputs or advance source positions.
 
 ### Draft schema evolution
 

@@ -67,3 +67,6 @@ It does not complete T005 or enable HTTP execution. Nonempty reservations/batche
 durable attempts/retries/acknowledgements and atomic acceptance still need implementation. Each new
 retained state family must explicitly extend the accounting and terminal-quiescence rules. Full
 HTTP/native/API/Studio/process recovery and retained-old-worker proofs remain owed. Tasks remain 3/22.
+
+The later [reservation checkpoint](connector-reservation-checkpoint.md) extends this budget to batch
+descriptors and implements owed reservations. The counts and remaining work above describe this earlier checkpoint.

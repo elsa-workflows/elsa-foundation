@@ -24,6 +24,38 @@ public static class EtlRuntimeIdentity
         return Hash("etl-scope-v1", scope.TenantId, scope.PersistencePartition);
     }
 
+    /// <summary>Stable connector input identity bound to all admission pins and prepared inputs.</summary>
+    public static string ConnectorBatchId(EtlConnectorRunAdmission admission, EtlConnectorPreparedRun prepared,
+        int partitionOrdinal, EtlConnectorBatchRange range, long inputBytes, string inputHash)
+    {
+        ArgumentNullException.ThrowIfNull(admission);
+        ArgumentNullException.ThrowIfNull(admission.Bindings);
+        ArgumentNullException.ThrowIfNull(prepared);
+        ArgumentNullException.ThrowIfNull(range);
+        var bindings = admission.Bindings;
+        var input = prepared.File is { } file
+            ? Hash("etl-connector-file-v2", ObjectReference(file.Source), ObjectReference(file.Index), Number(file.RecordCount))
+            : null;
+        var coordinates = range switch
+        {
+            EtlConnectorFileBatchRange fileRange => Hash("etl-file-range-v2", Number(fileRange.StartOrdinal), Number(fileRange.EndOrdinalExclusive)),
+            EtlConnectorHttpBatchRange http => Hash("etl-http-range-v2", Number(http.PageSequence), http.RequestHash, http.PageContentHash,
+                Number(http.StartItem), Number(http.EndItemExclusive)),
+            _ => throw new ArgumentException("The connector batch range is unsupported.", nameof(range))
+        };
+        // Explicit versioned fields keep mechanical identity independent of future snapshot DTO additions.
+        return Hash("etl-connector-batch-v2", InvocationFingerprint(admission.Invocation),
+            ConnectorBinding(bindings.Source), ConnectorBinding(bindings.Lookup), ConnectorBinding(bindings.Main), ConnectorBinding(bindings.Errors),
+            Hash(["etl-http-shards-v2", .. bindings.HttpShardIds]), input, ObjectReference(prepared.Lookup), Number(partitionOrdinal),
+            coordinates, Number(inputBytes), inputHash);
+    }
+
+    private static string? ConnectorBinding(EtlConnectorBindingRevision? binding) => binding is null
+        ? null : Hash("etl-connector-binding-v2", Number((int)binding.Kind), Binding(binding.Revision));
+
+    private static string? ObjectReference(EtlObjectReference? reference) => reference is null
+        ? null : Hash("etl-object-v2", reference.Key, reference.ContentHash, Number(reference.ByteLength));
+
     public static string InvocationFingerprint(EtlInvocation invocation)
     {
         ArgumentNullException.ThrowIfNull(invocation);

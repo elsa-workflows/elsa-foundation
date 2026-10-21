@@ -25,9 +25,27 @@ internal sealed class EtlConnectorPartitionRecord
     public long PageCount { get; set; }
     public long PageBytes { get; set; }
     public long MetadataBytes { get; set; }
+    public string? OwedBatchId { get; set; }
+    public long BatchMetadataBytes { get; set; }
     public long? CurrentRequestSequence { get; set; }
     public string? CurrentRequestHash { get; set; }
     public long Revision { get; set; }
+    public string SchemaVersion { get; set; } = null!;
+}
+
+internal sealed class EtlConnectorBatchRecord
+{
+    public string ScopeKey { get; set; } = null!;
+    public string RunKey { get; set; } = null!;
+    public int PartitionOrdinal { get; set; }
+    public string BatchId { get; set; } = null!;
+    public string StartKey { get; set; } = null!;
+    public string DescriptorJson { get; set; } = null!;
+    public string DescriptorDigest { get; set; } = null!;
+    public long RecordCount { get; set; }
+    public long InputBytes { get; set; }
+    public long MetadataBytes { get; set; }
+    public bool Settled { get; set; }
     public string SchemaVersion { get; set; } = null!;
 }
 

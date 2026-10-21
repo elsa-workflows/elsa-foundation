@@ -24,6 +24,8 @@ public interface IEtlConnectorRuntimeStore
     ValueTask<EtlConnectorPositionResult> AttachHttpPageAsync(EtlConnectorPartitionLease lease, EtlRetainedHttpPage page, CancellationToken cancellationToken = default);
     /// <summary>Advances only a retained empty page; nonempty pages require batch acceptance.</summary>
     ValueTask<EtlConnectorPositionResult> AdvanceEmptyHttpPageAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default);
+    /// <summary>Reserves measured input at the current position. Replacement workers inherit the same owed batch and quota charges.</summary>
+    ValueTask<EtlConnectorReservationResult> ReserveConnectorBatchAsync(EtlConnectorPartitionLease lease, EtlConnectorBatchDescriptor batch, CancellationToken cancellationToken = default);
     ValueTask<EtlStoreStatus> RenewConnectorPartitionAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default);
     ValueTask<EtlStoreStatus> ReleaseConnectorPartitionAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default);
 
@@ -60,7 +62,11 @@ public sealed record EtlRetainedHttpPage(long PageSequence, string RequestHash, 
 public sealed record EtlConnectorHttpPosition(long PageSequence, int NextItem, EtlHttpRequest Request,
     EtlRetainedHttpPage? Page, bool Exhausted) : EtlConnectorPosition;
 public sealed record EtlConnectorPartitionLease(EtlScope Scope, string RunId, int PartitionOrdinal, string Owner,
-    long Fence, DateTimeOffset ExpiresAt, EtlConnectorPosition Position);
+    long Fence, DateTimeOffset ExpiresAt, EtlConnectorPosition Position)
+{
+    /// <summary>Retained responsibility returned on acquisition; null only when no batch is owed.</summary>
+    public EtlConnectorBatchReservation? OwedBatch { get; init; }
+}
 
 /// <summary>Authoritative position after an applied or identical replayed transition; no lease on refusal.</summary>
 public sealed record EtlConnectorPositionResult(EtlStoreStatus Status, EtlConnectorPartitionLease? Lease);

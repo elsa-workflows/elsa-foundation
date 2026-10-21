@@ -10,6 +10,7 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
     internal DbSet<EtlRuntimeRunRecord> Runs => Set<EtlRuntimeRunRecord>();
     internal DbSet<EtlConnectorRunRecord> ConnectorRuns => Set<EtlConnectorRunRecord>();
     internal DbSet<EtlConnectorPartitionRecord> ConnectorPartitions => Set<EtlConnectorPartitionRecord>();
+    internal DbSet<EtlConnectorBatchRecord> ConnectorBatches => Set<EtlConnectorBatchRecord>();
     internal DbSet<EtlConnectorHttpRequestRecord> ConnectorHttpRequests => Set<EtlConnectorHttpRequestRecord>();
     internal DbSet<EtlConnectorHttpPageRecord> ConnectorHttpPages => Set<EtlConnectorHttpPageRecord>();
     internal DbSet<EtlRuntimePreparedRecord> PreparedRuns => Set<EtlRuntimePreparedRecord>();
@@ -61,7 +62,7 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
         {
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_partitions_NonNegativeCounters",
-                "PageCount >= 0 AND PageBytes >= 0 AND MetadataBytes >= 0");
+                "PageCount >= 0 AND PageBytes >= 0 AND MetadataBytes >= 0 AND BatchMetadataBytes >= 0");
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_partitions_CurrentRequestPointer",
                 "(CurrentRequestSequence IS NULL AND CurrentRequestHash IS NULL) OR (CurrentRequestSequence IS NOT NULL AND CurrentRequestHash IS NOT NULL)");
@@ -72,10 +73,12 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
         connectorPartitions.Property(row => row.PositionJson).IsRequired();
         connectorPartitions.Property(row => row.Owner).HasMaxLength(EtlRuntimeEfModule.EncodedIdentityMaximumLength);
         connectorPartitions.Property(row => row.CurrentRequestHash).HasMaxLength(EtlRuntimeEfModule.HashLength);
+        connectorPartitions.Property(row => row.OwedBatchId).HasMaxLength(EtlRuntimeEfModule.HashLength);
         connectorPartitions.Property(row => row.Revision).IsConcurrencyToken();
         connectorPartitions.Property(row => row.SchemaVersion).HasMaxLength(EtlRuntimeEfModule.SchemaVersionMaximumLength).IsRequired();
         connectorPartitions.HasIndex(row => new { row.ScopeKey, row.RunKey, row.Completed, row.ExpiresAtUtcTicks });
         connectorPartitions.HasIndex(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.CurrentRequestSequence, row.CurrentRequestHash });
+        connectorPartitions.HasIndex(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.OwedBatchId });
         connectorPartitions.HasOne<EtlConnectorRunRecord>()
             .WithMany()
             .HasForeignKey(row => new { row.ScopeKey, row.RunKey })
@@ -86,6 +89,27 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
             .HasPrincipalKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.PageSequence, row.RequestHash })
             .OnDelete(DeleteBehavior.Restrict)
             .IsRequired(false);
+        connectorPartitions.HasOne<EtlConnectorBatchRecord>()
+            .WithMany()
+            .HasForeignKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.OwedBatchId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
+
+        var connectorBatches = modelBuilder.Entity<EtlConnectorBatchRecord>();
+        connectorBatches.ToTable(EtlRuntimeEfModule.ConnectorBatchTableName);
+        connectorBatches.HasKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.BatchId });
+        connectorBatches.Property(row => row.ScopeKey).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
+        connectorBatches.Property(row => row.RunKey).HasMaxLength(EtlRuntimeEfModule.EncodedIdentityMaximumLength).IsRequired();
+        connectorBatches.Property(row => row.BatchId).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
+        connectorBatches.Property(row => row.StartKey).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
+        connectorBatches.Property(row => row.DescriptorJson).IsRequired();
+        connectorBatches.Property(row => row.DescriptorDigest).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
+        connectorBatches.Property(row => row.SchemaVersion).HasMaxLength(EtlRuntimeEfModule.SchemaVersionMaximumLength).IsRequired();
+        connectorBatches.HasIndex(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.StartKey }).IsUnique();
+        connectorBatches.HasOne<EtlConnectorPartitionRecord>()
+            .WithMany()
+            .HasForeignKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal })
+            .OnDelete(DeleteBehavior.Restrict);
 
         var connectorHttpRequests = modelBuilder.Entity<EtlConnectorHttpRequestRecord>();
         connectorHttpRequests.ToTable(EtlRuntimeEfModule.ConnectorHttpRequestTableName, table =>
