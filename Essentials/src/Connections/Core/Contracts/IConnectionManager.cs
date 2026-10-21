@@ -5,20 +5,26 @@ namespace Elsa.Connections.Core.Contracts;
 
 /// <summary>
 /// Lifecycle facade for service connections. Runtime value resolution lives on <see cref="IConnectionResolver"/>.
-/// Every write member first asks the permission gate, which throws <see cref="ConnectionUnavailableException"/> when the caller is refused.
+/// Every write member asks the permission gate before it writes anything, and the gate throws
+/// <see cref="ConnectionUnavailableException"/> when the caller is refused. Create and Update validate the request
+/// first, so an invalid request is an <see cref="ArgumentException"/> whatever the caller's permissions. Revoke,
+/// Delete and Test ask the gate first.
 /// </summary>
 public interface IConnectionManager
 {
     /// <summary>Creates a connection and writes the secrets of its inline credential fields.</summary>
-    /// <exception cref="ArgumentException">The name, owner, type, scheme, settings or credential sources are invalid, or a referenced secret is unavailable.</exception>
+    /// <exception cref="ArgumentException">
+    /// The name, owner, type, scheme, settings or credential sources are invalid, a referenced secret is unavailable, or an
+    /// existing secret holds the name of a managed credential (including one a concurrent writer created).
+    /// </exception>
     /// <exception cref="ConnectionConflictException">
-    /// The name is already in use in the tenant, or the secret name of an inline credential is still held by a deleted secret
-    /// (use a different connection name or bind an existing secret).
+    /// The name is already in use in the tenant, or the save lost a compare-and-swap against a concurrent change.
     /// </exception>
     /// <exception cref="ConnectionUnavailableException">The permission gate refused the caller.</exception>
     /// <exception cref="ConnectionStoreException">
-    /// The connection or secret store failed; the connection was not saved and the create removes what it wrote on a best-effort basis
-    /// (a step that fails is logged). Retry unless the message says the store configuration must be fixed.
+    /// The connection or secret store failed before the create was confirmed saved. The create removes what it wrote on a
+    /// best-effort basis (a step that fails is logged), but keeps a connection whose save committed before the store failed.
+    /// Retry unless the message says the store configuration must be fixed.
     /// </exception>
     ValueTask<ConnectionMetadata> CreateAsync(string tenantId, CreateConnectionRequest request, CancellationToken cancellationToken = default);
 
@@ -29,16 +35,19 @@ public interface IConnectionManager
     ValueTask<IReadOnlyList<ConnectionMetadata>> ListAsync(string tenantId, ConnectionQuery? query = null, CancellationToken cancellationToken = default);
 
     /// <summary>Updates a connection, or returns null when there is none.</summary>
-    /// <exception cref="ArgumentException">The settings or credential sources are invalid, a referenced secret is unavailable, or an existing secret holds the name of a managed credential.</exception>
+    /// <exception cref="ArgumentException">
+    /// The settings or credential sources are invalid, a referenced secret is unavailable, or an existing secret holds the name of
+    /// a managed credential (including one a concurrent writer created).
+    /// </exception>
     /// <exception cref="ConnectionConflictException">
-    /// The save lost a compare-and-swap against a concurrent change and nothing was saved, the secret name of a new inline credential
-    /// is still held by a deleted secret (nothing was saved), or the update was saved but a credential changed by another request,
-    /// so its new value was not written (the message names the fields).
+    /// The save lost a compare-and-swap against a concurrent change and nothing was saved, or the update was saved but a credential
+    /// changed by another request, so its new value was not written (the message names the fields).
     /// </exception>
     /// <exception cref="ConnectionUnavailableException">The permission gate refused the caller.</exception>
     /// <exception cref="ConnectionStoreException">
-    /// The connection or secret store failed before the update was confirmed saved, so the update was not saved. Retry unless the message
-    /// says the store configuration must be fixed. A secret created for a field moving to inline storage is not rolled back.
+    /// The connection or secret store failed before the update was confirmed saved, so the update is not confirmed saved. Retry
+    /// unless the message says the store configuration must be fixed. A secret the update created for a field moving to inline
+    /// storage is removed on a best-effort basis, unless the stored connection references it.
     /// </exception>
     /// <exception cref="ConnectionCredentialWriteException">
     /// A credential write or the cleanup of a replaced secret failed after the update committed; the message says the update was saved.

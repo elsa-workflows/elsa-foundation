@@ -6,8 +6,8 @@ using Xunit;
 namespace Elsa.Connections.Tests;
 
 /// <summary>
-/// The <see cref="IConnectionRepository.SaveAsync"/> compare-and-swap contract that the connection manager
-/// depends on. Every repository derives a test class from this one. Expected versions are read before each
+/// The compare-and-swap contract of <see cref="IConnectionRepository.SaveAsync"/> and the expected-version
+/// <c>DeleteAsync</c> that the connection manager depends on. Every repository derives a test class from this one. Expected versions are read before each
 /// save because a durable repository may write the new version back onto the document it was given.
 /// </summary>
 public abstract class ConnectionRepositoryContractTests(IConnectionRepository repository)
@@ -56,6 +56,35 @@ public abstract class ConnectionRepositoryContractTests(IConnectionRepository re
         await Assert.ThrowsAsync<ConnectionConflictException>(() => repository.SaveAsync(loaded).AsTask());
 
         Assert.Null(await repository.FindAsync(Tenant, _name));
+    }
+
+    [Fact]
+    public async Task DeleteAsync_AtTheExpectedVersionDeletesTheDocument()
+    {
+        var loaded = await AddAndLoadAsync();
+
+        Assert.True(await repository.DeleteAsync(Tenant, _name, loaded.State.Version));
+
+        Assert.Null(await repository.FindAsync(Tenant, _name));
+    }
+
+    [Fact]
+    public async Task DeleteAsync_AtAnOlderVersionKeepsTheDocumentSavedSince()
+    {
+        var loaded = await AddAndLoadAsync();
+        var addedVersion = loaded.State.Version;
+        loaded.Definition.DisplayName = "Saved since";
+        await repository.SaveAsync(loaded);
+
+        Assert.False(await repository.DeleteAsync(Tenant, _name, addedVersion));
+
+        Assert.Equal("Saved since", (await repository.FindAsync(Tenant, _name))!.Definition.DisplayName);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WithAnExpectedVersionReturnsFalseWhenThereIsNoDocument()
+    {
+        Assert.False(await repository.DeleteAsync(Tenant, _name, expectedVersion: 0));
     }
 
     private async Task<ConnectionDocument> AddAndLoadAsync()

@@ -86,10 +86,10 @@ public sealed class ConnectionsApiTests
     {
         var body = await UpdateFailingWithAsync(name => new ConnectionStoreException(
             name,
-            $"Connection '{name}' was not updated: the connection or secret store failed before the change was confirmed saved. Retry; if the retry reports a credential secret name as taken or held, use a different connection name or bind an existing secret.",
+            $"Connection '{name}' may not have been updated: the connection or secret store failed before the change was confirmed saved. Retry; if the retry reports a credential secret name as taken, use a different connection name or bind an existing secret.",
             new IOException("Connection refused by db-host-1")));
 
-        Assert.Contains("not updated", body);
+        Assert.Contains("may not have been updated", body);
         Assert.DoesNotContain("db-host-1", body);
     }
 

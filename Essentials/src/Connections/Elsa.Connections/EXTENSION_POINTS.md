@@ -13,22 +13,25 @@ Use `services.AddConnections()` to register defaults, then replace these service
   the definition is created again. An EF Core repository is tracked in #2854. A replacement must keep
   the compare-and-swap contract on `SaveAsync`: it saves only when the stored `State.Version` equals
   the document's and then increments it; otherwise, including after a delete, it throws
-  `ConnectionConflictException` and writes nothing. Derive the replacement's tests from
+  `ConnectionConflictException` and writes nothing. Its expected-version `DeleteAsync` deletes only while
+  the stored version equals the expected one, atomically. Derive the replacement's tests from
   `ConnectionRepositoryContractTests` in `Essentials/tests/Connections/Tests/`.
 - `IConnectionManager` for lifecycle. A replacement must keep the compare-and-swap contract on
   `IConnectionRepository.SaveAsync`, and the exception contract in the `IConnectionManager` XML docs:
   `ArgumentException` (HTTP 400), `ConnectionConflictException` (409), `ConnectionUnavailableException`,
-  `ConnectionStoreException` for a store failure before the save (500), and `ConnectionCredentialWriteException`
-  for a failure after it (500). The default manager's write ordering and error classification are documented on
-  `DefaultConnectionManager` (issue #2855). Known limits:
+  `ConnectionStoreException` for a store failure before the save is confirmed (500), and
+  `ConnectionCredentialWriteException` for a failure after it (500). The default manager's write ordering and
+  error classification are documented on `DefaultConnectionManager`. Known limits:
+  - A replaced secret that cannot be deleted after a committed save is reported as a 500 although the update was
+    saved; after a conflicted rotation that cleanup failure is logged and not returned, and the replaced secret stays
+    Active and unreferenced (#2855 item 2.2).
+  - `DeleteAsync` deletes the owned secrets before the connection row, without a compare-and-swap (#2855 item 2.4).
   - A custom `ISecretAuditSink` that throws after Secrets committed a write makes that write look failed: it is
-    reported as not written (500), or as a false 409 when the failure reads as a concurrent change.
+    reported as not written (500), or as a false 409 when the failure reads as a concurrent change (#3153).
   - A secret with no active version (revoked or expired) is rotated without an expected version, and Secrets has
-    no guard there, so concurrent updaters are last-writer-wins.
-  - Secrets keeps the name of a deleted secret, so re-creating an inline credential under a deleted secret's name
-    fails (409) until Secrets releases deleted names.
-  - A cleanup failure after a conflicted rotation is logged and not returned, so the replaced secret stays Active
-    and unreferenced.
+    no guard there, so concurrent updaters are last-writer-wins (#3153).
+  - A credential version that expires between the update's read and its rotation is reported as a 409 although no
+    other request changed it; retrying the update succeeds (#3153).
   - `Revoke`, `Delete`, `Test`, `Find` and `List` do not wrap store failures (#3139).
 - `IConnectionResolver` for point-of-use resolution.
 - `IConnectionGrantWriter` for compare-and-swap grant writes (expected secret version).

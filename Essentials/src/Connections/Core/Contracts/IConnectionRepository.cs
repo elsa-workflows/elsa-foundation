@@ -37,4 +37,12 @@ public interface IConnectionRepository
     ValueTask SaveAsync(ConnectionDocument document, CancellationToken cancellationToken = default);
 
     ValueTask<bool> DeleteAsync(string tenantId, string name, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes the document only while its stored <see cref="ConnectionState.Version"/> equals
+    /// <paramref name="expectedVersion"/>, checking and deleting atomically. Returns false, and deletes nothing, when
+    /// there is no document or it is at another version. The manager rolls a failed create back with it, so the
+    /// rollback cannot remove a document that another request has saved since.
+    /// </summary>
+    ValueTask<bool> DeleteAsync(string tenantId, string name, int expectedVersion, CancellationToken cancellationToken = default);
 }

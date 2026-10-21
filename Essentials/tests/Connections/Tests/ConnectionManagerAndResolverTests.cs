@@ -4,8 +4,10 @@ using Elsa.Connections.Core.Models;
 using Elsa.Connections.Services;
 using Elsa.Primitives.Persistence;
 using Elsa.Secrets.Core.Contracts;
+using Elsa.Secrets.Core.Exceptions;
 using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Services;
+using Elsa.Secrets.Types;
 using Elsa.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -657,53 +659,34 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task Create_ReportsADeletedSecretsHeldNameAsAConflictNotARetryableStoreFault()
-    {
-        await CreateConnectionAsync("held-create", TokenValue("first"));
-        Assert.True(await _manager.DeleteAsync(Tenant, "held-create"));
-
-        var outcome = await Record.ExceptionAsync(() => CreateConnectionAsync("held-create", TokenValue("second")).AsTask());
-
-        // Secrets keeps a deleted secret's name today, so this conflicts. Once it releases deleted names the create succeeds.
-        if (AssertHeldNameConflictOrNoError(outcome))
-            Assert.Null(await _manager.FindAsync(Tenant, "held-create"));
-        else
-            Assert.Equal("second", await RevealAsync("held-create"));
-    }
-
-    [Fact]
-    public async Task Create_RetriedAfterAFailureOnALaterFieldIsNotReportedAsRetryableWhenTheFirstNameIsHeld()
+    public async Task Create_RetriedAfterAFailureOnALaterFieldSucceeds()
     {
         var creates = 0;
         var outage = new InvalidOperationException("Simulated secret create failure.");
         _secretHooks.OnCreate = _ => ++creates == 2 ? outage : null;
         var fields = InlineFields(("token", "first"), ("extra", "second"));
-        await Assert.ThrowsAsync<ConnectionStoreException>(() => CreateConnectionAsync("held-again", fields).AsTask());
+        await Assert.ThrowsAsync<ConnectionStoreException>(() => CreateConnectionAsync("retried", fields).AsTask());
 
-        var outcome = await Record.ExceptionAsync(() => CreateConnectionAsync("held-again", fields).AsTask());
+        // The rollback deleted the first field's secret, which frees its name, so the retry writes both fields.
+        await CreateConnectionAsync("retried", fields);
 
-        // The rolled-back secret keeps its name today, so the retry conflicts. Once Secrets releases deleted names it succeeds.
-        if (AssertHeldNameConflictOrNoError(outcome))
-            Assert.Null(await _manager.FindAsync(Tenant, "held-again"));
-        else
-            Assert.NotNull(await _manager.FindAsync(Tenant, "held-again"));
+        Assert.Equal("first", await RevealAsync("retried"));
+        Assert.NotNull(await _secrets.FindAsync(Tenant, "connection:retried:extra"));
     }
 
     [Fact]
-    public async Task Update_ReportsADeletedSecretsHeldNameAsAConflictNotARetryableStoreFault()
+    public async Task Update_WritesAnInlineValueUnderTheNameOfADeletedSecret()
     {
-        await CreateConnectionAsync("held-update");
-        await CreateSecretAsync("connection:held-update:token", "stale");
-        await _secrets.DeleteAsync(Tenant, "connection:held-update:token");
+        await CreateConnectionAsync("freed-name");
+        await CreateSecretAsync("connection:freed-name:token", "stale");
+        await _secrets.DeleteAsync(Tenant, "connection:freed-name:token");
 
-        var outcome = await Record.ExceptionAsync(() => _manager.UpdateAsync(Tenant, "held-update", new UpdateConnectionRequest
+        await _manager.UpdateAsync(Tenant, "freed-name", new UpdateConnectionRequest
         {
             SecretFields = TokenValue("fresh")
-        }).AsTask());
+        });
 
-        // Secrets keeps a deleted secret's name today, so this conflicts. Once it releases deleted names the update succeeds.
-        if (!AssertHeldNameConflictOrNoError(outcome))
-            Assert.Equal("fresh", await RevealAsync("held-update"));
+        Assert.Equal("fresh", await RevealAsync("freed-name"));
     }
 
     [Fact]
@@ -733,18 +716,68 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
         Assert.Equal(1, (await _secrets.FindAsync(Tenant, "connection:raced-update:token"))!.CurrentVersion);
     }
 
-    [Fact]
-    public async Task Create_DoesNotReportASecretStoreMisconfigurationAsRetryable()
+    [Theory]
+    [InlineData("missing-store", SecretTypeNames.Text)]
+    [InlineData(SecretStoreNames.Encrypted, "missing-type")]
+    [InlineData(SecretStoreNames.Encrypted, ConfigurationOnlyTextType.Name)]
+    public async Task Create_DoesNotReportASecretStoreMisconfigurationAsRetryable(string storeName, string typeName)
     {
-        var misconfiguration = new InvalidOperationException("Secret type is not compatible with the selected store.");
-        _secretHooks.OnCreate = _ => misconfiguration;
+        // The real secret manager refuses the owned secret's store or type; only the request is redirected to it.
+        _secretHooks.RewriteCreate = request => new CreateSecretRequest
+        {
+            Name = request.Name,
+            DisplayName = request.DisplayName,
+            TypeName = typeName,
+            StoreName = storeName,
+            Value = request.Value,
+            Tags = request.Tags
+        };
 
         var failure = await Assert.ThrowsAsync<ConnectionStoreException>(() => CreateConnectionAsync("misconfigured", TokenValue("value")).AsTask());
 
-        Assert.Same(misconfiguration, failure.InnerException);
+        Assert.IsType<SecretStoreConfigurationException>(failure.InnerException);
         Assert.Contains("will not help", failure.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("safe to retry", failure.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Retry;", failure.Message, StringComparison.Ordinal);
         Assert.Null(await _manager.FindAsync(Tenant, "misconfigured"));
+        AssertLoggedError(failure);
+    }
+
+    public static TheoryData<Exception> ProgrammerErrors() => new()
+    {
+        new NullReferenceException(),
+        new InvalidCastException(),
+        new NotImplementedException(),
+        new NotSupportedException(),
+        new ObjectDisposedException("secret store")
+    };
+
+    [Theory]
+    [MemberData(nameof(ProgrammerErrors))]
+    public async Task CreateAndUpdate_LetAProgrammerErrorPropagateUnwrapped(Exception bug)
+    {
+        _secretHooks.OnCreate = _ => bug;
+        Assert.Same(bug, await Record.ExceptionAsync(() => CreateConnectionAsync("bug-create", TokenValue("value")).AsTask()));
+        Assert.Null(await _manager.FindAsync(Tenant, "bug-create"));
+
+        _secretHooks.OnCreate = null;
+        await CreateConnectionAsync("bug-update");
+        _secretHooks.OnCreate = _ => bug;
+        Assert.Same(bug, await Record.ExceptionAsync(() => _manager.UpdateAsync(Tenant, "bug-update", new UpdateConnectionRequest
+        {
+            SecretFields = TokenValue("value")
+        }).AsTask()));
+    }
+
+    [Fact]
+    public async Task Create_LogsTheStoreFailureItWrapsAtError()
+    {
+        var outage = new IOException("Simulated connection store outage.");
+        _interceptor.BeforeOuterSave = () => Task.FromException(outage);
+
+        var failure = await Assert.ThrowsAsync<ConnectionStoreException>(() => CreateConnectionAsync("logged-create").AsTask());
+
+        Assert.Same(outage, failure.InnerException);
+        AssertLoggedError(failure);
     }
 
     [Fact]
@@ -823,6 +856,54 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Create_RollbackKeepsAConnectionAnotherRequestSavedSince()
+    {
+        const string connectionName = "replaced-mid-create";
+        var repository = _scope.ServiceProvider.GetRequiredService<IConnectionRepository>();
+        var outage = new IOException("Simulated secret store outage.");
+        // While this create writes its second field, another request deletes the row and saves a connection of its own.
+        _secretHooks.OnCreate = name =>
+        {
+            if (!name.EndsWith(":extra", StringComparison.Ordinal))
+                return null;
+            ReplaceConnection(repository, connectionName);
+            return outage;
+        };
+
+        await Assert.ThrowsAsync<ConnectionStoreException>(() =>
+            CreateConnectionAsync(connectionName, InlineFields(("token", "first"), ("extra", "second"))).AsTask());
+
+        var survivor = await repository.FindAsync(Tenant, connectionName);
+        Assert.Equal("Saved by another request", survivor!.Definition.DisplayName);
+        Assert.Null(await _secrets.FindAsync(Tenant, "connection:replaced-mid-create:token"));
+    }
+
+    [Fact]
+    public async Task Create_LosingItsSaveToAConcurrentUpdateKeepsTheUpdatedConnection()
+    {
+        // An update wins between the create's add and its save (#2855 item 2.1); the create's rollback must not delete it.
+        _interceptor.BeforeOuterSave = ConcurrentDisplayNameUpdate("updated-mid-create");
+
+        await Assert.ThrowsAsync<ConnectionConflictException>(() => CreateConnectionAsync("updated-mid-create", TokenValue("value")).AsTask());
+
+        Assert.Equal("Concurrent update", (await _manager.FindAsync(Tenant, "updated-mid-create"))!.DisplayName);
+        // The update saved the row before the create wrote its credential, so nothing references the create's secret.
+        Assert.Null(await _secrets.FindAsync(Tenant, "connection:updated-mid-create:token"));
+    }
+
+    [Fact]
+    public async Task Create_KeepsAConnectionWhoseSaveCommittedBeforeTheStoreFailed()
+    {
+        _interceptor.AfterOuterSave = () => Task.FromException(new IOException("Simulated failure after the commit."));
+
+        var failure = await Assert.ThrowsAsync<ConnectionStoreException>(() => CreateConnectionAsync("committed-create", TokenValue("value")).AsTask());
+
+        // Not confirmed saved, and the rollback keeps what the committed row references.
+        Assert.Contains("may not have been created", failure.Message, StringComparison.Ordinal);
+        Assert.Equal("value", await RevealAsync("committed-create"));
+    }
+
+    [Fact]
     public async Task Create_PreservesRawWhitespaceInNonblankInlineSecretValues()
     {
         const string connectionName = "raw-credential";
@@ -883,15 +964,15 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task Update_SaveFailureOtherThanAConflictKeepsStoredValuesAndLeavesNewlyCreatedSecrets()
+    public async Task Update_SaveFailureOtherThanAConflictKeepsStoredValuesAndRemovesTheSecretsItCreated()
     {
         const string connectionName = "save-outage";
         await CreateConnectionAsync(connectionName, InlineFields((HttpConnectionSecretFields.Token, "previous-value"), ("secondary", "secondary-value")));
         await CreateSecretAsync("save-outage-replacement", "replacement-value");
 
-        // The interceptor fails before the inner save, so nothing is stored and no secret is deleted. Fields moving to a
-        // new inline secret have already created theirs, and it stays; only rotations of already-referenced secrets
-        // wait for the save. (A store that commits and then fails is why a failed save never deletes: the outcome is unknown.)
+        // The interceptor fails before the inner save, so nothing is stored. A field moving to a new inline secret has
+        // already created it, and the rollback deletes it because no stored connection references it; the secrets the
+        // stored connection resolves are kept, and rotations of them wait for the save.
         _interceptor.BeforeOuterSave = () => Task.FromException(new InvalidOperationException("Simulated store outage."));
         var failure = await Assert.ThrowsAsync<ConnectionStoreException>(() => _manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
         {
@@ -908,7 +989,40 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
         Assert.Equal("previous-value", await RevealAsync(connectionName));
         Assert.Equal(1, (await _secrets.FindAsync(Tenant, "connection:save-outage:token"))!.CurrentVersion);
         Assert.NotNull(await _secrets.FindAsync(Tenant, "connection:save-outage:secondary"));
-        Assert.NotNull(await _secrets.FindAsync(Tenant, "connection:save-outage:extra"));
+        Assert.Null(await _secrets.FindAsync(Tenant, "connection:save-outage:extra"));
+        AssertLoggedError(failure);
+    }
+
+    [Fact]
+    public async Task Update_LosingTheSaveRemovesTheSecretItCreatedSoARetrySucceeds()
+    {
+        const string connectionName = "lost-new-field";
+        await CreateConnectionAsync(connectionName, TokenValue("previous-value"));
+        var update = new UpdateConnectionRequest { SecretFields = InlineFields(("extra", "extra-value")) };
+
+        _interceptor.BeforeOuterSave = ConcurrentDisplayNameUpdate(connectionName);
+        await Assert.ThrowsAsync<ConnectionConflictException>(() => _manager.UpdateAsync(Tenant, connectionName, update).AsTask());
+        Assert.Null(await _secrets.FindAsync(Tenant, "connection:lost-new-field:extra"));
+
+        await _manager.UpdateAsync(Tenant, connectionName, update);
+
+        Assert.Contains("extra", (await _manager.FindAsync(Tenant, connectionName))!.SecretFieldNames);
+    }
+
+    [Fact]
+    public async Task Update_KeepsTheSecretItCreatedWhenTheSaveCommittedBeforeTheStoreFailed()
+    {
+        const string connectionName = "committed-update";
+        await CreateConnectionAsync(connectionName);
+
+        _interceptor.AfterOuterSave = () => Task.FromException(new IOException("Simulated failure after the commit."));
+        var failure = await Assert.ThrowsAsync<ConnectionStoreException>(() => _manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
+        {
+            SecretFields = TokenValue("committed-value")
+        }).AsTask());
+
+        Assert.Contains("may not have been updated", failure.Message, StringComparison.Ordinal);
+        Assert.Equal("committed-value", await RevealAsync(connectionName));
     }
 
     [Fact]
@@ -1001,11 +1115,10 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
             SecretFields = InlineFields((HttpConnectionSecretFields.Token, "new-value"), ("secondary", "secondary-new"))
         }).AsTask());
 
-        // The later fault is not lost behind the first one: both travel as the inner exception and both are logged.
+        // The later fault is not lost behind the first one: both travel as the inner exception, which is logged.
         var inner = Assert.IsType<AggregateException>(failure.InnerException);
         Assert.Equal([tokenFault, secondaryFault], inner.InnerExceptions);
-        Assert.Contains(_logger.Entries, entry => entry.Exception == tokenFault);
-        Assert.Contains(_logger.Entries, entry => entry.Exception == secondaryFault);
+        AssertLoggedError(failure);
     }
 
     [Fact]
@@ -1103,8 +1216,9 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
         // The first field's delete threw, yet the second field's replaced secret was still deleted.
         Assert.Null(await _secrets.FindAsync(Tenant, "connection:cleanup-after-failure:second"));
         Assert.NotNull(await _secrets.FindAsync(Tenant, "connection:cleanup-after-failure:first"));
-        // The swallowed cleanup failure leaves a trace.
-        Assert.Contains(_logger.Entries, entry => entry.Exception == deleteFault && entry.Message.Contains("connection:cleanup-after-failure:first"));
+        // The swallowed cleanup failure leaves a trace, and the reported rotation failure is logged at Error.
+        Assert.Contains(_logger.Warnings, entry => entry.Exception == deleteFault && entry.Message.Contains("'first'"));
+        AssertLoggedError(failure);
     }
 
     [Fact]
@@ -1156,7 +1270,7 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
         Assert.Same(deleteFault, failure.InnerException);
         Assert.Equal(["secondary"], failure.FieldNames);
         Assert.Equal("rotated-value", await RevealAsync(connectionName));
-        Assert.Contains(_logger.Entries, entry => entry.Exception == deleteFault);
+        AssertLoggedError(failure);
     }
 
     [Fact]
@@ -1172,22 +1286,10 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
         }).AsTask());
 
         Assert.Contains($"'{HttpConnectionSecretFields.Token}'", conflict.Message);
-        Assert.Contains("point them at an existing secret", conflict.Message);
-    }
 
-    [Fact]
-    public async Task Update_DoesNotTellACallerToRetryWhenTheConflictIsNotADeletion()
-    {
-        const string connectionName = "rotated-not-deleted";
-        await CreateConnectionAsync(connectionName, TokenValue("previous-value"));
-
-        _interceptor.AfterOuterSave = RotateConcurrently("connection:rotated-not-deleted:token");
-        var conflict = await Assert.ThrowsAsync<ConnectionConflictException>(() => _manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
-        {
-            SecretFields = TokenValue("stale-value")
-        }).AsTask());
-
-        Assert.DoesNotContain("existing secret", conflict.Message);
+        // The deleted secret freed its name, so retrying the inline value writes a new owned secret.
+        await _manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest { SecretFields = TokenValue("retried-value") });
+        Assert.Equal("retried-value", await RevealAsync(connectionName));
     }
 
     [Fact]
@@ -1229,15 +1331,15 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
         const string connectionName = "create-taken";
         await CreateConnectionAsync(connectionName, TokenValue("previous-value"));
 
-        // The manager reads the owned secret as absent (calls 1 and 2: write-target validation, then the merge), so it
-        // defers a create; by the time that create runs, a concurrent writer has taken the name.
-        var finds = 0;
-        _secretHooks.HideFind = name => name == "connection:create-taken:token" && ++finds <= 2;
+        // The manager reads the owned secret as absent, so it defers a create; by the time that create runs, a concurrent
+        // writer has taken the name. Secrets' typed refusal classifies it: the manager never reads the secret back.
+        _secretHooks.HideFind = name => name == "connection:create-taken:token";
         var conflict = await Assert.ThrowsAsync<ConnectionConflictException>(() => _manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
         {
             SecretFields = TokenValue("stale-value")
         }).AsTask());
 
+        _secretHooks.HideFind = null;
         Assert.Contains($"'{HttpConnectionSecretFields.Token}'", conflict.Message);
         Assert.Equal("previous-value", await RevealAsync(connectionName));
     }
@@ -1316,7 +1418,15 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
                 return secretHooks;
             });
             services.AddSingleton(logger);
+            services.AddSingleton<ISecretTypeProvider, ConfigurationOnlyTextType>();
         });
+
+    /// <summary>A secret type that no encrypted store can hold, so the real secret manager refuses an owned secret of it.</summary>
+    private sealed class ConfigurationOnlyTextType() : DelegatingSecretTypeProvider(new(
+        Name, "Configuration-only text", "A type no encrypted store can hold.", "text", [SecretStoreNames.Configuration]))
+    {
+        public const string Name = "configuration-only-text";
+    }
 
     private static IConfiguration NamedCredentialConfiguration() => new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
     {
@@ -1342,17 +1452,32 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     private ValueTask<ConnectionMetadata> CreateConnectionAsync(string name, IDictionary<string, ConnectionSecretFieldInput>? secretFields = null) =>
         _manager.CreateAsync(Tenant, BearerConnection(name, secretFields ?? new Dictionary<string, ConnectionSecretFieldInput>()));
 
-    /// <summary>Returns true after checking that an outcome is the held-name conflict, and false when there was no error.</summary>
-    private static bool AssertHeldNameConflictOrNoError(Exception? outcome)
+    /// <summary>Checks that the failure's inner exception was logged once at Error, with the failure's message.</summary>
+    private void AssertLoggedError(Exception failure)
     {
-        if (outcome is null)
-            return false;
+        var entry = Assert.Single(_logger.Entries, entry => entry.Level == LogLevel.Error);
+        Assert.Same(failure.InnerException, entry.Exception);
+        Assert.Equal(failure.Message, entry.Message);
+    }
 
-        var conflict = Assert.IsType<ConnectionConflictException>(outcome);
-        Assert.Contains("different connection name", conflict.Message, StringComparison.Ordinal);
-        Assert.Contains("existing secret", conflict.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("retry", conflict.Message, StringComparison.OrdinalIgnoreCase);
-        return true;
+    /// <summary>Stands in for another request that deletes the connection and saves one of its own under the name.</summary>
+    private static void ReplaceConnection(IConnectionRepository repository, string connectionName)
+    {
+        // The in-memory repository completes synchronously, so the secret-store hook can run these inline.
+        Assert.True(repository.DeleteAsync(Tenant, connectionName).AsTask().GetAwaiter().GetResult());
+        var replacement = new ConnectionDocument
+        {
+            Definition = new ConnectionDefinition
+            {
+                TenantId = Tenant,
+                Name = connectionName,
+                DisplayName = "Saved by another request",
+                TypeName = ConnectionTypeNames.Http,
+                AuthScheme = HttpAuthSchemes.Bearer
+            }
+        };
+        Assert.True(repository.TryAddAsync(replacement).AsTask().GetAwaiter().GetResult());
+        repository.SaveAsync(replacement).AsTask().GetAwaiter().GetResult();
     }
 
     private ValueTask<SecretMetadata> CreateSecretAsync(string name, string value) =>
@@ -1375,6 +1500,7 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     {
         public ISecretManager Inner { get; set; } = null!;
         public Func<string, Exception?>? OnCreate { get; set; }
+        public Func<CreateSecretRequest, CreateSecretRequest>? RewriteCreate { get; set; }
         public Func<string, Exception?>? OnRotate { get; set; }
         public Func<string, Exception?>? OnDelete { get; set; }
         public Func<string, bool>? HideFind { get; set; }
@@ -1385,7 +1511,7 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
         {
             if (OnCreate?.Invoke(request.Name) is { } fault)
                 throw fault;
-            return Inner.CreateAsync(tenantId, request, cancellationToken);
+            return Inner.CreateAsync(tenantId, RewriteCreate?.Invoke(request) ?? request, cancellationToken);
         }
 
         public async ValueTask<SecretMetadata?> FindAsync(string tenantId, string name, CancellationToken cancellationToken = default)
@@ -1483,6 +1609,14 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
             if (interceptor.OnRepositoryDelete?.Invoke() is { } fault)
                 throw fault;
             return inner.DeleteAsync(tenantId, name, cancellationToken);
+        }
+
+        public ValueTask<bool> DeleteAsync(string tenantId, string name, int expectedVersion, CancellationToken cancellationToken = default)
+        {
+            interceptor.RepositoryDeleteTokens.Add(cancellationToken);
+            if (interceptor.OnRepositoryDelete?.Invoke() is { } fault)
+                throw fault;
+            return inner.DeleteAsync(tenantId, name, expectedVersion, cancellationToken);
         }
     }
 
