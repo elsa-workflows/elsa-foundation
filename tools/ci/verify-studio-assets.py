@@ -24,6 +24,7 @@ EXPECTED_ASSETS = (
     "Extensions/Connections/studio/Elsa.Studio.Connections/wwwroot/studio/modules/connections/module.js",
     "Extensions/Diagnostics.OpenTelemetry/studio/Elsa.Studio.Diagnostics.OpenTelemetry/wwwroot/studio/modules/open-telemetry/module.js",
     "Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/wwwroot/studio/modules/structured-logs/module.js",
+    "Extensions/Etl/studio/Elsa.Studio.Etl/wwwroot/studio/modules/etl/module.js",
     "Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/wwwroot/studio/modules/expression-editors/javascript/module.js",
     "Extensions/ExpressionEditors.Liquid/studio/Elsa.Studio.ExpressionEditors.Liquid/wwwroot/studio/modules/expression-editors/liquid/module.js",
     "Extensions/ExtensionBuilder/studio/Elsa.Studio.ExtensionBuilder/wwwroot/studio/modules/extension-builder/module.js",
@@ -48,10 +49,12 @@ def self_test() -> None:
             asset.touch()
         if missing_assets(root):
             raise AssertionError("Complete fixture was reported as missing assets.")
-        removed = root / EXPECTED_ASSETS[-1]
-        removed.unlink()
-        if missing_assets(root) != [EXPECTED_ASSETS[-1]]:
-            raise AssertionError("Missing RCL asset was not reported precisely.")
+        for path in EXPECTED_ASSETS:
+            removed = root / path
+            removed.unlink()
+            if missing_assets(root) != [path]:
+                raise AssertionError(f"Missing asset was not reported precisely: {path}")
+            removed.touch()
 
 
 def main() -> None:

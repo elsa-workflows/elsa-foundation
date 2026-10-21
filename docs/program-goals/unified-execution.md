@@ -43,6 +43,12 @@ Evaluate an out-of-the-box runner and third-party adapters against those semanti
 stabilizing a public contract. Keep actor placement separate from computational work. Current ETL qualification
 does not establish workflow/queue pause support; no new runner implementation lane is authorized by this note.
 
+The finite ETL worker keeps durable admission, fenced work claims and terminal delivery separate. Its private
+polling loop can later be replaced without selecting a runner framework now. Future pause design must explicitly
+decide whether completed results may advance a paused workflow, and enforce eligibility durably at the relevant
+claim/continuation boundary. Preserve pending results and proof-before-acknowledgement; process-local worker
+capacity is not a distributed per-workflow in-flight limit.
+
 ## Working method
 
 One active implementation leaf, one integration lane and a small prepared successor queue. Reuse matching PRs and honor claims. Use a concise contract for substantial behavior, executable acceptance tests, focused changes, bounded self-review under the owner’s standing authorization, CI/maps and post-merge evidence. Use bounded worker reviews where useful; they do not create an independent-approval gate. Do not create a parallel backlog in this file or duplicate existing native proofs. Progressive elaboration follows real integrations.
