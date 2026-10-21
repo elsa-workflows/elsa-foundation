@@ -1,10 +1,25 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import axe from "axe-core";
+import {
+  addSteps,
+  createScopeWorkflow,
+  expectAccessible,
+  historyItems,
+  openScope,
+  publish,
+  readScopeInFreshTab,
+  recoveryChip,
+  recoveryName,
+  signIn,
+  startTestRun,
+  waitForPhase
+} from "./support/journey";
 
 // Spec 260 (M4), the browser layer against a real Studio and Workbench: an operator retries, resolves and abandons a
 // waiting compensation recovery, a stale action from a second tab is refused, a reload during polling resumes the
 // plan without submitting it again, and a reader without manage permission sees no action and gets 403.
 // Restarts and every persistence mode are proven by the backend journeys (O1–O8) and the Workbench owned-process test.
+// Spec 261 adds a scheduled retry: a scope with a handler retry delay shows "Retry scheduled" with its attempt and due
+// time, offers no action while it waits, and needs action once the attempts run out.
 
 test.skip(!process.env.ELSA_STUDIO_URL, "Set ELSA_STUDIO_URL to a running Studio connected to a Workbench.");
 test.describe.configure({ mode: "serial" });
@@ -140,67 +155,50 @@ test("a reader without manage permission sees the journal and history but no act
   expect(response.status()).toBe(403);
 });
 
-async function signIn(page: Page, user = process.env.ELSA_STUDIO_USER ?? "admin", password = process.env.ELSA_STUDIO_PASSWORD ?? "Password123!") {
-  await page.goto("/");
-  await page.locator("input[name=username], input[type=text]").first().fill(user!);
-  await page.locator("input[type=password]").first().fill(password!);
-  await page.locator("button[type=submit], button:has-text('Sign in')").first().click();
-  await page.waitForLoadState("networkidle");
-}
+// Spec 261 (T520): with a handler retry delay of 20 s the failed handler's next attempt is scheduled, not run at once.
+// The row says so with its attempt and due time, no action is offered while it waits (there is no blocking incident),
+// and once the attempts run out the scope needs action as before. The handler fails at once, so the moment it is
+// running ("Retrying") is too short to see; the journey sees the second and third attempts scheduled instead.
+test("a scheduled retry waits without offering an action, then the scope needs action", async ({ page }) => {
+  test.setTimeout(300_000);
+  await signIn(page);
+  await authorAndPublishOrderWorkflow(page, `Backoff journey ${Date.now()}`, { "Handler Retry Delay": "00:00:20" });
+  const runId = await startTestRun(page);
+
+  // Each poll reads the run in a fresh tab; the waits are long enough that reloading one tab would exhaust it.
+  await expect.poll(() => readScopeInFreshTab(page, runId, scope => recoveryName(scope, "Reserve delivery")), { timeout: 60_000, intervals: [3000] })
+    .toMatch(/^Recovery: Retry scheduled \(1st\) · Attempt 2 of 3 · after /);
+  let scope = await openScope(page, runId);
+  await expect(recoveryChip(scope, "Reserve delivery")).toHaveAccessibleName(/^Recovery: Retry (scheduled|due) \(1st\) · Attempt 2 of 3/);
+  await expect(scope.locator(".wf-compensation-phase")).toContainText("Compensating");
+  await expect(scope.locator(".wf-compensation-operator-action")).toHaveCount(0);
+  await expectAccessible(page, ".wf-compensation-designer");
+
+  await expect.poll(() => readScopeInFreshTab(page, runId, scope => recoveryName(scope, "Reserve delivery")), { timeout: 90_000, intervals: [3000] })
+    .toMatch(/^Recovery: (Retry scheduled|Retry due|Needs action) \(1st\) · Attempt 3 of 3/);
+  await expect.poll(() => readScopeInFreshTab(page, runId, scope => scope.locator(".wf-compensation-phase").innerText()), { timeout: 120_000, intervals: [3000] })
+    .toContain("Needs action");
+
+  scope = await openScope(page, runId);
+  await expect(recoveryChip(scope, "Reserve delivery")).toHaveAccessibleName(/^Recovery: Needs action \(1st\) · Attempt 3 of 3/);
+  await expect(scope.getByRole("button", { name: "Retry the compensation of Reserve delivery", exact: true })).toBeVisible();
+  await expectAccessible(page, ".wf-compensation-designer");
+});
 
 // Scope: [ Reserve inventory ↔ Release inventory, Reserve delivery ↔ Cancel delivery (always fails), Confirm order (fails) ].
-async function authorAndPublishOrderWorkflow(page: Page) {
-  await page.goto("/workflows/definitions");
-  await page.getByRole("button", { name: "Create", exact: true }).click();
-  await page.getByLabel("Display name").fill(`Operator actions journey ${Date.now()}`);
-  await page.locator(".wf-dialog-actions button[type=submit]").click();
-  await page.locator("button", { hasText: "Compensation Scope" }).first().click();
-  await page.locator("button.wf-node-slot-badge", { hasText: "Steps" }).first().click();
-  await expect(page.locator(".wf-compensation-designer")).toBeVisible();
-
-  await pick(page, page.getByRole("button", { name: "Add first step" }), "Write Line");
-  await fill(page, "Text", "Reserved inventory");
-  await rename(page, 1, "Reserve inventory");
-  await pick(page, page.getByRole("button", { name: "Add compensation for Reserve inventory" }), "Write Line");
-  await fill(page, "Text", "Released inventory");
-  await pick(page, page.getByRole("button", { name: "Add step", exact: true }), "Write Line");
-  await fill(page, "Text", "Reserved delivery");
-  await rename(page, 2, "Reserve delivery");
-  await pick(page, page.getByRole("button", { name: "Add compensation for Reserve delivery" }), "Fault");
-  await pick(page, page.getByRole("button", { name: "Add step", exact: true }), "Fault");
-  await rename(page, 3, "Confirm order");
-
-  await page.getByRole("button", { name: "Review & publish" }).click();
-  await page.getByRole("dialog", { name: "Publish workflow" }).getByRole("button", { name: "Publish", exact: true }).click();
-  await expect(page.getByRole("dialog", { name: "Published" })).toBeVisible();
-  await page.getByRole("dialog", { name: "Published" }).getByRole("button", { name: "Close" }).click();
+async function authorAndPublishOrderWorkflow(page: Page, name = `Operator actions journey ${Date.now()}`, scopeInputs: Record<string, string> = {}) {
+  await createScopeWorkflow(page, name, scopeInputs);
+  await addSteps(page, [
+    { name: "Reserve inventory", activity: "Write Line", text: "Reserved inventory", compensation: { activity: "Write Line", text: "Released inventory" } },
+    { name: "Reserve delivery", activity: "Write Line", text: "Reserved delivery", compensation: { activity: "Fault" } },
+    { name: "Confirm order", activity: "Fault" }
+  ]);
+  await publish(page);
   return page.url();
 }
 
-async function startTestRun(page: Page) {
-  await page.getByRole("button", { name: "Test Run", exact: true }).click();
-  await page.getByRole("button", { name: "Start Test Run", exact: true }).click();
-  const runLink = page.locator("text=RUN / INSTANCE").locator("xpath=following-sibling::*[1]");
-  await expect(runLink).not.toHaveText("", { timeout: 30_000 });
-  const runId = (await runLink.innerText()).trim();
-  expect(runId).toMatch(/^\S+$/);
-  return runId;
-}
-
-async function openScope(page: Page, runId: string) {
-  await page.goto(`/workflows/instances/${runId}`);
-  const badge = page.locator("button.wf-node-slot-badge", { hasText: "Steps" }).first();
-  const designer = page.locator(".wf-compensation-designer");
-  await expect(badge.or(designer).first()).toBeVisible({ timeout: 30_000 });
-  if (!(await designer.isVisible())) await badge.click();
-  await expect(designer).toBeVisible();
-  return designer;
-}
-
 async function openWaitingScope(page: Page, runId: string) {
-  await expect.poll(async () => (await openScope(page, runId)).locator(".wf-compensation-phase").innerText(), { timeout: 120_000, intervals: [2000] })
-    .toContain("Needs action");
-  return page.locator(".wf-compensation-designer");
+  return waitForPhase(page, runId, "Needs action");
 }
 
 async function resolveEntry(page: Page, scope: Locator, outcome: string, reason: string) {
@@ -210,59 +208,4 @@ async function resolveEntry(page: Page, scope: Locator, outcome: string, reason:
   await dialog.getByRole("textbox", { name: "Reason (required)" }).fill(reason);
   await dialog.getByRole("button", { name: "Resolve", exact: true }).click();
   await expect(dialog).toBeHidden();
-}
-
-function recoveryChip(scope: Locator, step: string) {
-  return scope.getByRole("listitem").filter({ hasText: step }).first().locator(".wf-compensation-state[data-kind='recovery']").first();
-}
-
-async function recoveryName(scope: Locator, step: string) {
-  return (await recoveryChip(scope, step).getAttribute("aria-label")) ?? "";
-}
-
-function historyItems(page: Page) {
-  return page.getByRole("region", { name: "Operator actions" }).getByRole("listitem");
-}
-
-async function pick(page: Page, trigger: Locator, activity: string) {
-  await trigger.click();
-  const listbox = page.getByRole("listbox").last();
-  await expect(listbox).toBeVisible();
-  await page.keyboard.type(activity);
-  await expect(listbox.getByRole("option").first()).toContainText(activity);
-  await page.keyboard.press("Enter");
-  await expect(listbox).toBeHidden();
-}
-
-async function fill(page: Page, label: string, value: string) {
-  const box = page.getByRole("textbox", { name: label, exact: true });
-  await box.fill(value);
-  await box.press("Tab");
-}
-
-async function rename(page: Page, index: number, value: string) {
-  const box = page.getByLabel(`Name of step ${index}`);
-  await box.fill(value);
-  await box.press("Tab");
-  await expect(box).toHaveValue(value);
-}
-
-// Axe on one part of the page at 1200 and 390 px; the run view is restored to its original size afterwards.
-async function expectAccessible(page: Page, selector: string) {
-  const original = page.viewportSize();
-  for (const width of [1200, 390]) {
-    await page.setViewportSize({ width, height: 900 });
-    await expect(page.locator(selector).first()).toBeVisible();
-    await page.addScriptTag({ content: axe.source });
-    const violations = await page.evaluate(async scope => {
-      const result = await (window as Window & {
-        axe: { run: (root: Element, options: object) => Promise<{ violations: Array<{ id: string; impact: string | null; help: string }> }> };
-      }).axe.run(document.querySelector(scope)!, { resultTypes: ["violations"] });
-      return result.violations
-        .filter(violation => violation.impact === "critical" || violation.impact === "serious")
-        .map(violation => `${violation.id}: ${violation.help}`);
-    }, selector);
-    expect(violations, `${selector} at ${width}px`).toEqual([]);
-  }
-  if (original) await page.setViewportSize(original);
 }

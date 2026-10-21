@@ -240,20 +240,23 @@ public sealed class CompensationScopeRestartTests : IDisposable
 
     /// <summary>
     /// A republish while recovery is in flight does not change the run's handlers: recovery finishes with the handler
-    /// of the executable the run started on, not the one published since.
+    /// of the executable the run started on, not the one published since. In every persistence mode (spec 261 Q10).
     /// </summary>
-    [Fact]
-    public async Task A_republish_mid_recovery_keeps_the_handlers_of_the_pinned_executable()
+    [Theory]
+    [InlineData(PersistenceMode.Durable)]
+    [InlineData(PersistenceMode.Balanced)]
+    [InlineData(PersistenceMode.Ephemeral)]
+    public async Task A_republish_mid_recovery_keeps_the_handlers_of_the_pinned_executable(PersistenceMode mode)
     {
         var participant = new Participant().Rejecting("confirm-order").KillingHostAfterEffectOf("cancel-delivery");
 
-        await using (var first = await StartHostAsync(participant, PersistenceMode.Durable))
+        await using (var first = await StartHostAsync(participant, mode))
         {
             var reference = await first.PublishAsync(Executable(ReservationJourney()), "source-compensation-restart");
             await StartUntilTheHostStopsAsync(first, reference);
         }
 
-        await using var second = await StartHostAsync(participant, PersistenceMode.Durable);
+        await using var second = await StartHostAsync(participant, mode);
         var republished = Scope(
             new Step("Reserve inventory", Participant("reserve-inventory"), Participant("release-inventory-v2")),
             new Step("Reserve delivery", Participant("reserve-delivery"), Participant("cancel-delivery")),

@@ -138,7 +138,7 @@ An operator choosing a database reads the qualification record: compensation is 
 
 1. **Given** each qualified provider and mode, **then** the provider subset (restart, wait and retry, nested hand-over, resolve with a kill before delivery, abandon, backoff with a kill while waiting) passes in the nightly `compensation` suite with its required-provider switch set.
 2. **Given** a scope that started under an older state version (1 to 4) and waits, **when** the current code resumes it, **then** recovery finishes and the state is written back as the current version.
-3. **Given** a compensated run, **when** it is deleted, **then** its activity executions and incidents (and so its operator history) are gone; a running or waiting run cannot be deleted.
+3. **Given** a compensated run, **when** it is deleted, **then** its activity executions and incidents (and so its operator history) are gone; the deletion store refuses a running or waiting run, and the API's delete cancels such a run first, without compensating it.
 4. **Given** an unqualified combination, **then** the qualification record and the user guide say so; no doc implies support.
 
 ### User Story 5 - Guides and samples match what ships (Priority: P1)
@@ -166,7 +166,7 @@ The program owner opens the qualification record and the Elsa 3 assessment. The 
 ### Edge Cases
 
 - **Backoff and a cancelled scope**: the delayed schedule fires after the scope was cancelled. The runtime acknowledges it and creates no child (FR-503).
-- **Backoff and run deletion**: a run cannot be deleted while it runs, so a pending retry never outlives its run's history; a delayed item that reaches a run that is gone (deleted after it was cancelled) is dropped.
+- **Backoff and run deletion**: the deletion store never deletes a running run, and the API's delete cancels it first, so a pending retry never outlives its run's history; a delayed item that reaches a run that is gone (deleted after it was cancelled) is dropped.
 - **Backoff and a terminal run**: the run faulted for another reason while the retry waited; the delayed item is acknowledged without scheduling.
 - **Backoff with a hand-over arriving**: the outer scope journals the handed-over entries while it waits, as during any recovery; the newest entry is undone after the waiting attempt finishes (handlers run one at a time).
 - **A Compensate or Confirm while waiting**: the scope is `Compensating`; both are ignored as today (spec 258).
@@ -211,7 +211,7 @@ The program owner opens the qualification record and the Elsa 3 assessment. The 
 - **FR-516**: Every row of the [qualification matrix](contracts/qualification-matrix.md) marked supported has a passing proof on the candidate revision, recorded with the revision, the job or command and the count.
 - **FR-517**: A nightly EF container suite `compensation` runs the provider subset on PostgreSQL, SQL Server and MySQL in each persistence mode, with a required-provider switch, listed in `tools/ci/ef-suites.json` (OD18 A).
 - **FR-518**: An integration test resumes a waiting scope from each older state version (1 to 4) under the current code and finishes its recovery.
-- **FR-519**: Retention is proven: a completed scope's journal is not served; deleting a compensated run removes its incidents; a running run cannot be deleted; an executable referenced by a pending delayed schedule is not collected; the test-run window's effect on a waiting scope is settled and documented (R10).
+- **FR-519**: Retention is proven: a completed scope's journal is not served; deleting a compensated run removes its incidents; the deletion store refuses a run that is not terminal, and `DELETE runtime/workflows/instances/{id}` first cancels a running or waiting run (cancellation runs no compensation, so its effects stay as they are) and then deletes it with its recovery history; an executable referenced by a pending delayed schedule is not collected; the test-run window's effect on a waiting scope is settled and documented (R10).
 - **FR-520**: The live journeys share one helper module; the M1 journey is repaired (#3142); a nesting journey with Confirm is added; backoff and the warning are shown live.
 - **FR-521**: Review findings on the M1–M4 runtime and Studio code are resolved or filed with a reason, including #3130.
 

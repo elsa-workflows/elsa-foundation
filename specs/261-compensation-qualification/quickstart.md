@@ -51,8 +51,8 @@ Against a Studio and a Workbench built from the candidate revision, with `ELSA_S
 | Journey | Steps |
 |---|---|
 | `compensation-journey.spec.ts` (M1, repaired) | Author the three-step scope with Write Line steps and handlers; open **Review & publish**; see two warnings per Write Line pair; publish; **Test Run**; inspect `Compensated`, the cause, the order and the "Compensates" link; axe |
-| `nesting-journey.spec.ts` (new) | Author outer [Charge ↔ Refund, Confirm, inner scope (Reserve A ↔ Release A, Reserve B ↔ Release B), Ship (Fault)], all Write Line but Ship; publish; test run; inspect: Charge `Confirmed`, inner `Compensable by …`, **Handed over by inner scopes** with B then A `Compensated`; the inner occurrence link; axe |
-| `operator-actions-journey.spec.ts` (M4) | As in spec 260, plus: with `handlerRetryDelay` 5 s, the row reads **Retry scheduled · Attempt 2 of 3** before **Retrying**, and no action is offered during the wait |
+| `nesting-journey.spec.ts` (new) | Author outer [Charge ↔ Refund, Confirm, inner scope (Reserve A ↔ Release A, Reserve B ↔ Release B), Ship (Fault)], all Write Line but Ship; publish (six warnings); test run; inspect: Charge `Confirmed`, **Handed over by inner scopes** with B then A `Compensated`; the inner occurrence link; the inner scope's own rows `Compensated` (undone by the outer scope; `Compensable by …` shows only until the outer scope recovers); axe |
+| `operator-actions-journey.spec.ts` (M4) | As in spec 260, plus: with `handlerRetryDelay` 20 s, the row reads **Retry scheduled (1st) · Attempt 2 of 3 · after …**, no action is offered during the wait, attempt 3 is scheduled in turn, then **Needs action** with the retry action. The Fault handler fails at once, so **Retrying** is too short to observe |
 | reader step (M4) | Unchanged; runs when `ELSA_STUDIO_READONLY_USER` is set |
 
 Any wait longer than the 30-minute test-run window uses a published run (research R10).
@@ -108,13 +108,29 @@ Suites: Workflows.Runtime (2,508 tests), Activities.Runtime (653) and Activities
 | N506a | The warning validator (it reports nothing when a reader is present) | Compensation 6 (W1, W2, both-at-once, nested, read-once; the no-reader case inverts), Workbench W6 1 | As expected. |
 | N506b | Studio's severity filter (`isWarningSeverity` never true) | Vitest 9 (seven in `publicationReviewWarnings.test.tsx`, two in `workflowPublicationOperations.test.tsx`) | The browser spec does **not** fail: its fixture builds the review with its warnings already split, so it guards the rendering and accessibility, not the filter. The M1 live journey was not run here; it needs a live host and is broken today (#3142, R7, PR 2). |
 
+### Results (PR 2, run once by hand, each reverted)
+
+On `d7c0ab201`. Suites: Activities.Compensation (427), Workflows.Runtime.Api (207), Workflows.Design.Api (176), and the Workbench W6 test. Every suite passed before and after each control.
+
+| ID | What was removed | Failing tests | Notes |
+|---|---|---|---|
+| N507 | The promotion preflight's warning filter (every validation counts) | Design API 1 (`Promotion_preflight_is_ready_with_warnings_only_and_does_not_list_them`); Workbench W6 1 | As expected. Before the fix this was the shipped behaviour, and the M1 live journey could not publish. |
+| N508 | The diagnostics service's per-caller grant (`canManage` always `true`) | Runtime API 4: the reader, the grant denied for the runtime, no access rule, a rule that answers only the per-run question | The manage and untrusted-caller tests do not fail: the first expects `true`, the second calls the access rule directly. |
+| N509 | The version 1 upcast's operation key rule (key `m1:{forward id}`) | 3: U1 and the two v1 payload unit tests | U1 is the only end-to-end proof that an upgraded entry's handler targets the key an M1 participant saw. |
+| N510 | Retained runs as executable retention roots | 3: R3 in each mode | |
+| N511 | N501 again (`AvailableAt` is the commit time), against the provider subset on SQLite | 6: S7 in each mode, and R3 in each mode (its retry then runs before the collector sweeps) | The same control would fail S7 on each server provider. |
+| N512 | The in-memory store's one-generation guard | 1: `A_second_host_generation_on_in_memory_stores_is_refused` | |
+
+Live journeys on the same revision (Workbench `http://localhost:5095`, Studio `http://localhost:5089`, Chromium 1194): `compensation-journey.spec.ts` 1/1, `nesting-journey.spec.ts` 1/1, `operator-actions-journey.spec.ts` 2/2 with the reader step skipped (no read-only account), 3.0 minutes. The provider subset ran on PostgreSQL 16.15 locally (21/21, required-provider switch set); SQL Server and MySQL run only in CI.
+
 ## Run locally
 
 ```bash
 dotnet test Essentials/tests/Workflows/Runtime/Tests --filter DelayedSchedule
 dotnet test Essentials/tests/Activities/Runtime/Tests --filter DelayedSchedule
 dotnet test Essentials/tests/Activities/Compensation/Tests
+dotnet test Essentials/tests/Activities/Compensation/Tests --filter "FullyQualifiedName~ProviderSubset|FullyQualifiedName~InMemorySmoke|FullyQualifiedName~UpcastJourney|FullyQualifiedName~RetentionJourney"
 dotnet test Essentials/tests/Workbench/Tests --filter Compensation
-cd Studio/src/essentials/Elsa.Studio.Workflows/Client && npx vitest run compensation publicationReview
-cd Studio && pnpm test:browser
+(cd Studio/src/essentials/Elsa.Studio.Workflows/Client && npx vitest run compensation publicationReview)
+(cd Studio && pnpm test:browser)
 ```

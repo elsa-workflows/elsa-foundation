@@ -194,9 +194,25 @@ Nesting, confirmation and cancellation add these states:
 
 A scope that ran more than once, in a loop or because its parent ran again, has an **Occurrence** list to choose which run to show.
 
+## Supported configurations
+
+Compensation is qualified on SQLite, PostgreSQL, SQL Server and MySQL, in each persistence mode (Durable, Balanced and Ephemeral), on one host process, restarts included. Every compensation journey runs on SQLite for every change; on PostgreSQL, SQL Server and MySQL a nightly suite runs a subset with restarts in each mode: a crash after a compensation's effect, a wait that survives a restart, a nested hand-over, a resolve interrupted before it is delivered, an abandon, a scope in a 50-iteration loop and a scheduled retry that survives a kill.
+
+These are not qualified:
+
+- **Oracle.** No compensation test runs on it.
+- **Several host processes over one store, and multi-node placement**, where runs move between nodes. The runtime's own claims and fences are tested for these, but no compensation journey runs under them.
+- **In-memory stores.** They are for development and tests. Nothing survives a restart: a scope that waits for an operator, a scheduled retry and every restart guarantee on this page are lost when the process stops.
+
 ## Current limits
 
 These behaviours are planned and not yet available:
 
 - a compensation that can be handed over and reads a container's variable from a script expression is not checked at publication; it fails when it runs and waits for an operator;
 - a failure inside a Sequence inside a Flowchart step does not reach the scope.
+
+Keep these in mind:
+
+- **A retry delay is a minimum.** A due retry runs at the next outbox sweep, every 10 seconds by default.
+- **Studio test runs end after 30 minutes.** A test run whose scope still waits after that keeps waiting: you can still retry, resolve or abandon it from its run page, but its Test Run panel no longer follows it. A test run started from a trigger is cancelled when its window ends instead, and cancellation never compensates. For anything that may wait longer, use a published run.
+- **Deleting a run that has not finished cancels it first.** Deleting a run that waits for an operator, or whose retry is scheduled, stops it and then removes its history. Cancellation never compensates, so the steps it had not undone stay done in the systems they touched.
