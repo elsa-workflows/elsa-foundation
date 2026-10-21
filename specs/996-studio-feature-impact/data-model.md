@@ -13,7 +13,7 @@ One instance per existing target: Studio or Server.
 | Desired state | The complete locally staged feature state for this host. |
 | Configuration revision | The existing revision associated with the loaded host configuration. |
 | Effective enabled-state roots | Per-host direct enable/disable requests whose requested state remains in the current desired state and still differs from baseline. Retain effective roots across pending edits rather than only the latest action; prune or mark a root inapplicable when a later cascade overwrites its requested state or it returns to baseline. |
-| Pending setting edits | Direct setting-field edits whose current values still differ from this host's baseline. Track these independently from enabled-state roots so a later cascade cannot erase a still-effective setting change. |
+| Pending setting edits | Direct setting-field edits whose submitted values still differ from this host's baseline. Track these independently from enabled-state roots so a later cascade cannot erase a still-effective setting change. Raw local values retained on disabled features may remain available for re-enabling, but are not described as applied while the outgoing contract omits them. |
 | Retained automatic causes | The earlier required-edge cause/path for an automatic state change that remains different from baseline after its initiating root is reverted. This is historical context, never a current pending root or a new direct edit. |
 | Current catalog snapshot | The feature and required/optional dependency relationships used to explain the desired state. |
 
@@ -21,9 +21,10 @@ One instance per existing target: Studio or Server.
 
 - Editing or selecting features for one host never changes the other host's draft or roots.
 - An enabled-state root is applicable only while its requested state remains effective in the current desired state and differs from baseline. A later cascade that overwrites that state, or an edit that returns it to baseline, prunes or marks the root inapplicable.
-- A setting edit leaves the pending set when its field returns to the loaded baseline. It remains represented when the feature's enabled-state root is superseded but the setting value is still changed.
+- A setting edit leaves the pending set when its field returns to the loaded baseline. It remains represented when the feature's enabled-state root is superseded and the setting value is still changed and included in the outgoing configuration.
 - Required dependency/dependant paths are used to explain automatic changes. Optional relationships do not create a path.
 - The current draft is derived through the existing cascade behavior; provenance describes its causes and does not create a second cascade.
+- Derive dirty comparison, impact and submitted configuration through the existing disabled-feature projection: Apply sends an empty configuration for disabled features. Show outgoing clears, omit unapplied retained-value edits, and do not classify an automatic clear as a direct setting edit. Preserve raw draft values for existing re-enable behavior. Every draft mutation still invalidates review, including a retained-value edit that does not alter the outgoing projection.
 - Preserve enough earlier required-edge cause information to explain a remaining automatic state difference when no effective root currently requires it. Clear it when that feature returns to baseline or Reset replaces the draft.
 
 ## Impact Entry

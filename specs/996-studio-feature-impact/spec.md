@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-21
 
-**Status**: Approved
+**Status**: In progress
 
 **Input**: User description: "Show the exact target host and full cascade before applying feature administration changes."
 
@@ -39,8 +39,10 @@ As a feature administrator, I can inspect the selected host's complete pending i
 3. **Given** an affected feature is excluded by the active filter, **When** the operator reviews the impact, **Then** that feature remains listed.
 4. **Given** the operator reverses or resets pending edits so a feature matches its loaded baseline, **When** the review is refreshed, **Then** that feature is omitted as a net-zero change and no reverted action is presented as pending.
 5. **Given** the operator cancels the review, **When** the operator returns to editing, **Then** the staged draft is still available and no saved host configuration has changed.
-6. **Given** the operator changed a feature setting, **When** the operator reviews the draft, **Then** that direct setting edit is represented in the review using the existing handling for sensitive setting values.
+6. **Given** the operator changed a feature setting that will be submitted, **When** the operator reviews the draft, **Then** that direct setting edit is represented in the review using the existing handling for sensitive setting values.
 7. **Given** A and required B start disabled, **When** the operator enables A and then disables A, **Then** the existing cascade leaves B enabled, the review shows B as an automatic retained effect of the earlier dependency change, omits net-zero A, and does not claim a direct B edit, a pending A edit, or that disabled A currently requires B.
+8. **Given** a configured feature is disabled directly or by a required cascade, **When** the operator reviews the change, **Then** the review shows the existing outgoing configuration clear, does not promise locally retained setting values that will not be submitted, and keeps an automatic clear classified as automatic.
+9. **Given** keyboard focus is on Review changes, **When** the operator opens and navigates the review, **Then** focus stays inside the dialog; Escape cancels without applying and returns focus to the invoking control.
 
 ### User Story 3 - Apply only what was reviewed (Priority: P1)
 
@@ -73,6 +75,7 @@ As an authenticated user who can inspect feature management but cannot manage it
 ### Edge Cases
 
 - A cascade changes a feature outside the current text or category filter.
+- Locally retained settings on a disabled feature are omitted by the existing Apply contract; review must describe the outgoing clear rather than promise those retained values.
 - More than one pending direct edit requires the same feature to change.
 - A later edit reverses a prior direct or automatic change, leaving the feature at its loaded baseline.
 - Reverting a direct enable leaves its required dependency changed under the existing cascade; that retained automatic effect still needs a truthful explanation.
@@ -89,7 +92,7 @@ As an authenticated user who can inspect feature management but cannot manage it
 - **FR-001**: The feature-management experience MUST retain the existing single and bulk enable/disable behavior for required feature dependencies and dependants.
 - **FR-002**: Optional dependencies MUST NOT cause an automatic feature change solely because the related feature is enabled or disabled.
 - **FR-003**: Drafts MUST remain isolated by selected host; a review MUST identify whether it applies to Studio or Server and MUST NOT affect the other host.
-- **FR-004**: Before Apply, the operator MUST be able to review every net change between the selected host's loaded state and its complete desired draft, including direct setting edits and regardless of the current feature filter.
+- **FR-004**: Before Apply, the operator MUST be able to review every net change between the selected host's loaded state and the complete state that Apply will submit, including applicable direct setting edits and regardless of the current feature filter. Locally retained values omitted for a disabled feature MUST NOT be presented as submitted; any outgoing configuration clear MUST remain visible.
 - **FR-005**: The review MUST distinguish direct edits from automatically affected features. For automatic changes required by current pending edits, it MUST show the required dependency or dependant path from each applicable root. An automatic change retained after its initiating edit is reverted MUST instead be explained as an earlier cascade effect, with historical context clearly distinguished from a current pending requirement. It MUST NOT invent a direct edit or a current requirement. Direct setting edits MUST follow existing handling for sensitive setting values.
 - **FR-006**: For each automatic change, the review MUST identify all applicable pending direct edits that require it. Explanations MUST be recalculated from the remaining pending draft when edits change; reverted or net-zero changes MUST NOT be shown as pending impact. A retained automatic effect may identify its earlier dependency path only as history, with no effective pending root asserted for it.
 - **FR-007**: The review MUST show known reload implications for the selected host when that information is available. It MUST label unknown implications as unknown and MUST NOT imply an unverified hot reload, activation, or rollback guarantee.
@@ -103,6 +106,7 @@ As an authenticated user who can inspect feature management but cannot manage it
 - **FR-015**: Anonymous or authentication-disabled demo behavior MUST remain as it is today.
 - **FR-016**: The review's revision guarantee MUST remain bounded to the loaded catalog snapshot and the existing feature-configuration revision. It MUST NOT claim that a later out-of-band package or dependency-catalog change is atomically detected by that revision.
 - **FR-017**: This feature MUST reuse the existing feature-management and cascade behavior; it MUST NOT add automatic enablement beyond the existing required-dependency cascade, broaden the managed host scope, or add shared configuration or deployment behavior.
+- **FR-018**: Opening the review dialog MUST move focus inside it, contain keyboard navigation, and support Escape cancellation with focus returned to the invoking control; cancellation MUST NOT apply changes.
 
 ### Key Entities *(include if feature involves data)*
 
