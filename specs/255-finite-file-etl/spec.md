@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-20
 
-**Status**: Approved — implementation authorized under owner-delegated self-review; #3109 acceptance remains open
+**Status**: Implemented — delivery in #3111; resulting-main verification remains tracked by #3109
 
 **Input**: User description: Deliver the first finite CSV-to-JSONL ETL journey in #3109: Studio authoring and publishing, native workflow invocation, bounded partitioned work, durable recovery, and run inspection.
 
