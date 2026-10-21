@@ -502,27 +502,32 @@ export type OperatorPlanResult =
  * Polls the plan to its end, then reads its job. A plan still running after the budget keeps being polled at 5 s while
  * the page is open, after one `onStillQueued` call.
  */
+/** A read refused for sign-in, permission or a gone plan ends following; any other failure, such as a lost connection, is tried again. */
+export function isTransientReadFailure(error: unknown): boolean {
+  const status = (error as { status?: unknown } | null)?.status;
+  return status !== 401 && status !== 403 && status !== 404;
+}
+
 export async function followOperatorPlan(api: OperatorActionApi, planId: string, options: OperatorPollingOptions): Promise<OperatorPlanResult> {
   const started = options.now();
   let warned = false;
   for (let attempt = 0; ; attempt++) {
     if (options.signal?.aborted) return { kind: "aborted" };
-    let plan: AlterationPlan;
     try {
-      plan = await api.getPlan(planId);
+      const plan = await api.getPlan(planId);
+      if (terminalAlterationPlanStatuses.has(plan.status)) {
+        const page = await api.pageJobs(planId);
+        const summary = page.items[0];
+        if (!summary) return plan.status === "Completed" ? { kind: "succeeded" } : { kind: "refused", code: plan.failure?.code ?? null };
+        const job = await api.getJob(planId, summary.jobId);
+        return job.status === "Succeeded" ? { kind: "succeeded" } : { kind: "refused", code: alterationJobFailureCode(job) ?? plan.failure?.code ?? null };
+      }
     } catch (error) {
-      // A lost connection does not end the plan: keep checking. A refused read (sign-in, permission, gone) does.
-      const status = (error as { status?: unknown })?.status;
-      if (status === 401 || status === 403 || status === 404) throw error;
+      // A lost connection does not end the plan, also while reading its result: keep checking. A refused read
+      // (sign-in, permission, gone) does.
+      if (!isTransientReadFailure(error)) throw error;
       await options.sleep(operatorPollDelay(attempt));
       continue;
-    }
-    if (terminalAlterationPlanStatuses.has(plan.status)) {
-      const page = await api.pageJobs(planId);
-      const summary = page.items[0];
-      if (!summary) return plan.status === "Completed" ? { kind: "succeeded" } : { kind: "refused", code: plan.failure?.code ?? null };
-      const job = await api.getJob(planId, summary.jobId);
-      return job.status === "Succeeded" ? { kind: "succeeded" } : { kind: "refused", code: alterationJobFailureCode(job) ?? plan.failure?.code ?? null };
     }
     if (!warned && options.now() - started >= operatorPollingBudgetMs) {
       warned = true;
@@ -544,7 +549,12 @@ export async function waitUntilApplied(
   const started = options.now();
   for (let attempt = 0; ; attempt++) {
     if (options.signal?.aborted) return "aborted";
-    if (await refresh()) return true;
+    try {
+      if (await refresh()) return true;
+    } catch (error) {
+      // A lost connection while checking the run is not a result: keep checking until the budget runs out.
+      if (!isTransientReadFailure(error)) throw error;
+    }
     if (options.now() - started >= budgetMs) return false;
     await options.sleep(operatorPollDelay(attempt));
   }

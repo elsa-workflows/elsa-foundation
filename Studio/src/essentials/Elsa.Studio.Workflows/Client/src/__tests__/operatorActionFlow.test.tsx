@@ -100,6 +100,26 @@ describe("following a plan", () => {
     await expect(followOperatorPlan(fakeApi(["Queued"], null), "plan-1", { sleep: async () => undefined, now: () => 0, signal: controller.signal })).resolves.toEqual({ kind: "aborted" });
   });
 
+  it("keeps following through a lost connection while it reads the finished plan's job", async () => {
+    const api = fakeApi(["Completed"], { status: "Succeeded", outcomes: [] });
+    api.pageJobs = vi.fn()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValue({ items: [{ jobId: "job-1", planId: "plan-1", workflowExecutionId: "wf-42", status: "Succeeded" }] });
+    api.getJob.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+
+    await expect(followOperatorPlan(api, "plan-1", { sleep: async () => undefined, now: () => 0 })).resolves.toEqual({ kind: "succeeded" });
+    expect(api.getJob).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps checking the run through a lost connection, and stops on a refused read", async () => {
+    const options = { sleep: async () => undefined, now: () => 0 };
+    const refresh = vi.fn().mockRejectedValueOnce(new TypeError("Failed to fetch")).mockResolvedValueOnce(true);
+    await expect(waitUntilApplied(refresh, options)).resolves.toBe(true);
+    expect(refresh).toHaveBeenCalledTimes(2);
+
+    await expect(waitUntilApplied(async () => { throw Object.assign(new Error("forbidden"), { status: 403 }); }, options)).rejects.toMatchObject({ status: 403 });
+  });
+
   it("refreshes until the run shows the change, or gives up after the budget", async () => {
     let clock = 0;
     const options = { sleep: async (milliseconds: number) => { clock += milliseconds; }, now: () => clock };
@@ -183,6 +203,23 @@ describe("useOperatorActions", () => {
     expect(harness.current().pending).toBeNull();
     expect(sessionStorage.getItem(pendingOperatorActionKey("wf-42"))).toBeNull();
     expect(backend.submits).toHaveLength(1);
+  });
+
+  it("only stores the plan when the page left the run while the submission was in flight", async () => {
+    let release!: () => void;
+    const backend = fakeBackend({ plans: ["Completed"], submitGate: new Promise<void>(resolve => { release = resolve; }) });
+    const harness = await mount(backend.context);
+
+    openAndConfirm(harness, retryModel());
+    await flush();
+    expect(backend.submits).toHaveLength(1);
+    flushSync(() => root.render(<></>));
+    release();
+    await flush();
+    await advance(5000);
+
+    expect(JSON.parse(sessionStorage.getItem(pendingOperatorActionKey("wf-42"))!)).toMatchObject({ planId: "plan-1" });
+    expect(backend.planReads).toBe(0);
   });
 
   it("shows a refusal, refreshes the run and clears the plan", async () => {
@@ -470,6 +507,7 @@ function fakeBackend(options: {
   job?: { status: string; outcomes: Array<{ ordinal: number; kind: string; schemaVersion: number; status: string; code: string }> };
   submitStatus?: number;
   retryAfter?: string;
+  submitGate?: Promise<void>;
 }) {
   const submits: Array<{ key: string; body: unknown }> = [];
   const state = { planReads: 0 };
@@ -482,6 +520,7 @@ function fakeBackend(options: {
   });
   const requestResponse = vi.fn(async (_url: string, init: RequestInit) => {
     submits.push({ key: (init.headers as Record<string, string>)["Idempotency-Key"], body: JSON.parse(String(init.body)) });
+    if (options.submitGate) await options.submitGate;
     if (options.submitStatus) {
       return new Response(JSON.stringify({ code: "Problem", message: "Problem", status: options.submitStatus }), {
         status: options.submitStatus,
