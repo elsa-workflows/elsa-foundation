@@ -706,8 +706,15 @@ export function buildWaterfallRows(spans: OTelSpan[]) {
 
 export function classifyOpenTelemetryError(error: unknown): ClassifiedError {
   const message = error instanceof Error ? error.message : String(error);
-  if (/\b(401|403)\b/.test(message)) return { status: "unauthorized", message: "Permission denied while loading OpenTelemetry diagnostics." };
-  if (/\b404\b/.test(message)) return { status: "unavailable", message: "OpenTelemetry diagnostics are unavailable. Enable the backend OpenTelemetry diagnostics module." };
+  const hasStatus = typeof error === "object" && error !== null && "status" in error;
+  const status = hasStatus ? error.status : undefined;
+  if (typeof status === "number") {
+    if (status === 401 || status === 403) return { status: "unauthorized", message: "Permission denied while loading OpenTelemetry diagnostics." };
+    if (status === 404) return { status: "unavailable", message: "OpenTelemetry diagnostics are unavailable. Enable the backend OpenTelemetry diagnostics module." };
+  } else if (!hasStatus) {
+    if (/\b(401|403)\b/.test(message)) return { status: "unauthorized", message: "Permission denied while loading OpenTelemetry diagnostics." };
+    if (/\b404\b/.test(message)) return { status: "unavailable", message: "OpenTelemetry diagnostics are unavailable. Enable the backend OpenTelemetry diagnostics module." };
+  }
   return { status: "failed", message: `OpenTelemetry diagnostics failed: ${message}` };
 }
 
