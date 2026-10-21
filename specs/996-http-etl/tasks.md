@@ -76,7 +76,8 @@ Independent proof: controlled time/endpoints show persistent Retry-After, releas
 
 - [x] T020 Update affected public API baselines, extension catalogs, migration/provider inventory and current program/spec docs; run affected full suites, architecture/core and map/filter/diff checks. Record exact commands/results in `specs/996-http-etl/evidence/`.
   - Completed integrated local gate: [checkpoint](evidence/final-integration-checkpoint.md). Main401 integrated; legacy provider compatibility and timely-receipt race repaired. ETL1009, architecture584, core4198 (two explicit skips), Studio69/typecheck/build, rebuilt REST/browser and frozen-v1 upgrade passed. **20/22 tasks complete**; exact-head CI and resulting-main verification remain required.
-- [ ] T021 Run independent correctness/standards/acceptance review of the integrated exact diff, fix concrete findings and rerun affected proof. Open/update the single #3151 draft PR with per-criterion evidence; require green exact-head checks before normal merge.
+- [x] T021 Run independent correctness/standards/acceptance review of the integrated exact diff, fix concrete findings and rerun affected proof. Open/update the single #3151 draft PR with per-criterion evidence; require green exact-head checks before normal merge.
+  - Four bounded review rounds ended clean on `adbc7417c42055e32437eddaeb2f80c980d4c666`. Exact-head backend, Studio, platform, architecture/core and maps checks passed before the normal App merge; see [resulting-main evidence](evidence/post-merge-verification.md) for counts, skips and the pending T022 gate. **21/22 tasks complete.**
 - [ ] T022 Verify resulting-main CI/Studio/CodeQL/maps and runtime delivery evidence, reconcile issue/parent/program/project state and release the exact claim. Preserve parent continuous/SQL/RabbitMQ/BPMN and task-runner boundaries in `docs/program-goals/unified-execution.md`.
 
 ## Dependencies and execution strategy
