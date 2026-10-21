@@ -12,6 +12,7 @@ Issue [#3151](https://github.com/elsa-workflows/elsa-foundation/issues/3151). On
 - [ ] T003 Capture an authentic pre-change v1 published artifact/native workflow and persisted in-flight run fixture with a reserved/owed batch in `Extensions/Etl/tests/Shared/` with replay tests in `Extensions/Etl/tests/Tests/`; migrate and resume with the successor; preserve canonical bytes/hash/output and accounting.
   - Partial retained-artifact/store proof and outstanding successor-worker limitation: [checkpoint](evidence/v1-compatibility-checkpoint.md).
 - [ ] T004 Add connector-capable v2 model/codec/validation/compiler in `Extensions/Etl/src/Core/` and `src/Design/Elsa.Etl.Design/`, and dual-reader/native pin support without changing v1 canonical semantics; cover formats and strict parsing in ETL tests.
+  - Partial connector model/codec/compiler proof and outstanding runtime integration: [checkpoint](evidence/v2-model-compiler-checkpoint.md).
 - [ ] T005 Add typed HTTP page/position/effect/retry store contracts in `Extensions/Etl/src/Core/Runtime/`, EF records/migrations in `src/Persistence/EntityFrameworkCore/` and provider upgrade/claim-shape tests; share current fence/quota/terminal invariants while retaining v1 provider composition.
 
 ## Phase 3 — US1: Author and execute HTTP integrations

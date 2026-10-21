@@ -754,3 +754,283 @@ override Elsa.Etl.Core.Runtime.EtlBindingSummary.ToString() -> string!
 static Elsa.Etl.Core.Runtime.EtlBindingSummary.operator !=(Elsa.Etl.Core.Runtime.EtlBindingSummary? left, Elsa.Etl.Core.Runtime.EtlBindingSummary? right) -> bool
 static Elsa.Etl.Core.Runtime.EtlBindingSummary.operator ==(Elsa.Etl.Core.Runtime.EtlBindingSummary? left, Elsa.Etl.Core.Runtime.EtlBindingSummary? right) -> bool
 Elsa.Etl.Core.Runtime.IEtlRuntimeStore.MaximumPageSize.get -> int
+Elsa.Etl.Core.EtlArtifactV2Json
+Elsa.Etl.Core.EtlConnectorLimits
+Elsa.Etl.Core.EtlConnectorLimits.<Clone>$() -> Elsa.Etl.Core.EtlConnectorLimits!
+Elsa.Etl.Core.EtlConnectorLimits.Equals(Elsa.Etl.Core.EtlConnectorLimits? other) -> bool
+Elsa.Etl.Core.EtlConnectorLimits.EtlConnectorLimits() -> void
+Elsa.Etl.Core.EtlConnectorLimits.FilePartitionCount.get -> int
+Elsa.Etl.Core.EtlConnectorLimits.FilePartitionCount.init -> void
+Elsa.Etl.Core.EtlConnectorLimits.MaxArtifactBytes.get -> int
+Elsa.Etl.Core.EtlConnectorLimits.MaxArtifactBytes.init -> void
+Elsa.Etl.Core.EtlConnectorLimits.MaxBatchBytes.get -> long
+Elsa.Etl.Core.EtlConnectorLimits.MaxBatchBytes.init -> void
+Elsa.Etl.Core.EtlConnectorLimits.MaxBatchRecords.get -> int
+Elsa.Etl.Core.EtlConnectorLimits.MaxBatchRecords.init -> void
+Elsa.Etl.Core.EtlConnectorLimits.MaxFields.get -> int
+Elsa.Etl.Core.EtlConnectorLimits.MaxFields.init -> void
+Elsa.Etl.Core.EtlConnectorLimits.MaxLookupBytes.get -> long
+Elsa.Etl.Core.EtlConnectorLimits.MaxLookupBytes.init -> void
+Elsa.Etl.Core.EtlConnectorLimits.MaxLookupRecords.get -> long
+Elsa.Etl.Core.EtlConnectorLimits.MaxLookupRecords.init -> void
+Elsa.Etl.Core.EtlConnectorLimits.MaxOutputBatchBytes.get -> long
+Elsa.Etl.Core.EtlConnectorLimits.MaxOutputBatchBytes.init -> void
+Elsa.Etl.Core.EtlConnectorLimits.MaxOutstandingBytes.get -> long
+Elsa.Etl.Core.EtlConnectorLimits.MaxOutstandingBytes.init -> void
+Elsa.Etl.Core.EtlConnectorLimits.MaxOutstandingRecords.get -> long
+Elsa.Etl.Core.EtlConnectorLimits.MaxOutstandingRecords.init -> void
+Elsa.Etl.Core.EtlConnectorLimits.MaxPartitions.get -> int
+Elsa.Etl.Core.EtlConnectorLimits.MaxPartitions.init -> void
+Elsa.Etl.Core.EtlConnectorLimits.MaxRecordBytes.get -> int
+Elsa.Etl.Core.EtlConnectorLimits.MaxRecordBytes.init -> void
+Elsa.Etl.Core.EtlConnectorLimits.MaxSnapshotBytes.get -> long
+Elsa.Etl.Core.EtlConnectorLimits.MaxSnapshotBytes.init -> void
+Elsa.Etl.Core.EtlCsvLookup
+Elsa.Etl.Core.EtlCsvLookup.<Clone>$() -> Elsa.Etl.Core.EtlCsvLookup!
+Elsa.Etl.Core.EtlCsvLookup.Binding.get -> string!
+Elsa.Etl.Core.EtlCsvLookup.Binding.init -> void
+Elsa.Etl.Core.EtlCsvLookup.Deconstruct(out string! Binding, out System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlColumn!>! Schema, out string! SourceKeyField, out string! LookupKeyField) -> void
+Elsa.Etl.Core.EtlCsvLookup.Equals(Elsa.Etl.Core.EtlCsvLookup? other) -> bool
+Elsa.Etl.Core.EtlCsvLookup.EtlCsvLookup(string! Binding, System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlColumn!>! Schema, string! SourceKeyField, string! LookupKeyField) -> void
+Elsa.Etl.Core.EtlCsvLookup.LookupKeyField.get -> string!
+Elsa.Etl.Core.EtlCsvLookup.LookupKeyField.init -> void
+Elsa.Etl.Core.EtlCsvLookup.Schema.get -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlColumn!>!
+Elsa.Etl.Core.EtlCsvLookup.Schema.init -> void
+Elsa.Etl.Core.EtlCsvLookup.SourceKeyField.get -> string!
+Elsa.Etl.Core.EtlCsvLookup.SourceKeyField.init -> void
+Elsa.Etl.Core.EtlCsvSource
+Elsa.Etl.Core.EtlCsvSource.Binding.get -> string!
+Elsa.Etl.Core.EtlCsvSource.Binding.init -> void
+Elsa.Etl.Core.EtlCsvSource.Deconstruct(out string! Binding, out System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlColumn!>! Schema) -> void
+Elsa.Etl.Core.EtlCsvSource.Equals(Elsa.Etl.Core.EtlCsvSource? other) -> bool
+Elsa.Etl.Core.EtlCsvSource.EtlCsvSource(string! Binding, System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlColumn!>! Schema) -> void
+Elsa.Etl.Core.EtlCsvSource.Schema.get -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlColumn!>!
+Elsa.Etl.Core.EtlCsvSource.Schema.init -> void
+Elsa.Etl.Core.EtlDestination
+Elsa.Etl.Core.EtlDestination.EtlDestination() -> void
+Elsa.Etl.Core.EtlDestination.EtlDestination(Elsa.Etl.Core.EtlDestination! original) -> void
+Elsa.Etl.Core.EtlHttpDestination
+Elsa.Etl.Core.EtlHttpDestination.Binding.get -> string!
+Elsa.Etl.Core.EtlHttpDestination.Binding.init -> void
+Elsa.Etl.Core.EtlHttpDestination.Deconstruct(out string! Binding) -> void
+Elsa.Etl.Core.EtlHttpDestination.Equals(Elsa.Etl.Core.EtlHttpDestination? other) -> bool
+Elsa.Etl.Core.EtlHttpDestination.EtlHttpDestination(string! Binding) -> void
+Elsa.Etl.Core.EtlHttpJsonSource
+Elsa.Etl.Core.EtlHttpJsonSource.Binding.get -> string!
+Elsa.Etl.Core.EtlHttpJsonSource.Binding.init -> void
+Elsa.Etl.Core.EtlHttpJsonSource.Deconstruct(out string! Binding, out string! RecordsPointer, out System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlJsonField!>! Fields, out Elsa.Etl.Core.EtlHttpPagination! Pagination) -> void
+Elsa.Etl.Core.EtlHttpJsonSource.Equals(Elsa.Etl.Core.EtlHttpJsonSource? other) -> bool
+Elsa.Etl.Core.EtlHttpJsonSource.EtlHttpJsonSource(string! Binding, string! RecordsPointer, System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlJsonField!>! Fields, Elsa.Etl.Core.EtlHttpPagination! Pagination) -> void
+Elsa.Etl.Core.EtlHttpJsonSource.Fields.get -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlJsonField!>!
+Elsa.Etl.Core.EtlHttpJsonSource.Fields.init -> void
+Elsa.Etl.Core.EtlHttpJsonSource.Pagination.get -> Elsa.Etl.Core.EtlHttpPagination!
+Elsa.Etl.Core.EtlHttpJsonSource.Pagination.init -> void
+Elsa.Etl.Core.EtlHttpJsonSource.RecordsPointer.get -> string!
+Elsa.Etl.Core.EtlHttpJsonSource.RecordsPointer.init -> void
+Elsa.Etl.Core.EtlHttpPagination
+Elsa.Etl.Core.EtlHttpPagination.EtlHttpPagination() -> void
+Elsa.Etl.Core.EtlHttpPagination.EtlHttpPagination(Elsa.Etl.Core.EtlHttpPagination! original) -> void
+Elsa.Etl.Core.EtlHttpPolicy
+Elsa.Etl.Core.EtlHttpPolicy.<Clone>$() -> Elsa.Etl.Core.EtlHttpPolicy!
+Elsa.Etl.Core.EtlHttpPolicy.DeadlineSeconds.get -> int
+Elsa.Etl.Core.EtlHttpPolicy.DeadlineSeconds.init -> void
+Elsa.Etl.Core.EtlHttpPolicy.Equals(Elsa.Etl.Core.EtlHttpPolicy? other) -> bool
+Elsa.Etl.Core.EtlHttpPolicy.EtlHttpPolicy() -> void
+Elsa.Etl.Core.EtlHttpPolicy.InitialDelaySeconds.get -> int
+Elsa.Etl.Core.EtlHttpPolicy.InitialDelaySeconds.init -> void
+Elsa.Etl.Core.EtlHttpPolicy.MaxAttempts.get -> int
+Elsa.Etl.Core.EtlHttpPolicy.MaxAttempts.init -> void
+Elsa.Etl.Core.EtlHttpPolicy.MaxContinuationBytes.get -> int
+Elsa.Etl.Core.EtlHttpPolicy.MaxContinuationBytes.init -> void
+Elsa.Etl.Core.EtlHttpPolicy.MaxDelaySeconds.get -> int
+Elsa.Etl.Core.EtlHttpPolicy.MaxDelaySeconds.init -> void
+Elsa.Etl.Core.EtlHttpPolicy.MaxJsonDepth.get -> int
+Elsa.Etl.Core.EtlHttpPolicy.MaxJsonDepth.init -> void
+Elsa.Etl.Core.EtlHttpPolicy.MaxPageBytes.get -> long
+Elsa.Etl.Core.EtlHttpPolicy.MaxPageBytes.init -> void
+Elsa.Etl.Core.EtlHttpPolicy.MaxPageRecords.get -> int
+Elsa.Etl.Core.EtlHttpPolicy.MaxPageRecords.init -> void
+Elsa.Etl.Core.EtlHttpPolicy.MaxPagesPerPartition.get -> int
+Elsa.Etl.Core.EtlHttpPolicy.MaxPagesPerPartition.init -> void
+Elsa.Etl.Core.EtlHttpPolicy.MaxRetainedInputBytes.get -> long
+Elsa.Etl.Core.EtlHttpPolicy.MaxRetainedInputBytes.init -> void
+Elsa.Etl.Core.EtlHttpPolicy.RequestTimeoutSeconds.get -> int
+Elsa.Etl.Core.EtlHttpPolicy.RequestTimeoutSeconds.init -> void
+Elsa.Etl.Core.EtlJsonField
+Elsa.Etl.Core.EtlJsonField.<Clone>$() -> Elsa.Etl.Core.EtlJsonField!
+Elsa.Etl.Core.EtlJsonField.Deconstruct(out string! Name, out string! Pointer, out Elsa.Etl.Core.EtlColumnType Type, out bool Required) -> void
+Elsa.Etl.Core.EtlJsonField.Equals(Elsa.Etl.Core.EtlJsonField? other) -> bool
+Elsa.Etl.Core.EtlJsonField.EtlJsonField(string! Name, string! Pointer, Elsa.Etl.Core.EtlColumnType Type, bool Required) -> void
+Elsa.Etl.Core.EtlJsonField.Name.get -> string!
+Elsa.Etl.Core.EtlJsonField.Name.init -> void
+Elsa.Etl.Core.EtlJsonField.Pointer.get -> string!
+Elsa.Etl.Core.EtlJsonField.Pointer.init -> void
+Elsa.Etl.Core.EtlJsonField.Required.get -> bool
+Elsa.Etl.Core.EtlJsonField.Required.init -> void
+Elsa.Etl.Core.EtlJsonField.Type.get -> Elsa.Etl.Core.EtlColumnType
+Elsa.Etl.Core.EtlJsonField.Type.init -> void
+Elsa.Etl.Core.EtlJsonlDestination
+Elsa.Etl.Core.EtlJsonlDestination.Binding.get -> string!
+Elsa.Etl.Core.EtlJsonlDestination.Binding.init -> void
+Elsa.Etl.Core.EtlJsonlDestination.Deconstruct(out string! Binding) -> void
+Elsa.Etl.Core.EtlJsonlDestination.Equals(Elsa.Etl.Core.EtlJsonlDestination? other) -> bool
+Elsa.Etl.Core.EtlJsonlDestination.EtlJsonlDestination(string! Binding) -> void
+Elsa.Etl.Core.EtlNextLinkPagination
+Elsa.Etl.Core.EtlNextLinkPagination.ContinuationPointer.get -> string!
+Elsa.Etl.Core.EtlNextLinkPagination.ContinuationPointer.init -> void
+Elsa.Etl.Core.EtlNextLinkPagination.Deconstruct(out string! ContinuationPointer) -> void
+Elsa.Etl.Core.EtlNextLinkPagination.Equals(Elsa.Etl.Core.EtlNextLinkPagination? other) -> bool
+Elsa.Etl.Core.EtlNextLinkPagination.EtlNextLinkPagination(string! ContinuationPointer) -> void
+Elsa.Etl.Core.EtlPipelineV2
+Elsa.Etl.Core.EtlPipelineV2.<Clone>$() -> Elsa.Etl.Core.EtlPipelineV2!
+Elsa.Etl.Core.EtlPipelineV2.Deconstruct(out Elsa.Etl.Core.EtlSource! Source, out Elsa.Etl.Core.EtlCsvLookup? Lookup, out Elsa.Etl.Core.EtlRoutes! Routes, out System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlOutputField!>! Mapping, out System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlFilter!>! Filters, out Elsa.Etl.Core.EtlConnectorLimits! Limits, out Elsa.Etl.Core.EtlHttpPolicy! Http) -> void
+Elsa.Etl.Core.EtlPipelineV2.Equals(Elsa.Etl.Core.EtlPipelineV2? other) -> bool
+Elsa.Etl.Core.EtlPipelineV2.EtlPipelineV2(Elsa.Etl.Core.EtlSource! Source, Elsa.Etl.Core.EtlCsvLookup? Lookup, Elsa.Etl.Core.EtlRoutes! Routes, System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlOutputField!>! Mapping, System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlFilter!>! Filters, Elsa.Etl.Core.EtlConnectorLimits! Limits, Elsa.Etl.Core.EtlHttpPolicy! Http) -> void
+Elsa.Etl.Core.EtlPipelineV2.Filters.get -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlFilter!>!
+Elsa.Etl.Core.EtlPipelineV2.Filters.init -> void
+Elsa.Etl.Core.EtlPipelineV2.Http.get -> Elsa.Etl.Core.EtlHttpPolicy!
+Elsa.Etl.Core.EtlPipelineV2.Http.init -> void
+Elsa.Etl.Core.EtlPipelineV2.Limits.get -> Elsa.Etl.Core.EtlConnectorLimits!
+Elsa.Etl.Core.EtlPipelineV2.Limits.init -> void
+Elsa.Etl.Core.EtlPipelineV2.Lookup.get -> Elsa.Etl.Core.EtlCsvLookup?
+Elsa.Etl.Core.EtlPipelineV2.Lookup.init -> void
+Elsa.Etl.Core.EtlPipelineV2.Mapping.get -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlOutputField!>!
+Elsa.Etl.Core.EtlPipelineV2.Mapping.init -> void
+Elsa.Etl.Core.EtlPipelineV2.Routes.get -> Elsa.Etl.Core.EtlRoutes!
+Elsa.Etl.Core.EtlPipelineV2.Routes.init -> void
+Elsa.Etl.Core.EtlPipelineV2.Source.get -> Elsa.Etl.Core.EtlSource!
+Elsa.Etl.Core.EtlPipelineV2.Source.init -> void
+Elsa.Etl.Core.EtlRoutes
+Elsa.Etl.Core.EtlRoutes.<Clone>$() -> Elsa.Etl.Core.EtlRoutes!
+Elsa.Etl.Core.EtlRoutes.Deconstruct(out Elsa.Etl.Core.EtlDestination! Main, out Elsa.Etl.Core.EtlDestination! Errors) -> void
+Elsa.Etl.Core.EtlRoutes.Equals(Elsa.Etl.Core.EtlRoutes? other) -> bool
+Elsa.Etl.Core.EtlRoutes.Errors.get -> Elsa.Etl.Core.EtlDestination!
+Elsa.Etl.Core.EtlRoutes.Errors.init -> void
+Elsa.Etl.Core.EtlRoutes.EtlRoutes(Elsa.Etl.Core.EtlDestination! Main, Elsa.Etl.Core.EtlDestination! Errors) -> void
+Elsa.Etl.Core.EtlRoutes.Main.get -> Elsa.Etl.Core.EtlDestination!
+Elsa.Etl.Core.EtlRoutes.Main.init -> void
+Elsa.Etl.Core.EtlSinglePagePagination
+Elsa.Etl.Core.EtlSinglePagePagination.Equals(Elsa.Etl.Core.EtlSinglePagePagination? other) -> bool
+Elsa.Etl.Core.EtlSinglePagePagination.EtlSinglePagePagination() -> void
+Elsa.Etl.Core.EtlSource
+Elsa.Etl.Core.EtlSource.EtlSource() -> void
+Elsa.Etl.Core.EtlSource.EtlSource(Elsa.Etl.Core.EtlSource! original) -> void
+Elsa.Etl.Core.EtlTokenPagination
+Elsa.Etl.Core.EtlTokenPagination.ContinuationPointer.get -> string!
+Elsa.Etl.Core.EtlTokenPagination.ContinuationPointer.init -> void
+Elsa.Etl.Core.EtlTokenPagination.Deconstruct(out string! ContinuationPointer, out string! QueryParameter) -> void
+Elsa.Etl.Core.EtlTokenPagination.Equals(Elsa.Etl.Core.EtlTokenPagination? other) -> bool
+Elsa.Etl.Core.EtlTokenPagination.EtlTokenPagination(string! ContinuationPointer, string! QueryParameter) -> void
+Elsa.Etl.Core.EtlTokenPagination.QueryParameter.get -> string!
+Elsa.Etl.Core.EtlTokenPagination.QueryParameter.init -> void
+abstract Elsa.Etl.Core.EtlDestination.<Clone>$() -> Elsa.Etl.Core.EtlDestination!
+abstract Elsa.Etl.Core.EtlHttpPagination.<Clone>$() -> Elsa.Etl.Core.EtlHttpPagination!
+abstract Elsa.Etl.Core.EtlSource.<Clone>$() -> Elsa.Etl.Core.EtlSource!
+const Elsa.Etl.Core.EtlArtifactV2Json.FormatVersion = 2 -> int
+const Elsa.Etl.Core.EtlArtifactV2Json.MaximumByteLength = 262144 -> int
+override Elsa.Etl.Core.EtlConnectorLimits.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlConnectorLimits.GetHashCode() -> int
+override Elsa.Etl.Core.EtlConnectorLimits.ToString() -> string!
+override Elsa.Etl.Core.EtlCsvLookup.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlCsvLookup.GetHashCode() -> int
+override Elsa.Etl.Core.EtlCsvLookup.ToString() -> string!
+override Elsa.Etl.Core.EtlCsvSource.<Clone>$() -> Elsa.Etl.Core.EtlCsvSource!
+override Elsa.Etl.Core.EtlCsvSource.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlCsvSource.GetHashCode() -> int
+override Elsa.Etl.Core.EtlCsvSource.ToString() -> string!
+override Elsa.Etl.Core.EtlDestination.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlDestination.GetHashCode() -> int
+override Elsa.Etl.Core.EtlDestination.ToString() -> string!
+override Elsa.Etl.Core.EtlHttpDestination.<Clone>$() -> Elsa.Etl.Core.EtlHttpDestination!
+override Elsa.Etl.Core.EtlHttpDestination.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlHttpDestination.GetHashCode() -> int
+override Elsa.Etl.Core.EtlHttpDestination.ToString() -> string!
+override Elsa.Etl.Core.EtlHttpJsonSource.<Clone>$() -> Elsa.Etl.Core.EtlHttpJsonSource!
+override Elsa.Etl.Core.EtlHttpJsonSource.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlHttpJsonSource.GetHashCode() -> int
+override Elsa.Etl.Core.EtlHttpJsonSource.ToString() -> string!
+override Elsa.Etl.Core.EtlHttpPagination.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlHttpPagination.GetHashCode() -> int
+override Elsa.Etl.Core.EtlHttpPagination.ToString() -> string!
+override Elsa.Etl.Core.EtlHttpPolicy.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlHttpPolicy.GetHashCode() -> int
+override Elsa.Etl.Core.EtlHttpPolicy.ToString() -> string!
+override Elsa.Etl.Core.EtlJsonField.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlJsonField.GetHashCode() -> int
+override Elsa.Etl.Core.EtlJsonField.ToString() -> string!
+override Elsa.Etl.Core.EtlJsonlDestination.<Clone>$() -> Elsa.Etl.Core.EtlJsonlDestination!
+override Elsa.Etl.Core.EtlJsonlDestination.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlJsonlDestination.GetHashCode() -> int
+override Elsa.Etl.Core.EtlJsonlDestination.ToString() -> string!
+override Elsa.Etl.Core.EtlNextLinkPagination.<Clone>$() -> Elsa.Etl.Core.EtlNextLinkPagination!
+override Elsa.Etl.Core.EtlNextLinkPagination.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlNextLinkPagination.GetHashCode() -> int
+override Elsa.Etl.Core.EtlNextLinkPagination.ToString() -> string!
+override Elsa.Etl.Core.EtlPipelineV2.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlPipelineV2.GetHashCode() -> int
+override Elsa.Etl.Core.EtlPipelineV2.ToString() -> string!
+override Elsa.Etl.Core.EtlRoutes.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlRoutes.GetHashCode() -> int
+override Elsa.Etl.Core.EtlRoutes.ToString() -> string!
+override Elsa.Etl.Core.EtlSinglePagePagination.<Clone>$() -> Elsa.Etl.Core.EtlSinglePagePagination!
+override Elsa.Etl.Core.EtlSinglePagePagination.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlSinglePagePagination.GetHashCode() -> int
+override Elsa.Etl.Core.EtlSinglePagePagination.ToString() -> string!
+override Elsa.Etl.Core.EtlSource.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlSource.GetHashCode() -> int
+override Elsa.Etl.Core.EtlSource.ToString() -> string!
+override Elsa.Etl.Core.EtlTokenPagination.<Clone>$() -> Elsa.Etl.Core.EtlTokenPagination!
+override Elsa.Etl.Core.EtlTokenPagination.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlTokenPagination.GetHashCode() -> int
+override Elsa.Etl.Core.EtlTokenPagination.ToString() -> string!
+override sealed Elsa.Etl.Core.EtlCsvSource.Equals(Elsa.Etl.Core.EtlSource? other) -> bool
+override sealed Elsa.Etl.Core.EtlHttpDestination.Equals(Elsa.Etl.Core.EtlDestination? other) -> bool
+override sealed Elsa.Etl.Core.EtlHttpJsonSource.Equals(Elsa.Etl.Core.EtlSource? other) -> bool
+override sealed Elsa.Etl.Core.EtlJsonlDestination.Equals(Elsa.Etl.Core.EtlDestination? other) -> bool
+override sealed Elsa.Etl.Core.EtlNextLinkPagination.Equals(Elsa.Etl.Core.EtlHttpPagination? other) -> bool
+override sealed Elsa.Etl.Core.EtlSinglePagePagination.Equals(Elsa.Etl.Core.EtlHttpPagination? other) -> bool
+override sealed Elsa.Etl.Core.EtlTokenPagination.Equals(Elsa.Etl.Core.EtlHttpPagination? other) -> bool
+static Elsa.Etl.Core.EtlArtifactV2Json.Read(System.ReadOnlyMemory<byte> utf8Json) -> Elsa.Etl.Core.EtlPipelineV2!
+static Elsa.Etl.Core.EtlArtifactV2Json.Read(System.Text.Json.JsonElement document) -> Elsa.Etl.Core.EtlPipelineV2!
+static Elsa.Etl.Core.EtlArtifactV2Json.Write(Elsa.Etl.Core.EtlPipelineV2! pipeline) -> System.Text.Json.JsonElement
+static Elsa.Etl.Core.EtlConnectorLimits.operator !=(Elsa.Etl.Core.EtlConnectorLimits? left, Elsa.Etl.Core.EtlConnectorLimits? right) -> bool
+static Elsa.Etl.Core.EtlConnectorLimits.operator ==(Elsa.Etl.Core.EtlConnectorLimits? left, Elsa.Etl.Core.EtlConnectorLimits? right) -> bool
+static Elsa.Etl.Core.EtlCsvLookup.operator !=(Elsa.Etl.Core.EtlCsvLookup? left, Elsa.Etl.Core.EtlCsvLookup? right) -> bool
+static Elsa.Etl.Core.EtlCsvLookup.operator ==(Elsa.Etl.Core.EtlCsvLookup? left, Elsa.Etl.Core.EtlCsvLookup? right) -> bool
+static Elsa.Etl.Core.EtlCsvSource.operator !=(Elsa.Etl.Core.EtlCsvSource? left, Elsa.Etl.Core.EtlCsvSource? right) -> bool
+static Elsa.Etl.Core.EtlCsvSource.operator ==(Elsa.Etl.Core.EtlCsvSource? left, Elsa.Etl.Core.EtlCsvSource? right) -> bool
+static Elsa.Etl.Core.EtlDestination.operator !=(Elsa.Etl.Core.EtlDestination? left, Elsa.Etl.Core.EtlDestination? right) -> bool
+static Elsa.Etl.Core.EtlDestination.operator ==(Elsa.Etl.Core.EtlDestination? left, Elsa.Etl.Core.EtlDestination? right) -> bool
+static Elsa.Etl.Core.EtlHttpDestination.operator !=(Elsa.Etl.Core.EtlHttpDestination? left, Elsa.Etl.Core.EtlHttpDestination? right) -> bool
+static Elsa.Etl.Core.EtlHttpDestination.operator ==(Elsa.Etl.Core.EtlHttpDestination? left, Elsa.Etl.Core.EtlHttpDestination? right) -> bool
+static Elsa.Etl.Core.EtlHttpJsonSource.operator !=(Elsa.Etl.Core.EtlHttpJsonSource? left, Elsa.Etl.Core.EtlHttpJsonSource? right) -> bool
+static Elsa.Etl.Core.EtlHttpJsonSource.operator ==(Elsa.Etl.Core.EtlHttpJsonSource? left, Elsa.Etl.Core.EtlHttpJsonSource? right) -> bool
+static Elsa.Etl.Core.EtlHttpPagination.operator !=(Elsa.Etl.Core.EtlHttpPagination? left, Elsa.Etl.Core.EtlHttpPagination? right) -> bool
+static Elsa.Etl.Core.EtlHttpPagination.operator ==(Elsa.Etl.Core.EtlHttpPagination? left, Elsa.Etl.Core.EtlHttpPagination? right) -> bool
+static Elsa.Etl.Core.EtlHttpPolicy.operator !=(Elsa.Etl.Core.EtlHttpPolicy? left, Elsa.Etl.Core.EtlHttpPolicy? right) -> bool
+static Elsa.Etl.Core.EtlHttpPolicy.operator ==(Elsa.Etl.Core.EtlHttpPolicy? left, Elsa.Etl.Core.EtlHttpPolicy? right) -> bool
+static Elsa.Etl.Core.EtlJsonField.operator !=(Elsa.Etl.Core.EtlJsonField? left, Elsa.Etl.Core.EtlJsonField? right) -> bool
+static Elsa.Etl.Core.EtlJsonField.operator ==(Elsa.Etl.Core.EtlJsonField? left, Elsa.Etl.Core.EtlJsonField? right) -> bool
+static Elsa.Etl.Core.EtlJsonlDestination.operator !=(Elsa.Etl.Core.EtlJsonlDestination? left, Elsa.Etl.Core.EtlJsonlDestination? right) -> bool
+static Elsa.Etl.Core.EtlJsonlDestination.operator ==(Elsa.Etl.Core.EtlJsonlDestination? left, Elsa.Etl.Core.EtlJsonlDestination? right) -> bool
+static Elsa.Etl.Core.EtlNextLinkPagination.operator !=(Elsa.Etl.Core.EtlNextLinkPagination? left, Elsa.Etl.Core.EtlNextLinkPagination? right) -> bool
+static Elsa.Etl.Core.EtlNextLinkPagination.operator ==(Elsa.Etl.Core.EtlNextLinkPagination? left, Elsa.Etl.Core.EtlNextLinkPagination? right) -> bool
+static Elsa.Etl.Core.EtlPipelineV2.operator !=(Elsa.Etl.Core.EtlPipelineV2? left, Elsa.Etl.Core.EtlPipelineV2? right) -> bool
+static Elsa.Etl.Core.EtlPipelineV2.operator ==(Elsa.Etl.Core.EtlPipelineV2? left, Elsa.Etl.Core.EtlPipelineV2? right) -> bool
+static Elsa.Etl.Core.EtlRoutes.operator !=(Elsa.Etl.Core.EtlRoutes? left, Elsa.Etl.Core.EtlRoutes? right) -> bool
+static Elsa.Etl.Core.EtlRoutes.operator ==(Elsa.Etl.Core.EtlRoutes? left, Elsa.Etl.Core.EtlRoutes? right) -> bool
+static Elsa.Etl.Core.EtlSinglePagePagination.operator !=(Elsa.Etl.Core.EtlSinglePagePagination? left, Elsa.Etl.Core.EtlSinglePagePagination? right) -> bool
+static Elsa.Etl.Core.EtlSinglePagePagination.operator ==(Elsa.Etl.Core.EtlSinglePagePagination? left, Elsa.Etl.Core.EtlSinglePagePagination? right) -> bool
+static Elsa.Etl.Core.EtlSource.operator !=(Elsa.Etl.Core.EtlSource? left, Elsa.Etl.Core.EtlSource? right) -> bool
+static Elsa.Etl.Core.EtlSource.operator ==(Elsa.Etl.Core.EtlSource? left, Elsa.Etl.Core.EtlSource? right) -> bool
+static Elsa.Etl.Core.EtlTokenPagination.operator !=(Elsa.Etl.Core.EtlTokenPagination? left, Elsa.Etl.Core.EtlTokenPagination? right) -> bool
+static Elsa.Etl.Core.EtlTokenPagination.operator ==(Elsa.Etl.Core.EtlTokenPagination? left, Elsa.Etl.Core.EtlTokenPagination? right) -> bool
+virtual Elsa.Etl.Core.EtlDestination.EqualityContract.get -> System.Type!
+virtual Elsa.Etl.Core.EtlDestination.Equals(Elsa.Etl.Core.EtlDestination? other) -> bool
+virtual Elsa.Etl.Core.EtlDestination.PrintMembers(System.Text.StringBuilder! builder) -> bool
+virtual Elsa.Etl.Core.EtlHttpPagination.EqualityContract.get -> System.Type!
+virtual Elsa.Etl.Core.EtlHttpPagination.Equals(Elsa.Etl.Core.EtlHttpPagination? other) -> bool
+virtual Elsa.Etl.Core.EtlHttpPagination.PrintMembers(System.Text.StringBuilder! builder) -> bool
+virtual Elsa.Etl.Core.EtlSource.EqualityContract.get -> System.Type!
+virtual Elsa.Etl.Core.EtlSource.Equals(Elsa.Etl.Core.EtlSource? other) -> bool
+virtual Elsa.Etl.Core.EtlSource.PrintMembers(System.Text.StringBuilder! builder) -> bool

@@ -138,3 +138,5 @@ static Elsa.Etl.Design.Stores.EtlDefinitionSummary.operator !=(Elsa.Etl.Design.S
 static Elsa.Etl.Design.Stores.EtlDefinitionSummary.operator ==(Elsa.Etl.Design.Stores.EtlDefinitionSummary? left, Elsa.Etl.Design.Stores.EtlDefinitionSummary? right) -> bool
 static Elsa.Etl.Design.Stores.EtlPublishedVersionSummary.operator !=(Elsa.Etl.Design.Stores.EtlPublishedVersionSummary? left, Elsa.Etl.Design.Stores.EtlPublishedVersionSummary? right) -> bool
 static Elsa.Etl.Design.Stores.EtlPublishedVersionSummary.operator ==(Elsa.Etl.Design.Stores.EtlPublishedVersionSummary? left, Elsa.Etl.Design.Stores.EtlPublishedVersionSummary? right) -> bool
+Elsa.Etl.Design.IEtlArtifactCompilerV2
+Elsa.Etl.Design.IEtlArtifactCompilerV2.Compile(string! definitionId, int definitionVersion, Elsa.Etl.Core.EtlPipelineV2! pipeline) -> Elsa.Etl.Design.EtlCompilationResult!

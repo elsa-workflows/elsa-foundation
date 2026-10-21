@@ -10,10 +10,10 @@ namespace Elsa.Etl.Core;
 /// </remarks>
 public sealed class EtlArtifact
 {
-    /// <summary>The current runnable ETL artifact envelope format.</summary>
+    /// <summary>The retained v1 file-pipeline format; connector artifacts use <see cref="EtlArtifactV2Json.FormatVersion"/>.</summary>
     public const int CurrentFormatVersion = 1;
 
-    /// <summary>The maximum serialized size of the complete v1 runnable envelope.</summary>
+    /// <summary>The maximum serialized size of a complete runnable artifact envelope.</summary>
     public const int MaximumByteLength = 256 * 1024;
 
     /// <summary>Creates an artifact envelope and clones the supplied JSON document.</summary>

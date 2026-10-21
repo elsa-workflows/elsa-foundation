@@ -24,3 +24,11 @@ may compose multiple bounded, exclusive keyset pages to serve its own bounded re
 increase the provider's cap or interpret an expired claim as worker termination. The runtime API uses this
 capability for at most 201 retained rows including lookahead. Manifest materialization streams pages under the
 same limit. See the [finite ETL contract](../../../../specs/255-finite-file-etl/contracts/journey.md).
+
+## Connector artifact format
+
+`EtlPipelineV2` is a versioned data contract, not a connector-provider registration surface. The supported
+source, pagination and destination variants are explicit. `EtlArtifactV2Json` provides bounded, strict
+serialization independently of `EtlPipeline` / `EtlArtifactJson` v1. Model declarations contain host binding
+aliases and selectors, not endpoint or credential values. Artifact validity and host runtime admission are
+separate decisions; a successfully decoded document is not proof that the configured runtime can execute it.

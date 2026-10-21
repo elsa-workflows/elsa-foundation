@@ -4,6 +4,15 @@
 
 V1 file model remains unchanged. V2 contains connector-kind/alias selections, source schema and JSON field selectors, pagination record/continuation selectors, transform declarations, optional CSV lookup, finite payload/admission/page/retry limits and route destinations. Canonical bytes are produced by the format-specific writer; definition and artifact hashes remain separate identities. Runtime never reconstructs v1 bytes with a v2 writer.
 
+### V2 declarations
+
+- Source is either CSV (binding and schema) or HTTP JSON (binding, record-array pointer, named scalar field pointers, and single-page/token/next-link pagination).
+- Optional CSV lookup owns its own binding/schema and explicit source/lookup join keys. Absence of a lookup does not create a synthetic lookup.
+- Main and error destinations independently select JSONL or HTTP, so mixed routes are valid.
+- Definition limits distinguish requested file partition count from an upper partition bound; HTTP partitions will come from bounded host shard seeds. Host admission applies its own ceilings.
+- HTTP policy contains finite page/continuation/retention limits and attempt/deadline/request-time/backoff settings. Token parameter names are bounded literal names; the transport must URI-encode them, including common names such as `page[token]`.
+- V2's compiler capability is additive. The native envelope key remains `etl.pipeline.v1`; its embedded artifact format selects the pipeline codec, independently of the unchanged activity state/completion format.
+
 ## Runtime state
 
 - **Binding pin:** tenant/partition, role/kind, alias/revision, opaque metadata digest. HTTP metadata binds endpoint/shard seeds, connection name/type and non-secret config digest. No credential value.
