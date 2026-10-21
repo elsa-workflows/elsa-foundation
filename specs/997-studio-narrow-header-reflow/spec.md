@@ -30,6 +30,7 @@ As a Studio user on a narrow viewport, I can reach the header actions and use th
 ## Edge Cases
 
 - Long account names, active Weaver session badges, and their combined width at 320px and 360px.
+- A long configured backend hostname in the top-navigation status bar must not expand the shell grid track and move header actions outside the viewport.
 - A resize across 640px/641px while keyboard focus is on a header action.
 - The theme menu opened near a viewport edge at 320px or 360px.
 - Left, top, and adaptive navigation preferences, authenticated and anonymous sessions, and settled Light, Dark, and supported High contrast modes.
@@ -50,7 +51,7 @@ As a Studio user on a narrow viewport, I can reach the header actions and use th
 ### Measurable Outcomes
 
 - **SC-001**: At 320px and 360px, every retained direct action has a bounding box fully within the viewport in the required account and Weaver states.
-- **SC-002**: At those widths, the document, main frame, and topbar actions have no unintended horizontal overflow; focusing and activating the tested controls leaves horizontal scroll offsets and the module page's left coordinate unchanged.
+- **SC-002**: At those widths, the document, shell grid, main frame, and topbar actions have no unintended horizontal overflow; the frame, topbar and status bar remain within the viewport. Focusing and activating the tested controls leaves horizontal scroll offsets and the module page's left coordinate unchanged.
 - **SC-003**: All existing mode, theme, navigation, account, source-link, and Weaver interactions remain usable by pointer and keyboard in focused regression coverage.
 - **SC-004**: The 640px/641px and 1024px/1025px breakpoint edges and a 1280px or 1440px desktop reference remain visually and functionally acceptable.
 

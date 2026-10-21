@@ -50,6 +50,7 @@ type UserMenuOptions = {
   appearance?: boolean;
   account?: boolean;
   authEnabled?: boolean;
+  backend?: "long";
 };
 
 async function openShell(page: Page, options: UserMenuOptions = {}) {
@@ -62,7 +63,8 @@ async function openShell(page: Page, options: UserMenuOptions = {}) {
     weaver: options.weaver === "dense" ? "dense" : options.weaver ? "1" : "0",
     appearance: options.appearance === false ? "off" : "on",
     auth: options.authEnabled === false ? "off" : "on",
-    account: options.account === false ? "off" : "on"
+    account: options.account === false ? "off" : "on",
+    backend: options.backend ?? "local"
   });
   await page.goto(`/dashboard?${query}`);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "classic");
@@ -106,6 +108,7 @@ async function readShellGeometry(page: Page) {
         body: { ...dimensions(document.body), margin: bodyStyle.margin, padding: bodyStyle.padding, overflow: bodyStyle.overflow },
         shell: dimensions(document.querySelector<HTMLElement>(".studio-shell")!),
         topbar: dimensions(document.querySelector<HTMLElement>(".topbar")!),
+        statusbar: describe(".studio-statusbar"),
         visualViewport: { width: window.visualViewport?.width, offsetLeft: window.visualViewport?.offsetLeft }
       },
       document: { scrollX: window.scrollX, clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth },
@@ -131,10 +134,10 @@ async function attachShellGeometry(label: string, geometry: unknown, screenshot:
 
 function expectHeaderToFit(geometry: Awaited<ReturnType<typeof readShellGeometry>>, width: number) {
   const diagnostic = JSON.stringify(geometry, null, 2);
-  for (const element of [geometry.document, geometry.frame, geometry.actions]) {
+  for (const element of [geometry.document, geometry.layout.shell, geometry.frame, geometry.actions]) {
     expect(element.scrollWidth, diagnostic).toBe(element.clientWidth);
   }
-  for (const control of Object.values(geometry.controls)) {
+  for (const control of [geometry.frame, geometry.layout.topbar, geometry.layout.statusbar, ...Object.values(geometry.controls)]) {
     if (!control) continue;
     expect(control.left, diagnostic).toBeGreaterThanOrEqual(0);
     expect(control.right, diagnostic).toBeLessThanOrEqual(width);
@@ -379,6 +382,27 @@ test.describe("shell user menu", () => {
     await expect(page.getByRole("heading", { name: "Backend sign-in page" })).toBeVisible();
     expect(state.logoutCalls).toEqual([`/_elsa/identity/logout/${provider}`]);
   });
+
+  for (const width of [320, 360]) {
+    test(`keeps top navigation within ${width}px with a long backend endpoint`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await openShell(page, { backend: "long" });
+      const before = await readShellGeometry(page);
+      await page.getByRole("button", { name: "Select theme" }).click();
+      await page.getByRole("menuitemradio", { name: "Top", exact: true }).click();
+      await expect(page.locator("html")).toHaveAttribute("data-nav-mode", "top");
+      const status = page.locator(".studio-statusbar");
+      await expect(status).toContainText("workflow-runtime.internal.example.org:18443");
+      await expect(status.locator("span[title]")).toHaveAttribute("title", "Configured backend endpoint; connectivity is not measured");
+      const after = await readShellGeometry(page);
+      await attachShellGeometry("long-backend-top-navigation", after, await page.screenshot());
+      expectHeaderToFit(after, width);
+      expect(after.frame.scrollLeft).toBe(before.frame.scrollLeft);
+      expect(after.content.left).toBe(before.content.left);
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("button", { name: "Select theme" })).toBeFocused();
+    });
+  }
 
   test("keeps a dense Weaver status summary and each badge inside the 320px viewport", async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 900 });

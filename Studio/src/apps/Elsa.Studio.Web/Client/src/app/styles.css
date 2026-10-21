@@ -3199,7 +3199,7 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
 /* Responsive Design */
 @media (max-width: 1024px) {
   .studio-shell {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) auto;
   }
 
@@ -3363,10 +3363,6 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
 }
 
 @media (max-width: 640px) {
-  .studio-shell {
-    grid-template-columns: 1fr;
-  }
-
   .sidebar {
     flex-direction: row;
     gap: 10px;

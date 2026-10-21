@@ -17,6 +17,9 @@ const weaverVariant = fixtureQuery.get("weaver") ?? "0";
 const showWeaver = weaverVariant !== "0";
 const showAppearance = fixtureQuery.get("appearance") !== "off";
 const showAccount = fixtureQuery.get("account") !== "off";
+const backendBaseUrl = fixtureQuery.get("backend") === "long"
+  ? "https://workflow-runtime.internal.example.org:18443"
+  : window.location.origin;
 const agentSessions: AgentSessionIndicatorSession[] = weaverVariant === "dense"
   ? [
       {
@@ -61,7 +64,7 @@ export function UserMenuFixture() {
           panels={[]}
           path="/dashboard"
           title="Home"
-          backendBaseUrl={window.location.origin}
+          backendBaseUrl={backendBaseUrl}
           themeAction={showAppearance ? <ThemeSwitcher /> : null}
           onNavigate={() => {}}
         >
