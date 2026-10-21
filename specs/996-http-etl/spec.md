@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/codex/3151-http-etl`
 **Created**: 2026-10-21
-**Status**: Approved
+**Status**: In progress
 **Input**: Owner-approved HTTP connector scope in [#2908](https://github.com/elsa-workflows/elsa-foundation/issues/2908), delivered through [#3151](https://github.com/elsa-workflows/elsa-foundation/issues/3151) in [Program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892).
 
 ## User Scenarios & Testing
