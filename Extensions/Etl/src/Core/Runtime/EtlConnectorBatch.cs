@@ -21,6 +21,8 @@ public sealed record EtlConnectorBatchReservation(EtlConnectorBatchDescriptor Ba
     public EtlConnectorBatchOutput? Output { get; init; }
     /// <summary>Retained HTTP attempt/outcome state; file delivery is a separate capability.</summary>
     public EtlConnectorHttpDeliveries? HttpDeliveries { get; init; }
+    /// <summary>Verified create-only publication at the deterministic destination key; not accepted progress.</summary>
+    public EtlConnectorFilePublications FilePublications { get; init; } = new(false, false);
 }
 public sealed record EtlConnectorReservationResult(EtlStoreStatus Status, EtlConnectorBatchReservation? Reservation);
 
@@ -33,3 +35,6 @@ public sealed record EtlConnectorRouteOutput(EtlConnectorKind Kind, EtlObjectRef
 public sealed record EtlConnectorBatchOutput(long AcceptedRecords, long RejectedRecords, long FilteredRecords,
     EtlConnectorRouteOutput? Main, EtlConnectorRouteOutput? Errors);
 public sealed record EtlConnectorOutputResult(EtlStoreStatus Status, EtlConnectorBatchOutput? Output);
+
+/// <summary>Fixed publication slots for JSONL routes; absent or HTTP routes must remain false.</summary>
+public sealed record EtlConnectorFilePublications(bool Main, bool Errors);

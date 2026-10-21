@@ -37,7 +37,7 @@ public sealed partial class EtlRuntimeStoreTests
         var request = await context.ConnectorHttpRequests.AsNoTracking().SingleAsync();
         Assert.Equal(new string('b', 64), request.RequestHash);
         Assert.Equal(0, request.PageSequence);
-        var page = await context.ConnectorHttpPages.AsNoTracking().SingleAsync();
+        var page = await context.ConnectorHttpPages.AsNoTracking().Select(row => new { row.RequestHash, row.HasContinuation, row.NextRequestHash }).SingleAsync();
         Assert.Equal(request.RequestHash, page.RequestHash);
         Assert.Equal(new string('c', 64), page.NextRequestHash);
         Assert.True(page.HasContinuation);

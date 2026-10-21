@@ -26,14 +26,16 @@ public sealed partial class EtlRuntimeStoreTests
             .ToListAsync();
         Assert.Contains("IX_elsa_etl_connector_partitions_ScopeKey_RunKey_Completed_NotBeforeUtcTicks_ExpiresAtUtcTicks", indexes);
 
-        var batch = await context.ConnectorBatches.AsNoTracking().SingleAsync();
+        var batch = await context.ConnectorBatches.AsNoTracking().Select(row => new
+        { row.OutputJson, row.OutputDigest, row.OutputBytes, row.HttpDeliveryJson, row.HttpDeliveryDigest }).SingleAsync();
         Assert.Equal("{\"rows\":[]}", batch.OutputJson);
         Assert.Equal(new string('c', 64), batch.OutputDigest);
         Assert.Equal(11L, batch.OutputBytes);
         Assert.Null(batch.HttpDeliveryJson);
         Assert.Null(batch.HttpDeliveryDigest);
 
-        var partition = await context.ConnectorPartitions.AsNoTracking().SingleAsync();
+        var partition = await context.ConnectorPartitions.AsNoTracking().Select(row => new
+        { row.OwedBatchId, row.BatchMetadataBytes, row.NotBeforeUtcTicks }).SingleAsync();
         Assert.Equal(new string('e', 64), partition.OwedBatchId);
         Assert.Equal(17L, partition.BatchMetadataBytes);
         Assert.Null(partition.NotBeforeUtcTicks);

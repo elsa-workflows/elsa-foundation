@@ -27,6 +27,10 @@ internal sealed class EtlConnectorPartitionRecord
     public long PageCount { get; set; }
     public long PageBytes { get; set; }
     public long MetadataBytes { get; set; }
+    public long AcceptedBatchCount { get; set; }
+    public long AcceptedRecords { get; set; }
+    public long RejectedRecords { get; set; }
+    public long FilteredRecords { get; set; }
     public string? OwedBatchId { get; set; }
     public long BatchMetadataBytes { get; set; }
     public long RetainedOutputBytes { get; set; }
@@ -49,6 +53,11 @@ internal sealed class EtlConnectorBatchRecord
     public string? OutputDigest { get; set; }
     public string? HttpDeliveryJson { get; set; }
     public string? HttpDeliveryDigest { get; set; }
+    public long BatchOrdinal { get; set; }
+    public long? HttpPageSequence { get; set; }
+    public long AcceptanceMetadataBytes { get; set; }
+    public bool MainFilePublished { get; set; }
+    public bool ErrorFilePublished { get; set; }
     public long OutputBytes { get; set; }
     public long RecordCount { get; set; }
     public long InputBytes { get; set; }
@@ -84,5 +93,6 @@ internal sealed class EtlConnectorHttpPageRecord
     public long ByteLength { get; set; }
     public string PageDigest { get; set; } = null!;
     public long MetadataBytes { get; set; }
+    public int AcceptedItemCount { get; set; }
     public string SchemaVersion { get; set; } = null!;
 }

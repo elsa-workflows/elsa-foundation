@@ -140,6 +140,8 @@ public sealed partial class EtlRuntimeStoreTests
         var second = await connector.AttachHttpPageAsync(nextLease, RetainedPage(nextLease, "empty-1", byteLength: 11, recordCount: 0));
         var beforeExhaustion = await runtime.SettleTerminalAsync(new(admission.Invocation.Scope, admission.Invocation.RunId, EtlTerminalOutcome.Succeeded, null));
         var exhausted = await connector.AdvanceEmptyHttpPageAsync(Assert.IsType<EtlConnectorPartitionLease>(second.Lease));
+        Assert.Single(await context.Terminals.AsNoTracking().ToListAsync());
+        Assert.Single(await context.Outbox.AsNoTracking().ToListAsync());
         var success = await runtime.SettleTerminalAsync(new(admission.Invocation.Scope, admission.Invocation.RunId, EtlTerminalOutcome.Succeeded, null));
         var run = Assert.IsType<EtlConnectorRunView>(await connector.FindConnectorRunAsync(admission.Invocation.Scope, admission.Invocation.RunId));
 
@@ -159,7 +161,7 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal(1, finalPosition.PageSequence);
         Assert.Null(finalPosition.Page);
         Assert.True(finalPosition.Exhausted);
-        Assert.Equal(EtlStoreStatus.Applied, success.Status);
+        Assert.Equal(EtlStoreStatus.Replay, success.Status);
         Assert.Equal(18, run.RetainedInputBytes);
         Assert.Equal(2, await context.ConnectorHttpPages.CountAsync());
         Assert.Empty(await context.Reservations.AsNoTracking().ToListAsync());

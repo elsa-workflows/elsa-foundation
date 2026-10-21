@@ -51,6 +51,22 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                     b.Property<long>("BatchMetadataBytes")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long>("AcceptedBatchCount")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("AcceptedRecords")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RejectedRecords")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("FilteredRecords")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("RetainedOutputBytes")
                         .HasDefaultValue(0L)
                         .HasColumnType("INTEGER");
@@ -101,6 +117,7 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                         {
                             t.HasCheckConstraint("CK_elsa_etl_connector_partitions_CurrentRequestPointer", "(CurrentRequestSequence IS NULL AND CurrentRequestHash IS NULL) OR (CurrentRequestSequence IS NOT NULL AND CurrentRequestHash IS NOT NULL)");
                             t.HasCheckConstraint("CK_elsa_etl_connector_partitions_NonNegativeCounters", "PageCount >= 0 AND PageBytes >= 0 AND MetadataBytes >= 0 AND BatchMetadataBytes >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_partitions_NonNegativeAcceptanceCounts", "AcceptedBatchCount >= 0 AND AcceptedRecords >= 0 AND RejectedRecords >= 0 AND FilteredRecords >= 0");
                             t.HasCheckConstraint("CK_elsa_etl_connector_partitions_NotBeforeUtcTicks", "NotBeforeUtcTicks IS NULL OR NotBeforeUtcTicks > 0");
                             t.HasCheckConstraint("CK_elsa_etl_connector_partitions_RetainedOutputBytes", "RetainedOutputBytes >= 0");
                         });
@@ -136,6 +153,25 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                     b.Property<string>("HttpDeliveryDigest")
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
+
+                    b.Property<long>("BatchOrdinal")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("HttpPageSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("AcceptanceMetadataBytes")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("MainFilePublished")
+                        .HasDefaultValue(false)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("ErrorFilePublished")
+                        .HasDefaultValue(false)
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("DescriptorJson")
                         .IsRequired()
@@ -180,11 +216,21 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                     b.HasIndex("ScopeKey", "RunKey", "PartitionOrdinal", "StartKey")
                         .IsUnique();
 
+                    b.HasIndex("ScopeKey", "RunKey", "PartitionOrdinal", "BatchOrdinal")
+                        .IsUnique();
+
+                    b.HasIndex("ScopeKey", "RunKey", "PartitionOrdinal", "HttpPageSequence");
+
                     b.ToTable("elsa_etl_connector_batches", t =>
                         {
                             t.HasCheckConstraint("CK_elsa_etl_connector_batches_OutputBytes", "OutputBytes >= 0 AND (OutputJson IS NOT NULL OR OutputBytes = 0)");
                             t.HasCheckConstraint("CK_elsa_etl_connector_batches_OutputPlan", "(OutputJson IS NULL AND OutputDigest IS NULL) OR (OutputJson IS NOT NULL AND OutputDigest IS NOT NULL AND length(OutputDigest) = 64)");
                             t.HasCheckConstraint("CK_elsa_etl_connector_batches_HttpDeliveryPlan", "(HttpDeliveryJson IS NULL AND HttpDeliveryDigest IS NULL) OR (HttpDeliveryJson IS NOT NULL AND HttpDeliveryDigest IS NOT NULL AND length(HttpDeliveryDigest) = 64 AND OutputJson IS NOT NULL)");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_batches_BatchOrdinal", "BatchOrdinal >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_batches_HttpPageSequence", "HttpPageSequence IS NULL OR HttpPageSequence >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_batches_AcceptanceMetadataBytes", "AcceptanceMetadataBytes >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_batches_MainFilePublishedRequiresOutput", "MainFilePublished = 0 OR OutputJson IS NOT NULL");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_batches_ErrorFilePublishedRequiresOutput", "ErrorFilePublished = 0 OR OutputJson IS NOT NULL");
                         });
                 });
 
@@ -205,6 +251,10 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                         .HasColumnType("INTEGER");
 
                     b.Property<long>("ByteLength")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("AcceptedItemCount")
+                        .HasDefaultValue(0)
                         .HasColumnType("INTEGER");
 
                     b.Property<bool>("HasContinuation")
@@ -252,6 +302,7 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                     b.ToTable("elsa_etl_connector_http_pages", t =>
                         {
                             t.HasCheckConstraint("CK_elsa_etl_connector_http_pages_NonNegativeByteCounts", "ByteLength >= 0 AND MetadataBytes >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_http_pages_AcceptedItemCount", "AcceptedItemCount >= 0");
                         });
                 });
 

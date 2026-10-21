@@ -53,13 +53,32 @@ internal sealed partial class EfEtlRuntimeStore
         var previous = route == EtlOutputRoute.Main ? deliveries.Main : deliveries.Errors;
         var result = transition(previous, routeOutput.EffectId, state.Pipeline.Http, EtlRuntimeRecordCodec.ReadUtc(NowTicks()));
         if (!HasConnectorAuthority(partition, lease.Owner, lease.Fence, NowTicks())) return new(EtlStoreStatus.LeaseLost, null, null);
-        if (result.Status != EtlStoreStatus.Applied)
-            return result.Permit is { } replayPermit && replayPermit.ExpiresAt.UtcTicks <= NowTicks()
-                ? new(EtlStoreStatus.Conflict, result.Delivery, null) : result;
-        if (result.Delivery is null) throw new InvalidDataException("An applied HTTP transition omitted its durable state.");
-        deliveries = route == EtlOutputRoute.Main ? deliveries with { Main = result.Delivery } : deliveries with { Errors = result.Delivery };
         var batch = await db.ConnectorBatches.SingleAsync(row => row.ScopeKey == key.ScopeKey && row.RunKey == key.RunKey &&
             row.PartitionOrdinal == lease.PartitionOrdinal && row.BatchId == batchId, cancellationToken);
+        // Receiving an outcome must not be blocked by a migrated checkpoint lacking dispatch capacity.
+        var reserveDelta = result.Permit is null ? 0 : MissingAcceptanceReserve(partition, position, owed.Batch, batch);
+        if (result.Status != EtlStoreStatus.Applied)
+        {
+            if (result.Permit is not { } replayPermit) return result;
+            if (replayPermit.ExpiresAt.UtcTicks <= NowTicks()) return new(EtlStoreStatus.Conflict, result.Delivery, null);
+            if (reserveDelta > state.Pipeline.Http.MaxRetainedMetadataBytes - connector.RetainedMetadataBytes)
+                return new(EtlStoreStatus.BudgetExceeded, previous, null);
+            if (reserveDelta != 0)
+            {
+                RetainAcceptanceReserve(connector, partition, batch, reserveDelta);
+                partition.Revision = checked(partition.Revision + 1);
+                connector.Revision = checked(connector.Revision + 1);
+                run.Revision = checked(run.Revision + 1);
+                run.UpdatedAtUtcTicks = NowTicks();
+                await db.SaveChangesAsync(cancellationToken);
+            }
+            if (!HasConnectorAuthority(partition, lease.Owner, lease.Fence, NowTicks())) return new(EtlStoreStatus.LeaseLost, null, null);
+            if (replayPermit.ExpiresAt.UtcTicks <= NowTicks()) return new(EtlStoreStatus.Conflict, result.Delivery, null);
+            await tx.CommitAsync(cancellationToken);
+            return result;
+        }
+        if (result.Delivery is null) throw new InvalidDataException("An applied HTTP transition omitted its durable state.");
+        deliveries = route == EtlOutputRoute.Main ? deliveries with { Main = result.Delivery } : deliveries with { Errors = result.Delivery };
         string json;
         try { json = EtlConnectorRecordCodec.Write(deliveries); }
         catch (ArgumentException) { return new(EtlStoreStatus.BudgetExceeded, previous, null); }
@@ -67,14 +86,15 @@ internal sealed partial class EfEtlRuntimeStore
         if (retainedBytes > EtlConnectorRecordCodec.MaximumDocumentBytes)
             return new(EtlStoreStatus.BudgetExceeded, previous, null);
         var delta = checked(retainedBytes - HttpDeliveryMetadataBytes(batch.HttpDeliveryJson));
-        if (delta > state.Pipeline.Http.MaxRetainedMetadataBytes - connector.RetainedMetadataBytes)
+        if (checked(delta + reserveDelta) > state.Pipeline.Http.MaxRetainedMetadataBytes - connector.RetainedMetadataBytes)
             return new(EtlStoreStatus.BudgetExceeded, previous, null);
+        RetainAcceptanceReserve(connector, partition, batch, reserveDelta);
         batch.HttpDeliveryJson = json;
         batch.HttpDeliveryDigest = MetadataDigest(json);
         batch.MetadataBytes = checked(batch.MetadataBytes + delta);
         partition.BatchMetadataBytes = checked(partition.BatchMetadataBytes + delta);
         partition.MetadataBytes = checked(partition.MetadataBytes + delta);
-        partition.NotBeforeUtcTicks = ConnectorNotBefore(output, deliveries);
+        partition.NotBeforeUtcTicks = ConnectorNotBefore(output, deliveries, owed.FilePublications);
         partition.Revision = checked(partition.Revision + 1);
         connector.RetainedMetadataBytes = checked(connector.RetainedMetadataBytes + delta);
         connector.Revision = checked(connector.Revision + 1);
@@ -131,13 +151,14 @@ internal sealed partial class EfEtlRuntimeStore
             throw new InvalidDataException("The HTTP delivery metadata is inconsistent.");
     }
 
-    private static long? ConnectorNotBefore(EtlConnectorBatchOutput? output, EtlConnectorHttpDeliveries? deliveries)
+    private static long? ConnectorNotBefore(EtlConnectorBatchOutput? output, EtlConnectorHttpDeliveries? deliveries,
+        EtlConnectorFilePublications publications)
     {
         if (output is null) return null;
         long? earliest = null;
-        foreach (var (route, delivery) in new[] { (output.Main, deliveries?.Main), (output.Errors, deliveries?.Errors) })
+        foreach (var (route, delivery, published) in new[] { (output.Main, deliveries?.Main, publications.Main), (output.Errors, deliveries?.Errors, publications.Errors) })
         {
-            if (route is null || delivery?.Phase == EtlHttpDeliveryPhase.Acknowledged) continue;
+            if (route is null || published || delivery?.Phase == EtlHttpDeliveryPhase.Acknowledged) continue;
             // File publication, unstarted HTTP work, uncertain in-flight work, and failure settlement
             // remain eligible. Only a partition whose remaining work is all delayed may be deferred.
             if (route.Kind != EtlConnectorKind.Http || delivery?.Phase != EtlHttpDeliveryPhase.Waiting) return null;

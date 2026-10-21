@@ -27,7 +27,8 @@ public interface IEtlConnectorRuntimeStore
     /// <summary>Reserves measured input at the current position. Replacement workers inherit the same owed batch and quota charges.</summary>
     ValueTask<EtlConnectorReservationResult> ReserveConnectorBatchAsync(EtlConnectorPartitionLease lease, EtlConnectorBatchDescriptor batch, CancellationToken cancellationToken = default);
     /// <summary>Retains the complete verified transformation output before any route is dispatched.</summary>
-    /// <remarks>The caller verifies immutable bodies before retention. Identical replay does not charge again.
+    /// <remarks>The caller verifies immutable bodies before retention. Identical replay does not recharge output.
+    /// Call before dispatch, including recovered output: a replay also reserves any missing acceptance capacity for migrated checkpoints.
     /// Retention neither acknowledges delivery nor advances input.</remarks>
     ValueTask<EtlConnectorOutputResult> RetainConnectorBatchOutputAsync(EtlConnectorPartitionLease lease, string batchId, EtlConnectorBatchOutput output, CancellationToken cancellationToken = default);
     /// <summary>Allocates a bounded attempt before transport. Conflict with retained Waiting state means not yet eligible.</summary>
@@ -39,6 +40,14 @@ public interface IEtlConnectorRuntimeStore
     /// <summary>Records an exact allocated attempt's synchronous outcome without advancing input.</summary>
     ValueTask<EtlConnectorHttpDeliveryResult> CompleteConnectorHttpDeliveryAsync(EtlConnectorPartitionLease lease, string batchId,
         EtlOutputRoute route, EtlHttpDeliveryAttempt attempt, EtlHttpDeliveryResponse response, CancellationToken cancellationToken = default);
+    /// <summary>Records a verified immutable file publication matching the retained route body and destination key.</summary>
+    /// <remarks>The caller verifies actual published bytes before recording; this operation does not advance input.</remarks>
+    ValueTask<EtlStoreStatus> RecordConnectorFilePublicationAsync(EtlConnectorPartitionLease lease, string batchId,
+        EtlOutputRoute route, EtlObjectReference publication, CancellationToken cancellationToken = default);
+    /// <summary>Accepts all retained route evidence, advances input and releases its reservation exactly once.</summary>
+    /// <remarks>Final work also commits the terminal result/outbox. A matching replay never repeats accounting.</remarks>
+    ValueTask<EtlConnectorPositionResult> AcceptConnectorBatchAsync(EtlConnectorPartitionLease lease, string batchId,
+        CancellationToken cancellationToken = default);
     ValueTask<EtlStoreStatus> RenewConnectorPartitionAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default);
     ValueTask<EtlStoreStatus> ReleaseConnectorPartitionAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default);
 

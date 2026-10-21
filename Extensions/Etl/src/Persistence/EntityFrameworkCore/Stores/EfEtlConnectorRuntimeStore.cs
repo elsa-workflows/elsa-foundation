@@ -190,7 +190,7 @@ internal sealed partial class EfEtlRuntimeStore
         ValidateRun(candidate.Run, scope, runId);
         var invocation = EtlRuntimeRecordCodec.ReadInvocation(candidate.Run.InvocationJson);
         var state = await ReadConnectorStateAsync(invocation, candidate.Connector, cancellationToken);
-        var position = await ReadConnectorPositionAsync(candidate.Partition, state.Pipeline, state.Bindings, state.Prepared, cancellationToken, auditHistory: true);
+        var position = await ReadConnectorPositionAsync(candidate.Partition, state.Pipeline, state.Bindings, state.Prepared, cancellationToken, auditHistory: true, admission: new(invocation, state.Bindings));
         var row = candidate.Partition;
         var owed = await ReadConnectorOwedBatchAsync(row, new(invocation, state.Bindings),
             state.Pipeline, state.Prepared!, position, cancellationToken);
@@ -319,14 +319,15 @@ internal sealed partial class EfEtlRuntimeStore
         var connector = await ConnectorRowAsync(key, cancellationToken);
         if (connector?.PreparedJson is null) return false;
         var run = await db.Runs.SingleAsync(x => x.ScopeKey == key.ScopeKey && x.RunKey == key.RunKey, cancellationToken);
-        var state = await ReadConnectorStateAsync(EtlRuntimeRecordCodec.ReadInvocation(run.InvocationJson), connector, cancellationToken);
+        var invocation = EtlRuntimeRecordCodec.ReadInvocation(run.InvocationJson);
+        var state = await ReadConnectorStateAsync(invocation, connector, cancellationToken);
         var rows = await db.ConnectorPartitions.Where(x => x.ScopeKey == key.ScopeKey && x.RunKey == key.RunKey)
             .Take(options.MaximumPartitionsPerRun == int.MaxValue ? int.MaxValue : options.MaximumPartitionsPerRun + 1).ToListAsync(cancellationToken);
         var count = InitialPositions(state.Pipeline, state.Bindings, state.Prepared!).Count();
         if (rows.Count != count || await db.ConnectorBatches.AnyAsync(batch => batch.ScopeKey == key.ScopeKey &&
             batch.RunKey == key.RunKey && !batch.Settled, cancellationToken)) return false;
         foreach (var row in rows)
-            if (!EtlConnectorRecordCodec.Complete(await ReadConnectorPositionAsync(row, state.Pipeline, state.Bindings, state.Prepared, cancellationToken, auditHistory: true))) return false;
+            if (!EtlConnectorRecordCodec.Complete(await ReadConnectorPositionAsync(row, state.Pipeline, state.Bindings, state.Prepared, cancellationToken, auditHistory: true, admission: new(invocation, state.Bindings)))) return false;
         return true;
     }
 

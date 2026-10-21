@@ -33,12 +33,28 @@ internal sealed partial class EfEtlRuntimeStore
         var admission = new EtlConnectorRunAdmission(invocation, state.Bindings);
         var owed = await ReadConnectorOwedBatchAsync(partition, admission, state.Pipeline, state.Prepared!, position, cancellationToken);
         if (owed is null) return new(EtlStoreStatus.Conflict, null);
-        if (owed.Output is { } retained)
-            return HasConnectorAuthority(partition, lease.Owner, lease.Fence, NowTicks())
-                ? new(retained == output ? EtlStoreStatus.Replay : EtlStoreStatus.Conflict, retained == output ? retained : null)
-                : new(EtlStoreStatus.LeaseLost, null);
         var batch = await db.ConnectorBatches.SingleAsync(row => row.ScopeKey == key.ScopeKey && row.RunKey == key.RunKey &&
             row.PartitionOrdinal == lease.PartitionOrdinal && row.BatchId == batchId, cancellationToken);
+        // Replaying output retention is the pre-dispatch capacity check for migrated checkpoints.
+        var reserveDelta = MissingAcceptanceReserve(partition, position, owed.Batch, batch);
+        if (owed.Output is { } retained)
+        {
+            if (retained != output) return new(EtlStoreStatus.Conflict, null);
+            if (reserveDelta > state.Pipeline.Http.MaxRetainedMetadataBytes - connector.RetainedMetadataBytes)
+                return new(EtlStoreStatus.BudgetExceeded, null);
+            if (reserveDelta != 0)
+            {
+                RetainAcceptanceReserve(connector, partition, batch, reserveDelta);
+                partition.Revision = checked(partition.Revision + 1);
+                connector.Revision = checked(connector.Revision + 1);
+                run.Revision = checked(run.Revision + 1);
+                run.UpdatedAtUtcTicks = NowTicks();
+                await db.SaveChangesAsync(cancellationToken);
+            }
+            if (!HasConnectorAuthority(partition, lease.Owner, lease.Fence, NowTicks())) return new(EtlStoreStatus.LeaseLost, null);
+            await tx.CommitAsync(cancellationToken);
+            return new(EtlStoreStatus.Replay, retained);
+        }
         string json;
         long bytes;
         try
@@ -53,8 +69,9 @@ internal sealed partial class EfEtlRuntimeStore
         var metadata = MetadataBytes(json);
         if (bytes > state.Pipeline.Limits.MaxOutputBatchBytes ||
             bytes > state.Pipeline.Limits.MaxRetainedOutputBytes - connector.RetainedOutputBytes ||
-            metadata > state.Pipeline.Http.MaxRetainedMetadataBytes - connector.RetainedMetadataBytes)
+            checked(metadata + reserveDelta) > state.Pipeline.Http.MaxRetainedMetadataBytes - connector.RetainedMetadataBytes)
             return new(EtlStoreStatus.BudgetExceeded, null);
+        RetainAcceptanceReserve(connector, partition, batch, reserveDelta);
         batch.OutputJson = json;
         batch.OutputDigest = MetadataDigest(json);
         batch.OutputBytes = bytes;

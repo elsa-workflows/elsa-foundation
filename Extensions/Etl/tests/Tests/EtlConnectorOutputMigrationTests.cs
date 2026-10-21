@@ -46,7 +46,7 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal(17, partition.BatchMetadataBytes);
         Assert.Equal(0, partition.RetainedOutputBytes);
         Assert.Single(await context.ConnectorHttpRequests.AsNoTracking().ToListAsync());
-        Assert.Single(await context.ConnectorHttpPages.AsNoTracking().ToListAsync());
+        Assert.Single(await context.ConnectorHttpPages.AsNoTracking().Select(row => row.PageSequence).ToListAsync());
         var batch = await context.ConnectorBatches.AsNoTracking()
             .Select(row => new { row.BatchId, row.Settled, row.MetadataBytes, row.OutputJson, row.OutputDigest, row.OutputBytes }).SingleAsync();
         Assert.Equal(batchId, batch.BatchId);

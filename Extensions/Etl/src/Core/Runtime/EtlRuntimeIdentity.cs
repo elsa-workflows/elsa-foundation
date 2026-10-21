@@ -66,6 +66,13 @@ public static class EtlRuntimeIdentity
             ConnectorBinding(destination), contentHash, Number(byteLength), Number(recordCount));
     }
 
+    /// <summary>The immutable JSONL filename produced when the file publisher receives the connector effect identity.</summary>
+    public static string ConnectorFileOutputKey(string effectId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(effectId);
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(effectId))) + ".jsonl";
+    }
+
     private static string? ObjectReference(EtlObjectReference? reference) => reference is null
         ? null : Hash("etl-object-v2", reference.Key, reference.ContentHash, Number(reference.ByteLength));
 

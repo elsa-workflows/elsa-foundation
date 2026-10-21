@@ -49,7 +49,8 @@ internal sealed partial class EfEtlRuntimeStore
             return new(EtlStoreStatus.Invalid, null);
         }
         var limits = state.Pipeline.Limits;
-        var metadataBytes = MetadataBytes(descriptor);
+        var acceptanceReserve = ConnectorAcceptanceReserve(row, position, batch);
+        var metadataBytes = checked(MetadataBytes(descriptor) + acceptanceReserve);
         if (records > limits.MaxBatchRecords || batch.InputBytes > limits.MaxBatchBytes ||
             run.OutstandingRecords > limits.MaxOutstandingRecords - records ||
             run.OutstandingBytes > limits.MaxOutstandingBytes - batch.InputBytes ||
@@ -62,8 +63,10 @@ internal sealed partial class EfEtlRuntimeStore
         db.ConnectorBatches.Add(new EtlConnectorBatchRecord
         {
             ScopeKey = key.ScopeKey, RunKey = key.RunKey, PartitionOrdinal = row.PartitionOrdinal,
-            BatchId = batch.BatchId, StartKey = startKey, DescriptorJson = descriptor, DescriptorDigest = MetadataDigest(descriptor),
-            RecordCount = records, InputBytes = batch.InputBytes, MetadataBytes = metadataBytes,
+            BatchId = batch.BatchId, BatchOrdinal = row.AcceptedBatchCount,
+            HttpPageSequence = (batch.Range as EtlConnectorHttpBatchRange)?.PageSequence,
+            StartKey = startKey, DescriptorJson = descriptor, DescriptorDigest = MetadataDigest(descriptor),
+            RecordCount = records, InputBytes = batch.InputBytes, MetadataBytes = metadataBytes, AcceptanceMetadataBytes = acceptanceReserve,
             SchemaVersion = EtlRuntimeEfModule.SchemaVersion
         });
         row.OwedBatchId = batch.BatchId;
@@ -91,16 +94,19 @@ internal sealed partial class EfEtlRuntimeStore
             ?? throw new InvalidDataException("The connector owed batch is missing.");
         var descriptor = ReadConnectorBatch(retained);
         var records = ValidateConnectorBatch(descriptor, admission, prepared, row.PartitionOrdinal, position);
-        if (retained.Settled || records != retained.RecordCount || row.Completed ||
+        if (retained.Settled || retained.BatchOrdinal != row.AcceptedBatchCount || records != retained.RecordCount || row.Completed ||
             records > pipeline.Limits.MaxBatchRecords || descriptor.InputBytes > pipeline.Limits.MaxBatchBytes)
             throw new InvalidDataException("The connector owed batch does not match its partition.");
+        if (retained.AcceptanceMetadataBytes != 0 && retained.AcceptanceMetadataBytes != ConnectorAcceptanceReserve(row, position, descriptor))
+            throw new InvalidDataException("The connector acceptance reserve differs from its input transition.");
         var output = ReadConnectorBatchOutput(retained);
         if (output is not null && ValidateConnectorOutput(output, records, admission, descriptor.BatchId) > pipeline.Limits.MaxOutputBatchBytes)
             throw new InvalidDataException("The connector output exceeds its admitted batch bound.");
         var deliveries = ReadConnectorHttpDeliveries(retained, output, pipeline.Http);
-        if (row.NotBeforeUtcTicks != ConnectorNotBefore(output, deliveries))
+        var publications = ReadConnectorFilePublications(retained, output);
+        if (row.NotBeforeUtcTicks != ConnectorNotBefore(output, deliveries, publications))
             throw new InvalidDataException("The partition retry eligibility differs from its owed output.");
-        return new(descriptor, false) { Output = output, HttpDeliveries = deliveries };
+        return new(descriptor, false) { Output = output, HttpDeliveries = deliveries, FilePublications = publications };
     }
 
     private static EtlConnectorBatchDescriptor ReadConnectorBatch(EtlConnectorBatchRecord row)
@@ -108,11 +114,13 @@ internal sealed partial class EfEtlRuntimeStore
         EnsureSchema(row.SchemaVersion);
         var batch = EtlConnectorRecordCodec.Read<EtlConnectorBatchDescriptor>(row.DescriptorJson);
         if (row.DescriptorDigest != MetadataDigest(row.DescriptorJson) || row.MetadataBytes != checked(MetadataBytes(row.DescriptorJson) + (row.OutputJson is null ? 0 : MetadataBytes(row.OutputJson)) +
-                HttpDeliveryMetadataBytes(row.HttpDeliveryJson)) ||
+                HttpDeliveryMetadataBytes(row.HttpDeliveryJson) + row.AcceptanceMetadataBytes) ||
+            row.AcceptanceMetadataBytes < 0 || row.Settled && row.AcceptanceMetadataBytes != 0 ||
+            row.BatchOrdinal < 0 || row.HttpPageSequence != (batch.Range as EtlConnectorHttpBatchRange)?.PageSequence ||
             batch.BatchId != row.BatchId || row.StartKey != ConnectorBatchStartKey(batch.Range) || batch.InputBytes != row.InputBytes ||
             batch.InputBytes <= 0 || !EtlRuntimeRecordCodec.IsSha256(batch.InputHash) || row.RecordCount <= 0)
             throw new InvalidDataException("The connector batch metadata is inconsistent.");
-        ReadConnectorBatchOutput(row);
+        ReadConnectorFilePublications(row, ReadConnectorBatchOutput(row));
         ValidateHttpDeliveryEnvelope(row);
         return batch;
     }
@@ -158,23 +166,4 @@ internal sealed partial class EfEtlRuntimeStore
             throw new InvalidDataException("The connector outstanding accounting differs from its owed batches.");
     }
 
-    private async ValueTask AuditConnectorBatchHistoryAsync(EtlConnectorPartitionRecord partition, CancellationToken cancellationToken)
-    {
-        long metadataBytes = 0, outputBytes = 0;
-        var owedFound = false;
-        await foreach (var retained in db.ConnectorBatches.AsNoTracking().Where(batch => batch.ScopeKey == partition.ScopeKey &&
-            batch.RunKey == partition.RunKey && batch.PartitionOrdinal == partition.PartitionOrdinal).AsAsyncEnumerable().WithCancellation(cancellationToken))
-        {
-            ReadConnectorBatch(retained);
-            // Acceptance is not enabled yet. A settled row cannot authorize progress without
-            // the route acknowledgement and accepted-range history introduced by that transition.
-            if (retained.Settled || retained.BatchId != partition.OwedBatchId || owedFound)
-                throw new InvalidDataException("The connector reservation history has unsupported or unlinked responsibility.");
-            owedFound = true;
-            metadataBytes = checked(metadataBytes + retained.MetadataBytes);
-            outputBytes = checked(outputBytes + retained.OutputBytes);
-        }
-        if (metadataBytes != partition.BatchMetadataBytes || outputBytes != partition.RetainedOutputBytes || owedFound != (partition.OwedBatchId is not null))
-            throw new InvalidDataException("The connector reservation history or metadata accounting is incomplete.");
-    }
 }

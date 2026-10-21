@@ -14,29 +14,56 @@ internal sealed partial class EfEtlRuntimeStore
     {
         // Partition cardinality is bounded at preparation. Page history may grow to the finite
         // page limit, so hot transitions must never aggregate page rows or deserialize that history.
-        var totals = await db.ConnectorPartitions.Where(partition => partition.ScopeKey == connector.ScopeKey && partition.RunKey == connector.RunKey)
+        var totals = await db.ConnectorPartitions.AsNoTracking()
+            .Where(partition => partition.ScopeKey == connector.ScopeKey && partition.RunKey == connector.RunKey)
             .GroupBy(partition => partition.RunKey)
-            .Select(group => new { PageBytes = group.Sum(partition => partition.PageBytes), MetadataBytes = group.Sum(partition => partition.MetadataBytes), OutputBytes = group.Sum(partition => partition.RetainedOutputBytes) })
+            .Select(group => new
+            {
+                PageBytes = group.Sum(partition => partition.PageBytes),
+                MetadataBytes = group.Sum(partition => partition.MetadataBytes),
+                OutputBytes = group.Sum(partition => partition.RetainedOutputBytes),
+                AcceptedRecords = group.Sum(partition => partition.AcceptedRecords),
+                RejectedRecords = group.Sum(partition => partition.RejectedRecords),
+                FilteredRecords = group.Sum(partition => partition.FilteredRecords)
+            })
             .SingleOrDefaultAsync(cancellationToken);
+        var run = await db.Runs.AsNoTracking().SingleOrDefaultAsync(row => row.ScopeKey == connector.ScopeKey &&
+            row.RunKey == connector.RunKey, cancellationToken)
+            ?? throw new InvalidDataException("The connector run is missing.");
+        if ((totals?.AcceptedRecords ?? 0) != run.AcceptedRecords ||
+            (totals?.RejectedRecords ?? 0) != run.RejectedRecords ||
+            (totals?.FilteredRecords ?? 0) != run.FilteredRecords)
+            throw new InvalidDataException("The connector acceptance counters differ from their partitions.");
         var state = ReadConnectorState(invocation, connector, totals?.PageBytes ?? 0, totals?.MetadataBytes ?? 0, totals?.OutputBytes ?? 0);
         await ValidateConnectorOutstandingAsync(connector, state.Pipeline, cancellationToken);
         return state;
     }
 
     private async ValueTask<EtlConnectorPosition> ReadConnectorPositionAsync(EtlConnectorPartitionRecord row, EtlPipelineV2 pipeline,
-        EtlConnectorRunBindings bindings, EtlConnectorPreparedRun? prepared, CancellationToken cancellationToken, bool auditHistory = false)
+        EtlConnectorRunBindings bindings, EtlConnectorPreparedRun? prepared, CancellationToken cancellationToken, bool auditHistory = false,
+        EtlConnectorRunAdmission? admission = null)
     {
         var position = ReadConnectorPosition(row, pipeline, bindings, prepared);
-        if (row.OwedBatchId is null && row.NotBeforeUtcTicks is not null || row.RetainedOutputBytes < 0 || row.PageBytes < 0 || row.BatchMetadataBytes < 0 || row.MetadataBytes < checked(MetadataBytes(row.PositionJson) + row.BatchMetadataBytes))
+        if (row.OwedBatchId is null && row.NotBeforeUtcTicks is not null || row.RetainedOutputBytes < 0 || row.PageBytes < 0 ||
+            row.BatchMetadataBytes < 0 || row.MetadataBytes < checked(MetadataBytes(row.PositionJson) + row.BatchMetadataBytes) ||
+            row.AcceptedBatchCount < 0 || row.AcceptedRecords < 0 || row.RejectedRecords < 0 || row.FilteredRecords < 0)
             throw new InvalidDataException("The connector partition accounting is invalid.");
-        if (auditHistory) await AuditConnectorBatchHistoryAsync(row, cancellationToken);
+        if (auditHistory && (admission is null || prepared is null))
+            throw new InvalidDataException("A full connector history audit requires its admission and prepared input.");
         if (position is not EtlConnectorHttpPosition http)
         {
             if (row.PageCount != 0 || row.PageBytes != 0 || row.CurrentRequestSequence is not null || row.CurrentRequestHash is not null ||
                 row.MetadataBytes != checked(MetadataBytes(row.PositionJson) + row.BatchMetadataBytes))
                 throw new InvalidDataException("A file partition has HTTP request accounting.");
-            if (auditHistory && (await Pages(row).AnyAsync(cancellationToken) || await Requests(row).AnyAsync(cancellationToken)))
-                throw new InvalidDataException("A file partition has HTTP request history.");
+            var file = (EtlConnectorFilePosition)position;
+            if (checked(row.AcceptedRecords + row.RejectedRecords + row.FilteredRecords) != file.NextOrdinal - file.StartOrdinal)
+                throw new InvalidDataException("The file partition position differs from its accepted record counters.");
+            if (auditHistory)
+            {
+                if (await Pages(row).AnyAsync(cancellationToken) || await Requests(row).AnyAsync(cancellationToken))
+                    throw new InvalidDataException("A file partition has HTTP request history.");
+                await AuditConnectorBatchHistoryAsync(row, admission!, pipeline, prepared!, position, cancellationToken);
+            }
             return position;
         }
         var expectedCount = checked(http.PageSequence + (http.Page is not null || http.Exhausted ? 1 : 0));
@@ -53,7 +80,7 @@ internal sealed partial class EfEtlRuntimeStore
             if (currentRow is null) throw new InvalidDataException("The current retained HTTP page is missing.");
             var page = ReadHttpPage(currentRow);
             ValidateRetainedPage(currentRow, page, http.Request, pipeline);
-            if (http.Page is not null && page != http.Page || http.Exhausted && (page.NextContinuation is not null || page.RecordCount != 0))
+            if (http.Page is not null && page != http.Page || http.Exhausted && page.NextContinuation is not null)
                 throw new InvalidDataException("The HTTP position differs from its retained page.");
         }
         else if (currentRow is not null) throw new InvalidDataException("The HTTP position omitted its retained page.");
@@ -62,12 +89,26 @@ internal sealed partial class EfEtlRuntimeStore
             var predecessor = await HttpPageRowAsync(row, http.PageSequence - 1, cancellationToken)
                 ?? throw new InvalidDataException("The preceding HTTP page is missing.");
             var page = ReadHttpPage(predecessor);
-            // Nonempty progress needs accepted-batch evidence before it can be enabled.
-            if (page.RecordCount != 0 || page.NextContinuation is null || page.NextContinuation != http.Request.Continuation ||
+            if (predecessor.AcceptedItemCount != page.RecordCount || page.NextContinuation is null || page.NextContinuation != http.Request.Continuation ||
                 !predecessor.HasContinuation || predecessor.NextRequestHash != requestRow.RequestHash)
-                throw new InvalidDataException("The HTTP request has no accepted predecessor progress.");
+                throw new InvalidDataException("The HTTP request has no fully accepted predecessor page.");
         }
-        if (auditHistory) await AuditHttpHistoryAsync(row, http, pipeline, cancellationToken);
+        if (currentRow is null)
+        {
+            if (http.NextItem != 0)
+                throw new InvalidDataException("The HTTP position advanced without a retained current page.");
+        }
+        else if (currentRow.AcceptedItemCount < 0 ||
+                 (http.Exhausted
+                     ? currentRow.AcceptedItemCount != ReadHttpPage(currentRow).RecordCount
+                     : currentRow.AcceptedItemCount != http.NextItem ||
+                       http.Page is { } currentPage && currentRow.AcceptedItemCount > currentPage.RecordCount))
+            throw new InvalidDataException("The HTTP position differs from its accepted page offset.");
+        if (auditHistory)
+        {
+            await AuditHttpHistoryAsync(row, http, pipeline, cancellationToken);
+            await AuditConnectorBatchHistoryAsync(row, admission!, pipeline, prepared!, position, cancellationToken);
+        }
         return position;
     }
 
@@ -93,21 +134,26 @@ internal sealed partial class EfEtlRuntimeStore
         await foreach (var retained in Pages(row).OrderBy(page => page.PageSequence).AsAsyncEnumerable().WithCancellation(cancellationToken))
         {
             var page = ReadHttpPage(retained);
-            if (page.PageSequence != sequence || !visited.Add(page.RequestHash))
+            if (page.PageSequence != sequence || !visited.Add(page.RequestHash) || retained.AcceptedItemCount < 0 ||
+                retained.AcceptedItemCount > page.RecordCount)
                 throw new InvalidDataException("The HTTP page history does not follow its request chain.");
             ValidateRetainedPage(retained, page, expectedRequest, pipeline);
             if (page.NextContinuation is not null && visited.Contains(retained.NextRequestHash))
                 throw new InvalidDataException("The retained continuation repeats a visited request.");
+            var acceptedItemCount = await ReadAcceptedItemCountAsync(row, retained.PageSequence, cancellationToken);
+            if (acceptedItemCount != retained.AcceptedItemCount)
+                throw new InvalidDataException("The HTTP page accepted offset differs from its settled batch ranges.");
             if (sequence == http.PageSequence)
             {
                 if (expectedRequest != http.Request || http.Page is not null && page != http.Page ||
-                    http.Exhausted && (page.NextContinuation is not null || page.RecordCount != 0))
+                    retained.AcceptedItemCount != (http.Exhausted ? page.RecordCount : http.NextItem) ||
+                    http.Exhausted && page.NextContinuation is not null)
                     throw new InvalidDataException("The HTTP position differs from its retained page.");
             }
             else
             {
-                if (page.NextContinuation is null || page.RecordCount != 0)
-                    throw new InvalidDataException("The HTTP position has no accepted predecessor progress.");
+                if (page.NextContinuation is null || retained.AcceptedItemCount != page.RecordCount)
+                    throw new InvalidDataException("The HTTP position has no fully accepted predecessor page.");
                 expectedRequest = expectedRequest with { Continuation = page.NextContinuation };
             }
             pageBytes = checked(pageBytes + page.Body.ByteLength);
@@ -117,6 +163,24 @@ internal sealed partial class EfEtlRuntimeStore
         if (sequence != row.PageCount || pageBytes != row.PageBytes || metadataBytes != row.MetadataBytes ||
             http.Page is null && !http.Exhausted && expectedRequest != http.Request)
             throw new InvalidDataException("The HTTP request history or retained accounting is inconsistent.");
+    }
+
+    private async ValueTask<int> ReadAcceptedItemCountAsync(EtlConnectorPartitionRecord partition, long pageSequence,
+        CancellationToken cancellationToken)
+    {
+        var acceptedItemCount = 0;
+        await foreach (var retained in db.ConnectorBatches.AsNoTracking().Where(batch => batch.ScopeKey == partition.ScopeKey &&
+                batch.RunKey == partition.RunKey && batch.PartitionOrdinal == partition.PartitionOrdinal &&
+                batch.HttpPageSequence == pageSequence && batch.Settled)
+            .OrderBy(batch => batch.BatchOrdinal).AsAsyncEnumerable().WithCancellation(cancellationToken))
+        {
+            var descriptor = ReadConnectorBatch(retained);
+            if (descriptor.Range is not EtlConnectorHttpBatchRange range || range.PageSequence != pageSequence ||
+                range.StartItem != acceptedItemCount || range.EndItemExclusive <= range.StartItem)
+                throw new InvalidDataException("The settled HTTP batch ranges are not contiguous within their page.");
+            acceptedItemCount = range.EndItemExclusive;
+        }
+        return acceptedItemCount;
     }
 
     private static void ValidateRetainedPage(EtlConnectorHttpPageRecord row, EtlRetainedHttpPage page, EtlHttpRequest request, EtlPipelineV2 pipeline)

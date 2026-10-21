@@ -1558,3 +1558,22 @@ static Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.operator !=(Elsa.Etl.C
 static Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.operator ==(Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord? left, Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord? right) -> bool
 static Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.operator !=(Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse? left, Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse? right) -> bool
 static Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.operator ==(Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse? left, Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse? right) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorFilePublications.Main.get -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorFilePublications.Main.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorFilePublications.Errors.get -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorFilePublications.Errors.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorFilePublications
+override Elsa.Etl.Core.Runtime.EtlConnectorFilePublications.ToString() -> string!
+static Elsa.Etl.Core.Runtime.EtlConnectorFilePublications.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorFilePublications? left, Elsa.Etl.Core.Runtime.EtlConnectorFilePublications? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorFilePublications.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorFilePublications? left, Elsa.Etl.Core.Runtime.EtlConnectorFilePublications? right) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorFilePublications.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorFilePublications.Equals(object? obj) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorFilePublications.Equals(Elsa.Etl.Core.Runtime.EtlConnectorFilePublications? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorFilePublications.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorFilePublications!
+Elsa.Etl.Core.Runtime.EtlConnectorFilePublications.Deconstruct(out bool Main, out bool Errors) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.FilePublications.get -> Elsa.Etl.Core.Runtime.EtlConnectorFilePublications!
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.FilePublications.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorFilePublications.EtlConnectorFilePublications(bool Main, bool Errors) -> void
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.AcceptConnectorBatchAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, string! batchId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorPositionResult!>
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.RecordConnectorFilePublicationAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, string! batchId, Elsa.Etl.Core.Runtime.EtlOutputRoute route, Elsa.Etl.Core.Runtime.EtlObjectReference! publication, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlStoreStatus>
+static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorFileOutputKey(string! effectId) -> string!

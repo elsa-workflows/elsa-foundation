@@ -33,10 +33,14 @@ internal sealed partial class EfEtlRuntimeStore
         if (run.Status != (int)EtlRunStatus.Running || !HasConnectorAuthority(row, lease.Owner, lease.Fence, NowTicks()))
             return new(EtlStoreStatus.LeaseLost, null);
         var expiry = row.ExpiresAtUtcTicks!.Value;
-        var state = await ReadConnectorStateAsync(EtlRuntimeRecordCodec.ReadInvocation(run.InvocationJson), connector, cancellationToken);
+        var invocation = EtlRuntimeRecordCodec.ReadInvocation(run.InvocationJson);
+        var state = await ReadConnectorStateAsync(invocation, connector, cancellationToken);
         var position = await ReadConnectorPositionAsync(row, state.Pipeline, state.Bindings, state.Prepared, cancellationToken);
         if (position is not EtlConnectorHttpPosition current || lease.Position is not EtlConnectorHttpPosition expected)
             return new(EtlStoreStatus.Invalid, null);
+        // Replays return current durable responsibility, including a batch reserved after attachment.
+        lease = lease with { OwedBatch = await ReadConnectorOwedBatchAsync(row, new(invocation, state.Bindings),
+            state.Pipeline, state.Prepared!, position, cancellationToken) };
         EtlConnectorHttpPosition next;
         EtlConnectorHttpPageRecord? addedPage = null;
         EtlConnectorHttpRequestRecord? addedRequest = null;
@@ -68,6 +72,11 @@ internal sealed partial class EfEtlRuntimeStore
         else
         {
             if (page is null || expected.Exhausted) return new(EtlStoreStatus.Invalid, null);
+            // A lost attachment reply may be retried after batches on this same page progressed.
+            // Return current progress and responsibility; never replace or rewind the retained page.
+            if (current.Page == page && expected.PageSequence == current.PageSequence && expected.Request == current.Request &&
+                expected.NextItem >= 0 && expected.NextItem <= current.NextItem && (expected.Page is null || expected.Page == page))
+                return PositionResult(EtlStoreStatus.Replay, lease, row, current);
             try
             {
                 // The request is taken from the expected lease, never supplied by the response.
@@ -84,13 +93,7 @@ internal sealed partial class EfEtlRuntimeStore
             {
                 return new(EtlStoreStatus.Invalid, null);
             }
-            if (current.Page is not null)
-            {
-                // Permit retry of attachment with the pre-attachment lease, or the returned lease.
-                if (current == next && (expected == current || expected == (current with { Page = null })))
-                    return PositionResult(EtlStoreStatus.Replay, lease, row, current);
-                return new(EtlStoreStatus.Conflict, null);
-            }
+            if (current.Page is not null) return new(EtlStoreStatus.Conflict, null);
             if (current != expected || expected.Page is not null) return new(EtlStoreStatus.Conflict, null);
             if (page.NextContinuation is { } continuation)
             {
@@ -139,7 +142,10 @@ internal sealed partial class EfEtlRuntimeStore
         row.PositionJson = positionJson;
         row.Completed = next.Exhausted;
         row.Revision = checked(row.Revision + 1);
+        run.UpdatedAtUtcTicks = NowTicks();
+        run.Revision = checked(run.Revision + 1);
         await db.SaveChangesAsync(cancellationToken);
+        if (advance) await CompleteConnectorRunIfReadyAsync(key, run, invocation, cancellationToken);
         if (expiry <= NowTicks()) return new(EtlStoreStatus.LeaseLost, null);
         await tx.CommitAsync(cancellationToken);
         return PositionResult(EtlStoreStatus.Applied, lease, row, next);
@@ -151,7 +157,7 @@ internal sealed partial class EfEtlRuntimeStore
             : position with { NextItem = 0, Page = null, Exhausted = true };
 
     private EtlConnectorPositionResult PositionResult(EtlStoreStatus status, EtlConnectorPartitionLease lease,
-        EtlConnectorPartitionRecord row, EtlConnectorHttpPosition position) =>
+        EtlConnectorPartitionRecord row, EtlConnectorPosition position) =>
         row.ExpiresAtUtcTicks is { } expiry && expiry > NowTicks()
             ? new(status, lease with { Position = position, ExpiresAt = EtlRuntimeRecordCodec.ReadUtc(expiry) })
             : new(EtlStoreStatus.LeaseLost, null);

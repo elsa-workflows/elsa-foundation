@@ -53,7 +53,7 @@ with a unique request digest per partition. Its payload is an object reference, 
 JSON. Total retained-input accounting includes every retained page body. A separate authored metadata limit
 (default 64 MiB, bounded by the host default ceiling of 256 MiB) accounts for UTF-8 bytes of all
 request/page JSON, retained batch-descriptor/output-plan/delivery-journal JSON and each current partition-position JSON across the run,
-plus bounded headroom for recording in-flight HTTP outcomes and pending retry exhaustion. Fixed SQL row/index/file
+plus bounded headroom for recording in-flight HTTP outcomes, pending retry exhaustion and accepted-position growth. Fixed SQL row/index/file
 overhead is excluded; admission/preparation/terminal envelopes retain their independent bounds.
 Partition and run counters are updated in the same transaction as metadata and position changes;
 replay does not recharge. Empty-page progression keeps
@@ -123,7 +123,41 @@ not a promise about physical database or live-worker memory.
 
 The additive 1400 migration preserves prior reservations/output and foreign keys. When all remaining
 HTTP routes are waiting, an indexed partition not-before value defers acquisition until the earliest
-route is due. Acknowledged routes are not resent. File publication evidence is still pending, so a
-mixed file/HTTP batch remains eligible while its file route has no settled publication record.
+route is due. Acknowledged routes are not resent. A mixed file/HTTP batch remains eligible while its
+file route has no publication record; a recorded file publication permits the remaining HTTP retry to defer it.
 Delivery acknowledgement neither advances input nor releases the owed record/byte reservation.
-Atomic accepted progress and source-fetch attempt state remain required before runtime activation.
+Atomic accepted progress is covered by the following checkpoint; source-fetch attempt state remains
+required before runtime activation.
+
+## Connector acceptance and file publication checkpoint
+
+A retained JSONL route has a fixed publication flag separate from accepted input. Recording that flag
+requires the deterministic file key derived from the route effect identity and the retained body's
+exact hash/length. The caller must verify the physical file before recording it. An HTTP route instead
+requires its validated synchronous acknowledgement journal. Absent routes need no effect; a nonempty
+fully filtered batch can therefore be accepted with no route bodies.
+
+Each partition retains an accepted-batch count and accepted/rejected/filtered totals. Batch ordinals
+form a settled prefix followed by at most one owed batch. HTTP page rows retain the accepted item
+count. Atomic acceptance clears owed responsibility, releases outstanding admission, advances the
+file cursor or HTTP page/item position, updates both partition and shared run counts, and retains
+all batch/output evidence. Consuming a page creates its next immutable request or marks it exhausted.
+The final batch or empty page also commits terminal result and outbox rows in the same transaction.
+Expiry during either progress or terminal persistence rolls back the entire transition.
+
+New reservations charge `AcceptanceMetadataBytes`, the exact positive growth of the next position
+and any next request document, before transformation or dispatch. Acceptance removes that reserve and
+charges the actual growth in the same transaction. Other partitions and route journals cannot spend
+the reserved capacity. The additive 1500 migration leaves earlier checkpoint rows at zero reserve;
+replaying output retention tops up missing capacity and is required before dispatching recovered
+output, including file publication. HTTP permits independently enforce the top-up. A received HTTP
+outcome can still be recorded without acquiring new dispatch capacity. If legacy already-delivered
+work cannot obtain capacity, it remains retained and must receive an explicit terminal failure; it
+must never exceed the quota, erase the receipt, or silently advance input.
+
+Recovery and successful terminal settlement stream the full request/page/batch history and validate
+contiguous ranges, admission-bound identities, route evidence and all aggregate counts. Ordinary
+transitions and settled-batch replay use indexed bounded reads; replay returns any newer owed batch
+without recounting old input. Once the run is terminal, duplicate acceptance returns `Terminal` and
+leaves its existing result/outbox unchanged. These storage contracts do not yet establish the full
+HTTP transport, native continuation, Studio or two-process acceptance journey.
