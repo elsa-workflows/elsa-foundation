@@ -349,6 +349,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 throw new InvalidOperationException("A terminal structural decision cannot also schedule child activities in the same execution.");
             if (structuralContinuation?.IsDeferred == true && childScheduleRequests.Count == 0)
                 throw new InvalidOperationException("An initial structural execution cannot defer without scheduling at least one child activity.");
+            RuntimeDelayedSchedules.Validate(serviceProvider, TimeProvider, invokePayload.ExecutableNodeId, childScheduleRequests);
             if (context?.GetChildSubtreeCancellationRequests().Count > 0)
                 throw new InvalidOperationException("An initial structural execution cannot cancel child subtrees; cancellation requests are only valid during a child-completion evaluation.");
             if (context?.GetChildFaultAbsorptionRequests().Count > 0)

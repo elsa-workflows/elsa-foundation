@@ -368,6 +368,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 var scheduledChildren = context.GetChildActivityScheduleRequests();
                 if (!continuation.IsDeferred && scheduledChildren.Count > 0)
                     throw new InvalidOperationException("A terminal structural decision cannot also schedule child activities in the same child-completion evaluation.");
+                RuntimeDelayedSchedules.Validate(serviceProvider, TimeProvider, payload.ExecutableNodeId, scheduledChildren);
 
                 subtreeCancellationPlans = await StructuralParentEvaluationSupport.PlanChildSubtreeCancellationsAsync(
                     serviceProvider,
