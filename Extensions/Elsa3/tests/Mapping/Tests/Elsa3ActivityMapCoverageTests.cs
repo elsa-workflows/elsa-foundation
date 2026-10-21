@@ -146,6 +146,28 @@ public sealed class Elsa3ActivityMapCoverageTests
         Assert.Equal(string.Empty, text.Elsa3Default?.GetString());
     }
 
+    /// <summary>
+    /// Spec 256: WriteHttpResponse.Content carries any value Elsa 4 sends the same (the body is a JSON value), and its
+    /// content type drops a blank expression. These contracts read the WriteHttpResponse siblings, so no other member uses them.
+    /// </summary>
+    [Fact]
+    public void WriteHttpResponse_content_and_content_type_use_the_response_contracts_only()
+    {
+        var members = Map.Find("Elsa.WriteHttpResponse")!.Members;
+        var content = Assert.Single(members, rule => rule.Elsa3Name == "Content");
+        Assert.Equal("Body", content.Elsa4Key);
+        Assert.Equal(Elsa3ValueContract.HttpResponseBody, content.Contract);
+        var contentType = Assert.Single(members, rule => rule.Elsa3Name == "ContentType");
+        Assert.Equal("ContentType", contentType.Elsa4Key);
+        Assert.Equal(Elsa3ValueContract.HttpResponseContentType, contentType.Contract);
+
+        var users = Map.Entries
+            .Where(entry => entry.Members.Any(rule =>
+                rule.Contract is Elsa3ValueContract.HttpResponseBody or Elsa3ValueContract.HttpResponseContentType))
+            .Select(entry => entry.Elsa3TypeName);
+        Assert.Equal(["Elsa.WriteHttpResponse"], users);
+    }
+
     [Fact]
     public void Every_intrinsic_target_and_key_exists()
     {
