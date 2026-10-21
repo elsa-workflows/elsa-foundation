@@ -4,6 +4,11 @@ import type {
   EtlApiCapability,
   EtlApiCapabilityDocument,
   EtlCreateDefinitionRequest,
+  EtlConnectorBindingSummary,
+  EtlConnectorCreateDefinitionRequest,
+  EtlConnectorDraftView,
+  EtlConnectorPublishedArtifactView,
+  EtlConnectorUpdateDraftRequest,
   EtlDraftView,
   EtlPage,
   EtlPageRequest,
@@ -23,18 +28,24 @@ import type {
   EtlValidationView
 } from "./etlTypes";
 
-export type EtlApiArea = "design" | "runtime";
+export type EtlApiArea = "design" | "design-v2" | "runtime";
 export type EtlApiFailureKind = "unavailable" | "forbidden" | "not-found" | "error";
 
-const int64LimitKeys = new Set(["maxBatchBytes", "maxOutstandingRecords", "maxOutstandingBytes", "maxLookupRecords", "maxLookupBytes", "maxOutputBatchBytes", "maxSnapshotBytes"]);
+const int64LimitKeys = new Set([
+  "maxBatchBytes", "maxOutstandingRecords", "maxOutstandingBytes", "maxLookupRecords", "maxLookupBytes",
+  "maxOutputBatchBytes", "maxRetainedOutputBytes", "maxSnapshotBytes", "maxPageBytes", "maxRetainedInputBytes",
+  "maxRetainedMetadataBytes"
+]);
 
 const capabilityIds: Record<EtlApiArea, string> = {
   design: "elsa.api.etl-design",
+  "design-v2": "elsa.api.etl-design-v2",
   runtime: "elsa.api.etl-runtime"
 };
 
 const requiredRelations: Record<EtlApiArea, readonly string[]> = {
   design: ["etl-bindings", "etl-definitions", "etl-definition", "etl-draft", "etl-validation", "etl-publication", "etl-versions", "etl-version"],
+  "design-v2": ["etl-v2-bindings", "etl-v2-definitions", "etl-v2-definition", "etl-v2-draft", "etl-v2-validation", "etl-v2-publication", "etl-v2-versions", "etl-v2-version"],
   runtime: ["etl-runs", "etl-run", "etl-run-partitions", "etl-run-cancel"]
 };
 
@@ -61,7 +72,7 @@ export function classifyEtlApiError(error: unknown): EtlApiFailureKind {
   return "error";
 }
 
-/** Loads and validates one ETL capability, including every relation in its v1 contract. */
+/** Loads and validates one ETL capability, including every relation in its advertised contract. */
 export async function getEtlApiCapability(context: StudioEndpointContext, area: EtlApiArea): Promise<EtlApiCapability> {
   const capability = await findEtlCapability(context, area);
   if (capability.contractVersion !== "1") {
@@ -100,9 +111,33 @@ export async function getEtlDefinition(context: StudioEndpointContext, definitio
   return losslessJsonRequest<EtlDraftView>(context, url, { method: "GET", signal });
 }
 
+export async function listEtlConnectorBindings(context: StudioEndpointContext, request: EtlPageRequest = {}, signal?: AbortSignal) {
+  const url = await pageUrl(context, "design-v2", "etl-v2-bindings", request);
+  return getJson<EtlPage<EtlConnectorBindingSummary>>(context, url, signal);
+}
+
+export async function listEtlConnectorDefinitions(context: StudioEndpointContext, request: EtlPageRequest = {}, signal?: AbortSignal) {
+  const url = await pageUrl(context, "design-v2", "etl-v2-definitions", request);
+  return getJson<EtlPage<EtlDefinitionSummaryView>>(context, url, signal);
+}
+
+export async function getEtlConnectorDefinition(context: StudioEndpointContext, definitionId: string, signal?: AbortSignal) {
+  const url = await resourceUrl(context, "design-v2", "etl-v2-definition", { id: definitionId });
+  return losslessJsonRequest<EtlConnectorDraftView>(context, url, { method: "GET", signal });
+}
+
 export async function createEtlDefinition(context: StudioEndpointContext, request: EtlCreateDefinitionRequest, signal?: AbortSignal) {
   const url = await resourceUrl(context, "design", "etl-definitions");
   return losslessJsonRequest<EtlDraftView>(context, url, { method: "POST", body: request, signal });
+}
+
+export async function createEtlConnectorDefinition(
+  context: StudioEndpointContext,
+  request: EtlConnectorCreateDefinitionRequest,
+  signal?: AbortSignal
+) {
+  const url = await resourceUrl(context, "design-v2", "etl-v2-definitions");
+  return losslessJsonRequest<EtlConnectorDraftView>(context, url, { method: "POST", body: request, signal });
 }
 
 export async function updateEtlDraft(
@@ -115,6 +150,16 @@ export async function updateEtlDraft(
   return losslessJsonRequest<EtlDraftView>(context, url, { method: "PUT", body: request, signal });
 }
 
+export async function updateEtlConnectorDraft(
+  context: StudioEndpointContext,
+  definitionId: string,
+  request: EtlConnectorUpdateDraftRequest,
+  signal?: AbortSignal
+) {
+  const url = await resourceUrl(context, "design-v2", "etl-v2-draft", { id: definitionId });
+  return losslessJsonRequest<EtlConnectorDraftView>(context, url, { method: "PUT", body: request, signal });
+}
+
 export async function validateEtlDraft(
   context: StudioEndpointContext,
   definitionId: string,
@@ -122,6 +167,16 @@ export async function validateEtlDraft(
   signal?: AbortSignal
 ) {
   const url = await resourceUrl(context, "design", "etl-validation", { id: definitionId });
+  return postJson<EtlValidationView>(context, url, request, signal);
+}
+
+export async function validateEtlConnectorDraft(
+  context: StudioEndpointContext,
+  definitionId: string,
+  request: EtlValidateDraftRequest,
+  signal?: AbortSignal
+) {
+  const url = await resourceUrl(context, "design-v2", "etl-v2-validation", { id: definitionId });
   return postJson<EtlValidationView>(context, url, request, signal);
 }
 
@@ -135,6 +190,16 @@ export async function publishEtlDefinition(
   return postJson<EtlPublicationView>(context, url, request, signal);
 }
 
+export async function publishEtlConnectorDefinition(
+  context: StudioEndpointContext,
+  definitionId: string,
+  request: EtlPublishDefinitionRequest,
+  signal?: AbortSignal
+) {
+  const url = await resourceUrl(context, "design-v2", "etl-v2-publication", { id: definitionId });
+  return postJson<EtlPublicationView>(context, url, request, signal);
+}
+
 export async function listEtlVersions(
   context: StudioEndpointContext,
   definitionId: string,
@@ -145,10 +210,26 @@ export async function listEtlVersions(
   return getJson<EtlPage<EtlPublishedVersionView>>(context, url, signal);
 }
 
+export async function listEtlConnectorVersions(
+  context: StudioEndpointContext,
+  definitionId: string,
+  request: EtlPageRequest = {},
+  signal?: AbortSignal
+) {
+  const url = await pageUrl(context, "design-v2", "etl-v2-versions", request, { id: definitionId });
+  return getJson<EtlPage<EtlPublishedVersionView>>(context, url, signal);
+}
+
 export async function getEtlVersion(context: StudioEndpointContext, definitionId: string, version: number, signal?: AbortSignal) {
   if (!Number.isSafeInteger(version) || version <= 0) throw new TypeError("The ETL version must be a positive safe integer.");
   const url = await resourceUrl(context, "design", "etl-version", { id: definitionId, version: String(version) });
   return losslessJsonRequest<EtlPublishedArtifactView>(context, url, { method: "GET", signal });
+}
+
+export async function getEtlConnectorVersion(context: StudioEndpointContext, definitionId: string, version: number, signal?: AbortSignal) {
+  if (!Number.isSafeInteger(version) || version <= 0) throw new TypeError("The ETL version must be a positive safe integer.");
+  const url = await resourceUrl(context, "design-v2", "etl-v2-version", { id: definitionId, version: String(version) });
+  return losslessJsonRequest<EtlConnectorPublishedArtifactView>(context, url, { method: "GET", signal });
 }
 
 export async function listEtlRuns(context: StudioEndpointContext, request: EtlRunPageRequest = {}, signal?: AbortSignal) {

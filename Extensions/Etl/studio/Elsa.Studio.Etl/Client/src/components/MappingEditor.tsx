@@ -6,12 +6,14 @@ export function MappingEditor({
   sourceSchema,
   lookupSchema,
   disabled,
+  sourceLabel = "Source CSV",
   onChange
 }: {
   mapping: readonly EtlOutputField[];
   sourceSchema: readonly EtlColumn[];
   lookupSchema: readonly EtlColumn[];
   disabled: boolean;
+  sourceLabel?: string;
   onChange(mapping: EtlOutputField[]): void;
 }) {
   const headingId = useId();
@@ -45,7 +47,7 @@ export function MappingEditor({
                   <td>
                     <label className="etl-editor-sr-only" htmlFor={`${id}-origin`}>Output field {index + 1} source</label>
                     <select id={`${id}-origin`} value={origin} disabled={disabled} onChange={event => update(index, { origin: event.currentTarget.value as EtlFieldOrigin, field: "" })}>
-                      <option value="source">Source CSV</option>
+                      <option value="source">{sourceLabel}</option>
                       <option value="lookup">Matched lookup</option>
                     </select>
                   </td>

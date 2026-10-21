@@ -6,14 +6,23 @@ import {
   classifyEtlApiError,
   clearEtlApiCapabilityCache,
   EtlApiError,
+  createEtlConnectorDefinition,
+  getEtlConnectorDefinition,
+  getEtlConnectorVersion,
   getEtlApiCapability,
   getEtlDefinition,
+  listEtlConnectorBindings,
+  listEtlConnectorDefinitions,
+  listEtlConnectorVersions,
   listEtlBindings,
   listEtlDefinitions,
   listEtlRuns,
+  publishEtlConnectorDefinition,
+  updateEtlConnectorDraft,
+  validateEtlConnectorDraft,
   updateEtlDraft
 } from "../etlApi";
-import { formatEtlJsonNumber, type EtlApiCapabilityDocument, type EtlJsonNumber } from "../etlTypes";
+import { formatEtlJsonNumber, type EtlApiCapabilityDocument, type EtlJsonNumber, type EtlPipelineV2 } from "../etlTypes";
 
 const designRelations = [
   ["etl-bindings", "etl/bindings"],
@@ -31,6 +40,17 @@ const runtimeRelations = [
   ["etl-run", "etl/runs/{id}"],
   ["etl-run-partitions", "etl/runs/{id}/partitions"],
   ["etl-run-cancel", "etl/runs/{id}/cancel"]
+] as const;
+
+const connectorDesignRelations = [
+  ["etl-v2-bindings", "etl/v2/bindings"],
+  ["etl-v2-definitions", "etl/v2/definitions"],
+  ["etl-v2-definition", "etl/v2/definitions/{id}"],
+  ["etl-v2-draft", "etl/v2/definitions/{id}/draft"],
+  ["etl-v2-validation", "etl/v2/definitions/{id}/validate"],
+  ["etl-v2-publication", "etl/v2/definitions/{id}/publish"],
+  ["etl-v2-versions", "etl/v2/definitions/{id}/versions"],
+  ["etl-v2-version", "etl/v2/definitions/{id}/versions/{version}"]
 ] as const;
 
 describe("ETL Studio API client", () => {
@@ -95,6 +115,137 @@ describe("ETL Studio API client", () => {
       status: 400,
       code: "etl.page-limit-invalid"
     });
+  });
+
+  it("uses the advertised v2 capability and pages safe connector bindings and definitions", async () => {
+    const context = endpointContext({
+      getJson: async (url: string) => url.endsWith("/capabilities")
+        ? capabilities()
+        : { items: [{ alias: "source", role: "Source", kind: "http" }], nextCursor: null }
+    });
+    const cursor = "opaque+/connector-cursor==";
+
+    await expect(getEtlApiCapability(context, "design-v2")).resolves.toMatchObject({
+      id: "elsa.api.etl-design-v2",
+      contractVersion: "1"
+    });
+    const bindings = await listEtlConnectorBindings(context, { limit: 17, cursor });
+    expect(bindings.items[0]).toEqual({ alias: "source", role: "Source", kind: "http" });
+    expect(context.getJsonSpy).toHaveBeenLastCalledWith(
+      `/studio/v2/etl/v2/bindings?limit=17&cursor=${encodeURIComponent(cursor)}`,
+      { signal: undefined }
+    );
+
+    await listEtlConnectorDefinitions(context, { limit: 9 });
+    expect(context.getJsonSpy).toHaveBeenLastCalledWith("/studio/v2/etl/v2/definitions?limit=9", { signal: undefined });
+    await listEtlConnectorVersions(context, "orders/with space", { limit: 5 });
+    expect(context.getJsonSpy).toHaveBeenLastCalledWith(
+      "/studio/v2/etl/v2/definitions/orders%2Fwith%20space/versions?limit=5",
+      { signal: undefined }
+    );
+  });
+
+  it("reads and saves v2 connector drafts without rounding 64-bit limits or filter values", async () => {
+    const pipelineJson = connectorPipelineJson();
+    const draftJson = connectorDraftJson(pipelineJson);
+    const requestResponse = vi.fn(async (_url: string, _init?: StudioRequestInit) => new Response(draftJson, { status: 200 }));
+    const context = endpointContext({ requestResponse });
+    const draft = await getEtlConnectorDefinition(context, "orders");
+
+    expect(context.http.requestResponse).toHaveBeenCalledWith(
+      "/studio/v2/etl/v2/definitions/orders",
+      expect.objectContaining({ method: "GET" })
+    );
+    expect(draft.pipeline.source.kind).toBe("httpJson");
+    expect(draft.pipeline.routes.main).toEqual({ kind: "http", binding: "output" });
+    const huge = "9223372036854775807";
+    const limits = draft.pipeline.limits;
+    const policy = draft.pipeline.http;
+    for (const value of [
+      limits.maxBatchBytes,
+      limits.maxOutstandingRecords,
+      limits.maxOutstandingBytes,
+      limits.maxLookupRecords,
+      limits.maxLookupBytes,
+      limits.maxOutputBatchBytes,
+      limits.maxRetainedOutputBytes,
+      limits.maxSnapshotBytes,
+      policy.maxPageBytes,
+      policy.maxRetainedInputBytes,
+      policy.maxRetainedMetadataBytes
+    ]) {
+      expect(isLosslessNumber(value)).toBe(true);
+      expect(formatEtlJsonNumber(value as EtlJsonNumber)).toBe(huge);
+    }
+    expect(isLosslessNumber(draft.pipeline.filters[0].value)).toBe(true);
+    expect(formatEtlJsonNumber(draft.pipeline.filters[0].value as EtlJsonNumber)).toBe(huge);
+
+    await updateEtlConnectorDraft(context, "orders", { expectedRevision: 2, pipeline: draft.pipeline });
+    const call = vi.mocked(requestResponse).mock.calls[1];
+    expect(call[0]).toBe("/studio/v2/etl/v2/definitions/orders/draft");
+    expect(call[1]?.method).toBe("PUT");
+    const rawBody = String(call[1]?.body);
+    expect(rawBody).toContain(`"maxRetainedOutputBytes":${huge}`);
+    expect(rawBody).toContain(`"maxPageBytes":${huge}`);
+    expect(rawBody).toContain(`"maxRetainedInputBytes":${huge}`);
+    expect(rawBody).toContain(`"maxRetainedMetadataBytes":${huge}`);
+    expect(rawBody).toContain(`"value":${huge}`);
+  });
+
+  it("keeps omitted v2 default budgets omitted when a saved draft is updated", async () => {
+    const pipelineJson = connectorPipelineJson(false);
+    const draftJson = connectorDraftJson(pipelineJson);
+    const requestResponse = vi.fn(async (_url: string, _init?: StudioRequestInit) => new Response(draftJson, { status: 200 }));
+    const context = endpointContext({ requestResponse });
+    const draft = await getEtlConnectorDefinition(context, "orders");
+
+    expect(draft.pipeline.limits.maxRetainedOutputBytes).toBeUndefined();
+    expect(draft.pipeline.http.maxRetainedMetadataBytes).toBeUndefined();
+    await updateEtlConnectorDraft(context, "orders", { expectedRevision: draft.revision, pipeline: draft.pipeline });
+    const body = String(vi.mocked(requestResponse).mock.calls[1][1]?.body);
+    expect(body).not.toContain("maxRetainedOutputBytes");
+    expect(body).not.toContain("maxRetainedMetadataBytes");
+  });
+
+  it("uses the v2 draft, validation, publication, and exact artifact routes", async () => {
+    const pipeline = connectorPipeline();
+    const token = `etl1:orders:1:${"a".repeat(64)}`;
+    const requestResponse = vi.fn(async (url: string, _init?: StudioRequestInit) => {
+      if (url.endsWith("/versions/1")) {
+        return new Response(JSON.stringify({
+          version: { definitionId: "orders", definitionVersion: 1, contentHash: "a".repeat(64), selection: token, publishedAt: null },
+          pipeline
+        }), { status: 200 });
+      }
+      return new Response(connectorDraftJson(connectorPipelineJson()), { status: 200 });
+    });
+    const postJson = vi.fn(async (url: string) => url.endsWith("/validate")
+      ? { revision: 3, definitionVersion: 2, contentHash: "b".repeat(64), diagnostics: [] }
+      : { status: "published", version: { definitionId: "orders", definitionVersion: 2, contentHash: "b".repeat(64), selection: `etl1:orders:2:${"b".repeat(64)}`, publishedAt: null } });
+    const context = endpointContext({ requestResponse, postJson });
+
+    await createEtlConnectorDefinition(context, { id: "orders", pipeline });
+    await updateEtlConnectorDraft(context, "orders", { expectedRevision: 1, pipeline });
+    await validateEtlConnectorDraft(context, "orders", { expectedRevision: 2 });
+    const publication = await publishEtlConnectorDefinition(context, "orders", {
+      expectedRevision: 3,
+      definitionVersion: 2,
+      contentHash: "b".repeat(64)
+    });
+    const artifact = await getEtlConnectorVersion(context, "orders", 1);
+
+    expect(vi.mocked(requestResponse).mock.calls.map(([url, init]) => [url, init?.method])).toEqual([
+      ["/studio/v2/etl/v2/definitions", "POST"],
+      ["/studio/v2/etl/v2/definitions/orders/draft", "PUT"],
+      ["/studio/v2/etl/v2/definitions/orders/versions/1", "GET"]
+    ]);
+    expect(vi.mocked(postJson).mock.calls.map(([url]) => url)).toEqual([
+      "/studio/v2/etl/v2/definitions/orders/validate",
+      "/studio/v2/etl/v2/definitions/orders/publish"
+    ]);
+    expect(publication.version.selection).toBe(`etl1:orders:2:${"b".repeat(64)}`);
+    expect(artifact.version.selection).toBe(token);
+    expect(artifact.pipeline.source.kind).toBe("httpJson");
   });
 
   it("does not share capability documents between HTTP clients at the same base URL", async () => {
@@ -221,7 +372,7 @@ function endpointContext(overrides: HttpOverrides = {}) {
   }, { getJsonSpy, requestJsonSpy });
 }
 
-function capabilities(options: { designVersion?: string } = {}): EtlApiCapabilityDocument {
+function capabilities(options: { designVersion?: string; connectorDesignVersion?: string } = {}): EtlApiCapabilityDocument {
   return {
     capabilities: [
       {
@@ -230,10 +381,74 @@ function capabilities(options: { designVersion?: string } = {}): EtlApiCapabilit
         links: designRelations.map(([rel, href]) => ({ rel, href }))
       },
       {
+        id: "elsa.api.etl-design-v2",
+        contractVersion: options.connectorDesignVersion ?? "1",
+        links: connectorDesignRelations.map(([rel, href]) => ({ rel, href }))
+      },
+      {
         id: "elsa.api.etl-runtime",
         contractVersion: "1",
         links: runtimeRelations.map(([rel, href]) => ({ rel, href }))
       }
     ]
+  };
+}
+
+const maxInt64 = "9223372036854775807";
+
+function connectorPipelineJson(includeDefaultBudgets = true): string {
+  const retainedOutputBytes = includeDefaultBudgets ? `"maxRetainedOutputBytes":${maxInt64},` : "";
+  const retainedMetadataBytes = includeDefaultBudgets ? `"maxRetainedMetadataBytes":${maxInt64},` : "";
+  return `{"source":{"kind":"httpJson","binding":"source","recordsPointer":"/items","fields":[{"name":"id","pointer":"/id","type":"int64","required":true}],"pagination":{"kind":"token","continuationPointer":"/next","queryParameter":"cursor"}},"lookup":null,"routes":{"main":{"kind":"http","binding":"output"},"errors":{"kind":"jsonl","binding":"errors"}},"mapping":[{"name":"id","origin":"source","field":"id"}],"filters":[{"field":"id","comparison":"equal","value":${maxInt64}}],"limits":{"filePartitionCount":2,"maxPartitions":32,"maxRecordBytes":65536,"maxFields":256,"maxBatchRecords":1000,"maxBatchBytes":${maxInt64},"maxOutstandingRecords":${maxInt64},"maxOutstandingBytes":${maxInt64},"maxLookupRecords":${maxInt64},"maxLookupBytes":${maxInt64},"maxOutputBatchBytes":${maxInt64},${retainedOutputBytes}"maxSnapshotBytes":${maxInt64},"maxArtifactBytes":262144},"http":{"maxPageBytes":${maxInt64},"maxPageRecords":10000,"maxJsonDepth":32,"maxContinuationBytes":8192,"maxPagesPerPartition":10000,"maxRetainedInputBytes":${maxInt64},${retainedMetadataBytes}"maxAttempts":5,"deadlineSeconds":900,"requestTimeoutSeconds":30,"initialDelaySeconds":1,"maxDelaySeconds":60}}`;
+}
+
+function connectorDraftJson(pipeline: string): string {
+  return `{"definitionId":"orders","revision":2,"lastPublishedVersion":1,"pipeline":${pipeline},"updatedAt":"2026-10-20T10:00:00Z"}`;
+}
+
+function connectorPipeline(): EtlPipelineV2 {
+  return {
+    source: {
+      kind: "httpJson",
+      binding: "source",
+      recordsPointer: "/items",
+      fields: [{ name: "id", pointer: "/id", type: "int64", required: true }],
+      pagination: { kind: "singlePage" }
+    },
+    lookup: null,
+    routes: {
+      main: { kind: "http", binding: "output" },
+      errors: { kind: "jsonl", binding: "errors" }
+    },
+    mapping: [{ name: "id", origin: "source", field: "id" }],
+    filters: [],
+    limits: {
+      filePartitionCount: 2,
+      maxPartitions: 32,
+      maxRecordBytes: 65536,
+      maxFields: 256,
+      maxBatchRecords: 1000,
+      maxBatchBytes: 1_000_000,
+      maxOutstandingRecords: 10_000,
+      maxOutstandingBytes: 8_000_000,
+      maxLookupRecords: 100_000,
+      maxLookupBytes: 8_000_000,
+      maxOutputBatchBytes: 1_000_000,
+      maxSnapshotBytes: 16_000_000,
+      maxArtifactBytes: 262144
+    },
+    http: {
+      maxPageBytes: 1_000_000,
+      maxPageRecords: 10_000,
+      maxJsonDepth: 32,
+      maxContinuationBytes: 8192,
+      maxPagesPerPartition: 10_000,
+      maxRetainedInputBytes: 16_000_000,
+      maxAttempts: 5,
+      deadlineSeconds: 900,
+      requestTimeoutSeconds: 30,
+      initialDelaySeconds: 1,
+      maxDelaySeconds: 60
+    }
   };
 }

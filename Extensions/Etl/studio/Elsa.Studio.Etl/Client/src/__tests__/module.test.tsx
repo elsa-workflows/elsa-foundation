@@ -14,7 +14,7 @@ describe("ETL module registration", () => {
     };
     register(api);
     const area = api.featureAreas.list()[0];
-    expect(area.ownedPaths).toEqual(["/etl/definitions", "/etl/runs"]);
+    expect(area.ownedPaths).toEqual(["/etl/definitions", "/etl/connectors", "/etl/runs"]);
     expect(area.routes.map(route => route.path)).toEqual(area.ownedPaths);
     const editor = api.propertyEditors.list()[0];
     const input = { name: "Pipeline", typeName: "System.String", uiHint: "etl-published-selection" };
