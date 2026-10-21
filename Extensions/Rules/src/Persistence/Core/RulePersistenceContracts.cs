@@ -326,7 +326,9 @@ public enum RuleLeaseDisposition
 {
     Renewed,
     Released,
-    LeaseLost
+    LeaseLost,
+    Unavailable,
+    Conflict
 }
 
 public sealed record RuleLeaseConfirmation(RuleLeaseDisposition Disposition, RuleWorkLease? Lease);

@@ -98,6 +98,8 @@ internal abstract class RulesDbContext : DbContext
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
 
+    internal abstract Task<long> ReadUtcTicksAsync(CancellationToken cancellationToken);
+
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);
 
     private void StampConcurrencyTokens()

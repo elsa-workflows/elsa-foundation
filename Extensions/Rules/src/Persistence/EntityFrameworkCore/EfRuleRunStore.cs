@@ -9,8 +9,10 @@ using Microsoft.EntityFrameworkCore;
 namespace Elsa.Rules.Persistence.EntityFrameworkCore;
 
 /// <summary>Rules-owned admission and settlement transactions. Worker operations are implemented separately.</summary>
-internal sealed partial class EfRuleRunStore(IDbContextFactory<RulesDbContext> contexts, IRuleAdmissionValidator validator)
+internal sealed partial class EfRuleRunStore(IDbContextFactory<RulesDbContext> contexts, IRuleAdmissionValidator validator,
+    TimeSpan? workLeaseDuration = null)
 {
+    private readonly TimeSpan _workLeaseDuration = ValidateLeaseDuration(workLeaseDuration ?? TimeSpan.FromMinutes(1));
     private const int MaximumWriteAttempts = 8;
 
     public async ValueTask<RuleAdmissionConfirmation> AdmitAsync(RuleRunAdmission admission, CancellationToken cancellationToken = default)
@@ -140,15 +142,12 @@ internal sealed partial class EfRuleRunStore(IDbContextFactory<RulesDbContext> c
                 await SaveAsync(db, cancellationToken);
                 return Existing(decision, row);
             }
-            catch (Exception error) when (EfRelationalExceptionClassifier.IsSaveConflict(error,
-                                             EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey | EfWriteConflict.Transient)
-                                         || EfRelationalExceptionClassifier.IsTransientWriteConflict(error))
+            catch (Exception error) when (IsWriteConflict(error))
             {
                 // Dispose the failed transaction/context and reconcile from fresh authoritative state.
                 // Never merge stale tracked facts, terminal metadata or lease state into the winner.
             }
-            catch (Exception error) when (EfRelationalExceptionClassifier.IsProviderFailure(error)
-                                         || error is NotSupportedException || IsInvalidRecord(error))
+            catch (Exception error) when (IsStoreUnavailable(error))
             {
                 return new(Settlement.Unavailable);
             }
@@ -171,15 +170,33 @@ internal sealed partial class EfRuleRunStore(IDbContextFactory<RulesDbContext> c
         };
     }
 
-    private static async Task SaveAsync(RulesDbContext db, CancellationToken cancellationToken)
+    private static async Task<bool> SaveAsync(RulesDbContext db, CancellationToken cancellationToken, LeaseWindow? leaseWindow = null)
     {
         foreach (var entry in db.ChangeTracker.Entries<RuleRunRecord>()
-                     .Where(entry => entry.State is EntityState.Added or EntityState.Modified))
-            RuleRowCodec.CheckProjectionSize(entry.Entity);
+                     .Where(entry => entry.State is EntityState.Added or EntityState.Modified).ToArray())
+        {
+            var row = entry.Entity;
+            string? pending = null;
+            if (row.PendingReceiptId64 is { } receiptId)
+                pending = db.Receipts.Local.SingleOrDefault(receipt => receipt.RunKey == row.RunKey && receipt.ReceiptId64 == receiptId)?.ReceiptJson
+                    ?? await db.Receipts.Where(receipt => receipt.RunKey == row.RunKey && receipt.ReceiptId64 == receiptId)
+                        .Select(receipt => receipt.ReceiptJson).SingleOrDefaultAsync(cancellationToken)
+                    ?? throw new InvalidDataException("rules.missing-pending-receipt");
+            RuleRowCodec.CheckProjectionSize(row, pending);
+        }
         // Explicitly atomic even if a host disables EF's automatic transactions.
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
+        if (leaseWindow is not null)
+        {
+            // The tracked write retains schema admission and row CAS; the row lock lasts through commit.
+            // Reading live database time after ALL writes also catches expiry while waiting for the write.
+            var now = await db.ReadUtcTicksAsync(cancellationToken);
+            if (now < leaseWindow.SampledAt || now >= leaseWindow.ExpiresAt)
+                return false; // Disposal rolls back every row. Never expose a token from this attempt.
+        }
         await transaction.CommitAsync(cancellationToken);
+        return true;
     }
 
     public async ValueTask<RuleRunReadResult> FindAsync(RuleRunIdentity identity, CancellationToken cancellationToken = default)
@@ -217,8 +234,7 @@ internal sealed partial class EfRuleRunStore(IDbContextFactory<RulesDbContext> c
                 return new(null, null, false);
             return new(row, RuleRowCodec.Read(row), false);
         }
-        catch (Exception error) when (EfRelationalExceptionClassifier.IsProviderFailure(error)
-                                     || error is NotSupportedException || IsInvalidRecord(error))
+        catch (Exception error) when (IsStoreUnavailable(error))
         {
             return new(null, null, true);
         }

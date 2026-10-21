@@ -143,9 +143,11 @@ Elsa.Rules.Persistence.Core.RuleLeaseConfirmation.Lease.get -> Elsa.Rules.Persis
 Elsa.Rules.Persistence.Core.RuleLeaseConfirmation.Lease.init -> void
 Elsa.Rules.Persistence.Core.RuleLeaseConfirmation.RuleLeaseConfirmation(Elsa.Rules.Persistence.Core.RuleLeaseDisposition Disposition, Elsa.Rules.Persistence.Core.RuleWorkLease? Lease) -> void
 Elsa.Rules.Persistence.Core.RuleLeaseDisposition
+Elsa.Rules.Persistence.Core.RuleLeaseDisposition.Conflict = 4 -> Elsa.Rules.Persistence.Core.RuleLeaseDisposition
 Elsa.Rules.Persistence.Core.RuleLeaseDisposition.LeaseLost = 2 -> Elsa.Rules.Persistence.Core.RuleLeaseDisposition
 Elsa.Rules.Persistence.Core.RuleLeaseDisposition.Released = 1 -> Elsa.Rules.Persistence.Core.RuleLeaseDisposition
 Elsa.Rules.Persistence.Core.RuleLeaseDisposition.Renewed = 0 -> Elsa.Rules.Persistence.Core.RuleLeaseDisposition
+Elsa.Rules.Persistence.Core.RuleLeaseDisposition.Unavailable = 3 -> Elsa.Rules.Persistence.Core.RuleLeaseDisposition
 Elsa.Rules.Persistence.Core.RuleProgressItem
 Elsa.Rules.Persistence.Core.RuleProgressItem.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleProgressItem!
 Elsa.Rules.Persistence.Core.RuleProgressItem.Equals(Elsa.Rules.Persistence.Core.RuleProgressItem? other) -> bool
