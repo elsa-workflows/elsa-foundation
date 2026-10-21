@@ -1750,6 +1750,22 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
+      "elsa.rules.core": {
+        "type": "Project"
+      },
+      "elsa.rules.persistence.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Rules.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.rules.runtime": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Rules.Core": "[4.0.0-dev, )",
+          "Elsa.Rules.Persistence.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.secrets": {
         "type": "Project",
         "dependencies": {

@@ -12,13 +12,13 @@ Elsa has no imposed greenfield TDD cadence (constitution 6.0.0 D9). Implement an
 
 ## Phase 2: Foundational contracts and deterministic semantics
 
-- [ ] T004 Implement immutable finite-language, artifact, identity/pin, result and bounds contracts in `Extensions/Rules/src/Core/`; create the actual Core project, tracked API and local documentation without implementation dependencies.
-- [ ] T005 Implement CQS store/reader, work/delivery token, receipt validator and confirmation contracts in `Extensions/Rules/src/Persistence/Core/`; snapshot mutable input buffers/collections and keep semantic revision separate from leases.
-- [ ] T006 Implement canonical artifact/fact/receipt encoding, finite round evaluator and complete receipt validator in `Extensions/Rules/src/Runtime/Elsa.Rules.Runtime/`; frozen input per round, unique IDs, complete firings, semantic hashes excluding attempt metadata.
+- [x] T004 Implement immutable finite-language, artifact, identity/pin, result and bounds contracts in `Extensions/Rules/src/Core/`; create the actual Core project, tracked API and local documentation without implementation dependencies.
+- [x] T005 Implement CQS store/reader, work/delivery token, receipt validator and confirmation contracts in `Extensions/Rules/src/Persistence/Core/`; snapshot mutable input buffers/collections and keep semantic revision separate from leases.
+- [x] T006 Implement canonical artifact/fact/receipt encoding, finite round evaluator and complete receipt validator in `Extensions/Rules/src/Runtime/`; frozen input per round, unique IDs, complete firings, semantic hashes excluding attempt metadata.
 - [ ] T007 Validate semantic witness, budget/default capture, malformed/duplicate/noncanonical receipts, vocabulary membership and byte/count boundaries in `Extensions/Rules/tests/Tests/`; include omission-of-applicable-rule and fixed-point-vs-budget removal controls.
 - [ ] T008 Register real projects in `Elsa.Server.slnx` and affected `tools/solution-filters/profiles.json` selections; verify scoped build, public API tracking and feature composition with actual services. Root serializes shared registrations.
 
-Checkpoint: contracts and semantic unit tests ready. No durable/package/native qualification claimed yet.
+Checkpoint status: T004–T006 implemented. Thirty focused semantic/value tests pass with a complete-firing removal control; full T007 bounds/budget controls and T008 composition remain pending. No durable/package/native qualification claimed yet.
 
 ## Phase 3: US1 — Direct durable invocation and actual packages (P1)
 
@@ -27,7 +27,7 @@ Independent acceptance: direct finite witness from a clean PackageReference cons
 - [ ] T009 [US1] Implement Rules-owned EF entities/context and SQLite migration in `Extensions/Rules/src/Persistence/EntityFrameworkCore/`; exact nullable scope, bounded indexed keys with full identity collision comparison, immutable invocation and separately paged receipt history.
 - [ ] T010 [US1] Implement atomic admission/refusal and reader projections in `Extensions/Rules/src/Persistence/EntityFrameworkCore/`; identity-first replay, unique-key race reread, full terminal result read and snapshot-stable inspection.
 - [ ] T011 [US1] Implement claim/read/accept/consume in `Extensions/Rules/src/Persistence/EntityFrameworkCore/`; complete validator plus atomic snapshot/fence/revision recheck, accepted receipt separate from consumption, next round or terminal exactly once.
-- [ ] T012 [US1] Implement direct facade/worker and trusted deployment identity in `Extensions/Rules/src/Runtime/Elsa.Rules.Runtime/`; freeze omitted limits before fingerprint, distinguish Invalid/Refused/Unavailable, use existing feature/task composition without a second scheduler authority.
+- [ ] T012 [US1] Implement direct facade/worker and trusted deployment identity in `Extensions/Rules/src/Runtime/`; freeze omitted limits before fingerprint, distinguish Invalid/Refused/Unavailable, use existing feature/task composition without a second scheduler authority.
 - [ ] T013 [US1] Validate real SQLite direct success, budget fault, refusal/unavailability, terminal facts/diagnostic and immutable replay in `Extensions/Rules/tests/Tests/`; registration resolves exact defaults and overrides as documented.
 - [ ] T014 [US1] Implement `tools/rules/verify-packaged-rules.py` and its clean consumer generation/receipt support; compute versions from immutable refs, pack actual dependency closure, isolated cache/outside repo, verify no transitive implementation ProjectReference, compare NuGet content/archive/selected loaded assets separately.
 - [ ] T015 [US1] Execute clean package direct witness and incompatible-pin cases; retain manifests/commands/results under `specs/999-durable-rules/evidence/` with large/raw artifacts referenced from the evidence receipt. Include a package-identity removal control, restore and rerun. No invented package versions or success-shaped fallback.

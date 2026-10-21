@@ -1,0 +1,587 @@
+#nullable enable
+Elsa.Rules.Persistence.Core.IRuleRoundValidator
+Elsa.Rules.Persistence.Core.IRuleRoundValidator.ValidateAsync(Elsa.Rules.Persistence.Core.RuleRoundValidationInput! input, Elsa.Rules.Persistence.Core.RuleRoundReceipt! candidate, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Rules.Persistence.Core.RuleRoundValidationResult!>
+Elsa.Rules.Persistence.Core.IRuleRunReader
+Elsa.Rules.Persistence.Core.IRuleRunReader.FindAsync(Elsa.Rules.Core.RuleRunIdentity! identity, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Rules.Persistence.Core.RuleRunReadResult!>
+Elsa.Rules.Persistence.Core.IRuleRunReader.ReadDeliveryAsync(Elsa.Rules.Persistence.Core.RuleDeliveryLease! lease, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Rules.Persistence.Core.RuleDeliveryReadResult!>
+Elsa.Rules.Persistence.Core.IRuleRunReader.ReadProgressAsync(Elsa.Rules.Core.RuleRunIdentity! identity, Elsa.Rules.Persistence.Core.RuleProgressPosition? after, int take, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Rules.Persistence.Core.RuleProgressReadResult!>
+Elsa.Rules.Persistence.Core.IRuleRunReader.ReadTerminalAsync(Elsa.Rules.Core.RuleRunIdentity! identity, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Rules.Persistence.Core.RuleTerminalReadResult!>
+Elsa.Rules.Persistence.Core.IRuleRunReader.ReadWorkAsync(Elsa.Rules.Persistence.Core.RuleWorkToken! token, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Rules.Persistence.Core.RuleWorkReadResult!>
+Elsa.Rules.Persistence.Core.IRuleRunStore
+Elsa.Rules.Persistence.Core.IRuleRunStore.AcceptRoundAsync(Elsa.Rules.Persistence.Core.RuleWorkToken! token, Elsa.Rules.Persistence.Core.RuleRoundSubmission! submission, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Rules.Persistence.Core.RuleReceiptConfirmation!>
+Elsa.Rules.Persistence.Core.IRuleRunStore.AcknowledgeDeliveryAsync(Elsa.Rules.Persistence.Core.RuleDeliveryLease! lease, Elsa.Rules.Persistence.Core.RuleDeliveryAcknowledgement! acknowledgement, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Rules.Persistence.Core.RuleTransitionConfirmation!>
+Elsa.Rules.Persistence.Core.IRuleRunStore.AdmitAsync(Elsa.Rules.Core.RuleRunAdmission! admission, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Rules.Persistence.Core.RuleAdmissionConfirmation!>
+Elsa.Rules.Persistence.Core.IRuleRunStore.CancelAsync(Elsa.Rules.Core.RuleCancellationRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Rules.Persistence.Core.RuleCancellationConfirmation!>
+Elsa.Rules.Persistence.Core.IRuleRunStore.ClaimDeliveryAsync(Elsa.Rules.Persistence.Core.RuleDeliveryClaimRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Rules.Persistence.Core.RuleDeliveryClaimResult!>
+Elsa.Rules.Persistence.Core.IRuleRunStore.ClaimWorkAsync(Elsa.Rules.Persistence.Core.RuleClaimRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Rules.Persistence.Core.RuleWorkClaimResult!>
+Elsa.Rules.Persistence.Core.IRuleRunStore.ConsumeRoundAsync(Elsa.Rules.Persistence.Core.RuleWorkToken! token, Elsa.Rules.Persistence.Core.RuleReceiptIdentity! receipt, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Rules.Persistence.Core.RuleTransitionConfirmation!>
+Elsa.Rules.Persistence.Core.IRuleRunStore.RefuseAdmissionAsync(Elsa.Rules.Core.RuleAdmissionRefusal! refusal, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Rules.Persistence.Core.RuleRefusalConfirmation!>
+Elsa.Rules.Persistence.Core.IRuleRunStore.ReleaseAsync(Elsa.Rules.Persistence.Core.RuleWorkLease! lease, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Rules.Persistence.Core.RuleLeaseConfirmation!>
+Elsa.Rules.Persistence.Core.IRuleRunStore.RenewAsync(Elsa.Rules.Persistence.Core.RuleWorkLease! lease, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Rules.Persistence.Core.RuleLeaseConfirmation!>
+Elsa.Rules.Persistence.Core.RuleAdmissionConfirmation
+Elsa.Rules.Persistence.Core.RuleAdmissionConfirmation.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleAdmissionConfirmation!
+Elsa.Rules.Persistence.Core.RuleAdmissionConfirmation.Deconstruct(out Elsa.Rules.Persistence.Core.RuleAdmissionDisposition Disposition, out Elsa.Rules.Core.RuleRunIdentity! Identity, out long? ModelRevision, out string? TerminalId) -> void
+Elsa.Rules.Persistence.Core.RuleAdmissionConfirmation.Disposition.get -> Elsa.Rules.Persistence.Core.RuleAdmissionDisposition
+Elsa.Rules.Persistence.Core.RuleAdmissionConfirmation.Disposition.init -> void
+Elsa.Rules.Persistence.Core.RuleAdmissionConfirmation.Equals(Elsa.Rules.Persistence.Core.RuleAdmissionConfirmation? other) -> bool
+Elsa.Rules.Persistence.Core.RuleAdmissionConfirmation.Identity.get -> Elsa.Rules.Core.RuleRunIdentity!
+Elsa.Rules.Persistence.Core.RuleAdmissionConfirmation.Identity.init -> void
+Elsa.Rules.Persistence.Core.RuleAdmissionConfirmation.ModelRevision.get -> long?
+Elsa.Rules.Persistence.Core.RuleAdmissionConfirmation.ModelRevision.init -> void
+Elsa.Rules.Persistence.Core.RuleAdmissionConfirmation.RuleAdmissionConfirmation(Elsa.Rules.Persistence.Core.RuleAdmissionDisposition Disposition, Elsa.Rules.Core.RuleRunIdentity! Identity, long? ModelRevision, string? TerminalId) -> void
+Elsa.Rules.Persistence.Core.RuleAdmissionConfirmation.TerminalId.get -> string?
+Elsa.Rules.Persistence.Core.RuleAdmissionConfirmation.TerminalId.init -> void
+Elsa.Rules.Persistence.Core.RuleAdmissionDisposition
+Elsa.Rules.Persistence.Core.RuleAdmissionDisposition.Admitted = 0 -> Elsa.Rules.Persistence.Core.RuleAdmissionDisposition
+Elsa.Rules.Persistence.Core.RuleAdmissionDisposition.AlreadyCancelled = 2 -> Elsa.Rules.Persistence.Core.RuleAdmissionDisposition
+Elsa.Rules.Persistence.Core.RuleAdmissionDisposition.AlreadyRefused = 3 -> Elsa.Rules.Persistence.Core.RuleAdmissionDisposition
+Elsa.Rules.Persistence.Core.RuleAdmissionDisposition.Conflict = 4 -> Elsa.Rules.Persistence.Core.RuleAdmissionDisposition
+Elsa.Rules.Persistence.Core.RuleAdmissionDisposition.Invalid = 5 -> Elsa.Rules.Persistence.Core.RuleAdmissionDisposition
+Elsa.Rules.Persistence.Core.RuleAdmissionDisposition.Replay = 1 -> Elsa.Rules.Persistence.Core.RuleAdmissionDisposition
+Elsa.Rules.Persistence.Core.RuleAdmissionDisposition.Unavailable = 6 -> Elsa.Rules.Persistence.Core.RuleAdmissionDisposition
+Elsa.Rules.Persistence.Core.RuleCancellationConfirmation
+Elsa.Rules.Persistence.Core.RuleCancellationConfirmation.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleCancellationConfirmation!
+Elsa.Rules.Persistence.Core.RuleCancellationConfirmation.Deconstruct(out Elsa.Rules.Persistence.Core.RuleCancellationDisposition Disposition, out Elsa.Rules.Core.RuleRunIdentity! Identity, out long? ModelRevision, out string? TerminalId) -> void
+Elsa.Rules.Persistence.Core.RuleCancellationConfirmation.Disposition.get -> Elsa.Rules.Persistence.Core.RuleCancellationDisposition
+Elsa.Rules.Persistence.Core.RuleCancellationConfirmation.Disposition.init -> void
+Elsa.Rules.Persistence.Core.RuleCancellationConfirmation.Equals(Elsa.Rules.Persistence.Core.RuleCancellationConfirmation? other) -> bool
+Elsa.Rules.Persistence.Core.RuleCancellationConfirmation.Identity.get -> Elsa.Rules.Core.RuleRunIdentity!
+Elsa.Rules.Persistence.Core.RuleCancellationConfirmation.Identity.init -> void
+Elsa.Rules.Persistence.Core.RuleCancellationConfirmation.ModelRevision.get -> long?
+Elsa.Rules.Persistence.Core.RuleCancellationConfirmation.ModelRevision.init -> void
+Elsa.Rules.Persistence.Core.RuleCancellationConfirmation.RuleCancellationConfirmation(Elsa.Rules.Persistence.Core.RuleCancellationDisposition Disposition, Elsa.Rules.Core.RuleRunIdentity! Identity, long? ModelRevision, string? TerminalId) -> void
+Elsa.Rules.Persistence.Core.RuleCancellationConfirmation.TerminalId.get -> string?
+Elsa.Rules.Persistence.Core.RuleCancellationConfirmation.TerminalId.init -> void
+Elsa.Rules.Persistence.Core.RuleCancellationDisposition
+Elsa.Rules.Persistence.Core.RuleCancellationDisposition.Cancelled = 0 -> Elsa.Rules.Persistence.Core.RuleCancellationDisposition
+Elsa.Rules.Persistence.Core.RuleCancellationDisposition.Conflict = 3 -> Elsa.Rules.Persistence.Core.RuleCancellationDisposition
+Elsa.Rules.Persistence.Core.RuleCancellationDisposition.Invalid = 4 -> Elsa.Rules.Persistence.Core.RuleCancellationDisposition
+Elsa.Rules.Persistence.Core.RuleCancellationDisposition.Replay = 1 -> Elsa.Rules.Persistence.Core.RuleCancellationDisposition
+Elsa.Rules.Persistence.Core.RuleCancellationDisposition.TerminalUnchanged = 2 -> Elsa.Rules.Persistence.Core.RuleCancellationDisposition
+Elsa.Rules.Persistence.Core.RuleCancellationDisposition.Unavailable = 5 -> Elsa.Rules.Persistence.Core.RuleCancellationDisposition
+Elsa.Rules.Persistence.Core.RuleClaimRequest
+Elsa.Rules.Persistence.Core.RuleClaimRequest.InvocationSchemas.get -> System.Collections.Generic.IReadOnlyList<int>!
+Elsa.Rules.Persistence.Core.RuleClaimRequest.Owner.get -> string!
+Elsa.Rules.Persistence.Core.RuleClaimRequest.ReceiptSchemas.get -> System.Collections.Generic.IReadOnlyList<int>!
+Elsa.Rules.Persistence.Core.RuleClaimRequest.RuleClaimRequest(string! owner, System.Collections.Generic.IReadOnlyList<Elsa.Rules.Core.RuleSemanticPin!>! supportedImplementations, System.Collections.Generic.IReadOnlyList<int>! invocationSchemas, System.Collections.Generic.IReadOnlyList<int>! receiptSchemas, System.Collections.Generic.IReadOnlyList<int>! stateSchemas) -> void
+Elsa.Rules.Persistence.Core.RuleClaimRequest.StateSchemas.get -> System.Collections.Generic.IReadOnlyList<int>!
+Elsa.Rules.Persistence.Core.RuleClaimRequest.SupportedImplementations.get -> System.Collections.Generic.IReadOnlyList<Elsa.Rules.Core.RuleSemanticPin!>!
+Elsa.Rules.Persistence.Core.RuleDeliveryAcknowledgement
+Elsa.Rules.Persistence.Core.RuleDeliveryAcknowledgement.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleDeliveryAcknowledgement!
+Elsa.Rules.Persistence.Core.RuleDeliveryAcknowledgement.Deconstruct(out Elsa.Rules.Core.RuleDeliveryProof! Proof) -> void
+Elsa.Rules.Persistence.Core.RuleDeliveryAcknowledgement.Equals(Elsa.Rules.Persistence.Core.RuleDeliveryAcknowledgement? other) -> bool
+Elsa.Rules.Persistence.Core.RuleDeliveryAcknowledgement.Proof.get -> Elsa.Rules.Core.RuleDeliveryProof!
+Elsa.Rules.Persistence.Core.RuleDeliveryAcknowledgement.Proof.init -> void
+Elsa.Rules.Persistence.Core.RuleDeliveryAcknowledgement.RuleDeliveryAcknowledgement(Elsa.Rules.Core.RuleDeliveryProof! Proof) -> void
+Elsa.Rules.Persistence.Core.RuleDeliveryClaimDisposition
+Elsa.Rules.Persistence.Core.RuleDeliveryClaimDisposition.Claimed = 0 -> Elsa.Rules.Persistence.Core.RuleDeliveryClaimDisposition
+Elsa.Rules.Persistence.Core.RuleDeliveryClaimDisposition.NoEligibleDelivery = 1 -> Elsa.Rules.Persistence.Core.RuleDeliveryClaimDisposition
+Elsa.Rules.Persistence.Core.RuleDeliveryClaimDisposition.Unavailable = 2 -> Elsa.Rules.Persistence.Core.RuleDeliveryClaimDisposition
+Elsa.Rules.Persistence.Core.RuleDeliveryClaimRequest
+Elsa.Rules.Persistence.Core.RuleDeliveryClaimRequest.Owner.get -> string!
+Elsa.Rules.Persistence.Core.RuleDeliveryClaimRequest.ResultSchemas.get -> System.Collections.Generic.IReadOnlyList<int>!
+Elsa.Rules.Persistence.Core.RuleDeliveryClaimRequest.RuleDeliveryClaimRequest(string! owner, System.Collections.Generic.IReadOnlyList<int>! resultSchemas) -> void
+Elsa.Rules.Persistence.Core.RuleDeliveryClaimResult
+Elsa.Rules.Persistence.Core.RuleDeliveryClaimResult.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleDeliveryClaimResult!
+Elsa.Rules.Persistence.Core.RuleDeliveryClaimResult.Deconstruct(out Elsa.Rules.Persistence.Core.RuleDeliveryClaimDisposition Disposition, out Elsa.Rules.Persistence.Core.RuleDeliveryLease? Lease) -> void
+Elsa.Rules.Persistence.Core.RuleDeliveryClaimResult.Disposition.get -> Elsa.Rules.Persistence.Core.RuleDeliveryClaimDisposition
+Elsa.Rules.Persistence.Core.RuleDeliveryClaimResult.Disposition.init -> void
+Elsa.Rules.Persistence.Core.RuleDeliveryClaimResult.Equals(Elsa.Rules.Persistence.Core.RuleDeliveryClaimResult? other) -> bool
+Elsa.Rules.Persistence.Core.RuleDeliveryClaimResult.Lease.get -> Elsa.Rules.Persistence.Core.RuleDeliveryLease?
+Elsa.Rules.Persistence.Core.RuleDeliveryClaimResult.Lease.init -> void
+Elsa.Rules.Persistence.Core.RuleDeliveryClaimResult.RuleDeliveryClaimResult(Elsa.Rules.Persistence.Core.RuleDeliveryClaimDisposition Disposition, Elsa.Rules.Persistence.Core.RuleDeliveryLease? Lease) -> void
+Elsa.Rules.Persistence.Core.RuleDeliveryLease
+Elsa.Rules.Persistence.Core.RuleDeliveryLease.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleDeliveryLease!
+Elsa.Rules.Persistence.Core.RuleDeliveryLease.DeliveryId.get -> string!
+Elsa.Rules.Persistence.Core.RuleDeliveryLease.Equals(Elsa.Rules.Persistence.Core.RuleDeliveryLease? other) -> bool
+Elsa.Rules.Persistence.Core.RuleDeliveryLease.ExpiresAt.get -> System.DateTimeOffset
+Elsa.Rules.Persistence.Core.RuleDeliveryLease.Fence.get -> long
+Elsa.Rules.Persistence.Core.RuleDeliveryLease.Identity.get -> Elsa.Rules.Core.RuleRunIdentity!
+Elsa.Rules.Persistence.Core.RuleDeliveryLease.Owner.get -> string!
+Elsa.Rules.Persistence.Core.RuleDeliveryLease.RuleDeliveryLease(Elsa.Rules.Core.RuleRunIdentity! identity, string! deliveryId, string! owner, long fence, System.DateTimeOffset expiresAt) -> void
+Elsa.Rules.Persistence.Core.RuleDeliveryReadDisposition
+Elsa.Rules.Persistence.Core.RuleDeliveryReadDisposition.LeaseLost = 1 -> Elsa.Rules.Persistence.Core.RuleDeliveryReadDisposition
+Elsa.Rules.Persistence.Core.RuleDeliveryReadDisposition.NotFound = 2 -> Elsa.Rules.Persistence.Core.RuleDeliveryReadDisposition
+Elsa.Rules.Persistence.Core.RuleDeliveryReadDisposition.Ready = 0 -> Elsa.Rules.Persistence.Core.RuleDeliveryReadDisposition
+Elsa.Rules.Persistence.Core.RuleDeliveryReadDisposition.Unavailable = 3 -> Elsa.Rules.Persistence.Core.RuleDeliveryReadDisposition
+Elsa.Rules.Persistence.Core.RuleDeliveryReadResult
+Elsa.Rules.Persistence.Core.RuleDeliveryReadResult.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleDeliveryReadResult!
+Elsa.Rules.Persistence.Core.RuleDeliveryReadResult.Disposition.get -> Elsa.Rules.Persistence.Core.RuleDeliveryReadDisposition
+Elsa.Rules.Persistence.Core.RuleDeliveryReadResult.Envelope.get -> Elsa.Rules.Core.RuleTerminalEnvelope?
+Elsa.Rules.Persistence.Core.RuleDeliveryReadResult.Equals(Elsa.Rules.Persistence.Core.RuleDeliveryReadResult? other) -> bool
+Elsa.Rules.Persistence.Core.RuleDeliveryReadResult.RuleDeliveryReadResult(Elsa.Rules.Persistence.Core.RuleDeliveryReadDisposition disposition, Elsa.Rules.Core.RuleTerminalEnvelope? envelope) -> void
+Elsa.Rules.Persistence.Core.RuleFiringEvidence
+Elsa.Rules.Persistence.Core.RuleFiringEvidence.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleFiringEvidence!
+Elsa.Rules.Persistence.Core.RuleFiringEvidence.Conclusion.get -> Elsa.Rules.Core.RuleFact!
+Elsa.Rules.Persistence.Core.RuleFiringEvidence.Equals(Elsa.Rules.Persistence.Core.RuleFiringEvidence? other) -> bool
+Elsa.Rules.Persistence.Core.RuleFiringEvidence.RuleFiringEvidence(string! ruleId, Elsa.Rules.Core.RuleFact! conclusion) -> void
+Elsa.Rules.Persistence.Core.RuleFiringEvidence.RuleId.get -> string!
+Elsa.Rules.Persistence.Core.RuleLeaseConfirmation
+Elsa.Rules.Persistence.Core.RuleLeaseConfirmation.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleLeaseConfirmation!
+Elsa.Rules.Persistence.Core.RuleLeaseConfirmation.Deconstruct(out Elsa.Rules.Persistence.Core.RuleLeaseDisposition Disposition, out Elsa.Rules.Persistence.Core.RuleWorkLease? Lease) -> void
+Elsa.Rules.Persistence.Core.RuleLeaseConfirmation.Disposition.get -> Elsa.Rules.Persistence.Core.RuleLeaseDisposition
+Elsa.Rules.Persistence.Core.RuleLeaseConfirmation.Disposition.init -> void
+Elsa.Rules.Persistence.Core.RuleLeaseConfirmation.Equals(Elsa.Rules.Persistence.Core.RuleLeaseConfirmation? other) -> bool
+Elsa.Rules.Persistence.Core.RuleLeaseConfirmation.Lease.get -> Elsa.Rules.Persistence.Core.RuleWorkLease?
+Elsa.Rules.Persistence.Core.RuleLeaseConfirmation.Lease.init -> void
+Elsa.Rules.Persistence.Core.RuleLeaseConfirmation.RuleLeaseConfirmation(Elsa.Rules.Persistence.Core.RuleLeaseDisposition Disposition, Elsa.Rules.Persistence.Core.RuleWorkLease? Lease) -> void
+Elsa.Rules.Persistence.Core.RuleLeaseDisposition
+Elsa.Rules.Persistence.Core.RuleLeaseDisposition.LeaseLost = 2 -> Elsa.Rules.Persistence.Core.RuleLeaseDisposition
+Elsa.Rules.Persistence.Core.RuleLeaseDisposition.Released = 1 -> Elsa.Rules.Persistence.Core.RuleLeaseDisposition
+Elsa.Rules.Persistence.Core.RuleLeaseDisposition.Renewed = 0 -> Elsa.Rules.Persistence.Core.RuleLeaseDisposition
+Elsa.Rules.Persistence.Core.RuleProgressItem
+Elsa.Rules.Persistence.Core.RuleProgressItem.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleProgressItem!
+Elsa.Rules.Persistence.Core.RuleProgressItem.Equals(Elsa.Rules.Persistence.Core.RuleProgressItem? other) -> bool
+Elsa.Rules.Persistence.Core.RuleProgressItem.Fact.get -> Elsa.Rules.Core.RuleFact?
+Elsa.Rules.Persistence.Core.RuleProgressItem.FirstVisibleModelRevision.get -> long
+Elsa.Rules.Persistence.Core.RuleProgressItem.Key.get -> string!
+Elsa.Rules.Persistence.Core.RuleProgressItem.Kind.get -> Elsa.Rules.Persistence.Core.RuleProgressItemKind
+Elsa.Rules.Persistence.Core.RuleProgressItem.Round.get -> Elsa.Rules.Persistence.Core.RuleRoundProgress?
+Elsa.Rules.Persistence.Core.RuleProgressItem.RuleProgressItem(Elsa.Rules.Persistence.Core.RuleProgressItemKind kind, string! key, long firstVisibleModelRevision, Elsa.Rules.Core.RuleFact? fact, Elsa.Rules.Persistence.Core.RuleRoundProgress? round) -> void
+Elsa.Rules.Persistence.Core.RuleProgressItemKind
+Elsa.Rules.Persistence.Core.RuleProgressItemKind.Fact = 0 -> Elsa.Rules.Persistence.Core.RuleProgressItemKind
+Elsa.Rules.Persistence.Core.RuleProgressItemKind.Round = 1 -> Elsa.Rules.Persistence.Core.RuleProgressItemKind
+Elsa.Rules.Persistence.Core.RuleProgressPage
+Elsa.Rules.Persistence.Core.RuleProgressPage.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Rules.Persistence.Core.RuleProgressItem!>!
+Elsa.Rules.Persistence.Core.RuleProgressPage.Next.get -> Elsa.Rules.Persistence.Core.RuleProgressPosition?
+Elsa.Rules.Persistence.Core.RuleProgressPage.RuleProgressPage(System.Collections.Generic.IReadOnlyList<Elsa.Rules.Persistence.Core.RuleProgressItem!>! items, Elsa.Rules.Persistence.Core.RuleProgressPosition? next) -> void
+Elsa.Rules.Persistence.Core.RuleProgressPosition
+Elsa.Rules.Persistence.Core.RuleProgressPosition.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleProgressPosition!
+Elsa.Rules.Persistence.Core.RuleProgressPosition.Cursor.get -> string!
+Elsa.Rules.Persistence.Core.RuleProgressPosition.Equals(Elsa.Rules.Persistence.Core.RuleProgressPosition? other) -> bool
+Elsa.Rules.Persistence.Core.RuleProgressPosition.RuleProgressPosition(string! cursor) -> void
+Elsa.Rules.Persistence.Core.RuleProgressReadDisposition
+Elsa.Rules.Persistence.Core.RuleProgressReadDisposition.InvalidPosition = 3 -> Elsa.Rules.Persistence.Core.RuleProgressReadDisposition
+Elsa.Rules.Persistence.Core.RuleProgressReadDisposition.NotFound = 1 -> Elsa.Rules.Persistence.Core.RuleProgressReadDisposition
+Elsa.Rules.Persistence.Core.RuleProgressReadDisposition.Page = 0 -> Elsa.Rules.Persistence.Core.RuleProgressReadDisposition
+Elsa.Rules.Persistence.Core.RuleProgressReadDisposition.Unavailable = 2 -> Elsa.Rules.Persistence.Core.RuleProgressReadDisposition
+Elsa.Rules.Persistence.Core.RuleProgressReadResult
+Elsa.Rules.Persistence.Core.RuleProgressReadResult.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleProgressReadResult!
+Elsa.Rules.Persistence.Core.RuleProgressReadResult.Disposition.get -> Elsa.Rules.Persistence.Core.RuleProgressReadDisposition
+Elsa.Rules.Persistence.Core.RuleProgressReadResult.Equals(Elsa.Rules.Persistence.Core.RuleProgressReadResult? other) -> bool
+Elsa.Rules.Persistence.Core.RuleProgressReadResult.Page.get -> Elsa.Rules.Persistence.Core.RuleProgressPage?
+Elsa.Rules.Persistence.Core.RuleProgressReadResult.RuleProgressReadResult(Elsa.Rules.Persistence.Core.RuleProgressReadDisposition disposition, Elsa.Rules.Persistence.Core.RuleProgressPage? page) -> void
+Elsa.Rules.Persistence.Core.RuleReceiptConfirmation
+Elsa.Rules.Persistence.Core.RuleReceiptConfirmation.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleReceiptConfirmation!
+Elsa.Rules.Persistence.Core.RuleReceiptConfirmation.Deconstruct(out Elsa.Rules.Persistence.Core.RuleReceiptDisposition Disposition, out Elsa.Rules.Core.RuleRunIdentity! Identity, out string? ReceiptId, out long? ModelRevision, out string? TerminalId, out string? NextRoundId) -> void
+Elsa.Rules.Persistence.Core.RuleReceiptConfirmation.Disposition.get -> Elsa.Rules.Persistence.Core.RuleReceiptDisposition
+Elsa.Rules.Persistence.Core.RuleReceiptConfirmation.Disposition.init -> void
+Elsa.Rules.Persistence.Core.RuleReceiptConfirmation.Equals(Elsa.Rules.Persistence.Core.RuleReceiptConfirmation? other) -> bool
+Elsa.Rules.Persistence.Core.RuleReceiptConfirmation.Identity.get -> Elsa.Rules.Core.RuleRunIdentity!
+Elsa.Rules.Persistence.Core.RuleReceiptConfirmation.Identity.init -> void
+Elsa.Rules.Persistence.Core.RuleReceiptConfirmation.ModelRevision.get -> long?
+Elsa.Rules.Persistence.Core.RuleReceiptConfirmation.ModelRevision.init -> void
+Elsa.Rules.Persistence.Core.RuleReceiptConfirmation.NextRoundId.get -> string?
+Elsa.Rules.Persistence.Core.RuleReceiptConfirmation.NextRoundId.init -> void
+Elsa.Rules.Persistence.Core.RuleReceiptConfirmation.ReceiptId.get -> string?
+Elsa.Rules.Persistence.Core.RuleReceiptConfirmation.ReceiptId.init -> void
+Elsa.Rules.Persistence.Core.RuleReceiptConfirmation.RuleReceiptConfirmation(Elsa.Rules.Persistence.Core.RuleReceiptDisposition Disposition, Elsa.Rules.Core.RuleRunIdentity! Identity, string? ReceiptId, long? ModelRevision, string? TerminalId, string? NextRoundId) -> void
+Elsa.Rules.Persistence.Core.RuleReceiptConfirmation.TerminalId.get -> string?
+Elsa.Rules.Persistence.Core.RuleReceiptConfirmation.TerminalId.init -> void
+Elsa.Rules.Persistence.Core.RuleReceiptDisposition
+Elsa.Rules.Persistence.Core.RuleReceiptDisposition.Accepted = 0 -> Elsa.Rules.Persistence.Core.RuleReceiptDisposition
+Elsa.Rules.Persistence.Core.RuleReceiptDisposition.Conflict = 2 -> Elsa.Rules.Persistence.Core.RuleReceiptDisposition
+Elsa.Rules.Persistence.Core.RuleReceiptDisposition.InvalidReceipt = 5 -> Elsa.Rules.Persistence.Core.RuleReceiptDisposition
+Elsa.Rules.Persistence.Core.RuleReceiptDisposition.LeaseLost = 3 -> Elsa.Rules.Persistence.Core.RuleReceiptDisposition
+Elsa.Rules.Persistence.Core.RuleReceiptDisposition.Replay = 1 -> Elsa.Rules.Persistence.Core.RuleReceiptDisposition
+Elsa.Rules.Persistence.Core.RuleReceiptDisposition.RevisionConflict = 4 -> Elsa.Rules.Persistence.Core.RuleReceiptDisposition
+Elsa.Rules.Persistence.Core.RuleReceiptDisposition.Unavailable = 6 -> Elsa.Rules.Persistence.Core.RuleReceiptDisposition
+Elsa.Rules.Persistence.Core.RuleReceiptIdentity
+Elsa.Rules.Persistence.Core.RuleReceiptIdentity.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleReceiptIdentity!
+Elsa.Rules.Persistence.Core.RuleReceiptIdentity.Deconstruct(out string! ReceiptId, out string! SemanticReceiptSha256) -> void
+Elsa.Rules.Persistence.Core.RuleReceiptIdentity.Equals(Elsa.Rules.Persistence.Core.RuleReceiptIdentity? other) -> bool
+Elsa.Rules.Persistence.Core.RuleReceiptIdentity.ReceiptId.get -> string!
+Elsa.Rules.Persistence.Core.RuleReceiptIdentity.ReceiptId.init -> void
+Elsa.Rules.Persistence.Core.RuleReceiptIdentity.RuleReceiptIdentity(string! ReceiptId, string! SemanticReceiptSha256) -> void
+Elsa.Rules.Persistence.Core.RuleReceiptIdentity.SemanticReceiptSha256.get -> string!
+Elsa.Rules.Persistence.Core.RuleReceiptIdentity.SemanticReceiptSha256.init -> void
+Elsa.Rules.Persistence.Core.RuleRefusalConfirmation
+Elsa.Rules.Persistence.Core.RuleRefusalConfirmation.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleRefusalConfirmation!
+Elsa.Rules.Persistence.Core.RuleRefusalConfirmation.Deconstruct(out Elsa.Rules.Persistence.Core.RuleRefusalDisposition Disposition, out Elsa.Rules.Core.RuleRunIdentity! Identity, out string? TerminalId) -> void
+Elsa.Rules.Persistence.Core.RuleRefusalConfirmation.Disposition.get -> Elsa.Rules.Persistence.Core.RuleRefusalDisposition
+Elsa.Rules.Persistence.Core.RuleRefusalConfirmation.Disposition.init -> void
+Elsa.Rules.Persistence.Core.RuleRefusalConfirmation.Equals(Elsa.Rules.Persistence.Core.RuleRefusalConfirmation? other) -> bool
+Elsa.Rules.Persistence.Core.RuleRefusalConfirmation.Identity.get -> Elsa.Rules.Core.RuleRunIdentity!
+Elsa.Rules.Persistence.Core.RuleRefusalConfirmation.Identity.init -> void
+Elsa.Rules.Persistence.Core.RuleRefusalConfirmation.RuleRefusalConfirmation(Elsa.Rules.Persistence.Core.RuleRefusalDisposition Disposition, Elsa.Rules.Core.RuleRunIdentity! Identity, string? TerminalId) -> void
+Elsa.Rules.Persistence.Core.RuleRefusalConfirmation.TerminalId.get -> string?
+Elsa.Rules.Persistence.Core.RuleRefusalConfirmation.TerminalId.init -> void
+Elsa.Rules.Persistence.Core.RuleRefusalDisposition
+Elsa.Rules.Persistence.Core.RuleRefusalDisposition.AlreadyCancelled = 3 -> Elsa.Rules.Persistence.Core.RuleRefusalDisposition
+Elsa.Rules.Persistence.Core.RuleRefusalDisposition.Conflict = 4 -> Elsa.Rules.Persistence.Core.RuleRefusalDisposition
+Elsa.Rules.Persistence.Core.RuleRefusalDisposition.ExistingAdmission = 2 -> Elsa.Rules.Persistence.Core.RuleRefusalDisposition
+Elsa.Rules.Persistence.Core.RuleRefusalDisposition.Invalid = 5 -> Elsa.Rules.Persistence.Core.RuleRefusalDisposition
+Elsa.Rules.Persistence.Core.RuleRefusalDisposition.Refused = 0 -> Elsa.Rules.Persistence.Core.RuleRefusalDisposition
+Elsa.Rules.Persistence.Core.RuleRefusalDisposition.Replay = 1 -> Elsa.Rules.Persistence.Core.RuleRefusalDisposition
+Elsa.Rules.Persistence.Core.RuleRefusalDisposition.Unavailable = 6 -> Elsa.Rules.Persistence.Core.RuleRefusalDisposition
+Elsa.Rules.Persistence.Core.RuleRoundAttempt
+Elsa.Rules.Persistence.Core.RuleRoundAttempt.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleRoundAttempt!
+Elsa.Rules.Persistence.Core.RuleRoundAttempt.AttemptId.get -> string!
+Elsa.Rules.Persistence.Core.RuleRoundAttempt.Equals(Elsa.Rules.Persistence.Core.RuleRoundAttempt? other) -> bool
+Elsa.Rules.Persistence.Core.RuleRoundAttempt.LeaseFence.get -> long
+Elsa.Rules.Persistence.Core.RuleRoundAttempt.RuleRoundAttempt(string! attemptId, string! workerId, long leaseFence) -> void
+Elsa.Rules.Persistence.Core.RuleRoundAttempt.WorkerId.get -> string!
+Elsa.Rules.Persistence.Core.RuleRoundIdentity
+Elsa.Rules.Persistence.Core.RuleRoundIdentity.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleRoundIdentity!
+Elsa.Rules.Persistence.Core.RuleRoundIdentity.Equals(Elsa.Rules.Persistence.Core.RuleRoundIdentity? other) -> bool
+Elsa.Rules.Persistence.Core.RuleRoundIdentity.Fingerprint.get -> Elsa.Rules.Core.RuleInvocationFingerprint!
+Elsa.Rules.Persistence.Core.RuleRoundIdentity.InputStateSha256.get -> string!
+Elsa.Rules.Persistence.Core.RuleRoundIdentity.Ordinal.get -> int
+Elsa.Rules.Persistence.Core.RuleRoundIdentity.RuleRoundIdentity(Elsa.Rules.Core.RuleRunIdentity! run, Elsa.Rules.Core.RuleInvocationFingerprint! fingerprint, int ordinal, string! inputStateSha256) -> void
+Elsa.Rules.Persistence.Core.RuleRoundIdentity.Run.get -> Elsa.Rules.Core.RuleRunIdentity!
+Elsa.Rules.Persistence.Core.RuleRoundInput
+Elsa.Rules.Persistence.Core.RuleRoundInput.Artifact.get -> Elsa.Rules.Core.RuleArtifactSnapshot!
+Elsa.Rules.Persistence.Core.RuleRoundInput.Facts.get -> System.Collections.Generic.IReadOnlyList<Elsa.Rules.Core.RuleFact!>!
+Elsa.Rules.Persistence.Core.RuleRoundInput.Identity.get -> Elsa.Rules.Persistence.Core.RuleRoundIdentity!
+Elsa.Rules.Persistence.Core.RuleRoundInput.Implementation.get -> Elsa.Rules.Core.RuleSemanticPin!
+Elsa.Rules.Persistence.Core.RuleRoundInput.MaxRounds.get -> int
+Elsa.Rules.Persistence.Core.RuleRoundInput.ModelRevision.get -> long
+Elsa.Rules.Persistence.Core.RuleRoundInput.RuleRoundInput(Elsa.Rules.Persistence.Core.RuleRoundIdentity! identity, Elsa.Rules.Core.RuleArtifactSnapshot! artifact, Elsa.Rules.Core.RuleSemanticPin! implementation, System.Collections.Generic.IReadOnlyList<Elsa.Rules.Core.RuleFact!>! facts, int maxRounds, long modelRevision) -> void
+Elsa.Rules.Persistence.Core.RuleRoundProgress
+Elsa.Rules.Persistence.Core.RuleRoundProgress.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleRoundProgress!
+Elsa.Rules.Persistence.Core.RuleRoundProgress.AcceptedAttemptId.get -> string?
+Elsa.Rules.Persistence.Core.RuleRoundProgress.AcceptedAttemptId.init -> void
+Elsa.Rules.Persistence.Core.RuleRoundProgress.AcceptedLeaseFence.get -> long?
+Elsa.Rules.Persistence.Core.RuleRoundProgress.AcceptedLeaseFence.init -> void
+Elsa.Rules.Persistence.Core.RuleRoundProgress.AcceptedModelRevision.get -> long
+Elsa.Rules.Persistence.Core.RuleRoundProgress.AcceptedModelRevision.init -> void
+Elsa.Rules.Persistence.Core.RuleRoundProgress.AcceptedWorkerId.get -> string?
+Elsa.Rules.Persistence.Core.RuleRoundProgress.AcceptedWorkerId.init -> void
+Elsa.Rules.Persistence.Core.RuleRoundProgress.AddedFactCount.get -> int
+Elsa.Rules.Persistence.Core.RuleRoundProgress.AddedFactCount.init -> void
+Elsa.Rules.Persistence.Core.RuleRoundProgress.ConsumedModelRevision.get -> long?
+Elsa.Rules.Persistence.Core.RuleRoundProgress.ConsumedModelRevision.init -> void
+Elsa.Rules.Persistence.Core.RuleRoundProgress.Deconstruct(out int Ordinal, out string! InputStateSha256, out string? ReceiptId, out string? SemanticReceiptSha256, out long AcceptedModelRevision, out long? ConsumedModelRevision, out string? AcceptedAttemptId, out string? AcceptedWorkerId, out long? AcceptedLeaseFence, out int AddedFactCount) -> void
+Elsa.Rules.Persistence.Core.RuleRoundProgress.Equals(Elsa.Rules.Persistence.Core.RuleRoundProgress? other) -> bool
+Elsa.Rules.Persistence.Core.RuleRoundProgress.InputStateSha256.get -> string!
+Elsa.Rules.Persistence.Core.RuleRoundProgress.InputStateSha256.init -> void
+Elsa.Rules.Persistence.Core.RuleRoundProgress.Ordinal.get -> int
+Elsa.Rules.Persistence.Core.RuleRoundProgress.Ordinal.init -> void
+Elsa.Rules.Persistence.Core.RuleRoundProgress.ReceiptId.get -> string?
+Elsa.Rules.Persistence.Core.RuleRoundProgress.ReceiptId.init -> void
+Elsa.Rules.Persistence.Core.RuleRoundProgress.RuleRoundProgress(int Ordinal, string! InputStateSha256, string? ReceiptId, string? SemanticReceiptSha256, long AcceptedModelRevision, long? ConsumedModelRevision, string? AcceptedAttemptId, string? AcceptedWorkerId, long? AcceptedLeaseFence, int AddedFactCount) -> void
+Elsa.Rules.Persistence.Core.RuleRoundProgress.SemanticReceiptSha256.get -> string?
+Elsa.Rules.Persistence.Core.RuleRoundProgress.SemanticReceiptSha256.init -> void
+Elsa.Rules.Persistence.Core.RuleRoundReceipt
+Elsa.Rules.Persistence.Core.RuleRoundReceipt.AddedFacts.get -> System.Collections.Generic.IReadOnlyList<Elsa.Rules.Core.RuleFact!>!
+Elsa.Rules.Persistence.Core.RuleRoundReceipt.FiringEvidence.get -> System.Collections.Generic.IReadOnlyList<Elsa.Rules.Persistence.Core.RuleFiringEvidence!>!
+Elsa.Rules.Persistence.Core.RuleRoundReceipt.Identity.get -> Elsa.Rules.Persistence.Core.RuleRoundIdentity!
+Elsa.Rules.Persistence.Core.RuleRoundReceipt.ImplementationPinHash.get -> string!
+Elsa.Rules.Persistence.Core.RuleRoundReceipt.RuleRoundReceipt(Elsa.Rules.Persistence.Core.RuleRoundIdentity! identity, string! implementationPinHash, System.Collections.Generic.IReadOnlyList<Elsa.Rules.Core.RuleFact!>! addedFacts, System.Collections.Generic.IReadOnlyList<Elsa.Rules.Persistence.Core.RuleFiringEvidence!>! firingEvidence, string! semanticReceiptSha256) -> void
+Elsa.Rules.Persistence.Core.RuleRoundReceipt.SemanticReceiptSha256.get -> string!
+Elsa.Rules.Persistence.Core.RuleRoundSubmission
+Elsa.Rules.Persistence.Core.RuleRoundSubmission.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleRoundSubmission!
+Elsa.Rules.Persistence.Core.RuleRoundSubmission.Attempt.get -> Elsa.Rules.Persistence.Core.RuleRoundAttempt!
+Elsa.Rules.Persistence.Core.RuleRoundSubmission.Attempt.init -> void
+Elsa.Rules.Persistence.Core.RuleRoundSubmission.Deconstruct(out Elsa.Rules.Persistence.Core.RuleRoundReceipt! Receipt, out Elsa.Rules.Persistence.Core.RuleRoundAttempt! Attempt) -> void
+Elsa.Rules.Persistence.Core.RuleRoundSubmission.Equals(Elsa.Rules.Persistence.Core.RuleRoundSubmission? other) -> bool
+Elsa.Rules.Persistence.Core.RuleRoundSubmission.Receipt.get -> Elsa.Rules.Persistence.Core.RuleRoundReceipt!
+Elsa.Rules.Persistence.Core.RuleRoundSubmission.Receipt.init -> void
+Elsa.Rules.Persistence.Core.RuleRoundSubmission.RuleRoundSubmission(Elsa.Rules.Persistence.Core.RuleRoundReceipt! Receipt, Elsa.Rules.Persistence.Core.RuleRoundAttempt! Attempt) -> void
+Elsa.Rules.Persistence.Core.RuleRoundValidationInput
+Elsa.Rules.Persistence.Core.RuleRoundValidationInput.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleRoundValidationInput!
+Elsa.Rules.Persistence.Core.RuleRoundValidationInput.Deconstruct(out Elsa.Rules.Persistence.Core.RuleRoundInput! Input) -> void
+Elsa.Rules.Persistence.Core.RuleRoundValidationInput.Equals(Elsa.Rules.Persistence.Core.RuleRoundValidationInput? other) -> bool
+Elsa.Rules.Persistence.Core.RuleRoundValidationInput.Input.get -> Elsa.Rules.Persistence.Core.RuleRoundInput!
+Elsa.Rules.Persistence.Core.RuleRoundValidationInput.Input.init -> void
+Elsa.Rules.Persistence.Core.RuleRoundValidationInput.RuleRoundValidationInput(Elsa.Rules.Persistence.Core.RuleRoundInput! Input) -> void
+Elsa.Rules.Persistence.Core.RuleRoundValidationResult
+Elsa.Rules.Persistence.Core.RuleRoundValidationResult.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleRoundValidationResult!
+Elsa.Rules.Persistence.Core.RuleRoundValidationResult.Disposition.get -> Elsa.Rules.Persistence.Core.RuleValidationDisposition
+Elsa.Rules.Persistence.Core.RuleRoundValidationResult.Equals(Elsa.Rules.Persistence.Core.RuleRoundValidationResult? other) -> bool
+Elsa.Rules.Persistence.Core.RuleRoundValidationResult.RuleRoundValidationResult(Elsa.Rules.Persistence.Core.RuleValidationDisposition disposition, string? safeDiagnosticCode) -> void
+Elsa.Rules.Persistence.Core.RuleRoundValidationResult.SafeDiagnosticCode.get -> string?
+Elsa.Rules.Persistence.Core.RuleRunReadDisposition
+Elsa.Rules.Persistence.Core.RuleRunReadDisposition.Found = 0 -> Elsa.Rules.Persistence.Core.RuleRunReadDisposition
+Elsa.Rules.Persistence.Core.RuleRunReadDisposition.NotFound = 1 -> Elsa.Rules.Persistence.Core.RuleRunReadDisposition
+Elsa.Rules.Persistence.Core.RuleRunReadDisposition.Unavailable = 2 -> Elsa.Rules.Persistence.Core.RuleRunReadDisposition
+Elsa.Rules.Persistence.Core.RuleRunReadResult
+Elsa.Rules.Persistence.Core.RuleRunReadResult.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleRunReadResult!
+Elsa.Rules.Persistence.Core.RuleRunReadResult.Disposition.get -> Elsa.Rules.Persistence.Core.RuleRunReadDisposition
+Elsa.Rules.Persistence.Core.RuleRunReadResult.Equals(Elsa.Rules.Persistence.Core.RuleRunReadResult? other) -> bool
+Elsa.Rules.Persistence.Core.RuleRunReadResult.RuleRunReadResult(Elsa.Rules.Persistence.Core.RuleRunReadDisposition disposition, Elsa.Rules.Persistence.Core.RuleRunView? view) -> void
+Elsa.Rules.Persistence.Core.RuleRunReadResult.View.get -> Elsa.Rules.Persistence.Core.RuleRunView?
+Elsa.Rules.Persistence.Core.RuleRunStatus
+Elsa.Rules.Persistence.Core.RuleRunStatus.Cancelled = 3 -> Elsa.Rules.Persistence.Core.RuleRunStatus
+Elsa.Rules.Persistence.Core.RuleRunStatus.Faulted = 2 -> Elsa.Rules.Persistence.Core.RuleRunStatus
+Elsa.Rules.Persistence.Core.RuleRunStatus.Refused = 4 -> Elsa.Rules.Persistence.Core.RuleRunStatus
+Elsa.Rules.Persistence.Core.RuleRunStatus.Running = 0 -> Elsa.Rules.Persistence.Core.RuleRunStatus
+Elsa.Rules.Persistence.Core.RuleRunStatus.Succeeded = 1 -> Elsa.Rules.Persistence.Core.RuleRunStatus
+Elsa.Rules.Persistence.Core.RuleRunView
+Elsa.Rules.Persistence.Core.RuleRunView.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleRunView!
+Elsa.Rules.Persistence.Core.RuleRunView.ArtifactId.get -> string!
+Elsa.Rules.Persistence.Core.RuleRunView.ArtifactId.init -> void
+Elsa.Rules.Persistence.Core.RuleRunView.ArtifactSha256.get -> string!
+Elsa.Rules.Persistence.Core.RuleRunView.ArtifactSha256.init -> void
+Elsa.Rules.Persistence.Core.RuleRunView.CommittedFactCount.get -> int
+Elsa.Rules.Persistence.Core.RuleRunView.CommittedFactCount.init -> void
+Elsa.Rules.Persistence.Core.RuleRunView.CommittedRounds.get -> int
+Elsa.Rules.Persistence.Core.RuleRunView.CommittedRounds.init -> void
+Elsa.Rules.Persistence.Core.RuleRunView.Deconstruct(out Elsa.Rules.Core.RuleRunIdentity! Identity, out Elsa.Rules.Core.RuleInvocationFingerprint! Fingerprint, out string! ArtifactId, out string! ArtifactSha256, out string! ImplementationPinHash, out Elsa.Rules.Persistence.Core.RuleRunStatus Status, out long ModelRevision, out int CommittedRounds, out int CommittedFactCount, out string? PendingReceiptId, out string? TerminalId, out Elsa.Rules.Core.RuleTerminalKind? TerminalKind) -> void
+Elsa.Rules.Persistence.Core.RuleRunView.Equals(Elsa.Rules.Persistence.Core.RuleRunView? other) -> bool
+Elsa.Rules.Persistence.Core.RuleRunView.Fingerprint.get -> Elsa.Rules.Core.RuleInvocationFingerprint!
+Elsa.Rules.Persistence.Core.RuleRunView.Fingerprint.init -> void
+Elsa.Rules.Persistence.Core.RuleRunView.Identity.get -> Elsa.Rules.Core.RuleRunIdentity!
+Elsa.Rules.Persistence.Core.RuleRunView.Identity.init -> void
+Elsa.Rules.Persistence.Core.RuleRunView.ImplementationPinHash.get -> string!
+Elsa.Rules.Persistence.Core.RuleRunView.ImplementationPinHash.init -> void
+Elsa.Rules.Persistence.Core.RuleRunView.ModelRevision.get -> long
+Elsa.Rules.Persistence.Core.RuleRunView.ModelRevision.init -> void
+Elsa.Rules.Persistence.Core.RuleRunView.PendingReceiptId.get -> string?
+Elsa.Rules.Persistence.Core.RuleRunView.PendingReceiptId.init -> void
+Elsa.Rules.Persistence.Core.RuleRunView.RuleRunView(Elsa.Rules.Core.RuleRunIdentity! Identity, Elsa.Rules.Core.RuleInvocationFingerprint! Fingerprint, string! ArtifactId, string! ArtifactSha256, string! ImplementationPinHash, Elsa.Rules.Persistence.Core.RuleRunStatus Status, long ModelRevision, int CommittedRounds, int CommittedFactCount, string? PendingReceiptId, string? TerminalId, Elsa.Rules.Core.RuleTerminalKind? TerminalKind) -> void
+Elsa.Rules.Persistence.Core.RuleRunView.Status.get -> Elsa.Rules.Persistence.Core.RuleRunStatus
+Elsa.Rules.Persistence.Core.RuleRunView.Status.init -> void
+Elsa.Rules.Persistence.Core.RuleRunView.TerminalId.get -> string?
+Elsa.Rules.Persistence.Core.RuleRunView.TerminalId.init -> void
+Elsa.Rules.Persistence.Core.RuleRunView.TerminalKind.get -> Elsa.Rules.Core.RuleTerminalKind?
+Elsa.Rules.Persistence.Core.RuleRunView.TerminalKind.init -> void
+Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt
+Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt!
+Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt.AcceptedAttempt.get -> Elsa.Rules.Persistence.Core.RuleRoundAttempt!
+Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt.AcceptedAttempt.init -> void
+Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt.AcceptedModelRevision.get -> long
+Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt.AcceptedModelRevision.init -> void
+Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt.ConsumedModelRevision.get -> long?
+Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt.ConsumedModelRevision.init -> void
+Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt.Deconstruct(out string! ReceiptId, out Elsa.Rules.Persistence.Core.RuleRoundReceipt! Receipt, out Elsa.Rules.Persistence.Core.RuleRoundAttempt! AcceptedAttempt, out long AcceptedModelRevision, out long? ConsumedModelRevision) -> void
+Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt.Equals(Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt? other) -> bool
+Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt.Receipt.get -> Elsa.Rules.Persistence.Core.RuleRoundReceipt!
+Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt.Receipt.init -> void
+Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt.ReceiptId.get -> string!
+Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt.ReceiptId.init -> void
+Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt.RuleStoredRoundReceipt(string! ReceiptId, Elsa.Rules.Persistence.Core.RuleRoundReceipt! Receipt, Elsa.Rules.Persistence.Core.RuleRoundAttempt! AcceptedAttempt, long AcceptedModelRevision, long? ConsumedModelRevision) -> void
+Elsa.Rules.Persistence.Core.RuleTerminalReadDisposition
+Elsa.Rules.Persistence.Core.RuleTerminalReadDisposition.Found = 0 -> Elsa.Rules.Persistence.Core.RuleTerminalReadDisposition
+Elsa.Rules.Persistence.Core.RuleTerminalReadDisposition.NotFound = 2 -> Elsa.Rules.Persistence.Core.RuleTerminalReadDisposition
+Elsa.Rules.Persistence.Core.RuleTerminalReadDisposition.NotTerminal = 1 -> Elsa.Rules.Persistence.Core.RuleTerminalReadDisposition
+Elsa.Rules.Persistence.Core.RuleTerminalReadDisposition.Unavailable = 3 -> Elsa.Rules.Persistence.Core.RuleTerminalReadDisposition
+Elsa.Rules.Persistence.Core.RuleTerminalReadResult
+Elsa.Rules.Persistence.Core.RuleTerminalReadResult.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleTerminalReadResult!
+Elsa.Rules.Persistence.Core.RuleTerminalReadResult.Disposition.get -> Elsa.Rules.Persistence.Core.RuleTerminalReadDisposition
+Elsa.Rules.Persistence.Core.RuleTerminalReadResult.Equals(Elsa.Rules.Persistence.Core.RuleTerminalReadResult? other) -> bool
+Elsa.Rules.Persistence.Core.RuleTerminalReadResult.Result.get -> Elsa.Rules.Core.RuleTerminalResult?
+Elsa.Rules.Persistence.Core.RuleTerminalReadResult.RuleTerminalReadResult(Elsa.Rules.Persistence.Core.RuleTerminalReadDisposition disposition, Elsa.Rules.Core.RuleTerminalResult? result) -> void
+Elsa.Rules.Persistence.Core.RuleTransitionConfirmation
+Elsa.Rules.Persistence.Core.RuleTransitionConfirmation.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleTransitionConfirmation!
+Elsa.Rules.Persistence.Core.RuleTransitionConfirmation.Deconstruct(out Elsa.Rules.Persistence.Core.RuleTransitionDisposition Disposition, out Elsa.Rules.Core.RuleRunIdentity! Identity, out string? TransitionId, out string? ReceiptId, out string? TerminalId, out string? NextRoundId, out long? ModelRevision) -> void
+Elsa.Rules.Persistence.Core.RuleTransitionConfirmation.Disposition.get -> Elsa.Rules.Persistence.Core.RuleTransitionDisposition
+Elsa.Rules.Persistence.Core.RuleTransitionConfirmation.Disposition.init -> void
+Elsa.Rules.Persistence.Core.RuleTransitionConfirmation.Equals(Elsa.Rules.Persistence.Core.RuleTransitionConfirmation? other) -> bool
+Elsa.Rules.Persistence.Core.RuleTransitionConfirmation.Identity.get -> Elsa.Rules.Core.RuleRunIdentity!
+Elsa.Rules.Persistence.Core.RuleTransitionConfirmation.Identity.init -> void
+Elsa.Rules.Persistence.Core.RuleTransitionConfirmation.ModelRevision.get -> long?
+Elsa.Rules.Persistence.Core.RuleTransitionConfirmation.ModelRevision.init -> void
+Elsa.Rules.Persistence.Core.RuleTransitionConfirmation.NextRoundId.get -> string?
+Elsa.Rules.Persistence.Core.RuleTransitionConfirmation.NextRoundId.init -> void
+Elsa.Rules.Persistence.Core.RuleTransitionConfirmation.ReceiptId.get -> string?
+Elsa.Rules.Persistence.Core.RuleTransitionConfirmation.ReceiptId.init -> void
+Elsa.Rules.Persistence.Core.RuleTransitionConfirmation.RuleTransitionConfirmation(Elsa.Rules.Persistence.Core.RuleTransitionDisposition Disposition, Elsa.Rules.Core.RuleRunIdentity! Identity, string? TransitionId, string? ReceiptId, string? TerminalId, string? NextRoundId, long? ModelRevision) -> void
+Elsa.Rules.Persistence.Core.RuleTransitionConfirmation.TerminalId.get -> string?
+Elsa.Rules.Persistence.Core.RuleTransitionConfirmation.TerminalId.init -> void
+Elsa.Rules.Persistence.Core.RuleTransitionConfirmation.TransitionId.get -> string?
+Elsa.Rules.Persistence.Core.RuleTransitionConfirmation.TransitionId.init -> void
+Elsa.Rules.Persistence.Core.RuleTransitionDisposition
+Elsa.Rules.Persistence.Core.RuleTransitionDisposition.Acknowledged = 1 -> Elsa.Rules.Persistence.Core.RuleTransitionDisposition
+Elsa.Rules.Persistence.Core.RuleTransitionDisposition.Conflict = 4 -> Elsa.Rules.Persistence.Core.RuleTransitionDisposition
+Elsa.Rules.Persistence.Core.RuleTransitionDisposition.Consumed = 0 -> Elsa.Rules.Persistence.Core.RuleTransitionDisposition
+Elsa.Rules.Persistence.Core.RuleTransitionDisposition.Invalid = 8 -> Elsa.Rules.Persistence.Core.RuleTransitionDisposition
+Elsa.Rules.Persistence.Core.RuleTransitionDisposition.LeaseLost = 5 -> Elsa.Rules.Persistence.Core.RuleTransitionDisposition
+Elsa.Rules.Persistence.Core.RuleTransitionDisposition.ProofUnavailable = 7 -> Elsa.Rules.Persistence.Core.RuleTransitionDisposition
+Elsa.Rules.Persistence.Core.RuleTransitionDisposition.Replay = 2 -> Elsa.Rules.Persistence.Core.RuleTransitionDisposition
+Elsa.Rules.Persistence.Core.RuleTransitionDisposition.RevisionConflict = 6 -> Elsa.Rules.Persistence.Core.RuleTransitionDisposition
+Elsa.Rules.Persistence.Core.RuleTransitionDisposition.TerminalUnchanged = 3 -> Elsa.Rules.Persistence.Core.RuleTransitionDisposition
+Elsa.Rules.Persistence.Core.RuleTransitionDisposition.Unavailable = 9 -> Elsa.Rules.Persistence.Core.RuleTransitionDisposition
+Elsa.Rules.Persistence.Core.RuleValidationDisposition
+Elsa.Rules.Persistence.Core.RuleValidationDisposition.Equivalent = 0 -> Elsa.Rules.Persistence.Core.RuleValidationDisposition
+Elsa.Rules.Persistence.Core.RuleValidationDisposition.Invalid = 1 -> Elsa.Rules.Persistence.Core.RuleValidationDisposition
+Elsa.Rules.Persistence.Core.RuleValidationDisposition.UnsupportedFormat = 2 -> Elsa.Rules.Persistence.Core.RuleValidationDisposition
+Elsa.Rules.Persistence.Core.RuleWorkClaimDisposition
+Elsa.Rules.Persistence.Core.RuleWorkClaimDisposition.Claimed = 0 -> Elsa.Rules.Persistence.Core.RuleWorkClaimDisposition
+Elsa.Rules.Persistence.Core.RuleWorkClaimDisposition.NoEligibleWork = 1 -> Elsa.Rules.Persistence.Core.RuleWorkClaimDisposition
+Elsa.Rules.Persistence.Core.RuleWorkClaimDisposition.Unavailable = 2 -> Elsa.Rules.Persistence.Core.RuleWorkClaimDisposition
+Elsa.Rules.Persistence.Core.RuleWorkClaimResult
+Elsa.Rules.Persistence.Core.RuleWorkClaimResult.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleWorkClaimResult!
+Elsa.Rules.Persistence.Core.RuleWorkClaimResult.Deconstruct(out Elsa.Rules.Persistence.Core.RuleWorkClaimDisposition Disposition, out Elsa.Rules.Persistence.Core.RuleWorkToken? Token) -> void
+Elsa.Rules.Persistence.Core.RuleWorkClaimResult.Disposition.get -> Elsa.Rules.Persistence.Core.RuleWorkClaimDisposition
+Elsa.Rules.Persistence.Core.RuleWorkClaimResult.Disposition.init -> void
+Elsa.Rules.Persistence.Core.RuleWorkClaimResult.Equals(Elsa.Rules.Persistence.Core.RuleWorkClaimResult? other) -> bool
+Elsa.Rules.Persistence.Core.RuleWorkClaimResult.RuleWorkClaimResult(Elsa.Rules.Persistence.Core.RuleWorkClaimDisposition Disposition, Elsa.Rules.Persistence.Core.RuleWorkToken? Token) -> void
+Elsa.Rules.Persistence.Core.RuleWorkClaimResult.Token.get -> Elsa.Rules.Persistence.Core.RuleWorkToken?
+Elsa.Rules.Persistence.Core.RuleWorkClaimResult.Token.init -> void
+Elsa.Rules.Persistence.Core.RuleWorkLease
+Elsa.Rules.Persistence.Core.RuleWorkLease.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleWorkLease!
+Elsa.Rules.Persistence.Core.RuleWorkLease.Equals(Elsa.Rules.Persistence.Core.RuleWorkLease? other) -> bool
+Elsa.Rules.Persistence.Core.RuleWorkLease.ExpiresAt.get -> System.DateTimeOffset
+Elsa.Rules.Persistence.Core.RuleWorkLease.Fence.get -> long
+Elsa.Rules.Persistence.Core.RuleWorkLease.Fingerprint.get -> Elsa.Rules.Core.RuleInvocationFingerprint!
+Elsa.Rules.Persistence.Core.RuleWorkLease.Identity.get -> Elsa.Rules.Core.RuleRunIdentity!
+Elsa.Rules.Persistence.Core.RuleWorkLease.Owner.get -> string!
+Elsa.Rules.Persistence.Core.RuleWorkLease.RuleWorkLease(Elsa.Rules.Core.RuleRunIdentity! identity, Elsa.Rules.Core.RuleInvocationFingerprint! fingerprint, string! owner, long fence, System.DateTimeOffset expiresAt) -> void
+Elsa.Rules.Persistence.Core.RuleWorkReadDisposition
+Elsa.Rules.Persistence.Core.RuleWorkReadDisposition.ConsumeReceipt = 1 -> Elsa.Rules.Persistence.Core.RuleWorkReadDisposition
+Elsa.Rules.Persistence.Core.RuleWorkReadDisposition.EvaluateRound = 0 -> Elsa.Rules.Persistence.Core.RuleWorkReadDisposition
+Elsa.Rules.Persistence.Core.RuleWorkReadDisposition.LeaseLost = 3 -> Elsa.Rules.Persistence.Core.RuleWorkReadDisposition
+Elsa.Rules.Persistence.Core.RuleWorkReadDisposition.NotFound = 4 -> Elsa.Rules.Persistence.Core.RuleWorkReadDisposition
+Elsa.Rules.Persistence.Core.RuleWorkReadDisposition.Terminal = 2 -> Elsa.Rules.Persistence.Core.RuleWorkReadDisposition
+Elsa.Rules.Persistence.Core.RuleWorkReadDisposition.Unavailable = 5 -> Elsa.Rules.Persistence.Core.RuleWorkReadDisposition
+Elsa.Rules.Persistence.Core.RuleWorkReadResult
+Elsa.Rules.Persistence.Core.RuleWorkReadResult.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleWorkReadResult!
+Elsa.Rules.Persistence.Core.RuleWorkReadResult.CurrentToken.get -> Elsa.Rules.Persistence.Core.RuleWorkToken?
+Elsa.Rules.Persistence.Core.RuleWorkReadResult.Disposition.get -> Elsa.Rules.Persistence.Core.RuleWorkReadDisposition
+Elsa.Rules.Persistence.Core.RuleWorkReadResult.Equals(Elsa.Rules.Persistence.Core.RuleWorkReadResult? other) -> bool
+Elsa.Rules.Persistence.Core.RuleWorkReadResult.PendingReceipt.get -> Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt?
+Elsa.Rules.Persistence.Core.RuleWorkReadResult.RoundInput.get -> Elsa.Rules.Persistence.Core.RuleRoundInput?
+Elsa.Rules.Persistence.Core.RuleWorkReadResult.RuleWorkReadResult(Elsa.Rules.Persistence.Core.RuleWorkReadDisposition disposition, Elsa.Rules.Persistence.Core.RuleWorkToken? currentToken, Elsa.Rules.Persistence.Core.RuleRoundInput? roundInput, Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt? pendingReceipt, string? terminalId) -> void
+Elsa.Rules.Persistence.Core.RuleWorkReadResult.TerminalId.get -> string?
+Elsa.Rules.Persistence.Core.RuleWorkToken
+Elsa.Rules.Persistence.Core.RuleWorkToken.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleWorkToken!
+Elsa.Rules.Persistence.Core.RuleWorkToken.Equals(Elsa.Rules.Persistence.Core.RuleWorkToken? other) -> bool
+Elsa.Rules.Persistence.Core.RuleWorkToken.ExpectedModelRevision.get -> long
+Elsa.Rules.Persistence.Core.RuleWorkToken.Lease.get -> Elsa.Rules.Persistence.Core.RuleWorkLease!
+Elsa.Rules.Persistence.Core.RuleWorkToken.RuleWorkToken(Elsa.Rules.Persistence.Core.RuleWorkLease! lease, long expectedModelRevision) -> void
+override Elsa.Rules.Persistence.Core.RuleAdmissionConfirmation.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleAdmissionConfirmation.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleAdmissionConfirmation.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleCancellationConfirmation.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleCancellationConfirmation.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleCancellationConfirmation.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleDeliveryAcknowledgement.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleDeliveryAcknowledgement.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleDeliveryAcknowledgement.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleDeliveryClaimResult.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleDeliveryClaimResult.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleDeliveryClaimResult.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleDeliveryLease.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleDeliveryLease.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleDeliveryLease.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleDeliveryReadResult.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleDeliveryReadResult.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleDeliveryReadResult.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleFiringEvidence.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleFiringEvidence.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleFiringEvidence.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleLeaseConfirmation.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleLeaseConfirmation.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleLeaseConfirmation.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleProgressItem.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleProgressItem.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleProgressItem.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleProgressPosition.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleProgressPosition.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleProgressPosition.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleProgressReadResult.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleProgressReadResult.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleProgressReadResult.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleReceiptConfirmation.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleReceiptConfirmation.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleReceiptConfirmation.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleReceiptIdentity.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleReceiptIdentity.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleReceiptIdentity.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleRefusalConfirmation.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleRefusalConfirmation.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleRefusalConfirmation.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleRoundAttempt.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleRoundAttempt.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleRoundAttempt.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleRoundIdentity.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleRoundIdentity.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleRoundIdentity.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleRoundProgress.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleRoundProgress.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleRoundProgress.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleRoundSubmission.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleRoundSubmission.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleRoundSubmission.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleRoundValidationInput.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleRoundValidationInput.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleRoundValidationInput.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleRoundValidationResult.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleRoundValidationResult.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleRoundValidationResult.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleRunReadResult.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleRunReadResult.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleRunReadResult.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleRunView.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleRunView.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleRunView.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleTerminalReadResult.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleTerminalReadResult.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleTerminalReadResult.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleTransitionConfirmation.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleTransitionConfirmation.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleTransitionConfirmation.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleWorkClaimResult.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleWorkClaimResult.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleWorkClaimResult.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleWorkLease.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleWorkLease.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleWorkLease.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleWorkReadResult.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleWorkReadResult.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleWorkReadResult.ToString() -> string!
+override Elsa.Rules.Persistence.Core.RuleWorkToken.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleWorkToken.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleWorkToken.ToString() -> string!
+static Elsa.Rules.Persistence.Core.RuleAdmissionConfirmation.operator !=(Elsa.Rules.Persistence.Core.RuleAdmissionConfirmation? left, Elsa.Rules.Persistence.Core.RuleAdmissionConfirmation? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleAdmissionConfirmation.operator ==(Elsa.Rules.Persistence.Core.RuleAdmissionConfirmation? left, Elsa.Rules.Persistence.Core.RuleAdmissionConfirmation? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleCancellationConfirmation.operator !=(Elsa.Rules.Persistence.Core.RuleCancellationConfirmation? left, Elsa.Rules.Persistence.Core.RuleCancellationConfirmation? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleCancellationConfirmation.operator ==(Elsa.Rules.Persistence.Core.RuleCancellationConfirmation? left, Elsa.Rules.Persistence.Core.RuleCancellationConfirmation? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleDeliveryAcknowledgement.operator !=(Elsa.Rules.Persistence.Core.RuleDeliveryAcknowledgement? left, Elsa.Rules.Persistence.Core.RuleDeliveryAcknowledgement? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleDeliveryAcknowledgement.operator ==(Elsa.Rules.Persistence.Core.RuleDeliveryAcknowledgement? left, Elsa.Rules.Persistence.Core.RuleDeliveryAcknowledgement? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleDeliveryClaimResult.operator !=(Elsa.Rules.Persistence.Core.RuleDeliveryClaimResult? left, Elsa.Rules.Persistence.Core.RuleDeliveryClaimResult? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleDeliveryClaimResult.operator ==(Elsa.Rules.Persistence.Core.RuleDeliveryClaimResult? left, Elsa.Rules.Persistence.Core.RuleDeliveryClaimResult? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleDeliveryLease.operator !=(Elsa.Rules.Persistence.Core.RuleDeliveryLease? left, Elsa.Rules.Persistence.Core.RuleDeliveryLease? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleDeliveryLease.operator ==(Elsa.Rules.Persistence.Core.RuleDeliveryLease? left, Elsa.Rules.Persistence.Core.RuleDeliveryLease? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleDeliveryReadResult.operator !=(Elsa.Rules.Persistence.Core.RuleDeliveryReadResult? left, Elsa.Rules.Persistence.Core.RuleDeliveryReadResult? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleDeliveryReadResult.operator ==(Elsa.Rules.Persistence.Core.RuleDeliveryReadResult? left, Elsa.Rules.Persistence.Core.RuleDeliveryReadResult? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleFiringEvidence.operator !=(Elsa.Rules.Persistence.Core.RuleFiringEvidence? left, Elsa.Rules.Persistence.Core.RuleFiringEvidence? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleFiringEvidence.operator ==(Elsa.Rules.Persistence.Core.RuleFiringEvidence? left, Elsa.Rules.Persistence.Core.RuleFiringEvidence? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleLeaseConfirmation.operator !=(Elsa.Rules.Persistence.Core.RuleLeaseConfirmation? left, Elsa.Rules.Persistence.Core.RuleLeaseConfirmation? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleLeaseConfirmation.operator ==(Elsa.Rules.Persistence.Core.RuleLeaseConfirmation? left, Elsa.Rules.Persistence.Core.RuleLeaseConfirmation? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleProgressItem.operator !=(Elsa.Rules.Persistence.Core.RuleProgressItem? left, Elsa.Rules.Persistence.Core.RuleProgressItem? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleProgressItem.operator ==(Elsa.Rules.Persistence.Core.RuleProgressItem? left, Elsa.Rules.Persistence.Core.RuleProgressItem? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleProgressPosition.operator !=(Elsa.Rules.Persistence.Core.RuleProgressPosition? left, Elsa.Rules.Persistence.Core.RuleProgressPosition? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleProgressPosition.operator ==(Elsa.Rules.Persistence.Core.RuleProgressPosition? left, Elsa.Rules.Persistence.Core.RuleProgressPosition? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleProgressReadResult.operator !=(Elsa.Rules.Persistence.Core.RuleProgressReadResult? left, Elsa.Rules.Persistence.Core.RuleProgressReadResult? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleProgressReadResult.operator ==(Elsa.Rules.Persistence.Core.RuleProgressReadResult? left, Elsa.Rules.Persistence.Core.RuleProgressReadResult? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleReceiptConfirmation.operator !=(Elsa.Rules.Persistence.Core.RuleReceiptConfirmation? left, Elsa.Rules.Persistence.Core.RuleReceiptConfirmation? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleReceiptConfirmation.operator ==(Elsa.Rules.Persistence.Core.RuleReceiptConfirmation? left, Elsa.Rules.Persistence.Core.RuleReceiptConfirmation? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleReceiptIdentity.operator !=(Elsa.Rules.Persistence.Core.RuleReceiptIdentity? left, Elsa.Rules.Persistence.Core.RuleReceiptIdentity? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleReceiptIdentity.operator ==(Elsa.Rules.Persistence.Core.RuleReceiptIdentity? left, Elsa.Rules.Persistence.Core.RuleReceiptIdentity? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleRefusalConfirmation.operator !=(Elsa.Rules.Persistence.Core.RuleRefusalConfirmation? left, Elsa.Rules.Persistence.Core.RuleRefusalConfirmation? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleRefusalConfirmation.operator ==(Elsa.Rules.Persistence.Core.RuleRefusalConfirmation? left, Elsa.Rules.Persistence.Core.RuleRefusalConfirmation? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleRoundAttempt.operator !=(Elsa.Rules.Persistence.Core.RuleRoundAttempt? left, Elsa.Rules.Persistence.Core.RuleRoundAttempt? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleRoundAttempt.operator ==(Elsa.Rules.Persistence.Core.RuleRoundAttempt? left, Elsa.Rules.Persistence.Core.RuleRoundAttempt? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleRoundIdentity.operator !=(Elsa.Rules.Persistence.Core.RuleRoundIdentity? left, Elsa.Rules.Persistence.Core.RuleRoundIdentity? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleRoundIdentity.operator ==(Elsa.Rules.Persistence.Core.RuleRoundIdentity? left, Elsa.Rules.Persistence.Core.RuleRoundIdentity? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleRoundProgress.operator !=(Elsa.Rules.Persistence.Core.RuleRoundProgress? left, Elsa.Rules.Persistence.Core.RuleRoundProgress? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleRoundProgress.operator ==(Elsa.Rules.Persistence.Core.RuleRoundProgress? left, Elsa.Rules.Persistence.Core.RuleRoundProgress? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleRoundSubmission.operator !=(Elsa.Rules.Persistence.Core.RuleRoundSubmission? left, Elsa.Rules.Persistence.Core.RuleRoundSubmission? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleRoundSubmission.operator ==(Elsa.Rules.Persistence.Core.RuleRoundSubmission? left, Elsa.Rules.Persistence.Core.RuleRoundSubmission? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleRoundValidationInput.operator !=(Elsa.Rules.Persistence.Core.RuleRoundValidationInput? left, Elsa.Rules.Persistence.Core.RuleRoundValidationInput? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleRoundValidationInput.operator ==(Elsa.Rules.Persistence.Core.RuleRoundValidationInput? left, Elsa.Rules.Persistence.Core.RuleRoundValidationInput? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleRoundValidationResult.operator !=(Elsa.Rules.Persistence.Core.RuleRoundValidationResult? left, Elsa.Rules.Persistence.Core.RuleRoundValidationResult? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleRoundValidationResult.operator ==(Elsa.Rules.Persistence.Core.RuleRoundValidationResult? left, Elsa.Rules.Persistence.Core.RuleRoundValidationResult? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleRunReadResult.operator !=(Elsa.Rules.Persistence.Core.RuleRunReadResult? left, Elsa.Rules.Persistence.Core.RuleRunReadResult? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleRunReadResult.operator ==(Elsa.Rules.Persistence.Core.RuleRunReadResult? left, Elsa.Rules.Persistence.Core.RuleRunReadResult? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleRunView.operator !=(Elsa.Rules.Persistence.Core.RuleRunView? left, Elsa.Rules.Persistence.Core.RuleRunView? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleRunView.operator ==(Elsa.Rules.Persistence.Core.RuleRunView? left, Elsa.Rules.Persistence.Core.RuleRunView? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt.operator !=(Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt? left, Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt.operator ==(Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt? left, Elsa.Rules.Persistence.Core.RuleStoredRoundReceipt? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleTerminalReadResult.operator !=(Elsa.Rules.Persistence.Core.RuleTerminalReadResult? left, Elsa.Rules.Persistence.Core.RuleTerminalReadResult? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleTerminalReadResult.operator ==(Elsa.Rules.Persistence.Core.RuleTerminalReadResult? left, Elsa.Rules.Persistence.Core.RuleTerminalReadResult? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleTransitionConfirmation.operator !=(Elsa.Rules.Persistence.Core.RuleTransitionConfirmation? left, Elsa.Rules.Persistence.Core.RuleTransitionConfirmation? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleTransitionConfirmation.operator ==(Elsa.Rules.Persistence.Core.RuleTransitionConfirmation? left, Elsa.Rules.Persistence.Core.RuleTransitionConfirmation? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleWorkClaimResult.operator !=(Elsa.Rules.Persistence.Core.RuleWorkClaimResult? left, Elsa.Rules.Persistence.Core.RuleWorkClaimResult? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleWorkClaimResult.operator ==(Elsa.Rules.Persistence.Core.RuleWorkClaimResult? left, Elsa.Rules.Persistence.Core.RuleWorkClaimResult? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleWorkLease.operator !=(Elsa.Rules.Persistence.Core.RuleWorkLease? left, Elsa.Rules.Persistence.Core.RuleWorkLease? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleWorkLease.operator ==(Elsa.Rules.Persistence.Core.RuleWorkLease? left, Elsa.Rules.Persistence.Core.RuleWorkLease? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleWorkReadResult.operator !=(Elsa.Rules.Persistence.Core.RuleWorkReadResult? left, Elsa.Rules.Persistence.Core.RuleWorkReadResult? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleWorkReadResult.operator ==(Elsa.Rules.Persistence.Core.RuleWorkReadResult? left, Elsa.Rules.Persistence.Core.RuleWorkReadResult? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleWorkToken.operator !=(Elsa.Rules.Persistence.Core.RuleWorkToken? left, Elsa.Rules.Persistence.Core.RuleWorkToken? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleWorkToken.operator ==(Elsa.Rules.Persistence.Core.RuleWorkToken? left, Elsa.Rules.Persistence.Core.RuleWorkToken? right) -> bool

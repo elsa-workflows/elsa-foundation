@@ -1,0 +1,227 @@
+#nullable enable
+Elsa.Rules.Core.RuleAdmissionRefusal
+Elsa.Rules.Core.RuleAdmissionRefusal.<Clone>$() -> Elsa.Rules.Core.RuleAdmissionRefusal!
+Elsa.Rules.Core.RuleAdmissionRefusal.Deconstruct(out Elsa.Rules.Core.RuleInvocationEnvelope! Invocation, out Elsa.Rules.Core.RuleRunDiagnostic! Diagnostic) -> void
+Elsa.Rules.Core.RuleAdmissionRefusal.Diagnostic.get -> Elsa.Rules.Core.RuleRunDiagnostic!
+Elsa.Rules.Core.RuleAdmissionRefusal.Diagnostic.init -> void
+Elsa.Rules.Core.RuleAdmissionRefusal.Equals(Elsa.Rules.Core.RuleAdmissionRefusal? other) -> bool
+Elsa.Rules.Core.RuleAdmissionRefusal.Invocation.get -> Elsa.Rules.Core.RuleInvocationEnvelope!
+Elsa.Rules.Core.RuleAdmissionRefusal.Invocation.init -> void
+Elsa.Rules.Core.RuleAdmissionRefusal.RuleAdmissionRefusal(Elsa.Rules.Core.RuleInvocationEnvelope! Invocation, Elsa.Rules.Core.RuleRunDiagnostic! Diagnostic) -> void
+Elsa.Rules.Core.RuleArtifactSnapshot
+Elsa.Rules.Core.RuleArtifactSnapshot.ArtifactId.get -> string!
+Elsa.Rules.Core.RuleArtifactSnapshot.CanonicalBytes.get -> System.ReadOnlyMemory<byte>
+Elsa.Rules.Core.RuleArtifactSnapshot.FormatVersion.get -> int
+Elsa.Rules.Core.RuleArtifactSnapshot.RuleArtifactSnapshot(int formatVersion, string! artifactId, string! sha256, System.ReadOnlyMemory<byte> canonicalBytes) -> void
+Elsa.Rules.Core.RuleArtifactSnapshot.Sha256.get -> string!
+Elsa.Rules.Core.RuleAssetPin
+Elsa.Rules.Core.RuleAssetPin.<Clone>$() -> Elsa.Rules.Core.RuleAssetPin!
+Elsa.Rules.Core.RuleAssetPin.AssemblyFullName.get -> string!
+Elsa.Rules.Core.RuleAssetPin.AssetSha256.get -> string!
+Elsa.Rules.Core.RuleAssetPin.Equals(Elsa.Rules.Core.RuleAssetPin? other) -> bool
+Elsa.Rules.Core.RuleAssetPin.PackageRelativeAssetPath.get -> string!
+Elsa.Rules.Core.RuleAssetPin.RuleAssetPin(string! packageRelativeAssetPath, string! assemblyFullName, string! assetSha256) -> void
+Elsa.Rules.Core.RuleCancellationRequest
+Elsa.Rules.Core.RuleCancellationRequest.<Clone>$() -> Elsa.Rules.Core.RuleCancellationRequest!
+Elsa.Rules.Core.RuleCancellationRequest.Deconstruct(out Elsa.Rules.Core.RuleInvocationEnvelope! Invocation) -> void
+Elsa.Rules.Core.RuleCancellationRequest.Equals(Elsa.Rules.Core.RuleCancellationRequest? other) -> bool
+Elsa.Rules.Core.RuleCancellationRequest.Invocation.get -> Elsa.Rules.Core.RuleInvocationEnvelope!
+Elsa.Rules.Core.RuleCancellationRequest.Invocation.init -> void
+Elsa.Rules.Core.RuleCancellationRequest.RuleCancellationRequest(Elsa.Rules.Core.RuleInvocationEnvelope! Invocation) -> void
+Elsa.Rules.Core.RuleDefinition
+Elsa.Rules.Core.RuleDefinition.Conclusion.get -> Elsa.Rules.Core.RuleFact!
+Elsa.Rules.Core.RuleDefinition.Id.get -> string!
+Elsa.Rules.Core.RuleDefinition.Premises.get -> System.Collections.Generic.IReadOnlyList<Elsa.Rules.Core.RuleFact!>!
+Elsa.Rules.Core.RuleDefinition.RuleDefinition(string! id, System.Collections.Generic.IReadOnlyList<Elsa.Rules.Core.RuleFact!>! premises, Elsa.Rules.Core.RuleFact! conclusion) -> void
+Elsa.Rules.Core.RuleDeliveryProof
+Elsa.Rules.Core.RuleDeliveryProof.<Clone>$() -> Elsa.Rules.Core.RuleDeliveryProof!
+Elsa.Rules.Core.RuleDeliveryProof.DestinationIdentity.get -> string!
+Elsa.Rules.Core.RuleDeliveryProof.Equals(Elsa.Rules.Core.RuleDeliveryProof? other) -> bool
+Elsa.Rules.Core.RuleDeliveryProof.Kind.get -> Elsa.Rules.Core.RuleDeliveryProofKind
+Elsa.Rules.Core.RuleDeliveryProof.ParentCommitOrTerminalId.get -> string!
+Elsa.Rules.Core.RuleDeliveryProof.PayloadSha256.get -> string!
+Elsa.Rules.Core.RuleDeliveryProof.RuleDeliveryProof(Elsa.Rules.Core.RuleDeliveryProofKind kind, string! destinationIdentity, string! terminalId, string! payloadSha256, string! parentCommitOrTerminalId) -> void
+Elsa.Rules.Core.RuleDeliveryProof.TerminalId.get -> string!
+Elsa.Rules.Core.RuleDeliveryProofKind
+Elsa.Rules.Core.RuleDeliveryProofKind.AlreadyConsumed = 1 -> Elsa.Rules.Core.RuleDeliveryProofKind
+Elsa.Rules.Core.RuleDeliveryProofKind.Consumed = 0 -> Elsa.Rules.Core.RuleDeliveryProofKind
+Elsa.Rules.Core.RuleDeliveryProofKind.ParentProvenTerminal = 2 -> Elsa.Rules.Core.RuleDeliveryProofKind
+Elsa.Rules.Core.RuleFact
+Elsa.Rules.Core.RuleFact.<Clone>$() -> Elsa.Rules.Core.RuleFact!
+Elsa.Rules.Core.RuleFact.Atom.get -> string!
+Elsa.Rules.Core.RuleFact.Equals(Elsa.Rules.Core.RuleFact? other) -> bool
+Elsa.Rules.Core.RuleFact.RuleFact(string! atom) -> void
+Elsa.Rules.Core.RuleInvocationEnvelope
+Elsa.Rules.Core.RuleInvocationEnvelope.Artifact.get -> Elsa.Rules.Core.RuleArtifactSnapshot!
+Elsa.Rules.Core.RuleInvocationEnvelope.ExpectedImplementation.get -> Elsa.Rules.Core.RuleSemanticPin!
+Elsa.Rules.Core.RuleInvocationEnvelope.Identity.get -> Elsa.Rules.Core.RuleRunIdentity!
+Elsa.Rules.Core.RuleInvocationEnvelope.InitialFacts.get -> System.Collections.Generic.IReadOnlyList<Elsa.Rules.Core.RuleFact!>!
+Elsa.Rules.Core.RuleInvocationEnvelope.InvocationSchemaVersion.get -> int
+Elsa.Rules.Core.RuleInvocationEnvelope.MaxRounds.get -> int
+Elsa.Rules.Core.RuleInvocationEnvelope.NativeDestination.get -> Elsa.Rules.Core.RuleNativeResultAddress?
+Elsa.Rules.Core.RuleInvocationEnvelope.RuleInvocationEnvelope(Elsa.Rules.Core.RuleRunIdentity! identity, Elsa.Rules.Core.RuleArtifactSnapshot! artifact, System.Collections.Generic.IReadOnlyList<Elsa.Rules.Core.RuleFact!>! initialFacts, int maxRounds, Elsa.Rules.Core.RuleSemanticPin! expectedImplementation, int invocationSchemaVersion, Elsa.Rules.Core.RuleNativeResultAddress? nativeDestination) -> void
+Elsa.Rules.Core.RuleInvocationFingerprint
+Elsa.Rules.Core.RuleInvocationFingerprint.<Clone>$() -> Elsa.Rules.Core.RuleInvocationFingerprint!
+Elsa.Rules.Core.RuleInvocationFingerprint.Equals(Elsa.Rules.Core.RuleInvocationFingerprint? other) -> bool
+Elsa.Rules.Core.RuleInvocationFingerprint.RuleInvocationFingerprint(string! sha256) -> void
+Elsa.Rules.Core.RuleInvocationFingerprint.Sha256.get -> string!
+Elsa.Rules.Core.RuleLanguage
+Elsa.Rules.Core.RuleLimits
+Elsa.Rules.Core.RuleNativeResultAddress
+Elsa.Rules.Core.RuleNativeResultAddress.<Clone>$() -> Elsa.Rules.Core.RuleNativeResultAddress!
+Elsa.Rules.Core.RuleNativeResultAddress.ActivityExecutionId.get -> string!
+Elsa.Rules.Core.RuleNativeResultAddress.BookmarkId.get -> string!
+Elsa.Rules.Core.RuleNativeResultAddress.DeduplicationPolicy.get -> string!
+Elsa.Rules.Core.RuleNativeResultAddress.Equals(Elsa.Rules.Core.RuleNativeResultAddress? other) -> bool
+Elsa.Rules.Core.RuleNativeResultAddress.ExecutableHash.get -> string!
+Elsa.Rules.Core.RuleNativeResultAddress.ExecutableId.get -> string!
+Elsa.Rules.Core.RuleNativeResultAddress.FormatVersion.get -> int
+Elsa.Rules.Core.RuleNativeResultAddress.NodeId.get -> string!
+Elsa.Rules.Core.RuleNativeResultAddress.ProviderId.get -> string!
+Elsa.Rules.Core.RuleNativeResultAddress.RegistrationId.get -> string!
+Elsa.Rules.Core.RuleNativeResultAddress.ResultContractId.get -> string!
+Elsa.Rules.Core.RuleNativeResultAddress.ResultSchemaVersion.get -> int
+Elsa.Rules.Core.RuleNativeResultAddress.ResumeTargetId.get -> string!
+Elsa.Rules.Core.RuleNativeResultAddress.RuleNativeResultAddress(int formatVersion, string! workflowExecutionId, string! activityExecutionId, string! executableId, string! executableHash, string! nodeId, string! bookmarkId, string! resumeTargetId, string! registrationId, string! stimulusType, string! stimulusHash, string! resultContractId, int resultSchemaVersion, string! deduplicationPolicy, string! providerId) -> void
+Elsa.Rules.Core.RuleNativeResultAddress.StimulusHash.get -> string!
+Elsa.Rules.Core.RuleNativeResultAddress.StimulusType.get -> string!
+Elsa.Rules.Core.RuleNativeResultAddress.WorkflowExecutionId.get -> string!
+Elsa.Rules.Core.RulePackagePin
+Elsa.Rules.Core.RulePackagePin.NuGetContentHash.get -> string!
+Elsa.Rules.Core.RulePackagePin.NuGetVersion.get -> string!
+Elsa.Rules.Core.RulePackagePin.PackageId.get -> string!
+Elsa.Rules.Core.RulePackagePin.RulePackagePin(string! packageId, string! nuGetVersion, string! nuGetContentHash, System.Collections.Generic.IReadOnlyList<Elsa.Rules.Core.RuleAssetPin!>! selectedAssets) -> void
+Elsa.Rules.Core.RulePackagePin.SelectedAssets.get -> System.Collections.Generic.IReadOnlyList<Elsa.Rules.Core.RuleAssetPin!>!
+Elsa.Rules.Core.RuleProgram
+Elsa.Rules.Core.RuleProgram.FormatVersion.get -> int
+Elsa.Rules.Core.RuleProgram.LanguageId.get -> string!
+Elsa.Rules.Core.RuleProgram.LanguageVersion.get -> int
+Elsa.Rules.Core.RuleProgram.RuleProgram(int formatVersion, string! languageId, int languageVersion, System.Collections.Generic.IReadOnlyList<Elsa.Rules.Core.RuleFact!>! vocabulary, System.Collections.Generic.IReadOnlyList<Elsa.Rules.Core.RuleDefinition!>! rules) -> void
+Elsa.Rules.Core.RuleProgram.Rules.get -> System.Collections.Generic.IReadOnlyList<Elsa.Rules.Core.RuleDefinition!>!
+Elsa.Rules.Core.RuleProgram.Vocabulary.get -> System.Collections.Generic.IReadOnlyList<Elsa.Rules.Core.RuleFact!>!
+Elsa.Rules.Core.RuleRunAdmission
+Elsa.Rules.Core.RuleRunAdmission.<Clone>$() -> Elsa.Rules.Core.RuleRunAdmission!
+Elsa.Rules.Core.RuleRunAdmission.Deconstruct(out Elsa.Rules.Core.RuleInvocationEnvelope! Invocation) -> void
+Elsa.Rules.Core.RuleRunAdmission.Equals(Elsa.Rules.Core.RuleRunAdmission? other) -> bool
+Elsa.Rules.Core.RuleRunAdmission.Invocation.get -> Elsa.Rules.Core.RuleInvocationEnvelope!
+Elsa.Rules.Core.RuleRunAdmission.Invocation.init -> void
+Elsa.Rules.Core.RuleRunAdmission.RuleRunAdmission(Elsa.Rules.Core.RuleInvocationEnvelope! Invocation) -> void
+Elsa.Rules.Core.RuleRunDiagnostic
+Elsa.Rules.Core.RuleRunDiagnostic.<Clone>$() -> Elsa.Rules.Core.RuleRunDiagnostic!
+Elsa.Rules.Core.RuleRunDiagnostic.Code.get -> string!
+Elsa.Rules.Core.RuleRunDiagnostic.Equals(Elsa.Rules.Core.RuleRunDiagnostic? other) -> bool
+Elsa.Rules.Core.RuleRunDiagnostic.RuleRunDiagnostic(string! code) -> void
+Elsa.Rules.Core.RuleRunIdentity
+Elsa.Rules.Core.RuleRunIdentity.<Clone>$() -> Elsa.Rules.Core.RuleRunIdentity!
+Elsa.Rules.Core.RuleRunIdentity.Equals(Elsa.Rules.Core.RuleRunIdentity? other) -> bool
+Elsa.Rules.Core.RuleRunIdentity.InvocationId.get -> string!
+Elsa.Rules.Core.RuleRunIdentity.RuleRunIdentity(Elsa.Rules.Core.RuleScope! scope, string! invocationId) -> void
+Elsa.Rules.Core.RuleRunIdentity.Scope.get -> Elsa.Rules.Core.RuleScope!
+Elsa.Rules.Core.RuleScope
+Elsa.Rules.Core.RuleScope.<Clone>$() -> Elsa.Rules.Core.RuleScope!
+Elsa.Rules.Core.RuleScope.Equals(Elsa.Rules.Core.RuleScope? other) -> bool
+Elsa.Rules.Core.RuleScope.PersistencePartition.get -> string!
+Elsa.Rules.Core.RuleScope.RuleScope(string? tenantId, string! persistencePartition) -> void
+Elsa.Rules.Core.RuleScope.TenantId.get -> string?
+Elsa.Rules.Core.RuleSemanticPin
+Elsa.Rules.Core.RuleSemanticPin.LanguageId.get -> string!
+Elsa.Rules.Core.RuleSemanticPin.LanguageVersion.get -> int
+Elsa.Rules.Core.RuleSemanticPin.Packages.get -> System.Collections.Generic.IReadOnlyList<Elsa.Rules.Core.RulePackagePin!>!
+Elsa.Rules.Core.RuleSemanticPin.PinSchemaVersion.get -> int
+Elsa.Rules.Core.RuleSemanticPin.ReceiptSchemaVersion.get -> int
+Elsa.Rules.Core.RuleSemanticPin.RuleSemanticPin(int pinSchemaVersion, System.Collections.Generic.IReadOnlyList<Elsa.Rules.Core.RulePackagePin!>! packages, string! languageId, int languageVersion, int receiptSchemaVersion, int stateSchemaVersion) -> void
+Elsa.Rules.Core.RuleSemanticPin.StateSchemaVersion.get -> int
+Elsa.Rules.Core.RuleTerminalEnvelope
+Elsa.Rules.Core.RuleTerminalEnvelope.<Clone>$() -> Elsa.Rules.Core.RuleTerminalEnvelope!
+Elsa.Rules.Core.RuleTerminalEnvelope.CanonicalPayloadSha256.get -> string!
+Elsa.Rules.Core.RuleTerminalEnvelope.DeliveryId.get -> string!
+Elsa.Rules.Core.RuleTerminalEnvelope.Destination.get -> Elsa.Rules.Core.RuleNativeResultAddress!
+Elsa.Rules.Core.RuleTerminalEnvelope.Equals(Elsa.Rules.Core.RuleTerminalEnvelope? other) -> bool
+Elsa.Rules.Core.RuleTerminalEnvelope.Result.get -> Elsa.Rules.Core.RuleTerminalResult!
+Elsa.Rules.Core.RuleTerminalEnvelope.RuleTerminalEnvelope(string! deliveryId, Elsa.Rules.Core.RuleNativeResultAddress! destination, Elsa.Rules.Core.RuleTerminalResult! result, string! canonicalPayloadSha256) -> void
+Elsa.Rules.Core.RuleTerminalKind
+Elsa.Rules.Core.RuleTerminalKind.Cancelled = 2 -> Elsa.Rules.Core.RuleTerminalKind
+Elsa.Rules.Core.RuleTerminalKind.Faulted = 1 -> Elsa.Rules.Core.RuleTerminalKind
+Elsa.Rules.Core.RuleTerminalKind.Refused = 3 -> Elsa.Rules.Core.RuleTerminalKind
+Elsa.Rules.Core.RuleTerminalKind.Succeeded = 0 -> Elsa.Rules.Core.RuleTerminalKind
+Elsa.Rules.Core.RuleTerminalResult
+Elsa.Rules.Core.RuleTerminalResult.CommittedRounds.get -> int
+Elsa.Rules.Core.RuleTerminalResult.Diagnostic.get -> Elsa.Rules.Core.RuleRunDiagnostic?
+Elsa.Rules.Core.RuleTerminalResult.FinalFactsSha256.get -> string!
+Elsa.Rules.Core.RuleTerminalResult.Kind.get -> Elsa.Rules.Core.RuleTerminalKind
+Elsa.Rules.Core.RuleTerminalResult.ResultFacts.get -> System.Collections.Generic.IReadOnlyList<Elsa.Rules.Core.RuleFact!>!
+Elsa.Rules.Core.RuleTerminalResult.ResultSchemaVersion.get -> int
+Elsa.Rules.Core.RuleTerminalResult.RuleTerminalResult(string! terminalId, Elsa.Rules.Core.RuleTerminalKind kind, int committedRounds, int resultSchemaVersion, System.Collections.Generic.IReadOnlyList<Elsa.Rules.Core.RuleFact!>! resultFacts, string! finalFactsSha256, Elsa.Rules.Core.RuleRunDiagnostic? diagnostic) -> void
+Elsa.Rules.Core.RuleTerminalResult.TerminalId.get -> string!
+const Elsa.Rules.Core.RuleLanguage.FormatVersion = 1 -> int
+const Elsa.Rules.Core.RuleLanguage.Id = "elsa.rules.finite-positive" -> string!
+const Elsa.Rules.Core.RuleLanguage.Version = 1 -> int
+const Elsa.Rules.Core.RuleLimits.MaxArtifactBytes = 1048576 -> int
+const Elsa.Rules.Core.RuleLimits.MaxEnvelopeBytes = 4194304 -> int
+const Elsa.Rules.Core.RuleLimits.MaxIdentifierUtf8Bytes = 256 -> int
+const Elsa.Rules.Core.RuleLimits.MaxPageEntries = 256 -> int
+const Elsa.Rules.Core.RuleLimits.MaxPremisesPerRule = 64 -> int
+const Elsa.Rules.Core.RuleLimits.MaxRounds = 4097 -> int
+const Elsa.Rules.Core.RuleLimits.MaxRules = 1024 -> int
+const Elsa.Rules.Core.RuleLimits.MaxStateProjectionBytes = 8388608 -> int
+const Elsa.Rules.Core.RuleLimits.MaxVocabularyFacts = 4096 -> int
+override Elsa.Rules.Core.RuleAdmissionRefusal.Equals(object? obj) -> bool
+override Elsa.Rules.Core.RuleAdmissionRefusal.GetHashCode() -> int
+override Elsa.Rules.Core.RuleAdmissionRefusal.ToString() -> string!
+override Elsa.Rules.Core.RuleAssetPin.Equals(object? obj) -> bool
+override Elsa.Rules.Core.RuleAssetPin.GetHashCode() -> int
+override Elsa.Rules.Core.RuleAssetPin.ToString() -> string!
+override Elsa.Rules.Core.RuleCancellationRequest.Equals(object? obj) -> bool
+override Elsa.Rules.Core.RuleCancellationRequest.GetHashCode() -> int
+override Elsa.Rules.Core.RuleCancellationRequest.ToString() -> string!
+override Elsa.Rules.Core.RuleDeliveryProof.Equals(object? obj) -> bool
+override Elsa.Rules.Core.RuleDeliveryProof.GetHashCode() -> int
+override Elsa.Rules.Core.RuleDeliveryProof.ToString() -> string!
+override Elsa.Rules.Core.RuleFact.Equals(object? obj) -> bool
+override Elsa.Rules.Core.RuleFact.GetHashCode() -> int
+override Elsa.Rules.Core.RuleFact.ToString() -> string!
+override Elsa.Rules.Core.RuleInvocationFingerprint.Equals(object? obj) -> bool
+override Elsa.Rules.Core.RuleInvocationFingerprint.GetHashCode() -> int
+override Elsa.Rules.Core.RuleInvocationFingerprint.ToString() -> string!
+override Elsa.Rules.Core.RuleNativeResultAddress.Equals(object? obj) -> bool
+override Elsa.Rules.Core.RuleNativeResultAddress.GetHashCode() -> int
+override Elsa.Rules.Core.RuleNativeResultAddress.ToString() -> string!
+override Elsa.Rules.Core.RuleRunAdmission.Equals(object? obj) -> bool
+override Elsa.Rules.Core.RuleRunAdmission.GetHashCode() -> int
+override Elsa.Rules.Core.RuleRunAdmission.ToString() -> string!
+override Elsa.Rules.Core.RuleRunDiagnostic.Equals(object? obj) -> bool
+override Elsa.Rules.Core.RuleRunDiagnostic.GetHashCode() -> int
+override Elsa.Rules.Core.RuleRunDiagnostic.ToString() -> string!
+override Elsa.Rules.Core.RuleRunIdentity.Equals(object? obj) -> bool
+override Elsa.Rules.Core.RuleRunIdentity.GetHashCode() -> int
+override Elsa.Rules.Core.RuleRunIdentity.ToString() -> string!
+override Elsa.Rules.Core.RuleScope.Equals(object? obj) -> bool
+override Elsa.Rules.Core.RuleScope.GetHashCode() -> int
+override Elsa.Rules.Core.RuleScope.ToString() -> string!
+override Elsa.Rules.Core.RuleTerminalEnvelope.Equals(object? obj) -> bool
+override Elsa.Rules.Core.RuleTerminalEnvelope.GetHashCode() -> int
+override Elsa.Rules.Core.RuleTerminalEnvelope.ToString() -> string!
+static Elsa.Rules.Core.RuleAdmissionRefusal.operator !=(Elsa.Rules.Core.RuleAdmissionRefusal? left, Elsa.Rules.Core.RuleAdmissionRefusal? right) -> bool
+static Elsa.Rules.Core.RuleAdmissionRefusal.operator ==(Elsa.Rules.Core.RuleAdmissionRefusal? left, Elsa.Rules.Core.RuleAdmissionRefusal? right) -> bool
+static Elsa.Rules.Core.RuleAssetPin.operator !=(Elsa.Rules.Core.RuleAssetPin? left, Elsa.Rules.Core.RuleAssetPin? right) -> bool
+static Elsa.Rules.Core.RuleAssetPin.operator ==(Elsa.Rules.Core.RuleAssetPin? left, Elsa.Rules.Core.RuleAssetPin? right) -> bool
+static Elsa.Rules.Core.RuleCancellationRequest.operator !=(Elsa.Rules.Core.RuleCancellationRequest? left, Elsa.Rules.Core.RuleCancellationRequest? right) -> bool
+static Elsa.Rules.Core.RuleCancellationRequest.operator ==(Elsa.Rules.Core.RuleCancellationRequest? left, Elsa.Rules.Core.RuleCancellationRequest? right) -> bool
+static Elsa.Rules.Core.RuleDeliveryProof.operator !=(Elsa.Rules.Core.RuleDeliveryProof? left, Elsa.Rules.Core.RuleDeliveryProof? right) -> bool
+static Elsa.Rules.Core.RuleDeliveryProof.operator ==(Elsa.Rules.Core.RuleDeliveryProof? left, Elsa.Rules.Core.RuleDeliveryProof? right) -> bool
+static Elsa.Rules.Core.RuleFact.operator !=(Elsa.Rules.Core.RuleFact? left, Elsa.Rules.Core.RuleFact? right) -> bool
+static Elsa.Rules.Core.RuleFact.operator ==(Elsa.Rules.Core.RuleFact? left, Elsa.Rules.Core.RuleFact? right) -> bool
+static Elsa.Rules.Core.RuleInvocationFingerprint.operator !=(Elsa.Rules.Core.RuleInvocationFingerprint? left, Elsa.Rules.Core.RuleInvocationFingerprint? right) -> bool
+static Elsa.Rules.Core.RuleInvocationFingerprint.operator ==(Elsa.Rules.Core.RuleInvocationFingerprint? left, Elsa.Rules.Core.RuleInvocationFingerprint? right) -> bool
+static Elsa.Rules.Core.RuleNativeResultAddress.operator !=(Elsa.Rules.Core.RuleNativeResultAddress? left, Elsa.Rules.Core.RuleNativeResultAddress? right) -> bool
+static Elsa.Rules.Core.RuleNativeResultAddress.operator ==(Elsa.Rules.Core.RuleNativeResultAddress? left, Elsa.Rules.Core.RuleNativeResultAddress? right) -> bool
+static Elsa.Rules.Core.RuleRunAdmission.operator !=(Elsa.Rules.Core.RuleRunAdmission? left, Elsa.Rules.Core.RuleRunAdmission? right) -> bool
+static Elsa.Rules.Core.RuleRunAdmission.operator ==(Elsa.Rules.Core.RuleRunAdmission? left, Elsa.Rules.Core.RuleRunAdmission? right) -> bool
+static Elsa.Rules.Core.RuleRunDiagnostic.operator !=(Elsa.Rules.Core.RuleRunDiagnostic? left, Elsa.Rules.Core.RuleRunDiagnostic? right) -> bool
+static Elsa.Rules.Core.RuleRunDiagnostic.operator ==(Elsa.Rules.Core.RuleRunDiagnostic? left, Elsa.Rules.Core.RuleRunDiagnostic? right) -> bool
+static Elsa.Rules.Core.RuleRunIdentity.operator !=(Elsa.Rules.Core.RuleRunIdentity? left, Elsa.Rules.Core.RuleRunIdentity? right) -> bool
+static Elsa.Rules.Core.RuleRunIdentity.operator ==(Elsa.Rules.Core.RuleRunIdentity? left, Elsa.Rules.Core.RuleRunIdentity? right) -> bool
+static Elsa.Rules.Core.RuleScope.operator !=(Elsa.Rules.Core.RuleScope? left, Elsa.Rules.Core.RuleScope? right) -> bool
+static Elsa.Rules.Core.RuleScope.operator ==(Elsa.Rules.Core.RuleScope? left, Elsa.Rules.Core.RuleScope? right) -> bool
+static Elsa.Rules.Core.RuleTerminalEnvelope.operator !=(Elsa.Rules.Core.RuleTerminalEnvelope? left, Elsa.Rules.Core.RuleTerminalEnvelope? right) -> bool
+static Elsa.Rules.Core.RuleTerminalEnvelope.operator ==(Elsa.Rules.Core.RuleTerminalEnvelope? left, Elsa.Rules.Core.RuleTerminalEnvelope? right) -> bool

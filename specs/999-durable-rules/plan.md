@@ -25,7 +25,7 @@ Both framework 6.1.0 and Elsa 6.1.0 gate indexes and the repository review check
 
 ## Project structure
 
-Six modules: `Extensions/Rules/src/Core`, `src/Runtime/Elsa.Rules.Runtime`, `src/Persistence/Core`, `src/Persistence/EntityFrameworkCore`, `src/Workflows/Design`, `src/Workflows/Runtime`. Tests belong to `Extensions/Rules/tests/Tests` and `tests/Persistence/EntityFrameworkCore/ProviderTests`. Package proof belongs to `tools/rules/`; the real HTTP journey belongs to `e2e-tests/rules/`. Source project layout must pass the existing architecture guard; do not add empty modules.
+Six modules: `Extensions/Rules/src/Core`, `src/Runtime`, `src/Persistence/Core`, `src/Persistence/EntityFrameworkCore`, `src/Workflows/Design`, `src/Workflows/Runtime`. Tests belong to `Extensions/Rules/tests/Tests` and `tests/Persistence/EntityFrameworkCore/ProviderTests`. Package proof belongs to `tools/rules/`; the real HTTP journey belongs to `e2e-tests/rules/`. Source project layout must pass the existing architecture guard; do not add empty modules.
 
 This specification owns research, data model, contracts, quickstart, tasks and evidence. The issue/project remains the public progress record; preparation documents are not acceptance receipts.
 
