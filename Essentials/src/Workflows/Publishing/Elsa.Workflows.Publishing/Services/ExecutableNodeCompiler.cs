@@ -172,6 +172,9 @@ public sealed class ExecutableNodeCompiler(
         // Spec 258 R-3: how the node handles faults below it, read by the runtime without constructing the activity.
         if (StructuralFaultHandling(clrActivityType) is { } faultHandling)
             metadata[RuntimeMetadataKeys.StructuralFaultHandling] = faultHandling;
+        // #3135: whether rescheduling a faulted child the node already evaluated may reach it, read at preflight.
+        if (clrActivityType is not null && typeof(IRuntimeAcceptsRescheduledFaultedChild).IsAssignableFrom(clrActivityType))
+            metadata[RuntimeMetadataKeys.AcceptsRescheduledFaultedChild] = "true";
 
         return metadata;
     }

@@ -35,6 +35,15 @@ public interface IRuntimeActivityDescendantFaultHandler
 }
 
 /// <summary>
+/// Opt-in for a structural parent that keeps waiting for a child whose fault it was told about but did not consume,
+/// so that rescheduling that faulted child (<c>RescheduleActivity</c>) reaches it: the successor's outcome arrives as
+/// that child's ordinary outcome. A parent that absorbed the fault, or stopped tracking the child, must not implement
+/// it. The capability is compiled into the executable node, and rescheduling a faulted child whose parent already
+/// evaluated its fault is refused unless the parent's node carries it and the parent is still running.
+/// </summary>
+public interface IRuntimeAcceptsRescheduledFaultedChild;
+
+/// <summary>
 /// Engine-only opt-in for evaluating one intentional child fault together with the ordered notifications raised
 /// during that same child evaluation. The runtime delivers this as one callback and one durable parent checkpoint.
 /// </summary>

@@ -266,14 +266,20 @@ Rules:
 
 The source transitions to `Superseded`; the replacement retains pinned inputs and records lineage.
 It is a fresh invocation: it keeps the source's metadata except the per-invocation runtime markers
-(activation claims, the attempt-ordinal watermark, parent-outcome and descendant-fault markers,
-background work id, incident, fault and causation metadata). It keeps the scheduling metadata the
+(activation claims, the attempt-ordinal watermark, parent-completion, parent-outcome and
+descendant-fault markers, background work id, incident, fault and causation metadata). It keeps the scheduling metadata the
 parent gave the source in its provenance, and its schedule command carries that metadata, so a parent
 that routes on it recognises the successor's outcome. Routing data a parent kept only in the child's
 command metadata (for example `bpmn.tokenId`) is not durable and is lost, so such a parent resolves the
-successor as it resolves a resumed child. A source whose fault its parent already evaluated passes on
-its parent-completion marker, so the successor's completion is not delivered to that parent; whether it
-should be is open in #3135.
+successor as it resolves a resumed child. A faulted source is accepted only while its parent and every
+ancestor are still running (`SourceParentNotRunning`, `SourceAncestorNotRunning`), and not when an
+ancestor already received its fault and deferred (it carries `runtime.descendantFaultProcessedWorkItemId`:
+`SourceFaultHandledByAncestor`). A source whose parent deferred on its fault (it carries the
+parent-completion marker) is accepted only when the parent's executable node carries
+`runtime.acceptsRescheduledFaultedChild`, compiled from `IRuntimeAcceptsRescheduledFaultedChild`
+(`ParentDoesNotAcceptRescheduledChild` otherwise); the successor's outcome then reaches the parent as
+that child's outcome (#3135). Only a newly compiled artifact carries the capability: node metadata is not
+part of the artifact hash, so republishing an unchanged definition reuses the stored artifact without it.
 
 ### Migrate/1
 

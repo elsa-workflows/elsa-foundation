@@ -101,6 +101,24 @@ public sealed class ModuleSchemaTests : IDisposable
     }
 
     /// <summary>
+    /// Qualified operations are not yet SQL. A data operation looks its columns up in its migration's target model,
+    /// which was scaffolded with no schema, so one that does not name its column types finds no table in a configured
+    /// schema and cannot be generated there at all. Generating every module's script, which needs no database, proves
+    /// each migration still produces its SQL in that schema.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(SchemaProviders))]
+    public void Every_module_migration_generates_its_sql_into_a_configured_schema(string provider)
+    {
+        foreach (var type in ModuleContextCatalog.Contexts(provider))
+        {
+            using var context = Create(type, provider, Schema);
+            var script = context.GetService<IMigrator>().GenerateScript();
+            Assert.Contains(Schema, script, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
     /// EF caches one model per context type. Two contexts of one type bound to different schemas therefore have to
     /// end up with different internal service providers, or the second silently writes to the first one's schema.
     /// </summary>
