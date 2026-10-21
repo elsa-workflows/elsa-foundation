@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <Description>Design-time startup project for scaffolding the Rules SQLite migration set.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../../../../tools/ef/Elsa.EntityFrameworkCore.Tooling/ModuleDesignTimeFactory.cs"
+             Link="ModuleDesignTimeFactory.cs" />
+  </ItemGroup>
+</Project>

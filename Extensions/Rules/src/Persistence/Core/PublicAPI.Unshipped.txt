@@ -39,6 +39,7 @@ Elsa.Rules.Persistence.Core.RuleAdmissionDisposition.AlreadyCancelled = 2 -> Els
 Elsa.Rules.Persistence.Core.RuleAdmissionDisposition.AlreadyRefused = 3 -> Elsa.Rules.Persistence.Core.RuleAdmissionDisposition
 Elsa.Rules.Persistence.Core.RuleAdmissionDisposition.Conflict = 4 -> Elsa.Rules.Persistence.Core.RuleAdmissionDisposition
 Elsa.Rules.Persistence.Core.RuleAdmissionDisposition.Invalid = 5 -> Elsa.Rules.Persistence.Core.RuleAdmissionDisposition
+Elsa.Rules.Persistence.Core.RuleAdmissionDisposition.Refused = 7 -> Elsa.Rules.Persistence.Core.RuleAdmissionDisposition
 Elsa.Rules.Persistence.Core.RuleAdmissionDisposition.Replay = 1 -> Elsa.Rules.Persistence.Core.RuleAdmissionDisposition
 Elsa.Rules.Persistence.Core.RuleAdmissionDisposition.Unavailable = 6 -> Elsa.Rules.Persistence.Core.RuleAdmissionDisposition
 Elsa.Rules.Persistence.Core.RuleAdmissionValidationDisposition

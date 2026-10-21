@@ -107,6 +107,7 @@
   <Folder Name="/Extensions/Rules/src/">
     <Project Path="Extensions/Rules/src/Core/Elsa.Rules.Core.csproj" />
     <Project Path="Extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj" />
+    <Project Path="Extensions/Rules/src/Tooling/Elsa.Rules.Tooling.csproj" />
   </Folder>
   <Folder Name="/Extensions/Rules/src/Persistence/">
     <Project Path="Extensions/Rules/src/Persistence/Core/Elsa.Rules.Persistence.Core.csproj" />

@@ -5,6 +5,7 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 using System.Runtime.CompilerServices;
 
 [assembly: InternalsVisibleTo("Elsa.Rules.Tests")]
+[assembly: InternalsVisibleTo("Elsa.Rules.Tooling")]
 
 [assembly: EfModule(
     Elsa.Rules.Persistence.EntityFrameworkCore.RulesEfModule.Name,

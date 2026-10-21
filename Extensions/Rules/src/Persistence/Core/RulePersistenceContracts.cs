@@ -609,7 +609,8 @@ public enum RuleAdmissionDisposition
     AlreadyRefused,
     Conflict,
     Invalid,
-    Unavailable
+    Unavailable,
+    Refused
 }
 
 public sealed record RuleAdmissionConfirmation(RuleAdmissionDisposition Disposition, RuleRunIdentity Identity,

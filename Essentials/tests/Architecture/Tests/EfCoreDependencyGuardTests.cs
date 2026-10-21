@@ -1232,10 +1232,17 @@ public sealed class EfCoreDependencyGuardTests
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
                 ["Extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj"] =
-                ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational"]
+                CorePackages(),
+                ["Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj"] =
+                [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"],
+                ["Extensions/Rules/src/Tooling/Elsa.Rules.Tooling.csproj"] =
+                [.. CorePackages(), "Microsoft.EntityFrameworkCore.Design", "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"]
             };
 
         public static bool IsProjectPath(string relativePath) => ExpectedEfPackagesByProject.ContainsKey(relativePath);
+
+        private static string[] CorePackages() =>
+            ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational"];
     }
 
     /// <summary>The scoped ETL design module admission for #3109 and ADR 0087.</summary>
