@@ -3317,6 +3317,19 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
 
   .topbar-actions {
     align-self: flex-end;
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .topbar-actions > button.agent-launcher {
+    height: auto;
+    min-height: 36px;
+  }
+
+  .topbar-actions .agent-session-indicator {
+    flex-wrap: wrap;
+    padding: 4px 0;
   }
 
   .host-health-strip {
@@ -3383,9 +3396,15 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
     font-size: 20px;
   }
 
-  .topbar-actions {
-    width: 100%;
-    justify-content: flex-end;
+  .topbar-actions .theme-mode-toggle,
+  .topbar-actions .user-menu-name {
+    display: none;
+  }
+
+  .topbar-actions .user-menu-button {
+    width: 40px;
+    padding: 4px;
+    justify-content: center;
   }
 
   .host-health-strip {
