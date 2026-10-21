@@ -205,6 +205,27 @@ describe("CompensationScopeDesigner scheduled retry (spec 261)", () => {
     expect(button("Show the incident Reserve inventory is waiting on")).toBeNull();
   });
 
+  it("names the date of a waiting retry that is due on another day", () => {
+    const dueAt = new Date(Date.now() + 2 * 24 * 60 * 60_000);
+    mount({
+      readOnly: true,
+      onSelectExecution: vi.fn(),
+      onOpenIncident: vi.fn(),
+      runtime: {
+        scopeActivityExecutionId: "ae-scope",
+        phase: "Compensating",
+        rows: [
+          { step: "Reserve inventory", forward: { state: "Completed", activityExecutionId: "ae-1" }, recovery: { state: "RetryScheduled", activityExecutionId: "ae-4", order: 1, attempts: { count: 2, max: 3 }, retryNotBefore: dueAt.toISOString() } },
+          { step: "Confirm order", forward: { state: "Faulted", activityExecutionId: "ae-3" }, recovery: { state: "NotApplicable" } }
+        ]
+      } satisfies CompensationScopeRuntime
+    });
+
+    const label = container.querySelectorAll(".wf-compensation-state")[1].getAttribute("aria-label") ?? "";
+    expect(label).toContain(` · after ${dueAt.toLocaleString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", year: "numeric", month: "short", day: "numeric" })}`);
+    expect(label).toContain(String(dueAt.getFullYear()));
+  });
+
   it("says a retry is due without a time once its due time passed", () => {
     mount({
       readOnly: true,

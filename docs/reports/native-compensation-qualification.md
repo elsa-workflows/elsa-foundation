@@ -27,12 +27,12 @@ Rows are the [qualification matrix](../../specs/261-compensation-qualification/c
 | Q1 | Every M1–M5 journey in each mode on SQLite | `d7c0ab201` | Local: `dotnet test Essentials/tests/Activities/Compensation/Tests -c Release` | 427/427 | Includes BK0–BK6, the provider subset on SQLite (21) and every journey below that runs in this project. B&T on the PR head: pending. |
 | Q2 | Restart injection, every documented point | `d7c0ab201` | As Q1 | Included in Q1 | Spec 250 P1–P4, spec 251 points 1–4, spec 258 points 1–4, spec 260 O8 1–3, spec 261 backoff points 1–3. |
 | Q3 | Real process kill through REST | `d7c0ab201` | Local: `dotnet test Essentials/tests/Workbench/Tests -c Release --filter FullyQualifiedName~WorkbenchCompensation` | 6/6 | Includes the backoff kill while a retry waits, and W6, which now also asserts that the promotion preflight is ready with only warnings (see section 7). |
-| Q4 | PostgreSQL in each mode | `d7c0ab201` | Local: provider subset with `ELSA_COMPENSATION_EF_REQUIRE_NATIVE_PROVIDERS=1` against a PostgreSQL 16.15 server (`ELSA_COMPENSATION_EF_POSTGRESQL_TEST_CONNECTION_STRING`) | 21/21 | Docker was unavailable, so this ran against an installed PostgreSQL 16 server rather than the suite's `postgres:16-alpine` container. CI: `EF container suites (compensation)` on dispatch, pending. |
-| Q5 | SQL Server in each mode | — | CI: `EF container suites (compensation)` | **Pending** | Not run: no SQL Server and no Docker in the authoring session. |
-| Q6 | MySQL in each mode | — | CI: `EF container suites (compensation)` | **Pending** | Not run: no MySQL and no Docker in the authoring session. |
+| Q4 | PostgreSQL in each mode | `d7c0ab201` | Local: provider subset with `ELSA_COMPENSATION_EF_REQUIRE_NATIVE_PROVIDERS=1` against a PostgreSQL 16.15 server (`ELSA_COMPENSATION_EF_POSTGRESQL_TEST_CONNECTION_STRING`) | 21/21 | Docker was unavailable, so this ran against an installed PostgreSQL 16 server rather than the suite's `postgres:16-alpine` container. CI: `EF container suites (compensation)` on `3214f9242` ([run 39546015477](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39546015477/job/119044528563)), with the required-provider switch: 63/63 across the three providers, 0 skipped. |
+| Q5 | SQL Server in each mode | `3214f9242` | CI: `EF container suites (compensation)`, [run 39546015477](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39546015477/job/119044528563), `ELSA_COMPENSATION_EF_REQUIRE_NATIVE_PROVIDERS=1` | Passed (63/63 for the three providers, 0 skipped) | |
+| Q6 | MySQL in each mode | `3214f9242` | CI: `EF container suites (compensation)`, [run 39546015477](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39546015477/job/119044528563), `ELSA_COMPENSATION_EF_REQUIRE_NATIVE_PROVIDERS=1` | Passed (with Q4 and Q5) | |
 | Q7 | In-memory stores: development and tests, no restart guarantee | `d7c0ab201` | Local: `CompensationInMemorySmokeTests` | 10/10 | J1, N1, O2h in each mode, and a second host generation is refused. |
 | Q8 | Scope state upcast v1→v5, resumed live | `d7c0ab201` | Local: `CompensationUpcastJourneyTests` and the payload upcast unit tests | 4/4 (U1–U4), unit tests in Q1 | |
-| Q9 | Serialization of wire contracts | `d7c0ab201` | Local: journal projector and alteration tests in Q1; S6 on PostgreSQL in Q4 | Passed | The private-state round trip on SQL Server and MySQL (S6) is pending with Q5 and Q6. |
+| Q9 | Serialization of wire contracts | `d7c0ab201` | Local: journal projector and alteration tests in Q1; S6 on PostgreSQL in Q4 | Passed | S6 also passed on SQL Server and MySQL in Q5 and Q6. |
 | Q10 | Executable pinning in each mode | `d7c0ab201` | Local: `A_republish_mid_recovery_keeps_the_handlers_of_the_pinned_executable` (now a theory), BK5 | 3/3, BK5 in Q1 | |
 | Q11 | Retention | `d7c0ab201` | Local: `CompensationRetentionJourneyTests` R1–R4; `J1_a_completed_scope_keeps_no_journal`; `Elsa.Workflows.Runtime.Api.Tests` (run deletion through the API) | 12/12; in Q1; 207/207 | R10 settled with no defect ([research R10 outcome](../../specs/261-compensation-qualification/research.md#r10-outcome-t524-pr-2)). |
 | Q12 | Studio authoring, publish, run, inspect (live) | `d7c0ab201` | Local pair: `ELSA_STUDIO_URL=http://localhost:5089 npx playwright test --config tests/live/playwright.live.config.ts compensation-journey.spec.ts` | 1/1 | Repaired (#3142). Lists the four replay-safe warnings and publishes. Axe clean at 1200 and 390 px on the designer and the Warnings section. |
@@ -52,9 +52,9 @@ The live pair was the Workbench (`Essentials/apps/Elsa.Workbench`, Release, `htt
 | Combination | Rows | State |
 |---|---|---|
 | SQLite, Durable / Balanced / Ephemeral | Q1–Q3, Q7–Q11 | Qualified on the candidate |
-| PostgreSQL, Durable / Balanced / Ephemeral | Q4 (provider subset), plus Q1 semantics | Qualified locally on PostgreSQL 16; the CI container run is pending |
-| SQL Server, Durable / Balanced / Ephemeral | Q5 (provider subset), plus Q1 semantics | **Pending** the dispatched EF run; not claimed until it passes |
-| MySQL, Durable / Balanced / Ephemeral | Q6 (provider subset), plus Q1 semantics | **Pending** the dispatched EF run; not claimed until it passes |
+| PostgreSQL, Durable / Balanced / Ephemeral | Q4 (provider subset), plus Q1 semantics | Qualified (local PostgreSQL 16 and the CI container run) |
+| SQL Server, Durable / Balanced / Ephemeral | Q5 (provider subset), plus Q1 semantics | Qualified (CI container run) |
+| MySQL, Durable / Balanced / Ephemeral | Q6 (provider subset), plus Q1 semantics | Qualified (CI container run) |
 | Studio authoring, publish, run, inspect, nested view, operator recovery | Q12–Q15 | Qualified on the candidate, except the M4 reader step (not run) |
 | One host process, restarts included | Q3 | Qualified on the candidate |
 

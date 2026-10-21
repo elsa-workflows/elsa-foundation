@@ -89,9 +89,14 @@ internal sealed class CompensationScopeValidator(IActivityStructureService activ
             !(TryReadNumber(multiplier.Value, out var factor) && double.IsFinite(factor) && factor >= 1))
             errors.Add(new ValidationError(InputPath(node, BackoffMultiplierInputKey), InvalidBackoffMultiplierType, "Handler retry backoff multiplier must be at least 1."));
 
-        if (ReadAuthored(node, RetryMaxDelayInputKey) is { IsLiteral: true } cap &&
+        var cap = ReadAuthored(node, RetryMaxDelayInputKey);
+        if (cap is { IsLiteral: true } &&
             !(TryReadDuration(cap.Value, out var capValue) && capValue >= (delay ?? TimeSpan.Zero) && capValue <= maxDelay))
             errors.Add(new ValidationError(InputPath(node, RetryMaxDelayInputKey), InvalidRetryMaxDelayType, "Handler retry max delay must be at least the retry delay and at most 24 hours."));
+        else if (cap is null && delay > CompensationScopeActivity.DefaultHandlerRetryMaxDelay)
+            // An unbound cap takes its default, which a longer literal delay would silently raise at run time.
+            errors.Add(new ValidationError(InputPath(node, RetryMaxDelayInputKey), InvalidRetryMaxDelayType,
+                $"Handler retry max delay defaults to {CompensationScopeActivity.DefaultHandlerRetryMaxDelay:c}, which is less than the retry delay; set it to at least the retry delay."));
     }
 
     // The input's authored value, or null when it is unbound. A literal carries its value; an expression's value is known

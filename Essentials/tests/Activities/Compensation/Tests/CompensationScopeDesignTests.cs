@@ -241,6 +241,16 @@ public sealed class CompensationScopeDesignTests : IDisposable
     }
 
     [Fact]
+    public async Task A_literal_delay_above_the_default_max_delay_needs_a_max_delay()
+    {
+        // An unbound max delay takes its 5-minute default, which a 10-minute delay would silently raise at run time.
+        var error = Assert.Single(await ValidateAsync(ScopeWithInputs(("handlerRetryDelay", "00:10:00", null))));
+        Assert.Equal((CompensationScopeValidator.InvalidRetryMaxDelayType, "scope/inputs/handlerRetryMaxDelay"), (error.Type, error.Path));
+        Assert.Empty(await ValidateAsync(ScopeWithInputs(("handlerRetryDelay", "00:05:00", null))));
+        Assert.Empty(await ValidateAsync(ScopeWithInputs(("handlerRetryDelay", "00:10:00", null), ("handlerRetryMaxDelay", "00:10:00", null))));
+    }
+
+    [Fact]
     public async Task An_expression_input_is_not_validated_at_design_time()
     {
         Assert.Empty(await ValidateAsync(ScopeWithInputs(

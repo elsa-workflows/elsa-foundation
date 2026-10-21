@@ -131,6 +131,6 @@ dotnet test Essentials/tests/Activities/Runtime/Tests --filter DelayedSchedule
 dotnet test Essentials/tests/Activities/Compensation/Tests
 dotnet test Essentials/tests/Activities/Compensation/Tests --filter "FullyQualifiedName~ProviderSubset|FullyQualifiedName~InMemorySmoke|FullyQualifiedName~UpcastJourney|FullyQualifiedName~RetentionJourney"
 dotnet test Essentials/tests/Workbench/Tests --filter Compensation
-cd Studio/src/essentials/Elsa.Studio.Workflows/Client && npx vitest run compensation publicationReview
-cd Studio && pnpm test:browser
+(cd Studio/src/essentials/Elsa.Studio.Workflows/Client && npx vitest run compensation publicationReview)
+(cd Studio && pnpm test:browser)
 ```

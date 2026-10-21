@@ -72,7 +72,7 @@ test("the run view shows a scheduled retry as text and icon with its attempt and
   await expect(page.locator(".wf-compensation-phase")).toContainText("Compensating");
   const retry = page.locator(".wf-compensation-state[data-kind='recovery'][data-state='RetryScheduled']");
   await expect(retry).toBeVisible();
-  await expect(retry).toContainText(/^\s*Retry scheduled \(1st\) · Attempt 2 of 3 · after \d{1,2}:\d{2}:\d{2}/);
+  await expect(retry).toContainText(/^\s*Retry scheduled \(1st\) · Attempt 2 of 3 · after .*2099.*\d{1,2}:\d{2}:\d{2}/);
   await expect(retry.locator("svg")).toHaveCount(1);
   await expect(page.locator(".wf-compensation-operator-action")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /waiting on/ })).toHaveCount(0);
