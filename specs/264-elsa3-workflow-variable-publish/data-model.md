@@ -29,5 +29,6 @@ No persisted model changes. The change is in how one Elsa 3 shape maps to one El
 | `Object` | any text, including JSON | the text |
 | `String` | any text | the text |
 | `Int32`, `Boolean`, other primitives, enums | `"5"`, `"true"`, `"OK"` | the converted value |
-| list, dictionary, other structured type | text starting `{` or `[` | the parsed value |
-| any non-`Object` type | text that does not convert | refused |
+| array, list, dictionary, other structured type | text starting `{` or `[` | the parsed value |
+| any non-`Object` type | text that does not convert in strict mode (`"abc"` for `Int32`, malformed JSON) | refused |
+| a type Elsa 4's registry does not know (`List<String>`, `ObjectDictionary`, `HttpHeaders`, an unregistered enum) | any text | refused |

@@ -68,7 +68,7 @@ new integration test class and two fixtures.
 | # | Decision | Detail |
 |---|---|---|
 | D-1 | No value, no starting value | `source.Value is null` → `Default: null`. Elsa 3 started such a variable as `null`; Elsa 4 does the same when no initial binding is declared (R-1) |
-| D-2 | Elsa 3's rule through `IObjectConverter` | `TryConvertTo(source.Value, clrType)`, where `clrType` is the type the mapper already resolves, closed to an array when `isArray` is set (R-2) |
+| D-2 | Elsa 3's rule through `IObjectConverter` | `TryConvertTo(source.Value, clrType, StrictMode: true)`, where `clrType` is the type the mapper already resolves, closed to an array when `isArray` is set (R-2; strict per the second clarification). A value on a type the registry does not know is refused before conversion |
 | D-3 | A `Literal` holding JSON | The converted value serialised to a `JsonElement`, as `new ArgumentValue(json, "Literal")`, matching `WorkflowBuilder.Variable` (R-3) |
 | D-4 | Check workflow variables in the normaliser | A normaliser pass over the definition's variables reports a refusal at `$.variables[i]`. The state mapper maps them afterwards with the same mapper. Container variables are checked where they are read today (`ReadContainerVariables`), through `context.Error` (R-4) |
 | D-5 | One new code | `ELS3-ACTIVITY-VARIABLE-VALUE-UNCONVERTIBLE`, an error. No existing code means "this value cannot become its own declared type" (R-5) |

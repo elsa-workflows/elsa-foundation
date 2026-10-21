@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-21
 
-**Status**: Draft
+**Status**: Implemented
 
 **Issue**: [#3122](https://github.com/elsa-workflows/elsa-foundation/issues/3122)
 
@@ -35,7 +35,44 @@ How Elsa 3 (3.6) gave a workflow variable its starting value, from its source:
 - Text, for a primitive or `String` variable: the text converted to that type (`"5"` → `5`, `"true"` → `true`).
 - Text that starts with `{` or `[`, for any other type (a list, a dictionary, a model type): the text parsed as JSON
   into that type.
-- Text that cannot be converted: a logged warning, and the variable starts as `null`.
+- Text a primitive cannot parse (`"abc"` for an `Int32`): the type's default (`0`), silently. Elsa 3's converter ran
+  in non-strict mode.
+- Malformed JSON for a structured type: a logged warning, and the variable starts as `null`.
+
+## Measured baseline (JTest corpus, 2026-10-21, `main` at `4d4f6d2b2`)
+
+Two throwaway tests, deleted afterwards. One converts the 36 definitions with the real activity catalog, as in specs
+247, 248 and 262. The other imports each definition that converts into the `Elsa3ImportHost` and publishes it.
+
+- 8 of 36 definitions convert end to end (spec 256's expected number).
+- 71 workflow variables in 28 definitions; **none has a starting value**. No container declares a variable.
+- 5 of the 8 that convert declare a workflow variable, so each of them hits #3122.
+- **2 of the 8 that convert publish** (performance-baseline-dispatch-sub, simple-write-hello-world). Publishing stops
+  at the first error, and for the other 6 it reports a different one first:
+
+| Publish error | Definitions |
+|---|---|
+| An activity input (`possibleOutcomes`) with no expression type | composition-bulk-dispatch-sub-workflow, performance-bigdata |
+| A `Variable` binding with no reference key | events-listener, performance-commit-after-every-activity |
+| `VF-COER-001`: `Headers` value `{}` cannot become `System.String[]` | javascript-array-methods, javascript-object-methods |
+
+These three are converter defects outside this unit's scope (FR-005 and the boundary keep this unit to variable
+starting values). They are reported to the maintainer as follow-ups. The conversion measurement cannot see any of them,
+because it never publishes.
+
+## Measured after (JTest corpus, 2026-10-21, this branch)
+
+Same throwaway method as the baseline, deleted afterwards.
+
+| Measure | Baseline | After |
+|---|---|---|
+| Definitions that convert end to end | 8 | 8 (the same eight) |
+| Workflow variables refused by the new rule | n/a | 0 (no corpus variable has a starting value) |
+| Converting definitions that publish | 2 | 2 |
+
+The 6 that still do not publish stop at the same first errors as in the baseline, all outside this unit. Publishing
+reports only its first error, so the corpus cannot show the #3122 fix on its own. The integration tests show it
+(`WorkflowVariablePublishTests`), and the follow-ups above remove the errors that hide it.
 
 ## Clarifications
 
@@ -44,6 +81,13 @@ How Elsa 3 (3.6) gave a workflow variable its starting value, from its source:
 - Q: The Elsa 3 variable has a value that cannot be converted to its type (Elsa 3 logged a warning and started the
   variable as `null`). Refuse, or convert with no starting value and a warning? → A: Refuse. The value is almost
   certainly an authoring mistake, and a refusal tells the author which variable to fix in the Elsa 3 workflow.
+- Q (during implementation, after reading Elsa 3's converter): Elsa 3 silently started an `Int32` with `"abc"` as `0`,
+  the type's default, with no warning. Only malformed JSON for a structured type gave a warning and `null`. Convert the
+  first faithfully to the default, or refuse both? → A: Refuse both. The converter converts in strict mode.
+- Found during implementation: Elsa 4 reserves bare aliases, so Elsa 3's `List<String>`, `ObjectDictionary` and
+  `HttpHeaders` cannot be registered. Neither can an enum or CLR type that no host registers. Such a variable runs as
+  `Object` in Elsa 4, and its value would stay text where Elsa 3 converted it. Under the same rule, a starting value on a
+  type Elsa 4's registry does not know is refused. A variable with no starting value still converts.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -109,9 +153,9 @@ it, and read every variable's starting value back; compare each with Elsa 3's ru
 - **FR-002**: A converted variable whose Elsa 3 starting value converts in Elsa 4 to the same value as in Elsa 3 MUST
   carry it as authored data that publication accepts, never as an expression.
 - **FR-003**: The starting value in Elsa 4 MUST follow Elsa 3's rule in Root cause for each kind of variable type.
-- **FR-004**: The converter MUST refuse a variable whose Elsa 3 starting value cannot be converted to its type, or
-  cannot start with the same value in Elsa 4, with a stable diagnostic that names the variable and gives guidance in
-  Elsa 3 terms.
+- **FR-004**: The converter MUST refuse a variable whose Elsa 3 starting value cannot be converted to its type in
+  strict mode, or whose type Elsa 4's type registry does not know, with a stable diagnostic that names the variable and
+  gives guidance in Elsa 3 terms.
 - **FR-005**: Publication, the runtime and the Elsa 4 variable model MUST NOT change.
 - **FR-006**: An integration test MUST import an Elsa 3 workflow with a workflow variable, capture the Event payload
   into it, publish and run the workflow, and read the value back.

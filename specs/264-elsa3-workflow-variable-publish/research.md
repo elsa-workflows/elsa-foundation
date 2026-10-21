@@ -30,6 +30,9 @@ version is 3.5):
 - The value is text (`VariableModel.Value` is a `string?`).
 - `source.Value.TryConvertTo(type)`: on success the variable gets the converted value; on failure a warning is logged
   and the variable keeps `null`.
+- The converter runs non-strict by default: a `FormatException` or `InvalidCastException` from `Convert.ChangeType`
+  returns the type's default (`"abc"` → `0` for an `Int32`) and counts as a success. Only a thrown conversion (malformed
+  JSON for a structured type) reaches the warning.
 - `ObjectConverter.ConvertTo` (elsa-core `Elsa.Expressions/Helpers/ObjectConverter.cs`): `null` → `null`; target
   assignable from `string` (`object`, `string`) → the text; a non-primitive, non-`object` target with text starting
   `{` or `[` → JSON-deserialised; `byte[]` → base64; otherwise the remaining branches (enums, `IConvertible`, type
@@ -37,8 +40,14 @@ version is 3.5):
 - Elsa 4's `ObjectConverter` (`Essentials/src/Serialization/SystemText/Services/ObjectConverter.cs`, behind
   `IObjectConverter`) carries the same branches: the string-to-structured rule is at the same lines (151, 165, 174).
 
-**Decision**: Apply Elsa 3's rule by calling `IObjectConverter.TryConvertTo(source.Value, clrType)` in the converter
-(D-2). `clrType` is the type `LegacyClrTypeResolver` already resolves, made an array type when `isArray` is set.
+**Decision**: Apply Elsa 3's rule by calling `IObjectConverter.TryConvertTo(source.Value, clrType)` in the converter,
+in strict mode so that a fallback to the type's default is refused (second clarification) (D-2).
+
+**Found during implementation**: Elsa 4 reserves bare aliases (`ReservedAliasNamespaceException`), so a host cannot
+register Elsa 3's `List<String>`, `ObjectDictionary` or `HttpHeaders`. A CLR type that resolves by `Type.GetType` but
+has no registered alias (an enum such as `System.Net.HttpStatusCode`) runs as `Object` at publish and in the runtime:
+the integration test saw `"200"` as text. A starting value on a type `IWellKnownTypeRegistry.TryGetTypeOrDefault` does
+not know is therefore refused. `clrType` is the type `LegacyClrTypeResolver` already resolves, made an array type when `isArray` is set.
 
 **Alternatives considered**:
 - Hand-write the rule. Rejected: the full rule is hundreds of lines, and Elsa 4 already keeps it.

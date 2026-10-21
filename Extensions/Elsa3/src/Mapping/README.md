@@ -54,6 +54,19 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
     scope only.
   - A loop's current value captured into a variable is read as the loop's scoped variable (`index`, `currentItem`)
     inside the loop body. Outside the loop that read is not representable.
+- **Variable starting values** (spec 264). Elsa 3 stored a variable's starting value as text and converted it to the
+  variable's type when the workflow started. The converter applies that rule, through Elsa 4's object converter, and
+  carries the result as a `Literal`:
+  - no value → no starting value (the variable starts empty);
+  - `Object` → the text, unparsed, even when it is JSON;
+  - `String`, primitives and enums → the text converted to the type (`"5"` → `5`, `"true"` → `true`);
+  - an array or other structured type → text starting with `{` or `[` parsed as JSON.
+
+  `ELS3-ACTIVITY-VARIABLE-VALUE-UNCONVERTIBLE` refuses a starting value in two cases. One is a value the rule cannot
+  convert: `"abc"` for an `Int32`, which Elsa 3 silently started as `0`, or malformed JSON, which it started empty with a
+  warning. The other is a value on a type Elsa 4's type registry does not know. That covers Elsa 3's `List<String>`,
+  `ObjectDictionary` and `HttpHeaders`, and any enum or CLR type the host registers no alias for: such a variable runs as
+  `Object`, so its value would stay text. A variable with no starting value converts whatever its type.
 - **HttpEndpoint headers and query string.** A captured `Headers` or `QueryStringData` gets a synthesized `set` node
   right after the endpoint. It rebuilds the Elsa 3 shape from Elsa 4's `Request` output (one value → string, several →
   array) into the captured variable, or into `elsa3.http.{node}.headers` / `.query` for a bare memory slot. The
