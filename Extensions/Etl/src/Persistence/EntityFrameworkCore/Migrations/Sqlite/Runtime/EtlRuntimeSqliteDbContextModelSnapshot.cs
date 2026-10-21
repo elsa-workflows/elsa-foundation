@@ -16,6 +16,90 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.10");
 
+            modelBuilder.Entity("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorPartitionRecord", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RunKey")
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("PartitionOrdinal")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Completed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ExpiresAtUtcTicks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Fence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Owner")
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PositionJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ScopeKey", "RunKey", "PartitionOrdinal");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKey", "RunKey", "Completed", "ExpiresAtUtcTicks");
+
+                    b.ToTable("elsa_etl_connector_partitions", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorRunRecord", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RunKey")
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BindingsJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PreparedJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RetainedInputBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ScopeKey", "RunKey");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.ToTable("elsa_etl_connector_runs", (string)null);
+                });
+
             modelBuilder.Entity("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlRuntimeManifestRecord", b =>
                 {
                     b.Property<string>("ScopeKey")
@@ -493,6 +577,24 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                     b.HasIndex("SchemaVersion");
 
                     b.ToTable("__ElsaSchemaFinalization_EtlRuntime", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorRunRecord", b =>
+                {
+                    b.HasOne("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlRuntimeRunRecord", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeKey", "RunKey")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorPartitionRecord", b =>
+                {
+                    b.HasOne("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorRunRecord", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeKey", "RunKey")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

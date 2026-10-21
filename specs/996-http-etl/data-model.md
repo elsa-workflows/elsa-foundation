@@ -28,3 +28,21 @@ V1 file model remains unchanged. V2 contains connector-kind/alias selections, so
 Admission pins once. Request preparation is fenced. Page publication is create-only; attachment checks the expected request/fence. Batch reservation checks the current page/item position and both quota dimensions. A dispatch attempt is allocated durably before sending. Retry persists next eligibility and releases the claim after I/O unwinds, retaining owed data. Acknowledgement binds exact request identity; acceptance requires current unexpired ownership and expected position. Fully filtered nonempty batches accept zero effects only with matching input/count accounting and settle their reservations. Empty pages use a guarded progress transition without fake output. Exhaustion is explicit and terminal settlement is shared with the existing run machinery.
 
 Migration must distinguish old file rows without changing their cursor/format meaning. New typed HTTP store operations must not oblige existing v1-only providers to claim support. Unsupported provider composition is diagnosed before HTTP execution. Unknown/corrupt state never advances progress.
+
+## Connector storage upgrade boundary
+
+Connector bindings and prepared inputs live in a companion run row; typed connector partitions use
+separate rows from the retained v1 ordinal tables. The shared run, counters and terminal outbox keep
+their existing representation. Each connector JSON snapshot has a bounded, canonical, closed shape;
+its partition completion flag must agree with that shape. Preparation atomically records the input
+snapshot and initial partitions before the shared run becomes runnable.
+
+The additive migration preserves existing v1 rows, but **mixed old and new worker binaries are not
+supported once v2 admissions are enabled**. Old workers do not know the connector marker and could
+claim or settle a connector run through file-only code. Drain or upgrade all ETL workers before enabling
+connector admissions. A schema upgrade alone is not a rolling-worker compatibility guarantee.
+
+Connector admission/preparation and ownership are the first part of T005. Page attachment, durable
+request history, reservations, route attempts/acknowledgements and atomic batch acceptance must be
+added before the runtime's explicit connector-unavailable refusal is removed. Completion must then
+include those owed-work tables in the same transaction as the shared terminal decision.

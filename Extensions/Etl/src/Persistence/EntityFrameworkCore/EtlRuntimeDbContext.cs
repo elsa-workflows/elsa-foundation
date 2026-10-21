@@ -8,6 +8,8 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore;
 internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContext(options)
 {
     internal DbSet<EtlRuntimeRunRecord> Runs => Set<EtlRuntimeRunRecord>();
+    internal DbSet<EtlConnectorRunRecord> ConnectorRuns => Set<EtlConnectorRunRecord>();
+    internal DbSet<EtlConnectorPartitionRecord> ConnectorPartitions => Set<EtlConnectorPartitionRecord>();
     internal DbSet<EtlRuntimePreparedRecord> PreparedRuns => Set<EtlRuntimePreparedRecord>();
     internal DbSet<EtlRuntimePartitionRecord> Partitions => Set<EtlRuntimePartitionRecord>();
     internal DbSet<EtlRuntimeReservationRecord> Reservations => Set<EtlRuntimeReservationRecord>();
@@ -35,6 +37,35 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
         runs.Property(row => row.Revision).IsConcurrencyToken();
         runs.Property(row => row.SchemaVersion).HasMaxLength(EtlRuntimeEfModule.SchemaVersionMaximumLength).IsRequired();
         runs.HasIndex(row => new { row.ScopeKey, row.Status, row.CreatedAtUtcTicks });
+
+        var connectorRuns = modelBuilder.Entity<EtlConnectorRunRecord>();
+        connectorRuns.ToTable(EtlRuntimeEfModule.ConnectorRunTableName);
+        connectorRuns.HasKey(row => new { row.ScopeKey, row.RunKey });
+        connectorRuns.Property(row => row.ScopeKey).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
+        connectorRuns.Property(row => row.RunKey).HasMaxLength(EtlRuntimeEfModule.EncodedIdentityMaximumLength).IsRequired();
+        connectorRuns.Property(row => row.BindingsJson).IsRequired();
+        connectorRuns.Property(row => row.PreparedJson);
+        connectorRuns.Property(row => row.Revision).IsConcurrencyToken();
+        connectorRuns.Property(row => row.SchemaVersion).HasMaxLength(EtlRuntimeEfModule.SchemaVersionMaximumLength).IsRequired();
+        connectorRuns.HasOne<EtlRuntimeRunRecord>()
+            .WithMany()
+            .HasForeignKey(row => new { row.ScopeKey, row.RunKey })
+            .OnDelete(DeleteBehavior.Restrict);
+
+        var connectorPartitions = modelBuilder.Entity<EtlConnectorPartitionRecord>();
+        connectorPartitions.ToTable(EtlRuntimeEfModule.ConnectorPartitionTableName);
+        connectorPartitions.HasKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal });
+        connectorPartitions.Property(row => row.ScopeKey).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
+        connectorPartitions.Property(row => row.RunKey).HasMaxLength(EtlRuntimeEfModule.EncodedIdentityMaximumLength).IsRequired();
+        connectorPartitions.Property(row => row.PositionJson).IsRequired();
+        connectorPartitions.Property(row => row.Owner).HasMaxLength(EtlRuntimeEfModule.EncodedIdentityMaximumLength);
+        connectorPartitions.Property(row => row.Revision).IsConcurrencyToken();
+        connectorPartitions.Property(row => row.SchemaVersion).HasMaxLength(EtlRuntimeEfModule.SchemaVersionMaximumLength).IsRequired();
+        connectorPartitions.HasIndex(row => new { row.ScopeKey, row.RunKey, row.Completed, row.ExpiresAtUtcTicks });
+        connectorPartitions.HasOne<EtlConnectorRunRecord>()
+            .WithMany()
+            .HasForeignKey(row => new { row.ScopeKey, row.RunKey })
+            .OnDelete(DeleteBehavior.Restrict);
 
         var prepared = modelBuilder.Entity<EtlRuntimePreparedRecord>();
         prepared.ToTable(EtlRuntimeEfModule.PreparedTableName);

@@ -45,6 +45,9 @@ internal static class EtlRuntimeEntityFrameworkCoreRegistration
             options.PreparationLease, options.PartitionLease, options.DeliveryLease,
             options.MaximumPartitionsPerRun, options.MaximumPageSize));
         services.AddScoped<IEtlRuntimeStore, EfEtlRuntimeStore>();
+        services.AddScoped<IEtlConnectorRuntimeStore>(provider =>
+            provider.GetRequiredService<IEtlRuntimeStore>() as IEtlConnectorRuntimeStore
+            ?? throw new NotSupportedException("The selected ETL runtime store does not provide connector persistence."));
         return services;
     }
 

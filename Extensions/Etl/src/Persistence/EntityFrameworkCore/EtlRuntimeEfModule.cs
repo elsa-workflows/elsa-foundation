@@ -15,6 +15,8 @@ internal static class EtlRuntimeEfModule
     public const int HashLength = 64;
     public const int SchemaVersionMaximumLength = 32;
     public const string RunTableName = "elsa_etl_runtime_runs";
+    public const string ConnectorRunTableName = "elsa_etl_connector_runs";
+    public const string ConnectorPartitionTableName = "elsa_etl_connector_partitions";
     public const string PreparedTableName = "elsa_etl_runtime_prepared";
     public const string PartitionTableName = "elsa_etl_runtime_partitions";
     public const string ReservationTableName = "elsa_etl_runtime_reservations";

@@ -16,6 +16,7 @@ Issue [#3151](https://github.com/elsa-workflows/elsa-foundation/issues/3151). On
   - Additive definition persistence, retained-v1 migration and native v2 pins: [checkpoint](evidence/v2-persistence-pin-checkpoint.md). Runtime execution remains owed.
   - Completed versioned foundation with runtime-only validation, typed transformation and retained terminal envelopes: [checkpoint](evidence/v2-runtime-reader-checkpoint.md). Connector requests still receive an explicit unavailable refusal until T005/T009 are integrated.
 - [ ] T005 Add typed HTTP page/position/effect/retry store contracts in `Extensions/Etl/src/Core/Runtime/`, EF records/migrations in `src/Persistence/EntityFrameworkCore/` and provider upgrade/claim-shape tests; share current fence/quota/terminal invariants while retaining v1 provider composition.
+  - Partial typed admission/preparation/ownership implementation: [checkpoint](evidence/connector-preparation-checkpoint.md). Page, reservation, effect and retry transitions remain owed.
 
 ## Phase 3 — US1: Author and execute HTTP integrations
 

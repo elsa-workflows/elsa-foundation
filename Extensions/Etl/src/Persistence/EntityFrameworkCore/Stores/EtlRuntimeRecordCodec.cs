@@ -318,7 +318,7 @@ internal static class EtlRuntimeRecordCodec
     public static void ValidateObject(EtlObjectReference reference, string label)
     {
         ArgumentNullException.ThrowIfNull(reference);
-        if (reference.Key.Length is 0 or > 128 || reference.Key.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not '.' and not '_' and not '-'))
+        if (reference.Key is null or { Length: 0 or > 128 } || reference.Key.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not '.' and not '_' and not '-'))
             throw new ArgumentException($"The ETL {label} key is not a bounded opaque key.", nameof(reference));
         if (!IsSha256(reference.ContentHash) || reference.ByteLength < 0)
             throw new ArgumentException($"The ETL {label} reference has an invalid hash or length.", nameof(reference));

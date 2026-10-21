@@ -11,11 +11,11 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Etl.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>Persists bounded ETL state transitions independently from workflow checkpoints and design data.</summary>
-internal sealed class EfEtlRuntimeStore(
+internal sealed partial class EfEtlRuntimeStore(
     EtlRuntimeDbContext db,
     TimeProvider clock,
     EtlRuntimeStoreOptions options,
-    ILogger<EfEtlRuntimeStore>? logger = null) : IEtlRuntimeStore
+    ILogger<EfEtlRuntimeStore>? logger = null) : IEtlRuntimeStore, IEtlConnectorRuntimeStore
 {
     public int MaximumPageSize => options.MaximumPageSize;
 
@@ -88,8 +88,9 @@ internal sealed class EfEtlRuntimeStore(
         var scopeKey = EtlRuntimeRecordCodec.Scope(scope).Key;
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         var now = NowTicks();
-        var row = await db.Runs.Where(x => x.ScopeKey == scopeKey && x.Status == (int)EtlRunStatus.Preparing &&
-                    (x.PreparationExpiresAtUtcTicks == null || x.PreparationExpiresAtUtcTicks <= now))
+        var row = await db.Runs.Where(x => x.ScopeKey == scopeKey && x.Status == (int)EtlRunStatus.Preparing && x.BindingsJson != null &&
+                    (x.PreparationExpiresAtUtcTicks == null || x.PreparationExpiresAtUtcTicks <= now) &&
+                    !db.ConnectorRuns.Any(connector => connector.ScopeKey == x.ScopeKey && connector.RunKey == x.RunKey))
             .OrderBy(x => x.CreatedAtUtcTicks).ThenBy(x => x.RunKey).FirstOrDefaultAsync(cancellationToken);
         if (row is null) return null;
         ValidateRun(row, scope, EtlRuntimeRecordCodec.DecodeIdentity(row.RunId, "run id"));
@@ -136,6 +137,8 @@ internal sealed class EfEtlRuntimeStore(
         var row = await FindRunRowAsync(lease.Scope, lease.RunId, cancellationToken);
         if (row is null) return EtlStoreStatus.NotFound;
         var key = RunKey(lease.Scope, lease.RunId);
+        if (EtlRuntimeRecordCodec.ReadInvocation(row.InvocationJson).Artifact.FormatVersion != EtlArtifact.CurrentFormatVersion ||
+            await IsConnectorRunAsync(key, cancellationToken)) return EtlStoreStatus.Invalid;
         var existing = await db.PreparedRuns.SingleOrDefaultAsync(x => x.ScopeKey == key.ScopeKey && x.RunKey == key.RunKey, cancellationToken);
         if (row.Status == (int)EtlRunStatus.Running && existing is not null)
             return EtlRuntimeRecordCodec.ReadPrepared(existing) == prepared ? EtlStoreStatus.Replay : EtlStoreStatus.Conflict;
@@ -847,7 +850,8 @@ internal sealed class EfEtlRuntimeStore(
         // A binding-resolution refusal may only settle an invocation before admission pins its
         // host revisions. A retry with different local binding availability must not cancel or
         // terminalize work that another admission attempt already made runnable.
-        if (outcome == EtlTerminalOutcome.BusinessError && proposal is null && run.BindingsJson is not null)
+        var connector = await IsConnectorRunAsync(key, cancellationToken);
+        if (outcome == EtlTerminalOutcome.BusinessError && proposal is null && (run.BindingsJson is not null || connector))
             return new(EtlStoreStatus.Conflict, null);
 
         var currentStatus = (EtlRunStatus)run.Status;
@@ -857,13 +861,14 @@ internal sealed class EfEtlRuntimeStore(
         if (outcome == EtlTerminalOutcome.Succeeded)
         {
             if (run.Status != (int)EtlRunStatus.Running || run.OutstandingRecords != 0 || run.OutstandingBytes != 0 || run.RejectedRecords != 0 ||
+                invocation.Artifact.FormatVersion == EtlArtifactV2Json.FormatVersion && !await ConnectorIsCompleteAsync(key, cancellationToken) ||
                 await db.Partitions.AnyAsync(x => x.ScopeKey == key.ScopeKey && x.RunKey == key.RunKey && x.NextOrdinal != x.EndOrdinalExclusive, cancellationToken) ||
                 await db.Reservations.AnyAsync(x => x.ScopeKey == key.ScopeKey && x.RunKey == key.RunKey && !x.Settled, cancellationToken))
                 return new(EtlStoreStatus.Conflict, null);
         }
         else if (outcome is EtlTerminalOutcome.BusinessError or EtlTerminalOutcome.Faulted)
         {
-            var preAdmissionRefusal = proposal is null && run.BindingsJson is null && currentStatus == EtlRunStatus.Preparing;
+            var preAdmissionRefusal = proposal is null && run.BindingsJson is null && !connector && currentStatus == EtlRunStatus.Preparing;
             if (!preAdmissionRefusal)
             {
                 if (proposal is null || await FailureAuthorityExpiryAsync(proposal, NowTicks(), cancellationToken) is not { } expiry)
@@ -907,6 +912,8 @@ internal sealed class EfEtlRuntimeStore(
         {
             var run = await FindRunRowAsync(proposal.Scope, proposal.RunId, cancellationToken);
             if (run?.Status != (int)EtlRunStatus.Running) return null;
+            if (await IsConnectorRunAsync(RunKey(proposal.Scope, proposal.RunId), cancellationToken))
+                return await ConnectorFailureExpiryAsync(proposal, now, cancellationToken);
             var partition = await FindPartitionRowAsync(proposal.Scope, proposal.RunId, ordinal, cancellationToken);
             return partition is not null && HasPartitionLease(partition,
                 new(proposal.Scope, proposal.RunId, ordinal, proposal.PartitionOwner, fence, DateTimeOffset.MinValue,
