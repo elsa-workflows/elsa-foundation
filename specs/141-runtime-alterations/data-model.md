@@ -271,15 +271,15 @@ descendant-fault markers, background work id, incident, fault and causation meta
 parent gave the source in its provenance, and its schedule command carries that metadata, so a parent
 that routes on it recognises the successor's outcome. Routing data a parent kept only in the child's
 command metadata (for example `bpmn.tokenId`) is not durable and is lost, so such a parent resolves the
-successor as it resolves a resumed child. A source whose fault its parent already evaluated (it carries
-the parent-completion marker) is accepted only when that parent is still running
-(`SourceParentNotRunning` otherwise) and its executable node carries
+successor as it resolves a resumed child. A faulted source is accepted only while its parent and every
+ancestor are still running (`SourceParentNotRunning`, `SourceAncestorNotRunning`), and not when an
+ancestor already received its fault and deferred (it carries `runtime.descendantFaultProcessedWorkItemId`:
+`SourceFaultHandledByAncestor`). A source whose parent deferred on its fault (it carries the
+parent-completion marker) is accepted only when the parent's executable node carries
 `runtime.acceptsRescheduledFaultedChild`, compiled from `IRuntimeAcceptsRescheduledFaultedChild`
 (`ParentDoesNotAcceptRescheduledChild` otherwise); the successor's outcome then reaches the parent as
-that child's outcome (#3135). A source whose fault an ancestor already received past a composite that
-does not handle it (spec 258 R-3) is refused with `SourceFaultHandledByAncestor`. Only a newly compiled
-artifact carries the capability: node metadata is not part of the artifact hash, so republishing an
-unchanged definition reuses the stored artifact without it.
+that child's outcome (#3135). Only a newly compiled artifact carries the capability: node metadata is not
+part of the artifact hash, so republishing an unchanged definition reuses the stored artifact without it.
 
 ### Migrate/1
 

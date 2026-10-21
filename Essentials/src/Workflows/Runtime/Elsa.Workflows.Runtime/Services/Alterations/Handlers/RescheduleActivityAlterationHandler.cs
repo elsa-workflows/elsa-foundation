@@ -103,33 +103,47 @@ public sealed class RescheduleActivityAlterationHandler(
         return WorkflowAlterationPreflightResult.Accepted();
     }
 
-    // A parent that already evaluated the source's fault may have stopped tracking the child (a BPMN error boundary or
-    // late-fault guard drops it), and the runtime cannot tell from outside whether it still expects an outcome. So the
-    // successor's outcome may only go to a running parent that opted in (IRuntimeAcceptsRescheduledFaultedChild, #3135);
-    // otherwise the reschedule is refused rather than leaving the successor to run with no one to receive its outcome.
+    // A faulted source's outcome may only go somewhere that still expects it (#3135). Every structural parent above
+    // it must still be running: a parent or ancestor that faulted, completed or was cancelled on or after the fault
+    // never consumes the successor's outcome, and the successor's effects would happen outside it (for example the
+    // rest of a Sequence after its compensation scope faulted). A parent that already evaluated the fault may also have
+    // stopped tracking the child (a BPMN error boundary or late-fault guard drops it), and the runtime cannot tell from
+    // outside whether it still expects an outcome, so such a parent must have opted in
+    // (IRuntimeAcceptsRescheduledFaultedChild).
     private static WorkflowAlterationPreflightResult? ParentThatEvaluatedSourceRefusal(
         ActivityExecutionState source,
         IReadOnlyCollection<ActivityExecutionState> activities,
         WorkflowExecutable executable)
     {
-        // An ancestor that received this fault past a composite that does not handle it (spec 258 R-3) already
-        // decided on it, for example a compensation scope that faulted or abandoned the step without cancelling it.
+        // An ancestor that received this fault past a composite that does not handle it (spec 258 R-3) and deferred
+        // already decided on it, for example a compensation scope that abandoned the step without cancelling it.
         if (source.Metadata.TryGetValue(RuntimeMetadataKeys.DescendantFaultProcessedWorkItemId, out var descendantWorkItemId) &&
             !string.IsNullOrWhiteSpace(descendantWorkItemId))
             return WorkflowAlterationPreflightResult.Rejected(
                 "SourceFaultHandledByAncestor",
                 "An ancestor of the source activity already received and decided on its fault.");
-        if (!source.Metadata.TryGetValue(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId, out var processedWorkItemId) ||
-            string.IsNullOrWhiteSpace(processedWorkItemId))
+
+        var evaluatedByParent = source.Metadata.TryGetValue(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId, out var processedWorkItemId) &&
+                                !string.IsNullOrWhiteSpace(processedWorkItemId);
+        if (source.Status != ActivityExecutionStatus.Faulted && !evaluatedByParent)
             return null;
 
-        var parent = source.ParentActivityExecutionId is { } parentId
-            ? activities.SingleOrDefault(state => StringComparer.Ordinal.Equals(state.Execution.ActivityExecutionId, parentId))
-            : null;
-        if (parent is not { Status: ActivityExecutionStatus.Running })
-            return WorkflowAlterationPreflightResult.Rejected(
-                "SourceParentNotRunning",
-                "The source activity's parent already evaluated its outcome and is no longer running, so nothing would receive the successor's outcome.");
+        var byId = activities.ToDictionary(state => state.Execution.ActivityExecutionId, StringComparer.Ordinal);
+        ActivityExecutionState? parent = null;
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        for (var ancestorId = source.ParentActivityExecutionId; ancestorId is not null && visited.Add(ancestorId);)
+        {
+            var isParent = parent is null;
+            if (!byId.TryGetValue(ancestorId, out var ancestor) || ancestor.Status != ActivityExecutionStatus.Running)
+                return isParent
+                    ? WorkflowAlterationPreflightResult.Rejected("SourceParentNotRunning", "The source activity's parent is not running, so nothing would receive the successor's outcome.")
+                    : WorkflowAlterationPreflightResult.Rejected("SourceAncestorNotRunning", "An ancestor of the source activity is not running, so the successor would run outside it.");
+            parent ??= ancestor;
+            ancestorId = ancestor.ParentActivityExecutionId;
+        }
+
+        if (!evaluatedByParent || parent is null)
+            return null;
         if (!executable.NodesById.TryGetValue(parent.Execution.ExecutableNodeId, out var parentNode) ||
             !StringComparer.OrdinalIgnoreCase.Equals(parentNode.Metadata.GetValueOrDefault(RuntimeMetadataKeys.AcceptsRescheduledFaultedChild), "true"))
             return WorkflowAlterationPreflightResult.Rejected(

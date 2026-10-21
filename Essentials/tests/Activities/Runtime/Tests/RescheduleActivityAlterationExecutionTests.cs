@@ -124,6 +124,26 @@ public sealed class RescheduleActivityAlterationExecutionTests
         run.AssertCompleted("node-parallel");
     }
 
+    [Fact]
+    public async Task FaultedBranchOfAParallelThatFaultedOnIt_IsRefused()
+    {
+        // Every branch must succeed, so the branch fault faults the join; ContinueWithIncidents keeps the run going.
+        await using var fixture = await RescheduleFixture.StartAsync(
+            NewParallelNode(threshold: 2,
+                ("a", InterventionTestSupport.NewLeafNode("node-f", typeof(OutcomeUnknownActivity))),
+                ("b", InterventionTestSupport.NewLeafNode("node-b", typeof(SuspendOnceActivity)))),
+            "actexec-parallel", "actexec-f", "actexec-b");
+        var source = fixture.Run.State("node-f");
+        Assert.Equal(ActivityExecutionStatus.Faulted, source.Status);
+        Assert.Equal(ActivityExecutionStatus.Faulted, fixture.Run.State("node-parallel").Status);
+
+        var job = await fixture.RescheduleAsync(source.Execution.ActivityExecutionId, "reschedule-faulted-join-branch");
+
+        Assert.Equal(WorkflowAlterationJobStatus.Failed, job.Status);
+        Assert.Equal("SourceParentNotRunning", Assert.Single(job.Outcomes).Code);
+        Assert.Single((await fixture.ReadRunAsync()).States("node-f"));
+    }
+
     // The executable compiler sets the capability from the activity type; the harness builds nodes by hand.
     private static ExecutableNode NewSequenceNode(params ExecutableNode[] children) =>
         new(

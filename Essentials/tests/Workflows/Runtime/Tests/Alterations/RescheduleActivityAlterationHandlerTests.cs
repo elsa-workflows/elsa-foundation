@@ -236,6 +236,44 @@ public sealed class RescheduleActivityAlterationHandlerTests
     }
 
     [Fact]
+    public async Task PreflightAsync_RefusesAFaultedSourceWhoseParentFaultedOnItsFault()
+    {
+        // A parent whose fault evaluation faulted it writes no processed marker on the child.
+        var source = Source(ActivityExecutionStatus.Faulted) with { ParentActivityExecutionId = "parent" };
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        await executableStore.SaveAsync(ExecutableWithParent(acceptsRescheduledFaultedChild: true));
+        var staging = new Staging();
+
+        var result = await Handler(executableStore).PreflightAsync(Context(source, staging, Parent(ActivityExecutionStatus.Faulted)));
+
+        Assert.False(result.IsAccepted);
+        Assert.Equal("SourceParentNotRunning", result.Failure!.Code);
+        Assert.Empty(staging.StagedChanges);
+    }
+
+    [Fact]
+    public async Task PreflightAsync_RefusesAFaultedSourceUnderAnAncestorThatIsNoLongerRunning()
+    {
+        // The parent is running and accepts it, but the scope above it faulted on the fault without cancelling it.
+        var source = Source(ActivityExecutionStatus.Faulted) with
+        {
+            ParentActivityExecutionId = "parent",
+            Metadata = new Dictionary<string, string> { [RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId] = "work-1" }
+        };
+        var parent = Parent(ActivityExecutionStatus.Running) with { ParentActivityExecutionId = "grandparent" };
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        await executableStore.SaveAsync(ExecutableWithParent(acceptsRescheduledFaultedChild: true));
+        var staging = new Staging();
+
+        var result = await Handler(executableStore).PreflightAsync(
+            Context(source, staging, parent, Source(ActivityExecutionStatus.Faulted, "grandparent")));
+
+        Assert.False(result.IsAccepted);
+        Assert.Equal("SourceAncestorNotRunning", result.Failure!.Code);
+        Assert.Empty(staging.StagedChanges);
+    }
+
+    [Fact]
     public async Task PreflightAsync_KeepsIntrinsicSuccessorScheduledEvenWhenInputsArePinned()
     {
         var source = Source(ActivityExecutionStatus.Faulted) with
