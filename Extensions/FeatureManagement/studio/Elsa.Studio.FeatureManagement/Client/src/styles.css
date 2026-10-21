@@ -16,6 +16,8 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  container-type: inline-size;
+  container-name: feature-management;
 }
 
 .feature-management-header {
@@ -82,6 +84,17 @@
   position: sticky;
   top: 12px;
   max-height: calc(100vh - 112px);
+}
+
+@container feature-management (width < 814px) {
+  .feature-management-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .feature-management-inspector {
+    position: static;
+    max-height: none;
+  }
 }
 
 /* Search + category picker row that heads the feature list. */
