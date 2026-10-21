@@ -13,15 +13,10 @@ public sealed class ConnectionsPermissionContributor : IPermissionContributor
 
     public IEnumerable<Permission> Contribute() =>
     [
-        Permission(ConnectionsPermissions.Read, "Read connections", "Read connection metadata and descriptors."),
-        Permission(
-            ConnectionsPermissions.Use,
-            "Use connections",
-            "Resolve and bind connections in workflows, and publish definitions that reference them. Not granted by connections:manage."),
         Permission(
             ConnectionsPermissions.Manage,
             "Manage connections",
-            "Create, update, revoke and delete connections. Does not grant use or secret binding."),
+            "List, create, update, revoke and delete connections. Does not grant secret binding."),
         Permission(
             ConnectionsPermissions.BindSecret,
             "Bind connection secrets",

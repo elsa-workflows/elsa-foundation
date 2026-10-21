@@ -37,6 +37,25 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
         ActivitySchedulingProvenance? schedulingProvenance = null,
         LoopIterationScopeRequest? iterationFrame = null);
 
+    /// <summary>
+    /// Stages the same child schedule as the overload above, delivered not before <paramref name="notBefore"/> (R-7,
+    /// spec 261). Valid wherever scheduling a child is valid. A <paramref name="notBefore"/> that is null, or at or before
+    /// the commit, schedules the child as usual. A later one commits the child's schedule work item in this evaluation's
+    /// checkpoint as a post-commit intent whose outbox item becomes available at that time; the checkpoint is then
+    /// durable in every persistence mode, and the item never enters the run's scheduler queue early, so it holds back no
+    /// other work of the run. A due time more than <c>RuntimeDelayedScheduleOptions.MaxDelay</c> ahead faults the
+    /// evaluation with <c>runtime.delayed-schedule.too-far</c>; a host without the outbox sweep faults it with
+    /// <c>runtime.delayed-schedule.unavailable</c>. When the schedule is delivered, a run that is gone or terminal, or a
+    /// scheduling parent that is no longer running, acknowledges it without scheduling the child.
+    /// </summary>
+    void ScheduleChildActivity(
+        string executableNodeId,
+        string? schedulingActivityExecutionId,
+        IReadOnlyDictionary<string, string>? metadata,
+        ActivitySchedulingProvenance? schedulingProvenance,
+        LoopIterationScopeRequest? iterationFrame,
+        DateTimeOffset? notBefore);
+
     IReadOnlyCollection<RuntimeChildActivityScheduleRequest> GetChildActivityScheduleRequests();
 
     /// <summary>
@@ -112,6 +131,21 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
         string reason,
         IReadOnlyDictionary<string, string>? metadata = null);
 
+    /// <summary>
+    /// Stages the same request as <see cref="RequestChildFaultIntervention(string, string, IReadOnlyDictionary{string, string}?)"/>
+    /// and offers the <paramref name="decisions"/> an operator may take on the wait through the
+    /// <c>DecideIntervention</c> alteration (spec 260 R-5): 1 to 8 dotted lower-case codes of at most 64 characters, none
+    /// starting <c>runtime.</c>. The runtime records them, in offer order, as <c>runtime.interventionDecisions</c> on the
+    /// wait-for-intervention outcome metadata, with the requester as <c>runtime.interventionRequestedBy</c>, and later
+    /// delivers the chosen one to <c>IRuntimeActivityInterventionDecisionHandler</c>. Offering decisions from an
+    /// activity that does not implement that callback, or an invalid offer, faults the evaluation.
+    /// </summary>
+    void RequestChildFaultIntervention(
+        string incidentId,
+        string reason,
+        IReadOnlyDictionary<string, string>? metadata,
+        IReadOnlyCollection<string> decisions);
+
     IReadOnlyCollection<RuntimeChildFaultInterventionRequest> GetChildFaultInterventionRequests();
 
     /// <summary>
@@ -137,6 +171,16 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
     /// faults with <c>runtime.ancestor-notification.target-not-found</c>.
     /// </summary>
     void RequestAncestorNotification(string ancestorConsumerKey, string code, System.Text.Json.JsonElement? payload = null);
+
+    /// <summary>
+    /// Stages a coded notification to the nearest committed ancestor that matches <paramref name="selector"/>: a
+    /// consumer key (as the overload above), or an activity type key, optionally narrowed to one authored node. The
+    /// selector can end the walk at a reusable-activity boundary and can be optional, in which case no match sends
+    /// nothing instead of faulting. Valid in an initial structural execution, or in a child-completion evaluation,
+    /// that ends in a <c>Complete</c> continuation; either way the notification is enqueued ahead of this activity's
+    /// own completion. The receiver learns which of its direct children the notification came through.
+    /// </summary>
+    void RequestAncestorNotification(RuntimeAncestorSelector selector, string code, System.Text.Json.JsonElement? payload = null);
 
     IReadOnlyCollection<RuntimeAncestorNotificationRequest> GetAncestorNotificationRequests();
 }

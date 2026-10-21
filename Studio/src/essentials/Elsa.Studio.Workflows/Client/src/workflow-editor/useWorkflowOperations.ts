@@ -16,6 +16,7 @@ import {
   startWorkflowDraftTestRun,
   type PublicationIntent
 } from "../api/publishing";
+import { getDraftValidations } from "../api/draftValidations";
 import { decorateConversionDiagnostic } from "../conversionSettings";
 import { buildExportPayload, downloadWorkflowJson } from "../workflowSerialization";
 import {
@@ -39,6 +40,8 @@ import {
   publicationBlockedMessage,
   publicationIntentFor,
   publicationPreflightMatchesIntent,
+  splitPublicationValidations,
+  withPublicationWarnings,
   type PublicationReviewState,
   type PublicationVersionSelection
 } from "./publicationReview";
@@ -264,9 +267,8 @@ export function useWorkflowOperations({
           setPublicationReview(current => current ? { ...current, savedDraft: justSaved, draftSnapshot: justSaved, intent } : current);
         }
         const persistedDraft = savedDraft;
-        const validationErrors = persistedDraft.validationErrors
-          .map(error => error.message?.trim())
-          .filter((message): message is string => Boolean(message));
+        // Only errors block; a warning on the saved draft is listed in the review and publication goes on (spec 261).
+        const validationErrors = splitPublicationValidations(persistedDraft.validationErrors).errors;
         if (!persistedDraft.state.rootActivity) validationErrors.unshift("Workflow has no root activity.");
         if (validationErrors.length) {
           setPublicationReview(current => current ? {
@@ -439,6 +441,9 @@ export function useWorkflowOperations({
       });
       review.versionPreflightSupported = versionCapabilities.preflight;
       review.exactVersionSupported = versionCapabilities.exact;
+      // Spec 261 FR-515: list the server's validation warnings (for example a replay-safe compensation step) in the
+      // review. They never block; a host without the validations relation, or a failed read, shows none.
+      review = withPublicationWarnings(review, await getDraftValidations(context, draftSnapshot.id).catch(() => null));
       if (!review.validationErrors.length && !(review.intent.action === "sideBySide" && !review.intent.slotName)) {
         const intent = publicationIntentFor(review, review.intent.action ?? "replace", review.intent.slotName ?? review.policy.defaultSlotName);
         const [preflight, versionPreflight] = await Promise.all([

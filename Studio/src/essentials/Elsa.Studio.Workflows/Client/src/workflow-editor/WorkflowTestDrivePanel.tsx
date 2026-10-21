@@ -243,7 +243,7 @@ export function WorkflowTestDrivePanel({
       {optionDiagnostics.length ? <ul className="wf-test-drive-diagnostics" aria-label="Start diagnostics">{optionDiagnostics.map((diagnostic, index) => <li key={`${diagnostic.code}-${diagnostic.nodeId ?? index}`}><strong>{diagnostic.code}</strong> {diagnostic.message}{diagnostic.nodeId ? <span> · Node {diagnostic.nodeId}</span> : null}</li>)}</ul> : null}
       {options.some(option => option.isAvailable === false) ? <ul className="wf-test-drive-diagnostics" aria-label="Unavailable starts">{options.filter(option => option.isAvailable === false).map(option => <li key={option.optionId}><strong>{option.label}</strong>{option.nodeId ? ` · Node ${option.nodeId}` : ""}{option.reason ? ` · ${option.reason}` : " · Unavailable"}</li>)}</ul> : null}
       {loading ? <p role="status">Loading available starts…</p> : null}
-      <Suspense fallback={<p className="wf-test-drive-loading" role="status">Loading Test Drive editor…</p>}>
+      <Suspense fallback={<p className="wf-test-drive-loading" role="status">Loading Test Run editor…</p>}>
       <form onSubmit={event => { void submit(event); }}>
         <label className="wf-form-field">
           <span>Start</span>
@@ -325,7 +325,7 @@ export function WorkflowTestDrivePanel({
         ) : null}
         {actionError ? <div className="wf-test-drive-error" role="alert">{actionError}</div> : null}
         <div className="wf-test-drive-actions">
-          <button type="submit" disabled={busy || loading || isStale || Boolean(loadError) || triggerUnavailable || !snapshot.draft.state.rootActivity}>{busy ? "Starting…" : editor?.startLabel ?? "Run workflow"}</button>
+          <button type="submit" disabled={busy || loading || isStale || Boolean(loadError) || triggerUnavailable || !snapshot.draft.state.rootActivity}>{busy ? "Starting…" : editor?.startLabel ?? "Start Test Run"}</button>
         </div>
       </form>
       </Suspense>

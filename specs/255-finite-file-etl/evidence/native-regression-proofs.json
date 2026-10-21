@@ -1,0 +1,20 @@
+[
+  {
+    "name": "native-bookmark-match",
+    "path": "Extensions/Etl/src/Workflows/Runtime/Services/EtlCheckpointEnricher.cs",
+    "originalSha256": "10596abc564ceb48ed04ae14cc8063ea5d13657ab5700b2a53d6b0d2afd2fdf3",
+    "changedSha256": "f2710940fd54ee208c0735f54966ae25e970ca6417005e1640621a651e519b4a",
+    "changedExit": 1,
+    "restoredExit": 0,
+    "filter": "FullyQualifiedName~A_changed_bookmark_address_cannot_create_an_admission_intent"
+  },
+  {
+    "name": "native-consumed-cancellation",
+    "path": "Extensions/Etl/src/Workflows/Runtime/Services/EtlNativeBoundary.cs",
+    "originalSha256": "4b1e0a6b764524431729e0bd7a71fc3263f23b250a84d6f4ae663d1022e2d6a0",
+    "changedSha256": "7d4b05a0c52dca6adf8b72ef35696197fcd0cfd47adc746d0194135d09a6a205",
+    "changedExit": 1,
+    "restoredExit": 0,
+    "filter": "FullyQualifiedName~Cancellation_after_typed_claim_uses_the_consumed_receipt"
+  }
+]

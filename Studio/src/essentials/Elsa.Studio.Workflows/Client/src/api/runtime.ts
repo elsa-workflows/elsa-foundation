@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type {
   ActivityExecutionInspection,
+  ActivityStateView,
   ActivityExecutionHierarchyPage,
   ActivityExecutionLayout,
   RuntimeDiagnosticsEvidenceLevel,
@@ -336,6 +337,31 @@ export async function getActivityExecutionInspection(
   return signal
     ? context.http.getJson<ActivityExecutionInspection>(path, { signal })
     : context.http.getJson<ActivityExecutionInspection>(path);
+}
+
+/** Whether the host serves the activity state view (spec 260 R-6); it advertises the link only when a module projects one. */
+export function supportsActivityStateView(context: StudioEndpointContext) {
+  return hasCapabilityLink(context, capabilityIds.runtime, "activity-execution-state-view");
+}
+
+/**
+ * Reads a live structural activity's projected private state, such as a compensation scope's journal. A 404 means the run
+ * or activity is unknown, belongs to another tenant, or the caller may not inspect it; the response never says which.
+ */
+export async function getActivityStateView(
+  context: StudioEndpointContext,
+  workflowExecutionId: string,
+  activityExecutionId: string,
+  signal?: AbortSignal
+) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.runtime,
+    "activity-execution-state-view",
+    { workflowExecutionId, activityExecutionId });
+  return signal
+    ? context.http.getJson<ActivityStateView>(path, { signal })
+    : context.http.getJson<ActivityStateView>(path);
 }
 
 export function supportsActivityExecutionInspection(context: StudioEndpointContext) {

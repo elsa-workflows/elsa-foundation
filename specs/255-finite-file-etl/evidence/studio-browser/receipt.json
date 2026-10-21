@@ -1,0 +1,66 @@
+{
+  "stats": {
+    "startTime": "2026-10-20T22:51:43.597Z",
+    "duration": 110721.478,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "attachments": {
+    "etl-definition-mobile-layout": {
+      "viewportWidth": 390,
+      "left": 16,
+      "right": 374,
+      "contentWidth": 390,
+      "contentScrollWidth": 390,
+      "documentWidth": 390,
+      "overflowText": [],
+      "overflowElements": []
+    },
+    "etl-run-mobile-layout": {
+      "viewportWidth": 390,
+      "left": 16,
+      "right": 374,
+      "contentWidth": 390,
+      "contentScrollWidth": 390,
+      "documentWidth": 390,
+      "overflowText": [],
+      "overflowElements": []
+    },
+    "etl-journey-result": {
+      "definitionId": "etl-live-1792536726833",
+      "selection": "etl1:etl-live-1792536726833:1:9baf6f2b67483ffde394c3f5a78bcf702f239aa8f5855c3888b1067c2ac051a8",
+      "workflowName": "ETL live journey 1792536732067",
+      "executionId": "14WNN5kNmUp",
+      "acceptedRecords": 2,
+      "rejectedRecords": 0,
+      "filteredRecords": 0,
+      "completedPartitions": 2,
+      "nativeActivities": [
+        "RunEtl",
+        "WriteLine"
+      ],
+      "status": "Succeeded"
+    }
+  },
+  "screenshotsSha256": {
+    "etl-native-sequence-completed.png": "7c9fae471e71b76887af56ae1693f8fbb4c442c4b13760ccb15164b13dfedc99",
+    "etl-definition-mobile.png": "a9dfd7ce2b0b82281b2b9efdc03c23a206b991917b97179248060006fd777e48",
+    "etl-run-mobile.png": "cede62a0c2d14f6bf7484c908f39b9143fde779464a89d37371c55d4f02b3816"
+  },
+  "command": "pwsh -NoProfile -File e2e-tests/etl/Test-FiniteFileEtlStudio.ps1",
+  "baselineCommit": "b47e59b332ea4823e7cf86e5b52029ddc43fa226",
+  "revisionNote": "Executed against the uncommitted integrated Studio, native tenant and recovery changes following this checkpoint. This is not CI evidence for that baseline commit.",
+  "ownedHostsStopped": [
+    56569,
+    57011
+  ],
+  "limits": [
+    "Chromium only",
+    "Successful ETL path and Sequence continuation in browser; rejection and Flowchart are separately verified by Workbench HTTP tests",
+    "ETL content viewport qualification only; shared Studio header is not a whole-app mobile qualification",
+    "Transient editor Test Run is not qualified",
+    "Physical effects remain at least once"
+  ]
+}

@@ -1239,6 +1239,37 @@ describe("Activity Definition authoring", () => {
     await rendered.unmount();
   });
 
+  it("makes Save now await the exact current draft revision before reporting completion", async () => {
+    let resolveSave!: (value: ActivityDefinitionDraftView) => void;
+    const pendingSave = new Promise<ActivityDefinitionDraftView>(resolve => { resolveSave = resolve; });
+    const putJson = vi.fn(() => pendingSave);
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      contributions: [editingContribution()],
+      putJson,
+      getJson: async url => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ revision: 3, payload: { edit: 0 } });
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Saved revision 3");
+    click(buttonByText(rendered.container, "Edit implementation 0"));
+    click(buttonByText(rendered.container, "Save now"));
+    await waitFor(() => expect(putJson).toHaveBeenCalledTimes(1));
+    expect(putJson).toHaveBeenCalledWith("/design/activities/drafts/activity-draft-1", expect.objectContaining({
+      expectedRevision: 3,
+      provider: expect.objectContaining({ payload: { edit: 1 } })
+    }));
+    expect(rendered.container.querySelector<HTMLElement>(".ad-save-state[role='status']")?.textContent).toContain("Saving");
+    expect(rendered.container.textContent).not.toContain("Saved revision 4");
+
+    resolveSave(fullDraft({ revision: 4, payload: { edit: 1 } }));
+    await waitForText(rendered.container, "Saved revision 4");
+    await rendered.unmount();
+  });
+
   it("flushes pending autosave and validates only the exact returned saved revision", async () => {
     const postJson = vi.fn(async (_url: string, body: unknown) => ({ draftId: "activity-draft-1", revision: (body as { expectedRevision: number }).expectedRevision, isValid: true, validatedAt: "2026-07-17T10:01:00Z", diagnostics: [] }));
     const putJson = vi.fn(async (_url: string, body: unknown) => fullDraft({ revision: 4, payload: (body as { provider: { payload: unknown } }).provider.payload }));

@@ -137,7 +137,17 @@
       "Extensions/Agent/src/Core/Elsa.Agent.Core.csproj",
       "Extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj",
       "Extensions/Agent/src/Workflows/Elsa.Agent.Workflows.csproj",
-      "Extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj"
+      "Extensions/Etl/src/Api/Elsa.Etl.Api.csproj",
+      "Extensions/Etl/src/Core/Elsa.Etl.Core.csproj",
+      "Extensions/Etl/src/Design/Api/Elsa.Etl.Design.Api.csproj",
+      "Extensions/Etl/src/Design/Elsa.Etl.Design/Elsa.Etl.Design.csproj",
+      "Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj",
+      "Extensions/Etl/src/Runtime/Api/Elsa.Etl.Runtime.Api.csproj",
+      "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Elsa.Etl.Runtime.csproj",
+      "Extensions/Etl/src/Workflows/Design/Elsa.Etl.Workflows.Design.csproj",
+      "Extensions/Etl/src/Workflows/Runtime/Elsa.Etl.Workflows.Runtime.csproj",
+      "Extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj",
+      "samples/Elsa.Samples.Compensation/Elsa.Samples.Compensation.csproj"
     ]
   }
 }

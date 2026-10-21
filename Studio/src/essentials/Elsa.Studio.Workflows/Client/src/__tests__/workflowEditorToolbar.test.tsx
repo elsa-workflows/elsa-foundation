@@ -2,9 +2,18 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { TestRunStatus } from "../workflow-editor/editorPanels";
 import { WorkflowEditorToolbar } from "../workflow-editor/WorkflowEditorToolbar";
+import type { WorkflowTestRunView } from "../workflowTypes";
 
 const mounted: { root: ReturnType<typeof createRoot>; container: HTMLDivElement }[] = [];
+const testRunStatusCases: { name: string; view: Partial<WorkflowTestRunView>; label: string }[] = [
+  { name: "accepted", view: { status: "DispatchAccepted" }, label: "Test Run dispatched" },
+  { name: "rejected", view: { status: "Rejected", reason: "The workflow rejected the test." }, label: "Test Run rejected" },
+  { name: "accepted with incidents", view: { status: "DispatchAccepted", incidentCount: 2 }, label: "Test Run accepted with incidents" },
+  { name: "accepted with a runtime issue", view: { status: "DispatchAccepted", commandDispatchStatus: "AcceptedButFaulted" }, label: "Test Run accepted with a runtime issue" }
+];
+
 afterEach(() => {
   mounted.splice(0).forEach(({ root, container }) => {
     flushSync(() => root.unmount());
@@ -38,16 +47,38 @@ describe("compact workflow toolbar", () => {
     const save = container.querySelector<HTMLButtonElement>(".wf-save-button")!;
     const publish = container.querySelector<HTMLButtonElement>(".wf-publish-primary")!;
     const run = container.querySelector<HTMLButtonElement>(".wf-run-button")!;
+    const publishAccessibleName = publish.getAttribute("aria-label") ?? publish.textContent?.trim();
+    const runAccessibleName = run.getAttribute("aria-label") ?? run.textContent?.trim();
     expect(save.title).toBe("Save workflow");
     expect(save.textContent).toBe("Save");
     expect(save.querySelector(".wf-toolbar-sr-only")).not.toBeNull();
-    expect(publish.textContent).toBe("Review and Publish");
     expect(container.querySelector("[aria-label='Publish options']")).not.toBeNull();
     click(save); click(publish); click(run);
     expect(commands.onSave).toHaveBeenCalledOnce();
     expect(commands.onPublish).toHaveBeenCalledOnce();
     expect(commands.onPublish).toHaveBeenCalledWith("review");
     expect(commands.onRun).toHaveBeenCalledOnce();
+    expect(publishAccessibleName).toBe("Review & publish");
+    expect(runAccessibleName).toBe("Test Run");
+  });
+
+  it.each(testRunStatusCases)("keeps the full $name Test Run result and direct details access", ({ view, label }) => {
+    const onOpenDetails = vi.fn();
+    const testRun: WorkflowTestRunView = {
+      testRunId: "test-run-1",
+      definitionId: "definition-1",
+      definitionVersionId: "draft:3",
+      status: "DispatchAccepted",
+      ...view
+    };
+    const { container } = render({ runStatus: <TestRunStatus testRun={testRun} stale onOpenDetails={onOpenDetails} /> });
+    const result = container.querySelector<HTMLButtonElement>(".wf-test-run-trigger")!;
+    const accessibleName = result.getAttribute("aria-label") ?? result.textContent?.trim();
+
+    click(result);
+
+    expect(onOpenDetails).toHaveBeenCalledOnce();
+    expect(accessibleName).toBe(`Earlier draft · ${label}`);
   });
 
   it("keeps save feedback with the actions and preserves busy and run eligibility guards", () => {

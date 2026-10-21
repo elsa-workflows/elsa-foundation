@@ -137,7 +137,7 @@ public sealed class BpmnMessageTests
         Assert.Equal(EventStimulus.StimulusType, bookmark.StimulusType);
         Assert.Equal(EventStimulus.Hash("order-approved"), bookmark.StimulusHash);
 
-        var resumed = await fixture.ResumeAsync(bookmark, JsonSerializer.SerializeToElement(new EventReceived("order-approved")));
+        var resumed = await fixture.ResumeAsync(bookmark, JsonSerializer.SerializeToElement(new { eventName = "order-approved" }));
 
         resumed.AssertCompleted("node-wait");
         resumed.AssertRan("node-after");

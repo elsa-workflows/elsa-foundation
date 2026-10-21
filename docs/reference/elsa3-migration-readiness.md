@@ -30,10 +30,11 @@ signals its result through **outcomes**. It may wait in its body: a Delay, a mid
 suspend and resume as in Elsa 3 (proven end to end). It cannot return output values or compute from its inputs until
 #3023 and #3027 are done.
 
-> **Known Elsa 4 issue, every workflow:** an Event wait woken by a **Publish Event** activity faults on resume today
-> ([#3107](https://github.com/elsa-workflows/elsa-foundation/issues/3107)); the import does not warn about it. An event
-> raised through the runtime's stimulus API (`POST runtime/workflows/stimuli`) resumes it correctly. Until #3107 is
-> fixed, list the workflows that pair Publish Event with an Event wait and test them after import.
+**Publish Event and Event, every workflow:** a **Publish Event** wakes the matching Event wait, with or without a
+payload, both in a regular workflow and in a reusable activity's body (proven end to end; fixed in
+[#3107](https://github.com/elsa-workflows/elsa-foundation/issues/3107)). The Event hands the payload on as its
+`Payload` output, which is where an Elsa 3 Event's `Result` converts to. A payload authored as an Elsa 3 `Object`
+literal arrives as the text the author typed.
 
 How Elsa 3 runs a reusable workflow matters for the fixes below: inside the execution of the workflow that uses it.
 Its variables are its own, but Correlate, Set Name and Finish act on that calling workflow.

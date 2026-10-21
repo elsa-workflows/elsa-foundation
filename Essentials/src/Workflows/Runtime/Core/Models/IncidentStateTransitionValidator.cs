@@ -9,7 +9,11 @@ public static class IncidentStateTransitionValidator
     /// <summary>
     /// Ensures a committed resolution outcome and its lifecycle effect cannot be changed. An exact replay remains valid.
     /// The one allowed change is the intervention an outcome waits for: a blocking incident whose outcome is
-    /// <see cref="IncidentResolutionActionKinds.WaitForIntervention"/> may be resolved once by an operator retry.
+    /// <see cref="IncidentResolutionActionKinds.WaitForIntervention"/> may be resolved once, on the same activity
+    /// execution, by an operator retry (<see cref="IncidentResolutionActionKinds.OperatorRetry"/> from
+    /// <see cref="IncidentResolutionSystemSources.OperatorRetryAlteration"/>) or an operator decision
+    /// (<see cref="IncidentResolutionActionKinds.OperatorDecision"/> from
+    /// <see cref="IncidentResolutionSystemSources.OperatorDecisionAlteration"/>).
     /// </summary>
     public static void EnsureResolutionOutcomeIsWriteOnce(IncidentState? existing, IncidentState candidate)
     {
@@ -19,7 +23,7 @@ public static class IncidentStateTransitionValidator
         if (existingOutcome is null)
             return;
 
-        if (IsOperatorRetryOfInterventionWait(existing!, candidate))
+        if (IsOperatorResolutionOfInterventionWait(existing!, candidate))
             return;
 
         if (!OutcomesAreIdentical(existingOutcome, candidate.ResolutionOutcome) ||
@@ -46,14 +50,22 @@ public static class IncidentStateTransitionValidator
     public static RuntimeCheckpointCommitValidationException AppendConflict(IncidentState candidate) =>
         new($"Incident '{candidate.IncidentId}' already exists for workflow execution '{candidate.WorkflowExecutionId}' and cannot be appended again.");
 
-    private static bool IsOperatorRetryOfInterventionWait(IncidentState existing, IncidentState candidate) =>
+    private static bool IsOperatorResolutionOfInterventionWait(IncidentState existing, IncidentState candidate) =>
         existing.Status == IncidentStatus.Blocking &&
         StringComparer.Ordinal.Equals(existing.ResolutionOutcome?.ActionKind, IncidentResolutionActionKinds.WaitForIntervention) &&
         candidate.Status == IncidentStatus.Resolved &&
         candidate.ResolvedAt is not null &&
-        StringComparer.Ordinal.Equals(candidate.ResolutionOutcome?.ActionKind, IncidentResolutionActionKinds.OperatorRetry) &&
-        StringComparer.Ordinal.Equals(candidate.ResolutionOutcome?.SystemSource, IncidentResolutionSystemSources.OperatorRetryAlteration) &&
+        IsOperatorResolutionPair(candidate.ResolutionOutcome) &&
         StringComparer.Ordinal.Equals(existing.ActivityExecutionId, candidate.ActivityExecutionId);
+
+    // Exactly two (action kind, system source) pairs may replace a wait: the operator retry (spec 251) and the operator
+    // decision (spec 260). A mixed pair is refused.
+    private static bool IsOperatorResolutionPair(IncidentResolutionOutcome? outcome) =>
+        outcome is not null &&
+        ((StringComparer.Ordinal.Equals(outcome.ActionKind, IncidentResolutionActionKinds.OperatorRetry) &&
+          StringComparer.Ordinal.Equals(outcome.SystemSource, IncidentResolutionSystemSources.OperatorRetryAlteration)) ||
+         (StringComparer.Ordinal.Equals(outcome.ActionKind, IncidentResolutionActionKinds.OperatorDecision) &&
+          StringComparer.Ordinal.Equals(outcome.SystemSource, IncidentResolutionSystemSources.OperatorDecisionAlteration)));
 
     private static bool OutcomesAreIdentical(
         IncidentResolutionOutcome existing,

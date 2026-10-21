@@ -11,6 +11,7 @@ using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Middleware;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Options;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Elsa.Workflows.Runtime.Diagnostics;
 using Elsa.Workflows.Runtime.Middleware;
@@ -95,6 +96,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<MigrateWorkflowAlterationHandler>();
         services.TryAddScoped<RescheduleActivityAlterationHandler>();
         services.TryAddScoped<RetryFaultedActivityAlterationHandler>();
+        services.TryAddScoped<DecideInterventionAlterationHandler>();
         services.TryAddScoped<ActivityExecutionSupersessionPlanner>();
         AddRuntimeOwnedAlterationContribution(services, new("CancelWorkflow", 1, "Cancel workflow"), typeof(CancelWorkflowAlterationHandler));
         AddRuntimeOwnedAlterationContribution(services, new("ModifyVariable", 1, "Modify variable"), typeof(ModifyVariableAlterationHandler));
@@ -105,6 +107,10 @@ public static class RuntimeCoreServiceCollectionExtensions
             services,
             new(RetryFaultedActivityAlterationHandler.Kind, RetryFaultedActivityAlterationHandler.SchemaVersion, "Retry faulted activity"),
             typeof(RetryFaultedActivityAlterationHandler));
+        AddRuntimeOwnedAlterationContribution(
+            services,
+            new(DecideInterventionAlterationHandler.Kind, DecideInterventionAlterationHandler.SchemaVersion, "Decide intervention"),
+            typeof(DecideInterventionAlterationHandler));
         services.TryAddScoped<IWorkflowAlterationCheckpointWriter, RuntimeWorkflowAlterationCheckpointWriter>();
         services.TryAddScoped<WorkflowAlterationJobExecutor>();
         services.TryAddScoped<IWorkflowAlterationActorCommandExecutor, WorkflowAlterationActorCommandExecutor>();
@@ -421,6 +427,9 @@ public static class RuntimeCoreServiceCollectionExtensions
         // registering RuntimeInProcessHopFastPathOptions { Enabled = false } before this call; the durable deserialize
         // path then runs everywhere and MUST commit byte-identical state.
         services.TryAddSingleton<RuntimeInProcessHopFastPathOptions>();
+        // R-7 (spec 261): the limit on delayed child schedules. The capability that makes them deliverable is registered
+        // by the feature that registers the outbox sweep (WorkflowsRuntimeResumption), not here.
+        services.TryAddSingleton<RuntimeDelayedScheduleOptions>();
         // Explicit factory (not greedy ctor selection): the coalescing session accessor is only registered when the
         // coalescing feature is enabled, so the container cannot always satisfy every constructor parameter. The factory
         // injects each optional collaborator with GetService so the live-drain accessor and fast-path options are wired

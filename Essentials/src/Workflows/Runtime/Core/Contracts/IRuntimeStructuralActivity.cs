@@ -22,6 +22,28 @@ public interface IRuntimeActivityChildFaultHandler
 }
 
 /// <summary>
+/// Engine-only opt-in for receiving faults of descendants below composites that do not handle their children's faults
+/// (Sequence and the loops). When such a composite's child faults, the runtime walks up from it and delivers the fault
+/// to the nearest ancestor that implements this interface, provided every composite in between handles no child
+/// faults and no reusable-activity boundary is in between. The receiver may absorb the fault, which cancels the
+/// subtree of the direct child it came through, or request intervention, exactly as in a child-fault evaluation. The
+/// capability is compiled into the executable node, so the runtime decides without constructing ancestors.
+/// </summary>
+public interface IRuntimeActivityDescendantFaultHandler
+{
+    ValueTask<RuntimeStructuralContinuation> OnDescendantFaultedAsync(ActivityDescendantFaultedContext context);
+}
+
+/// <summary>
+/// Opt-in for a structural parent that keeps waiting for a child whose fault it was told about but did not consume,
+/// so that rescheduling that faulted child (<c>RescheduleActivity</c>) reaches it: the successor's outcome arrives as
+/// that child's ordinary outcome. A parent that absorbed the fault, or stopped tracking the child, must not implement
+/// it. The capability is compiled into the executable node, and rescheduling a faulted child whose parent already
+/// evaluated its fault is refused unless the parent's node carries it and the parent is still running.
+/// </summary>
+public interface IRuntimeAcceptsRescheduledFaultedChild;
+
+/// <summary>
 /// Engine-only opt-in for evaluating one intentional child fault together with the ordered notifications raised
 /// during that same child evaluation. The runtime delivers this as one callback and one durable parent checkpoint.
 /// </summary>
@@ -41,6 +63,22 @@ public interface IRuntimeActivityChildOutcomeHandler
 public interface IRuntimeActivityChildNotificationHandler
 {
     ValueTask<RuntimeStructuralContinuation> OnChildNotifiedAsync(IRuntimeActivityExecutionContext context, ActivityChildNotifiedContext notification);
+}
+
+/// <summary>
+/// Engine-only opt-in for receiving an operator's decision on an intervention this activity requested with offered
+/// decisions (spec 260 R-5, <c>DecideIntervention/1</c>). The runtime delivers the decision in its own structural
+/// evaluation, after the alteration checkpoint resolved the incident. The callback may schedule children, stage a child
+/// subtree cancellation (with a <c>Defer</c> or <c>Complete</c> continuation), stage private state, notify an ancestor
+/// when it completes, and return <c>Defer</c>, <c>Complete</c> or <c>Fault</c>; it may not absorb a fault or request
+/// intervention, because no fault is being evaluated. A requester that is no longer running is not called. A requester
+/// must accept any decision it offered while its wait stands, and may ignore one for a wait it no longer has (a repeat).
+/// </summary>
+public interface IRuntimeActivityInterventionDecisionHandler
+{
+    ValueTask<RuntimeStructuralContinuation> OnInterventionDecidedAsync(
+        IRuntimeActivityExecutionContext context,
+        ActivityInterventionDecidedContext decision);
 }
 
 /// <summary>

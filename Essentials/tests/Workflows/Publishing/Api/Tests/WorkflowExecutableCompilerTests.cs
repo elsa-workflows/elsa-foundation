@@ -2202,6 +2202,79 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal("Trigger", executable.RootActivity.Metadata[TriggerNodeMetadata.ExecutionTypeKey]);
     }
 
+    public static TheoryData<Type, string?> StructuralFaultHandlingCases => new()
+    {
+        { typeof(ChildFaultHandlingProbe), RuntimeMetadataKeys.StructuralFaultHandlingChild },
+        { typeof(DescendantFaultHandlingProbe), RuntimeMetadataKeys.StructuralFaultHandlingDescendant },
+        { typeof(LegacyTriggerActivity), null }
+    };
+
+    [Theory]
+    [MemberData(nameof(StructuralFaultHandlingCases))]
+    public async Task The_node_carries_how_it_handles_faults_below_it_only_when_it_handles_them(Type activityType, string? expected)
+    {
+        var activityVersion = LegacyTriggerActivityVersion(activityType);
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(activityType, TypeAliasConvention.CanonicalAlias(activityType));
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("node", activityVersion.Id, [], []))),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            registry);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        // Spec 258 R-3: read by the runtime when a fault passes a composite that does not handle it.
+        Assert.Equal(expected, executable.RootActivity.Metadata.GetValueOrDefault(RuntimeMetadataKeys.StructuralFaultHandling));
+    }
+
+    public static TheoryData<Type, string?> AcceptsRescheduledFaultedChildCases => new()
+    {
+        { typeof(RescheduledFaultedChildProbe), "true" },
+        { typeof(ChildFaultHandlingProbe), null },
+        { typeof(LegacyTriggerActivity), null }
+    };
+
+    [Theory]
+    [MemberData(nameof(AcceptsRescheduledFaultedChildCases))]
+    public async Task The_node_says_it_accepts_a_rescheduled_faulted_child_only_when_its_type_opts_in(Type activityType, string? expected)
+    {
+        var activityVersion = LegacyTriggerActivityVersion(activityType);
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(activityType, TypeAliasConvention.CanonicalAlias(activityType));
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("node", activityVersion.Id, [], []))),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            registry);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        // #3135: read by the RescheduleActivity preflight for a faulted child this node already evaluated.
+        Assert.Equal(expected, executable.RootActivity.Metadata.GetValueOrDefault(RuntimeMetadataKeys.AcceptsRescheduledFaultedChild));
+    }
+
+    private sealed class RescheduledFaultedChildProbe : IActivityResult<ActivityUnit>, IRuntimeActivityChildCompletionHandler, IRuntimeAcceptsRescheduledFaultedChild
+    {
+        public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
+    }
+
+    private sealed class ChildFaultHandlingProbe : IActivityResult<ActivityUnit>, IRuntimeActivityChildFaultHandler
+    {
+        public ValueTask<RuntimeStructuralContinuation> OnChildFaultedAsync(ActivityChildFaultedContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+    }
+
+    private sealed class DescendantFaultHandlingProbe : IActivityResult<ActivityUnit>, IRuntimeActivityChildFaultHandler, IRuntimeActivityDescendantFaultHandler
+    {
+        public ValueTask<RuntimeStructuralContinuation> OnChildFaultedAsync(ActivityChildFaultedContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+
+        public ValueTask<RuntimeStructuralContinuation> OnDescendantFaultedAsync(ActivityDescendantFaultedContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+    }
+
     public static TheoryData<Type, string> FirstPartyClrTriggers => new()
     {
         { typeof(EventActivity), EventActivity.ActivityType },

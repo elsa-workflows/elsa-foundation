@@ -197,7 +197,7 @@ public sealed class CombinedChildOutcomeEfTests : IDisposable
                 afterBookmark.ResumeTargetId,
                 afterBookmark.StimulusType,
                 afterBookmark.StimulusHash,
-                JsonSerializer.SerializeToElement(new EventReceived(CombinedChildOutcomeEfFixture.AfterEventName)));
+                JsonSerializer.SerializeToElement(new { eventName = CombinedChildOutcomeEfFixture.AfterEventName }));
             Assert.Equal(WorkflowExecutionStatus.Completed, completed.WorkflowState?.Status);
             Assert.Equal(ActivityExecutionStatus.Completed, completed.State(CombinedChildOutcomeEfFixture.AfterNodeId).Status);
             Assert.Empty(await BookmarksAsync(third));

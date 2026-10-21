@@ -4,6 +4,8 @@ Reports are point-in-time findings. They may become work units, but they are not
 
 ## Current reports
 
+- [Native compensation: qualification and release readiness](native-compensation-qualification.md) - spec 261 (M5) record of the integrated candidate: every qualification matrix row with its revision and result, the supported and not-qualified configurations, known limits, open follow-ups and review findings. Claims no release or deployment.
+- [Native compensation: the Elsa 3 follow-on](native-compensation-elsa3-follow-on.md) - what an Elsa 3 implementation (elsa-core#4015) can reuse from Elsa 4's compensation: twenty engine-neutral acceptance scenarios and the participant contract, not the runtime seams; implementation is a separate effort.
 - [EF Core persistence completion ledger](ef-core-persistence-completion-ledger.md) - closed (2026-09-16) Program #1665 ledger: the pre-program inventory plus each row's replacement, default-flip (#1763) and deletion (#1764) disposition, with the carry-forwards it does not claim.
 - [Secrets EF persistence pilot verdict and conditional replacement plan 2026-09](secrets-ef-persistence-pilot-verdict-2026-09.md) - historical narrow technical pilot for provider-derived EF contexts, dual migration modes, and per-shell EF/Groundwork selection; its bounded recommendation is superseded by ADR 0073 while the technical evidence remains valid.
 - [Wave 4 Agent REST and SSE API migration 2026-08](wave-4-agent-api-migration-2026-08.md) - exact eleven-route FastEndpoints-before HTTP/OpenAPI evidence, shared Agent permissions, SSE framing/cancellation, mixed coexistence, and collectible owner lifecycle.

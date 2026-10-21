@@ -78,6 +78,13 @@
 		<ProjectReference Include="..\..\src\Workflows\Design\Reconciliation\Elsa.Workflows.Design.Reconciliation\Elsa.Workflows.Design.Reconciliation.csproj" />
 		<ProjectReference Include="..\..\src\Workflows\Design\Reconciliation\Json\Elsa.Workflows.Design.Reconciliation.Json.csproj" />
 		<ProjectReference Include="..\..\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
+		<!-- ETL is discoverable here and enabled only by an explicit shell composition. -->
+		<ProjectReference Include="..\..\..\Extensions\Etl\src\Design\Api\Elsa.Etl.Design.Api.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Etl\src\Runtime\Api\Elsa.Etl.Runtime.Api.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Etl\src\Runtime\Elsa.Etl.Runtime\Elsa.Etl.Runtime.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Etl\src\Persistence\EntityFrameworkCore\Elsa.Etl.Persistence.EntityFrameworkCore.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Etl\src\Workflows\Design\Elsa.Etl.Workflows.Design.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Etl\src\Workflows\Runtime\Elsa.Etl.Workflows.Runtime.csproj" />
 		<ProjectReference Include="..\..\src\Activities\Bpmn\Elsa.Activities.Bpmn\Elsa.Activities.Bpmn.csproj" />
 		<ProjectReference Include="..\..\src\Activities\Bpmn\Interchange\Elsa.Activities.Bpmn.Interchange.csproj" />
 		<ProjectReference Include="..\..\src\Activities\Compensation\Elsa.Activities.Compensation.csproj" />

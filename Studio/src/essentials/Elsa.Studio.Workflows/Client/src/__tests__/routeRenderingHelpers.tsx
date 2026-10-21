@@ -92,9 +92,10 @@ export async function renderRegisteredRoute(
     return <Component navigate={navigate} />;
   }
 
-  flushSync(() => {
+  const rerender = () => flushSync(() => {
     root.render(<QueryClientProvider client={queryClient}><RegisteredRouteHost /></QueryClientProvider>);
   });
+  rerender();
 
   const unmount = async () => {
     if (!mountedRouteHosts.delete(unmount)) return;
@@ -104,7 +105,7 @@ export async function renderRegisteredRoute(
   };
   mountedRouteHosts.add(unmount);
 
-  return { api, container, unmount };
+  return { api, container, rerender, unmount };
 }
 
 function routeMatchesPath(routePath: string, path: string) {
