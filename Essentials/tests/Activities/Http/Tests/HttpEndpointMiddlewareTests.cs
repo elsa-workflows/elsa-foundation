@@ -1224,7 +1224,7 @@ public sealed class HttpEndpointMiddlewareTests
     public async Task Sync_CanonicalDeliveryFault_PropagatesToTheHost(bool responseStarted)
     {
         var committed = await HttpResponseInstructionFixture.StoreWith(
-            new HttpResponseInstruction(StatusCodes.Status201Created, new Dictionary<string, string[]>(), "partial response", "text/plain"));
+            new HttpResponseInstruction(StatusCodes.Status201Created, new Dictionary<string, string[]>(), HttpResponseInstructionFixture.Text("partial response"), "text/plain"));
         var delivery = new HttpResponseInstructionDelivery(committed, []);
         var (services, _) = SyncServices(delivery);
         var context = NewContext("/workflows/http/response-fault", "POST", body: "{}", services: services);

@@ -74,7 +74,7 @@ internal static class ReferenceWorkflows
             "write-response",
             typeof(WriteHttpResponse),
             [(nameof(WriteHttpResponse.StatusCode), 200), (nameof(WriteHttpResponse.ContentType), "text/plain")],
-            [JavaScript(nameof(WriteHttpResponse.Body), "String", "getVariable('referenceText')")]);
+            [JavaScript(nameof(WriteHttpResponse.Body), "System.Text.Json.JsonElement?", "getVariable('referenceText')")]);
 
         return Executable(
             "http-reference",

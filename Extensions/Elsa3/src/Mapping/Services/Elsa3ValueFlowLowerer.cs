@@ -67,6 +67,20 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 continue;
             }
 
+            if (property.InputContract is not null && DropsTypedConversion(property, property.InputContract.Type))
+            {
+                var declared = ReadType(property.Value).Alias;
+                diagnostics.Add(CreateDiagnostic(
+                    input,
+                    property,
+                    Elsa3ImportDiagnosticCodes.IncompatibleValue,
+                    $"Property '{property.PropertyName}' is a script declared as '{declared}'. Elsa 3 converted its result to '{declared}', but the Elsa 4 member '{property.InputContract.Type.Alias}' takes the value exactly as the script returns it.",
+                    $"Declare the expression's type as Object if the script already returns a {declared}; otherwise convert the value in the script before import.",
+                    $"{property.JsonPath}.typeName",
+                    property.MemoryReferenceId));
+                continue;
+            }
+
             if ((property.Expression is not null || property.MemoryReferenceId is not null) &&
                 property.InputContract is not null &&
                 !ValueFits(property, property.InputContract.Type))
@@ -290,7 +304,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             return;
         }
 
-        var resultType = ReadType(property.Value);
+        var resultType = ExpressionResultType(property);
         var rewrite = expressionRewriter.Rewrite(
             expression.Type,
             expression.Value,
@@ -828,6 +842,19 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         }
     }
 
+    /// <summary>
+    /// The result type a lowered expression declares. Publication requires it to equal the member's type verbatim. A JSON
+    /// member (<c>JsonElement</c>, <c>Object</c>, <c>Any</c>) accepts any expression value, so the expression declares
+    /// the member's own type, for every activity (spec 256: an Elsa 3 <c>Object</c> response body binds Elsa 4's
+    /// <c>JsonElement?</c>). <see cref="DropsTypedConversion"/> has already refused a script with a typed declaration
+    /// there, so no Elsa 3 conversion is lost. A typed member keeps the declared Elsa 3 type, so publication still
+    /// refuses a real mismatch.
+    /// </summary>
+    private static TypeReference ExpressionResultType(ActivityProperty property) =>
+        property.InputContract?.Type is { } member && IsUntyped(member, SimpleName(member.Alias))
+            ? member
+            : ReadType(property.Value);
+
     private static TypeReference ReadType(JsonElement value)
     {
         if (!value.TryGetProperty("typeName", out var typeName) || typeName.ValueKind != JsonValueKind.String)
@@ -915,6 +942,27 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             "DateTime" or "DateTimeOffset" => DateTimeOffset.TryParse(text, invariant, System.Globalization.DateTimeStyles.None, out _),
             _ => TypesMatch(declared, member)
         };
+    }
+
+    /// <summary>
+    /// Spec 256 FR-013: whether a script bound to a JSON member (<c>JsonElement</c>, <c>Object</c>, <c>Any</c>) carries a
+    /// typed Elsa 3 declaration. Elsa 3 converted the script's result to that type (<c>Int32</c> turns <c>"5"</c> into
+    /// 5); the JSON member takes the value as the script returns it, so the conversion would be lost silently. An untyped
+    /// declaration, or a collection or dictionary of untyped values, involves no conversion. Literals, variables and
+    /// object values are data, not scripts.
+    /// </summary>
+    private static bool DropsTypedConversion(ActivityProperty property, TypeReference member)
+    {
+        if (property.Expression is not { } expression ||
+            expression.Type.Equals("Literal", StringComparison.OrdinalIgnoreCase) ||
+            expression.Type.Equals("Object", StringComparison.OrdinalIgnoreCase) ||
+            expression.Type.Equals("Secret", StringComparison.OrdinalIgnoreCase) ||
+            expression.Type.Equals("Variable", StringComparison.OrdinalIgnoreCase) ||
+            !IsUntyped(member, SimpleName(member.Alias)))
+            return false;
+
+        var declared = SimpleName(ReadNormalizedType(property.Value).Alias);
+        return !IsUntypedName(declared) && declared is not ("IDictionary" or "Dictionary" or "JsonObject" or "JsonArray");
     }
 
     private static bool IsUntyped(TypeReference type, string simpleName) =>
