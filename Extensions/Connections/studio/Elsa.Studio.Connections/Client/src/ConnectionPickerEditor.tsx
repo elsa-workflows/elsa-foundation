@@ -90,7 +90,7 @@ export function ConnectionPickerEditor({
           </>
         ) : null}
         {unavailable ? "This connection is unavailable." : null}
-        {needsAuthorization ? "Needs authorization. Publishing still succeeds; a run will fault until authorized." : null}
+        {needsAuthorization ? "Needs authorization. Promotion still succeeds; a run will fault until authorized." : null}
       </p>
     </div>
   );

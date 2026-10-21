@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -64,6 +65,7 @@ public sealed class RescheduleActivityAlterationHandler(
         var successorId = ActivitySuccessorStaging.SuccessorId(context, Slug, source);
         var scopeId = ActivitySuccessorStaging.SuccessorScopeId(successorId);
         var now = _timeProvider.GetUtcNow();
+        // The successor keeps the scheduling metadata its parent gave the source, so the parent still routes its outcome.
         var provenance = ActivitySchedulingProvenance.From(
             workflow.WorkflowExecutionId,
             source.ParentActivityExecutionId,
@@ -72,18 +74,19 @@ public sealed class RescheduleActivityAlterationHandler(
             source.IterationId,
             source.Provenance.ExecutionPathId,
             scopeId,
-            Reason);
+            Reason,
+            source.Provenance.Metadata);
         var successor = ActivitySuccessorStaging.NewSuccessor(
             source,
             sourceNode,
             successorId,
             scopeId,
             provenance,
-            ActivitySuccessorStaging.SuccessorMetadata(source.Metadata, source.Execution.ActivityExecutionId),
+            NewMetadata(source),
             now);
         var superseded = ActivitySuccessorStaging.Supersede(source, successorId, now);
 
-        var continuation = ActivitySuccessorStaging.NewContinuation(workflow, successor, context, now, Slug, Reason);
+        var continuation = ActivitySuccessorStaging.NewContinuation(workflow, successor, context, now, Slug, Reason, ActivitySuccessorStaging.SchedulingMetadata(successor));
         var supersession = await _supersessionPlanner.PlanAsync(workflow.WorkflowExecutionId, source, activities, now, cancellationToken);
         context.Staging.Stage(new ActivitySuccessorStaging.SupersessionStagedChange(
             $"runtime.alteration.reschedule:{superseded.Execution.ActivityExecutionId}",
@@ -96,6 +99,17 @@ public sealed class RescheduleActivityAlterationHandler(
             continuation,
             Incidents: []));
         return WorkflowAlterationPreflightResult.Accepted();
+    }
+
+    // A parent that already evaluated the source's fault may have stopped tracking the child (a BPMN error boundary or
+    // late-fault guard drops it), and the runtime cannot tell whether it still expects an outcome. Until that is
+    // decided (#3135), the successor keeps the source's parent-completion marker, so its completion is not delivered.
+    private static Dictionary<string, string> NewMetadata(ActivityExecutionState source)
+    {
+        var metadata = ActivitySuccessorStaging.SuccessorMetadata(source.Metadata, source.Execution.ActivityExecutionId);
+        if (source.Metadata.TryGetValue(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId, out var processedWorkItemId))
+            metadata[RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId] = processedWorkItemId;
+        return metadata;
     }
 
     private static bool TryReadPayload(JsonElement payload, out string sourceId)
