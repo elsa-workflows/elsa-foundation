@@ -62,89 +62,36 @@ internal sealed class ConnectorWorkerGate(string root, string role, EtlConnector
 }
 
 /// <summary>Preserves the optional connector-store capability while adding deterministic process gates.</summary>
-internal sealed class ConnectorWorkerGateStore : ForwardingEtlRuntimeStore, IEtlConnectorRuntimeStore
+internal sealed class ConnectorWorkerGateStore(IEtlRuntimeStore baseStore, IEtlConnectorRuntimeStore connector,
+    ConnectorWorkerGate gate) : ForwardingEtlConnectorRuntimeStore(baseStore, connector)
 {
-    private readonly IEtlConnectorRuntimeStore _connector;
-    private readonly ConnectorWorkerGate _gate;
+    private readonly ConnectorWorkerGate _gate = gate ?? throw new ArgumentNullException(nameof(gate));
 
-    public ConnectorWorkerGateStore(IEtlRuntimeStore baseStore, IEtlConnectorRuntimeStore connector,
-        ConnectorWorkerGate gate) : base(baseStore)
-    {
-        _connector = connector ?? throw new ArgumentNullException(nameof(connector));
-        _gate = gate ?? throw new ArgumentNullException(nameof(gate));
-    }
-
-    public ValueTask<EtlConnectorAdmissionResult> AdmitConnectorAsync(EtlConnectorRunAdmission admission,
-        CancellationToken cancellationToken = default) =>
-        _connector.AdmitConnectorAsync(admission, cancellationToken);
-
-    public ValueTask<EtlConnectorRunView?> FindConnectorRunAsync(EtlScope scope, string runId,
-        CancellationToken cancellationToken = default) =>
-        _connector.FindConnectorRunAsync(scope, runId, cancellationToken);
-
-    public ValueTask<EtlPreparationLease?> ClaimConnectorPreparationAsync(EtlScope scope, string workerId,
-        CancellationToken cancellationToken = default) =>
-        _connector.ClaimConnectorPreparationAsync(scope, workerId, cancellationToken);
-
-    public ValueTask<EtlStoreStatus> CommitConnectorPreparationAsync(EtlPreparationLease lease,
-        EtlConnectorPreparedRun prepared, CancellationToken cancellationToken = default) =>
-        _connector.CommitConnectorPreparationAsync(lease, prepared, cancellationToken);
-
-    public ValueTask<EtlConnectorPartitionLease?> ClaimConnectorPartitionAsync(EtlScope scope, string? runId,
-        string workerId, CancellationToken cancellationToken = default) =>
-        _connector.ClaimConnectorPartitionAsync(scope, runId, workerId, cancellationToken);
-
-    public ValueTask<EtlConnectorHttpSourceFetchResult> BeginConnectorHttpSourceAsync(
-        EtlConnectorPartitionLease lease, string requestId, CancellationToken cancellationToken = default) =>
-        _connector.BeginConnectorHttpSourceAsync(lease, requestId, cancellationToken);
-
-    public ValueTask<EtlConnectorHttpSourceFetchResult> CompleteConnectorHttpSourceAsync(
-        EtlConnectorPartitionLease lease, EtlHttpSourceFetchAttempt attempt, EtlHttpSourceFetchOutcome outcome,
-        CancellationToken cancellationToken = default) =>
-        _connector.CompleteConnectorHttpSourceAsync(lease, attempt, outcome, cancellationToken);
-
-    public async ValueTask<EtlConnectorHttpSourceFetchResult> CaptureConnectorHttpSourceAsync(
+    public override async ValueTask<EtlConnectorHttpSourceFetchResult> CaptureConnectorHttpSourceAsync(
         EtlConnectorPartitionLease lease, EtlHttpSourceFetchAttempt attempt, EtlRetainedHttpPage page,
         DateTimeOffset responseReceivedAtUtc, CancellationToken cancellationToken = default)
     {
         await _gate.BeforeCaptureAsync(lease, page, cancellationToken);
-        return await _connector.CaptureConnectorHttpSourceAsync(lease, attempt, page, responseReceivedAtUtc,
+        return await Connector.CaptureConnectorHttpSourceAsync(lease, attempt, page, responseReceivedAtUtc,
             cancellationToken);
     }
 
-    public ValueTask<EtlConnectorPositionResult> AttachHttpPageAsync(EtlConnectorPartitionLease lease,
-        EtlRetainedHttpPage page, CancellationToken cancellationToken = default) =>
-        _connector.AttachHttpPageAsync(lease, page, cancellationToken);
-
-    public ValueTask<EtlConnectorPositionResult> AdvanceEmptyHttpPageAsync(EtlConnectorPartitionLease lease,
-        CancellationToken cancellationToken = default) =>
-        _connector.AdvanceEmptyHttpPageAsync(lease, cancellationToken);
-
-    public async ValueTask<EtlConnectorReservationResult> ReserveConnectorBatchAsync(
+    public override async ValueTask<EtlConnectorReservationResult> ReserveConnectorBatchAsync(
         EtlConnectorPartitionLease lease, EtlConnectorBatchDescriptor batch,
         CancellationToken cancellationToken = default)
     {
-        var result = await _connector.ReserveConnectorBatchAsync(lease, batch, cancellationToken);
+        var result = await Connector.ReserveConnectorBatchAsync(lease, batch, cancellationToken);
         if (result.Status == EtlStoreStatus.Applied && result.Reservation is { } reservation)
             await _gate.AfterReservationAsync(lease, reservation.Batch.BatchId, cancellationToken);
         return result;
     }
 
-    public ValueTask<EtlConnectorOutputResult> RetainConnectorBatchOutputAsync(EtlConnectorPartitionLease lease,
-        string batchId, EtlConnectorBatchOutput output, CancellationToken cancellationToken = default) =>
-        _connector.RetainConnectorBatchOutputAsync(lease, batchId, output, cancellationToken);
-
-    public ValueTask<EtlConnectorHttpDeliveryResult> BeginConnectorHttpDeliveryAsync(
-        EtlConnectorPartitionLease lease, string batchId, EtlOutputRoute route, string requestId,
-        CancellationToken cancellationToken = default) =>
-        _connector.BeginConnectorHttpDeliveryAsync(lease, batchId, route, requestId, cancellationToken);
-
-    public async ValueTask<EtlConnectorHttpDeliveryResult> CompleteConnectorHttpDeliveryAsync(
+    public override async ValueTask<EtlConnectorHttpDeliveryResult> CompleteConnectorHttpDeliveryAsync(
         EtlConnectorPartitionLease lease, string batchId, EtlOutputRoute route,
         EtlHttpDeliveryAttempt attempt, EtlHttpDeliveryResponse response,
         CancellationToken cancellationToken = default)
     {
-        var result = await _connector.CompleteConnectorHttpDeliveryAsync(lease, batchId, route, attempt, response,
+        var result = await Connector.CompleteConnectorHttpDeliveryAsync(lease, batchId, route, attempt, response,
             cancellationToken);
         var gate = route switch
         {
@@ -157,23 +104,10 @@ internal sealed class ConnectorWorkerGateStore : ForwardingEtlRuntimeStore, IEtl
         return result;
     }
 
-    public ValueTask<EtlStoreStatus> RecordConnectorFilePublicationAsync(EtlConnectorPartitionLease lease,
-        string batchId, EtlOutputRoute route, EtlObjectReference publication,
-        CancellationToken cancellationToken = default) =>
-        _connector.RecordConnectorFilePublicationAsync(lease, batchId, route, publication, cancellationToken);
-
-    public async ValueTask<EtlConnectorPositionResult> AcceptConnectorBatchAsync(EtlConnectorPartitionLease lease,
+    public override async ValueTask<EtlConnectorPositionResult> AcceptConnectorBatchAsync(EtlConnectorPartitionLease lease,
         string batchId, CancellationToken cancellationToken = default)
     {
         await _gate.BeforeAcceptanceAsync(lease, batchId, cancellationToken);
-        return await _connector.AcceptConnectorBatchAsync(lease, batchId, cancellationToken);
+        return await Connector.AcceptConnectorBatchAsync(lease, batchId, cancellationToken);
     }
-
-    public ValueTask<EtlStoreStatus> RenewConnectorPartitionAsync(EtlConnectorPartitionLease lease,
-        CancellationToken cancellationToken = default) =>
-        _connector.RenewConnectorPartitionAsync(lease, cancellationToken);
-
-    public ValueTask<EtlStoreStatus> ReleaseConnectorPartitionAsync(EtlConnectorPartitionLease lease,
-        CancellationToken cancellationToken = default) =>
-        _connector.ReleaseConnectorPartitionAsync(lease, cancellationToken);
 }
