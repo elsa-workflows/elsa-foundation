@@ -10,6 +10,7 @@ public static class RuleLimits
     public const int MaxArtifactBytes = 1_048_576;
     public const int MaxEnvelopeBytes = 4_194_304;
     public const int MaxStateProjectionBytes = 8_388_608;
+    public const int MaxStateMetadataBytes = 65_536;
     public const int MaxPageEntries = 256;
     public const int MaxRounds = 4097;
 }

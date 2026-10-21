@@ -18,7 +18,7 @@ Elsa has no imposed greenfield TDD cadence (constitution 6.0.0 D9). Implement an
 - [ ] T007 Validate semantic witness, budget/default capture, malformed/duplicate/noncanonical receipts, vocabulary membership and byte/count boundaries in `Extensions/Rules/tests/Tests/`; include omission-of-applicable-rule and fixed-point-vs-budget removal controls.
 - [ ] T008 Register real projects in `Elsa.Server.slnx` and affected `tools/solution-filters/profiles.json` selections; verify scoped build, public API tracking and feature composition with actual services. Root serializes shared registrations.
 
-Checkpoint status: T004–T006 implemented. Thirty focused semantic/value tests pass with a complete-firing removal control; full T007 bounds/budget controls and T008 composition remain pending. No durable/package/native qualification claimed yet.
+Checkpoint status: T004–T006 implemented. Fifty-one focused semantic/value/encoding tests pass with complete-firing and encoded-byte removal controls; exact/one-over artifact and invocation bounds are covered. T007 durable fixed-point/budget controls and T008 composition remain pending. See [encoding checkpoint](evidence/admission-encoding-checkpoint.md). No durable/package/native qualification claimed yet.
 
 ## Phase 3: US1 — Direct durable invocation and actual packages (P1)
 

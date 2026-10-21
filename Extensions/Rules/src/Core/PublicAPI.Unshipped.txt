@@ -163,6 +163,7 @@ const Elsa.Rules.Core.RuleLimits.MaxPageEntries = 256 -> int
 const Elsa.Rules.Core.RuleLimits.MaxPremisesPerRule = 64 -> int
 const Elsa.Rules.Core.RuleLimits.MaxRounds = 4097 -> int
 const Elsa.Rules.Core.RuleLimits.MaxRules = 1024 -> int
+const Elsa.Rules.Core.RuleLimits.MaxStateMetadataBytes = 65536 -> int
 const Elsa.Rules.Core.RuleLimits.MaxStateProjectionBytes = 8388608 -> int
 const Elsa.Rules.Core.RuleLimits.MaxVocabularyFacts = 4096 -> int
 override Elsa.Rules.Core.RuleAdmissionRefusal.Equals(object? obj) -> bool

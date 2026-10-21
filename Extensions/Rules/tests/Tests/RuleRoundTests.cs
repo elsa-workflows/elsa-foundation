@@ -2,6 +2,7 @@ using System.Text;
 using Elsa.Rules.Core;
 using Elsa.Rules.Persistence.Core;
 using Elsa.Rules.Runtime;
+using static Elsa.Rules.Tests.RuleTestData;
 
 namespace Elsa.Rules.Tests;
 
@@ -172,6 +173,8 @@ public class RuleRoundTests
 
     [Theory]
     [InlineData("[]")]
+    [InlineData("{\"formatVersion\":2147483648}")]
+    [InlineData("{\"formatVersion\":2}")]
     [InlineData("{\"formatVersion\":\"wrong\"}")]
     [InlineData("{\"formatVersion\":1,\"languageId\":true}")]
     public async Task Malformed_json_shapes_return_invalid(string json)
@@ -212,21 +215,4 @@ public class RuleRoundTests
             RulesCodec.Hash(RulesCodec.ReceiptBytes(unsigned)));
     }
 
-    private static RuleRoundInput Input(RuleProgram program, IReadOnlyList<RuleFact> facts, int ordinal = 0)
-    {
-        var identity = new RuleRoundIdentity(new(new(null, "partition"), "invocation"), new(new string('a', 64)),
-            ordinal, RulesCodec.FactsHash(facts));
-        // Synthetic identity is only a semantic unit-test fixture, never package qualification.
-        var asset = new RuleAssetPin("lib/net10.0/Tests.Semantics.dll", "Tests.Semantics, Version=1.0.0.0", new string('0', 64));
-        var pin = new RuleSemanticPin(1, [new RulePackagePin("Tests.Semantics", "1.0.0", Convert.ToBase64String(new byte[64]), [asset])], RulesCodec.LanguageId, 1, 1, 1);
-        return new(identity, RulesCodec.CreateArtifact(program), pin, facts, 8, ordinal + 1);
-    }
-
-    private static RuleProgram Witness() => Program(["final", "joined", "left", "never-derived", "right", "seed", "unreachable"],
-        [Rule("left", ["seed"], "left"), Rule("right", ["seed"], "right"), Rule("join", ["left", "right"], "joined"),
-         Rule("final", ["joined"], "final"), Rule("unreachable", ["unreachable"], "never-derived")]);
-
-    private static RuleDefinition Rule(string id, string[] premises, string conclusion) => new(id, Facts(premises), new(conclusion));
-    private static RuleFact[] Facts(params string[] facts) => facts.Select(fact => new RuleFact(fact)).ToArray();
-    private static RuleProgram Program(string[] vocabulary, RuleDefinition[] rules) => new(1, RulesCodec.LanguageId, 1, Facts(vocabulary), rules);
 }

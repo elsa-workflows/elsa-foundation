@@ -8,12 +8,12 @@ namespace Elsa.Rules.Runtime;
 /// <summary>Version-one canonical encoding. Field order and ordinal set order are part of the persisted contract.</summary>
 internal static class RulesCodec
 {
-    internal const string LanguageId = "elsa.rules.finite-positive";
+    internal const string LanguageId = RuleLanguage.Id;
 
     public static RuleArtifactSnapshot CreateArtifact(RuleProgram program)
     {
         ValidateProgram(program);
-        var bytes = Write(writer => WriteProgram(writer, program));
+        var bytes = RuleJson.Write(writer => WriteProgram(writer, program), RuleLimits.MaxArtifactBytes);
         Require(bytes.Length <= RuleLimits.MaxArtifactBytes, "rules.artifact-too-large");
         var hash = Hash(bytes);
         return new RuleArtifactSnapshot(1, "rules:" + hash, hash, bytes);
@@ -29,7 +29,9 @@ internal static class RulesCodec
         if (artifact.FormatVersion != 1) throw new NotSupportedException("rules.artifact-version");
         using var json = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 12 });
         var root = json.RootElement;
-        var program = new RuleProgram(root.GetProperty("formatVersion").GetInt32(),
+        var formatVersion = root.GetProperty("formatVersion").GetInt32();
+        Require(formatVersion == artifact.FormatVersion, "rules.artifact-format-identity");
+        var program = new RuleProgram(formatVersion,
             root.GetProperty("languageId").GetString()!, root.GetProperty("languageVersion").GetInt32(),
             ReadFacts(root.GetProperty("vocabulary")),
             root.GetProperty("rules").EnumerateArray().Select(rule => new RuleDefinition(
@@ -52,7 +54,7 @@ internal static class RulesCodec
         return copy.OrderBy(fact => fact.Atom, StringComparer.Ordinal).ToArray();
     }
 
-    public static string FactsHash(IReadOnlyList<RuleFact> facts) => Hash(Write(writer => WriteFacts(writer, facts)));
+    public static string FactsHash(IReadOnlyList<RuleFact> facts) => Hash(RuleJson.Write(writer => WriteFacts(writer, facts), RuleLimits.MaxEnvelopeBytes));
 
     public static int ResolveMaxRounds(RuleProgram program, IReadOnlyList<RuleFact> initialFacts, int? requested)
     {
@@ -65,9 +67,9 @@ internal static class RulesCodec
         return limit;
     }
 
-    public static string PinHash(RuleSemanticPin pin) => Hash(Write(writer => WritePin(writer, pin)));
+    public static string PinHash(RuleSemanticPin pin) => Hash(RuleJson.Write(writer => WritePin(writer, pin), RuleLimits.MaxEnvelopeBytes));
 
-    public static byte[] ReceiptBytes(RuleRoundReceipt receipt) => Write(writer =>
+    public static byte[] ReceiptBytes(RuleRoundReceipt receipt) => RuleJson.Write(writer =>
     {
         writer.WriteStartObject();
         writer.WritePropertyName("identity");
@@ -85,7 +87,20 @@ internal static class RulesCodec
         }
         writer.WriteEndArray();
         writer.WriteEndObject();
-    });
+    }, RuleLimits.MaxEnvelopeBytes);
+
+    public static byte[] ReceiptRecordBytes(RuleRoundReceipt receipt)
+    {
+        var body = ReceiptBytes(receipt);
+        return RuleJson.Write(writer =>
+        {
+            writer.WriteStartObject();
+            writer.WritePropertyName("receipt");
+            writer.WriteRawValue(body);
+            writer.WriteString("semanticReceiptSha256", receipt.SemanticReceiptSha256);
+            writer.WriteEndObject();
+        }, RuleLimits.MaxEnvelopeBytes);
+    }
 
     public static string Hash(ReadOnlySpan<byte> bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
 
@@ -135,7 +150,7 @@ internal static class RulesCodec
         writer.WriteEndObject();
     }
 
-    private static void WriteFacts(Utf8JsonWriter writer, IEnumerable<RuleFact> facts)
+    internal static void WriteFacts(Utf8JsonWriter writer, IEnumerable<RuleFact> facts)
     {
         writer.WriteStartArray();
         foreach (var fact in facts) writer.WriteStringValue(fact.Atom);
@@ -154,7 +169,7 @@ internal static class RulesCodec
         writer.WriteEndObject();
     }
 
-    private static void WritePin(Utf8JsonWriter writer, RuleSemanticPin pin)
+    internal static void WritePin(Utf8JsonWriter writer, RuleSemanticPin pin)
     {
         writer.WriteStartObject();
         writer.WriteNumber("pinSchemaVersion", pin.PinSchemaVersion);
@@ -183,13 +198,6 @@ internal static class RulesCodec
         }
         writer.WriteEndArray();
         writer.WriteEndObject();
-    }
-
-    private static byte[] Write(Action<Utf8JsonWriter> write)
-    {
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream)) write(writer);
-        return stream.ToArray();
     }
 
     private static void Require(bool condition, string code)

@@ -32,7 +32,9 @@ internal sealed class RuleRoundEvaluator : IRuleRoundValidator
         var receipt = new RuleRoundReceipt(input.Identity, RulesCodec.PinHash(pin), additions, firings, new string('0', 64));
         var bytes = RulesCodec.ReceiptBytes(receipt);
         if (bytes.Length > RuleLimits.MaxEnvelopeBytes) throw new InvalidDataException("rules.receipt-too-large");
-        return new RuleRoundReceipt(receipt.Identity, receipt.ImplementationPinHash, additions, firings, RulesCodec.Hash(bytes));
+        var result = new RuleRoundReceipt(receipt.Identity, receipt.ImplementationPinHash, additions, firings, RulesCodec.Hash(bytes));
+        _ = RulesCodec.ReceiptRecordBytes(result);
+        return result;
     }
 
     public ValueTask<RuleRoundValidationResult> ValidateAsync(RuleRoundValidationInput input,
@@ -54,6 +56,7 @@ internal sealed class RuleRoundEvaluator : IRuleRoundValidator
                 RuleValueValidation.Identifier(firing?.Conclusion?.Atom!, nameof(candidate));
             }
             var bytes = RulesCodec.ReceiptBytes(candidate);
+            _ = RulesCodec.ReceiptRecordBytes(candidate);
             var equivalent = bytes.Length <= RuleLimits.MaxEnvelopeBytes
                 && candidate.SemanticReceiptSha256 == expected.SemanticReceiptSha256
                 && bytes.AsSpan().SequenceEqual(RulesCodec.ReceiptBytes(expected));
@@ -66,7 +69,7 @@ internal sealed class RuleRoundEvaluator : IRuleRoundValidator
             return ValueTask.FromResult(new RuleRoundValidationResult(RuleValidationDisposition.UnsupportedFormat,
                 "rules.unsupported-format"));
         }
-        catch (Exception ex) when (ex is InvalidDataException or ArgumentException or JsonException or KeyNotFoundException or InvalidOperationException)
+        catch (Exception ex) when (ex is InvalidDataException or ArgumentException or JsonException or KeyNotFoundException or InvalidOperationException or FormatException)
         {
             return ValueTask.FromResult(new RuleRoundValidationResult(RuleValidationDisposition.Invalid,
                 "rules.invalid-round-receipt"));
