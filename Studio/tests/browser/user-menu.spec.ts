@@ -67,6 +67,7 @@ async function openShell(page: Page, options: UserMenuOptions = {}) {
   await page.goto(`/dashboard?${query}`);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "classic");
   await expect(page.locator("html")).toHaveAttribute("data-theme-mode", theme);
+  await page.evaluate(() => document.fonts.ready);
   return state;
 }
 
@@ -91,12 +92,22 @@ async function readShellGeometry(page: Page) {
     const frame = document.querySelector<HTMLElement>(".main-frame")!;
     const actions = document.querySelector<HTMLElement>(".topbar-actions")!;
     const content = document.querySelector<HTMLElement>(".content")!;
+    const bodyStyle = getComputedStyle(document.body);
     const describe = (selector: string) => {
       const element = document.querySelector<HTMLElement>(selector);
       return element ? dimensions(element) : null;
     };
     const describeAll = (selector: string) => Array.from(document.querySelectorAll<HTMLElement>(selector), dimensions);
     return {
+      layout: {
+        navigation: document.documentElement.getAttribute("data-nav-mode"),
+        appearance: document.documentElement.getAttribute("data-theme-appearance"),
+        fonts: document.fonts.status,
+        body: { ...dimensions(document.body), margin: bodyStyle.margin, padding: bodyStyle.padding, overflow: bodyStyle.overflow },
+        shell: dimensions(document.querySelector<HTMLElement>(".studio-shell")!),
+        topbar: dimensions(document.querySelector<HTMLElement>(".topbar")!),
+        visualViewport: { width: window.visualViewport?.width, offsetLeft: window.visualViewport?.offsetLeft }
+      },
       document: { scrollX: window.scrollX, clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth },
       frame: dimensions(frame),
       actions: dimensions(actions),
@@ -119,13 +130,14 @@ async function attachShellGeometry(label: string, geometry: unknown, screenshot:
 }
 
 function expectHeaderToFit(geometry: Awaited<ReturnType<typeof readShellGeometry>>, width: number) {
+  const diagnostic = JSON.stringify(geometry, null, 2);
   for (const element of [geometry.document, geometry.frame, geometry.actions]) {
-    expect(element.scrollWidth).toBe(element.clientWidth);
+    expect(element.scrollWidth, diagnostic).toBe(element.clientWidth);
   }
   for (const control of Object.values(geometry.controls)) {
     if (!control) continue;
-    expect(control.left).toBeGreaterThanOrEqual(0);
-    expect(control.right).toBeLessThanOrEqual(width);
+    expect(control.left, diagnostic).toBeGreaterThanOrEqual(0);
+    expect(control.right, diagnostic).toBeLessThanOrEqual(width);
   }
 }
 
@@ -285,6 +297,7 @@ test.describe("shell user menu", () => {
         await themeMenu.getByRole("menuitemradio", { name: navigation }).click();
         await expect(themeMenu.getByRole("menuitemradio", { name: navigation })).toHaveAttribute("aria-checked", "true");
         await expect(page.locator("html")).toHaveAttribute("data-nav-mode", navigation === "Top" ? "top" : "left");
+        await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
         const afterNavigation = await readShellGeometry(page);
         expectHeaderToFit(afterNavigation, width);
         expect(afterNavigation.frame.scrollLeft).toBe(before.frame.scrollLeft);
@@ -319,6 +332,54 @@ test.describe("shell user menu", () => {
     });
   }
 
+  test("selects appearance options and signs out with the keyboard at 320px", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 900 });
+    const state = await openShell(page);
+    const themeTrigger = page.getByRole("button", { name: "Select theme" });
+    await themeTrigger.focus();
+    await page.keyboard.press("Enter");
+    const themeMenu = page.locator(".theme-dropdown");
+    await expect(themeMenu.getByRole("menuitemradio", { name: "Light", exact: true })).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(themeMenu.getByRole("menuitemradio", { name: "Dark", exact: true })).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("html")).toHaveAttribute("data-theme-appearance", "dark");
+
+    await page.keyboard.press("Home");
+    await expect(themeMenu.getByRole("menuitemradio", { name: "Light", exact: true })).toBeFocused();
+    for (const name of ["Dark", "Dim", "High contrast", "Theme default", "Left", "Top"]) {
+      await page.keyboard.press("ArrowDown");
+      await expect(themeMenu.getByRole("menuitemradio", { name, exact: true })).toBeFocused();
+    }
+    const top = themeMenu.getByRole("menuitemradio", { name: "Top", exact: true });
+    await expect(top).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(top).toHaveAttribute("aria-checked", "true");
+    await expect(page.locator("html")).toHaveAttribute("data-nav-mode", "top");
+    expectHeaderToFit(await readShellGeometry(page), 320);
+
+    await page.keyboard.press("m");
+    await expect(themeMenu.getByRole("menuitem", { name: "Meridian", exact: true })).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "meridian");
+    await expect(themeMenu).toBeHidden();
+    await expect(themeTrigger).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(themeMenu.getByRole("menuitemradio", { name: "Light", exact: true })).toBeFocused();
+    await page.keyboard.press("c");
+    await expect(themeMenu.getByRole("menuitem", { name: "Classic", exact: true })).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "classic");
+    await expect(themeTrigger).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(account(page)).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("menuitem", { name: "Sign out", exact: true })).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("heading", { name: "Backend sign-in page" })).toBeVisible();
+    expect(state.logoutCalls).toEqual([`/_elsa/identity/logout/${provider}`]);
+  });
+
   test("keeps a dense Weaver status summary and each badge inside the 320px viewport", async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 900 });
     await openShell(page, { displayName: "Administrator", weaver: "dense" });
@@ -327,8 +388,7 @@ test.describe("shell user menu", () => {
     const indicator = page.locator(".agent-session-indicator");
     await expect(indicator).toHaveAttribute("aria-label", "1 active or background Weaver sessions, 2 waiting, 1 blocked, 1 failed, 3 pending proposals, 2 pending artifacts, 1 pending prompts, 1 child sessions");
     expect(geometry.controls.weaver).not.toBeNull();
-    expect(geometry.controls.weaver!.left).toBeGreaterThanOrEqual(0);
-    expect(geometry.controls.weaver!.right).toBeLessThanOrEqual(320);
+    expectHeaderToFit(geometry, 320);
     expect(geometry.weaverBadges).toHaveLength(8);
     for (const badge of geometry.weaverBadges) {
       expect(badge.left).toBeGreaterThanOrEqual(0);
@@ -336,9 +396,6 @@ test.describe("shell user menu", () => {
       expect(badge.top).toBeGreaterThanOrEqual(geometry.controls.weaver!.top);
       expect(badge.bottom).toBeLessThanOrEqual(geometry.controls.weaver!.bottom);
     }
-    expect(geometry.document.scrollWidth).toBe(geometry.document.clientWidth);
-    expect(geometry.frame.scrollWidth).toBe(geometry.frame.clientWidth);
-    expect(geometry.actions.scrollWidth).toBe(geometry.actions.clientWidth);
   });
 
   test("keeps remaining controls usable when the shell omits appearance and account actions", async ({ page }) => {
@@ -348,14 +405,7 @@ test.describe("shell user menu", () => {
     await expect(page.getByRole("button", { name: "Select theme" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "GitHub" })).toHaveAttribute("href", "https://github.com/elsa-workflows/elsa-foundation-studio");
     await expect(page.getByRole("link", { name: "Designer source" })).toHaveAttribute("href", "https://github.com/elsa-workflows/elsa-foundation-designer");
-    const geometry = await readShellGeometry(page);
-    expect(geometry.document.scrollWidth).toBe(geometry.document.clientWidth);
-    expect(geometry.frame.scrollWidth).toBe(geometry.frame.clientWidth);
-    expect(geometry.actions.scrollWidth).toBe(geometry.actions.clientWidth);
-    for (const control of Object.values(geometry.controls).filter((value): value is NonNullable<typeof value> => value !== null)) {
-      expect(control.left).toBeGreaterThanOrEqual(0);
-      expect(control.right).toBeLessThanOrEqual(320);
-    }
+    expectHeaderToFit(await readShellGeometry(page), 320);
   });
 
   test("fits the anonymous shell without an account action", async ({ page }) => {
@@ -374,6 +424,13 @@ test.describe("shell user menu", () => {
       await expect(page.locator(".topbar-actions .user-menu-button")).toBeHidden();
       await expect(page.locator(".theme-mode-toggle")).toBeVisible();
       await expect(page.locator(".sidebar-account .user-menu-name")).toBeVisible();
+      const bounds = await page.locator(".sidebar-account .user-menu-button").boundingBox();
+      expect(bounds).not.toBeNull();
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+      expect(bounds!.y).toBeGreaterThanOrEqual(0);
+      expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(900);
+      await test.info().attach(`desktop-account-${width}.json`, { body: JSON.stringify(bounds), contentType: "application/json" });
     }
   });
 
