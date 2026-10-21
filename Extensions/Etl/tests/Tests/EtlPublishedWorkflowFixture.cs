@@ -62,7 +62,7 @@ namespace Elsa.Etl.Tests;
 /// The authoring service provider is disposed before the fixture is returned; only durable files and immutable
 /// publication snapshots cross into the separate runtime-only provider.
 /// </summary>
-internal sealed class EtlPublishedWorkflowFixture : IAsyncDisposable
+internal sealed partial class EtlPublishedWorkflowFixture : IAsyncDisposable
 {
     private const string DefinitionId = "etl-published-parent";
     private const string PipelineDefinitionId = "orders";
@@ -70,6 +70,7 @@ internal sealed class EtlPublishedWorkflowFixture : IAsyncDisposable
     private const string WorkflowRecoverySigningKey = "etl-published-workflow-recovery-key-32";
     private const string WorkflowHierarchySigningKey = "etl-published-workflow-hierarchy-key-32";
     private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
+    private readonly bool _preserveRootDirectory;
     private bool _disposed;
 
     private EtlPublishedWorkflowFixture(
@@ -79,11 +80,14 @@ internal sealed class EtlPublishedWorkflowFixture : IAsyncDisposable
         EtlArtifact originalArtifact,
         EtlArtifact updatedArtifact,
         WorkflowExecutable executable,
-        WorkflowExecutableSourceReference reference)
+        WorkflowExecutableSourceReference reference,
+        string runtimeDatabaseFileName,
+        bool preserveRootDirectory)
     {
+        _preserveRootDirectory = preserveRootDirectory;
         RootDirectory = rootDirectory;
         WorkflowDatabase = Path.Combine(rootDirectory, "workflow.db");
-        EtlRuntimeDatabase = Path.Combine(rootDirectory, "etl-runtime.db");
+        EtlRuntimeDatabase = Path.Combine(rootDirectory, runtimeDatabaseFileName);
         EtlDesignDatabase = Path.Combine(rootDirectory, "etl-design.db");
         SnapshotRoot = Path.Combine(rootDirectory, "snapshots");
         OutputRoot = Path.Combine(rootDirectory, "output");
@@ -111,9 +115,18 @@ internal sealed class EtlPublishedWorkflowFixture : IAsyncDisposable
     public static async Task<EtlPublishedWorkflowFixture> CreateAsync(
         bool flowchart,
         string? catalogSourceId = null,
-        bool httpSource = false)
+        bool httpSource = false,
+        string? rootDirectory = null,
+        string runtimeDatabaseFileName = "etl-runtime.db",
+        bool preserveRootDirectory = false)
     {
-        var directory = Path.Combine(Path.GetTempPath(), "Elsa.Etl.PublishedWorkflow", Guid.NewGuid().ToString("N"));
+        var directory = rootDirectory is null
+            ? Path.Combine(Path.GetTempPath(), "Elsa.Etl.PublishedWorkflow", Guid.NewGuid().ToString("N"))
+            : Path.GetFullPath(rootDirectory);
+        if (Path.IsPathRooted(runtimeDatabaseFileName) || Path.GetFileName(runtimeDatabaseFileName) != runtimeDatabaseFileName)
+            throw new ArgumentException("The runtime database name must be one file name.", nameof(runtimeDatabaseFileName));
+        if (Directory.Exists(directory))
+            throw new IOException("The published workflow fixture root must not already exist.");
         WorkflowExecutionHarness? authoring = null;
         try
         {
@@ -274,7 +287,8 @@ internal sealed class EtlPublishedWorkflowFixture : IAsyncDisposable
 
             await authoring.DisposeAsync();
             authoring = null;
-            return new EtlPublishedWorkflowFixture(directory, scope, bindings, originalArtifact, updatedArtifact, executable, reference);
+            return new EtlPublishedWorkflowFixture(directory, scope, bindings, originalArtifact, updatedArtifact, executable,
+                reference, runtimeDatabaseFileName, preserveRootDirectory);
         }
         catch (Exception exception)
         {
@@ -292,7 +306,7 @@ internal sealed class EtlPublishedWorkflowFixture : IAsyncDisposable
                 }
             }
 
-            if (!cleanupFailed && Directory.Exists(directory))
+            if (!preserveRootDirectory && !cleanupFailed && Directory.Exists(directory))
             {
                 try
                 {
@@ -316,7 +330,7 @@ internal sealed class EtlPublishedWorkflowFixture : IAsyncDisposable
         if (_disposed)
             return ValueTask.CompletedTask;
         _disposed = true;
-        if (Directory.Exists(RootDirectory))
+        if (!_preserveRootDirectory && Directory.Exists(RootDirectory))
             Directory.Delete(RootDirectory, recursive: true);
         return ValueTask.CompletedTask;
     }

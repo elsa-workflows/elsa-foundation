@@ -1,0 +1,134 @@
+--- a/Extensions/Etl/tests/Tests/EtlPublishedWorkflowFixture.cs
++++ b/Extensions/Etl/tests/Tests/EtlPublishedWorkflowFixture.cs
+@@ -62,7 +62,7 @@
+ /// The authoring service provider is disposed before the fixture is returned; only durable files and immutable
+ /// publication snapshots cross into the separate runtime-only provider.
+ /// </summary>
+-internal sealed class EtlPublishedWorkflowFixture : IAsyncDisposable
++internal sealed partial class EtlPublishedWorkflowFixture : IAsyncDisposable
+ {
+     private const string DefinitionId = "etl-published-parent";
+     private const string PipelineDefinitionId = "orders";
+@@ -70,6 +70,7 @@
+     private const string WorkflowRecoverySigningKey = "etl-published-workflow-recovery-key-32";
+     private const string WorkflowHierarchySigningKey = "etl-published-workflow-hierarchy-key-32";
+     private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
++    private readonly bool _preserveRootDirectory;
+     private bool _disposed;
+ 
+     private EtlPublishedWorkflowFixture(
+@@ -79,11 +80,14 @@
+         EtlArtifact originalArtifact,
+         EtlArtifact updatedArtifact,
+         WorkflowExecutable executable,
+-        WorkflowExecutableSourceReference reference)
++        WorkflowExecutableSourceReference reference,
++        string runtimeDatabaseFileName,
++        bool preserveRootDirectory)
+     {
++        _preserveRootDirectory = preserveRootDirectory;
+         RootDirectory = rootDirectory;
+         WorkflowDatabase = Path.Combine(rootDirectory, "workflow.db");
+-        EtlRuntimeDatabase = Path.Combine(rootDirectory, "etl-runtime.db");
++        EtlRuntimeDatabase = Path.Combine(rootDirectory, runtimeDatabaseFileName);
+         EtlDesignDatabase = Path.Combine(rootDirectory, "etl-design.db");
+         SnapshotRoot = Path.Combine(rootDirectory, "snapshots");
+         OutputRoot = Path.Combine(rootDirectory, "output");
+@@ -108,9 +112,18 @@
+     public WorkflowExecutable Executable { get; }
+     public WorkflowExecutableSourceReference Reference { get; }
+ 
+-    public static async Task<EtlPublishedWorkflowFixture> CreateAsync(bool flowchart)
++    public static async Task<EtlPublishedWorkflowFixture> CreateAsync(bool flowchart,
++        string? rootDirectory = null,
++        string runtimeDatabaseFileName = "etl-runtime.db",
++        bool preserveRootDirectory = false)
+     {
+-        var directory = Path.Combine(Path.GetTempPath(), "Elsa.Etl.PublishedWorkflow", Guid.NewGuid().ToString("N"));
++        var directory = rootDirectory is null
++            ? Path.Combine(Path.GetTempPath(), "Elsa.Etl.PublishedWorkflow", Guid.NewGuid().ToString("N"))
++            : Path.GetFullPath(rootDirectory);
++        if (Path.IsPathRooted(runtimeDatabaseFileName) || Path.GetFileName(runtimeDatabaseFileName) != runtimeDatabaseFileName)
++            throw new ArgumentException("The runtime database name must be one file name.", nameof(runtimeDatabaseFileName));
++        if (Directory.Exists(directory))
++            throw new IOException("The published workflow fixture root must not already exist.");
+         WorkflowExecutionHarness? authoring = null;
+         try
+         {
+@@ -238,7 +251,8 @@
+ 
+             await authoring.DisposeAsync();
+             authoring = null;
+-            return new EtlPublishedWorkflowFixture(directory, scope, bindings, originalArtifact, updatedArtifact, executable, reference);
++            return new EtlPublishedWorkflowFixture(directory, scope, bindings, originalArtifact, updatedArtifact, executable,
++                reference, runtimeDatabaseFileName, preserveRootDirectory);
+         }
+         catch (Exception exception)
+         {
+@@ -256,7 +270,7 @@
+                 }
+             }
+ 
+-            if (!cleanupFailed && Directory.Exists(directory))
++            if (!preserveRootDirectory && !cleanupFailed && Directory.Exists(directory))
+             {
+                 try
+                 {
+@@ -280,7 +294,7 @@
+         if (_disposed)
+             return ValueTask.CompletedTask;
+         _disposed = true;
+-        if (Directory.Exists(RootDirectory))
++        if (!_preserveRootDirectory && Directory.Exists(RootDirectory))
+             Directory.Delete(RootDirectory, recursive: true);
+         return ValueTask.CompletedTask;
+     }
+--- a/Extensions/Etl/tests/Tests/EtlPublishedWorkflowJourneyTests.cs
++++ b/Extensions/Etl/tests/Tests/EtlPublishedWorkflowJourneyTests.cs
+@@ -37,7 +37,7 @@
+ namespace Elsa.Etl.Tests;
+ 
+ /// <summary>Exercises persisted native publication followed by execution in a separate runtime-only provider.</summary>
+-public sealed class EtlPublishedWorkflowJourneyTests
++public sealed partial class EtlPublishedWorkflowJourneyTests
+ {
+     [Theory]
+     [InlineData(false)]
+@@ -117,14 +117,14 @@
+         public string ExecutionId { get; } = executionId;
+         private bool _workerStarted;
+ 
+-        public static async Task<RuntimeHost> CreateAsync(EtlPublishedWorkflowFixture published)
++        public static async Task<RuntimeHost> CreateAsync(EtlPublishedWorkflowFixture published, string? retainedExecutionId = null)
+         {
+             var lifetime = Host.CreateApplicationBuilder().Build();
+             WorkflowExecutionHarness? harness = null;
+             try
+             {
+                 await lifetime.StartAsync();
+-                var executionId = "etl-published-parent-" + Guid.NewGuid().ToString("N");
++                var executionId = retainedExecutionId ?? "etl-published-parent-" + Guid.NewGuid().ToString("N");
+                 harness = WorkflowExecutionHarness.Create()
+                     .WithFeature(services => new WorkflowsRuntimeResumptionFeature().ConfigureServices(services))
+                     .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
+@@ -155,7 +155,7 @@
+                     })
+                     .WithPersistenceMode(PersistenceMode.Durable)
+                     .Build(published.Executable.Identity, executionId,
+-                        Enumerable.Range(1, 32).Select(index => $"{executionId}-activity-{index}"));
++                        Enumerable.Range(retainedExecutionId is null ? 1 : 33, 32).Select(index => $"{executionId}-activity-{index}"));
+                 foreach (var initializer in harness.Services.GetServices<IShellInitializer>())
+                     await initializer.InitializeAsync();
+                 harness.InitializeActivityTypes();
+--- a/Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj
++++ b/Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj
+@@ -2,6 +2,9 @@
+   <PropertyGroup>
+     <IsTestProject>true</IsTestProject>
+     <IsPackable>false</IsPackable>
++  </PropertyGroup>
++  <PropertyGroup Condition="'$(EtlV1NativeUpgrade)' == 'true'">
++    <DefineConstants>$(DefineConstants);ETL_V1_NATIVE_UPGRADE</DefineConstants>
+   </PropertyGroup>
+   <ItemGroup>
+     <PackageReference Include="Microsoft.NET.Test.Sdk" />

@@ -9,8 +9,9 @@ Issue [#3151](https://github.com/elsa-workflows/elsa-foundation/issues/3151). On
 
 ## Phase 2 — Compatibility and versioned foundation
 
-- [ ] T003 Capture an authentic pre-change v1 published artifact/native workflow and persisted in-flight run fixture with a reserved/owed batch in `Extensions/Etl/tests/Shared/` with replay tests in `Extensions/Etl/tests/Tests/`; migrate and resume with the successor; preserve canonical bytes/hash/output and accounting.
+- [x] T003 Capture an authentic pre-change v1 published artifact/native workflow and persisted in-flight run fixture with a reserved/owed batch in `Extensions/Etl/tests/Shared/` with replay tests in `Extensions/Etl/tests/Tests/`; migrate and resume with the successor; preserve canonical bytes/hash/output and accounting.
   - Partial retained-artifact/store proof and outstanding successor-worker limitation: [checkpoint](evidence/v1-compatibility-checkpoint.md).
+  - Completed frozen predecessor/current successor native upgrade: [checkpoint](evidence/v1-native-upgrade-checkpoint.md). Actual old-worker suspension before acceptance, eight additive runtime migrations, same-batch current-worker recovery and same-Sequence typed continuation/outbox acknowledgement passed. **19/22 tasks complete**; final integration/review/delivery remain.
 - [x] T004 Add connector-capable v2 model/codec/validation/compiler in `Extensions/Etl/src/Core/` and `src/Design/Elsa.Etl.Design/`, and dual-reader/native pin support without changing v1 canonical semantics; cover formats and strict parsing in ETL tests.
   - Partial connector model/codec/compiler proof and outstanding runtime integration: [checkpoint](evidence/v2-model-compiler-checkpoint.md).
   - Additive definition persistence, retained-v1 migration and native v2 pins: [checkpoint](evidence/v2-persistence-pin-checkpoint.md). Runtime execution remains owed.

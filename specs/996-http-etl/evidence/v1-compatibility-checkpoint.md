@@ -1,6 +1,6 @@
 # Retained v1 compatibility checkpoint
 
-Issue [#3151](https://github.com/elsa-workflows/elsa-foundation/issues/3151), task T003. Production baseline: `b555bd8460270476e49496e519c69b65180e9505`. This is partial evidence, not completed successor-worker/native recovery.
+Issue [#3151](https://github.com/elsa-workflows/elsa-foundation/issues/3151), task T003. Production baseline: `b555bd8460270476e49496e519c69b65180e9505`. This historical checkpoint is partial artifact/store evidence. The later [frozen native upgrade checkpoint](v1-native-upgrade-checkpoint.md) completes successor-worker/native recovery without changing this fixture or its limits.
 
 ## What is retained
 

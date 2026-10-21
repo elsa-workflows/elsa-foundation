@@ -38,7 +38,7 @@ using Microsoft.Extensions.Hosting;
 namespace Elsa.Etl.Tests;
 
 /// <summary>Exercises persisted native publication followed by execution in a separate runtime-only provider.</summary>
-public sealed class EtlPublishedWorkflowJourneyTests
+public sealed partial class EtlPublishedWorkflowJourneyTests
 {
     [Theory]
     [InlineData(false, false)]
