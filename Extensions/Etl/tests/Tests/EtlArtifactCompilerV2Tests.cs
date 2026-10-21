@@ -113,6 +113,7 @@ public sealed class EtlArtifactCompilerV2Tests
     public void Finite_limits_and_enclosing_budgets_are_validated()
     {
         var p = EtlV2TestPipelines.Create();
+        Assert.Equal(64L * 1024 * 1024, p.Http.MaxRetainedMetadataBytes);
         AssertRejected(p with { Limits = p.Limits with { MaxBatchRecords = 0 } }, "limits.invalid");
         AssertRejected(p with { Limits = p.Limits with { FilePartitionCount = 33 } }, "limits.invalid");
         AssertRejected(p with { Limits = p.Limits with { MaxOutstandingBytes = 1 } }, "limits.invalid");
@@ -120,7 +121,13 @@ public sealed class EtlArtifactCompilerV2Tests
         AssertRejected(p with { Http = p.Http with { MaxAttempts = 0 } }, "http.limits.invalid");
         AssertRejected(p with { Http = p.Http with { MaxJsonDepth = 65 } }, "http.limits.invalid");
         AssertRejected(p with { Http = p.Http with { MaxRetainedInputBytes = 1 } }, "http.limits.invalid");
+        AssertRejected(p with { Http = p.Http with { MaxRetainedMetadataBytes = 0 } }, "http.limits.invalid");
+        AssertRejected(p with { Http = p.Http with { MaxRetainedMetadataBytes = -1 } }, "http.limits.invalid");
         AssertRejected(p with { Http = p.Http with { RequestTimeoutSeconds = p.Http.DeadlineSeconds + 1 } }, "http.limits.invalid");
+        Assert.Empty(Compile(p with
+        {
+            Http = p.Http with { MaxRetainedInputBytes = 16L * 1024 * 1024, MaxRetainedMetadataBytes = long.MaxValue }
+        }).Diagnostics);
     }
 
     [Fact]

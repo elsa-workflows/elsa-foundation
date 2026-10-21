@@ -7,6 +7,7 @@ internal sealed class EtlConnectorRunRecord
     public string BindingsJson { get; set; } = null!;
     public string? PreparedJson { get; set; }
     public long RetainedInputBytes { get; set; }
+    public long RetainedMetadataBytes { get; set; }
     public long Revision { get; set; }
     public string SchemaVersion { get; set; } = null!;
 }
@@ -21,7 +22,26 @@ internal sealed class EtlConnectorPartitionRecord
     public string? Owner { get; set; }
     public long Fence { get; set; }
     public long? ExpiresAtUtcTicks { get; set; }
+    public long PageCount { get; set; }
+    public long PageBytes { get; set; }
+    public long MetadataBytes { get; set; }
+    public long? CurrentRequestSequence { get; set; }
+    public string? CurrentRequestHash { get; set; }
     public long Revision { get; set; }
+    public string SchemaVersion { get; set; } = null!;
+}
+
+internal sealed class EtlConnectorHttpRequestRecord
+{
+    public string ScopeKey { get; set; } = null!;
+    public string RunKey { get; set; } = null!;
+    public int PartitionOrdinal { get; set; }
+    public long PageSequence { get; set; }
+    public string RequestHash { get; set; } = null!;
+    public string RequestJson { get; set; } = null!;
+    public long MetadataBytes { get; set; }
+    public long? PreviousPageSequence { get; set; }
+    public bool? PreviousHasContinuation { get; set; }
     public string SchemaVersion { get; set; } = null!;
 }
 
@@ -32,7 +52,11 @@ internal sealed class EtlConnectorHttpPageRecord
     public int PartitionOrdinal { get; set; }
     public long PageSequence { get; set; }
     public string RequestHash { get; set; } = null!;
+    public string NextRequestHash { get; set; } = null!;
+    public bool HasContinuation { get; set; }
     public string PageJson { get; set; } = null!;
     public long ByteLength { get; set; }
+    public string PageDigest { get; set; } = null!;
+    public long MetadataBytes { get; set; }
     public string SchemaVersion { get; set; } = null!;
 }

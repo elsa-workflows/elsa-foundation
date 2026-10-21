@@ -17,6 +17,7 @@ V1 file model remains unchanged. V2 contains connector-kind/alias selections, so
 
 - **Binding pin:** tenant/partition, role/kind, alias/revision, opaque metadata digest. HTTP metadata binds endpoint/shard seeds, connection name/type and non-secret config digest. No credential value.
 - **HTTP partition:** stable shard identity, current request descriptor, monotonic page sequence, retained page reference/item offset, exhausted flag, current ownership/fence/expiry and retry eligibility. A file partition keeps its original ordinal range.
+- **Request ledger:** immutable sequence/request identity per HTTP partition, with unique visited-request digest, a predecessor-page link and a current-request pointer. Normal lease/page transitions read indexed current/predecessor rows; ownership acquisition and terminal success audit the complete finite history.
 - **Retained page:** immutable raw/canonical data reference, content hash/size, bounded record count, parsed next-request descriptor and source response consistency metadata where available. Never accepted solely because a staging path exists.
 - **Owed batch:** stable input/page/item-range identity, actual canonical record/byte charge, retained per-route output body references and effect keys. It survives owner loss; each physical attempt owns separate local allowances.
 - **Route delivery:** pinned destination, request body reference/hash/key, durable dispatch attempt/deadline/not-before, acknowledged status and bounded safe acknowledgement identity. Conflicting body/key is refused. Remote physical receipt is distinct from authoritative progress.
@@ -49,7 +50,22 @@ include those owed-work tables in the same transaction as the shared terminal de
 
 The HTTP page companion table retains immutable metadata keyed by scope/run/partition/page sequence,
 with a unique request digest per partition. Its payload is an object reference, not inline response
-JSON. Total retained-input accounting includes every retained page; empty-page progression keeps
+JSON. Total retained-input accounting includes every retained page body. A separate authored metadata limit
+(default 64 MiB, bounded by the host default ceiling of 256 MiB) accounts for UTF-8 bytes of all
+request/page JSON and each current partition-position JSON across the run. Fixed SQL row/index/file
+overhead is excluded; admission/preparation/terminal envelopes retain their independent bounds.
+Partition and run counters are updated in the same transaction as metadata and position changes;
+replay does not recharge. Empty-page progression keeps
 that history for replay and loop checks. Source request identities are separate from worker attempts
 and lease fences. Nonempty progress must be proved by atomic batch acceptance, not the empty-page
 operation.
+
+### Draft schema evolution
+
+The connector migrations `20261021070000_ConnectorRuntimePreparation` and
+`20261021100000_ConnectorHttpPages` are still part of unmerged draft PR #3156. This iteration
+refines them to include the request ledger, linked current/predecessor identities and counters;
+it leaves the released v1 migration unchanged. The supported upgrade target is the v1 schema.
+There is no in-place upgrade from private databases that already applied the earlier draft
+connector migrations. Disposable checkpoint databases must be recreated for this revised branch;
+this is not a production rolling-upgrade claim.

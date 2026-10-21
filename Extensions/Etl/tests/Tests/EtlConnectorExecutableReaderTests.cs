@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Etl.Core;
 using Elsa.Etl.Design;
 using Elsa.Etl.Design.Stores;
@@ -32,12 +33,88 @@ public sealed class EtlConnectorExecutableReaderTests
         {
             MaxPageBytes = 1024,
             MaxContinuationBytes = 1024,
-            MaxRetainedInputBytes = 16 * 1024 * 1024
+            MaxRetainedInputBytes = 16 * 1024 * 1024,
+            MaxRetainedMetadataBytes = 64L * 1024 * 1024
         });
 
         var exception = Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(Compile(EtlV2TestPipelines.Create())));
 
         Assert.Equal("etl.executable.limits-exceeded", exception.Code);
+    }
+
+    [Fact]
+    public void Reader_enforces_positive_host_and_authored_metadata_budgets_independently_of_input_budget()
+    {
+        Assert.Equal(256L * 1024 * 1024, new EtlHttpHostLimits().MaxRetainedMetadataBytes);
+
+        using var runtime = CreateRuntime(feature => feature.HttpLimits = new EtlHttpHostLimits
+        {
+            MaxRetainedMetadataBytes = 32L * 1024 * 1024
+        });
+        var defaults = EtlV2TestPipelines.Create();
+        var aboveHost = defaults with
+        {
+            Http = defaults.Http with { MaxRetainedInputBytes = 2L * 1024 * 1024 * 1024, MaxRetainedMetadataBytes = 64L * 1024 * 1024 }
+        };
+
+        var exception = Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(aboveHost)));
+
+        Assert.Equal("etl.executable.limits-exceeded", exception.Code);
+        var independentBudgets = defaults with
+        {
+            Http = defaults.Http with { MaxRetainedInputBytes = 16L * 1024 * 1024, MaxRetainedMetadataBytes = 32L * 1024 * 1024 }
+        };
+        Assert.Equal(32L * 1024 * 1024, runtime.Reader.Read(Compile(independentBudgets)).Http.MaxRetainedMetadataBytes);
+    }
+
+    [Theory]
+    [InlineData(0L)]
+    [InlineData(-1L)]
+    public void Runtime_options_reject_non_positive_host_metadata_budget(long maxRetainedMetadataBytes)
+    {
+        Assert.Throws<InvalidOperationException>(() => CreateRuntime(feature => feature.HttpLimits = new EtlHttpHostLimits
+        {
+            MaxRetainedMetadataBytes = maxRetainedMetadataBytes
+        }));
+    }
+
+    [Theory]
+    [InlineData(0L)]
+    [InlineData(-1L)]
+    public void Reader_rejects_non_positive_authored_metadata_budget(long maxRetainedMetadataBytes)
+    {
+        using var runtime = CreateRuntime();
+        var defaults = EtlV2TestPipelines.Create();
+        var pipeline = defaults with
+        {
+            Http = defaults.Http with { MaxRetainedMetadataBytes = maxRetainedMetadataBytes }
+        };
+
+        var exception = Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(pipeline)));
+
+        Assert.Equal("etl.executable.limits-exceeded", exception.Code);
+    }
+
+    [Fact]
+    public void Reader_accepts_old_v2_http_document_without_rewriting_its_hash_or_bytes()
+    {
+        var node = JsonNode.Parse(EtlArtifactV2Json.Write(EtlV2TestPipelines.Create()).GetRawText())!;
+        node["http"]!.AsObject().Remove("maxRetainedMetadataBytes");
+        using var document = JsonDocument.Parse(node.ToJsonString());
+        var originalPipeline = document.RootElement.Clone();
+        var originalPipelineJson = originalPipeline.GetRawText();
+        var originalHash = EtlArtifactJson.Hash(originalPipeline);
+        var artifact = new EtlArtifact(2,
+            EtlArtifactJson.CreateArtifactId(2, "orders", 1, originalHash), originalHash,
+            "orders", 1, originalPipeline);
+        using var runtime = CreateRuntime();
+
+        var restored = runtime.Reader.Read(artifact);
+
+        Assert.Equal(64L * 1024 * 1024, restored.Http.MaxRetainedMetadataBytes);
+        Assert.Equal(originalHash, artifact.ContentHash);
+        Assert.Equal(originalPipelineJson, artifact.Pipeline.GetRawText());
+        Assert.False(artifact.Pipeline.GetProperty("http").TryGetProperty("maxRetainedMetadataBytes", out _));
     }
 
     [Fact]

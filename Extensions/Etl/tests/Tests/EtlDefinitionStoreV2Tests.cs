@@ -70,6 +70,33 @@ public sealed class EtlDefinitionStoreV2Tests
     }
 
     [Fact]
+    public async Task Default_v2_draft_and_published_artifact_preserve_pipeline_bytes_and_hashes()
+    {
+        await using var database = await EtlDesignTestDatabase.CreateAsync();
+        await using var context = database.CreateContext();
+        var store = Store(context);
+        var pipeline = EtlV2TestPipelines.Create();
+        var currentArtifact = Compile(1, pipeline);
+        Assert.Equal(EtlDefinitionWriteStatus.Created, (await store.CreateDraftAsync(Scope, "orders", pipeline)).Status);
+        Assert.Equal(EtlPublicationStatus.Published, (await store.PublishAsync(Scope, "orders", 1, currentArtifact)).Status);
+
+        var draftRow = await context.Drafts.SingleAsync();
+        var publishedRow = await context.PublishedArtifacts.SingleAsync();
+
+        var restoredDraft = Assert.IsType<EtlDefinitionDraftV2>(await ((IEtlDefinitionStoreV2)store).FindDraftAsync(Scope, "orders"));
+        var restoredArtifact = Assert.IsType<EtlArtifact>(await store.FindPublishedAsync(Scope, "orders", 1));
+
+        Assert.Equal(64L * 1024 * 1024, restoredDraft.Pipeline.Http.MaxRetainedMetadataBytes);
+        Assert.Equal(EtlArtifactV2Json.Write(pipeline).GetRawText(), draftRow.PipelineJson);
+        Assert.Equal(EtlDefinitionRecordCodec.HashPipeline(draftRow.PipelineJson), draftRow.PipelineHash);
+        Assert.Equal(currentArtifact.ArtifactId, restoredArtifact.ArtifactId);
+        Assert.Equal(currentArtifact.ContentHash, restoredArtifact.ContentHash);
+        Assert.Equal(currentArtifact.Pipeline.GetRawText(), restoredArtifact.Pipeline.GetRawText());
+        Assert.Equal(publishedRow.ArtifactJson, JsonSerializer.Serialize(restoredArtifact, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        Assert.False(restoredArtifact.Pipeline.GetProperty("http").TryGetProperty("maxRetainedMetadataBytes", out _));
+    }
+
+    [Fact]
     public async Task Explicit_v1_to_v2_upgrade_preserves_old_publication_and_refuses_implicit_downgrade()
     {
         await using var database = await EtlDesignTestDatabase.CreateAsync();

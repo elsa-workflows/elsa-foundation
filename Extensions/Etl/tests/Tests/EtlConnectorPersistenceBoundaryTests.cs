@@ -83,18 +83,24 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal(EtlStoreStatus.Applied, (await store.AdmitConnectorAsync(admission)).Status);
         var prep = Assert.IsType<EtlPreparationLease>(await store.ClaimConnectorPreparationAsync(admission.Invocation.Scope, "worker"));
         Assert.Equal(EtlStoreStatus.Applied, await store.CommitConnectorPreparationAsync(prep, new(null, null)));
+        context.ChangeTracker.Clear();
         var row = await context.ConnectorPartitions.FirstAsync();
         if (corruption == "unknown") row.PositionJson = "{\"kind\":\"unsupported\"}";
         else if (corruption == "completed") row.Completed = true;
         else if (corruption == "null-request") row.PositionJson = EtlConnectorRecordCodec.Write<EtlConnectorPosition>(new EtlConnectorHttpPosition(0, 0, null!, null, false));
-        else context.ConnectorPartitions.Remove(row);
+        else
+        {
+            context.ConnectorPartitions.Remove(row);
+            // The immutable seed request now prevents deleting its owning partition.
+            await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
+            Assert.Empty(await context.Terminals.AsNoTracking().ToListAsync());
+            Assert.Empty(await context.Outbox.AsNoTracking().ToListAsync());
+            return;
+        }
         await context.SaveChangesAsync();
         if (corruption is "unknown" or "null-request")
             await Assert.ThrowsAsync<InvalidDataException>(() => store.ClaimConnectorPartitionAsync(admission.Invocation.Scope, admission.Invocation.RunId, "worker").AsTask());
-        if (corruption == "missing")
-            Assert.Equal(EtlStoreStatus.Conflict, (await store.SettleTerminalAsync(new(admission.Invocation.Scope, admission.Invocation.RunId, EtlTerminalOutcome.Succeeded, null))).Status);
-        else
-            await Assert.ThrowsAsync<InvalidDataException>(() => store.SettleTerminalAsync(new(admission.Invocation.Scope, admission.Invocation.RunId, EtlTerminalOutcome.Succeeded, null)).AsTask());
+        await Assert.ThrowsAsync<InvalidDataException>(() => store.SettleTerminalAsync(new(admission.Invocation.Scope, admission.Invocation.RunId, EtlTerminalOutcome.Succeeded, null)).AsTask());
         Assert.Empty(await context.Terminals.AsNoTracking().ToListAsync());
         Assert.Empty(await context.Outbox.AsNoTracking().ToListAsync());
     }

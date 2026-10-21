@@ -32,10 +32,20 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                     b.Property<bool>("Completed")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("CurrentRequestHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("CurrentRequestSequence")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long?>("ExpiresAtUtcTicks")
                         .HasColumnType("INTEGER");
 
                     b.Property<long>("Fence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("MetadataBytes")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("Owner")
@@ -45,6 +55,12 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                     b.Property<string>("PositionJson")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<long>("PageBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("PageCount")
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -61,7 +77,13 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
 
                     b.HasIndex("ScopeKey", "RunKey", "Completed", "ExpiresAtUtcTicks");
 
-                    b.ToTable("elsa_etl_connector_partitions", (string)null);
+                    b.HasIndex("ScopeKey", "RunKey", "PartitionOrdinal", "CurrentRequestSequence", "CurrentRequestHash");
+
+                    b.ToTable("elsa_etl_connector_partitions", t =>
+                        {
+                            t.HasCheckConstraint("CK_elsa_etl_connector_partitions_CurrentRequestPointer", "(CurrentRequestSequence IS NULL AND CurrentRequestHash IS NULL) OR (CurrentRequestSequence IS NOT NULL AND CurrentRequestHash IS NOT NULL)");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_partitions_NonNegativeCounters", "PageCount >= 0 AND PageBytes >= 0 AND MetadataBytes >= 0");
+                        });
                 });
 
             modelBuilder.Entity("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorHttpPageRecord", b =>
@@ -83,11 +105,27 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                     b.Property<long>("ByteLength")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("HasContinuation")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("MetadataBytes")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("PageJson")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("PageDigest")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NextRequestHash")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
@@ -99,12 +137,78 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
 
                     b.HasKey("ScopeKey", "RunKey", "PartitionOrdinal", "PageSequence");
 
+                    b.HasAlternateKey("ScopeKey", "RunKey", "PartitionOrdinal", "PageSequence", "NextRequestHash", "HasContinuation")
+                        .HasName("AK_elsa_etl_connector_http_pages_ScopeKey_RunKey_PartitionOrdinal_PageSequence_NextRequestHash_HasContinuation");
+
                     b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKey", "RunKey", "PartitionOrdinal", "RequestHash")
                         .IsUnique();
 
-                    b.ToTable("elsa_etl_connector_http_pages", (string)null);
+                    b.HasIndex("ScopeKey", "RunKey", "PartitionOrdinal", "PageSequence", "RequestHash");
+
+                    b.ToTable("elsa_etl_connector_http_pages", t =>
+                        {
+                            t.HasCheckConstraint("CK_elsa_etl_connector_http_pages_NonNegativeByteCounts", "ByteLength >= 0 AND MetadataBytes >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorHttpRequestRecord", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RunKey")
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("PartitionOrdinal")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("PreviousPageSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool?>("PreviousHasContinuation")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("MetadataBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequestJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("PageSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ScopeKey", "RunKey", "PartitionOrdinal", "PageSequence");
+
+                    b.HasAlternateKey("ScopeKey", "RunKey", "PartitionOrdinal", "PageSequence", "RequestHash")
+                        .HasName("AK_elsa_etl_connector_http_requests_ScopeKey_RunKey_PartitionOrdinal_PageSequence_RequestHash");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKey", "RunKey", "PartitionOrdinal", "RequestHash")
+                        .IsUnique();
+
+                    b.HasIndex("ScopeKey", "RunKey", "PartitionOrdinal", "PreviousPageSequence", "RequestHash", "PreviousHasContinuation");
+
+                    b.ToTable("elsa_etl_connector_http_requests", t =>
+                        {
+                            t.HasCheckConstraint("CK_elsa_etl_connector_http_requests_NonNegativeMetadataBytes", "MetadataBytes >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_http_requests_SequencePredecessor", "(PageSequence = 0 AND PreviousPageSequence IS NULL AND PreviousHasContinuation IS NULL) OR (PageSequence > 0 AND PreviousPageSequence IS NOT NULL AND PreviousHasContinuation IS NOT NULL AND PreviousPageSequence = PageSequence - 1 AND PreviousHasContinuation = 1)");
+                        });
                 });
 
             modelBuilder.Entity("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorRunRecord", b =>
@@ -127,6 +231,9 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                     b.Property<long>("RetainedInputBytes")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long>("RetainedMetadataBytes")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
@@ -140,7 +247,10 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
 
                     b.HasIndex("SchemaVersion");
 
-                    b.ToTable("elsa_etl_connector_runs", (string)null);
+                    b.ToTable("elsa_etl_connector_runs", t =>
+                        {
+                            t.HasCheckConstraint("CK_elsa_etl_connector_runs_RetainedByteCounts", "RetainedInputBytes >= 0 AND RetainedMetadataBytes >= 0");
+                        });
                 });
 
             modelBuilder.Entity("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlRuntimeManifestRecord", b =>
@@ -638,6 +748,29 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                         .HasForeignKey("ScopeKey", "RunKey")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorHttpRequestRecord", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeKey", "RunKey", "PartitionOrdinal", "CurrentRequestSequence", "CurrentRequestHash")
+                        .HasPrincipalKey("ScopeKey", "RunKey", "PartitionOrdinal", "PageSequence", "RequestHash")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired(false);
+                });
+
+            modelBuilder.Entity("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorHttpRequestRecord", b =>
+                {
+                    b.HasOne("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorPartitionRecord", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeKey", "RunKey", "PartitionOrdinal")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorHttpPageRecord", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeKey", "RunKey", "PartitionOrdinal", "PreviousPageSequence", "RequestHash", "PreviousHasContinuation")
+                        .HasPrincipalKey("ScopeKey", "RunKey", "PartitionOrdinal", "PageSequence", "NextRequestHash", "HasContinuation")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired(false);
                 });
 
             modelBuilder.Entity("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorHttpPageRecord", b =>
@@ -645,6 +778,13 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                     b.HasOne("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorPartitionRecord", null)
                         .WithMany()
                         .HasForeignKey("ScopeKey", "RunKey", "PartitionOrdinal")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorHttpRequestRecord", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeKey", "RunKey", "PartitionOrdinal", "PageSequence", "RequestHash")
+                        .HasPrincipalKey("ScopeKey", "RunKey", "PartitionOrdinal", "PageSequence", "RequestHash")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

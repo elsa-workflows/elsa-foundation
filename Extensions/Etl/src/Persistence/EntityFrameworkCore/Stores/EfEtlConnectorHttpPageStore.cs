@@ -38,6 +38,8 @@ internal sealed partial class EfEtlRuntimeStore
         if (position is not EtlConnectorHttpPosition current || lease.Position is not EtlConnectorHttpPosition expected)
             return new(EtlStoreStatus.Invalid, null);
         EtlConnectorHttpPosition next;
+        EtlConnectorHttpPageRecord? addedPage = null;
+        EtlConnectorHttpRequestRecord? addedRequest = null;
         if (advance)
         {
             if (expected.Page is not { RecordCount: 0 } || expected.NextItem != 0 || expected.Exhausted)
@@ -61,6 +63,7 @@ internal sealed partial class EfEtlRuntimeStore
                     return PositionResult(EtlStoreStatus.Replay, lease, row, current);
             }
             if (current != expected) return new(EtlStoreStatus.Conflict, null);
+            if (!next.Exhausted) addedRequest = HttpRequestRecord(row, next);
         }
         else
         {
@@ -92,26 +95,48 @@ internal sealed partial class EfEtlRuntimeStore
             if (page.NextContinuation is { } continuation)
             {
                 var nextHash = EtlRuntimeIdentity.HttpRequestHash(current.Request with { Continuation = continuation });
-                if (nextHash == page.RequestHash || await db.ConnectorHttpPages.AnyAsync(x => x.ScopeKey == row.ScopeKey &&
+                if (nextHash == page.RequestHash || await db.ConnectorHttpRequests.AnyAsync(x => x.ScopeKey == row.ScopeKey &&
                     x.RunKey == row.RunKey && x.PartitionOrdinal == row.PartitionOrdinal && x.RequestHash == nextHash, cancellationToken))
                     return new(EtlStoreStatus.Invalid, null);
             }
-            if (await db.ConnectorHttpPages.AnyAsync(x => x.ScopeKey == row.ScopeKey && x.RunKey == row.RunKey &&
-                x.PartitionOrdinal == row.PartitionOrdinal && (x.PageSequence == page.PageSequence || x.RequestHash == page.RequestHash), cancellationToken))
-                return new(EtlStoreStatus.Conflict, null);
+            // The current-page lookup and request-ledger keys already prove this is a new
+            // attachment. A second history-wide sequence-or-hash probe is unnecessary.
             // Subtraction avoids overflow even for a caller supplying an extremely large object.
             if (page.Body.ByteLength > state.Pipeline.Http.MaxRetainedInputBytes - connector.RetainedInputBytes)
                 return new(EtlStoreStatus.BudgetExceeded, null);
-            db.ConnectorHttpPages.Add(new EtlConnectorHttpPageRecord
+            var pageJson = EtlConnectorRecordCodec.Write(page);
+            addedPage = new EtlConnectorHttpPageRecord
             {
                 ScopeKey = row.ScopeKey, RunKey = row.RunKey, PartitionOrdinal = row.PartitionOrdinal,
-                PageSequence = page.PageSequence, RequestHash = page.RequestHash, PageJson = EtlConnectorRecordCodec.Write(page),
+                PageSequence = page.PageSequence, RequestHash = page.RequestHash, PageJson = pageJson,
+                PageDigest = MetadataDigest(pageJson), MetadataBytes = MetadataBytes(pageJson),
+                NextRequestHash = EtlRuntimeIdentity.HttpRequestHash(current.Request with { Continuation = page.NextContinuation }),
+                HasContinuation = page.NextContinuation is not null,
                 ByteLength = page.Body.ByteLength, SchemaVersion = EtlRuntimeEfModule.SchemaVersion
-            });
-            connector.RetainedInputBytes = checked(connector.RetainedInputBytes + page.Body.ByteLength);
-            connector.Revision = checked(connector.Revision + 1);
+            };
         }
-        row.PositionJson = EtlConnectorRecordCodec.Write<EtlConnectorPosition>(next);
+        var positionJson = EtlConnectorRecordCodec.Write<EtlConnectorPosition>(next);
+        var metadataDelta = checked(MetadataBytes(positionJson) - MetadataBytes(row.PositionJson) +
+            (addedPage?.MetadataBytes ?? 0) + (addedRequest?.MetadataBytes ?? 0));
+        if (metadataDelta > state.Pipeline.Http.MaxRetainedMetadataBytes - connector.RetainedMetadataBytes)
+            return new(EtlStoreStatus.BudgetExceeded, null);
+        connector.RetainedMetadataBytes = checked(connector.RetainedMetadataBytes + metadataDelta);
+        row.MetadataBytes = checked(row.MetadataBytes + metadataDelta);
+        connector.Revision = checked(connector.Revision + 1);
+        if (addedPage is not null)
+        {
+            db.ConnectorHttpPages.Add(addedPage);
+            connector.RetainedInputBytes = checked(connector.RetainedInputBytes + addedPage.ByteLength);
+            row.PageBytes = checked(row.PageBytes + addedPage.ByteLength);
+            row.PageCount = checked(row.PageCount + 1);
+        }
+        if (addedRequest is not null)
+        {
+            db.ConnectorHttpRequests.Add(addedRequest);
+            row.CurrentRequestSequence = addedRequest.PageSequence;
+            row.CurrentRequestHash = addedRequest.RequestHash;
+        }
+        row.PositionJson = positionJson;
         row.Completed = next.Exhausted;
         row.Revision = checked(row.Revision + 1);
         await db.SaveChangesAsync(cancellationToken);
@@ -131,77 +156,4 @@ internal sealed partial class EfEtlRuntimeStore
             ? new(status, lease with { Position = position, ExpiresAt = EtlRuntimeRecordCodec.ReadUtc(expiry) })
             : new(EtlStoreStatus.LeaseLost, null);
 
-    private async ValueTask<(EtlPipelineV2 Pipeline, EtlConnectorRunBindings Bindings, EtlConnectorPreparedRun? Prepared)> ReadConnectorStateAsync(
-        EtlInvocation invocation, EtlConnectorRunRecord connector, CancellationToken cancellationToken)
-    {
-        var pageBytes = await db.ConnectorHttpPages.Where(page => page.ScopeKey == connector.ScopeKey && page.RunKey == connector.RunKey)
-            .SumAsync(page => (long?)page.ByteLength, cancellationToken) ?? 0;
-        return ReadConnectorState(invocation, connector, pageBytes);
-    }
-
-    private async ValueTask<EtlConnectorPosition> ReadConnectorPositionAsync(EtlConnectorPartitionRecord row, EtlPipelineV2 pipeline,
-        EtlConnectorRunBindings bindings, EtlConnectorPreparedRun? prepared, CancellationToken cancellationToken)
-    {
-        var position = ReadConnectorPosition(row, pipeline, bindings, prepared);
-        var pages = db.ConnectorHttpPages.AsNoTracking().Where(page => page.ScopeKey == row.ScopeKey && page.RunKey == row.RunKey && page.PartitionOrdinal == row.PartitionOrdinal);
-        var count = await pages.LongCountAsync(cancellationToken);
-        if (position is not EtlConnectorHttpPosition http)
-        {
-            if (count != 0) throw new InvalidDataException("A file partition has HTTP page history.");
-            return position;
-        }
-        var expectedCount = http.PageSequence + (http.Page is not null || http.Exhausted ? 1 : 0);
-        if (count != expectedCount || await pages.AnyAsync(page => page.PageSequence < 0 || page.PageSequence >= expectedCount, cancellationToken))
-            throw new InvalidDataException("The HTTP position has incomplete or inconsistent page history.");
-        // Stream the bounded history so a changed older digest cannot silently remove a visited
-        // request. Do not materialize every retained metadata document at once.
-        var request = new EtlHttpRequest(http.Request.ShardId, null);
-        var visited = new HashSet<string>(StringComparer.Ordinal);
-        long sequence = 0;
-        await foreach (var retained in pages.OrderBy(page => page.PageSequence).AsAsyncEnumerable().WithCancellation(cancellationToken))
-        {
-            var page = ReadHttpPage(retained);
-            if (page.PageSequence != sequence || !visited.Add(page.RequestHash))
-                throw new InvalidDataException("The HTTP page history does not follow its request chain.");
-            var retainedPosition = new EtlConnectorHttpPosition(sequence, 0, request, page, false);
-            EtlConnectorRecordCodec.Complete(retainedPosition);
-            EtlConnectorRecordCodec.ValidateHttpPosition(retainedPosition, pipeline.Http);
-            if (page.NextContinuation == string.Empty ||
-                pipeline.Source is EtlHttpJsonSource { Pagination: EtlSinglePagePagination } && page.NextContinuation is not null ||
-                page.NextContinuation is not null && (sequence + 1 >= pipeline.Http.MaxPagesPerPartition ||
-                    visited.Contains(EtlRuntimeIdentity.HttpRequestHash(request with { Continuation = page.NextContinuation }))))
-                throw new InvalidDataException("The retained continuation violates the finite request history.");
-            if (sequence == http.PageSequence)
-            {
-                if (request != http.Request || http.Page is not null && page != http.Page ||
-                    http.Exhausted && (page.NextContinuation is not null || page.RecordCount != 0))
-                    throw new InvalidDataException("The HTTP position differs from its retained page.");
-            }
-            else
-            {
-                // Nonempty progress will require accepted-batch evidence when that capability is added.
-                if (page.NextContinuation is null || page.RecordCount != 0)
-                    throw new InvalidDataException("The HTTP position has no accepted predecessor progress.");
-                request = request with { Continuation = page.NextContinuation };
-            }
-            sequence++;
-        }
-        if (http.Page is null && !http.Exhausted && request != http.Request)
-            throw new InvalidDataException("The HTTP request does not follow its retained predecessor.");
-        return position;
-    }
-
-    private Task<EtlConnectorHttpPageRecord?> HttpPageRowAsync(EtlConnectorPartitionRecord row, long sequence, CancellationToken cancellationToken) =>
-        db.ConnectorHttpPages.SingleOrDefaultAsync(page => page.ScopeKey == row.ScopeKey && page.RunKey == row.RunKey &&
-            page.PartitionOrdinal == row.PartitionOrdinal && page.PageSequence == sequence, cancellationToken);
-
-    private static EtlRetainedHttpPage ReadHttpPage(EtlConnectorHttpPageRecord row)
-    {
-        EnsureSchema(row.SchemaVersion);
-        var page = EtlConnectorRecordCodec.Read<EtlRetainedHttpPage>(row.PageJson);
-        if (page.PageSequence != row.PageSequence || page.RequestHash != row.RequestHash || page.Body is null ||
-            page.Body.ByteLength != row.ByteLength || row.ByteLength < 0)
-            throw new InvalidDataException("The HTTP page history metadata differs from its retained page.");
-        return page;
-    }
 }

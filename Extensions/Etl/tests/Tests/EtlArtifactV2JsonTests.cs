@@ -24,6 +24,42 @@ public sealed class EtlArtifactV2JsonTests
         Assert.Equal("http", document.GetProperty("routes").GetProperty("main").GetProperty("kind").GetString());
         Assert.Null(restored.Lookup);
         Assert.Equal(2, ((EtlHttpJsonSource)restored.Source).Fields.Count);
+        Assert.Equal(64L * 1024 * 1024, restored.Http.MaxRetainedMetadataBytes);
+        Assert.False(document.GetProperty("http").TryGetProperty("maxRetainedMetadataBytes", out _));
+        Assert.Equal(document.GetRawText(), EtlArtifactV2Json.Write(restored).GetRawText());
+    }
+
+    [Fact]
+    public void Reader_defaults_retained_metadata_budget_when_v2_http_property_is_absent()
+    {
+        var document = EtlArtifactV2Json.Write(EtlV2TestPipelines.Create());
+
+        var restored = EtlArtifactV2Json.Read(document);
+
+        Assert.Equal(64L * 1024 * 1024, restored.Http.MaxRetainedMetadataBytes);
+        Assert.False(document.GetProperty("http").TryGetProperty("maxRetainedMetadataBytes", out _));
+        Assert.Equal(document.GetRawText(), EtlArtifactV2Json.Write(restored).GetRawText());
+    }
+
+    [Fact]
+    public void Nondefault_retained_metadata_budget_is_serialized_and_round_trips()
+    {
+        var pipeline = EtlV2TestPipelines.Create() with
+        {
+            Http = new EtlHttpPolicy { MaxRetainedMetadataBytes = 12_345 }
+        };
+
+        var document = EtlArtifactV2Json.Write(pipeline);
+        var restored = EtlArtifactV2Json.Read(document);
+
+        Assert.Equal(12_345L, document.GetProperty("http").GetProperty("maxRetainedMetadataBytes").GetInt64());
+        Assert.Equal(12_345L, restored.Http.MaxRetainedMetadataBytes);
+        Assert.Equal(document.GetRawText(), EtlArtifactV2Json.Write(restored).GetRawText());
+
+        var missingRequiredSource = JsonNode.Parse(document.GetRawText())!;
+        missingRequiredSource.AsObject().Remove("source");
+        using var malformed = JsonDocument.Parse(missingRequiredSource.ToJsonString());
+        Assert.Throws<JsonException>(() => EtlArtifactV2Json.Read(malformed.RootElement));
     }
 
     [Fact]

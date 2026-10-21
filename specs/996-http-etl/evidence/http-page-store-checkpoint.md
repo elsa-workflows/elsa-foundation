@@ -33,14 +33,16 @@ HTTP/native/API/Studio/process-recovery proof and the retained old-producer work
 
 T005 remains unchecked; total completed tasks remain 3/22.
 
-## Review and resource work still required in T005
+## Review and resource findings at this checkpoint
 
 Three bounded root/worker review passes covered schema, replay/history and integrated limits. Review
 found and corrected incomplete older-history validation and continuation policies larger than the
 persisted metadata format supports. The focused compiler/reader/store run passed 171 tests after
 correcting one test's admission-versus-preparation expectation; no production behavior was weakened.
 
-The full chain check streams metadata without EF tracking, but repeating it on every progression
+The subsequent [request-ledger and metadata checkpoint](http-metadata-ledger-checkpoint.md) addresses the following resource findings while preserving T005 as incomplete.
+
+At this checkpoint, the full chain check streams metadata without EF tracking, but repeating it on every progression
 still accumulates quadratic work across a long shard. The page-body retention budget also excludes
 metadata overhead, which is bounded separately per page and by finite page count. Before runtime
 qualification, T005 must choose a bounded aggregate metadata budget and a validation/index strategy

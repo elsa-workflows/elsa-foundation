@@ -16,6 +16,9 @@ public sealed record EtlHttpHostLimits
     public int MaxPagesPerPartition { get; init; } = 100_000;
     /// <summary>Maximum retained source input bytes for one run.</summary>
     public long MaxRetainedInputBytes { get; init; } = 4L * 1024 * 1024 * 1024;
+    /// <summary>Maximum host ceiling for logical UTF-8 bytes per run across retained connector position, request-ledger, and page-history JSON.</summary>
+    /// <remarks>The budget counts canonical <c>PositionJson</c>, <c>RequestJson</c>, and <c>PageJson</c> bytes. It excludes admission, prepared, and native-terminal envelopes and database or index overhead; it does not promise an aggregate physical database size.</remarks>
+    public long MaxRetainedMetadataBytes { get; init; } = 256L * 1024 * 1024;
     /// <summary>Maximum physical attempts for one HTTP operation.</summary>
     public int MaxAttempts { get; init; } = 10;
     /// <summary>Maximum HTTP operation deadline in seconds.</summary>

@@ -77,13 +77,15 @@ internal sealed class EtlConnectorExecutableReader(EtlRuntimeOptions options)
             throw Refused("etl.executable.limits-exceeded");
         if (http.MaxPageBytes <= 0 || http.MaxPageRecords <= 0 || http.MaxJsonDepth is <= 0 or > 64 || http.MaxContinuationBytes <= 0 ||
             http.MaxContinuationBytes > EtlHttpPolicy.MaximumSupportedContinuationBytes ||
-            http.MaxPagesPerPartition <= 0 || http.MaxRetainedInputBytes <= 0 || http.MaxAttempts <= 0 || http.DeadlineSeconds <= 0 ||
+            http.MaxPagesPerPartition <= 0 || http.MaxRetainedInputBytes <= 0 || http.MaxRetainedMetadataBytes <= 0 ||
+            http.MaxAttempts <= 0 || http.DeadlineSeconds <= 0 ||
             http.RequestTimeoutSeconds <= 0 || http.InitialDelaySeconds <= 0 || http.MaxDelaySeconds <= 0 ||
             http.MaxPageBytes > http.MaxRetainedInputBytes || http.MaxContinuationBytes > http.MaxPageBytes ||
             http.RequestTimeoutSeconds > http.DeadlineSeconds || http.InitialDelaySeconds > http.MaxDelaySeconds || http.MaxDelaySeconds > http.DeadlineSeconds ||
             http.MaxPageBytes > host.MaxPageBytes || http.MaxPageRecords > host.MaxPageRecords || http.MaxJsonDepth > host.MaxJsonDepth ||
             http.MaxContinuationBytes > host.MaxContinuationBytes || http.MaxPagesPerPartition > host.MaxPagesPerPartition ||
-            http.MaxRetainedInputBytes > host.MaxRetainedInputBytes || http.MaxAttempts > host.MaxAttempts ||
+            http.MaxRetainedInputBytes > host.MaxRetainedInputBytes || http.MaxRetainedMetadataBytes > host.MaxRetainedMetadataBytes ||
+            http.MaxAttempts > host.MaxAttempts ||
             http.DeadlineSeconds > host.MaxDeadlineSeconds || http.RequestTimeoutSeconds > host.MaxRequestTimeoutSeconds || http.MaxDelaySeconds > host.MaxDelaySeconds)
             throw Refused("etl.executable.limits-exceeded");
         if (pipeline.Source is EtlHttpJsonSource && (http.MaxPageBytes > options.Capacity.InputBytes || http.MaxPageRecords > options.Capacity.Records))

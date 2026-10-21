@@ -163,6 +163,13 @@ public static class EtlArtifactV2Json
 
     private static void MarkSharedModelPropertiesRequired(JsonTypeInfo typeInfo)
     {
+        if (typeInfo.Type == typeof(EtlHttpPolicy))
+        {
+            var metadataBudgetName = JsonNamingPolicy.CamelCase.ConvertName(nameof(EtlHttpPolicy.MaxRetainedMetadataBytes));
+            var metadataBudget = typeInfo.Properties.Single(property => property.Name == metadataBudgetName);
+            metadataBudget.ShouldSerialize = static (_, value) => (long)value! != EtlHttpPolicy.DefaultMaxRetainedMetadataBytes;
+        }
+
         if (typeInfo.Type != typeof(EtlColumn) && typeInfo.Type != typeof(EtlOutputField))
             return;
 

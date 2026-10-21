@@ -165,6 +165,8 @@ public sealed record EtlHttpPolicy
     /// <remarks>Runtime metadata uses a lossless UTF-16 representation and is bounded to 512 KiB; this ceiling leaves room for both request and response continuations and their surrounding identities.</remarks>
     public const int MaximumSupportedContinuationBytes = 64 * 1024;
 
+    internal const long DefaultMaxRetainedMetadataBytes = 64L * 1024 * 1024;
+
     /// <summary>The maximum raw response bytes retained for one HTTP page.</summary>
     public long MaxPageBytes { get; init; } = 8L * 1024 * 1024;
 
@@ -182,6 +184,10 @@ public sealed record EtlHttpPolicy
 
     /// <summary>The maximum retained source input bytes for the run.</summary>
     public long MaxRetainedInputBytes { get; init; } = 1024L * 1024 * 1024;
+
+    /// <summary>The maximum logical UTF-8 bytes per run across retained connector position, request-ledger, and page-history JSON.</summary>
+    /// <remarks>The budget counts canonical <c>PositionJson</c>, <c>RequestJson</c>, and <c>PageJson</c> bytes. It excludes admission, prepared, and native-terminal envelopes and database or index overhead; it does not promise an aggregate physical database size. The default value is omitted from the v2 JSON representation to preserve existing artifact bytes and hashes.</remarks>
+    public long MaxRetainedMetadataBytes { get; init; } = DefaultMaxRetainedMetadataBytes;
 
     /// <summary>The maximum physical attempts for one HTTP route delivery.</summary>
     public int MaxAttempts { get; init; } = 5;

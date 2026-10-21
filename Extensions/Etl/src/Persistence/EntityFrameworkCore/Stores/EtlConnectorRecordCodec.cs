@@ -50,7 +50,7 @@ internal static class EtlConnectorRecordCodec
         var limits = pipeline.Limits;
         if (limits.FilePartitionCount <= 0 || limits.MaxPartitions <= 0 || limits.FilePartitionCount > limits.MaxPartitions ||
             limits.MaxPartitions > maximumPartitions || limits.MaxSnapshotBytes <= 0 || limits.MaxLookupBytes <= 0 ||
-            limits.MaxLookupBytes > limits.MaxSnapshotBytes || pipeline.Http.MaxRetainedInputBytes <= 0 ||
+            limits.MaxLookupBytes > limits.MaxSnapshotBytes || pipeline.Http.MaxRetainedInputBytes <= 0 || pipeline.Http.MaxRetainedMetadataBytes <= 0 ||
             pipeline.Http.MaxPagesPerPartition <= 0 || pipeline.Http.MaxPageBytes <= 0 || pipeline.Http.MaxPageRecords <= 0 ||
             pipeline.Http.MaxContinuationBytes <= 0 ||
             pipeline.Http.MaxContinuationBytes > EtlHttpPolicy.MaximumSupportedContinuationBytes ||

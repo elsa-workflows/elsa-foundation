@@ -10,6 +10,7 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
     internal DbSet<EtlRuntimeRunRecord> Runs => Set<EtlRuntimeRunRecord>();
     internal DbSet<EtlConnectorRunRecord> ConnectorRuns => Set<EtlConnectorRunRecord>();
     internal DbSet<EtlConnectorPartitionRecord> ConnectorPartitions => Set<EtlConnectorPartitionRecord>();
+    internal DbSet<EtlConnectorHttpRequestRecord> ConnectorHttpRequests => Set<EtlConnectorHttpRequestRecord>();
     internal DbSet<EtlConnectorHttpPageRecord> ConnectorHttpPages => Set<EtlConnectorHttpPageRecord>();
     internal DbSet<EtlRuntimePreparedRecord> PreparedRuns => Set<EtlRuntimePreparedRecord>();
     internal DbSet<EtlRuntimePartitionRecord> Partitions => Set<EtlRuntimePartitionRecord>();
@@ -40,7 +41,9 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
         runs.HasIndex(row => new { row.ScopeKey, row.Status, row.CreatedAtUtcTicks });
 
         var connectorRuns = modelBuilder.Entity<EtlConnectorRunRecord>();
-        connectorRuns.ToTable(EtlRuntimeEfModule.ConnectorRunTableName);
+        connectorRuns.ToTable(EtlRuntimeEfModule.ConnectorRunTableName, table => table.HasCheckConstraint(
+            "CK_elsa_etl_connector_runs_RetainedByteCounts",
+            "RetainedInputBytes >= 0 AND RetainedMetadataBytes >= 0"));
         connectorRuns.HasKey(row => new { row.ScopeKey, row.RunKey });
         connectorRuns.Property(row => row.ScopeKey).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
         connectorRuns.Property(row => row.RunKey).HasMaxLength(EtlRuntimeEfModule.EncodedIdentityMaximumLength).IsRequired();
@@ -54,32 +57,92 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
             .OnDelete(DeleteBehavior.Restrict);
 
         var connectorPartitions = modelBuilder.Entity<EtlConnectorPartitionRecord>();
-        connectorPartitions.ToTable(EtlRuntimeEfModule.ConnectorPartitionTableName);
+        connectorPartitions.ToTable(EtlRuntimeEfModule.ConnectorPartitionTableName, table =>
+        {
+            table.HasCheckConstraint(
+                "CK_elsa_etl_connector_partitions_NonNegativeCounters",
+                "PageCount >= 0 AND PageBytes >= 0 AND MetadataBytes >= 0");
+            table.HasCheckConstraint(
+                "CK_elsa_etl_connector_partitions_CurrentRequestPointer",
+                "(CurrentRequestSequence IS NULL AND CurrentRequestHash IS NULL) OR (CurrentRequestSequence IS NOT NULL AND CurrentRequestHash IS NOT NULL)");
+        });
         connectorPartitions.HasKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal });
         connectorPartitions.Property(row => row.ScopeKey).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
         connectorPartitions.Property(row => row.RunKey).HasMaxLength(EtlRuntimeEfModule.EncodedIdentityMaximumLength).IsRequired();
         connectorPartitions.Property(row => row.PositionJson).IsRequired();
         connectorPartitions.Property(row => row.Owner).HasMaxLength(EtlRuntimeEfModule.EncodedIdentityMaximumLength);
+        connectorPartitions.Property(row => row.CurrentRequestHash).HasMaxLength(EtlRuntimeEfModule.HashLength);
         connectorPartitions.Property(row => row.Revision).IsConcurrencyToken();
         connectorPartitions.Property(row => row.SchemaVersion).HasMaxLength(EtlRuntimeEfModule.SchemaVersionMaximumLength).IsRequired();
         connectorPartitions.HasIndex(row => new { row.ScopeKey, row.RunKey, row.Completed, row.ExpiresAtUtcTicks });
+        connectorPartitions.HasIndex(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.CurrentRequestSequence, row.CurrentRequestHash });
         connectorPartitions.HasOne<EtlConnectorRunRecord>()
             .WithMany()
             .HasForeignKey(row => new { row.ScopeKey, row.RunKey })
             .OnDelete(DeleteBehavior.Restrict);
+        connectorPartitions.HasOne<EtlConnectorHttpRequestRecord>()
+            .WithMany()
+            .HasForeignKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.CurrentRequestSequence, row.CurrentRequestHash })
+            .HasPrincipalKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.PageSequence, row.RequestHash })
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
+
+        var connectorHttpRequests = modelBuilder.Entity<EtlConnectorHttpRequestRecord>();
+        connectorHttpRequests.ToTable(EtlRuntimeEfModule.ConnectorHttpRequestTableName, table =>
+        {
+            table.HasCheckConstraint(
+                "CK_elsa_etl_connector_http_requests_NonNegativeMetadataBytes",
+                "MetadataBytes >= 0");
+            table.HasCheckConstraint(
+                "CK_elsa_etl_connector_http_requests_SequencePredecessor",
+                "(PageSequence = 0 AND PreviousPageSequence IS NULL AND PreviousHasContinuation IS NULL) OR (PageSequence > 0 AND PreviousPageSequence IS NOT NULL AND PreviousHasContinuation IS NOT NULL AND PreviousPageSequence = PageSequence - 1 AND PreviousHasContinuation = 1)");
+        });
+        connectorHttpRequests.HasKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.PageSequence });
+        connectorHttpRequests.Property(row => row.ScopeKey).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
+        connectorHttpRequests.Property(row => row.RunKey).HasMaxLength(EtlRuntimeEfModule.EncodedIdentityMaximumLength).IsRequired();
+        connectorHttpRequests.Property(row => row.RequestHash).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
+        connectorHttpRequests.Property(row => row.RequestJson).IsRequired();
+        connectorHttpRequests.Property(row => row.SchemaVersion).HasMaxLength(EtlRuntimeEfModule.SchemaVersionMaximumLength).IsRequired();
+        connectorHttpRequests.HasAlternateKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.PageSequence, row.RequestHash })
+            .HasName("AK_elsa_etl_connector_http_requests_ScopeKey_RunKey_PartitionOrdinal_PageSequence_RequestHash");
+        connectorHttpRequests.HasIndex(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.RequestHash }).IsUnique();
+        connectorHttpRequests.HasIndex(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.PreviousPageSequence, row.RequestHash, row.PreviousHasContinuation });
+        connectorHttpRequests.HasOne<EtlConnectorPartitionRecord>()
+            .WithMany()
+            .HasForeignKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal })
+            .OnDelete(DeleteBehavior.Restrict);
+        connectorHttpRequests.HasOne<EtlConnectorHttpPageRecord>()
+            .WithMany()
+            .HasForeignKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.PreviousPageSequence, row.RequestHash, row.PreviousHasContinuation })
+            .HasPrincipalKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.PageSequence, row.NextRequestHash, row.HasContinuation })
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
 
         var connectorHttpPages = modelBuilder.Entity<EtlConnectorHttpPageRecord>();
-        connectorHttpPages.ToTable(EtlRuntimeEfModule.ConnectorHttpPageTableName);
+        connectorHttpPages.ToTable(EtlRuntimeEfModule.ConnectorHttpPageTableName, table =>
+            table.HasCheckConstraint(
+                "CK_elsa_etl_connector_http_pages_NonNegativeByteCounts",
+                "ByteLength >= 0 AND MetadataBytes >= 0"));
         connectorHttpPages.HasKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.PageSequence });
         connectorHttpPages.Property(row => row.ScopeKey).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
         connectorHttpPages.Property(row => row.RunKey).HasMaxLength(EtlRuntimeEfModule.EncodedIdentityMaximumLength).IsRequired();
         connectorHttpPages.Property(row => row.RequestHash).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
+        connectorHttpPages.Property(row => row.NextRequestHash).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
         connectorHttpPages.Property(row => row.PageJson).IsRequired();
+        connectorHttpPages.Property(row => row.PageDigest).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
         connectorHttpPages.Property(row => row.SchemaVersion).HasMaxLength(EtlRuntimeEfModule.SchemaVersionMaximumLength).IsRequired();
+        connectorHttpPages.HasAlternateKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.PageSequence, row.NextRequestHash, row.HasContinuation })
+            .HasName("AK_elsa_etl_connector_http_pages_ScopeKey_RunKey_PartitionOrdinal_PageSequence_NextRequestHash_HasContinuation");
         connectorHttpPages.HasIndex(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.RequestHash }).IsUnique();
+        connectorHttpPages.HasIndex(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.PageSequence, row.RequestHash });
         connectorHttpPages.HasOne<EtlConnectorPartitionRecord>()
             .WithMany()
             .HasForeignKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal })
+            .OnDelete(DeleteBehavior.Restrict);
+        connectorHttpPages.HasOne<EtlConnectorHttpRequestRecord>()
+            .WithMany()
+            .HasForeignKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.PageSequence, row.RequestHash })
+            .HasPrincipalKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.PageSequence, row.RequestHash })
             .OnDelete(DeleteBehavior.Restrict);
 
         var prepared = modelBuilder.Entity<EtlRuntimePreparedRecord>();

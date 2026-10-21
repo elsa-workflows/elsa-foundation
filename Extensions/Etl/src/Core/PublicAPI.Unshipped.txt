@@ -854,6 +854,8 @@ Elsa.Etl.Core.EtlHttpPolicy.MaxPagesPerPartition.get -> int
 Elsa.Etl.Core.EtlHttpPolicy.MaxPagesPerPartition.init -> void
 Elsa.Etl.Core.EtlHttpPolicy.MaxRetainedInputBytes.get -> long
 Elsa.Etl.Core.EtlHttpPolicy.MaxRetainedInputBytes.init -> void
+Elsa.Etl.Core.EtlHttpPolicy.MaxRetainedMetadataBytes.get -> long
+Elsa.Etl.Core.EtlHttpPolicy.MaxRetainedMetadataBytes.init -> void
 Elsa.Etl.Core.EtlHttpPolicy.RequestTimeoutSeconds.get -> int
 Elsa.Etl.Core.EtlHttpPolicy.RequestTimeoutSeconds.init -> void
 const Elsa.Etl.Core.EtlHttpPolicy.MaximumSupportedContinuationBytes = 65536 -> int

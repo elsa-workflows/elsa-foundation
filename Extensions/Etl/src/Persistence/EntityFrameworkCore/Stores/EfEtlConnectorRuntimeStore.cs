@@ -56,11 +56,12 @@ internal sealed partial class EfEtlRuntimeStore
         var snapshot = await (from run in RunSnapshots(key.ScopeKey)
             join connector in db.ConnectorRuns.AsNoTracking() on new { run.Run.ScopeKey, run.Run.RunKey } equals new { connector.ScopeKey, connector.RunKey }
             where run.Run.RunKey == key.RunKey
-            select new { Snapshot = run, Connector = connector, PageBytes = db.ConnectorHttpPages.Where(page => page.ScopeKey == connector.ScopeKey && page.RunKey == connector.RunKey).Sum(page => (long?)page.ByteLength) ?? 0 }).SingleOrDefaultAsync(cancellationToken);
+            select new { Snapshot = run, Connector = connector, PageBytes = db.ConnectorPartitions.Where(partition => partition.ScopeKey == connector.ScopeKey && partition.RunKey == connector.RunKey).Sum(partition => (long?)partition.PageBytes) ?? 0,
+                MetadataBytes = db.ConnectorPartitions.Where(partition => partition.ScopeKey == connector.ScopeKey && partition.RunKey == connector.RunKey).Sum(partition => (long?)partition.MetadataBytes) ?? 0 }).SingleOrDefaultAsync(cancellationToken);
         if (snapshot is null) return null;
         ValidateRun(snapshot.Snapshot.Run, scope, runId);
         var view = BuildRunView(snapshot.Snapshot.Run, snapshot.Snapshot.Prepared, snapshot.Snapshot.Terminal);
-        var state = ReadConnectorState(view.Invocation, snapshot.Connector, snapshot.PageBytes);
+        var state = ReadConnectorState(view.Invocation, snapshot.Connector, snapshot.PageBytes, snapshot.MetadataBytes);
         return new(view, state.Bindings, state.Prepared, snapshot.Connector.RetainedInputBytes);
     }
 
@@ -116,16 +117,45 @@ internal sealed partial class EfEtlRuntimeStore
         var expiry = run.PreparationExpiresAtUtcTicks!.Value;
         // Read back the bounded snapshot; no caller-owned collection survives the transition.
         prepared = EtlConnectorRecordCodec.Read<EtlConnectorPreparedRun>(preparedJson);
-        connector.PreparedJson = preparedJson;
-        connector.RetainedInputBytes = EtlConnectorRecordCodec.RetainedBytes(prepared);
-        connector.Revision = checked(connector.Revision + 1);
+        var partitions = new List<EtlConnectorPartitionRecord>();
+        var requests = new List<EtlConnectorHttpRequestRecord>();
+        long metadataBytes = 0;
         foreach (var (position, ordinal) in InitialPositions(state.Pipeline, state.Bindings, prepared).Select((position, ordinal) => (position, ordinal)))
-            db.ConnectorPartitions.Add(new EtlConnectorPartitionRecord
+        {
+            var partition = new EtlConnectorPartitionRecord
             {
                 ScopeKey = key.ScopeKey, RunKey = key.RunKey, PartitionOrdinal = ordinal,
                 PositionJson = EtlConnectorRecordCodec.Write(position), Completed = EtlConnectorRecordCodec.Complete(position),
                 Revision = 1, SchemaVersion = EtlRuntimeEfModule.SchemaVersion
-            });
+            };
+            partition.MetadataBytes = MetadataBytes(partition.PositionJson);
+            if (position is EtlConnectorHttpPosition http)
+            {
+                var request = HttpRequestRecord(partition, http);
+                requests.Add(request);
+                partition.MetadataBytes = checked(partition.MetadataBytes + request.MetadataBytes);
+            }
+            if (partition.MetadataBytes > state.Pipeline.Http.MaxRetainedMetadataBytes - metadataBytes)
+                return EtlStoreStatus.BudgetExceeded;
+            metadataBytes += partition.MetadataBytes;
+            partitions.Add(partition);
+        }
+        connector.PreparedJson = preparedJson;
+        connector.RetainedInputBytes = EtlConnectorRecordCodec.RetainedBytes(prepared);
+        connector.RetainedMetadataBytes = metadataBytes;
+        connector.Revision = checked(connector.Revision + 1);
+        // Break the optional partition-pointer cycle without exposing partial preparation: every
+        // save belongs to this transaction and expiry after any save rolls it all back.
+        db.ConnectorPartitions.AddRange(partitions);
+        await db.SaveChangesAsync(cancellationToken);
+        db.ConnectorHttpRequests.AddRange(requests);
+        await db.SaveChangesAsync(cancellationToken);
+        foreach (var request in requests)
+        {
+            var partition = partitions[request.PartitionOrdinal];
+            partition.CurrentRequestSequence = request.PageSequence;
+            partition.CurrentRequestHash = request.RequestHash;
+        }
         run.Status = (int)EtlRunStatus.Running;
         run.PreparationOwner = null;
         run.PreparationExpiresAtUtcTicks = null;
@@ -157,7 +187,7 @@ internal sealed partial class EfEtlRuntimeStore
         runId = EtlRuntimeRecordCodec.DecodeIdentity(candidate.Run.RunId, "run id");
         ValidateRun(candidate.Run, scope, runId);
         var state = await ReadConnectorStateAsync(EtlRuntimeRecordCodec.ReadInvocation(candidate.Run.InvocationJson), candidate.Connector, cancellationToken);
-        var position = await ReadConnectorPositionAsync(candidate.Partition, state.Pipeline, state.Bindings, state.Prepared, cancellationToken);
+        var position = await ReadConnectorPositionAsync(candidate.Partition, state.Pipeline, state.Bindings, state.Prepared, cancellationToken, auditHistory: true);
         var row = candidate.Partition;
         now = NowTicks();
         row.Owner = EtlRuntimeRecordCodec.EncodeIdentity(workerId, "worker id");
@@ -210,7 +240,7 @@ internal sealed partial class EfEtlRuntimeStore
         return new(view, state.Bindings, state.Prepared, connector.RetainedInputBytes);
     }
 
-    private (EtlPipelineV2 Pipeline, EtlConnectorRunBindings Bindings, EtlConnectorPreparedRun? Prepared) ReadConnectorState(EtlInvocation invocation, EtlConnectorRunRecord connector, long pageBytes)
+    private (EtlPipelineV2 Pipeline, EtlConnectorRunBindings Bindings, EtlConnectorPreparedRun? Prepared) ReadConnectorState(EtlInvocation invocation, EtlConnectorRunRecord connector, long pageBytes, long metadataBytes)
     {
         EnsureSchema(connector.SchemaVersion);
         try
@@ -223,6 +253,9 @@ internal sealed partial class EfEtlRuntimeStore
             if (pageBytes < 0 || connector.RetainedInputBytes != checked((prepared is null ? 0 : EtlConnectorRecordCodec.RetainedBytes(prepared)) + pageBytes) ||
                 connector.RetainedInputBytes > pipeline.Http.MaxRetainedInputBytes || prepared is null && connector.RetainedInputBytes != 0)
                 throw new InvalidDataException("The retained connector input accounting is invalid.");
+            if (metadataBytes < 0 || connector.RetainedMetadataBytes != metadataBytes ||
+                metadataBytes > pipeline.Http.MaxRetainedMetadataBytes || prepared is null && metadataBytes != 0)
+                throw new InvalidDataException("The retained connector metadata accounting is invalid.");
             return (pipeline, bindings, prepared);
         }
         catch (Exception exception) when (exception is ArgumentException or OverflowException)
@@ -284,7 +317,7 @@ internal sealed partial class EfEtlRuntimeStore
         var count = InitialPositions(state.Pipeline, state.Bindings, state.Prepared!).Count();
         if (rows.Count != count) return false;
         foreach (var row in rows)
-            if (!EtlConnectorRecordCodec.Complete(await ReadConnectorPositionAsync(row, state.Pipeline, state.Bindings, state.Prepared, cancellationToken))) return false;
+            if (!EtlConnectorRecordCodec.Complete(await ReadConnectorPositionAsync(row, state.Pipeline, state.Bindings, state.Prepared, cancellationToken, auditHistory: true))) return false;
         return true;
     }
 

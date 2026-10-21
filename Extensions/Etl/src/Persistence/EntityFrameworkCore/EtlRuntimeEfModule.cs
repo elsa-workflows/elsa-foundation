@@ -17,6 +17,7 @@ internal static class EtlRuntimeEfModule
     public const string RunTableName = "elsa_etl_runtime_runs";
     public const string ConnectorRunTableName = "elsa_etl_connector_runs";
     public const string ConnectorPartitionTableName = "elsa_etl_connector_partitions";
+    public const string ConnectorHttpRequestTableName = "elsa_etl_connector_http_requests";
     public const string ConnectorHttpPageTableName = "elsa_etl_connector_http_pages";
     public const string PreparedTableName = "elsa_etl_runtime_prepared";
     public const string PartitionTableName = "elsa_etl_runtime_partitions";

@@ -30,27 +30,35 @@ public sealed partial class EtlRuntimeStoreTests
     }
 
     [Fact]
-    public async Task Altered_older_request_digest_cannot_hide_a_visited_request()
+    public async Task Corrupt_older_page_json_cannot_remove_request_membership_and_fresh_claim_refuses_run()
     {
         await using var database = await TestDatabase.CreateAsync();
         await using var context = database.CreateContext();
         var store = database.CreateStore(context);
         var admission = ConnectorAdmission("altered-chain", new("tenant", "history"), httpShardIds: ["shard"]);
         var lease = Assert.Single(await StartHttpRunAsync(store, admission, "worker"));
-        foreach (var continuation in new[] { "a", "b", "c" })
+        foreach (var continuation in new[] { "a", "b", "c", "d" })
         {
             var attached = await store.AttachHttpPageAsync(lease, RetainedPage(lease, $"page-{continuation}", 10, 0, continuation));
             Assert.Equal(EtlStoreStatus.Applied, attached.Status);
             lease = (await store.AdvanceEmptyHttpPageAsync(attached.Lease!)).Lease!;
         }
         var prior = await context.ConnectorHttpPages.SingleAsync(page => page.PageSequence == 1);
-        var metadata = EtlConnectorRecordCodec.Read<EtlRetainedHttpPage>(prior.PageJson);
-        prior.RequestHash = new string('d', 64);
-        prior.PageJson = EtlConnectorRecordCodec.Write(metadata with { RequestHash = prior.RequestHash });
+        var originalRequestHash = prior.RequestHash;
+        prior.PageJson = "{}";
         await context.SaveChangesAsync();
-        await Assert.ThrowsAsync<InvalidDataException>(() => store.AttachHttpPageAsync(lease,
-            RetainedPage(lease, "loop", 10, 0, "a")).AsTask());
-        Assert.Equal(3, await context.ConnectorHttpPages.CountAsync());
+
+        Assert.Contains(originalRequestHash,
+            await context.ConnectorHttpRequests.AsNoTracking().Select(request => request.RequestHash).ToListAsync());
+        Assert.Equal(EtlStoreStatus.Invalid,
+            (await store.AttachHttpPageAsync(lease, RetainedPage(lease, "revisited", 10, 0, "a"))).Status);
+        Assert.Equal(EtlStoreStatus.Applied, await store.ReleaseConnectorPartitionAsync(lease));
+
+        await using var recoveryContext = database.CreateContext();
+        var recoveryStore = database.CreateStore(recoveryContext);
+        await Assert.ThrowsAsync<InvalidDataException>(() => recoveryStore.ClaimConnectorPartitionAsync(
+            admission.Invocation.Scope, admission.Invocation.RunId, "replacement").AsTask());
+        Assert.Equal(4, await recoveryContext.ConnectorHttpPages.CountAsync());
     }
 
     [Fact]
@@ -108,6 +116,13 @@ public sealed partial class EtlRuntimeStoreTests
                 partition.Completed = true;
                 break;
         }
+        if (defect == "request-hash")
+        {
+            await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
+            Assert.Empty(await context.Terminals.AsNoTracking().ToListAsync());
+            return;
+        }
+
         await context.SaveChangesAsync();
         if (defect == "false-exhaustion")
             await Assert.ThrowsAsync<InvalidDataException>(() => store.SettleTerminalAsync(

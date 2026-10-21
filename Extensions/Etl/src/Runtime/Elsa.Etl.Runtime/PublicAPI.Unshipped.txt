@@ -67,6 +67,8 @@ Elsa.Etl.Runtime.EtlHttpHostLimits.MaxPagesPerPartition.get -> int
 Elsa.Etl.Runtime.EtlHttpHostLimits.MaxPagesPerPartition.init -> void
 Elsa.Etl.Runtime.EtlHttpHostLimits.MaxRetainedInputBytes.get -> long
 Elsa.Etl.Runtime.EtlHttpHostLimits.MaxRetainedInputBytes.init -> void
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxRetainedMetadataBytes.get -> long
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxRetainedMetadataBytes.init -> void
 Elsa.Etl.Runtime.EtlHttpHostLimits.MaxAttempts.get -> int
 Elsa.Etl.Runtime.EtlHttpHostLimits.MaxAttempts.init -> void
 Elsa.Etl.Runtime.EtlHttpHostLimits.MaxDeadlineSeconds.get -> int

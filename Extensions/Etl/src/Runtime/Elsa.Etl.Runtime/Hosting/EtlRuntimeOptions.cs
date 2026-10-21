@@ -30,7 +30,7 @@ internal sealed record EtlRuntimeOptions(
         var http = feature.HttpLimits;
         if (http is null || http.MaxPageBytes <= 0 || http.MaxPageRecords <= 0 || http.MaxJsonDepth is <= 0 or > 64 ||
             http.MaxContinuationBytes <= 0 || http.MaxContinuationBytes > EtlHttpPolicy.MaximumSupportedContinuationBytes ||
-            http.MaxPagesPerPartition <= 0 || http.MaxRetainedInputBytes <= 0 ||
+            http.MaxPagesPerPartition <= 0 || http.MaxRetainedInputBytes <= 0 || http.MaxRetainedMetadataBytes <= 0 ||
             http.MaxAttempts <= 0 || http.MaxDeadlineSeconds <= 0 || http.MaxRequestTimeoutSeconds <= 0 || http.MaxDelaySeconds <= 0 ||
             http.MaxPageBytes > http.MaxRetainedInputBytes || http.MaxContinuationBytes > http.MaxPageBytes ||
             http.MaxRequestTimeoutSeconds > http.MaxDeadlineSeconds || http.MaxDelaySeconds > http.MaxDeadlineSeconds)
