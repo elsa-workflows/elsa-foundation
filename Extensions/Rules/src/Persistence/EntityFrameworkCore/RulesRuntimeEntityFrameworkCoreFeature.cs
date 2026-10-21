@@ -18,7 +18,7 @@ public class RulesRuntimeEntityFrameworkCoreFeature : IShellFeature
 {
     private static readonly EfModuleBinding Binding = EfModuleBinding.For(typeof(RulesDbContext));
 
-    [ManifestSetting(DisplayName = "Provider", Description = "Relational provider; this build supports SQLite.", Category = "Persistence")]
+    [ManifestSetting(DisplayName = "Provider", Description = "Relational provider: Sqlite, PostgreSql, SqlServer or MySql; the host supplies the engine package.", Category = "Persistence")]
     public string Provider { get; set; } = "Sqlite";
     [ManifestSetting(DisplayName = "Connection string", Description = "Optional provider connection string; defaults to the shared Elsa connection.", Category = "Persistence", Secret = true)]
     public string? ConnectionString { get; set; }
@@ -39,7 +39,6 @@ public class RulesRuntimeEntityFrameworkCoreFeature : IShellFeature
         if (WorkLeaseSeconds is < 1 or > 86_400) throw new ArgumentOutOfRangeException(nameof(WorkLeaseSeconds));
         if (DeliveryLeaseSeconds is < 1 or > 86_400) throw new ArgumentOutOfRangeException(nameof(DeliveryLeaseSeconds));
         var provider = EfRelationalProviderBinding.Normalize(Provider);
-        if (provider != "sqlite") throw new NotSupportedException("This Rules persistence build supports SQLite only.");
         var connection = ConnectionString;
         var connectionName = ConnectionName;
         var schema = Schema;
@@ -50,11 +49,14 @@ public class RulesRuntimeEntityFrameworkCoreFeature : IShellFeature
 
         // A fresh context per store transaction avoids retaining stale tracked state after a conflict.
         // The shared binding preserves normal connection resolution and schema write admission.
-        if (Pooling)
-            services.AddPooledDbContextFactory<RulesSqliteDbContext>(Configure);
-        else
-            services.AddDbContextFactory<RulesSqliteDbContext>(Configure, ServiceLifetime.Scoped);
-        services.AddScoped<IDbContextFactory<RulesDbContext>, RulesContextFactory>();
+        switch (provider)
+        {
+            case "sqlite": RegisterContext<RulesSqliteDbContext>(services, Configure, Pooling); break;
+            case "postgresql": RegisterContext<RulesPostgreSqlDbContext>(services, Configure, Pooling); break;
+            case "sqlserver": RegisterContext<RulesSqlServerDbContext>(services, Configure, Pooling); break;
+            case "mysql": RegisterContext<RulesMySqlDbContext>(services, Configure, Pooling); break;
+            default: throw new NotSupportedException($"Unsupported Rules provider '{Provider}'.");
+        }
         services.AddScoped<RulesDbContext>(services => services.GetRequiredService<IDbContextFactory<RulesDbContext>>().CreateDbContext());
         services.TryAddScoped<EfRuleRunStore>(services => new(
             services.GetRequiredService<IDbContextFactory<RulesDbContext>>(),
@@ -69,7 +71,18 @@ public class RulesRuntimeEntityFrameworkCoreFeature : IShellFeature
         services.AddEfModuleMigrations<RulesDbContext>(Provider);
     }
 
-    private sealed class RulesContextFactory(IDbContextFactory<RulesSqliteDbContext> factory) : IDbContextFactory<RulesDbContext>
+    private static void RegisterContext<TContext>(IServiceCollection services,
+        Action<IServiceProvider, DbContextOptionsBuilder> configure, bool pooling) where TContext : RulesDbContext
+    {
+        if (pooling)
+            services.AddPooledDbContextFactory<TContext>(configure);
+        else
+            services.AddDbContextFactory<TContext>(configure, ServiceLifetime.Scoped);
+        services.AddScoped<IDbContextFactory<RulesDbContext>, RulesContextFactory<TContext>>();
+    }
+
+    private sealed class RulesContextFactory<TContext>(IDbContextFactory<TContext> factory) : IDbContextFactory<RulesDbContext>
+        where TContext : RulesDbContext
     {
         public RulesDbContext CreateDbContext() => factory.CreateDbContext();
         public async Task<RulesDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default) =>

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Add one named migration for the Rules SQLite context without replacing its retained migration set.
+# Add one named migration for the selected Rules provider context without replacing its retained migration set.
 set -euo pipefail
 
 fail() {
@@ -10,14 +10,14 @@ fail() {
 usage() {
   cat <<'USAGE'
 Usage:
-  bash tools/rules/generate-rules-migrations.sh <MigrationName>
+  bash tools/rules/generate-rules-migrations.sh <MigrationName> [Sqlite|PostgreSql|SqlServer|MySql]
 
-The only supported context is RulesSqliteDbContext. Migration files and the model snapshot
-are retained under Extensions/Rules/src/Persistence/EntityFrameworkCore/Migrations/Rules/Sqlite/.
+The provider defaults to Sqlite. Each context retains its own migration set under
+Extensions/Rules/src/Persistence/EntityFrameworkCore/Migrations/Rules/<Provider>/.
 USAGE
 }
 
-if [[ $# -ne 1 ]]; then
+if [[ $# -lt 1 || $# -gt 2 ]]; then
   usage >&2
   exit 2
 fi
@@ -33,23 +33,25 @@ migration_name="$1"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 cd "$root"
 
-context="RulesSqliteDbContext"
+provider="${2:-Sqlite}"
+case "$provider" in
+  Sqlite|PostgreSql|SqlServer|MySql) ;;
+  *) fail "Unsupported Rules provider '$provider'." ;;
+esac
+context="Rules${provider}DbContext"
 project_rel="Extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj"
 project="${project_rel}"
 project_dir="$root/Extensions/Rules/src/Persistence/EntityFrameworkCore"
-context_source="$project_dir/RulesSqliteDbContext.cs"
+context_source="$project_dir/${context}.cs"
 tooling="Extensions/Rules/src/Tooling/Elsa.Rules.Tooling.csproj"
-factory_source="Extensions/Rules/src/Tooling/RulesSqliteDbContextFactory.cs"
-output_dir="Migrations/Rules/Sqlite"
-namespace="Elsa.Rules.Persistence.EntityFrameworkCore.Migrations.Rules.Sqlite"
+factory_source="Extensions/Rules/src/Tooling/${context}Factory.cs"
+output_dir="Migrations/Rules/$provider"
+namespace="Elsa.Rules.Persistence.EntityFrameworkCore.Migrations.Rules.$provider"
 destination="$project_dir/$output_dir"
-expected_destination="$root/Extensions/Rules/src/Persistence/EntityFrameworkCore/Migrations/Rules/Sqlite"
+expected_destination="$root/Extensions/Rules/src/Persistence/EntityFrameworkCore/Migrations/Rules/$provider"
 configuration="${ELSA_EF_CONFIGURATION:-Release}"
 
-[[ "$context" == "RulesSqliteDbContext" ]] ||
-  fail "Unsupported context '$context'; only RulesSqliteDbContext is supported."
-[[ "$output_dir" == "Migrations/Rules/Sqlite" && "$destination" == "$expected_destination" ]] ||
-  fail "Rules migration output must be the module's Migrations/Rules/Sqlite directory."
+[[ "$destination" == "$expected_destination" ]] || fail "Unexpected Rules migration destination."
 
 for required_file in "$project_rel" "$context_source" "$tooling" "$factory_source" \
                      "tools/ef/Elsa.EntityFrameworkCore.Tooling/ModuleDesignTimeFactory.cs" \
@@ -57,16 +59,23 @@ for required_file in "$project_rel" "$context_source" "$tooling" "$factory_sourc
   [[ -f "$required_file" ]] || fail "Required migration input is missing: $required_file."
 done
 
-grep -Fq 'internal sealed class RulesSqliteDbContext' "$context_source" ||
-  fail "The supported SQLite context declaration is missing or has changed."
-grep -Fq 'ModuleDesignTimeFactory<RulesSqliteDbContext>' "$factory_source" ||
+grep -Fq "internal sealed class $context" "$context_source" ||
+  fail "The supported provider context declaration is missing or has changed."
+grep -Fq "ModuleDesignTimeFactory<$context>" "$factory_source" ||
   fail "The Rules tooling factory does not target the supported context."
 
 # Refuse redirected destinations and non-directory path components before restore/build/scaffolding.
-for path in "$project_dir/Migrations" "$project_dir/Migrations/Rules" "$destination"; do
+for path in "$root/Extensions" "$root/Extensions/Rules" "$root/Extensions/Rules/src" \
+            "$root/Extensions/Rules/src/Persistence" "$project_dir" \
+            "$project_dir/Migrations" "$project_dir/Migrations/Rules" "$destination"; do
   [[ ! -L "$path" ]] || fail "Migration path components must not be symlinks: $path."
   [[ ! -e "$path" || -d "$path" ]] || fail "Migration path component is not a directory: $path."
 done
+
+if [[ -d "$destination" ]] &&
+   find "$destination" -maxdepth 1 -type l -name '*.cs' -print -quit | grep -q .; then
+  fail "Migration source files must not be symlinks."
+fi
 
 if [[ -d "$destination" ]] &&
    find "$destination" -maxdepth 1 -type f -name "*_${migration_name}.cs" -print -quit | grep -q .; then

@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Description>SQLite EF Core persistence for durable finite-positive Rules runs.</Description>
+    <Description>Relational EF Core persistence for durable finite-positive Rules runs.</Description>
     <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
   </PropertyGroup>
   <ItemGroup>

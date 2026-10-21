@@ -14,5 +14,6 @@
     <ProjectReference Include="../Persistence/Core/Elsa.Rules.Persistence.Core.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj" />
     <InternalsVisibleTo Include="Elsa.Rules.Tests" />
+    <InternalsVisibleTo Include="Elsa.Rules.Persistence.EntityFrameworkCore.ProviderTests" />
   </ItemGroup>
 </Project>

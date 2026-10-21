@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "requiredProviders": [
+    "Sqlite",
+    "PostgreSql",
+    "SqlServer",
+    "MySql"
+  ],
+  "requireAll": true,
+  "sourceBefore": {
+    "head": "646cfc2346dbc78b3d68baf5d4bad3a932ac54fc",
+    "dirty": true,
+    "fingerprint": "269716fdf7fbfe9862ce7ddafa24d68cf341b42aaf03d9c1d4bed58e4416ccca"
+  },
+  "command": [
+    "dotnet",
+    "test",
+    "Extensions/Rules/tests/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Rules.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+    "--logger",
+    "trx;LogFileName=rules-providers.trx",
+    "--results-directory",
+    "/private/tmp/3181-providers-final/run-4f8d9ed51ade46bea5b5b8d0b892d15d"
+  ],
+  "qualified": true,
+  "exitCode": 0,
+  "counts": {
+    "total": "8",
+    "executed": "8",
+    "passed": "8",
+    "failed": "0",
+    "error": "0",
+    "timeout": "0",
+    "aborted": "0",
+    "inconclusive": "0",
+    "passedButRunAborted": "0",
+    "notRunnable": "0",
+    "notExecuted": "0",
+    "disconnected": "0",
+    "warning": "0",
+    "completed": "0",
+    "inProgress": "0",
+    "pending": "0"
+  },
+  "providers": {
+    "Sqlite": {
+      "total": 2,
+      "passed": 2
+    },
+    "PostgreSql": {
+      "total": 2,
+      "passed": 2
+    },
+    "SqlServer": {
+      "total": 2,
+      "passed": 2
+    },
+    "MySql": {
+      "total": 2,
+      "passed": 2
+    }
+  },
+  "sourceAfter": {
+    "head": "646cfc2346dbc78b3d68baf5d4bad3a932ac54fc",
+    "dirty": true,
+    "fingerprint": "269716fdf7fbfe9862ce7ddafa24d68cf341b42aaf03d9c1d4bed58e4416ccca"
+  },
+  "sourceUnchanged": true,
+  "engineVersions": {
+    "MySql": [
+      "8.4.11"
+    ],
+    "Sqlite": [
+      "3.50.4"
+    ],
+    "SqlServer": [
+      "16.00.4185"
+    ],
+    "PostgreSql": [
+      "16.15"
+    ]
+  },
+  "rawArtifacts": {
+    "receipt.json": {
+      "path": "/tmp/3181-providers-final/run-4f8d9ed51ade46bea5b5b8d0b892d15d/receipt.json",
+      "sha256": "9308dea8ba9138fe5c81aed09558afe0cd090c5e152ab7ba21a2148f511f9c7e"
+    },
+    "rules-providers.trx": {
+      "path": "/tmp/3181-providers-final/run-4f8d9ed51ade46bea5b5b8d0b892d15d/rules-providers.trx",
+      "sha256": "c1613689ac7f647dd95760fd818baceade85464260759823d1b9581547dc2ac5"
+    },
+    "command.log": {
+      "path": "/tmp/3181-providers-final/run-4f8d9ed51ade46bea5b5b8d0b892d15d/command.log",
+      "sha256": "9be42b42c16e6a519e1e0614137dc8c9e4031fb0da1c91c79f67e0c662fa635c"
+    }
+  },
+  "evidenceScope": "Source project real-engine store contracts, including synthetic delivery-proof validator; not installed packages, process replacement or native continuation."
+}

@@ -6,12 +6,16 @@ using System.Runtime.CompilerServices;
 
 [assembly: InternalsVisibleTo("Elsa.Rules.Tests")]
 [assembly: InternalsVisibleTo("Elsa.Rules.Tooling")]
+[assembly: InternalsVisibleTo("Elsa.Rules.Persistence.EntityFrameworkCore.ProviderTests")]
 
 [assembly: EfModule(
     Elsa.Rules.Persistence.EntityFrameworkCore.RulesEfModule.Name,
     typeof(Elsa.Rules.Persistence.EntityFrameworkCore.RulesDbContext),
     HistoryModule = Elsa.Rules.Persistence.EntityFrameworkCore.RulesEfModule.HistoryModuleName,
     Sqlite = typeof(Elsa.Rules.Persistence.EntityFrameworkCore.RulesSqliteDbContext),
+    PostgreSql = typeof(RulesPostgreSqlDbContext),
+    SqlServer = typeof(RulesSqlServerDbContext),
+    MySql = typeof(RulesMySqlDbContext),
     DisplayName = "Rules runtime",
     DefaultConnectionName = Elsa.Rules.Persistence.EntityFrameworkCore.RulesEfModule.DefaultConnectionName,
     DefaultSqliteConnectionString = Elsa.Rules.Persistence.EntityFrameworkCore.RulesEfModule.DefaultSqliteConnectionString)]

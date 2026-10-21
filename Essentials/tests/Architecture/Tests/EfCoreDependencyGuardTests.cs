@@ -1236,10 +1236,16 @@ public sealed class EfCoreDependencyGuardTests
                 ["Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"],
                 ["Extensions/Rules/src/Tooling/Elsa.Rules.Tooling.csproj"] =
-                [.. CorePackages(), "Microsoft.EntityFrameworkCore.Design", "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"]
+                [.. ProviderPackages(), "Microsoft.EntityFrameworkCore.Design"],
+                ["Extensions/Rules/tests/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Rules.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
+                ProviderPackages()
             };
 
         public static bool IsProjectPath(string relativePath) => ExpectedEfPackagesByProject.ContainsKey(relativePath);
+
+        private static string[] ProviderPackages() =>
+            [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core",
+                "Microsoft.EntityFrameworkCore.SqlServer", "Npgsql.EntityFrameworkCore.PostgreSQL", "MySql.EntityFrameworkCore"];
 
         private static string[] CorePackages() =>
             ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational"];
