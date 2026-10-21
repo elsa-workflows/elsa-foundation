@@ -152,6 +152,8 @@ public sealed partial class EtlRuntimeJourneyTests
 
         HttpProcessState waiting;
         EtlConnectorHttpDeliveries deliveries;
+        while (errorRequestTimes.IsEmpty)
+            await Task.Delay(TimeSpan.FromMilliseconds(25), deadline.Token);
         while (true)
         {
             waiting = await ReadHttpProcessStateAsync(host.Services, deadline.Token);
@@ -268,6 +270,8 @@ public sealed partial class EtlRuntimeJourneyTests
 
         HttpProcessState waiting;
         EtlConnectorHttpSourceFetch fetch;
+        while (sourceResponses.IsEmpty)
+            await Task.Delay(TimeSpan.FromMilliseconds(25), deadline.Token);
         while (true)
         {
             waiting = await ReadHttpProcessStateAsync(host.Services, deadline.Token);
@@ -290,7 +294,7 @@ public sealed partial class EtlRuntimeJourneyTests
         Assert.Equal(429, firstAttempt.Outcome!.StatusCode);
         Assert.Equal(429, Assert.Single(sourceResponses).Status);
         Assert.Single(endpoint.Requests, request => request.Method == "GET");
-        Assert.Empty(endpoint.Requests.Where(request => request.Method == "POST"));
+        Assert.DoesNotContain(endpoint.Requests, request => request.Method == "POST");
         var notBefore = Assert.IsType<DateTimeOffset>(fetch.NotBefore);
 
         await predecessor.CrashAsync();
@@ -303,7 +307,7 @@ public sealed partial class EtlRuntimeJourneyTests
         await Task.Delay(remaining, deadline.Token);
         Assert.True(DateTimeOffset.UtcNow < notBefore);
         Assert.Single(endpoint.Requests, request => request.Method == "GET");
-        Assert.Empty(endpoint.Requests.Where(request => request.Method == "POST"));
+        Assert.DoesNotContain(endpoint.Requests, request => request.Method == "POST");
 
         var recovered = await successor.WaitForConnectorCheckpointAsync(deadline.Token);
         Assert.Equal(EtlConnectorWorkerGate.BeforeAcceptance, recovered.Gate);
