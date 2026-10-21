@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-20
 
-**Status**: Implemented — delivery in #3111; resulting-main verification remains tracked by #3109
+**Status**: Implemented — delivered in #3111; resulting-main verification and #3109 closeout complete ([evidence](evidence/post-merge-verification.md)).
 
 **Input**: User description: Deliver the first finite CSV-to-JSONL ETL journey in #3109: Studio authoring and publishing, native workflow invocation, bounded partitioned work, durable recovery, and run inspection.
 
