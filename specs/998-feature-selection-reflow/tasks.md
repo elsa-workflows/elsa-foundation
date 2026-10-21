@@ -6,15 +6,7 @@
 
 **Tests**: Add the rendered regression because the acceptance criteria concern actual browser layout. This is not a greenfield feature class or logic-bearing implementation under framework §2.23. Execute the requested red/green proof, then run the scoped existing module tests and CSS/build checks.
 
-## Phase 1: Setup
-
-**Purpose**: Use the existing Studio browser harness; no project or dependency setup is needed.
-
-## Phase 2: Foundational
-
-**Purpose**: No shared foundations are required for this CSS-only correction.
-
-## Phase 3: User Story 1 - Read and use narrow selection controls (Priority: P2)
+## Phase 1: User Story 1 - Read and use narrow selection controls (Priority: P2)
 
 **Goal**: Keep both counts and all three action buttons fully legible in narrow Feature Management containers while preserving the existing wide row and interactions.
 
@@ -22,9 +14,9 @@
 
 - [x] T001 [US1] Add the real-page mock-catalog fixture in `Studio/tests/browser/feature-management.html` and `Studio/tests/browser/featureManagementFixture.tsx`.
 - [x] T002 [US1] Add rendered geometry and keyboard assertions in `Studio/tests/browser/feature-management-layout.spec.ts`.
-- [x] T003 [US1] Run `pnpm exec playwright test tests/browser/feature-management-layout.spec.ts` from `Studio/` against the unchanged module CSS and record the expected failing geometry in `/Users/sipke/Documents/Codex/2026-10-19/studio-ux-audit/execution/3175-browser-red.log`.
+- [x] T003 [US1] Run `pnpm exec playwright test tests/browser/feature-management-layout.spec.ts` from `Studio/` against the unchanged module CSS and record the expected failing geometry in the issue #3175 implementation evidence.
 - [x] T004 [US1] Reflow only `.feature-management-bulk-actions` in `Extensions/FeatureManagement/studio/Elsa.Studio.FeatureManagement/Client/src/styles.css` under the existing narrow named-container query.
-- [x] T005 [US1] Run the focused browser spec, Feature Management client tests, scoped Stylelint, and client build; record command outcomes in `/Users/sipke/Documents/Codex/2026-10-19/studio-ux-audit/execution/3175-implementation-evidence.md`.
+- [x] T005 [US1] Run the focused browser spec, Feature Management client tests, scoped Stylelint, and client build; record command outcomes in the issue #3175 implementation evidence.
 
 ## Dependencies & Execution Order
 

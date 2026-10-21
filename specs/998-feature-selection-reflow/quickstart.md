@@ -20,7 +20,7 @@ From the repository root:
 
 ```bash
 pnpm --dir Extensions/FeatureManagement/studio/Elsa.Studio.FeatureManagement/Client test
-pnpm --dir Studio exec stylelint --config Studio/.stylelintrc.json Extensions/FeatureManagement/studio/Elsa.Studio.FeatureManagement/Client/src/styles.css
+pnpm --dir Studio exec stylelint --config .stylelintrc.json ../Extensions/FeatureManagement/studio/Elsa.Studio.FeatureManagement/Client/src/styles.css
 pnpm --dir Extensions/FeatureManagement/studio/Elsa.Studio.FeatureManagement/Client build
 ```
 

@@ -17,11 +17,12 @@ async function readToolbarGeometry(page: import("@playwright/test").Page) {
     const selectedCount = row.querySelector(":scope > div > span");
     const buttons = Array.from(row.querySelectorAll("button"));
     if (!labelCount || !selectedCount) throw new Error("Both count labels must render.");
-    const textFit = (element: Element) => element.clientWidth > 0 && element.scrollWidth <= element.clientWidth + 1;
+    const textFit = (element: Element) => element.clientWidth > 0 && element.scrollWidth <= element.clientWidth;
     const overlaps = (first: DOMRect, second: DOMRect) =>
       first.left < second.right && first.right > second.left && first.top < second.bottom && first.bottom > second.top;
     const countRects = [labelCount, selectedCount].map(element => element.getBoundingClientRect());
     const buttonRects = buttons.map(button => button.getBoundingClientRect());
+    const rowRect = row.getBoundingClientRect();
     return {
       row: toRect(row),
       rowClientWidth: row.clientWidth,
@@ -34,9 +35,12 @@ async function readToolbarGeometry(page: import("@playwright/test").Page) {
         disabled: (button as HTMLButtonElement).disabled,
         rect: toRect(button),
         textFits: textFit(button),
-        insideRow: buttonRects[index].left >= row.getBoundingClientRect().left
-          && buttonRects[index].right <= row.getBoundingClientRect().right
+        insideRow: buttonRects[index].left >= rowRect.left
+          && buttonRects[index].right <= rowRect.right
+          && buttonRects[index].top >= rowRect.top
+          && buttonRects[index].bottom <= rowRect.bottom
       })),
+      countOverlap: overlaps(countRects[0], countRects[1]),
       countButtonOverlap: countRects.some(countRect => buttonRects.some(buttonRect => overlaps(countRect, buttonRect))),
       buttonOverlap: buttonRects.some((rect, index) => buttonRects.slice(index + 1).some(other => overlaps(rect, other))),
       documentClientWidth: document.documentElement.clientWidth,
@@ -50,11 +54,12 @@ function expectToolbarToFit(geometry: Awaited<ReturnType<typeof readToolbarGeome
   expect(geometry.selectedCount.text).toBe(expected.selected);
   expect(geometry.visibleCount.fits).toBe(true);
   expect(geometry.selectedCount.fits).toBe(true);
+  expect(geometry.countOverlap).toBe(false);
   expect(geometry.countButtonOverlap).toBe(false);
   expect(geometry.buttonOverlap).toBe(false);
   expect(geometry.buttons.every(button => button.insideRow && button.textFits)).toBe(true);
-  expect(geometry.rowScrollWidth).toBeLessThanOrEqual(geometry.rowClientWidth + 1);
-  expect(geometry.documentScrollWidth).toBeLessThanOrEqual(geometry.documentClientWidth + 1);
+  expect(geometry.rowScrollWidth).toBeLessThanOrEqual(geometry.rowClientWidth);
+  expect(geometry.documentScrollWidth).toBeLessThanOrEqual(geometry.documentClientWidth);
 }
 
 test("Feature Management selection counts and actions reflow without clipping", async ({ page }, testInfo) => {
