@@ -3,6 +3,12 @@
     <IsTestProject>true</IsTestProject>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(EtlV1FixtureCapture)' == 'true'">
+    <DefineConstants>$(DefineConstants);ETL_V1_FIXTURE_CAPTURE</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(EtlV1NativeUpgrade)' == 'true'">
+    <DefineConstants>$(DefineConstants);ETL_V1_NATIVE_UPGRADE</DefineConstants>
+  </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />

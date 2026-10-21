@@ -138,3 +138,47 @@ static Elsa.Etl.Design.Stores.EtlDefinitionSummary.operator !=(Elsa.Etl.Design.S
 static Elsa.Etl.Design.Stores.EtlDefinitionSummary.operator ==(Elsa.Etl.Design.Stores.EtlDefinitionSummary? left, Elsa.Etl.Design.Stores.EtlDefinitionSummary? right) -> bool
 static Elsa.Etl.Design.Stores.EtlPublishedVersionSummary.operator !=(Elsa.Etl.Design.Stores.EtlPublishedVersionSummary? left, Elsa.Etl.Design.Stores.EtlPublishedVersionSummary? right) -> bool
 static Elsa.Etl.Design.Stores.EtlPublishedVersionSummary.operator ==(Elsa.Etl.Design.Stores.EtlPublishedVersionSummary? left, Elsa.Etl.Design.Stores.EtlPublishedVersionSummary? right) -> bool
+Elsa.Etl.Design.IEtlArtifactCompilerV2
+Elsa.Etl.Design.IEtlArtifactCompilerV2.Compile(string! definitionId, int definitionVersion, Elsa.Etl.Core.EtlPipelineV2! pipeline) -> Elsa.Etl.Design.EtlCompilationResult!
+Elsa.Etl.Design.Stores.EtlDefinitionDraftV2
+Elsa.Etl.Design.Stores.EtlDefinitionDraftV2.<Clone>$() -> Elsa.Etl.Design.Stores.EtlDefinitionDraftV2!
+Elsa.Etl.Design.Stores.EtlDefinitionDraftV2.Deconstruct(out string! DefinitionId, out long Revision, out int LastPublishedVersion, out Elsa.Etl.Core.EtlPipelineV2! Pipeline, out System.DateTimeOffset UpdatedAt) -> void
+Elsa.Etl.Design.Stores.EtlDefinitionDraftV2.DefinitionId.get -> string!
+Elsa.Etl.Design.Stores.EtlDefinitionDraftV2.DefinitionId.init -> void
+Elsa.Etl.Design.Stores.EtlDefinitionDraftV2.Equals(Elsa.Etl.Design.Stores.EtlDefinitionDraftV2? other) -> bool
+Elsa.Etl.Design.Stores.EtlDefinitionDraftV2.EtlDefinitionDraftV2(string! DefinitionId, long Revision, int LastPublishedVersion, Elsa.Etl.Core.EtlPipelineV2! Pipeline, System.DateTimeOffset UpdatedAt) -> void
+Elsa.Etl.Design.Stores.EtlDefinitionDraftV2.LastPublishedVersion.get -> int
+Elsa.Etl.Design.Stores.EtlDefinitionDraftV2.LastPublishedVersion.init -> void
+Elsa.Etl.Design.Stores.EtlDefinitionDraftV2.Pipeline.get -> Elsa.Etl.Core.EtlPipelineV2!
+Elsa.Etl.Design.Stores.EtlDefinitionDraftV2.Pipeline.init -> void
+Elsa.Etl.Design.Stores.EtlDefinitionDraftV2.Revision.get -> long
+Elsa.Etl.Design.Stores.EtlDefinitionDraftV2.Revision.init -> void
+Elsa.Etl.Design.Stores.EtlDefinitionDraftV2.UpdatedAt.get -> System.DateTimeOffset
+Elsa.Etl.Design.Stores.EtlDefinitionDraftV2.UpdatedAt.init -> void
+Elsa.Etl.Design.Stores.EtlDefinitionSummary.FormatVersion.get -> int
+Elsa.Etl.Design.Stores.EtlDefinitionSummary.FormatVersion.init -> void
+Elsa.Etl.Design.Stores.EtlDefinitionWriteResultV2
+Elsa.Etl.Design.Stores.EtlDefinitionWriteResultV2.<Clone>$() -> Elsa.Etl.Design.Stores.EtlDefinitionWriteResultV2!
+Elsa.Etl.Design.Stores.EtlDefinitionWriteResultV2.Deconstruct(out Elsa.Etl.Design.Stores.EtlDefinitionWriteStatus Status, out Elsa.Etl.Design.Stores.EtlDefinitionDraftV2? Draft) -> void
+Elsa.Etl.Design.Stores.EtlDefinitionWriteResultV2.Draft.get -> Elsa.Etl.Design.Stores.EtlDefinitionDraftV2?
+Elsa.Etl.Design.Stores.EtlDefinitionWriteResultV2.Draft.init -> void
+Elsa.Etl.Design.Stores.EtlDefinitionWriteResultV2.Equals(Elsa.Etl.Design.Stores.EtlDefinitionWriteResultV2? other) -> bool
+Elsa.Etl.Design.Stores.EtlDefinitionWriteResultV2.EtlDefinitionWriteResultV2(Elsa.Etl.Design.Stores.EtlDefinitionWriteStatus Status, Elsa.Etl.Design.Stores.EtlDefinitionDraftV2? Draft) -> void
+Elsa.Etl.Design.Stores.EtlDefinitionWriteResultV2.Status.get -> Elsa.Etl.Design.Stores.EtlDefinitionWriteStatus
+Elsa.Etl.Design.Stores.EtlDefinitionWriteResultV2.Status.init -> void
+Elsa.Etl.Design.Stores.EtlPublishedVersionSummary.FormatVersion.get -> int
+Elsa.Etl.Design.Stores.EtlPublishedVersionSummary.FormatVersion.init -> void
+Elsa.Etl.Design.Stores.IEtlDefinitionStoreV2
+Elsa.Etl.Design.Stores.IEtlDefinitionStoreV2.CreateDraftAsync(Elsa.Etl.Core.EtlScope! scope, string! definitionId, Elsa.Etl.Core.EtlPipelineV2! pipeline, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Design.Stores.EtlDefinitionWriteResultV2!>
+Elsa.Etl.Design.Stores.IEtlDefinitionStoreV2.FindDraftAsync(Elsa.Etl.Core.EtlScope! scope, string! definitionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Design.Stores.EtlDefinitionDraftV2?>
+Elsa.Etl.Design.Stores.IEtlDefinitionStoreV2.UpdateDraftAsync(Elsa.Etl.Core.EtlScope! scope, string! definitionId, long expectedRevision, Elsa.Etl.Core.EtlPipelineV2! pipeline, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Design.Stores.EtlDefinitionWriteResultV2!>
+override Elsa.Etl.Design.Stores.EtlDefinitionDraftV2.Equals(object? obj) -> bool
+override Elsa.Etl.Design.Stores.EtlDefinitionDraftV2.GetHashCode() -> int
+override Elsa.Etl.Design.Stores.EtlDefinitionDraftV2.ToString() -> string!
+override Elsa.Etl.Design.Stores.EtlDefinitionWriteResultV2.Equals(object? obj) -> bool
+override Elsa.Etl.Design.Stores.EtlDefinitionWriteResultV2.GetHashCode() -> int
+override Elsa.Etl.Design.Stores.EtlDefinitionWriteResultV2.ToString() -> string!
+static Elsa.Etl.Design.Stores.EtlDefinitionDraftV2.operator !=(Elsa.Etl.Design.Stores.EtlDefinitionDraftV2? left, Elsa.Etl.Design.Stores.EtlDefinitionDraftV2? right) -> bool
+static Elsa.Etl.Design.Stores.EtlDefinitionDraftV2.operator ==(Elsa.Etl.Design.Stores.EtlDefinitionDraftV2? left, Elsa.Etl.Design.Stores.EtlDefinitionDraftV2? right) -> bool
+static Elsa.Etl.Design.Stores.EtlDefinitionWriteResultV2.operator !=(Elsa.Etl.Design.Stores.EtlDefinitionWriteResultV2? left, Elsa.Etl.Design.Stores.EtlDefinitionWriteResultV2? right) -> bool
+static Elsa.Etl.Design.Stores.EtlDefinitionWriteResultV2.operator ==(Elsa.Etl.Design.Stores.EtlDefinitionWriteResultV2? left, Elsa.Etl.Design.Stores.EtlDefinitionWriteResultV2? right) -> bool

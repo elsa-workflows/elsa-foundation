@@ -62,6 +62,9 @@ internal sealed class EtlWorkerProcess(string root, string configurationPath, st
         WaitForJournalAsync<EtlWorkerDelivery>(EtlWorkerProtocol.DeliveryPath(root, role), cancellationToken,
             AcceptancePath, CommittedAcceptancePath, ReservationPath);
 
+    public Task<EtlConnectorWorkerCheckpoint> WaitForConnectorCheckpointAsync(CancellationToken cancellationToken) =>
+        WaitForJournalAsync<EtlConnectorWorkerCheckpoint>(EtlWorkerProtocol.ConnectorCheckpointPath(root, role), cancellationToken);
+
     public Task<EtlWorkerWrite> WaitForWriteAsync(CancellationToken cancellationToken) =>
         WaitForJournalAsync<EtlWorkerWrite>(EtlWorkerProtocol.WritePath(root, role), cancellationToken,
             AcceptancePath, CommittedAcceptancePath, ReservationPath);

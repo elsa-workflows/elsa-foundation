@@ -14,9 +14,73 @@ internal sealed class FileChunkStore : IFileChunkPublisher
     public FileChunkStore(string extension = ".jsonl")
     {
         // Only feature-owned formats; never an authored path or suffix.
-        if (extension is not (".jsonl" or ".csv" or ".index"))
+        if (extension is not (".jsonl" or ".csv" or ".index" or ".json" or ".page"))
             throw new ArgumentException("Unsupported ETL chunk format.", nameof(extension));
         _extension = extension;
+    }
+
+    internal string KeyFor(string effectIdentity)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(effectIdentity);
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(effectIdentity))).ToLowerInvariant() + _extension;
+    }
+
+    /// <summary>Reads one exact immutable chunk only after checking its finite physical bound.</summary>
+    /// <remarks>Only a missing file under an existing root is reported as absent. An unavailable root is an I/O failure.</remarks>
+    internal async ValueTask<byte[]?> ReadAsync(string outputRoot, string effectIdentity, long maxBytes,
+        long? expectedByteLength = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputRoot);
+        ArgumentException.ThrowIfNullOrWhiteSpace(effectIdentity);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBytes);
+        if (expectedByteLength is < 0 || expectedByteLength is { } expectedLength && expectedLength > maxBytes)
+            throw new EtlEffectException("etl.output-read-conflict", "A published ETL object has an invalid size.");
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var path = Path.Combine(outputRoot, KeyFor(effectIdentity));
+        FileStream file;
+        try
+        {
+            file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
+                4096, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        }
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new EtlEffectException("etl.output-read-failed", "The ETL object could not be read.", exception);
+        }
+
+        await using (file)
+        {
+            try
+            {
+                var length = file.Length;
+                if (length > maxBytes || length > int.MaxValue || expectedByteLength is { } expected && length != expected)
+                    throw new EtlEffectException("etl.output-read-conflict", "A published ETL object has an invalid size.");
+
+                var bytes = new byte[(int)length];
+                await file.ReadExactlyAsync(bytes, cancellationToken);
+                var extra = new byte[1];
+                if (await file.ReadAsync(extra, cancellationToken) != 0)
+                    throw new EtlEffectException("etl.output-read-conflict", "A published ETL object exceeds its declared size.");
+                return bytes;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (EtlEffectException)
+            {
+                throw;
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                throw new EtlEffectException("etl.output-read-failed", "The ETL object could not be read.", exception);
+            }
+        }
     }
 
     public async ValueTask<EtlChunk> PublishAsync(
@@ -34,7 +98,7 @@ internal sealed class FileChunkStore : IFileChunkPublisher
 
         // An effect identity is data, never an authored path. Staging and final files share a
         // directory so the host's declared create-only publication cannot cross filesystems.
-        var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(effectIdentity))).ToLowerInvariant() + _extension;
+        var key = KeyFor(effectIdentity);
         var finalPath = Path.Combine(outputRoot, key);
         var stagingPath = Path.Combine(outputRoot, $".{key}.{Guid.NewGuid():N}.staging");
         try

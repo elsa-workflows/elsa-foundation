@@ -1,8 +1,10 @@
 using CShells.Features;
+using Elsa.Connections.Core.Contracts;
 using Elsa.Etl.Core.Runtime;
 using Elsa.Etl.Runtime.Bindings;
 using Elsa.Etl.Runtime.Execution;
 using Elsa.Etl.Runtime.Hosting;
+using Elsa.Etl.Runtime.Http;
 using Elsa.Etl.Runtime.Output;
 using Elsa.Etl.Runtime.Preparation;
 using Elsa.Tasks.Core;
@@ -15,7 +17,7 @@ namespace Elsa.Etl.Runtime;
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("ETL")]
 [ManifestFeatureCategory("Runtime")]
-[ShellFeature(name: "EtlRuntime", DisplayName = "ETL Runtime", Description = "Bounded execution support for published finite file ETL pipelines.", DependsOn = new object[] { "Tasks" })]
+[ShellFeature(name: "EtlRuntime", DisplayName = "ETL Runtime", Description = "Bounded execution support for published finite file and HTTP ETL pipelines.", DependsOn = new object[] { "Tasks" })]
 public class EtlRuntimeFeature : IShellFeature
 {
     [ManifestSetting(DisplayName = "Snapshot root", Description = "Absolute host-approved root for bounded ETL source and lookup snapshots.", Category = "Storage")]
@@ -23,6 +25,9 @@ public class EtlRuntimeFeature : IShellFeature
 
     [ManifestSetting(DisplayName = "File bindings", Description = "Trusted, revision-pinned host files available to ETL definitions.", Category = "Bindings")]
     public List<EtlHostFileBindingOptions> FileBindings { get; set; } = [];
+
+    [ManifestSetting(DisplayName = "HTTP bindings", Description = "Trusted scoped HTTP endpoints, revision policies and optional connection aliases.", Category = "Bindings")]
+    public List<EtlHostHttpBindingOptions> HttpBindings { get; set; } = [];
 
     [ManifestSetting(DisplayName = "Maximum concurrent attempts", Description = "Maximum actual ETL attempt tasks that may hold process-local capacity.", Category = "Capacity")]
     public int MaxConcurrentAttempts { get; set; } = 2;
@@ -51,6 +56,12 @@ public class EtlRuntimeFeature : IShellFeature
     [ManifestSetting(DisplayName = "Maximum snapshot bytes", Description = "Maximum size of each host-approved ETL snapshot.", Category = "Capacity")]
     public long MaxSnapshotBytes { get; set; } = 4L * 1024 * 1024 * 1024;
 
+    [ManifestSetting(DisplayName = "Maximum retained output bytes", Description = "Host ceiling for route-body bytes retained across output plans for one ETL run.", Category = "Capacity")]
+    public long MaxRetainedOutputBytes { get; set; } = 4L * 1024 * 1024 * 1024;
+
+    [ManifestSetting(DisplayName = "HTTP limits", Description = "Host ceilings for finite HTTP pages, retention and retries; independent of authored limits.", Category = "Capacity")]
+    public EtlHttpHostLimits HttpLimits { get; set; } = new();
+
     public virtual void ConfigureServices(IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -62,12 +73,28 @@ public class EtlRuntimeFeature : IShellFeature
         services.TryAddSingleton<EtlAttemptBudget>(_ => new EtlAttemptBudget(options.MaxConcurrentAttempts, options.Capacity));
         services.AddScoped(_ => new HostFileBindings(options.FileBindings));
         services.TryAddScoped<IEtlBindingCatalog>(provider => provider.GetRequiredService<HostFileBindings>());
+        services.AddScoped(provider => options.HttpBindings.WithConnections(
+            provider.GetService<IConnectionResolver>(),
+            provider.GetService<IConnectionTypeRegistry>(),
+            provider.GetService<IAuthenticationSchemeRegistry>(),
+            provider.GetServices<IHttpRequestAuthenticator>()));
+        services.AddScoped(provider => new HostConnectorBindings(
+            provider.GetRequiredService<HostFileBindings>(), provider.GetRequiredService<HostHttpBindings>(), options.MaxPartitions));
+        services.TryAddScoped<IEtlConnectorBindingCatalog>(provider => provider.GetRequiredService<HostConnectorBindings>());
+        services.TryAddScoped<IEtlConnectorBindingResolver>(provider => provider.GetRequiredService<HostConnectorBindings>());
         services.AddScoped<EtlExecutableReader>();
+        services.AddScoped<EtlConnectorExecutableReader>();
         services.AddScoped<EtlBatchProcessor>();
         services.AddScoped(provider => new EtlFilePreparer(
             provider.GetRequiredService<HostFileBindings>(),
             options.SnapshotRoot,
             provider.GetRequiredService<IFileChunkPublisherFactory>()));
+        services.AddScoped(provider => new EtlConnectorPreparer(
+            provider.GetRequiredService<HostFileBindings>(), options.SnapshotRoot,
+            provider.GetRequiredService<IFileChunkPublisherFactory>()));
+        services.AddScoped<EtlHttpTransport>();
+        // Resolve this optional execution path only after the worker discovers a connector-capable store.
+        services.AddScoped(provider => ActivatorUtilities.CreateInstance<EtlConnectorExecution>(provider));
         services.AddScoped<EtlExecution>();
         services.AddScoped<EtlAcceptedOutputMaterializer>();
         services.AddScoped<IEtlRunAdmissionService>(provider => provider.GetRequiredService<EtlExecution>());

@@ -37,7 +37,15 @@ public interface IEtlDefinitionCatalog
 }
 
 /// <summary>Metadata for one mutable ETL definition draft.</summary>
-public sealed record EtlDefinitionSummary(string DefinitionId, long Revision, int LastPublishedVersion, DateTimeOffset UpdatedAt);
+public sealed record EtlDefinitionSummary(string DefinitionId, long Revision, int LastPublishedVersion, DateTimeOffset UpdatedAt)
+{
+    /// <summary>The pipeline document format, used to select the matching draft reader.</summary>
+    public int FormatVersion { get; init; } = EtlArtifact.CurrentFormatVersion;
+}
 
 /// <summary>Metadata for one immutable, published ETL artifact version.</summary>
-public sealed record EtlPublishedVersionSummary(string DefinitionId, int DefinitionVersion, string ContentHash, DateTimeOffset PublishedAt);
+public sealed record EtlPublishedVersionSummary(string DefinitionId, int DefinitionVersion, string ContentHash, DateTimeOffset PublishedAt)
+{
+    /// <summary>The published artifact format, independent of its definition version.</summary>
+    public int FormatVersion { get; init; } = EtlArtifact.CurrentFormatVersion;
+}

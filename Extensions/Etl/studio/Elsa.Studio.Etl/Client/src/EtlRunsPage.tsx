@@ -7,14 +7,22 @@ import {
   EtlApiError,
   getEtlRun,
   invalidateEtlApiCapabilityCache,
+  listEtlRunConnectorPartitions,
   listEtlRunPartitions,
   listEtlRuns,
   type EtlApiFailureKind
 } from "./etlApi";
-import { EtlPartitionTable, EtlRunInspection, etlRunStatusLabel } from "./EtlRunInspection";
-import type { EtlRunDetailView, EtlRunPartitionView, EtlRunSummaryView, EtlRunTerminalResultView } from "./etlTypes";
+import { EtlConnectorPartitionTable, EtlPartitionTable, EtlRunInspection, etlRunStatusLabel, isConnectorRun } from "./EtlRunInspection";
+import type {
+  EtlRunConnectorPartitionView,
+  EtlRunDetailView,
+  EtlRunPartitionView,
+  EtlRunSummaryView,
+  EtlRunTerminalResultView
+} from "./etlTypes";
 
 const pageSize = 50;
+type EtlRunPartitionProgress = EtlRunPartitionView | EtlRunConnectorPartitionView;
 
 interface RequestFailure {
   kind: EtlApiFailureKind;
@@ -48,7 +56,7 @@ export function EtlRunsPage({ context, dialogs }: { context: StudioEndpointConte
   const [runDetail, setRunDetail] = useState<EtlRunDetailView | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailFailure, setDetailFailure] = useState<RequestFailure | null>(null);
-  const [partitions, setPartitions] = useState<EtlRunPartitionView[]>([]);
+  const [partitions, setPartitions] = useState<EtlRunPartitionProgress[]>([]);
   const [partitionsCursor, setPartitionsCursor] = useState<string | null>(null);
   const [partitionsLoading, setPartitionsLoading] = useState(false);
   const [partitionsMoreLoading, setPartitionsMoreLoading] = useState(false);
@@ -123,19 +131,6 @@ export function EtlRunsPage({ context, dialogs }: { context: StudioEndpointConte
     detailController.current = detailRequest;
     setDetailLoading(true);
     setDetailFailure(null);
-    void getEtlRun(context, runId, detailRequest.signal)
-      .then(detail => {
-        if (!isCurrentDetail(context, runId, detailRequest, detailRequestId)) return;
-        setRunDetail(detail);
-      })
-      .catch(error => {
-        if (!isCurrentDetail(context, runId, detailRequest, detailRequestId)) return;
-        setDetailFailure(failureOf(error));
-      })
-      .finally(() => {
-        if (isCurrentDetail(context, runId, detailRequest, detailRequestId)) setDetailLoading(false);
-      });
-
     const partitionRequest = new AbortController();
     const partitionRequestId = ++partitionGeneration.current;
     partitionController.current?.abort();
@@ -147,18 +142,35 @@ export function EtlRunsPage({ context, dialogs }: { context: StudioEndpointConte
     setPartitionsMoreLoading(false);
     setPartitionsFailure(null);
     setPartitionsMoreFailure(null);
-    void listEtlRunPartitions(context, runId, { limit: pageSize }, partitionRequest.signal)
-      .then(page => {
+    const loadInitialPartitions = async (detail: EtlRunDetailView) => {
+      try {
+        const page = isConnectorRun(detail)
+          ? await listEtlRunConnectorPartitions(context, runId, { limit: pageSize }, partitionRequest.signal)
+          : await listEtlRunPartitions(context, runId, { limit: pageSize }, partitionRequest.signal);
         if (!isCurrentPartition(context, runId, partitionRequest, partitionRequestId)) return;
         setPartitions(page.items);
         setPartitionsCursor(page.nextCursor);
-      })
-      .catch(error => {
+      } catch (error) {
         if (!isCurrentPartition(context, runId, partitionRequest, partitionRequestId)) return;
         setPartitionsFailure(failureOf(error));
+      } finally {
+        if (isCurrentPartition(context, runId, partitionRequest, partitionRequestId)) setPartitionsLoading(false);
+      }
+    };
+
+    void getEtlRun(context, runId, detailRequest.signal)
+      .then(detail => {
+        if (!isCurrentDetail(context, runId, detailRequest, detailRequestId)) return;
+        setRunDetail(detail);
+        void loadInitialPartitions(detail);
+      })
+      .catch(error => {
+        if (!isCurrentDetail(context, runId, detailRequest, detailRequestId)) return;
+        setDetailFailure(failureOf(error));
+        setPartitionsLoading(false);
       })
       .finally(() => {
-        if (isCurrentPartition(context, runId, partitionRequest, partitionRequestId)) setPartitionsLoading(false);
+        if (isCurrentDetail(context, runId, detailRequest, detailRequestId)) setDetailLoading(false);
       });
 
     return () => {
@@ -232,9 +244,10 @@ export function EtlRunsPage({ context, dialogs }: { context: StudioEndpointConte
   }
 
   async function loadMorePartitions() {
-    if (!selectedRunId || !partitionsCursor || partitionsMoreLoading || partitionsLoading || !contextIsLoaded) return;
+    if (!selectedRunId || !runDetail || runDetail.runId !== selectedRunId || !partitionsCursor || partitionsMoreLoading || partitionsLoading || !contextIsLoaded) return;
     const requestContext = context;
     const runId = selectedRunId;
+    const detail = runDetail;
     const generation = partitionGeneration.current;
     const cursor = partitionsCursor;
     const controller = new AbortController();
@@ -243,7 +256,9 @@ export function EtlRunsPage({ context, dialogs }: { context: StudioEndpointConte
     setPartitionsMoreLoading(true);
     setPartitionsMoreFailure(null);
     try {
-      const page = await listEtlRunPartitions(requestContext, runId, { limit: pageSize, cursor }, controller.signal);
+      const page = isConnectorRun(detail)
+        ? await listEtlRunConnectorPartitions(requestContext, runId, { limit: pageSize, cursor }, controller.signal)
+        : await listEtlRunPartitions(requestContext, runId, { limit: pageSize, cursor }, controller.signal);
       if (!isCurrentPartition(requestContext, runId, controller, generation)) return;
       setPartitions(previous => appendUnique(previous, page.items, item => String(item.partitionOrdinal)));
       setPartitionsCursor(page.nextCursor);
@@ -382,13 +397,21 @@ export function EtlRunsPage({ context, dialogs }: { context: StudioEndpointConte
           <EtlRunInspection run={visibleDetail} />
           <section className="etl-run-partitions" aria-labelledby="etl-run-partitions-heading">
             <div className="etl-runs-section-heading"><h3 id="etl-run-partitions-heading">Partition progress</h3>{partitionsLoading ? <span role="status">Loading…</span> : null}</div>
-            {partitionsFailure ? <FailureNotice failure={partitionsFailure} subject="partition progress" onRetry={() => retry(partitionsFailure, () => setRefreshSelection(value => value + 1))} /> : null}
+            {partitionsFailure ? <FailureNotice failure={partitionsFailure}
+              subject={isConnectorRun(visibleDetail) ? "connector partition progress" : "partition progress"}
+              onRetry={() => retry(partitionsFailure, () => setRefreshSelection(value => value + 1))} /> : null}
             {partitionsLoading && visiblePartitions.length === 0 ? <p role="status" aria-live="polite">Loading partition progress…</p> : null}
-            {!partitionsLoading && !partitionsFailure ? <EtlPartitionTable partitions={visiblePartitions} /> : null}
+            {!partitionsLoading && !partitionsFailure
+              ? isConnectorRun(visibleDetail)
+                ? <EtlConnectorPartitionTable partitions={visiblePartitions as EtlRunConnectorPartitionView[]} />
+                : <EtlPartitionTable partitions={visiblePartitions as EtlRunPartitionView[]} />
+              : null}
             {partitionsCursor ? <button type="button" disabled={partitionsMoreLoading || partitionsLoading} onClick={() => void loadMorePartitions()}>
               {partitionsMoreLoading ? "Loading more partitions…" : "Load more partitions"}
             </button> : null}
-            {partitionsMoreFailure ? <FailureNotice failure={partitionsMoreFailure} subject="more partition progress" onRetry={() => retry(partitionsMoreFailure, () => void loadMorePartitions())} /> : null}
+            {partitionsMoreFailure ? <FailureNotice failure={partitionsMoreFailure}
+              subject={isConnectorRun(visibleDetail) ? "more connector partition progress" : "more partition progress"}
+              onRetry={() => retry(partitionsMoreFailure, () => void loadMorePartitions())} /> : null}
           </section>
         </> : null}
       </section>
@@ -398,7 +421,9 @@ export function EtlRunsPage({ context, dialogs }: { context: StudioEndpointConte
 
 function FailureNotice({ failure, subject, onRetry }: { failure: RequestFailure; subject: string; onRetry(): void }) {
   const message = failure.missingCapability
-    ? "This host does not advertise the required ETL runtime capability."
+    ? subject.includes("connector partition")
+      ? "This host does not advertise connector partition progress support."
+      : "This host does not advertise the required ETL runtime capability."
     : failure.kind === "forbidden"
       ? `You do not have permission to access ${subject}.`
       : failure.kind === "unavailable"

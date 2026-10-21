@@ -3,14 +3,16 @@
     Runs the opt-in live Studio ETL authoring and execution journey against isolated local hosts.
 .DESCRIPTION
     Starts already-built Workbench and Studio processes on free loopback ports. Each host receives a private
-    content root, and the Workbench binds only the two-row source/lookup fixture and private output directories.
+    content root, and the Workbench binds the two-row file fixture and private output directories; -Http also starts an owned
+    loopback source/receiver and runs the connector publication and retry/cancellation journeys.
     Studio authentication stays enabled. The browser test writes screenshots and failure traces beneath the retained
-    fixture root; this script stops only the two processes it started.
+    fixture root; this script stops only the processes it started.
 #>
 [CmdletBinding()]
 param(
     [string] $Username = 'admin',
-    [string] $Password = 'Password123!'
+    [string] $Password = 'Password123!',
+    [switch] $Http
 )
 
 . "$PSScriptRoot/_EtlFixture.ps1"
@@ -184,7 +186,8 @@ try {
         throw 'pnpm was not found on PATH; install the Studio workspace dependencies before running this journey.'
     }
 
-    $fixture = New-EtlFixture -SourceCsv "id,name`n1,Ada`n2,Grace`n" -LookupCsv "id,category`n1,One`n2,Two`n"
+    $fixtureArguments = @{ SourceCsv = "id,name`n1,Ada`n2,Grace`n"; LookupCsv = "id,category`n1,One`n2,Two`n" }
+    $fixture = if ($Http) { New-EtlHttpFixture @fixtureArguments } else { New-EtlFixture @fixtureArguments }
     $studioPort = Get-FreeLoopbackPort
     do { $workbenchPort = Get-FreeLoopbackPort } while ($workbenchPort -eq $studioPort)
     $studioUrl = "http://127.0.0.1:$studioPort"
@@ -201,18 +204,20 @@ try {
     $journeyLog = Join-Path $fixture.ContentRoot 'studio-journey.log'
     $playwrightOutput = Join-Path $fixture.ContentRoot 'playwright-output'
     $reportPath = Join-Path $fixture.ContentRoot 'studio-journey.json'
-    $environmentNames = @('ELSA_ETL_LIVE_JOURNEY', 'ELSA_STUDIO_URL', 'ELSA_STUDIO_USER', 'ELSA_STUDIO_PASSWORD', 'PLAYWRIGHT_JSON_OUTPUT_FILE')
+    $environmentNames = @('ELSA_ETL_HTTP_LIVE_JOURNEY', 'ELSA_ETL_LIVE_JOURNEY', 'ELSA_STUDIO_URL', 'ELSA_STUDIO_USER', 'ELSA_STUDIO_PASSWORD', 'PLAYWRIGHT_JSON_OUTPUT_FILE')
     $previous = @{}
     foreach ($name in $environmentNames) { $previous[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
     try {
         [Environment]::SetEnvironmentVariable('ELSA_ETL_LIVE_JOURNEY', '1', 'Process')
+        [Environment]::SetEnvironmentVariable('ELSA_ETL_HTTP_LIVE_JOURNEY', $(if ($Http) { '1' } else { $null }), 'Process')
+        $testPattern = if ($Http) { 'HTTP connector' } else { 'authors and runs an immutable ETL pipeline through a Sequence workflow' }
         [Environment]::SetEnvironmentVariable('ELSA_STUDIO_URL', $studioUrl, 'Process')
         [Environment]::SetEnvironmentVariable('ELSA_STUDIO_USER', $Username, 'Process')
         [Environment]::SetEnvironmentVariable('ELSA_STUDIO_PASSWORD', $Password, 'Process')
         [Environment]::SetEnvironmentVariable('PLAYWRIGHT_JSON_OUTPUT_FILE', $reportPath, 'Process')
         Push-Location $studioDirectory
         try {
-            & pnpm exec playwright test --config tests/live/playwright.live.config.ts --reporter=line,json --output $playwrightOutput tests/live/etl-journey.spec.ts *>&1 |
+            & pnpm exec playwright test --config tests/live/playwright.live.config.ts --reporter=line,json --output $playwrightOutput --grep $testPattern tests/live/etl-journey.spec.ts *>&1 |
                 Tee-Object -FilePath $journeyLog
             $journeyExitCode = $LASTEXITCODE
         } finally {
@@ -228,8 +233,9 @@ try {
         throw "Live Studio ETL journey failed with exit code $journeyExitCode. See $journeyLog and $playwrightOutput."
     }
     $report = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
-    if ($report.stats.expected -ne 1 -or $report.stats.unexpected -ne 0 -or $report.stats.skipped -ne 0 -or $report.stats.flaky -ne 0) {
-        throw "The ETL journey did not execute exactly one passing test without retries/skips. See $reportPath."
+    $expectedTests = if ($Http) { 2 } else { 1 }
+    if ($report.stats.expected -ne $expectedTests -or $report.stats.unexpected -ne 0 -or $report.stats.skipped -ne 0 -or $report.stats.flaky -ne 0) {
+        throw "The ETL journey did not execute exactly $expectedTests passing tests without retries/skips. See $reportPath."
     }
 
     Write-Host "SUCCESS - the live Studio journey authored, published, selected, and ran the finite ETL pipeline."
@@ -240,6 +246,9 @@ try {
     $cleanupErrors = [System.Collections.Generic.List[string]]::new()
     try { Stop-OwnedStudioServer } catch { $cleanupErrors.Add("Studio: $_") }
     try { Stop-OwnedElsaServer } catch { $cleanupErrors.Add("Workbench: $_") }
+    if ($Http -and $fixture) {
+        try { Stop-EtlHttpFixture -Fixture $fixture } catch { $cleanupErrors.Add("HTTP fixture: $_") }
+    }
     if ($fixture) {
         Write-Host "  [evidence] retained private hosts, databases, inputs, outputs, logs, and Playwright screenshots at $($fixture.ContentRoot)"
     }

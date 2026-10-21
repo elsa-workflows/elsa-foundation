@@ -44,5 +44,26 @@ using System.Runtime.CompilerServices;
     nameof(EtlRuntimeRunRecord.InvocationJson), nameof(EtlRuntimeRunRecord.BindingsJson))]
 [assembly: EfSchemaContent(
     Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEfModule.SchemaFamily,
+    typeof(EtlConnectorRunRecord),
+    nameof(EtlConnectorRunRecord.BindingsJson), nameof(EtlConnectorRunRecord.PreparedJson))]
+[assembly: EfSchemaContent(
+    Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEfModule.SchemaFamily,
+    typeof(EtlConnectorPartitionRecord),
+    nameof(EtlConnectorPartitionRecord.PositionJson))]
+[assembly: EfSchemaContent(
+    Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEfModule.SchemaFamily,
+    typeof(EtlConnectorBatchRecord),
+    nameof(EtlConnectorBatchRecord.DescriptorJson), nameof(EtlConnectorBatchRecord.OutputJson),
+    nameof(EtlConnectorBatchRecord.HttpDeliveryJson))]
+[assembly: EfSchemaContent(
+    Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEfModule.SchemaFamily,
+    typeof(EtlConnectorHttpRequestRecord),
+    nameof(EtlConnectorHttpRequestRecord.RequestJson))]
+[assembly: EfSchemaContent(
+    Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEfModule.SchemaFamily,
+    typeof(EtlConnectorHttpPageRecord),
+    nameof(EtlConnectorHttpPageRecord.PageJson))]
+[assembly: EfSchemaContent(
+    Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEfModule.SchemaFamily,
     typeof(EtlRuntimeTerminalRecord),
     nameof(EtlRuntimeTerminalRecord.ResultJson))]

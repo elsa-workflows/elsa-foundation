@@ -62,7 +62,7 @@ namespace Elsa.Etl.Tests;
 /// The authoring service provider is disposed before the fixture is returned; only durable files and immutable
 /// publication snapshots cross into the separate runtime-only provider.
 /// </summary>
-internal sealed class EtlPublishedWorkflowFixture : IAsyncDisposable
+internal sealed partial class EtlPublishedWorkflowFixture : IAsyncDisposable
 {
     private const string DefinitionId = "etl-published-parent";
     private const string PipelineDefinitionId = "orders";
@@ -70,6 +70,7 @@ internal sealed class EtlPublishedWorkflowFixture : IAsyncDisposable
     private const string WorkflowRecoverySigningKey = "etl-published-workflow-recovery-key-32";
     private const string WorkflowHierarchySigningKey = "etl-published-workflow-hierarchy-key-32";
     private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
+    private readonly bool _preserveRootDirectory;
     private bool _disposed;
 
     private EtlPublishedWorkflowFixture(
@@ -79,11 +80,14 @@ internal sealed class EtlPublishedWorkflowFixture : IAsyncDisposable
         EtlArtifact originalArtifact,
         EtlArtifact updatedArtifact,
         WorkflowExecutable executable,
-        WorkflowExecutableSourceReference reference)
+        WorkflowExecutableSourceReference reference,
+        string runtimeDatabaseFileName,
+        bool preserveRootDirectory)
     {
+        _preserveRootDirectory = preserveRootDirectory;
         RootDirectory = rootDirectory;
         WorkflowDatabase = Path.Combine(rootDirectory, "workflow.db");
-        EtlRuntimeDatabase = Path.Combine(rootDirectory, "etl-runtime.db");
+        EtlRuntimeDatabase = Path.Combine(rootDirectory, runtimeDatabaseFileName);
         EtlDesignDatabase = Path.Combine(rootDirectory, "etl-design.db");
         SnapshotRoot = Path.Combine(rootDirectory, "snapshots");
         OutputRoot = Path.Combine(rootDirectory, "output");
@@ -108,9 +112,21 @@ internal sealed class EtlPublishedWorkflowFixture : IAsyncDisposable
     public WorkflowExecutable Executable { get; }
     public WorkflowExecutableSourceReference Reference { get; }
 
-    public static async Task<EtlPublishedWorkflowFixture> CreateAsync(bool flowchart)
+    public static async Task<EtlPublishedWorkflowFixture> CreateAsync(
+        bool flowchart,
+        string? catalogSourceId = null,
+        bool httpSource = false,
+        string? rootDirectory = null,
+        string runtimeDatabaseFileName = "etl-runtime.db",
+        bool preserveRootDirectory = false)
     {
-        var directory = Path.Combine(Path.GetTempPath(), "Elsa.Etl.PublishedWorkflow", Guid.NewGuid().ToString("N"));
+        var directory = rootDirectory is null
+            ? Path.Combine(Path.GetTempPath(), "Elsa.Etl.PublishedWorkflow", Guid.NewGuid().ToString("N"))
+            : Path.GetFullPath(rootDirectory);
+        if (Path.IsPathRooted(runtimeDatabaseFileName) || Path.GetFileName(runtimeDatabaseFileName) != runtimeDatabaseFileName)
+            throw new ArgumentException("The runtime database name must be one file name.", nameof(runtimeDatabaseFileName));
+        if (Directory.Exists(directory))
+            throw new IOException("The published workflow fixture root must not already exist.");
         WorkflowExecutionHarness? authoring = null;
         try
         {
@@ -125,7 +141,10 @@ internal sealed class EtlPublishedWorkflowFixture : IAsyncDisposable
             await File.WriteAllTextAsync(sourcePath, "id,name\n1,Ada\n", new UTF8Encoding(false));
             await File.WriteAllTextAsync(lookupPath, "id,category\n1,one\n", new UTF8Encoding(false));
             Directory.CreateDirectory(snapshotRoot);
-            var bindings = EtlNativeTestFileBindings.Create(scope, directory);
+            var fileBindings = EtlNativeTestFileBindings.Create(scope, directory);
+            var bindings = httpSource
+                ? fileBindings.Where(binding => binding.Role is "MainOutput" or "ErrorOutput").ToArray()
+                : fileBindings;
 
             authoring = BuildAuthoringProvider(directory, workflowDatabase, etlDesignDatabase);
             foreach (var initializer in authoring.Services.GetServices<IShellInitializer>())
@@ -142,13 +161,25 @@ internal sealed class EtlPublishedWorkflowFixture : IAsyncDisposable
             await using (var operation = await OpenPartitionScopeAsync(authoring.Services, scope))
             {
                 var services = operation.ServiceProvider;
-                sourceCatalog = NativeEtlAuthoredComposite.CreateSourceCatalog(services, ActivityTypeKeys(flowchart));
-                var compiler = services.GetRequiredService<IEtlArtifactCompiler>();
+                sourceCatalog = NativeEtlAuthoredComposite.CreateSourceCatalog(services, ActivityTypeKeys(flowchart), catalogSourceId);
                 var definitions = services.GetRequiredService<IEtlDefinitionStore>();
-                var initialPipeline = EtlTestPipelines.Create();
-                originalArtifact = Assert.IsType<EtlArtifact>(compiler.Compile(PipelineDefinitionId, 1, initialPipeline).Artifact);
-                Assert.Equal(EtlDefinitionWriteStatus.Created,
-                    (await definitions.CreateDraftAsync(scope, PipelineDefinitionId, initialPipeline)).Status);
+                if (httpSource)
+                {
+                    var initialPipeline = HttpSourcePipeline();
+                    var definitionsV2 = services.GetRequiredService<IEtlDefinitionStoreV2>();
+                    var compilerV2 = services.GetRequiredService<IEtlArtifactCompilerV2>();
+                    originalArtifact = Assert.IsType<EtlArtifact>(compilerV2.Compile(PipelineDefinitionId, 1, initialPipeline).Artifact);
+                    Assert.Equal(EtlDefinitionWriteStatus.Created,
+                        (await definitionsV2.CreateDraftAsync(scope, PipelineDefinitionId, initialPipeline)).Status);
+                }
+                else
+                {
+                    var initialPipeline = EtlTestPipelines.Create();
+                    var compiler = services.GetRequiredService<IEtlArtifactCompiler>();
+                    originalArtifact = Assert.IsType<EtlArtifact>(compiler.Compile(PipelineDefinitionId, 1, initialPipeline).Artifact);
+                    Assert.Equal(EtlDefinitionWriteStatus.Created,
+                        (await definitions.CreateDraftAsync(scope, PipelineDefinitionId, initialPipeline)).Status);
+                }
                 Assert.Equal(EtlPublicationStatus.Published,
                     (await definitions.PublishAsync(scope, PipelineDefinitionId, 1, originalArtifact)).Status);
 
@@ -209,14 +240,32 @@ internal sealed class EtlPublishedWorkflowFixture : IAsyncDisposable
             {
                 var services = operation.ServiceProvider;
                 var definitions = services.GetRequiredService<IEtlDefinitionStore>();
-                var currentDraft = await definitions.FindDraftAsync(scope, PipelineDefinitionId)
-                    ?? throw new InvalidOperationException("The ETL design store did not return its published draft.");
-                var renamedPipeline = EtlTestPipelines.Create("renamed");
-                var updatedDraft = await definitions.UpdateDraftAsync(scope, PipelineDefinitionId, currentDraft.Revision, renamedPipeline);
-                Assert.Equal(EtlDefinitionWriteStatus.Updated, updatedDraft.Status);
-                var compiler = services.GetRequiredService<IEtlArtifactCompiler>();
-                var updatedCandidate = Assert.IsType<EtlArtifact>(compiler.Compile(PipelineDefinitionId, 2, renamedPipeline).Artifact);
-                var publication = await definitions.PublishAsync(scope, PipelineDefinitionId, updatedDraft.Draft!.Revision, updatedCandidate);
+                EtlArtifact updatedCandidate;
+                long updatedDraftRevision;
+                if (httpSource)
+                {
+                    var definitionsV2 = services.GetRequiredService<IEtlDefinitionStoreV2>();
+                    var currentDraft = await definitionsV2.FindDraftAsync(scope, PipelineDefinitionId)
+                        ?? throw new InvalidOperationException("The ETL design store did not return its published v2 draft.");
+                    var renamedPipeline = HttpSourcePipeline(renamedOutput: true);
+                    var updatedDraft = await definitionsV2.UpdateDraftAsync(scope, PipelineDefinitionId, currentDraft.Revision, renamedPipeline);
+                    Assert.Equal(EtlDefinitionWriteStatus.Updated, updatedDraft.Status);
+                    var compilerV2 = services.GetRequiredService<IEtlArtifactCompilerV2>();
+                    updatedCandidate = Assert.IsType<EtlArtifact>(compilerV2.Compile(PipelineDefinitionId, 2, renamedPipeline).Artifact);
+                    updatedDraftRevision = updatedDraft.Draft!.Revision;
+                }
+                else
+                {
+                    var currentDraft = await definitions.FindDraftAsync(scope, PipelineDefinitionId)
+                        ?? throw new InvalidOperationException("The ETL design store did not return its published draft.");
+                    var renamedPipeline = EtlTestPipelines.Create("renamed");
+                    var updatedDraft = await definitions.UpdateDraftAsync(scope, PipelineDefinitionId, currentDraft.Revision, renamedPipeline);
+                    Assert.Equal(EtlDefinitionWriteStatus.Updated, updatedDraft.Status);
+                    var compiler = services.GetRequiredService<IEtlArtifactCompiler>();
+                    updatedCandidate = Assert.IsType<EtlArtifact>(compiler.Compile(PipelineDefinitionId, 2, renamedPipeline).Artifact);
+                    updatedDraftRevision = updatedDraft.Draft!.Revision;
+                }
+                var publication = await definitions.PublishAsync(scope, PipelineDefinitionId, updatedDraftRevision, updatedCandidate);
                 Assert.Equal(EtlPublicationStatus.Published, publication.Status);
                 updatedArtifact = Assert.IsType<EtlArtifact>(publication.Artifact);
                 Assert.Equal(1, originalArtifact.DefinitionVersion);
@@ -238,7 +287,8 @@ internal sealed class EtlPublishedWorkflowFixture : IAsyncDisposable
 
             await authoring.DisposeAsync();
             authoring = null;
-            return new EtlPublishedWorkflowFixture(directory, scope, bindings, originalArtifact, updatedArtifact, executable, reference);
+            return new EtlPublishedWorkflowFixture(directory, scope, bindings, originalArtifact, updatedArtifact, executable,
+                reference, runtimeDatabaseFileName, preserveRootDirectory);
         }
         catch (Exception exception)
         {
@@ -256,7 +306,7 @@ internal sealed class EtlPublishedWorkflowFixture : IAsyncDisposable
                 }
             }
 
-            if (!cleanupFailed && Directory.Exists(directory))
+            if (!preserveRootDirectory && !cleanupFailed && Directory.Exists(directory))
             {
                 try
                 {
@@ -280,7 +330,7 @@ internal sealed class EtlPublishedWorkflowFixture : IAsyncDisposable
         if (_disposed)
             return ValueTask.CompletedTask;
         _disposed = true;
-        if (Directory.Exists(RootDirectory))
+        if (!_preserveRootDirectory && Directory.Exists(RootDirectory))
             Directory.Delete(RootDirectory, recursive: true);
         return ValueTask.CompletedTask;
     }
@@ -349,6 +399,19 @@ internal sealed class EtlPublishedWorkflowFixture : IAsyncDisposable
         typeof(WriteLineActivity).FullName!,
         flowchart ? typeof(WorkflowFlowchart).FullName! : typeof(WorkflowSequence).FullName!
     ];
+
+    private static EtlPipelineV2 HttpSourcePipeline(bool renamedOutput = false)
+    {
+        var pipeline = EtlV2TestPipelines.Create();
+        var source = (EtlHttpJsonSource)pipeline.Source;
+        var outputName = renamedOutput ? "renamed" : "name";
+        return pipeline with
+        {
+            Source = source with { Pagination = new EtlSinglePagePagination() },
+            Routes = new EtlRoutes(new EtlJsonlDestination("output"), new EtlJsonlDestination("errors")),
+            Mapping = [new EtlOutputField(outputName, EtlFieldOrigin.Source, "name")]
+        };
+    }
 
     private static WorkflowDefinitionState CreateWorkflowState(
         IReadOnlyCollection<(ActivityDefinition Definition, ActivityDefinitionVersion Version)> sourceCatalog,

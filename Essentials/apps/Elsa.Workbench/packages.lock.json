@@ -1395,6 +1395,7 @@
         "type": "Project",
         "dependencies": {
           "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Connections.Core": "[4.0.0-dev, )",
           "Elsa.Etl.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )"
         }

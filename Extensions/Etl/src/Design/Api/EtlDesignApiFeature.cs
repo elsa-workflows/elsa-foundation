@@ -17,7 +17,7 @@ namespace Elsa.Etl.Design.Api;
 [ManifestFeatureCategory("ETL")]
 [ManifestFeatureCategory("Design")]
 [ManifestFeatureCategory("API")]
-[ShellFeature(name: "EtlDesignApi", DisplayName = "ETL Design API", Description = "Author finite file ETL definitions and publish immutable versions.", DependsOn = new object[] { "ApiCapabilities", "EtlDesign" })]
+[ShellFeature(name: "EtlDesignApi", DisplayName = "ETL Design API", Description = "Author finite ETL definitions and publish immutable versions.", DependsOn = new object[] { "ApiCapabilities", "EtlDesign" })]
 public class EtlDesignApiFeature : IWebShellFeature
 {
     /// <summary>Stable shared signing key for pagination across host replicas; defaults to a process-local key.</summary>
@@ -28,6 +28,7 @@ public class EtlDesignApiFeature : IWebShellFeature
     {
         EtlApiServices.Add(services, CursorSigningKey, EtlDesignApi.OwnerId);
         services.TryAddScoped<IEtlDesignOperations, EtlDesignOperations>();
+        services.TryAddScoped<IEtlConnectorDesignOperations, EtlConnectorDesignOperations>();
         services.AddPermissionContributor<EtlDesignPermissionContributor>();
         services.AddApiCapability(new ApiCapabilityDeclaration("elsa.api.etl-design", 1,
         [
@@ -39,6 +40,17 @@ public class EtlDesignApiFeature : IWebShellFeature
             new("etl-publication", "etl/definitions/{id}/publish", true),
             new("etl-versions", "etl/definitions/{id}/versions", true),
             new("etl-version", "etl/definitions/{id}/versions/{version}", true)
+        ], "EtlDesignApi"));
+        services.AddApiCapability(new ApiCapabilityDeclaration("elsa.api.etl-design-v2", 1,
+        [
+            new("etl-v2-bindings", "etl/v2/bindings"),
+            new("etl-v2-definitions", "etl/v2/definitions"),
+            new("etl-v2-definition", "etl/v2/definitions/{id}", true),
+            new("etl-v2-draft", "etl/v2/definitions/{id}/draft", true),
+            new("etl-v2-validation", "etl/v2/definitions/{id}/validate", true),
+            new("etl-v2-publication", "etl/v2/definitions/{id}/publish", true),
+            new("etl-v2-versions", "etl/v2/definitions/{id}/versions", true),
+            new("etl-v2-version", "etl/v2/definitions/{id}/versions/{version}", true)
         ], "EtlDesignApi"));
     }
 
