@@ -26,6 +26,9 @@ Use `services.AddConnections()` to register defaults, then replace these service
     saved; after a conflicted rotation that cleanup failure is logged and not returned, and the replaced secret stays
     Active and unreferenced (#2855 item 2.2).
   - `DeleteAsync` deletes the owned secrets before the connection row, without a compare-and-swap (#2855 item 2.4).
+  - A create's rollback deletes its row only at the version it added it at, so a connection saved since is kept.
+    A row that another request deleted and a second create re-added, still unsaved, is at that same version and
+    can be deleted; that second create's save then fails with 409 and rolls itself back (#2855 item 2.1).
   - A custom `ISecretAuditSink` that throws after Secrets committed a write makes that write look failed: it is
     reported as not written (500), or as a false 409 when the failure reads as a concurrent change (#3153).
   - A secret with no active version (revoked or expired) is rotated without an expected version, and Secrets has
