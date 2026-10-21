@@ -140,7 +140,9 @@ internal sealed partial class EfEtlRuntimeStore
     }
 
     // Reserve enough canonical JSON growth to record the bounded outcome before sending.
-    // InFlight -> Waiting can add a status and three UTC timestamps; Waiting -> Failed can
+    // InFlight -> Waiting can add a status and up to five UTC timestamps (Retry-After,
+    // response receipt, completion, retry eligibility and update); the 512-byte in-flight
+    // reserve covers the full transition, including the receipt field. Waiting -> Failed can
     // change the update timestamp. Each releases at least 256 bytes, more than that growth.
     // A new attempt pays its history growth plus the replenished reserve before dispatch.
     private static long HttpDeliveryTransitionReserve(EtlConnectorHttpDeliveries deliveries) =>

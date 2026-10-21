@@ -183,7 +183,8 @@ public sealed class EtlHttpDeliveryTransitionTests
         var (state, attempt) = Begin();
 
         var replaced = EtlHttpDeliveryTransitions.Begin(state, EffectId, RequestId(2), 8, Start.AddSeconds(1), Policy());
-        var oldSuccess = Complete(replaced.Delivery!, attempt, new(200, null), Start.AddSeconds(1));
+        var oldSuccess = Complete(replaced.Delivery!, attempt,
+            new EtlHttpDeliveryResponse(200, null) { ResponseReceivedAtUtc = Start.AddMilliseconds(500) }, Start.AddSeconds(1));
         var oldUncertain = Complete(replaced.Delivery!, attempt, new(null, null), Start.AddSeconds(1));
         var early = EtlHttpDeliveryTransitions.Begin(replaced.Delivery, EffectId, RequestId(3), 8,
             Start.AddSeconds(1), Policy());
@@ -260,6 +261,124 @@ public sealed class EtlHttpDeliveryTransitionTests
         Assert.Equal(EtlStoreStatus.Applied, uncertain.Status);
         Assert.Equal(EtlHttpDeliveryPhase.Waiting, uncertain.Delivery!.Phase);
         Assert.Null(uncertain.Delivery.Attempts[0].Response);
+    }
+
+    [Fact]
+    public void Timely_success_receipt_can_be_reconciled_after_the_attempt_and_run_deadline()
+    {
+        var policy = Policy(maxAttempts: 2, deadlineSeconds: 10, requestTimeoutSeconds: 10);
+        var (state, attempt) = Begin(policy);
+        var receivedAt = attempt.ExpiresAt.AddTicks(-1);
+        var reconciledAt = attempt.ExpiresAt.AddSeconds(1);
+        var response = new EtlHttpDeliveryResponse(204, null) { ResponseReceivedAtUtc = receivedAt };
+
+        var result = Complete(state, attempt, response, reconciledAt, policy);
+
+        Assert.Equal(EtlStoreStatus.Applied, result.Status);
+        Assert.Equal(EtlHttpDeliveryPhase.Acknowledged, result.Delivery!.Phase);
+        var recorded = Assert.Single(result.Delivery.Attempts);
+        Assert.Equal(response, recorded.Response);
+        Assert.Equal(reconciledAt, recorded.CompletedAt);
+        Assert.True(recorded.CompletedAt!.Value > recorded.Response!.ResponseReceivedAtUtc!.Value);
+        Assert.True(recorded.CompletedAt.Value > result.Delivery.Deadline);
+        EtlHttpDeliveryTransitions.Validate(result.Delivery, EffectId, policy);
+    }
+
+    [Fact]
+    public void Timely_transient_receipt_reconciled_after_request_expiry_uses_reconciliation_time_for_backoff()
+    {
+        var policy = Policy(maxAttempts: 2, deadlineSeconds: 30, requestTimeoutSeconds: 10);
+        var (state, attempt) = Begin(policy);
+        var reconciledAt = attempt.ExpiresAt.AddSeconds(1);
+        var response = new EtlHttpDeliveryResponse(503, null)
+        {
+            ResponseReceivedAtUtc = attempt.ExpiresAt.AddTicks(-1)
+        };
+
+        var result = Complete(state, attempt, response, reconciledAt, policy);
+
+        Assert.Equal(EtlStoreStatus.Applied, result.Status);
+        Assert.Equal(EtlHttpDeliveryPhase.Waiting, result.Delivery!.Phase);
+        Assert.Equal(reconciledAt.AddSeconds(1), result.Delivery.NotBefore);
+        Assert.Equal(reconciledAt, Assert.Single(result.Delivery.Attempts).CompletedAt);
+        EtlHttpDeliveryTransitions.Validate(result.Delivery, EffectId, policy);
+    }
+
+    [Fact]
+    public void Timely_transient_receipt_reconciled_after_the_run_deadline_cannot_schedule_another_attempt()
+    {
+        var policy = Policy(maxAttempts: 2, deadlineSeconds: 10, requestTimeoutSeconds: 10);
+        var (state, attempt) = Begin(policy);
+        var response = new EtlHttpDeliveryResponse(503, null)
+        {
+            ResponseReceivedAtUtc = attempt.ExpiresAt.AddTicks(-1)
+        };
+
+        var result = Complete(state, attempt, response, attempt.ExpiresAt.AddSeconds(1), policy);
+
+        Assert.Equal(EtlStoreStatus.Applied, result.Status);
+        Assert.Equal(EtlHttpDeliveryPhase.Failed, result.Delivery!.Phase);
+        Assert.Equal(EtlHttpDeliveryFailure.DeadlineExceeded, result.Delivery.Failure);
+        Assert.Null(result.Delivery.NotBefore);
+        Assert.Equal(response, Assert.Single(result.Delivery.Attempts).Response);
+        EtlHttpDeliveryTransitions.Validate(result.Delivery, EffectId, policy);
+    }
+
+    [Theory]
+    [InlineData("before-start")]
+    [InlineData("at-expiry")]
+    [InlineData("future")]
+    [InlineData("non-utc")]
+    public void Response_receipt_must_be_utc_and_inside_the_physical_attempt(string defect)
+    {
+        var (state, attempt) = Begin();
+        var now = Start.AddSeconds(1);
+        var receivedAt = defect switch
+        {
+            "before-start" => attempt.StartedAt.AddTicks(-1),
+            "at-expiry" => attempt.ExpiresAt,
+            "future" => now.AddTicks(1),
+            "non-utc" => now.ToOffset(TimeSpan.FromHours(1)),
+            _ => throw new ArgumentOutOfRangeException(nameof(defect))
+        };
+
+        var result = Complete(state, attempt,
+            new EtlHttpDeliveryResponse(200, null) { ResponseReceivedAtUtc = receivedAt }, now);
+
+        Assert.Equal(EtlStoreStatus.Invalid, result.Status);
+        Assert.Same(state, result.Delivery);
+    }
+
+    [Fact]
+    public void A_receipt_timestamp_without_a_response_and_tampered_journal_receipts_are_rejected()
+    {
+        var (state, attempt) = Begin();
+        var receiptWithoutStatus = Complete(state, attempt,
+            new EtlHttpDeliveryResponse(null, null) { ResponseReceivedAtUtc = Start.AddMilliseconds(500) },
+            Start.AddSeconds(1));
+        var successful = Complete(state, attempt,
+            new EtlHttpDeliveryResponse(200, null) { ResponseReceivedAtUtc = Start.AddMilliseconds(500) },
+            Start.AddSeconds(1));
+        var completed = Assert.Single(successful.Delivery!.Attempts);
+        var futureReceipt = successful.Delivery with
+        {
+            Attempts = new[] { completed with
+            {
+                Response = completed.Response! with { ResponseReceivedAtUtc = completed.CompletedAt!.Value.AddTicks(1) }
+            } }
+        };
+        var earlyReceipt = successful.Delivery with
+        {
+            Attempts = new[] { completed with
+            {
+                Response = completed.Response! with { ResponseReceivedAtUtc = attempt.StartedAt.AddTicks(-1) }
+            } }
+        };
+
+        Assert.Equal(EtlStoreStatus.Invalid, receiptWithoutStatus.Status);
+        Assert.Same(state, receiptWithoutStatus.Delivery);
+        Assert.Throws<InvalidDataException>(() => EtlHttpDeliveryTransitions.Validate(futureReceipt, EffectId, Policy()));
+        Assert.Throws<InvalidDataException>(() => EtlHttpDeliveryTransitions.Validate(earlyReceipt, EffectId, Policy()));
     }
 
     [Fact]

@@ -124,7 +124,11 @@ internal static class EtlHttpDeliveryTransitions
         if (now < attempt.StartedAt)
             return new(EtlStoreStatus.Invalid, state, null);
 
-        if (response.StatusCode is not null && now >= attempt.ExpiresAt)
+        var hasTimelyReceipt = IsTimelyReceipt(response, attempt, state.Deadline, now);
+        if (response.ResponseReceivedAtUtc is not null && !hasTimelyReceipt)
+            return new(EtlStoreStatus.Invalid, state, null);
+
+        if (response.StatusCode is not null && now >= attempt.ExpiresAt && !hasTimelyReceipt)
             return new(EtlStoreStatus.Invalid, state, null);
 
         var storedResponse = response.StatusCode is null ? null : response;
@@ -134,9 +138,8 @@ internal static class EtlHttpDeliveryTransitions
             UpdatedAt = now
         };
 
-        if (now >= state.Deadline)
-            return new(EtlStoreStatus.Applied, Fail(completed, now, EtlHttpDeliveryFailure.DeadlineExceeded), null);
-
+        // A receipt proves the response completed inside both retained deadlines. Legacy callers
+        // remain conservative because the expiry check above requires timely reconciliation.
         if (IsAcknowledgement(response.StatusCode))
         {
             var acknowledged = completed with
@@ -147,6 +150,9 @@ internal static class EtlHttpDeliveryTransitions
             };
             return new(EtlStoreStatus.Applied, acknowledged, null);
         }
+
+        if (now >= state.Deadline)
+            return new(EtlStoreStatus.Applied, Fail(completed, now, EtlHttpDeliveryFailure.DeadlineExceeded), null);
 
         if (!EtlHttpRetryPolicy.IsRetryable(response.StatusCode))
         {
@@ -216,7 +222,8 @@ internal static class EtlHttpDeliveryTransitions
             if (item.CompletedAt is not null)
             {
                 if (!EtlHttpRetryPolicy.IsUtc(item.CompletedAt.Value) || item.CompletedAt.Value < current.StartedAt ||
-                    item.Response is not null && (!ValidResponseArgument(item.Response) || item.CompletedAt.Value >= current.ExpiresAt))
+                    item.Response is not null && !ValidCompletedResponse(item.Response, current, state.Deadline,
+                        item.CompletedAt.Value))
                     throw Corrupt();
                 if (state.UpdatedAt < item.CompletedAt.Value)
                     throw Corrupt();
@@ -270,7 +277,9 @@ internal static class EtlHttpDeliveryTransitions
             case EtlHttpDeliveryPhase.Acknowledged:
                 if (state.Failure != EtlHttpDeliveryFailure.None || state.NotBefore is not null ||
                     last.CompletedAt is null || !IsAcknowledgement(last.Response?.StatusCode) ||
-                    last.CompletedAt.Value >= state.Deadline || state.UpdatedAt != last.CompletedAt.Value)
+                    (last.CompletedAt.Value >= state.Deadline &&
+                     !IsTimelyReceipt(last.Response!, attempt, state.Deadline, last.CompletedAt.Value)) ||
+                    state.UpdatedAt != last.CompletedAt.Value)
                     throw Corrupt();
                 break;
 
@@ -291,7 +300,9 @@ internal static class EtlHttpDeliveryTransitions
                             ? EtlHttpRetryPolicy.NextRetryAt(attempt.Number, last.CompletedAt.Value,
                                 last.Response?.RetryAfter, policy)
                             : DateTimeOffset.MinValue;
-                        if (!(last.CompletedAt.Value >= state.Deadline ||
+                        if ((IsAcknowledgement(last.Response?.StatusCode) &&
+                             IsTimelyReceipt(last.Response!, attempt, state.Deadline, last.CompletedAt.Value)) ||
+                            !(last.CompletedAt.Value >= state.Deadline ||
                               canRetry && (state.UpdatedAt >= state.Deadline || retryAt >= state.Deadline)))
                             throw Corrupt();
                         break;
@@ -374,7 +385,21 @@ internal static class EtlHttpDeliveryTransitions
     private static bool ValidResponseArgument(EtlHttpDeliveryResponse? response) => response is not null &&
         (response.StatusCode is null || response.StatusCode is >= 100 and <= 599) &&
         (response.RetryAfter is null || EtlHttpRetryPolicy.IsUtc(response.RetryAfter.Value)) &&
-        (response.StatusCode is not null || response.RetryAfter is null);
+        (response.StatusCode is not null || response.RetryAfter is null) &&
+        (response.ResponseReceivedAtUtc is null || response.StatusCode is not null &&
+            EtlHttpRetryPolicy.IsUtc(response.ResponseReceivedAtUtc.Value));
+
+    private static bool IsTimelyReceipt(EtlHttpDeliveryResponse response, EtlHttpDeliveryAttempt attempt,
+        DateTimeOffset deadline, DateTimeOffset reconciledAt) =>
+        response.StatusCode is not null && response.ResponseReceivedAtUtc is { } receivedAt &&
+        EtlHttpRetryPolicy.IsUtc(receivedAt) && receivedAt >= attempt.StartedAt && receivedAt < attempt.ExpiresAt &&
+        receivedAt < deadline && receivedAt <= reconciledAt;
+
+    private static bool ValidCompletedResponse(EtlHttpDeliveryResponse response, EtlHttpDeliveryAttempt attempt,
+        DateTimeOffset deadline, DateTimeOffset completedAt) =>
+        ValidResponseArgument(response) && response.StatusCode is not null &&
+        (response.ResponseReceivedAtUtc is { } ? IsTimelyReceipt(response, attempt, deadline, completedAt) :
+            completedAt < attempt.ExpiresAt);
 
     private static string? ReadStateEffectId(EtlConnectorHttpDelivery state)
     {
@@ -399,7 +424,10 @@ internal static class EtlHttpDeliveryTransitions
     private static bool IsAcknowledgement(int? statusCode) => statusCode is 200 or 201 or 204;
 
     private static bool SameOutcome(EtlHttpDeliveryResponse? recorded, EtlHttpDeliveryResponse supplied) =>
-        recorded is null ? supplied.StatusCode is null && supplied.RetryAfter is null : recorded == supplied;
+        recorded is null
+            ? supplied.StatusCode is null && supplied.RetryAfter is null && supplied.ResponseReceivedAtUtc is null
+            : recorded.StatusCode == supplied.StatusCode && recorded.RetryAfter == supplied.RetryAfter &&
+              recorded.ResponseReceivedAtUtc == supplied.ResponseReceivedAtUtc;
 
     private static bool IsTerminal(EtlHttpDeliveryPhase phase) =>
         phase is EtlHttpDeliveryPhase.Acknowledged or EtlHttpDeliveryPhase.Failed;

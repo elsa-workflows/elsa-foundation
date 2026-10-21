@@ -64,6 +64,8 @@ Each nonempty route sends a bounded JSON array to its pinned destination via POS
 
 200/201/204 acknowledge this synchronous profile. 202 is unsupported; other statuses are explicit failure except 408/429/500/502/503/504, which are retryable within the retained budget. Transport uncertainty is retryable because the same request may already have taken effect. Persist each attempt and deadline before dispatch. Retry-After delays/date values may extend the normal capped backoff; exceeding the remaining deadline ends retry rather than causing an early request. Retry and cancellation never silently discard an owed reservation.
 
+The transport records the UTC time when the complete bounded response has been received separately from the store's durable reconciliation time. A receipt at or after the attempt expiry or overall deadline is not authoritative. A timely 200/201/204 receipt can still acknowledge its retained route when persistence reconciliation is delayed beyond those deadlines, provided the current fence and run remain active. Late reconciliation of a transient response never starts another attempt after the overall deadline. Callers that omit receipt time retain the conservative rule that a known response must be reconciled before attempt expiry.
+
 Automatic redirects and cookies are disabled. Default HTTPS; explicit host opt-in permits controlled HTTP. Authentication is request-local and ETL endpoint policy always applies, with connection host policy additionally checked for authenticated requests. Safe diagnostics identify failure kind/route/position, not URLs, token values, bodies or secrets.
 
 ## Native and Studio

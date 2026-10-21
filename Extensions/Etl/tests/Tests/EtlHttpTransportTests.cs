@@ -170,8 +170,9 @@ public sealed partial class EtlHttpTransportTests
             ValueTask.FromResult(new EtlHttpLoopbackResponse(201, "response-secret")));
         await using var binding = await ResolveAsync(server.CreateUri("/deliver"), "MainOutput");
         using var transport = new EtlHttpTransport(TimeProvider.System);
+        var attempt = NewDeliveryAttempt();
 
-        var response = await transport.DeliverAsync(binding, NewDeliveryAttempt(), body, 8);
+        var response = await transport.DeliverAsync(binding, attempt, body, 8);
 
         var request = Assert.Single(server.Requests);
         Assert.Equal("POST", request.Method);
@@ -180,6 +181,9 @@ public sealed partial class EtlHttpTransportTests
         Assert.Equal("application/json", request.Headers["Content-Type"]);
         Assert.Equal(201, response.StatusCode);
         Assert.Null(response.RetryAfter);
+        Assert.NotNull(response.ResponseReceivedAtUtc);
+        Assert.Equal(TimeSpan.Zero, response.ResponseReceivedAtUtc!.Value.Offset);
+        Assert.InRange(response.ResponseReceivedAtUtc.Value, attempt.StartedAt, attempt.ExpiresAt.AddTicks(-1));
         Assert.DoesNotContain("response-secret", response.ToString(), StringComparison.Ordinal);
     }
 

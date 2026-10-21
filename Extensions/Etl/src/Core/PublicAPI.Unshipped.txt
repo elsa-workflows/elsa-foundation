@@ -1525,6 +1525,8 @@ Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.Equals(Elsa.Etl.Core.Runtime.EtlHt
 Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.EtlHttpDeliveryResponse(int? StatusCode, System.DateTimeOffset? RetryAfter) -> void
 Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.RetryAfter.get -> System.DateTimeOffset?
 Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.RetryAfter.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.ResponseReceivedAtUtc.get -> System.DateTimeOffset?
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.ResponseReceivedAtUtc.init -> void
 Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.StatusCode.get -> int?
 Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.StatusCode.init -> void
 Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.BeginConnectorHttpDeliveryAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, string! batchId, Elsa.Etl.Core.Runtime.EtlOutputRoute route, string! requestId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult!>

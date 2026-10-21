@@ -9,8 +9,13 @@ public enum EtlHttpDeliveryFailure { None, AttemptsExhausted, DeadlineExceeded, 
 public sealed record EtlHttpDeliveryAttempt(string RequestId, int Number, long Fence, string EffectId,
     DateTimeOffset StartedAt, DateTimeOffset ExpiresAt);
 /// <summary>Transport outcome without a response body, URL or exception. Null status means uncertain delivery.</summary>
-/// <remarks>RetryAfter is an already parsed absolute UTC instant; transport parsing remains the caller's responsibility.</remarks>
-public sealed record EtlHttpDeliveryResponse(int? StatusCode, DateTimeOffset? RetryAfter);
+/// <remarks>RetryAfter is an already parsed absolute UTC instant; transport parsing remains the caller's responsibility.
+/// ResponseReceivedAtUtc is the time a complete bounded response was received, separate from the durable time at which
+/// the store reconciles this outcome. It is optional for compatibility with callers that cannot provide a receipt time.</remarks>
+public sealed record EtlHttpDeliveryResponse(int? StatusCode, DateTimeOffset? RetryAfter)
+{
+    public DateTimeOffset? ResponseReceivedAtUtc { get; init; }
+}
 /// <summary>An open attempt has no completion time; a closed attempt with no response records uncertainty.</summary>
 public sealed record EtlHttpDeliveryAttemptRecord(EtlHttpDeliveryAttempt Attempt, EtlHttpDeliveryResponse? Response,
     DateTimeOffset? CompletedAt);

@@ -378,9 +378,11 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal(measuredTotal, afterBegin.RunMetadataBytes);
         Assert.True(afterBegin.RunMetadataBytes - before.RunMetadataBytes >= inFlightJsonBytes + HttpInFlightReceiptReservationBytes);
 
-        var response = retryableResponse
-            ? new EtlHttpDeliveryResponse(429, clock.GetUtcNow().AddSeconds(10))
-            : new EtlHttpDeliveryResponse(204, null);
+        var response = new EtlHttpDeliveryResponse(retryableResponse ? 429 : 204,
+            retryableResponse ? clock.GetUtcNow().AddSeconds(10) : null)
+        {
+            ResponseReceivedAtUtc = clock.GetUtcNow()
+        };
         var complete = await store.CompleteConnectorHttpDeliveryAsync(lease, batch.BatchId, EtlOutputRoute.Main, permit, response);
         var finalBatch = await context.ConnectorBatches.AsNoTracking().SingleAsync();
         var afterComplete = await DeliveryAccountingAsync(context, lease.PartitionOrdinal);

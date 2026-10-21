@@ -192,7 +192,7 @@ internal sealed class EtlHttpTransport : IDisposable
             var completedAt = _clock.GetUtcNow();
             return timeout.IsCancellationRequested || completedAt >= attempt.ExpiresAt
                 ? UncertainDelivery()
-                : new EtlHttpDeliveryResponse(status, retryAfter);
+                : new EtlHttpDeliveryResponse(status, retryAfter) { ResponseReceivedAtUtc = completedAt };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
