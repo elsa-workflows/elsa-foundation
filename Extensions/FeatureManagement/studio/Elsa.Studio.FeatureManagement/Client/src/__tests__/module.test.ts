@@ -713,6 +713,7 @@ describe("feature impact review", () => {
       scenario: "enabling A then disabling A leaves B enabled",
       aEnabled: false,
       bEnabled: false,
+      bId: "B",
       firstToggle: "Enable A",
       secondToggle: "Disable A",
       residualFeature: "B",
@@ -723,19 +724,31 @@ describe("feature impact review", () => {
       scenario: "disabling B then enabling B leaves A disabled",
       aEnabled: true,
       bEnabled: true,
+      bId: "B",
       firstToggle: "Disable B",
       secondToggle: "Enable B",
       residualFeature: "A",
       netZeroFeature: "B",
       requiredPath: ["B", "A"]
+    },
+    {
+      scenario: "enabling A then disabling A retains the __proto__ feature cause",
+      aEnabled: false,
+      bEnabled: false,
+      bId: "__proto__",
+      firstToggle: "Enable A",
+      secondToggle: "Disable A",
+      residualFeature: "__proto__",
+      netZeroFeature: "A",
+      requiredPath: ["A", "__proto__"]
     }
   ] as const)("keeps a residual cascade truthful after its original root returns to baseline: $scenario", async scenario => {
     const api = stubApi({
       getJson: async () => ({
         revision: "server-rev-1",
         features: [
-          feature("A", scenario.aEnabled, {}, [], { dependencies: ["B"] }),
-          feature("B", scenario.bEnabled, {})
+          feature("A", scenario.aEnabled, {}, [], { dependencies: [scenario.bId] }),
+          feature(scenario.bId, scenario.bEnabled, {})
         ]
       })
     });
@@ -762,7 +775,7 @@ describe("feature impact review", () => {
     if (reviewButton && !reviewButton.disabled) {
       const resetReview = await openImpactReview(container);
       expectNoImpactRow(resetReview, "A");
-      expectNoImpactRow(resetReview, "B");
+      expectNoImpactRow(resetReview, scenario.bId);
       expect(resetReview.textContent).not.toMatch(/historical|earlier|prior/i);
     } else {
       expectControlUnavailableByText(container, "Review changes");

@@ -890,7 +890,7 @@
 
 .feature-management-impact-intro {
   margin: 0 0 14px;
-  color: var(--studio-text-muted, var(--muted-foreground));
+  color: var(--studio-text-muted);
   line-height: 1.45;
 }
 
@@ -902,9 +902,9 @@
 .feature-management-impact-entry {
   display: grid;
   gap: 10px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--studio-border);
   border-radius: 6px;
-  background: color-mix(in srgb, var(--studio-surface, var(--card)) 96%, var(--muted));
+  background: color-mix(in srgb, var(--studio-surface) 96%, var(--studio-surface-muted));
   padding: 12px;
 }
 
@@ -930,7 +930,7 @@
 
 .feature-management-impact-heading h4 {
   margin: 0 0 3px;
-  color: var(--studio-text, var(--foreground));
+  color: var(--studio-text);
   font-size: 14px;
 }
 
@@ -938,7 +938,7 @@
 .feature-management-impact-reason span,
 .feature-management-impact-state,
 .feature-management-impact-reload {
-  color: var(--studio-text-muted, var(--muted-foreground));
+  color: var(--studio-text-muted);
   font-size: 12px;
 }
 
@@ -962,7 +962,7 @@
 
 .feature-management-impact-section h5 {
   margin: 0;
-  color: var(--studio-text, var(--foreground));
+  color: var(--studio-text);
   font-size: 12px;
   font-weight: 700;
 }
@@ -972,7 +972,7 @@
   display: grid;
   gap: 0;
   margin: 0;
-  border: 1px solid var(--border);
+  border: 1px solid var(--studio-border);
   border-radius: 5px;
   overflow: hidden;
 }
@@ -988,8 +988,8 @@
   grid-template-columns: minmax(110px, 30%) minmax(0, 1fr);
   align-items: start;
   gap: 10px;
-  border-bottom: 1px solid var(--border);
-  background: var(--studio-surface, var(--card));
+  border-bottom: 1px solid var(--studio-border);
+  background: var(--studio-surface);
   padding: 8px 10px;
 }
 
@@ -1003,7 +1003,7 @@
 }
 
 .feature-management-impact-section dt {
-  color: var(--studio-text-muted, var(--muted-foreground));
+  color: var(--studio-text-muted);
   font-size: 12px;
   font-weight: 650;
 }
@@ -1011,7 +1011,7 @@
 .feature-management-impact-section dd {
   min-width: 0;
   margin: 0;
-  color: var(--studio-text, var(--foreground));
+  color: var(--studio-text);
   font-size: 12px;
   overflow-wrap: anywhere;
 }
@@ -1021,7 +1021,7 @@
 }
 
 .feature-management-impact-reason code {
-  color: var(--studio-text, var(--foreground));
+  color: var(--studio-text);
   overflow-wrap: anywhere;
 }
 

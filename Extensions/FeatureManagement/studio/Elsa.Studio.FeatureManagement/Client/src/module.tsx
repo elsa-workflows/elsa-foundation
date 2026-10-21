@@ -128,7 +128,7 @@ interface FeatureHostState {
   status: string | null;
   error: string | null;
   enabledRoots: FeatureToggleRoot[];
-  stateCauses: Record<string, FeatureStateCause>;
+  stateCauses: Map<string, FeatureStateCause>;
 }
 
 interface FeatureReviewSnapshot {
@@ -395,7 +395,7 @@ function createInitialHostState(): FeatureHostState {
     status: null,
     error: null,
     enabledRoots: [],
-    stateCauses: {}
+    stateCauses: new Map()
   };
 }
 
@@ -434,25 +434,25 @@ function stageFeatureToggle(state: FeatureHostState, rootIds: Iterable<string>, 
     }
   }
 
-  const stateCauses = { ...state.stateCauses };
+  const stateCauses = new Map(state.stateCauses);
   for (const initial of baseline.values()) {
     const current = desired.get(normalizeType(initial.id));
     if (!current || current.enabled === initial.enabled) {
-      delete stateCauses[initial.id];
+      stateCauses.delete(initial.id);
     }
   }
 
   for (const featureId of result.changedIds) {
     const current = desired.get(normalizeType(featureId));
     if (current && stateDiffersFromBaseline(current.id)) {
-      stateCauses[current.id] = { enabled, rootIds: result.rootIds };
+      stateCauses.set(current.id, { enabled, rootIds: result.rootIds });
     }
   }
 
   for (const rootId of result.rootIds) {
     const current = desired.get(normalizeType(rootId));
     if (current && stateDiffersFromBaseline(current.id)) {
-      stateCauses[current.id] = { enabled: current.enabled, rootIds: [current.id] };
+      stateCauses.set(current.id, { enabled: current.enabled, rootIds: [current.id] });
     }
   }
 
@@ -576,7 +576,7 @@ export function FeatureManagementPage() {
         draft: response.features.map(toDraftFeature),
         checkedFeatureIds: new Set(),
         enabledRoots: [],
-        stateCauses: {},
+        stateCauses: new Map(),
         status: null,
         loading: false
       }));
@@ -623,7 +623,7 @@ export function FeatureManagementPage() {
         catalog: response.catalog,
         draft: response.catalog.features.map(toDraftFeature),
         enabledRoots: [],
-        stateCauses: {},
+        stateCauses: new Map(),
         status: message,
         applying: false
       }));
@@ -751,7 +751,7 @@ export function FeatureManagementPage() {
       ...state,
       draft: catalog.features.map(toDraftFeature),
       enabledRoots: [],
-      stateCauses: {},
+      stateCauses: new Map(),
       status: null,
       error: null
     }));
@@ -1027,7 +1027,7 @@ function getFeatureImpactEntries(
   catalog: FeatureCatalogResponse | null,
   draft: DraftFeature[],
   roots: FeatureToggleRoot[],
-  causes: Record<string, FeatureStateCause>): FeatureImpactEntry[] {
+  causes: ReadonlyMap<string, FeatureStateCause>): FeatureImpactEntry[] {
   if (!catalog) {
     return [];
   }
@@ -1062,7 +1062,7 @@ function getFeatureImpactEntries(
         return path ? [{ rootId: root.featureId, path, historical: false }] : [];
       })
       : [];
-    const cause = causes[desired.id];
+    const cause = causes.get(desired.id);
     const historicalReasons = enabledChanged && !directRoot && currentReasons.length === 0 && cause?.enabled === desired.enabled
       ? cause.rootIds.flatMap(rootId => {
         if (roots.some(root => normalizeType(root.featureId) === normalizeType(rootId) && root.enabled === cause.enabled)) {
