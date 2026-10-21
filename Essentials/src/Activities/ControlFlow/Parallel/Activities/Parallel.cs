@@ -70,7 +70,9 @@ namespace Elsa.Activities.Parallel.Activities;
     LabelProperty = "name",
     SlotNameTemplate = "Parallel.Branch[{name}]")]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
-public sealed class Parallel(IActivityExecutionStateStore activityExecutionStateStore) : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler, IRuntimeActivityChildFaultHandler
+// The join is decided from the durable branch states, where a superseded branch does not count and its successor's
+// completion counts as that branch's success, so a rescheduled faulted branch can rejoin a deferred join (#3135).
+public sealed class Parallel(IActivityExecutionStateStore activityExecutionStateStore) : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler, IRuntimeActivityChildFaultHandler, IRuntimeAcceptsRescheduledFaultedChild
 {
     public const string BranchSlotPrefix = "Parallel.Branch[";
     public const string BranchSlotSuffix = "]";
