@@ -10,6 +10,10 @@ Credentials are resolved per attempt. Pin the selected connection type/auth sche
 
 A page is a JSON document. A JSON Pointer identifies its record array, and per-column pointers identify scalar fields relative to a record. Strict pointer escapes and bounded indices are validated. Duplicate properties are refused rather than interpreted differently by parsers. Types preserve null/missing distinctions, reject non-finite or out-of-range numbers, and do not coerce arbitrary objects into strings.
 
+Record items may be objects, arrays or scalars. An empty field pointer selects the item itself; array-index pointers select within array items. Requiredness and declared scalar types determine whether a selected value is valid, rather than an implicit object-only restriction.
+
+Decoded JSON decimal fields require an exactly representable decimal value; conversion must not silently round or underflow. Equivalent exponent and trailing-zero spellings are valid. Invalid UTF-8 or escaped Unicode anywhere in the page, including unselected metadata, produces a value-free page diagnostic. The declared-field limit bounds selectors; raw page bytes and JSON depth also bound traversal of unselected members. Decoder item indices are meaningful only within the retained shard/request/page identity, never as standalone durable cursors.
+
 Continuation is either a scalar opaque token inserted into one named query parameter of the pinned seed, or a URI reference selected from JSON. Missing/null/empty continuation ends the shard; empty record array alone does not. Next links are resolved then checked against the pinned origin and finite exact canonical-path allowlist before authentication. By default only seed paths are approved; hosts may explicitly add paths. A same-origin link to any other path is refused. Raw continuation text is retained only in protected runtime data, not keys/logs/public API. Page count/visited request digests bound loops.
 
 ## Delivery and retry
