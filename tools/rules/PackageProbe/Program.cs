@@ -23,7 +23,7 @@ using Microsoft.Extensions.Hosting;
 using NuGet.Packaging;
 using NuGet.Versioning;
 
-internal static class Program
+internal static partial class Program
 {
     private const string ReceiptFileName = "elsa.rules.deployment-receipt.json";
     private const string PublishStateEnvironmentVariable = "ELSA_RULES_PUBLISH_STATE_COMMIT";
@@ -60,6 +60,9 @@ internal static class Program
         {
             object result = command switch
             {
+                "process-boundary" when args.Length == 4 => await RunProcessBoundaryAsync(args[1], args[2]),
+                "process-recover" when args.Length == 3 => await RunProcessRecoverAsync(args[1]),
+                "process-cancel" when args.Length == 3 => await RunProcessCancelAsync(args[1]),
                 "receipt" when args.Length == 3 => await CreateReceiptAsync(args[1]),
                 "direct" when args.Length == 3 => await RunDirectAsync(args[1]),
                 "unavailable" when args.Length == 3 => await RunUnavailableAsync(args[1]),

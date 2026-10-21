@@ -91,7 +91,7 @@ def main():
     parser.add_argument('--publish-state-ref', required=True, type=immutable_commit)
     parser.add_argument('--evidence-dir', required=True, type=Path)
     parser.add_argument('--packed-run', type=Path, help='Reuse a verified immutable pack receipt; consumer caches remain fresh.')
-    parser.add_argument('--stage', choices=('pack', 'direct'), default='direct',
+    parser.add_argument('--stage', choices=('pack', 'direct', 'process'), default='direct',
                         help='pack retains build artifacts only and does not qualify a consumer.')
     args = parser.parse_args()
     base = args.evidence_dir.expanduser().resolve()
@@ -103,10 +103,11 @@ def main():
     feed.mkdir()
     receipt = {'schemaVersion': 1, 'sourceCommit': args.source_ref,
                'publishStateCommit': args.publish_state_ref, 'stage': args.stage,
-               'directProofPassed': False, 'fullAcceptancePassed': False, 'commands': [],
+               'directProofPassed': False, 'processBoundaryProofPassed': False, 'fullAcceptancePassed': False, 'commands': [],
                'harness': {str(path.relative_to(ROOT)): sha256(path) for path in
                            [Path(__file__), Path(__file__).with_name('package_consumer.py'),
-                            Path(__file__).with_name('PackageProbe') / 'Program.cs']}}
+                            Path(__file__).with_name('package_process.py'),
+                            *sorted(Path(__file__).with_name('PackageProbe').glob('*.cs'))]}}
     print('Rules package evidence: ' + str(evidence), flush=True)
     environment = os.environ.copy()
     # No ambient credentials or injected build settings are needed by the public local-package proof.
@@ -114,20 +115,31 @@ def main():
                  'MSBuildSDKsPath', 'ELSA_EF_CONNECTION', 'ELSA_EF_SCHEMA'):
         environment.pop(name, None)
 
-    def run(command, cwd=None, env=environment, expect_failure=False):
+    def run(command, cwd=None, env=environment, expect_failure=False, timeout=None):
         cwd = source if cwd is None else cwd
         number = len(receipt['commands']) + 1
         log = evidence / f'{number:02d}-command.log'
         entry = {'command': list(map(str, command)), 'cwd': str(cwd), 'log': str(log)}
         receipt['commands'].append(entry)
         print(f'[{number}] ' + ' '.join(map(str, command[:5])), flush=True)
-        with log.open('w') as output:
-            completed = subprocess.run(list(map(str, command)), cwd=cwd, env=env,
-                                       stdout=output, stderr=subprocess.STDOUT)
-        entry['exitCode'] = completed.returncode
-        entry['expectedFailure'] = expect_failure
-        entry['logSha256'] = sha256(log)
-        write_json(evidence / 'receipt.json', receipt)
+        try:
+            with log.open('w') as output:
+                completed = subprocess.run(list(map(str, command)), cwd=cwd, env=env,
+                                           stdout=output, stderr=subprocess.STDOUT, timeout=timeout)
+            entry['exitCode'] = completed.returncode
+            entry['expectedFailure'] = expect_failure
+        except subprocess.TimeoutExpired:
+            entry['timedOutSeconds'] = timeout
+            raise
+        finally:
+            connection = env.get('ELSA_RULES_PROCESS_CONNECTION')
+            if connection:
+                output_text = log.read_text().replace(connection, '[REDACTED CONNECTION]')
+                for password in re.findall(r'(?i)(?:^|;)Password=([^;]+)', connection):
+                    output_text = output_text.replace(password, '[REDACTED]')
+                log.write_text(output_text)
+            entry['logSha256'] = sha256(log)
+            write_json(evidence / 'receipt.json', receipt)
         if (completed.returncode != 0) != expect_failure:
             raise RuntimeError(f'Command {number} returned {completed.returncode} (expected failure: {expect_failure}); see {log}.')
 
@@ -202,11 +214,11 @@ def main():
                 raise ValueError('The clean source checkout changed during packing.')
             receipt['packages'] = records
             receipt['packPassed'] = True
-        if args.stage == 'direct':
+        if args.stage in ('direct', 'process'):
             from package_consumer import verify_consumer
-            verify_consumer(receipt, evidence, source, feed, run, environment)
+            verify_consumer(receipt, evidence, source, feed, run, environment, args.stage == 'process')
         exit_code = 0
-    except (OSError, ValueError, KeyError, RuntimeError, subprocess.CalledProcessError, AssertionError) as error:
+    except (OSError, ValueError, KeyError, RuntimeError, subprocess.SubprocessError, AssertionError) as error:
         receipt['error'] = str(error) or type(error).__name__
         print(receipt['error'], file=sys.stderr)
         exit_code = 1
@@ -215,6 +227,7 @@ def main():
         receipt['harnessUnchanged'] = unchanged
         if not unchanged:
             receipt['directProofPassed'] = False
+            receipt['processBoundaryProofPassed'] = False
             receipt['error'] = 'Harness changed during execution.'
             exit_code = 1
         write_json(evidence / 'receipt.json', receipt)

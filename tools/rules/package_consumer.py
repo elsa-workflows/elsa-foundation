@@ -8,7 +8,7 @@ import shutil
 import xml.etree.ElementTree as ET
 
 
-def verify_consumer(receipt, evidence, source, feed, run, environment):
+def verify_consumer(receipt, evidence, source, feed, run, environment, process_proof=False):
     consumer, deployment = evidence / 'consumer', evidence / 'deployment'
     consumer.mkdir()
     for ancestor in consumer.parents:
@@ -16,13 +16,16 @@ def verify_consumer(receipt, evidence, source, feed, run, environment):
             if (ancestor / name).exists():
                 raise ValueError('Consumer would inherit ambient build configuration: ' + str(ancestor / name))
     template = Path(__file__).with_name('PackageProbe') / 'Program.cs'
-    shutil.copyfile(template, consumer / 'Program.cs')
+    for template_source in template.parent.glob('*.cs'):
+        shutil.copyfile(template_source, consumer / template_source.name)
     receipt['consumerTemplateSha256'] = hashlib.sha256(template.read_bytes()).hexdigest()
     shutil.copyfile(source / 'global.json', consumer / 'global.json')
     versions = {p['id']: p['version'] for p in receipt['closure']}
     central = ET.parse(source / 'Directory.Packages.props')
     sqlite = next(p.attrib['Version'] for p in central.findall('.//PackageVersion')
                   if p.attrib['Include'] == 'Microsoft.EntityFrameworkCore.Sqlite')
+    postgres = next(p.attrib['Version'] for p in central.findall('.//PackageVersion')
+                    if p.attrib['Include'] == 'Npgsql.EntityFrameworkCore.PostgreSQL')
     project = ET.Element('Project', Sdk='Microsoft.NET.Sdk')
     properties = ET.SubElement(project, 'PropertyGroup')
     for key, value in {'OutputType': 'Exe', 'TargetFramework': 'net10.0', 'ImplicitUsings': 'enable',
@@ -33,6 +36,7 @@ def verify_consumer(receipt, evidence, source, feed, run, environment):
     for package, version in {'Elsa.Rules.Runtime': versions['Elsa.Rules.Runtime'],
                              'Elsa.Rules.Persistence.EntityFrameworkCore': versions['Elsa.Rules.Persistence.EntityFrameworkCore'],
                              'Microsoft.EntityFrameworkCore.Sqlite': sqlite,
+                             'Npgsql.EntityFrameworkCore.PostgreSQL': postgres,
                              'NuGet.Packaging': '7.9.0'}.items():
         ET.SubElement(references, 'PackageReference', Include=package, Version='[' + version + ']')
     ET.indent(project)
@@ -91,7 +95,10 @@ def verify_consumer(receipt, evidence, source, feed, run, environment):
     run(['dotnet', executable, 'direct', evidence / 'restored.db', evidence / 'restored.json'], cwd=deployment, env=env)
     verify_identity_control(receipt, evidence, source, feed, deployment, executable, run, env)
     receipt['directProofPassed'] = True
-    receipt['proofScope'] = 'Four-module clean PackageReference direct execution and identity rejection; native/process/upgrade gates pending.'
+    receipt['proofScope'] = 'Four-module clean PackageReference direct execution and identity rejection; native/upgrade gates pending.'
+    if process_proof:
+        from package_process import verify_processes
+        verify_processes(receipt, evidence, deployment, executable, run, env)
 
 
 def verify_identity_control(receipt, evidence, source, feed, deployment, executable, run, env):

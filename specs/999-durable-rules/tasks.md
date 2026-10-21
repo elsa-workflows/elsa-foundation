@@ -44,6 +44,10 @@ Independent acceptance: separate packaged PostgreSQL processes recover accepted 
 - [ ] T019 [US2] Extend `tools/rules/verify-packaged-rules.py` with two independent PostgreSQL process runs at accepted-unconsumed and consumed-round boundaries, old-worker late response and absent design storage. Depends on PostgreSQL provider task T021.
 - [ ] T020 [US2] Execute process replacement and cancellation proof; record exact identities/counts/outcomes and topology in `specs/999-durable-rules/evidence/`; prove cancellation identity, worker fencing and one-time consumption with separate meaningful removal controls, restore and rerun.
 
+The five-case [process-boundary checkpoint](evidence/process-boundary-checkpoint.md) passed on the packaged source; this partial checkpoint does not close T019–T020.
+
+T019–T020 evidence distinctions: post-commit process loss and a delayed confirmation after terminal settlement do not prove stale *new* acceptance. Add a separate pre-forward acceptance barrier with a live successor holding the new lease. Isolate the fence check with same-owner reclaim at an unchanged pending revision, since different worker IDs also exercise owner comparison. Cancellation must first reject a changed envelope without changing a Running snapshot, then accept the exact envelope and preserve only committed facts; include cancellation before admission. The one-time-consumption control must assert the durable consumed marker and exact historical confirmation replay, while full process histories prove no duplicate advancement under the combined guards. These remain open until executed, restored and reviewed.
+
 ## Phase 5: US4 — Four-provider durability and upgrade/rollback (P2, prerequisite for complete US2/US3 acceptance)
 
 Independent acceptance: identical invariants actually run on all four engines, old native and Rules state survive additive schema/deployment changes under original pins.
