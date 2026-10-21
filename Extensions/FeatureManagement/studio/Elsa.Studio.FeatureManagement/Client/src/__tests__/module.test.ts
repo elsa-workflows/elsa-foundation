@@ -158,6 +158,14 @@ describe("feature management module", () => {
     expect(isDirty(current, [feature("FeatureA", true, {})])).toBe(false);
   });
 
+  it("keeps undefined configuration properties omitted in dirty checks and outgoing JSON", () => {
+    const current = { revision: "rev-1", features: [feature("FeatureA", true, { optional: undefined })] };
+    const draft = [feature("FeatureA", true, {})];
+
+    expect(isDirty(current, draft)).toBe(false);
+    expect(JSON.stringify(createApplyPayload("rev-1", current.features))).toBe(JSON.stringify(createApplyPayload("rev-1", draft)));
+  });
+
   it.each([
     ["stale configuration revision", "Expected revision rev-1 but found rev-2."],
     ["activation guard refusal", "Feature 'FeatureA' cannot be enabled while its runtime is unavailable."]
@@ -618,7 +626,9 @@ describe("feature impact review", () => {
         features: [
           feature("Api", false, {}, [], { dependencies: ["Shared"] }),
           feature("Ui", false, {}, [], { dependencies: ["Shared"] }),
-          feature("Shared", false, {})
+          feature("Shared", false, { Mode: "safe" }, [], {
+            settings: [setting({ name: "Mode", displayName: "Mode" })]
+          })
         ]
       })
     });
@@ -635,6 +645,9 @@ describe("feature impact review", () => {
     expect(impactRowText(review, "Ui")).toContain("Direct");
     const shared = impactRowText(review, "Shared");
     expect(shared).toContain("Automatic");
+    expect(shared).not.toContain("Direct");
+    expect(shared).toContain("Mode");
+    expect(shared).toContain("safe");
     expect(shared).toContain("Api");
     expect(shared).toContain("Ui");
     expectOrderedPath(shared, ["Api", "Shared"]);
@@ -780,6 +793,269 @@ describe("feature impact review", () => {
     expect(review.textContent).not.toContain("credential-after");
     expect(configured).toContain("********");
     expect(impactRowText(review, "UnknownReload")).toMatch(/unknown/i);
+    await unmount();
+  });
+
+  it.each([
+    {
+      scenario: "direct disable",
+      configuredFeature: "Configured",
+      rootFeature: "Configured",
+      automatic: false,
+      features: [feature("Configured", true, { Mode: "safe" }, [], {
+        settings: [setting({ name: "Mode", displayName: "Mode" })]
+      })]
+    },
+    {
+      scenario: "required cascade disable",
+      configuredFeature: "Api",
+      rootFeature: "Runtime",
+      automatic: true,
+      features: [
+        feature("Api", true, { Mode: "safe" }, [], {
+          settings: [setting({ name: "Mode", displayName: "Mode" })],
+          dependencies: ["Runtime"]
+        }),
+        feature("Runtime", true, {})
+      ]
+    }
+  ] as const)("previews the applied configuration when a configured feature is disabled by $scenario", async scenario => {
+    const api = stubApi({
+      getJson: async () => ({ revision: "server-rev-1", features: scenario.features })
+    });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+
+    await click(container.querySelector(`[aria-label='Disable ${scenario.rootFeature}']`));
+    const review = await openImpactReview(container);
+    const configured = impactRowText(review, scenario.configuredFeature);
+
+    expect(configured).toContain("Mode");
+    expect(configured).toContain("safe");
+    expect(configured).toContain("Not set");
+    if (scenario.automatic) {
+      expect(configured).toContain("Automatic");
+      expect(configured).not.toContain("Direct");
+    } else {
+      expect(configured).toContain("Direct");
+    }
+    await unmount();
+  });
+
+  it("does not preview an edited value after disabling a feature when apply clears its configuration", async () => {
+    let submitted: unknown = null;
+    const api = stubApi({
+      getJson: async () => ({
+        revision: "server-rev-1",
+        features: [feature("Configured", true, { Mode: "safe" }, [], {
+          settings: [setting({ name: "Mode", displayName: "Mode" })]
+        }), feature("Other", false, {})]
+      }),
+      postJson: async (_url, body) => {
+        submitted = body;
+        return { catalog: { revision: "server-rev-2", features: [feature("Configured", false, {}), feature("Other", true, {})] }, featureDescriptorCount: 2, reloadedShellCount: 0 };
+      }
+    });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+
+    await editSettingValue(container, "Configured", "Mode", "fast");
+    await click(container.querySelector("[aria-label='Disable Configured']"));
+    await click(container.querySelector("[aria-label='Enable Other']"));
+    const review = await openImpactReview(container);
+    const configured = impactRowText(review, "Configured");
+
+    expect(configured).not.toContain("fast");
+    expect(configured).toContain("Not set");
+    expect(impactRowText(review, "Other")).toContain("Direct");
+    await click(buttonByText(review, "Apply"));
+    expect(submitted).toEqual({
+      revision: "server-rev-1",
+      features: [
+        { id: "Configured", enabled: false, configuration: {} },
+        { id: "Other", enabled: true, configuration: {} }
+      ]
+    });
+    await unmount();
+  });
+
+  it("does not preview stale configuration for an initially-disabled feature when another feature is applied", async () => {
+    let submitted: unknown = null;
+    const api = stubApi({
+      getJson: async () => ({
+        revision: "server-rev-1",
+        features: [
+          feature("Disabled", false, { Mode: "safe" }, [], {
+            settings: [setting({ name: "Mode", displayName: "Mode" })]
+          }),
+          feature("Other", false, {})
+        ]
+      }),
+      postJson: async (_url, body) => {
+        submitted = body;
+        return { catalog: { revision: "server-rev-2", features: [feature("Disabled", false, {}), feature("Other", true, {})] }, featureDescriptorCount: 1, reloadedShellCount: 0 };
+      }
+    });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+
+    expectControlUnavailableByText(container, "Edit settings");
+    await click(container.querySelector("[aria-label='Enable Other']"));
+    const review = await openImpactReview(container);
+    expectNoImpactRow(review, "Disabled");
+    await click(buttonByText(review, "Apply"));
+
+    expect(submitted).toEqual({
+      revision: "server-rev-1",
+      features: [
+        { id: "Disabled", enabled: false, configuration: {} },
+        { id: "Other", enabled: true, configuration: {} }
+      ]
+    });
+    await unmount();
+  });
+
+  it("masks a secret value while previewing configuration clearing", async () => {
+    const secret = "credential-to-clear";
+    const api = stubApi({
+      getJson: async () => ({
+        revision: "server-rev-1",
+        features: [feature("Configured", true, { Token: secret }, [], {
+          settings: [setting({ name: "Token", displayName: "Access token", secret: true, sensitive: true })]
+        })]
+      })
+    });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+
+    await click(container.querySelector("[aria-label='Disable Configured']"));
+    const review = await openImpactReview(container);
+    const configured = impactRowText(review, "Configured");
+
+    expect(configured).toContain("Access token");
+    expect(configured).toContain("********");
+    expect(configured).toContain("Not set");
+    expect(review.textContent).not.toContain(secret);
+    await unmount();
+  });
+
+  it("keeps an explicit setting edit direct when a later required cascade enables the feature", async () => {
+    const api = stubApi({
+      getJson: async () => ({
+        revision: "server-rev-1",
+        features: [
+          feature("A", false, {}, [], { settings: [setting({ name: "Mode", displayName: "Mode" })] }),
+          feature("B", false, {}, [], { dependencies: ["A"] })
+        ]
+      })
+    });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+
+    await click(container.querySelector("[aria-label='Enable A']"));
+    await editSettingValue(container, "A", "Mode", "fast");
+    await click(container.querySelector("[aria-label='Disable A']"));
+    await click(container.querySelector("[aria-label='Enable B']"));
+
+    const review = await openImpactReview(container);
+    const a = impactRowText(review, "A");
+    expect(a).toContain("Direct");
+    expect(a).toContain("Automatic");
+    expect(a).toContain("fast");
+    expectOrderedPath(a, ["B", "A"]);
+    await unmount();
+  });
+
+  it("does not stage an object-setting change when only JSON key order changes", async () => {
+    const api = stubApi({
+      getJson: async () => ({
+        revision: "server-rev-1",
+        features: [feature("Configured", true, { Options: { first: 1, second: 2 } }, [], {
+          settings: [setting({ name: "Options", displayName: "Options", jsonType: "object" })]
+        })]
+      })
+    });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+
+    await editSettingValue(container, "Configured", "Options", '{"second":2,"first":1}');
+
+    expect(container.textContent).not.toContain("Unsaved changes");
+    expectControlUnavailableByText(container, "Review changes");
+    await unmount();
+  });
+
+  it("preserves an object setting's own __proto__ key in dirty and impact review state", async () => {
+    const api = stubApi({
+      getJson: async () => ({
+        revision: "server-rev-1",
+        features: [feature("Configured", true, { Options: {} }, [], {
+          settings: [setting({ name: "Options", displayName: "Options", jsonType: "object" })]
+        })]
+      })
+    });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+    try {
+      await editSettingValue(container, "Configured", "Options", '{"__proto__":{"polluted":true}}');
+
+      expect(container.textContent).toContain("Unsaved changes");
+      const review = await openImpactReview(container);
+      const configured = impactRowText(review, "Configured");
+      expect(configured).toContain("{}");
+      expect(configured).toContain('{"__proto__":{"polluted":true}}');
+    } finally {
+      await unmount();
+    }
+  });
+
+  it("moves focus into the review dialog when it opens", async () => {
+    const api = stubApi({ getJson: async () => ({ revision: "server-rev-1", features: [feature("FeatureA", true, {})] }) });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+
+    await click(container.querySelector("[aria-label='Disable FeatureA']"));
+    const opener = buttonByText(container, "Review changes") as HTMLButtonElement;
+    opener.focus();
+    await click(opener);
+    const review = impactReviewRegion(container);
+    const close = buttonByText(review!, "Close");
+
+    expect(document.activeElement).toBe(close);
+    await unmount();
+  });
+
+  it("closes the review dialog on Escape and returns focus to its opener", async () => {
+    const api = stubApi({ getJson: async () => ({ revision: "server-rev-1", features: [feature("FeatureA", true, {})] }) });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+
+    await click(container.querySelector("[aria-label='Disable FeatureA']"));
+    const opener = buttonByText(container, "Review changes") as HTMLButtonElement;
+    opener.focus();
+    await click(opener);
+    flushSync(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    expect(impactReviewRegion(container)).toBeNull();
+    expect(document.activeElement).toBe(opener);
+    await unmount();
+  });
+
+  it("wraps Tab navigation inside the review dialog", async () => {
+    const api = stubApi({ getJson: async () => ({ revision: "server-rev-1", features: [feature("FeatureA", true, {})] }) });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+
+    await click(container.querySelector("[aria-label='Disable FeatureA']"));
+    const review = await openImpactReview(container);
+    const close = buttonByText(review, "Close");
+    const apply = buttonByText(review, "Apply") as HTMLButtonElement;
+
+    apply.focus();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+    expect(document.activeElement).toBe(close);
+    close.focus();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }));
+    expect(document.activeElement).toBe(apply);
     await unmount();
   });
 
@@ -1059,6 +1335,7 @@ function feature(
   categories: string[] = [],
   overrides: Record<string, unknown> = {}
 ) {
+  const dependencies = (overrides.dependencies as Array<string | { id: string; optional?: boolean }> | undefined) ?? [];
   const built = {
     id,
     displayName: id,
@@ -1069,12 +1346,12 @@ function feature(
     advanced: false,
     experimental: false,
     settings: [],
-    dependencies: [],
-    ...overrides
+    ...overrides,
+    dependencies
   };
 
   // Normalize dependency overrides so a bare string means a mandatory dependency and an object can flag `optional`.
-  built.dependencies = (built.dependencies as Array<string | { id: string; optional?: boolean }>).map(dependency =>
+  built.dependencies = built.dependencies.map(dependency =>
     typeof dependency === "string" ? { id: dependency, optional: false } : { id: dependency.id, optional: dependency.optional === true });
 
   return built as any;
@@ -1147,7 +1424,7 @@ function authenticatedProvider(permissions: string[]): AuthWrapper {
     getAccessToken: async () => null,
     refresh: async () => session
   };
-  return children => React.createElement(AuthProvider, { manager }, children);
+  return children => React.createElement(AuthProvider, { manager, children });
 }
 
 async function openImpactReview(container: Element) {
@@ -1164,17 +1441,8 @@ function impactReviewRegion(container: Element) {
 }
 
 function impactRow(review: Element, featureId: string) {
-  return Array.from(review.querySelectorAll("tr, [role='row'], li, [role='listitem'], article, section, [data-impact-feature-id], [data-feature-id]"))
-    .find(row => {
-      const exactId = row.getAttribute("data-impact-feature-id")
-        ?? row.querySelector("[data-impact-feature-id]")?.getAttribute("data-impact-feature-id");
-      if (exactId) {
-        return exactId === featureId;
-      }
-
-      const identity = row.querySelector("th, td:first-child, [role='rowheader'], h3, h4, strong, code")?.textContent?.trim();
-      return identity ? new RegExp(`(^|\\b)${escapeRegExp(featureId)}(\\b|$)`).test(identity) : false;
-    }) ?? null;
+  return Array.from(review.querySelectorAll("article[data-impact-feature-id]"))
+    .find(row => row.getAttribute("data-impact-feature-id") === featureId) ?? null;
 }
 
 function impactRowText(review: Element, featureId: string) {
@@ -1196,10 +1464,6 @@ function expectOrderedPath(text: string, path: string[]) {
     expect(currentIndex, `Expected required path ${path.join(" -> ")} in '${text}'.`).toBeGreaterThan(previousIndex);
     previousIndex = currentIndex;
   }
-}
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 async function editSettingValue(container: Element, featureId: string, settingLabel: string, value: string) {

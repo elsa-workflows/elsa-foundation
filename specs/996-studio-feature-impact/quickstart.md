@@ -39,7 +39,7 @@ Run the focused suite while the product module is still unchanged. Confirm that 
 
 ## 2. Focused GREEN and module checks
 
-After root accepts the RED checkpoint, implement only the planned module, test, and scoped style files. Run the focused suite after each coherent behavior change, then the complete module suite:
+After root accepts the RED checkpoint, implement the planned module, test, and scoped style files. Remove the module's obsolete local SDK declaration shim as recorded in the plan so the existing public SDK types remain authoritative. Run the focused suite after each coherent behavior change, then the complete module suite:
 
 ```bash
 cd Studio

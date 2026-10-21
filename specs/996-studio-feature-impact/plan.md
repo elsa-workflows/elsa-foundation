@@ -28,7 +28,7 @@ Implementation source is the controlled `7fb745f8604b6ed67a2eae60266976c98bce949
 
 **Constraints**: Preserve the existing full-state Apply contract, required/optional dependency semantics, selected-host isolation, and backend authority. Do not change the API, SDK, backend, permission policy, provider composition, host configuration, lockfiles, or deployment behavior. Keep secrets out of test output and browser receipts. Build and test sequentially through the repository's normal wrappers; root owns shared-machine heavy gates.
 
-**Scale/Scope**: One existing Studio module, its component/unit tests, and its scoped stylesheet if needed. No new shared service or cross-host management surface.
+**Scale/Scope**: One existing Studio module, its component/unit tests, and its scoped stylesheet if needed. Remove its obsolete local SDK declaration shim so the module consumes the existing public SDK types. No new shared service or cross-host management surface.
 
 ## Constitution Check
 
@@ -76,7 +76,7 @@ Essentials/tests/Modularity/Tests/
 └── JsonShellFeatureConfigurationStoreTests.cs   # existing revision/persistence preservation suite; no edits planned
 ```
 
-The current Studio SDK already publicly re-exports `useAuthSession`, `usePermissions`, and the auth providers. No SDK source, SDK declaration, backend project, route, API contract, package manifest, lockfile, or host configuration file is in the planned product diff.
+The current Studio SDK already publicly re-exports `useAuthSession`, `usePermissions`, the auth providers, and the dialog focus hook. The module's obsolete local `src/studio-sdk.d.ts` declaration shadows those actual exports and is removed rather than maintaining a second SDK contract. No SDK package source or declaration, backend project, route, API contract, package manifest, lockfile, or host configuration file is in the planned product diff. Root authorized this narrow scope correction after the direct module TypeScript check exposed the shadowing.
 
 **Structure Decision**: Extend the existing Feature Management module and its `module.test.ts`, with scoped styles only for the new review surface. Keep existing cascade calculation and Apply transport in place. Use existing Studio SDK auth exports and existing backend behavior without adding a package, service, route, or persisted entity.
 

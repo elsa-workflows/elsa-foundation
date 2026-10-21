@@ -857,6 +857,11 @@
   overflow: hidden;
 }
 
+.feature-management-impact-dialog {
+  width: min(960px, calc(100vw - 48px));
+  max-height: min(820px, calc(100vh - 48px));
+}
+
 .feature-management-dialog-heading,
 .feature-management-dialog-actions {
   display: flex;
@@ -881,6 +886,130 @@
 .feature-management-dialog-body {
   overflow: auto;
   padding: 16px;
+}
+
+.feature-management-impact-intro {
+  margin: 0 0 14px;
+  color: var(--studio-text-muted, var(--muted-foreground));
+  line-height: 1.45;
+}
+
+.feature-management-impact-list {
+  display: grid;
+  gap: 10px;
+}
+
+.feature-management-impact-entry {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--studio-surface, var(--card)) 96%, var(--muted));
+  padding: 12px;
+}
+
+.feature-management-impact-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.feature-management-impact-heading h4 {
+  margin: 0 0 3px;
+  color: var(--studio-text, var(--foreground));
+  font-size: 14px;
+}
+
+.feature-management-impact-heading code,
+.feature-management-impact-reason span,
+.feature-management-impact-state,
+.feature-management-impact-reload {
+  color: var(--studio-text-muted, var(--muted-foreground));
+  font-size: 12px;
+}
+
+.feature-management-impact-kinds {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 5px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.feature-management-impact-state,
+.feature-management-impact-reload {
+  margin: 0;
+}
+
+.feature-management-impact-section {
+  display: grid;
+  gap: 6px;
+}
+
+.feature-management-impact-section h5 {
+  margin: 0;
+  color: var(--studio-text, var(--foreground));
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.feature-management-impact-section dl,
+.feature-management-impact-reasons {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.feature-management-impact-reasons {
+  list-style: none;
+  padding: 0;
+}
+
+.feature-management-impact-section dl > div,
+.feature-management-impact-reason {
+  display: grid;
+  grid-template-columns: minmax(110px, 30%) minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--studio-surface, var(--card));
+  padding: 8px 10px;
+}
+
+.feature-management-impact-reason {
+  margin: 0;
+}
+
+.feature-management-impact-section dl > div:last-child,
+.feature-management-impact-reason:last-child {
+  border-bottom: 0;
+}
+
+.feature-management-impact-section dt {
+  color: var(--studio-text-muted, var(--muted-foreground));
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.feature-management-impact-section dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--studio-text, var(--foreground));
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.feature-management-impact-reason span {
+  font-weight: 650;
+}
+
+.feature-management-impact-reason code {
+  color: var(--studio-text, var(--foreground));
+  overflow-wrap: anywhere;
 }
 
 .feature-management-dialog-actions {
@@ -953,5 +1082,11 @@
 
   .feature-management-dialog-actions button {
     flex: 1;
+  }
+
+  .feature-management-impact-section dl > div,
+  .feature-management-impact-reason {
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
 }
