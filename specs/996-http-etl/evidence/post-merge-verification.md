@@ -18,7 +18,7 @@ All entries below refer to exact merge `9462cb743c08a515e9b8973c57110e3f44df0f7f
 
 | Gate | Current evidence |
 |---|---|
-| [CI 39650145673](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39650145673) | **In progress.** Live output shows ETL 1,009 and runtime EF 1,002 passing, but final backend/core/architecture summaries are not yet available. T022 cannot complete on partial logs. |
+| [CI 39650145673](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39650145673) | **In progress.** Final backend/core/architecture logs and summaries are not yet available. Transient live output is not retained here as acceptance evidence; T022 remains incomplete. |
 | [Studio CI 39650145447](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39650145447) | Passed. Completed logs: .NET 462, browser 361/five skipped, ETL frontend 69 and workflows frontend 2,285 plus three shuffled repetitions. Lint/typecheck/bundle and host/package/image checks passed. |
 | [CodeQL 39650145255](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39650145255) | Passed for Actions, C#, JavaScript/TypeScript and Python. |
 | [Generated maps fresh](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39650145673/job/119396032059) | Passed. The generator/filter/manifest contracts completed. |
