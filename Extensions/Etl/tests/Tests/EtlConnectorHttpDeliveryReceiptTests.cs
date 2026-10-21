@@ -14,7 +14,7 @@ public sealed partial class EtlRuntimeStoreTests
         await using var database = await TestDatabase.CreateAsync();
         var clock = new MutableTimeProvider();
         var defaults = EtlV2TestPipelines.Create();
-        var pipeline = defaults with { Http = defaults.Http with { DeadlineSeconds = 10, RequestTimeoutSeconds = 10 } };
+        var pipeline = defaults with { Http = defaults.Http with { DeadlineSeconds = 10, RequestTimeoutSeconds = 10, MaxDelaySeconds = 10 } };
         var admission = ConnectorAdmission("http-late-success-receipt", new("tenant-a", "http-late-success-receipt"),
             pipeline, ["shard"]);
         EtlConnectorPartitionLease lease;
