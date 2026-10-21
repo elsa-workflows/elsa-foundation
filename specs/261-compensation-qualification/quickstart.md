@@ -123,6 +123,18 @@ On `d7c0ab201`. Suites: Activities.Compensation (427), Workflows.Runtime.Api (20
 
 Live journeys on the same revision (Workbench `http://localhost:5095`, Studio `http://localhost:5089`, Chromium 1194): `compensation-journey.spec.ts` 1/1, `nesting-journey.spec.ts` 1/1, `operator-actions-journey.spec.ts` 2/2 with the reader step skipped (no read-only account), 3.0 minutes. The provider subset ran on PostgreSQL 16.15 locally (21/21, required-provider switch set); SQL Server and MySQL run only in CI.
 
+### Results (PR 3, run once by hand, each reverted)
+
+The sample participant (`samples/Elsa.Samples.Compensation/Ledger/ReservationLedger.cs`, as committed in `9fbbbbc15`). Suites: `Elsa.Samples.Compensation.Tests` (21) and `WorkbenchCompensationSampleTests` (1). Both passed before and after each control.
+
+| ID | What was removed | Failing tests | Notes |
+|---|---|---|---|
+| N513 | Rule 1: a repeated operation key returns the original reservation (each call reserves again) | Sample 1: `A_repeated_reservation_returns_the_original_and_applies_once` | The Workbench test does **not** fail: S1–S3 never repeat a step. The unit test is the guard. |
+| N514 | Rule 3: a tombstone refuses a late reservation | Sample 1: `A_release_before_its_reservation_leaves_a_tombstone_that_refuses_the_late_request` | The Workbench test does **not** fail: no S1–S3 step arrives after its undo. |
+| N515 | Rule 2: a release undoes its target (it records itself but leaves the reservation `Reserved`) | Sample 4 (the release, lost-response, Fail times and no-target cases); Workbench 1 (S1's ledger still `Reserved`) | As expected. |
+
+The README's build-and-drop, import, publish and run steps were also run by hand against a Workbench started from the same build: `dotnet pack` into its feed, the feature enabled in `shells.json`, the README's `curl` and `jq` import verbatim (three versions submitted and published), and S1 executed: the run completed and `inventory.json` and `delivery.json` each held one released reservation and its release. The README's Studio steps were not walked.
+
 ## Run locally
 
 ```bash
@@ -131,6 +143,7 @@ dotnet test Essentials/tests/Activities/Runtime/Tests --filter DelayedSchedule
 dotnet test Essentials/tests/Activities/Compensation/Tests
 dotnet test Essentials/tests/Activities/Compensation/Tests --filter "FullyQualifiedName~ProviderSubset|FullyQualifiedName~InMemorySmoke|FullyQualifiedName~UpcastJourney|FullyQualifiedName~RetentionJourney"
 dotnet test Essentials/tests/Workbench/Tests --filter Compensation
+dotnet test Essentials/tests/Samples/Compensation/Tests
 (cd Studio/src/essentials/Elsa.Studio.Workflows/Client && npx vitest run compensation publicationReview)
 (cd Studio && pnpm test:browser)
 ```
