@@ -17,9 +17,12 @@ import {
 } from "../module";
 
 const mountedRoots = new Set<() => void>();
+const eventCleanups = new Set<() => void>();
 
 afterEach(() => {
   const errors: unknown[] = [];
+  const previousUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  setBrowserPath("/__feature-management-test-cleanup__");
   for (const cleanup of Array.from(mountedRoots)) {
     try {
       cleanup();
@@ -27,7 +30,15 @@ afterEach(() => {
       errors.push(error);
     }
   }
+  for (const cleanup of Array.from(eventCleanups)) {
+    try {
+      cleanup();
+    } catch (error) {
+      errors.push(error);
+    }
+  }
   document.body.replaceChildren();
+  window.history.replaceState(null, "", previousUrl);
   if (errors.length > 0) {
     throw new AggregateError(errors, "One or more feature-management test roots failed to unmount.");
   }
@@ -1374,6 +1385,266 @@ describe("feature impact review", () => {
     await unmount();
   });
 
+  it("retains the Studio target, success result, and focus through repeated registry remounts", async () => {
+    setBrowserPath("/features");
+    const harness = studioApplyHarness();
+    const registryChanges = observeRegistryChanges();
+    register(harness.createApi());
+    const strictAnonymousProvider: AuthWrapper = children => anonymousProvider()(
+      React.createElement(React.StrictMode, null, children)
+    );
+    let page = await renderFeatureManagementPage(strictAnonymousProvider);
+
+    await applyStudioFeature(page.container);
+
+    expect(registryChanges.count).toBe(1);
+    expect(page.container.textContent).toContain("Applied 1 descriptor(s); reloaded 1 shell(s).");
+
+    for (let rebuild = 0; rebuild < 2; rebuild++) {
+      await page.unmount();
+      register(harness.createApi());
+      page = await renderFeatureManagementPage(strictAnonymousProvider);
+
+      expect(page.container.textContent).toContain("Studio: 0 enabled of 1 available");
+      expect(page.container.textContent).not.toContain("Server: 1 enabled of 1 available");
+      const completion = featureCompletion(page.container);
+      expect(completion).not.toBeNull();
+      expect(completion?.textContent ?? "").toContain("Applied 1 descriptor(s); reloaded 1 shell(s).");
+      expect(completion?.getAttribute("tabindex")).toBe("-1");
+      expect(document.activeElement).toBe(completion);
+    }
+
+    await page.unmount();
+  });
+
+  it("focuses an ordinary Server Apply result after the review closes", async () => {
+    setBrowserPath("/features");
+    const api = stubApi({
+      getJson: async () => ({ revision: "server-rev-1", features: [feature("ServerFeature", true, {})] }),
+      postJson: async () => ({
+        catalog: { revision: "server-rev-2", features: [feature("ServerFeature", false, {})] },
+        featureDescriptorCount: 1,
+        reloadedShellCount: 0
+      })
+    });
+    register(api);
+    const page = await renderFeatureManagementPage();
+
+    await click(page.container.querySelector("[aria-label='Disable ServerFeature']"));
+    const review = await openImpactReview(page.container);
+    await click(buttonByText(review, "Apply"));
+
+    const completion = featureCompletion(page.container);
+    expect(page.container.textContent).toContain("Applied 1 descriptor(s); reloaded 0 shell(s).");
+    expect(completion).not.toBeNull();
+    expect(completion?.textContent ?? "").toContain("Applied 1 descriptor(s); reloaded 0 shell(s).");
+    expect(completion?.getAttribute("tabindex")).toBe("-1");
+    expect(document.activeElement).toBe(completion);
+    await page.unmount();
+  });
+
+  it("clears Studio completion on host, draft, reset, and manual-refresh actions", async () => {
+    const actions = ["host selection", "draft mutation", "reset", "manual refresh"] as const;
+
+    for (const action of actions) {
+      setBrowserPath("/features");
+      const harness = studioApplyHarness();
+      register(harness.createApi());
+      let page = await renderFeatureManagementPage();
+      await applyStudioFeature(page.container);
+
+      if (action === "host selection") {
+        await click(buttonContainingText(page.container, "Server"));
+      } else if (action === "draft mutation") {
+        await click(page.container.querySelector("[aria-label='Enable StudioFeature']"));
+      } else if (action === "reset") {
+        await click(page.container.querySelector("[aria-label='Enable StudioFeature']"));
+        await click(buttonByText(page.container, "Reset"));
+      } else {
+        await click(page.container.querySelector("[aria-label='Refresh features']"));
+      }
+      expect(featureCompletion(page.container), action).toBeNull();
+
+      await page.unmount();
+      register(harness.createApi());
+      page = await renderFeatureManagementPage();
+      expect(featureCompletion(page.container)).toBeNull();
+      expect(page.container.textContent).not.toContain("Applied 1 descriptor(s); reloaded 1 shell(s).");
+      await page.unmount();
+    }
+  });
+
+  it("does not hand off success after a new Studio Apply is rejected", async () => {
+    setBrowserPath("/features");
+    const harness = studioApplyHarness({ rejectApplyNumber: 2 });
+    const registryChanges = observeRegistryChanges();
+    register(harness.createApi());
+    let page = await renderFeatureManagementPage();
+    await applyStudioFeature(page.container);
+    expect(registryChanges.count).toBe(1);
+
+    await page.unmount();
+    register(harness.createApi());
+    page = await renderFeatureManagementPage();
+    expect(page.container.textContent).toContain("Studio: 0 enabled of 1 available");
+    expect(featureCompletion(page.container)?.textContent).toContain("Applied 1 descriptor(s); reloaded 1 shell(s).");
+
+    await click(page.container.querySelector("[aria-label='Enable StudioFeature']"));
+    expect(featureCompletion(page.container)).toBeNull();
+    const review = await openImpactReview(page.container);
+    await click(buttonByText(review, "Apply"));
+    expect(impactReviewRegion(page.container)?.textContent).toContain("Studio feature activation was rejected.");
+    expect(featureCompletion(page.container)).toBeNull();
+    expect(registryChanges.count).toBe(1);
+
+    await page.unmount();
+    register(harness.createApi());
+    page = await renderFeatureManagementPage();
+    expect(featureCompletion(page.container)).toBeNull();
+    expect(page.container.textContent).not.toContain("Applied 1 descriptor(s); reloaded 1 shell(s).");
+    await page.unmount();
+  });
+
+  it("clears Studio completion when leaving during a registry-loading unmount", async () => {
+    setBrowserPath("/features");
+    const harness = studioApplyHarness();
+    register(harness.createApi());
+    let page = await renderFeatureManagementPage();
+    await applyStudioFeature(page.container);
+    expect(page.container.textContent).toContain("Applied 1 descriptor(s); reloaded 1 shell(s).");
+
+    // App temporarily removes the route while the modules-changed registry is loading.
+    await page.unmount();
+    setBrowserPath("/settings/diagnostics");
+    setBrowserPath("/features");
+    register(harness.createApi());
+    page = await renderFeatureManagementPage();
+
+    expect(page.container.textContent).toContain("Server: 1 enabled of 1 available");
+    expect(featureCompletion(page.container)).toBeNull();
+    expect(page.container.textContent).not.toContain("Applied 1 descriptor(s); reloaded 1 shell(s).");
+    await page.unmount();
+  });
+
+  it("clears Studio completion after a mounted Features route is left and revisited", async () => {
+    setBrowserPath("/features");
+    const harness = studioApplyHarness();
+    register(harness.createApi());
+    let page = await renderFeatureManagementPage();
+    await applyStudioFeature(page.container);
+    expect(page.container.textContent).toContain("Applied 1 descriptor(s); reloaded 1 shell(s).");
+
+    setBrowserPath("/settings/diagnostics");
+    await page.unmount();
+    setBrowserPath("/features");
+    register(harness.createApi());
+    page = await renderFeatureManagementPage();
+
+    expect(page.container.textContent).toContain("Server: 1 enabled of 1 available");
+    expect(featureCompletion(page.container)).toBeNull();
+    expect(page.container.textContent).not.toContain("Applied 1 descriptor(s); reloaded 1 shell(s).");
+    await page.unmount();
+  });
+
+  it("does not replay an Apply completion when the request resolves after leaving and returning", async () => {
+    setBrowserPath("/features");
+    let studioCatalog = { revision: "studio-rev-1", features: [feature("StudioFeature", true, {}, ["Studio"])] };
+    let finishApply: ((result: { catalog: typeof studioCatalog; featureDescriptorCount: number; reloadedShellCount: number }) => void) | undefined;
+    const registryChanges = observeRegistryChanges();
+    const createApi = () => stubApi({
+      hostGetJson: async () => studioCatalog,
+      getJson: async () => ({ revision: "server-rev-1", features: [feature("ServerFeature", true, {})] }),
+      hostPostJson: async () => new Promise(resolve => {
+        finishApply = result => {
+          studioCatalog = result.catalog;
+          resolve(result);
+        };
+      })
+    });
+    register(createApi());
+    let page = await renderFeatureManagementPage();
+    await applyStudioFeature(page.container);
+    expect(buttonByText(impactReviewRegion(page.container)!, "Applying").hasAttribute("disabled")).toBe(true);
+
+    // A pending dialog does not prevent ordinary route navigation. The old route is gone when Apply completes.
+    await page.unmount();
+    setBrowserPath("/settings/diagnostics");
+    setBrowserPath("/features");
+    register(createApi());
+    page = await renderFeatureManagementPage();
+    expect(page.container.textContent).toContain("Server: 1 enabled of 1 available");
+
+    finishApply?.({
+      catalog: { revision: "studio-rev-2", features: [feature("StudioFeature", false, {}, ["Studio"])] },
+      featureDescriptorCount: 1,
+      reloadedShellCount: 1
+    });
+    await flushPromises();
+    expect(registryChanges.count).toBe(1);
+
+    // The resulting same-version registry reload must not bring a previous-visit completion into this visit.
+    await page.unmount();
+    register(createApi());
+    page = await renderFeatureManagementPage();
+    expect(page.container.textContent).toContain("Server: 1 enabled of 1 available");
+    expect(featureCompletion(page.container)).toBeNull();
+    expect(page.container.textContent).not.toContain("Applied 1 descriptor(s); reloaded 1 shell(s).");
+    await page.unmount();
+  });
+
+  it("does not let a stale Studio Apply clear a newer Server completion", async () => {
+    setBrowserPath("/features");
+    const studioCatalog = { revision: "studio-rev-1", features: [feature("StudioFeature", true, {}, ["Studio"])] };
+    let serverCatalog = { revision: "server-rev-1", features: [feature("ServerFeature", true, {})] };
+    let finishStudioApply: ((result: { catalog: typeof studioCatalog; featureDescriptorCount: number; reloadedShellCount: number }) => void) | undefined;
+    const registryChanges = observeRegistryChanges();
+    const api = stubApi({
+      hostGetJson: async () => studioCatalog,
+      getJson: async () => serverCatalog,
+      hostPostJson: async () => new Promise(resolve => {
+        finishStudioApply = result => resolve(result);
+      }),
+      postJson: async () => {
+        serverCatalog = { revision: "server-rev-2", features: [feature("ServerFeature", false, {})] };
+        return { catalog: serverCatalog, featureDescriptorCount: 1, reloadedShellCount: 0 };
+      }
+    });
+    register(api);
+    let page = await renderFeatureManagementPage();
+    await applyStudioFeature(page.container);
+
+    await page.unmount();
+    setBrowserPath("/settings/diagnostics");
+    setBrowserPath("/features");
+    register(api);
+    page = await renderFeatureManagementPage();
+    await click(page.container.querySelector("[aria-label='Disable ServerFeature']"));
+    const review = await openImpactReview(page.container);
+    await click(buttonByText(review, "Apply"));
+
+    const serverCompletion = featureCompletion(page.container);
+    expect(serverCompletion?.textContent ?? "").toContain("Applied 1 descriptor(s); reloaded 0 shell(s).");
+    expect(document.activeElement).toBe(serverCompletion);
+    expect(registryChanges.count).toBe(0);
+
+    finishStudioApply?.({
+      catalog: { revision: "studio-rev-2", features: [feature("StudioFeature", false, {}, ["Studio"])] },
+      featureDescriptorCount: 1,
+      reloadedShellCount: 1
+    });
+    await flushPromises();
+    expect(registryChanges.count).toBe(1);
+
+    await page.unmount();
+    register(api);
+    page = await renderFeatureManagementPage();
+    expect(page.container.textContent).toContain("Server: 0 enabled of 1 available");
+    expect(page.container.textContent).not.toContain("Studio: 0 enabled of 1 available");
+    expect(featureCompletion(page.container)?.textContent ?? "").toContain("Applied 1 descriptor(s); reloaded 0 shell(s).");
+    expect(document.activeElement).toBe(featureCompletion(page.container));
+    await page.unmount();
+  });
+
   it("mounts authenticated inspect-only users without editable controls", async () => {
     const api = stubApi({
       getJson: async () => ({ revision: "server-rev-1", features: [feature("FeatureA", false, {}, [], { settings: [setting({ name: "Mode", displayName: "Mode" })] })] })
@@ -1483,6 +1754,62 @@ function stubApi(http?: {
     routes: registry(),
     settingEditors: registry()
   } as any;
+}
+
+function studioApplyHarness(options: { rejectApplyNumber?: number } = {}) {
+  let studioCatalog = {
+    revision: "studio-rev-1",
+    features: [feature("StudioFeature", true, {}, ["Studio"])]
+  };
+  let applyCount = 0;
+
+  return {
+    createApi() {
+      return stubApi({
+        hostGetJson: async () => studioCatalog,
+        getJson: async () => ({ revision: "server-rev-1", features: [feature("ServerFeature", true, {})] }),
+        hostPostJson: async () => {
+          applyCount++;
+          if (applyCount === options.rejectApplyNumber) {
+            throw httpError(409, "Studio feature activation was rejected.");
+          }
+          studioCatalog = {
+            revision: `studio-rev-${applyCount + 1}`,
+            features: [feature("StudioFeature", false, {}, ["Studio"])]
+          };
+          return { catalog: studioCatalog, featureDescriptorCount: 1, reloadedShellCount: 1 };
+        }
+      });
+    }
+  };
+}
+
+function featureCompletion(container: Element) {
+  return container.querySelector("[data-feature-apply-completion]");
+}
+
+async function applyStudioFeature(container: Element) {
+  await click(buttonContainingText(container, "Studio"));
+  await click(container.querySelector("[aria-label='Disable StudioFeature']"));
+  const review = await openImpactReview(container);
+  await click(buttonByText(review, "Apply"));
+}
+
+function setBrowserPath(path: string) {
+  window.history.replaceState(null, "", path);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
+function observeRegistryChanges() {
+  let count = 0;
+  const listener = () => { count++; };
+  window.addEventListener("elsa-studio:modules-changed", listener);
+  const cleanup = () => {
+    window.removeEventListener("elsa-studio:modules-changed", listener);
+    eventCleanups.delete(cleanup);
+  };
+  eventCleanups.add(cleanup);
+  return { get count() { return count; } };
 }
 
 function registry() {

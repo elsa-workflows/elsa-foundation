@@ -149,6 +149,67 @@ export const featureKeys = {
 };
 
 let moduleApi: ElsaStudioModuleApi;
+let featureCompletion: { hostId: FeatureHostId; message: string } | null = null;
+let featureVisitVersion = 0;
+let pendingFeatureApplies = 0;
+let removeFeatureNavigationObserver: (() => void) | null = null;
+
+function isFeatureManagementPath(pathname: string) {
+  const path = pathname.replace(/\/+$/, "") || "/";
+  return path === "/features" || path === "/settings/feature-management";
+}
+
+function removeFeatureNavigationObserverIfIdle() {
+  if (featureCompletion || pendingFeatureApplies > 0) {
+    return;
+  }
+  removeFeatureNavigationObserver?.();
+  removeFeatureNavigationObserver = null;
+}
+
+function observeFeatureNavigation() {
+  if (typeof window === "undefined" || removeFeatureNavigationObserver) {
+    return;
+  }
+
+  const onNavigation = () => {
+    if (!isFeatureManagementPath(window.location.pathname)) {
+      featureVisitVersion++;
+      featureCompletion = null;
+      removeFeatureNavigationObserverIfIdle();
+    }
+  };
+  window.addEventListener("popstate", onNavigation);
+  removeFeatureNavigationObserver = () => window.removeEventListener("popstate", onNavigation);
+}
+
+function clearFeatureCompletion() {
+  featureCompletion = null;
+  removeFeatureNavigationObserverIfIdle();
+}
+
+function beginFeatureApplyAttempt() {
+  observeFeatureNavigation();
+  pendingFeatureApplies++;
+  return featureVisitVersion;
+}
+
+function endFeatureApplyAttempt() {
+  pendingFeatureApplies--;
+  removeFeatureNavigationObserverIfIdle();
+}
+
+function retainFeatureCompletion(hostId: FeatureHostId, message: string, visitVersion: number) {
+  if (typeof window === "undefined"
+    || !isFeatureManagementPath(window.location.pathname)
+    || visitVersion !== featureVisitVersion) {
+    return;
+  }
+
+  clearFeatureCompletion();
+  featureCompletion = { hostId, message };
+  observeFeatureNavigation();
+}
 
 export function register(api: ElsaStudioModuleApi) {
   moduleApi = api;
@@ -402,7 +463,8 @@ export function FeatureManagementPage() {
   const session = useAuthSession();
   const permissions = usePermissions();
   const hosts = useMemo(() => getFeatureHosts(moduleApi), []);
-  const [activeHostId, setActiveHostId] = useState<FeatureHostId>("server");
+  const [activeHostId, setActiveHostId] = useState<FeatureHostId>(() => featureCompletion?.hostId ?? "server");
+  const completionRef = useRef<HTMLDivElement | null>(null);
   const [reviewSnapshot, setReviewSnapshot] = useState<FeatureReviewSnapshot | null>(null);
   const reviewSnapshotRef = useRef<FeatureReviewSnapshot | null>(null);
   const applyInProgressRef = useRef(false);
@@ -414,12 +476,19 @@ export function FeatureManagementPage() {
   const activeHost = hosts.find(host => host.id === activeHostId) ?? hosts[0];
   const hostState = hostStates[activeHost.id];
   const { catalog, draft, selectedId, checkedFeatureIds, selectedCategory, filterText, loading, applying, status, error, enabledRoots, stateCauses } = hostState;
+  const completionMessage = featureCompletion?.hostId === activeHost.id ? featureCompletion.message : status;
 
   useEffect(() => {
     for (const host of hosts) {
-      void refreshHost(host.id);
+      void refreshHost(host.id, false);
     }
   }, []);
+
+  useLayoutEffect(() => {
+    if (completionMessage) {
+      completionRef.current?.focus();
+    }
+  }, [activeHost.id, completionMessage]);
 
   const textFilteredDraft = useMemo(() => filterFeaturesByText(draft, filterText), [draft, filterText]);
   const categories = useMemo(() => getCategoryFilters(textFilteredDraft), [textFilteredDraft]);
@@ -484,9 +553,12 @@ export function FeatureManagementPage() {
     }
   }
 
-  async function refreshHost(hostId = activeHost.id) {
+  async function refreshHost(hostId = activeHost.id, manual = true) {
     if (applyInProgressRef.current) {
       return;
+    }
+    if (manual) {
+      clearFeatureCompletion();
     }
     const host = hosts.find(candidate => candidate.id === hostId) ?? activeHost;
     if (reviewSnapshotRef.current?.hostId === host.id) {
@@ -537,21 +609,25 @@ export function FeatureManagementPage() {
       return;
     }
 
+    const applyVisitVersion = beginFeatureApplyAttempt();
     applyInProgressRef.current = true;
+    clearFeatureCompletion();
     updateHostState(snapshot.hostId, state => ({ ...state, applying: true, error: null, status: null }));
     try {
       const response = await host.context.http.postJson<FeatureApplyResult>(
         "/modularity/features/apply",
         JSON.parse(JSON.stringify(snapshot.payload)));
+      const message = `Applied ${response.featureDescriptorCount} descriptor(s); reloaded ${response.reloadedShellCount} shell(s).`;
       updateHostState(snapshot.hostId, state => ({
         ...state,
         catalog: response.catalog,
         draft: response.catalog.features.map(toDraftFeature),
         enabledRoots: [],
         stateCauses: {},
-        status: `Applied ${response.featureDescriptorCount} descriptor(s); reloaded ${response.reloadedShellCount} shell(s).`,
+        status: message,
         applying: false
       }));
+      retainFeatureCompletion(snapshot.hostId, message, applyVisitVersion);
       clearReview();
 
       if (snapshot.hostId === "studio") {
@@ -561,6 +637,7 @@ export function FeatureManagementPage() {
       updateHostState(snapshot.hostId, state => ({ ...state, error: getErrorMessage(e), applying: false, status: null }));
     } finally {
       applyInProgressRef.current = false;
+      endFeatureApplyAttempt();
     }
   }
 
@@ -587,6 +664,7 @@ export function FeatureManagementPage() {
     }
 
     clearReview();
+    clearFeatureCompletion();
     updateHostState(activeHost.id, state => ({
       ...state,
       status: null,
@@ -601,6 +679,7 @@ export function FeatureManagementPage() {
     }
 
     clearReview();
+    clearFeatureCompletion();
     const enabled = !feature.enabled;
     updateHostState(activeHost.id, state => ({ ...stageFeatureToggle(state, [feature.id], enabled), status: null, error: null }));
   }
@@ -647,6 +726,7 @@ export function FeatureManagementPage() {
     }
 
     clearReview();
+    clearFeatureCompletion();
     updateHostState(activeHost.id, state => ({ ...stageFeatureToggle(state, state.checkedFeatureIds, enabled), status: null, error: null }));
   }
 
@@ -666,6 +746,7 @@ export function FeatureManagementPage() {
     }
 
     clearReview();
+    clearFeatureCompletion();
     updateHostState(activeHost.id, state => ({
       ...state,
       draft: catalog.features.map(toDraftFeature),
@@ -700,17 +781,26 @@ export function FeatureManagementPage() {
         tabs={hosts.map(host => ({ id: host.id, label: host.label }))}
         activeTab={activeHost.id}
         onSelect={hostId => {
-          if (applyInProgressRef.current) {
+          if (applyInProgressRef.current || hostId === activeHost.id) {
             return;
           }
+          clearFeatureCompletion();
           clearReview();
+          setHostStates(current => ({
+            studio: { ...current.studio, status: null },
+            server: { ...current.server, status: null }
+          }));
           setActiveHostId(hostId as FeatureHostId);
         }}
         ariaLabel="Hosts"
       />
 
       {!reviewSnapshot && error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
-      {!reviewSnapshot && status ? <StudioAlert tone="success">{status}</StudioAlert> : null}
+      {!reviewSnapshot && completionMessage ? (
+        <div ref={completionRef} tabIndex={-1} data-feature-apply-completion>
+          <StudioAlert tone="success">{completionMessage}</StudioAlert>
+        </div>
+      ) : null}
       <div className="feature-management-layout">
         <div className="feature-management-list-column">
           <div className="feature-management-list-toolbar">
