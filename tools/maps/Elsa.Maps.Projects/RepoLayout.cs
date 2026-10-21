@@ -1,4 +1,4 @@
-namespace Elsa.Maps.Generator;
+namespace Elsa.Maps.Projects;
 
 /// <summary>Where backend maps look for code, and how they classify its paths.</summary>
 /// <remarks>
@@ -18,6 +18,30 @@ public static class RepoLayout
         "Extensions/*/src/*.csproj",
         "Extensions/*/tests/*.csproj"
     ];
+
+    /// <summary>
+    /// True for a backend project the maps describe: a <c>.csproj</c> under <c>Essentials/src</c>, <c>Essentials/apps</c>
+    /// or <c>Essentials/tests</c>, or under <c>Extensions/&lt;capability&gt;/src</c> or <c>/tests</c>, at any depth.
+    /// </summary>
+    /// <remarks>
+    /// The one project-discovery rule, for the working tree and for a commit's git tree alike (spec 259). It is the
+    /// layout rule, not git's pathspec rule: in <see cref="ProjectPathspecs"/> a <c>*</c> also matches <c>/</c>, so
+    /// <c>Extensions/*/src/*.csproj</c> would take in <c>Extensions/&lt;capability&gt;/studio/src/…</c>, which this
+    /// layout keeps out of the backend maps. The versioning calculator applies the same rule to its own inventory.
+    /// </remarks>
+    public static bool IsProjectPath(string relativePath)
+    {
+        if (!relativePath.EndsWith(".csproj", StringComparison.Ordinal))
+            return false;
+
+        if (relativePath.StartsWith("Essentials/src/", StringComparison.Ordinal) ||
+            relativePath.StartsWith("Essentials/apps/", StringComparison.Ordinal) ||
+            relativePath.StartsWith("Essentials/tests/", StringComparison.Ordinal))
+            return true;
+
+        var segments = relativePath.Split('/');
+        return segments.Length >= 4 && segments[0] == "Extensions" && segments[2] is "src" or "tests";
+    }
 
     /// <summary>Pathspecs covering production C# source, excluding tests and Studio projects.</summary>
     public static readonly string[] SourceFilePathspecs =

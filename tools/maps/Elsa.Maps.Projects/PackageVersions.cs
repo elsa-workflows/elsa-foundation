@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace Elsa.Maps.Generator;
+namespace Elsa.Maps.Projects;
 
 /// <summary>
 /// Resolves the version a <c>PackageReference</c> actually gets, honouring central package management.
@@ -20,12 +20,12 @@ public sealed partial class PackageVersions
     private PackageVersions(IReadOnlyList<(string, string, string)> central) => _central = central;
 
     /// <summary>Reads <c>Directory.Packages.props</c>, or an empty set when it is absent.</summary>
-    public static PackageVersions Load(RepoContext repo)
+    public static PackageVersions Load(IRepositoryTree tree)
     {
-        var path = Path.Combine(repo.Root, "Directory.Packages.props");
-        if (!File.Exists(path)) return new PackageVersions([]);
+        const string path = "Directory.Packages.props";
+        if (!tree.Exists(path)) return new PackageVersions([]);
 
-        var entries = PackageVersionElementPattern.Matches(File.ReadAllText(path))
+        var entries = PackageVersionElementPattern.Matches(tree.ReadText(path))
             .Select(match => (
                 Id: Attribute(match.Value, "Include"),
                 Version: Attribute(match.Value, "Version"),

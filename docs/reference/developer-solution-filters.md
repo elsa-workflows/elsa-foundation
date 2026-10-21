@@ -123,4 +123,5 @@ dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj
 dotnet run --project tools/maps/Elsa.Maps.Generator -- check
 ```
 
-`-- check` compares the committed `docs/maps/dependency-map.json`; the filters have their own check above.
+`-- check` checks the same committed filters as `-- solution-filters-check`; the dependency map is derived per commit and
+not committed (spec 259).
