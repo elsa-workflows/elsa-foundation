@@ -58,7 +58,9 @@ run, and they are the only two outcomes the incident rule lets replace a committ
   (`IRuntimeActivityInterventionDecisionHandler`). The runtime carries the decision code without interpreting it.
 
 An alteration that names runs by id captures every run of the plan's tenant, whatever execution authority started it;
-the run's authority is still captured for the concurrency check. A query target keeps the authority filter.
+the run's authority is still captured for the concurrency check. A query target keeps the authority filter. Through
+the runtime API each named run is also authorized at submission as run deletion does (`workflows/runtime:manage` with
+the run as the permission resource); a refused run fails `TargetNotFound`, like a missing one, and is never captured.
 
 Deferred envelopes are encrypted before plan persistence. Plan and job reads contain stable descriptor identity,
 ordinal, status, bounded safe code/message, and structural IDs only—never an envelope payload, variable value,

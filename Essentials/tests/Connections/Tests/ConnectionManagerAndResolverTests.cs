@@ -804,6 +804,25 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task DeleteThenRecreateWithAnInlineValue_CreatesAFreshOwnedSecret()
+    {
+        const string connectionName = "recreated";
+        const string ownedSecretName = "connection:recreated:token";
+
+        await CreateConnectionAsync(connectionName, TokenValue("first-value"));
+        var firstSecretId = (await _secrets.FindAsync(Tenant, ownedSecretName))!.Id;
+        Assert.True(await _manager.DeleteAsync(Tenant, connectionName));
+        Assert.Null(await _secrets.FindAsync(Tenant, ownedSecretName));
+
+        await CreateConnectionAsync(connectionName, TokenValue("second-value"));
+
+        var ownedSecret = (await _secrets.FindAsync(Tenant, ownedSecretName))!;
+        Assert.NotEqual(firstSecretId, ownedSecret.Id);
+        Assert.Equal(1, ownedSecret.CurrentVersion);
+        Assert.Equal("second-value", await RevealAsync(connectionName));
+    }
+
+    [Fact]
     public async Task Create_PreservesRawWhitespaceInNonblankInlineSecretValues()
     {
         const string connectionName = "raw-credential";

@@ -1,0 +1,10 @@
+{
+  "source": "Extensions/Etl/src/Runtime/Execution/EtlExecution.cs",
+  "originalHead": "ee18ca9de7ada3ab105125771d81a2cc055d753c",
+  "fixedSha256": "6ddd8ab664fc9b067f93ba16c4f1c171fca92d7e0d3db9624e331c60c70ac269",
+  "originalSha256": "615769d650aba0d8d7ceb27cb5690861a1dced3ec9e12bea18a852a8cff4ceb3",
+  "regression": "Original early permit disposal restored temporarily; both final strengthened real execution tests failed the actual capacity assertion.",
+  "exitCode": 1,
+  "restoredByteExactly": true,
+  "restorationValidation": "Final strengthened focused tests2 passed before removal; both2 failed with original early disposal; byte-exact restoration and full ETL suite287 passed, zero failed/skipped."
+}

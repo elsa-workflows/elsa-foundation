@@ -1762,8 +1762,8 @@ async function renderRequestedFixture() {
   if (searchParams.get("mode") === "compensation-scope") {
     const { CompensationScopeFixture } = await import("./compensationScopeFixture");
     const view = searchParams.get("view");
-    const views = ["run", "waiting", "nested", "confirmed", "loop"] as const;
-    root.render(<CompensationScopeFixture view={views.find(candidate => candidate === view) ?? "author"} />);
+    const views = ["run", "waiting", "nested", "confirmed", "loop", "actions", "resolved", "abandoned", "readonly", "derived", "step", "incident"] as const;
+    root.render(<CompensationScopeFixture view={views.find(candidate => candidate === view) ?? "author"} outcome={searchParams.get("outcome") ?? undefined} />);
     return;
   }
   if (searchParams.get("mode") === "incident-diagnostics") {

@@ -15,7 +15,7 @@
 | R-5 constants and rule | `IncidentResolutionActionKinds.OperatorDecision`, `IncidentResolutionSystemSources.OperatorDecisionAlteration`, `IncidentStateTransitionValidator`, `RuntimeMetadataKeys` |
 | R-5 delivery | `WorkflowExecutionCommandKind.DeliverInterventionDecision`, `RuntimeInterventionDecisionCommandPayload` (Core); `IRuntimeActivityInterventionDecisionHandler`, `ActivityInterventionDecidedContext` (Core); `WorkflowInterventionDecisionSchedulerWorkHandler` (Activities.Runtime, modelled on `WorkflowNotifyParentActivitySchedulerWorkHandler`) |
 | Retry refusal (FR-405) | `RetryFaultedActivityAlterationHandler` |
-| Explicit-target capture (FR-406) | `WorkflowAlterationTargetCaptureTask` explicit branch |
+| Explicit-target capture (FR-406) | `WorkflowAlterationTargetCaptureTask` explicit branch; per-run authorization at submission in `WorkflowAlterationPlanApiService` through `IWorkflowAlterationRequestContext.CanManageAsync` |
 | R-6 state view | `IActivityStateViewProjector`, `ActivityStateViewContext` (Core); endpoint `Workflows/Runtime/Api/Endpoints/ActivityExecutions/StateView/Endpoint.cs`; `ActivityStateViewService`; capability source next to `RuntimeAlterationCapabilitySource` |
 | Permission signal | `IWorkflowRuntimeOperatorAccess` + HTTP implementation (Runtime.Api); `WorkflowInstanceDetailsView.Permissions` |
 | Scope v4 and decisions | `Activities/Compensation/` (`CompensationScope` implements `IRuntimeActivityInterventionDecisionHandler`; `Internal/CompensationScopeState`, persister, upcaster v3→v4) |

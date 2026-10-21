@@ -1,6 +1,6 @@
 import { isCompensationScope, readCompensationSteps } from "./compensationScope";
 import { getChildSlots } from "./workflowAdapter";
-import type { ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary } from "./workflowTypes";
+import type { ActivityExecutionStateSummary, ActivityNode, ActivityStateView, IncidentStateSummary } from "./workflowTypes";
 
 // What a run says about one compensation scope, derived from the executions and incidents the run view already
 // loads (spec 250). Forward and handler executions are matched by their authored node ids within the scope's
@@ -12,6 +12,24 @@ export const compensatedOutcome = "Compensated";
 const forwardOutcomeKey = "compensation.forwardOutcome";
 const maxAttemptsKey = "compensation.maxAttempts";
 const structuralInterventionSource = "StructuralIntervention";
+// Spec 260 (M4): what a wait offers, who asked for it, and what an operator decided, as the runtime records them.
+const interventionDecisionsKey = "runtime.interventionDecisions";
+const interventionRequestedByKey = "runtime.interventionRequestedBy";
+const interventionDecisionKey = "runtime.interventionDecision";
+const alterationSubmittedByKey = "runtime.alteration.submittedBy";
+const alterationReasonKey = "runtime.alteration.reason";
+export const operatorRetryActionKind = "OperatorRetry";
+export const operatorDecisionActionKind = "OperatorDecision";
+export const waitForInterventionActionKind = "WaitForIntervention";
+/** The decisions a compensation scope offers when it waits for an operator (spec 260 FR-407). */
+export const compensationDecisions = {
+  resolveEffectAbsent: "compensation.resolve.effect-absent",
+  resolveEffectAccepted: "compensation.resolve.effect-accepted",
+  abandon: "compensation.abandon"
+} as const;
+/** The read-only journal a live scope's state view carries (spec 260 FR-414). */
+export const compensationJournalViewKind = "compensation.journal";
+export const compensationJournalViewVersion = 1;
 // Spec 258 (M3): the activities that confirm a scope's work or ask it to compensate, and the scope input that makes
 // a completing scope confirm instead of handing its entries to the enclosing scope.
 export const compensationScopeActivityType = "Elsa.Activities.Compensation.Activities.CompensationScope";
@@ -24,7 +42,10 @@ export type CompensationForwardState = "NotLoaded" | "NotRun" | "Running" | "Com
 export type CompensationRecoveryState =
   | "NotLoaded" | "NotApplicable" | "NotNeeded" | "Registered" | "Kept" | "Pending" | "Running" | "Compensated" | "Failed" | "NeedsAction"
   // Spec 258: confirmed work is never undone; a completed inner scope's work stays undoable by the enclosing scope.
-  | "Confirmed" | "HandedOver";
+  | "Confirmed" | "HandedOver"
+  // Spec 260: a handler running again after a failed attempt, an entry an operator settled without running it, and an
+  // entry an abandoned recovery left as it was.
+  | "Retrying" | "ResolvedAbsent" | "ResolvedKept" | "NotUndone";
 
 /** A scope occurrence as the run view names it: the scope's execution and, inside a loop, its iteration. */
 export interface CompensationScopeReference {
@@ -33,7 +54,38 @@ export interface CompensationScopeReference {
   activityExecutionId?: string;
   iterationId?: string;
 }
-export type CompensationScopeRunPhase = "NotLoaded" | "NotStarted" | "Running" | "Compensating" | "AwaitingIntervention" | "Completed" | "Compensated" | "Faulted" | "Cancelled";
+export type CompensationScopeRunPhase =
+  | "NotLoaded" | "NotStarted" | "Running" | "Compensating" | "AwaitingIntervention" | "Completed" | "Compensated" | "Faulted" | "Cancelled"
+  // Spec 260: an operator stopped the recovery; the scope faulted with compensation.scope.abandoned.
+  | "Abandoned";
+
+/**
+ * What an operator can do about a row that waits (spec 260): the waiting incident, the activity a retry runs again, the
+ * decisions the wait offers, and whether the wait is on a handler out of attempts or on a forward step with no handler.
+ * Studio still shows the actions only when the run says the caller may manage it.
+ */
+export interface CompensationRowActions {
+  incidentId: string;
+  /** The faulted activity a retry runs again: the incident's activity, else the row's latest attempt or step. */
+  sourceActivityExecutionId?: string;
+  decisions: string[];
+  target: "handler" | "step";
+}
+
+/** One operator action on the scope, read from the incident it resolved (spec 260 OD14). */
+export interface CompensationOperatorHistoryEntry {
+  incidentId: string;
+  kind: "Retry" | "ResolvedAbsent" | "ResolvedKept" | "Abandoned" | "Decision";
+  /** The decision code, for a decision. */
+  decision?: string;
+  actor?: string;
+  appliedAt?: string;
+  reason?: string;
+  /** The step the action was about, when Studio can tell. */
+  step?: string;
+  /** A decision the scope never applied, because it was cancelled before the decision reached it. */
+  notApplied?: boolean;
+}
 
 export interface CompensationRowRuntime {
   step: string;
@@ -53,6 +105,13 @@ export interface CompensationRowRuntime {
   };
   /** Present on an entry this scope received from a completed inner scope: where the work was done. */
   origin?: CompensationScopeReference;
+  /** The handler's authored node, when the step has one. */
+  handlerNodeId?: string;
+  /** The journal entry and its operation key, when the row comes from the scope's journal (spec 260). */
+  entryId?: string;
+  operationKey?: string;
+  /** Present while the row waits for an operator. */
+  actions?: CompensationRowActions;
 }
 
 export interface CompensationScopeOccurrence {
@@ -72,6 +131,8 @@ export interface CompensationRecoveryCause {
   message?: string;
   /** The Compensate activity's execution, when the kind is explicit. */
   requestedBy?: string;
+  /** The journal withheld the failure message because the caller may not see captured values (spec 260 FR-415). */
+  messageWithheld?: boolean;
 }
 
 export interface CompensationScopeRuntime {
@@ -85,6 +146,75 @@ export interface CompensationScopeRuntime {
   occurrences?: CompensationScopeOccurrence[];
   /** The run's activity list was a bounded page, so a missing execution may exist on a later page. */
   incomplete?: boolean;
+  /** Spec 260: whether the rows come from the scope's journal or are derived from run data (M1–M3). */
+  source?: "journal" | "derived";
+  /** Why a derived view has no journal: the scope completed, so its journal is no longer kept, or it is unavailable. */
+  journalUnavailable?: "StateCleared" | "Unavailable";
+  /** The scope's own name, for action labels. */
+  scopeLabel?: string;
+  /** The scope that decides next if this one faults (an abandoned recovery). */
+  enclosingScope?: CompensationScopeReference;
+  /** The steps still to undo, in recovery order, from the journal. */
+  remaining?: Array<{ step: string; handlerNodeId?: string }>;
+  /** Operator actions on this occurrence, newest first, read from incidents. */
+  history?: CompensationOperatorHistoryEntry[];
+}
+
+/** The journal of one live scope, `compensation.journal` version 1 (spec 260 contracts/journal-and-permissions.md). */
+export interface CompensationJournal {
+  phase: string;
+  stateVersion?: number;
+  cause?: {
+    kind: string;
+    step: string;
+    activityExecutionId: string;
+    incidentId?: string | null;
+    failureType?: string | null;
+    message?: string | null;
+    messageWithheld?: boolean;
+    requestedBy?: string | null;
+    target?: string | null;
+  } | null;
+  entries: CompensationJournalEntry[];
+  remaining: string[];
+  confirmations?: Array<{ activityExecutionId: string; entryIds: string[] }>;
+  handOvers?: { received: string[]; inProgress: Array<{ originScope: string; batches: number[] }> } | null;
+  abandonment?: { incidentId: string; entryId: string; fromPhase: string } | null;
+}
+
+export interface CompensationJournalEntry {
+  id: string;
+  step: string;
+  ordinal: number;
+  status: "Registered" | "NoHandler" | "Compensating" | "Compensated" | "Uncertain" | "Failed" | "Confirmed" | "ResolvedManually" | string;
+  forwardOutcome: "Completed" | "Uncertain" | string;
+  operationKey: string;
+  forward: { activityExecutionId: string; iterationId?: string | null };
+  handler?: { executableNodeId: string; remaining: boolean } | null;
+  attempts: Array<{ number: number; activityExecutionId?: string | null; incidentId?: string | null; result: string }>;
+  waiting?: { incidentId: string; decisions: string[] } | null;
+  resolution?: { outcome: "EffectAbsent" | "EffectAccepted" | string; incidentId: string } | null;
+  origin?: { scopeActivityExecutionId: string; entryId: string } | null;
+  confirmedBy?: string | null;
+}
+
+/**
+ * What the run view knows about a scope occurrence's journal: the state view the runtime returned, `loading` while it is
+ * being read, or `unavailable` when the host cannot serve it or the read failed.
+ */
+export type CompensationJournalSource = ActivityStateView | "loading" | "unavailable";
+
+/** The journal inside a state view, when the view is the compensation journal this Studio reads. */
+export function readCompensationJournal(view: ActivityStateView | null | undefined): CompensationJournal | null {
+  if (!view?.available || view.viewKind !== compensationJournalViewKind || view.viewVersion !== compensationJournalViewVersion) return null;
+  const journal = view.view as Partial<CompensationJournal> | null | undefined;
+  if (!journal || typeof journal !== "object" || typeof journal.phase !== "string" || !Array.isArray(journal.entries)) return null;
+  return {
+    ...journal,
+    phase: journal.phase,
+    entries: journal.entries.map(entry => ({ ...entry, attempts: Array.isArray(entry.attempts) ? entry.attempts : [] })),
+    remaining: Array.isArray(journal.remaining) ? journal.remaining : []
+  };
 }
 
 export function isCompensationHandlerExecution(activity: Pick<ActivityExecutionStateSummary, "provenance">): boolean {
@@ -95,11 +225,18 @@ export function isCompensationHandlerExecution(activity: Pick<ActivityExecutionS
 // reported as not loaded, never as not run, so a partial page cannot claim the scope or a step did not happen.
 // `root` is the run's workflow graph: with it, a scope also shows the entries inner scopes handed it, Confirm and
 // Compensate requests, and which enclosing scope can still undo its own work (spec 258).
+// `journal` is what the run view read of the shown occurrence's journal (spec 260): when it holds the journal, the rows
+// come from it, and the derivation from run data is the fallback, marked as derived.
 export function deriveCompensationRuntime(
   scope: ActivityNode,
   activities: ActivityExecutionStateSummary[],
   incidents: IncidentStateSummary[],
-  { complete = true, selectedActivityExecutionId, root }: { complete?: boolean; selectedActivityExecutionId?: string | null; root?: ActivityNode | null } = {}
+  { complete = true, selectedActivityExecutionId, root, journal }: {
+    complete?: boolean;
+    selectedActivityExecutionId?: string | null;
+    root?: ActivityNode | null;
+    journal?: CompensationJournalSource;
+  } = {}
 ): CompensationScopeRuntime {
   const steps = readCompensationSteps(scope);
   const run = new RunIndex(root ?? scope, scope, activities);
@@ -151,9 +288,12 @@ export function deriveCompensationRuntime(
     const forwardIncident = forward ? incidentOf(forward, incidents) : undefined;
     // A step that a Compensate stopped may have had its effect, so it is uncertain (spec 258 R9).
     const stopped = !!request && forward?.status === "Cancelled";
+    // An operator decision replaces the wait's outcome, so a step that waited for one reads as uncertain from the decision:
+    // only an uncertain step waits for an operator (spec 260).
+    const forwardDecided = forward?.status === "Faulted" && isDecision(forwardIncident);
     const forwardState: CompensationForwardState = !forward && !complete
       ? "NotLoaded"
-      : forward?.status === "Faulted" && isUncertain(forwardIncident) || stopped ? "Uncertain" : forwardStateOf(forward);
+      : forward?.status === "Faulted" && isUncertain(forwardIncident) || stopped || forwardDecided ? "Uncertain" : forwardStateOf(forward);
     // Every run of the handler, an operator retry's successor included, oldest first.
     const ownAttempts = step.compensation
       ? handlerExecutions.filter(activity => matchesNode(activity, step.compensation!.nodeId))
@@ -178,10 +318,13 @@ export function deriveCompensationRuntime(
     else if (state === "Kept" && handedOverTo) state = "HandedOver";
     // A stopped step that nothing can undo stays as it is: the scope faults with uncertain-unhandled.
     else if (state === "NotNeeded" && stopped) state = "Kept";
+    state = settledState(state, attempts.length, handler?.status === "Faulted" ? handlerIncident : !step.compensation && forwardDecided ? forwardIncident : undefined, phase0);
 
     return {
       step: step.name,
       forward: { state: forwardState, activityExecutionId: forward?.activityExecutionId },
+      ...(step.compensation ? { handlerNodeId: step.compensation.nodeId } : {}),
+      ...(waitingIncident ? { actions: actionsOf(waitingIncident, handler && waitingIncident === handlerIncident ? "handler" : "step", handler ?? forward) } : {}),
       recovery: {
         state,
         activityExecutionId: handler?.activityExecutionId,
@@ -211,9 +354,12 @@ export function deriveCompensationRuntime(
           : recoveryStateOf("Completed", true, handler, handlerIncident, phase0 === "Compensating", ended);
       if ((state === "Registered" || state === "Kept") && confirmedBy) state = "Confirmed";
       else if (state === "Kept" && handedOverTo) state = "HandedOver";
+      state = settledState(state, attempts.length, handlerIncident, phase0);
       return {
         step: entry.step,
         forward: { state: "Completed", activityExecutionId: entry.forward.activityExecutionId },
+        handlerNodeId: entry.handlerNodeId,
+        ...(waitingIncident ? { actions: actionsOf(waitingIncident, "handler", handler) } : {}),
         recovery: {
           state,
           activityExecutionId: handler?.activityExecutionId,
@@ -228,16 +374,29 @@ export function deriveCompensationRuntime(
     })
     : [];
 
-  // A scope that is still running but blocked on an operator waits for intervention (spec 251 OD2).
+  // A scope that is still running but blocked on an operator waits for intervention (spec 251 OD2). A scope that faulted
+  // after an operator abandoned its recovery is abandoned, and what it had not undone stays not undone (spec 260).
   const allRows = [...rows, ...received];
-  const phase: CompensationScopeRunPhase = (phase0 === "Running" || phase0 === "Compensating") && allRows.some(row => row.recovery.state === "NeedsAction")
-    ? "AwaitingIntervention"
-    : phase0;
+  const abandoned = !!scopeExecution && phase0 === "Faulted" && incidents.some(incident => isDecision(incident)
+    && incident.resolutionOutcome?.metadata?.[interventionDecisionKey] === compensationDecisions.abandon
+    && incident.resolutionOutcome.metadata[interventionRequestedByKey] === scopeExecution.activityExecutionId);
+  const phase: CompensationScopeRunPhase = abandoned
+    ? "Abandoned"
+    : (phase0 === "Running" || phase0 === "Compensating") && allRows.some(row => row.recovery.state === "NeedsAction")
+      ? "AwaitingIntervention"
+      : phase0;
+  if (abandoned) {
+    for (const row of allRows) {
+      if (notUndoneStates.has(row.recovery.state) || (row.recovery.state === "NotNeeded" && row.forward.state === "Uncertain")) {
+        row.recovery = { ...row.recovery, state: "NotUndone" };
+      }
+    }
+  }
 
   const faulted = forwardFaulted[0];
-  const cause = faulted && (recovering || phase === "AwaitingIntervention")
+  const cause = faulted && (recovering || phase === "AwaitingIntervention" || phase === "Abandoned")
     ? causeOf(steps[faulted.index].name, faulted.forward, incidents)
-    : request && (recovering || phase === "AwaitingIntervention")
+    : request && (recovering || phase === "AwaitingIntervention" || phase === "Abandoned")
       ? explicitCauseOf(request, steps.find(step => forwardOf(step)?.status === "Cancelled")?.name)
       : undefined;
 
@@ -250,15 +409,291 @@ export function deriveCompensationRuntime(
     }))
     : undefined;
 
-  return {
+  const derived: CompensationScopeRuntime = {
     scopeActivityExecutionId: scopeExecution?.activityExecutionId,
     phase,
     rows,
     cause,
     ...(received.length > 0 ? { received } : {}),
     ...(occurrences ? { occurrences } : {}),
-    ...(complete ? {} : { incomplete: true })
+    ...(complete ? {} : { incomplete: true }),
+    source: "derived",
+    scopeLabel: designLabel(scope),
+    ...(scopeExecution && run.enclosingScopeOf(scopeExecution) ? { enclosingScope: run.enclosingScopeOf(scopeExecution) } : {})
   };
+  // A completed scope keeps no journal (spec 258 R1): its rows are always derived.
+  const view = typeof journal === "object" && scopeExecution && journal.activityExecutionId === scopeExecution.activityExecutionId ? journal : undefined;
+  const entries = readCompensationJournal(view);
+  const runtime: CompensationScopeRuntime = entries && view
+    ? applyJournal(derived, entries, view.activityStatus, run, incidents)
+    : {
+      ...derived,
+      ...(scopeExecution && (scopeExecution.status === "Completed" || view?.unavailableReason === "StateCleared")
+        ? { journalUnavailable: "StateCleared" as const }
+        : journal === "unavailable" || view ? { journalUnavailable: "Unavailable" as const } : {})
+    };
+  const history = scopeExecution ? operatorHistoryOf(scopeExecution, runtime, steps, run, incidents, entries) : [];
+  return history.length > 0 ? { ...runtime, history } : runtime;
+}
+
+// Recovery states an abandoned scope leaves as they were: anything not undone, settled or confirmed.
+const notUndoneStates: ReadonlySet<CompensationRecoveryState> = new Set(["Pending", "Failed", "NeedsAction", "Registered", "Kept", "Running", "Retrying"]);
+
+// A running handler after a failed attempt is a retry; an entry an operator resolved reads as resolved, unless the scope
+// was cancelled before the decision reached it (spec 260).
+function settledState(
+  state: CompensationRecoveryState,
+  attempts: number,
+  incident: IncidentStateSummary | undefined,
+  phase: CompensationScopeRunPhase
+): CompensationRecoveryState {
+  if (state === "Running" && attempts > 1) return "Retrying";
+  if (!isDecision(incident) || phase === "Cancelled") return state;
+  const decision = incident.resolutionOutcome?.metadata?.[interventionDecisionKey];
+  return decision === compensationDecisions.resolveEffectAbsent ? "ResolvedAbsent"
+    : decision === compensationDecisions.resolveEffectAccepted ? "ResolvedKept"
+      : state;
+}
+
+function actionsOf(
+  incident: IncidentStateSummary,
+  target: CompensationRowActions["target"],
+  attempt: ActivityExecutionStateSummary | undefined
+): CompensationRowActions {
+  const source = incidentActivityExecutionId(incident) ?? attempt?.activityExecutionId;
+  return {
+    incidentId: incident.incidentId,
+    ...(source ? { sourceActivityExecutionId: source } : {}),
+    decisions: offeredDecisions(incident),
+    target
+  };
+}
+
+/** The decision codes a waiting incident's outcome offers; a wait from before spec 260 offers none. */
+export function offeredDecisions(incident: Pick<IncidentStateSummary, "resolutionOutcome"> | undefined): string[] {
+  const raw = incident?.resolutionOutcome?.metadata?.[interventionDecisionsKey];
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((code): code is string => typeof code === "string" && code.length > 0) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** The structural activity that asked for the wait (or that an operator decided for). */
+export function interventionRequesterOf(incident: Pick<IncidentStateSummary, "resolutionOutcome"> | undefined): string | undefined {
+  return incident?.resolutionOutcome?.metadata?.[interventionRequestedByKey]?.trim() || undefined;
+}
+
+/** Whether an incident waits for an operator: blocking, with a wait-for-intervention outcome. */
+export function isWaitingForIntervention(incident: IncidentStateSummary | undefined): incident is IncidentStateSummary {
+  return !!incident && incident.isBlocking && incident.resolutionOutcome?.actionKind === waitForInterventionActionKind;
+}
+
+function incidentActivityExecutionId(incident: IncidentStateSummary): string | undefined {
+  return incident.activityExecutionId?.trim() || incident.metadata?.["runtime.activityExecutionId"]?.trim() || undefined;
+}
+
+function isDecision(incident: IncidentStateSummary | undefined): incident is IncidentStateSummary {
+  return incident?.resolutionOutcome?.actionKind === operatorDecisionActionKind;
+}
+
+// Spec 260: the journal is the source of truth for a live scope. The derivation still places each entry on its authored
+// row (by the forward occurrence, else by step name) and supplies what the journal does not carry: recovery order, the
+// handler's attempt limit and where a handed-over entry came from.
+function applyJournal(
+  derived: CompensationScopeRuntime,
+  journal: CompensationJournal,
+  activityStatus: string,
+  run: RunIndex,
+  incidents: IncidentStateSummary[]
+): CompensationScopeRuntime {
+  const phase = journalPhase(journal.phase, activityStatus);
+  const own = journal.entries.filter(entry => !entry.origin);
+  const used = new Set<string>();
+  const rows = derived.rows.map(row => {
+    const entry = own.find(candidate => !used.has(candidate.id) && !!row.forward.activityExecutionId && candidate.forward.activityExecutionId === row.forward.activityExecutionId)
+      ?? own.find(candidate => !used.has(candidate.id) && candidate.step === row.step);
+    if (!entry) return { ...row, actions: undefined };
+    used.add(entry.id);
+    return journalRow(row, entry, phase, incidents);
+  });
+  const receivedRows = journal.entries.filter(entry => !!entry.origin).map(entry => {
+    const base = derived.received?.find(row => row.forward.activityExecutionId === entry.forward.activityExecutionId);
+    const origin = base?.origin ?? originOf(entry.origin!.scopeActivityExecutionId, run);
+    return journalRow({
+      step: entry.step,
+      forward: { state: "Completed", activityExecutionId: entry.forward.activityExecutionId },
+      recovery: { state: "NotLoaded", ...(base?.recovery.order ? { order: base.recovery.order } : {}), ...(base?.recovery.attempts ? { attempts: base.recovery.attempts } : {}) },
+      origin,
+      handlerNodeId: base?.handlerNodeId ?? entry.handler?.executableNodeId
+    }, entry, phase, incidents);
+  });
+  const all = [...rows, ...receivedRows];
+  const byEntry = new Map(all.filter(row => row.entryId).map(row => [row.entryId!, row]));
+  const cause = journal.cause;
+  // An operator acted and the scope has not seen it yet: it no longer waits on anyone.
+  const shownPhase: CompensationScopeRunPhase = phase === "AwaitingIntervention" && !all.some(row => row.recovery.state === "NeedsAction")
+    ? derived.phase === "Running" ? "Running" : "Compensating"
+    : phase;
+  return {
+    ...derived,
+    phase: shownPhase,
+    rows,
+    ...(receivedRows.length > 0 ? { received: receivedRows } : { received: undefined }),
+    cause: cause ? {
+      kind: cause.kind === "uncertain" ? "uncertain" : cause.kind === "fault" ? "fault" : "explicit",
+      step: cause.step,
+      activityExecutionId: cause.activityExecutionId,
+      ...(cause.incidentId ? { incidentId: cause.incidentId } : {}),
+      ...(cause.failureType ? { failureType: cause.failureType } : {}),
+      ...(cause.message ? { message: cause.message } : {}),
+      ...(cause.messageWithheld ? { messageWithheld: true } : {}),
+      ...(cause.requestedBy ? { requestedBy: cause.requestedBy } : {})
+    } : undefined,
+    remaining: journal.remaining.flatMap(id => {
+      const entry = journal.entries.find(candidate => candidate.id === id);
+      if (!entry) return [];
+      const handlerNodeId = byEntry.get(id)?.handlerNodeId ?? entry.handler?.executableNodeId;
+      return [{ step: entry.step, ...(handlerNodeId ? { handlerNodeId } : {}) }];
+    }),
+    source: "journal",
+    journalUnavailable: undefined
+  };
+}
+
+function journalRow(row: CompensationRowRuntime, entry: CompensationJournalEntry, phase: CompensationScopeRunPhase, incidents: IncidentStateSummary[]): CompensationRowRuntime {
+  const cancelled = phase === "Cancelled";
+  const waitingIncident = entry.waiting ? incidents.find(candidate => candidate.incidentId === entry.waiting!.incidentId) : undefined;
+  // The scope clears the wait only when the retried handler finishes or the decision reaches it. Until then the incident
+  // already says an operator acted, and the row shows what run data says: the retry running, or the decision taken.
+  if (entry.waiting && !cancelled && waitingIncident && !isWaitingForIntervention(waitingIncident)) {
+    return { ...row, entryId: entry.id, operationKey: entry.operationKey, actions: undefined };
+  }
+  const waiting = entry.waiting && !cancelled ? entry.waiting : undefined;
+  const state = journalRecoveryState(entry, phase);
+  const max = row.recovery.attempts?.max;
+  const attempts = entry.attempts.length > 1 || max !== undefined ? { count: entry.attempts.length, ...(max !== undefined ? { max } : {}) } : undefined;
+  const latestAttempt = entry.attempts.at(-1)?.activityExecutionId ?? undefined;
+  const source = (waitingIncident ? incidentActivityExecutionId(waitingIncident) : undefined) ?? latestAttempt ?? entry.forward.activityExecutionId;
+  const forwardState: CompensationForwardState = entry.forwardOutcome === "Uncertain"
+    ? "Uncertain"
+    : row.forward.state === "NotLoaded" || row.forward.state === "NotRun" ? "Completed" : row.forward.state;
+  return {
+    ...row,
+    forward: { ...row.forward, state: forwardState, activityExecutionId: entry.forward.activityExecutionId },
+    entryId: entry.id,
+    operationKey: entry.operationKey,
+    actions: waiting ? { incidentId: waiting.incidentId, sourceActivityExecutionId: source, decisions: waiting.decisions ?? [], target: entry.attempts.length > 0 ? "handler" : "step" } : undefined,
+    recovery: {
+      state,
+      ...(latestAttempt ?? row.recovery.activityExecutionId ? { activityExecutionId: latestAttempt ?? row.recovery.activityExecutionId } : {}),
+      ...(row.recovery.order && entry.attempts.length > 0 ? { order: row.recovery.order } : {}),
+      ...(attempts ? { attempts } : {}),
+      ...(waiting ? { incidentId: waiting.incidentId } : {}),
+      ...(state === "Confirmed" && entry.confirmedBy ? { confirmedBy: entry.confirmedBy } : {})
+    }
+  };
+}
+
+function journalPhase(phase: string, activityStatus: string): CompensationScopeRunPhase {
+  if (phase === "Abandoned") return "Abandoned";
+  if (activityStatus === "Cancelled") return "Cancelled";
+  if (activityStatus === "Faulted") return "Faulted";
+  switch (phase) {
+    case "Compensating":
+    case "AwaitingIntervention":
+    case "Completed":
+    case "Compensated":
+      return phase;
+    default:
+      return "Running";
+  }
+}
+
+function journalRecoveryState(entry: CompensationJournalEntry, phase: CompensationScopeRunPhase): CompensationRecoveryState {
+  switch (entry.status) {
+    case "ResolvedManually": return entry.resolution?.outcome === "EffectAccepted" ? "ResolvedKept" : "ResolvedAbsent";
+    case "Compensated": return "Compensated";
+    case "Confirmed": return "Confirmed";
+    case "NoHandler": return "NotNeeded";
+  }
+  if (phase === "Abandoned") return "NotUndone";
+  const ended = phase === "Cancelled" || phase === "Faulted" || phase === "Completed" || phase === "Compensated";
+  if (entry.waiting && !ended) return "NeedsAction";
+  switch (entry.status) {
+    case "Compensating": return entry.attempts.length > 1 ? "Retrying" : "Running";
+    case "Failed": return "Failed";
+    default:
+      if (!entry.handler) return ended ? "Kept" : "NotNeeded";
+      if (ended) return "Kept";
+      return phase === "Running" ? "Registered" : "Pending";
+  }
+}
+
+function originOf(scopeActivityExecutionId: string, run: RunIndex): CompensationScopeReference {
+  const scope = run.execution(scopeActivityExecutionId);
+  return scope ? run.reference(scope) : { scopeNodeId: "", label: "an inner scope", activityExecutionId: scopeActivityExecutionId };
+}
+
+// Operator history (spec 260 OD14): the run's incidents an operator resolved. A retry belongs to the occurrence that is
+// the nearest scope of the retried activity (a step or handler of this scope, or a descendant of one); a decision belongs
+// to the scope that asked for it.
+function operatorHistoryOf(
+  scopeExecution: ActivityExecutionStateSummary,
+  runtime: CompensationScopeRuntime,
+  steps: ReturnType<typeof readCompensationSteps>,
+  run: RunIndex,
+  incidents: IncidentStateSummary[],
+  journal: CompensationJournal | null
+): CompensationOperatorHistoryEntry[] {
+  const scopeId = scopeExecution.activityExecutionId;
+  const ownNodes = new Set(steps.flatMap(step => [step.activity?.nodeId, step.compensation?.nodeId]).filter((id): id is string => !!id));
+  const stepOf = (activityExecutionId: string | undefined, nodeId: string | null | undefined): string | undefined => {
+    const activity = activityExecutionId ? run.execution(activityExecutionId) : undefined;
+    const child = activity ? run.childOf(activity, scopeId) : undefined;
+    const key = child ? nodeKey(child) : nodeId ?? undefined;
+    const step = steps.find(candidate => candidate.activity?.nodeId === key || candidate.compensation?.nodeId === key
+      || (!!child && (candidate.activity?.nodeId === child.executableNodeId || candidate.compensation?.nodeId === child.executableNodeId)));
+    return step?.name ?? (runtime.received ?? []).find(row => row.recovery.activityExecutionId === activityExecutionId)?.step;
+  };
+  return incidents.flatMap((incident): CompensationOperatorHistoryEntry[] => {
+    const outcome = incident.resolutionOutcome;
+    const metadata = outcome?.metadata ?? {};
+    const activityExecutionId = incidentActivityExecutionId(incident);
+    let belongs: boolean;
+    if (outcome?.actionKind === operatorRetryActionKind) {
+      const activity = activityExecutionId ? run.execution(activityExecutionId) : undefined;
+      belongs = activity
+        ? run.nearestScope(activity)?.activityExecutionId === scopeId
+        : !runtime.occurrences && !!incident.executableNodeId && ownNodes.has(incident.executableNodeId);
+    } else if (outcome?.actionKind === operatorDecisionActionKind) {
+      belongs = metadata[interventionRequestedByKey] === scopeId;
+    } else {
+      return [];
+    }
+    if (!belongs) return [];
+    const decision = outcome.actionKind === operatorDecisionActionKind ? metadata[interventionDecisionKey] : undefined;
+    const kind: CompensationOperatorHistoryEntry["kind"] = !decision ? "Retry"
+      : decision === compensationDecisions.resolveEffectAbsent ? "ResolvedAbsent"
+        : decision === compensationDecisions.resolveEffectAccepted ? "ResolvedKept"
+          : decision === compensationDecisions.abandon ? "Abandoned"
+            : "Decision";
+    // The scope acks a decision it can no longer apply; its journal still shows the entry waiting on that incident.
+    const notApplied = !!decision && runtime.phase === "Cancelled" && !!journal?.entries.some(entry => entry.waiting?.incidentId === incident.incidentId);
+    const step = stepOf(activityExecutionId, incident.executableNodeId);
+    return [{
+      incidentId: incident.incidentId,
+      kind,
+      ...(decision ? { decision } : {}),
+      ...(metadata[alterationSubmittedByKey] ? { actor: metadata[alterationSubmittedByKey] } : {}),
+      ...(outcome.appliedAt ?? incident.resolvedAt ? { appliedAt: (outcome.appliedAt ?? incident.resolvedAt)! } : {}),
+      ...(metadata[alterationReasonKey] ? { reason: metadata[alterationReasonKey] } : {}),
+      ...(step ? { step } : {}),
+      ...(notApplied ? { notApplied: true } : {})
+    }];
+  }).sort((left, right) => (right.appliedAt ?? "").localeCompare(left.appliedAt ?? ""));
 }
 
 export function forwardStateLabel(state: CompensationForwardState): string {
@@ -287,6 +722,10 @@ export function recoveryStateLabel(state: CompensationRecoveryState): string {
     case "NeedsAction": return "Needs action";
     case "Confirmed": return "Confirmed";
     case "HandedOver": return "Compensable by the enclosing scope";
+    case "Retrying": return "Retrying";
+    case "ResolvedAbsent": return "Resolved: effect absent";
+    case "ResolvedKept": return "Resolved: effect kept";
+    case "NotUndone": return "Not undone (recovery abandoned)";
   }
 }
 
@@ -308,6 +747,28 @@ export function scopePhaseLabel(phase: CompensationScopeRunPhase): string {
     case "Compensated": return "Compensated";
     case "Faulted": return "Faulted";
     case "Cancelled": return "Cancelled";
+    case "Abandoned": return "Abandoned";
+  }
+}
+
+/** Names a decision a wait offers; a code no module labels is shown as it is (spec 260 R13). */
+export function interventionDecisionLabel(code: string): string {
+  switch (code) {
+    case compensationDecisions.resolveEffectAbsent: return "Resolve: effect absent or undone";
+    case compensationDecisions.resolveEffectAccepted: return "Resolve: effect present, keep it";
+    case compensationDecisions.abandon: return "Abandon recovery";
+    default: return code;
+  }
+}
+
+/** How the operator history names an action: "Retry", "Resolved — effect absent", "Abandoned". */
+export function operatorHistoryLabel(entry: Pick<CompensationOperatorHistoryEntry, "kind" | "decision">): string {
+  switch (entry.kind) {
+    case "Retry": return "Retry";
+    case "ResolvedAbsent": return "Resolved — effect absent";
+    case "ResolvedKept": return "Resolved — effect kept";
+    case "Abandoned": return "Abandoned";
+    default: return `Decision — ${entry.decision ? interventionDecisionLabel(entry.decision) : "unknown"}`;
   }
 }
 
@@ -411,6 +872,15 @@ class RunIndex {
     visit(root);
     visit(scope);
     this.byId = new Map(activities.map(activity => [activity.activityExecutionId, activity]));
+  }
+
+  execution(activityExecutionId: string): ActivityExecutionStateSummary | undefined {
+    return this.byId.get(activityExecutionId);
+  }
+
+  // The direct child of an occurrence on an execution's parent chain (the execution itself when it is one).
+  childOf(activity: ActivityExecutionStateSummary, parentActivityExecutionId: string): ActivityExecutionStateSummary | undefined {
+    return [activity, ...this.ancestors(activity)].find(candidate => parentOf(candidate) === parentActivityExecutionId);
   }
 
   isScope(activity: ActivityExecutionStateSummary): boolean {
