@@ -20,7 +20,7 @@ public sealed partial class EtlRuntimeStoreTests
         var lease = Assert.Single(await StartHttpRunAsync(store, admission, "worker"));
         for (var sequence = 0; sequence < 2; sequence++)
         {
-            var attached = await store.AttachHttpPageAsync(lease, RetainedPage(lease, $"page-{sequence}", 10, 0, $"cursor-{sequence}"));
+            var attached = await store.AttachTestHttpPageAsync(lease, RetainedPage(lease, $"page-{sequence}", 10, 0, $"cursor-{sequence}"));
             Assert.Equal(EtlStoreStatus.Applied, attached.Status);
             var advanced = await store.AdvanceEmptyHttpPageAsync(attached.Lease!);
             Assert.Equal(EtlStoreStatus.Applied, advanced.Status);

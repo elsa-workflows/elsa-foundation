@@ -7,6 +7,7 @@ internal sealed class EtlConnectorRunRecord
     public string BindingsJson { get; set; } = null!;
     public string? PreparedJson { get; set; }
     public long RetainedInputBytes { get; set; }
+    public long SourceInputReservedBytes { get; set; }
     public long RetainedMetadataBytes { get; set; }
     public long RetainedOutputBytes { get; set; }
     public long Revision { get; set; }
@@ -26,6 +27,7 @@ internal sealed class EtlConnectorPartitionRecord
     public long? ExpiresAtUtcTicks { get; set; }
     public long PageCount { get; set; }
     public long PageBytes { get; set; }
+    public long SourceInputReservedBytes { get; set; }
     public long MetadataBytes { get; set; }
     public long AcceptedBatchCount { get; set; }
     public long AcceptedRecords { get; set; }
@@ -74,6 +76,11 @@ internal sealed class EtlConnectorHttpRequestRecord
     public long PageSequence { get; set; }
     public string RequestHash { get; set; } = null!;
     public string RequestJson { get; set; } = null!;
+    public string? FetchJson { get; set; }
+    public string? FetchDigest { get; set; }
+    public long FetchMetadataBytes { get; set; }
+    public long SourceMetadataReserveBytes { get; set; }
+    public long InputReservationBytes { get; set; }
     public long MetadataBytes { get; set; }
     public long? PreviousPageSequence { get; set; }
     public bool? PreviousHasContinuation { get; set; }

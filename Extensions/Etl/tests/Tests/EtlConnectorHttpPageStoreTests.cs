@@ -17,10 +17,10 @@ public sealed partial class EtlRuntimeStoreTests
         var lease = Assert.Single(await StartHttpRunAsync(store, admission, "worker"));
         var page = RetainedPage(lease, "page-0", byteLength: 31, recordCount: 2, nextContinuation: "cursor-1");
 
-        var attached = await store.AttachHttpPageAsync(lease, page);
+        var attached = await store.AttachTestHttpPageAsync(lease, page);
         var attachedLease = Assert.IsType<EtlConnectorPartitionLease>(attached.Lease);
-        var replay = await store.AttachHttpPageAsync(attachedLease, page);
-        var replayFromPreAttachLease = await store.AttachHttpPageAsync(lease, page);
+        var replay = await store.AttachTestHttpPageAsync(attachedLease, page);
+        var replayFromPreAttachLease = await store.AttachTestHttpPageAsync(lease, page);
         var changed = await store.AttachHttpPageAsync(attachedLease, page with
         {
             Body = page.Body with { Key = "different-page" }
@@ -68,7 +68,7 @@ public sealed partial class EtlRuntimeStoreTests
             _ => throw new ArgumentOutOfRangeException(nameof(defect), defect, null)
         };
 
-        var result = await store.AttachHttpPageAsync(lease, page);
+        var result = await store.AttachTestHttpPageAsync(lease, page);
         var run = Assert.IsType<EtlConnectorRunView>(await store.FindConnectorRunAsync(admission.Invocation.Scope, admission.Invocation.RunId));
 
         Assert.Equal(EtlStoreStatus.Invalid, result.Status);
@@ -100,7 +100,7 @@ public sealed partial class EtlRuntimeStoreTests
         if (defect == "continuation-loop")
         {
             var firstPage = RetainedPage(lease, "page-0", byteLength: 10, recordCount: 0, nextContinuation: "cursor-a");
-            var attached = await store.AttachHttpPageAsync(lease, firstPage);
+            var attached = await store.AttachTestHttpPageAsync(lease, firstPage);
             lease = Assert.IsType<EtlConnectorPartitionLease>(attached.Lease);
             var advanced = await store.AdvanceEmptyHttpPageAsync(lease);
             lease = Assert.IsType<EtlConnectorPartitionLease>(advanced.Lease);
@@ -110,7 +110,7 @@ public sealed partial class EtlRuntimeStoreTests
             ? Assert.IsType<EtlConnectorHttpPosition>(lease.Position).Request.Continuation
             : "cursor-long";
         var page = RetainedPage(lease, "invalid-next", byteLength: 10, recordCount: 0, nextContinuation);
-        var result = await store.AttachHttpPageAsync(lease, page);
+        var result = await store.AttachTestHttpPageAsync(lease, page);
 
         Assert.Equal(EtlStoreStatus.Invalid, result.Status);
         Assert.Null(result.Lease);
@@ -130,14 +130,14 @@ public sealed partial class EtlRuntimeStoreTests
 
         var earlySuccess = await runtime.SettleTerminalAsync(new(admission.Invocation.Scope, admission.Invocation.RunId, EtlTerminalOutcome.Succeeded, null));
         var firstPage = RetainedPage(lease, "empty-0", byteLength: 7, recordCount: 0, nextContinuation: "cursor-1");
-        var first = await connector.AttachHttpPageAsync(lease, firstPage);
+        var first = await connector.AttachTestHttpPageAsync(lease, firstPage);
         var firstPageLease = Assert.IsType<EtlConnectorPartitionLease>(first.Lease);
         var afterFirst = await connector.AdvanceEmptyHttpPageAsync(firstPageLease);
         var advanceReplay = await connector.AdvanceEmptyHttpPageAsync(firstPageLease);
         var nextLease = Assert.IsType<EtlConnectorPartitionLease>(afterFirst.Lease);
         var nextPosition = Assert.IsType<EtlConnectorHttpPosition>(nextLease.Position);
-        var stalePosition = await connector.AttachHttpPageAsync(firstPageLease, firstPage);
-        var second = await connector.AttachHttpPageAsync(nextLease, RetainedPage(nextLease, "empty-1", byteLength: 11, recordCount: 0));
+        var stalePosition = await connector.AttachTestHttpPageAsync(firstPageLease, firstPage);
+        var second = await connector.AttachTestHttpPageAsync(nextLease, RetainedPage(nextLease, "empty-1", byteLength: 11, recordCount: 0));
         var beforeExhaustion = await runtime.SettleTerminalAsync(new(admission.Invocation.Scope, admission.Invocation.RunId, EtlTerminalOutcome.Succeeded, null));
         var exhausted = await connector.AdvanceEmptyHttpPageAsync(Assert.IsType<EtlConnectorPartitionLease>(second.Lease));
         Assert.Single(await context.Terminals.AsNoTracking().ToListAsync());
@@ -176,7 +176,7 @@ public sealed partial class EtlRuntimeStoreTests
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var admission = ConnectorAdmission("http-page-nonempty", new EtlScope("tenant-a", "http-page-nonempty"), httpShardIds: ["shard-a"]);
         var lease = Assert.Single(await StartHttpRunAsync(store, admission, "worker"));
-        var attached = await store.AttachHttpPageAsync(lease, RetainedPage(lease, "records", byteLength: 9, recordCount: 1, nextContinuation: "cursor-1"));
+        var attached = await store.AttachTestHttpPageAsync(lease, RetainedPage(lease, "records", byteLength: 9, recordCount: 1, nextContinuation: "cursor-1"));
 
         var nonempty = await store.AdvanceEmptyHttpPageAsync(attached.Lease!);
         var stale = await store.AdvanceEmptyHttpPageAsync(lease);
@@ -200,10 +200,10 @@ public sealed partial class EtlRuntimeStoreTests
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var admission = ConnectorAdmission("http-retention-budget", new EtlScope("tenant-a", "http-retention-budget"), pipeline, ["shard-a"]);
         var lease = Assert.Single(await StartHttpRunAsync(store, admission, "worker"));
-        var first = await store.AttachHttpPageAsync(lease, RetainedPage(lease, "budget-0", byteLength: 10, recordCount: 0, nextContinuation: "cursor-1"));
+        var first = await store.AttachTestHttpPageAsync(lease, RetainedPage(lease, "budget-0", byteLength: 10, recordCount: 0, nextContinuation: "cursor-1"));
         var nextLease = Assert.IsType<EtlConnectorPartitionLease>((await store.AdvanceEmptyHttpPageAsync(first.Lease!)).Lease);
 
-        var overBudget = await store.AttachHttpPageAsync(nextLease, RetainedPage(nextLease, "budget-1", byteLength: 10, recordCount: 0));
+        var overBudget = await store.AttachTestHttpPageAsync(nextLease, RetainedPage(nextLease, "budget-1", byteLength: 10, recordCount: 0));
         var run = Assert.IsType<EtlConnectorRunView>(await store.FindConnectorRunAsync(admission.Invocation.Scope, admission.Invocation.RunId));
 
         Assert.Equal(EtlStoreStatus.BudgetExceeded, overBudget.Status);
@@ -224,13 +224,13 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal(2, leases.Count);
         foreach (var lease in leases)
         {
-            var result = await store.AttachHttpPageAsync(lease, RetainedPage(lease, $"{lease.PartitionOrdinal}-page", byteLength: 13, recordCount: 1));
+            var result = await store.AttachTestHttpPageAsync(lease, RetainedPage(lease, $"{lease.PartitionOrdinal}-page", byteLength: 13, recordCount: 1));
             Assert.Equal(EtlStoreStatus.Applied, result.Status);
         }
 
         var isolatedAdmission = ConnectorAdmission("shared-run-id", new EtlScope("tenant-a", "http-other-scope"), httpShardIds: ["shard-a"]);
         var isolatedLease = Assert.Single(await StartHttpRunAsync(store, isolatedAdmission, "other-worker"));
-        Assert.Equal(EtlStoreStatus.Applied, (await store.AttachHttpPageAsync(isolatedLease, RetainedPage(isolatedLease, "isolated-page", byteLength: 5, recordCount: 0))).Status);
+        Assert.Equal(EtlStoreStatus.Applied, (await store.AttachTestHttpPageAsync(isolatedLease, RetainedPage(isolatedLease, "isolated-page", byteLength: 5, recordCount: 0))).Status);
         var aggregate = Assert.IsType<EtlConnectorRunView>(await store.FindConnectorRunAsync(scope, admission.Invocation.RunId));
         var isolated = Assert.IsType<EtlConnectorRunView>(await store.FindConnectorRunAsync(isolatedAdmission.Invocation.Scope, isolatedAdmission.Invocation.RunId));
 
@@ -248,7 +248,7 @@ public sealed partial class EtlRuntimeStoreTests
         var admission = ConnectorAdmission("http-page-recovery", new EtlScope("tenant-a", "http-page-recovery"), httpShardIds: ["shard-a"]);
         var lease = Assert.Single(await StartHttpRunAsync(store, admission, "first-worker"));
         var page = RetainedPage(lease, "recoverable-page", byteLength: 17, recordCount: 3, nextContinuation: "cursor-1");
-        var attached = await store.AttachHttpPageAsync(lease, page);
+        var attached = await store.AttachTestHttpPageAsync(lease, page);
 
         Assert.Equal(EtlStoreStatus.Applied, await store.ReleaseConnectorPartitionAsync(attached.Lease!));
         var recovered = Assert.IsType<EtlConnectorPartitionLease>(await store.ClaimConnectorPartitionAsync(admission.Invocation.Scope, admission.Invocation.RunId, "replacement-worker"));
@@ -272,7 +272,7 @@ public sealed partial class EtlRuntimeStoreTests
             Assert.Equal(EtlStoreStatus.Applied, await store.ReleaseConnectorPartitionAsync(lease));
             Assert.NotNull(await store.ClaimConnectorPartitionAsync(admission.Invocation.Scope, admission.Invocation.RunId, "replacement-worker"));
 
-            var stale = await store.AttachHttpPageAsync(lease, RetainedPage(lease, "stale-page", byteLength: 8, recordCount: 0));
+            var stale = await store.AttachTestHttpPageAsync(lease, RetainedPage(lease, "stale-page", byteLength: 8, recordCount: 0));
 
             Assert.Equal(EtlStoreStatus.LeaseLost, stale.Status);
             Assert.Null(stale.Lease);
@@ -289,7 +289,7 @@ public sealed partial class EtlRuntimeStoreTests
             var lease = Assert.Single(await StartHttpRunAsync(store, admission, "worker"));
 
             expire.Armed = true;
-            var expired = await store.AttachHttpPageAsync(lease, RetainedPage(lease, "rolled-back-page", byteLength: 8, recordCount: 0));
+            var expired = await store.AttachTestHttpPageAsync(lease, RetainedPage(lease, "rolled-back-page", byteLength: 8, recordCount: 0));
             context.ChangeTracker.Clear();
 
             Assert.Equal(EtlStoreStatus.LeaseLost, expired.Status);
@@ -310,7 +310,7 @@ public sealed partial class EtlRuntimeStoreTests
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, clock);
         var admission = ConnectorAdmission("http-advance-expiry", new EtlScope("tenant-a", "http-advance-expiry"), httpShardIds: ["shard-a"]);
         var lease = Assert.Single(await StartHttpRunAsync(store, admission, "worker"));
-        var attached = await store.AttachHttpPageAsync(lease, RetainedPage(lease, "advance-expiry-page", byteLength: 12, recordCount: 0, nextContinuation: "cursor-1"));
+        var attached = await store.AttachTestHttpPageAsync(lease, RetainedPage(lease, "advance-expiry-page", byteLength: 12, recordCount: 0, nextContinuation: "cursor-1"));
         var attachedLease = Assert.IsType<EtlConnectorPartitionLease>(attached.Lease);
 
         expire.Armed = true;
@@ -336,7 +336,7 @@ public sealed partial class EtlRuntimeStoreTests
         var lease = Assert.Single(await StartHttpRunAsync(store, admission, "worker"));
         Assert.Equal(EtlStoreStatus.Applied, (await runtime.CancelAsync(admission.Invocation)).Status);
 
-        var attach = await store.AttachHttpPageAsync(lease, RetainedPage(lease, "cancelled-page", byteLength: 8, recordCount: 0));
+        var attach = await store.AttachTestHttpPageAsync(lease, RetainedPage(lease, "cancelled-page", byteLength: 8, recordCount: 0));
         var advance = await store.AdvanceEmptyHttpPageAsync(lease);
 
         Assert.Equal(EtlStoreStatus.Terminal, attach.Status);

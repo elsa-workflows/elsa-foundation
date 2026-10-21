@@ -15,7 +15,7 @@ Issue [#3151](https://github.com/elsa-workflows/elsa-foundation/issues/3151). On
   - Partial connector model/codec/compiler proof and outstanding runtime integration: [checkpoint](evidence/v2-model-compiler-checkpoint.md).
   - Additive definition persistence, retained-v1 migration and native v2 pins: [checkpoint](evidence/v2-persistence-pin-checkpoint.md). Runtime execution remains owed.
   - Completed versioned foundation with runtime-only validation, typed transformation and retained terminal envelopes: [checkpoint](evidence/v2-runtime-reader-checkpoint.md). Connector requests still receive an explicit unavailable refusal until T005/T009 are integrated.
-- [ ] T005 Add typed HTTP page/position/effect/retry store contracts in `Extensions/Etl/src/Core/Runtime/`, EF records/migrations in `src/Persistence/EntityFrameworkCore/` and provider upgrade/claim-shape tests; share current fence/quota/terminal invariants while retaining v1 provider composition.
+- [x] T005 Add typed HTTP page/position/effect/retry store contracts in `Extensions/Etl/src/Core/Runtime/`, EF records/migrations in `src/Persistence/EntityFrameworkCore/` and provider upgrade/claim-shape tests; share current fence/quota/terminal invariants while retaining v1 provider composition.
   - Partial typed admission/preparation/ownership implementation: [checkpoint](evidence/connector-preparation-checkpoint.md). Page, reservation, effect and retry transitions remain owed.
   - Retained page attachment, request history and empty-page progression: [checkpoint](evidence/http-page-store-checkpoint.md). Nonempty batch/effect/retry transitions remain owed.
   - Indexed request ledger, transactional run-wide metadata budget and full recovery/terminal audits: [checkpoint](evidence/http-metadata-ledger-checkpoint.md). This addresses the preceding resource findings without closing T005.
@@ -25,6 +25,7 @@ Issue [#3151](https://github.com/elsa-workflows/elsa-foundation/issues/3151). On
   - Durable HTTP route attempts, bounded retries/receipt headroom and partial-route recovery: [checkpoint](evidence/connector-http-delivery-checkpoint.md). Source-fetch attempts, file publication/atomic acceptance and execution remain owed; T005 stays open.
   - File publication, atomic accepted progress, acceptance metadata headroom and final result/outbox: [checkpoint](evidence/connector-acceptance-checkpoint.md). Source-fetch attempts and full runtime/product recovery proof remain owed; T005 stays open.
   - Source retry/capture primitives and request-addressed page cache: [checkpoint](evidence/source-capture-checkpoint.md). EF journal/attachment integration, pre-dispatch source capacity and actual transport remain owed; T005 stays open.
+  - Completed storage integration: [source store checkpoint](evidence/source-store-checkpoint.md). Durable source journals, pre-dispatch input/metadata capacity, capture-gated attachment, delayed claims, history/terminal audits and legacy migrations complete T005. **4/22 tasks complete.** Actual transport/cache orchestration and native/product/process acceptance remain T003/T006–T022.
 
 ## Phase 3 — US1: Author and execute HTTP integrations
 

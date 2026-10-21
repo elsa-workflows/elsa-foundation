@@ -37,7 +37,7 @@ internal sealed partial class EfEtlRuntimeStore
                 var requestRow = await Requests(partition).SingleOrDefaultAsync(request =>
                     request.PageSequence == range.PageSequence, cancellationToken)
                     ?? throw new InvalidDataException("The accepted HTTP batch has no retained request.");
-                var request = ReadHttpRequest(requestRow);
+                var (request, _) = ReadHttpRequest(requestRow, pipeline.Http);
                 ValidateRetainedPage(pageRow, page, request, pipeline);
                 if (pageRow.AcceptedItemCount < range.EndItemExclusive || pageRow.AcceptedItemCount > page.RecordCount ||
                     range.PageSequence < current.PageSequence &&
@@ -128,7 +128,7 @@ internal sealed partial class EfEtlRuntimeStore
                         var requestRow = await Requests(partition).SingleOrDefaultAsync(request =>
                             request.PageSequence == range.PageSequence, cancellationToken)
                             ?? throw new InvalidDataException("A settled HTTP batch has no retained request.");
-                        var request = ReadHttpRequest(requestRow);
+                        var (request, _) = ReadHttpRequest(requestRow, pipeline.Http);
                         batchPosition = new EtlConnectorHttpPosition(range.PageSequence, nextHttpItem, request, page, false);
                         break;
                     default:

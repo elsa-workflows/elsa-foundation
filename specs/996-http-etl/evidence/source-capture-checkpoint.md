@@ -50,3 +50,8 @@ Runtime connector execution remains unavailable. Real HTTP composition, native/A
 interruption/replacement and frozen old-worker compatibility remain owed. The general task-runner and pause
 follow-up is unchanged. External effects remain at least once. This checkpoint is not permission to merge
 an incomplete draft and establishes no cause for historical timeouts.
+
+## Subsequent storage integration
+
+The [source store checkpoint](source-store-checkpoint.md) addresses the EF journal, reservation,
+attachment and claim/audit integration listed above. Transport and full product acceptance remain owed.

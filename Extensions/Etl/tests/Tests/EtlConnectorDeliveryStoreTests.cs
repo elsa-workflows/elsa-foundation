@@ -184,7 +184,7 @@ public sealed partial class EtlRuntimeStoreTests
         var other = Assert.IsType<EtlConnectorPartitionLease>(await store.ClaimConnectorPartitionAsync(
             admission.Invocation.Scope, admission.Invocation.RunId, "other-partition-worker"));
         Assert.Equal(1, other.PartitionOrdinal);
-        var emptyPage = await store.AttachHttpPageAsync(other, RetainedPage(other, "other-empty-page", 5, 0));
+        var emptyPage = await store.AttachTestHttpPageAsync(other, RetainedPage(other, "other-empty-page", 5, 0));
         var exhausted = await store.AdvanceEmptyHttpPageAsync(Assert.IsType<EtlConnectorPartitionLease>(emptyPage.Lease));
         Assert.True(Assert.IsType<EtlConnectorHttpPosition>(exhausted.Lease!.Position).Exhausted);
         Assert.Equal(EtlStoreStatus.Applied, await store.ReleaseConnectorPartitionAsync(exhausted.Lease));
@@ -252,7 +252,9 @@ public sealed partial class EtlRuntimeStoreTests
         var pipeline = defaults with { Http = defaults.Http with { MaxRetainedMetadataBytes = baseline } };
         var admission = ConnectorAdmission("http-delivery-metadata-limit", new("tenant-a", "http-delivery-metadata-limit"), pipeline, ["shard"]);
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
-        var (lease, batch, _) = await PrepareHttpOutputBatchAsync(store, admission, "worker");
+        var initialLease = Assert.Single(await StartHttpRunAsync(store, admission, "worker"));
+        var (lease, batch, _) = await PrepareLegacyHttpOutputBatchAsync(context, store, admission, initialLease,
+            admission.Invocation.RunId);
         var before = await DeliveryAccountingAsync(context, lease.PartitionOrdinal);
         Assert.Equal(baseline, before.RunMetadataBytes);
 
@@ -283,7 +285,8 @@ public sealed partial class EtlRuntimeStoreTests
         var pipeline = defaults with { Http = defaults.Http with { MaxRetainedMetadataBytes = measuredTotal } };
         var admission = ConnectorAdmission(runId, new("tenant-a", runId), pipeline, ["shard"]);
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, clock);
-        var (lease, batch, _) = await PrepareHttpOutputBatchAsync(store, admission, "worker");
+        var initialLease = Assert.Single(await StartHttpRunAsync(store, admission, "worker"));
+        var (lease, batch, _) = await PrepareLegacyHttpOutputBatchAsync(context, store, admission, initialLease, runId);
         var before = await DeliveryAccountingAsync(context, lease.PartitionOrdinal);
         var originalPositionJson = await context.ConnectorPartitions.AsNoTracking()
             .Where(row => row.PartitionOrdinal == lease.PartitionOrdinal).Select(row => row.PositionJson).SingleAsync();
@@ -368,11 +371,26 @@ public sealed partial class EtlRuntimeStoreTests
         PrepareHttpOutputBatchAsync(IEtlConnectorRuntimeStore store, EtlConnectorRunAdmission admission,
             EtlConnectorPartitionLease initialLease, string? suffix = null)
     {
-        var attached = await store.AttachHttpPageAsync(initialLease,
+        var attached = await store.AttachTestHttpPageAsync(initialLease,
             RetainedPage(initialLease, $"{admission.Invocation.RunId}-delivery-page", byteLength: 9, recordCount: 2));
         var lease = Assert.IsType<EtlConnectorPartitionLease>(attached.Lease);
         var run = Assert.IsType<EtlConnectorRunView>(await store.FindConnectorRunAsync(admission.Invocation.Scope, admission.Invocation.RunId));
-        var batch = HttpBatch(admission, run.Prepared!, lease, endItemExclusive: 2, inputBytes: 5,
+        return await PrepareHttpOutputBatchAsync(store, admission, lease, run.Prepared!, suffix);
+    }
+
+    private static async Task<(EtlConnectorPartitionLease Lease, EtlConnectorBatchDescriptor Batch, EtlConnectorBatchOutput Output)>
+        PrepareLegacyHttpOutputBatchAsync(EtlRuntimeDbContext context, IEtlConnectorRuntimeStore store,
+            EtlConnectorRunAdmission admission, EtlConnectorPartitionLease initialLease, string suffix)
+    {
+        var (lease, prepared) = await AttachLegacyAcceptanceBudgetPageAsync(context, store, admission, initialLease, suffix);
+        return await PrepareHttpOutputBatchAsync(store, admission, lease, prepared, suffix);
+    }
+
+    private static async Task<(EtlConnectorPartitionLease Lease, EtlConnectorBatchDescriptor Batch, EtlConnectorBatchOutput Output)>
+        PrepareHttpOutputBatchAsync(IEtlConnectorRuntimeStore store, EtlConnectorRunAdmission admission,
+            EtlConnectorPartitionLease lease, EtlConnectorPreparedRun prepared, string? suffix)
+    {
+        var batch = HttpBatch(admission, prepared, lease, endItemExclusive: 2, inputBytes: 5,
             marker: $"{admission.Invocation.RunId}-delivery-input");
         Assert.Equal(EtlStoreStatus.Applied, (await store.ReserveConnectorBatchAsync(lease, batch)).Status);
         var output = CreateOutput(admission, batch, accepted: 1, rejected: 1, filtered: 0,
@@ -389,7 +407,8 @@ public sealed partial class EtlRuntimeStoreTests
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var admission = ConnectorAdmission("http-delivery-metadata-limit", new("tenant-a", "http-delivery-metadata-limit"), httpShardIds: ["shard"]);
-        _ = await PrepareHttpOutputBatchAsync(store, admission, "worker");
+        var initialLease = Assert.Single(await StartHttpRunAsync(store, admission, "worker"));
+        _ = await PrepareLegacyHttpOutputBatchAsync(context, store, admission, initialLease, admission.Invocation.RunId);
         return await RetainedMetadataBytesAsync(context);
     }
 
@@ -400,7 +419,8 @@ public sealed partial class EtlRuntimeStoreTests
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, clock);
         var admission = ConnectorAdmission(runId, new("tenant-a", runId), httpShardIds: ["shard"]);
-        var (lease, batch, _) = await PrepareHttpOutputBatchAsync(store, admission, "worker");
+        var initialLease = Assert.Single(await StartHttpRunAsync(store, admission, "worker"));
+        var (lease, batch, _) = await PrepareLegacyHttpOutputBatchAsync(context, store, admission, initialLease, runId);
         var begin = await store.BeginConnectorHttpDeliveryAsync(lease, batch.BatchId, EtlOutputRoute.Main, requestId);
         Assert.Equal(EtlStoreStatus.Applied, begin.Status);
         return await RetainedMetadataBytesAsync(context);

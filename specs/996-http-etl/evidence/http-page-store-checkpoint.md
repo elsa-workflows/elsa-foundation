@@ -57,3 +57,9 @@ The first narrow history mutation left the test green because the shared positio
 - `dotnet test Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj --no-restore`: **575 passed**, zero failures/skips, after restoring production source from the two final negative controls. This includes migration/model-snapshot, retained v1 and real process recovery cases; it does not prove the still-unimplemented HTTP worker.
 - Both final request-history controls failed their targeted regression when the relevant check was removed. Restored page-store SHA-256: `92e6f4a61efe66c4cccf50ee24ddb319036afc002c27aa291762ffa1c481503c`.
 - Final architecture/map/filter results are recorded in the matching PR checkpoint receipt. No backend REST/browser HTTP acceptance is claimed by this storage-only checkpoint.
+
+## Subsequent envelope correction
+
+The [source store checkpoint](source-store-checkpoint.md) corrects the 512 KiB claim above: JSON escaping
+of lossless Base64 can make two allowed 64 KiB continuations exceed that envelope. The connector limit is
+now 1 MiB, with unchanged 64 KiB continuation and independent run-wide metadata quotas.

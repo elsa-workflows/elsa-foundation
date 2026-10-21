@@ -53,7 +53,7 @@ public sealed partial class EtlRuntimeStoreTests
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var admission = ConnectorAdmission("accepted-history", new("tenant", "accepted-history"), httpShardIds: ["shard"]);
         var initial = Assert.Single(await StartHttpRunAsync(store, admission, "worker"));
-        var attached = await store.AttachHttpPageAsync(initial, RetainedPage(initial, "history-page", 20, 2, "next"));
+        var attached = await store.AttachTestHttpPageAsync(initial, RetainedPage(initial, "history-page", 20, 2, "next"));
         var lease = attached.Lease!;
         var run = (await store.FindConnectorRunAsync(lease.Scope, lease.RunId))!;
         var batch = HttpBatch(admission, run.Prepared!, lease, 1, 5);

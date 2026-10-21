@@ -8,7 +8,9 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Stores;
 /// <summary>Bounded private connector snapshots; never used as public inspection documents.</summary>
 internal static class EtlConnectorRecordCodec
 {
-    internal const int MaximumDocumentBytes = 512 * 1024;
+    // Two opaque 64 KiB continuations need room for lossless UTF-16 Base64 and JSON escapes.
+    // Per-run metadata quotas still bound aggregate retention independently.
+    internal const int MaximumDocumentBytes = 1024 * 1024;
 
     internal static string Write<T>(T value)
     {

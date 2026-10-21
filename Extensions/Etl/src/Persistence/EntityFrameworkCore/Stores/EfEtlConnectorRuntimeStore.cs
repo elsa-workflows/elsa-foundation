@@ -57,12 +57,14 @@ internal sealed partial class EfEtlRuntimeStore
             join connector in db.ConnectorRuns.AsNoTracking() on new { run.Run.ScopeKey, run.Run.RunKey } equals new { connector.ScopeKey, connector.RunKey }
             where run.Run.RunKey == key.RunKey
             select new { Snapshot = run, Connector = connector, PageBytes = db.ConnectorPartitions.Where(partition => partition.ScopeKey == connector.ScopeKey && partition.RunKey == connector.RunKey).Sum(partition => (long?)partition.PageBytes) ?? 0,
+                SourceInputReservedBytes = db.ConnectorPartitions.Where(partition => partition.ScopeKey == connector.ScopeKey && partition.RunKey == connector.RunKey).Sum(partition => (long?)partition.SourceInputReservedBytes) ?? 0,
                 OutputBytes = db.ConnectorPartitions.Where(partition => partition.ScopeKey == connector.ScopeKey && partition.RunKey == connector.RunKey).Sum(partition => (long?)partition.RetainedOutputBytes) ?? 0,
                 MetadataBytes = db.ConnectorPartitions.Where(partition => partition.ScopeKey == connector.ScopeKey && partition.RunKey == connector.RunKey).Sum(partition => (long?)partition.MetadataBytes) ?? 0 }).SingleOrDefaultAsync(cancellationToken);
         if (snapshot is null) return null;
         ValidateRun(snapshot.Snapshot.Run, scope, runId);
         var view = BuildRunView(snapshot.Snapshot.Run, snapshot.Snapshot.Prepared, snapshot.Snapshot.Terminal);
-        var state = ReadConnectorState(view.Invocation, snapshot.Connector, snapshot.PageBytes, snapshot.MetadataBytes, snapshot.OutputBytes);
+        var state = ReadConnectorState(view.Invocation, snapshot.Connector, snapshot.PageBytes, snapshot.SourceInputReservedBytes,
+            snapshot.MetadataBytes, snapshot.OutputBytes);
         return new(view, state.Bindings, state.Prepared, snapshot.Connector.RetainedInputBytes);
     }
 
@@ -245,7 +247,9 @@ internal sealed partial class EfEtlRuntimeStore
         return new(view, state.Bindings, state.Prepared, connector.RetainedInputBytes);
     }
 
-    private (EtlPipelineV2 Pipeline, EtlConnectorRunBindings Bindings, EtlConnectorPreparedRun? Prepared) ReadConnectorState(EtlInvocation invocation, EtlConnectorRunRecord connector, long pageBytes, long metadataBytes, long outputBytes)
+    private (EtlPipelineV2 Pipeline, EtlConnectorRunBindings Bindings, EtlConnectorPreparedRun? Prepared) ReadConnectorState(
+        EtlInvocation invocation, EtlConnectorRunRecord connector, long pageBytes, long sourceInputReservedBytes,
+        long metadataBytes, long outputBytes)
     {
         EnsureSchema(connector.SchemaVersion);
         try
@@ -255,8 +259,10 @@ internal sealed partial class EfEtlRuntimeStore
             EtlConnectorRecordCodec.ValidateBindings(pipeline, bindings, options.MaximumPartitionsPerRun);
             var prepared = connector.PreparedJson is null ? null : EtlConnectorRecordCodec.Read<EtlConnectorPreparedRun>(connector.PreparedJson);
             if (prepared is not null) EtlConnectorRecordCodec.ValidatePrepared(pipeline, bindings, prepared);
-            if (pageBytes < 0 || connector.RetainedInputBytes != checked((prepared is null ? 0 : EtlConnectorRecordCodec.RetainedBytes(prepared)) + pageBytes) ||
-                connector.RetainedInputBytes > pipeline.Http.MaxRetainedInputBytes || prepared is null && connector.RetainedInputBytes != 0)
+            if (pageBytes < 0 || sourceInputReservedBytes < 0 || connector.SourceInputReservedBytes != sourceInputReservedBytes ||
+                connector.RetainedInputBytes != checked((prepared is null ? 0 : EtlConnectorRecordCodec.RetainedBytes(prepared)) + pageBytes) ||
+                checked(connector.RetainedInputBytes + connector.SourceInputReservedBytes) > pipeline.Http.MaxRetainedInputBytes ||
+                prepared is null && (connector.RetainedInputBytes != 0 || connector.SourceInputReservedBytes != 0))
                 throw new InvalidDataException("The retained connector input accounting is invalid.");
             if (metadataBytes < 0 || connector.RetainedMetadataBytes != metadataBytes ||
                 metadataBytes > pipeline.Http.MaxRetainedMetadataBytes || prepared is null && metadataBytes != 0)

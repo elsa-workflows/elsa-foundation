@@ -55,7 +55,7 @@ public sealed partial class EtlRuntimeStoreTests
         {
             var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
             var initial = Assert.Single(await StartHttpRunAsync(store, admission, "original"));
-            var lease = Assert.IsType<EtlConnectorPartitionLease>((await store.AttachHttpPageAsync(initial,
+            var lease = Assert.IsType<EtlConnectorPartitionLease>((await store.AttachTestHttpPageAsync(initial,
                 RetainedPage(initial, "page", 12, 2))).Lease);
             var view = (await store.FindConnectorRunAsync(lease.Scope, lease.RunId))!;
             var batch = HttpBatch(admission, view.Prepared!, lease, 1, 5);
@@ -102,7 +102,7 @@ public sealed partial class EtlRuntimeStoreTests
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, clock, partitionLease: TimeSpan.FromSeconds(30));
         var admission = ConnectorAdmission("batch-expired-replay", new("tenant-a", "batch-expired-replay"), httpShardIds: ["shard"]);
         var initial = Assert.Single(await StartHttpRunAsync(store, admission, "original"));
-        var lease = Assert.IsType<EtlConnectorPartitionLease>((await store.AttachHttpPageAsync(initial,
+        var lease = Assert.IsType<EtlConnectorPartitionLease>((await store.AttachTestHttpPageAsync(initial,
             RetainedPage(initial, "page", 10, 1))).Lease);
         var run = (await store.FindConnectorRunAsync(lease.Scope, lease.RunId))!;
         var batch = HttpBatch(admission, run.Prepared!, lease, 1, 5);
@@ -131,7 +131,7 @@ public sealed partial class EtlRuntimeStoreTests
         var admission = ConnectorAdmission("owed-first", new("tenant-a", "owed-first"), httpShardIds: ["first", "second"]);
         var leases = await StartHttpRunAsync(store, admission, "original");
         var second = leases.Single(lease => lease.PartitionOrdinal == 1);
-        second = Assert.IsType<EtlConnectorPartitionLease>((await store.AttachHttpPageAsync(second,
+        second = Assert.IsType<EtlConnectorPartitionLease>((await store.AttachTestHttpPageAsync(second,
             RetainedPage(second, "page", 10, 1))).Lease);
         var run = (await store.FindConnectorRunAsync(second.Scope, second.RunId))!;
         var batch = HttpBatch(admission, run.Prepared!, second, 1, 5);

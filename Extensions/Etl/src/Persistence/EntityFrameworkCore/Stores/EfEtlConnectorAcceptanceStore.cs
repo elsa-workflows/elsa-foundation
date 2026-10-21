@@ -102,8 +102,24 @@ internal sealed partial class EfEtlRuntimeStore
             if (page.AcceptedItemCount != range.StartItem) throw new InvalidDataException("The page acceptance differs from its current input position.");
             page.AcceptedItemCount = range.EndItemExclusive;
         }
+        long sourceReserveDelta = 0;
+        if (position is EtlConnectorHttpPosition sourcePosition)
+        {
+            var sourceRequest = await HttpRequestForUpdateAsync(partition, sourcePosition.PageSequence, cancellationToken);
+            if (sourceRequest.FetchJson is not null)
+            {
+                var remaining = next is EtlConnectorHttpPosition { Page: not null } continued &&
+                    continued.PageSequence == sourcePosition.PageSequence
+                    ? HttpSourceAttachedProgressMetadataReserve(continued, state.Pipeline.Http) : 0;
+                sourceReserveDelta = checked(remaining - sourceRequest.SourceMetadataReserveBytes);
+                if (sourceReserveDelta > 0)
+                    throw new InvalidDataException("The accepted source page exhausted its reserved progress capacity.");
+                sourceRequest.SourceMetadataReserveBytes = remaining;
+                sourceRequest.MetadataBytes = checked(sourceRequest.MetadataBytes + sourceReserveDelta);
+            }
+        }
         var positionJson = EtlConnectorRecordCodec.Write<EtlConnectorPosition>(next);
-        var metadataDelta = checked(MetadataBytes(positionJson) - MetadataBytes(partition.PositionJson) + (addedRequest?.MetadataBytes ?? 0) - batch.AcceptanceMetadataBytes);
+        var metadataDelta = checked(MetadataBytes(positionJson) - MetadataBytes(partition.PositionJson) + (addedRequest?.MetadataBytes ?? 0) - batch.AcceptanceMetadataBytes + sourceReserveDelta);
         if (metadataDelta > state.Pipeline.Http.MaxRetainedMetadataBytes - connector.RetainedMetadataBytes)
             return new(EtlStoreStatus.BudgetExceeded, null);
         if (addedRequest is not null)

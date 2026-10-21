@@ -83,7 +83,7 @@ public sealed partial class EtlRuntimeStoreTests
         var admission = ConnectorAdmission("connector-http-output-recovery", new("tenant-a", "http-output-recovery"),
             httpShardIds: ["shard"]);
         var initialLease = Assert.Single(await StartHttpRunAsync(store, admission, "http-output-worker"));
-        var attached = await store.AttachHttpPageAsync(initialLease,
+        var attached = await store.AttachTestHttpPageAsync(initialLease,
             RetainedPage(initialLease, "http-output-page", byteLength: 23, recordCount: 2, nextContinuation: "cursor-1"));
         var lease = Assert.IsType<EtlConnectorPartitionLease>(attached.Lease);
         var run = Assert.IsType<EtlConnectorRunView>(await store.FindConnectorRunAsync(admission.Invocation.Scope, admission.Invocation.RunId));

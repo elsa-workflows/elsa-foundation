@@ -118,11 +118,25 @@ internal sealed partial class EfEtlRuntimeStore
                 ByteLength = page.Body.ByteLength, SchemaVersion = EtlRuntimeEfModule.SchemaVersion
             };
         }
+        var request = await HttpRequestForUpdateAsync(row, current.PageSequence, cancellationToken);
+        var fetch = ReadConnectorHttpSource(request, state.Pipeline.Http);
+        if (!advance && fetch?.Capture?.Page != page) return new(EtlStoreStatus.Conflict, null);
+        var remainingReserve = advance || fetch is null ? 0 : HttpSourceAttachedProgressMetadataReserve(next, state.Pipeline.Http);
+        var reserveDelta = checked(remainingReserve - request.SourceMetadataReserveBytes);
+        var inputReleased = advance ? 0 : request.InputReservationBytes;
+        if (!advance && page!.Body.ByteLength > state.Pipeline.Http.MaxRetainedInputBytes - connector.RetainedInputBytes -
+            connector.SourceInputReservedBytes + inputReleased)
+            return new(EtlStoreStatus.BudgetExceeded, null);
         var positionJson = EtlConnectorRecordCodec.Write<EtlConnectorPosition>(next);
         var metadataDelta = checked(MetadataBytes(positionJson) - MetadataBytes(row.PositionJson) +
-            (addedPage?.MetadataBytes ?? 0) + (addedRequest?.MetadataBytes ?? 0));
+            (addedPage?.MetadataBytes ?? 0) + (addedRequest?.MetadataBytes ?? 0) + reserveDelta);
         if (metadataDelta > state.Pipeline.Http.MaxRetainedMetadataBytes - connector.RetainedMetadataBytes)
             return new(EtlStoreStatus.BudgetExceeded, null);
+        request.SourceMetadataReserveBytes = remainingReserve;
+        request.MetadataBytes = checked(request.MetadataBytes + reserveDelta);
+        request.InputReservationBytes = checked(request.InputReservationBytes - inputReleased);
+        connector.SourceInputReservedBytes = checked(connector.SourceInputReservedBytes - inputReleased);
+        row.SourceInputReservedBytes = checked(row.SourceInputReservedBytes - inputReleased);
         connector.RetainedMetadataBytes = checked(connector.RetainedMetadataBytes + metadataDelta);
         row.MetadataBytes = checked(row.MetadataBytes + metadataDelta);
         connector.Revision = checked(connector.Revision + 1);

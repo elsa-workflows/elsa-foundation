@@ -168,7 +168,7 @@ public sealed record EtlConnectorLimits
 public sealed record EtlHttpPolicy
 {
     /// <summary>The largest continuation supported by the persisted HTTP page and cursor metadata.</summary>
-    /// <remarks>Runtime metadata uses a lossless UTF-16 representation and is bounded to 512 KiB; this ceiling leaves room for both request and response continuations and their surrounding identities.</remarks>
+    /// <remarks>Runtime metadata uses a lossless UTF-16 representation and is bounded to 1 MiB including JSON escaping; this ceiling leaves room for both request and response continuations and their surrounding identities.</remarks>
     public const int MaximumSupportedContinuationBytes = 64 * 1024;
 
     internal const long DefaultMaxRetainedMetadataBytes = 64L * 1024 * 1024;

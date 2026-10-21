@@ -185,9 +185,21 @@ raw body references continue to measure the real JSON bytes. Zero-byte responses
 unavailable/corrupt storage never become source exhaustion. A body without a manifest is uncommitted
 cache material; its cleanup and physical storage capacity belong to the runtime integration.
 
-T005 still requires wiring this journal and capture proof into EF request/page rows, claim eligibility,
-current-owner attachment and history audits. Reserve bounded outcome/page/position metadata before GET;
-for empty pages preserve capacity for the next-request transition, and for nonempty pages transfer the
-needed capacity to the existing final-batch acceptance reserve without charging it twice. Source input
-retention must also account for concurrent in-flight acquisitions before actual transport is enabled.
-The source retry/capture types and cache alone do not activate HTTP execution or close T005/T009.
+The request row now persists the source journal with canonical bytes/digest, outcome headroom and a
+separate page/progress metadata reservation. Before returning a physical GET permit, one serializable
+transaction reserves logical input capacity and bounded capture, attachment and future progress metadata.
+Capture reduces the input reservation to the verified raw-page length; attachment transfers that capacity
+into retained input. Nonempty batch reservation transfers the required progress capacity into the existing
+acceptance reserve without charging it twice. Empty-page progress releases its unused reserve. All source
+writes recheck current ownership after saving, before commit; delayed claims use persisted `NotBefore`.
+Recovery and terminal audits validate current and historical journals against their page/request chain.
+Legacy null source journals remain readable for already-retained pages; new attachments require capture.
+
+Connector documents are bounded to 1 MiB. The earlier 512 KiB envelope could not hold two allowed 64 KiB
+opaque continuations for every valid value: lossless UTF-16 Base64 still expands further when JSON escapes
+`+`. The run-wide metadata quota remains independent, and the source permit checks the conservative
+encoded bound before dispatch. No canonical serialization or v1 document limit changed.
+
+The [source store checkpoint](evidence/source-store-checkpoint.md) records this storage integration.
+Actual transport, cache verification/publication orchestration, physical request capacity/cleanup and
+full native/product/process recovery remain runtime acceptance; these stores do not activate HTTP execution.

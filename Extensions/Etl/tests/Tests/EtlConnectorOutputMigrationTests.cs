@@ -38,14 +38,17 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal(1, await ForeignKeysEnabledAsync(context));
         await AssertNoForeignKeyViolationsAsync(context);
         Assert.Single(await context.Runs.AsNoTracking().ToListAsync());
-        var connectorRun = await context.ConnectorRuns.AsNoTracking().SingleAsync();
+        // The database is intentionally stopped before later source-fetch columns exist.
+        var connectorRun = await context.ConnectorRuns.AsNoTracking()
+            .Select(row => new { row.RetainedOutputBytes }).SingleAsync();
         Assert.Equal(0, connectorRun.RetainedOutputBytes);
         var partition = await context.ConnectorPartitions.AsNoTracking()
             .Select(row => new { row.OwedBatchId, row.BatchMetadataBytes, row.RetainedOutputBytes }).SingleAsync();
         Assert.Equal(batchId, partition.OwedBatchId);
         Assert.Equal(17, partition.BatchMetadataBytes);
         Assert.Equal(0, partition.RetainedOutputBytes);
-        Assert.Single(await context.ConnectorHttpRequests.AsNoTracking().ToListAsync());
+        Assert.Single(await context.ConnectorHttpRequests.AsNoTracking()
+            .Select(row => new { row.RequestHash, row.PageSequence }).ToListAsync());
         Assert.Single(await context.ConnectorHttpPages.AsNoTracking().Select(row => row.PageSequence).ToListAsync());
         var batch = await context.ConnectorBatches.AsNoTracking()
             .Select(row => new { row.BatchId, row.Settled, row.MetadataBytes, row.OutputJson, row.OutputDigest, row.OutputBytes }).SingleAsync();

@@ -89,6 +89,10 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                     b.Property<long>("PageBytes")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long>("SourceInputReservedBytes")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("PageCount")
                         .HasColumnType("INTEGER");
 
@@ -117,6 +121,7 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                         {
                             t.HasCheckConstraint("CK_elsa_etl_connector_partitions_CurrentRequestPointer", "(CurrentRequestSequence IS NULL AND CurrentRequestHash IS NULL) OR (CurrentRequestSequence IS NOT NULL AND CurrentRequestHash IS NOT NULL)");
                             t.HasCheckConstraint("CK_elsa_etl_connector_partitions_NonNegativeCounters", "PageCount >= 0 AND PageBytes >= 0 AND MetadataBytes >= 0 AND BatchMetadataBytes >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_partitions_SourceInputReservedBytes", "SourceInputReservedBytes >= 0");
                             t.HasCheckConstraint("CK_elsa_etl_connector_partitions_NonNegativeAcceptanceCounts", "AcceptedBatchCount >= 0 AND AcceptedRecords >= 0 AND RejectedRecords >= 0 AND FilteredRecords >= 0");
                             t.HasCheckConstraint("CK_elsa_etl_connector_partitions_NotBeforeUtcTicks", "NotBeforeUtcTicks IS NULL OR NotBeforeUtcTicks > 0");
                             t.HasCheckConstraint("CK_elsa_etl_connector_partitions_RetainedOutputBytes", "RetainedOutputBytes >= 0");
@@ -328,6 +333,25 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                     b.Property<long>("MetadataBytes")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long>("FetchMetadataBytes")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("InputReservationBytes")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("SourceMetadataReserveBytes")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FetchDigest")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FetchJson")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("RequestHash")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -360,6 +384,7 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                     b.ToTable("elsa_etl_connector_http_requests", t =>
                         {
                             t.HasCheckConstraint("CK_elsa_etl_connector_http_requests_NonNegativeMetadataBytes", "MetadataBytes >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_http_requests_SourceFetchMetadata", "FetchMetadataBytes >= 0 AND SourceMetadataReserveBytes >= 0 AND InputReservationBytes >= 0 AND ((FetchJson IS NULL AND FetchDigest IS NULL AND FetchMetadataBytes = 0 AND SourceMetadataReserveBytes = 0 AND InputReservationBytes = 0) OR (FetchJson IS NOT NULL AND FetchDigest IS NOT NULL AND length(FetchDigest) = 64))");
                             t.HasCheckConstraint("CK_elsa_etl_connector_http_requests_SequencePredecessor", "(PageSequence = 0 AND PreviousPageSequence IS NULL AND PreviousHasContinuation IS NULL) OR (PageSequence > 0 AND PreviousPageSequence IS NOT NULL AND PreviousHasContinuation IS NOT NULL AND PreviousPageSequence = PageSequence - 1 AND PreviousHasContinuation = 1)");
                         });
                 });
@@ -382,6 +407,10 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                         .HasColumnType("TEXT");
 
                     b.Property<long>("RetainedInputBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("SourceInputReservedBytes")
+                        .HasDefaultValue(0L)
                         .HasColumnType("INTEGER");
 
                     b.Property<long>("RetainedMetadataBytes")
@@ -407,6 +436,7 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                     b.ToTable("elsa_etl_connector_runs", t =>
                         {
                             t.HasCheckConstraint("CK_elsa_etl_connector_runs_RetainedByteCounts", "RetainedInputBytes >= 0 AND RetainedMetadataBytes >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_runs_SourceInputReservedBytes", "SourceInputReservedBytes >= 0");
                             t.HasCheckConstraint("CK_elsa_etl_connector_runs_RetainedOutputBytes", "RetainedOutputBytes >= 0");
                         });
                 });

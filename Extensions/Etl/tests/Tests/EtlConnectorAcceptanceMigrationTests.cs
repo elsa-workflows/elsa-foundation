@@ -66,8 +66,12 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal(1, await ForeignKeysEnabledAsync(context));
         await AssertNoForeignKeyViolationsAsync(context);
         Assert.Single(await context.Runs.AsNoTracking().ToListAsync());
-        Assert.Single(await context.ConnectorHttpRequests.AsNoTracking().ToListAsync());
-        Assert.Single(await context.ConnectorHttpPages.AsNoTracking().ToListAsync());
+        // Query only columns that exist at this historical target; the current model includes
+        // source-fetch request columns added by the following migration.
+        Assert.Single(await context.ConnectorHttpRequests.AsNoTracking()
+            .Select(row => new { row.RequestHash, row.PageSequence }).ToListAsync());
+        Assert.Single(await context.ConnectorHttpPages.AsNoTracking()
+            .Select(row => new { row.RequestHash, row.AcceptedItemCount }).ToListAsync());
 
         var httpBatch = await context.ConnectorBatches.AsNoTracking().SingleAsync(row => row.BatchId == batchId);
         Assert.Equal(0L, httpBatch.BatchOrdinal);
@@ -86,7 +90,9 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.False(fileBatch.ErrorFilePublished);
         Assert.Equal(0L, fileBatch.AcceptanceMetadataBytes);
 
-        var partitions = await context.ConnectorPartitions.AsNoTracking().OrderBy(row => row.PartitionOrdinal).ToListAsync();
+        var partitions = await context.ConnectorPartitions.AsNoTracking().OrderBy(row => row.PartitionOrdinal)
+            .Select(row => new { row.AcceptedBatchCount, row.AcceptedRecords, row.RejectedRecords, row.FilteredRecords })
+            .ToListAsync();
         Assert.All(partitions, partition =>
         {
             Assert.Equal(0L, partition.AcceptedBatchCount);
@@ -94,7 +100,8 @@ public sealed partial class EtlRuntimeStoreTests
             Assert.Equal(0L, partition.RejectedRecords);
             Assert.Equal(0L, partition.FilteredRecords);
         });
-        Assert.Equal(0, (await context.ConnectorHttpPages.AsNoTracking().SingleAsync()).AcceptedItemCount);
+        Assert.Equal(0, (await context.ConnectorHttpPages.AsNoTracking()
+            .Select(row => new { row.AcceptedItemCount }).SingleAsync()).AcceptedItemCount);
     }
 
     [Fact]

@@ -17,8 +17,20 @@ public interface IEtlConnectorRuntimeStore
     ValueTask<EtlPreparationLease?> ClaimConnectorPreparationAsync(EtlScope scope, string workerId, CancellationToken cancellationToken = default);
     ValueTask<EtlStoreStatus> CommitConnectorPreparationAsync(EtlPreparationLease lease, EtlConnectorPreparedRun prepared, CancellationToken cancellationToken = default);
     ValueTask<EtlConnectorPartitionLease?> ClaimConnectorPartitionAsync(EtlScope scope, string? runId, string workerId, CancellationToken cancellationToken = default);
+    /// <summary>Reserves source capacity and records a bounded permit before issuing a GET.</summary>
+    /// <remarks>Only a returned permit authorizes transport. Retry and replacement preserve the original request identity.</remarks>
+    ValueTask<EtlConnectorHttpSourceFetchResult> BeginConnectorHttpSourceAsync(EtlConnectorPartitionLease lease,
+        string requestId, CancellationToken cancellationToken = default);
+    /// <summary>Records an issued source attempt's non-success or uncertain outcome without advancing input.</summary>
+    ValueTask<EtlConnectorHttpSourceFetchResult> CompleteConnectorHttpSourceAsync(EtlConnectorPartitionLease lease,
+        EtlHttpSourceFetchAttempt attempt, EtlHttpSourceFetchOutcome outcome, CancellationToken cancellationToken = default);
+    /// <summary>Retains a verified capture from its exact historical permit under current ownership.</summary>
+    /// <remarks>The caller verifies the immutable cache bytes. Capture does not attach or advance the page.</remarks>
+    ValueTask<EtlConnectorHttpSourceFetchResult> CaptureConnectorHttpSourceAsync(EtlConnectorPartitionLease lease,
+        EtlHttpSourceFetchAttempt attempt, EtlRetainedHttpPage page, DateTimeOffset responseReceivedAtUtc,
+        CancellationToken cancellationToken = default);
     /// <summary>Retains one verified response for the expected request under current partition ownership.</summary>
-    /// <remarks>The caller verifies the immutable body first. RequestHash is produced by
+    /// <remarks>The caller verifies the immutable body and records its capture first. New attachments require matching capture evidence. RequestHash is produced by
     /// <see cref="EtlRuntimeIdentity.HttpRequestHash"/>. Null continuation ends the shard; empty is invalid.
     /// Replays do not charge retained bytes again. Use the returned position for subsequent operations.</remarks>
     ValueTask<EtlConnectorPositionResult> AttachHttpPageAsync(EtlConnectorPartitionLease lease, EtlRetainedHttpPage page, CancellationToken cancellationToken = default);

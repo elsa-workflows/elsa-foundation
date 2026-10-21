@@ -50,11 +50,20 @@ internal sealed partial class EfEtlRuntimeStore
         }
         var limits = state.Pipeline.Limits;
         var acceptanceReserve = ConnectorAcceptanceReserve(row, position, batch);
+        // A captured source page already owns its cumulative cursor/continuation capacity.
+        // Transfer the next acceptance slice instead of charging it a second time.
+        EtlConnectorHttpRequestRecord? sourceRequest = null;
+        if (position is EtlConnectorHttpPosition http)
+            sourceRequest = await HttpRequestForUpdateAsync(row, http.PageSequence, cancellationToken);
+        var transferred = sourceRequest?.FetchJson is null ? 0 : acceptanceReserve;
+        if (transferred > (sourceRequest?.SourceMetadataReserveBytes ?? 0))
+            throw new InvalidDataException("The captured source page has insufficient reserved progress capacity.");
         var metadataBytes = checked(MetadataBytes(descriptor) + acceptanceReserve);
+        var newMetadataBytes = checked(metadataBytes - transferred);
         if (records > limits.MaxBatchRecords || batch.InputBytes > limits.MaxBatchBytes ||
             run.OutstandingRecords > limits.MaxOutstandingRecords - records ||
             run.OutstandingBytes > limits.MaxOutstandingBytes - batch.InputBytes ||
-            metadataBytes > state.Pipeline.Http.MaxRetainedMetadataBytes - connector.RetainedMetadataBytes)
+            newMetadataBytes > state.Pipeline.Http.MaxRetainedMetadataBytes - connector.RetainedMetadataBytes)
             return new(EtlStoreStatus.BudgetExceeded, null);
         var startKey = ConnectorBatchStartKey(batch.Range);
         if (await db.ConnectorBatches.AnyAsync(x => x.ScopeKey == key.ScopeKey && x.RunKey == key.RunKey &&
@@ -69,11 +78,16 @@ internal sealed partial class EfEtlRuntimeStore
             RecordCount = records, InputBytes = batch.InputBytes, MetadataBytes = metadataBytes, AcceptanceMetadataBytes = acceptanceReserve,
             SchemaVersion = EtlRuntimeEfModule.SchemaVersion
         });
+        if (sourceRequest is not null && transferred != 0)
+        {
+            sourceRequest.SourceMetadataReserveBytes = checked(sourceRequest.SourceMetadataReserveBytes - transferred);
+            sourceRequest.MetadataBytes = checked(sourceRequest.MetadataBytes - transferred);
+        }
         row.OwedBatchId = batch.BatchId;
         row.BatchMetadataBytes = checked(row.BatchMetadataBytes + metadataBytes);
-        row.MetadataBytes = checked(row.MetadataBytes + metadataBytes);
+        row.MetadataBytes = checked(row.MetadataBytes + newMetadataBytes);
         row.Revision = checked(row.Revision + 1);
-        connector.RetainedMetadataBytes = checked(connector.RetainedMetadataBytes + metadataBytes);
+        connector.RetainedMetadataBytes = checked(connector.RetainedMetadataBytes + newMetadataBytes);
         connector.Revision = checked(connector.Revision + 1);
         run.OutstandingRecords = checked(run.OutstandingRecords + records);
         run.OutstandingBytes = checked(run.OutstandingBytes + batch.InputBytes);

@@ -34,7 +34,9 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal(new string('b', 64), partition.CurrentRequestHash);
         Assert.Null(partition.OwedBatchId);
         Assert.Equal(0, partition.BatchMetadataBytes);
-        var request = await context.ConnectorHttpRequests.AsNoTracking().SingleAsync();
+        // This migration target predates the source-fetch columns present in the current model.
+        var request = await context.ConnectorHttpRequests.AsNoTracking()
+            .Select(row => new { row.RequestHash, row.PageSequence }).SingleAsync();
         Assert.Equal(new string('b', 64), request.RequestHash);
         Assert.Equal(0, request.PageSequence);
         var page = await context.ConnectorHttpPages.AsNoTracking().Select(row => new { row.RequestHash, row.HasContinuation, row.NextRequestHash }).SingleAsync();
