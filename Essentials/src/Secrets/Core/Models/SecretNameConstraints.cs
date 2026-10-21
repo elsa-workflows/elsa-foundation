@@ -8,8 +8,8 @@ public static class SecretNameConstraints
     /// <summary>
     /// The most characters a secret's tenant id, normalized name and id may have together. A store keys a deleted
     /// secret by all three, its id being the tombstone that frees the name, and 450 UTF-16 characters are the 900
-    /// bytes SQL Server allows a clustered key. A generated id has <see cref="Elsa.Primitives.Identity.ShortIdentityGenerator.Length"/>
-    /// characters (11), so a tenant id and a name may have 439 between them.
+    /// bytes SQL Server allows a clustered key. A generated id is an 11-character
+    /// <see cref="Elsa.Primitives.Identity.ShortIdentityGenerator"/> id, so a tenant id and a name may have 439 between them.
     /// </summary>
     public const int MaximumKeyLength = 450;
 

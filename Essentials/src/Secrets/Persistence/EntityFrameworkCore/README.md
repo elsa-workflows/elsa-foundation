@@ -125,7 +125,9 @@ SQLite have no such bound here, so the audit does not check key length:
 - `post-migrate` cannot repair a 440-to-450-character row of that kind that an older host deleted in
   place, because the row it would move the secret to is refused. `SecretsProjectionReindex` then
   fails with a `SecretsProjectionException` that names the tenant and secret name and rolls back its
-  batch. Shorten or remove that row by hand and rerun `post-migrate`.
+  batch. Shorten or remove that row by hand and rerun `post-migrate`. Only SQL Server's key-length
+  refusal (error 1946) is reported this way; any other failure of a move, such as a deadlock, a timeout
+  or a lost concurrency race, propagates as itself and also rolls back the batch.
 
 Derived contexts: `SecretsSqliteDbContext`, `SecretsSqlServerDbContext`,
 `SecretsPostgreSqlDbContext`, and `SecretsMySqlDbContext`. Each has its own

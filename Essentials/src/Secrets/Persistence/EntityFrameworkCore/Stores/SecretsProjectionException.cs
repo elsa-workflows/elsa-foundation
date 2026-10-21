@@ -43,8 +43,8 @@ public sealed class SecretsProjectionException : InvalidOperationException
             record.NormalizedName,
             $"Secrets row tenant '{record.TenantId}' name '{record.NormalizedName}' holds a secret that a host from " +
             $"before FreeNameOnDelete deleted in place, and the database refused the row that frees its name under " +
-            $"tombstone '{tombstone}', most likely because the tenant id, name and tombstone together exceed the " +
-            "provider's key length. The current bounded batch was not committed. Shorten this row's tenant id or name, " +
+            $"tombstone '{tombstone}' because the tenant id, name and tombstone together exceed the key length it " +
+            "allows. The current bounded batch was not committed. Shorten this row's tenant id or name, " +
             $"or remove the row, by hand, then rerun the idempotent '{EfPostMigrationActions.Command}' command for " +
             "this host's provider before starting the host.",
             innerException);

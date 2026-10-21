@@ -20,6 +20,9 @@ public sealed class SqliteEfSecretRepositoryTests
 {
     private static readonly DateTimeOffset Now = new(2026, 8, 16, 12, 0, 0, TimeSpan.Zero);
 
+    /// <summary>SQL Server's error for an index entry longer than the key allows.</summary>
+    private const int KeyTooLong = 1946;
+
     [Fact]
     public async Task Migrate_crud_revision_conflict_and_tenant_isolation()
     {
@@ -512,7 +515,7 @@ public sealed class SqliteEfSecretRepositoryTests
     [Fact]
     public async Task A_move_the_database_refuses_names_the_row_to_shorten_or_remove_and_rolls_back_its_batch()
     {
-        var refuseSecondMove = new RefuseInsertInterceptor(refusedInsert: 2);
+        var refuseSecondMove = new RefuseInsertInterceptor(refusedInsert: 2, () => new ProviderFailures.SqlException(KeyTooLong));
         await using var fixture = await SqliteFixture.CreateAsync(refuseSecondMove);
         await AddDeletedInPlaceAsync(fixture, "a.moves.first");
         await AddDeletedInPlaceAsync(fixture, "b.refused");
@@ -524,12 +527,49 @@ public sealed class SqliteEfSecretRepositoryTests
         Assert.Equal(("tenant-a", "b.refused"), (refused.TenantId, refused.NormalizedName));
         Assert.Contains("Shorten this row's tenant id or name, or remove the row, by hand", refused.Message, StringComparison.Ordinal);
         Assert.Contains(EfPostMigrationActions.Command, refused.Message, StringComparison.Ordinal);
-        Assert.IsType<DbUpdateException>(refused.InnerException);
+        Assert.IsType<ProviderFailures.SqlException>(Assert.IsType<DbUpdateException>(refused.InnerException).InnerException);
         refuseSecondMove.Armed = false;
         Assert.All(
             await fixture.Context.Secrets.AsNoTracking().ToListAsync(),
             row => Assert.Equal(("", "deleted"), (row.Tombstone, row.Status)));
         Assert.True(await reindex.AuditAsync(fixture.Context));
+    }
+
+    /// <summary>
+    /// Only a key the database refuses as too long is a row to shorten. Any other failure of a move, a dropped connection
+    /// or a timeout among them, says nothing about the row, so the reindex lets it through as the failure it is, and its
+    /// batch still rolls back.
+    /// </summary>
+    [Fact]
+    public async Task A_move_that_fails_for_another_reason_surfaces_untranslated()
+    {
+        var failMove = new RefuseInsertInterceptor(refusedInsert: 1, () => new ProviderFailures.SyntheticProviderException());
+        await using var fixture = await SqliteFixture.CreateAsync(failMove);
+        await AddDeletedInPlaceAsync(fixture, "deleted.in.place");
+        failMove.Armed = true;
+
+        var failure = await Assert.ThrowsAsync<DbUpdateException>(() => SecretsProjectionContract.ReindexAsync(fixture.Context));
+
+        Assert.IsType<ProviderFailures.SyntheticProviderException>(failure.InnerException);
+        failMove.Armed = false;
+        var row = await fixture.Context.Secrets.AsNoTracking().SingleAsync();
+        Assert.Equal(("", "deleted"), (row.Tombstone, row.Status));
+    }
+
+    /// <summary>
+    /// A concurrent writer that changes the row a move removes is a lost race, not a row to shorten: the reindex reports
+    /// it as the concurrency failure it is.
+    /// </summary>
+    [Fact]
+    public async Task A_concurrent_write_during_a_move_surfaces_as_a_concurrency_failure()
+    {
+        await using var fixture = await SqliteFixture.CreateAsync();
+        await AddDeletedInPlaceAsync(fixture, "deleted.in.place");
+        await using var reindexing = new SecretsSqliteDbContext(SqliteOptions(fixture.Connection)
+            .AddInterceptors(new AlwaysFailConcurrencyInterceptor())
+            .Options);
+
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => SecretsProjectionContract.ReindexAsync(reindexing));
     }
 
     /// <summary>
@@ -805,10 +845,10 @@ public sealed class SqliteEfSecretRepositoryTests
     }
 
     /// <summary>
-    /// Once armed, fails the <paramref name="refusedInsert"/>th command that inserts a row with a provider error, as a
-    /// database refusing a key it cannot hold does; EF reports it as the <see cref="DbUpdateException"/> of the save.
+    /// Once armed, fails the <paramref name="refusedInsert"/>th command that inserts a row with the provider error
+    /// <paramref name="failure"/> makes; EF reports it as the <see cref="DbUpdateException"/> of the save.
     /// </summary>
-    private sealed class RefuseInsertInterceptor(int refusedInsert) : DbCommandInterceptor
+    private sealed class RefuseInsertInterceptor(int refusedInsert, Func<DbException> failure) : DbCommandInterceptor
     {
         private int _inserts;
 
@@ -837,7 +877,7 @@ public sealed class SqliteEfSecretRepositoryTests
         private void RefuseIfDue(DbCommand command)
         {
             if (Armed && command.CommandText.Contains("INSERT INTO", StringComparison.OrdinalIgnoreCase) && ++_inserts == refusedInsert)
-                throw new ProviderFailures.SyntheticProviderException();
+                throw failure();
         }
     }
 

@@ -13,7 +13,7 @@ namespace Elsa.Primitives.Identity;
 internal static class Base62
 {
     private const string Alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-    internal const int Width = 11;
+    private const int Width = 11;
 
     public static string Encode(ulong value)
     {

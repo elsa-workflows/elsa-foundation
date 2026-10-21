@@ -81,7 +81,7 @@ public static class SecretsProjectionContract
     /// Rewrites legacy projection columns and payload copies from the authoritative stored secret, and moves a secret
     /// deleted in place out of the row that holds its name into a row of its own under its id, which frees the name.
     /// </summary>
-    /// <exception cref="SecretsProjectionException">A row payload cannot be parsed or does not match its key, or the database refuses the row a secret deleted in place moves to; the current batch is rolled back.</exception>
+    /// <exception cref="SecretsProjectionException">A row payload cannot be parsed or does not match its key, or the database refuses the row a secret deleted in place moves to because its key is too long; the current batch is rolled back.</exception>
     public static async Task<int> ReindexAsync(
         SecretsDbContext context,
         CancellationToken cancellationToken = default)
@@ -146,7 +146,9 @@ public static class SecretsProjectionContract
     /// guarding the delete against a concurrent writer, and the secret's own row takes its id as the tombstone. The
     /// revision carries over, as for every row this repairs. Each move is its own save, so a row the provider refuses
     /// is the one the failure names: on SQL Server, a secret created before the key length bound whose tenant id and
-    /// name leave its id no room within 900 bytes cannot be moved, and only the operator can shorten or remove it.
+    /// name leave its id no room within 900 bytes cannot be moved, and only the operator can shorten or remove it. Only
+    /// that refusal names the row; any other failure, a lost race, a deadlock, a timeout or a dropped connection, says
+    /// nothing about it and propagates as itself.
     /// </summary>
     private static async Task MoveDeletedInPlaceAsync(
         SecretsDbContext context,
@@ -160,10 +162,31 @@ public static class SecretsProjectionContract
         {
             await context.SaveProjectionChangesAsync(cancellationToken);
         }
-        catch (DbUpdateException exception) when (exception is not DbUpdateConcurrencyException)
+        catch (DbUpdateException exception) when (IsKeyTooLong(exception))
         {
             throw SecretsProjectionException.ForRefusedMove(record, current.Tombstone, exception);
         }
+    }
+
+    /// <summary>
+    /// Whether the database refused a row because its key is longer than the key allows, read by the provider
+    /// exception's type name so no provider assembly is referenced. Only SQL Server can: its clustered key is 900 bytes,
+    /// less than the columns can hold together, and it refuses an entry past that with error 1946. SQLite has no key
+    /// limit. PostgreSQL's B-tree entry limit and MySQL's key prefix limit both exceed the most bytes the bounded
+    /// columns can hold, and MySQL checks its limit when the key is created, not when a row is written.
+    /// </summary>
+    private static bool IsKeyTooLong(DbUpdateException exception)
+    {
+        for (Exception? current = exception.InnerException; current is not null; current = current.InnerException)
+        {
+            var type = current.GetType();
+            if (type.Name.Equals("SqlException", StringComparison.Ordinal) &&
+                (type.GetProperty("Number")?.GetValue(current) is 1946 ||
+                 current.Message.Contains("maximum length of 900 bytes", StringComparison.Ordinal)))
+                return true;
+        }
+
+        return false;
     }
 
     private readonly record struct SeekCursor(string TenantId, string NormalizedName, string Tombstone);
