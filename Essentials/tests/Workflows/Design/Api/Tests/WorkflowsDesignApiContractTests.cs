@@ -442,6 +442,36 @@ public sealed class WorkflowsDesignApiContractTests
         Assert.Null(host.Domain.LastSubmittedState);
     }
 
+    /// <summary>
+    /// Binding a connection in a workflow is authorized by <c>workflows/design:manage</c> alone: the connection
+    /// validator asks no one, so every viewer sees the same findings. Every Workflow Design route that writes drafts or
+    /// versions, or promotes a draft, and so could carry a connection binding, must therefore refuse a reader before it
+    /// dispatches.
+    /// </summary>
+    [Theory]
+    [InlineData("POST", "/design/workflows/definitions")]
+    [InlineData("POST", "/design/workflows/definitions/submit")]
+    [InlineData("PUT", "/design/workflows/drafts/route-draft")]
+    [InlineData("POST", "/design/workflows/drafts/route-draft/promote")]
+    [InlineData("POST", "/design/workflows/drafts/route-draft/promotion-preflight")]
+    [InlineData("POST", "/design/workflows/versions/ingest")]
+    public async Task A_reader_cannot_write_or_promote_workflow_state(string method, string route)
+    {
+        await using var host = await AuthorizationHost.StartAsync();
+        using var request = LifecycleRequest(new HttpMethod(method), route, "{}");
+        request.Headers.Remove(AuthorizationHost.IdentityHeader);
+        request.Headers.TryAddWithoutValidation(AuthorizationHost.IdentityHeader, "trusted-read");
+
+        using var response = await host.Client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Null(host.Domain.LastSavedDefinition);
+        Assert.Null(host.Domain.LastSubmittedState);
+        Assert.Null(host.Domain.LastDraftUpdate);
+        Assert.Null(host.Domain.LastDraftReadId);
+        Assert.Null(host.Domain.LastPromoteDraftId);
+    }
+
     [Fact]
     public async Task Submit_round_trips_every_schema_intrinsic_and_conversion_enum_value()
     {
