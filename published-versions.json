@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "a710adf26ad16ff9fe7fbbd1db5818c604aee45d",
+  "last_publish_commit": "882e90101cf53045ecb1d2df122ada52106e955a",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -194,18 +194,18 @@
     },
     {
       "package_id": "Elsa.Connections",
-      "version": "4.0.2-preview",
-      "commit": "73a4f8bf838a21d8d42d35bea28053492e600aeb"
+      "version": "4.0.3-preview",
+      "commit": "882e90101cf53045ecb1d2df122ada52106e955a"
     },
     {
       "package_id": "Elsa.Connections.Api",
-      "version": "4.0.1-preview",
-      "commit": "73a4f8bf838a21d8d42d35bea28053492e600aeb"
+      "version": "4.0.2-preview",
+      "commit": "882e90101cf53045ecb1d2df122ada52106e955a"
     },
     {
       "package_id": "Elsa.Connections.Core",
-      "version": "4.0.2-preview",
-      "commit": "73a4f8bf838a21d8d42d35bea28053492e600aeb"
+      "version": "4.0.3-preview",
+      "commit": "882e90101cf53045ecb1d2df122ada52106e955a"
     },
     {
       "package_id": "Elsa.Connections.Design",
@@ -214,8 +214,8 @@
     },
     {
       "package_id": "Elsa.Connections.Workflows",
-      "version": "4.0.2-preview",
-      "commit": "73a4f8bf838a21d8d42d35bea28053492e600aeb"
+      "version": "4.0.3-preview",
+      "commit": "882e90101cf53045ecb1d2df122ada52106e955a"
     },
     {
       "package_id": "Elsa.Diagnostics.ConsoleLogStreaming",
@@ -514,8 +514,8 @@
     },
     {
       "package_id": "Elsa.Secrets",
-      "version": "4.0.14-preview",
-      "commit": "da9a4927d98fb29eda017b4e1a74a28ee4316439"
+      "version": "4.0.15-preview",
+      "commit": "882e90101cf53045ecb1d2df122ada52106e955a"
     },
     {
       "package_id": "Elsa.Secrets.Api",
@@ -524,8 +524,8 @@
     },
     {
       "package_id": "Elsa.Secrets.Core",
-      "version": "4.0.9-preview",
-      "commit": "da9a4927d98fb29eda017b4e1a74a28ee4316439"
+      "version": "4.0.10-preview",
+      "commit": "882e90101cf53045ecb1d2df122ada52106e955a"
     },
     {
       "package_id": "Elsa.Secrets.Nuplane",
