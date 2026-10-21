@@ -7,8 +7,6 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Stores;
 /// <summary>Pure, bounded transitions for durable HTTP route delivery attempts.</summary>
 internal static class EtlHttpDeliveryTransitions
 {
-    private static readonly HashSet<int> RetryableStatusCodes = [408, 429, 500, 502, 503, 504];
-
     public static EtlConnectorHttpDeliveryResult Begin(EtlConnectorHttpDelivery? state, string effectId, string requestId,
         long fence, DateTimeOffset now, EtlHttpPolicy policy)
     {
@@ -17,9 +15,8 @@ internal static class EtlHttpDeliveryTransitions
 
         if (state is null)
         {
-            DateTimeOffset deadline;
-            try { deadline = now.AddSeconds(policy.DeadlineSeconds); }
-            catch (ArgumentOutOfRangeException) { return new(EtlStoreStatus.Invalid, null, null); }
+            if (!EtlHttpRetryPolicy.TryGetDeadline(now, policy, out var deadline))
+                return new(EtlStoreStatus.Invalid, null, null);
 
             var attempt = NewAttempt(requestId, 1, effectId, fence, now, deadline, policy);
             var created = new EtlConnectorHttpDelivery(deadline, Snapshot([new EtlHttpDeliveryAttemptRecord(attempt, null, null)]),
@@ -96,7 +93,7 @@ internal static class EtlHttpDeliveryTransitions
     public static EtlConnectorHttpDeliveryResult Complete(EtlConnectorHttpDelivery state, EtlHttpDeliveryAttempt attempt,
         EtlHttpDeliveryResponse response, long fence, DateTimeOffset now, EtlHttpPolicy policy)
     {
-        if (state is null || attempt is null || !ValidPolicy(policy) || fence <= 0 || !IsUtc(now) ||
+        if (state is null || attempt is null || !EtlHttpRetryPolicy.IsValid(policy) || fence <= 0 || !EtlHttpRetryPolicy.IsUtc(now) ||
             !ValidAttemptArgument(attempt) || !ValidResponseArgument(response))
             return new(EtlStoreStatus.Invalid, state, null);
 
@@ -151,7 +148,7 @@ internal static class EtlHttpDeliveryTransitions
             return new(EtlStoreStatus.Applied, acknowledged, null);
         }
 
-        if (!IsRetryable(response.StatusCode))
+        if (!EtlHttpRetryPolicy.IsRetryable(response.StatusCode))
         {
             var rejected = completed with
             {
@@ -184,9 +181,9 @@ internal static class EtlHttpDeliveryTransitions
 
     private static void ValidateCore(EtlConnectorHttpDelivery state, string effectId, EtlHttpPolicy policy)
     {
-        if (state is null || !ValidEffectId(effectId) || !ValidPolicy(policy) || state.Attempts is null ||
+        if (state is null || !ValidEffectId(effectId) || !EtlHttpRetryPolicy.IsValid(policy) || state.Attempts is null ||
             state.Attempts.Count is < 1 || state.Attempts.Count > policy.MaxAttempts ||
-            !IsUtc(state.Deadline) || !IsUtc(state.UpdatedAt) || !Enum.IsDefined(state.Phase) || !Enum.IsDefined(state.Failure))
+            !EtlHttpRetryPolicy.IsUtc(state.Deadline) || !EtlHttpRetryPolicy.IsUtc(state.UpdatedAt) || !Enum.IsDefined(state.Phase) || !Enum.IsDefined(state.Failure))
             throw Corrupt();
 
         var attempts = state.Attempts;
@@ -195,7 +192,8 @@ internal static class EtlHttpDeliveryTransitions
         if (!ValidAttemptArgument(first) || first.Number != 1 || first.EffectId != effectId)
             throw Corrupt();
 
-        var expectedDeadline = first.StartedAt.AddSeconds(policy.DeadlineSeconds);
+        if (!EtlHttpRetryPolicy.TryGetDeadline(first.StartedAt, policy, out var expectedDeadline))
+            throw Corrupt();
         if (state.Deadline != expectedDeadline || state.UpdatedAt < first.StartedAt)
             throw Corrupt();
 
@@ -212,12 +210,12 @@ internal static class EtlHttpDeliveryTransitions
             if (current.Number != index + 1 || current.EffectId != effectId ||
                 !ids.Add(current.RequestId) || current.Fence < previousFence ||
                 (index > 0 && current.StartedAt <= previousStarted) || current.StartedAt >= state.Deadline ||
-                current.ExpiresAt != Expiry(current.StartedAt, state.Deadline, policy))
+                current.ExpiresAt != EtlHttpRetryPolicy.ClampExpiry(current.StartedAt, state.Deadline, policy))
                 throw Corrupt();
 
             if (item.CompletedAt is not null)
             {
-                if (!IsUtc(item.CompletedAt.Value) || item.CompletedAt.Value < current.StartedAt ||
+                if (!EtlHttpRetryPolicy.IsUtc(item.CompletedAt.Value) || item.CompletedAt.Value < current.StartedAt ||
                     item.Response is not null && (!ValidResponseArgument(item.Response) || item.CompletedAt.Value >= current.ExpiresAt))
                     throw Corrupt();
                 if (state.UpdatedAt < item.CompletedAt.Value)
@@ -229,11 +227,12 @@ internal static class EtlHttpDeliveryTransitions
             if (!isLast)
             {
                 if (item.CompletedAt is null || item.CompletedAt.Value >= state.Deadline ||
-                    current.Number >= policy.MaxAttempts || !IsRetryable(item.Response?.StatusCode))
+                    current.Number >= policy.MaxAttempts || !EtlHttpRetryPolicy.IsRetryable(item.Response?.StatusCode))
                     throw Corrupt();
 
                 var next = attempts[index + 1].Attempt;
-                var retryAt = NextRetryAt(current, item.Response, item.CompletedAt.Value, policy);
+                var retryAt = EtlHttpRetryPolicy.NextRetryAt(current.Number, item.CompletedAt.Value,
+                    item.Response?.RetryAfter, policy);
                 if (next.StartedAt < retryAt || next.StartedAt <= item.CompletedAt.Value || next.StartedAt >= state.Deadline)
                     throw Corrupt();
             }
@@ -259,10 +258,11 @@ internal static class EtlHttpDeliveryTransitions
 
             case EtlHttpDeliveryPhase.Waiting:
                 if (state.Failure != EtlHttpDeliveryFailure.None || state.NotBefore is null ||
-                    !IsUtc(state.NotBefore.Value) || last.CompletedAt is null ||
-                    !IsRetryable(last.Response?.StatusCode) || attempt.Number >= policy.MaxAttempts ||
+                    !EtlHttpRetryPolicy.IsUtc(state.NotBefore.Value) || last.CompletedAt is null ||
+                    !EtlHttpRetryPolicy.IsRetryable(last.Response?.StatusCode) || attempt.Number >= policy.MaxAttempts ||
                     last.CompletedAt.Value >= state.Deadline || state.UpdatedAt != last.CompletedAt.Value ||
-                    state.NotBefore.Value != NextRetryAt(attempt, last.Response, last.CompletedAt.Value, policy) ||
+                    state.NotBefore.Value != EtlHttpRetryPolicy.NextRetryAt(attempt.Number, last.CompletedAt.Value,
+                        last.Response?.RetryAfter, policy) ||
                     state.NotBefore.Value >= state.Deadline)
                     throw Corrupt();
                 break;
@@ -281,21 +281,22 @@ internal static class EtlHttpDeliveryTransitions
                 switch (state.Failure)
                 {
                     case EtlHttpDeliveryFailure.AttemptsExhausted:
-                        if (attempt.Number != policy.MaxAttempts || !IsRetryable(last.Response?.StatusCode) ||
+                        if (attempt.Number != policy.MaxAttempts || !EtlHttpRetryPolicy.IsRetryable(last.Response?.StatusCode) ||
                             last.CompletedAt.Value >= state.Deadline || state.UpdatedAt != last.CompletedAt.Value)
                             throw Corrupt();
                         break;
                     case EtlHttpDeliveryFailure.DeadlineExceeded:
-                        var canRetry = IsRetryable(last.Response?.StatusCode);
+                        var canRetry = EtlHttpRetryPolicy.IsRetryable(last.Response?.StatusCode);
                         var retryAt = canRetry
-                            ? NextRetryAt(attempt, last.Response, last.CompletedAt.Value, policy)
+                            ? EtlHttpRetryPolicy.NextRetryAt(attempt.Number, last.CompletedAt.Value,
+                                last.Response?.RetryAfter, policy)
                             : DateTimeOffset.MinValue;
                         if (!(last.CompletedAt.Value >= state.Deadline ||
                               canRetry && (state.UpdatedAt >= state.Deadline || retryAt >= state.Deadline)))
                             throw Corrupt();
                         break;
                     case EtlHttpDeliveryFailure.ResponseRejected:
-                        if (last.Response is null || IsRetryable(last.Response.StatusCode) || IsAcknowledgement(last.Response.StatusCode) ||
+                        if (last.Response is null || EtlHttpRetryPolicy.IsRetryable(last.Response.StatusCode) || IsAcknowledgement(last.Response.StatusCode) ||
                             last.CompletedAt.Value >= state.Deadline || state.UpdatedAt != last.CompletedAt.Value)
                             throw Corrupt();
                         break;
@@ -335,7 +336,8 @@ internal static class EtlHttpDeliveryTransitions
         if (last.Attempt.Number >= policy.MaxAttempts)
             return Fail(state, completedAt, EtlHttpDeliveryFailure.AttemptsExhausted);
 
-        var retryAt = NextRetryAt(last.Attempt, last.Response, completedAt, policy);
+        var retryAt = EtlHttpRetryPolicy.NextRetryAt(last.Attempt.Number, completedAt,
+            last.Response?.RetryAfter, policy);
         if (retryAt >= state.Deadline)
             return Fail(state, completedAt, EtlHttpDeliveryFailure.DeadlineExceeded);
 
@@ -359,51 +361,20 @@ internal static class EtlHttpDeliveryTransitions
 
     private static EtlHttpDeliveryAttempt NewAttempt(string requestId, int number, string effectId, long fence,
         DateTimeOffset startedAt, DateTimeOffset deadline, EtlHttpPolicy policy) =>
-        new(requestId, number, fence, effectId, startedAt, Expiry(startedAt, deadline, policy));
-
-    private static DateTimeOffset Expiry(DateTimeOffset startedAt, DateTimeOffset deadline, EtlHttpPolicy policy)
-    {
-        var timeoutTicks = TimeSpan.FromSeconds(policy.RequestTimeoutSeconds).Ticks;
-        var remainingTicks = deadline.Ticks - startedAt.Ticks;
-        return timeoutTicks >= remainingTicks
-            ? deadline
-            : new DateTimeOffset(startedAt.Ticks + timeoutTicks, TimeSpan.Zero);
-    }
-
-    private static DateTimeOffset NextRetryAt(EtlHttpDeliveryAttempt attempt, EtlHttpDeliveryResponse? response,
-        DateTimeOffset completedAt, EtlHttpPolicy policy)
-    {
-        var backoffAt = AddSecondsSaturated(completedAt, BackoffSeconds(attempt.Number, policy));
-        var retryAfter = response?.RetryAfter;
-        return retryAfter is not null && retryAfter.Value > completedAt && retryAfter.Value > backoffAt
-            ? retryAfter.Value
-            : backoffAt;
-    }
-
-    private static int BackoffSeconds(int attemptNumber, EtlHttpPolicy policy)
-    {
-        long delay = policy.InitialDelaySeconds;
-        for (var i = 1; i < attemptNumber && delay < policy.MaxDelaySeconds; i++)
-            delay = Math.Min(policy.MaxDelaySeconds, delay * 2);
-        return (int)Math.Min(delay, policy.MaxDelaySeconds);
-    }
+        new(requestId, number, fence, effectId, startedAt, EtlHttpRetryPolicy.ClampExpiry(startedAt, deadline, policy));
 
     private static bool ValidBeginArguments(string effectId, string requestId, long fence, DateTimeOffset now,
-        EtlHttpPolicy policy) => ValidEffectId(effectId) && IsRequestId(requestId) && fence > 0 && IsUtc(now) && ValidPolicy(policy);
+        EtlHttpPolicy policy) => ValidEffectId(effectId) && EtlHttpRetryPolicy.IsAttemptId(requestId) && fence > 0 &&
+                                 EtlHttpRetryPolicy.IsUtc(now) && EtlHttpRetryPolicy.IsValid(policy);
 
     private static bool ValidAttemptArgument(EtlHttpDeliveryAttempt? attempt) => attempt is not null &&
-        IsRequestId(attempt.RequestId) && attempt.Number > 0 && attempt.Fence > 0 && ValidEffectId(attempt.EffectId) &&
-        IsUtc(attempt.StartedAt) && IsUtc(attempt.ExpiresAt) && attempt.ExpiresAt >= attempt.StartedAt;
+        EtlHttpRetryPolicy.IsAttemptId(attempt.RequestId) && attempt.Number > 0 && attempt.Fence > 0 && ValidEffectId(attempt.EffectId) &&
+        EtlHttpRetryPolicy.IsUtc(attempt.StartedAt) && EtlHttpRetryPolicy.IsUtc(attempt.ExpiresAt) && attempt.ExpiresAt >= attempt.StartedAt;
 
     private static bool ValidResponseArgument(EtlHttpDeliveryResponse? response) => response is not null &&
         (response.StatusCode is null || response.StatusCode is >= 100 and <= 599) &&
-        (response.RetryAfter is null || IsUtc(response.RetryAfter.Value)) &&
+        (response.RetryAfter is null || EtlHttpRetryPolicy.IsUtc(response.RetryAfter.Value)) &&
         (response.StatusCode is not null || response.RetryAfter is null);
-
-    internal static bool ValidPolicy(EtlHttpPolicy? policy) => policy is not null && policy.MaxAttempts > 0 &&
-        policy.DeadlineSeconds > 0 && policy.RequestTimeoutSeconds > 0 &&
-        policy.RequestTimeoutSeconds <= policy.DeadlineSeconds && policy.InitialDelaySeconds > 0 &&
-        policy.MaxDelaySeconds >= policy.InitialDelaySeconds && policy.MaxDelaySeconds <= policy.DeadlineSeconds;
 
     private static string? ReadStateEffectId(EtlConnectorHttpDelivery state)
     {
@@ -425,26 +396,13 @@ internal static class EtlHttpDeliveryTransitions
         }
     }
 
-    private static bool IsRequestId(string? value) => value is { Length: 32 } &&
-        Guid.TryParseExact(value, "N", out var parsed) && StringComparer.Ordinal.Equals(parsed.ToString("N"), value);
-
-    private static bool IsUtc(DateTimeOffset value) => value.Offset == TimeSpan.Zero;
-
     private static bool IsAcknowledgement(int? statusCode) => statusCode is 200 or 201 or 204;
-
-    private static bool IsRetryable(int? statusCode) => statusCode is null || RetryableStatusCodes.Contains(statusCode.Value);
 
     private static bool SameOutcome(EtlHttpDeliveryResponse? recorded, EtlHttpDeliveryResponse supplied) =>
         recorded is null ? supplied.StatusCode is null && supplied.RetryAfter is null : recorded == supplied;
 
     private static bool IsTerminal(EtlHttpDeliveryPhase phase) =>
         phase is EtlHttpDeliveryPhase.Acknowledged or EtlHttpDeliveryPhase.Failed;
-
-    private static DateTimeOffset AddSecondsSaturated(DateTimeOffset value, int seconds)
-    {
-        try { return value.AddSeconds(seconds); }
-        catch (ArgumentOutOfRangeException) { return DateTimeOffset.MaxValue; }
-    }
 
     private static IReadOnlyList<EtlHttpDeliveryAttemptRecord> Snapshot(IEnumerable<EtlHttpDeliveryAttemptRecord> attempts) =>
         new ReadOnlyCollection<EtlHttpDeliveryAttemptRecord>(attempts.ToArray());

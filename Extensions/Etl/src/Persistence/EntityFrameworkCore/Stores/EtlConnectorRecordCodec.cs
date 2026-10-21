@@ -58,7 +58,7 @@ internal static class EtlConnectorRecordCodec
             pipeline.Http.MaxContinuationBytes <= 0 ||
             pipeline.Http.MaxContinuationBytes > EtlHttpPolicy.MaximumSupportedContinuationBytes ||
             pipeline.Http.MaxPageBytes > pipeline.Http.MaxRetainedInputBytes ||
-            pipeline.Http.MaxContinuationBytes > pipeline.Http.MaxPageBytes || !EtlHttpDeliveryTransitions.ValidPolicy(pipeline.Http))
+            pipeline.Http.MaxContinuationBytes > pipeline.Http.MaxPageBytes || !EtlHttpRetryPolicy.IsValid(pipeline.Http))
             throw new ArgumentException("The connector storage limits are invalid.");
         switch (pipeline.Source)
         {

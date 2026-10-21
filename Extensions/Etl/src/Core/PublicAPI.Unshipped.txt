@@ -1577,3 +1577,131 @@ Elsa.Etl.Core.Runtime.EtlConnectorFilePublications.EtlConnectorFilePublications(
 Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.AcceptConnectorBatchAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, string! batchId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorPositionResult!>
 Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.RecordConnectorFilePublicationAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, string! batchId, Elsa.Etl.Core.Runtime.EtlOutputRoute route, Elsa.Etl.Core.Runtime.EtlObjectReference! publication, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlStoreStatus>
 static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorFileOutputKey(string! effectId) -> string!
+static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorHttpPageId(Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission! admission, int partitionOrdinal, long pageSequence, Elsa.Etl.Core.Runtime.EtlHttpRequest! request) -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch!
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.Attempts.get -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord!>!
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.Attempts.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.Capture.get -> Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture?
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.Capture.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.Deadline.get -> System.DateTimeOffset
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.Deadline.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.Equals(Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.Failure.get -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.Failure.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.NotBefore.get -> System.DateTimeOffset?
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.NotBefore.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.Phase.get -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchPhase
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.Phase.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.RequestHash.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.RequestHash.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.UpdatedAt.get -> System.DateTimeOffset
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.UpdatedAt.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure.AttemptsExhausted = 1 -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure.DeadlineExceeded = 2 -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure.InvalidPage = 4 -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure.None = 0 -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure.ResponseRejected = 3 -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchPhase
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchPhase.Captured = 3 -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchPhase
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchPhase.Failed = 2 -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchPhase
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchPhase.InFlight = 0 -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchPhase
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchPhase.Waiting = 1 -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchPhase
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult!
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.Deconstruct(out Elsa.Etl.Core.Runtime.EtlStoreStatus Status, out Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch? Fetch, out Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt? Permit) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.Equals(Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.EtlConnectorHttpSourceFetchResult(Elsa.Etl.Core.Runtime.EtlStoreStatus Status, Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch? Fetch, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt? Permit) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.Fetch.get -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch?
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.Fetch.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.Permit.get -> Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt?
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.Permit.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.Status.get -> Elsa.Etl.Core.Runtime.EtlStoreStatus
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.Status.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt!
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.Deconstruct(out string! RequestId, out int Number, out long Fence, out string! RequestHash, out System.DateTimeOffset StartedAt, out System.DateTimeOffset ExpiresAt) -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.Equals(Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt? other) -> bool
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.EtlHttpSourceFetchAttempt(string! RequestId, int Number, long Fence, string! RequestHash, System.DateTimeOffset StartedAt, System.DateTimeOffset ExpiresAt) -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.ExpiresAt.get -> System.DateTimeOffset
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.ExpiresAt.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.Fence.get -> long
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.Fence.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.Number.get -> int
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.Number.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.RequestHash.get -> string!
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.RequestHash.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.RequestId.get -> string!
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.RequestId.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.StartedAt.get -> System.DateTimeOffset
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.StartedAt.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord!
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.Attempt.get -> Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt!
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.Attempt.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.CompletedAt.get -> System.DateTimeOffset?
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.CompletedAt.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.Deconstruct(out Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt! Attempt, out Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome? Outcome, out System.DateTimeOffset? CompletedAt) -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.Equals(Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord? other) -> bool
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.EtlHttpSourceFetchAttemptRecord(Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt! Attempt, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome? Outcome, System.DateTimeOffset? CompletedAt) -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.Outcome.get -> Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome?
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.Outcome.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture!
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.Deconstruct(out Elsa.Etl.Core.Runtime.EtlRetainedHttpPage! Page, out string! RequestId, out long Fence, out System.DateTimeOffset ResponseReceivedAtUtc) -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.Equals(Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture? other) -> bool
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.EtlHttpSourceFetchCapture(Elsa.Etl.Core.Runtime.EtlRetainedHttpPage! Page, string! RequestId, long Fence, System.DateTimeOffset ResponseReceivedAtUtc) -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.Fence.get -> long
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.Fence.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.Page.get -> Elsa.Etl.Core.Runtime.EtlRetainedHttpPage!
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.Page.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.RequestId.get -> string!
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.RequestId.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.ResponseReceivedAtUtc.get -> System.DateTimeOffset
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.ResponseReceivedAtUtc.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome!
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.Deconstruct(out int? StatusCode, out System.DateTimeOffset? RetryAfter, out bool InvalidPage) -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.Equals(Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome? other) -> bool
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.EtlHttpSourceFetchOutcome(int? StatusCode, System.DateTimeOffset? RetryAfter, bool InvalidPage) -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.InvalidPage.get -> bool
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.InvalidPage.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.RetryAfter.get -> System.DateTimeOffset?
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.RetryAfter.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.StatusCode.get -> int?
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.StatusCode.init -> void
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.ToString() -> string!
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.operator !=(Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt? left, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.operator ==(Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt? left, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.operator !=(Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord? left, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.operator ==(Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord? left, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.operator !=(Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture? left, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.operator ==(Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture? left, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.operator !=(Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome? left, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.operator ==(Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome? left, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome? right) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.Deconstruct(out string! RequestHash, out long PageSequence, out System.DateTimeOffset Deadline, out System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord!>! Attempts, out Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchPhase Phase, out System.DateTimeOffset? NotBefore, out Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure Failure, out System.DateTimeOffset UpdatedAt, out Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture? Capture) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.PageSequence.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.PageSequence.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.EtlConnectorHttpSourceFetch(string! RequestHash, long PageSequence, System.DateTimeOffset Deadline, System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord!>! Attempts, Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchPhase Phase, System.DateTimeOffset? NotBefore, Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure Failure, System.DateTimeOffset UpdatedAt, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture? Capture) -> void

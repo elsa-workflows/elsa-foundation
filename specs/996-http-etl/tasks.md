@@ -24,6 +24,7 @@ Issue [#3151](https://github.com/elsa-workflows/elsa-foundation/issues/3151). On
 
   - Durable HTTP route attempts, bounded retries/receipt headroom and partial-route recovery: [checkpoint](evidence/connector-http-delivery-checkpoint.md). Source-fetch attempts, file publication/atomic acceptance and execution remain owed; T005 stays open.
   - File publication, atomic accepted progress, acceptance metadata headroom and final result/outbox: [checkpoint](evidence/connector-acceptance-checkpoint.md). Source-fetch attempts and full runtime/product recovery proof remain owed; T005 stays open.
+  - Source retry/capture primitives and request-addressed page cache: [checkpoint](evidence/source-capture-checkpoint.md). EF journal/attachment integration, pre-dispatch source capacity and actual transport remain owed; T005 stays open.
 
 ## Phase 3 — US1: Author and execute HTTP integrations
 

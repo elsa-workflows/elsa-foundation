@@ -16,6 +16,33 @@ Decoded JSON decimal fields require an exactly representable decimal value; conv
 
 Continuation is either a scalar opaque token inserted into one named query parameter of the pinned seed, or a URI reference selected from JSON. Missing/null/empty continuation ends the shard; empty record array alone does not. Next links are resolved then checked against the pinned origin and finite exact canonical-path allowlist before authentication. By default only seed paths are approved; hosts may explicitly add paths. A same-origin link to any other path is refused. Raw continuation text is retained only in protected runtime data, not keys/logs/public API. Page count/visited request digests bound loops.
 
+## Source acquisition and retained-page recovery
+
+Only a complete bounded HTTP 200 JSON representation is a source page. Other 2xx responses, including
+201, 202, 204 and 206, do not prove a complete page and are refused. Source retry uses the same selected
+transient statuses and bounded timing mechanics as delivery, but source capture and output acknowledgement
+remain different facts. Malformed or over-limit JSON is a deterministic page failure, not empty-source success.
+
+Allocate the source attempt durably before GET. Its identity, current fence, expiry and fixed request deadline
+are separate from the immutable request identity. A successful response is not authoritative input until its
+raw body is retained and verified and the current owner attaches its page descriptor. Keep the complete-response
+receipt time and original attempt provenance so a replacement can validate a previously published page without
+inventing a new response or attributing it to its own fence.
+
+The file cache publishes a content-addressed raw JSON body first, then a request-addressed immutable manifest.
+The manifest is the single publication point; a raw body without that manifest is not a recoverable page.
+Recovery checks the fixed-size manifest checksum and revalidates the referenced body's bytes and decoded count/continuation before
+allocating another GET. A missing manifest is distinct from an unavailable cache or a manifest whose body is
+missing/corrupt. Those failures never silently become permission to fetch again. Identical content may reuse
+the first manifest and its provenance; different content cannot overwrite it. This does not guarantee that
+remote pages observed at different times form one consistent remote collection.
+
+The manifest belongs to protected runtime storage. Its key binds the admitted invocation, source revision,
+partition, page sequence and request hash; it contains no endpoint, headers or credential. Body references retain
+the actual raw JSON hash/length rather than the manifest's byte identity. Body/manifest publication and SQL
+attachment are separate durability boundaries. Unreferenced bodies after interruption require runtime cleanup;
+logical retained-input limits do not promise to bound filesystem overhead or all crash leftovers.
+
 ## Delivery and retry
 
 Each nonempty route sends a bounded JSON array to its pinned destination via POST. Request identity and body are retained before sending. Default key header is `Idempotency-Key`, host-configurable to an approved non-conflicting name. The key is stable across worker replacement and binds the retained route/body; it is not an exactly-once guarantee. The receiver must explicitly offer deduplication for stronger external-effect behavior.

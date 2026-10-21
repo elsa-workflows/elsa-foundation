@@ -18,6 +18,24 @@ public static class EtlRuntimeIdentity
         return Hash("etl-http-request-v2", request.ShardId, request.Continuation);
     }
 
+    /// <summary>Stable retained-page identity bound to its invocation, source pin, partition, page, and request.</summary>
+    public static string ConnectorHttpPageId(EtlConnectorRunAdmission admission, int partitionOrdinal,
+        long pageSequence, EtlHttpRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(admission);
+        ArgumentNullException.ThrowIfNull(admission.Bindings);
+        ArgumentNullException.ThrowIfNull(request);
+        if (partitionOrdinal < 0)
+            throw new ArgumentOutOfRangeException(nameof(partitionOrdinal));
+        if (pageSequence < 0)
+            throw new ArgumentOutOfRangeException(nameof(pageSequence));
+        if (admission.Bindings.Source is not { Kind: EtlConnectorKind.Http } source)
+            throw new ArgumentException("A retained HTTP page requires an HTTP source binding.", nameof(admission));
+
+        return Hash("etl-connector-http-page-v1", InvocationFingerprint(admission.Invocation),
+            ConnectorBinding(source), Number(partitionOrdinal), Number(pageSequence), HttpRequestHash(request));
+    }
+
     public static string ScopeKey(EtlScope scope)
     {
         ArgumentNullException.ThrowIfNull(scope);

@@ -161,3 +161,33 @@ transitions and settled-batch replay use indexed bounded reads; replay returns a
 without recounting old input. Once the run is terminal, duplicate acceptance returns `Terminal` and
 leaves its existing result/outbox unchanged. These storage contracts do not yet establish the full
 HTTP transport, native continuation, Studio or two-process acceptance journey.
+
+## Source-fetch journal and capture boundary
+
+The source request binds its page sequence and request hash, and owns a fixed retry deadline and a bounded ordered history of physical permits.
+A permit binds its caller-generated request ID, attempt number, original owner fence, immutable source
+request hash and start/expiry. Non-success HTTP outcomes, incomplete transport and invalid complete
+pages are distinct facts. A bare 200 is not a durable success outcome; only a verified capture receipt
+can establish a retained source page.
+
+The capture receipt references the raw page descriptor and the original attempt ID/fence plus the
+complete-response receive time. Recovery must match that tuple to a retained historical permit and
+require start <= receive time < expiry and before the fixed deadline. The current lease authorizes
+attachment; the receipt's old fence identifies the original request, and is not substituted for the
+current lease. A valid capture can be discovered after that attempt was recorded uncertain or another
+attempt began. Keep those physical histories unchanged and record capture separately. Capture stops
+new dispatch, but does not prove that a later physical attempt has terminated or release its capacity.
+A definite incompatible response or invalid-page outcome cannot be replaced by a successful receipt.
+
+The file cache publishes raw content-addressed JSON before the request-addressed manifest. That
+manifest is the recoverable pre-SQL receipt. Re-read and validate its actual body before attaching;
+raw body references continue to measure the real JSON bytes. Zero-byte responses, malformed/truncated transport and
+unavailable/corrupt storage never become source exhaustion. A body without a manifest is uncommitted
+cache material; its cleanup and physical storage capacity belong to the runtime integration.
+
+T005 still requires wiring this journal and capture proof into EF request/page rows, claim eligibility,
+current-owner attachment and history audits. Reserve bounded outcome/page/position metadata before GET;
+for empty pages preserve capacity for the next-request transition, and for nonempty pages transfer the
+needed capacity to the existing final-batch acceptance reserve without charging it twice. Source input
+retention must also account for concurrent in-flight acquisitions before actual transport is enabled.
+The source retry/capture types and cache alone do not activate HTTP execution or close T005/T009.
