@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "7fb745f8604b6ed67a2eae60266976c98bce949e",
+  "last_publish_commit": "73a4f8bf838a21d8d42d35bea28053492e600aeb",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -194,28 +194,28 @@
     },
     {
       "package_id": "Elsa.Connections",
-      "version": "4.0.1-preview",
-      "commit": "eea75dd448143553f9afd6649ca3a425f870be97"
+      "version": "4.0.2-preview",
+      "commit": "73a4f8bf838a21d8d42d35bea28053492e600aeb"
     },
     {
       "package_id": "Elsa.Connections.Api",
-      "version": "4.0.0-preview",
-      "commit": "15feed9e0be709348602e054cca85a33f0f76873"
+      "version": "4.0.1-preview",
+      "commit": "73a4f8bf838a21d8d42d35bea28053492e600aeb"
     },
     {
       "package_id": "Elsa.Connections.Core",
-      "version": "4.0.1-preview",
-      "commit": "eea75dd448143553f9afd6649ca3a425f870be97"
+      "version": "4.0.2-preview",
+      "commit": "73a4f8bf838a21d8d42d35bea28053492e600aeb"
     },
     {
       "package_id": "Elsa.Connections.Design",
-      "version": "4.0.0-preview",
-      "commit": "15feed9e0be709348602e054cca85a33f0f76873"
+      "version": "4.0.1-preview",
+      "commit": "73a4f8bf838a21d8d42d35bea28053492e600aeb"
     },
     {
       "package_id": "Elsa.Connections.Workflows",
-      "version": "4.0.1-preview",
-      "commit": "3c01b8975ebe3a9decf6aa3ace1fb6b8258602c0"
+      "version": "4.0.2-preview",
+      "commit": "73a4f8bf838a21d8d42d35bea28053492e600aeb"
     },
     {
       "package_id": "Elsa.Diagnostics.ConsoleLogStreaming",
