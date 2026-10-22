@@ -91,7 +91,7 @@ Every activity the design-time picker can show is a persisted `ActivityDefinitio
 
 **Activity versioning** *(draft pending ratification)*: an author-owned SemVer 2.0.0 string from the declaring assembly, overridable by `[Version("…")]`; never an engine-assigned integer.
 
-**Reconciliation — Model X** *(provisional pending architecture review)*: catalogs reconcile from trusted sources at creation time only, with no operational sibling, `LastSeenAt`, `IsStale` or `RemovedAt`. Lookup is by `(DefinitionId, Version)`, ignoring build metadata: absent → create; present and the only content difference is input `tier` → the one pre-GA exception, rewriting `Hash` and `InputsSource` in place; present with any other `ReconcilliationHash` → throw `ActivityVersionHashMismatchException`; same hash → skip or throw per source configuration. Versions are never deleted and sort by SemVer.
+**Reconciliation — Model X** *(provisional pending architecture review)*: catalogs reconcile from trusted sources at creation time only, with no operational sibling, `LastSeenAt`, `IsStale` or `RemovedAt`. Lookup is by `(DefinitionId, Version)`, ignoring build metadata: absent → create; present and the only difference is build metadata → skip (logged); present and the only content difference is input `tier` → the one pre-GA exception, rewriting `Hash` and `InputsSource` in place; present with any other `Hash` difference → throw `ActivityVersionHashMismatchException`; same hash → skip or throw per source configuration. Versions are never deleted and sort by SemVer.
 
 ### §E2.9 `WorkflowDefinitionState` scope policy + architectural triplet
 
