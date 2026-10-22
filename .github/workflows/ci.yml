@@ -577,6 +577,36 @@ jobs:
         if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
         run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- ef-suites-self-test
 
+      # Spec 263: every test project is in tools/ci/test-tiers.json exactly once; Testcontainers, or a child host in a
+      # project of 2 minutes or more, is integration tier; split classes exist and no xUnit collection is split; every unit
+      # runs in exactly one shard of its tier.
+      - name: Check the test tier manifest
+        id: test-tiers-check
+        if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- test-tiers-check
+
+      - name: Exercise test tier check contract
+        id: test-tiers-self-test
+        if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- test-tiers-self-test
+
+      - name: Explain a failed test tier check
+        if: ${{ failure() && (steps.test-tiers-check.outcome == 'failure' || steps.test-tiers-self-test.outcome == 'failure') }}
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## Test tier manifest does not match the tree
+
+          The step log names each problem. `tools/ci/test-tiers.json` must list every test project once, in the
+          `pr` or `integration` tier, and every unit in one shard of its tier. A project that reaches Testcontainers,
+          or that launches a child host and takes 2 minutes or more, is integration tier. Check locally with:
+
+          ```bash
+          dotnet run --project tools/maps/Elsa.Maps.Generator -- test-tiers-check
+          ```
+
+          The tier rule: `docs/contributing/merging.md#ci-tiers`.
+          EOF
+
       - name: Validate filters with the .NET CLI
         id: filters-cli
         if: ${{ !cancelled() }}

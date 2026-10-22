@@ -84,8 +84,8 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
   - the switch on and off;
   - malformed JSON (exit 1);
   - a refusal when the ruleset fixture lacks `Full tier`.
-- [ ] T013 Create `tools/maps/Elsa.Maps.Generator/TestTierManifest.cs`, the manifest model and loader. It names R6 failures by JSON path.
-- [ ] T014 Create `tools/maps/Elsa.Maps.Generator/TestTierCheck.cs` (`test-tiers-check`), per [contracts](contracts/cli-and-ci.md#elsamapsgenerator). It checks:
+- [X] T013 Create `tools/maps/Elsa.Maps.Generator/TestTierManifest.cs`, the manifest model and loader. It names R6 failures by JSON path.
+- [X] T014 Create `tools/maps/Elsa.Maps.Generator/TestTierCheck.cs` (`test-tiers-check`), per [contracts](contracts/cli-and-ci.md#elsamapsgenerator). It checks:
   - every test project appears once and every entry exists (FR-016);
   - the Testcontainers trait, through the same `PackageReference` and `ProjectReference` closure that `solution-filter-roots` uses;
   - the `dotnet`-launch trait, by a scan of the project's `.cs` files and those of referenced test and fixture projects for `ProcessStartInfo`/`Process.Start` whose file name is the literal `"dotnet"`, `DOTNET_HOST_PATH` or a `DotnetMuxer()` call (git and bash are ignored);
@@ -95,14 +95,14 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
   - shard coverage per tier, and container-suite coverage.
 
   Each failure names the project, `tools/ci/test-tiers.json` and both tiers.
-- [ ] T015 Create `test-tiers-self-test` in `tools/maps/Elsa.Maps.Generator/TestTierCheck.cs`, with fixture trees for each T014 failure, including:
+- [X] T015 Create `test-tiers-self-test` in `tools/maps/Elsa.Maps.Generator/TestTierCheck.cs`, with fixture trees for each T014 failure, including:
   - a `dotnet` launch in a project under 2 min (allowed);
   - the same launch at 2 min (refused);
   - a git launch (allowed).
 
   Wire both commands into `tools/maps/Elsa.Maps.Generator/Program.cs` (usage comment `:10`, dispatch near `:58`, and the unknown-command list `:128`).
-- [ ] T016 Create `tools/maps/Elsa.Maps.Generator/TestTierRebalance.cs` (`rebalance <trx-dir> [--write]`). It computes per-project medians and per-class sums from TRX, and proposes `shards` and `splits` by longest-first bin packing within `shardTargetMinutes`, never splitting a collection. It is a maintainer tool, not run in CI. Run it on the TRX set from run 39790463068 and confirm it reproduces T005 and T006, or explain the difference in the PR.
-- [ ] T017 Add `test-tiers-check` and `test-tiers-self-test` steps to the `Generated maps fresh` job in `.github/workflows/ci.yml`, beside `ef-suites-self-test` (`:573-578`). They follow the same `if: ${{ !cancelled() && steps.generator.outcome == 'success' }}` pattern, and each failed step is added to the "Explain a failed generator check" condition. Keep the job name.
+- [X] T016 Create `tools/maps/Elsa.Maps.Generator/TestTierRebalance.cs` (`rebalance <trx-dir> [--write]`). It computes per-project medians and per-class sums from TRX, and proposes `shards` and `splits` by longest-first bin packing within `shardTargetMinutes`, never splitting a collection. It is a maintainer tool, not run in CI. Run it on the TRX set from run 39790463068 and confirm it reproduces T005 and T006, or explain the difference in the PR. *(Done: it reproduces R3's class floors and R9's three PR bins of about 10 project-minutes. `--write` records the median over every run given, never one run: in run 39790463068 `Elsa.Etl.Tests` took 3.6 min against a 50-run median of 1.8, which would have crossed the 2-minute bar. The shard grouping stays a reviewed hand edit.)*
+- [X] T017 Add `test-tiers-check` and `test-tiers-self-test` steps to the `Generated maps fresh` job in `.github/workflows/ci.yml`, beside `ef-suites-self-test` (`:573-578`). They follow the same `if: ${{ !cancelled() && steps.generator.outcome == 'success' }}` pattern, and each failed step is added to the "Explain a failed generator check" condition. Keep the job name. *(Done with a step of its own, "Explain a failed test tier check", because the generator explanation talks about maps and lock files.)*
 
 **Checkpoint**: the manifest validates; `ef-suites-select` output is unchanged; no workflow behaviour has changed yet.
 
