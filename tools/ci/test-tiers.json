@@ -1094,6 +1094,11 @@
       "test": "Elsa.Primitives.Tests.Spec263Probe.Spec263ProbeTests.Quarantined_always_fails",
       "issue": 3263,
       "since": "2026-10-22"
+    },
+    {
+      "test": "Elsa.Primitives.Tests.Spec263Probe.Spec263ProbeTests.Fails_twice",
+      "issue": 3068,
+      "since": "2026-10-22"
     }
   ]
 }
