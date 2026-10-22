@@ -28,14 +28,15 @@ export function workflowEditorResponse(url: URL) {
 export async function renderWorkflowRoute(
   path: string,
   fetchMock: typeof fetch,
-  capabilities = pagedDefinitionCapabilities()
+  capabilities = pagedDefinitionCapabilities(),
+  options: { followNavigation?: boolean; historyState?: unknown } = {}
 ) {
   vi.stubGlobal("fetch", fetchMock);
   let context = createEndpointContext("https://server.example/");
   const rendered = await renderRegisteredRoute(path, (api: ElsaStudioModuleApi) => {
     // Use the public SDK HTTP client so denial cases exercise StudioHttpError.status.
     Object.defineProperty(api, "backend", { get: () => context });
-  }, false, capabilities);
+  }, options.followNavigation, capabilities, options.historyState);
   return {
     ...rendered,
     updateEndpoint(baseUrl: string) {

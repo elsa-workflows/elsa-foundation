@@ -35,6 +35,7 @@ describe("home dashboard data", () => {
         {
           id: "definition-1",
           name: "Orders",
+        draftId: "draft-orders",
           description: "Processes new orders.",
           createdAt: "2026-10-17T10:00:00Z",
           lastModifiedAt: "2026-10-18T11:30:00Z",
@@ -53,10 +54,29 @@ describe("home dashboard data", () => {
       createdAt: "2026-10-17T10:00:00Z",
       lastModifiedAt: "2026-10-18T11:30:00Z",
       latestVersion: "3",
-      publicationState: "published"
+      publicationState: "published",
+      draftId: "draft-orders"
     });
     expect(getJson).toHaveBeenCalledTimes(1);
     expect(getJson).toHaveBeenCalledWith(definitionsPath, { signal });
+  });
+
+  it("retains draft identity for every returned definition, including candidates beyond the recent preview", async () => {
+    const api = stubApi();
+    const definitions = Array.from({ length: 9 }, (_, index) => ({
+      id: `definition-${index + 1}`,
+      name: `Workflow ${index + 1}`,
+      draftId: index === 8 ? "draft-ninth" : index === 7 ? "  " : `draft-${index + 1}`,
+      publicationState: "published"
+    }));
+    mockGetJson(api, () => ({ items: definitions }));
+
+    const workflows = await loadRecentWorkflows(api, new AbortController().signal);
+
+    expect(workflows).toHaveLength(9);
+    expect(workflows.map(item => item.draftId)).toEqual([
+      "draft-1", "draft-2", "draft-3", "draft-4", "draft-5", "draft-6", "draft-7", undefined, "draft-ninth"
+    ]);
   });
 
   it("uses one bulk definition lookup to label runs and preserves explicit run names", async () => {

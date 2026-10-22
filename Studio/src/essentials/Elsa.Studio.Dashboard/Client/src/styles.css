@@ -107,4 +107,38 @@
 
 .home-page .dashboard-grid { align-items: start; }
 
+.home-task-group { display: grid; gap: .85rem; padding: 1rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-md); background: var(--studio-surface); }
+.home-task-group-heading h3 { margin: 0; color: var(--studio-text); font-size: var(--studio-section-title-size); }
+.home-task-group-heading p { margin: .25rem 0 0; color: var(--studio-text-muted); }
+.home-task-group-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); gap: .625rem; }
+.home-task-card { display: flex; align-items: center; gap: .625rem; min-width: 0; min-height: 4.5rem; padding: .75rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-md); background: var(--studio-surface-muted); color: var(--studio-text); text-align: start; text-decoration: none; cursor: pointer; }
+.home-task-card--primary { border-color: color-mix(in srgb, var(--studio-accent) 38%, var(--studio-border)); background: color-mix(in srgb, var(--studio-accent) 7%, var(--studio-surface)); }
+.home-task-card--disabled, .home-task-card:disabled { color: var(--studio-text-muted); opacity: .75; cursor: not-allowed; }
+.home-task-card-icon { display: grid; place-items: center; flex: 0 0 auto; width: 2rem; height: 2rem; border-radius: var(--studio-radius-sm); background: color-mix(in srgb, var(--studio-accent) 11%, var(--studio-surface)); color: var(--studio-accent); }
+.home-task-card-copy { display: grid; flex: 1; gap: .2rem; min-width: 0; }
+.home-task-card-copy strong { font-size: .95rem; font-weight: 650; }
+.home-task-card-copy > span { color: var(--studio-text-muted); font-size: var(--studio-label-size); line-height: 1.4; }
+.home-task-card > svg:last-child { flex: 0 0 auto; color: var(--studio-text-muted); }
+.home-task-card:hover:not(:disabled) { background: color-mix(in srgb, var(--studio-accent) 9%, var(--studio-surface)); }
+.home-task-group a:focus-visible, .home-task-group button:focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 2px; }
+.home-task-group-footer { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; }
+.home-task-group-footer a, .home-task-group-footer span[aria-disabled="true"] { display: inline-flex; align-items: center; gap: .375rem; color: var(--studio-accent); font-weight: 550; text-decoration: none; }
+.home-task-group-footer a:hover { text-decoration: underline; text-underline-offset: .2em; }
+.home-continue-dialog { display: grid; gap: .75rem; width: min(38rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; }
+.home-continue-dialog > h4, .home-continue-dialog p { margin: 0; }
+.home-continue-dialog [role="status"] { display: flex; align-items: center; gap: .5rem; color: var(--studio-text-muted); }
+.home-continue-dialog > div:not(.home-continue-dialog-actions) { display: grid; gap: .75rem; }
+.home-continue-dialog a { color: var(--studio-accent); }
+.home-continue-dialog ul { display: grid; gap: .375rem; max-height: 18rem; overflow: auto; margin: 0; padding: 0; list-style: none; }
+.home-continue-dialog li a { display: grid; gap: .2rem; padding: .625rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-sm); background: var(--studio-surface-muted); color: var(--studio-text); text-decoration: none; }
+.home-continue-dialog li a:hover { border-color: var(--studio-accent); }
+.home-continue-dialog li code { overflow-wrap: anywhere; color: var(--studio-text-muted); font-family: var(--studio-font-mono); font-size: var(--studio-label-size); }
+.home-continue-dialog-actions { display: flex; justify-content: flex-end; padding-block-start: .25rem; border-block-start: 1px solid var(--studio-border); }
+.home-continue-dialog [role="status"] svg { flex: 0 0 auto; animation: home-task-spin 1s linear infinite; }
+@keyframes home-task-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .home-continue-dialog [role="status"] svg { animation: none; }
+}
+
 .home-record-trailing .studio-status-chip { text-transform: capitalize; }

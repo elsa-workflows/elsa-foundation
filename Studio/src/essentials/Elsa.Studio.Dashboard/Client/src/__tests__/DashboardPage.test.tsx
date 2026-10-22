@@ -13,6 +13,47 @@ describe("HomePage", () => {
     localStorage.clear();
   });
 
+  it("shows durable workflow tasks before the configurable grid without writing Home preferences", async () => {
+    const api = stubApi();
+    api.dashboardWidgets.add(widget({ id: "preserved-widget", title: "Preserved widget", component: () => <span>Preserved content</span> }));
+    seedHomeLayout(api, ["preserved-widget"]);
+    const putJson = vi.spyOn(api.backend.http, "putJson");
+    const view = render(api);
+
+    const taskGroup = view.container.querySelector(".home-task-group");
+    expect(taskGroup).not.toBeNull();
+    expect(view.container.querySelector(".dashboard-grid")).toBeNull();
+    expect(taskGroup?.textContent).toContain("Create workflow");
+    expect(taskGroup?.textContent).toContain("Continue editing");
+    expect(taskGroup?.querySelector("a[href='/workflows/instances?incidentHealth=active']")).not.toBeNull();
+
+    const continueButton = [...view.container.querySelectorAll("button")]
+      .find(button => button.textContent?.includes("Continue editing"))!;
+    flushSync(() => continueButton.click());
+    const openChooser = view.container.querySelector('.home-continue-dialog[role="dialog"]');
+    expect(openChooser).not.toBeNull();
+
+    await waitUntil(() => view.container.querySelector(".dashboard-grid") !== null);
+    expect(view.container.querySelector('.home-continue-dialog[role="dialog"]')).toBe(openChooser);
+    const grid = view.container.querySelector(".dashboard-grid")!;
+    expect(taskGroup!.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(view.container.textContent).toContain("Preserved content");
+    expect(putJson).not.toHaveBeenCalled();
+    flushSync(() => view.root.unmount());
+  });
+
+  it("hides the Home workflow task group when the workflows module is off", async () => {
+    const api = stubApi();
+    api.runtime.enabledFeatures = [];
+    api.dashboardWidgets.add(widget({ id: "core", title: "Core widget", core: true, component: () => <span>Core content</span> }));
+    seedHomeLayout(api, ["core"]);
+    const view = render(api);
+
+    await waitUntil(() => view.container.textContent?.includes("Core content") === true);
+    expect(view.container.querySelector(".home-task-group")).toBeNull();
+    flushSync(() => view.root.unmount());
+  });
+
   it("moves, resizes, hides, and restores widgets in Edit home", async () => {
     const api = stubApi();
     api.dashboardWidgets.add(widget({ id: "first", title: "First", component: () => <span>First body</span> }));
@@ -23,7 +64,7 @@ describe("HomePage", () => {
 
     clickText(container, "Edit home");
     click(container, "Move Second earlier");
-    expect([...container.querySelectorAll("h3")].map(value => value.textContent?.replace("⠿", ""))).toEqual(["Second", "First"]);
+    expect([...container.querySelectorAll(".dashboard-grid article h3")].map(value => value.textContent?.replace("⠿", ""))).toEqual(["Second", "First"]);
     expect(container.querySelector("[aria-live='polite']")?.textContent).toBe("Second moved to position 1 of 2");
     expect(container.querySelector('button[aria-label="Move Second earlier"]')).toBe(document.activeElement);
 
@@ -297,7 +338,7 @@ describe("HomePage", () => {
     }));
     seedHomeLayout(api, []);
     const { container, root } = render(api);
-    await waitUntil(() => container.querySelector("h2")?.textContent === "Home");
+    await waitUntil(() => [...container.querySelectorAll("button")].some(value => value.textContent?.includes("Edit home")));
 
     clickText(container, "Edit home");
     clickText(container, "Add widget");

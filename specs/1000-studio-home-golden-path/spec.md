@@ -105,6 +105,5 @@ An author or operator sees the everyday task entries before configurable summari
 
 - Scope is the already composed Workbench modules. No new backend endpoint, permission policy, runtime/recovery behavior, metrics, widget rewrite or optional module setup is included.
 - Continue selects a definition's current draft, not an observed historical draft version. Recent ordering uses the existing update-time convention and is not personal editing history.
-- #3061 is qualified. Runs #3062 has merged with reviewed-tree equivalence and resulting-main Studio success; its final Core qualification remains mandatory before this slice merges or qualifies under the [scheduling refinement](https://github.com/elsa-workflows/elsa-foundation/issues/3057#issuecomment-6328158365).
-- If a required base gate fails during the recorded overlap, implementation stops until root reconciles that gate.
+- #3061 and #3062 are accepted prerequisites on qualified main `45f9a3b9b226ad7a94e9c176503729ebadfea9f5`; Core run `39762400251` and Studio run `39762399813` succeeded. The historical [scheduling refinement](https://github.com/elsa-workflows/elsa-foundation/issues/3057#issuecomment-6328158365) allowed implementation overlap without waiving the required base qualification. If any required base gate fails during implementation, stop until root reconciles it.
 - Existing valid tests remain valid; changed behavior receives focused observable regression and red/green evidence plus normal-host proof, not a new performance benchmark.

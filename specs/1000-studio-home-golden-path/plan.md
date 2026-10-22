@@ -2,7 +2,7 @@
 
 **Branch**: `agent/codex/3063-home-golden-path` | **Date**: 2026-10-22 | **Spec**: [spec.md](spec.md)
 
-**Input**: #3063, sole isolated implementation of #3057 / #2559; base `5d1df7097db3a731330735a94c2b6a5fb7f9a476`. [Scheduling refinement](https://github.com/elsa-workflows/elsa-foundation/issues/3057#issuecomment-6328158365) permits implementation during Runs main Core verification; it does not waive prerequisite qualification before merge/acceptance.
+**Input**: #3063, sole isolated implementation of #3057 / #2559; implementation base is qualified `45f9a3b9b226ad7a94e9c176503729ebadfea9f5`. Prerequisites #3061 and #3062 are accepted on this base; Core run `39762400251` and Studio run `39762399813` succeeded. The research pin `5d1df7097db3a731330735a94c2b6a5fb7f9a476` remains the reviewed historical snapshot because the Home target paths are unchanged since it. The [scheduling refinement](https://github.com/elsa-workflows/elsa-foundation/issues/3057#issuecomment-6328158365) permitted implementation during Runs main Core verification but did not waive qualification; stop/resume reconciliation still applies if a required base gate fails.
 
 ## Summary
 

@@ -35,6 +35,7 @@ import type { WorkflowNodeActions, WorkflowSlotNavigation } from "./contexts";
 import {
   createNodeId,
   dispatchAiAction,
+  describeWorkflowError,
   findAiAction,
   getDraftSignature,
   groupActivityPalette,
@@ -226,6 +227,9 @@ export function WorkflowEditor({
     reload,
     reloadExpressionDescriptors
   } = useWorkflowEditorData({ context, definitionId, resetHistory, loadDraft, markSaved, setError });
+  const retryLoad = useCallback(() => {
+    void reload().catch(e => setError(describeWorkflowError(e, "Could not load the workflow editor.")));
+  }, [reload, setError]);
   // Debounced name/description save; edits are optimistic and flushed on unmount.
   const { updateDefinitionMeta } = useDefinitionMetadata({ context, details, setDetails, setStatus });
 
@@ -950,8 +954,33 @@ export function WorkflowEditor({
   // run on every render.
   const publishedEquivalent = useDraftEquivalence(context, definitionId, currentTestRun);
 
-  if (!details || !draft) {
-    return <div className="wf-empty">{error?.message || "Loading workflow editor..."}</div>;
+  if (!details) {
+    return (
+      <div className="wf-empty wf-editor-empty" role={error ? "alert" : "status"}>
+        {error?.message ? <>
+          <p>{error.message}</p>
+          <p>Selected workflow definition: <code>{definitionId}</code></p>
+        </> : <p>Loading workflow editor…</p>}
+        {error ? <div className="wf-actions wf-empty-actions">
+          <button type="button" onClick={retryLoad}>Retry loading this workflow</button>
+          <button type="button" onClick={onBack}>Browse workflows</button>
+        </div> : null}
+      </div>
+    );
+  }
+
+  if (!draft) {
+    return (
+      <div className="wf-empty wf-editor-empty" role={error ? "alert" : "status"}>
+        <p>This workflow definition has no current draft.</p>
+        <p>Selected workflow definition: <code>{definitionId}</code></p>
+        {error?.message ? <p>{error.message}</p> : null}
+        <div className="wf-actions wf-empty-actions">
+          <button type="button" onClick={retryLoad}>Reload this workflow</button>
+          <button type="button" onClick={onBack}>Browse workflows</button>
+        </div>
+      </div>
+    );
   }
 
   // The inspected node is either a canvas node (labelled by its node data) or the scope owner, which

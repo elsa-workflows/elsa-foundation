@@ -751,6 +751,14 @@
   color: var(--wf-muted-text);
 }
 
+.wf-page .wf-empty.wf-editor-empty {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wf-editor-empty > p { margin: 0; }
+
 .wf-alert-detailed {
   align-items: flex-start;
 }
