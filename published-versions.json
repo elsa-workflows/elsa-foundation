@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "9462cb743c08a515e9b8973c57110e3f44df0f7f",
+  "last_publish_commit": "45f9a3b9b226ad7a94e9c176503729ebadfea9f5",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -759,13 +759,13 @@
     },
     {
       "package_id": "Elsa3.Mapping",
-      "version": "4.0.22-preview",
-      "commit": "4d4f6d2b2ccff1e56c07c9022079d852e896a812"
+      "version": "4.0.23-preview",
+      "commit": "45f9a3b9b226ad7a94e9c176503729ebadfea9f5"
     },
     {
       "package_id": "Elsa3.Models",
-      "version": "4.0.12-preview",
-      "commit": "4d4f6d2b2ccff1e56c07c9022079d852e896a812"
+      "version": "4.0.13-preview",
+      "commit": "45f9a3b9b226ad7a94e9c176503729ebadfea9f5"
     },
     {
       "package_id": "dotnet-elsa",
