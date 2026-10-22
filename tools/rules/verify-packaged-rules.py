@@ -103,10 +103,10 @@ def main():
     feed.mkdir()
     receipt = {'schemaVersion': 1, 'sourceCommit': args.source_ref,
                'publishStateCommit': args.publish_state_ref, 'stage': args.stage,
-               'directProofPassed': False, 'processBoundaryProofPassed': False, 'fullAcceptancePassed': False, 'commands': [],
+               'directProofPassed': False, 'processBoundaryProofPassed': False, 'processProofPassed': False, 'fullAcceptancePassed': False, 'commands': [],
                'harness': {str(path.relative_to(ROOT)): sha256(path) for path in
                            [Path(__file__), Path(__file__).with_name('package_consumer.py'),
-                            Path(__file__).with_name('package_process.py'),
+                            Path(__file__).with_name('package_process.py'), Path(__file__).with_name('package_adversarial.py'),
                             *sorted(Path(__file__).with_name('PackageProbe').glob('*.cs'))]}}
     print('Rules package evidence: ' + str(evidence), flush=True)
     environment = os.environ.copy()
@@ -228,6 +228,7 @@ def main():
         if not unchanged:
             receipt['directProofPassed'] = False
             receipt['processBoundaryProofPassed'] = False
+            receipt['processProofPassed'] = False
             receipt['error'] = 'Harness changed during execution.'
             exit_code = 1
         write_json(evidence / 'receipt.json', receipt)

@@ -312,7 +312,12 @@ internal static partial class Program
         }
     }
 
-    private static IHost BuildProcessHost(string connection, ProcessBoundaryControl? control, bool suppressWorker)
+    private static IHost BuildProcessHost(string connection, ProcessBoundaryControl? control, bool suppressWorker) =>
+        BuildObservedProcessHost(connection, suppressWorker,
+            control is null ? null : (store, reader) => new ProcessBoundaryStore(store, reader, control));
+
+    private static IHost BuildObservedProcessHost(string connection, bool suppressWorker,
+        Func<IRuleRunStore, IRuleRunReader, IRuleRunStore>? observer)
     {
         var entryAssembly = Assembly.GetEntryAssembly() ?? throw new ProbeAssertionException("Entry assembly is unavailable.");
         var hostRoot = ResolvePhysicalPath(AppContext.BaseDirectory);
@@ -337,8 +342,6 @@ internal static partial class Program
             foreach (var worker in workers)
                 builder.Services.Remove(worker);
         }
-        if (control is not null)
-            builder.Services.AddSingleton(control);
         new RulesRuntimeEntityFrameworkCoreFeature
         {
             Provider = "PostgreSql",
@@ -349,7 +352,7 @@ internal static partial class Program
         }.ConfigureServices(builder.Services);
         builder.Services.Configure<EfMigrateOptions>(options => options.Policy = EfMigratePolicy.AutoMigrate);
 
-        if (control is not null)
+        if (observer is not null)
         {
             var descriptor = builder.Services.LastOrDefault(item => item.ServiceType == typeof(IRuleRunStore));
             Require(descriptor is not null, "PostgreSQL EF Rules feature did not register IRuleRunStore.");
@@ -360,7 +363,7 @@ internal static partial class Program
                     ?? throw new InvalidOperationException("The PostgreSQL Rules store descriptor did not create a store.");
                 var reader = inner as IRuleRunReader
                     ?? throw new InvalidOperationException("The PostgreSQL Rules store does not implement its paired reader.");
-                return new ProcessBoundaryStore(inner, reader, services.GetRequiredService<ProcessBoundaryControl>());
+                return observer(inner, reader);
             });
         }
 

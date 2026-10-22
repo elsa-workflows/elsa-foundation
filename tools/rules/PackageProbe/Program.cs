@@ -60,6 +60,9 @@ internal static partial class Program
         {
             object result = command switch
             {
+                "process-stale-origin" when args.Length == 3 => await RunStaleProcessOriginAsync(args[1]),
+                "process-stale-successor" when args.Length == 4 => await RunStaleProcessSuccessorAsync(args[1], args[2]),
+                "process-control" when args.Length == 4 => await RunPersistenceControlAsync(args[1], args[2]),
                 "process-boundary" when args.Length == 4 => await RunProcessBoundaryAsync(args[1], args[2]),
                 "process-recover" when args.Length == 3 => await RunProcessRecoverAsync(args[1]),
                 "process-cancel" when args.Length == 3 => await RunProcessCancelAsync(args[1]),

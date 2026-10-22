@@ -98,7 +98,7 @@ def verify_consumer(receipt, evidence, source, feed, run, environment, process_p
     receipt['proofScope'] = 'Four-module clean PackageReference direct execution and identity rejection; native/upgrade gates pending.'
     if process_proof:
         from package_process import verify_processes
-        verify_processes(receipt, evidence, deployment, executable, run, env)
+        verify_processes(receipt, evidence, source, feed, deployment, executable, run, env)
 
 
 def verify_identity_control(receipt, evidence, source, feed, deployment, executable, run, env):
