@@ -14,8 +14,9 @@ internal readonly record struct ElsaFrame(string Name, bool IsInfrastructure, st
 /// <item><c>save-changes</c>: the stack <c>SaveChanges</c> was entered on, for a command EF sent inside it after an
 /// asynchronous hop, such as a batched write after the savepoint round trip.</item>
 /// <item><c>stitched</c>: a stack that lost its callers in an asynchronous hop, completed with the latest whole stack of
-/// the same asynchronous flow that ran through its outermost frame, or, when no whole stack did, the latest stitched one.
-/// <see cref="Seam"/> is where the two meet; on a stack stitched onto a stitched one it marks the newer seam.</item>
+/// the same asynchronous flow that ran through its outermost frame, or, when no whole stack did, the latest stitched
+/// one that did. <see cref="Seam"/> is where the two meet; on a stack stitched onto a stitched one it marks the newer
+/// seam.</item>
 /// <item><c>none</c>: no Elsa caller could be found.</item>
 /// </list>
 /// </summary>
@@ -142,11 +143,11 @@ internal sealed partial record CommandCostAttribution(IReadOnlyList<ElsaFrame> F
 }
 
 /// <summary>
-/// The whole stacks one asynchronous flow has issued commands from, newest last. A store method that awaits real I/O
-/// resumes on a thread-pool stack that holds the store but not its caller; its earlier command, issued before the hop,
-/// carried the whole stack, and that is the one a later command of the same flow is stitched onto. Flows that run
-/// concurrently and share one memory could stitch onto each other's stacks; the runtime drains one execution at a time,
-/// so within one measured run they do not.
+/// The stacks one asynchronous flow has issued commands from, newest last: the whole ones, and the stitched ones as a
+/// fallback. A store method that awaits real I/O resumes on a thread-pool stack that holds the store but not its
+/// caller; its earlier command, issued before the hop, carried the whole stack, and that is the one a later command of
+/// the same flow is stitched onto. Flows that run concurrently and share one memory could stitch onto each other's
+/// stacks; the runtime drains one execution at a time, so within one measured run they do not.
 /// <para>
 /// The stacks stitched so far are kept too, as a fallback. When nested awaits complete one after the other, a later
 /// command can resume on a stack whose outermost frame is a method that only ever ran after a hop, such as a helper the

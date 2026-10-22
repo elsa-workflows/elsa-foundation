@@ -108,8 +108,8 @@ internal sealed class CommandCostRecorder : DbCommandInterceptor, IDbTransaction
     public IWorkflowEngineTracer Tracer => new NamingTracer(this, new ActivitySourceWorkflowEngineTracer(_source));
 
     /// <summary>
-    /// Gives the calling asynchronous flow a memory of whole stacks to stitch truncated ones onto, unless it has one. Call
-    /// it from the method that starts the work; the memory flows into everything that method awaits.
+    /// Gives the calling asynchronous flow a memory of whole and stitched stacks to stitch truncated ones onto, unless it
+    /// has one. Call it from the method that starts the work; the memory flows into everything that method awaits.
     /// </summary>
     public void BeginFlow() => _flow.Value ??= new CommandCostFlowMemory();
 
