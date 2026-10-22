@@ -145,29 +145,39 @@ describe("draft validations API capability handling", () => {
 });
 
 describe("start-trigger detection", () => {
-  it("flags a start trigger that is neither the start node nor connected into", () => {
-    // The reported repro: an If authored first takes the start, then an Http Endpoint with
-    // CanStartWorkflow is added and can never run.
-    const httpEndpoint = node("http", {
-      canStartWorkflow: { typeName: "System.Boolean", expression: { type: "Literal", value: true } }
-    });
-    const state = { rootActivity: flowchart([node("if"), httpEndpoint], [], "if") };
+  const startTrigger = (nodeId: string) => node(nodeId, {
+    canStartWorkflow: { typeName: "System.Boolean", expression: { type: "Literal", value: true } }
+  });
+
+  it("flags a start trigger that something connects into and that is not the start node", () => {
+    // Spec 238: publishing refuses this placement, so the designer surfaces it.
+    const state = { rootActivity: flowchart([node("if"), startTrigger("http")], [{ from: "if", to: "http" }], "if") };
 
     const errors = detectStructuralValidationErrors(state);
 
-    const startTrigger = errors.find(error => error.type === STRUCTURAL_START_TRIGGER_TYPE);
-    expect(startTrigger?.path).toBe("http");
-    expect(startTrigger?.message).toContain("can start a workflow");
+    const misplaced = errors.find(error => error.type === STRUCTURAL_START_TRIGGER_TYPE);
+    expect(misplaced?.path).toBe("http");
   });
 
   it("stops flagging it once it is the start node", () => {
-    const httpEndpoint = node("http", {
-      canStartWorkflow: { typeName: "System.Boolean", expression: { type: "Literal", value: true } }
-    });
-    const state = { rootActivity: flowchart([node("if"), httpEndpoint], [], "http") };
+    const state = { rootActivity: flowchart([node("if"), startTrigger("http")], [{ from: "if", to: "http" }], "http") };
 
     expect(detectStructuralValidationErrors(state).some(error => error.type === STRUCTURAL_START_TRIGGER_TYPE))
       .toBe(false);
+  });
+
+  it("accepts a second start trigger heading its own branch: neither misplaced nor unreachable", () => {
+    const state = {
+      rootActivity: flowchart(
+        [startTrigger("http-a"), node("after-a"), startTrigger("http-b"), node("after-b")],
+        [{ from: "http-a", to: "after-a" }, { from: "http-b", to: "after-b" }],
+        "http-a")
+    };
+
+    const errors = detectStructuralValidationErrors(state);
+
+    expect(errors.some(error => error.type === STRUCTURAL_START_TRIGGER_TYPE)).toBe(false);
+    expect(errors.filter(error => error.type === STRUCTURAL_NO_START_TYPE)).toEqual([]);
   });
 });
 
@@ -197,6 +207,7 @@ describe("ValidationPanel", () => {
       />
     ));
     expect(container.querySelector(".wf-validation-summary")?.textContent).toContain("1 validation issue");
+    expect(container.querySelector(".wf-validation-message")?.getAttribute("title")).toBe("orphan");
     const goTo = container.querySelector<HTMLButtonElement>(".wf-validation-repair")!;
     flushSync(() => goTo.click());
     expect(selected).toEqual(["orphan"]);

@@ -14,7 +14,6 @@ import {
   type OnNodeDrag,
   type OnReconnect,
   type ReactFlowInstance,
-  type Viewport,
   type XYPosition
 } from "@xyflow/react";
 import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
@@ -28,6 +27,7 @@ import {
   type WorkflowNodeData
 } from "../workflowAdapter";
 import { resolveActivityIcon, resolveActivityIconTone } from "../activityIcons";
+import { useGraphViewport } from "./useGraphViewport";
 import { computeAutoLayout } from "../workflowLayout";
 import { activityDragDataType, pointerDragThreshold } from "../workflow-editor/constants";
 import {
@@ -156,10 +156,7 @@ export function useGraphCanvasInteractions({
   const [highlightedEdgeId, setHighlightedEdgeId] = useState<string | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const connectSourceRef = useRef<WorkflowConnectSource | null>(null);
-  const viewportSnapshotsRef = useRef(new Map<string, Viewport>());
-  const visitedViewportScopesRef = useRef(new Set<string>());
-  const settledViewportScopeKeyRef = useRef<string | null>(null);
-  const staleScopeNodesRef = useRef<Node<WorkflowNodeData>[] | null>(null);
+  const { onMoveEnd } = useGraphViewport({ nodes, scopeKey, instance: reactFlowInstance });
   const pointerDragRef = useRef<{
     activity: ActivityCatalogItem;
     startX: number;
@@ -169,6 +166,7 @@ export function useGraphCanvasInteractions({
   const nativePaletteDragRef = useRef<{ activityVersionId: string; handledDrop: boolean } | null>(null);
   const suppressPaletteClickRef = useRef(false);
   const pendingFocusNodeIdRef = useRef<string | null>(null);
+  const focusObserverRef = useRef<MutationObserver | null>(null);
 
   const isUnsupported = mode === "unsupported";
   // BPMN shares the free-connection graph editing model with flowcharts; sequence keeps its linear model.
@@ -207,39 +205,6 @@ export function useGraphCanvasInteractions({
     };
   }, [createPlacement]);
 
-  useEffect(() => () => {
-    if (!reactFlowInstance) return;
-    viewportSnapshotsRef.current.set(scopeKey, reactFlowInstance.getViewport());
-  }, [reactFlowInstance, scopeKey]);
-
-  // Restore (or first-time fit) the viewport once the host has rebuilt `nodes` for the new scope.
-  // The rebuild is asynchronous relative to the scope change — the host sees the new scope, then
-  // pushes a fresh node array on a later commit — so acting on the scope change alone would restore
-  // against the *previous* scope's nodes. Waiting for the node array's identity to change is the one
-  // signal available here that does not require the host to announce its rebuild.
-  useEffect(() => {
-    if (settledViewportScopeKeyRef.current !== scopeKey) {
-      settledViewportScopeKeyRef.current = scopeKey;
-      staleScopeNodesRef.current = nodes;
-      return;
-    }
-    if (staleScopeNodesRef.current === null || staleScopeNodesRef.current === nodes) return;
-    staleScopeNodesRef.current = null;
-
-    if (!reactFlowInstance) return;
-    const savedViewport = viewportSnapshotsRef.current.get(scopeKey);
-    const hasVisitedScope = visitedViewportScopesRef.current.has(scopeKey);
-    visitedViewportScopesRef.current.add(scopeKey);
-
-    window.requestAnimationFrame(() => {
-      if (savedViewport) {
-        reactFlowInstance.setViewport(savedViewport);
-      } else if (!hasVisitedScope && nodes.length > 0) {
-        reactFlowInstance.fitView({ padding: 0.2 });
-      }
-    });
-  }, [nodes, reactFlowInstance, scopeKey]);
-
   // React Flow's keyboard selection is emitted as a node change, while the inspector is driven by the
   // host's selected node id. Keep both projections aligned so Enter/Space has the same result as a
   // pointer click and the accessible pressed state always describes what the inspector is showing.
@@ -257,24 +222,48 @@ export function useGraphCanvasInteractions({
   }, [selectedNodeId, setNodes]);
 
   const focusCanvasNode = useCallback((nodeId: string) => {
-    const element = Array.from(canvasRef.current?.querySelectorAll<HTMLElement>(".react-flow__node") ?? [])
+    const element = Array.from(canvasRef.current?.querySelectorAll<HTMLElement>(".react-flow__node, .wf-sequence-step") ?? [])
       .find(candidate => candidate.dataset.id === nodeId);
     if (!element) return false;
     element.focus({ preventScroll: true });
-    return true;
+    return document.activeElement === element;
   }, []);
 
   const queueCanvasNodeFocus = useCallback((nodeId: string) => {
     pendingFocusNodeIdRef.current = nodeId;
-    window.requestAnimationFrame(() => {
+    focusObserverRef.current?.disconnect();
+    const tryFocus = () => {
       if (pendingFocusNodeIdRef.current !== nodeId || !focusCanvasNode(nodeId)) return;
       pendingFocusNodeIdRef.current = null;
-    });
+      focusObserverRef.current?.disconnect();
+      focusObserverRef.current = null;
+    };
+    // React Flow mounts new nodes hidden until measured. Observe its visibility update rather
+    // than treating a found-but-not-focusable wrapper as successful or guessing a render delay.
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const observer = new MutationObserver(tryFocus);
+      observer.observe(canvas, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "tabindex"] });
+      focusObserverRef.current = observer;
+    }
+    window.requestAnimationFrame(tryFocus);
   }, [focusCanvasNode]);
+
+  useEffect(() => () => {
+    pendingFocusNodeIdRef.current = null;
+    focusObserverRef.current?.disconnect();
+  }, []);
 
   useEffect(() => {
     const nodeId = pendingFocusNodeIdRef.current;
-    if (nodeId) queueCanvasNodeFocus(nodeId);
+    if (!nodeId) return;
+    if (nodes.some(node => node.id === nodeId)) {
+      queueCanvasNodeFocus(nodeId);
+    } else {
+      pendingFocusNodeIdRef.current = null;
+      focusObserverRef.current?.disconnect();
+      focusObserverRef.current = null;
+    }
   }, [nodes, queueCanvasNodeFocus]);
 
   /**
@@ -350,6 +339,20 @@ export function useGraphCanvasInteractions({
     onActivityPlaced?.(activity);
   }, [edgeFactory, edges, nodes, onActivityPlaced, placeOnCanvas, placementFactory]);
 
+  const insertSequenceActivity = useCallback((activity: ActivityCatalogItem, index: number) => {
+    if (mode !== "sequence" || !canAddActivities || activity.available === false || !Number.isInteger(index) || index < 0 || index > nodes.length) return;
+    if (nativePaletteDragRef.current?.activityVersionId === activity.activityVersionId) nativePaletteDragRef.current.handledDrop = true;
+    pointerDragRef.current = null;
+    const placement = placementFactory(activity, { x: 0, y: 0 });
+    if (!placement) return;
+    stampCanvasNode(placement.node, {
+      createdActivities: [placement.activityNode],
+      order: current => [...current.slice(0, index), placement.node, ...current.slice(index)],
+      wire: current => buildSequenceEdges(current) as WorkflowEdge[]
+    });
+    onActivityPlaced?.(activity);
+  }, [canAddActivities, mode, nodes.length, onActivityPlaced, placementFactory, stampCanvasNode]);
+
   const tryAddActivityAtClientPoint = useCallback((activity: ActivityCatalogItem, clientX: number, clientY: number) => {
     if (!canAddActivities) return false;
     if (!canvasRef.current) return false;
@@ -362,6 +365,13 @@ export function useGraphCanvasInteractions({
       clientY <= canvasRect.bottom;
 
     if (!isOverCanvas) return false;
+
+    if (mode === "sequence") {
+      const boundary = document.elementFromPoint?.(clientX, clientY)?.closest<HTMLElement>("[data-sequence-insert-index]");
+      if (!boundary || !canvasRef.current.contains(boundary)) return false;
+      insertSequenceActivity(activity, Number(boundary.dataset.sequenceInsertIndex));
+      return true;
+    }
 
     const position = toCanvasPosition(clientX, clientY);
     if (!position) return false;
@@ -377,7 +387,7 @@ export function useGraphCanvasInteractions({
 
     placeActivity(activity, position);
     return true;
-  }, [canAddActivities, edges, findEdgeUnderCursor, isGraphMode, placeActivity, spliceActivityIntoEdge, toCanvasPosition]);
+  }, [canAddActivities, edges, findEdgeUnderCursor, insertSequenceActivity, isGraphMode, mode, placeActivity, spliceActivityIntoEdge, toCanvasPosition]);
 
   // Pointer-based palette drag. Runs alongside the native HTML5 drag so a palette press that never
   // produces a dragstart (touch, or a browser that suppresses it) still lands an activity.
@@ -523,9 +533,10 @@ export function useGraphCanvasInteractions({
 
   // The inline "Add step" affordance (editorial layout): continue from the selected node when there is
   // one — the same commit as dragging a new activity off its default port — otherwise add to the scope.
-  const openAddStepMenu = (anchor: { clientX: number; clientY: number }) => {
-    if (selectedNodeId && canCreateActivityFromPort && nodes.some(node => node.id === selectedNodeId)) {
-      setConnectMenu({ kind: "fromPort", sourceNodeId: selectedNodeId, sourceHandleId: null, ...anchor });
+  const openAddStepMenu = (anchor: { clientX: number; clientY: number }, source?: { nodeId: string; handleId: string }) => {
+    const sourceNodeId = source?.nodeId ?? selectedNodeId;
+    if (sourceNodeId && canCreateActivityFromPort && nodes.some(node => node.id === sourceNodeId)) {
+      setConnectMenu({ kind: "fromPort", sourceNodeId, sourceHandleId: source?.handleId ?? null, ...anchor });
       return;
     }
 
@@ -590,10 +601,10 @@ export function useGraphCanvasInteractions({
     commitCanvas(nextNodes, edges);
   };
 
-  const canAutoLayout = !isUnsupported && nodes.length > 0;
+  const canAutoLayout = !isUnsupported && mode !== "sequence" && nodes.length > 0;
   const autoLayout = useCallback(() => {
-    if (isUnsupported || nodes.length === 0) return;
-    const positions = computeAutoLayout(nodes, edges, mode === "sequence" ? "sequence" : "flowchart");
+    if (isUnsupported || mode === "sequence" || nodes.length === 0) return;
+    const positions = computeAutoLayout(nodes, edges, "flowchart");
     const nextNodes = nodes.map(node => {
       const position = positions.get(node.id);
       return position ? { ...node, position } : node;
@@ -652,7 +663,7 @@ export function useGraphCanvasInteractions({
     // by canvas node id, which in a BPMN scope is the element id rather than the resolved activity id.
     const removedNodeIds = new Set([...deletedIds, ...(resolveRemovedActivityNodeIds?.(deletedNodes) ?? [])]);
     const nextNodes = nodes.filter(node => !deletedIds.has(node.id));
-    const nextEdges = edges.filter(edge => !deletedIds.has(edge.source) && !deletedIds.has(edge.target));
+    const nextEdges = mode === "sequence" ? buildSequenceEdges(nextNodes) : edges.filter(edge => !deletedIds.has(edge.source) && !deletedIds.has(edge.target));
     setNodes(nextNodes);
     setEdges(nextEdges);
     if (selectedNodeId && deletedIds.has(selectedNodeId)) {
@@ -695,10 +706,35 @@ export function useGraphCanvasInteractions({
     setConnectMenu({ kind: "spliceEdge", edgeId, clientX, clientY });
   }, [isGraphMode]);
 
+  const openSequenceInsertMenu = (index: number, anchor: { clientX: number; clientY: number }) => {
+    if (mode !== "sequence" || !canAddActivities || !Number.isInteger(index) || index < 0 || index > nodes.length) return;
+    setConnectMenu({ kind: "sequenceInsert", index, scopeKey, ...anchor });
+  };
+
+  const moveSequenceActivity = (nodeId: string, boundary: number) => {
+    if (mode !== "sequence" || !canAddActivities || !Number.isInteger(boundary) || boundary < 0 || boundary > nodes.length) return;
+    const from = nodes.findIndex(node => node.id === nodeId);
+    if (from < 0 || boundary === from || boundary === from + 1) return;
+    const next = [...nodes];
+    const [node] = next.splice(from, 1);
+    next.splice(boundary > from ? boundary - 1 : boundary, 0, node);
+    const nextEdges = buildSequenceEdges(next) as WorkflowEdge[];
+    setNodes(next);
+    setEdges(nextEdges);
+    select(nodeId);
+    commitCanvas(next, nextEdges);
+    queueCanvasNodeFocus(nodeId);
+    onStatus?.(`Moved ${node.data.label} to step ${next.findIndex(item => item.id === nodeId) + 1}.`);
+  };
+
   const onConnectMenuPick = (activity: ActivityCatalogItem) => {
     const menu = connectMenu;
     if (!menu) return;
     setConnectMenu(null);
+    if (menu.kind === "sequenceInsert") {
+      if (menu.scopeKey === scopeKey) insertSequenceActivity(activity, menu.index);
+      return;
+    }
 
     const fallbackPosition = toCanvasPosition(menu.clientX, menu.clientY) ?? { x: 0, y: 0 };
 
@@ -747,6 +783,7 @@ export function useGraphCanvasInteractions({
     canvasRef,
     reactFlowInstance,
     setReactFlowInstance,
+    onMoveEnd,
     canCreateActivityFromPort,
     connectMenu,
     setConnectMenu,
@@ -770,6 +807,9 @@ export function useGraphCanvasInteractions({
     onCanvasDrop,
     openEmptyConnectMenu,
     openAddStepMenu,
+    openSequenceInsertMenu,
+    insertSequenceActivity,
+    moveSequenceActivity,
     onConnectMenuPick,
     onPaletteClick,
     onPaletteDragStart,

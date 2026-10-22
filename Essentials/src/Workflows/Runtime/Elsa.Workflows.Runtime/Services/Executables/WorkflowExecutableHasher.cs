@@ -201,7 +201,10 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
             .OrderBy(output => output.Key, StringComparer.Ordinal)
             .Select(FormatOutputCapture));
         var outputCapturePayload = outputCaptures.Length == 0 ? string.Empty : $":outputs={outputCaptures}";
-        var legacyShape = $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.Descriptor.ConsumerKey}:{node.Descriptor.SchemaVersion}:{CanonicalJson(node.Descriptor.Payload)}:{structure}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(FormatInputBinding))}:{childSlots}{outputCapturePayload}";
+        var executionPlacement = node.ExecutionPlacement == ActivityExecutionPlacement.Inline
+            ? string.Empty
+            : $":executionPlacement={node.ExecutionPlacement}";
+        var legacyShape = $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.Descriptor.ConsumerKey}:{node.Descriptor.SchemaVersion}:{CanonicalJson(node.Descriptor.Payload)}:{structure}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(FormatInputBinding))}:{childSlots}{outputCapturePayload}{executionPlacement}";
         var nodeShape = intrinsic.Length == 0 ? legacyShape : $"{legacyShape}:{intrinsic}";
         return node.ActivityContract is null
             ? nodeShape
@@ -304,6 +307,8 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         writer.WriteString("nodeId", node.ExecutableNodeId);
         writer.WriteString("activityType", node.ActivityType);
         writer.WriteString("activityTypeVersion", node.ActivityTypeVersion);
+        if (node.ExecutionPlacement != ActivityExecutionPlacement.Inline)
+            writer.WriteString("executionPlacement", node.ExecutionPlacement.ToString());
         if (node.ActivityContract is { } activityContract)
             writer.WriteString("sideEffectProfile", activityContract.SideEffectProfile.ToString());
         writer.WriteStartObject("descriptor");

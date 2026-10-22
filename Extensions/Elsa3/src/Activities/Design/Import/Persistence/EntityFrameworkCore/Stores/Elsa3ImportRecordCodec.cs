@@ -78,7 +78,9 @@ internal static class Elsa3ImportRecordCodec
         EnsureScope(receipt.AccessScope);
         if (!StringComparer.Ordinal.Equals(receipt.ReceiptId, ReusableActivityImportIdentity.Receipt(receipt.IdempotencyKey, receipt.AccessScope)))
             throw new ArgumentException("The Elsa 3 import receipt identity is not derived from its key and scope.", nameof(receipt));
-        var json = JsonSerializer.Serialize(new ReceiptDocument(receipt), Json);
+        // The stored receipt is what a replay and a status read return: it keeps the conversion warnings (spec 246 D-3).
+        // Publication states are read from the publication store each time and never stored (R-6).
+        var json = JsonSerializer.Serialize(new ReceiptDocument(receipt with { Publications = null }), Json);
         return new Elsa3ImportReceiptRecord
         {
             TenantKey = TenantKey(receipt.AccessScope.TenantId),

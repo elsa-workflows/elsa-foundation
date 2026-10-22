@@ -446,7 +446,7 @@
     {
       "alias": "Elsa.Activities.Http.Activities.HttpEndpoint",
       "activityTypeKey": "Elsa.Activities.Http.Activities.HttpEndpoint",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "Http",
       "executionType": "Action",
       "inputs": [
@@ -529,10 +529,21 @@
           "collectionKind": "Single",
           "isRequired": false,
           "isNullable": false,
-          "uiHint": null,
-          "defaultValue": null,
+          "uiHint": "dropdown",
+          "defaultValue": "Sync",
           "defaultSyntax": null,
-          "uiSpecifications": null
+          "uiSpecifications": {
+            "options": [
+              {
+                "label": "Wait for workflow response",
+                "value": "Sync"
+              },
+              {
+                "label": "Accept and run in background",
+                "value": "Async"
+              }
+            ]
+          }
         },
         {
           "key": "SupportedMethods",
@@ -614,15 +625,15 @@
       "executionType": "Action",
       "inputs": [
         {
-          "key": "Authorization",
-          "name": "Authorization",
-          "type": "String",
+          "key": "Connection",
+          "name": "Connection",
+          "type": "Elsa.Activities.Runtime.Core.Models.ConnectionReference",
           "collectionKind": "Single",
           "isRequired": false,
           "isNullable": true,
-          "uiHint": null,
+          "uiHint": "connection-picker",
           "defaultValue": null,
-          "defaultSyntax": null,
+          "defaultSyntax": "Connection",
           "uiSpecifications": null
         },
         {
@@ -798,7 +809,7 @@
         {
           "key": "Body",
           "name": "Body",
-          "type": "String",
+          "type": "System.Text.Json.JsonElement?",
           "collectionKind": "Single",
           "isRequired": false,
           "isNullable": true,
@@ -848,7 +859,7 @@
         {
           "key": "Body",
           "name": "Body",
-          "type": "String",
+          "type": "System.Text.Json.JsonElement?",
           "collectionKind": "Single",
           "isRequired": true,
           "isNullable": true,
@@ -1042,6 +1053,15 @@
         }
       ],
       "outputs": [
+        {
+          "key": "Payload",
+          "name": "Payload",
+          "type": "System.Text.Json.JsonElement?",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "sourceRepresentation": null
+        },
         {
           "key": "Result",
           "name": "EventName",

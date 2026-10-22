@@ -22,6 +22,48 @@ public sealed class IncidentResolutionBatchExecutorTests
 {
     private static readonly DateTimeOffset Now = new(2026, 7, 25, 12, 0, 0, TimeSpan.Zero);
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Pending_combined_outcome_holds_the_whole_batch_until_the_parent_decision_commits(bool viaDrainObserver)
+    {
+        await using var harness = new Harness(IncidentStrategyBuiltIns.FaultReference);
+        var earlierIncident = await harness.AddIncidentAsync("incident-earlier-descendant");
+        var pendingIncident = await harness.AddIncidentAsync("incident-bubbling-parent", new Dictionary<string, string>
+        {
+            [RuntimeMetadataKeys.ParentOutcomeWorkItemId] = "combined-outcome-work"
+        });
+        await harness.AddOutcomeActivityAsync("outer-parent", ActivityExecutionStatus.Running);
+        var child = await harness.AddOutcomeActivityAsync(pendingIncident.ActivityExecutionId!, ActivityExecutionStatus.Faulted,
+            "outer-parent", pendingIncident.IncidentId);
+
+        async ValueTask DecideAsync()
+        {
+            if (viaDrainObserver)
+                await new IncidentStrategyResolutionDrainObserver(harness.IncidentStore, harness.Executor)
+                    .OnDrainedAsync(harness.Envelope, new RuntimeSchedulerDrainResult(Harness.WorkflowExecutionId, Now, Now, []));
+            else
+                await harness.ExecuteAsync([earlierIncident]); // The pending ancestor is outside the requested batch.
+        }
+
+        await DecideAsync();
+
+        Assert.Equal(WorkflowExecutionStatus.Running, (await harness.WorkflowStore.FindAsync(Harness.WorkflowExecutionId))!.Status);
+        Assert.Null((await harness.IncidentStore.FindAsync(Harness.WorkflowExecutionId, earlierIncident.IncidentId))!.ResolutionOutcome);
+        Assert.Empty(harness.CommitStore.ListCommits());
+
+        await harness.ActivityStore.SaveAsync(child with
+        {
+            Metadata = new Dictionary<string, string> { [RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId] = "combined-outcome-work" }
+        });
+        await DecideAsync();
+
+        Assert.Equal(WorkflowExecutionStatus.Faulted, (await harness.WorkflowStore.FindAsync(Harness.WorkflowExecutionId))!.Status);
+        Assert.Equal(IncidentResolutionActionKinds.FaultWorkflow,
+            (await harness.IncidentStore.FindAsync(Harness.WorkflowExecutionId, earlierIncident.IncidentId))!.ResolutionOutcome!.ActionKind);
+        Assert.Single(harness.CommitStore.ListCommits());
+    }
+
     [Fact]
     public async Task Fault_applies_two_incidents_in_stable_order_and_faults_the_workflow_in_one_checkpoint()
     {
@@ -347,6 +389,26 @@ public sealed class IncidentResolutionBatchExecutorTests
             IReadOnlyCollection<IncidentState> incidents,
             CancellationToken cancellationToken = default) =>
             Executor.ExecuteAsync(Envelope, incidents, cancellationToken);
+
+        public ValueTask<ActivityExecutionState> AddOutcomeActivityAsync(
+            string id, ActivityExecutionStatus status, string? parentId = null, string? incidentId = null) =>
+            ActivityStore.SaveAsync(new ActivityExecutionState(
+                Execution: new ActivityExecution(id, WorkflowExecutionId, "node-1", "authored-1", "test/activity", "1"),
+                Status: status,
+                SubStatus: null,
+                ScheduledAt: Now,
+                StartedAt: Now,
+                CompletedAt: status == ActivityExecutionStatus.Faulted ? Now : null,
+                SchedulingActivityExecutionId: parentId,
+                ParentActivityExecutionId: parentId,
+                BranchId: null,
+                IterationId: null,
+                CallStackDepth: null,
+                BookmarkIds: [],
+                IncidentIds: incidentId is null ? [] : [incidentId],
+                FaultCount: incidentId is null ? 0 : 1,
+                AggregateFaultCount: incidentId is null ? 0 : 1,
+                Metadata: new Dictionary<string, string>()));
 
         public ValueTask DisposeAsync()
         {

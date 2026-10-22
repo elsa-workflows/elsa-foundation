@@ -140,6 +140,9 @@ public sealed class SchedulerCompletionWorkItem
         if (completedChildActivityExecutionId is not null && string.IsNullOrWhiteSpace(completedChildActivityExecutionId))
             throw new ArgumentException("Completed child activity execution ID cannot be blank when provided.", nameof(completedChildActivityExecutionId));
 
+        if (kind == SchedulerCompletionKind.ParentOutcomeEvaluation)
+            throw new ArgumentException("Parent outcome evaluations require the versioned activity command payload and cannot be represented by scheduler completion work.", nameof(kind));
+
         if (branchId is not null && string.IsNullOrWhiteSpace(branchId))
             throw new ArgumentException("Branch ID cannot be blank when provided.", nameof(branchId));
 
@@ -430,7 +433,8 @@ public enum SchedulerCompletionKind
 {
     ActivityCompleted,
     ParentCompletionEvaluation,
-    ContinuationScheduling
+    ContinuationScheduling,
+    ParentOutcomeEvaluation
 }
 
 public enum VolatileWaitHostShutdownBehavior

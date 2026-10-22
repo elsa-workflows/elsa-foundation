@@ -30,7 +30,8 @@ public sealed record PublishActivityDefinitionRequest(
     string? ExpectedDefinitionHeadVersionId,
     string Version,
     string ReviewToken = "",
-    string IdempotencyKey = "");
+    string IdempotencyKey = "",
+    string? RequestedVersionId = null);
 
 public sealed record PreflightActivityDefinitionPublicationRequest(
     string DraftId,
@@ -197,7 +198,7 @@ public sealed class ActivityDefinitionPublisher(
         if (existing is not null)
         {
             EnsureAuthorized(existing.TenantId);
-            return Replay(existing, fingerprint);
+            return Replay(existing, fingerprint, request.RequestedVersionId);
         }
 
         try
@@ -214,7 +215,7 @@ public sealed class ActivityDefinitionPublisher(
             if (concurrentlyCompleted is not null)
             {
                 EnsureAuthorized(concurrentlyCompleted.TenantId);
-                return Replay(concurrentlyCompleted, fingerprint);
+                return Replay(concurrentlyCompleted, fingerprint, request.RequestedVersionId);
             }
             var status = exception.ErrorCode switch
             {
@@ -239,7 +240,7 @@ public sealed class ActivityDefinitionPublisher(
             if (concurrentlyCompleted is not null)
             {
                 EnsureAuthorized(concurrentlyCompleted.TenantId);
-                return Replay(concurrentlyCompleted, fingerprint);
+                return Replay(concurrentlyCompleted, fingerprint, request.RequestedVersionId);
             }
             await StoreTerminalReceiptAsync(
                 request,
@@ -295,7 +296,8 @@ public sealed class ActivityDefinitionPublisher(
         var (definition, draft, layout) = (context.Definition, context.Draft, context.Layout);
         // Publish compiles under the version id it commits. Its evidence must still reproduce the token preflight issued
         // under the stable candidate id, so evidence that shifts with the version id is refused as a stale review.
-        var versionId = NewId("activity-ver");
+        // A caller that already references the version (an import's plan) may name its id; preflight never sees it.
+        var versionId = request.RequestedVersionId ?? NewId("activity-ver");
         var candidate = await EvaluateCandidateAsync(context, versionId, request.Version, cancellationToken);
         EnsureVersionAccepted(context, candidate);
         if (!StringComparer.Ordinal.Equals(candidate.ReviewToken, request.ReviewToken))
@@ -933,6 +935,8 @@ public sealed class ActivityDefinitionPublisher(
             request.IdempotencyKey.Length > 200 ||
             request.ExpectedDefinitionHeadVersionId is not null &&
             string.IsNullOrWhiteSpace(request.ExpectedDefinitionHeadVersionId) ||
+            request.RequestedVersionId is not null &&
+            (string.IsNullOrWhiteSpace(request.RequestedVersionId) || request.RequestedVersionId.Length > MaximumRequestedVersionIdLength) ||
             !SemVer.TryParse(request.Version, out _))
             throw Reject(
                 ActivityErrorCodes.RequestInvalid,
@@ -942,9 +946,15 @@ public sealed class ActivityDefinitionPublisher(
 
     private static ActivityPublicationReceipt Replay(
         ActivityPublicationReceipt receipt,
-        string fingerprint)
+        string fingerprint,
+        string? requestedVersionId)
     {
-        if (!StringComparer.Ordinal.Equals(receipt.RequestFingerprint, fingerprint))
+        // The requested version id is not part of the fingerprint, so receipts written before it existed keep theirs.
+        // An applied replay must still have committed under the id the caller names now.
+        if (!StringComparer.Ordinal.Equals(receipt.RequestFingerprint, fingerprint) ||
+            requestedVersionId is not null &&
+            receipt.Status == ActivityPublicationReceiptStatus.Applied &&
+            !StringComparer.Ordinal.Equals(receipt.Outcome?.DefinitionVersionId, requestedVersionId))
             throw Reject(
                 "activity.publication.idempotency-conflict",
                 "The idempotency key is already bound to another publication request.",
@@ -1005,6 +1015,9 @@ public sealed class ActivityDefinitionPublisher(
     }
 
     private string NewId(string prefix) => $"{prefix}-{identityGenerator.Generate()}";
+
+    // The Activities Design id column length; a longer requested id could never be committed.
+    private const int MaximumRequestedVersionIdLength = 450;
 
     private static long ComputeLayoutBytes(IEnumerable<ActivityLayoutRecord> records) => records.Sum(x =>
         (long)Encoding.UTF8.GetByteCount(x.NodeId) + Encoding.UTF8.GetByteCount(x.Data.GetRawText()));

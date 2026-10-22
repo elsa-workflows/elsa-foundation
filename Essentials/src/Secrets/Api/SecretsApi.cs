@@ -134,7 +134,8 @@ public static class SecretsApi
         var types = context.RequestServices.GetRequiredService<ISecretTypeRegistry>().List().ToArray();
         var stores = context.RequestServices.GetRequiredService<ISecretStoreRegistry>().List()
             .Select(store => store.Descriptor).ToArray();
-        await Json(new SecretDescriptorsResponse { Types = types, Stores = stores }).ExecuteAsync(context);
+        var scopes = context.RequestServices.GetRequiredService<ISecretScopeRegistry>().List().ToArray();
+        await Json(new SecretDescriptorsResponse { Types = types, Stores = stores, Scopes = scopes }).ExecuteAsync(context);
     }
 
     private static async Task HandlePickerAsync(HttpContext context)

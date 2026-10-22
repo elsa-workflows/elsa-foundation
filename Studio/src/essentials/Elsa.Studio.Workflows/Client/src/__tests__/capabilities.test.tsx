@@ -4,6 +4,7 @@ import {
   capabilityIds,
   clearApiCapabilityCache,
   getApiCapabilities,
+  invalidateApiCapabilityCache,
   hasApiCapability,
   resolveCapabilityLink
 } from "../api/capabilities";
@@ -33,8 +34,21 @@ describe("API capability bootstrap", () => {
 
     expect(first).toEqual(document);
     expect(second).toBe(first);
-    expect(link).toBe("/design/workflows/definitions");
+    expect(link).toBe("/shell-a/design/workflows/definitions");
     expect(getJson).toHaveBeenCalledOnce();
+    expect(getJson).toHaveBeenCalledWith("/shell-a/capabilities");
+  });
+
+  it.each(["", "test://custom-transport", "options-test"])("retains root capability paths for a custom transport with base %s", async baseUrl => {
+    const getJson = vi.fn().mockResolvedValue({ capabilities: [{
+      id: capabilityIds.workflowDesign,
+      contractVersion: "1",
+      links: [{ rel: "workflow-definitions", href: "design/workflows/definitions" }]
+    }] });
+    const value = { ...context(getJson), baseUrl };
+
+    await expect(resolveCapabilityLink(value, capabilityIds.workflowDesign, "workflow-definitions"))
+      .resolves.toBe("/design/workflows/definitions");
     expect(getJson).toHaveBeenCalledWith("/capabilities");
   });
 
@@ -108,5 +122,28 @@ describe("API capability bootstrap", () => {
     await expect(getApiCapabilities(value)).rejects.toThrow("offline");
     await expect(getApiCapabilities(value)).resolves.toEqual(document);
     expect(getJson).toHaveBeenCalledTimes(2);
+  });
+
+  it("invalidates only the explicitly refreshed backend's cached capability document", async () => {
+    const oldDocument = { capabilities: [] };
+    const refreshedDocument = { capabilities: [{
+      id: capabilityIds.publishing,
+      contractVersion: "1",
+      links: [{ rel: "workflow-draft-test-run-options", href: "publishing/test-run-options" }]
+    }] };
+    const firstGetJson = vi.fn().mockResolvedValue(oldDocument);
+    const secondGetJson = vi.fn().mockResolvedValue(oldDocument);
+    const first = context(firstGetJson);
+    const second = { ...context(secondGetJson), baseUrl: "https://server.example/shell-b" };
+    await getApiCapabilities(first);
+    await getApiCapabilities(second);
+
+    invalidateApiCapabilityCache(first);
+    firstGetJson.mockResolvedValueOnce(refreshedDocument);
+    await expect(getApiCapabilities(first)).resolves.toEqual(refreshedDocument);
+    await expect(getApiCapabilities(second)).resolves.toEqual(oldDocument);
+
+    expect(firstGetJson).toHaveBeenCalledTimes(2);
+    expect(secondGetJson).toHaveBeenCalledOnce();
   });
 });

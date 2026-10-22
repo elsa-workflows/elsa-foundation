@@ -3,7 +3,6 @@ import { BaseEdge, EdgeLabelRenderer, Handle, Position, getBezierPath, getSmooth
 import { useStudioThemeLayout, type StudioThemeLayout } from "@elsa-workflows/studio-sdk";
 import { AlertTriangle, Flag, Plus, Trash2 } from "lucide-react";
 import type { ActivityCatalogItem } from "../workflowTypes";
-import { resolveActivityIcon, resolveActivityIconFallback, resolveActivityIconTone } from "../activityIcons";
 import { renderActivityIcon } from "../activityIconView";
 import { getActivityDisplay, type WorkflowNodeData } from "../workflowAdapter";
 import { getAvailabilityStateLabel } from "../activityAvailability";
@@ -11,30 +10,15 @@ import { truncate } from "../workflowFormatting";
 import { groupActivityPalette, isActivityBrowsable } from "./editorHelpers";
 import { WorkflowEdgeActionsContext, WorkflowNodeAvailabilityContext } from "./contexts";
 import { NodeSlotBadges } from "./NodeSlotBadges";
-import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
-import { RuntimeIncidentAction } from "./RuntimeIncidentAction";
+import { WorkflowNodeContextToolbar } from "./WorkflowNodeContextToolbar";
+import { WorkflowNodeRuntimeBadges } from "./WorkflowNodeRuntimeBadges";
 import { BpmnElementNode } from "../bpmn/BpmnElementNode";
+import { httpEndpointResponseBadge } from "../httpEndpointResponseMode";
 import type { WorkflowEdge } from "./editorTypes";
+import { resolveNodeActivityVisual } from "./workflowNodeVisual";
 
 export const nodeTypes = { workflowActivity: WorkflowActivityNode, bpmnElement: BpmnElementNode };
 export const edgeTypes = { workflow: WorkflowFlowEdge };
-
-function resolveNodeActivityVisual(nodeData: WorkflowNodeData) {
-  const source = {
-    activityTypeKey: nodeData.activityTypeKey ?? "",
-    displayName: nodeData.label,
-    category: nodeData.category ?? "",
-    executionType: nodeData.executionType ?? "",
-    icon: nodeData.catalogIcon,
-    iconName: nodeData.catalogIconName,
-    activityDefinitionId: nodeData.activityDefinitionId
-  };
-  return {
-    icon: nodeData.icon ?? resolveActivityIcon(source),
-    fallback: resolveActivityIconFallback(source),
-    tone: nodeData.iconTone ?? resolveActivityIconTone(source)
-  };
-}
 
 export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
   const nodeData = data as WorkflowNodeData;
@@ -45,6 +29,7 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
     ? nodeData.sourcePorts.length > 0 ? nodeData.sourcePorts : [{ name: "Done", displayName: "Done" }]
     : [];
   const subtitle = formatNodeSubtitle(nodeData);
+  const httpResponseBadge = httpEndpointResponseBadge(nodeData.httpEndpointResponseMode ?? null);
   const availabilityLookup = React.useContext(WorkflowNodeAvailabilityContext);
   const availability = availabilityLookup?.({ activityVersionId: nodeData.activityVersionId, activityTypeKey: nodeData.activityTypeKey }) ?? null;
   return (
@@ -64,6 +49,7 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
           <Flag size={11} aria-hidden="true" /> Start
         </span>
       ) : null}
+      <WorkflowNodeContextToolbar nodeId={id} data={nodeData} selected={!!selected} />
       {availability ? (
         <span className="wf-node-availability" title={`No longer available for new use · ${getAvailabilityStateLabel(availability.state)}`}>
           <AlertTriangle size={13} />
@@ -74,6 +60,16 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
         <span className="wf-node-copy">
           <strong title={nodeData.label}>{nodeData.label}</strong>
           {nodeData.ghost ? <small className="wf-node-ghost-note">Not available in this environment</small> : subtitle.text ? <small title={subtitle.title}>{subtitle.text}</small> : null}
+          {httpResponseBadge ? (
+            <span
+              className="wf-node-http-response-badge"
+              data-mode={nodeData.httpEndpointResponseMode?.toLowerCase()}
+              title={httpResponseBadge}
+              aria-label={`HTTP endpoint behavior: ${httpResponseBadge}`}
+            >
+              {httpResponseBadge}
+            </span>
+          ) : null}
         </span>
       </div>
       <NodeSlotBadges
@@ -82,13 +78,7 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
         slots={nodeData.childSlots}
         onEnterSlot={nodeData.onEnterSlot}
       />
-      {runtime ? (
-        <div className="wf-node-runtime-strip">
-          {runtime.status ? <WorkflowStatusBadge status={runtime.status} subStatus={runtime.subStatus} /> : null}
-          <RuntimeIncidentAction runtime={runtime} onOpenIncident={nodeData.onIncidentClick} activityLabel={nodeData.label} />
-          {runtime.faultCount > 0 ? <span className="wf-node-runtime-count" data-health={runtime.hasBlockingIncident ? "blocking" : "neutral"}>{runtime.faultCount} faults</span> : null}
-        </div>
-      ) : null}
+      <WorkflowNodeRuntimeBadges data={nodeData} />
       {sourcePorts.map((port, index) => {
         const top = `${((index + 1) / (sourcePorts.length + 1)) * 100}%`;
         return (

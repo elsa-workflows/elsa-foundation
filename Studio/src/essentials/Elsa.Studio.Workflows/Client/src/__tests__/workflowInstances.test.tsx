@@ -369,7 +369,7 @@ describe("Runtime-pinned workflow instance rendering", () => {
         incidentId: "incident-1",
         severity: "Error",
         status: "Open",
-        resolutionAction: "None",
+        resolutionOutcome: null,
         failureType: "ActivityInputFailed",
         message: "Wrapper failure",
         createdAt: "2026-10-01T12:00:00Z",
@@ -698,6 +698,98 @@ describe("Runtime-pinned workflow instance rendering", () => {
   });
 });
 
+describe("Incident diagnostic presentation", () => {
+  it("shows a selected incident next step before its technical evidence", () => {
+    renderIncidentList([incident()], [activityExecution()], vi.fn(), vi.fn());
+    const container = mounted!.container;
+    click(buttonByText(container, "Open incident details"));
+
+    const dialog = container.querySelector<HTMLElement>("[role=dialog]")!;
+    const content = dialog.textContent ?? "";
+    expect(content).toContain("Next step");
+    expect(content.indexOf("Next step")).toBeLessThan(content.indexOf("Failure type"));
+  });
+
+  it("keeps technical details collapsed and labels the trace without exposing a raw frame as its summary", () => {
+    const stackTrace = "at Example.VeryLongMethod(" + "node-id-".repeat(50) + ")\n at Example.NextFrame()";
+    const failure = incident({
+      stackTrace,
+      metadata: { "runtime.faultInnerMessage": "Cannot read the requested item.", "runtime.inputKey": "body", "runtime.inputFailureCode": "ExpressionEvaluationFailed", "runtime.expressionLanguage": "JavaScript" }
+    });
+    renderIncidentList([failure], [activityExecution()], vi.fn(), vi.fn());
+    const container = mounted!.container;
+    const technicalDetails = container.querySelector<HTMLDetailsElement>(".wf-incident-technical-details")!;
+    expect(technicalDetails.open).toBe(false);
+    expect(technicalDetails.querySelector("dl")).not.toBeNull();
+    expect(technicalDetails.textContent).toContain("ExpressionEvaluationFailed");
+    const trace = container.querySelector<HTMLDetailsElement>(".wf-incident-stacktrace")!;
+    expect(trace.open).toBe(false);
+    expect(trace.querySelector("summary")?.textContent).toBe("Stack trace");
+    expect(trace.querySelector("pre")?.textContent).toBe(stackTrace);
+    expect(container.querySelector(".wf-instance-incident-cause")?.textContent).toBe("Cannot read the requested item.");
+  });
+
+  it("shows the resolution the runtime applied, with the source that applied it", () => {
+    const waiting = incident({
+      resolutionOutcome: { actionKind: "WaitForIntervention", systemSource: "PoisonedSchedulerWork", metadata: {} }
+    });
+    renderIncidentList([waiting], [activityExecution()], vi.fn(), vi.fn());
+    const technicalDetails = mounted!.container.querySelector<HTMLDetailsElement>(".wf-incident-technical-details")!;
+    expect(technicalDetails.textContent).toContain("Resolution action");
+    expect(technicalDetails.textContent).toContain("WaitForIntervention (PoisonedSchedulerWork)");
+  });
+
+  it("copies the complete report including direct stack trace evidence", async () => {
+    const clipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    try {
+      const stackTrace = "at Example.Evaluate()\n at Example.Run()";
+      renderIncidentList([incident({ stackTrace })], [activityExecution()], vi.fn(), vi.fn());
+      const copy = buttonByText(mounted!.container, "Copy incident details");
+      expect(copy?.textContent).toContain("Copy incident details");
+      click(copy!);
+      await Promise.resolve();
+      expect(writeText).toHaveBeenCalledTimes(1);
+      expect(writeText.mock.calls[0][0]).toContain("incident-1");
+      expect(writeText.mock.calls[0][0]).toContain("Wrapper failure");
+      expect(writeText.mock.calls[0][0]).toContain(stackTrace);
+    } finally {
+      if (clipboard) Object.defineProperty(navigator, "clipboard", clipboard);
+      else Reflect.deleteProperty(navigator, "clipboard");
+    }
+  });
+
+  it("opens a readable full report and returns focus to the originating incident", async () => {
+    const message = "Scheduler failure: " + "fingerprint-".repeat(100);
+    const stackTrace = "at Example.Evaluate()\n at Example.Run()";
+    renderIncidentList([incident({ message, stackTrace })], [activityExecution()], vi.fn(), vi.fn());
+    const container = mounted!.container;
+    const trigger = buttonByText(container, "Open incident details");
+    expect(trigger).toBeDefined();
+    trigger!.focus();
+    click(trigger);
+    const dialog = container.querySelector<HTMLElement>("[role=dialog]")!;
+    expect(dialog).not.toBeNull();
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    expect(dialog.textContent).toContain(message);
+    expect(dialog.textContent).toContain("incident-1");
+    expect(dialog.querySelector("pre")?.textContent).toBe(stackTrace);
+    const surroundingEscape = vi.fn();
+    window.addEventListener("keydown", surroundingEscape);
+    try {
+      flushSync(() => document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+      expect(surroundingEscape).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener("keydown", surroundingEscape);
+    }
+    expect(container.querySelector("[role=dialog]")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+});
+
 function renderIncidentList(
   incidents: IncidentStateSummary[],
   activities: ActivityExecutionStateSummary[],
@@ -760,7 +852,7 @@ function incident(overrides: Partial<IncidentStateSummary> = {}): IncidentStateS
     executableNodeId: "exec-node",
     severity: "Error",
     status: "Open",
-    resolutionAction: "None",
+    resolutionOutcome: null,
     failureType: "ActivityInputFailed",
     message: "Wrapper failure",
     createdAt: "2026-10-01T12:00:00Z",

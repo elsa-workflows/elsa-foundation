@@ -13,7 +13,7 @@ public sealed class SecretsApiAuthorizationTests(ITestOutputHelper output)
         ["missing", "denied", HttpStatusCode.Forbidden],
         ["adjacent", "delete", HttpStatusCode.Forbidden],
         ["exact", "read", HttpStatusCode.OK],
-        ["write-implies-read", "write", HttpStatusCode.OK],
+        ["write-does-not-imply-read", "write", HttpStatusCode.Forbidden],
         ["wildcard", "wildcard", HttpStatusCode.OK],
         ["untrusted", "untrusted", HttpStatusCode.Unauthorized],
         ["ambiguous", "ambiguous", HttpStatusCode.Forbidden],

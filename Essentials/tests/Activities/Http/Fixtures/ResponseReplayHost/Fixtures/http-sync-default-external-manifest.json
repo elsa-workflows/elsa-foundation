@@ -1,0 +1,171 @@
+{
+  "formatVersion": 1,
+  "capturedAtUtc": "2026-10-16T17:41:10.851943+00:00",
+  "source": {
+    "gitHead": "0af3d456a3e7748a47007f0c6c9e5dabcf75eaba",
+    "branch": "agent/codex/1177-http-usability",
+    "captureMethod": "ResponseReplayHost --measurement-publication-proof; normal design submit, publication and executable-export APIs. The historical baseline import is separate from this newly published export.",
+    "captureMutation": {
+      "relativePath": "Essentials/src/Activities/Http/Activities/WriteHttpResponse.cs",
+      "change": "Temporarily declare WriteHttpResponse External only for the baseline capture build; restored ReplaySafe immediately after building.",
+      "originalSha256": "7a55faafe0260ce2871a43c74779d830fcb2c61355d6e629c49d14de0db9858c",
+      "captureSha256": "789ad6e7791c5a3e0a47484deb88080bc7681c281b86388737faf2aebb98a455",
+      "restoredSha256": "7a55faafe0260ce2871a43c74779d830fcb2c61355d6e629c49d14de0db9858c"
+    },
+    "pinnedSourceFiles": [
+      {
+        "relativePath": "Essentials/src/Activities/Http/Activities/WriteHttpResponse.cs",
+        "sha256": "789ad6e7791c5a3e0a47484deb88080bc7681c281b86388737faf2aebb98a455",
+        "byteLength": 2136
+      },
+      {
+        "relativePath": "Essentials/src/Activities/Http/Activities/HttpEndpoint.cs",
+        "sha256": "926921da02f477b0f46c05202ef115024c2e16ce7c2424c5dd652d61f3483199",
+        "byteLength": 7184
+      },
+      {
+        "relativePath": "Essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/Program.cs",
+        "sha256": "768fc95e88581c011f1bdfb90f0ebce980d889d56ea0ab2397bf4d1a44aca3d7",
+        "byteLength": 19537
+      },
+      {
+        "relativePath": "Essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/ResponseReplayPublicationHost.cs",
+        "sha256": "c9fb507d6dbd0f5014b62204879b4100a56ae5b7cc5757cd9a5b6d0c1698bfbb",
+        "byteLength": 91309
+      },
+      {
+        "relativePath": "Essentials/src/Activities/Design/Reconciliation/Clr/Services/ClrAssemblyScanner.cs",
+        "sha256": "4cc47b9535e114fc726f8f78ca3b6681420f5d9c785858f711a2bf4bbb0be9b0",
+        "byteLength": 56324
+      },
+      {
+        "relativePath": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableHasher.cs",
+        "sha256": "559bbeca12df1f15dd4aa71d1d21f44fea2e02ba40721eb8d6f3ec9a6c3bc198",
+        "byteLength": 23273
+      }
+    ],
+    "captureAssemblies": [
+      {
+        "relativePath": "Essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/bin/Debug/net10.0/ResponseReplayHost.dll",
+        "sha256": "aeef7ed61d866d0957378e86cf0629d17eb05961d46b676c4ae94ed194846292",
+        "byteLength": 331264
+      },
+      {
+        "relativePath": "Essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/bin/Debug/net10.0/Elsa.Activities.Http.dll",
+        "sha256": "a171a75ac9279f5b6980cfada740049ae2a8c04d1849c121a001c05c696b1943",
+        "byteLength": 107008
+      },
+      {
+        "relativePath": "Essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/bin/Debug/net10.0/Elsa.Workflows.Runtime.dll",
+        "sha256": "bee1316b39413b8bbe0ea451bb607f648a2b315d6219717f2c9b7524dc574c85",
+        "byteLength": 1745920
+      },
+      {
+        "relativePath": "Essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/bin/Debug/net10.0/Elsa.Activities.Design.Reconciliation.Clr.dll",
+        "sha256": "7a933c50699ea9b288f9319e0d6bbce46e3860d09334a3bcf3bc0bff621bf2c7",
+        "byteLength": 67584
+      }
+    ],
+    "productionChangesFromGitHead": [
+      "HttpEndpoint adds [Version(\"1.1.0\")]; the pinned source hash includes this contract-version change.",
+      "WriteHttpResponse uses the one-line External capture mutation recorded below; restored immediately after the build."
+    ]
+  },
+  "publication": {
+    "workflowDefinitionId": "14PNUaTTFHA",
+    "workflowDefinitionVersionId": "14PNUaWX8BN",
+    "sourceReferenceId": "activation-ref:publication-14PNUcuPwSl",
+    "artifactId": "artifact-dd98e96a39b1",
+    "artifactHash": "sha256:dd98e96a39b1655435aefe14f4d0f347985cdc843c552ae726a9c62eadf2a27a",
+    "rootArtifactId": "artifact-dd98e96a39b1",
+    "artifactVersion": "1.0.0",
+    "responseNodeId": "write-response",
+    "responseActivityType": "Elsa.Activities.Http.Activities.WriteHttpResponse",
+    "resolvedWriteHttpResponseProfile": "External",
+    "routePath": "response-replay-current-format-5be54cae82a548c1a96efafc26fff6b7",
+    "responseMethod": "POST",
+    "httpEndpointActivityVersion": "1.1.0",
+    "responseModeDefault": "Sync"
+  },
+  "workload": {
+    "sequenceNodeIds": [
+      "root",
+      "http-in",
+      "set-reference-text",
+      "write-response"
+    ],
+    "sequenceChildNodeOrder": [
+      "http-in",
+      "set-reference-text",
+      "write-response"
+    ],
+    "requestContentType": "application/json",
+    "requestBody": "{\"firstName\":\"Alice\",\"lastName\":\"Smith\"}",
+    "computation": "getVariable('content').firstName + ' ' + getVariable('content').lastName",
+    "responseAssertionPassed": true,
+    "responseStatus": 200,
+    "responseBody": "Alice Smith",
+    "evidence": "Fresh normal publication executed through the real HTTP pipeline in ResponseReplayHost. HTTP 200 Alice Smith, Completed, then exact executable-export bytes saved."
+  },
+  "export": {
+    "route": "/publishing/workflows/{versionId}/executable-export",
+    "formatVersion": 1,
+    "fileName": "http-sync-default-external-closure.json",
+    "byteLength": 29593,
+    "sha256": "0de8feba2dd91ab87ed986129751bb671cc68bb921b6d211b5e15ff8c1f22372",
+    "responseStatus": 200
+  },
+  "publicationProof": {
+    "baselineClosureSha256": "cce757438f683fee93204df0dc3cda84531e09106787f99247868c837620b3f3",
+    "baselineArtifactId": "artifact-48fcccd01c49",
+    "baselineArtifactHash": "sha256:48fcccd01c4967d6ea576fdf6dc5a8d9383d6f6d858f9886c910cd3167ea5198",
+    "baselineDefinitionId": "14C9KTKZfxp",
+    "baselineDefinitionVersionId": "14C9KTQmMAR",
+    "baselineProfile": "External",
+    "baselineExecutionId": "14PNUG0sxK3",
+    "baselineHttpStatus": 200,
+    "baselineHttpBody": "Alice Smith",
+    "baselineHttpContentType": "text/plain",
+    "baselinePersistedFirstName": "Alice",
+    "baselinePersistedLastName": "Smith",
+    "baselineReferenceText": "Alice Smith",
+    "baselineCommittedHeaderCount": 0,
+    "baselineDeliveredAuthoredHeaderCount": 0,
+    "candidateArtifactId": "artifact-dd98e96a39b1",
+    "candidateArtifactHash": "sha256:dd98e96a39b1655435aefe14f4d0f347985cdc843c552ae726a9c62eadf2a27a",
+    "candidateDefinitionId": "14PNUaTTFHA",
+    "candidateDefinitionVersionId": "14PNUaWX8BN",
+    "candidateSourceReferenceId": "activation-ref:publication-14PNUcuPwSl",
+    "candidateProfile": "External",
+    "candidateExecutableArtifactHash": "sha256:dd98e96a39b1655435aefe14f4d0f347985cdc843c552ae726a9c62eadf2a27a",
+    "candidateResponseContractFingerprint": "sha256:fdafa1b10848cf64d2f83d84a47c9f789f6043d0a6652b16427cb260f3047db2",
+    "activeSharedRouteBindingCount": 1,
+    "activeSharedRouteArtifactId": "artifact-dd98e96a39b1",
+    "candidateHttpExecutionId": "14PNUfj5lns",
+    "candidateHttpStatus": 200,
+    "candidateHttpBody": "Alice Smith",
+    "candidateHttpContentType": "text/plain",
+    "candidateCommittedStatusCode": 200,
+    "candidateCommittedBody": "Alice Smith",
+    "candidateCommittedContentType": "text/plain",
+    "candidateCommittedHeaderCount": 0,
+    "candidateDeliveredAuthoredHeaderCount": 0,
+    "candidatePersistedFirstName": "Alice",
+    "candidatePersistedLastName": "Smith",
+    "candidateReferenceText": "Alice Smith",
+    "candidateExecutionStatus": "Completed",
+    "candidateClosureFile": "candidate-published-closure.json",
+    "candidateClosureSha256": "0de8feba2dd91ab87ed986129751bb671cc68bb921b6d211b5e15ff8c1f22372",
+    "restCompanionArtifactId": "artifact-dbb4c57e8702",
+    "restAdmissionStatus": 200,
+    "restExecutionId": "14PNUkrxPaq",
+    "restExecutionStatus": "Completed",
+    "restCommittedStatusCode": 200,
+    "restCommittedBody": "Alice Smith",
+    "restCommittedContentType": "text/plain",
+    "restCommittedHeaderCount": 0,
+    "restPersistedFirstName": "Alice",
+    "restPersistedLastName": "Smith",
+    "restReferenceText": "Alice Smith"
+  }
+}

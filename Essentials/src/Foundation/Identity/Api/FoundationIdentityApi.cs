@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Security.Claims;
 using System.Text.Json;
@@ -114,8 +115,7 @@ public static class FoundationIdentityApi
                 x.Key,
                 x.DisplayName,
                 x.Category,
-                x.Description,
-                x.Implies?.ToArray() ?? [])).ToList());
+                x.Description)).ToList());
 
         await Results.Json(response, FoundationIdentityApiJsonContext.Default.IdentityCapabilitiesResponse).ExecuteAsync(context);
     }
@@ -154,8 +154,7 @@ public static class FoundationIdentityApi
             return;
         }
 
-        var subject = normalizedPrincipal.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? normalizedPrincipal.FindFirstValue("sub");
+        var subject = Subject(normalizedPrincipal);
         if (string.IsNullOrWhiteSpace(subject))
         {
             await Results.Unauthorized().ExecuteAsync(context);
@@ -214,16 +213,34 @@ public static class FoundationIdentityApi
         var resolver = services.GetRequiredService<IAuthenticationProviderResolver>();
         var descriptor = await resolver.FindAsync(provider, allowGlobalFallback: true, cancellationToken: context.RequestAborted);
         var schemeName = descriptor?.Challenge?.Scheme ?? provider;
+        var schemeRegistered = !string.IsNullOrEmpty(schemeName) &&
+            await services.GetRequiredService<IAuthenticationSchemeProvider>().GetSchemeAsync(schemeName) is not null;
 
-        var invalidator = descriptor is null
+        // The provider session being ended is the principal of the provider's own scheme, not the request's
+        // selected principal: the selector prefers a bearer, which may name another subject than the session.
+        // Revocation and invalidation act on that session, so beside a session a bearer never decides whose
+        // tokens are revoked. Bearer-only, the bearer's own subject is signed out everywhere instead.
+        var session = descriptor is null
+            ? null
+            : (schemeRegistered ? await AuthenticateSessionAsync(context, schemeName) : null) ?? context.User;
+
+        // Revoke before invalidating: a revocation fault then leaves the session (cookie and security stamp)
+        // intact, so a retry still authenticates as the subject and can revoke. The fault answers a bare 503,
+        // which Studio reports as a failed sign-out, never a 204 that would leave live tokens behind.
+        if (session is not null && !await TryRevokeSubjectTokensAsync(context, session))
+        {
+            await Results.StatusCode(StatusCodes.Status503ServiceUnavailable).ExecuteAsync(context);
+            return;
+        }
+
+        var invalidator = session is null
             ? null
             : services.GetServices<IAuthenticationSessionInvalidator>().SingleOrDefault(candidate =>
-                string.Equals(candidate.ProviderId, descriptor.Id, StringComparison.OrdinalIgnoreCase));
+                string.Equals(candidate.ProviderId, descriptor!.Id, StringComparison.OrdinalIgnoreCase));
         if (invalidator is not null)
-            await invalidator.InvalidateAsync(new AuthenticationSessionInvalidationContext(context.User), context.RequestAborted);
+            await invalidator.InvalidateAsync(new AuthenticationSessionInvalidationContext(session!), context.RequestAborted);
 
-        if (!string.IsNullOrEmpty(schemeName) &&
-            await services.GetRequiredService<IAuthenticationSchemeProvider>().GetSchemeAsync(schemeName) is not null)
+        if (schemeRegistered)
         {
             var handler = await services.GetRequiredService<IAuthenticationHandlerProvider>()
                 .GetHandlerAsync(context, schemeName);
@@ -232,6 +249,38 @@ public static class FoundationIdentityApi
         }
 
         await Results.NoContent().ExecuteAsync(context);
+    }
+
+    // Revokes under the normalized subject, the one the token exchange issues under, so a stale tab can neither
+    // refresh nor keep its bearer. An un-normalized principal revokes nothing. False when revocation faulted.
+    private static async Task<bool> TryRevokeSubjectTokensAsync(HttpContext context, ClaimsPrincipal session)
+    {
+        var tokens = context.RequestServices.GetService<ITokenService>();
+        if (tokens is null ||
+            !context.RequestServices.GetRequiredService<NormalizedPrincipalValidator>().TryGetNormalizedPrincipal(session, out var principal))
+            return true;
+
+        var subject = Subject(principal);
+        if (string.IsNullOrWhiteSpace(subject))
+            return true;
+
+        try
+        {
+            await tokens.RevokeSubjectAsync(subject, context.RequestAborted);
+            return true;
+        }
+        catch (Exception exception) when (!(exception is OperationCanceledException && context.RequestAborted.IsCancellationRequested))
+        {
+            context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(FoundationIdentityApi))
+                .LogError(exception, "Sign-out could not revoke the subject's tokens; the session was left intact so the sign-out can be retried.");
+            return false;
+        }
+    }
+
+    private static async Task<ClaimsPrincipal?> AuthenticateSessionAsync(HttpContext context, string schemeName)
+    {
+        var result = await context.AuthenticateAsync(schemeName);
+        return result.Succeeded ? result.Principal : null;
     }
 
     private static async Task HandleRefreshAsync(HttpContext context)
@@ -307,6 +356,9 @@ public static class FoundationIdentityApi
 
         return null;
     }
+
+    private static string? Subject(ClaimsPrincipal principal) =>
+        principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? principal.FindFirstValue("sub");
 
     private static string RouteValue(HttpContext context, string name) =>
         context.Request.RouteValues.TryGetValue(name, out var value) ? Convert.ToString(value) ?? string.Empty : string.Empty;

@@ -11,9 +11,9 @@ public static class ModuleManagementPermissionKeys
 {
     public const string OwnerId = "elsa.modularity.module-management";
 
-    public const string Read = "module-management.read";
+    public const string Read = "module-management:read";
 
-    public const string Manage = "module-management.manage";
+    public const string Manage = "module-management:manage";
 }
 
 /// <summary>
@@ -37,7 +37,6 @@ public sealed class ModuleManagementPermissionContributor : IPermissionContribut
             ModuleManagementPermissionKeys.Manage,
             "Manage modules",
             Category,
-            "Apply feature/module configuration changes on the backend host.",
-            new HashSet<string> { ModuleManagementPermissionKeys.Read });
+            "Apply feature/module configuration changes on the backend host.");
     }
 }

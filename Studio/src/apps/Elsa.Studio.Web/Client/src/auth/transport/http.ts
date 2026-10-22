@@ -1,4 +1,4 @@
-import { createHttpClient, type StudioHttpClient } from "../../sdk";
+import { createHttpClient, type StudioHttpClient, type StudioRequestInit } from "../../sdk";
 import { authSessionEndedEvent, type AuthProviderManager } from "../types";
 
 export interface AuthenticatedHttpClientOptions {
@@ -40,13 +40,16 @@ function createAuthenticatedFetch(
 
   return (async (input: RequestInfo | URL, init?: RequestInit) => {
     const requestUrl = typeof input === "string" ? input : input.toString();
-    const firstAttempt = await withBearerToken(requestUrl, auth, options, init);
+    const studioInit = init as StudioRequestInit | undefined;
+    const retryOnUnauthorized = studioInit?.retryOnUnauthorized !== false;
+    const requestInit = withoutRetryOption(init);
+    const firstAttempt = await withBearerToken(requestUrl, auth, options, requestInit);
     if (!firstAttempt.hasAuthorization && options.requireAuthorization === true && options.refreshOnUnauthorized !== false) {
       return authenticationRequiredResponse();
     }
 
     const firstResponse = await request(requestUrl, firstAttempt.init);
-    if (firstResponse.status !== 401 || options.refreshOnUnauthorized === false) {
+    if (firstResponse.status !== 401 || options.refreshOnUnauthorized === false || !retryOnUnauthorized) {
       return firstResponse;
     }
 
@@ -55,11 +58,18 @@ function createAuthenticatedFetch(
       return new Response("Authentication required.", { status: 401 });
     }
 
-    const retryAttempt = await withBearerToken(requestUrl, auth, options, init, false);
+    const retryAttempt = await withBearerToken(requestUrl, auth, options, requestInit, false);
     return retryAttempt.hasAuthorization
       ? request(requestUrl, retryAttempt.init)
       : authenticationRequiredResponse();
   }) as typeof fetch;
+}
+
+function withoutRetryOption(init?: RequestInit): RequestInit | undefined {
+  if (!init) return undefined;
+  const copy = { ...init } as StudioRequestInit;
+  delete copy.retryOnUnauthorized;
+  return copy;
 }
 
 async function refreshOnce(

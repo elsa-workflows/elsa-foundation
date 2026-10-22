@@ -10,6 +10,10 @@ declare module "@elsa-workflows/studio-sdk" {
     name: string;
     displayName?: string | null;
     typeName: string;
+    /** Presentation tier from the activity catalog; unknown values remain forward-compatible. */
+    tier?: string | null;
+    /** Whether the activity requires this input at runtime; independent of its presentation tier. */
+    isRequired?: boolean | null;
     uiHint?: string | null;
     defaultSyntax?: string | null;
     isReadOnly?: boolean | null;

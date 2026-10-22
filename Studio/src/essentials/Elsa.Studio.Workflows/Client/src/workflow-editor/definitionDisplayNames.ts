@@ -36,6 +36,10 @@ export async function loadDefinitionDisplayNames(
   if (wanted.length === 0) return names;
 
   try {
+    // Run views load names through this one list call (state: "all"). Publication-state
+    // enrichment lives on that list endpoint's batched lookup, so the run views do not add a
+    // per-definition slot query. Then a per-id getDefinition for anything still missing. Uncapping
+    // the parallel getDefinition fan-out past the first 100 is issue #2800 — do not raise it here.
     const listed = await listDefinitions(context, {
       search: "",
       state: "all",

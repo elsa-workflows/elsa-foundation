@@ -60,6 +60,9 @@ public sealed record PublicationFailure(string Code, string Message);
 /// </summary>
 public static class PublicationFailureCodes
 {
+    /// <summary>The shell permits only declared channels and the target name is not declared.</summary>
+    public const string ChannelNotDeclared = "channel_not_declared";
+
     /// <summary>The target activation slot is owned by another activation source; ownership transfer is an
     /// explicit operator action.</summary>
     public const string SlotOwnerConflict = "slot_owner_conflict";

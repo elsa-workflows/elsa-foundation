@@ -13,6 +13,7 @@ public sealed class IdentityAuthorityStoreBackend
     [
         typeof(IUserStore),
         typeof(IRevisionAwareUserStore),
+        typeof(IPagedUserStore),
         typeof(IRoleStore),
         typeof(IRevisionAwareRoleStore),
         typeof(IPagedRoleStore),

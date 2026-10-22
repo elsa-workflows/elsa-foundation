@@ -3,6 +3,7 @@ import type {
   ActivityPresentationRecord
 } from "./workflowTypes";
 import { getActivityDisplay } from "./activityDisplay";
+import { shortTypeName } from "./workflowFormatting";
 
 export const activityDisplayNameMaxLength = 200;
 export const activityDescriptionMaxLength = 2_000;
@@ -90,5 +91,5 @@ export function resolveActivityLabel(
 }
 
 function shortActivityType(value: string) {
-  return value.split(".").filter(Boolean).at(-1) ?? value;
+  return shortTypeName(value) ?? value;
 }

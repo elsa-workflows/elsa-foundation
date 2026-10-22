@@ -2,26 +2,65 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 
 namespace Elsa.Workflows.Runtime.Services.Executions;
 
-public sealed class InMemoryWorkflowExecutionStateStore() : InMemoryKeyedStateStore<string, WorkflowExecutionState>(StringComparer.Ordinal), IWorkflowExecutionStateStore
+public sealed class InMemoryWorkflowExecutionStateStore : InMemoryKeyedStateStore<string, WorkflowExecutionState>, IWorkflowExecutionStateStore
 {
     private readonly string? _cursorScope;
+    private readonly InMemoryRuntimeCheckpointStoreState _checkpointState;
+    private readonly IExecutionLivenessStateStore? _executionLivenessStateStore;
+
+    public InMemoryWorkflowExecutionStateStore()
+        : this(new InMemoryRuntimeCheckpointStoreState(), new InMemoryExecutionLivenessStateStore(), null)
+    {
+    }
 
     /// <summary>Creates a history store whose cursors also bind an externally applied result-set predicate.</summary>
-    public InMemoryWorkflowExecutionStateStore(string? cursorScope) : this() => _cursorScope = cursorScope;
+    public InMemoryWorkflowExecutionStateStore(string? cursorScope)
+        : this(new InMemoryRuntimeCheckpointStoreState(), new InMemoryExecutionLivenessStateStore(), cursorScope)
+    {
+    }
 
-    public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default)
+    public InMemoryWorkflowExecutionStateStore(
+        InMemoryRuntimeCheckpointStoreState checkpointState,
+        IExecutionLivenessStateStore? executionLivenessStateStore,
+        string? cursorScope = null)
+        : base(StringComparer.Ordinal)
+    {
+        ArgumentNullException.ThrowIfNull(checkpointState);
+        _checkpointState = checkpointState;
+        _executionLivenessStateStore = executionLivenessStateStore;
+        _cursorScope = cursorScope;
+    }
+
+    public async ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentException.ThrowIfNullOrWhiteSpace(state.WorkflowExecutionId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        return new(Save(state.WorkflowExecutionId, state));
+        return await _checkpointState.ExecuteWriteGateAsync(async token =>
+        {
+            if (_executionLivenessStateStore is not InMemoryExecutionLivenessStateStore livenessStore)
+                return Save(state.WorkflowExecutionId, state);
+
+            return await livenessStore.ExecuteOwnershipAtomicAsync(async ownershipToken =>
+            {
+                ownershipToken.ThrowIfCancellationRequested();
+                var ownership = await livenessStore.FindAsync(
+                    state.WorkflowExecutionId,
+                    RuntimeExecutionOwnershipStateId.For(state.WorkflowExecutionId),
+                    ownershipToken);
+                ThrowIfDeletionTombstoned(ownership);
+                return Save(state.WorkflowExecutionId, state);
+            }, token);
+        }, cancellationToken);
     }
 
     public ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
@@ -73,12 +112,106 @@ public sealed class InMemoryWorkflowExecutionStateStore() : InMemoryKeyedStateSt
         return new(artifactIds);
     }
 
-    public ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    public async ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        return new(Remove(workflowExecutionId));
+        return await _checkpointState.ExecuteWriteGateAsync(async token =>
+        {
+            if (Find(workflowExecutionId) is null)
+                return false;
+
+            if (_executionLivenessStateStore is InMemoryExecutionLivenessStateStore inMemoryLivenessStore)
+                return await inMemoryLivenessStore.ExecuteWorkflowDeletionAtomicAsync(
+                    workflowExecutionId,
+                    _ => ValueTask.FromResult(DeleteExecutionAndCancelOutstandingWork(workflowExecutionId)),
+                    token);
+
+            return DeleteExecutionAndCancelOutstandingWork(workflowExecutionId);
+        }, cancellationToken);
+    }
+
+    internal InMemoryRuntimeCheckpointStoreState CheckpointState => _checkpointState;
+
+    internal IExecutionLivenessStateStore? ExecutionLivenessStateStore => _executionLivenessStateStore;
+
+    internal async ValueTask<WorkflowExecutionDeletionResult> TryDeleteTerminalAsync(
+        WorkflowExecutionDeletionCandidate candidate,
+        bool concurrencyTokenIsValid,
+        Action cleanup,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+        ArgumentNullException.ThrowIfNull(cleanup);
+        ArgumentException.ThrowIfNullOrWhiteSpace(candidate.State.WorkflowExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (_executionLivenessStateStore is not InMemoryExecutionLivenessStateStore livenessStore)
+            return WorkflowExecutionDeletionResult.Unsupported;
+
+        return await _checkpointState.ExecuteWriteGateAsync(async token =>
+        {
+            return await livenessStore.ExecuteOwnershipAtomicAsync(async ownershipToken =>
+            {
+                // Candidate validation and the deletion tombstone share both the checkpoint and ownership gates
+                // with direct SaveAsync calls and checkpoint commits. Once cleanup starts, no supported writer can
+                // replace this snapshot and cancellation cannot interrupt the synchronous purge.
+                var current = Find(candidate.State.WorkflowExecutionId);
+                if (current is null)
+                    return WorkflowExecutionDeletionResult.NotFound;
+                if (!concurrencyTokenIsValid || !ReferenceEquals(current, candidate.State))
+                    return WorkflowExecutionDeletionResult.Changed;
+                if (!current.Status.IsTerminal())
+                    return WorkflowExecutionDeletionResult.NotTerminal;
+
+                return await livenessStore.ExecuteWorkflowDeletionAtomicAsync(
+                    current.WorkflowExecutionId,
+                    _ =>
+                    {
+                        CancelOutstandingBackgroundWork(current.WorkflowExecutionId);
+                        cleanup();
+                        return ValueTask.FromResult(Remove(current.WorkflowExecutionId)
+                            ? WorkflowExecutionDeletionResult.Deleted
+                            : throw new InvalidOperationException("The workflow execution disappeared inside the deletion gate."));
+                    },
+                    CancellationToken.None);
+            }, token);
+        }, cancellationToken);
+    }
+
+    private bool DeleteExecutionAndCancelOutstandingWork(string workflowExecutionId)
+    {
+        CancelOutstandingBackgroundWork(workflowExecutionId);
+        return Remove(workflowExecutionId);
+    }
+
+    private void CancelOutstandingBackgroundWork(string workflowExecutionId)
+    {
+        var now = DateTimeOffset.UtcNow;
+        lock (_checkpointState.SyncRoot)
+        {
+            // In-memory execution state is keyed only by execution ID, so deletion remains process-global and
+            // tombstones every scoped ledger row for that execution ID. The EF store performs scoped deletion.
+            var cancellations = _checkpointState.BackgroundActivityWorkItems
+                .Where(pair => StringComparer.Ordinal.Equals(pair.Key.WorkflowExecutionId, workflowExecutionId) &&
+                               pair.Value.Status is BackgroundActivityWorkStatus.Pending or
+                                   BackgroundActivityWorkStatus.Claimed or
+                                   BackgroundActivityWorkStatus.ResultReady)
+                .Select(pair => (pair.Key, Item: BackgroundActivityWorkLifecycle.Cancel(pair.Value, now)))
+                .ToArray();
+            foreach (var cancellation in cancellations)
+                _checkpointState.BackgroundActivityWorkItems[cancellation.Key] = cancellation.Item;
+        }
+    }
+
+    private static void ThrowIfDeletionTombstoned(ExecutionLivenessState? ownership)
+    {
+        if (ownership?.Metadata.TryGetValue(RuntimeMetadataKeys.WorkflowExecutionDeletionTombstone, out var tombstone) != true)
+            return;
+        if (!StringComparer.Ordinal.Equals(tombstone, "true"))
+            throw new InvalidDataException("The persisted workflow-execution deletion tombstone is corrupt.");
+        throw new InvalidOperationException("A deleted workflow execution cannot be recreated by saving its execution state.");
     }
 
     private WorkflowExecutionStatePage QueryPage(

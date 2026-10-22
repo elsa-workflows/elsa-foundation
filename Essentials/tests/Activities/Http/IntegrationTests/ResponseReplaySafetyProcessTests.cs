@@ -20,8 +20,8 @@ namespace Elsa.Activities.Http.IntegrationTests;
 
 public sealed class ResponseReplaySafetyProcessTests
 {
-    private const string ExternalClosureFileName = "current-format-external-closure.json";
-    private const string ExternalManifestFileName = "current-format-external-manifest.json";
+    private const string ExternalClosureFileName = "http-sync-default-external-closure.json";
+    private const string ExternalManifestFileName = "http-sync-default-external-manifest.json";
     private const string ResultPrefix = "RESPONSE_REPLAY_RESULT=";
     private const string PublicationResultPrefix = "RESPONSE_REPLAY_PUBLICATION_RESULT=";
     private const string RecoveryResultPrefix = "RESPONSE_REPLAY_RECOVERY_RESULT=";
@@ -35,14 +35,16 @@ public sealed class ResponseReplaySafetyProcessTests
 
     public ResponseReplaySafetyProcessTests(ITestOutputHelper output) => _output = output;
 
-    [Fact]
-    public async Task CapturedExternalClosure_ImportsAndExecutesThroughChildHttpHost()
+    [Theory]
+    [InlineData("current-format-external")]
+    [InlineData("http-sync-default-external")]
+    public async Task CapturedExternalClosure_ImportsAndExecutesThroughChildHttpHost(string fixturePrefix)
     {
         var repositoryRoot = FindRepositoryRoot();
         var fixtureDirectory = Path.Combine(repositoryRoot,
             "Essentials", "tests", "Activities", "Http", "Fixtures", "ResponseReplayHost", "Fixtures");
-        var closurePath = Path.Combine(fixtureDirectory, ExternalClosureFileName);
-        var manifestPath = Path.Combine(fixtureDirectory, ExternalManifestFileName);
+        var closurePath = Path.Combine(fixtureDirectory, $"{fixturePrefix}-closure.json");
+        var manifestPath = Path.Combine(fixtureDirectory, $"{fixturePrefix}-manifest.json");
         var childProjectDirectory = Path.Combine(repositoryRoot,
             "Essentials", "tests", "Activities", "Http", "Fixtures", "ResponseReplayHost");
 
@@ -182,6 +184,17 @@ public sealed class ResponseReplaySafetyProcessTests
             var candidateClosureHash = Convert.ToHexString(SHA256.HashData(candidateClosureBytes)).ToLowerInvariant();
             Assert.Equal(resultRoot.GetProperty("candidateClosureSha256").GetString(), candidateClosureHash);
             using var candidateClosure = JsonDocument.Parse(candidateClosureBytes);
+            // Resolve the new contract through the real catalog and publisher, while the theory above
+            // still imports and executes the historical contract without rewriting its bytes.
+            var endpoint = candidateClosure.RootElement.GetProperty("artifacts").EnumerateArray()
+                .Single(artifact => artifact.GetProperty("identity").GetProperty("artifactId").GetString() == resultRoot.GetProperty("candidateArtifactId").GetString())
+                .GetProperty("rootActivity").GetProperty("childSlots").EnumerateArray()
+                .SelectMany(slot => slot.GetProperty("activities").EnumerateArray())
+                .Single(node => node.GetProperty("authoredActivityId").GetString() == HttpNodeId);
+            Assert.Equal("1.1.0", endpoint.GetProperty("activityTypeVersion").GetString());
+            var responseMode = endpoint.GetProperty("activityContract").GetProperty("inputs").GetProperty("ResponseMode");
+            Assert.True(responseMode.GetProperty("hasDefault").GetBoolean());
+            Assert.Equal("Sync", responseMode.GetProperty("defaultValue").GetString());
             AssertAuthoredBehaviorMatches(baselineClosure.RootElement, candidateClosure.RootElement,
                 publication.GetProperty("artifactId").GetString()!, resultRoot.GetProperty("candidateArtifactId").GetString()!);
 
@@ -1118,6 +1131,7 @@ public sealed class ResponseReplaySafetyProcessTests
         var candidateArtifact = candidateClosure.GetProperty("artifacts").EnumerateArray().Single(artifact =>
             artifact.GetProperty("identity").GetProperty("artifactId").GetString() == candidateArtifactId);
         var baselineProjection = AuthoredBehaviorProjection(baselineArtifact);
+        ApplyStructuredBodyContractChange(baselineProjection);
         var candidateProjection = AuthoredBehaviorProjection(candidateArtifact);
         Assert.True(JsonNode.DeepEquals(baselineProjection, candidateProjection),
             "Normal candidate publication changed authored variables, node order/types, or input bindings beyond the reviewed contract-profile/version metadata allowance.\n" +
@@ -1135,6 +1149,33 @@ public sealed class ResponseReplaySafetyProcessTests
         return projected;
     }
 
+    /// <summary>
+    /// Reviewed allowance for spec 256 (#3050): the frozen baseline predates WriteHttpResponse.Body becoming a JSON value.
+    /// Only its <c>String</c> Body type is upgraded to the current contract; any other difference still fails.
+    /// </summary>
+    private static void ApplyStructuredBodyContractChange(JsonObject artifact)
+    {
+        const string bodyType = "System.Text.Json.JsonElement?";
+        var writeResponse = ((artifact["rootActivity"]?["childSlots"] as JsonArray) ?? [])
+            .SelectMany(slot => (slot?["activities"] as JsonArray) ?? [])
+            .OfType<JsonObject>()
+            .Single(node => node["authoredActivityId"]?.GetValue<string>() == "write-response");
+
+        Upgrade(writeResponse["inputBindings"]?["Body"]?["targetType"], "alias");
+        Upgrade(writeResponse["inputBindings"]?["Body"]?["expression"]?["resultType"], "id");
+        Upgrade(writeResponse["activityContract"]?["inputs"]?["Body"]?["type"], "alias");
+        Upgrade(writeResponse["activityContract"]?["result"]?["projections"]?["Body"]?["type"], "alias");
+        if (writeResponse["activityContract"]?["result"]?["projections"]?["Body"] is JsonObject projection &&
+            projection["sourceRepresentation"]?.GetValue<string>() == "TextValue")
+            projection["sourceRepresentation"] = "TypedValue";
+
+        void Upgrade(JsonNode? holder, string property)
+        {
+            if (holder is JsonObject value && value[property]?.GetValue<string>() == "String")
+                value[property] = bodyType;
+        }
+    }
+
     private static void StripAllowedContractMetadata(JsonObject artifact)
     {
         if (artifact["rootActivity"] is JsonObject rootActivity)
@@ -1143,6 +1184,11 @@ public sealed class ResponseReplaySafetyProcessTests
 
     private static void StripExecutableNodeContractMetadata(JsonObject node)
     {
+        // A capability the compiler derives from the activity type (#3135), so a node compiled after it was added
+        // carries it while the historical baseline cannot.
+        if (node["metadata"] is JsonObject metadata)
+            metadata.Remove(RuntimeMetadataKeys.AcceptsRescheduledFaultedChild);
+
         if (node["descriptorType"]?.GetValue<string>() == "elsa.clr-activity" &&
             node["activityContract"] is JsonObject contract &&
             contract["descriptorKind"]?.GetValue<string>() == "Elsa.Primitives.Models.ClrActivityDescriptor")

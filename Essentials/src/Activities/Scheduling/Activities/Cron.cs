@@ -30,6 +30,7 @@ namespace Elsa.Activities.Scheduling.Activities;
 /// </para>
 /// </remarks>
 [RefusesSecretBinding(nameof(Expression), SecretBindingRefusalReason.FixedAtPublish)]
+[Activity(Icon = "CalendarClock")]
 [TriggerActivity]
 public sealed class Cron : Activity<CronResult>
 {

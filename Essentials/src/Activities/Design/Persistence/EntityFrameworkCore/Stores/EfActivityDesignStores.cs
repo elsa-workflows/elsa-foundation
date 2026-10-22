@@ -815,7 +815,19 @@ public sealed class EfActivityDesignStores(
         EnsureDesignAuthoring(authoring, draft.DefinitionId, draft.TenantId);
         if (draft.Status != ActivityDefinitionDraftStatus.Active || draft.Revision != validation.Revision) throw new DbUpdateConcurrencyException("Activity draft validation is stale or inactive.");
         await AdvanceConcurrencyFenceAsync(db.ActivityDefinitionDrafts, draft, "Activity draft validation is stale or inactive.", cancellationToken);
-        db.ActivityDraftValidations.Add(validation);
+        var existingValidation = await ById(Access(db.ActivityDraftValidations), validation.Id).SingleOrDefaultAsync(cancellationToken);
+        if (existingValidation is null)
+            db.ActivityDraftValidations.Add(validation);
+        else
+        {
+            if (existingValidation.TenantId != validation.TenantId ||
+                existingValidation.DraftId != validation.DraftId ||
+                existingValidation.Revision != validation.Revision)
+                throw new InvalidOperationException("An activity draft validation ID cannot be reused for different validation facts.");
+
+            existingValidation.ValidatedAt = validation.ValidatedAt;
+            existingValidation.Diagnostics = validation.Diagnostics.ToList();
+        }
         await SaveAsync(cancellationToken);
         await tx.CommitAsync(cancellationToken);
     }

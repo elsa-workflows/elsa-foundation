@@ -36,11 +36,12 @@ $httpEp    = Invoke-Step "resolve HttpEndpoint"{ Get-ActivityVersionId -Ctx $ctx
 $path = "hello-$(Get-Random -Maximum 999999)"
 
 # HttpEndpoint start trigger. Path + CanStartWorkflow are required; SupportedMethods is a JSON array
-# (authored so -Method is honored). Other options are intentionally left unauthored (they default).
+# (authored so -Method is honored). This fire-and-forget example explicitly chooses background acceptance.
 $httpNode = New-ActivityNode -NodeId "http-in" -VersionId $httpEp -Inputs @(
     (New-LiteralInput -ReferenceKey "Path"             -Value $path),
     (New-LiteralInput -ReferenceKey "CanStartWorkflow" -Value $true),
-    (New-LiteralInput -ReferenceKey "SupportedMethods" -Value @($Method))
+    (New-LiteralInput -ReferenceKey "SupportedMethods" -Value @($Method)),
+    (New-LiteralInput -ReferenceKey "ResponseMode" -Value "Async")
 )
 $writeNode = New-ActivityNode -NodeId "after-http" -VersionId $writeLine -Inputs @(
     (New-LiteralInput -ReferenceKey "text" -Value $Message)

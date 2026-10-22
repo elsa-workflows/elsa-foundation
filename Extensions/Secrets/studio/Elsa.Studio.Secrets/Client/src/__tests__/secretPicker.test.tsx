@@ -37,6 +37,37 @@ describe("secret picker", () => {
     });
   });
 
+  it("filters active metadata without regard to casing and preserves legacy entries without status", async () => {
+    const secret = pickerResponse().items[0];
+    const activeItems = ["Active", "active", "ACTIVE"].map((status, index) => ({
+      ...secret,
+      id: `secret-active-${index}`,
+      name: `active-${index}`,
+      displayName: `Active ${index}`,
+      status
+    }));
+    const unavailableItems = ["Inactive", "inactive", "INACTIVE", "Revoked", "revoked", "REVOKED"]
+      .map((status, index) => ({
+        ...secret,
+        id: `secret-unavailable-${index}`,
+        name: `unavailable-${index}`,
+        displayName: `Unavailable ${index}`,
+        status
+      }));
+    const { status: _status, ...legacySecret } = secret;
+    const legacyItem = { ...legacySecret, id: "secret-legacy", name: "legacy", displayName: "Legacy" };
+    const { container } = render({
+      postJson: vi.fn(async () => ({ items: [...activeItems, ...unavailableItems, legacyItem] }))
+    });
+
+    await waitFor(() => !container.querySelector("select")?.disabled);
+
+    const options = Array.from(container.querySelector("select")!.options)
+      .map(option => option.value)
+      .filter(Boolean);
+    expect(options).toEqual(["secret-active-0", "secret-active-1", "secret-active-2", "secret-legacy"]);
+  });
+
   it("latches a focus request until asynchronous metadata makes the picker usable", async () => {
     const request = deferred<unknown>();
     const { container, rerender } = render({

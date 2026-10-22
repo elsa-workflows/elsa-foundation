@@ -42,7 +42,10 @@ public sealed record PublicationTriggerConflict(
     string StimulusType,
     string StimulusHash,
     PublicationTriggerCardinality Cardinality,
-    string ClaimId);
+    string ClaimId)
+{
+    public string? Descriptor { get; init; }
+}
 
 public sealed record PublicationPreflightResult(
     bool CanActivate,

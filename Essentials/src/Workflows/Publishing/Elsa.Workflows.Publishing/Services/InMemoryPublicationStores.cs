@@ -8,6 +8,8 @@ public sealed class InMemoryPublicationRecordStore : IPublicationRecordStore
     private readonly Lock _gate = new();
     private readonly Dictionary<string, PublicationRecord> _records = new(StringComparer.Ordinal);
 
+    public bool SupportsDefinitionIdLookup => true;
+
     public ValueTask SaveAsync(PublicationRecord publication, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(publication);
@@ -30,6 +32,22 @@ public sealed class InMemoryPublicationRecordStore : IPublicationRecordStore
             return ValueTask.FromResult(_records.GetValueOrDefault(publicationId));
     }
 
+    public ValueTask<IReadOnlyCollection<PublicationRecord>> FindByIdsAsync(
+        IReadOnlyCollection<string> publicationIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(publicationIds);
+        cancellationToken.ThrowIfCancellationRequested();
+        foreach (var publicationId in publicationIds)
+            ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
+        var requested = publicationIds.ToHashSet(StringComparer.Ordinal);
+        lock (_gate)
+            return ValueTask.FromResult<IReadOnlyCollection<PublicationRecord>>(_records.Values
+                .Where(publication => requested.Contains(publication.PublicationId))
+                .OrderBy(publication => publication.PublicationId, StringComparer.Ordinal)
+                .ToArray());
+    }
+
     public ValueTask<IReadOnlyCollection<PublicationRecord>> ListBySlotAsync(string slotId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(slotId);
@@ -37,6 +55,25 @@ public sealed class InMemoryPublicationRecordStore : IPublicationRecordStore
         lock (_gate)
             return ValueTask.FromResult<IReadOnlyCollection<PublicationRecord>>(_records.Values
                 .Where(publication => StringComparer.Ordinal.Equals(publication.SlotId, slotId))
+                .OrderBy(publication => publication.CreatedAt)
+                .ThenBy(publication => publication.PublicationId, StringComparer.Ordinal)
+                .ToArray());
+    }
+
+    public ValueTask<IReadOnlyCollection<PublicationRecord>> ListByDefinitionIdsAsync(
+        IReadOnlyCollection<string> workflowDefinitionIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(workflowDefinitionIds);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (workflowDefinitionIds.Count == 0)
+            return ValueTask.FromResult<IReadOnlyCollection<PublicationRecord>>([]);
+        foreach (var workflowDefinitionId in workflowDefinitionIds)
+            ArgumentException.ThrowIfNullOrWhiteSpace(workflowDefinitionId);
+        var wanted = workflowDefinitionIds.ToHashSet(StringComparer.Ordinal);
+        lock (_gate)
+            return ValueTask.FromResult<IReadOnlyCollection<PublicationRecord>>(_records.Values
+                .Where(publication => wanted.Contains(publication.WorkflowDefinitionId))
                 .OrderBy(publication => publication.CreatedAt)
                 .ThenBy(publication => publication.PublicationId, StringComparer.Ordinal)
                 .ToArray());
@@ -74,11 +111,32 @@ public sealed class InMemoryPublicationPolicyStore : IPublicationPolicyStore
     private readonly Lock _gate = new();
     private readonly Dictionary<string, PublicationPolicy> _policies = new(StringComparer.Ordinal);
 
+    public bool SupportsBatchDefinitionLookup => true;
+
     public ValueTask<PublicationPolicy?> FindAsync(string? workflowDefinitionId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         lock (_gate)
             return ValueTask.FromResult(_policies.GetValueOrDefault(Key(workflowDefinitionId)));
+    }
+
+    public ValueTask<IReadOnlyDictionary<string, PublicationPolicy>> FindByDefinitionIdsAsync(
+        IReadOnlyCollection<string> workflowDefinitionIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(workflowDefinitionIds);
+        cancellationToken.ThrowIfCancellationRequested();
+        var ids = workflowDefinitionIds
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        lock (_gate)
+        {
+            IReadOnlyDictionary<string, PublicationPolicy> policies = ids
+                .Where(id => _policies.ContainsKey(Key(id)))
+                .ToDictionary(id => id, id => _policies[Key(id)], StringComparer.Ordinal);
+            return ValueTask.FromResult(policies);
+        }
     }
 
     public ValueTask<PublicationPolicyWriteResult> TrySaveAsync(PublicationPolicy policy, long expectedRevision, CancellationToken cancellationToken = default)

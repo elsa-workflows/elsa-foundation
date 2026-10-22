@@ -116,6 +116,8 @@ describe("variable shape construction", () => {
 
   it("reads a stored argument type tolerantly", () => {
     expect(readArgumentType({ type: { alias: "Guid", collectionKind: "HashSet" } })).toEqual({ alias: "Guid", collectionKind: "HashSet" });
+    expect(readArgumentType({ type: { alias: "String", collectionKind: "single" } })).toEqual({ alias: "String", collectionKind: "Single" });
+    expect(readArgumentType({ type: { alias: "String", collectionKind: "array" } })).toEqual({ alias: "String", collectionKind: "Array" });
     expect(readArgumentType({ type: "String" })).toEqual({ alias: "String", collectionKind: "Single" });
     expect(readArgumentType({ type: { alias: "X", collectionKind: "Nope" } })).toEqual({ alias: "X", collectionKind: "Single" });
     expect(readArgumentType({})).toEqual({ alias: "", collectionKind: "Single" });

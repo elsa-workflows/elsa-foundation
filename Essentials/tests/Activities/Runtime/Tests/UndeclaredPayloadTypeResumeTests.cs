@@ -38,7 +38,7 @@ public sealed class UndeclaredPayloadTypeResumeTests : IAsyncDisposable
                 workflowExecutionId: _harness.ExecutionId,
                 stimulusType: bookmark.StimulusType,
                 stimulusHash: bookmark.StimulusHash,
-                input: JsonSerializer.SerializeToElement(new EventReceived(EventName))));
+                input: JsonSerializer.SerializeToElement(new { eventName = EventName })));
 
         Assert.Equal(BookmarkResumeDispatchStatus.Dispatched, result.Status);
         await AssertResumedToCompletionAsync();
@@ -62,7 +62,7 @@ public sealed class UndeclaredPayloadTypeResumeTests : IAsyncDisposable
         var result = await router.RouteAsync(new StimulusDispatchRequest(
             EventStimulus.StimulusType,
             EventStimulus.Hash(EventName),
-            input: JsonSerializer.SerializeToElement(new EventReceived(EventName)),
+            input: JsonSerializer.SerializeToElement(new { eventName = EventName }),
             mode: StimulusRoutingMode.ResumeOnly));
 
         Assert.Equal(1, result.ResumedCount);

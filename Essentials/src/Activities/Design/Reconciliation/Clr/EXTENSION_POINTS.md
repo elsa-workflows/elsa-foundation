@@ -59,6 +59,10 @@ holding application-wide static state (§2.5.1).
   `[Activity(Icon = …)]` is copied onto an `elsa.activity-icon` design facet (`ActivityIconName`); an
   unknown or unsafe value is dropped. The facet is presentation only and is excluded from the
   descriptor hash, so adding or changing an icon does not throw `ActivityVersionHashMismatchException`.
+  `[ReplacesActivityType]` declarations on the class itself are copied onto an `elsa.replaced-activity-types`
+  design facet (`ClrAssemblyScanner.ReplacedActivityTypesFacetKind`, schema `1`, `{ "typeNames": [...] }`). Unlike the
+  icon, this facet is content: it is part of the version hash, so a replacement scanner must emit it identically or
+  change existing versions' hashes.
 
 ---
 

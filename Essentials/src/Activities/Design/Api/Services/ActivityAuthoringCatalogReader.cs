@@ -117,7 +117,8 @@ public sealed class ActivityAuthoringCatalogReader(
             input.UISpecifications,
             IsSensitive: input.IsSensitive == true || input.IsCredential == true,
             IsCredential: input.IsCredential == true,
-            Tier: ActivityInputTiers.NormalizeOrNull(input.Tier));
+            Tier: ActivityInputTiers.NormalizeOrNull(input.Tier),
+            ConnectionType: string.IsNullOrWhiteSpace(input.ConnectionType) ? null : input.ConnectionType);
 
     private static ActivityOutputDescriptorView ToView(OutputDefinition output) =>
         new(
@@ -127,7 +128,10 @@ public sealed class ActivityAuthoringCatalogReader(
             output.DisplayName,
             output.Description,
             output.Category,
-            output.IsBrowsable ?? true);
+            output.IsBrowsable ?? true)
+        {
+            ReferenceKey = output.ReferenceKey
+        };
 
     private static IEnumerable<ActivityPortDescriptorView> ToPorts(ActivityDesignFacet facet)
     {

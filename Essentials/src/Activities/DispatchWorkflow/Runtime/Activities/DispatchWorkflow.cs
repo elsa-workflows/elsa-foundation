@@ -23,6 +23,7 @@ namespace Elsa.Activities.DispatchWorkflow.Runtime.Activities;
 [RefusesSecretBinding(nameof(WorkflowDefinitionId), SecretBindingRefusalReason.FixedAtPublish)]
 [RefusesSecretBinding(nameof(Inputs), SecretBindingRefusalReason.PersistedByActivity)]
 [RefusesSecretBinding(nameof(CorrelationId), SecretBindingRefusalReason.PersistedByActivity)]
+[Activity(Icon = "SendToBack")]
 public sealed class DispatchWorkflow(
     IWorkflowExecutableStore executableStore,
     IWorkflowExecutionStateStore workflowExecutionStateStore,

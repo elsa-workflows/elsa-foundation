@@ -1,5 +1,5 @@
-import type { ElsaStudioModuleApi, StudioDashboardWidgetContribution, StudioSettingDescriptor } from "@elsa-workflows/studio-sdk";
-import { loadPortfolio, loadRunHealth, type RunHealthSettings, type WorkflowPortfolioSnapshot, type WorkflowRunHealthSnapshot } from "./workflowDashboardApi";
+import { registerHomeWidget, type ElsaStudioModuleApi, type StudioSettingDescriptor } from "@elsa-workflows/studio-sdk";
+import { defaultRunHealthSettings, loadPortfolio, loadRunHealth, type RunHealthSettings, type WorkflowPortfolioSnapshot, type WorkflowRunHealthSnapshot } from "./workflowDashboardApi";
 import { WorkflowPortfolioWidget } from "./WorkflowPortfolioWidget";
 import { WorkflowRunHealthWidget } from "./WorkflowRunHealthWidget";
 import "./styles.css";
@@ -13,19 +13,21 @@ const testsDescriptor: StudioSettingDescriptor = {
   secret: false, sensitive: false, restartRequired: false, advanced: false, experimental: false, options: []
 };
 export function register(api: ElsaStudioModuleApi) {
-  api.dashboardWidgets.add({
+  registerHomeWidget<WorkflowPortfolioSnapshot>(api, {
     id: "workflows.portfolio", moduleId: "Elsa.Studio.Workflows.Dashboard", title: "Workflow portfolio",
-    description: "Current workflow definition readiness.", order: 10, defaultVisible: true, defaultSize: "small",
+    description: "Current workflow definition readiness.", order: 10, defaultVisible: true, defaultSize: "medium",
+    permissions: ["workflows/dashboard:read"], requiresFeature: "workflows",
     supportedSizes: ["small", "medium"], minimumRefreshIntervalMs: 300_000, cacheLifetimeMs: 300_000,
     load: ({ signal }) => loadPortfolio(api, signal), component: WorkflowPortfolioWidget
-  } as StudioDashboardWidgetContribution<WorkflowPortfolioSnapshot, unknown>);
-  api.dashboardWidgets.add({
+  });
+  registerHomeWidget<WorkflowRunHealthSnapshot, RunHealthSettings>(api, {
     id: "workflows.run-health", moduleId: "Elsa.Studio.Workflows.Dashboard", title: "Workflow run health",
-    description: "Execution outcomes and incidents over time.", order: 20, defaultVisible: true, defaultSize: "wide",
+    description: "Run outcomes, start activity and workflow failures.", order: 20, defaultVisible: true, defaultSize: "full",
+    permissions: ["workflows/dashboard:read"], requiresFeature: "workflows",
     supportedSizes: ["medium", "wide", "full"], minimumRefreshIntervalMs: 60_000, cacheLifetimeMs: 60_000,
-    settings: { schemaVersion: 1, defaults: { range: "7d", includeTestRuns: false }, descriptors: [rangeDescriptor, testsDescriptor], validate: value => isSettings(value) ? value : null },
+    settings: { schemaVersion: 1, defaults: defaultRunHealthSettings, descriptors: [rangeDescriptor, testsDescriptor], validate: value => isSettings(value) ? value : null },
     load: ({ settings, signal }) => loadRunHealth(api, settings, signal), component: WorkflowRunHealthWidget
-  } as StudioDashboardWidgetContribution<WorkflowRunHealthSnapshot, RunHealthSettings>);
+  });
 }
 function isSettings(value: unknown): value is RunHealthSettings {
   if (!value || typeof value !== "object") return false;

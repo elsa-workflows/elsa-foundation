@@ -185,17 +185,19 @@ public sealed class WorkflowTriggerIndexerTests
         var store = new InMemoryWorkflowTriggerBindingStore();
         await store.SaveAsync(StaleBinding("artifact-1", "node-old-1"));
         await store.SaveAsync(StaleBinding("artifact-1", "node-old-2"));
+        // Spec 238: a start trigger below a composite must lie on the start path, so the root carries a structure
+        // whose start-entry strategy makes every child an entry. What this test asserts is unchanged.
         var indexer = new WorkflowTriggerIndexer(
-            new WorkflowTriggerBindingExtractor([new FakeProvider("Elsa.Event", "Event", "sha256:new")]),
+            new WorkflowTriggerBindingExtractor([new FakeProvider("Elsa.Event", "Event", "sha256:new")], [StartEntryTestSupport.AnyChild]),
             store);
         var executable = Executable(
             "artifact-1",
             "sha256:v2",
-            ActionNode(
+            StartEntryTestSupport.WithStructure(ActionNode(
                 "root",
                 "Elsa.Sequence",
                 TriggerNode("node-invalid", "Elsa.Unknown"),
-                TriggerNode("node-valid", "Elsa.Event")));
+                TriggerNode("node-valid", "Elsa.Event")), StartEntryTestSupport.AnyChildKind));
 
         var exception = await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(() => indexer.IndexAsync(executable).AsTask());
 

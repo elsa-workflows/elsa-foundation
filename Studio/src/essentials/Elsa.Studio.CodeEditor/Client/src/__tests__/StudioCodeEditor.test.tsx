@@ -501,6 +501,28 @@ describe("StudioCodeEditor", () => {
     unmount();
   }, 20000);
 
+  it("inserts a newline in an expanded rich editor", async () => {
+    const onChange = vi.fn();
+    const onExpand = vi.fn();
+    const { container, unmount } = renderEditor({
+      document: codeDocument({ value: "hello" }),
+      languageAdapter: javaScriptLanguageAdapter,
+      profile: "expanded",
+      onChange,
+      onExpand
+    });
+    try {
+      await waitFor(() => !!container.querySelector<HTMLElement>(".cm-content"));
+      const content = container.querySelector<HTMLElement>(".cm-content")!;
+      const enter = key(content, "Enter");
+      expect(enter.defaultPrevented).toBe(true);
+      expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ value: "\nhello" }));
+      expect(onExpand).not.toHaveBeenCalled();
+    } finally {
+      unmount();
+    }
+  });
+
   it("uses the documented Control M shortcut to let Tab leave an expanded editor", async () => {
     const { container, unmount } = renderEditor({
       document: codeDocument(),

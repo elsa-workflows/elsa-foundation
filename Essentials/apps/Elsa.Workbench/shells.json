@@ -5,6 +5,7 @@
         "Name": "default",
         "Features": {
           "ActivitiesBpmn": {},
+          "ActivitiesCompensation": {},
           "ActivitiesControlFlow": {},
           "ActivitiesDispatchWorkflowRuntime": {},
           "ActivitiesDispatchWorkflowDesign": {},
@@ -162,6 +163,10 @@
           "SecretsApi": {},
           "SecretsWorkflows": {},
           "SecretsEntityFrameworkCore": {},
+          "Connections": {},
+          "ConnectionsApi": {},
+          "ConnectionsDesign": {},
+          "ConnectionsWorkflows": {},
           "Serialization": {},
           "AttentionApi": {},
           "ModularityAttention": {},

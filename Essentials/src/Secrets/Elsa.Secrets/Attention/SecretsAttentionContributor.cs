@@ -40,9 +40,11 @@ public sealed class SecretsAttentionContributor(
             return Unavailable("SECRETS_ATTENTION_CONFIGURATION_INVALID", "The soon-expiring horizon must be a whole number of days from 0 through 3650.");
 
         context.Budget.ConsumeDownstreamCall();
+        // Deleted secrets raise no condition, and a name that is deleted and reused leaves one behind each time, so
+        // they stay out of the bounded query rather than make the contributor unavailable over rows it ignores.
         var page = await repository.ListPageAsync(
             context.Query.TenantId,
-            new SecretRepositoryListRequest(take: SecretRepositoryListRequest.MaximumTake),
+            new SecretRepositoryListRequest(excludedStatus: SecretStatus.Deleted, take: SecretRepositoryListRequest.MaximumTake),
             cancellationToken);
         var secrets = page.Items;
         if (page.TotalCount > secrets.Count)

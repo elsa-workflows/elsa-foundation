@@ -8,6 +8,15 @@ Outbound logging (not an extension point): `ActivitiesHttpFeature` calls `Remove
 
 ---
 
+## Overridable contracts
+
+### `IHttpConnectionApplicator` *(scoped service — `Elsa.Activities.Http.Connections`)*
+- **Kind:** Replacement. `ActivitiesHttpFeature` registers `UnboundHttpConnectionApplicator` with `TryAdd`.
+- **Usage:** `SendHttpRequest` applies a bound `ConnectionReference` through this seam after `RequestHeaders`. The unbound default is a no-op when the input is empty and refuses a bound name when Connections is not composed.
+- **Replace:** `ConnectionsWorkflows` calls `services.Replace` with `HttpConnectionApplicator`, which resolves the http connection for the execution partition and applies the registered `IHttpRequestAuthenticator`.
+
+---
+
 ## Request-scoped response delivery
 
 ### `HttpResponseInstructionDelivery` *(scoped service — `Elsa.Activities.Http.Services`)*
@@ -23,6 +32,7 @@ Outbound logging (not an extension point): `ActivitiesHttpFeature` calls `Remove
 
 ## Cross-references
 
+- Test Run trigger and wait drivers (`ITestRunTriggerDriver`, `ITestRunWaitDriver`), including the authenticated Studio action contract: [`Elsa.Workflows.Runtime` extension points](../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#workflow-test-run-trigger-and-wait-drivers).
 - HTTP endpoint behaviour contracts (route resolution, authorization, fault mapping) + the route-table freshness seams: [`Elsa.Workflows.Runtime.Http/EXTENSION_POINTS.md`](../../Workflows/Runtime/Http/EXTENSION_POINTS.md).
 - Dispatch-options passthrough (`IWorkflowStartDispatcher`/`IBookmarkResumeDispatcher`/`IStimulusRouter`): [`Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md).
 - HTTP content factories / downloadable content: [`Elsa.Http/EXTENSION_POINTS.md`](../../Http/Elsa.Http/EXTENSION_POINTS.md).

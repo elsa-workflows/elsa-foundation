@@ -2,6 +2,7 @@
   "solution": {
     "path": "Elsa.Server.slnx",
     "projects": [
+      "Essentials/src/Activities/Compensation/Elsa.Activities.Compensation.csproj",
       "Essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj",
       "Essentials/src/Activities/Design/Api/Elsa.Activities.Design.Api.csproj",
       "Essentials/src/Activities/Design/Core/Elsa.Activities.Design.Core.csproj",
@@ -28,6 +29,9 @@
       "Essentials/src/Events/Strategies/Elsa.Events.Strategies.csproj",
       "Essentials/src/Expressions/Core/Elsa.Expressions.Core.csproj",
       "Essentials/src/Expressions/Elsa.Expressions/Elsa.Expressions.csproj",
+      "Essentials/src/Expressions/JavaScript/Core/Elsa.Expressions.JavaScript.Core.csproj",
+      "Essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/Elsa.Expressions.JavaScript.csproj",
+      "Essentials/src/Expressions/JavaScript/Jint/Elsa.Expressions.JavaScript.Jint.csproj",
       "Essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj",
       "Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj",
       "Essentials/src/Locking/Core/Elsa.Locking.Core.csproj",

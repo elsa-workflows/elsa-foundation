@@ -133,7 +133,7 @@ public sealed class RuntimeAdmissionShedResponseTests
             app.Use(async (context, next) =>
             {
                 context.User = new ClaimsPrincipal(new ClaimsIdentity(
-                    [new Claim(IdentityClaimTypes.Permission, "workflow-runtime.execute"), new Claim(IdentityClaimTypes.Normalized, "v1")],
+                    [new Claim(IdentityClaimTypes.Permission, "workflows/runtime:execute"), new Claim(IdentityClaimTypes.Normalized, "v1")],
                     "RuntimeApiTest"));
                 await next();
             });
@@ -171,7 +171,7 @@ public sealed class RuntimeAdmissionShedResponseTests
         protected override Task<AuthenticateResult> HandleAuthenticateAsync() =>
             Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(
                 new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(
-                    [new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, "operator-1"), new System.Security.Claims.Claim(IdentityClaimTypes.Permission, "workflow-runtime.execute"), new System.Security.Claims.Claim(IdentityClaimTypes.Normalized, "v1")],
+                    [new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, "operator-1"), new System.Security.Claims.Claim(IdentityClaimTypes.Permission, "workflows/runtime:execute"), new System.Security.Claims.Claim(IdentityClaimTypes.Normalized, "v1")],
                     Scheme.Name)),
                 Scheme.Name)));
     }

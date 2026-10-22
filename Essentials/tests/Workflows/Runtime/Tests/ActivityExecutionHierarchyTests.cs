@@ -215,7 +215,10 @@ public class ActivityExecutionHierarchyTests
     {
         var store = Store();
         await store.SaveAsync(Record(ActivityExecutionInspectionProjectionTests.Projection("outer", "outer", null, 1, ActivityExecutionStatus.Completed, boundary: true)));
-        await store.SaveAsync(Record(ActivityExecutionInspectionProjectionTests.Projection("nested", "outer", "outer", 2, ActivityExecutionStatus.Completed, boundary: true)));
+        await store.SaveAsync(Record(ActivityExecutionInspectionProjectionTests.Projection("nested", "nested", "outer", 2, ActivityExecutionStatus.Completed, boundary: true) with
+        {
+            EnclosingExecutionScopeId = "outer"
+        }));
         await store.SaveAsync(Record(ActivityExecutionInspectionProjectionTests.Projection("nested-child", "nested", "nested", 3, ActivityExecutionStatus.Completed)));
 
         var outerPage = await store.ReadPageAsync(Query(limit: 100));

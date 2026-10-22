@@ -8,7 +8,8 @@ import {
   parseWorkflowRunInputs,
   type WorkflowRunInputContributionFailure
 } from "./workflowRunInputs";
-import type { CollectionKind, WorkflowInput } from "./workflowTypes";
+import type { WorkflowInput } from "./workflowTypes";
+import { readArgumentType } from "./workflowProperties";
 
 export type ActivityTestRunInputPresence = "Absent" | "Null" | "Value";
 export type ActivityTestRunStage =
@@ -43,10 +44,7 @@ export function toWorkflowRunInput(input: ActivityInputContract): WorkflowInput 
     category: input.category ?? "",
     uiHint: input.uiHint ?? "",
     storageDriverType: input.storageDriverKey || null,
-    type: {
-      ...input.type,
-      collectionKind: normalizeCollectionKind(input.type.collectionKind)
-    },
+    type: readArgumentType({ type: input.type }),
     isRequired: input.isRequired
   };
 }
@@ -148,9 +146,4 @@ export function activityTestRunWorkbenchUrl(view: ActivityDraftTestRunView) {
   return view.outerActivityExecutionId
     ? `${base}?activityExecutionId=${encodeURIComponent(view.outerActivityExecutionId)}`
     : base;
-}
-
-function normalizeCollectionKind(value: string): CollectionKind {
-  if (value === "Array" || value === "List" || value === "HashSet") return value;
-  return "Single";
 }

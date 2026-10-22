@@ -49,6 +49,7 @@ namespace Elsa.Activities.While.Activities;
 /// immediately.
 /// </para>
 /// </remarks>
+[Activity(Icon = "Repeat")]
 [ActivityStructure("elsa.while.structure", "1.0.0")]
 [ActivityChildSlot("While.Body", "body", "Body", ActivityChildSlotCardinalities.Single)]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]

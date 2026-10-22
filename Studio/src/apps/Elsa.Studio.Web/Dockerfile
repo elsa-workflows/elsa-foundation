@@ -17,6 +17,7 @@
 # ---- Build stage ------------------------------------------------------------
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
+ARG STUDIO_VERSION=1.0.0
 
 # Copy Studio-owned build configuration first so restore layers cache well. The extension
 # projects import these files through their studio-level Directory.Build/Packages wrappers.
@@ -29,8 +30,10 @@ COPY Studio/src/ ./Studio/src/
 # Copy only the optional Studio modules consumed by the host, not every Foundation extension.
 COPY Extensions/Attention/studio/ ./Extensions/Attention/studio/
 COPY Extensions/ConsoleStream/studio/ ./Extensions/ConsoleStream/studio/
+COPY Extensions/Connections/studio/ ./Extensions/Connections/studio/
 COPY Extensions/Diagnostics.OpenTelemetry/studio/ ./Extensions/Diagnostics.OpenTelemetry/studio/
 COPY Extensions/Diagnostics.StructuredLogs/studio/ ./Extensions/Diagnostics.StructuredLogs/studio/
+COPY Extensions/Etl/studio/ ./Extensions/Etl/studio/
 COPY Extensions/ExpressionEditors.JavaScript/studio/ ./Extensions/ExpressionEditors.JavaScript/studio/
 COPY Extensions/ExpressionEditors.Liquid/studio/ ./Extensions/ExpressionEditors.Liquid/studio/
 COPY Extensions/ExtensionBuilder/studio/ ./Extensions/ExtensionBuilder/studio/
@@ -52,11 +55,13 @@ RUN test -f Studio/src/apps/Elsa.Studio.Web/wwwroot/studio/index.html
 # feed and NuGet resolves the newer stable version instead.
 RUN dotnet restore Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj \
         --configfile Studio/NuGet.config \
-        -p:WarningsNotAsErrors=NU1603
+        -p:WarningsNotAsErrors=NU1603 \
+        -p:Version=$STUDIO_VERSION
 RUN dotnet publish Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj \
         -c Release \
         --no-restore \
         -p:WarningsNotAsErrors=NU1603 \
+        -p:Version=$STUDIO_VERSION \
         -o /app/publish
 
 # ---- Runtime stage ----------------------------------------------------------

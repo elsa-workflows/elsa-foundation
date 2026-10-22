@@ -6,6 +6,7 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa3.Mapping.Mappings;
 using Elsa3.Mapping.Services;
 using Elsa3.Models;
+using Microsoft.Extensions.DependencyInjection;
 using System.Collections.ObjectModel;
 using System.Xml.Linq;
 using Xunit;
@@ -257,19 +258,19 @@ public sealed class Elsa3MigrationBoundaryTests
 
     private static Elsa3WorkflowDefinitionImporter CreateImporter()
     {
-        var registry = new StubWellKnownTypeRegistry();
-        var lookup = new ThrowingActivityDefinitionLookup();
+        // The conversion as the Elsa3Mapping feature registers it, over a catalog that throws on every lookup.
+        var services = new ServiceCollection();
+        services.AddSingleton<IWellKnownTypeRegistry>(new StubWellKnownTypeRegistry());
+        services.AddSingleton<IActivityDefinitionLookup>(new ThrowingActivityDefinitionLookup());
+        services.AddSingleton<IObjectConverter>(new ThrowingObjectConverter());
+        new Elsa3.Mapping.Elsa3MappingFeature().ConfigureServices(services);
+        var scope = services.BuildServiceProvider().CreateScope();
         var mapper = new Elsa3WorkflowDefinitionToWorkflowDefinitionVersion(
-            new Elsa3WorkflowDefinitionToState(
-                registry,
-                new Elsa3ActivityToState(lookup),
-                new Elsa3ArgumentDefinitionToInputOutput(registry)),
             new StubWorkflowDefinitionFactory(),
             new ThrowingWorkflowDefinitionVersionFactory());
         return new Elsa3WorkflowDefinitionImporter(
-            mapper,
-            new Elsa3MemoryReferenceGraph(lookup),
-            new Elsa3ValueFlowLowerer(new Elsa3ExpressionRewriter()));
+            scope.ServiceProvider.GetRequiredService<Elsa3.Mapping.Conversion.IElsa3DefinitionConverter>(),
+            mapper);
     }
 
     private sealed class ThrowingWorkflowDefinitionVersionFactory : IWorkflowDefinitionVersionFactory
@@ -281,6 +282,19 @@ public sealed class Elsa3MigrationBoundaryTests
             DateTimeOffset? sourceCreatedAt = null,
             string? id = null) =>
             throw new InvalidOperationException("The malformed definition test should fail before creating a workflow definition version.");
+    }
+
+    /// <summary>The boundary tests' definitions declare no variable with a starting value, so nothing converts one.</summary>
+    private sealed class ThrowingObjectConverter : IObjectConverter
+    {
+        public T? ConvertTo<T>(object? value, Elsa.Serialization.Core.Options.ObjectConverterOptions? converterOptions = null) => throw Unexpected();
+
+        public object? ConvertTo(object? value, Type targetType, Elsa.Serialization.Core.Options.ObjectConverterOptions? converterOptions = null) => throw Unexpected();
+
+        public Elsa.Primitives.Models.Result TryConvertTo(object? value, Type targetType, Elsa.Serialization.Core.Options.ObjectConverterOptions? converterOptions = null) => throw Unexpected();
+
+        private static InvalidOperationException Unexpected() =>
+            new("The boundary tests should not convert a variable starting value.");
     }
 
     private sealed class StubWellKnownTypeRegistry : IWellKnownTypeRegistry

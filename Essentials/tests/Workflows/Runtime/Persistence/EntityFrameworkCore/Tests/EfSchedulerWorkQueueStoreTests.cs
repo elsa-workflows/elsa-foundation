@@ -1,9 +1,12 @@
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.Tests;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Recovery;
 using Elsa.Workflows.Runtime.Services.Scheduler;
 using Microsoft.Data.Sqlite;
@@ -34,6 +37,68 @@ public sealed class EfSchedulerWorkQueueStoreTests
         Assert.Equal(original.Sequence, (await restarted.Store.ListAsync(new RuntimeSchedulerWorkQuery("wf-1"))).Items.Single().Sequence);
         await using var otherScope = database.Open("tenant-b");
         Assert.Empty((await otherScope.Store.ListAsync(new RuntimeSchedulerWorkQuery("wf-1"))).Items);
+    }
+
+    [Fact]
+    public async Task Enqueue_batches_existing_root_and_ownership_guard_into_one_command()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using (var seed = database.Open("tenant-a"))
+            await BackgroundActivityWorkTestSupport.SeedLiveExecutionAsync(
+                seed.Context,
+                new FixedAccessor("tenant-a"),
+                "wf-root-guard",
+                "tenant-a");
+
+        var capture = new CommandCaptureInterceptor();
+        await using var fixture = database.Open("tenant-a", capture);
+        await fixture.Store.EnqueueAsync(Work("wf-root-guard", "work-1", 1));
+
+        Assert.Equal(4, capture.Commands.Count);
+        var guard = Assert.Single(capture.Commands, command =>
+            command.Contains(RuntimeWorkflowExecutionEfModule.TableName, StringComparison.OrdinalIgnoreCase) &&
+            command.Contains(RuntimeOperationalStateEfModule.ExecutionLivenessTableName, StringComparison.OrdinalIgnoreCase));
+        Assert.True(guard.Contains("LEFT JOIN", StringComparison.OrdinalIgnoreCase), guard);
+        Assert.Single((await fixture.Store.ListAsync(new RuntimeSchedulerWorkQuery("wf-root-guard"))).Items);
+    }
+
+    [Fact]
+    public async Task Enqueue_honors_same_root_ownership_tombstone_in_batched_guard()
+    {
+        const string workflowExecutionId = "wf-root-tombstone";
+        await using var database = await TestDatabase.CreateAsync();
+        await using (var seed = database.Open("tenant-a"))
+        {
+            await BackgroundActivityWorkTestSupport.SeedLiveExecutionAsync(
+                seed.Context,
+                new FixedAccessor("tenant-a"),
+                workflowExecutionId,
+                "tenant-a");
+            var tombstone = new ExecutionLivenessState(
+                RuntimeExecutionOwnershipStateId.For(workflowExecutionId),
+                workflowExecutionId,
+                null,
+                null,
+                null,
+                null,
+                metadata: new Dictionary<string, string>
+                {
+                    [RuntimeMetadataKeys.WorkflowExecutionDeletionTombstone] = "true"
+                });
+            await seed.Liveness.SaveAsync(tombstone);
+        }
+
+        var capture = new CommandCaptureInterceptor();
+        await using var fixture = database.Open("tenant-a", capture);
+        var work = Work(workflowExecutionId, "late-work", 1);
+        Assert.Same(work, await fixture.Store.EnqueueAsync(work));
+
+        Assert.Equal(2, capture.Commands.Count);
+        var guard = Assert.Single(capture.Commands, command =>
+            command.Contains(RuntimeWorkflowExecutionEfModule.TableName, StringComparison.OrdinalIgnoreCase) &&
+            command.Contains(RuntimeOperationalStateEfModule.ExecutionLivenessTableName, StringComparison.OrdinalIgnoreCase));
+        Assert.True(guard.Contains("LEFT JOIN", StringComparison.OrdinalIgnoreCase), guard);
+        Assert.Empty(await fixture.Context.SchedulerWorkItems.ToArrayAsync());
     }
 
     [Fact]
@@ -277,7 +342,7 @@ public sealed class EfSchedulerWorkQueueStoreTests
             return new TestDatabase(keeper, connectionString);
         }
 
-        public TestFixture Open(string scope, SaveChangesInterceptor? interceptor = null) => new(connectionString, scope, interceptor);
+        public TestFixture Open(string scope, IInterceptor? interceptor = null) => new(connectionString, scope, interceptor);
         public ValueTask DisposeAsync() => keeper.DisposeAsync();
     }
 
@@ -286,8 +351,9 @@ public sealed class EfSchedulerWorkQueueStoreTests
         private readonly SqliteConnection connection;
         public RuntimeSqliteDbContext Context { get; }
         public EfSchedulerWorkQueueStore Store { get; }
+        public EfExecutionLivenessStateStore Liveness { get; }
 
-        public TestFixture(string connectionString, string scope, SaveChangesInterceptor? interceptor)
+        public TestFixture(string connectionString, string scope, IInterceptor? interceptor)
         {
             connection = new SqliteConnection(connectionString);
             connection.Open();
@@ -295,7 +361,11 @@ public sealed class EfSchedulerWorkQueueStoreTests
             if (interceptor is not null)
                 options.AddInterceptors(interceptor);
             Context = new RuntimeSqliteDbContext(options.Options);
-            Store = new EfSchedulerWorkQueueStore(Context, new FixedAccessor(scope), new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = new string('k', 32) })));
+            var accessor = new FixedAccessor(scope);
+            var codec = new HmacRuntimeRecoveryContinuationCodec(Options.Create(
+                new RuntimeRecoveryContinuationOptions { SigningKey = new string('k', 32) }));
+            Store = new EfSchedulerWorkQueueStore(Context, accessor, codec);
+            Liveness = new EfExecutionLivenessStateStore(Context, accessor, codec);
         }
 
         public async ValueTask DisposeAsync()

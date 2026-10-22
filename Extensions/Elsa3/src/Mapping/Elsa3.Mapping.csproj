@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<ItemGroup>
+		<InternalsVisibleTo Include="Elsa3.Mapping.Tests" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<PackageReference Include="CShells.Abstractions" />
 		<PackageReference Include="Acornima" />
 		<PackageReference Include="Fluid.Core" />

@@ -23,6 +23,7 @@ The per-domain catalog (framework §2.22.1) of everything you can implement or o
 | `IWorkflowDefinitionLookup` | Core — `Elsa.Workflows.Design.Core` | `WorkflowDefinitionLookup` (`.Persistence.Core`) | You want a different read strategy (caching, projection store) while keeping the write path. |
 | Command interfaces (`IUpdateDraftCommand` + 5 lifecycle) | Core — `Elsa.Workflows.Design.Persistence.Core` | EF Core command implementations (`.Persistence.EntityFrameworkCore`) | You want different mutation/lifecycle behaviour while keeping the built-in `IWorkflowDefinitionLookup`. |
 | `IDraftStateDiffEngine` | Contract — `Elsa.Workflows.Design.Persistence.Core` | `DraftStateDiffEngine` (`.Persistence.Core`) | You want to change which mutation events are emitted or the match-key semantics. |
+| `IWorkflowDefinitionPublicationStateLookup` | Contract — `Elsa.Workflows.Design.Persistence.Core` | `NullWorkflowDefinitionPublicationStateLookup` (`Elsa.Workflows.Design.Api.Services`); Publishing replaces with `WorkflowDefinitionPublicationStateLookup` | Publishing is composed and definition list/detail views should distinguish Retracted and Retired from Published. Design-only hosts keep the null-object and leave `publicationState` unset. |
 
 ### `IWorkflowDefinitionLookup` *(Core — `Elsa.Workflows.Design.Core`)*
 - **Signature:** `GetDefinition(id)`, `ListDefinitions(searchTerm?)`, `GetVersion(versionId)`, `FindLatestVersion(definitionId)`, `ListVersions(definitionId)` — all `Task`-returning reads.
@@ -37,6 +38,11 @@ Summary: `IUpdateDraftCommand`, `ICreateDraftCommand`, `ICloneDraftFromVersionCo
 ### `IDraftStateDiffEngine` *(Contract — `Elsa.Workflows.Design.Persistence.Core`)*
 - **Signature:** `IReadOnlyList<IEvent> Evaluate(string draftId, WorkflowDefinitionState stored, IReadOnlyCollection<DesignMetadataRecord> storedLayout, WorkflowDefinitionState desired, IReadOnlyCollection<DesignMetadataRecord> desiredLayout)`
 - **Default impl:** `DraftStateDiffEngine`. Override to change emission / matching.
+
+### `IWorkflowDefinitionPublicationStateLookup` *(Contract — `Elsa.Workflows.Design.Persistence.Core`)*
+- **Signature:** `ListByDefinitionIdsAsync(workflowDefinitionIds)` returns a dictionary of `WorkflowDefinitionPublicationSummary` values: `State` (`Draft`, `Published`, `Retracted`, `Retired`) and optional `PublishedVersionId`, the active publication's immutable source version ID. An absent entry means the provider cannot establish publication state.
+- **Default impl:** `NullWorkflowDefinitionPublicationStateLookup` in `Elsa.Workflows.Design.Api.Services`, so NativeEndpoints `GetRequiredService` succeeds on a design-only host and list/detail views leave `publicationState` unset. Publishing `Replace`s it with `WorkflowDefinitionPublicationStateLookup`. Live and empty slots cover Published and Retracted on every store. The source version comes from the active configured primary slot, or a unique version shared by all valid active publications when no primary is active. Conflicting or unavailable records leave the source version unset. Without a slot, Retired needs journal evidence and Draft needs a complete definition-keyed journal lookup; unsupported lookup leaves the state unset. The in-memory journal supports this lookup; the EF ledger lacks a definition-id hash — tracked by [#2801](https://github.com/elsa-workflows/elsa-foundation/issues/2801).
+- **Override:** `services.Replace(ServiceDescriptor.Scoped<IWorkflowDefinitionPublicationStateLookup, MyLookup>())`. Do not add a Design.Api → Publishing project reference; the lookup is the bridge.
 
 ### Domain-model abstractions
 `IWorkflowDefinition`, `IWorkflowDefinitionVersion`, `IWorkflowDefinitionDraft`, `IWorkflowDefinitionLayout`, `IWorkflowGraph` are read-model abstractions (framework §2.1). A custom persistence provider realises them; application code does not replace them piecemeal.
@@ -100,6 +106,7 @@ Known implementations: none in the foundation host; feature modules opt in by re
   - `CompileExecutableStructure(activity)` — materialize the authored structure into the executable structure the runtime consumes.
   - `SupportsScopedVariables` *(default `false`)* — whether this activity is a **container scope** that can own container-scoped variable declarations (ADR 0027). Container activities (`Sequence`, `Flowchart`) return `true`.
   - `ProjectScopedVariables(activity)` *(default empty)* — the container-scoped `VariableDefinition`s the activity declares, visible to its descendant activities. These flow through publishing into the compiled executable structure's `variables`, so the runtime materializes the visible variable scope chain (`RuntimeVariableScopeFactory` / `RuntimeContainerScopeService` in `Elsa.Workflows.Runtime.Core`) without re-reading the design document.
+  - `ChildrenCompletedBefore(activity, childNodeId)` *(default `null`)* — the direct children whose results the structure guarantees are committed before `childNodeId` runs, most relevant first. `PersistedExpressionAuthoringContextSource` offers their results to that child's expressions, ranked first; `null` promises no order. Sequence keeps its built-in document-order rule.
   - `AuthoredPayloadType` *(default `null`)* — the CLR model type of the handler's *authored* structure payload. The structure-kind registry endpoint (`GET design/workflows/structures`) publishes a generated JSON Schema per kind from this type so headless clients can compose structure payloads without reading source; `null` keeps the payload opaque/undocumented.
 - **Aggregation:** `IActivityStructureService` (`DefaultActivityStructureService`) resolves the registered handlers by `Kind`. `ScopedVariableResolver` walks the authored tree through this contract to compute per-node scoped-variable visibility.
 - **Registration:** register an implementation with DI as `IActivityStructureHandler` from the activity's own module.
@@ -107,6 +114,7 @@ Known implementations: none in the foundation host; feature modules opt in by re
 Known implementations:
 - `SequenceStructureHandler` (`Elsa.Activities.Sequence`) *(cross-domain — `SupportsScopedVariables = true`)*.
 - `FlowchartStructureHandler` (`Elsa.Activities.Flowchart`) *(cross-domain — `SupportsScopedVariables = true`)*.
+- `CompensationScopeStructureHandler` (`Elsa.Activities.Compensation`) *(cross-domain — implements `ChildrenCompletedBefore`: a handler sees its own step's result first)*.
 
 ---
 

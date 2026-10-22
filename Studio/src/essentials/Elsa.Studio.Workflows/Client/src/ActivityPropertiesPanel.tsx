@@ -1,6 +1,6 @@
 import { type KeyboardEvent as ReactKeyboardEvent, memo, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Maximize2, SlidersHorizontal, X } from "lucide-react";
-import { AnchoredPopover } from "@elsa-workflows/studio-ui";
+import { Braces, Cable, Code2, KeyRound, Maximize2, SlidersHorizontal, Type, X, type LucideIcon } from "lucide-react";
+import { AdvancedSection, AnchoredPopover } from "@elsa-workflows/studio-ui";
 import {
   authSessionEndedEvent,
   authSessionStartedEvent,
@@ -39,6 +39,7 @@ import {
   describeDictionaryForInput,
   getLiteralDefaultValue,
   isRepeaterOptOut,
+  readPortableExpressionDefinition,
   readWrappedInput,
   secretSyntax,
   withConversion,
@@ -68,6 +69,7 @@ import {
 } from "./workflowReferenceAuthoring";
 import { CollectionValueEditor } from "./CollectionValueEditor";
 import { DictionaryValueEditor } from "./DictionaryValueEditor";
+import { ReportedPropertyEditor } from "./ReportedPropertyEditor";
 import { clearDictionaryEditorSessionScope } from "./dictionaryEditorSession";
 import { useDialogFocus } from "./workflow-editor/useDialogFocus";
 import { createActivityExpressionDocument } from "./activityExpressionDocument";
@@ -138,10 +140,44 @@ export function ActivityPropertiesPanel({
   const generatedDictionarySessionScope = useId();
   const effectiveDictionarySessionScope = dictionarySessionScope ?? generatedDictionarySessionScope;
   const effectiveExpressionEditorSessionScope = expressionEditorSessionScope ?? effectiveDictionarySessionScope;
+  const latestActivity = useRef(activity);
+  const renderedActivity = useRef(activity);
+  if (renderedActivity.current !== activity) {
+    latestActivity.current = activity;
+    renderedActivity.current = activity;
+  }
+  const commitInputChange = useCallback((nextActivity: ActivityNode, input: StudioActivityInputDescriptor) => {
+    const current = latestActivity.current;
+    if (current.nodeId !== nextActivity.nodeId) {
+      onChange(nextActivity);
+      return;
+    }
+    const propertyName = getInputPropertyName(input);
+    const next = { ...current };
+    if (Object.prototype.hasOwnProperty.call(nextActivity, propertyName)) {
+      next[propertyName] = nextActivity[propertyName];
+    } else {
+      delete next[propertyName];
+    }
+    latestActivity.current = next;
+    onChange(next);
+  }, [onChange]);
   const conversionProfiles = useConversionProfiles(context);
   const [activeToolingProperty, setActiveToolingProperty] = useState<string>();
+  const [rowDisclosureErrors, setRowDisclosureErrors] = useState<Record<string, true>>({});
+  const [rowDisclosureFailures, setRowDisclosureFailures] = useState<Record<string, true>>({});
+  const [rowDisclosureFallbacks, setRowDisclosureFallbacks] = useState<Record<string, true>>({});
   const toolingAuthorization = useExpressionToolingAuthorization(effectiveExpressionEditorSessionScope);
   const activateToolingProperty = useCallback((property: string) => setActiveToolingProperty(property), []);
+  const reportDisclosureError = useCallback((key: string, hasError: boolean) => {
+    setRowDisclosureErrors(current => updateDisclosureSignal(current, key, hasError));
+  }, []);
+  const reportDisclosureFailure = useCallback((key: string, hasFailure: boolean) => {
+    setRowDisclosureFailures(current => updateDisclosureSignal(current, key, hasFailure));
+  }, []);
+  const reportDisclosureFallback = useCallback((key: string, shouldForceOpen: boolean) => {
+    setRowDisclosureFallbacks(current => updateDisclosureSignal(current, key, shouldForceOpen));
+  }, []);
 
   useEffect(() => () => clearDictionaryEditorSessionScope(effectiveDictionarySessionScope), [effectiveDictionarySessionScope]);
   useEffect(() => {
@@ -168,6 +204,49 @@ export function ActivityPropertiesPanel({
   }
 
   const groups = groupInputs(inputs, readPropertyGroupMetadata(descriptor.customProperties));
+  const directGroups = partitionInputGroups(groups, input => !isOptionalTier(input));
+  const optionalGroups = partitionInputGroups(groups, isOptionalTier);
+  const optionalInputs = optionalGroups.flatMap(group => group.inputs);
+  const configuredOptionalCount = optionalInputs.filter(input => hasStoredInputValue(activity, input)).length;
+  const optionalHasError = optionalInputs.some(input => hasDisclosureSignal(rowDisclosureErrors, disclosureSignalKey(draftId, activity, input)));
+  const optionalHasFailure = optionalInputs.some(input => rowDisclosureFailures[disclosureSignalKey(draftId, activity, input)] === true);
+  const optionalHasUnreportedEditor = optionalInputs.some(input => hasDisclosureSignal(
+    rowDisclosureFallbacks, disclosureSignalKey(draftId, activity, input)
+  ));
+  const renderGroups = (groupsToRender: typeof groups) => groupsToRender.map(group => (
+    <section key={group.category} className="wf-property-group">
+      {groupsToRender.length > 1 || group.configured || group.category !== "General" ? <h4>{group.label}</h4> : null}
+      {group.inputs.map(input => (
+        <MemoizedPropertyRow
+          key={input.name}
+          activity={activity}
+          activityDescriptor={descriptor}
+          endpointContext={context}
+          draftId={draftId}
+          expressionTooling={expressionTooling}
+          workflowState={workflowState}
+          dictionarySessionScope={effectiveDictionarySessionScope}
+          expressionEditorSessionScope={effectiveExpressionEditorSessionScope}
+          toolingAuthorizationAvailable={toolingAuthorization.available}
+          toolingAuthorizationEpoch={toolingAuthorization.epoch}
+          toolingAuthorizationConfirmationRequired={toolingAuthorization.confirmationRequired}
+          onToolingAuthorizationConfirmed={toolingAuthorization.confirm}
+          input={input}
+          editors={editors}
+          expressionEditors={expressionEditors}
+          expressionDescriptors={expressionDescriptors}
+          conversionProfiles={conversionProfiles}
+          toolingActive={activeToolingProperty === `${activity.nodeId}\u001f${input.referenceKey?.trim() || input.name}`}
+          onToolingFocus={activateToolingProperty}
+          disclosureSignalKey={disclosureSignalKey(draftId, activity, input)}
+          onDisclosureErrorChange={reportDisclosureError}
+          onDisclosureFailureChange={reportDisclosureFailure}
+          onDisclosureFallbackChange={reportDisclosureFallback}
+          onChange={commitInputChange}
+        />
+      ))}
+    </section>
+  ));
   return (
     <WorkflowReferenceAuthoringProvider
       workflowState={workflowState}
@@ -183,36 +262,20 @@ export function ActivityPropertiesPanel({
         hasSnapshot={expressionDescriptors.length > 0}
         onRetry={onRetryDescriptors}
       />
-      {groups.map(group => (
-        <section key={group.category} className="wf-property-group">
-          {groups.length > 1 || group.configured || group.category !== "General" ? <h4>{group.label}</h4> : null}
-          {group.inputs.map(input => (
-            <MemoizedPropertyRow
-              key={input.name}
-              activity={activity}
-              activityDescriptor={descriptor}
-              endpointContext={context}
-              draftId={draftId}
-              expressionTooling={expressionTooling}
-              workflowState={workflowState}
-              dictionarySessionScope={effectiveDictionarySessionScope}
-              expressionEditorSessionScope={effectiveExpressionEditorSessionScope}
-              toolingAuthorizationAvailable={toolingAuthorization.available}
-              toolingAuthorizationEpoch={toolingAuthorization.epoch}
-              toolingAuthorizationConfirmationRequired={toolingAuthorization.confirmationRequired}
-              onToolingAuthorizationConfirmed={toolingAuthorization.confirm}
-              input={input}
-              editors={editors}
-              expressionEditors={expressionEditors}
-              expressionDescriptors={expressionDescriptors}
-              conversionProfiles={conversionProfiles}
-              toolingActive={activeToolingProperty === `${activity.nodeId}\u001f${input.referenceKey?.trim() || input.name}`}
-              onToolingFocus={activateToolingProperty}
-              onChange={onChange}
-            />
-          ))}
-        </section>
-      ))}
+      {renderGroups(directGroups)}
+      {optionalGroups.length > 0 ? (
+        <AdvancedSection
+          key={[draftId, activity.activityVersionId, activity.nodeId].join("\u001f")}
+          label="More options"
+          setCount={configuredOptionalCount}
+          defaultOpen={configuredOptionalCount > 0}
+          allowCollapseWhenSet
+          hasError={optionalHasError}
+          forceOpen={optionalHasFailure || optionalHasUnreportedEditor}
+        >
+          {renderGroups(optionalGroups)}
+        </AdvancedSection>
+      ) : null}
     </div>
     </WorkflowReferenceAuthoringProvider>
   );
@@ -253,6 +316,7 @@ function useExpressionToolingSnapshot(
   document: StudioExpressionDocument,
   workflowState: WorkflowDefinitionState,
   enabled: boolean,
+  authorizationScope: string,
   authorizationEpoch: number,
   authorizationConfirmationRequired: boolean,
   onAuthorizationConfirmed: () => void
@@ -261,21 +325,38 @@ function useExpressionToolingSnapshot(
     useState<StudioExpressionToolingResult<StudioExpressionAuthoringContext>>();
   const [validation, setValidation] =
     useState<StudioExpressionToolingResult<StudioExpressionValidationResult>>();
+  const snapshotScope = useRef<{
+    tooling: StudioExpressionToolingClient;
+    documentId: string;
+    expressionType: string;
+    authorizationScope: string;
+    authorizationEpoch: number;
+  } | undefined>(undefined);
   const validateNowRef = useRef<() => void>(() => {});
   const validateNow = useCallback(() => validateNowRef.current(), []);
 
   useEffect(() => {
     if (!tooling || !enabled) {
+      snapshotScope.current = undefined;
       validateNowRef.current = () => {};
       setAuthoringContext(undefined);
       setValidation(undefined);
       return;
     }
 
-    // A snapshot is revision-bound. Suppress the previous revision immediately while the
-    // debounced context and validation requests for the new source are in flight.
-    setAuthoringContext(undefined);
-    setValidation(undefined);
+    const previousScope = snapshotScope.current;
+    const sameScope = previousScope?.tooling === tooling &&
+      previousScope.documentId === document.id &&
+      previousScope.expressionType === document.expressionType &&
+      previousScope.authorizationScope === authorizationScope &&
+      previousScope.authorizationEpoch === authorizationEpoch;
+    snapshotScope.current = {
+      tooling, documentId: document.id, expressionType: document.expressionType, authorizationScope, authorizationEpoch
+    };
+    // Payloads are revision-bound; availability is not. Keep only the generic status while
+    // refreshing this expression, so typing clears stale assistance without toggling its hint.
+    setAuthoringContext(current => sameScope ? toolingStatusOnly(current) : undefined);
+    setValidation(current => sameScope ? toolingStatusOnly(current) : undefined);
     const controller = new AbortController();
     let started = false;
     const run = () => {
@@ -321,6 +402,7 @@ function useExpressionToolingSnapshot(
   }, [
     authorizationConfirmationRequired,
     authorizationEpoch,
+    authorizationScope,
     document,
     enabled,
     onAuthorizationConfirmed,
@@ -329,6 +411,14 @@ function useExpressionToolingSnapshot(
   ]);
 
   return { authoringContext, validation, validateNow };
+}
+
+function toolingStatusOnly<T>(snapshot: StudioExpressionToolingResult<T> | undefined): StudioExpressionToolingResult<T> | undefined {
+  return snapshot ? {
+    state: snapshot.state,
+    contractVersion: snapshot.contractVersion,
+    expressionType: snapshot.expressionType
+  } : undefined;
 }
 
 function useExpressionToolingAuthorization(scope: string) {
@@ -380,7 +470,11 @@ type PropertyRowProps = {
   conversionProfiles: ConversionProfileReference[];
   toolingActive: boolean;
   onToolingFocus(property: string): void;
-  onChange(activity: ActivityNode): void;
+  disclosureSignalKey: string;
+  onDisclosureErrorChange(key: string, hasError: boolean): void;
+  onDisclosureFailureChange(key: string, hasFailure: boolean): void;
+  onDisclosureFallbackChange(key: string, shouldForceOpen: boolean): void;
+  onChange(activity: ActivityNode, input: StudioActivityInputDescriptor): void;
 };
 
 function PropertyRow({
@@ -403,6 +497,10 @@ function PropertyRow({
   conversionProfiles,
   toolingActive,
   onToolingFocus,
+  disclosureSignalKey,
+  onDisclosureErrorChange,
+  onDisclosureFailureChange,
+  onDisclosureFallbackChange,
   onChange
 }: PropertyRowProps) {
   const readOnly = input.isReadOnly === true;
@@ -414,6 +512,45 @@ function PropertyRow({
     ? expressionDescriptors.filter(descriptor => descriptor.type === secretSyntax)
     : expressionDescriptors;
   const dynamicOptions = useActivityInputOptions(endpointContext, workflowState, activity, activityDescriptor, input);
+  const [failedOptionsScope, setFailedOptionsScope] = useState<string>();
+  const reportedEditorSignals = useRef(new Set<string>());
+  const reportedEditorFallbackSignals = useRef(new Set<string>());
+  const currentDisclosureScope = useRef(disclosureSignalKey);
+  currentDisclosureScope.current = disclosureSignalKey;
+  const reportEditorValidation = useCallback((instanceKey: string, hasError: boolean) => {
+    if (currentDisclosureScope.current !== disclosureSignalKey) return;
+    const signalKey = `${disclosureSignalKey}\u001e${instanceKey}`;
+    if (hasError) reportedEditorSignals.current.add(signalKey);
+    else reportedEditorSignals.current.delete(signalKey);
+    onDisclosureErrorChange(signalKey, hasError);
+  }, [disclosureSignalKey, onDisclosureErrorChange]);
+  const reportEditorFallback = useCallback((instanceKey: string, shouldForceOpen: boolean) => {
+    if (currentDisclosureScope.current !== disclosureSignalKey) return;
+    const signalKey = `${disclosureSignalKey}\u001e${instanceKey}`;
+    if (shouldForceOpen) reportedEditorFallbackSignals.current.add(signalKey);
+    else reportedEditorFallbackSignals.current.delete(signalKey);
+    onDisclosureFallbackChange(signalKey, shouldForceOpen);
+  }, [disclosureSignalKey, onDisclosureFallbackChange]);
+  useEffect(() => {
+    const scopeKey = disclosureSignalKey;
+    return () => {
+      const prefix = `${scopeKey}\u001e`;
+      for (const key of [...reportedEditorSignals.current]) {
+        if (!key.startsWith(prefix)) continue;
+        reportedEditorSignals.current.delete(key);
+        onDisclosureErrorChange(key, false);
+      }
+      for (const key of [...reportedEditorFallbackSignals.current]) {
+        if (!key.startsWith(prefix)) continue;
+        reportedEditorFallbackSignals.current.delete(key);
+        onDisclosureFallbackChange(key, false);
+      }
+    };
+  }, [disclosureSignalKey, onDisclosureErrorChange, onDisclosureFallbackChange]);
+  useEffect(() => {
+    if (dynamicOptions.status === "error") setFailedOptionsScope(disclosureSignalKey);
+    else if (dynamicOptions.status === "ready" || dynamicOptions.status === "idle") setFailedOptionsScope(undefined);
+  }, [disclosureSignalKey, dynamicOptions.status]);
   const provider = readOptionsProvider(input);
   const effectiveInput = provider ? {
     ...input,
@@ -422,7 +559,6 @@ function PropertyRow({
   const editorDisabled = readOnly || (!!provider && dynamicOptions.status !== "ready");
   const context: StudioActivityPropertyEditorContext = { activity, activityId: activity.nodeId, expressionDescriptors, readOnly: editorDisabled };
   const editor = resolveEditor(editors, effectiveInput, context);
-  const EditorComponent = editor?.component;
   const wrapped = input.isWrapped !== false ? readWrappedInput(activity, input) : null;
   const syntax = wrapped?.expression.type ?? (secretOnly ? secretSyntax : "Literal");
   const expressionDescriptor = expressionDescriptors.find(descriptor => descriptor.type === syntax);
@@ -434,7 +570,9 @@ function PropertyRow({
   // inputs, a subset of masked inputs, take their own branch below, and their documents carry nothing either.
   const valueMasked = !secretOnly && isMaskedInput(input) && !showsMaskedValue(editingMode);
   const value = getLiteralEditorValue(activity, input);
-  const expressionSource = valueMasked || secretOnly || value == null ? "" : String(value);
+  const portableDefinition = wrapped ? readPortableExpressionDefinition(value, syntax) : null;
+  const editorValue = portableDefinition?.source ?? value;
+  const expressionSource = valueMasked || secretOnly || editorValue == null ? "" : String(editorValue);
   const documentVersions = useRef(new Map<string, { source: string; version: number }>());
   const propertyKey = input.referenceKey?.trim() || input.name;
   const toolingPropertyKey = `${activity.nodeId}\u001f${propertyKey}`;
@@ -460,6 +598,7 @@ function PropertyRow({
     expressionDocument,
     workflowState,
     toolingAuthorizationAvailable && toolingActive && wrapped != null && editingMode === "text",
+    expressionEditorSessionScope,
     toolingAuthorizationEpoch,
     toolingAuthorizationConfirmationRequired,
     onToolingAuthorizationConfirmed
@@ -512,8 +651,33 @@ function PropertyRow({
     ? resolveExpressionDiagnosticProvider(expressionEditors, inlineExpressionContext)
     : null;
   const inlineDiagnostics = inlineDiagnosticProvider && inlineExpressionContext
-    ? getExpressionEditorDiagnostics(inlineDiagnosticProvider, inlineExpressionContext, value)
+    ? getExpressionEditorDiagnostics(inlineDiagnosticProvider, inlineExpressionContext, editorValue)
     : [];
+  const semanticValidation = toolingSnapshot.validation;
+  const semanticValidationData = semanticValidation?.data;
+  const currentSemanticDiagnostics = semanticValidation?.state === "ready" && semanticValidationData &&
+    semanticValidationData.documentId === expressionDocument.id &&
+    semanticValidationData.sourceVersion === expressionDocument.sourceVersion &&
+    semanticValidationData.contextVersion === semanticValidation.contextVersion &&
+    semanticValidationData.contextVersion === toolingSnapshot.authoringContext?.data?.version
+    ? semanticValidationData.diagnostics
+    : [];
+  const hasRowError = inlineDiagnostics.some(diagnostic => diagnostic.severity === "error") ||
+    currentSemanticDiagnostics.some(diagnostic => diagnostic.severity === "error");
+  useEffect(() => {
+    onDisclosureErrorChange(disclosureSignalKey, hasRowError);
+    return () => onDisclosureErrorChange(disclosureSignalKey, false);
+  }, [disclosureSignalKey, hasRowError, onDisclosureErrorChange]);
+  const hasSelectedInlineExpressionEditor = Boolean(InlineExpressionEditorComponent && inlineExpressionContext);
+  useEffect(() => {
+    reportEditorFallback("inline-expression", hasSelectedInlineExpressionEditor);
+    return () => reportEditorFallback("inline-expression", false);
+  }, [hasSelectedInlineExpressionEditor, reportEditorFallback]);
+  useEffect(() => {
+    const hasFailure = failedOptionsScope === disclosureSignalKey;
+    onDisclosureFailureChange(disclosureSignalKey, hasFailure);
+    return () => onDisclosureFailureChange(disclosureSignalKey, false);
+  }, [disclosureSignalKey, failedOptionsScope, onDisclosureFailureChange]);
   // A collection repeater renders multiple rows, not a single-line field, so the inline text chrome (the
   // overlaid syntax picker + expand button, positioned top:4/bottom:4 of the field) must not wrap it —
   // it would stretch down the whole list and cover the per-row reorder controls. Repeaters still get a
@@ -524,7 +688,9 @@ function PropertyRow({
     ? describeCollectionForInput(effectiveInput)
     : null;
   const isCollectionEditor = dictionaryType != null || collectionType != null || structuredCollectionType != null;
-  const useInlineSyntaxPicker = Boolean(wrapped && !isCollectionEditor && (
+  // Reference contributions own their picker, labels and feedback. A literal's single-line hint
+  // must not put overlaid text-field chrome across that whole reference editor.
+  const useInlineSyntaxPicker = Boolean(wrapped && editingMode !== "reference" && !isCollectionEditor && (
     editingMode === "text" || editingMode === "structured" || isSingleLineInput(input, editor?.id)
   ));
   const useDictionarySyntaxPicker = Boolean(wrapped && dictionaryType != null);
@@ -611,11 +777,18 @@ function PropertyRow({
       : null;
     const cleared = clearSecretOnlyInput(current.activity, current.input, nextValue);
     if (cleared) {
-      current.onChange(cleared);
+      current.onChange(cleared, current.input);
       return;
     }
-    const next = currentWrapped ? withLiteralValue(currentWrapped, nextValue) : nextValue;
-    current.onChange(writeInputValue(current.activity, current.input, next));
+    const portableDefinition = currentWrapped
+      ? readPortableExpressionDefinition(currentWrapped.expression.value, currentWrapped.expression.type)
+      : null;
+    const next = currentWrapped
+      ? withLiteralValue(currentWrapped, portableDefinition && typeof nextValue === "string"
+        ? { ...portableDefinition, source: nextValue }
+        : nextValue)
+      : nextValue;
+    current.onChange(writeInputValue(current.activity, current.input, next), current.input);
   }, []);
 
   const getUnavailableReason = (descriptor: StudioExpressionDescriptor): string | null => {
@@ -646,7 +819,7 @@ function PropertyRow({
     if (!wrapped) return;
     setPendingTransition(null);
     setFocusRequested(true);
-    onChange(writeInputValue(activity, input, withExpression(wrapped, descriptor.type, nextValue)));
+    onChange(writeInputValue(activity, input, withExpression(wrapped, descriptor.type, nextValue)), input);
   };
 
   const cancelTransition = () => {
@@ -690,6 +863,9 @@ function PropertyRow({
         editors={editors}
         context={context}
         disabled={editorDisabled}
+        validationScopeKey={disclosureSignalKey}
+        onValidationChange={reportEditorValidation}
+        onDisclosureFallbackChange={reportEditorFallback}
         onChange={setRaw}
       />
     )
@@ -704,6 +880,9 @@ function PropertyRow({
       editors={editors}
       context={context}
       disabled={editorDisabled}
+      validationScopeKey={disclosureSignalKey}
+      onValidationChange={reportEditorValidation}
+      onDisclosureFallbackChange={reportEditorFallback}
       onOpenExpanded={() => setExpandRequested(true)}
       onChange={setRaw}
     />
@@ -712,7 +891,7 @@ function PropertyRow({
     <InlineExpressionEditorComponent
       descriptor={effectiveInput}
       syntax={syntax}
-      value={value}
+      value={editorValue}
       disabled={editingMode === "structured" ? editorDisabled : readOnly}
       initialFocus={focusRequested && !expanded}
       context={inlineExpressionContext}
@@ -731,7 +910,7 @@ function PropertyRow({
     // Only the masked editor, for a single value in a known literal mode: any other editor would show the value and
     // the masked editor cannot edit a dictionary or a list, so everything else says the value is masked.
     editingMode === "literal" && editor?.id === maskedPropertyEditorId && !dictionaryType && !collectionType
-      ? renderEditor(EditorComponent, effectiveInput, value, editorDisabled, context, setRaw)
+      ? renderEditor(editor, effectiveInput, value, editorDisabled, context, setRaw, disclosureSignalKey, reportEditorValidation, reportEditorFallback)
       : (
         <p className="wf-expression-editor-hint" role="status">
           This value is masked. It is preserved and read-only here.
@@ -742,7 +921,7 @@ function PropertyRow({
       <GenericTextExpressionEditor
         descriptor={effectiveInput}
         syntax={syntax}
-        value={value}
+        value={editorValue}
         disabled={readOnly}
         initialFocus={focusRequested && !expanded}
         context={inlineExpressionContext}
@@ -750,7 +929,7 @@ function PropertyRow({
       />
     )
   ) : dictionaryEditor ?? collectionEditor ?? contributedExpressionEditor ?? (editingMode === "literal"
-    ? renderEditor(EditorComponent, effectiveInput, value, editorDisabled, context, setRaw)
+    ? renderEditor(editor, effectiveInput, value, editorDisabled, context, setRaw, disclosureSignalKey, reportEditorValidation, reportEditorFallback)
     : <UnavailableExpressionEditor syntax={syntax} />);
   // A single session must never be mounted into two editor engines at once. While the dialog owns the
   // text document, unmount the compact surface; closing remounts it from the same URI-scoped session.
@@ -762,6 +941,17 @@ function PropertyRow({
         <label>{input.displayName || input.name}</label>
         <div className="wf-property-row-header-meta">
           <span>{formatTypeName(input.typeName)}</span>
+          {wrapped && !useInlineSyntaxPicker && !useDictionarySyntaxPicker ? (
+            <SyntaxPicker
+              label={`${input.displayName || input.name} expression syntax`}
+              value={syntax}
+              descriptors={syntaxDescriptors}
+              getUnavailableReason={getUnavailableReason}
+              disabled={readOnly}
+              variant="compact"
+              onChange={setSyntax}
+            />
+          ) : null}
           {wrapped && !secretOnly ? (
             <button
               ref={conversionToggleRef}
@@ -779,16 +969,6 @@ function PropertyRow({
         </div>
       </div>
       {input.description ? <p>{input.description}</p> : null}
-      {wrapped && !useInlineSyntaxPicker && !useDictionarySyntaxPicker ? (
-        <SyntaxPicker
-          label={`${input.displayName || input.name} expression syntax`}
-          value={syntax}
-          descriptors={syntaxDescriptors}
-          getUnavailableReason={getUnavailableReason}
-          disabled={readOnly}
-          onChange={setSyntax}
-        />
-      ) : null}
       {useInlineSyntaxPicker ? (
         <div className={`wf-expression-field${useToggleLayout ? " wf-expression-field--toggle" : useControlLayout ? " wf-expression-field--control" : ""}`}>
           <div className="wf-expression-editor">
@@ -857,7 +1037,7 @@ function PropertyRow({
                 wrapped={wrapped}
                 profiles={conversionProfiles}
                 disabled={readOnly}
-                onChange={next => onChange(writeInputValue(activity, input, next))}
+                onChange={next => onChange(writeInputValue(activity, input, next), input)}
               />
             </div>
           ) : (
@@ -930,7 +1110,7 @@ function PropertyRow({
         <ExpandedPropertyEditor
           input={input}
           dictionarySessionScope={dictionarySessionScope}
-          value={value}
+          value={editorValue}
           syntax={syntax}
           editingMode={editingMode}
           descriptors={expressionDescriptors}
@@ -938,12 +1118,15 @@ function PropertyRow({
           activity={activity}
           propertyEditors={editors}
           expressionEditors={expressionEditors}
+          validationScopeKey={disclosureSignalKey}
+          onValidationChange={reportEditorValidation}
+          onDisclosureFallbackChange={reportEditorFallback}
           expressionContext={makeExpressionContext(syntax, "expanded")}
           disabled={readOnly}
           wrapped={wrapped}
           conversionProfiles={conversionProfiles}
           onChange={setRaw}
-          onConversionChange={next => onChange(writeInputValue(activity, input, next))}
+          onConversionChange={next => onChange(writeInputValue(activity, input, next), input)}
           onSyntaxChange={setSyntax}
           onClose={closeExpanded}
         />
@@ -978,6 +1161,10 @@ function arePropertyRowPropsEqual(previous: PropertyRowProps, next: PropertyRowP
     previous.conversionProfiles !== next.conversionProfiles ||
     previous.toolingActive !== next.toolingActive ||
     previous.onToolingFocus !== next.onToolingFocus ||
+    previous.disclosureSignalKey !== next.disclosureSignalKey ||
+    previous.onDisclosureErrorChange !== next.onDisclosureErrorChange ||
+    previous.onDisclosureFailureChange !== next.onDisclosureFailureChange ||
+    previous.onDisclosureFallbackChange !== next.onDisclosureFallbackChange ||
     previous.onChange !== next.onChange
   ) return false;
 
@@ -1018,6 +1205,9 @@ function ExpandedPropertyEditor({
   activity,
   propertyEditors,
   expressionEditors,
+  validationScopeKey,
+  onValidationChange,
+  onDisclosureFallbackChange,
   expressionContext,
   disabled,
   wrapped,
@@ -1037,6 +1227,9 @@ function ExpandedPropertyEditor({
   activity: ActivityNode;
   propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
+  validationScopeKey: string;
+  onValidationChange(instanceKey: string, hasError: boolean): void;
+  onDisclosureFallbackChange(instanceKey: string, shouldForceOpen: boolean): void;
   expressionContext: StudioExpressionEditorContext;
   disabled: boolean;
   wrapped: WrappedActivityInputValue | null;
@@ -1110,6 +1303,9 @@ function ExpandedPropertyEditor({
               editors={propertyEditors}
               context={{ activity, expressionDescriptors: descriptors, readOnly: disabled }}
               disabled={disabled}
+              validationScopeKey={validationScopeKey}
+              onValidationChange={onValidationChange}
+              onDisclosureFallbackChange={onDisclosureFallbackChange}
               variant="expanded"
               onChange={onChange}
             />
@@ -1164,20 +1360,28 @@ function ExpandedPropertyEditor({
 }
 
 function renderEditor(
-  EditorComponent: StudioActivityPropertyEditorContribution["component"] | undefined,
+  editor: StudioActivityPropertyEditorContribution | undefined,
   input: StudioActivityInputDescriptor,
   value: unknown,
   disabled: boolean,
   context: StudioActivityPropertyEditorContext,
-  onChange: (value: unknown) => void
+  onChange: (value: unknown) => void,
+  validationScopeKey: string,
+  onValidationChange: (instanceKey: string, hasError: boolean) => void,
+  onDisclosureFallbackChange: (instanceKey: string, shouldForceOpen: boolean) => void
 ) {
-  return EditorComponent ? (
-    <EditorComponent
+  return editor ? (
+    <ReportedPropertyEditor
+      key={`${validationScopeKey}\u001fscalar\u001f${editor.id}`}
+      editor={editor}
       descriptor={input}
       value={value}
       disabled={disabled}
       context={context}
       onChange={onChange}
+      validationInstanceKey="scalar"
+      onValidationChange={onValidationChange}
+      onDisclosureFallbackChange={onDisclosureFallbackChange}
     />
   ) : (
     <input type="text" value={value == null ? "" : String(value)} disabled={disabled} onChange={event => onChange(event.target.value)} />
@@ -1358,7 +1562,7 @@ export function SyntaxPicker({
   descriptors: StudioExpressionDescriptor[];
   getUnavailableReason?(descriptor: StudioExpressionDescriptor): string | null;
   disabled: boolean;
-  variant?: "block" | "inline";
+  variant?: "block" | "compact" | "inline";
   onChange(value: string): void;
 }) {
   const [open, setOpen] = useState(false);
@@ -1367,12 +1571,15 @@ export function SyntaxPicker({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const selected = descriptors.find(descriptor => descriptor.type === value);
+  const selectedName = selected?.displayName || selected?.type || value;
+  const SyntaxIcon = syntaxIconFor(selected);
+  const iconOnly = variant !== "block";
   const selectedIndex = Math.max(0, descriptors.findIndex(descriptor => descriptor.type === value));
   const unavailableReasons = descriptors.map(getUnavailableReason);
   const availableIndices = descriptors.flatMap((_, index) => unavailableReasons[index] ? [] : [index]);
   const className = [
     "wf-syntax-picker-trigger",
-    variant === "inline" ? "inline" : "",
+    iconOnly ? variant : "",
     open ? "open" : ""
   ].filter(Boolean).join(" ");
 
@@ -1458,26 +1665,29 @@ export function SyntaxPicker({
   };
 
   return (
-    <div className={variant === "inline" ? "wf-syntax-picker inline" : "wf-syntax-picker"}>
+    <div className={["wf-syntax-picker", iconOnly ? variant : ""].filter(Boolean).join(" ")}>
       <button
         ref={triggerRef}
         type="button"
         className={className}
-        aria-label={label}
+        aria-label={iconOnly ? `${label}: ${selectedName}` : label}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listboxId}
+        title={iconOnly ? selectedName : undefined}
         disabled={disabled}
         onClick={() => open ? closePicker(false) : openPicker()}
         onKeyDown={handleTriggerKeyDown}
       >
-        <span>{selected?.displayName || selected?.type || value}</span>
+        {iconOnly
+          ? <SyntaxIcon className="wf-syntax-picker-icon" size={14} strokeWidth={2} aria-hidden="true" />
+          : <span>{selectedName}</span>}
       </button>
       <AnchoredPopover
         anchorRef={triggerRef}
         open={open}
         className="wf-syntax-picker-menu"
-        minWidth={variant === "inline" ? 176 : 0}
+        minWidth={iconOnly ? 176 : 0}
         maxHeight={210}
         onDismiss={reason => closePicker(reason !== "anchor-hidden")}
       >
@@ -1511,6 +1721,17 @@ export function SyntaxPicker({
       </AnchoredPopover>
     </div>
   );
+}
+
+function syntaxIconFor(descriptor: StudioExpressionDescriptor | undefined): LucideIcon {
+  const syntax = descriptor?.type.toLowerCase() ?? "";
+  if (syntax === "literal") return Type;
+  if (syntax.includes("secret")) return KeyRound;
+  if (syntax === "connection") return Cable;
+  if (["input", "variable", "object", "json"].includes(syntax) || descriptor?.editingMode === "structured") return Braces;
+  if (descriptor?.editingMode === "reference") return Cable;
+  if (descriptor?.editingMode === "literal") return Type;
+  return Code2;
 }
 
 function resolveEditor(
@@ -1643,6 +1864,45 @@ function readFirstNonEmptyString(...values: unknown[]): string | null {
   }
 
   return null;
+}
+
+function isOptionalTier(input: StudioActivityInputDescriptor) {
+  return input.tier === "optional" && input.isRequired !== true;
+}
+
+function hasDisclosureSignal(signals: Record<string, true>, rowKey: string) {
+  return signals[rowKey] === true || Object.keys(signals).some(key => key.startsWith(`${rowKey}\u001e`));
+}
+
+function updateDisclosureSignal(current: Record<string, true>, key: string, enabled: boolean): Record<string, true> {
+  if (enabled) return current[key] ? current : { ...current, [key]: true as const };
+  if (!current[key]) return current;
+  const next = { ...current };
+  delete next[key];
+  return next;
+}
+
+function partitionInputGroups(
+  groups: ReturnType<typeof groupInputs>,
+  shouldInclude: (input: StudioActivityInputDescriptor) => boolean
+) {
+  return groups
+    .map(group => ({ ...group, inputs: group.inputs.filter(shouldInclude) }))
+    .filter(group => group.inputs.length > 0);
+}
+
+function hasStoredInputValue(activity: ActivityNode, input: StudioActivityInputDescriptor) {
+  const propertyName = getInputPropertyName(input);
+  if (Object.prototype.hasOwnProperty.call(activity, propertyName)) return true;
+
+  return Array.isArray(activity.inputs) && activity.inputs.some(argument => {
+    const record = asRecord(argument);
+    return record?.referenceKey === propertyName;
+  });
+}
+
+function disclosureSignalKey(draftId: string, activity: ActivityNode, input: StudioActivityInputDescriptor) {
+  return [draftId, activity.activityVersionId, activity.nodeId, getInputPropertyName(input)].join("\u001f");
 }
 
 function groupInputs(inputs: StudioActivityInputDescriptor[], metadata: ResolvedPropertyGroupMetadata[]) {

@@ -1,4 +1,4 @@
-import { useEffect, useState, type UIEvent } from "react";
+import { useEffect, useRef, useState, type UIEvent } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { ArrowRight, RefreshCw } from "lucide-react";
 import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -7,8 +7,10 @@ import type {
   ActivityDefinitionDependencyReference,
   ActivityDefinitionUsageEvidence
 } from "./activityDefinitionTypes";
-import { activityDesignKeys, useActivityDefinitionVersions } from "./api/activityDesign";
+import { activityDesignKeys, useActivityDefinitionVersion, useActivityDefinitionVersions } from "./api/activityDesign";
+import { displayActivityDefinitionVersion } from "./activityDefinitionDraftManagementShared";
 import { getActivityDefinitionDependencyPage } from "./api/activityDefinitionDependencies";
+import { StudioLink } from "./StudioLink";
 import dependencyExplorerStylesUrl from "./activityDefinitionDependencyExplorer.css?url&no-inline";
 
 const dependencyPageSize = 100;
@@ -23,28 +25,52 @@ type IncludedArtifact = "versions" | "drafts";
 
 export function ActivityDefinitionDependencyExplorer({
   context,
-  definitionId
+  definitionId,
+  initialVersionId,
+  initialDirection
 }: {
   context: StudioEndpointContext;
   definitionId: string;
+  initialVersionId?: string;
+  initialDirection?: DependencyDirection;
 }) {
   const [versionCursors, setVersionCursors] = useState<(string | null)[]>([null]);
   const [versionPage, setVersionPage] = useState(0);
   const [rootVersionId, setRootVersionId] = useState("");
-  const [direction, setDirection] = useState<DependencyDirection>("outbound");
+  const [direction, setDirection] = useState<DependencyDirection>(initialDirection ?? "outbound");
   const [transitive, setTransitive] = useState(false);
   const [included, setIncluded] = useState<IncludedArtifact[]>(["versions", "drafts"]);
   const [generation, setGeneration] = useState(0);
   const [selectedRelationshipId, setSelectedRelationshipId] = useState<string | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
+  const initializedVersionId = useRef<string | null>(null);
   const versionRequest = {
     definitionId,
     limit: 50,
     cursor: versionCursors[versionPage]
   };
   const versionsQuery = useActivityDefinitionVersions(context, versionRequest, true);
-  const rootVersion = versionsQuery.data?.items.find(item => item.version.versionId === rootVersionId) ?? null;
+  const initialVersionQuery = useActivityDefinitionVersion(context, definitionId, initialVersionId ?? null, Boolean(initialVersionId));
+  const listedRootVersion = !versionsQuery.isError
+    ? versionsQuery.data?.items.find(item => item.version.definitionId === definitionId && item.version.versionId === rootVersionId) ?? null
+    : null;
+  const exactInitialVersion = initialVersionQuery.data;
+  const confirmedInitialVersion = !initialVersionQuery.isError &&
+    exactInitialVersion?.version?.definitionId === definitionId &&
+    exactInitialVersion?.version?.versionId === initialVersionId
+    ? exactInitialVersion
+    : null;
+  const rootVersion = listedRootVersion ?? (rootVersionId === initialVersionId ? confirmedInitialVersion : null);
+  const versionOptions = !versionsQuery.isError ? versionsQuery.data?.items ?? [] : [];
+  const showConfirmedInitialVersion = confirmedInitialVersion && !versionOptions.some(item => item.version.versionId === confirmedInitialVersion.version.versionId);
   const includeKey = [...included].sort().join(",");
+
+  useEffect(() => {
+    if (!initialVersionId || initialVersionQuery.isPending || initialVersionQuery.isError || !confirmedInitialVersion || initializedVersionId.current === initialVersionId) return;
+
+    initializedVersionId.current = initialVersionId;
+    setRootVersionId(current => current || initialVersionId);
+  }, [confirmedInitialVersion, initialVersionId, initialVersionQuery.isError, initialVersionQuery.isPending]);
 
   const dependenciesQuery = useInfiniteQuery({
     queryKey: [
@@ -83,7 +109,7 @@ export function ActivityDefinitionDependencyExplorer({
   const responseBindingMismatch = validPages.length !== pages.length;
   const privacyFailure = isPrivateFailure(dependenciesQuery.error);
   const cursorFailure = dependencyCursorFailure(dependenciesQuery.error);
-  const rows = privacyFailure ? [] : validPages.flatMap(page => page.items);
+  const rows = !rootVersion || privacyFailure ? [] : validPages.flatMap(page => page.items);
   const selected = rows.find(item => item.relationshipId === selectedRelationshipId) ?? null;
   const snapshot = validPages[0]?.consistency ?? null;
   const start = Math.max(0, Math.floor(scrollTop / dependencyRowHeight) - 2);
@@ -114,81 +140,95 @@ export function ActivityDefinitionDependencyExplorer({
     <header className="ad-section-heading">
       <span aria-hidden><ArrowRight size={18} /></span>
       <div>
-        <h2>Dependencies &amp; usage</h2>
-        <p>Start from one explicit immutable Activity Definition Version. Mutable drafts and workflow occurrences appear as exact evidence rows; Studio never substitutes mutable latest.</p>
+        <h2>{direction === "inbound" ? "Used by" : "Dependencies"}</h2>
+        <p>{direction === "inbound"
+          ? "See where this exact activity version is used."
+          : "See the exact activity versions used by this one."}</p>
       </div>
     </header>
 
-    <section className="ad-dependency-controls" aria-label="Dependency query">
+    <section className="ad-dependency-controls" aria-label="Usage query">
       <label>
-        <span>Exact version root</span>
+        <span>Version</span>
         <select value={rootVersionId} onChange={event => setRootVersionId(event.target.value)}>
-          <option value="">Choose an exact immutable version</option>
-          {(versionsQuery.data?.items ?? []).map(item =>
-            <option key={item.version.versionId} value={item.version.versionId}>
-              {item.version.version} · {item.version.lifecycle} · {item.version.versionId}
+          <option value="">Choose a version</option>
+          {showConfirmedInitialVersion ? <option value={confirmedInitialVersion.version.versionId} title={confirmedInitialVersion.version.version}>
+            {displayActivityDefinitionVersion(confirmedInitialVersion.version.version)} · {confirmedInitialVersion.version.lifecycle}
+          </option> : null}
+          {versionOptions.map(item =>
+            <option key={item.version.versionId} value={item.version.versionId} title={item.version.version}>
+              {displayActivityDefinitionVersion(item.version.version)} · {item.version.lifecycle}
             </option>)}
         </select>
       </label>
-      <fieldset>
-        <legend>Direction</legend>
-        <label><input type="radio" name="dependency-direction" checked={direction === "outbound"} onChange={() => setDirection("outbound")} /> Dependencies</label>
+      <fieldset className="ad-dependency-direction">
+        <legend>Show</legend>
         <label><input type="radio" name="dependency-direction" checked={direction === "inbound"} onChange={() => setDirection("inbound")} /> Used by</label>
+        <label><input type="radio" name="dependency-direction" checked={direction === "outbound"} onChange={() => setDirection("outbound")} /> Dependencies</label>
       </fieldset>
-      <fieldset>
-        <legend>Traversal</legend>
-        <label><input type="radio" name="dependency-depth" checked={!transitive} onChange={() => setTransitive(false)} /> Direct</label>
-        <label><input type="radio" name="dependency-depth" checked={transitive} onChange={() => setTransitive(true)} /> Transitive</label>
-      </fieldset>
-      <fieldset>
-        <legend>Evidence kinds</legend>
-        <label><input type="checkbox" checked={included.includes("versions")} onChange={() => toggleIncluded("versions")} /> Immutable versions</label>
-        <label><input type="checkbox" checked={included.includes("drafts")} onChange={() => toggleIncluded("drafts")} /> Mutable drafts</label>
-      </fieldset>
+      <details className="ad-dependency-advanced">
+        <summary>Advanced options</summary>
+        <div className="ad-dependency-advanced-content">
+          <fieldset>
+            <legend>Search depth</legend>
+            <label><input type="radio" name="dependency-depth" checked={!transitive} onChange={() => setTransitive(false)} /> Direct only</label>
+            <label><input type="radio" name="dependency-depth" checked={transitive} onChange={() => setTransitive(true)} /> Include indirect</label>
+          </fieldset>
+          <fieldset>
+            <legend>Include</legend>
+            <label><input type="checkbox" checked={included.includes("versions")} onChange={() => toggleIncluded("versions")} /> Versions</label>
+            <label><input type="checkbox" checked={included.includes("drafts")} onChange={() => toggleIncluded("drafts")} /> Drafts</label>
+          </fieldset>
+        </div>
+      </details>
     </section>
 
-    <div className="ad-child-pager" aria-label="Exact version root pages">
+    {versionPage > 0 || versionsQuery.data?.hasMore ? <div className="ad-child-pager" aria-label="Version pages">
       <button type="button" onClick={() => {
         setRootVersionId("");
         setVersionPage(current => Math.max(0, current - 1));
-      }} disabled={versionPage === 0}>Previous roots</button>
-      <span>Root page {versionPage + 1}</span>
+      }} disabled={versionPage === 0}>Previous</button>
+      <span>Page {versionPage + 1}</span>
       <button type="button" onClick={() => {
         const cursor = versionsQuery.data?.continuation;
         if (!cursor) return;
         setRootVersionId("");
         setVersionCursors(current => [...current.slice(0, versionPage + 1), cursor]);
         setVersionPage(current => current + 1);
-      }} disabled={!versionsQuery.data?.hasMore || !versionsQuery.data.continuation}>Next roots</button>
-    </div>
+      }} disabled={!versionsQuery.data?.hasMore || !versionsQuery.data.continuation}>Next</button>
+    </div> : null}
 
-    {versionsQuery.isPending ? <div className="ad-inline-status" role="status">Loading authorized exact version roots…</div> : null}
-    {versionsQuery.isError ? <div className="ad-inline-error" role="alert">Exact roots could not be confirmed. No root identities or counts are shown.</div> : null}
-    {!rootVersionId ? <div className="ad-inline-status" role="status">Choose one exact version root to load bounded evidence.</div> : null}
-    {rootVersionId && !rootVersion ? <div className="ad-inline-error" role="alert">The selected exact root is not confirmed on this authorized page. Choose it again from the current page.</div> : null}
-    {included.length === 0 ? <div className="ad-inline-error" role="alert">Choose at least one evidence kind. No request is sent for an empty filter.</div> : null}
-    {dependenciesQuery.isPending ? <div className="ad-inline-status" role="status">Loading the first snapshot-bound page…</div> : null}
-    {privacyFailure ? <div className="ad-inline-error" role="alert">Dependency evidence is unavailable for this account or exact root. No hidden identity or count is shown.</div> : null}
-    {responseBindingMismatch && !rows.length ? <div className="ad-inline-error" role="alert">The first page did not match this exact root, query, snapshot, and access binding. No unconfirmed identity or count is shown. <button type="button" onClick={restart}>Restart from latest</button></div> : null}
-    {dependenciesQuery.isError && !privacyFailure && !rows.length ? <div className="ad-inline-error" role="alert">Dependency evidence could not be confirmed. No unconfirmed rows are shown. <button type="button" onClick={restart}>Try again</button></div> : null}
-    {isStale ? <div className="ad-stale-warning" role="alert"><div><strong>Loaded evidence is a stale completed snapshot</strong><span>{cursorFailure === "expired" ? "The server no longer retains this projection watermark." : "The next page no longer matches this root, query, snapshot, or access binding."} Pages from another binding were not combined.</span></div><button type="button" onClick={restart}><RefreshCw size={15} aria-hidden /> Restart from latest</button></div> : null}
+    {versionsQuery.isPending ? <div className="ad-inline-status" role="status">Loading versions…</div> : null}
+    {versionsQuery.isError ? <div className="ad-inline-error" role="alert">Versions could not be confirmed. No identities or counts are shown.</div> : null}
+    {!rootVersionId ? <div className="ad-inline-status" role="status">Choose a version to see matching evidence.</div> : null}
+    {rootVersionId && !rootVersion ? <div className="ad-inline-error" role="alert">This version is not confirmed by an authorized read. Choose a listed version.</div> : null}
+    {included.length === 0 ? <div className="ad-inline-error" role="alert">Select versions or drafts to continue.</div> : null}
+    {rootVersion && included.length > 0 && dependenciesQuery.isPending ? <div className="ad-inline-status" role="status">Loading evidence…</div> : null}
+    {privacyFailure ? <div className="ad-inline-error" role="alert">Evidence is unavailable for this account or version. No identities or counts are shown.</div> : null}
+    {responseBindingMismatch && !rows.length ? <div className="ad-inline-error" role="alert">Results did not match this version or snapshot. No identities or counts are shown. <button type="button" onClick={restart}>Restart scan</button></div> : null}
+    {dependenciesQuery.isError && !privacyFailure && !rows.length ? <div className="ad-inline-error" role="alert">Could not confirm these results. No unconfirmed rows are shown. <button type="button" onClick={restart}>Try again</button></div> : null}
+    {isStale ? <div className="ad-stale-warning" role="alert"><div><strong>This scan is out of date</strong><span>{cursorFailure === "expired" ? "The snapshot is no longer available. Confirmed rows remain visible." : "The next page did not match this version, filters, or snapshot. Confirmed rows remain visible."} Pages from another snapshot were not combined.</span></div><button type="button" onClick={restart}><RefreshCw size={15} aria-hidden /> Restart scan</button></div> : null}
 
-    {snapshot && rows.length ? <section className="ad-dependency-snapshot" aria-label="Evidence consistency">
-      <div><span>Evidence</span><strong>{snapshot.kind}</strong></div>
-      <div><span>Authority</span><strong>{snapshot.isAuthoritative ? "Authoritative direct facts" : "Derived projection"}</strong></div>
-      <div><span>Freshness</span><strong>{snapshot.asOf ? formatTimestamp(snapshot.asOf) : "Publication truth"}</strong></div>
-      <div><span>Loaded</span><strong>{rows.length} visible rows · {validPages.length} server pages</strong></div>
-    </section> : null}
+    {snapshot && rows.length ? <details className="ad-scan-details">
+      <summary>Scan details</summary>
+      <section className="ad-dependency-snapshot" aria-label="Evidence consistency">
+        <div><span>Evidence</span><strong>{snapshot.kind}</strong></div>
+        <div><span>Authority</span><strong>{snapshot.isAuthoritative ? "Authoritative direct facts" : "Derived projection"}</strong></div>
+        <div><span>Freshness</span><strong>{snapshot.asOf ? formatTimestamp(snapshot.asOf) : "Publication truth"}</strong></div>
+        <div><span>Loaded</span><strong>{rows.length} visible rows · {validPages.length} server pages</strong></div>
+      </section>
+    </details> : null}
 
-    {dependenciesQuery.isSuccess && rows.length === 0 ? <div className="ad-inline-status" role="status">No authorized evidence rows match this exact root and filter.</div> : null}
+    {dependenciesQuery.isSuccess && rootVersion && rows.length === 0 ? <div className="ad-inline-status" role="status">No evidence matches this version and filters.</div> : null}
     {rows.length ? <div className="ad-dependency-table-scroll" onScroll={onScroll}>
       <table className="ad-dependency-table" aria-label={direction === "outbound" ? "Dependency evidence" : "Used by evidence"}>
-        <thead><tr><th>Owner</th><th>Occurrence</th><th>Dependency</th><th>Evidence</th><th>Path</th></tr></thead>
+        <thead><tr><th>{direction === "inbound" ? "Used in" : "Version"}</th><th>Where</th><th>{direction === "inbound" ? "Activity" : "Uses"}</th><th>Evidence</th><th>Path</th></tr></thead>
         <tbody>
           {start > 0 ? <tr aria-hidden><td colSpan={5} style={{ height: start * dependencyRowHeight, padding: 0 }} /></tr> : null}
           {visibleRows.map(item => <DependencyRow
             key={item.relationshipId}
             item={item}
+            direction={direction}
             selected={selectedRelationshipId === item.relationshipId}
             onSelect={() => setSelectedRelationshipId(item.relationshipId)}
           />)}
@@ -197,7 +237,7 @@ export function ActivityDefinitionDependencyExplorer({
       </table>
     </div> : null}
 
-    {dependenciesQuery.hasNextPage && !isStale && !privacyFailure ? <div className="ad-child-pager">
+    {dependenciesQuery.hasNextPage && rootVersion && !isStale && !privacyFailure ? <div className="ad-child-pager">
       <span>Pages remain bound to this exact snapshot.</span>
       <button type="button" onClick={() => void dependenciesQuery.fetchNextPage()} disabled={dependenciesQuery.isFetchingNextPage}>
         {dependenciesQuery.isFetchingNextPage ? "Loading next page…" : "Load next page"}
@@ -210,20 +250,22 @@ export function ActivityDefinitionDependencyExplorer({
 
 function DependencyRow({
   item,
+  direction,
   selected,
   onSelect
 }: {
   item: ActivityDefinitionDependencyItem;
+  direction: DependencyDirection;
   selected: boolean;
   onSelect(): void;
 }) {
   const sourceHref = exactOwnerHref(item);
   return <tr className={selected ? "is-selected" : ""}>
-    <td data-label="Owner"><strong>{referenceLabel(item.owner)}</strong><code>{referenceIdentity(item.owner)}</code></td>
-    <td data-label="Occurrence"><strong>{item.occurrence.occurrenceId}</strong><span>{item.occurrence.nodeOrigin.length} exact origin segments</span></td>
-    <td data-label="Dependency"><strong>{referenceLabel(item.dependency)}</strong><code>{referenceIdentity(item.dependency)}</code></td>
+    <td data-label={direction === "inbound" ? "Used in" : "Version"}><strong>{referenceLabel(item.owner)}</strong><code>{referenceIdentity(item.owner)}</code></td>
+    <td data-label="Where"><strong>{item.occurrence.occurrenceId}</strong><span>{item.occurrence.nodeOrigin.length} origin steps</span></td>
+    <td data-label={direction === "inbound" ? "Activity" : "Uses"}><strong>{referenceLabel(item.dependency)}</strong><code>{referenceIdentity(item.dependency)}</code></td>
     <td data-label="Evidence"><strong>{item.isDirect ? "Direct" : `Transitive depth ${item.depth}`}</strong><span>{item.owner.kind}</span></td>
-    <td data-label="Path"><button type="button" aria-pressed={selected} onClick={onSelect}>Review exact path</button>{sourceHref ? <a href={sourceHref}>Open source context</a> : <span>Source navigation unavailable</span>}</td>
+    <td data-label="Path"><button type="button" aria-pressed={selected} onClick={onSelect}>View path</button>{sourceHref ? <StudioLink href={sourceHref}>Open source</StudioLink> : <span>Source unavailable</span>}</td>
   </tr>;
 }
 

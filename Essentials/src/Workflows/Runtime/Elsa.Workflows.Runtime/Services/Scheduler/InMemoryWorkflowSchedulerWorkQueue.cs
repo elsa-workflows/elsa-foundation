@@ -9,9 +9,27 @@ namespace Elsa.Workflows.Runtime.Services.Scheduler;
 public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQueue, IWorkflowSchedulerWorkClaimInspection
 {
     private readonly object _syncRoot = new();
+    private readonly HashSet<string> _deletedWorkflowExecutionIds = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Queue<RuntimeSchedulerWorkItem>> _queuesByWorkflowExecutionId = new(StringComparer.Ordinal);
     private readonly Dictionary<SchedulerWorkItemKey, RuntimeSchedulerWorkItem> _workItemsByScopedId = new();
     private readonly Dictionary<SchedulerWorkItemKey, ClaimState> _claimsByScopedId = new();
+
+    internal void DeleteForWorkflowExecution(string workflowExecutionId)
+    {
+        lock (_syncRoot)
+        {
+            _deletedWorkflowExecutionIds.Add(workflowExecutionId);
+            _queuesByWorkflowExecutionId.Remove(workflowExecutionId);
+            foreach (var key in _workItemsByScopedId.Keys
+                         .Where(key => StringComparer.Ordinal.Equals(key.WorkflowExecutionId, workflowExecutionId))
+                         .ToArray())
+                _workItemsByScopedId.Remove(key);
+            foreach (var key in _claimsByScopedId.Keys
+                         .Where(key => StringComparer.Ordinal.Equals(key.WorkflowExecutionId, workflowExecutionId))
+                         .ToArray())
+                _claimsByScopedId.Remove(key);
+        }
+    }
 
     public bool SupportsClaimTransitions => true;
 
@@ -26,6 +44,10 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
 
         lock (_syncRoot)
         {
+            // A retained post-commit continuation may settle after manual history deletion. Acknowledge its
+            // idempotent delivery without recreating scheduler work for the fenced execution.
+            if (_deletedWorkflowExecutionIds.Contains(workItem.WorkflowExecutionId))
+                return ValueTask.FromResult(workItem);
             var scopedWorkItemKey = new SchedulerWorkItemKey(workItem.WorkflowExecutionId, workItem.WorkItemId);
             if (_workItemsByScopedId.TryGetValue(scopedWorkItemKey, out var existing))
                 return new ValueTask<RuntimeSchedulerWorkItem>(existing);

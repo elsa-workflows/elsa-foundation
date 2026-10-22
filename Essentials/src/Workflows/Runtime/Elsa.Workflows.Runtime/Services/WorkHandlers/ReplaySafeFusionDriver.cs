@@ -83,7 +83,7 @@ public sealed class ReplaySafeFusionDriver
     {
         ArgumentNullException.ThrowIfNull(node);
 
-        if (!_options.Enabled)
+        if (!_options.Enabled || node.ExecutionPlacement != Elsa.Primitives.Models.ActivityExecutionPlacement.Inline)
             return false;
 
         var nodeIsFusable = node.IntrinsicKind is { } intrinsicKind
@@ -333,6 +333,10 @@ public sealed class ReplaySafeFusionDriver
                     ? PumpDecision.Fusable
                     : PumpDecision.Fallback;
             }
+
+            case SchedulerCompletionKind.ParentOutcomeEvaluation:
+                // Combined fault/notification outcomes must remain a single discrete durable parent evaluation.
+                return PumpDecision.Fallback;
 
             default:
                 // ContinuationScheduling → Checkpoint is the workflow tail: it commits mandatory (possibly terminal)

@@ -41,7 +41,7 @@ Exposed manifest settings: **Trace / Span / Metric point / Log record / Resource
 
 Two distinct auth surfaces:
 
-- **Query + SSE endpoints** carry the catalog-owned `Diagnostics:OpenTelemetry.Read` action in standard ASP.NET Core authorization metadata. The host's configured authentication and authorization middleware determines whether anonymous callers are challenged (401) and whether authenticated callers are forbidden (403); the endpoint framework does not hide permission rules in path-specific middleware.
+- **Query + SSE endpoints** carry the catalog-owned `diagnostics/opentelemetry:read` action in standard ASP.NET Core authorization metadata. The host's configured authentication and authorization middleware determines whether anonymous callers are challenged (401) and whether authenticated callers are forbidden (403); the endpoint framework does not hide permission rules in path-specific middleware.
 - **OTLP collector endpoints** are outside the studio permission model and are framework-anonymous with an explicit `HostCredential` security disposition. They are gated by `IOtlpRequestAuthenticator` before any body read or parse. The default implementation preserves the configured API-key/loopback policy: a valid global API key authenticates the collector but deliberately carries no tenant claims; accepted loopback requests are explicitly untrusted. A host can replace it with a scoped authenticator that validates per-source credentials and returns immutable, server-authoritative source claims. Telemetry resource attributes remain evidence and never become authority merely because a sender emitted them.
 
 ## Query parameters (SSE stream)
