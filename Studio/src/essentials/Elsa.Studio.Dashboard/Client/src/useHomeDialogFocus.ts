@@ -14,15 +14,23 @@ function getFocusableElements(dialog: HTMLElement | null) {
     .filter(element => !element.closest("[hidden], [aria-hidden='true']"));
 }
 
+function isUsableFocusTarget(element: HTMLElement | null): element is HTMLElement {
+  return Boolean(element && element.isConnected && element !== document.body && element !== document.documentElement
+    && !element.matches(":disabled") && !element.closest("[hidden], [inert], [aria-hidden='true']"));
+}
+
 export function useHomeDialogFocus(
   dialogRef: RefObject<HTMLElement | null>,
-  onEscape: (() => void) | null
+  onEscape: (() => void) | null,
+  fallbackFocusRef?: RefObject<HTMLElement | null>
 ) {
   const onEscapeRef = useRef(onEscape);
   onEscapeRef.current = onEscape;
   useEffect(() => {
     if (!onEscape) return;
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const activeDialog = dialogRef.current;
+    const fallbackFocus = fallbackFocusRef?.current ?? null;
     const frame = requestAnimationFrame(() => {
       const dialog = dialogRef.current;
       if (dialog?.contains(document.activeElement)) return;
@@ -65,7 +73,10 @@ export function useHomeDialogFocus(
     return () => {
       cancelAnimationFrame(frame);
       window.removeEventListener("keydown", handleKeyDown);
-      previouslyFocused?.focus();
+      const currentlyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      if (isUsableFocusTarget(currentlyFocused) && currentlyFocused !== previouslyFocused && !activeDialog?.contains(currentlyFocused)) return;
+      const restoreTarget = isUsableFocusTarget(previouslyFocused) ? previouslyFocused : fallbackFocus;
+      if (isUsableFocusTarget(restoreTarget)) restoreTarget.focus();
     };
-  }, [dialogRef, onEscape]);
+  }, [dialogRef, fallbackFocusRef, onEscape]);
 }

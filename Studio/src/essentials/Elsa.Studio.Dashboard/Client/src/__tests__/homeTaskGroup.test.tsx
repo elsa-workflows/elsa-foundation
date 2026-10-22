@@ -232,6 +232,85 @@ describe("Home workflow task group", () => {
     view.unmount();
   });
 
+  it("restores focus to Home when an auth refresh disables the Continue opener", async () => {
+    const api = stubApi();
+    vi.spyOn(api.backend.http, "getJson").mockResolvedValue({ items: [
+      { id: "definition-a", name: "Orders A", draftId: "draft-a" },
+      { id: "definition-b", name: "Orders B", draftId: "draft-b" }
+    ] } as never);
+    const manager = authenticatedManager({ subject: "alice", tenantId: "tenant-a", permissions: ["workflows/design:read"] });
+    const nextSession: AuthSession = { ...manager.getSession(), permissions: [] };
+    manager.refresh = async () => nextSession;
+    let refreshSession: (() => Promise<AuthSession>) | undefined;
+    let captureAuthorityCommit = false;
+    let authorityCommitted = false;
+    const view = mount(
+      <AuthProvider manager={manager}>
+        <>
+          <HomeTaskGroup api={api} />
+          <AuthRefreshProbe
+            onRefresh={refresh => { refreshSession = refresh; }}
+            onAuthorityCommit={() => {
+              if (!captureAuthorityCommit) return;
+              captureAuthorityCommit = false;
+              authorityCommitted = true;
+            }}
+          />
+        </>
+      </AuthProvider>
+    );
+
+    await waitUntil(() => refreshSession !== undefined);
+    await waitUntil(() => view.container.querySelector("button.home-task-card") !== null);
+    const continueButton = view.container.querySelector<HTMLButtonElement>("button.home-task-card")!;
+    flushSync(() => continueButton.focus());
+    expect(document.activeElement).toBe(continueButton);
+    click(continueButton);
+    await waitUntil(() => view.container.textContent?.includes("definition-a") === true && view.container.textContent?.includes("definition-b") === true);
+    await waitUntil(() => view.container.querySelector("[role='dialog']")?.contains(document.activeElement) === true);
+
+    captureAuthorityCommit = true;
+    await refreshSession!();
+    await waitUntil(() => authorityCommitted && continueButton.disabled);
+    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+
+    const homeFallback = view.container.querySelector<HTMLElement>(".home-task-group")!;
+    expect(document.activeElement).not.toBe(document.body);
+    expect(homeFallback.tabIndex).toBe(-1);
+    expect(document.activeElement).toBe(homeFallback);
+    view.unmount();
+  });
+
+  it("keeps useful outside focus when the chooser closes", async () => {
+    const api = stubApi();
+    vi.spyOn(api.backend.http, "getJson").mockResolvedValue({ items: [
+      { id: "definition-a", name: "Orders A", draftId: "draft-a" },
+      { id: "definition-b", name: "Orders B", draftId: "draft-b" }
+    ] } as never);
+    const view = mount(
+      <AnonymousAuthProvider>
+        <>
+          <button type="button" data-testid="outside-home-dialog">Outside Home dialog</button>
+          <HomeTaskGroup api={api} />
+        </>
+      </AnonymousAuthProvider>
+    );
+
+    const continueButton = view.container.querySelector<HTMLButtonElement>("button.home-task-card")!;
+    click(continueButton);
+    await waitUntil(() => view.container.querySelector("[role='dialog']")?.contains(document.activeElement) === true);
+    const outsideButton = view.container.querySelector<HTMLButtonElement>("[data-testid='outside-home-dialog']")!;
+    flushSync(() => outsideButton.focus());
+    expect(document.activeElement).toBe(outsideButton);
+
+    flushSync(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    await waitUntil(() => view.container.querySelector("[role='dialog']") === null);
+    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+
+    expect(document.activeElement).toBe(outsideButton);
+    view.unmount();
+  });
+
   it("closes an open chooser when Workflows turns off and ignores its pending result", async () => {
     const api = stubApi();
     let resolveDefinitions: ((value: { items: Array<{ id: string; draftId: string; name: string }> }) => void) | undefined;

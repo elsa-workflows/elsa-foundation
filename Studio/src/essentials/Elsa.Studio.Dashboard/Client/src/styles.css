@@ -116,7 +116,7 @@
 .home-task-card--disabled, .home-task-card:disabled { color: var(--studio-text-muted); opacity: .75; cursor: not-allowed; }
 .home-task-card-icon { display: grid; place-items: center; flex: 0 0 auto; width: 2rem; height: 2rem; border-radius: var(--studio-radius-sm); background: color-mix(in srgb, var(--studio-accent) 11%, var(--studio-surface)); color: var(--studio-accent); }
 .home-task-card-copy { display: grid; flex: 1; gap: .2rem; min-width: 0; }
-.home-task-card-copy strong { font-size: .95rem; font-weight: 650; }
+.home-task-card-copy strong { font-size: var(--studio-body-size); font-weight: 650; }
 .home-task-card-copy > span { color: var(--studio-text-muted); font-size: var(--studio-label-size); line-height: 1.4; }
 .home-task-card > svg:last-child { flex: 0 0 auto; color: var(--studio-text-muted); }
 .home-task-card:hover:not(:disabled) { background: color-mix(in srgb, var(--studio-accent) 9%, var(--studio-surface)); }

@@ -38,6 +38,7 @@ export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
   const controllerRef = useRef<AbortController | null>(null);
   const continueButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
+  const homeFallbackRef = useRef<HTMLElement>(null);
   const [dialogState, setDialogState] = useState<ActiveDialog | null>(null);
   const activeDialog = workflowsEnabled && dialogState?.authorityKey === authorityKey ? dialogState : null;
 
@@ -52,7 +53,7 @@ export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
       ? { ...current, discovery }
       : current);
   }, []);
-  useHomeDialogFocus(dialogRef, activeDialog ? closeDialog : null);
+  useHomeDialogFocus(dialogRef, activeDialog ? closeDialog : null, homeFallbackRef);
 
   useEffect(() => () => {
     controllerRef.current?.abort();
@@ -112,7 +113,7 @@ export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
   };
 
   return (
-    <section className="home-task-group" aria-labelledby="home-task-group-title">
+    <section ref={homeFallbackRef} className="home-task-group" aria-labelledby="home-task-group-title" tabIndex={-1}>
       <div className="home-task-group-heading">
         <div>
           <h3 id="home-task-group-title">Workflow tasks</h3>
