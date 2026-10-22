@@ -1089,6 +1089,11 @@
       "test": "Elsa.Expressions.JavaScript.Jint.Tests.StatementBindingTests.Statement_body_honors_cancellation_during_evaluation",
       "issue": 3262,
       "since": "2026-10-22"
+    },
+    {
+      "test": "Elsa.Primitives.Tests.Spec263Probe.Spec263ProbeTests.Quarantined_always_fails",
+      "issue": 3263,
+      "since": "2026-10-22"
     }
   ]
 }
