@@ -61,7 +61,7 @@
 }
 
 .wf-incident-next-step-open-definition {
-  min-height: var(--spacing-2xl);
+  min-height: var(--spacing-2xl, 32px);
   border: 1px solid var(--wf-border-strong);
   border-radius: var(--wf-radius-sm);
   background: var(--wf-panel);

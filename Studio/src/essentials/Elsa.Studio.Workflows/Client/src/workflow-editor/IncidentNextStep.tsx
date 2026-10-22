@@ -122,6 +122,8 @@ export function IncidentNextStep({
     nextStep = "The recorded parent is not running, so Retry is not available for this scope. Review the activity evidence or share the incident with an operator.";
   } else if (guidance.retryReviewEligibility.reason === "blocking-descendant-incident") {
     nextStep = "Another blocking incident is recorded on a descendant activity. Review that incident before retrying this activity.";
+  } else if (guidance.retryReviewEligibility.reason === "descendant-ancestry-not-loaded") {
+    nextStep = "A blocking incident is recorded, but its activity ancestry is incomplete. Inspect the run evidence or share this incident before retrying.";
   } else if (guidance.retryReviewEligibility.status === "unknown") {
     nextStep = "The exact activity state needed to confirm Retry is unavailable here. Inspect the selected run evidence or share the incident with an operator.";
   } else if (guidance.actionAvailability === "checking") {

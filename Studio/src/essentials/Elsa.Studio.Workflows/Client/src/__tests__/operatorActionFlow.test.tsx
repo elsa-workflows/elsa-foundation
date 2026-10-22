@@ -19,6 +19,7 @@ import {
 } from "../operatorActions";
 import { AlterationRequestError } from "../api/alterations";
 import { getIncidentRetryReviewEligibility, useCompensationJournals, useOperatorActions, type CompensationJournals, type OperatorActionsApi } from "../workflow-editor/useOperatorActions";
+import { IncidentNextStep } from "../workflow-editor/IncidentNextStep";
 import { WorkflowIncidentList } from "../workflow-editor/WorkflowInstances";
 import type { CompensationJournalSource } from "../compensationRuntime";
 import { compensationScopeStructureKind } from "../compensationScope";
@@ -401,6 +402,43 @@ describe("useOperatorActions", () => {
     expect(backend.submits).toHaveLength(0);
   });
 
+  it("clears pending reads across A-to-B-to-A run switches without letting the old read affect A again", async () => {
+    const backend = fakeBackend({});
+    const resolvers: Array<(source: CompensationJournalSource) => void> = [];
+    const reload = vi.fn(() => new Promise<CompensationJournalSource>(resolve => { resolvers.push(resolve); }));
+
+    flushSync(() => root.render(<RunSwitchIncidentHarness context={backend.context} reload={reload} />));
+    await flush();
+
+    const switchRun = () => container.querySelector<HTMLButtonElement>("[data-switch-run]")!.click();
+    const clickRetry = () => container.querySelector<HTMLButtonElement>(".wf-incident-operator-actions button")!.click();
+    flushSync(clickRetry);
+    expect(reload).toHaveBeenCalledTimes(1);
+
+    flushSync(switchRun);
+    await flush();
+    expect(container.querySelector<HTMLButtonElement>(".wf-incident-operator-actions button")?.disabled).toBe(false);
+    flushSync(switchRun);
+    await flush();
+
+    const retryOnReturnedRun = container.querySelector<HTMLButtonElement>(".wf-incident-operator-actions button")!;
+    expect(retryOnReturnedRun.disabled).toBe(false);
+    flushSync(() => retryOnReturnedRun.click());
+    expect(reload).toHaveBeenCalledTimes(2);
+
+    resolvers[0]("unavailable");
+    await flush();
+    expect(container.querySelector(".wf-operator-dialog")).toBeNull();
+    expect(container.querySelector<HTMLButtonElement>(".wf-incident-operator-actions button")?.disabled).toBe(true);
+    flushSync(() => container.querySelector<HTMLButtonElement>(".wf-incident-operator-actions button")!.click());
+    expect(reload).toHaveBeenCalledTimes(2);
+
+    resolvers[1]("unavailable");
+    await flush();
+    expect(container.querySelector(".wf-operator-dialog")).not.toBeNull();
+    expect(backend.submits).toHaveLength(0);
+  });
+
   it("submits once with the dialog's key, then shows submitted, Applying… and the result, and clears the stored plan", async () => {
     const backend = fakeBackend({ plans: ["Queued", "Completed"], job: { status: "Succeeded", outcomes: [] } });
     const refreshRun = vi.fn()
@@ -629,15 +667,57 @@ describe("useOperatorActions", () => {
       activityExecutionId: "ae-partial-descendant",
       resolutionOutcome: null
     };
-    const runDetails = { ...details([selected, blocker]), activityNextContinuationToken: "page-2" };
+    const baseDetails = details([selected, blocker]);
+    const runDetails = {
+      ...baseDetails,
+      instance: { ...baseDetails.instance, status: "Running" },
+      activityNextContinuationToken: "page-2"
+    };
     const activities = [...retryActivities(), partialDescendant];
 
-    flushSync(() => root.render(<Harness context={backend.context} sink={harness.sink} activities={activities} runDetails={runDetails} extra={api => api.renderIncidentActions(selected, "Cancel delivery", vi.fn(), vi.fn())} />));
+    const renderCase = (currentActivities: ActivityExecutionStateSummary[]) => flushSync(() => root.render(
+      <Harness
+        context={backend.context}
+        sink={harness.sink}
+        activities={currentActivities}
+        runDetails={runDetails}
+        extra={api => <>
+          {api.renderIncidentActions(selected, "Cancel delivery", vi.fn(), vi.fn())}
+          <IncidentNextStep context={backend.context} summary={runDetails.instance} incident={selected} guidance={api.guidanceForIncident(selected)} />
+        </>}
+      />
+    ));
+    renderCase(retryActivities());
+    await flush();
+    expect(harness.current().guidanceForIncident(selected).retryReviewEligibility)
+      .toMatchObject({ status: "unknown", reason: "descendant-ancestry-not-loaded" });
+    expect([...container.querySelectorAll(".wf-incident-operator-actions button")].map(button => button.textContent!.trim()))
+      .toEqual(["Resolve: effect absent or undone", "Resolve: effect present, keep it", "Abandon recovery"]);
+
+    renderCase(activities);
     await flush();
 
-    expect(harness.current().guidanceForIncident(selected).retryReviewEligibility.status).toBe("eligible");
+    expect(harness.current().guidanceForIncident(selected).retryReviewEligibility)
+      .toMatchObject({ status: "unknown", reason: "descendant-ancestry-not-loaded" });
     expect([...container.querySelectorAll(".wf-incident-operator-actions button")].map(button => button.textContent!.trim()))
-      .toContain("Retry");
+      .toEqual(["Resolve: effect absent or undone", "Resolve: effect present, keep it", "Abandon recovery"]);
+    expect(container.querySelector(".wf-incident-next-step-copy")?.textContent)
+      .toContain("activity ancestry is incomplete");
+
+    const loadedAncestor: ActivityExecutionStateSummary = {
+      ...retryActivities()[0],
+      activityExecutionId: "ae-not-loaded",
+      parentActivityExecutionId: "ae-11",
+      provenance: { parentActivityExecutionId: "ae-11" }
+    };
+    renderCase([...activities, loadedAncestor]);
+    await flush();
+    expect(harness.current().guidanceForIncident(selected).retryReviewEligibility)
+      .toMatchObject({ status: "ineligible", reason: "blocking-descendant-incident" });
+    expect([...container.querySelectorAll(".wf-incident-operator-actions button")].map(button => button.textContent!.trim()))
+      .toEqual(["Resolve: effect absent or undone", "Resolve: effect present, keep it", "Abandon recovery"]);
+    expect(container.querySelector(".wf-incident-next-step-copy")?.textContent)
+      .toContain("recorded on a descendant activity");
   });
 
   it.each([
@@ -830,6 +910,43 @@ function Harness({ context, sink, canManage = true, refreshRun, extra, activitie
   });
   sink.api = api;
   return <>{api.status}{api.dialog}{extra?.(api)}</>;
+}
+
+function RunSwitchIncidentHarness({ context, reload }: {
+  context: StudioEndpointContext;
+  reload: () => Promise<CompensationJournalSource>;
+}) {
+  const [workflowExecutionId, setWorkflowExecutionId] = useState("wf-a");
+  const incident = { ...waitingIncident(), workflowExecutionId };
+  const activities = retryActivities().map(activity => ({ ...activity, workflowExecutionId }));
+  const baseDetails = details([incident]);
+  const runDetails = {
+    ...baseDetails,
+    instance: { ...baseDetails.instance, workflowExecutionId, status: "Running" },
+    activities
+  };
+  const api = useOperatorActions({
+    context,
+    workflowExecutionId,
+    details: runDetails,
+    root: null,
+    activities,
+    journals: {
+      get: () => undefined,
+      request: () => undefined,
+      reload: async () => reload(),
+      reset: () => undefined,
+      generation: 0
+    },
+    labelOf: () => undefined,
+    refreshRun: async () => runDetails
+  });
+
+  return <>
+    <button type="button" data-switch-run onClick={() => setWorkflowExecutionId(current => current === "wf-a" ? "wf-b" : "wf-a")}>Switch run</button>
+    {api.renderIncidentActions(incident, "Cancel delivery", () => undefined, () => undefined)}
+    {api.dialog}
+  </>;
 }
 
 async function mount(context: StudioEndpointContext, options: { refreshRun?: () => Promise<WorkflowInstanceDetails | null> } = {}) {

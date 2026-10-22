@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, Loader, OctagonX, RotateCw, UserCheck } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
@@ -137,7 +137,7 @@ export type OperatorActionAvailability = "checking" | "available" | "unavailable
 
 export type RetryReviewEligibility = "eligible" | "ineligible" | "unknown";
 
-export type RetryReviewReason = "historical-incident" | "ended-run" | "source-not-faulted" | "parent-not-running" | "source-not-loaded" | "parent-not-loaded" | "blocking-descendant-incident";
+export type RetryReviewReason = "historical-incident" | "ended-run" | "source-not-faulted" | "parent-not-running" | "source-not-loaded" | "parent-not-loaded" | "blocking-descendant-incident" | "descendant-ancestry-not-loaded";
 
 export interface IncidentRetryReviewEligibility {
   status: RetryReviewEligibility;
@@ -180,48 +180,70 @@ export function getIncidentRetryReviewEligibility(
     }
   }
 
-  if (hasKnownBlockingDescendantIncident(incident, sourceId, workflowExecutionId, activities, incidents)) {
+  const descendantBlocker = getBlockingDescendantStatus(incident, sourceId, workflowExecutionId, activities, incidents);
+  if (descendantBlocker === "confirmed") {
     return { status: "ineligible", reason: "blocking-descendant-incident" };
+  }
+  if (descendantBlocker === "unknown") {
+    return { status: "unknown", reason: "descendant-ancestry-not-loaded" };
   }
 
   return { status: "eligible" };
 }
 
-function hasKnownBlockingDescendantIncident(
+function getBlockingDescendantStatus(
   selectedIncident: IncidentStateSummary,
   sourceId: string,
   workflowExecutionId: string,
   activities: ActivityExecutionStateSummary[],
   incidents: IncidentStateSummary[]
-) {
-  if (selectedIncident.workflowExecutionId !== workflowExecutionId) return false;
+): "confirmed" | "unknown" | "none" {
+  if (selectedIncident.workflowExecutionId !== workflowExecutionId) return "none";
   const activitiesById = new Map(activities.map(activity => [activity.activityExecutionId, activity] as const));
   const source = activitiesById.get(sourceId);
-  if (!source || source.workflowExecutionId !== workflowExecutionId) return false;
+  if (!source || source.workflowExecutionId !== workflowExecutionId) return "none";
 
-  return incidents.some(blocker => {
+  let incompleteKnownAncestry = false;
+  for (const blocker of incidents) {
     if (blocker.incidentId === selectedIncident.incidentId
       || blocker.workflowExecutionId !== workflowExecutionId
       || !blocker.isBlocking
-      || !isActiveIncident(blocker)) return false;
+      || !isActiveIncident(blocker)) continue;
 
     const blockerActivityId = blocker.activityExecutionId?.trim() || blocker.metadata?.["runtime.activityExecutionId"]?.trim();
-    if (!blockerActivityId || blockerActivityId === sourceId) return false;
+    // An incident with no exact activity cannot be tied to an ancestry. Once it names an activity, missing or
+    // cross-run rows leave that known blocker's relationship unresolved.
+    if (!blockerActivityId || blockerActivityId === sourceId) continue;
     let current = activitiesById.get(blockerActivityId);
-    if (!current || current.workflowExecutionId !== workflowExecutionId) return false;
-
-    const visited = new Set<string>();
-    while (current && !visited.has(current.activityExecutionId)) {
-      visited.add(current.activityExecutionId);
-      const parentId = current.parentActivityExecutionId?.trim() || current.provenance?.parentActivityExecutionId?.trim();
-      if (!parentId) return false;
-      if (parentId === sourceId) return true;
-      current = activitiesById.get(parentId);
-      if (current && current.workflowExecutionId !== workflowExecutionId) return false;
+    if (!current || current.workflowExecutionId !== workflowExecutionId) {
+      incompleteKnownAncestry = true;
+      continue;
     }
 
-    return false;
-  });
+    const visited = new Set<string>();
+    while (current) {
+      if (visited.has(current.activityExecutionId)) {
+        incompleteKnownAncestry = true;
+        break;
+      }
+      visited.add(current.activityExecutionId);
+      const parentId = current.parentActivityExecutionId?.trim() || current.provenance?.parentActivityExecutionId?.trim();
+      if (!parentId) break;
+      if (parentId === sourceId) return "confirmed";
+      const parent = activitiesById.get(parentId);
+      if (!parent) {
+        incompleteKnownAncestry = true;
+        break;
+      }
+      if (parent.workflowExecutionId !== workflowExecutionId) {
+        incompleteKnownAncestry = true;
+        break;
+      }
+      current = parent;
+    }
+  }
+
+  return incompleteKnownAncestry ? "unknown" : "none";
 }
 
 export interface IncidentNextStepGuidance {
@@ -271,7 +293,7 @@ export function useOperatorActions({
   const [followed, setFollowed] = useState<FollowedAction | null>(null);
   const [message, setMessage] = useState<{ text: string; tone: "info" | "error" } | null>(null);
   const [pendingIncidentActionReads, setPendingIncidentActionReads] = useState<ReadonlySet<string>>(() => new Set());
-  const pendingIncidentActionReadKeys = useRef(new Set<string>());
+  const pendingIncidentActionReadKeys = useRef(new Map<string, symbol>());
   // The plan being followed and the controller that stops following it; one at a time.
   const following = useRef<{ planId: string; controller: AbortController } | null>(null);
   const refreshRunRef = useRef(refreshRun);
@@ -298,6 +320,18 @@ export function useOperatorActions({
 
   // The run this hook shows now; null once it unmounts. A submission that resolves after a switch only stores its plan.
   const currentRun = useRef<string | null>(workflowExecutionId);
+  const incidentActionRunGeneration = useRef(0);
+
+  useLayoutEffect(() => {
+    const pendingReadsForRun = pendingIncidentActionReadKeys.current;
+    incidentActionRunGeneration.current += 1;
+    pendingReadsForRun.clear();
+    setPendingIncidentActionReads(new Set());
+    return () => {
+      incidentActionRunGeneration.current += 1;
+      pendingReadsForRun.clear();
+    };
+  }, [workflowExecutionId]);
 
   // A different run, or leaving the page, stops following; the stored plan is resumed when the run is opened again.
   useEffect(() => {
@@ -558,7 +592,9 @@ export function useOperatorActions({
       const ownerDialog = document.activeElement instanceof HTMLElement
         ? document.activeElement.closest<HTMLElement>("[role=dialog]")
         : null;
-      pendingIncidentActionReadKeys.current.add(actionReadKey);
+      const readToken = Symbol();
+      const runGeneration = incidentActionRunGeneration.current;
+      pendingIncidentActionReadKeys.current.set(actionReadKey, readToken);
       // Keep focus in the incident dialog before the pending state disables its action buttons.
       ownerDialog?.focus();
       setPendingIncidentActionReads(current => new Set(current).add(actionReadKey));
@@ -570,7 +606,7 @@ export function useOperatorActions({
         const journal = requester && (!cached || cached === "loading")
           ? await journals.reload(requester).catch(() => undefined)
           : cached;
-        if (currentRun.current !== workflowExecutionId) return;
+        if (currentRun.current !== workflowExecutionId || incidentActionRunGeneration.current !== runGeneration) return;
         // Escape or another close can end the incident dialog while the journal is loading. Do not reopen a
         // confirmation after the operator has left this incident.
         if (ownerDialog && !ownerDialog.isConnected) return;
@@ -581,8 +617,8 @@ export function useOperatorActions({
         closeIncident();
         open(modelForIncident(incident, activityLabel, action, journal), focusFallback);
       } finally {
-        pendingIncidentActionReadKeys.current.delete(actionReadKey);
-        if (currentRun.current === workflowExecutionId) {
+        if (pendingIncidentActionReadKeys.current.get(actionReadKey) === readToken) {
+          pendingIncidentActionReadKeys.current.delete(actionReadKey);
           setPendingIncidentActionReads(current => {
             if (!current.has(actionReadKey)) return current;
             const next = new Set(current);
