@@ -19,16 +19,16 @@ Each command exits 0 on a clean tree.
 ## Story 1 — fast PR tier
 
 1. Open a draft PR that changes one line in a PR-tier project's source.
-2. Confirm that `Plan tiers`, the `PR shard (n)` jobs, `Architecture guards`, `Core-only build & test` and `Build & test` run, and that `Full tier` reports "not run: draft".
+2. Confirm that `Plan tiers`, the `PR shard (n)` jobs, `Architecture guards`, `Core-only build & test` and `Build & test` run, and that the full-tier aggregate reports as `Full tier (not run: draft)`.
 3. Record the push-to-`Build & test` time. SC-001 is the median of the first 20 code PRs after the switch, taken from the runs API: `created_at` of the run to `completed_at` of `Build & test`.
 4. **Retry.** Add a test that fails on its first run and passes on the second; it can use a marker file in `$RUNNER_TEMP`. Confirm the shard succeeds, the summary lists the test under "passed on retry", and after the run `ci-flake-record` comments on the `ci-flake` issue.
 5. **Double failure.** Make the test always fail. Confirm `Build & test` fails and names it.
 
 ## Story 2 — full tier gates the merge
 
-1. On the draft from Story 1, confirm `Full tier` is success with "not run: draft", and that no integration or EF shard ran.
+1. On the draft from Story 1, confirm the head carries `Full tier (not run: draft)` and no `Full tier` check, and that no integration or EF shard ran.
 2. Run `gh workflow run ci.yml --ref <branch> -f tier=full`. Confirm the integration and EF shards run on the draft's head, and that the PR stays a draft.
-3. Run `gh pr ready <n>`. Confirm `CI full tier` runs on the same head, `Build & test` does not re-run, and `Full tier` reports after the shards.
+3. Run `gh pr ready <n>`. Straight away, and again while `CI full tier` is queued or running, confirm `gh pr view <n> --json mergeStateStatus` is `BLOCKED` and that `Full tier` shows as expected (with the ruleset requiring it, after T036) or absent. Then confirm `CI full tier` runs on the same head, `Build & test` does not re-run, and `Full tier` reports after the shards.
 4. Push another commit. Confirm both workflows run.
 5. Close and reopen the PR. Confirm both run again.
 6. Open a second PR directly as ready. Confirm both run on open.
@@ -40,7 +40,8 @@ Each command exits 0 on a clean tree.
 
 1. Confirm every test in `quarantine` has an open issue: `python3 tools/ci/test_results.py check-quarantine --manifest tools/ci/test-tiers.json`.
 2. In a throwaway PR, make a quarantined test fail. Confirm the shard succeeds and the summary lists it with its issue link.
-3. Point an entry at a closed issue. Confirm `Plan tiers` fails and names the entry.
+3. In a throwaway PR, add an entry that points at a closed issue. Confirm `Plan tiers` fails and names the entry.
+4. With an entry already on `main` whose issue is then closed, confirm an open PR that does not touch the entry still passes `Plan tiers`, and that `python3 tools/ci/test_results.py check-quarantine --manifest tools/ci/test-tiers.json` (no `--base`, as `main` and nightly run it) fails and names the entry.
 
 ## Story 4 — tier guards
 

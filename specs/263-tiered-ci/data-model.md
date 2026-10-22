@@ -73,7 +73,7 @@ It replaces `tools/ci/ef-suites.json` and is the single list that both tiers and
 | `shards.containers` | Container suites per EF job | every `containerSuites[].suite` appears in exactly one shard |
 | `containerSuites` | The EF container legs, moved from `ef-suites.json` with the same fields | `ef-suites-self-test` (retargeted): every Testcontainers project of the solution, plus the Secrets EF composition project, is covered |
 | `slowAllowList` | Tests allowed above `slowTestSeconds` in the PR tier, each with a reason | `test_results.py` excludes them from the FR-019 report |
-| `quarantine[].test` | Fully qualified name of a test method, without theory arguments | `test_results.py check-quarantine`: `issue` exists and is open (FR-013) |
+| `quarantine[].test` | Fully qualified name of a test method, without theory arguments | `test_results.py check-quarantine`: `issue` exists and is open (FR-013). On a PR, only for entries the diff adds or changes; on `main` and nightly, for every entry |
 | `quarantine[].issue` | Its tracking issue number | same |
 
 ### Derived rules
@@ -115,7 +115,8 @@ Written by `test_results.py evaluate`, read by `ci-flake-record.yml` and by the 
 
 | PR state | `Build & test` | `Full tier` |
 |---|---|---|
-| draft, manifest untouched | runs (PR tier) | success, summary "not run: draft" |
+| draft, manifest untouched | runs (PR tier) | not reported; the aggregate reports as `Full tier (not run: draft)`, so the required context is missing and the head is not mergeable |
+| just marked ready, full-tier run not started yet | unchanged | still missing, so the merge stays blocked |
 | draft, diff touches `tools/ci/test-tiers.json` or the tier tooling | runs | runs for real |
 | opened as ready, reopened while not a draft, or marked ready | runs on open and reopen; not re-run on `ready_for_review` | runs on that head |
 | push while not a draft | runs | runs |

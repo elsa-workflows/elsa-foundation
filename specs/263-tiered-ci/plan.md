@@ -9,7 +9,7 @@
 **The design.** One committed manifest, `tools/ci/test-tiers.json`, assigns every test project to the PR tier or the integration tier and records the shard grouping, the class splits, the slow-test allow-list and the quarantine list. It absorbs `ef-suites.json`.
 
 - **PR tier.** `ci.yml`'s `Build & test` becomes the aggregate of a Python-only plan job and 3 parallel shards, plus the existing `Architecture guards` and `Core-only` jobs. Each shard rebuilds the solution and runs its projects or test-class groups.
-- **Full tier.** A new workflow, `ci-full.yml`, reports a new required check, `Full tier`. It runs on PRs opened or reopened as ready, marked ready, or pushed while ready. It runs the integration-tier projects in 4 shards and the EF container suites in 3 combined jobs. The jobs live in a reusable `full-tier.yml`, which `ci.yml` also calls for `main`, nightly and dispatch.
+- **Full tier.** A new workflow, `ci-full.yml`, reports a new required check, `Full tier`. It runs on PRs opened or reopened as ready, marked ready, or pushed while ready. It runs the integration-tier projects in 4 shards and the EF container suites in 3 combined jobs. On a draft the aggregate reports as `Full tier (not run: draft)`, so a draft head never carries the required context, and a PR just marked ready stays unmergeable until the real run reports (research R8). The jobs live in a reusable `full-tier.yml`, which `ci.yml` also calls for `main`, nightly and dispatch.
 - **Retries.** One script retries a failing test once, honours the quarantine list and reports slow tests. Retried passes reach one flake-tracking issue through a `workflow_run` workflow, because fork PRs have read-only tokens.
 - **Guards.** The generator gains `test-tiers-check` for FR-016 and FR-017. Studio CI gets path filters.
 - **Order.** FR-011 is held by a manifest switch, `integrationLeavesPrTier`, which flips only after an admin makes `Full tier` required.
@@ -120,7 +120,7 @@ FR-011 fixes the order of steps 3 and 6. The other steps can overlap.
 2. **Sharded PR tier with retry and quarantine** (Stories 1 and 3).
    - `ci.yml` gets `Plan tiers`, `PR shard (n)` and the `Build & test` aggregate. `integrationLeavesPrTier` is `false`, so the PR tier still runs every non-container project, in up to 8 test jobs.
    - Add `ci-flake-record.yml`.
-3. **Full tier** (Story 2). Add `full-tier.yml` and `ci-full.yml`, and have `ci.yml` call `full-tier.yml` on push, schedule and dispatch. Then the **admin step**: add `Full tier` to ruleset `main-2`.
+3. **Full tier** (Story 2). Add `full-tier.yml` and `ci-full.yml`, and have `ci.yml` call `full-tier.yml` on push, schedule and dispatch. Then the **admin step**: add `Full tier` to ruleset `main-2`, and in the same step update every merge path that names the required checks (`merging.md`, the review checklist, `elsa-auto-review-merge`, `elsa-quality-fix`), so it waits for `Full tier` instead of trying a merge the ruleset refuses.
 4. **Studio CI path filter** (Story 6). Independent; can go first.
 5. **Documentation, skills and constitution** (Stories 4 and 5): the `merging.md#ci-tiers` section, the skill links, the draft rule in `elsa-quality-fix`, the review-checklist row, the constitution MINOR, the manifest hashes and `check-docs` in `Plan tiers`.
 6. **The switch** (FR-011). After step 3's admin step, a PR sets `integrationLeavesPrTier: true`, and `select` verifies the ruleset. Then measure SC-001 over the next 20 code PRs, and SC-002 on each ready PR. Set `Status: Implemented` in the PR that finishes the measured outcomes.
@@ -135,15 +135,15 @@ Steps 1–5 can ship as one PR or several. Step 6 is its own PR by construction.
     - a draft push costs about 45 job-minutes: the PR tier, with no Studio CI;
     - a push while ready costs about 45 + 115 for the full tier. Today the EF container suites run only nightly; on ready PRs they become new load.
   - **Break-even**: total load only falls when fewer than about 30% of PR pushes happen while ready. That makes the draft rule (Story 5) load-bearing, not a convenience.
+  - **Review rounds are likely to miss it from the start.** FR-024 has PR-driving skills mark a PR ready before requesting review, so every fix push in a review loop (up to 6 rounds) runs the full tier, about 115 job-minutes each. Most pushes made while ready will be review fixes.
+    - The first lever is to mark a PR ready only after a clean review round. The review app skips drafts today, so that lever also needs a change to how review is requested. It is not adopted in this spec; the measurement after step 3 decides.
   - **Mitigations in this plan**:
     - EF legs are combined, so per-leg setup is paid once per job;
     - `Architecture.Tests` stops running twice;
     - backend PRs no longer start Studio CI;
     - shards rebuild rather than download a shared build, which R4 measured as cheaper in job-minutes too.
   - **Measure after step 3**: the share of PR pushes made while ready, and the queue wait. If total load rises, the next lever is fewer full-tier runs per PR, which needs an owner decision against Decision 3.
-- **SC-001 sits on a class floor (R3, R9).** `CompensationNestingJourneyTests` takes 7.1 min alone, so the PR tier lands at about 12–13 min. If the first 20 runs miss the 12-minute target, the options are:
-  - a method-level split of that one class, which needs an FR-002 change;
-  - accepting about 13 min.
+- **SC-001 sits on a class floor (R3, R9).** `CompensationNestingJourneyTests` takes 7.1 min alone, so the PR tier lands at about 12–13 min. SC-001 therefore accepts a median of up to 13 min, with a follow-up issue for a method-level split of that one class (which needs an FR-002 change). Above 13 min it is a miss, and the method-level split becomes this spec's work.
 
   Speeding up the test is out of scope.
 - **SC-002 sits on a collection floor (R3).** Workbench's native-hosting collection runs 17.1 min serially. It also holds 4 of the 7 quarantine candidates, and their single retry can add up to about 4.5 min. Quarantine keeps the full tier green while they run and are reported, and #3147, #3252 and the new issues track the fixes.

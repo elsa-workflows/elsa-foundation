@@ -167,14 +167,14 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
   - triggers: `pull_request` types `[opened, reopened, synchronize, ready_for_review]` on `main`; concurrency `ci-full-pr-<n>`, cancel in progress;
   - **`Plan` job**: runs `change_scope.py`, and sets `run=true` when the PR is not a draft, or its diff touches `tools/ci/test-tiers.json`, `tools/ci/test_tiers.py`, `tools/ci/test_results.py` or `.github/workflows/full-tier.yml`, and is not docs-only;
   - calls `full-tier.yml` with `containers: true`;
-  - **`Full tier` job**: the aggregate, a plain job with `if: ${{ !cancelled() }}`. It succeeds with summary "not run: draft" or "documentation only" when `run=false`; otherwise it succeeds only when every shard succeeded.
+  - **`Full tier` job**: the aggregate, a plain job with `if: ${{ !cancelled() }}`, whose `name` follows research R8 point 3: `Full tier` when `run=true` or the PR is not a draft, otherwise `Full tier (not run: draft)`. On a draft it succeeds under the draft name, so the head carries no required `Full tier` context. On a ready PR with `run=false` it succeeds as `Full tier` with summary "documentation only". Otherwise it succeeds only when every shard succeeded.
 - [ ] T026 [US2] In `.github/workflows/ci.yml`:
   - add the `workflow_dispatch` input `tier` (choice `full`/`pr`, default `full`);
   - on `push`, `schedule` and `tier=full` dispatch, call `full-tier.yml`, with `containers` true for schedule and dispatch and false for push (FR-010);
   - remove the now-duplicated jobs `select-ef-suites`, `ef-container-suites`, `ef-container-result` and `secrets-ef-composition` (`:225-375`);
   - repoint the `alert` job's `needs` (`:461-472`) to the aggregate jobs;
   - keep `!cancelled()` so a superseded run files nothing.
-- [ ] T027 [US2] Run quickstart "Story 2", steps 1–6, 8 and 9, on throwaway PRs, and record each check context with its conclusion in the PR evidence comment. In particular, confirm that `ready_for_review` does not re-run `Build & test`, and that adding any label starts no `CI full tier` run.
+- [ ] T027 [US2] Run quickstart "Story 2", steps 1–6, 8 and 9, on throwaway PRs, and record each check context with its conclusion in the PR evidence comment. In particular, confirm that `ready_for_review` does not re-run `Build & test`, that adding any label starts no `CI full tier` run, and that a draft head shows `Full tier` as expected (missing) and stays unmergeable after `gh pr ready` until the real run reports.
 
 **Checkpoint**: `Full tier` reports correctly in every PR state in the [data-model state table](data-model.md#state-a-pull-requests-checks); `main` and nightly coverage is unchanged.
 
@@ -186,9 +186,11 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
 
 **Independent test**: quickstart "Story 3".
 
-- [ ] T028 [US3] Add `check-quarantine` to `tools/ci/test_results.py`. It runs `gh issue view <n> --json state` for each entry and exits 1 on a missing or closed issue, naming the entry, the issue and the fix. Add self-test cases with a stubbed `gh`, through a `GH` environment override.
-- [ ] T029 [US3] Run `test_results.py check-quarantine --manifest tools/ci/test-tiers.json` in the `Plan tiers` job of `.github/workflows/ci.yml`, with `permissions: issues: read` on that job only. It runs on documentation-only PRs too.
-- [ ] T030 [US3] Run quickstart "Story 3", steps 1–3, and the retry case from "Story 1" step 4, and confirm a `ci-flake-record` comment appears on the T003 issue. Record the links in the PR.
+- [ ] T028 [US3] Add `check-quarantine` to `tools/ci/test_results.py`. It runs `gh issue view <n> --json state` for each entry it checks and exits 1 on a missing or closed issue, naming the entry, the issue and the fix. With `--base <sha>` it reads the manifest at `<sha>` (`git show <sha>:tools/ci/test-tiers.json`; an absent file means every entry is new) and checks only new or changed entries. Without `--base` it checks every entry. Add self-test cases with a stubbed `gh`, through a `GH` environment override: an unchanged entry with a closed issue passes with `--base`, a new entry with a closed issue fails with `--base`, and the same closed issue fails without `--base`.
+- [ ] T029 [US3] In `.github/workflows/ci.yml`, with `permissions: issues: read` on the running job only:
+  - on `pull_request`, run `test_results.py check-quarantine --manifest tools/ci/test-tiers.json --base <PR base sha>` in `Plan tiers`; it runs on documentation-only PRs too;
+  - on `push` to `main` and `schedule`, run it without `--base` in a job that the `alert` job's `needs` include, so a closed issue files or updates the `main is red` issue.
+- [ ] T030 [US3] Run quickstart "Story 3", steps 1–4, and the retry case from "Story 1" step 4, and confirm a `ci-flake-record` comment appears on the T003 issue. Record the links in the PR.
 
 **Checkpoint**: FR-012 to FR-014 are met. Each of R2's seven tests is quarantined with an open issue, and `DurableDrainCycleTests` is watched.
 
@@ -248,7 +250,7 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
 
 ## Phase 9: The switch (FR-011) and outcomes
 
-- [ ] T036 After the PR with Phases 2–5 merges and `Full tier` is green on a `main` push, ask the admin (Joey Barten or Sipke Schoorstra) to add `Full tier` to ruleset `main-2`'s required contexts. Confirm with `gh api repos/elsa-workflows/elsa-foundation/rulesets/<id> --jq '.rules[] | select(.type=="required_status_checks")'`, and record the output on the program issue.
+- [ ] T036 After the PR with Phases 2–5 merges and `Full tier` is green on a `main` push, ask the admin (Joey Barten or Sipke Schoorstra) to add `Full tier` to ruleset `main-2`'s required contexts. Confirm with `gh api repos/elsa-workflows/elsa-foundation/rulesets/<id> --jq '.rules[] | select(.type=="required_status_checks")'`, and record the output on the program issue. In the same step, update every merge path that names the required checks, so it waits for `Full tier` instead of trying a merge the ruleset refuses: `docs/contributing/merging.md`, `docs/contributing/review-checklist.md`, and the `elsa-auto-review-merge` and `elsa-quality-fix` skills (refresh `.specify/integrations/claude.manifest.json`).
 - [ ] T037 In a separate PR, set `integrationLeavesPrTier: true` in `tools/ci/test-tiers.json` and drop the integration units from `shards.pr`, leaving pr-1 to pr-3 per research R9. Its `Plan tiers` must show the ruleset check passing. Afterwards the PR tier runs at most 5 test jobs (FR-022).
 - [ ] T038 Measure the outcomes after T037 and post them on the program issue:
   - **SC-001**: the median push-to-`Build & test` time over the first 20 code PRs, from the runs API;
@@ -256,7 +258,7 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
   - **SC-004**: re-runs caused by quarantined tests over 30 days;
   - **the load risk** from the plan: the share of PR pushes made while ready, and the queue wait, against R1's baseline.
 
-  A miss on SC-001 goes to the owner with the two options in the plan's Risks section.
+  A median of at most 13 minutes meets SC-001; file the method-level split of the slowest class as a `needs-triage` follow-up. A miss above 13 minutes goes to the owner with the options in the plan's Risks section.
 - [ ] T039 Set the spec's `**Status**:` line to `Implemented` in the PR that completes T038's measured outcomes, before it merges (docs/reference/spec-lifecycle.md; never a separate status PR). Update `docs/program-goals/` per Program bookkeeping.
 
 ---

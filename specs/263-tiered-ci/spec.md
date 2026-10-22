@@ -62,9 +62,9 @@ While a PR is a draft, only the PR tier runs. Once it is marked ready for review
 
 **Acceptance Scenarios**:
 
-1. **Given** a draft PR, **When** a commit is pushed, **Then** the PR tier runs and the full tier does not.
+1. **Given** a draft PR, **When** a commit is pushed, **Then** the PR tier runs, the full tier does not, and no check named `Full tier` is reported on that head.
 2. **Given** a PR is opened as ready for review, reopened while not a draft, marked ready for review, or receives a commit while it is not a draft, **When** CI runs, **Then** the full tier runs on that head and reports a required check.
-3. **Given** a ready PR whose full tier failed or has not finished, **When** someone tries to merge it, **Then** GitHub blocks the merge.
+3. **Given** a ready PR whose full tier failed or has not finished, including a PR just marked ready whose full-tier run has not started yet, **When** someone tries to merge it, **Then** GitHub blocks the merge.
 4. **Given** a draft PR, **When** its author starts the workflow manually on the branch with the full tier selected, **Then** the full tier runs on that head without the PR leaving draft.
 5. **Given** a PR whose whole diff is documentation, **When** it is ready for review, **Then** the full tier follows spec 257's fast path and reports success without building or testing.
 6. **Given** a push to `main` or the nightly schedule, **When** CI runs, **Then** the full set runs as it does today, and a red result files or updates the `main is red` issue.
@@ -84,7 +84,8 @@ A known flaky test no longer forces a full re-run or blocks a merge. Every flake
 1. **Given** a test on the quarantine list, **When** it fails, **Then** the run still succeeds, and the summary names the test and links its tracking issue.
 2. **Given** a test that is not quarantined and passes only on its retry, **When** the run finishes, **Then** the retry is recorded in one flake-tracking issue, so repeat offenders become visible.
 3. **Given** the flaky tests listed under Evidence, **When** this story is delivered, **Then** each is either fixed or quarantined with a tracking issue.
-4. **Given** a quarantine entry, **When** its tracking issue is closed, **Then** a guard fails until the entry is removed.
+4. **Given** a PR that adds or changes a quarantine entry, **When** the entry's tracking issue is missing or closed, **Then** that PR's `Build & test` fails and names the entry.
+5. **Given** a quarantine entry already on `main`, **When** its tracking issue is closed, **Then** the next push run on `main` or the nightly run fails, the `main is red` issue names the entry, and open PRs are not affected.
 
 ---
 
@@ -141,6 +142,8 @@ A backend-only PR does not start Studio's lint, unit, browser and .NET jobs; a P
 
 - **A draft is merged.** GitHub does not merge drafts, so the full tier always runs before a merge.
 - **Ready, then back to draft.** Converting back to draft stops the full tier from running on later commits. The required check must report again before merge once the PR is ready.
+- **Marked ready, then merged at once.** Between marking a PR ready and the start of the full-tier run, which can take a long time when runners queue, the head must not be mergeable. Because a draft head carries no `Full tier` check (FR-006), the required check is missing there, so GitHub blocks the merge until a real run reports.
+- **A quarantine issue is closed outside a PR.** Closing a tracking issue, by hand or through a `Fixes #n` merge that leaves the entry in place, must not turn every open PR red. Only `main` and nightly runs check the whole list (FR-013).
 - **Combination breaks.** Two PRs that pass on their own can break `main` together (#543). The full CI run on every push to `main` and the red-main alert catch that after the fact. The merge queue that would prevent it is deferred; see [Alternatives considered](#alternatives-considered).
 - **Admin bypass.** Admins can still bypass required checks. The push run on `main` covers that.
 - **Cancelled runs.** A run cancelled by a newer push is not a failure and must not file a `main is red` issue.
@@ -162,8 +165,8 @@ A backend-only PR does not start Studio's lint, unit, browser and .NET jobs; a P
 **Full tier (Story 2)**
 
 - **FR-005**: The full tier MUST contain every integration-tier test project, every EF container suite, and the Secrets EF composition proof.
-- **FR-006**: The full tier MUST run on a pull request whenever it becomes ready: when it is opened as ready for review, reopened while not a draft, or marked ready for review. It MUST also run on every push while the PR is not a draft, so the required check never waits for another push. It MUST NOT run on draft commits unless asked for (FR-008).
-- **FR-007**: The full tier MUST report a required status check, and the `main-2` ruleset MUST require it.
+- **FR-006**: The full tier MUST run on a pull request whenever it becomes ready: when it is opened as ready for review, reopened while not a draft, or marked ready for review. It MUST also run on every push while the PR is not a draft, so the required check never waits for another push. It MUST NOT run on draft commits unless asked for (FR-008). A head on which the full tier did not run MUST NOT carry a check under the required name, not even a successful placeholder, so that the head is not mergeable until a real run reports. GitHub counts a skipped or placeholder success as passing.
+- **FR-007**: The full tier MUST report a required status check, and the `main-2` ruleset MUST require it. Only a run that executed the full tier, or spec 257's documentation fast path on a PR that is not a draft (FR-009), MAY report under that name.
 - **FR-008**: An author MUST be able to run the full tier on any branch, a draft's head included, through a manual workflow run that selects the full tier. There is no label for it.
 - **FR-009**: A PR whose whole diff is documentation (spec 257) MUST get a full-tier result without building or testing.
 - **FR-010**: The full CI run on every push to `main`, the nightly schedule, the maps publication and the red-main alert MUST stay as they are.
@@ -172,7 +175,7 @@ A backend-only PR does not start Studio's lint, unit, browser and .NET jobs; a P
 **Flakes (Story 3)**
 
 - **FR-012**: A committed quarantine list MUST name each quarantined test and its tracking issue. A quarantined test MUST still run, and its failure MUST be reported without failing the run.
-- **FR-013**: A guard MUST fail when a quarantine entry has no tracking issue, or when its tracking issue is closed.
+- **FR-013**: A guard MUST check that every quarantine entry has an open tracking issue. On a pull request it MUST check only the entries that the PR's own diff adds or changes, so that issue state outside the PR never fails a PR. On pushes to `main` and the nightly run it MUST check the whole list, and a failure there MUST file or update the `main is red` issue.
 - **FR-014**: Each flaky test listed under Evidence MUST be fixed or quarantined with a tracking issue before this spec is Implemented.
 
 **Test tiers (Story 4)**
@@ -210,7 +213,7 @@ A backend-only PR does not start Studio's lint, unit, browser and .NET jobs; a P
 
 ### Measurable Outcomes
 
-- **SC-001**: On a code PR, the median time from push to `Build & test` reporting is at most 12 minutes, down from 37-57 minutes, measured over the first 20 PR runs after Story 1 ships.
+- **SC-001**: On a code PR, the median time from push to `Build & test` reporting is at most 12 minutes, down from 37-57 minutes, measured over the first 20 PR runs after Story 1 ships. A median of at most 13 minutes is accepted as met, with a follow-up issue for a method-level split of the slowest class (plan, Risks). A median above 13 minutes is a miss.
 - **SC-002**: The full tier reports within 25 minutes of a PR being marked ready.
 - **SC-003**: No PR merges with a failing integration-tier project or EF container suite.
 - **SC-004**: Over the 30 days after Story 3 ships, no PR needs a manual re-run because of a test on the quarantine list, and `main is red` issues caused by flaky tests fall from the September-October level.
@@ -284,3 +287,12 @@ Settled with Joey Barten on 2026-10-21 and revised on 2026-10-22 after review.
 - **2026-10-22 (planning)**: two factual corrections from research R5 and R6, with no change to any requirement. Workbench has 17 classes and two shared collections (four classes and two), not 13 classes and one collection of three; `Elsa3.Activities.Design.Import.Integration.Tests` starts no child process.
 - **2026-10-22 (planning, Joey Barten)**: FR-017 and Decision 5 narrowed so the PR tier loses as little as possible. A child host process is a hard trait only in a project with a median of 2 minutes or more, and `git` or `bash` launches never are. `Elsa.Etl.Tests`, `Elsa.Secrets.Persistence.EntityFrameworkCore.Tests` and `Elsa.Workflows.Publishing.Tests` stay in the PR tier.
 - **2026-10-22 (planning, Joey Barten)**: the `ci:full` label is dropped from FR-008, FR-023, FR-025 and Story 2 scenario 4, and the manual run is the one way to run the full tier early. This follows Sipke's review point 4 ("Agents won't add `ci:full`"): the label was never the safety net once the full tier became required on ready PRs. Keeping it would have cost a third workflow and a second check name (research R8).
+- **2026-10-22 (Code Review round 1)**: each point and its resolution:
+
+| Review point | Resolution |
+|---|---|
+| Blocker 1: the draft placeholder leaves a green `Full tier` on a head that becomes mergeable as soon as it is marked ready | A draft head no longer carries a `Full tier` check. The aggregate's job name is `Full tier (not run: draft)` when the full tier did not run, so the required context is missing and GitHub blocks the merge until the real run reports (FR-006, FR-007, Story 2 scenarios 1 and 3, edge case "Marked ready, then merged at once", research R8). Quickstart Story 2 step 3 proves it. |
+| Blocker 2: `check-quarantine` in the required `Build & test` turns every PR red when an issue closes | PR runs check only the entries their diff adds or changes; `main` and nightly runs check the whole list and report through the `main is red` issue (FR-013, Story 3 scenarios 4 and 5, T028, T029, quickstart Story 3). |
+| Low 1: review rounds will be most of the pushes made while ready | Stated in the plan's Risks, with marking ready after a clean review round as the first lever. That lever needs the review app to review drafts, so it is not adopted yet. |
+| Low 2: the admin step must also update every merge path that names the required checks | Added to plan step 3 and T036. |
+| Low 3: SC-001 is at risk with no defined fallback | SC-001 accepts a median up to 13 minutes, with a follow-up issue for a method-level split. |

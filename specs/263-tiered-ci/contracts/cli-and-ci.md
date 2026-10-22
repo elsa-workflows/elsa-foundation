@@ -6,7 +6,8 @@
 |---|---|---|---|
 | `Build & test` | `ci.yml` | yes, unchanged name | Aggregate of `Plan tiers`, every `PR shard (n)`, `Architecture guards` and `Core-only build & test`. Success when all of them succeeded, or when the diff is documentation-only (spec 257). |
 | `Generated maps fresh` | `ci.yml` | yes, unchanged | Gains `test-tiers-check` beside `ef-suites-self-test`. |
-| `Full tier` | `ci-full.yml` | **yes, new** (added to ruleset `main-2` by an admin) | Aggregate of the full-tier plan, integration shards and EF container shards. On a draft with no manifest change: success, summary "not run: draft". |
+| `Full tier` | `ci-full.yml` | **yes, new** (added to ruleset `main-2` by an admin) | Aggregate of the full-tier plan, integration shards and EF container shards. On a draft with no manifest change it is not reported; see the next row. |
+| `Full tier (not run: draft)` | `ci-full.yml` | no, and never required | The same aggregate job, named this way when the full tier did not run on a draft (research R8). It leaves the required `Full tier` missing on that head. |
 | `PR shard (n)`, `Integration shard (n)`, `EF container shard (n)`, `Plan tiers`, `Architecture guards`, `Core-only build & test` | as above | no | per job |
 
 The job names `Build & test`, `Generated maps fresh` and `Full tier` are load-bearing: branch protection matches them by job name. They are top-level jobs of their workflows, never jobs inside a reusable workflow, so the context carries no `caller / callee` prefix.
@@ -64,7 +65,7 @@ test_results.py failures <trx-dir>                       # prints FQNs of failed
 test_results.py retry-filter <trx-dir>                   # prints a dotnet --filter for those FQNs, or nothing
 test_results.py evaluate <shard-dir> --manifest <file> --shard <name> --head <sha>
                          [--summary <file>] [--outcomes <file>]
-test_results.py check-quarantine --manifest <file>       # needs GH_TOKEN with issues: read
+test_results.py check-quarantine --manifest <file> [--base <sha>]   # needs GH_TOKEN with issues: read
 test_results.py --self-test
 ```
 
@@ -73,6 +74,8 @@ test_results.py --self-test
   - Exit 1 when the test host aborted.
   - Otherwise exit 0.
 - **`check-quarantine`**: exit 1 on an entry whose issue is missing or closed. The message names the entry, its issue and the fix: remove the entry, or reopen the issue if the test is still flaky.
+  - With `--base <sha>` (PR runs), it checks only the entries that are new or changed compared with the manifest at `<sha>`. Entries that are unchanged or removed are not checked.
+  - Without `--base` (push to `main`, nightly), it checks every entry.
 - **Exit 2** on bad arguments, for every subcommand.
 
 ## Elsa.Maps.Generator
