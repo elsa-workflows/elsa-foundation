@@ -4,6 +4,7 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Activities.Graph.Design.Models;
+using Elsa.Expressions.Core.Models;
 using DesignActivityContract = Elsa.Activities.Design.Core.Models.ActivityContract;
 
 namespace Elsa.Activities.Graph.Design.Services;
@@ -29,6 +30,8 @@ internal static class GraphBodyReferenceValidator
     public const string CaptureTypeIncompatible = "activity.graph.body-capture-type-incompatible";
 
     private const string WorkflowScopeId = "workflow";
+    // The whole result of an activity, which every activity with a result produces.
+    private const string WholeResultProjectionKey = "$result";
     private const string LegacyGraphScopeId = "activity-graph";
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
     {
@@ -49,6 +52,11 @@ internal static class GraphBodyReferenceValidator
         IReadOnlyDictionary<string, DesignActivityContract>? dependencyContracts)
     {
         var findings = new List<Finding>();
+        // Duplicate variable reference keys or node ids are reported by the graph's own checks; a body cannot be
+        // resolved against them, so its references are not checked until they are fixed.
+        if (HasDuplicates(graph.Variables.Select(x => x.ReferenceKey)) || HasDuplicates(nodes.Select(x => x.NodeId)))
+            return findings;
+
         var inputs = contract.Inputs.Select(x => x.ReferenceKey).ToHashSet(StringComparer.Ordinal);
         var variables = graph.Variables.ToDictionary(x => x.ReferenceKey, StringComparer.Ordinal);
         var nodesById = nodes.ToDictionary(x => x.NodeId, StringComparer.Ordinal);
@@ -80,7 +88,8 @@ internal static class GraphBodyReferenceValidator
                                 pointer, key));
                             break;
                         case ResultRead result when !nodesById.ContainsKey(result.ProducerNodeId) ||
-                                                    (dependencyContracts?.TryGetValue(result.ProducerNodeId, out var producer) == true &&
+                                                    (!StringComparer.Ordinal.Equals(result.ProjectionKey, WholeResultProjectionKey) &&
+                                                     dependencyContracts?.TryGetValue(result.ProducerNodeId, out var producer) == true &&
                                                      producer.Outputs.All(output => !StringComparer.Ordinal.Equals(output.ReferenceKey, result.ProjectionKey))):
                             findings.Add(new(ProducerUnknown,
                                 $"Body node '{node.NodeId}' input '{key}' reads the result '{result.ProjectionKey}' of '{result.ProducerNodeId}', which is not a node of this activity's body or has no such result.",
@@ -141,6 +150,12 @@ internal static class GraphBodyReferenceValidator
         alias.Equals("elsa.any", StringComparison.OrdinalIgnoreCase) ||
         alias.Equals("jsonnode", StringComparison.OrdinalIgnoreCase);
 
+    private static bool HasDuplicates(IEnumerable<string> keys)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        return keys.Any(key => !seen.Add(key));
+    }
+
     private static bool IsGraphScope(string? scopeId) =>
         scopeId is null or WorkflowScopeId or LegacyGraphScopeId;
 
@@ -181,21 +196,27 @@ internal static class GraphBodyReferenceValidator
     // parameters of a portable expression. These are the shapes placement remaps (PlacedReferenceRemapper).
     private static IEnumerable<Reference> References(ArgumentState argument)
     {
+        // Syntax names match case-insensitively, as the binding compiler and the placer read them.
+        var expressionType = argument.Value.ExpressionType?.ToLowerInvariant();
+        // A variable reference is read exactly as the compiler reads it, in its string or object form.
+        if (expressionType == "variable")
+        {
+            if (VariableReference.TryParse(argument.Value.Value, out var reference) && reference is not null)
+                yield return new VariableRead(reference.ReferenceKey, reference.DeclaringScopeId);
+            yield break;
+        }
+
         var value = argument.Value.Value is JsonElement element ? element : JsonSerializer.SerializeToElement(argument.Value.Value);
         if (value.ValueKind != JsonValueKind.Object)
             yield break;
 
-        // Syntax names match case-insensitively, as the binding compiler and the placer read them.
-        switch (argument.Value.ExpressionType?.ToLowerInvariant())
+        switch (expressionType)
         {
             case "workflowrequest" when Text(value, "memberKey") is { } memberKey:
                 yield return new RequestRead(memberKey);
                 yield break;
             case "input" when Text(value, "referenceKey") is { } inputKey:
                 yield return new RequestRead(inputKey);
-                yield break;
-            case "variable" when Text(value, "referenceKey") is { } variableKey:
-                yield return new VariableRead(variableKey, Text(value, "declaringScopeId"));
                 yield break;
             case "activityresult" when Text(value, "producerNodeId") is { } producer && Text(value, "projectionKey") is { } projection:
                 yield return new ResultRead(producer, projection);

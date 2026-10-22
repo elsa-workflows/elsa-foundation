@@ -41,6 +41,8 @@ public sealed partial class GraphActivityProviderTests
     [InlineData("Input", """{"referenceKey":"unknown"}""", GraphBodyReferenceCodes.InputUnknown)]
     [InlineData("Variable", """{"referenceKey":"unknown","declaringScopeId":"workflow"}""", GraphBodyReferenceCodes.VariableUnknown)]
     [InlineData("Variable", """{"referenceKey":"running-total","declaringScopeId":"elsewhere"}""", GraphBodyReferenceCodes.VariableScopeInvisible)]
+    // The string form of a variable reference, read as the compiler reads it.
+    [InlineData("Variable", "\"unknown\"", GraphBodyReferenceCodes.VariableUnknown)]
     [InlineData("ActivityResult", """{"producerNodeId":"ghost","projectionKey":"result","producerScopeId":"graph-root"}""", GraphBodyReferenceCodes.ProducerUnknown)]
     [InlineData("JavaScript", """{"source":"args.x","parameters":{"x":{"kind":"WorkflowRequest","memberKey":"unknown"}}}""", GraphBodyReferenceCodes.InputUnknown)]
     [InlineData("JavaScript", """{"source":"args.x","parameters":{"x":{"kind":"ActivityResult","producerNodeId":"ghost","projectionKey":"result"}}}""", GraphBodyReferenceCodes.ProducerUnknown)]
@@ -91,6 +93,40 @@ public sealed partial class GraphActivityProviderTests
     }
 
     [Fact]
+    public async Task A_capture_written_as_a_plain_variable_name_is_accepted()
+    {
+        var diagnostics = await ValidateBodyAsync(inputs: [], outputs: [BodyArgument("result", "Variable", "running-total")]);
+
+        Assert.DoesNotContain(diagnostics, x => x.Code.StartsWith("activity.graph.body-", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Duplicate_variables_are_reported_by_the_graph_check_instead_of_throwing()
+    {
+        var diagnostics = await _provider.ValidateAsync(
+            BodyManifest([BodyArgument("value", "Variable", "running-total")], [], duplicateVariable: true),
+            BodyContract());
+
+        Assert.Contains(diagnostics, x => x.Code == "activity.graph.variable-reference-duplicate");
+        Assert.DoesNotContain(diagnostics, x => x.Code.StartsWith("activity.graph.body-", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Compilation_accepts_a_read_of_a_body_nodes_whole_result()
+    {
+        var manifest = BodyManifest(
+            inputs: [BodyArgument("value", "ActivityResult", new { producerNodeId = "graph-root", projectionKey = "$result", producerScopeId = "graph-root" })],
+            outputs: []);
+        var request = new ActivityTemplateCompilationRequest(
+            "definition-1", "activity-type-1", "draft-1", 1, "1.0.0", BodyContract(), manifest,
+            [CreateDependency("graph-root", "activity-ver-root", "root-origin")], "provider-fingerprint");
+
+        var compilation = await _provider.CompileAsync(request);
+
+        Assert.DoesNotContain(compilation.Diagnostics, x => x.Code == GraphBodyReferenceCodes.ProducerUnknown);
+    }
+
+    [Fact]
     public async Task Compilation_refuses_a_missing_result_projection_and_an_incompatible_capture()
     {
         // These two need the body nodes' resolved contracts, so they are checked when the activity compiles.
@@ -121,13 +157,15 @@ public sealed partial class GraphActivityProviderTests
     private ValueTask<IReadOnlyList<ActivityDiagnostic>> ValidateBodyAsync(object[] inputs, object[] outputs) =>
         _provider.ValidateAsync(BodyManifest(inputs, outputs), BodyContract());
 
-    private static ActivityProviderManifest BodyManifest(object[] inputs, object[] outputs) =>
+    private static ActivityProviderManifest BodyManifest(object[] inputs, object[] outputs, bool duplicateVariable = false) =>
             new ActivityProviderManifest(
                 GraphActivityProvider.Key,
                 Design.Models.ActivityGraphManifest.SchemaVersion,
                 JsonSerializer.SerializeToElement(new
                 {
-                    variables = new[]
+                    variables = (duplicateVariable
+                        ? new[] { new { referenceKey = "label", name = "Again", type = new { alias = "String", collectionKind = "Single" }, storageDriverKey = "elsa.json" } }
+                        : []).Concat(new[]
                     {
                         new
                         {
@@ -143,7 +181,7 @@ public sealed partial class GraphActivityProviderTests
                             type = new { alias = "String", collectionKind = "Single" },
                             storageDriverKey = "elsa.json"
                         }
-                    },
+                    }),
                     rootActivity = new
                     {
                         nodeId = "graph-root",

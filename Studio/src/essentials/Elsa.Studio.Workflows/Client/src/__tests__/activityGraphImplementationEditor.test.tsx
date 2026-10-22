@@ -261,7 +261,7 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
   // variables; placement remaps them to the placed graph. The earlier "activity-graph" scope had no runtime frame.
   it("offers graph variables to body nodes under the workflow root scope", async () => {
     expressionDescriptors = [{ type: "Variable", displayName: "Variable", editingMode: "reference" }];
-    catalogItems = [flowchartCatalogItem(), inputLeafCatalogItem()];
+    catalogItems = [flowchartCatalogItem(), inputLeafCatalogItem("Variable")];
     const value = flowchartImplementationValue(flowchartStructureKind, [{
       nodeId: "write-line-1",
       activityVersionId: "write-line-v1",
@@ -968,7 +968,7 @@ function leafCatalogItem() {
   };
 }
 
-function inputLeafCatalogItem() {
+function inputLeafCatalogItem(defaultSyntax = "Input") {
   return {
     ...leafCatalogItem(),
     inputs: [{
@@ -978,7 +978,7 @@ function inputLeafCatalogItem() {
       description: "Message to write.",
       isBrowsable: true,
       isWrapped: true,
-      defaultSyntax: "Input"
+      defaultSyntax
     }]
   };
 }
