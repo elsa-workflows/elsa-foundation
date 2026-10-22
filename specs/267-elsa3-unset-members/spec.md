@@ -109,7 +109,8 @@ collection import, then publishes and runs them.
 ### User Story 1 - A workflow with null activity members publishes and runs as in Elsa 3 (Priority: P1)
 
 An author imports an Elsa 3 workflow whose activities carry `null` members, as every Elsa 3 export does for members the
-author never set. The import succeeds, publishing succeeds, and the run behaves as the workflow did in Elsa 3.
+author never set, and none of them is a member FR-006 refuses. The import succeeds, publishing succeeds, and the run
+behaves as the workflow did in Elsa 3 (FR-002 to FR-004).
 
 **Why this priority**: this is #3200. Every Elsa 3 export has `null` members, and today they block publishing.
 
@@ -171,7 +172,9 @@ activity. The converter refuses that activity and says which member to set, or t
 
 - An input holding a literal null (an explicit expression with a null value) is not unset: it converts as an explicit
   null, as today.
-- An empty string or an empty JSON array or object is not `null`. It converts by the existing rules.
+- An empty string or an empty JSON array or object is not `null`. It converts by the existing rules, except for the two
+  members FR-006 refuses when *blank*: `Cron.CronExpression` and `RunJavaScript.Script`. Blank means unset, empty or
+  whitespace only; Elsa 3 treated all three the same for these two members.
 - A member the map removes (R3) or restricts (R6) already treats `null` as absent. That does not change.
 - A member that is unset on an activity resolved by name (an alias, a catalog key or a workflow-as-activity reference)
   has no recorded Elsa 3 default. It gets no binding, and the Elsa 4 contract's default applies. Elsa 3 skipped such a
@@ -212,8 +215,8 @@ activity. The converter refuses that activity and says which member to set, or t
   | SendHttpRequest / FlowSendHttpRequest.RequestHeaders | faults |
   | WriteHttpResponse.ResponseHeaders | faults |
   | SendHttpRequest / FlowSendHttpRequest.ContentType, when Content is bound (`null` or absent) | the body is not sent |
-  | Cron.CronExpression (unset or blank) | no trigger; the activity completes |
-  | RunJavaScript.Script (unset or blank) | does nothing |
+  | Cron.CronExpression, blank (unset, empty or whitespace only) | no trigger; the activity completes |
+  | RunJavaScript.Script, blank (unset, empty or whitespace only) | does nothing |
   | HttpEndpoint.Path, SendHttpRequest.Url, Event.EventName, PublishEvent.EventName, DispatchWorkflow / ExecuteWorkflow.WorkflowDefinitionId, SetOutput.OutputName | rejects the activity as missing a required input |
   | SetVariable.Value, SetOutput.OutputValue | sets the variable or workflow output to null, which Elsa 4 cannot publish as a literal |
 
@@ -244,6 +247,9 @@ activity. The converter refuses that activity and says which member to set, or t
 - **SC-004**: Every member in FR-003 and FR-006 has a test with the member `null`, and a test with it absent where the
   two used to convert differently.
 - **SC-005**: The converted workflows of the corpus carry no warning that this spec introduced.
+- **SC-006**: The spec 236 member map document has an unset rule for every member in FR-003 and FR-006 (FR-009).
+- **SC-007**: The change touches no Elsa 4 activity, publication or runtime code (FR-010). The diff outside
+  `Extensions/Elsa3` and `specs/` is empty, and no Elsa 4 test changes.
 
 ## Assumptions
 
