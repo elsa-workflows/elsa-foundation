@@ -249,12 +249,13 @@ test("offers Retry and Resolve on an uncertain step without a handler next to it
   await expect(resolve).toContainText("Effect present: the scope carries on with the next step.");
 });
 
-test("the incident dialog offers Retry and each offered decision with its label", async ({ page }) => {
+test("the incident dialog keeps offered decisions when Retry source evidence is unavailable", async ({ page }) => {
   await page.goto("/?mode=compensation-scope&view=incident&theme=light");
 
   await page.getByRole("button", { name: "Open incident details" }).click();
   const actions = page.getByRole("dialog", { name: "Incident details" }).getByRole("group", { name: "Operator actions" });
-  await expect(actions.getByRole("button")).toHaveText(["Retry", "Resolve: effect absent or undone", "Resolve: effect present, keep it", "Abandon recovery"]);
+  await expect(actions.getByRole("button", { name: "Retry", exact: true })).toHaveCount(0);
+  await expect(actions.getByRole("button")).toHaveText(["Resolve: effect absent or undone", "Resolve: effect present, keep it", "Abandon recovery"]);
   await actions.getByRole("button", { name: "Abandon recovery" }).click();
   await expect(page.getByRole("dialog", { name: /^Apply "Abandon recovery"\?$/ })).toBeVisible();
 });

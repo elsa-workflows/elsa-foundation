@@ -2378,6 +2378,8 @@
 .wf-instance-incident-actions button,
 .wf-run-incident-action {
   display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
   min-height: 30px;
   align-items: center;
   gap: 6px;
@@ -2390,6 +2392,8 @@
   font-size: 12px;
   font-weight: 650;
   padding: 0 9px;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .wf-instance-incident-actions button:hover,
@@ -2411,6 +2415,8 @@
   display: inline-flex;
   width: auto;
   height: auto;
+  min-width: 0;
+  max-width: 100%;
   min-height: 30px;
   align-items: center;
   justify-content: center;
@@ -2424,6 +2430,8 @@
   font-size: 12px;
   font-weight: 650;
   padding: 0 9px;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .wf-instance-incident-actions .wf-copy-button:hover,
