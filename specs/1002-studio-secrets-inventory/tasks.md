@@ -49,7 +49,7 @@ Independent test:search/filter→exact detail→Close/Escape retains applied cri
 - [x] T015 Add observable RED→GREEN coverage for selecting an initial scope before a later different-scope search; retain the active choice with an accurate loaded-results qualifier and verify clearing it reveals the returned record.
 - [x] T016 Keep accepted-query Refresh/post-mutation reloads and attempted-query Retry distinct from the input draft; test the actual controls and metadata-save path without changing mutation payloads or authority.
 - [x] T017 Add the combined selected-facet plus authoritative zero-search result regression; show query-specific no-match copy before local-facet empty copy.
-- [ ] T018 Re-run complete affected tests/typecheck/scoped lint/Secrets browser checks, root review the correction batch and carry all round1 findings into round2 without resetting the counter. Final normal-host and canonical acceptance remain separate.
+- [x] T018 Re-run complete affected tests/typecheck/scoped lint/Secrets browser checks, root review the correction batch and carry all round1 findings into round2 without resetting the counter. Final normal-host and canonical acceptance remain separate.
 
 T001→T002→T003→T004 precedes US1; US2 and US3 depend on accepted observation ownership and share SecretsPage/test/browser files, so one writer executes them serially. T012→T013→T014 follows the stories. Read-only root/audit review may run alongside work; no parallel source writers or overlapping heavy builds.
 
