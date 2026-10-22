@@ -5,22 +5,26 @@ using Elsa.Primitives.Versioning;
 namespace Elsa.Integrations.Sdk.Manifest;
 
 /// <summary>
-/// Activity version order from foundation CLR reconciliation: <c>[Version]</c>, then informational,
-/// then assembly <c>Major.Minor.Build</c> (#2726 rule 2). The package does not declare a competing
-/// version.
+/// Activity version order from foundation CLR reconciliation: <c>[Version]</c> walking the base
+/// chain (issue #417), then informational, then assembly <c>Major.Minor.Build</c> (#2726 rule 2).
+/// <c>ActivityTypeVersionResolver</c> lives in design reconciliation; this package does not
+/// reference that assembly. The walk matches
+/// <c>ReflectionOnlyAttributes.ReadStringArgumentUpTypeChain</c>.
 /// </summary>
 internal static class ConnectorActivityVersion
 {
+    private static readonly string VersionAttributeFullName = typeof(VersionAttribute).FullName!;
+
     public static string Resolve(Type type)
     {
         ArgumentNullException.ThrowIfNull(type);
 
-        var versionAttribute = type.GetCustomAttribute<VersionAttribute>(inherit: true);
-        if (versionAttribute is not null)
+        var versionAttributeValue = ReadVersionUpTypeChain(type);
+        if (versionAttributeValue is not null)
         {
-            if (!SemVer.TryParse(versionAttribute.Version, out _))
-                throw new InvalidOperationException($"Activity '{type.FullName}' has invalid [Version] '{versionAttribute.Version}'.");
-            return versionAttribute.Version;
+            if (!SemVer.TryParse(versionAttributeValue, out _))
+                throw new InvalidOperationException($"Activity '{type.FullName}' has invalid [Version] '{versionAttributeValue}'.");
+            return versionAttributeValue;
         }
 
         var assembly = type.Assembly;
@@ -38,5 +42,22 @@ internal static class ConnectorActivityVersion
         }
 
         throw new InvalidOperationException($"Activity '{type.FullName}' has no resolvable SemVer.");
+    }
+
+    /// <summary>
+    /// <see cref="VersionAttribute"/> is <c>Inherited = false</c>. Walk each declaring type the
+    /// same way CLR reconciliation does, rather than <c>GetCustomAttribute(inherit: true)</c>.
+    /// </summary>
+    private static string? ReadVersionUpTypeChain(Type type)
+    {
+        for (var current = (Type?)type; current is not null; current = current.BaseType)
+        {
+            var data = current.GetCustomAttributesData()
+                .FirstOrDefault(attribute => attribute.AttributeType.FullName == VersionAttributeFullName);
+            if (data?.ConstructorArguments is [{ Value: string value }, ..])
+                return value;
+        }
+
+        return null;
     }
 }

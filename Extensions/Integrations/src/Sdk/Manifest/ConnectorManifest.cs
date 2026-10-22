@@ -30,7 +30,7 @@ public sealed class ConnectorManifest
     {
         ArgumentNullException.ThrowIfNull(assembly);
 
-        var activities = assembly.GetTypes()
+        var activities = LoadableTypes(assembly)
             .Where(IsActivityType)
             .Select(ToEntry)
             .OrderBy(entry => entry.TypeName, StringComparer.Ordinal)
@@ -48,8 +48,35 @@ public sealed class ConnectorManifest
         File.WriteAllText(path, ToJson());
     }
 
+    /// <summary>
+    /// Types that resolved when <see cref="Assembly.GetTypes"/> threw
+    /// <see cref="ReflectionTypeLoadException"/>, matching CLR reconciliation's partial-load scan.
+    /// </summary>
+    internal static Type[] LoadedTypes(ReflectionTypeLoadException exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        return [..exception.Types.OfType<Type>()];
+    }
+
+    private static IEnumerable<Type> LoadableTypes(Assembly assembly)
+    {
+        try
+        {
+            return assembly.GetTypes();
+        }
+        catch (ReflectionTypeLoadException exception)
+        {
+            return LoadedTypes(exception);
+        }
+    }
+
+    /// <summary>
+    /// Same shape as <c>ClrAssemblyScanner.IsActivityType</c>: concrete, closed, and an
+    /// <see cref="IActivity"/>. Open generics cannot be activated.
+    /// </summary>
     private static bool IsActivityType(Type type) =>
-        type is { IsClass: true, IsAbstract: false } && typeof(IActivity).IsAssignableFrom(type);
+        type is { IsClass: true, IsAbstract: false, ContainsGenericParameters: false }
+        && typeof(IActivity).IsAssignableFrom(type);
 
     private static ConnectorActivityEntry ToEntry(Type type)
     {

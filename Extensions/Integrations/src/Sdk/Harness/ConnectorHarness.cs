@@ -11,9 +11,9 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Integrations.Sdk.Harness;
 
 /// <summary>
-/// In-memory host for connector tests: fake <see cref="ISecretValueResolver"/>, the named Elsa
-/// HTTP client, and the unbound <see cref="IHttpConnectionApplicator"/>. Compose
-/// <c>AddConnectionsWorkflows</c> in the test host when a real http connection must apply.
+/// In-memory host for connector tests: fake <see cref="ISecretValueResolver"/>, fake
+/// <see cref="IHttpConnectionApplicator"/>, and the named Elsa HTTP client with header-free
+/// outbound logging. Pass <c>configure</c> to <see cref="Create"/> to replace the applicator.
 /// </summary>
 public sealed class ConnectorHarness : IAsyncDisposable
 {
@@ -27,6 +27,7 @@ public sealed class ConnectorHarness : IAsyncDisposable
         TenantId = tenantId;
         Secrets = provider.GetRequiredService<ISecretValueResolver>() as InMemorySecretValueResolver
             ?? throw new InvalidOperationException("The harness requires InMemorySecretValueResolver.");
+        Connections = provider.GetRequiredService<InMemoryHttpConnectionApplicator>();
         Http = provider.GetRequiredService<RecordingHttpMessageHandler>();
         HttpClientFactory = provider.GetRequiredService<IHttpClientFactory>();
         HttpClient = HttpClientFactory.CreateClient(HttpActivityConstants.HttpClientName);
@@ -36,6 +37,8 @@ public sealed class ConnectorHarness : IAsyncDisposable
     public string TenantId { get; }
 
     public InMemorySecretValueResolver Secrets { get; }
+
+    public InMemoryHttpConnectionApplicator Connections { get; }
 
     public RecordingHttpMessageHandler Http { get; }
 
@@ -49,27 +52,28 @@ public sealed class ConnectorHarness : IAsyncDisposable
 
     public IReadOnlyList<string> LogMessages => _logs.Messages;
 
-    public static ConnectorHarness Create(string tenantId = "tenant-1")
+    public static ConnectorHarness Create(string tenantId = "tenant-1", Action<IServiceCollection>? configure = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
 
         var logs = new CapturingLoggerProvider();
         var http = new RecordingHttpMessageHandler();
         var secrets = new InMemorySecretValueResolver();
+        var connections = new InMemoryHttpConnectionApplicator();
 
         var services = new ServiceCollection();
         services.AddSingleton(http);
         services.AddSingleton<ISecretValueResolver>(secrets);
+        services.AddSingleton(connections);
+        services.AddSingleton<IHttpConnectionApplicator>(connections);
         services.AddLogging(builder =>
         {
             builder.SetMinimumLevel(LogLevel.Trace);
             builder.AddProvider(logs);
         });
-        services.TryAddSingleton<HttpActivityClientLogger>();
         services.AddElsaIntegrationsRuntime()
-            .ConfigurePrimaryHttpMessageHandler(sp => sp.GetRequiredService<RecordingHttpMessageHandler>())
-            .RemoveAllLoggers()
-            .AddLogger<HttpActivityClientLogger>();
+            .ConfigurePrimaryHttpMessageHandler(sp => sp.GetRequiredService<RecordingHttpMessageHandler>());
+        configure?.Invoke(services);
 
         return new ConnectorHarness(services.BuildServiceProvider(), logs, tenantId);
     }

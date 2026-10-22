@@ -6,6 +6,8 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Integrations.Sdk;
 using Elsa.Integrations.Sdk.Harness;
 using Elsa.Integrations.Tests.Support;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Integrations.Tests;
 
@@ -27,7 +29,7 @@ public sealed class AuthenticatedHttpTests
     {
         await using var harness = ConnectorHarness.Create();
         Assert.Equal("Elsa.Activities.Http", HttpActivityConstants.HttpClientName);
-        Assert.IsType<UnboundHttpConnectionApplicator>(harness.ConnectionApplicator);
+        Assert.Same(harness.Connections, harness.ConnectionApplicator);
 
         await harness.HttpClient.GetAsync("https://api.example.com/open");
         Assert.Null(harness.Http.LastRequest?.Headers.Authorization);
@@ -44,27 +46,22 @@ public sealed class AuthenticatedHttpTests
     [Fact]
     public async Task Unbound_applicator_refuses_a_named_connection()
     {
-        await using var harness = ConnectorHarness.Create();
+        var applicator = new UnboundHttpConnectionApplicator();
         using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.example.com/private");
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            harness.ConnectionApplicator.ApplyAsync(
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            applicator.ApplyAsync(
                 request,
                 new ConnectionReference("acme", "http"),
                 NewContext()).AsTask());
-
-        Assert.Contains("no connection applicator is composed", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public async Task Connector_applies_the_bound_connection_through_the_http_applicator()
     {
         await using var harness = ConnectorHarness.Create();
-        var applicator = new RecordingHttpConnectionApplicator
-        {
-            Authorization = new AuthenticationHeaderValue("Bearer", "tok-secret")
-        };
-        var activity = new SamplePingActivity(harness.HttpClientFactory, applicator)
+        harness.Connections.Add("acme", "Bearer", "tok-secret");
+        var activity = new SamplePingActivity(harness.HttpClientFactory, harness.ConnectionApplicator)
         {
             Url = "https://api.example.com/health",
             Connection = new ConnectionReference("acme", "http")
@@ -72,8 +69,21 @@ public sealed class AuthenticatedHttpTests
 
         await activity.ExecuteForTestsAsync(NewContext());
 
-        Assert.Equal(new ConnectionReference("acme", "http"), applicator.LastConnection);
+        var applied = Assert.Single(harness.Connections.Applied);
+        Assert.Equal(new ConnectionReference("acme", "http"), applied.Connection);
+        Assert.Equal(new AuthenticationHeaderValue("Bearer", "tok-secret"), applied.Authorization);
         Assert.Equal(new AuthenticationHeaderValue("Bearer", "tok-secret"), harness.Http.LastRequest?.Headers.Authorization);
+    }
+
+    [Fact]
+    public async Task Create_configure_can_swap_the_applicator()
+    {
+        await using var harness = ConnectorHarness.Create(configure: services =>
+        {
+            services.Replace(ServiceDescriptor.Singleton<IHttpConnectionApplicator, UnboundHttpConnectionApplicator>());
+        });
+
+        Assert.IsType<UnboundHttpConnectionApplicator>(harness.ConnectionApplicator);
     }
 
     [Fact]

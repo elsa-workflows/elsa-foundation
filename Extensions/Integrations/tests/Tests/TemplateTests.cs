@@ -11,6 +11,9 @@ public sealed class TemplateTests
         using var document = JsonDocument.Parse(File.ReadAllText(path));
         Assert.Equal("elsa-connector", document.RootElement.GetProperty("shortName").GetString());
         Assert.Equal("Elsa.Integrations.Connector", document.RootElement.GetProperty("identity").GetString());
+
+        var project = File.ReadAllText(Path.GetFullPath(Path.Combine(RepoRoot(), "Extensions", "Integrations", "templates", "elsa-connector", "Company.Connector.csproj")));
+        Assert.Contains("Version=\"4.0.*-*\"", project, StringComparison.Ordinal);
     }
 
     private static string RepoRoot()

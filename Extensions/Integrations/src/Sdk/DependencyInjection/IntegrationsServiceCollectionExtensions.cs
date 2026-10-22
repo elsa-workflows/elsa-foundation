@@ -1,7 +1,9 @@
 using Elsa.Activities.Http.Connections;
 using Elsa.Activities.Http.Constants;
+using Elsa.Activities.Http.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Http.Logging;
 
 namespace Elsa.Integrations.Sdk.DependencyInjection;
 
@@ -13,18 +15,20 @@ namespace Elsa.Integrations.Sdk.DependencyInjection;
 public static class IntegrationsServiceCollectionExtensions
 {
     /// <summary>
-    /// Ensures the named <see cref="HttpActivityConstants.HttpClientName"/> client exists and
-    /// registers the unbound <see cref="IHttpConnectionApplicator"/> when Connections is not
-    /// composed. Does not add an auth <see cref="DelegatingHandler"/>; outbound credentials
-    /// attach at send time through <see cref="IHttpConnectionApplicator.ApplyAsync"/>. Outbound
-    /// logging stays that client's header-free logger (spec 188 FR-019), owned by
-    /// <c>ActivitiesHttpFeature</c>; this method does not replace it.
+    /// Ensures the named <see cref="HttpActivityConstants.HttpClientName"/> client exists with
+    /// header-free outbound logging and registers the unbound <see cref="IHttpConnectionApplicator"/>
+    /// when Connections is not composed. Does not add an auth <see cref="DelegatingHandler"/>;
+    /// outbound credentials attach at send time through
+    /// <see cref="IHttpConnectionApplicator.ApplyAsync"/>.
     /// </summary>
     public static IHttpClientBuilder AddElsaIntegrationsRuntime(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
 
         services.TryAddScoped<IHttpConnectionApplicator, UnboundHttpConnectionApplicator>();
-        return services.AddHttpClient(HttpActivityConstants.HttpClientName);
+        services.TryAddSingleton<HttpActivityClientLogger>();
+        return services.AddHttpClient(HttpActivityConstants.HttpClientName)
+            .RemoveAllLoggers()
+            .AddLogger<HttpActivityClientLogger>();
     }
 }

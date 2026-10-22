@@ -9,13 +9,29 @@ public sealed class RecordingHttpMessageHandler : HttpMessageHandler
     public HttpStatusCode ResponseStatus { get; set; } = HttpStatusCode.OK;
     public string ResponseContent { get; set; } = "{}";
 
-    public IReadOnlyList<HttpRequestMessage> Requests => _requests;
+    public IReadOnlyList<HttpRequestMessage> Requests
+    {
+        get
+        {
+            lock (_requests)
+                return [.._requests];
+        }
+    }
 
-    public HttpRequestMessage? LastRequest => _requests.Count == 0 ? null : _requests[^1];
+    public HttpRequestMessage? LastRequest
+    {
+        get
+        {
+            lock (_requests)
+                return _requests.Count == 0 ? null : _requests[^1];
+        }
+    }
 
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        _requests.Add(Clone(request));
+        var clone = Clone(request);
+        lock (_requests)
+            _requests.Add(clone);
         return Task.FromResult(new HttpResponseMessage(ResponseStatus)
         {
             RequestMessage = request,

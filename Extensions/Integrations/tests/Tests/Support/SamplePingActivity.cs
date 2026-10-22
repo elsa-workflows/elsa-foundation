@@ -45,3 +45,31 @@ public sealed class SampleWebhookTrigger : ConnectorActivity
     protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
         ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
 }
+
+[Version("9.8.7")]
+public abstract class VersionedConnectorBase : ConnectorActivity;
+
+[Activity(Icon = "box")]
+public sealed class DerivedFromVersionedBase : VersionedConnectorBase
+{
+    protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
+}
+
+[Activity(Icon = "box")]
+public sealed class OpenGenericConnectorActivity<TPayload> : ConnectorActivity
+{
+    protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
+}
+
+[Activity(Icon = "key")]
+[Version("1.0.0")]
+public sealed class SampleCredentialActivity : ConnectorActivity
+{
+    [ActivityInput(IsCredential = true)]
+    public string? Token { get; set; }
+
+    protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
+}
