@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path, PurePosixPath
 import shutil
+import tempfile
 import zipfile
 import xml.etree.ElementTree as ET
 
@@ -30,6 +31,13 @@ def verify_workbench_package_host(receipt, evidence, source, feed, run, environm
     This proves package-host restore/publish and identity-receipt compatibility. It does not
     execute a native Rules workflow in Workbench.
     """
+    with tempfile.TemporaryDirectory(prefix='RulesPackageWorkbench-', dir=Path(source) / 'Essentials/apps') as host_copy:
+        return _verify_workbench_package_host(receipt, evidence, source, feed, run, environment,
+                                              probe_deployment, Path(host_copy))
+
+
+def _verify_workbench_package_host(receipt, evidence, source, feed, run, environment, probe_deployment,
+                                   workbench_source) -> dict:
     evidence, source, feed, probe_deployment = map(Path, (evidence, source, feed, probe_deployment))
     original_project = source / 'Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj'
     if not original_project.is_file():
@@ -73,9 +81,8 @@ def verify_workbench_package_host(receipt, evidence, source, feed, run, environm
     # Keep the production dependency graph unconditional. The qualification host is a copy at
     # the same directory depth, so ordinary relative references/imports and host sources retain
     # their meaning. Only its direct Rules references are replaced with exact package roots.
-    workbench_source = original_project.parent.with_name('RulesPackageWorkbench')
     shutil.copytree(original_project.parent, workbench_source,
-                    ignore=shutil.ignore_patterns('bin', 'obj'))
+                    ignore=shutil.ignore_patterns('bin', 'obj'), dirs_exist_ok=True)
     workbench_project = workbench_source / original_project.name
     project = ET.parse(workbench_project)
     replaced = []
@@ -95,6 +102,8 @@ def verify_workbench_package_host(receipt, evidence, source, feed, run, environm
     ET.SubElement(project.getroot(), 'Import', Project=str(props_path.resolve()))
     ET.indent(project)
     project.write(workbench_project, encoding='unicode', xml_declaration=True)
+    retained_project = workbench_evidence / 'qualification-project.csproj'
+    shutil.copyfile(workbench_project, retained_project)
     if (workbench_source / 'Program.cs').read_bytes() != (original_project.parent / 'Program.cs').read_bytes():
         raise ValueError('Qualification host entry point differs from immutable Workbench source.')
 
@@ -181,12 +190,14 @@ def verify_workbench_package_host(receipt, evidence, source, feed, run, environm
                        'Native Rules execution in Workbench is not covered.'),
         'nativeExecutionPassed': False,
         'sourceCommit': receipt['sourceCommit'],
-        'workbenchProject': str(workbench_project),
+        'workbenchSourceProject': str(original_project),
+        'buildInputProjectPath': str(workbench_project),
         'workbenchSourceSha256': {
             'project': _sha256(original_project),
             'program': _sha256(original_project.parent / 'Program.cs'),
         },
         'qualificationProjectSha256': _sha256(workbench_project),
+        'retainedQualificationProject': str(retained_project),
         'qualificationProgramSha256': _sha256(workbench_source / 'Program.cs'),
         'replacedProjectReferences': sorted(replaced),
         'moduleVersions': {package: versions[package] for package in RULES_MODULES},

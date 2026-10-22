@@ -44,7 +44,7 @@ The cancellation-fingerprint, same-owner fence and consumed-marker controls each
 The Workbench qualification uses the same immutable package closure and a fresh package cache. It
 resolves all six Rules modules as exact PackageReferences, verifies the deployed DLLs against the
 selected archive assets, and checks the semantic deployment receipt against the host dependency graph.
-Other Workbench dependencies can remain source project references.
+Other Workbench dependencies can remain source project references. The runner copies the immutable Workbench host into a separate sibling project within the disposable source clone, preserving host source/configuration and replacing only its four direct Rules project references with six exact package references. Production Workbench references remain unconditional; no special dependency-guard exception is required.
 
 ```bash
 python3 tools/rules/verify-packaged-rules.py \

@@ -225,6 +225,9 @@ def main():
             from package_workbench import verify_workbench_package_host
             host = verify_workbench_package_host(receipt, evidence, source, feed, run, environment,
                                                  evidence / 'deployment')
+            if git('status', '--porcelain', cwd=source):
+                raise ValueError('Workbench qualification changed the retained immutable source checkout.')
+            receipt['sourceCleanAfterWorkbenchBuild'] = True
             receipt['workbenchPackageHost'] = host
             receipt['workbenchPackageHostPassed'] = host['passed']
             host_root = Path(host['deploymentReceipt']).parent
