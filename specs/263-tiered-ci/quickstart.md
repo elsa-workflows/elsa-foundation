@@ -35,6 +35,9 @@ Each command exits 0 on a clean tree.
 7. With `Full tier` failing (a failing test in `Elsa.Workbench.Tests`), confirm GitHub blocks the merge once the ruleset requires `Full tier`.
 8. Open a documentation-only ready PR. Confirm `Build & test` and `Full tier` both take the fast path and report success within a few minutes.
 9. Run `gh workflow run ci.yml --ref <branch> -f tier=full`. Confirm the PR tier, the integration shards and the EF container shards all run.
+10. On a ready throwaway PR, make the `Plan` job of `CI full tier` fail (for example, a syntax error in `tools/ci/test_tiers.py`). Confirm the aggregate reports `Full tier` as failed, not as "documentation only" success.
+
+If a run is cancelled before the aggregate job starts, GitHub may show the aggregate's raw `name:` expression as its check name. That is harmless, because it never equals `Full tier`, and the next run on the head reports normally.
 
 ## Story 3 — quarantine
 
@@ -42,6 +45,7 @@ Each command exits 0 on a clean tree.
 2. In a throwaway PR, make a quarantined test fail. Confirm the shard succeeds and the summary lists it with its issue link.
 3. In a throwaway PR, add an entry that points at a closed issue. Confirm `Plan tiers` fails and names the entry.
 4. With an entry already on `main` whose issue is then closed, confirm an open PR that does not touch the entry still passes `Plan tiers`, and that `python3 tools/ci/test_results.py check-quarantine --manifest tools/ci/test-tiers.json` (no `--base`, as `main` and nightly run it) fails and names the entry.
+5. Run `check-quarantine --base <sha>` with a SHA that is not in the clone. Confirm it exits 2 and names the commit, rather than checking every entry.
 
 ## Story 4 — tier guards
 
