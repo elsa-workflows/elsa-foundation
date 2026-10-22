@@ -245,8 +245,9 @@ publish and run, and a caller that passes `approve` gets the branch that value s
   They MUST NOT fall through to the started workflow or to an outer graph activity (D-1).
 - **FR-008**: Values read in the body MUST be the activity's durable values, so suspension, resume, retry and
   rehydration give the same results.
-- **FR-009**: Studio's graph activity editor MUST offer the activity's inputs, its variables and earlier body
-  results in body-node input pickers, and MUST store references that satisfy FR-001 to FR-006.
+- **FR-009**: Studio's graph activity editor MUST offer the activity's inputs and its variables in body-node input
+  pickers, and MUST store references that satisfy FR-001 to FR-006. Pickers for earlier body results are a follow-up
+  (plan A-7).
 - **FR-010**: The Elsa 3 converter MUST stop refusing reusable bodies for the reads this spec supports, and MUST
   convert them to graph-scoped references. Reads it still cannot carry MUST stay refused with a diagnostic and
   guidance.
@@ -279,6 +280,10 @@ publish and run, and a caller that passes `approve` gets the branch that value s
   refused at activity publication. None reaches workflow publish or run time in the test suite.
 - **SC-004**: The spec 246 fixtures `reusable-reads-input` and `reusable-reads-result`, and a memory-reference
   capture fixture, import, publish and run to the expected result. The D-8 refusal tests now assert conversion.
+  *(Implementation note: met for input reads, which import, publish and run, including against a caller's own input.
+  Running result reads and captures from an imported body is blocked by two existing limits of every converted
+  RunJavaScript; they are converted and proven at run time in the Behavioral and placement tests instead. See plan
+  A-8.)*
 - **SC-005**: Existing workflow, graph boundary, placement and Elsa 3 converter tests pass, except the D-8 refusal
   tests that SC-004 replaces.
 - **SC-006**: A body suspended mid-run and resumed after a restart reads the same input and variable values as

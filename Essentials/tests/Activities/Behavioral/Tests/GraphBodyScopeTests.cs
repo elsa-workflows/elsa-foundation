@@ -189,6 +189,55 @@ public sealed class GraphBodyScopeTests
         Assert.Equal(11, ReadInput(run, "node-read-total"));
     }
 
+    [Fact]
+    public async Task After_a_resume_the_body_reads_the_same_input_and_variable_values()
+    {
+        // SC-006: the body suspends on an Event before reading; the reads after the resume see the boundary's values.
+        await using var harness = WorkflowExecutionHarness.Create()
+            .WithFeature(services => new SerializationFeature().ConfigureServices(services))
+            .WithFeature(services => new Primitives.ActivitiesPrimitivesFeature().ConfigureServices(services))
+            .WithFeature(services => new GraphActivitiesRuntimeFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
+            .Build(Enumerable.Range(1, 64).Select(index => $"actexec-{index}"));
+        var body = GraphBoundaryCompleteTests.Sequence(
+            "node-body",
+            Nodes.Leaf("node-wait", typeof(Primitives.Activities.Event), new Dictionary<string, object?> { ["EventName"] = "go", ["CanStartWorkflow"] = false }),
+            Echo("node-read-a", Request("A")),
+            Echo("node-read-total", Variable("total", BoundaryNodeId)));
+        var boundary = Boundary(
+            body,
+            inputs: [Input("A")],
+            variables: [new GraphActivityVariableDescriptor("total", "RunningTotal", ObjectType, WellKnownRuntimeDurableValueStorageDrivers.Json, new GraphActivityExpression("Literal", JsonSerializer.SerializeToElement(10)))],
+            boundaryInputs: [Literal("A", 2)]);
+        var waitTarget = WorkflowExecutableResumeTarget.ComposeScopedId("node-wait", Primitives.Activities.Event.ResumeTargetId);
+        var executable = new WorkflowExecutable(
+            WorkflowExecutionHarness.Identity,
+            boundary,
+            new Dictionary<string, WorkflowExecutableResumeTarget>
+            {
+                [waitTarget] = new(waitTarget, "node-wait", "ResumeAsync", new Dictionary<string, string>(), Primitives.Activities.Event.ResumeTargetId)
+            },
+            new DateTimeOffset(2026, 10, 22, 12, 0, 0, TimeSpan.Zero),
+            new Dictionary<string, string>(),
+            IncidentStrategyBuiltIns.FaultReference);
+
+        var suspended = await harness.RunAsync(executable, allowPendingWorkOnTerminalCompletion: true, inputs: new Dictionary<string, JsonElement> { ["A"] = JsonSerializer.SerializeToElement(99) });
+        var wait = suspended.State("node-wait");
+        var resumed = await harness.ResumeAsync(
+            WorkflowExecutionHarness.Identity,
+            bookmarkId: Assert.Single(wait.BookmarkIds),
+            activityExecutionId: wait.InvocationId,
+            executableNodeId: "node-wait",
+            resumeTargetId: waitTarget,
+            stimulusType: Primitives.Activities.EventStimulus.StimulusType,
+            stimulusHash: Primitives.Activities.EventStimulus.Hash("go"),
+            input: JsonSerializer.SerializeToElement(new { eventName = "go" }));
+
+        resumed.AssertWorkflowCompleted();
+        Assert.Equal(2, ReadInput(resumed, "node-read-a"));
+        Assert.Equal(10, ReadInput(resumed, "node-read-total"));
+    }
+
     private static WorkflowExecutionHarness ScriptingHarness() =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new SerializationFeature().ConfigureServices(services))

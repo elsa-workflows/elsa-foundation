@@ -38,3 +38,26 @@ durably cancels the rest of its body. `ActivitiesGraphDesign` validates these no
 rejects them in plain workflow definitions. Emitters such as importers and Studio write the node shape, rules and
 diagnostic codes in the [Complete activity contract](../../specs/237-graph-boundary-completion/contracts/complete-activity.md)
 (spec 237).
+
+## Values inside a graph body
+
+A graph activity is a closed value scope (spec 265). A node in its body reads the activity's own values, never those
+of the workflow that calls it:
+
+| A body node reads or writes | Authored as | Resolves to |
+|---|---|---|
+| One of the activity's inputs | a request read (`WorkflowRequest {memberKey}`), or Studio's `Input {referenceKey}` pick | the value the caller passed, else the input's default, else `null` |
+| One of the activity's variables | a `Variable` reference with scope `workflow` | the variable in this invocation |
+| A variable of a container inside the body | a `Variable` reference with the container's node id as scope | that container's variable |
+| Another body node's result | an `ActivityResult` reference to the body node id | that node's result in the same invocation |
+| An output captured into a variable | a node output bound to a `workflow`-scope `Variable` | writes the activity's own variable |
+
+Inside a body, the `workflow` scope means the activity, because the body is authored like a workflow whose root is
+the activity. When a workflow that uses the activity is published, placement rewrites these template-local references
+to the placed activity, so two uses of one activity, or one use in a loop, never share values. JavaScript in a body
+sees the activity's variables by name (`variables.x`, `getVariable('x')`).
+
+Publishing the activity refuses a body reference the activity does not declare or contain, with one of the
+`activity.graph.body-*` codes in the [graph scope contract](../../specs/265-graph-activity-scope-reads/contracts/graph-scope-references.md).
+Versions compiled before graph compiler `3.0.0` keep their behaviour: their bodies still resolve against the
+caller until the activity is published again.

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Expressions.Core.Models;
+using Elsa3.Mapping.Services;
 using Elsa3.Mapping.Tests.Support;
 using Elsa3.Models;
 using Xunit;
@@ -54,6 +55,17 @@ public sealed class Elsa3ReusableValueReadTests
         var reference = ToElement(argument.Value.Value);
         Assert.Equal("variable-total", reference.GetProperty("referenceKey").GetString());
         Assert.Equal(VariableReference.WorkflowScopeId, reference.GetProperty("declaringScopeId").GetString());
+    }
+
+    [Fact]
+    public async Task A_reusable_body_reading_an_input_through_getVariable_stays_refused_as_an_undeclared_variable()
+    {
+        // getVariable reads declared variables only, as in every workflow; an input is reached through getInput or its
+        // generated accessor (spec 265 T057).
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), Definition("getVariable(\"message\")", reusable: true), isReusable: true);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.DanglingReference);
     }
 
     [Theory]

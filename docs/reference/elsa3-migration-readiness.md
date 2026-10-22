@@ -21,14 +21,14 @@ differently.
 |---|---|---|
 | No start trigger in the body | `ELS3-REUSABLE-UNSUPPORTED-START-TRIGGER`, `ELS3-REUSABLE-UNSUPPORTED-TRIGGER` | Elsa 4 behaviour |
 | No SetVariable, SetOutput, Correlate, SetName or Finish, and no captured HTTP Endpoint headers or query string | `ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED` | Gap, [#3023](https://github.com/elsa-workflows/elsa-foundation/issues/3023) |
-| No reads of its own inputs, its variables or other activities' results, and no output captured into a variable | `ELS3-ACTIVITY-REUSABLE-VALUE-READ-UNSUPPORTED` | Gap, [#3027](https://github.com/elsa-workflows/elsa-foundation/issues/3027) |
 | Outcomes: each Complete names one literal outcome, not `done` | `ELS3-ACTIVITY-UNSUPPORTED-MODE` | Elsa 4 behaviour |
 | End only in the workflow's root flowchart | `ELS3-ACTIVITY-UNSUPPORTED-MODE` | Elsa 4 behaviour |
 
-What this means today: a reusable workflow imports as a reusable activity when its body works from literal values and
-signals its result through **outcomes**. It may wait in its body: a Delay, a mid-flow Event and a mid-flow HTTP Endpoint
-suspend and resume as in Elsa 3 (proven end to end). It cannot return output values or compute from its inputs until
-#3023 and #3027 are done.
+What this means today: a reusable workflow imports as a reusable activity when its body sets no values and signals its
+result through **outcomes**. Its body reads its own inputs, its variables and other activities' results, and captures
+outputs into its own variables, as in Elsa 3 (spec 265, [#3027](https://github.com/elsa-workflows/elsa-foundation/issues/3027);
+reading an input is proven end to end). It may wait in its body: a Delay, a mid-flow Event and a mid-flow HTTP
+Endpoint suspend and resume as in Elsa 3 (proven end to end). It cannot return output values until #3023 is done.
 
 **Publish Event and Event, every workflow:** a **Publish Event** wakes the matching Event wait, with or without a
 payload, both in a regular workflow and in a reusable activity's body (proven end to end; fixed in
@@ -54,12 +54,12 @@ Its variables are its own, but Correlate, Set Name and Finish act on that callin
 
    | In the reusable body | Fix in Elsa 3 |
    |---|---|
-   | Set Variable | Nothing outside the body sees its variables. If nothing in the body reads the variable, delete the Set Variable. If something does, that read is refused too (item 3): wait for #3023 and #3027, or make the workflow regular (below). |
+   | Set Variable | Nothing outside the body sees its variables. If nothing in the body reads the variable, delete the Set Variable. If a value only passes from one activity to the next, capture that activity's output into the variable instead. Otherwise wait for #3023, or make the workflow regular (below). |
    | Set Output | If no caller reads the output, delete it. If one does, wait for #3023, or make the workflow regular (below). |
    | Correlate | It sets the **caller's** correlation id. Delete it, and add a Correlate with the same value to each caller, directly before the activity. |
    | Set Name | It names the **caller's** instance. Delete it, and add a Set Name with the same value to each caller, directly before or after the activity. |
    | Finish | It ends the **whole calling workflow**. Replace it with a Complete that names a new, declared outcome (for example `Finished`), and in each caller connect that outcome to a Finish. |
-   | HTTP Endpoint with *Headers* or *Query String Data* captured | Remove the capture; nothing in the body can read it yet. |
+   | HTTP Endpoint with *Headers* or *Query String Data* captured | Remove the capture: Elsa 4 rebuilds these values with a set step a reusable body cannot hold yet. |
 
    Do not move Correlate, Set Name or Finish into a regular workflow called by Dispatch or Execute Workflow instead:
    there they would act on the called workflow, not the caller.
@@ -68,15 +68,14 @@ Its variables are its own, but Correlate, Set Name and Finish act on that callin
    `set{Name}(...)`, `setCorrelationId`, `setWorkflowInstanceName`, `variables.x = ...`, Liquid `assign`): that is
    refused in every workflow (`VF-IMP-005`), and the Set, Correlate or Set Name activity its guidance points to is not
    available in a reusable body yet.
-3. **No reading values.** No activity in the body reads a value: in JavaScript `getInput(...)`, `getVariable(...)`,
-   `variables.x` or a generated `get{Name}()` accessor; in Liquid `Input.x`, `Variables.x` or `Output.x`; and no property
-   bound to a variable or to another activity's output (an Elsa 3 memory reference). Use literal values.
-   - No output captured into a variable either: nothing in the body can read it, so remove the capture.
-   - Allowed: `getWorkflowInstanceId()` and `getCorrelationId()` read the running workflow instance, as in Elsa 3.
-   - The JavaScript guidance "pass the value in as a workflow input" or "capture the output into a variable" does not
-     help inside a reusable body, because the body cannot read either yet. Keep that logic in the calling workflow, or
-     make the reusable workflow a regular one (see below). Declared inputs may stay on the workflow, and callers may pass them,
-   but the body cannot read them yet.
+3. **Reading values.** A body reads its own values as in Elsa 3 (spec 265): `getInput(...)`, a generated `get{Name}()`
+   accessor, `getVariable(...)`, `variables.x`, Liquid `Input.x` and `Variables.x`, a property bound to a variable or to
+   another activity's output, and an output captured into one of its variables. A caller's inputs and variables are not
+   visible in the body; pass what the body needs as an input.
+   - Allowed as before: `getWorkflowInstanceId()` and `getCorrelationId()` read the running workflow instance.
+   - Known Elsa 4 limits that apply to every converted workflow, reusable or not: a RunJavaScript result bound straight
+     to a typed input (for example a Flow Decision condition) has no automatic conversion and is refused at publish, and
+     a converted RunJavaScript without arguments faults when it runs (both tracked as spec 265 follow-ups).
 4. **Outcomes.** Each Complete names exactly one literal outcome; not a list, not an expression, and not `done`, which
    collides with Elsa 4's natural outcome (rename it, and change the callers that route on it). Declare the outcomes on the workflow: an undeclared one is declared anyway with
    `ELS3-BEHAVIOUR-OUTCOME-UNDECLARED`, and a declared one no Complete reaches is dropped with
