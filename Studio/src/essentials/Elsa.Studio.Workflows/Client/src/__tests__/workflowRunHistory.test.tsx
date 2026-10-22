@@ -4,15 +4,19 @@ import { createRoot, type Root } from "react-dom/client";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearApiCapabilityCache } from "../api/capabilities";
-import { WorkflowInstances } from "../workflow-editor/WorkflowInstances";
+import { getRunHistoryBackLocation, parseRunHistoryReturnTo, WorkflowInstances } from "../workflow-editor/WorkflowInstances";
 import { setDialogs } from "../workflow-editor/dialogs";
 
 const confirmRuns = vi.fn(async (_options: { title?: string; message: string }) => false);
 setDialogs({ confirm: confirmRuns, prompt: async () => null, alert: async () => {} });
 
 let mounted: { root: Root; container: HTMLDivElement } | null = null;
+let previousClipboard: PropertyDescriptor | undefined;
 
 afterEach(() => {
+  if (previousClipboard) Object.defineProperty(navigator, "clipboard", previousClipboard);
+  else Reflect.deleteProperty(navigator, "clipboard");
+  previousClipboard = undefined;
   clearApiCapabilityCache();
   confirmRuns.mockReset().mockResolvedValue(false);
   vi.restoreAllMocks();
@@ -25,6 +29,27 @@ afterEach(() => {
 });
 
 describe("workflow run history", () => {
+  it("canonicalizes only an exact same-origin Runs return location", () => {
+    const origin = window.location.origin;
+    expect(parseRunHistoryReturnTo("/workflows/instances?status=Running&pageSize=50&cursor=opaque&ignored=yes", origin))
+      .toBe("/workflows/instances?status=Running&pageSize=50&cursor=opaque");
+    expect(parseRunHistoryReturnTo(`${origin}/workflows/instances?artifactId=artifact-1`, origin))
+      .toBe("/workflows/instances?artifactId=artifact-1");
+    expect(getRunHistoryBackLocation(null)).toBe("/workflows/instances");
+    expect(getRunHistoryBackLocation("https://external.example/workflows/instances")).toBe("/workflows/instances");
+    for (const invalid of [
+      "https://external.example/workflows/instances?status=Running",
+      "//external.example/workflows/instances?status=Running",
+      "//localhost/workflows/instances?status=Running",
+      "/workflows/instances/child?status=Running",
+      "/workflows/instances-extra?status=Running",
+      "/workflows/instances/../instances?status=Running",
+      "javascript:alert(1)"
+    ]) {
+      expect(parseRunHistoryReturnTo(invalid, origin), invalid).toBeNull();
+    }
+  });
+
   it("navigates retained forward-only cursor history and resets it for filters and page size", async () => {
     window.history.replaceState({}, "", "/workflows/instances?pageSize=10");
     const getJson = vi.fn(async (url: string) => {
@@ -49,6 +74,7 @@ describe("workflow run history", () => {
     await waitFor(() => expect(container.textContent).toContain("execution-2"));
     expect(button(container, "Previous workflow run page").disabled).toBe(false);
 
+    openMoreFilters(container);
     fill(input(container, "Workflow run correlation"), "correlation-1");
     click(buttonByText(container, "Apply filters"));
     await waitFor(() => expect(container.textContent).toContain("execution-1"));
@@ -76,7 +102,8 @@ describe("workflow run history", () => {
     const container = render(context(getJson), navigate);
 
     await waitFor(() => expect(container.textContent).toContain("execution-1"));
-    expect(input(container, "Workflow run definition").value).toBe("definition-1");
+    expect(input(container, "Workflow").value).toBe("definition-1");
+    expect(button(container, "Copy Workflow definition ID")).toBeTruthy();
     expect(input(container, "Workflow run artifact").value).toBe("artifact-1");
     expect(container.textContent).toContain("Showing 1 of 42 matching runs");
     expect(container.textContent).toContain("Current health unavailable");
@@ -112,6 +139,121 @@ describe("workflow run history", () => {
     await waitFor(() => expect(container.textContent).toContain("execution-1"));
   });
 
+  it("applies primary triage choices immediately and preserves unrelated advanced drafts", async () => {
+    window.history.replaceState({}, "", "/workflows/instances?pageSize=10");
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return healthCapabilities;
+      return page("active-running");
+    });
+    const navigate = vi.fn((path: string) => window.history.pushState({}, "", path));
+    const container = render(context(getJson), navigate);
+
+    await waitFor(() => expect(container.textContent).toContain("active-running"));
+    const attention = buttonByTextOptional(container, "Needs attention");
+    expect(attention).toBeTruthy();
+    click(attention!);
+    await waitFor(() => expect(navigate).toHaveBeenLastCalledWith(expect.stringContaining("incidentHealth=active")));
+    await waitFor(() => expect(getJson).toHaveBeenCalledWith("/runtime/workflows/instances/health?incidentHealth=active&take=10"));
+
+    openMoreFilters(container);
+    fill(input(container, "Workflow run artifact"), "draft-artifact");
+    const running = buttonByTextOptional(container, "Running");
+    expect(running).toBeTruthy();
+    click(running!);
+    await waitFor(() => expect(navigate).toHaveBeenLastCalledWith(expect.stringMatching(/status=Running.*incidentHealth=active|incidentHealth=active.*status=Running/)));
+    await waitFor(() => expect(getJson).toHaveBeenCalledWith(expect.stringMatching(/instances\/health\?.*status=Running.*incidentHealth=active|instances\/health\?.*incidentHealth=active.*status=Running/)));
+    expect(input(container, "Workflow run artifact").value).toBe("draft-artifact");
+
+    click(buttonByText(container, "Apply filters"));
+    await waitFor(() => expect(navigate).toHaveBeenLastCalledWith(expect.stringContaining("artifactId=draft-artifact")));
+    expect(navigate).toHaveBeenLastCalledWith(expect.stringContaining("status=Running"));
+    expect(navigate).toHaveBeenLastCalledWith(expect.stringContaining("incidentHealth=active"));
+  });
+
+  it("removes only the selected applied chip and preserves page size", async () => {
+    window.history.replaceState({}, "", "/workflows/instances?incidentHealth=active&artifactId=artifact-1&pageSize=10&cursor=next-cursor");
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return healthCapabilities;
+      return page(url.includes("cursor=next-cursor") ? "execution-2" : "execution-1");
+    });
+    const navigate = vi.fn((path: string) => window.history.pushState({}, "", path));
+    const container = render(context(getJson), navigate);
+
+    await waitFor(() => expect(container.textContent).toContain("execution-2"));
+    expect(container.querySelector(".wf-run-filter-chip")).toBeTruthy();
+    const removeArtifact = button(container, "Remove Artifact filter");
+    click(removeArtifact);
+
+    await waitFor(() => expect(navigate).toHaveBeenLastCalledWith("/workflows/instances?incidentHealth=active&pageSize=10"));
+    await waitFor(() => expect(getJson).toHaveBeenCalledWith("/runtime/workflows/instances/health?incidentHealth=active&take=10"));
+    expect(input(container, "Workflow run artifact").value).toBe("");
+  });
+
+  it("adds the validated current Runs location when opening a real row", async () => {
+    window.history.replaceState({}, "", "/workflows/instances?status=Running&incidentHealth=active&pageSize=10&cursor=second-page");
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return healthCapabilities;
+      return page("execution-2");
+    });
+    const navigate = vi.fn();
+    const container = render(context(getJson), navigate);
+
+    await waitFor(() => expect(container.textContent).toContain("execution-2"));
+    click(button(container, "Inspect workflow run execution-2 · definition-1"));
+
+    const detail = new URL(navigate.mock.lastCall?.[0] ?? "", "https://studio.example");
+    expect(detail.pathname).toBe("/workflows/instances/execution-2");
+    expect(detail.searchParams.get("returnTo")).toBe("/workflows/instances?status=Running&incidentHealth=active&pageSize=10&cursor=second-page");
+  });
+
+  it("leads with the workflow name and copies exact identifiers without inspecting the run", async () => {
+    previousClipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    const writeText = vi.fn(async (_value: string) => {});
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return definitionCapabilities;
+      if (url.startsWith("/design/workflows/definitions")) {
+        return { items: [{ id: "definition-1", name: "Order fulfillment" }] };
+      }
+      return page("execution-1");
+    });
+    const navigate = vi.fn();
+    const container = render(context(getJson), navigate);
+
+    await waitFor(() => expect(container.querySelector(".wf-run-inspect")?.textContent).toContain("Order fulfillment"));
+    const expectedValues = [
+      ["Copy Execution ID", "execution-1"],
+      ["Copy Artifact ID", "artifact-1"],
+      ["Copy Definition ID", "definition-1"],
+      ["Copy Definition version ID", "version-1"]
+    ] as const;
+    for (const [label, exactValue] of expectedValues) {
+      click(button(container, label));
+      await waitFor(() => expect(writeText).toHaveBeenLastCalledWith(exactValue));
+    }
+
+    expect(navigate).not.toHaveBeenCalled();
+    expect(container.querySelector(".wf-run-inspect strong")?.textContent).toBe("Order fulfillment");
+    expect(container.querySelector(".wf-run-inspect")?.getAttribute("aria-label")).toBe("Inspect workflow run execution-1 · Order fulfillment");
+  });
+
+  it("lets browser history restore the same applied Runs query after inspecting a row", async () => {
+    const returnPath = "/workflows/instances?status=Running&pageSize=10";
+    window.history.replaceState({}, "", returnPath);
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : page("execution-1"));
+    const navigate = vi.fn((path: string) => window.history.pushState({}, "", path));
+    const container = render(context(getJson), navigate);
+
+    await waitFor(() => expect(container.textContent).toContain("execution-1"));
+    click(button(container, "Inspect workflow run execution-1 · definition-1"));
+    expect(navigate).toHaveBeenLastCalledWith("/workflows/instances/execution-1?returnTo=%2Fworkflows%2Finstances%3Fstatus%3DRunning%26pageSize%3D10");
+
+    window.history.replaceState({}, "", returnPath);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    await waitFor(() => expect(buttonByTextOptional(container, "Running")?.getAttribute("aria-pressed")).toBe("true"));
+    expect(getJson).toHaveBeenCalledWith("/runtime/workflows/instances/page?status=Running&take=10");
+  });
+
   it("announces loading, filtered empty, error, and end states", async () => {
     let resolvePage: ((value: unknown) => void) | undefined;
     const getJson = vi.fn((url: string) => {
@@ -130,11 +272,18 @@ describe("workflow run history", () => {
     mounted!.container.remove();
     mounted = null;
     clearApiCapabilityCache();
+    let fail = true;
     const errorContainer = render(context(async url => {
       if (url === "/capabilities") return capabilities;
-      throw new Error("Runtime unavailable");
+      if (fail) throw new Error("Runtime unavailable");
+      return page("retry-run");
     }), vi.fn());
     await waitFor(() => expect(errorContainer.querySelector("[role='alert']")?.textContent).toContain("Runtime unavailable"));
+    const retry = buttonByTextOptional(errorContainer, "Retry");
+    expect(retry).toBeTruthy();
+    fail = false;
+    click(retry!);
+    await waitFor(() => expect(errorContainer.textContent).toContain("retry-run"));
   });
 
   it("uses the advertised health filter and distinguishes current health from historical incident totals", async () => {
@@ -187,7 +336,7 @@ describe("workflow run history", () => {
     expect(healthFilter.disabled).toBe(false);
     expect(healthFilter.querySelector<HTMLOptionElement>("option[value='active']")?.disabled).toBe(true);
     expect(container.querySelector<HTMLSelectElement>("select[aria-label='Workflow run status']")?.value).toBe("Faulted");
-    expect(input(container, "Workflow run definition").value).toBe("definition-1");
+    expect(input(container, "Workflow").value).toBe("definition-1");
     expect(getJson).toHaveBeenCalledTimes(1);
     expect(getJson).toHaveBeenCalledWith("/capabilities");
 
@@ -255,6 +404,7 @@ describe("workflow run history", () => {
     const confirm = confirmRuns.mockResolvedValue(false);
 
     await waitFor(() => expect(container.textContent).toContain("execution-1"));
+    expect(container.querySelector(".wf-run-deletion-toolbar")).toBeNull();
     const selectAll = input(container, "Select all workflow runs on this page");
     expect(selectAll.checked).toBe(false);
     click(input(container, "Select workflow run execution-1"));
@@ -276,7 +426,7 @@ describe("workflow run history", () => {
 
     const row = container.querySelector<HTMLElement>(".wf-grid-row")!;
     row.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-    expect(navigate).toHaveBeenCalledWith("/workflows/instances/execution-1");
+    expect(navigate).toHaveBeenCalledWith("/workflows/instances/execution-1?returnTo=%2Fworkflows%2Finstances");
   });
 
   it("keeps only failed runs selected after a partial deletion so they can be retried", async () => {
@@ -311,7 +461,7 @@ describe("workflow run history", () => {
     const getJson = vi.fn(async (url: string) => {
       if (url === "/capabilities") return deletionCapabilities;
       if (url.includes("cursor=next-cursor")) return page("execution-2");
-      if (url.includes("workflowExecutionId=filtered-run")) return page("filtered-run");
+      if (new URL(url, window.location.origin).searchParams.get("workflowExecutionId") === "filtered-run") return page("filtered-run");
       return page("execution-1", { nextCursor: "next-cursor", hasNext: true });
     });
     const navigate = vi.fn((path: string) => window.history.pushState({}, "", path));
@@ -324,14 +474,15 @@ describe("workflow run history", () => {
     click(button(container, "Next workflow run page"));
     await waitFor(() => expect(container.textContent).toContain("execution-2"));
     expect(input(container, "Select workflow run execution-2").checked).toBe(false);
-    expect(container.querySelector(".wf-run-deletion-toolbar")?.textContent).toContain("0 workflow runs selected");
+    expect(container.querySelector(".wf-run-deletion-toolbar")).toBeNull();
 
     click(input(container, "Select workflow run execution-2"));
+    openMoreFilters(container);
     fill(input(container, "Workflow run execution id"), "filtered-run");
     click(buttonByText(container, "Apply filters"));
-    await waitFor(() => expect(container.textContent).toContain("filtered-run"));
+    await waitFor(() => expect(container.querySelector("[aria-label='Select workflow run filtered-run']")).not.toBeNull());
     expect(input(container, "Select workflow run filtered-run").checked).toBe(false);
-    expect(container.querySelector(".wf-run-deletion-toolbar")?.textContent).toContain("0 workflow runs selected");
+    expect(container.querySelector(".wf-run-deletion-toolbar")).toBeNull();
   });
 
   it("limits bulk deletion to three concurrent requests", async () => {
@@ -500,6 +651,17 @@ const capabilities = {
   }]
 };
 
+const definitionCapabilities = {
+  capabilities: [
+    ...capabilities.capabilities,
+    {
+      id: "elsa.api.workflow-design",
+      contractVersion: "1",
+      links: [{ rel: "workflow-definitions", href: "design/workflows/definitions" }]
+    }
+  ]
+};
+
 const healthCapabilities = {
   capabilities: [{
     id: "elsa.api.runtime",
@@ -538,6 +700,12 @@ function buttonByText(container: HTMLElement, text: string) {
 
 function buttonByTextOptional(container: HTMLElement, text: string) {
   return [...container.querySelectorAll<HTMLButtonElement>("button")].find(candidate => candidate.textContent === text) ?? null;
+}
+
+function openMoreFilters(container: HTMLElement) {
+  const trigger = [...container.querySelectorAll<HTMLButtonElement>(".studio-disclosure-fold-trigger")]
+    .find(candidate => candidate.textContent?.includes("More filters"));
+  if (trigger?.getAttribute("aria-expanded") !== "true") click(trigger!);
 }
 
 function click(element: HTMLElement) {
