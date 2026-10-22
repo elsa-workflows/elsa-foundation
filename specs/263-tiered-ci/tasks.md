@@ -74,11 +74,11 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
   - the comment in `Essentials/tests/Activities/Compensation/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Activities.Compensation.Persistence.EntityFrameworkCore.ProviderTests.csproj:5`.
 
   Leave the historical reports under `docs/reports/ci/` as they are.
-- [ ] T011 Create `tools/ci/test_tiers.py` with `select --tier pr|full|push|nightly`, per [contracts](contracts/cli-and-ci.md#toolscitest_tierspy):
+- [X] T011 Create `tools/ci/test_tiers.py` with `select --tier pr|full|push|nightly`, per [contracts](contracts/cli-and-ci.md#toolscitest_tierspy):
   - **Output**: it reads the manifest and writes `pr_matrix`, `integration_matrix`, `container_matrix` and their counts to `--github-output`, with a table in `--summary`.
   - **Filters**: a split unit's filter is `FullyQualifiedName~<Class>.|…`; a rest group's is the `&`-joined negation `FullyQualifiedName!~<Class>.` of every class its siblings name.
   - **Switch**: `--tier pr` drops integration units when `integrationLeavesPrTier` is true. When the PR diff (`--base`/`--head`) changes that field to true, it calls `gh api repos/{repo}/rulesets/<id>` and exits 1 unless `main-2` requires `Full tier`.
-- [ ] T012 Add `--self-test` to `tools/ci/test_tiers.py`, with in-memory manifests covering:
+- [X] T012 Add `--self-test` to `tools/ci/test_tiers.py`, with in-memory manifests covering:
   - a plain shard;
   - a split with a rest group, where the exact filter strings are asserted;
   - the switch on and off;
