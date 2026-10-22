@@ -155,6 +155,31 @@ test("inventory coverage stays truthful through search, local scope filtering an
   await expect(page.locator("body")).not.toContainText("raw-secret-value");
 });
 
+test("keeps an active loaded scope visible when search returns a different scope", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/secret-scopes.html?scenario=inventory");
+
+  const count = page.locator(".secrets-count");
+  await expect(count).toHaveText("100 shown · 100 loaded · 101 results");
+  const scope = page.getByRole("combobox", { name: "Scope", exact: true });
+  await scope.selectOption("Scope:1");
+
+  const search = page.getByRole("textbox", { name: "Search secrets", exact: true });
+  const laterName = "knownlaterintegrationbillingcredentialsforregionalpartnernetwork";
+  await search.fill(laterName);
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+
+  await expect(count).toHaveText(`0 shown · 1 loaded · 1 result for “${laterName}”`);
+  await expect(scope).toHaveValue("Scope:1");
+  await expect(scope.locator("option:checked")).toHaveText("Scope:1 (not in loaded results)");
+
+  await scope.selectOption("");
+  await expect(page.getByRole("button", { name: "Known later credentials", exact: true })).toBeVisible();
+  await expect(count).toHaveText(`1 shown · 1 loaded · 1 result for “${laterName}”`);
+  await expect(scope).toHaveValue("");
+  await expect(page.locator("body")).not.toContainText("raw-secret-value");
+});
+
 for (const source of [
   { scenario: "default", label: "Value", wrapper: ".secrets-value-field" },
   { scenario: "configuration", label: "Configuration key", wrapper: "label" }

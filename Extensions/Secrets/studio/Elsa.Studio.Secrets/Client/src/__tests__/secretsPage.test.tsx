@@ -326,6 +326,120 @@ describe("secrets page", () => {
     expect(container.querySelector(".secrets-count")?.textContent).toContain("1 shown · 100 loaded · 101 results for “confirmed-query”");
   });
 
+  it("keeps a selected scope visible when a later search returns a different scope", async () => {
+    const laterSecret = secret({
+      id: "later-scope",
+      name: "later.scope.secret",
+      displayName: "Later scope secret",
+      scope: "scope.B"
+    });
+    const { container } = render({
+      getItems: url => getSearchTerm(url) === laterSecret.name ? [laterSecret] : inventoryPage(),
+      getTotalCount: (_items, url) => getSearchTerm(url) ? 1 : 101
+    });
+    await waitForText(container, "Inventory secret 1");
+
+    const scope = [...container.querySelectorAll<HTMLSelectElement>(".secrets-filter select")]
+      .find(select => select.labels?.[0]?.textContent === "Scope")!;
+    selectValue(scope, "scope.1");
+    const search = container.querySelector<HTMLInputElement>("input[aria-label='Search secrets']")!;
+    change(search, laterSecret.name);
+    clickButton(container, "Search");
+
+    await waitFor(() => container.querySelector(".secrets-count")?.textContent === `0 shown · 1 loaded · 1 result for “${laterSecret.name}”`);
+    expect(scope.value).toBe("scope.1");
+    expect([...scope.options].find(option => option.value === "scope.1")?.textContent).toContain("not in loaded results");
+
+    selectValue(scope, "");
+    await waitForText(container, "Later scope secret");
+    expect(container.querySelector(".secrets-count")?.textContent).toBe(`1 shown · 1 loaded · 1 result for “${laterSecret.name}”`);
+    expect(scope.value).toBe("");
+  });
+
+  it("keeps toolbar Refresh on the accepted query while search text is a draft", async () => {
+    const { container, listRequests } = render({
+      getItems: () => [paymentSecret()],
+      getTotalCount: () => 1
+    });
+    await waitForText(container, "Payments API");
+
+    const search = container.querySelector<HTMLInputElement>("input[aria-label='Search secrets']")!;
+    change(search, "queryA");
+    clickButton(container, "Search");
+    await waitFor(() => container.querySelector(".secrets-count")?.textContent === "1 shown · 1 loaded · 1 result for “queryA”");
+    expect(getSearchTerm(listRequests.at(-1)!)).toBe("queryA");
+
+    change(search, "draftB");
+    clickButton(container, "Refresh");
+    await waitFor(() => listRequests.length === 3);
+    await waitFor(() => !!container.querySelector(".secrets-count"));
+    expect(container.querySelector(".secrets-count")?.textContent).toBe("1 shown · 1 loaded · 1 result for “queryA”");
+    expect(getSearchTerm(listRequests.at(-1)!)).toBe("queryA");
+    expect(search.value).toBe("draftB");
+  });
+
+  it("keeps metadata-save reloads on the accepted query while search text is a draft", async () => {
+    let current = paymentSecret({ scope: "scope.A" });
+    const putJson = vi.fn(async (_url: string, request: { displayName: string; description: string }) => {
+      current = paymentSecret({ ...request, scope: "scope.A" });
+      return current;
+    });
+    const { container, listRequests } = render({
+      getItems: () => [current],
+      getTotalCount: () => 1,
+      putJson
+    });
+    await waitForText(container, "Payments API");
+
+    const search = container.querySelector<HTMLInputElement>("input[aria-label='Search secrets']")!;
+    change(search, "queryA");
+    clickButton(container, "Search");
+    await waitFor(() => container.querySelector(".secrets-count")?.textContent === "1 shown · 1 loaded · 1 result for “queryA”");
+    expect(getSearchTerm(listRequests.at(-1)!)).toBe("queryA");
+
+    change(search, "draftB");
+    openEditor(container);
+    flushSync(() => change(container.querySelector<HTMLInputElement>(".secrets-edit-form input")!, "Updated payments"));
+    clickButton(container, "Save changes");
+    await waitForText(container, "Secret metadata updated.");
+
+    expect(putJson).toHaveBeenCalledWith("/secrets/payments.api", { displayName: "Updated payments", description: "Token for payment provider" });
+    expect(getSearchTerm(listRequests.at(-1)!)).toBe("queryA");
+    expect(container.querySelector(".secrets-count")?.textContent).toBe("1 shown · 1 loaded · 1 result for “queryA”");
+    expect(search.value).toBe("draftB");
+  });
+
+  it("retries the failed query instead of the later search draft", async () => {
+    let failAttempt = true;
+    const { container, listRequests } = render({
+      getItems: url => {
+        const query = getSearchTerm(url);
+        if (query === "queryB" && failAttempt) {
+          failAttempt = false;
+          throw new Error("private-backend-detail");
+        }
+        return query === "draftC" ? [] : [paymentSecret()];
+      },
+      getTotalCount: (_items, url) => getSearchTerm(url) === "draftC" ? 0 : 1
+    });
+    await waitForText(container, "Payments API");
+
+    const search = container.querySelector<HTMLInputElement>("input[aria-label='Search secrets']")!;
+    change(search, "queryB");
+    clickButton(container, "Search");
+    await waitForText(container, "Secrets could not be loaded.");
+    expect(getSearchTerm(listRequests.at(-1)!)).toBe("queryB");
+
+    change(search, "draftC");
+    clickButton(container, "Retry");
+    await waitFor(() => listRequests.length === 3);
+    await waitFor(() => !!container.querySelector(".secrets-count"));
+    expect(container.querySelector(".secrets-count")?.textContent).toBe("1 shown · 1 loaded · 1 result for “queryB”");
+
+    expect(getSearchTerm(listRequests.at(-1)!)).toBe("queryB");
+    expect(search.value).toBe("draftC");
+  });
+
   it("does not label a complete full page as partial", async () => {
     const { container } = render({
       getItems: () => inventoryPage("Complete"),
@@ -370,6 +484,26 @@ describe("secrets page", () => {
 
     expect(container.querySelector(".secrets-empty-state button")?.textContent).toContain("Clear filters");
     expect(container.querySelector(".secrets-coverage")).toBeNull();
+  });
+
+  it("shows an authoritative no-match search before the selected local facet empty state", async () => {
+    const { container } = render({
+      getItems: url => getSearchTerm(url) === "missing-secret" ? [] : [paymentSecret()],
+      getTotalCount: (_items, url) => getSearchTerm(url) === "missing-secret" ? 0 : 1
+    });
+    await waitForText(container, "Payments API");
+
+    const status = [...container.querySelectorAll<HTMLSelectElement>(".secrets-filter select")]
+      .find(select => select.labels?.[0]?.textContent === "Status")!;
+    selectValue(status, "Revoked");
+    await waitForText(container, "No loaded secrets match your filters");
+    const search = container.querySelector<HTMLInputElement>("input[aria-label='Search secrets']")!;
+    change(search, "missing-secret");
+    clickButton(container, "Search");
+
+    await waitFor(() => container.querySelector(".secrets-count")?.textContent === "0 shown · 0 loaded · 0 results for “missing-secret”");
+    expect(container.querySelector(".secrets-empty-state strong")?.textContent).toBe("No results for “missing-secret”");
+    expect(status.value).toBe("Revoked");
   });
 
   it("does not let a slower earlier search replace the latest result", async () => {

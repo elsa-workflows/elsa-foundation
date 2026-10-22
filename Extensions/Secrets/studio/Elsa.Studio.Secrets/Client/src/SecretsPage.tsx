@@ -29,8 +29,16 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
   const [error, setError] = useState<string | null>(null);
   const descriptorRequestSequence = useRef(0);
   const secretsRequestSequence = useRef(0);
+  const attemptedSearch = useRef("");
 
   const scopes = useMemo(() => Array.from(new Set(secrets.map(secret => secret.scope).filter((scope): scope is string => !!scope))).sort(), [secrets]);
+  const scopeOptions = useMemo(() => {
+    const options = scopes.map(scope => ({ value: scope, label: scope }));
+    if (scopeFilter && !scopes.includes(scopeFilter)) {
+      options.push({ value: scopeFilter, label: `${scopeFilter} (not in loaded results)` });
+    }
+    return options;
+  }, [scopeFilter, scopes]);
   const filteredSecrets = useMemo(() => {
     return secrets.filter(secret => {
       if (typeFilter && secret.typeName !== typeFilter) return false;
@@ -46,12 +54,14 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
   const hasLocalFilters = Boolean(typeFilter || storeFilter || scopeFilter || statusFilter);
   const hasActiveFilters = Boolean(completedSearch.trim() || hasLocalFilters);
   const partialResult = totalCount > secrets.length;
-  const emptyTitle = hasLocalFilters
+  const noSearchMatches = Boolean(completedSearch.trim()) && totalCount === 0;
+  const localFilterEmpty = !noSearchMatches && hasLocalFilters && secrets.length > 0 && filteredSecrets.length === 0;
+  const emptyTitle = localFilterEmpty
     ? "No loaded secrets match your filters"
     : completedSearch.trim()
       ? `No results for “${completedSearch}”`
       : "No secrets yet";
-  const emptyDescription = hasLocalFilters
+  const emptyDescription = localFilterEmpty
     ? "Local filters only cover loaded secrets. Try adjusting them or clear the filters."
     : completedSearch.trim()
       ? "Try another name or display name, or clear the search."
@@ -59,6 +69,7 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
 
   const loadSecrets = useCallback(async (searchTerm: string) => {
     const requestSequence = ++secretsRequestSequence.current;
+    attemptedSearch.current = searchTerm;
     setLoading(true);
     setLoadError(false);
     setError(null);
@@ -111,11 +122,12 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
     return () => {
       descriptorSequence.current++;
       secretsSequence.current++;
+      attemptedSearch.current = "";
     };
   }, [load]);
 
   async function refreshWithStatus(message: string) {
-    await load(search);
+    await load(completedSearch);
     setStatus(message);
   }
 
@@ -238,13 +250,13 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
           label="Scope"
           value={scopeFilter}
           onChange={setScopeFilter}
-          options={scopes.map(scope => ({ value: scope, label: scope }))}
+          options={scopeOptions}
           helpText="Scopes in loaded results"
           description="The list loads up to 100 secrets, so other scopes may exist."
         />
         <FilterSelect label="Status" value={statusFilter} onChange={setStatusFilter} options={secretStatuses.map(value => ({ value, label: value }))} />
         <div className="secrets-toolbar-actions">
-          <button type="button" onClick={() => void load(search)} disabled={loading || descriptorsLoading}><RefreshCw size={15} aria-hidden /> Refresh</button>
+          <button type="button" onClick={() => void load(completedSearch)} disabled={loading || descriptorsLoading}><RefreshCw size={15} aria-hidden /> Refresh</button>
           <button type="button" onClick={() => setDialog({ kind: "create" })} disabled={!descriptors}><Plus size={15} aria-hidden /> Create</button>
         </div>
       </section>
@@ -287,7 +299,7 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
                     <span className="secrets-empty-icon" aria-hidden><AlertCircle size={20} /></span>
                     <strong>Secrets could not be loaded.</strong>
                     <p>Check your connection and try again.</p>
-                    <button type="button" onClick={() => void load(search)}><RefreshCw size={14} aria-hidden /> Retry</button>
+                    <button type="button" onClick={() => void load(attemptedSearch.current)}><RefreshCw size={14} aria-hidden /> Retry</button>
                   </div>
                 </td></tr>
               ) : null}
