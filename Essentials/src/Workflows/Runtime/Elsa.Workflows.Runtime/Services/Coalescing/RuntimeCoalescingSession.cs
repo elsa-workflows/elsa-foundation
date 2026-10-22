@@ -29,6 +29,7 @@ public sealed class RuntimeCoalescingSession
     private readonly ConcurrentDictionary<RuntimeSchedulerWorkClaim, byte> _overlayClaims =
         new(ReferenceEqualityComparer.Instance);
     private bool _queueSeeded;
+    private bool _durableSchedulerClaimBoundaryRequested;
 
     private readonly List<RuntimeCheckpointStateChangeSet> _bufferedChangeSets = [];
     private readonly HashSet<string> _segmentActivityIds = new(StringComparer.Ordinal);
@@ -150,6 +151,17 @@ public sealed class RuntimeCoalescingSession
     {
         ArgumentNullException.ThrowIfNull(claim);
         return _overlayClaims.ContainsKey(claim);
+    }
+
+    /// <summary>Requests a checkpoint flush before the next durable scheduler claim is acquired.</summary>
+    internal void RequestDurableSchedulerClaimBoundary() => _durableSchedulerClaimBoundaryRequested = true;
+
+    /// <summary>Consumes the one-shot request made when the overlay FIFO head requires a durable claim.</summary>
+    internal bool ConsumeDurableSchedulerClaimBoundaryRequest()
+    {
+        var requested = _durableSchedulerClaimBoundaryRequested;
+        _durableSchedulerClaimBoundaryRequested = false;
+        return requested;
     }
 
     // ---- Buffering -------------------------------------------------------------------------------------------------

@@ -157,6 +157,7 @@ internal sealed partial class EfRuleRunStore
         var (key, identityBase64) = DeliveryAddress(identity);
         for (var attempt = 0; attempt < MaximumWriteAttempts; attempt++)
         {
+            RuleInvocationEnvelope invocation;
             RuleTerminalEnvelope envelope;
             long sampledAt;
             try
@@ -176,6 +177,7 @@ internal sealed partial class EfRuleRunStore
                     var state = RuleRowCodec.Read(row);
                     if (state.Terminal is null || state.Invocation.NativeDestination is null)
                         return DeliveryConfirmation(RuleTransitionDisposition.LeaseLost, identity);
+                    invocation = state.Invocation;
                     envelope = ReadEnvelope(row);
                     if (row.DeliveryAcknowledged)
                         return string.Equals(row.DeliveryAcknowledgementJson, acknowledgementJson, StringComparison.Ordinal)
@@ -202,7 +204,7 @@ internal sealed partial class EfRuleRunStore
             {
                 try
                 {
-                    var validation = await validator.ValidateAsync(envelope, acknowledgement.Proof, cancellationToken);
+                    var validation = await validator.ValidateAsync(invocation, envelope, acknowledgement.Proof, cancellationToken);
                     validationDisposition = validation?.Disposition ?? RuleDeliveryProofValidationDisposition.Unavailable;
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

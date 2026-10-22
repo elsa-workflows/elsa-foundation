@@ -377,7 +377,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         using var pageReuseCancellation = cancellationToken.Register(
             static state => ((RuntimeCoalescingSession)state!).DisableDurableValuePageReuse(),
             scope.Session);
-        var drainResult = await DrainSchedulerAndPostCommitWorkAsync(request, cancellationToken);
+        var drainResult = await DrainSchedulerAndPostCommitWorkAsync(request, scope, cancellationToken);
         await scope.FlushAtQuiescenceAsync(cancellationToken);
         await NotifyObserversAsync(envelope, drainResult, cancellationToken);
         return drainResult;
@@ -385,6 +385,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
 
     private async ValueTask<RuntimeSchedulerDrainResult> DrainSchedulerAndPostCommitWorkAsync(
         RuntimeSchedulerDrainRequest request,
+        IRuntimeCoalescingDrainScope coalescingScope,
         CancellationToken cancellationToken)
     {
         RuntimeSchedulerDrainResult? firstDrainResult = null;
@@ -399,10 +400,23 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         {
             cycles.BeginCycle();
             var drainResult = await _schedulerDrainer.DrainAsync(request, cancellationToken);
-            cycles.RecordDispatched(drainResult);
+            var durableClaimBoundary = coalescingScope.Session.ConsumeDurableSchedulerClaimBoundaryRequest();
+            cycles.RecordDispatched(drainResult, countEmptyAsNoProgress: !durableClaimBoundary);
             firstDrainResult ??= drainResult;
             lastDrainResult = drainResult;
             itemResults.AddRange(drainResult.Items);
+
+            // ResumeBookmark work may need durable visibility backoff if its handler reports temporary unavailability.
+            // Flush and deactivate before claiming that FIFO head so the drainer receives the real provider claim rather
+            // than an overlay-only claim whose release would be lost at quiescence.
+            if (durableClaimBoundary)
+                await coalescingScope.FlushAtQuiescenceAsync(cancellationToken);
+
+            if (drainResult.StoppedOnDeferral)
+            {
+                stopReason = RuntimeSchedulerDrainStopReason.Deferred;
+                break;
+            }
 
             if (drainResult.StoppedOnFault || drainResult.StoppedOnPause)
             {
@@ -422,7 +436,9 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
 
             var settlement = await AnyOwnDeliveryStillFailedAsync(outboxDeliveryResults, cancellationToken)
                 ? ContinuationSettlement.Undelivered
-                : await SettleContinuationsAsync(request, drainResult, outboxResult, outboxDeliveryResults, continuationWait, cancellationToken);
+                : durableClaimBoundary
+                    ? ContinuationSettlement.DrainAgain
+                    : await SettleContinuationsAsync(request, drainResult, outboxResult, outboxDeliveryResults, continuationWait, cancellationToken);
             if (settlement == ContinuationSettlement.DrainAgain)
                 continue;
 
@@ -682,13 +698,16 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             }
         }
 
-        public void RecordDispatched(RuntimeSchedulerDrainResult drainResult)
+        public void RecordDispatched(RuntimeSchedulerDrainResult drainResult, bool countEmptyAsNoProgress = true)
         {
             var progressed = false;
             foreach (var item in drainResult.Items)
                 progressed |= _dispatchedWorkItemIds.Add(item.WorkItemId);
 
-            _cyclesWithoutProgress = progressed ? 0 : _cyclesWithoutProgress + 1;
+            if (progressed)
+                _cyclesWithoutProgress = 0;
+            else if (countEmptyAsNoProgress)
+                _cyclesWithoutProgress++;
         }
     }
 

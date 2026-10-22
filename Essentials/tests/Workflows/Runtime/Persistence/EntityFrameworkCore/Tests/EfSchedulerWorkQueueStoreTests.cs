@@ -19,7 +19,7 @@ using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.Schedu
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
-public sealed class EfSchedulerWorkQueueStoreTests
+public sealed partial class EfSchedulerWorkQueueStoreTests
 {
     [Fact]
     public async Task Enqueue_is_existing_wins_scoped_and_survives_restart()

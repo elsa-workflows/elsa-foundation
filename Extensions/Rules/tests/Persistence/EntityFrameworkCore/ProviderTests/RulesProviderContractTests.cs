@@ -482,7 +482,7 @@ internal static partial class RulesProviderContractTests
         private int _calls;
         internal int Calls => Volatile.Read(ref _calls);
 
-        public ValueTask<RuleDeliveryProofValidationResult> ValidateAsync(RuleTerminalEnvelope envelope,
+        public ValueTask<RuleDeliveryProofValidationResult> ValidateAsync(RuleInvocationEnvelope invocation, RuleTerminalEnvelope envelope,
             RuleDeliveryProof proof, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();

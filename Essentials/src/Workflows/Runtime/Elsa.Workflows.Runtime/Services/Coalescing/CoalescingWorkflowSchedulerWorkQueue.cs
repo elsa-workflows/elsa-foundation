@@ -81,7 +81,21 @@ public sealed class CoalescingWorkflowSchedulerWorkQueue(
         CancellationToken cancellationToken = default)
     {
         if (sessionAccessor.Current is { } session && session.AppliesTo(request.WorkflowExecutionId))
+        {
+            var head = await session.ListOverlayAsync(
+                new RuntimeSchedulerWorkQuery(request.WorkflowExecutionId, limit: 1),
+                cancellationToken);
+            if (head.Items.FirstOrDefault()?.CommandKind == WorkflowExecutionCommandKind.ResumeBookmark)
+            {
+                // The resume handler may explicitly defer while its dependency is unavailable. Flush the current
+                // coalesced segment before claiming this item so the drainer's later release updates the real durable
+                // queue row rather than only an overlay that disappears at quiescence.
+                session.RequestDurableSchedulerClaimBoundary();
+                return null;
+            }
+
             return await session.ClaimOverlayAsync(request, cancellationToken);
+        }
 
         return await _inner.ClaimAsync(request, cancellationToken);
     }

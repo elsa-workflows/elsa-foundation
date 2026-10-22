@@ -9,6 +9,7 @@ using Elsa.Rules.Workflows.Runtime.Activities;
 using Elsa.Rules.Workflows.Runtime.Models;
 using Elsa.Rules.Workflows.Runtime.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using static Elsa.Rules.Tests.RuleTestData;
 using ActivityTransitionKind = Elsa.Activities.Runtime.Core.Models.ActivityTransitionKind;
@@ -87,6 +88,45 @@ public sealed class RunRulesBoundaryTests
         Assert.Equal(RuleTerminalKind.Succeeded, terminal.Kind);
         Assert.Equal(["final", "joined", "left", "right", "seed"],
             terminal.ResultFacts.Select(fact => fact.Atom));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Resume_classifies_explicit_store_unavailability_for_same_payload_retry(bool runReadUnavailable)
+    {
+        var fixture = new Fixture(Witness(), ["seed"]);
+        var suspension = await fixture.ExecuteAsync();
+        var request = RulesNativeBoundary.ReadState(suspension.StatePayload.Deserialize<RunRulesState>()!);
+        var address = fixture.Address(request);
+        var terminal = Terminal(["final", "joined", "left", "right", "seed"]);
+        var completion = new RunRulesCompletion(1, address, "model-delivery", TerminalElement(terminal), null);
+        fixture.SetRunResult(request, address, terminal);
+        fixture.SetResumeState(suspension, address, completion, "native-command");
+        fixture.SetUnavailable(runReadUnavailable);
+
+        await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(async () =>
+            await fixture.ResumeAsync(suspension, completion, "native-command"));
+
+        fixture.SetRunResult(request, address, terminal);
+        Assert.Equal(ActivityTransitionKind.Complete,
+            (await fixture.ResumeAsync(suspension, completion, "native-command")).Kind);
+    }
+
+    [Fact]
+    public async Task Invalid_budget_resume_also_preserves_explicit_store_unavailability()
+    {
+        var fixture = new Fixture(Witness(), ["seed"], maxRounds: 0);
+        var suspension = await fixture.ExecuteAsync();
+        var request = RulesNativeBoundary.ReadState(suspension.StatePayload.Deserialize<RunRulesState>()!);
+        var address = fixture.Address(request);
+        var completion = new RunRulesCompletion(1, address, RulesNativeBoundary.InvalidDeliveryId(request, address),
+            null, RulesNativeBoundary.InvalidRoundLimit);
+        fixture.SetResumeState(suspension, address, completion, "native-invalid-command");
+        fixture.SetUnavailable(runRead: true);
+
+        await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(async () =>
+            await fixture.ResumeAsync(suspension, completion, "native-invalid-command"));
     }
 
     [Fact]
@@ -213,6 +253,14 @@ public sealed class RunRulesBoundaryTests
         public RuleWorkflowProgramPin Pin { get; }
         public string Source { get; }
         public RunRules Activity { get; }
+        public void SetUnavailable(bool runRead)
+        {
+            if (runRead)
+                _reader.RunRead = new(RuleRunReadDisposition.Unavailable, null);
+            else
+                _reader.TerminalRead = new(RuleTerminalReadDisposition.Unavailable, null);
+        }
+
         public int FindCalls => _reader.FindCalls;
         public RuleRunReadDisposition LastRunReadDisposition => _reader.LastRunRead.Disposition;
 

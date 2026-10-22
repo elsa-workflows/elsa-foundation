@@ -7,6 +7,7 @@ using Elsa.Rules.Persistence.Core;
 using Elsa.Rules.Workflows.Runtime.Models;
 using Elsa.Rules.Workflows.Runtime.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Rules.Workflows.Runtime.Activities;
@@ -95,8 +96,12 @@ public sealed class RunRules(IWorkflowExecutionStateStore workflows, IWorkflowEx
         if (RulesNativeBoundary.HasInvalidRoundLimit(request))
         {
             if (completion.Result is not null || completion.InvalidCode != RulesNativeBoundary.InvalidRoundLimit ||
-                completion.DeliveryId != RulesNativeBoundary.InvalidDeliveryId(request, completion.Destination) ||
-                (await runs.FindAsync(identity, context.CancellationToken)).Disposition != RuleRunReadDisposition.NotFound)
+                completion.DeliveryId != RulesNativeBoundary.InvalidDeliveryId(request, completion.Destination))
+                throw RulesNativeBoundary.Invalid();
+            var invalidRead = await runs.FindAsync(identity, context.CancellationToken);
+            if (invalidRead.Disposition == RuleRunReadDisposition.Unavailable)
+                throw new RuntimeSchedulerWorkUnavailableException("rules.store-unavailable", "The Rules store is temporarily unavailable.");
+            if (invalidRead.Disposition != RuleRunReadDisposition.NotFound)
                 throw RulesNativeBoundary.Invalid();
             return Fault(new(completion.InvalidCode, "The Rules round limit must be positive and within the finite limit."));
         }
@@ -107,8 +112,14 @@ public sealed class RunRules(IWorkflowExecutionStateStore workflows, IWorkflowEx
         var result = RuleRecordCodec.ReadTerminal(resultBytes.ToArray());
         var invocation = RulesNativeBoundary.Invocation(request, completion.Destination);
         var retained = await runs.FindAsync(identity, context.CancellationToken);
+        if (retained.Disposition == RuleRunReadDisposition.Unavailable)
+            throw new RuntimeSchedulerWorkUnavailableException("rules.store-unavailable", "The Rules store is temporarily unavailable.");
+        if (retained.View?.Fingerprint != RuleRecordCodec.Fingerprint(invocation))
+            throw RulesNativeBoundary.Invalid();
         var terminal = await runs.ReadTerminalAsync(identity, context.CancellationToken);
-        if (retained.View?.Fingerprint != RuleRecordCodec.Fingerprint(invocation) || terminal.Result is null ||
+        if (terminal.Disposition == RuleTerminalReadDisposition.Unavailable)
+            throw new RuntimeSchedulerWorkUnavailableException("rules.store-unavailable", "The Rules store is temporarily unavailable.");
+        if (terminal.Result is null ||
             !RuleRecordCodec.TerminalBytes(terminal.Result).AsSpan().SequenceEqual(RuleRecordCodec.TerminalBytes(result)))
             throw RulesNativeBoundary.Invalid();
         _ = RuleRecordCodec.DeliveryBytes(completion.DeliveryId, completion.Destination, result);

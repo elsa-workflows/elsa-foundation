@@ -58,6 +58,24 @@ public sealed class RuleDeliveryStoreTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Acknowledgement_validates_with_the_store_retained_invocation_and_scope()
+    {
+        var invocation = await CreateNativeTerminalAsync();
+        var validator = new FixedProofValidator(RuleDeliveryProofValidationDisposition.Equivalent);
+        var store = CreateStore(validator);
+        var lease = Assert.IsType<RuleDeliveryLease>((await store.ClaimDeliveryAsync(new("delivery-worker", [1]))).Lease);
+        var read = await store.ReadDeliveryAsync(lease);
+
+        var confirmation = await store.AcknowledgeDeliveryAsync(lease, new(ProofFor(read)));
+
+        Assert.Equal(RuleTransitionDisposition.Acknowledged, confirmation.Disposition);
+        var retained = Assert.IsType<RuleInvocationEnvelope>(validator.Invocation);
+        Assert.Equal(invocation.Identity, retained.Identity);
+        Assert.Equal(RuleRecordCodec.InvocationBytes(invocation), RuleRecordCodec.InvocationBytes(retained));
+        Assert.NotSame(invocation, retained);
+    }
+
+    [Fact]
     public async Task Delivery_read_checks_exact_identity_before_decoding_payload()
     {
         var invocation = await CreateNativeTerminalAsync();
@@ -268,12 +286,14 @@ public sealed class RuleDeliveryStoreTests : IAsyncLifetime
     {
         private int _calls;
         public int Calls => Volatile.Read(ref _calls);
+        public RuleInvocationEnvelope? Invocation { get; private set; }
 
-        public ValueTask<RuleDeliveryProofValidationResult> ValidateAsync(RuleTerminalEnvelope envelope,
+        public ValueTask<RuleDeliveryProofValidationResult> ValidateAsync(RuleInvocationEnvelope invocation, RuleTerminalEnvelope envelope,
             RuleDeliveryProof proof, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
             Interlocked.Increment(ref _calls);
+            Invocation = invocation;
             return ValueTask.FromResult(new RuleDeliveryProofValidationResult(disposition));
         }
     }
@@ -288,7 +308,7 @@ public sealed class RuleDeliveryStoreTests : IAsyncLifetime
         public Task FirstValidationStarted => _firstValidationStarted.Task;
         public void ReleaseFirstValidation() => _releaseFirstValidation.TrySetResult();
 
-        public async ValueTask<RuleDeliveryProofValidationResult> ValidateAsync(RuleTerminalEnvelope envelope,
+        public async ValueTask<RuleDeliveryProofValidationResult> ValidateAsync(RuleInvocationEnvelope invocation, RuleTerminalEnvelope envelope,
             RuleDeliveryProof proof, CancellationToken cancellationToken = default)
         {
             var call = Interlocked.Increment(ref _calls);

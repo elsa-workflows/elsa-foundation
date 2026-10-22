@@ -629,7 +629,7 @@ static Elsa.Rules.Persistence.Core.RuleWorkReadResult.operator ==(Elsa.Rules.Per
 static Elsa.Rules.Persistence.Core.RuleWorkToken.operator !=(Elsa.Rules.Persistence.Core.RuleWorkToken? left, Elsa.Rules.Persistence.Core.RuleWorkToken? right) -> bool
 static Elsa.Rules.Persistence.Core.RuleWorkToken.operator ==(Elsa.Rules.Persistence.Core.RuleWorkToken? left, Elsa.Rules.Persistence.Core.RuleWorkToken? right) -> bool
 Elsa.Rules.Persistence.Core.IRuleDeliveryProofValidator
-Elsa.Rules.Persistence.Core.IRuleDeliveryProofValidator.ValidateAsync(Elsa.Rules.Core.RuleTerminalEnvelope! envelope, Elsa.Rules.Core.RuleDeliveryProof! proof, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationResult!>
+Elsa.Rules.Persistence.Core.IRuleDeliveryProofValidator.ValidateAsync(Elsa.Rules.Core.RuleInvocationEnvelope! invocation, Elsa.Rules.Core.RuleTerminalEnvelope! envelope, Elsa.Rules.Core.RuleDeliveryProof! proof, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationResult!>
 Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationDisposition
 Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationDisposition.Equivalent = 0 -> Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationDisposition
 Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationDisposition.Invalid = 2 -> Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationDisposition

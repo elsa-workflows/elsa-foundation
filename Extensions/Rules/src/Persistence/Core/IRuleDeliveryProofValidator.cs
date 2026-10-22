@@ -2,10 +2,11 @@ using Elsa.Rules.Core;
 
 namespace Elsa.Rules.Persistence.Core;
 
-/// <summary>Verifies durable native consumption proof against the exact frozen Rules delivery.</summary>
+/// <summary>Verifies durable native consumption against the store-retained invocation scope and frozen delivery.</summary>
 public interface IRuleDeliveryProofValidator
 {
     ValueTask<RuleDeliveryProofValidationResult> ValidateAsync(
+        RuleInvocationEnvelope invocation,
         RuleTerminalEnvelope envelope,
         RuleDeliveryProof proof,
         CancellationToken cancellationToken = default);

@@ -43,3 +43,7 @@ Intent handling, delivery hosting, durable native proof and acknowledgement, run
 ### Next recovery investigation
 
 Read-only tracing found an existing same-work-item redelivery path: `TryResolveClaimedResume` and `ActivityAttemptActivationClaimer.PrepareTypedResumeRedeliveryClaim` retain the consumed trigger payload and start a fresh attempt. A narrow explicitly retryable resume failure may be able to use the existing scheduler retry policy instead of creating a second retry scheduler. This is a candidate, not an implemented guarantee: the default retry policy is Noop and durable retry also requires the appropriate poison/resumption store composition. The next slice must inspect competing shared-runtime work, establish the actual host policy, and test an outage after trigger consumption followed by recovery of the same work item. Permanent identity/content mismatches must still fail. ETL's similar read during resume is not evidence of safe unavailable recovery.
+
+### Recovery follow-up
+
+The later [intent/retry checkpoint](native-retry-checkpoint.md) resolves the component-level unavailable-resume finding through a durable queue claim boundary and records a correction to the consume-accessor assumption. Whole Rules native registration and persisted composite acceptance remain open. This original receipt still describes its original component inputs.
