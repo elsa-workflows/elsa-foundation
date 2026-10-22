@@ -275,13 +275,14 @@ public sealed partial class EtlRuntimeJourneyTests
         private readonly HashSet<string> _workerRoles = new(StringComparer.Ordinal);
         private readonly string _source;
         private readonly string _lookup;
-        public EtlScope Scope { get; } = new(null, "runtime-journey");
+        public EtlScope Scope { get; }
         public string SnapshotRoot => Path.Combine(_directory, "snapshots");
         public string OutputRoot => Path.Combine(_directory, "output");
         public string ErrorRoot => Path.Combine(_directory, "errors");
 
-        public RuntimeFiles(string source)
+        public RuntimeFiles(string source, EtlScope? scope = null)
         {
+            Scope = scope ?? new EtlScope(null, "runtime-journey");
             Directory.CreateDirectory(_directory);
             _source = Path.Combine(_directory, "source.csv");
             _lookup = Path.Combine(_directory, "lookup.csv");
@@ -297,7 +298,7 @@ public sealed partial class EtlRuntimeJourneyTests
 
         public async Task<IHost> StartHostAsync(EfMigratePolicy policy, bool includeBindings = true, bool useShell = false,
             string bindingRevision = "v1", IEtlResultDelivery? resultDelivery = null, int deliveryLeaseSeconds = 30, int maximumPageSize = 100,
-            Action<IServiceCollection>? configureServices = null)
+            Action<IServiceCollection>? configureServices = null, Action<EtlRuntimeFeature>? configureRuntime = null)
         {
             var builder = Host.CreateApplicationBuilder();
             var runtime = new EtlRuntimeFeature
@@ -306,6 +307,7 @@ public sealed partial class EtlRuntimeJourneyTests
                 FileBindings = includeBindings ? [Binding("source", "Source", _source, bindingRevision), Binding("lookup", "Lookup", _lookup, bindingRevision),
                     Binding("output", "MainOutput", OutputRoot, bindingRevision), Binding("errors", "ErrorOutput", ErrorRoot, bindingRevision)] : []
             };
+            configureRuntime?.Invoke(runtime);
             var persistence = new EtlRuntimeEntityFrameworkCoreFeature
             {
                 ConnectionString = $"Data Source={Path.Combine(_directory, "runtime.db")};Pooling=False",
@@ -321,6 +323,7 @@ public sealed partial class EtlRuntimeJourneyTests
                         {
                             feature.SnapshotRoot = runtime.SnapshotRoot;
                             feature.FileBindings = runtime.FileBindings;
+                            feature.HttpBindings = runtime.HttpBindings;
                         })
                         .WithFeature<EtlRuntimeEntityFrameworkCoreFeature>(feature => feature.ConnectionString = persistence.ConnectionString)
                         .WithFeature<FileSystemLockingFeature>(feature => feature.LocksFolderPath = Path.Combine(_directory, "locks"))));
@@ -360,7 +363,9 @@ public sealed partial class EtlRuntimeJourneyTests
 
         public async Task<EtlWorkerProcess> StartWorkerAsync(string role, CancellationToken cancellationToken,
             EtlWorkerWritePause writePause = EtlWorkerWritePause.None,
-            EtlWorkerStoreGate storeGate = EtlWorkerStoreGate.BeforeAcceptance)
+            EtlWorkerStoreGate storeGate = EtlWorkerStoreGate.BeforeAcceptance,
+            IReadOnlyList<EtlHostHttpBindingOptions>? httpBindings = null,
+            EtlConnectorWorkerGate connectorGate = EtlConnectorWorkerGate.None)
         {
             EtlWorkerProtocol.ValidateRole(role);
             if (!_workerRoles.Add(role))
@@ -369,7 +374,10 @@ public sealed partial class EtlRuntimeJourneyTests
             var configurationPath = EtlWorkerProtocol.ConfigurationPath(_directory, role);
             var configuration = new EtlWorkerConfiguration(_directory, Scope,
                 [Binding("source", "Source", _source, "v1"), Binding("lookup", "Lookup", _lookup, "v1"),
-                    Binding("output", "MainOutput", OutputRoot, "v1"), Binding("errors", "ErrorOutput", ErrorRoot, "v1")], writePause, storeGate);
+                    Binding("output", "MainOutput", OutputRoot, "v1"), Binding("errors", "ErrorOutput", ErrorRoot, "v1")],
+                writePause, storeGate, httpBindings?.ToList(), connectorGate);
+            if (httpBindings is not null)
+                configuration.Bindings.RemoveAll(binding => httpBindings.Any(http => http.Role == binding.Role));
             await EtlWorkerProtocol.WriteConfigurationAsync(_directory, role, configuration, cancellationToken);
             var worker = new EtlWorkerProcess(_directory, configurationPath, role);
             _workers.Add(worker); // Retain ownership even when startup/readiness fails.

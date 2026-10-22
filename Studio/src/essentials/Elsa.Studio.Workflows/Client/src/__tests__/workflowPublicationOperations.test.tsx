@@ -212,6 +212,47 @@ describe("workflow publication operations", () => {
     expect(fixture.reload).toHaveBeenCalledTimes(1);
   });
 
+  // Spec 261 FR-515: the server's validation warnings are listed in the review, and never block publication.
+  it("lists the server's validation warnings in the review and keeps it publishable", async () => {
+    const fixture = renderOperations({
+      draftValidations: [
+        { code: "CompensationScope/ReplaySafeStep", message: "\"Charge card\" is marked safe to repeat.", nodeId: "scope", member: "steps/0", severity: "Warning" }
+      ]
+    });
+
+    await prepare(fixture);
+
+    expect(fixture.getJson).toHaveBeenCalledWith("/design/workflows/drafts/draft-1/validations", expect.anything());
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "review",
+      validationErrors: [],
+      validationWarnings: ["\"Charge card\" is marked safe to repeat."]
+    });
+
+    await publish(fixture);
+
+    expect(fixture.mutationOrder).toEqual(["snapshot-preflight", "save", "promote", "publish"]);
+    expect(fixture.current().publicationReview?.phase).toBe("success");
+  });
+
+  it("publishes a saved draft whose only validations are warnings", async () => {
+    const fixture = renderOperations({ savedValidations: [{ message: "Connection 'crm' is not available.", severity: "Warning" }] });
+    await prepare(fixture);
+
+    await publish(fixture);
+
+    expect(fixture.mutationOrder).toEqual(["snapshot-preflight", "save", "promote", "publish"]);
+    expect(fixture.current().publicationReview?.phase).toBe("success");
+  });
+
+  it("opens the review without warnings when the validations read fails", async () => {
+    const fixture = renderOperations({ draftValidations: "fail" });
+
+    await prepare(fixture);
+
+    expect(fixture.current().publicationReview).toMatchObject({ phase: "review", validationWarnings: [] });
+  });
+
   it("prevents duplicate quick publication preparation in the same tick", async () => {
     const fixture = renderOperations();
 
@@ -851,6 +892,10 @@ function renderOperations(options: {
   stalePublishAttempts?: number;
   publishValidationDiagnostics?: unknown[];
   savedValidationErrors?: string[];
+  /** Spec 261: entries with a severity the saved draft carries. */
+  savedValidations?: Array<{ message: string; severity?: string }>;
+  /** Spec 261: what `GET design/workflows/drafts/{draftId}/validations` returns, or "fail" to make it throw. */
+  draftValidations?: Array<{ code: string; message: string; nodeId?: string; member?: string; severity?: string }> | "fail";
   failPolicyLoad?: boolean;
   exactVersionSupport?: boolean;
   versionPreflightOverrides?: Partial<PromotionPreflightAssessment>;
@@ -872,8 +917,12 @@ function renderOperations(options: {
   let promoteAttempts = 0;
   let snapshotPreflightAttempts = 0;
   let failNextVersionPreflight = false;
-  const getJson = vi.fn(async (url: string) => {
-    if (url === "/capabilities") return capabilitiesFor(options.exactVersionSupport ?? false, options.legacySlotContract ?? false);
+  const getJson = vi.fn(async (url: string, _options?: unknown) => {
+    if (url === "/capabilities") return capabilitiesFor(options.exactVersionSupport ?? false, options.legacySlotContract ?? false, options.draftValidations !== undefined);
+    if (url === "/design/workflows/drafts/draft-1/validations") {
+      if (options.draftValidations === "fail") throw new Error("validations unavailable");
+      return { draftId: "draft-1", errors: options.draftValidations ?? [] };
+    }
     if (url === "/publishing/workflows/definition-1/policy") {
       if (options.failPolicyLoad) throw new Error("policy unavailable");
       return options.publicationPolicy ?? { defaultAction: "replace", defaultSlotName: "default", source: "host" };
@@ -975,7 +1024,7 @@ function renderOperations(options: {
     mutationOrder.push("save");
     if (options.saveDelayMs) await new Promise(resolve => setTimeout(resolve, options.saveDelayMs));
     const saved = structuredClone(snapshot);
-    saved.validationErrors = (options.savedValidationErrors ?? []).map(message => ({ message }));
+    saved.validationErrors = [...(options.savedValidationErrors ?? []).map(message => ({ message })), ...(options.savedValidations ?? [])];
     return saved;
   });
   const flushPendingSave = vi.fn(options.flushPendingSave ?? (async () => undefined));
@@ -1097,7 +1146,7 @@ function publishedRecord() {
 
 // The current backend contract: slot reads are Runtime-owned and joined through `publication-record`.
 // The legacy contract predates elsa-foundation#1498 and advertises only the removed Publishing relation.
-function capabilitiesFor(exactVersionSupport: boolean, legacySlotContract: boolean) {
+function capabilitiesFor(exactVersionSupport: boolean, legacySlotContract: boolean, draftValidations = false) {
   return {
     capabilities: [
     {
@@ -1105,6 +1154,7 @@ function capabilitiesFor(exactVersionSupport: boolean, legacySlotContract: boole
       contractVersion: "1",
       links: [
         { rel: "workflow-drafts", href: "design/workflows/drafts/{draftId}", templated: true },
+        ...(draftValidations ? [{ rel: "workflow-draft-validations", href: "design/workflows/drafts/{draftId}/validations", templated: true }] : []),
         { rel: "workflow-versions", href: "design/workflows/versions/{versionId}", templated: true },
         ...(exactVersionSupport ? [
           {

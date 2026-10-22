@@ -3,9 +3,11 @@ import { compensationScopeStructureKind } from "../compensationScope";
 import {
   deriveCompensationRuntime,
   interventionDecisionLabel,
+  isRetryDue,
   offeredDecisions,
   operatorHistoryLabel,
   readCompensationJournal,
+  recoveryLabel,
   recoveryStateLabel,
   scopePhaseLabel,
   type CompensationJournal,
@@ -239,6 +241,70 @@ type EntryOptions = {
   resolution?: "EffectAbsent" | "EffectAccepted";
   forwardOutcome?: "Completed" | "Uncertain";
 };
+
+// Spec 261 T515: an automatic retry that waits for its due time reads as Retry scheduled, then Retry due, and Retrying once
+// the run shows its handler running. No action is offered while it waits.
+describe("compensation run view of a scheduled retry", () => {
+  const dueAt = "2026-10-20T10:42:30Z";
+  const scheduled = () => view(journal("Compensating", [
+    entry("e1", "Reserve inventory", 1, "Registered", "ae-1", { handler: "release" }),
+    {
+      ...entry("e2", "Reserve delivery", 2, "Compensating", "ae-2", { handler: "cancel", attempts: ["ae-4"] }),
+      attempts: [
+        { number: 1, activityExecutionId: "ae-4", incidentId: "inc-4", result: "Faulted" },
+        { number: 2, activityExecutionId: null, incidentId: null, result: "Running", notBefore: dueAt }
+      ]
+    }
+  ], { remaining: ["e2", "e1"] }));
+  const firstFailure = () => waitingRun().slice(0, 5);
+  const incidents = () => [incident("inc-3", "ae-3"), absorbed(incident("inc-4", "ae-4"), { "compensation.maxAttempts": "3" })];
+
+  it("shows a retry that waits for its due time, with its attempt and due time, and offers no action", () => {
+    const runtime = deriveCompensationRuntime(journeyScope(), firstFailure(), incidents(), { journal: scheduled() });
+
+    expect(runtime.phase).toBe("Compensating");
+    expect(runtime.rows[1]).toMatchObject({
+      recovery: { state: "RetryScheduled", retryNotBefore: dueAt, attempts: { count: 2, max: 3 }, order: 1 }
+    });
+    expect(runtime.rows[1].actions).toBeUndefined();
+    expect(recoveryLabel(runtime.rows[1].recovery, new Date("2026-10-20T10:42:00Z"))).toBe("Retry scheduled");
+    expect(isRetryDue(runtime.rows[1].recovery, new Date("2026-10-20T10:42:00Z"))).toBe(false);
+  });
+
+  it("says the retry is due once its time has passed and the handler has not started", () => {
+    const runtime = deriveCompensationRuntime(journeyScope(), firstFailure(), incidents(), { journal: scheduled() });
+
+    expect(recoveryLabel(runtime.rows[1].recovery, new Date(dueAt))).toBe("Retry due");
+    expect(isRetryDue(runtime.rows[1].recovery, new Date("2026-10-20T10:43:00Z"))).toBe(true);
+  });
+
+  it("shows Retrying once the run shows the waiting attempt's handler running", () => {
+    const run = [...firstFailure(), execution("ae-5", "cancel", "Running", "15", { parent: "ae-scope", handler: true, scheduledBy: "ae-2" })];
+
+    const runtime = deriveCompensationRuntime(journeyScope(), run, incidents(), { journal: scheduled() });
+
+    expect(runtime.rows[1].recovery).toMatchObject({ state: "Retrying", attempts: { count: 2, max: 3 } });
+    expect(runtime.rows[1].recovery.retryNotBefore).toBeUndefined();
+  });
+
+  it("does not show a scheduled retry for a cancelled scope", () => {
+    const runtime = deriveCompensationRuntime(journeyScope(), waitingRun("Cancelled").slice(0, 5), incidents(), { journal: { ...scheduled(), activityStatus: "Cancelled" } });
+
+    expect(runtime.rows[1].recovery.state).not.toBe("RetryScheduled");
+  });
+
+  it("keeps a retry without a due time, as before spec 261, as Retrying", () => {
+    const legacy = scheduled();
+    const journalView = legacy.view as CompensationJournal;
+    journalView.entries[1].attempts[1] = { number: 2, activityExecutionId: null, incidentId: null, result: "Running" };
+
+    expect(deriveCompensationRuntime(journeyScope(), firstFailure(), incidents(), { journal: legacy }).rows[1].recovery.state).toBe("Retrying");
+  });
+
+  it("labels the state as text", () => {
+    expect(recoveryStateLabel("RetryScheduled")).toBe("Retry scheduled");
+  });
+});
 
 function entry(id: string, step: string, ordinal: number, status: string, forward: string, options: EntryOptions = {}): CompensationJournalEntry {
   return {

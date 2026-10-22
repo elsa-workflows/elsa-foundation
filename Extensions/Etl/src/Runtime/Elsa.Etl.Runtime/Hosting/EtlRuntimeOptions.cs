@@ -13,8 +13,12 @@ internal sealed record EtlRuntimeOptions(
     long MaxLookupRecords,
     long MaxLookupCells,
     int MaxPartitions,
-    long MaxSnapshotBytes)
+    long MaxSnapshotBytes,
+    long MaxRetainedOutputBytes,
+    EtlHttpHostLimits HttpLimits)
 {
+    internal HostHttpBindings HttpBindings { get; init; } = new([]);
+
     public static EtlRuntimeOptions Create(EtlRuntimeFeature feature)
     {
         ArgumentNullException.ThrowIfNull(feature);
@@ -23,7 +27,16 @@ internal sealed record EtlRuntimeOptions(
             feature.MaxConcurrentAttempts <= 0 || feature.MaxLiveRecords <= 0 || feature.MaxLiveInputBytes <= 0 ||
             feature.MaxLiveLookupBytes <= 0 || feature.MaxLiveOutputBytes <= 0 || feature.MaxLookupRecords <= 0 ||
             feature.MaxLookupCells <= 0 || feature.MaxPartitions <= 0 ||
-            feature.MaxSnapshotBytes <= 0 || feature.FileBindings is null)
+            feature.MaxSnapshotBytes <= 0 || feature.MaxRetainedOutputBytes <= 0 || feature.FileBindings is null || feature.HttpBindings is null)
+            throw InvalidConfiguration();
+
+        var http = feature.HttpLimits;
+        if (http is null || http.MaxPageBytes <= 0 || http.MaxPageRecords <= 0 || http.MaxJsonDepth is <= 0 or > 64 ||
+            http.MaxContinuationBytes <= 0 || http.MaxContinuationBytes > EtlHttpPolicy.MaximumSupportedContinuationBytes ||
+            http.MaxPagesPerPartition <= 0 || http.MaxRetainedInputBytes <= 0 || http.MaxRetainedMetadataBytes <= 0 ||
+            http.MaxAttempts <= 0 || http.MaxDeadlineSeconds <= 0 || http.MaxRequestTimeoutSeconds <= 0 || http.MaxDelaySeconds <= 0 ||
+            http.MaxPageBytes > http.MaxRetainedInputBytes || http.MaxContinuationBytes > http.MaxPageBytes ||
+            http.MaxRequestTimeoutSeconds > http.MaxDeadlineSeconds || http.MaxDelaySeconds > http.MaxDeadlineSeconds)
             throw InvalidConfiguration();
 
         try
@@ -32,6 +45,10 @@ internal sealed record EtlRuntimeOptions(
             // Validate the complete trusted registry once while composing the feature. The runtime-scoped
             // registry is rebuilt from these immutable values for each scope.
             _ = new HostFileBindings(bindings);
+            var httpBindings = new HostHttpBindings(feature.HttpBindings);
+            foreach (var file in bindings.Where(x => x.IsCurrent))
+                if (httpBindings.ContainsBinding(file.Scope, file.Alias, file.Role.ToString()))
+                    throw InvalidConfiguration();
 
             return new EtlRuntimeOptions(
                 Path.GetFullPath(feature.SnapshotRoot),
@@ -42,7 +59,9 @@ internal sealed record EtlRuntimeOptions(
                 feature.MaxLookupRecords,
                 feature.MaxLookupCells,
                 feature.MaxPartitions,
-                feature.MaxSnapshotBytes);
+                feature.MaxSnapshotBytes,
+                feature.MaxRetainedOutputBytes,
+                http) { HttpBindings = httpBindings };
         }
         catch (Exception exception) when (exception is ArgumentException or EtlBindingException or NullReferenceException)
         {

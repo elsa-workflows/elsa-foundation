@@ -7,12 +7,15 @@ import {
 import {
   classifyEtlApiError,
   getEtlApiCapability,
+  getEtlConnectorVersion,
   invalidateEtlApiCapabilityCache,
   listEtlDefinitions,
+  listEtlConnectorDefinitions,
+  listEtlConnectorVersions,
   listEtlVersions,
   type EtlApiFailureKind
 } from "./etlApi";
-import type { EtlDefinitionSummaryView, EtlPublishedVersionView } from "./etlTypes";
+import type { EtlDefinitionSummaryView, EtlPageRequest, EtlPublishedVersionView } from "./etlTypes";
 
 const pageSize = 50;
 
@@ -25,7 +28,10 @@ interface CurrentSelection {
   token: string;
   definitionId: string;
   version: number;
+  contentHash: string;
 }
+
+type PipelineCatalog = "file" | "connector";
 
 export function EtlPublishedSelectionEditor({
   value,
@@ -38,6 +44,7 @@ export function EtlPublishedSelectionEditor({
   const readOnly = disabled || context.readOnly === true;
   const currentToken = typeof value === "string" ? value : null;
   const current = currentToken ? parseSelection(currentToken) : null;
+  const [catalog, setCatalog] = useState<PipelineCatalog>("file");
   const [definitionId, setDefinitionId] = useState(current?.definitionId ?? "");
   const [definitions, setDefinitions] = useState<EtlDefinitionSummaryView[]>([]);
   const [definitionsCursor, setDefinitionsCursor] = useState<string | null>(null);
@@ -57,6 +64,54 @@ export function EtlPublishedSelectionEditor({
   const versionsGeneration = useRef(0);
   const definitionsMoreRequest = useRef<AbortController | null>(null);
   const versionsMoreRequest = useRef<AbortController | null>(null);
+  const selectionProbeGeneration = useRef(0);
+  const catalogChoiceGeneration = useRef(0);
+  const manualCatalogChoice = useRef<{ token: string | null; catalog: PipelineCatalog } | null>(null);
+  const autoDetectedConnector = useRef<{ token: string; endpointContext: StudioEndpointContext } | null>(null);
+
+  useEffect(() => {
+    const generation = ++selectionProbeGeneration.current;
+    const controller = new AbortController();
+    const selection = currentToken ? parseSelection(currentToken) : null;
+    const manualChoice = manualCatalogChoice.current;
+    if (manualChoice?.token === currentToken) {
+      setCatalog(manualChoice.catalog);
+      return () => controller.abort();
+    }
+    if (manualChoice) {
+      manualCatalogChoice.current = null;
+      autoDetectedConnector.current = null;
+      setCatalog("file");
+    }
+    if (!selection) {
+      revertStaleAutomaticChoice(autoDetectedConnector, currentToken, endpointContext, setCatalog);
+      return () => controller.abort();
+    }
+
+    const choiceGeneration = catalogChoiceGeneration.current;
+    void getEtlConnectorVersion(endpointContext, selection.definitionId, selection.version, controller.signal)
+      .then(artifact => {
+        if (controller.signal.aborted || generation !== selectionProbeGeneration.current || choiceGeneration !== catalogChoiceGeneration.current) return;
+        const version = artifact.version;
+        if (version.selection === selection.token &&
+          version.definitionId === selection.definitionId &&
+          version.definitionVersion === selection.version &&
+          version.contentHash === selection.contentHash) {
+          autoDetectedConnector.current = { token: selection.token, endpointContext };
+          setCatalog("connector");
+        } else {
+          revertStaleAutomaticChoice(autoDetectedConnector, currentToken, endpointContext, setCatalog);
+        }
+      })
+      .catch(() => {
+        if (controller.signal.aborted || generation !== selectionProbeGeneration.current || choiceGeneration !== catalogChoiceGeneration.current) return;
+        revertStaleAutomaticChoice(autoDetectedConnector, currentToken, endpointContext, setCatalog);
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [endpointContext, currentToken]);
 
   useEffect(() => {
     const generation = ++definitionsGeneration.current;
@@ -69,10 +124,11 @@ export function EtlPublishedSelectionEditor({
     setDefinitionsFailure(null);
     setDefinitionsMoreFailure(null);
 
-    void getEtlApiCapability(endpointContext, "design")
+    const area = catalog === "connector" ? "design-v2" : "design";
+    void getEtlApiCapability(endpointContext, area)
       .then(() => {
         if (controller.signal.aborted) return null;
-        return listEtlDefinitions(endpointContext, { limit: pageSize }, controller.signal);
+        return listDefinitions(endpointContext, catalog, { limit: pageSize }, controller.signal);
       })
       .then(page => {
         if (!page || controller.signal.aborted || generation !== definitionsGeneration.current) return;
@@ -91,7 +147,7 @@ export function EtlPublishedSelectionEditor({
       definitionsMoreRequest.current?.abort();
       definitionsGeneration.current++;
     };
-  }, [endpointContext, definitionsRetry]);
+  }, [endpointContext, catalog, definitionsRetry]);
 
   useEffect(() => {
     const generation = ++versionsGeneration.current;
@@ -111,7 +167,7 @@ export function EtlPublishedSelectionEditor({
     }
 
     setVersionsLoading(true);
-    void listEtlVersions(endpointContext, definitionId, { limit: pageSize }, controller.signal)
+    void listVersions(endpointContext, catalog, definitionId, { limit: pageSize }, controller.signal)
       .then(page => {
         if (controller.signal.aborted || generation !== versionsGeneration.current) return;
         setVersions(page.items);
@@ -129,7 +185,7 @@ export function EtlPublishedSelectionEditor({
       versionsMoreRequest.current?.abort();
       versionsGeneration.current++;
     };
-  }, [endpointContext, definitionId, versionsRetry]);
+  }, [endpointContext, catalog, definitionId, versionsRetry]);
 
   useEffect(() => {
     setDefinitionId(current?.definitionId ?? "");
@@ -144,7 +200,7 @@ export function EtlPublishedSelectionEditor({
     setDefinitionsMoreLoading(true);
     setDefinitionsMoreFailure(null);
     try {
-      const page = await listEtlDefinitions(endpointContext, { limit: pageSize, cursor: definitionsCursor }, controller.signal);
+      const page = await listDefinitions(endpointContext, catalog, { limit: pageSize, cursor: definitionsCursor }, controller.signal);
       if (controller.signal.aborted || generation !== definitionsGeneration.current) return;
       setDefinitions(previous => appendUnique(previous, page.items, item => item.definitionId));
       setDefinitionsCursor(page.nextCursor);
@@ -166,7 +222,7 @@ export function EtlPublishedSelectionEditor({
     setVersionsMoreLoading(true);
     setVersionsMoreFailure(null);
     try {
-      const page = await listEtlVersions(endpointContext, selectedDefinitionId, { limit: pageSize, cursor: versionsCursor }, controller.signal);
+      const page = await listVersions(endpointContext, catalog, selectedDefinitionId, { limit: pageSize, cursor: versionsCursor }, controller.signal);
       if (controller.signal.aborted || generation !== versionsGeneration.current) return;
       setVersions(previous => appendUnique(previous, page.items, item => item.selection));
       setVersionsCursor(page.nextCursor);
@@ -187,12 +243,36 @@ export function EtlPublishedSelectionEditor({
   return (
     <section className="etl-selection-editor" aria-label="Published ETL selection">
       <div className="etl-editor-field">
+        <label htmlFor={`${editorId}-catalog`}>Pipeline catalog</label>
+        <select
+          id={`${editorId}-catalog`}
+          value={catalog}
+          disabled={readOnly}
+          onChange={event => {
+            catalogChoiceGeneration.current++;
+            const selectedCatalog = event.currentTarget.value as PipelineCatalog;
+            autoDetectedConnector.current = null;
+            manualCatalogChoice.current = { token: currentToken, catalog: selectedCatalog };
+            setCatalog(selectedCatalog);
+          }}
+        >
+          <option value="file">File pipelines</option>
+          <option value="connector">Connector pipelines</option>
+        </select>
+      </div>
+
+      <div className="etl-editor-field">
         <label htmlFor={`${editorId}-definition`}>Published ETL definition</label>
         <select
           id={`${editorId}-definition`}
           value={definitionId}
           disabled={readOnly || definitionsLoading || definitionsFailure !== null}
-          onChange={event => setDefinitionId(event.currentTarget.value)}
+          onChange={event => {
+            catalogChoiceGeneration.current++;
+            autoDetectedConnector.current = null;
+            manualCatalogChoice.current = { token: currentToken, catalog };
+            setDefinitionId(event.currentTarget.value);
+          }}
         >
           <option value="">Choose a published ETL definition</option>
           {current && !savedDefinitionIsListed ? (
@@ -223,7 +303,12 @@ export function EtlPublishedSelectionEditor({
           disabled={readOnly || !definitionId || versionsLoading || versionsFailure !== null}
           onChange={event => {
             const selected = versions.find(version => version.selection === event.currentTarget.value);
-            if (selected) onChange(selected.selection);
+            if (selected) {
+              catalogChoiceGeneration.current++;
+              autoDetectedConnector.current = null;
+              manualCatalogChoice.current = { token: selected.selection, catalog };
+              onChange(selected.selection);
+            }
           }}
         >
           <option value="">Choose an immutable published version</option>
@@ -277,5 +362,29 @@ function parseSelection(token: string): CurrentSelection | null {
   if (!match) return null;
   const version = Number(match[2]);
   if (!Number.isSafeInteger(version) || version <= 0) return null;
-  return { token, definitionId: match[1], version };
+  return { token, definitionId: match[1], version, contentHash: match[3] };
+}
+
+function listDefinitions(context: StudioEndpointContext, catalog: PipelineCatalog, request: EtlPageRequest, signal: AbortSignal) {
+  return catalog === "connector"
+    ? listEtlConnectorDefinitions(context, request, signal)
+    : listEtlDefinitions(context, request, signal);
+}
+
+function listVersions(context: StudioEndpointContext, catalog: PipelineCatalog, definitionId: string, request: EtlPageRequest, signal: AbortSignal) {
+  return catalog === "connector"
+    ? listEtlConnectorVersions(context, definitionId, request, signal)
+    : listEtlVersions(context, definitionId, request, signal);
+}
+
+function revertStaleAutomaticChoice(
+  choice: { current: { token: string; endpointContext: StudioEndpointContext } | null },
+  currentToken: string | null,
+  endpointContext: StudioEndpointContext,
+  setCatalog: (catalog: PipelineCatalog) => void
+) {
+  const previous = choice.current;
+  if (!previous || previous.token === currentToken && previous.endpointContext === endpointContext) return;
+  choice.current = null;
+  setCatalog("file");
 }

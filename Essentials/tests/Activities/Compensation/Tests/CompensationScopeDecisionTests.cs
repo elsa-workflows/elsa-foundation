@@ -378,7 +378,7 @@ public sealed class CompensationScopeDecisionTests
         };
 
         var staged = Stage(state);
-        Assert.Equal(4, staged.StateVersion);
+        Assert.Equal(CompensationScopeStatePersister.StateSchemaVersion, staged.StateVersion);
         var json = staged.Value.InlineValue!.Value.GetRawText();
         Assert.Contains("\"ResolvedManually\"", json, StringComparison.Ordinal);
         Assert.Contains("\"Abandoned\"", json, StringComparison.Ordinal);
@@ -391,7 +391,7 @@ public sealed class CompensationScopeDecisionTests
     }
 
     [Fact]
-    public void A_version_3_state_is_upgraded_unchanged_and_written_back_as_version_4()
+    public void A_version_3_state_is_upgraded_unchanged_and_written_back_as_the_current_version()
     {
         var v3 = JsonSerializer.SerializeToElement(new
         {
@@ -421,7 +421,7 @@ public sealed class CompensationScopeDecisionTests
         Assert.Null(entry.Resolution);
         Assert.Null(state.Abandonment);
         Assert.Equal(["ae-inner"], state.ReceivedHandOvers);
-        Assert.Equal(4, Stage(state).StateVersion);
+        Assert.Equal(CompensationScopeStatePersister.StateSchemaVersion, Stage(state).StateVersion);
     }
 
     [Fact]
@@ -444,11 +444,11 @@ public sealed class CompensationScopeDecisionTests
         Assert.Equal(("ae-1", CompensationEntryStatus.Compensated), (entry.OperationKey, entry.Status));
         Assert.Empty(state.Confirmations);
         Assert.Null(state.Abandonment);
-        Assert.Equal(4, Stage(state).StateVersion);
+        Assert.Equal(CompensationScopeStatePersister.StateSchemaVersion, Stage(state).StateVersion);
     }
 
     [Theory]
-    [InlineData(5)]
+    [InlineData(6)]
     [InlineData(99)]
     public void An_unknown_state_version_is_refused(int version)
     {

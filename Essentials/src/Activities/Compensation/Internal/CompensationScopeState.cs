@@ -278,20 +278,42 @@ internal sealed record CompensationConfirmation
     public IReadOnlyList<string> EntryIds { get; init; }
 }
 
-/// <summary>One run of an entry's handler. Its execution id is recorded when it completes or faults.</summary>
+/// <summary>
+/// One run of an entry's handler. Its execution id is recorded when it completes or faults. An automatic retry the scope
+/// scheduled after a wait (spec 261) records the time it waits for; it stays <see cref="CompensationAttemptResult.Running"/>
+/// while it waits and becomes an ordinary running attempt when its handler starts.
+/// </summary>
 internal sealed record CompensationHandlerAttempt
 {
     [JsonConstructor]
-    public CompensationHandlerAttempt(CompensationAttemptResult result, string? activityExecutionId = null, string? incidentId = null)
+    public CompensationHandlerAttempt(
+        CompensationAttemptResult result,
+        string? activityExecutionId = null,
+        string? incidentId = null,
+        DateTimeOffset? notBefore = null,
+        bool? delayClamped = null)
     {
         Result = result;
         ActivityExecutionId = activityExecutionId;
         IncidentId = incidentId;
+        NotBefore = notBefore;
+        DelayClamped = delayClamped;
     }
 
     public CompensationAttemptResult Result { get; init; }
     public string? ActivityExecutionId { get; init; }
     public string? IncidentId { get; init; }
+
+    /// <summary>When the handler runs, at the earliest, for a retry the scope scheduled after a wait (version 5).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTimeOffset? NotBefore { get; init; }
+
+    /// <summary>
+    /// <see langword="true"/> when the retry inputs came from an expression whose value was outside the allowed range and
+    /// was clamped into it (spec 261 FR-509); absent otherwise (version 5).
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? DelayClamped { get; init; }
 }
 
 /// <summary>

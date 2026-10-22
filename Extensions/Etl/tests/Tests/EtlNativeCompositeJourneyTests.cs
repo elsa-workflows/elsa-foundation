@@ -290,7 +290,7 @@ public sealed partial class EtlNativeCompositeJourneyTests
     private static async Task AssertNativeCancellationAsync(NativeEtlJourney journey, EtlInvocation invocation, bool subtree)
     {
         var native = await journey.ReadNativeStateAsync();
-        AssertCancelledTree(native);
+        AssertCancelledTree(journey, native, subtree);
 
         Assert.Null(await journey.ReadBookmarkAsync(invocation.ResultAddress.BookmarkId));
         var run = Assert.IsType<EtlRunView>(await journey.ReadRunAsync(invocation.Scope, invocation.RunId));
@@ -306,35 +306,36 @@ public sealed partial class EtlNativeCompositeJourneyTests
         var delivery = await journey.ReadOutboxAsync(invocation.Scope, invocation.RunId);
         Assert.Equal((int)EtlDeliveryDisposition.ProvenParentTerminal, delivery.Disposition);
         Assert.NotNull(delivery.AcknowledgedAtUtcTicks);
-        AssertCancelledTree(await journey.ReadNativeStateAsync());
+        AssertCancelledTree(journey, await journey.ReadNativeStateAsync(), subtree);
         Assert.Null(await journey.ReadBookmarkAsync(invocation.ResultAddress.BookmarkId));
         Assert.Empty(await journey.ReadManifestAsync(invocation.Scope, invocation.RunId));
+    }
 
-        void AssertCancelledTree((WorkflowExecutionState Workflow, IReadOnlyCollection<ActivityExecutionState> Activities) native)
+    private static void AssertCancelledTree(NativeEtlJourney journey,
+        (WorkflowExecutionState Workflow, IReadOnlyCollection<ActivityExecutionState> Activities) native, bool subtree)
+    {
+        var child = Assert.Single(native.Activities, state => state.Execution.ExecutableNodeId == journey.RunEtlNodeId);
+        Assert.Equal(ActivityExecutionStatus.Cancelled, child.Status);
+        Assert.Equal(ActivityExecutionStatus.Cancelled,
+            Assert.Single(native.Activities, state => state.Execution.ExecutableNodeId == journey.CompositeNodeId).Status);
+        Assert.Equal(subtree ? WorkflowExecutionStatus.Running : WorkflowExecutionStatus.Cancelled, native.Workflow.Status);
+        Assert.DoesNotContain(native.Activities, state => state.Execution.ExecutableNodeId == journey.AfterEtlNodeId);
+        if (subtree)
         {
-            var child = Assert.Single(native.Activities, state => state.Execution.ExecutableNodeId == journey.RunEtlNodeId);
-            Assert.Equal(ActivityExecutionStatus.Cancelled, child.Status);
             Assert.Equal(ActivityExecutionStatus.Cancelled,
-                Assert.Single(native.Activities, state => state.Execution.ExecutableNodeId == journey.CompositeNodeId).Status);
-            Assert.DoesNotContain(native.Activities, state => state.Execution.ExecutableNodeId == journey.AfterEtlNodeId);
-            if (subtree)
-            {
-                Assert.Equal(ActivityExecutionStatus.Cancelled,
-                    Assert.Single(native.Activities, state => state.Execution.ExecutableNodeId == journey.ActivityBoundaryNodeId).Status);
-                Assert.Equal(WorkflowExecutionStatus.Running, native.Workflow.Status);
-                // Sequence defers while its child runs; cancelling that child scope does not complete the outer parent.
-                Assert.Equal(ActivityExecutionStatus.Running,
-                    Assert.Single(native.Activities, state => state.Execution.ExecutableNodeId == "outer-sequence").Status);
-                Assert.DoesNotContain(native.Activities, state => state.Execution.ExecutableNodeId == "after-composite");
-            }
-            Assert.Empty(child.TriggerDeliveries ?? []);
+                Assert.Single(native.Activities, state => state.Execution.ExecutableNodeId == journey.ActivityBoundaryNodeId).Status);
+            // Sequence defers while its child runs; cancelling that child scope does not complete the outer parent.
+            Assert.Equal(ActivityExecutionStatus.Running,
+                Assert.Single(native.Activities, state => state.Execution.ExecutableNodeId == "outer-sequence").Status);
+            Assert.DoesNotContain(native.Activities, state => state.Execution.ExecutableNodeId == "after-composite");
         }
+        Assert.Empty(child.TriggerDeliveries ?? []);
     }
 
     private static async Task WithJourneyAsync(CompositeKind kind, NativeOutcome outcome, Func<NativeEtlJourney, Task> test,
-        AdmissionGate? gate = null, bool includeBindings = true)
+        AdmissionGate? gate = null, bool includeBindings = true, NativeHttpConfiguration? http = null)
     {
-        await using var journey = await NativeEtlJourney.CreateAsync(kind, outcome, gate, includeBindings);
+        await using var journey = await NativeEtlJourney.CreateAsync(kind, outcome, gate, includeBindings, http);
         try
         {
             await test(journey);
@@ -416,7 +417,7 @@ public sealed partial class EtlNativeCompositeJourneyTests
         CompensationAfterFault
     }
 
-    private sealed class NativeEtlJourney : IAsyncDisposable
+    private sealed partial class NativeEtlJourney : IAsyncDisposable
     {
         private const string WorkflowRecoverySigningKey = "etl-native-composite-recovery-key-32";
         private const string WorkflowHierarchySigningKey = "etl-native-composite-hierarchy-key-32";
@@ -435,8 +436,9 @@ public sealed partial class EtlNativeCompositeJourneyTests
             CompositeKind compositeKind,
             NativeOutcome outcome,
             string workflowExecutionId,
-            EtlScope scope)
+            EtlScope scope, NativeHttpConfiguration? http)
         {
+            _http = http;
             _directory = directory;
             _lifetimeHost = lifetimeHost;
             Harness = harness;
@@ -466,7 +468,8 @@ public sealed partial class EtlNativeCompositeJourneyTests
         public string OutputRoot { get; }
 
         public static async Task<NativeEtlJourney> CreateAsync(CompositeKind compositeKind,
-            NativeOutcome outcome = NativeOutcome.Succeeded, AdmissionGate? gate = null, bool includeBindings = true)
+            NativeOutcome outcome = NativeOutcome.Succeeded, AdmissionGate? gate = null, bool includeBindings = true,
+            NativeHttpConfiguration? http = null)
         {
             var directory = Path.Combine(Path.GetTempPath(), "Elsa.Etl.NativeCompositeJourney", Guid.NewGuid().ToString("N"));
             IHost? lifetimeHost = null;
@@ -524,11 +527,16 @@ public sealed partial class EtlNativeCompositeJourneyTests
                     {
                         ConnectionString = $"Data Source={etlDesignDatabase};Pooling=False"
                     }.ConfigureServices(services))
-                    .WithFeature(services => new EtlRuntimeFeature
+                    .WithFeature(services =>
                     {
-                        SnapshotRoot = snapshotRoot,
-                        FileBindings = includeBindings ? bindings.ToList() : []
-                    }.ConfigureServices(services))
+                        var runtime = new EtlRuntimeFeature
+                        {
+                            SnapshotRoot = snapshotRoot,
+                            FileBindings = includeBindings ? bindings.ToList() : []
+                        };
+                        http?.ConfigureRuntime(runtime, scope);
+                        runtime.ConfigureServices(services);
+                    })
                     .WithFeature(services => new EtlRuntimeEntityFrameworkCoreFeature
                     {
                         ConnectionString = $"Data Source={etlRuntimeDatabase};Pooling=False"
@@ -538,6 +546,7 @@ public sealed partial class EtlNativeCompositeJourneyTests
                     .ConfigureServices(services =>
                     {
                         services.AddLogging();
+                        http?.ConfigureServices(services);
                         if (gate is not null)
                             services.AddScoped<IEtlRunAdmissionService>(provider => new GatedAdmission(
                                 provider.GetRequiredService<EtlExecution>(), gate));
@@ -563,7 +572,7 @@ public sealed partial class EtlNativeCompositeJourneyTests
                     await initializer.InitializeAsync();
                 harness.InitializeActivityTypes();
                 var worker = Assert.Single(harness.Services.GetServices<IBackgroundTask>().OfType<EtlRuntimeWorker>());
-                return new NativeEtlJourney(directory, lifetimeHost, harness, worker, compositeKind, outcome, workflowExecutionId, scope);
+                return new NativeEtlJourney(directory, lifetimeHost, harness, worker, compositeKind, outcome, workflowExecutionId, scope, http);
             }
             catch
             {
@@ -585,11 +594,23 @@ public sealed partial class EtlNativeCompositeJourneyTests
             EtlArtifact artifact;
             await using (var operation = await OpenPartitionScopeAsync())
             {
-                var compiler = operation.ServiceProvider.GetRequiredService<IEtlArtifactCompiler>();
-                artifact = Assert.IsType<EtlArtifact>(compiler.Compile("orders", 1, EtlTestPipelines.Create()).Artifact);
                 var definitions = operation.ServiceProvider.GetRequiredService<IEtlDefinitionStore>();
-                Assert.Equal(EtlDefinitionWriteStatus.Created,
-                    (await definitions.CreateDraftAsync(Scope, "orders", EtlTestPipelines.Create())).Status);
+                if (_http is null)
+                {
+                    var compiler = operation.ServiceProvider.GetRequiredService<IEtlArtifactCompiler>();
+                    artifact = Assert.IsType<EtlArtifact>(compiler.Compile("orders", 1, EtlTestPipelines.Create()).Artifact);
+                    Assert.Equal(EtlDefinitionWriteStatus.Created,
+                        (await definitions.CreateDraftAsync(Scope, "orders", EtlTestPipelines.Create())).Status);
+                }
+                else
+                {
+                    var pipeline = EtlV2TestPipelines.Create();
+                    artifact = Assert.IsType<EtlArtifact>(operation.ServiceProvider.GetRequiredService<IEtlArtifactCompilerV2>()
+                        .Compile("orders", 1, pipeline).Artifact);
+                    Assert.Equal(EtlDefinitionWriteStatus.Created,
+                        (await operation.ServiceProvider.GetRequiredService<IEtlDefinitionStoreV2>()
+                            .CreateDraftAsync(Scope, "orders", pipeline)).Status);
+                }
                 Assert.Equal(EtlPublicationStatus.Published,
                     (await definitions.PublishAsync(Scope, "orders", 1, artifact)).Status);
 

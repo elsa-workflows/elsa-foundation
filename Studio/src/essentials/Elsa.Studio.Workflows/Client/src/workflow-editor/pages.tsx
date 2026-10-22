@@ -157,12 +157,18 @@ export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [
   const workflowExecutionId = readWorkflowExecutionIdFromUrl();
   const searchParams = new URLSearchParams(window.location.search);
   // The run view rewrites the selection in the URL as the operator moves around (spec 260 FR-423); read it once per run
-  // so a later render never reloads the run for a selection the view itself wrote.
-  const initialSelection = useRef<{ workflowExecutionId: string; activityExecutionId: string | null } | null>(null);
+  // so a later render never reloads the run for a selection the view itself wrote. Keep the list destination from that
+  // same initial URL because the detail view may replace its query while the operator moves between activities.
+  const initialSelection = useRef<{ workflowExecutionId: string; activityExecutionId: string | null; returnTo: string | null } | null>(null);
   if (initialSelection.current?.workflowExecutionId !== workflowExecutionId) {
-    initialSelection.current = { workflowExecutionId, activityExecutionId: readRunSelection(window.location.search) };
+    initialSelection.current = {
+      workflowExecutionId,
+      activityExecutionId: readRunSelection(window.location.search),
+      returnTo: searchParams.get("returnTo")
+    };
   }
   const initialActivityExecutionId = initialSelection.current.activityExecutionId;
+  const initialReturnTo = initialSelection.current.returnTo;
   const requestedInspectorTab = searchParams.get("tab");
   const initialInspectorTab = requestedInspectorTab === "issues"
     ? "issues"
@@ -186,7 +192,7 @@ export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [
       ) : null}
     >
       <WorkflowLazyBoundary label="workflow run">
-        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} expressionEditors={expressionEditors} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} initialInspectorTab={initialInspectorTab} navigate={navigate} />
+        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} expressionEditors={expressionEditors} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} initialInspectorTab={initialInspectorTab} initialReturnTo={initialReturnTo} navigate={navigate} />
       </WorkflowLazyBoundary>
     </WorkflowsPageFrame>
   );

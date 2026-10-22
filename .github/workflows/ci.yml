@@ -57,7 +57,7 @@ name: CI
 # still runs its Python guards and the catalog link check (the files CatalogLinkGuardTests reads) and then
 # reports success under its own name, so the required context is a real result, never "skipped" or pending.
 # Architecture guards and Core-only build & test skip on that output. Any path a build or test reads
-# (EXTENSION_POINTS.md, the committed dependency map, spec contracts, build and analyzer config) forces the
+# (EXTENSION_POINTS.md, spec contracts, build and analyzer config) forces the
 # full run, and so does anything the classifier cannot read. Push, schedule and dispatch are always full
 # runs, so main itself is never judged by the fast path. "Generated maps fresh" always runs in full; it
 # builds only the generator.
@@ -95,7 +95,9 @@ jobs:
     runs-on: ubuntu-latest
     # The native-hosting process matrix shares this job with the container-free suites.
     # The former 30-minute budget expired before that suite completed (#3056); per-test limits stay bounded.
-    timeout-minutes: 45
+    # 45 minutes then left no margin: the Workbench suite alone takes 25-28 minutes after about 17 minutes of build
+    # and other suites, so runs on main and on PRs were cancelled mid-Workbench with no failing test (#3150, #3152).
+    timeout-minutes: 60
     outputs:
       docs_only: ${{ steps.scope.outputs.docs_only }}
     steps:
@@ -475,16 +477,17 @@ jobs:
     with:
       gate: CI
 
-  # Freshness gate for the generated files that ARE committed: docs/maps/dependency-map.json, which the versioning
-  # calculator reads from each commit's tree, and the generated solution filters (Elsa.Server.*.slnf). Each is
+  # Freshness gate for the one generated output that IS committed: the solution filters (Elsa.Server.*.slnf),
   # regenerated into a scratch directory and byte-compared with what is committed. It also runs the generator's own
-  # contract self-tests, including the publish link rewrite and the generated-maps branch writer.
+  # contract self-tests, including the shared project-discovery rule, the publish link rewrite and the generated-maps
+  # branch writer, and generates the full published set, so a tree the project-graph scan refuses fails here too.
   #
   # The documentation maps, their manifest and the findings reports are not committed (spec 257): every PR changed
-  # them, so concurrent PRs conflicted on them and this job turned unrelated PRs red. They are generated locally with
-  # `-- all` and published after every push to main by the "Publish generated maps" job below. Before #1274 this job
-  # ran on pull_request only and PR #1202 left main stale for the next three PRs (#1243, #1247, #1248); with only
-  # project-graph facts left to compare, a spec or docs change can no longer make it stale at all.
+  # them, so concurrent PRs conflicted on them and this job turned unrelated PRs red. docs/maps/dependency-map.json
+  # is not committed either (spec 259): the versioning calculator derives it from each commit's tree with the same scan
+  # (tools/maps/Elsa.Maps.Projects). All of them are generated locally with `-- all` and published after every push to
+  # main by the "Publish generated maps" job below. Before #1274 this job ran on pull_request only and PR #1202 left
+  # main stale for the next three PRs (#1243, #1247, #1248).
   #
   # "Generated maps fresh" is a required status check on main, matched by JOB name, so the name below is
   # load-bearing and must not be renamed. Until #2622 it lived in maps.yml and the filter check in
@@ -493,11 +496,11 @@ jobs:
   # documentation-only ones.
   #
   # This job is deliberately NOT among the alert job's needs, as it was never wired to main-red-alert.yml in
-  # maps.yml either: a stale dependency map is a request to open a refresh PR, and the actionable output is the
-  # refresh command in the run summary.
+  # maps.yml either: stale filters are a request to open a refresh PR, and the actionable output is the refresh
+  # command in the run summary.
   #
-  # The generator is built once and each check runs whenever that build succeeded, so a stale dependency map does
-  # not hide stale solution filters or the reverse.
+  # The generator is built once and each check runs whenever that build succeeded, so one failing check does not
+  # hide another.
   generated-maps:
     name: Generated maps fresh
     runs-on: ubuntu-latest
@@ -518,11 +521,6 @@ jobs:
       - name: Build the generator
         id: generator
         run: dotnet build tools/maps/Elsa.Maps.Generator -c Release -p:RestoreLockedMode=true
-
-      - name: Check the committed dependency map against the tree
-        id: maps
-        if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
-        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- check
 
       - name: Exercise publish link rewrite contract
         id: publish-self-test
@@ -550,6 +548,12 @@ jobs:
         id: project-facts
         if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
         run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- project-facts-self-test
+
+      # The one project-discovery rule the generator and the versioning calculator share (spec 259).
+      - name: Exercise project graph contract
+        id: project-graph
+        if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- project-graph-self-test
 
       - name: Exercise feature facts contract
         id: feature-facts
@@ -583,30 +587,25 @@ jobs:
             dotnet sln "$filter" list >/dev/null
           done
 
-      - name: Explain how to refresh the dependency map
+      - name: Explain a failed generator check
         if: >-
-          ${{ failure() && (steps.generator.outcome == 'failure' || steps.maps.outcome == 'failure'
-          || steps.project-facts.outcome == 'failure' || steps.feature-facts.outcome == 'failure'
-          || steps.publish-self-test.outcome == 'failure' || steps.publish-dry-run.outcome == 'failure'
-          || steps.branch-writer.outcome == 'failure') }}
+          ${{ failure() && (steps.generator.outcome == 'failure'
+          || steps.project-facts.outcome == 'failure' || steps.project-graph.outcome == 'failure'
+          || steps.feature-facts.outcome == 'failure' || steps.publish-self-test.outcome == 'failure'
+          || steps.publish-dry-run.outcome == 'failure' || steps.branch-writer.outcome == 'failure') }}
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
           ## Generated maps check failed
 
-          If the dependency-map check failed, the committed `docs/maps/dependency-map.json` no longer
-          describes the project graph. Regenerate it and commit it:
+          No map is committed: the documentation maps (spec 257) and `docs/maps/dependency-map.json`
+          (spec 259) are generated and published, never staged. The versioning calculator derives the
+          dependency map from each commit's tree with the same scan this job runs.
 
-          ```bash
-          dotnet run --project tools/maps/Elsa.Maps.Generator -- dependency-map
-          ```
-
-          If the generator refuses a lock file, the tree's dependencies changed without it: run
+          If the scan refuses a lock file, the tree's dependencies changed without it: run
           `dotnet restore Elsa.Server.slnx`, review and commit the changed `packages.lock.json`
-          files, then generate again.
-
-          The documentation maps are never committed (spec 257): do not stage them. A failing publish
-          or branch-writer step is a generator or `tools/maps` change to fix; see
-          `docs/contributing/generated-maps.md`.
+          files, then run `dotnet run --project tools/maps/Elsa.Maps.Generator -- dependency-map` to
+          confirm the map derives. Any other failing step is a generator or `tools/maps` change to fix;
+          see `docs/contributing/generated-maps.md`.
           EOF
 
       - name: Explain how to refresh the solution filters

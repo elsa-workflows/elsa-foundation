@@ -5,6 +5,9 @@ import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/stu
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EtlDefinitionsPage } from "../EtlDefinitionsPage";
 import {
+  createEtlConnectorDefinition, getEtlConnectorDefinition, getEtlConnectorVersion,
+  listEtlConnectorBindings, listEtlConnectorDefinitions, listEtlConnectorVersions,
+  publishEtlConnectorDefinition, updateEtlConnectorDraft, validateEtlConnectorDraft,
   createEtlDefinition,
   EtlApiError,
   getEtlDefinition,
@@ -17,6 +20,7 @@ import {
   validateEtlDraft
 } from "../etlApi";
 import { createDefaultEtlPipeline } from "../authoringHelpers";
+import { createDefaultEtlConnectorPipeline } from "../connectorAuthoringHelpers";
 import type {
   EtlBindingSummary,
   EtlDraftView,
@@ -30,6 +34,9 @@ import type {
 
 vi.mock("../etlApi", async importOriginal => ({
   ...(await importOriginal<typeof import("../etlApi")>()),
+  createEtlConnectorDefinition: vi.fn(), getEtlConnectorDefinition: vi.fn(), getEtlConnectorVersion: vi.fn(),
+  listEtlConnectorBindings: vi.fn(), listEtlConnectorDefinitions: vi.fn(), listEtlConnectorVersions: vi.fn(),
+  publishEtlConnectorDefinition: vi.fn(), updateEtlConnectorDraft: vi.fn(), validateEtlConnectorDraft: vi.fn(),
   createEtlDefinition: vi.fn(),
   getEtlDefinition: vi.fn(),
   getEtlVersion: vi.fn(),
@@ -43,6 +50,21 @@ vi.mock("../etlApi", async importOriginal => ({
 
 describe("ETL definitions page", () => {
   beforeEach(() => {
+    vi.mocked(listEtlConnectorDefinitions).mockResolvedValue(page([summary("orders")]));
+    vi.mocked(listEtlConnectorBindings).mockResolvedValue(page([
+      { alias: "source", role: "Source", kind: "http" },
+      { alias: "output", role: "MainOutput", kind: "http" },
+      { alias: "errors", role: "ErrorOutput", kind: "http" }
+    ]));
+    vi.mocked(getEtlConnectorDefinition).mockImplementation(async (_context, id) => connectorDraft(id));
+    vi.mocked(createEtlConnectorDefinition).mockImplementation(async (_context, request) => connectorDraft(request.id, 1, request.pipeline));
+    vi.mocked(updateEtlConnectorDraft).mockImplementation(async (_context, id, request) => connectorDraft(id, request.expectedRevision + 1, request.pipeline));
+    vi.mocked(validateEtlConnectorDraft).mockImplementation(async (_context, _id, request) => validResult(request.expectedRevision));
+    vi.mocked(publishEtlConnectorDefinition).mockImplementation(async (_context, id, request) => published(id, request.definitionVersion, request.contentHash));
+    vi.mocked(listEtlConnectorVersions).mockResolvedValue(page([]));
+    vi.mocked(getEtlConnectorVersion).mockImplementation(async (_context, id, number) => ({
+      version: version(id, number, hash("b")), pipeline: createDefaultEtlConnectorPipeline()
+    }));
     vi.mocked(listEtlDefinitions).mockResolvedValue(page([summary("orders"), summary("returns")]));
     vi.mocked(listEtlBindings).mockResolvedValue(page(bindings()));
     vi.mocked(getEtlDefinition).mockImplementation(async (_context, id) => draft(id));
@@ -61,6 +83,67 @@ describe("ETL definitions page", () => {
     cleanupActive();
     vi.restoreAllMocks();
     vi.resetAllMocks();
+  });
+
+  it("creates, edits and publishes a connector draft through its own catalog using the validated tuple", async () => {
+    const context = endpointContext();
+    const rendered = mount(context, createDialogs(), "connector");
+    await waitFor(() => expect(buttonContaining(rendered.host, "orders")).toBeTruthy());
+    expect(rendered.host.textContent).toContain("Connector pipelines");
+    click(buttonByText(rendered.host, "New definition"));
+    await waitFor(() => expect(rendered.host.textContent).toContain("Draft: new-pipeline"));
+    expect(createEtlConnectorDefinition).toHaveBeenCalledWith(context, {
+      id: "new-pipeline", pipeline: createDefaultEtlConnectorPipeline()
+    }, expect.any(AbortSignal));
+    change(inputByLabel(rendered.host, "Output field 1 name"), "displayName");
+    expect(buttonByText(rendered.host, "Validate saved revision").disabled).toBe(true);
+    click(buttonByText(rendered.host, "Save draft"));
+    await waitFor(() => expect(rendered.host.textContent).toContain("Saved new-pipeline at revision 2"));
+    expect(updateEtlConnectorDraft).toHaveBeenCalledWith(context, "new-pipeline", expect.objectContaining({
+      expectedRevision: 1,
+      pipeline: expect.objectContaining({ mapping: [{ name: "displayName", origin: "source", field: "name" }] })
+    }), expect.any(AbortSignal));
+    click(buttonByText(rendered.host, "Validate saved revision"));
+    await waitFor(() => expect(buttonByText(rendered.host, "Publish immutable version").disabled).toBe(false));
+    vi.mocked(listEtlConnectorVersions).mockResolvedValue(page([version("new-pipeline", 2, hash("b"))]));
+    click(buttonByText(rendered.host, "Publish immutable version"));
+    await waitFor(() => expect(publishEtlConnectorDefinition).toHaveBeenCalledTimes(1));
+    expect(publishEtlConnectorDefinition).toHaveBeenCalledWith(context, "new-pipeline", {
+      expectedRevision: 2, definitionVersion: 2, contentHash: hash("b")
+    }, expect.any(AbortSignal));
+    await waitFor(() => expect(buttonContaining(rendered.host, "View version 2")).toBeTruthy());
+    click(buttonContaining(rendered.host, "View version 2")!);
+    await waitFor(() => expect(rendered.host.textContent).toContain(`Exact selection: etl1:new-pipeline:2:${hash("b")}`));
+    expect(inputByLabel(rendered.host, "Output field 1 name", true).disabled).toBe(true);
+    expect(listEtlDefinitions).not.toHaveBeenCalled();
+    expect(createEtlDefinition).not.toHaveBeenCalled();
+    expect(publishEtlDefinition).not.toHaveBeenCalled();
+  });
+
+  it("keeps a missing connector capability explicit without falling back to the file catalog", async () => {
+    vi.mocked(listEtlConnectorDefinitions).mockRejectedValue(new EtlApiError("unavailable", null, "etl.capability-unavailable"));
+    const rendered = mount(endpointContext(), createDialogs(), "connector");
+    await waitFor(() => expect(rendered.host.textContent).toContain("ETL API is unavailable"));
+    expect(listEtlDefinitions).not.toHaveBeenCalled();
+    expect(buttonContaining(rendered.host, "orders")).toBeNull();
+  });
+
+  it("discards stale file-catalog responses when the authoring profile changes", async () => {
+    let finishFile: ((result: EtlPage<EtlDefinitionSummaryView>) => void) | undefined;
+    let fileSignal: AbortSignal | undefined;
+    vi.mocked(listEtlDefinitions).mockImplementation((_context, _request, signal) => {
+      fileSignal = signal;
+      return new Promise(resolve => { finishFile = resolve; });
+    });
+    const context = endpointContext();
+    const rendered = mount(context);
+    await waitFor(() => expect(finishFile).toBeDefined());
+    rendered.render(context, "connector");
+    await waitFor(() => expect(buttonContaining(rendered.host, "orders")).toBeTruthy());
+    finishFile?.(page([summary("stale-file-definition")]));
+    await waitFor(() => expect(fileSignal?.aborted).toBe(true));
+    expect(buttonContaining(rendered.host, "stale-file-definition")).toBeNull();
+    expect(rendered.host.textContent).toContain("Connector pipelines");
   });
 
   it("saves a draft, validates its saved revision, publishes that exact tuple once, and views the immutable artifact", async () => {
@@ -260,15 +343,15 @@ function cleanupActive() {
   current?.cleanup();
 }
 
-function mount(context: StudioEndpointContext, dialogs = createDialogs()) {
+function mount(context: StudioEndpointContext, dialogs = createDialogs(), profile: "file" | "connector" = "file") {
   const host = document.createElement("div");
   document.body.append(host);
   const root = createRoot(host);
   const rendered = {
     host,
     root,
-    render(nextContext: StudioEndpointContext) {
-      flushSync(() => root.render(<EtlDefinitionsPage context={nextContext} dialogs={dialogs} />));
+    render(nextContext: StudioEndpointContext, nextProfile = profile) {
+      flushSync(() => root.render(<EtlDefinitionsPage context={nextContext} dialogs={dialogs} profile={nextProfile} />));
     },
     cleanup() {
       flushSync(() => root.unmount());
@@ -302,6 +385,10 @@ function summary(definitionId: string): EtlDefinitionSummaryView {
 
 function draft(definitionId: string, revision = 4, pipeline: EtlPipeline = createDefaultEtlPipeline()): EtlDraftView {
   return { definitionId, revision, lastPublishedVersion: 1, pipeline, updatedAt: "2026-10-20T10:00:00Z" };
+}
+
+function connectorDraft(definitionId: string, revision = 4, pipeline = createDefaultEtlConnectorPipeline()) {
+  return { ...draft(definitionId, revision), pipeline };
 }
 
 function bindings(): EtlBindingSummary[] {

@@ -1595,6 +1595,13 @@ function publicationReview(): PublicationReviewState {
   });
   return {
     ...review,
+    // Spec 261 FR-515: `warnings=1` lists the replay-safe warnings a compensation scope with Write Line steps gets.
+    validationWarnings: searchParams.get("warnings") === "1"
+      ? [
+        "\"Charge card\" is marked safe to repeat, so its call may not be committed before it runs; if the process stops, recovery may not know it happened. Mark it as an external effect unless it has none.",
+        "The compensation of \"Charge card\" is marked safe to repeat, so an undo may run again after a restart without a committed claim. Mark it as an external effect unless it is idempotent and has no effect of its own."
+      ]
+      : review.validationWarnings,
     exactVersionSupported: searchParams.get("exact") !== "unsupported",
     versionPreflightSupported: searchParams.get("exact") !== "unsupported",
     proposedVersion: "2.0.0",
@@ -1762,7 +1769,7 @@ async function renderRequestedFixture() {
   if (searchParams.get("mode") === "compensation-scope") {
     const { CompensationScopeFixture } = await import("./compensationScopeFixture");
     const view = searchParams.get("view");
-    const views = ["run", "waiting", "nested", "confirmed", "loop", "actions", "resolved", "abandoned", "readonly", "derived", "step", "incident"] as const;
+    const views = ["run", "waiting", "retry", "nested", "confirmed", "loop", "actions", "resolved", "abandoned", "readonly", "derived", "step", "incident"] as const;
     root.render(<CompensationScopeFixture view={views.find(candidate => candidate === view) ?? "author"} outcome={searchParams.get("outcome") ?? undefined} />);
     return;
   }

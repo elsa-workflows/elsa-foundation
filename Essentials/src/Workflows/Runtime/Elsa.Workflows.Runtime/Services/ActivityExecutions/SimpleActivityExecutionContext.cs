@@ -95,14 +95,24 @@ public sealed class SimpleActivityExecutionContext(
         string? schedulingActivityExecutionId = null,
         IReadOnlyDictionary<string, string>? metadata = null,
         ActivitySchedulingProvenance? schedulingProvenance = null,
-        LoopIterationScopeRequest? iterationFrame = null)
+        LoopIterationScopeRequest? iterationFrame = null) =>
+        ScheduleChildActivity(executableNodeId, schedulingActivityExecutionId, metadata, schedulingProvenance, iterationFrame, notBefore: null);
+
+    public void ScheduleChildActivity(
+        string executableNodeId,
+        string? schedulingActivityExecutionId,
+        IReadOnlyDictionary<string, string>? metadata,
+        ActivitySchedulingProvenance? schedulingProvenance,
+        LoopIterationScopeRequest? iterationFrame,
+        DateTimeOffset? notBefore)
     {
         _childActivityScheduleRequests.Add(new RuntimeChildActivityScheduleRequest(
             executableNodeId,
             schedulingActivityExecutionId,
             metadata,
             schedulingProvenance,
-            iterationFrame));
+            iterationFrame,
+            notBefore));
     }
 
     public IReadOnlyCollection<RuntimeChildActivityScheduleRequest> GetChildActivityScheduleRequests() =>

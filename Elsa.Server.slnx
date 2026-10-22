@@ -74,6 +74,7 @@
     <Project Path="Extensions/ExtensionBuilder/tests/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj" />
   </Folder>
   <Folder Name="/samples/">
+    <Project Path="samples/Elsa.Samples.Compensation/Elsa.Samples.Compensation.csproj" />
     <Project Path="samples/Elsa.Samples.Nuplane.Activities/Elsa.Samples.Nuplane.Activities.csproj" />
     <Project Path="samples/Elsa.Samples.Nuplane.Notes/Elsa.Samples.Nuplane.Notes.csproj" />
     <Project Path="samples/Elsa.Samples.Nuplane.Notes.Activities/Elsa.Samples.Nuplane.Notes.Activities.csproj" />
@@ -95,6 +96,7 @@
   </Folder>
   <Folder Name="/tools/maps/">
     <Project Path="tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator.csproj" />
+    <Project Path="tools/maps/Elsa.Maps.Projects/Elsa.Maps.Projects.csproj" />
   </Folder>
   <Folder Name="/tools/versioning/">
     <Project Path="tools/versioning/Elsa.Versioning.Calculator/Elsa.Versioning.Calculator.csproj" />
@@ -379,6 +381,9 @@
   <Folder Name="/Essentials/tests/Activities/Compensation/">
     <Project Path="Essentials/tests/Activities/Compensation/Tests/Elsa.Activities.Compensation.Tests.csproj" />
   </Folder>
+  <Folder Name="/Essentials/tests/Activities/Compensation/Persistence/EntityFrameworkCore/">
+    <Project Path="Essentials/tests/Activities/Compensation/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Activities.Compensation.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
+  </Folder>
   <Folder Name="/Essentials/tests/Activities/ControlFlow/">
     <Project Path="Essentials/tests/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj" />
   </Folder>
@@ -592,6 +597,9 @@
     <Project Path="Essentials/tests/Persistence/EntityFrameworkCore/MySql/FeasibilityTests/Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Samples/" />
+  <Folder Name="/Essentials/tests/Samples/Compensation/">
+    <Project Path="Essentials/tests/Samples/Compensation/Tests/Elsa.Samples.Compensation.Tests.csproj" />
+  </Folder>
   <Folder Name="/Essentials/tests/Samples/Nuplane/" />
   <Folder Name="/Essentials/tests/Samples/Nuplane/Activities/">
     <Project Path="Essentials/tests/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj" />

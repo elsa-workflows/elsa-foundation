@@ -6,7 +6,8 @@ namespace Elsa.Activities.Compensation.Internal;
 
 /// <summary>
 /// Upgrades older scope state payloads to the current version: version 1 (M1) to version 2 (spec 251 data model),
-/// version 2 to version 3 (spec 258 data model), and version 3 to version 4 (spec 260 data model), so a scope that
+/// version 2 to version 3 (spec 258 data model), version 3 to version 4 (spec 260 data model), and version 4 to
+/// version 5 (spec 261 data model), so a scope that
 /// started under an older release resumes under the current code. Statuses, ordinals and identities are kept. No
 /// version is ever downgraded.
 /// </summary>
@@ -50,6 +51,18 @@ internal static class CompensationScopeStateUpcaster
     {
         if (JsonNode.Parse(payload.GetRawText()) is not JsonObject state)
             throw new CompensationScopeExecutionException("Compensation scope private state (version 3) is not an object.");
+
+        return JsonSerializer.SerializeToElement(state);
+    }
+
+    /// <summary>
+    /// Version 4 to 5: every field is kept and nothing is added. The new attempt fields (<c>notBefore</c>,
+    /// <c>delayClamped</c>) are optional and absent: no version-4 scope ever scheduled a retry after a wait.
+    /// </summary>
+    public static JsonElement FromVersion4(JsonElement payload)
+    {
+        if (JsonNode.Parse(payload.GetRawText()) is not JsonObject state)
+            throw new CompensationScopeExecutionException("Compensation scope private state (version 4) is not an object.");
 
         return JsonSerializer.SerializeToElement(state);
     }

@@ -28,11 +28,12 @@ public static class MapSetPublisher
         {
             MarkdownTable.Redirect = (repo.Root, outputRoot);
 
-            // Same order as "all", minus the committed dependency-map dataset: architecture-reference reads summaries
-            // out of the domain and extension-point maps, so those come first.
+            // Same order as "all", the dependency-map dataset included (spec 259): architecture-reference reads
+            // summaries out of the domain and extension-point maps, so those come first.
             var projects = ProjectGraph.Read(repo);
             published =
             [
+                .. DependencyMap.Generate(repo, projects),
                 .. CoreMapsGenerator.Generate(repo, projects),
                 .. DomainMapGenerator.Generate(repo, projects),
                 .. ExtensionPointMapGenerator.Generate(repo, projects),

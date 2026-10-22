@@ -809,7 +809,7 @@
         {
           "key": "Body",
           "name": "Body",
-          "type": "String",
+          "type": "System.Text.Json.JsonElement?",
           "collectionKind": "Single",
           "isRequired": false,
           "isNullable": true,
@@ -859,7 +859,7 @@
         {
           "key": "Body",
           "name": "Body",
-          "type": "String",
+          "type": "System.Text.Json.JsonElement?",
           "collectionKind": "Single",
           "isRequired": true,
           "isNullable": true,

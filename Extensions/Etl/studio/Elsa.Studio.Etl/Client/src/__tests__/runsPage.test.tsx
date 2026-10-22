@@ -9,12 +9,14 @@ import {
   cancelEtlRun,
   getEtlRun,
   invalidateEtlApiCapabilityCache,
+  listEtlRunConnectorPartitions,
   listEtlRunPartitions,
   listEtlRuns
 } from "../etlApi";
 import type {
   EtlPage,
   EtlRunDetailView,
+  EtlRunConnectorPartitionView,
   EtlRunPartitionView,
   EtlRunSummaryView,
   EtlRunTerminalResultView
@@ -26,6 +28,7 @@ vi.mock("../etlApi", async importOriginal => ({
   getEtlRun: vi.fn(),
   invalidateEtlApiCapabilityCache: vi.fn(),
   listEtlRunPartitions: vi.fn(),
+  listEtlRunConnectorPartitions: vi.fn(),
   listEtlRuns: vi.fn()
 }));
 
@@ -34,6 +37,7 @@ describe("ETL runs page", () => {
     vi.mocked(listEtlRuns).mockResolvedValue(page([summary("run-1", "running")]));
     vi.mocked(getEtlRun).mockResolvedValue(detail("run-1", "running"));
     vi.mocked(listEtlRunPartitions).mockResolvedValue(page([partition(0)]));
+    vi.mocked(listEtlRunConnectorPartitions).mockResolvedValue(page([connectorPartition(0)]));
     vi.mocked(cancelEtlRun).mockResolvedValue({ cancellationAccepted: true, terminalResult: terminal("cancelled") });
   });
 
@@ -72,6 +76,60 @@ describe("ETL runs page", () => {
     expect(listEtlRuns).toHaveBeenNthCalledWith(2, context, { limit: 50, cursor: "runs-next" }, expect.any(AbortSignal));
     expect(listEtlRunPartitions).toHaveBeenNthCalledWith(1, context, "run-1", { limit: 50 }, expect.any(AbortSignal));
     expect(listEtlRunPartitions).toHaveBeenNthCalledWith(2, context, "run-1", { limit: 50, cursor: "partitions-next" }, expect.any(AbortSignal));
+  });
+
+  it("uses connector progress paging for connector runs and never falls back to file partitions", async () => {
+    const connectorRun = {
+      ...detail("run-1", "running"),
+      sourceRecordCount: null,
+      connector: { sourceKind: "http", mainKind: "http", errorKind: "jsonl", acceptedMainEffects: 2, acceptedErrorEffects: 1 }
+    };
+    vi.mocked(getEtlRun).mockResolvedValue(connectorRun);
+    vi.mocked(listEtlRunConnectorPartitions)
+      .mockResolvedValueOnce(page([connectorPartition(0)], "connector-next"))
+      .mockResolvedValueOnce(page([connectorPartition(1)]));
+    const context = endpointContext();
+    const rendered = mount(context);
+    await waitFor(() => expect(buttonContaining(rendered.host, "run-1")).toBeTruthy());
+    click(buttonContaining(rendered.host, "run-1")!);
+    await waitFor(() => expect(rendered.host.textContent).toContain("HTTP page 3, next item 1 of 4"));
+    expect(rendered.host.textContent).toContain("Unknown for an HTTP source");
+    expect(listEtlRunConnectorPartitions).toHaveBeenNthCalledWith(1, context, "run-1", { limit: 50 }, expect.any(AbortSignal));
+
+    click(buttonByText(rendered.host, "Load more partitions"));
+    await waitFor(() => expect(listEtlRunConnectorPartitions).toHaveBeenCalledTimes(2));
+    expect(listEtlRunConnectorPartitions).toHaveBeenNthCalledWith(2, context, "run-1", { limit: 50, cursor: "connector-next" }, expect.any(AbortSignal));
+    expect(listEtlRunPartitions).not.toHaveBeenCalled();
+  });
+
+  it("keeps a rejected connector run visible without routing it through file progress", async () => {
+    vi.mocked(getEtlRun).mockResolvedValue({
+      ...detail("run-1", "businessError"), formatVersion: 2, connector: null, bindingAliases: null,
+      sourceRecordCount: null, sourceInput: null, lookupInput: null,
+      diagnostic: { code: "etl.binding-unavailable", recordOrdinal: null, field: null }
+    });
+    vi.mocked(listEtlRunConnectorPartitions).mockResolvedValue(page([]));
+    const rendered = mount(endpointContext());
+    await waitFor(() => expect(buttonContaining(rendered.host, "run-1")).toBeTruthy());
+    click(buttonContaining(rendered.host, "run-1")!);
+    await waitFor(() => expect(rendered.host.textContent).toContain("No connector partitions on this page."));
+    expect(rendered.host.textContent).toContain("etl.binding-unavailable");
+    expect(listEtlRunPartitions).not.toHaveBeenCalled();
+  });
+
+  it("shows connector progress as unsupported when the host does not advertise it", async () => {
+    vi.mocked(getEtlRun).mockResolvedValue({
+      ...detail("run-1", "running"),
+      connector: { sourceKind: "csv", mainKind: "jsonl", errorKind: "jsonl", acceptedMainEffects: 0, acceptedErrorEffects: 0 }
+    });
+    vi.mocked(listEtlRunConnectorPartitions).mockRejectedValue(new EtlApiError(
+      "not advertised", null, "etl.capability-unavailable"
+    ));
+    const rendered = mount(endpointContext());
+    await waitFor(() => expect(buttonContaining(rendered.host, "run-1")).toBeTruthy());
+    click(buttonContaining(rendered.host, "run-1")!);
+    await waitFor(() => expect(rendered.host.textContent).toContain("This host does not advertise connector partition progress support."));
+    expect(listEtlRunPartitions).not.toHaveBeenCalled();
   });
 
   it("distinguishes loading, empty, forbidden, and missing-capability states with retry", async () => {
@@ -202,7 +260,7 @@ describe("ETL runs page", () => {
     await waitFor(() => expect(rendered.host.textContent).toContain("Output may be partial."));
     expect(rendered.host.textContent).toContain("Outstanding records");
     expect(rendered.host.textContent).toContain("Outstanding bytes");
-    expect(rendered.host.textContent).toContain("does not undo file writes");
+    expect(rendered.host.textContent).toContain("does not undo output already written or accepted");
     expect(buttonOrNull(rendered.host, "Cancel run")).toBeNull();
     expect(cancelEtlRun).not.toHaveBeenCalled();
   });
@@ -326,6 +384,21 @@ function partition(partitionOrdinal: number): EtlRunPartitionView {
     claimFence: partitionOrdinal === 0 ? 3 : null,
     claimExpiresAt: partitionOrdinal === 0 ? "2026-10-20T10:05:00Z" : null,
     owedBatch: partitionOrdinal === 0 ? { startOrdinal: 0, endOrdinalExclusive: 20, inputBytes: 2048 } : null
+  };
+}
+
+function connectorPartition(partitionOrdinal: number): EtlRunConnectorPartitionView {
+  return {
+    partitionOrdinal,
+    file: null,
+    http: { pageSequence: 3, nextItem: 1, pageRecordCount: 4, exhausted: false, fetch: null },
+    isClaimed: true,
+    claimFence: 3,
+    claimExpiresAt: "2026-10-20T10:05:00Z",
+    notBefore: null,
+    owedBatch: null,
+    acceptedMainEffects: 2,
+    acceptedErrorEffects: 1
   };
 }
 

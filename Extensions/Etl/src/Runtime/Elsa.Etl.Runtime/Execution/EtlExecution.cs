@@ -15,12 +15,15 @@ internal sealed class EtlExecution(
     HostFileBindings bindings,
     EtlRuntimeOptions options,
     EtlExecutableReader executableReader,
+    EtlConnectorExecutableReader connectorExecutableReader,
     EtlFilePreparer preparer,
     EtlBatchProcessor batchProcessor,
     EtlAttemptBudget budget,
     IServiceScopeFactory scopeFactory,
     TimeProvider clock,
-    ILogger<EtlExecution> logger) : IEtlRunAdmissionService
+    ILogger<EtlExecution> logger,
+    HostConnectorBindings connectorBindings,
+    IEtlConnectorRuntimeStore? connectorStore = null) : IEtlRunAdmissionService
 {
     public async ValueTask<EtlAdmissionResult> AdmitAsync(EtlInvocation invocation, CancellationToken cancellationToken = default)
     {
@@ -28,16 +31,31 @@ internal sealed class EtlExecution(
         if (existing is not null)
             return Existing(invocation, existing);
 
-        EtlRunAdmission admission;
+        EtlAdmissionResult result;
         try
         {
-            var pipeline = executableReader.Read(invocation.Artifact);
-            var scope = invocation.Scope;
-            admission = new(invocation, new(
-                EtlRuntimeMetadata.Binding(bindings.Resolve(scope, pipeline.Bindings.Source, EtlFileRole.Source)),
-                EtlRuntimeMetadata.Binding(bindings.Resolve(scope, pipeline.Bindings.Lookup, EtlFileRole.Lookup)),
-                EtlRuntimeMetadata.Binding(bindings.Resolve(scope, pipeline.Bindings.Output, EtlFileRole.MainOutput)),
-                EtlRuntimeMetadata.Binding(bindings.Resolve(scope, pipeline.Bindings.Errors, EtlFileRole.ErrorOutput))));
+            if (invocation.Artifact.FormatVersion == EtlArtifactV2Json.FormatVersion)
+            {
+                var pipeline = connectorExecutableReader.Read(invocation.Artifact);
+                if (connectorStore is null)
+                    return await RefuseAsync(invocation, "etl.connector-runtime-unavailable", cancellationToken);
+                var resolved = await connectorBindings.ResolveAsync(invocation.Scope, pipeline, cancellationToken);
+                if (resolved.Bindings is null)
+                    return await RefuseAsync(invocation, resolved.FailureCode ?? "etl.binding-unavailable", cancellationToken);
+                var admitted = await connectorStore.AdmitConnectorAsync(new(invocation, resolved.Bindings), cancellationToken);
+                result = new(admitted.Status, admitted.Run?.Run);
+            }
+            else
+            {
+                var pipeline = executableReader.Read(invocation.Artifact);
+                var scope = invocation.Scope;
+                var admission = new EtlRunAdmission(invocation, new(
+                    EtlRuntimeMetadata.Binding(bindings.Resolve(scope, pipeline.Bindings.Source, EtlFileRole.Source)),
+                    EtlRuntimeMetadata.Binding(bindings.Resolve(scope, pipeline.Bindings.Lookup, EtlFileRole.Lookup)),
+                    EtlRuntimeMetadata.Binding(bindings.Resolve(scope, pipeline.Bindings.Output, EtlFileRole.MainOutput)),
+                    EtlRuntimeMetadata.Binding(bindings.Resolve(scope, pipeline.Bindings.Errors, EtlFileRole.ErrorOutput))));
+                result = await store.AdmitAsync(admission, cancellationToken);
+            }
         }
         catch (EtlExecutableException exception)
         {
@@ -48,7 +66,6 @@ internal sealed class EtlExecution(
             return await RefuseAsync(invocation, exception.Code, cancellationToken);
         }
 
-        var result = await store.AdmitAsync(admission, cancellationToken);
         if (result.Status != EtlStoreStatus.Conflict)
             return result;
         // Another admission may have won with an earlier host revision. Reuse its pins, never retarget them.
@@ -230,16 +247,13 @@ internal sealed class EtlExecution(
             : new(EtlStoreStatus.Conflict, null);
 
     private ValueTask<EtlTerminalSettlementResult> SettleAsync(EtlPreparationLease lease, EtlPreparationDiagnostic diagnostic, CancellationToken token) =>
-        store.SettleTerminalAsync(new(lease.Scope, lease.RunId, Outcome(diagnostic), SafeDiagnostic(diagnostic),
+        store.SettleTerminalAsync(new(lease.Scope, lease.RunId, EtlRuntimeMetadata.Outcome(diagnostic), EtlRuntimeMetadata.SafeDiagnostic(diagnostic),
             PreparationOwner: lease.Owner, PreparationFence: lease.Fence), token);
 
     private ValueTask<EtlTerminalSettlementResult> SettleAsync(EtlPartitionLease lease, EtlPreparationDiagnostic diagnostic, CancellationToken token) =>
-        store.SettleTerminalAsync(new(lease.Scope, lease.RunId, Outcome(diagnostic), SafeDiagnostic(diagnostic),
+        store.SettleTerminalAsync(new(lease.Scope, lease.RunId, EtlRuntimeMetadata.Outcome(diagnostic), EtlRuntimeMetadata.SafeDiagnostic(diagnostic),
             PartitionOrdinal: lease.PartitionOrdinal, PartitionOwner: lease.Owner, PartitionFence: lease.Fence), token);
 
-    private static EtlTerminalOutcome Outcome(EtlPreparationDiagnostic diagnostic) => diagnostic.Kind == EtlPreparationDiagnosticKind.Fault
-        ? EtlTerminalOutcome.Faulted : EtlTerminalOutcome.BusinessError;
-    private static EtlRunDiagnostic SafeDiagnostic(EtlPreparationDiagnostic diagnostic) => new(diagnostic.Code, diagnostic.RecordOrdinal, diagnostic.Field is { Length: <= 256 } ? diagnostic.Field : null);
     private static EtlChunk Chunk(EtlObjectReference reference) => new(reference.Key, reference.ContentHash, reference.ByteLength);
     private static EtlAttemptCharge Charge(EtlLimits limits) => new(limits.MaxBatchRecords, limits.MaxBatchBytes,
         Math.Min(limits.MaxLookupBytes, limits.MaxSnapshotBytes), limits.MaxOutputBatchBytes);

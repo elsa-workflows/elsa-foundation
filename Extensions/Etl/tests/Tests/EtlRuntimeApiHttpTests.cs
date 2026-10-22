@@ -17,7 +17,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Etl.Tests;
 
-public sealed class EtlRuntimeApiHttpTests
+public sealed partial class EtlRuntimeApiHttpTests
 {
     private static readonly string[] ReadPermissions = [EtlRuntimePermissions.ReadRuns];
     private static readonly string[] CancelPermissions = [EtlRuntimePermissions.CancelRuns];

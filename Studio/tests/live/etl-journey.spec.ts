@@ -1,13 +1,11 @@
 import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
 
-// This journey creates immutable ETL/workflow artifacts and runs them against the configured host.
-// Require a second, explicit opt-in so an ordinary Studio URL cannot accidentally receive test data.
-test.skip(
-  process.env.ELSA_ETL_LIVE_JOURNEY !== "1" || !process.env.ELSA_STUDIO_URL,
-  "Set ELSA_ETL_LIVE_JOURNEY=1 and ELSA_STUDIO_URL for the dedicated ETL fixture Workbench."
-);
-
 test("authors and runs an immutable ETL pipeline through a Sequence workflow", async ({ page }, testInfo) => {
+  test.skip(
+    process.env.ELSA_ETL_LIVE_JOURNEY !== "1" || !process.env.ELSA_STUDIO_URL,
+    "Set ELSA_ETL_LIVE_JOURNEY=1 and ELSA_STUDIO_URL for the dedicated file ETL fixture Workbench."
+  );
+
   await signIn(page);
   await page.setViewportSize({ width: 390, height: 844 });
 
@@ -69,74 +67,13 @@ test("authors and runs an immutable ETL pipeline through a Sequence workflow", a
   await expect.poll(() => sourceTable.evaluate(element => element.scrollLeft)).toBe(0);
   await captureNarrowEvidence(page, testInfo, "etl-definition-mobile");
 
-  // Compose a normal Sequence with RunEtl and a visible downstream success activity.
-  await page.setViewportSize({ width: 1440, height: 900 });
   const workflowName = `ETL live journey ${Date.now()}`;
-  await page.goto("/workflows/definitions");
-  await expect(page.getByRole("button", { name: "Create", exact: true })).toBeVisible({ timeout: 60_000 });
-  await page.getByRole("button", { name: "Create", exact: true }).click();
-  const workflowDialog = page.getByRole("dialog", { name: "Create Workflow" });
-  await workflowDialog.getByLabel("Display name").fill(workflowName);
-  const sequenceRoot = workflowDialog.getByRole("radio", { name: "Sequence" });
-  await expect(sequenceRoot).toBeEnabled();
-  await sequenceRoot.focus();
-  await sequenceRoot.press("Space");
-  await expect(sequenceRoot).toBeChecked();
-  await workflowDialog.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Definitions" })).toBeVisible();
-
-  await expect(page.locator(".wf-sequence-designer")).toBeVisible();
-  await addActivityByKeyboard(page, "Add the first step", "Run Etl");
-
-  const etlDefinition = page.getByLabel("Published ETL definition", { exact: true });
-  await expect(etlDefinition).toBeVisible();
-  await selectPagedOption(page, etlDefinition, definitionId, "Load more definitions");
-  const etlVersion = page.getByLabel("Published ETL version", { exact: true });
-  await expect.poll(async () => etlVersion.locator("option").evaluateAll((options, expected) =>
-    options.some(option => (option as HTMLOptionElement).value === expected), selection
-  ), { timeout: 60_000 }).toBe(true);
-  await etlVersion.selectOption(selection);
-  await expect(etlVersion).toHaveValue(selection);
-
-  await addActivityByKeyboard(page, /^Insert step after /, "Write Line");
-  await page.getByRole("button", { name: /^2\. Write Line/ }).click();
-  await fill(page, "Text", "ETL successor completed");
-  await expect(page.getByRole("list", { name: "Sequence steps" }).getByRole("listitem")).toHaveCount(2);
-
-  await page.getByRole("button", { name: "Publish options" }).click();
-  await page.getByRole("menuitemradio", { name: "Review & publish" }).click();
-  const workflowReview = page.getByRole("dialog", { name: "Publish workflow", exact: true });
-  await expect(workflowReview).toBeVisible({ timeout: 60_000 });
-  await workflowReview.getByRole("button", { name: "Publish", exact: true }).click();
-  const publishedDialog = page.getByRole("dialog", { name: "Published" });
-  await expect(publishedDialog).toBeVisible({ timeout: 60_000 });
-  await publishedDialog.getByRole("button", { name: "Close" }).click();
-
-  // Run the persisted publication, using the normal executable catalog rather than a transient draft test run.
-  await page.goto("/workflows/executables");
-  const executableRow = page.getByRole("table", { name: "Workflow executables" })
-    .getByRole("row").filter({ hasText: workflowName });
-  await expect(executableRow).toHaveCount(1, { timeout: 60_000 });
-  await executableRow.getByRole("button", { name: "Run", exact: true }).click();
-  // This workflow declares no run inputs, so the executable action dispatches immediately.
-  const openRun = page.getByRole("button", { name: /^Open Run / });
-  await expect(openRun).toBeVisible({ timeout: 60_000 });
-  const executionId = (await openRun.innerText()).replace(/^Open Run /, "").trim();
-  expect(executionId).not.toBe("");
+  const executionId = await createAndRunSequence(page, {
+    definitionId, selection, workflowName, writeLineText: "ETL successor completed"
+  });
 
   // Inspect the durable ETL result by its exact published selection, not by host paths or an inferred run ID.
-  await page.goto("/etl/runs");
-  await expect(page.getByRole("heading", { name: "ETL runs" })).toBeVisible({ timeout: 60_000 });
-  const runEntry = page.locator("button.etl-run-select").filter({ hasText: selection });
-  const refresh = page.getByRole("button", { name: "Refresh", exact: true });
-  await expect(async () => {
-    await refresh.click();
-    await expect(runEntry).toHaveCount(1, { timeout: 5_000 });
-    await expect(runEntry).toContainText("Succeeded", { timeout: 5_000 });
-  }).toPass({ timeout: 90_000, intervals: [1_000, 2_000, 5_000] });
-  await runEntry.click();
-
-  const runDetails = page.getByRole("region", { name: "Run details" });
+  const { runDetails } = await openRunBySelection(page, selection, "Succeeded");
   await expect(runDetails.getByRole("status")).toHaveText("Succeeded", { timeout: 60_000 });
   await expect(metric(runDetails, "Published pipeline")).toHaveText(selection);
   await expect(metric(runDetails, "Source records")).toHaveText("2");
@@ -157,6 +94,245 @@ test("authors and runs an immutable ETL pipeline through a Sequence workflow", a
   // The native ETL wait must complete successfully before the following Write Line executes.
   // Reload the real instance view while the runtime delivers the ETL completion if the first read races it.
   await page.setViewportSize({ width: 1440, height: 900 });
+  await expectNativeSequenceCompleted(page, executionId, testInfo, "etl-native-sequence-completed.png");
+  await testInfo.attach("etl-journey-result", {
+    body: JSON.stringify({ definitionId, selection, workflowName, executionId,
+      acceptedRecords: 2, rejectedRecords: 0, filteredRecords: 0, completedPartitions: 2,
+      nativeActivities: ["Sequence", "RunEtl", "WriteLine"], status: "Succeeded" }, null, 2),
+    contentType: "application/json"
+  });
+});
+
+test("HTTP connector authors, paginates, and completes through a Sequence workflow", async ({ page }, testInfo) => {
+  test.skip(
+    process.env.ELSA_ETL_HTTP_LIVE_JOURNEY !== "1" || !process.env.ELSA_STUDIO_URL,
+    "Set ELSA_ETL_HTTP_LIVE_JOURNEY=1 and ELSA_STUDIO_URL for the dedicated HTTP ETL fixture Workbench."
+  );
+  test.setTimeout(180_000);
+
+  await signIn(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  const definitionId = `etl-http-live-${Date.now()}`;
+  const selection = await authorAndPublishConnector(page, definitionId, "http-source");
+  const workflowName = `HTTP ETL live journey ${Date.now()}`;
+  const executionId = await createAndRunSequence(page, {
+    definitionId, selection, workflowName, writeLineText: "HTTP ETL successor completed", catalog: "connector"
+  });
+
+  const { runDetails } = await openRunBySelection(page, selection, "Succeeded", true);
+  await expect(runDetails.getByRole("status")).toHaveText("Succeeded", { timeout: 60_000 });
+  await expect(metric(runDetails, "Published pipeline")).toHaveText(selection);
+  await expect(metric(runDetails, "Source records")).toHaveText("Unknown for an HTTP source");
+  await expect(metric(runDetails, "Accepted records")).toHaveText("4");
+  await expect(metric(runDetails, "Rejected records")).toHaveText("0");
+
+  const connectorOutput = page.getByRole("region", { name: "Connector output progress" });
+  await expect(metric(connectorOutput, "Source type")).toHaveText("HTTP JSON");
+  await expect(metric(connectorOutput, "Main output type")).toHaveText("HTTP JSON");
+  await expect(metric(connectorOutput, "Error output type")).toHaveText("JSON Lines");
+  const acceptedMainRouteBodies = Number(await metric(connectorOutput, "Main route bodies accepted").innerText());
+  expect(acceptedMainRouteBodies).toBe(4);
+  await expect(metric(connectorOutput, "Error route bodies accepted")).toHaveText("0");
+
+  const partitions = page.getByRole("region", { name: "Connector partition progress table" });
+  const partitionRows = partitions.locator("tbody tr");
+  await expect(partitionRows).toHaveCount(2);
+  for (let index = 0; index < 2; index++) {
+    await expect(partitionRows.nth(index)).toContainText("HTTP page 1,");
+    await expect(partitionRows.nth(index)).toContainText("source exhausted");
+  }
+  await page.screenshot({ path: testInfo.outputPath("etl-http-run.png"), fullPage: true });
+  await partitions.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath("etl-http-partitions.png"), fullPage: true });
+
+  await expectNativeSequenceCompleted(page, executionId, testInfo, "etl-http-native-sequence-completed.png");
+  await testInfo.attach("etl-http-journey-result", {
+    body: JSON.stringify({ definitionId, selection, workflowName, executionId, sourceRecords: "unknown for an HTTP source",
+      acceptedRecords: 4, acceptedMainRouteBodies, rejectedRecords: 0,
+      sourcePartitions: 2, nativeActivities: ["Sequence", "RunEtl", "WriteLine"], status: "Succeeded" }, null, 2),
+    contentType: "application/json"
+  });
+});
+
+test("HTTP connector shows a waiting 429 and accepts Studio cancellation", async ({ page }, testInfo) => {
+  test.skip(
+    process.env.ELSA_ETL_HTTP_LIVE_JOURNEY !== "1" || !process.env.ELSA_STUDIO_URL,
+    "Set ELSA_ETL_HTTP_LIVE_JOURNEY=1 and ELSA_STUDIO_URL for the dedicated HTTP ETL fixture Workbench."
+  );
+  test.setTimeout(180_000);
+
+  await signIn(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  const definitionId = `etl-http-wait-${Date.now()}`;
+  const selection = await authorAndPublishConnector(page, definitionId, "http-wait");
+  const workflowName = `HTTP ETL cancellation ${Date.now()}`;
+  const executionId = await createAndRunSequence(page, {
+    definitionId, selection, workflowName, writeLineText: "Must not run after HTTP cancellation", catalog: "connector"
+  });
+
+  const { runEntry, runDetails } = await openRunBySelection(page, selection, /Preparing input|Processing/, true);
+  const partitions = page.getByRole("region", { name: "Connector partition progress table" });
+  await expect(async () => {
+    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await expect(runDetails.getByRole("status")).toContainText(/Preparing input|Processing/);
+    await expect(partitions).toContainText(/Retry phase: waiting; attempt [1-9]\d*\./);
+    await expect(partitions).toContainText("Deadline:");
+    await expect(partitions).toContainText("Last HTTP status: 429");
+    await expect(partitions).toContainText("Next attempt after");
+  }).toPass({ timeout: 60_000, intervals: [500, 1_000, 2_000] });
+
+  await expect(metric(runDetails, "Source records")).toHaveText("Unknown for an HTTP source");
+  const connectorOutput = page.getByRole("region", { name: "Connector output progress" });
+  await expect(metric(connectorOutput, "Main route bodies accepted")).toHaveText("0");
+  await expect(metric(connectorOutput, "Error route bodies accepted")).toHaveText("0");
+
+  await page.getByRole("button", { name: "Cancel run", exact: true }).click();
+  const cancelDialog = page.getByRole("dialog").last();
+  await expect(cancelDialog).toContainText("Completed output writes are retained");
+  await cancelDialog.getByRole("button", { name: "Cancel run", exact: true }).click();
+
+  const cancellationReceipt = page.getByRole("status").filter({ hasText: "Cancellation accepted." });
+  await expect(cancellationReceipt).toContainText("Actual terminal outcome: Cancelled.");
+  await expect(runDetails.getByRole("status")).toHaveText("Cancelled");
+  await expect(runEntry).toContainText("Cancelled");
+  await expect(metric(connectorOutput, "Main route bodies accepted")).toHaveText("0");
+  await expect(metric(connectorOutput, "Error route bodies accepted")).toHaveText("0");
+  await page.screenshot({ path: testInfo.outputPath("etl-http-429-cancelled.png"), fullPage: true });
+  await expectNativeSequenceHasNoCompletedWriteLine(page, executionId, testInfo);
+  await testInfo.attach("etl-http-cancellation-result", {
+    body: JSON.stringify({ definitionId, selection, workflowName, status: "Cancelled",
+      retryPhase: "waiting", lastStatusCode: 429, acceptedMainRouteBodies: 0, acceptedErrorRouteBodies: 0 }, null, 2),
+    contentType: "application/json"
+  });
+});
+
+async function authorAndPublishConnector(page: Page, definitionId: string, sourceBinding: string) {
+  await page.goto("/etl/connectors");
+  await expect(page.getByRole("heading", { name: "Connector pipelines" })).toBeVisible({ timeout: 60_000 });
+  await page.getByRole("button", { name: "New definition" }).click();
+
+  const createDialog = page.getByRole("dialog", { name: "New ETL definition" });
+  await createDialog.getByRole("textbox", { name: "New ETL definition" }).fill(definitionId);
+  await createDialog.getByRole("button", { name: "Create draft" }).click();
+  await expect(page.getByRole("heading", { name: `Draft: ${definitionId}` })).toBeVisible();
+
+  await selectBinding(page, "Source HTTP binding", sourceBinding);
+  await fill(page, "Records JSON Pointer", "/items");
+  await fill(page, "Continuation query parameter", "pageToken");
+  await selectBinding(page, "Accepted records binding", "http-output");
+  await page.getByLabel("Rejected records destination kind", { exact: true }).selectOption("jsonl");
+  await selectBinding(page, "Rejected records binding", "errors");
+  await expect(page.getByText("No lookup is configured", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Save draft" }).click();
+  await expect(page.getByRole("status").filter({ hasText: `Saved ${definitionId}` })).toBeVisible();
+  await page.getByRole("button", { name: "Validate saved revision" }).click();
+  await expect(page.getByRole("status").filter({ hasText: /is valid as immutable version/ })).toBeVisible({ timeout: 60_000 });
+  await page.getByRole("button", { name: "Publish immutable version" }).click();
+  const publishDialog = page.getByRole("dialog", { name: "Publish immutable ETL version?" });
+  await publishDialog.getByRole("button", { name: "Publish version" }).click();
+
+  const version = page.getByRole("button", { name: /^View version 1\b/ });
+  await expect(version).toBeVisible({ timeout: 60_000 });
+  await version.click();
+  const artifact = page.getByRole("region", { name: "Published ETL artifact" });
+  await expect(artifact).toBeVisible();
+  const selection = (await artifact.locator("code").innerText()).trim();
+  expect(selection).not.toBe("");
+  await expect(artifact).toContainText(selection);
+  return selection;
+}
+
+async function createAndRunSequence(page: Page, {
+  definitionId, selection, workflowName, writeLineText, catalog = "file"
+}: { definitionId: string; selection: string; workflowName: string; writeLineText?: string; catalog?: "file" | "connector" }) {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/workflows/definitions");
+  const create = page.getByRole("button", { name: "Create", exact: true });
+  await expect(create).toBeVisible({ timeout: 60_000 });
+  await create.click();
+  const workflowDialog = page.getByRole("dialog", { name: "Create Workflow" });
+  await workflowDialog.getByLabel("Display name").fill(workflowName);
+  const sequenceRoot = workflowDialog.getByRole("radio", { name: "Sequence" });
+  await expect(sequenceRoot).toBeEnabled();
+  await sequenceRoot.focus();
+  await sequenceRoot.press("Space");
+  await expect(sequenceRoot).toBeChecked();
+  await workflowDialog.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Definitions" })).toBeVisible();
+  await expect(page.locator(".wf-sequence-designer")).toBeVisible();
+
+  await addActivityByKeyboard(page, "Add the first step", "Run Etl");
+  const etlCatalog = page.getByLabel("Pipeline catalog", { exact: true });
+  await expect(etlCatalog).toBeVisible();
+  await etlCatalog.selectOption(catalog);
+  await expect(etlCatalog).toHaveValue(catalog);
+  const etlDefinition = page.getByLabel("Published ETL definition", { exact: true });
+  await expect(etlDefinition).toBeVisible();
+  await selectPagedOption(page, etlDefinition, definitionId, "Load more definitions");
+  const etlVersion = page.getByLabel("Published ETL version", { exact: true });
+  await expect.poll(async () => etlVersion.locator("option").evaluateAll((options, expected) =>
+    options.some(option => (option as HTMLOptionElement).value === expected), selection
+  ), { timeout: 60_000 }).toBe(true);
+  await etlVersion.selectOption(selection);
+  await expect(etlVersion).toHaveValue(selection);
+
+  if (writeLineText !== undefined) {
+    await addActivityByKeyboard(page, /^Insert step after /, "Write Line");
+    await page.getByRole("button", { name: /^2\. Write Line/ }).click();
+    await fill(page, "Text", writeLineText);
+    await expect(page.getByRole("list", { name: "Sequence steps" }).getByRole("listitem")).toHaveCount(2);
+  }
+
+  await page.getByRole("button", { name: "Publish options" }).click();
+  await page.getByRole("menuitemradio", { name: "Review & publish" }).click();
+  const workflowReview = page.getByRole("dialog", { name: "Publish workflow", exact: true });
+  await expect(workflowReview).toBeVisible({ timeout: 60_000 });
+  await workflowReview.getByRole("button", { name: "Publish", exact: true }).click();
+  const publishedDialog = page.getByRole("dialog", { name: "Published" });
+  await expect(publishedDialog).toBeVisible({ timeout: 60_000 });
+  await publishedDialog.getByRole("button", { name: "Close" }).click();
+
+  await page.goto("/workflows/executables");
+  const executableRow = page.getByRole("table", { name: "Workflow executables" })
+    .getByRole("row").filter({ hasText: workflowName });
+  await expect(executableRow).toHaveCount(1, { timeout: 60_000 });
+  await executableRow.getByRole("button", { name: "Run", exact: true }).click();
+  const openRun = page.getByRole("button", { name: /^Open Run / });
+  await expect(openRun).toBeVisible({ timeout: 60_000 });
+  const executionId = (await openRun.innerText()).replace(/^Open Run /, "").trim();
+  expect(executionId).not.toBe("");
+  return executionId;
+}
+
+async function openRunBySelection(page: Page, selection: string, expectedStatus: string | RegExp, expectConnectorPartitions = false) {
+  await page.goto("/etl/runs");
+  await expect(page.getByRole("heading", { name: "ETL runs" })).toBeVisible({ timeout: 60_000 });
+  const runEntry = page.locator("button.etl-run-select").filter({ hasText: selection });
+  const refresh = page.getByRole("button", { name: "Refresh", exact: true });
+  await expect(async () => {
+    await refresh.click();
+    await expect(runEntry).toHaveCount(1, { timeout: 5_000 });
+    await expect(runEntry).toContainText(expectedStatus, { timeout: 5_000 });
+  }).toPass({ timeout: 90_000, intervals: [1_000, 2_000, 5_000] });
+
+  const connectorPartitionsResponse = expectConnectorPartitions
+    ? page.waitForResponse(response => response.url().includes("/etl/runs/") && response.url().includes("/connector-partitions"), { timeout: 60_000 })
+    : null;
+  await runEntry.click();
+  if (connectorPartitionsResponse) {
+    const response = await connectorPartitionsResponse;
+    expect(response.status()).toBe(200);
+  }
+
+  const runDetails = page.getByRole("region", { name: "Run details" });
+  await expect(runDetails).toBeVisible();
+  return { runEntry, runDetails };
+}
+
+async function expectNativeSequenceCompleted(page: Page, executionId: string, testInfo: TestInfo, screenshotName: string) {
   const timeline = page.getByRole("list", { name: "Execution timeline" });
   const runEtlEntry = timeline.getByRole("button").filter({ hasText: /Run\s*Etl/i });
   const successorEntry = timeline.getByRole("button").filter({ hasText: "Write Line" });
@@ -176,14 +352,26 @@ test("authors and runs an immutable ETL pipeline through a Sequence workflow", a
     expect(etlIndex).toBeGreaterThanOrEqual(0);
     expect(successorIndex).toBeGreaterThan(etlIndex);
   }).toPass({ timeout: 90_000, intervals: [1_000, 2_000, 5_000] });
-  await page.screenshot({ path: testInfo.outputPath("etl-native-sequence-completed.png") });
-  await testInfo.attach("etl-journey-result", {
-    body: JSON.stringify({ definitionId, selection, workflowName, executionId,
-      acceptedRecords: 2, rejectedRecords: 0, filteredRecords: 0, completedPartitions: 2,
-      nativeActivities: ["Sequence", "RunEtl", "WriteLine"], status: "Succeeded" }, null, 2),
-    contentType: "application/json"
-  });
-});
+  await page.screenshot({ path: testInfo.outputPath(screenshotName) });
+}
+
+async function expectNativeSequenceHasNoCompletedWriteLine(page: Page, executionId: string, testInfo: TestInfo) {
+  await page.goto(`/workflows/instances/${encodeURIComponent(executionId)}`);
+  const timeline = page.getByRole("list", { name: "Execution timeline" });
+  const runEtlEntry = timeline.getByRole("button").filter({ hasText: /Run\s*Etl/i });
+  const sequenceEntry = timeline.getByRole("button").filter({ hasText: "Sequence" });
+  const successorEntry = timeline.getByRole("button").filter({ hasText: "Write Line" });
+  await expect(async () => {
+    await page.reload();
+    await expect(timeline).toBeVisible({ timeout: 5_000 });
+    await expect(runEtlEntry).toHaveCount(1, { timeout: 5_000 });
+    await expect(runEtlEntry.locator('[data-status="cancelled"]')).toBeVisible({ timeout: 5_000 });
+    await expect(sequenceEntry).toHaveCount(1, { timeout: 5_000 });
+    await expect(sequenceEntry.locator('[data-status="cancelled"]')).toBeVisible({ timeout: 5_000 });
+  }).toPass({ timeout: 90_000, intervals: [1_000, 2_000, 5_000] });
+  await expect(successorEntry.locator('[data-status="completed"]')).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("etl-http-sequence-cancelled.png") });
+}
 
 async function signIn(page: Page) {
   await page.goto("/");

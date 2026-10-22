@@ -96,7 +96,8 @@ public static class SchedulerWorkHandlerHelpers
     /// Builds the <see cref="RuntimePostCommitIntentKinds.EnqueueSchedulerWork"/> post-commit intent
     /// that enqueues a follow-up scheduler work item after the source commit lands (#412 item 2).
     /// Extracted from five verbatim copies. The <c>intentId</c> and <c>idempotencyKey</c> strings and
-    /// the intent kind are frozen persisted identifiers and are reproduced exactly.
+    /// the intent kind are frozen persisted identifiers and are reproduced exactly. A <c>ScheduleActivity</c> work item
+    /// staged with a due time (R-7, spec 261) gives the intent that due time as <see cref="RuntimePostCommitIntent.NotBefore"/>.
     /// </summary>
     public static RuntimePostCommitIntent NewEnqueueSchedulerWorkIntent(
         RuntimeSchedulerWorkItem sourceWorkItem,
@@ -115,7 +116,8 @@ public static class SchedulerWorkHandlerHelpers
             // Carry the already-materialized work item alongside its authoritative serialized payload so
             // a live drain's in-process hop can skip re-deserializing it. In-process conduit only ([JsonIgnore]); the
             // serialized payload above stays the sole durable form.
-            materializedSchedulerWorkItem: schedulerWorkItem);
+            materializedSchedulerWorkItem: schedulerWorkItem,
+            notBefore: RuntimeDelayedSchedules.ReadNotBefore(schedulerWorkItem) is { } notBefore && notBefore > recordedAt ? notBefore : null);
 
     /// <summary>
     /// Normalizes activity completion outcome names: snapshots the sequence, applies the empty-set

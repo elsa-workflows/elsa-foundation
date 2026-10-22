@@ -5,7 +5,7 @@ Domain: `Elsa.Etl`
 
 ## Authoring operation boundary
 
-`IEtlDesignOperations` is the scoped operation seam dispatched by the nine NativeEndpoints endpoint classes.
+`IEtlDesignOperations` is the scoped operation seam dispatched by the version 1 NativeEndpoints endpoint classes.
 The default `EtlDesignOperations` resolves tenant identity from a validated normalized principal and partition
 from the host's ordinary persistence scope. Replacements must preserve permission, scope, bounded pagination,
 optimistic revision and exact publication retry semantics in the [finite ETL contract](../../../../../specs/255-finite-file-etl/contracts/journey.md).
@@ -26,3 +26,15 @@ and validates the actual retained binding revisions.
 Cursor signing is internal to this feature. Configure `CursorSigningKey` consistently across replicas for stable
 pagination; its process-local default deliberately does not promise continuity across restarts. The key is a
 secret host setting, not an authored value or response field.
+
+## Connector authoring API
+
+The file-only authoring surface is version 1 at `/etl/...`; its `IEtlBindingCatalog` remains file-only. Connector
+pipelines use the additive version 2 surface at `/etl/v2/...` and the separate `IEtlConnectorBindingCatalog` and
+`IEtlConnectorBindingResolver` ports. The connector catalog exposes only the current alias, role and connector kind
+for the caller's exact scope. The resolver is required for v2 validation and new publication, resolves a complete
+immutable binding set without sending source or destination requests, and refuses authenticated bindings when the validated scope has no
+tenant. An absent v2 provider is reported as unavailable. Both API versions share definition identity and
+publication history, so each list and immutable read filters to its own artifact format. Signed cursors advance over
+the shared raw history even when a page has no rows of the requested format; an older v1 publication therefore
+remains reachable after a v2 draft or publication is added.

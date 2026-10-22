@@ -48,4 +48,10 @@ internal static class EtlRuntimeMetadata
 
     public static EtlObjectReference ToReference(EtlChunk chunk) =>
         new(chunk.Key, chunk.ContentHash, chunk.ByteLength);
+    public static EtlTerminalOutcome Outcome(EtlPreparationDiagnostic diagnostic) =>
+        diagnostic.Kind == EtlPreparationDiagnosticKind.Fault ? EtlTerminalOutcome.Faulted : EtlTerminalOutcome.BusinessError;
+
+    public static EtlRunDiagnostic SafeDiagnostic(EtlPreparationDiagnostic diagnostic) =>
+        new(diagnostic.Code, diagnostic.RecordOrdinal, diagnostic.Field is { Length: <= 256 } ? diagnostic.Field : null);
+
 }

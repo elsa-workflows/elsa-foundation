@@ -1,6 +1,6 @@
 import { useId, useRef, type KeyboardEvent, type MouseEvent, type ReactNode, type RefObject } from "react";
 import type { Node } from "@xyflow/react";
-import { AlertTriangle, ArrowDown, ArrowUp, BadgeCheck, Ban, Check, ChevronRight, CircleDashed, CircleDot, CircleSlash, CornerUpLeft, Hand, Hourglass, Loader, Minus, OctagonX, Plus, RotateCw, Trash2, Undo2, UserCheck, X } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, BadgeCheck, Ban, Check, ChevronRight, CircleDashed, CircleDot, CircleSlash, CornerUpLeft, Hand, Hourglass, Loader, Minus, OctagonX, Plus, RotateCw, Timer, Trash2, Undo2, UserCheck, X } from "lucide-react";
 import { renderActivityIcon } from "../activityIconView";
 import {
   compensationStepProblems,
@@ -13,6 +13,7 @@ import {
 import {
   compensationDecisions,
   forwardStateLabel,
+  isRetryDue,
   operatorHistoryLabel,
   ordinalLabel,
   recoveryLabel,
@@ -540,7 +541,7 @@ function RecoveryState({
       <StateChip
         kind="recovery"
         state={recovery.state}
-        label={`${recoveryLabel(recovery)}${recovery.order ? ` (${ordinalLabel(recovery.order)})` : ""}${attemptLabel(recovery.attempts)}`}
+        label={`${recoveryLabel(recovery)}${recovery.order ? ` (${ordinalLabel(recovery.order)})` : ""}${attemptLabel(recovery.attempts)}${retryTimeLabel(recovery)}`}
         onSelect={target && onSelectExecution ? () => onSelectExecution(target) : undefined}
       />
       {recovery.confirmedBy && onSelectExecution ? (
@@ -607,6 +608,7 @@ function StateIcon({ state }: { state: CompensationForwardState | CompensationRe
     case "NotRun":
     case "Registered": return <CircleDashed size={12} aria-hidden="true" />;
     case "Retrying": return <RotateCw size={12} aria-hidden="true" />;
+    case "RetryScheduled": return <Timer size={12} aria-hidden="true" />;
     case "ResolvedAbsent":
     case "ResolvedKept": return <UserCheck size={12} aria-hidden="true" />;
     case "NotUndone": return <CircleSlash size={12} aria-hidden="true" />;
@@ -689,6 +691,17 @@ function HistoryIcon({ kind }: { kind: CompensationOperatorHistoryEntry["kind"] 
 function attemptLabel(attempts: { count: number; max?: number } | undefined) {
   if (!attempts) return "";
   return attempts.max ? ` · Attempt ${attempts.count} of ${attempts.max}` : ` · Attempt ${attempts.count}`;
+}
+
+// Spec 261: " · after 10:42:30" while a scheduled retry waits; nothing once it is due (it runs at the next sweep).
+function retryTimeLabel(recovery: CompensationRowRuntime["recovery"]) {
+  if (recovery.state !== "RetryScheduled" || !recovery.retryNotBefore || isRetryDue(recovery)) return "";
+  const due = new Date(recovery.retryNotBefore);
+  if (Number.isNaN(due.getTime())) return "";
+  const time: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit", second: "2-digit" };
+  // A wait can reach 24 hours, so a retry due on another day names its date.
+  const today = due.toDateString() === new Date().toDateString();
+  return ` · after ${today ? due.toLocaleTimeString(undefined, time) : due.toLocaleString(undefined, { ...time, year: "numeric", month: "short", day: "numeric" })}`;
 }
 
 // Arrow keys move between the same cell of neighbouring rows; Home and End jump to the first and last row.

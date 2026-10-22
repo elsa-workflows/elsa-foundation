@@ -45,6 +45,13 @@ internal static class EtlRuntimeEntityFrameworkCoreRegistration
             options.PreparationLease, options.PartitionLease, options.DeliveryLease,
             options.MaximumPartitionsPerRun, options.MaximumPageSize));
         services.AddScoped<IEtlRuntimeStore, EfEtlRuntimeStore>();
+        // The selected store may be replaced/decorated by a file-only provider. GetService must
+        // then report the optional capability as absent, without bypassing that provider or
+        // preventing the v1 execution path from being constructed.
+        services.AddScoped<IEtlConnectorRuntimeStore>(provider =>
+            (provider.GetRequiredService<IEtlRuntimeStore>() as IEtlConnectorRuntimeStore)!);
+        services.AddScoped<IEtlConnectorRuntimeInspector>(provider =>
+            (provider.GetRequiredService<IEtlRuntimeStore>() as IEtlConnectorRuntimeInspector)!);
         return services;
     }
 

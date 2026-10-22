@@ -25,6 +25,7 @@ internal abstract class EtlDesignDbContext(DbContextOptions options) : DbContext
         drafts.Property(row => row.DefinitionId).HasMaxLength(EtlDesignEfModule.EncodedIdentityMaximumLength).IsRequired();
         drafts.Property(row => row.Revision).IsConcurrencyToken();
         drafts.Property(row => row.LastPublishedVersion).IsConcurrencyToken();
+        drafts.Property(row => row.FormatVersion).HasDefaultValue(1);
         drafts.Property(row => row.SchemaVersion).HasMaxLength(EtlDesignEfModule.SchemaVersionMaximumLength).IsRequired();
         drafts.Property(row => row.PipelineJson).IsRequired();
         drafts.Property(row => row.PipelineHash).HasMaxLength(EtlDesignEfModule.HashLength).IsRequired();
@@ -37,6 +38,7 @@ internal abstract class EtlDesignDbContext(DbContextOptions options) : DbContext
         published.Property(row => row.PersistencePartition).HasMaxLength(EtlDesignEfModule.EncodedIdentityMaximumLength).IsRequired();
         published.Property(row => row.DefinitionKey).HasMaxLength(EtlDesignEfModule.HashLength).IsRequired();
         published.Property(row => row.DefinitionId).HasMaxLength(EtlDesignEfModule.EncodedIdentityMaximumLength).IsRequired();
+        published.Property(row => row.FormatVersion).HasDefaultValue(1);
         published.Property(row => row.SchemaVersion).HasMaxLength(EtlDesignEfModule.SchemaVersionMaximumLength).IsRequired();
         published.Property(row => row.ArtifactJson).IsRequired();
         published.Property(row => row.ArtifactEnvelopeHash).HasMaxLength(EtlDesignEfModule.HashLength).IsRequired();

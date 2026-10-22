@@ -146,7 +146,8 @@
       "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Elsa.Etl.Runtime.csproj",
       "Extensions/Etl/src/Workflows/Design/Elsa.Etl.Workflows.Design.csproj",
       "Extensions/Etl/src/Workflows/Runtime/Elsa.Etl.Workflows.Runtime.csproj",
-      "Extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj"
+      "Extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj",
+      "samples/Elsa.Samples.Compensation/Elsa.Samples.Compensation.csproj"
     ]
   }
 }

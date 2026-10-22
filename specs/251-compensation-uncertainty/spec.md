@@ -24,7 +24,7 @@ The Studio retry button for #2747 is M4.
 | OD2 (refined) | How does "waits for intervention" work? | A handler that exhausts its attempts leaves its incident **blocking with outcome Wait for intervention**. The run stays running; no automatic retry is scheduled. This replaces spec 250's "durable bookmark" wording, which a structural activity cannot hold. |
 | OD5 | How does an operator resume? | Through **#2747's retry**, built now as an M2 prerequisite (by owner exception to the Runtime Alterations park): a runtime alteration that resolves the blocking incident and reschedules the same activity occurrence's work. The Studio Retry button is M4. |
 | OD6 | Where do the new runtime contracts live? | As **generic** runtime seams any activity can use: a logical operation key on the activity context, the fault code and category on the child-fault callback, and a structural "keep this incident blocking for intervention" request. |
-| OD7 | Do handler retries back off? | **No, not in M2.** A failed handler is retried immediately, up to a scope setting (default 3 attempts in total). Backoff needs a structural delay seam and is M5 work. |
+| OD7 | Do handler retries back off? | **No, not in M2.** A failed handler is retried immediately, up to a scope setting (default 3 attempts in total). Backoff needs a structural delay seam and is M5 work. **Implemented by spec 261**: the scope inputs `handlerRetryDelay`, `handlerRetryBackoffMultiplier` and `handlerRetryMaxDelay` (default delay zero keeps immediate retries), on the runtime's delayed child schedule (R-7). |
 
 ## User Scenarios & Testing
 

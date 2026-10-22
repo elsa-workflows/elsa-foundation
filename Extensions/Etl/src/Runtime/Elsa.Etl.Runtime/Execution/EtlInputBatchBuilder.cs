@@ -277,7 +277,8 @@ internal sealed class EtlInputBatchBuilder : IAsyncDisposable
     private async ValueTask<CsvRecord> ReadSourceRecordAsync(IndexEntry entry, CancellationToken cancellationToken)
     {
         _source.Position = entry.StartByteOffset;
-        await using var limited = new RangeReadStream(_source, entry.EndByteOffset - entry.StartByteOffset);
+        await using var limited = new EtlBoundedRangeReadStream(_source,
+            entry.EndByteOffset - entry.StartByteOffset, flushSupported: false);
         await using var records = new CsvRecordReader(
                 limited,
                 _pipeline.Limits.MaxRecordBytes,
@@ -430,7 +431,7 @@ internal sealed class EtlInputBatchBuilder : IAsyncDisposable
 
     private static bool TryMeasureRecord(CsvRecord record, long maxBytes, out long byteLength)
     {
-        using var stream = new CountingLimitStream(maxBytes);
+        using var stream = new EtlBoundedCountingStream(maxBytes);
         try
         {
             using var writer = NewJsonWriter(stream);
@@ -439,7 +440,7 @@ internal sealed class EtlInputBatchBuilder : IAsyncDisposable
             byteLength = stream.ByteLength;
             return true;
         }
-        catch (PayloadLimitExceededException)
+        catch (EtlPayloadLimitExceededException)
         {
             byteLength = 0;
             return false;
@@ -449,7 +450,7 @@ internal sealed class EtlInputBatchBuilder : IAsyncDisposable
     private static (long ByteLength, string ContentHash) HashCanonicalBatch(IReadOnlyList<CsvRecord> records, long maxBytes)
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        using var stream = new HashingLimitStream(hash, maxBytes);
+        using var stream = new EtlBoundedHashingStream(hash, maxBytes);
         using (var writer = NewJsonWriter(stream))
         {
             writer.WriteStartObject();
@@ -500,75 +501,4 @@ internal sealed class EtlInputBatchBuilder : IAsyncDisposable
     }
 
     private readonly record struct IndexEntry(long Ordinal, long StartByteOffset, long EndByteOffset);
-
-    private sealed class RangeReadStream(Stream source, long remaining) : Stream
-    {
-        public override bool CanRead => source.CanRead;
-        public override bool CanSeek => false;
-        public override bool CanWrite => false;
-        public override long Length => throw new NotSupportedException();
-        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
-        public override void Flush() => throw new NotSupportedException();
-        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-        public override void SetLength(long value) => throw new NotSupportedException();
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
-
-        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (remaining <= 0)
-                return 0;
-            var read = await source.ReadAsync(buffer[..(int)Math.Min(buffer.Length, remaining)], cancellationToken);
-            remaining -= read;
-            return read;
-        }
-
-        protected override void Dispose(bool disposing)
-        {
-            // The batch builder owns the shared source stream.
-            base.Dispose(disposing);
-        }
-    }
-
-    private class CountingLimitStream(long maxBytes) : Stream
-    {
-        public long ByteLength { get; private set; }
-        public override bool CanRead => false;
-        public override bool CanSeek => false;
-        public override bool CanWrite => true;
-        public override long Length => ByteLength;
-        public override long Position { get => ByteLength; set => throw new NotSupportedException(); }
-        public override void Flush() { }
-        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-        public override void SetLength(long value) => throw new NotSupportedException();
-
-        public override void Write(byte[] buffer, int offset, int count) => Write(buffer.AsSpan(offset, count));
-
-        public override void Write(ReadOnlySpan<byte> buffer)
-        {
-            if (buffer.Length > maxBytes - ByteLength)
-                throw new PayloadLimitExceededException();
-            ByteLength += buffer.Length;
-        }
-    }
-
-    private sealed class HashingLimitStream(IncrementalHash hash, long maxBytes) : CountingLimitStream(maxBytes)
-    {
-        public override void Write(byte[] buffer, int offset, int count)
-        {
-            Write(buffer.AsSpan(offset, count));
-        }
-
-        public override void Write(ReadOnlySpan<byte> buffer)
-        {
-            base.Write(buffer);
-            hash.AppendData(buffer);
-        }
-    }
-
-    private sealed class PayloadLimitExceededException : Exception
-    {
-    }
 }

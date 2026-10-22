@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Events.Core.Extensions;
 using Elsa.Mediator.Core.Extensions;
@@ -132,6 +133,8 @@ public class WorkflowsPublishingFeature : IShellFeature
         services.TryAddScoped<ActivityTreeProjector>();
         services.TryAddScoped<WorkflowExecutableAuthoredInputsSidecar>();
         services.TryAddScoped<ExecutableNodeCompiler>();
+        // Spec 261 FR-513: the side-effect profile the compiler would compile, for design-time validators.
+        services.TryAddScoped<IActivitySideEffectProfileReader, ActivitySideEffectProfileReader>();
         services.TryAddScoped<WorkflowExecutablePlacementSidecarContext>();
         services.TryAddSingleton<IActivityTemplateProviderCompilerRegistry, ActivityTemplateProviderCompilerRegistry>();
         services.TryAddSingleton<IActivityTemplateDependencyDiscovererRegistry, ActivityTemplateDependencyDiscovererRegistry>();

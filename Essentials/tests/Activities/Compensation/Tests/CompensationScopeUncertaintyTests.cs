@@ -232,7 +232,7 @@ public sealed class CompensationScopeUncertaintyTests
         // It is written back as current version, never as version 1.
         var staged = CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Defer, state);
         Assert.Equal(CompensationScopeStatePersister.StateSchemaVersion, staged.StateUpdate!.StateVersion);
-        Assert.Equal(4, CompensationScopeStatePersister.StateSchemaVersion);
+        Assert.Equal(5, CompensationScopeStatePersister.StateSchemaVersion);
     }
 
     [Fact]

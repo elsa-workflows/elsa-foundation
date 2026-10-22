@@ -11,7 +11,7 @@ pushing and the recording, and the Packages workflow runs it ([Publishing](#publ
 dotnet run --project tools/versioning/Elsa.Versioning.Calculator -- \
   --record-ref origin/publish-state [--commit HEAD] [--output computation.json] \
   [--pack-properties package-versions.props --branch main] \
-  [--force-advance Elsa.Tasks,Elsa.Http --force-reason "<why>"]
+  [--force-advance Elsa.Tasks,Elsa.Http --force-reason "<why>"] [--dataset auto|committed|derived]
 
 dotnet run --project tools/versioning/Elsa.Versioning.Calculator -- \
   --record published-versions.json [--commit <revision>] [--repo <dir>] [--output <file>]
@@ -22,24 +22,32 @@ dotnet run --project tools/versioning/Elsa.Versioning.Calculator -- \
 standard output unless `--output` names a file. `--pack-properties` also writes the MSBuild file that packs the
 computation from the branch `--branch` names ([Packing](#packing)); the two go together. `--force-advance` and
 `--force-reason` advance named packages whose inputs did not change ([Force-advance](#force-advance)); they go
-together too.
+together too. `--dataset` picks where each commit's dependency map comes from ([What it reads](#what-it-reads)); the
+default, `auto`, is what publishing uses.
 
 | Exit | Meaning |
 |---|---|
 | 0 | Computed. |
 | 1 | A publish gate refused: monotonicity (FR-012), or forward-only (FR-021), which includes a latest publish missing from the repository. Nothing may be published. |
-| 2 | Invalid input: usage, an unreadable record, a stale or unknown-schema dependency map, a record entry whose commit is missing, an import it cannot resolve, a force-advance naming no package, a package twice, a package the commit lacks, or no reason. |
+| 2 | Invalid input: usage, an unreadable record, a stale, unknown-schema or underivable dependency map, a `--dataset` source the commit cannot serve, a record entry whose commit is missing, an import it cannot resolve, a force-advance naming no package, a package twice, a package the commit lacks, or no reason. |
 
 ## What it reads
 
 Only git objects: the commit being built, the commit each record entry names, and the
-[dependency map](../../docs/maps/dependency-map.json) committed in each of them, which is its sole source of
-package ids, version lines, project paths, ownership and the packages each nuspec lists. It reads schema version 2
+[dependency map](../../docs/maps/README.md#dependency-map-dataset) for each of them, which is its sole source of
+package ids, version lines, project paths, ownership and the packages each nuspec lists. A commit from before
+[spec 259](../../specs/259-derived-dependency-map/spec.md) carries the map committed at `docs/maps/dependency-map.json`,
+and the calculator reads that copy as it is, so the inputs recorded for those publishes never move. Any other commit
+has the map derived from its own tree by the scan the maps generator runs (`tools/maps/Elsa.Maps.Projects`): its project
+files, `Directory.Build.props` files, `VersionLines.props`, `Directory.Packages.props` and lock files. A tree the scan
+cannot read is refused, naming the commit and the file. `--dataset committed` or `derived` forces one source for every
+commit, to compare them; the default, `auto`, chooses as above. It reads schema version 2
 of the map and refuses any other, version 1 included: that one records no pinned-transitive edges, so it cannot say
 which packages a pin reaches, and a record entry naming a commit that carries it stops the computation rather than
 comparing against an empty set. It never reads the working tree, a clock, the
 environment or a feed, and it can run only the read-only git commands `cat-file`, `ls-tree`, `merge-base` and
-`rev-parse`, so the same commit and record revision give byte-identical output on any machine (FR-009, SC-008).
+`rev-parse` (blobs through one `cat-file --batch` per computation), so the same commit and record revision give
+byte-identical output on any machine (FR-009, SC-008).
 A shallow clone lacks the commits it compares; fetch full history.
 
 Each line's `major.minor` comes from `ElsaVersion` (Line B) and `ElsaContractsVersion` (Line A) in

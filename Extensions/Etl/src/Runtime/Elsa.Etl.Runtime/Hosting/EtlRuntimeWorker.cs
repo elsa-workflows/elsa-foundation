@@ -16,11 +16,13 @@ internal sealed class EtlRuntimeWorker(
     IHostApplicationLifetime lifetime,
     ILogger<EtlRuntimeWorker> logger) : BackgroundService, IBackgroundTask
 {
+    private const int WorkKindCount = 5;
     private readonly object _startGate = new();
     private Task? _startup;
     private bool _waitForHostStartup;
     private readonly string _workerId = "etl-" + Guid.NewGuid().ToString("N");
-    private readonly EtlScope[] _scopes = options.FileBindings.Select(binding => binding.Scope).Distinct().ToArray();
+    private readonly EtlScope[] _scopes = options.FileBindings.Select(binding => binding.Scope)
+        .Concat(options.HttpBindings.Scopes).Distinct().ToArray();
     private long _workOffset;
     private int _missingStoreReported;
 
@@ -93,18 +95,20 @@ internal sealed class EtlRuntimeWorker(
                 return;
             }
             var execution = operation.ServiceProvider.GetRequiredService<EtlExecution>();
+            var connectorStore = operation.ServiceProvider.GetService<IEtlConnectorRuntimeStore>();
+            var connectors = connectorStore is null ? null : operation.ServiceProvider.GetRequiredService<EtlConnectorExecution>();
             var delivery = operation.ServiceProvider.GetService<IEtlResultDelivery>();
             // Rotate configured work scopes and work kind; terminal delivery is discovered from persisted outbox state.
             var ticket = (ulong)Interlocked.Increment(ref _workOffset);
-            var start = _scopes.Length == 0 ? 0 : (int)((ticket / 3) % (ulong)_scopes.Length);
-            var preferredKind = (int)(ticket % 3);
+            var start = _scopes.Length == 0 ? 0 : (int)((ticket / WorkKindCount) % (ulong)_scopes.Length);
+            var preferredKind = (int)(ticket % WorkKindCount);
             var deliveryAttempted = false;
             for (var offset = 0; offset < _scopes.Length; offset++)
             {
                 var scope = _scopes[(start + offset) % _scopes.Length];
-                for (var kindOffset = 0; kindOffset < 3; kindOffset++)
+                for (var kindOffset = 0; kindOffset < WorkKindCount; kindOffset++)
                 {
-                    switch ((preferredKind + kindOffset) % 3)
+                    switch ((preferredKind + kindOffset) % WorkKindCount)
                     {
                         case 0:
                         {
@@ -120,7 +124,21 @@ internal sealed class EtlRuntimeWorker(
                             await execution.ExecutePartitionAsync(partition, cancellationToken);
                             return;
                         }
-                        case 2 when delivery is not null:
+                        case 2 when connectorStore is not null:
+                        {
+                            var preparation = await connectorStore.ClaimConnectorPreparationAsync(scope, _workerId, cancellationToken);
+                            if (preparation is null) continue;
+                            await connectors!.PrepareAsync(preparation, cancellationToken);
+                            return;
+                        }
+                        case 3 when connectorStore is not null:
+                        {
+                            var partition = await connectorStore.ClaimConnectorPartitionAsync(scope, null, _workerId, cancellationToken);
+                            if (partition is null) continue;
+                            await connectors!.ExecutePartitionAsync(partition, cancellationToken);
+                            return;
+                        }
+                        case 4 when delivery is not null:
                         {
                             if (deliveryAttempted)
                                 continue;

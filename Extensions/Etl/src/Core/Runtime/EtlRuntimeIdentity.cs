@@ -6,15 +6,93 @@ using System.Text;
 
 namespace Elsa.Etl.Core.Runtime;
 
-/// <summary>Version-one mechanical identities shared by ETL producers and persistence providers.</summary>
+/// <summary>Versioned mechanical identities shared by ETL producers and persistence providers.</summary>
 /// <remarks>Values are length-framed, lossless little-endian UTF-16 code units with a distinct null marker. No worker, attempt, lease or fence is included.</remarks>
 public static class EtlRuntimeIdentity
 {
+    /// <summary>Stable digest of a request within its pinned shard, independent of worker or attempt.</summary>
+    public static string HttpRequestHash(EtlHttpRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(request.ShardId);
+        return Hash("etl-http-request-v2", request.ShardId, request.Continuation);
+    }
+
+    /// <summary>Stable retained-page identity bound to its invocation, source pin, partition, page, and request.</summary>
+    public static string ConnectorHttpPageId(EtlConnectorRunAdmission admission, int partitionOrdinal,
+        long pageSequence, EtlHttpRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(admission);
+        ArgumentNullException.ThrowIfNull(admission.Bindings);
+        ArgumentNullException.ThrowIfNull(request);
+        if (partitionOrdinal < 0)
+            throw new ArgumentOutOfRangeException(nameof(partitionOrdinal));
+        if (pageSequence < 0)
+            throw new ArgumentOutOfRangeException(nameof(pageSequence));
+        if (admission.Bindings.Source is not { Kind: EtlConnectorKind.Http } source)
+            throw new ArgumentException("A retained HTTP page requires an HTTP source binding.", nameof(admission));
+
+        return Hash("etl-connector-http-page-v1", InvocationFingerprint(admission.Invocation),
+            ConnectorBinding(source), Number(partitionOrdinal), Number(pageSequence), HttpRequestHash(request));
+    }
+
     public static string ScopeKey(EtlScope scope)
     {
         ArgumentNullException.ThrowIfNull(scope);
         return Hash("etl-scope-v1", scope.TenantId, scope.PersistencePartition);
     }
+
+    /// <summary>Stable connector input identity bound to all admission pins and prepared inputs.</summary>
+    public static string ConnectorBatchId(EtlConnectorRunAdmission admission, EtlConnectorPreparedRun prepared,
+        int partitionOrdinal, EtlConnectorBatchRange range, long inputBytes, string inputHash)
+    {
+        ArgumentNullException.ThrowIfNull(admission);
+        ArgumentNullException.ThrowIfNull(admission.Bindings);
+        ArgumentNullException.ThrowIfNull(prepared);
+        ArgumentNullException.ThrowIfNull(range);
+        var bindings = admission.Bindings;
+        var input = prepared.File is { } file
+            ? Hash("etl-connector-file-v2", ObjectReference(file.Source), ObjectReference(file.Index), Number(file.RecordCount))
+            : null;
+        var coordinates = range switch
+        {
+            EtlConnectorFileBatchRange fileRange => Hash("etl-file-range-v2", Number(fileRange.StartOrdinal), Number(fileRange.EndOrdinalExclusive)),
+            EtlConnectorHttpBatchRange http => Hash("etl-http-range-v2", Number(http.PageSequence), http.RequestHash, http.PageContentHash,
+                Number(http.StartItem), Number(http.EndItemExclusive)),
+            _ => throw new ArgumentException("The connector batch range is unsupported.", nameof(range))
+        };
+        // Explicit versioned fields keep mechanical identity independent of future snapshot DTO additions.
+        return Hash("etl-connector-batch-v2", InvocationFingerprint(admission.Invocation),
+            ConnectorBinding(bindings.Source), ConnectorBinding(bindings.Lookup), ConnectorBinding(bindings.Main), ConnectorBinding(bindings.Errors),
+            Hash(["etl-http-shards-v2", .. bindings.HttpShardIds]), input, ObjectReference(prepared.Lookup), Number(partitionOrdinal),
+            coordinates, Number(inputBytes), inputHash);
+    }
+
+    private static string? ConnectorBinding(EtlConnectorBindingRevision? binding) => binding is null
+        ? null : Hash("etl-connector-binding-v2", Number((int)binding.Kind), Binding(binding.Revision));
+
+    /// <summary>Stable route effect bound to its input batch, pinned destination and exact body content.</summary>
+    /// <remarks>Independent of worker, attempt and staging location; pass unchanged as the delivery identity.</remarks>
+    public static string ConnectorEffectId(EtlConnectorRunAdmission admission, string batchId, EtlOutputRoute route,
+        string contentHash, long byteLength, long recordCount)
+    {
+        ArgumentNullException.ThrowIfNull(admission);
+        ArgumentNullException.ThrowIfNull(admission.Bindings);
+        if (!Enum.IsDefined(route)) throw new ArgumentOutOfRangeException(nameof(route));
+        var destination = route == EtlOutputRoute.Main ? admission.Bindings.Main : admission.Bindings.Errors;
+        return Hash("etl-connector-effect-v2", InvocationFingerprint(admission.Invocation), batchId, Number((int)route),
+            ConnectorBinding(destination), contentHash, Number(byteLength), Number(recordCount));
+    }
+
+    /// <summary>The immutable JSONL filename produced when the file publisher receives the connector effect identity.</summary>
+    public static string ConnectorFileOutputKey(string effectId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(effectId);
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(effectId))) + ".jsonl";
+    }
+
+    private static string? ObjectReference(EtlObjectReference? reference) => reference is null
+        ? null : Hash("etl-object-v2", reference.Key, reference.ContentHash, Number(reference.ByteLength));
 
     public static string InvocationFingerprint(EtlInvocation invocation)
     {

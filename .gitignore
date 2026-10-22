@@ -487,9 +487,11 @@ Studio/.specify/feature.json
 
 # Generated documentation maps: produced locally by `dotnet run --project tools/maps/Elsa.Maps.Generator -- all`
 # and published by CI to the generated-maps branch, never committed (spec 257, docs/contributing/generated-maps.md).
-# dependency-map.json and README.md stay committed.
+# README.md stays committed. dependency-map.json is not committed either: the versioning calculator derives it from
+# each commit's tree (spec 259).
 docs/maps/*.md
 !docs/maps/README.md
 docs/maps/manifest.json
+docs/maps/dependency-map.json
 docs/reports/maps-v1-findings.md
 docs/reports/maps-v2-findings.md

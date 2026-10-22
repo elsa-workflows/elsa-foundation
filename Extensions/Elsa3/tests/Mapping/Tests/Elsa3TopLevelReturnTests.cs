@@ -41,7 +41,7 @@ public sealed class Elsa3TopLevelReturnTests
         var result = await ConvertTextAsync("if (false) { return 1 }\n40 + 2");
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
-        Assert.Equal("(function () {\nif (false) { return 1 }\nreturn 40 + 2\n})()", Source(Input(Node(result.Value!.State, "node"), "text")));
+        Assert.Equal("(function () {\nif (false) { return (1) ?? null }\nreturn (40 + 2) ?? null\n})()", Source(Input(Node(result.Value!.State, "node"), "text")));
     }
 
     [Fact]
@@ -88,7 +88,7 @@ public sealed class Elsa3TopLevelReturnTests
         var result = await ConvertTextAsync("[1, 2].map(function (x) { return x * 2 })[1]");
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
-        Assert.Equal("[1, 2].map(function (x) { return x * 2 })[1]", Source(Input(Node(result.Value!.State, "node"), "text")));
+        Assert.Equal("([1, 2].map(function (x) { return x * 2 })[1]) ?? null", Source(Input(Node(result.Value!.State, "node"), "text")));
     }
 
     [Fact]

@@ -5,7 +5,7 @@ using Elsa.Etl.Core;
 
 namespace Elsa.Etl.Design;
 
-internal sealed class EtlArtifactCompiler : IEtlArtifactCompiler
+internal sealed partial class EtlArtifactCompiler : IEtlArtifactCompiler, IEtlArtifactCompilerV2
 {
     private const int MaximumArtifactBytes = EtlArtifact.MaximumByteLength;
     private const int MaximumDefinitionIdLength = 256;
@@ -16,12 +16,7 @@ internal sealed class EtlArtifactCompiler : IEtlArtifactCompiler
     {
         var diagnostics = new DiagnosticCollector();
 
-        if (string.IsNullOrWhiteSpace(definitionId))
-            diagnostics.Add("definition.id.required", "definitionId", "A definition identifier is required.");
-        else if (definitionId.Length > MaximumDefinitionIdLength || !DefinitionIdPattern.IsMatch(definitionId))
-            diagnostics.Add("definition.id.invalid", "definitionId", "The definition identifier must be a path-safe identifier of at most 256 ASCII characters.");
-        if (definitionVersion <= 0)
-            diagnostics.Add("definition.version.invalid", "definitionVersion", "The definition version must be positive.");
+        ValidateDefinitionIdentity(definitionId, definitionVersion, diagnostics);
         if (pipeline is null)
         {
             diagnostics.Add("pipeline.required", "pipeline", "A pipeline definition is required.");
@@ -75,6 +70,16 @@ internal sealed class EtlArtifactCompiler : IEtlArtifactCompiler
         }
 
         return new EtlCompilationResult(artifact, Array.Empty<EtlDiagnostic>());
+    }
+
+    private static void ValidateDefinitionIdentity(string? definitionId, int definitionVersion, DiagnosticCollector diagnostics)
+    {
+        if (string.IsNullOrWhiteSpace(definitionId))
+            diagnostics.Add("definition.id.required", "definitionId", "A definition identifier is required.");
+        else if (definitionId.Length > MaximumDefinitionIdLength || !DefinitionIdPattern.IsMatch(definitionId))
+            diagnostics.Add("definition.id.invalid", "definitionId", "The definition identifier must be a path-safe identifier of at most 256 ASCII characters.");
+        if (definitionVersion <= 0)
+            diagnostics.Add("definition.version.invalid", "definitionVersion", "The definition version must be positive.");
     }
 
     private static void ValidateLimits(EtlLimits? limits, EtlPipeline pipeline, DiagnosticCollector diagnostics)
@@ -260,6 +265,8 @@ internal sealed class EtlArtifactCompiler : IEtlArtifactCompiler
     {
         if (value is null)
             return true;
+        if (value.Length > byteBudget)
+            return false;
 
         try
         {
@@ -282,6 +289,12 @@ internal sealed class EtlArtifactCompiler : IEtlArtifactCompiler
         IReadOnlyList<EtlColumn>? schema,
         string path,
         EtlLimits? limits,
+        DiagnosticCollector diagnostics) => ValidateSchema(schema, path, limits?.MaxFields, diagnostics);
+
+    private static Dictionary<string, EtlColumn> ValidateSchema(
+        IReadOnlyList<EtlColumn>? schema,
+        string path,
+        int? maximumFields,
         DiagnosticCollector diagnostics)
     {
         var fields = new Dictionary<string, EtlColumn>(StringComparer.Ordinal);
@@ -291,7 +304,7 @@ internal sealed class EtlArtifactCompiler : IEtlArtifactCompiler
             return fields;
         }
 
-        if (limits is { MaxFields: > 0 } && schema.Count > limits.MaxFields)
+        if (maximumFields is > 0 && schema.Count > maximumFields)
             diagnostics.Add("schema.field-count.exceeded", path, "The schema contains more fields than the configured maximum.");
 
         for (var index = 0; index < schema.Count; index++)
@@ -320,22 +333,32 @@ internal sealed class EtlArtifactCompiler : IEtlArtifactCompiler
         EtlPipeline pipeline,
         IReadOnlyDictionary<string, EtlColumn> source,
         IReadOnlyDictionary<string, EtlColumn> lookup,
+        DiagnosticCollector diagnostics) => ValidateLookupKeys(
+            pipeline.SourceLookupField, pipeline.LookupKeyField, "sourceLookupField", "lookupKeyField", source, lookup, diagnostics);
+
+    private static void ValidateLookupKeys(
+        string? sourceKey,
+        string? lookupKey,
+        string sourcePath,
+        string lookupPath,
+        IReadOnlyDictionary<string, EtlColumn> source,
+        IReadOnlyDictionary<string, EtlColumn> lookup,
         DiagnosticCollector diagnostics)
     {
-        var sourceField = FindField(source, pipeline.SourceLookupField);
-        var lookupField = FindField(lookup, pipeline.LookupKeyField);
+        var sourceField = FindField(source, sourceKey);
+        var lookupField = FindField(lookup, lookupKey);
         if (sourceField is null)
-            diagnostics.Add("lookup.source-key.missing", "sourceLookupField", "The source lookup field must exist in the source schema.");
+            diagnostics.Add("lookup.source-key.missing", sourcePath, "The source lookup field must exist in the source schema.");
         else if (!sourceField.Required)
-            diagnostics.Add("lookup.source-key.required", "sourceLookupField", "The source lookup field must be required.");
+            diagnostics.Add("lookup.source-key.required", sourcePath, "The source lookup field must be required.");
 
         if (lookupField is null)
-            diagnostics.Add("lookup.key.missing", "lookupKeyField", "The lookup key field must exist in the lookup schema.");
+            diagnostics.Add("lookup.key.missing", lookupPath, "The lookup key field must exist in the lookup schema.");
         else if (!lookupField.Required)
-            diagnostics.Add("lookup.key.required", "lookupKeyField", "The lookup key field must be required.");
+            diagnostics.Add("lookup.key.required", lookupPath, "The lookup key field must be required.");
 
         if (sourceField is not null && lookupField is not null && sourceField.Type != lookupField.Type)
-            diagnostics.Add("lookup.key.type-mismatch", "lookupKeyField", "Source and lookup key fields must have the same type.");
+            diagnostics.Add("lookup.key.type-mismatch", lookupPath, "Source and lookup key fields must have the same type.");
     }
 
     private static Dictionary<string, EtlColumn> ValidateMapping(

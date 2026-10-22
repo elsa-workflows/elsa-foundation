@@ -37,6 +37,25 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
         ActivitySchedulingProvenance? schedulingProvenance = null,
         LoopIterationScopeRequest? iterationFrame = null);
 
+    /// <summary>
+    /// Stages the same child schedule as the overload above, delivered not before <paramref name="notBefore"/> (R-7,
+    /// spec 261). Valid wherever scheduling a child is valid. A <paramref name="notBefore"/> that is null, or at or before
+    /// the commit, schedules the child as usual. A later one commits the child's schedule work item in this evaluation's
+    /// checkpoint as a post-commit intent whose outbox item becomes available at that time; the checkpoint is then
+    /// durable in every persistence mode, and the item never enters the run's scheduler queue early, so it holds back no
+    /// other work of the run. A due time more than <c>RuntimeDelayedScheduleOptions.MaxDelay</c> ahead faults the
+    /// evaluation with <c>runtime.delayed-schedule.too-far</c>; a host without the outbox sweep faults it with
+    /// <c>runtime.delayed-schedule.unavailable</c>. When the schedule is delivered, a run that is gone or terminal, or a
+    /// scheduling parent that is no longer running, acknowledges it without scheduling the child.
+    /// </summary>
+    void ScheduleChildActivity(
+        string executableNodeId,
+        string? schedulingActivityExecutionId,
+        IReadOnlyDictionary<string, string>? metadata,
+        ActivitySchedulingProvenance? schedulingProvenance,
+        LoopIterationScopeRequest? iterationFrame,
+        DateTimeOffset? notBefore);
+
     IReadOnlyCollection<RuntimeChildActivityScheduleRequest> GetChildActivityScheduleRequests();
 
     /// <summary>

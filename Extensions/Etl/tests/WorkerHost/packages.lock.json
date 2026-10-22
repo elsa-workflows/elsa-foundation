@@ -79,6 +79,12 @@
           "SQLitePCLRaw.core": "3.0.3"
         }
       },
+      "elsa.connections.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
       "elsa.etl.core": {
         "type": "Project"
       },
@@ -103,6 +109,7 @@
         "type": "Project",
         "dependencies": {
           "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Connections.Core": "[4.0.0-dev, )",
           "Elsa.Etl.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )"
         }
