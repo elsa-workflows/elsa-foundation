@@ -1719,6 +1719,58 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
+      "elsa.rules.core": {
+        "type": "Project"
+      },
+      "elsa.rules.persistence.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Rules.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.rules.persistence.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Elsa.Rules.Persistence.Core": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
+        }
+      },
+      "elsa.rules.runtime": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Rules.Core": "[4.0.0-dev, )",
+          "Elsa.Rules.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.rules.workflows.design": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Rules.Core": "[4.0.0-dev, )",
+          "Elsa.Rules.Runtime": "[4.0.0-dev, )",
+          "Elsa.Rules.Workflows.Runtime": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.rules.workflows.runtime": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Rules.Core": "[4.0.0-dev, )",
+          "Elsa.Rules.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Rules.Runtime": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.secrets": {
         "type": "Project",
         "dependencies": {
@@ -1918,6 +1970,10 @@
           "Elsa.Modularity.Nuplane": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Primitives.Hosting": "[4.0.0-dev, )",
+          "Elsa.Rules.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
+          "Elsa.Rules.Runtime": "[4.0.0-dev, )",
+          "Elsa.Rules.Workflows.Design": "[4.0.0-dev, )",
+          "Elsa.Rules.Workflows.Runtime": "[4.0.0-dev, )",
           "Elsa.Secrets": "[4.0.0-dev, )",
           "Elsa.Secrets.Api": "[4.0.0-dev, )",
           "Elsa.Secrets.Core": "[4.0.0-dev, )",
