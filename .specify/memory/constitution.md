@@ -1,7 +1,7 @@
 <!--
 SYNC IMPACT REPORT — 6.2.0 -> 6.3.0 (2026-10-22)
 MINOR: adds §E7, the CI test tier gate (spec 263, FR-021): every test project is in tools/ci/test-tiers.json in exactly one tier, and a project that reaches Testcontainers, or launches a child host and takes 2 minutes or more, is integration tier. Checked by Elsa.Maps.Generator test-tiers-check in "Generated maps fresh". No existing rule changes; the Gate index intro now also names generator checks.
-Authority: owner approval pending in the implementing PR (Joey Barten agreed on 2026-10-22 to approve it there).
+Approval: Joey Barten, 2026-10-22, in the implementing PR #3265 (spec 263).
 Propagation: docs/contributing/merging.md#ci-tiers, docs/contributing/review-checklist.md, the elsa-add-unit-tests skill. Speckit templates pin no CI gates and need no change.
 -->
 <!--
