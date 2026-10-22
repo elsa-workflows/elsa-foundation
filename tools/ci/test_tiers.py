@@ -124,6 +124,18 @@ def select(manifest: dict, tier: str) -> dict[str, dict]:
     raise ManifestError(f"unknown tier `{tier}`")
 
 
+def job_entry(manifest: dict, shard: str, projects: list[str]) -> dict:
+    """A run_shard.py entry for a job outside the shard matrix (Architecture guards, Core-only), so it gets the same
+    retry, quarantine and reporting (FR-004). Only manifest test projects are kept: a solution filter also lists
+    source projects."""
+    tests = {entry["project"] for entry in manifest["projects"]}
+    return {"shard": shard, "whole": sorted(project for project in projects if project in tests), "split": []}
+
+
+def slnf_projects(text: str) -> list[str]:
+    return [project.replace("\\", "/") for project in json.loads(text)["solution"]["projects"]]
+
+
 def switch_turned_on(base_text: str | None, head: dict) -> bool:
     if not head.get("integrationLeavesPrTier"):
         return False
@@ -373,6 +385,11 @@ def self_test() -> int:
     check("ruleset: present Full tier allows",
           ruleset_requires(FULL_TIER_CONTEXT, _ruleset_fetch(["Build & test", FULL_TIER_CONTEXT])))
 
+    entry = job_entry(_fixture() | {"projects": [{"project": "t/A/A.Tests.csproj"}]}, "core-only",
+                      slnf_projects('{"solution": {"projects": ["src\\\\A\\\\A.csproj", "t\\\\A\\\\A.Tests.csproj"]}}'))
+    check("job entry: keeps only test projects, with forward slashes",
+          entry == {"shard": "core-only", "whole": ["t/A/A.Tests.csproj"], "split": []})
+
     good_ci = ("on:\n  pull_request:\njobs:\n  build-and-test:\n    name: Build & test\n"
                "    needs: [plan-tiers, pr-shard, architecture-guards, core-only]\n    if: ${{ !cancelled() }}\n")
     good_full = ("on:\n  pull_request:\n    types: [opened, reopened, synchronize, ready_for_review]\njobs:\n  full-tier:\n"
@@ -424,6 +441,12 @@ def main() -> int:
     sel.add_argument("--head")
     sel.add_argument("--github-output")
     sel.add_argument("--summary")
+    ent = sub.add_parser("entry")
+    ent.add_argument("--shard", required=True)
+    ent.add_argument("--manifest", default=MANIFEST)
+    source = ent.add_mutually_exclusive_group(required=True)
+    source.add_argument("--slnf")
+    source.add_argument("--project")
     sub.add_parser("check-workflows")
     sub.add_parser("check-docs")
     args = parser.parse_args()
@@ -433,6 +456,12 @@ def main() -> int:
     try:
         if args.command == "select":
             return run_select(args)
+        if args.command == "entry":
+            with open(args.manifest, encoding="utf-8") as handle:
+                manifest = load(handle.read())
+            projects = [args.project] if args.project else slnf_projects(_read_file(args.slnf) or "")
+            print(json.dumps(job_entry(manifest, args.shard, projects)))
+            return 0
         if args.command in ("check-workflows", "check-docs"):
             if args.command == "check-workflows":
                 problems = check_workflows(_read_file(CI) or "", _read_file(CI_FULL) or "")
