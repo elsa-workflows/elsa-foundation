@@ -1,10 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <Description>Elsa Integrations SDK v1: connector activity base types, credential inputs on ISecretValueResolver, and IHttpConnectionApplicator on the named Elsa.Activities.Http client. Service connections are Elsa.Connections. Elsa 4 only. Preview pin; not contract-stable until GA (ADR 0080 D4).</Description>
+    <Description>Elsa Integrations SDK v1: connector activity base types, credential inputs on ISecretValueResolver, and outbound auth through Elsa.Connections' IHttpConnectionApplicator on the named Elsa.Activities.Http client. Service connections are Elsa.Connections. Elsa 4 only. Preview pin; not contract-stable until GA (ADR 0080 D4).</Description>
     <PackageTags>elsa;integrations;connector;sdk</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <IsPackable>false</IsPackable>
+    <IsPackable>true</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
