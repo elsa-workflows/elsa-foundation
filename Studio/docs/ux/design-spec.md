@@ -144,8 +144,8 @@ completed actions become toasts.
 
 | Item | Status | Notes |
 |---|---|---|
-| Minimap | `exists` | `MiniMap` on `GraphAuthoringCanvas` (and run / executable canvases). |
-| Fit / zoom | `exists` | xyflow `Controls` on the same canvases. |
+| Minimap | `exists` | Designer (`GraphAuthoringCanvas`) shows `MiniMap` only when the graph’s unzoomed bounds exceed the canvas pane. Run / executable canvases still render `MiniMap` unconditionally. |
+| Fit / zoom | `exists` | xyflow `Controls` on the same canvases. First-visit and Auto layout `fitView` clamp `maxZoom` to 1 so small graphs stay at their natural size. |
 | Empty-canvas add | `exists` | `.wf-empty-canvas-add`; editorial layout also has **Add step**. |
 | Save-state indicator | `exists` | `.wf-editor-save-status` in the Designer header (pending spinner / saved check). |
 | Duplicate / copy-paste | `exists` | In-workflow only. Ctrl/Cmd+C and Ctrl/Cmd+V copy the selected activities; Duplicate is on the node context menu and Ctrl/Cmd+D. Fresh ids and names, offset position, one undo step, nested containers remapped. Cross-workflow clipboard and graph-editor paste are later slices. |
