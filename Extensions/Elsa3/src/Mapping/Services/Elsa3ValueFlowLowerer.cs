@@ -494,7 +494,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         AccessorScope accessors,
         Elsa3AmbientReference ambient)
     {
-        // A graph body is a closed scope (spec 265): its request inputs are the reusable's own inputs and its root
+        // A graph body is a closed scope: its request inputs are the reusable's own inputs and its root
         // variables are the reusable's variables, so the same lowering as a workflow's reads the reusable's values.
         switch (ambient.Kind)
         {

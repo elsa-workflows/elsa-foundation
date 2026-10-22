@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Activities.Runtime.Services;
 
 /// <summary>
-/// Finds the closed activity execution scope a completing node's graph-variable captures write into (spec 265 D-2):
+/// Finds the closed activity execution scope a completing node's graph-variable captures write into:
 /// the nearest closed boundary above the node. Looked up only for a node that has such a capture.
 /// </summary>
 internal static class ClosedScopeCaptureBoundary

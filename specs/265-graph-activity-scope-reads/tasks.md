@@ -65,7 +65,7 @@ placement. Behaviour changes only below a boundary carrying the marker.
   - unknown ids left alone;
   - `Secret`, `ConversionRequest` and the conversion plans preserved;
   - the same instance returned when there is nothing to remap.
-- [x] T013 Extend `Essentials/tests/Workflows/Publishing/Api/Tests/ActivityTemplatePlacementTests.cs`:
+- [x] T013 Extend `Essentials/tests/Workflows/Publishing/Api/Tests/ActivityTemplatePlacementTests.cs`: — Round 2: a nested graph boundary's bindings to an outer body node have no placement test; the remap path is shared with occurrence roots (`ReconstructOccurrenceRoots`).
   - a closed-scope template whose body node B has an `ActivityResult` from body node A gets A's placed id;
   - the same template placed twice gets two independent id sets;
   - a nested graph's boundary bindings referencing an outer body node are mapped to the outer placed id;
@@ -115,10 +115,10 @@ caller's own `RunningTotal = 0` does not affect it.
   - a body suspended on a bookmark and resumed after a restart reads the same input and variable values (FR-008, SC-006). Use the rehydrate harness from `GraphActivityRecoveryTests.cs`.
 - [x] T024 [P] [US2] In `Graph.Runtime/Services/GraphActivityScope.cs` (`NewStateAsync` :314-357), stamp `RuntimeMetadataKeys.BoundaryVariableName` on variable rows. Add a `GraphActivityExecutionTests` assertion for it. — Covered indirectly: the JavaScript name tests read graph variables by the names on their rows.
 - [x] T025 [US2] In `Runtime.Values/RuntimeContainerScopeService.cs` `BuildVisibleFramesAsync` (:21-74), when T018 finds a boundary:
-  - begin the chain with a synthetic Root `VariableFrameState` (`FrameId = graph:{boundaryExecutionId}`, `ScopeId = boundary ExecutableNodeId`, parent null), with values from the boundary's variable rows;
+  - begin the chain with a synthetic Root `VariableFrameState` (`FrameId = activity-scope:{boundaryExecutionId}`, `ScopeId = boundary ExecutableNodeId`, parent null), with values from the boundary's variable rows;
   - skip the caller root frame and every frame owned by the boundary or its ancestors;
   - keep the frames of descendants between the boundary and the node.
-- [x] T026 [US2] In `RuntimeContainerScopeService.ActivateOwnedFramesAsync` (:76-152), parent a body container's new frame to `graph:{boundaryExecutionId}` when its nearest visible root is the graph frame. Do not persist the synthetic frame.
+- [x] T026 [US2] In `RuntimeContainerScopeService.ActivateOwnedFramesAsync` (:76-152), parent a body container's new frame to `activity-scope:{boundaryExecutionId}` when its nearest visible root is the graph frame. Do not persist the synthetic frame.
 - [x] T027 [US2] In the ambient name projection (`ProjectAmbientVisibleVariableEnvelopes`, around :293-346), take names for the graph frame from the rows' `BoundaryVariableName`, not from `executable.WorkflowVariables` (:326-327).
 - [ ] T028 [US2] In `WorkflowIntrinsicExecutor.cs` (:721-752), build the same chain. Make the Set owner lookup (:713) unable to resolve the caller's root from inside a body. #3023 builds on this; for now, add a test that the lookup fails closed. — No dedicated test. The fail-closed Set lookup is unreachable until #3023 lets a graph hold intrinsics.
 - [x] T029 [US2] Run the T023 tests to green, then the Runtime, Activities.Runtime (`ContainerScopedVariableEvaluatorTests`, `SetVariableDurabilityExecutionTests`), Flowchart and Behavioral tests.
@@ -134,7 +134,7 @@ Placed twice, and run in a loop, each invocation reads its own `compute`.
   - in `Essentials/tests/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerTests.cs`, a workflow using a chained-result body publishes, and the linker finds the placed producer;
   - in `GraphActivityBodyScopeTests.cs`, run with two placements, in a loop with three iterations, and through both a direct `ActivityResult` binding and a JavaScript `ActivityResultExpressionParameterBinding`.
 - [x] T031 [US3] In `Runtime.Values/CausalActivityResultResolver.cs` `IsStructurallyVisible` (:128-140), when the producer has a closed boundary (T018):
-  - compare `declaredProducerScopeId` with the producer's `RuntimeMetadataKeys.FlowchartExecutionScopeId` metadata, not `Provenance.ExecutionScopeId`;
+  - skip the declared-scope comparison (plan A-2), because every placed body node opens its own execution scope;
   - require producer and consumer to share the same nearest boundary execution id.
 
   Outside a boundary, behaviour is unchanged.
@@ -189,7 +189,7 @@ it, the caller's `CurrentCustomer` is unchanged, and the value survives resume a
   - refuse withheld values.
 - [x] T045 [US5] Pass the producer's ancestor states to `ProjectAsync` at the four call sites in `Activities.Runtime`: `WorkflowInvokeActivitySchedulerWorkHandler.cs` (:594, :694), `WorkflowParentActivityCompletionSchedulerWorkHandler.cs` (:661, :680), `WorkflowResumeBookmarkSchedulerWorkHandler.cs` (:484, :498) and `StructuralCallbackEvaluation.cs` (:374, :388). Commit the graph rows in the same completion commit.
 - [x] T046 [US5] (concurrency code dropped, plan A-4) Add the capture codes to `GraphBodyReferenceValidator`: `body-capture-target-unknown`, `body-capture-type-incompatible` (exact alias and collection kind, an `Object` target, or an authored conversion) and `body-capture-concurrent` (two capturing nodes in parallel branches of a Parallel/Fork). Add them to `GraphBodyReferenceValidatorTests.cs`.
-- [x] T047 [US5] Add an ADR 0048 amendment note in `docs/adr/0048-container-output-captures-resolve-through-producer-visible-variable-frames.md`: graph variable rows are the single store, the graph frame is a projection (not a §4 shadow), and §5 concurrency is enforced at activity publication.
+- [x] T047 [US5] Add an ADR 0048 amendment note in `docs/adr/0048-container-output-captures-resolve-through-producer-visible-variable-frames.md`: graph variable rows are the single store, the graph frame is a projection (not a §4 shadow), and §5 concurrency is not yet enforced for graph variables (#3198, plan A-4).
 - [x] T048 [US5] Run the Graph, Publishing, Activities.Runtime and Behavioral tests to green.
 
 ## Phase 8: User Story 6 - Designers can pick graph values in Studio (P2)
@@ -199,7 +199,7 @@ picks publish and run (plan D-11).
 
 **Independent test**: in Studio, build "Add two numbers" by picking `A` and `B`, publish it, run a caller and get `Sum`.
 
-- [x] T049 [US6] In `Publishing/RuntimeInputBindingCompiler.cs` (:439-458), add a graph-body compile option, used only by the placer's `CompileOccurrenceInputs` (`ActivityTemplatePlacer.cs:391-411`). With it, `Input {referenceKey}` compiles to `WorkflowRequest(memberKey = referenceKey)`; without it, behaviour is unchanged. Add placement tests for both paths.
+- [x] T049 [US6] In `Publishing/RuntimeInputBindingCompiler.cs` (:439-458), add a graph-body compile option, used only by the placer's `CompileOccurrenceInputs` (`ActivityTemplatePlacer.cs:391-411`). With it, `Input {referenceKey}` compiles to `WorkflowRequest(memberKey = referenceKey)`; without it, behaviour is unchanged. Add placement tests for both paths. — Done in the placer (plan A-11); only the closed-scope path has a test.
 - [x] T050 [P] [US6] In `Studio.Client/ActivityGraphImplementationEditor.tsx:1135`, use `WORKFLOW_SCOPE_ID` (from `./scopedVariables`) instead of `"activity-graph"`. Add `rootActivity: root` to the graph `workflowState` (:161-164, :399-402), so body container variables are offered.
 - [ ] T051 [US6] Wire expression tooling into the graph editor's `InspectorPanel` (:812ff): pass `draftId`, `expressionTooling` and `expressionEditorSessionScope`, as `WorkflowEditor.tsx:1051-1053` does. First check whether the expression-tooling server answers for an activity draft. — deferred to a follow-up (plan A-7): no Node on this machine to build or test the tooling wiring
   - If it does, wire it in.
@@ -245,7 +245,7 @@ run (plan D-12).
   - `Extensions/Elsa3/src/Mapping/README.md` (:133-134);
   - `specs/246-publish-imported-reusables/contracts/diagnostic-codes.md` (:32);
   - spec 246 D-8 and its references (`spec.md` :88, :124, :277, :295, :344): mark them "lifted by spec 265".
-- [x] T062 [P] Draft the D-13 issue: plain-workflow `Input` picks compile to a generic expression. Add a test that confirms today's behaviour, then show the draft to the owner before filing it as `needs-triage`. — draft in the PR description; owner to confirm before filing
+- [ ] T062 [P] Draft the D-13 issue: plain-workflow `Input` picks compile to a generic expression. Add a test that confirms today's behaviour, then show the draft to the owner before filing it as `needs-triage`. — draft in the PR description; owner to confirm before filing — Not done: no test confirms the plain-workflow behaviour yet; the issue stays a draft.
 - [x] T063 Confirm that no `EXTENSION_POINTS.md` or generated map changes are needed: there are no new contributors, replacement contracts or project references. Regenerate `dependency-map.json` only if project references changed, and check with `git diff --stat` (Windows CRLF note). — no extension point, contract or production project reference changes; the Behavioral test project gains an Elsa.Expressions reference (no checked-in dependency map)
 - [x] T064 Run every test project from T003, plus the Studio checks, and compare with the baseline. Set the spec `Status: Implemented — via #<PR>` in this PR before merge. Commit, push, open the PR, and run the review gate (`elsa-auto-review-merge`). — PR #3199; follow-ups #3195–#3198; the review gate has not run yet
 

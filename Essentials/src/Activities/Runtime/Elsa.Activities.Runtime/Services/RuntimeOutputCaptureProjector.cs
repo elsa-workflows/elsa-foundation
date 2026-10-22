@@ -145,7 +145,7 @@ public sealed class RuntimeOutputCaptureProjector
     }
 
     /// <summary>
-    /// Spec 265 D-2: a capture into a graph variable writes the variable row of the producer's nearest closed activity
+    /// A capture into a graph variable writes the variable row of the producer's nearest closed activity
     /// execution scope, the row that boundary's activation owns, so later body nodes and its output mappings read it.
     /// A graph variable has no withheld form, so a withheld value is refused as for a durable output.
     /// </summary>
@@ -182,14 +182,12 @@ public sealed class RuntimeOutputCaptureProjector
         var boundaryId = closedScopeBoundary.InvocationId;
         var referenceKey = capture.Metadata[RuntimeMetadataKeys.TargetVariableReferenceKey];
         var durableValueId = ActivityExecutionScopeKeys.Variable(boundaryId, referenceKey);
-        var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            [RuntimeMetadataKeys.BoundaryExecutionScopeId] = boundaryId,
-            [RuntimeMetadataKeys.BoundaryValueRole] = RuntimeInputBindingStateProjection.BoundaryVariableRole,
-            [RuntimeMetadataKeys.BoundaryReferenceKey] = referenceKey,
-            [RuntimeMetadataKeys.StorageDriverKey] = capture.StorageDriverKey,
-            [RuntimeMetadataKeys.BoundaryVariableName] = capture.Metadata.GetValueOrDefault(RuntimeMetadataKeys.VariableName, referenceKey)
-        };
+        var metadata = ActivityExecutionScopeValues.Metadata(
+            boundaryId,
+            ActivityExecutionScopeValues.VariableRole,
+            referenceKey,
+            capture.StorageDriverKey,
+            variableName: capture.Metadata.GetValueOrDefault(RuntimeMetadataKeys.VariableName, referenceKey));
         var state = new DurableValueState(
             durableValueId,
             workflowExecutionId,

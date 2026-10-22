@@ -257,7 +257,7 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
     });
   });
 
-  // Spec 265: inside a graph body the root scope is the graph, so graph variables are offered as workflow-scope
+  // Inside a graph body the root scope is the graph, so graph variables are offered as workflow-scope
   // variables; placement remaps them to the placed graph. The earlier "activity-graph" scope had no runtime frame.
   it("offers graph variables to body nodes under the workflow root scope", async () => {
     expressionDescriptors = [{ type: "Variable", displayName: "Variable", editingMode: "reference" }];

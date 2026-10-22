@@ -1,7 +1,7 @@
 namespace Elsa3.Mapping.Conversion;
 
 /// <summary>
-/// What an engineer can do about a reusable workflow Elsa 4 graph activities cannot hold yet (spec 246 D-7). Each
+/// What an engineer can do about a reusable workflow Elsa 4 graph activities cannot hold yet. Each
 /// text names what is unsupported, where it is tracked, and the change to the Elsa 3 workflow that makes it import, or
 /// says plainly that the workflow has to wait.
 /// </summary>

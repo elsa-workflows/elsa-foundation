@@ -146,7 +146,7 @@ public sealed class ActivityTemplatePlacer(
                     : GenerateId("node", frame.Origin, $"node:{node.ExecutableNodeId}", generatedIds);
         }
 
-        // Spec 265: a closed-scope body's references are template-local. They are rewritten to this placement once
+        // A closed-scope body's references are template-local. They are rewritten to this placement once
         // every body occurrence has its placed identity, with the graph's own scope as the placed boundary id.
         var closedScopeId = IsClosedScope(frame.Template.Root.Descriptor)
             ? nodeIds[frame.Template.Root.ExecutableNodeId]
@@ -358,7 +358,7 @@ public sealed class ActivityTemplatePlacer(
             .ToArray();
     }
 
-    // Spec 265 D-2: a closed-scope body node's authored outputs capture into the graph's own variables.
+    // A closed-scope body node's authored outputs capture into the graph's own variables.
     private ExecutableNode CompileGraphVariableCaptures(
         ExecutableNode root,
         PlacementBuild occurrence,
@@ -500,7 +500,7 @@ public sealed class ActivityTemplatePlacer(
         return inputBindingCompiler.CompileAll(frame.OccurrenceId!, contract.Inputs.Values, inputStates);
     }
 
-    // Spec 265: Studio picks a graph input as Input {referenceKey}. Inside a closed-scope body the request is the
+    // Studio picks a graph input as Input {referenceKey}. Inside a closed-scope body the request is the
     // graph's own inputs, keyed by reference key, so the pick is a request read of that key.
     private static ArgumentState ToGraphInputRead(ArgumentState state)
     {
@@ -634,7 +634,7 @@ public sealed class ActivityTemplatePlacer(
         public string ChildSlotName { get; } = childSlotName;
         public int ChildIndex { get; } = childIndex;
         public ExecutableActivityTemplateOccurrenceOverlay? OccurrenceOverlay { get; } = occurrenceOverlay;
-        /// <summary>Spec 265: this occurrence is a body node of a closed-scope graph.</summary>
+        /// <summary>This occurrence is a body node of a closed-scope graph.</summary>
         public bool InClosedScope { get; } = inClosedScope;
         public ExecutableActivityTemplateDependency[] Dependencies { get; } = template.DirectDependencies
             .OrderBy(x => x.OccurrenceId, StringComparer.Ordinal)

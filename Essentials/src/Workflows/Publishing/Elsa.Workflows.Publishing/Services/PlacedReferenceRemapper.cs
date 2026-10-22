@@ -5,7 +5,7 @@ namespace Elsa.Workflows.Publishing.Services;
 
 /// <summary>
 /// Rewrites the template-local identities that a closed-scope graph body's references carry into the identities of
-/// one placement (spec 265, ADR 0027). A body node refers to another body node, to a body container's variables, or
+/// one placement. A body node refers to another body node, to a body container's variables, or
 /// to the graph's own variables by its template-local identity; once the placer has given every body node its placed
 /// identity, this rewrites those references to match.
 /// </summary>
@@ -17,7 +17,7 @@ namespace Elsa.Workflows.Publishing.Services;
 /// </remarks>
 internal static class PlacedReferenceRemapper
 {
-    /// <summary>The scope id Studio authored for graph variables before spec 265; read as the template root.</summary>
+    /// <summary>The scope id Studio authored for graph variables before closed scopes; read as the template root.</summary>
     public const string LegacyGraphScopeId = "activity-graph";
 
     public static ExecutableNode Remap(

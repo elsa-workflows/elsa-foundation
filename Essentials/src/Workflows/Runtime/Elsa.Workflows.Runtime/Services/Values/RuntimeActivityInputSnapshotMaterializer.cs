@@ -37,7 +37,7 @@ public sealed class RuntimeActivityInputSnapshotMaterializer(
             ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires the canonical workflow variable-frame owner store.");
         var visibleFrames = await new RuntimeContainerScopeService(activityExecutionStateStore, resolvedWorkflowExecutionStateStore)
             .BuildVisibleFramesAsync(state.Execution.WorkflowExecutionId, state, cancellationToken: cancellationToken, durableValues: durableValues);
-        // Spec 265: below a closed activity execution scope the request inputs are the boundary's own.
+        // Below a closed activity execution scope the request inputs are the boundary's own.
         var workflowInputEnvelopes = visibleFrames.ClosedScopeBoundary is { } boundary
             ? RuntimeClosedScope.InputEnvelopes(boundary, durableValues, executable)
             : projections.WorkflowInputEnvelopes;

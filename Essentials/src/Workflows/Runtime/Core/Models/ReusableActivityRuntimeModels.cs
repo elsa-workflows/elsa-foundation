@@ -134,7 +134,7 @@ public sealed record ExecutableActivityTemplateOccurrenceOverlay
     public ExecutableActivityStructure? Structure { get; }
 
     /// <summary>
-    /// Authored output captures of a closed-scope graph body node (spec 265), opaque to Runtime and compiled by
+    /// Authored output captures of a closed-scope graph body node, opaque to Runtime and compiled by
     /// Publishing against the graph's variables. Omitted when null, so templates without captures hash as before.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

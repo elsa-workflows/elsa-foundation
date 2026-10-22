@@ -4,7 +4,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Services.Values;
 
 /// <summary>
-/// The nearest closed activity execution scope above a node, and the view its body reads (spec 265). A closed
+/// The nearest closed activity execution scope above a node, and the view its body reads. A closed
 /// boundary (a graph activity compiled as a closed scope) replaces the started workflow for every node below it:
 /// request inputs are the boundary's captured inputs and the root variable frame is the boundary's variables, both
 /// read from the rows the boundary activation wrote. A node is never its own boundary, so a boundary's own bindings
@@ -48,7 +48,7 @@ internal static class RuntimeClosedScope
             : RuntimeInputBindingStateProjection.ProjectBoundaryEnvelopes(
                 durableValues,
                 boundary.InvocationId,
-                RuntimeInputBindingStateProjection.BoundaryVariableRole));
+                ActivityExecutionScopeValues.VariableRole));
 
     /// <summary>
     /// The request a body node reads below <paramref name="boundary"/>: the boundary's captured inputs by reference key,
@@ -61,7 +61,7 @@ internal static class RuntimeClosedScope
         WorkflowExecutable executable)
     {
         var envelopes = RuntimeInputBindingStateProjection.ProjectBoundaryEnvelopes(
-                durableValues, boundary.InvocationId, RuntimeInputBindingStateProjection.BoundaryInputRole)
+                durableValues, boundary.InvocationId, ActivityExecutionScopeValues.InputRole)
             .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         if (executable.NodesById.TryGetValue(boundary.Execution.ExecutableNodeId, out var node) &&
             node.ActivityContract is { } contract)

@@ -75,7 +75,7 @@ the same meaning that `WorkflowRequest` already has inside a template, and the E
   `VariableRead.DeclaringScopeId`, the parameter `DeclaringScopeNodeId`, capture targets and `IntrinsicVariable`.
   The legacy Studio id `"activity-graph"` is read as an alias of `"workflow"`.
 - **Runtime.** For a body node, the visible frame chain starts with a synthetic, read-only Root-kind frame:
-  - `FrameId = graph:{boundaryExecutionId}`, `ScopeId = placed boundary node id`, parent null.
+  - `FrameId = activity-scope:{boundaryExecutionId}`, `ScopeId = placed boundary node id`, parent null.
   - It is projected from the scope's variable rows, so there is no second store.
   - The caller's root frame, caller containers and iterations, and the boundary's own iteration frame are excluded.
   - Body container frames below the boundary stay visible and are parented to the graph frame. Its deterministic
@@ -204,8 +204,9 @@ execution, not predecessors, so loop iterations and two placements stay independ
 - So every body `ActivityResult` that carries a producer scope would read as Unavailable.
 
 **Decision.** When the producer's nearest boundary is a closed-scope boundary:
-- compare the declared scope with the producer's `RuntimeMetadataKeys.FlowchartExecutionScopeId`, not provenance;
-- also require producer and consumer to share that nearest boundary execution, which is the FR-004 guarantee.
+- require producer and consumer to share that nearest boundary execution, which is the FR-004 guarantee;
+- do not compare the declared scope at all. *(Revised during implementation, plan A-2: every placed body node opens its
+  own execution scope, so no declared scope matches a runtime one, Flowchart-local or not.)*
 
 JavaScript `ActivityResultExpressionParameterBinding` passes no scope (:49) and needs only the remap.
 

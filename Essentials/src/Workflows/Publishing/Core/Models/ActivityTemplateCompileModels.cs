@@ -41,7 +41,7 @@ public sealed record ActivityTemplateOccurrenceCompilation(
     string OccurrenceId,
     JsonElement InputBindings,
     ActivityNodeStructure? Structure,
-    // Spec 265: authored output captures of a closed-scope graph body node; null when it captures nothing.
+    // Authored output captures of a closed-scope graph body node; null when it captures nothing.
     JsonElement? OutputBindings = null);
 
 public sealed record ActivityTemplateDependencyDiscoveryRequest(

@@ -117,7 +117,7 @@ internal static class StructuralCallbackEvaluation
         var scopeService = new RuntimeContainerScopeService(
             activityExecutionStateStore,
             serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
-            serviceProvider.GetService<IDurableValueStateStore>());
+            serviceProvider.GetRequiredService<IDurableValueStateStore>());
 
         SimpleActivityExecutionContext? context = null;
         RuntimeStructuralContinuation? continuation = null;
@@ -375,7 +375,7 @@ internal static class StructuralCallbackEvaluation
             var captureProjection = await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().ProjectAsync(
                 workItem.WorkflowExecutionId, currentParentState.InvocationId, parentExecutableNode,
                 (IActivityCompletionTransition)completionTransition, completionProjection, completedAt, cancellationToken,
-                // Spec 265 D-2: a capture into a graph variable writes the row of the producer's nearest closed scope.
+                // A capture into a graph variable writes the row of the producer's nearest closed scope.
                 closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, currentParentState.InvocationId, parentExecutableNode, cancellationToken));
             completionDurableValueChanges = (completionCheckpointPreparation?.DurableValueChanges ?? [])
                 .Concat(captureProjection.DurableValues)

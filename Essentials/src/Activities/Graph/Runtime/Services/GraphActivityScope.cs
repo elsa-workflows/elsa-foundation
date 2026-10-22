@@ -335,18 +335,14 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
 
         var typeDescriptor = TypeDescriptor(type, storageDriverKey);
         var encoding = await storageDriver.EncodeAsync(value, typeDescriptor, cancellationToken);
-        var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            [RuntimeMetadataKeys.BoundaryExecutionScopeId] = ExecutionScope.ExecutionScopeId,
-            [RuntimeMetadataKeys.BoundaryValueRole] = role,
-            [RuntimeMetadataKeys.BoundaryReferenceKey] = referenceKey,
-            ["runtime.storageDriverKey"] = storageDriverKey
-        };
-        if (boundaryInputName is not null)
-            metadata[RuntimeMetadataKeys.BoundaryInputName] = boundaryInputName;
-        // Spec 265: body nodes read graph variables by name (variables.x), and the runtime has no graph descriptor.
-        if (boundaryVariableName is not null)
-            metadata[RuntimeMetadataKeys.BoundaryVariableName] = boundaryVariableName;
+        // Body nodes read graph variables by name (variables.x), and the runtime has no graph descriptor.
+        var metadata = ActivityExecutionScopeValues.Metadata(
+            ExecutionScope.ExecutionScopeId,
+            role,
+            referenceKey,
+            storageDriverKey,
+            boundaryInputName,
+            boundaryVariableName);
 
         return new DurableValueState(
             durableValueId,

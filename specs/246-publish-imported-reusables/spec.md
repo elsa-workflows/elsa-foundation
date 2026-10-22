@@ -120,7 +120,7 @@ flowcharts that branch on those outcomes. Run each caller and check the branch i
    analyzed and applied, **Then** its conversion is refused with `ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED`, naming
    the node, and nothing is written (D-7).
 8. **Given** a reusable workflow whose body reads one of its inputs, a variable or another activity's result, **When**
-   the import is applied, **Then** its conversion is refused with `ELS3-ACTIVITY-REUSABLE-VALUE-READ-UNSUPPORTED`, and
+   the import is applied, **Then** its conversion is refused with `ELS3-ACTIVITY-REUSABLE-VALUE-READ-UNSUPPORTED`, and *(Lifted by spec 265, #3027: the code is removed and these reads convert.)*
    nothing is written (D-8).
 
 ---
@@ -292,7 +292,7 @@ A user with the import permission but not the publish permission tries to apply 
   workflows keep converting them.
 - **FR-022**: Conversion of a reusable workflow MUST refuse a body that reads one of its inputs, a variable or another
   activity's result (`getInput`, `getVariable`, output reads, Elsa 3 memory references) with
-  `ELS3-ACTIVITY-REUSABLE-VALUE-READ-UNSUPPORTED` (D-8). Non-reusable workflows keep converting them.
+  `ELS3-ACTIVITY-REUSABLE-VALUE-READ-UNSUPPORTED` (D-8). Non-reusable workflows keep converting them. *(Lifted by spec 265, #3027: the code is removed and these reads convert.)*
 
 ### Key Entities
 

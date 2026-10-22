@@ -70,6 +70,17 @@ public sealed partial class GraphActivityProviderTests
     }
 
     [Fact]
+    public async Task Syntax_names_match_without_regard_to_case()
+    {
+        var diagnostics = await ValidateBodyAsync(
+            inputs: [BodyArgument("value", "WORKFLOWREQUEST", new { memberKey = "unknown" })],
+            outputs: [BodyArgument("result", "VARIABLE", new { referenceKey = "running-total", declaringScopeId = "workflow" })]);
+
+        Assert.Contains(diagnostics, x => x.Code == GraphBodyReferenceCodes.InputUnknown);
+        Assert.DoesNotContain(diagnostics, x => x.Code == GraphBodyReferenceCodes.CaptureTargetUnknown);
+    }
+
+    [Fact]
     public async Task A_capture_into_a_declared_graph_variable_is_accepted()
     {
         var diagnostics = await ValidateBodyAsync(

@@ -35,7 +35,7 @@ public static class RuntimeInputBindingStateProjection
 
     /// <summary>
     /// Projects one closed activity execution scope's values of one role (<c>input</c> or <c>variable</c>), keyed by
-    /// reference key (spec 265). These are the rows the boundary activation wrote under its own execution id; a body
+    /// reference key. These are the rows the boundary activation wrote under its own execution id; a body
     /// node reads them in place of the started workflow's request and root variables.
     /// </summary>
     public static IReadOnlyDictionary<string, ValueEnvelope> ProjectBoundaryEnvelopes(
@@ -61,7 +61,7 @@ public static class RuntimeInputBindingStateProjection
         ArgumentException.ThrowIfNullOrWhiteSpace(boundaryActivityExecutionId);
 
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var durableValue in BoundaryRows(durableValues, boundaryActivityExecutionId, BoundaryVariableRole))
+        foreach (var durableValue in BoundaryRows(durableValues, boundaryActivityExecutionId, ActivityExecutionScopeValues.VariableRole))
         {
             var referenceKey = durableValue.Metadata[RuntimeMetadataKeys.BoundaryReferenceKey];
             result[referenceKey] = durableValue.Metadata.GetValueOrDefault(RuntimeMetadataKeys.BoundaryVariableName, referenceKey);
@@ -70,8 +70,6 @@ public static class RuntimeInputBindingStateProjection
         return result;
     }
 
-    public const string BoundaryInputRole = "input";
-    public const string BoundaryVariableRole = "variable";
 
     private static IEnumerable<DurableValueState> BoundaryRows(
         IEnumerable<DurableValueState> durableValues,

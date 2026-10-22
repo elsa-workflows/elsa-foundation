@@ -183,7 +183,7 @@ public sealed class GraphActivityProvider(
                 node.NodeId,
                 ReadCanonicalArray(node.Element, "inputs"),
                 activityStructureService.CompileExecutableStructure(node.Activity),
-                // Spec 265 D-2: a body node's captures into graph variables; absent when it captures nothing.
+                // A body node's captures into graph variables; absent when it captures nothing.
                 ReadCanonicalArray(node.Element, "outputs") is { } outputs && outputs.GetArrayLength() > 0 ? outputs : null))
             .ToArray();
 
@@ -1138,7 +1138,7 @@ public sealed class GraphActivityProvider(
         var serializerOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         var payload = JsonSerializer.SerializeToElement(plan, serializerOptions);
         var closedPayload = JsonNode.Parse(payload.GetRawText())!.AsObject();
-        // Spec 265: the body is a closed value scope. Placement reads this to remap body references and mark the
+        // The body is a closed value scope. Placement reads this to remap body references and mark the
         // boundary; versions compiled before it keep resolving their body against the caller.
         closedPayload["scopeModel"] = Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.ActivityExecutionScopeClosed;
         if (!StringComparer.Ordinal.Equals(graph.ManifestSchemaVersion, ActivityGraphManifest.MultipleOutcomesSchemaVersion))
@@ -1240,7 +1240,7 @@ public sealed class GraphActivityProvider(
 
     private static ActivityDiagnosticSubject ProposalSubject() => new("ActivityDefinition", Key);
 
-    // Spec 265: a closed-scope body refers only to what the activity declares or contains.
+    // A closed-scope body refers only to what the activity declares or contains.
     private static void ValidateBodyReferences(
         ActivityGraphManifest graph,
         DesignActivityContract contract,

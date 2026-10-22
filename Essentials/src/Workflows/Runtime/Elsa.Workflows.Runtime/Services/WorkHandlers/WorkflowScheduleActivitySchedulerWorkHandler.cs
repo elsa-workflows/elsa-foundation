@@ -296,7 +296,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         "activity.invocationOrigin",
         "activity.placementNamespace",
         "graph.templateHash",
-        // Spec 265: the boundary's state carries the closed-scope marker, so a body node's ancestor walk finds its
+        // The boundary's state carries the closed-scope marker, so a body node's ancestor walk finds its
         // nearest closed scope from durable state alone.
         RuntimeMetadataKeys.ActivityExecutionScope
     ];

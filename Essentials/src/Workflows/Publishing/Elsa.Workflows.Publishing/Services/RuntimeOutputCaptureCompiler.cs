@@ -79,7 +79,7 @@ public sealed class RuntimeOutputCaptureCompiler(
             workflowVariables);
 
     /// <summary>
-    /// Compiles the authored outputs of a node inside a closed-scope graph body (spec 265 D-2) into captures that write
+    /// Compiles the authored outputs of a node inside a closed-scope graph body into captures that write
     /// the graph's own variables. Inside a graph body the root scope is the graph, so the authored target is a
     /// workflow-scope <c>Variable</c> reference (or Studio's legacy <c>activity-graph</c> scope) naming one of
     /// <paramref name="graphVariables"/>. The capture is pinned to that variable's declared type and storage driver, so
@@ -129,7 +129,7 @@ public sealed class RuntimeOutputCaptureCompiler(
                 : resolvedConversionPlanResolver.Resolve(
                     sourceType,
                     sourceRepresentation,
-                    new ValueTypeDescriptor(alias),
+                    new ValueTypeDescriptor(alias, CollectionKindOf(variable.Type)),
                     AuthoredValueConversionMapper.Mode(output.Conversion),
                     AuthoredValueConversionMapper.Profile(output.Conversion),
                     AuthoredValueConversionMapper.Limits(output.Conversion),
@@ -156,6 +156,14 @@ public sealed class RuntimeOutputCaptureCompiler(
 
         return captures;
     }
+
+    private static CollectionKind CollectionKindOf(System.Text.Json.JsonElement type) =>
+        type.ValueKind == System.Text.Json.JsonValueKind.Object &&
+        type.TryGetProperty("collectionKind", out var kind) &&
+        kind.ValueKind == System.Text.Json.JsonValueKind.String &&
+        Enum.TryParse<CollectionKind>(kind.GetString(), ignoreCase: true, out var parsed)
+            ? parsed
+            : CollectionKind.Single;
 
     /// <summary>Value id prefix of a capture into a graph variable; the runtime writes the boundary's own row.</summary>
     internal const string GraphVariableValueIdPrefix = "graph-variable:";
@@ -260,7 +268,7 @@ public sealed class RuntimeOutputCaptureCompiler(
 
 }
 
-/// <summary>A graph variable a body node can capture into (spec 265): its declared type JSON and storage driver.</summary>
+/// <summary>A graph variable a body node can capture into: its declared type JSON and storage driver.</summary>
 internal sealed record GraphVariableCaptureTarget(
     string ReferenceKey,
     string Name,

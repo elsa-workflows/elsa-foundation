@@ -67,14 +67,18 @@ public sealed class RuntimeContainerScopeService(
             ancestorId = ancestor.ParentActivityExecutionId;
         }
 
-        // Spec 265: below a closed activity execution scope the boundary's variables are the root, and nothing above
+        // Below a closed activity execution scope the boundary's variables are the root, and nothing above
         // the boundary (the caller's root, containers or iterations, or the boundary's own frames) is visible.
         var chain = ancestors.ToList();
         var boundaryIndex = RuntimeClosedScope.IndexOfNearest(chain);
         var boundary = boundaryIndex < 0 ? null : chain[boundaryIndex];
         // The scoped-variable reader seam reads no durable values of its own; it still gets the closed scope's variables.
-        if (loadClosedScopeValues && boundary is not null && durableValues is null && durableValueStateStore is not null)
-            durableValues = await durableValueStateStore.ListAllDurableValueStatesAsync(workflowExecutionId, cancellationToken);
+        if (loadClosedScopeValues && boundary is not null && durableValues is null)
+        {
+            var store = durableValueStateStore
+                ?? throw new InvalidOperationException($"Activity '{activityState.InvocationId}' reads scoped variables inside a closed activity execution scope, which requires a durable value state store.");
+            durableValues = await store.ListAllDurableValueStatesAsync(workflowExecutionId, cancellationToken);
+        }
         var ordered = new List<VariableFrameState>
         {
             boundary is null ? root : RuntimeClosedScope.CreateFrame(boundary, durableValues)
@@ -104,7 +108,7 @@ public sealed class RuntimeContainerScopeService(
     }
 
     /// <summary>
-    /// The nearest closed activity execution scope above an activity (spec 265), or null outside every closed scope.
+    /// The nearest closed activity execution scope above an activity, or null outside every closed scope.
     /// Looked up only for a node that captures into a graph variable, which writes that boundary's own row.
     /// </summary>
     public async ValueTask<ActivityExecutionState?> FindClosedScopeBoundaryAsync(
@@ -381,7 +385,7 @@ public sealed class RuntimeContainerScopeService(
                 continue;
             }
 
-            // Spec 265: a closed scope's root frame holds the boundary's variables, named by their rows.
+            // A closed scope's root frame holds the boundary's variables, named by their rows.
             if (RuntimeClosedScope.IsClosedScopeFrame(frame))
             {
                 foreach (var (key, value) in frame.Values)
@@ -500,7 +504,7 @@ public sealed class RuntimeVisibleVariableFrames
     }
 
     /// <summary>
-    /// A chain rooted at a closed activity execution scope (spec 265): <paramref name="closedScopeBoundary"/> is the
+    /// A chain rooted at a closed activity execution scope: <paramref name="closedScopeBoundary"/> is the
     /// boundary whose variables form the root frame, and <paramref name="rootVariableNames"/> maps their reference keys
     /// to declared names for name-based reads.
     /// </summary>

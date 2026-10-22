@@ -36,7 +36,7 @@ A body node keeps template-local identities:
   | `VariableExpressionParameterBinding.DeclaringScopeNodeId` | As `DeclaringScopeId` |
   | `ActivityResultExpressionParameterBinding.ProducerNodeId` | Placed producer id |
   | `ExecutableNode.IntrinsicVariable.DeclaringScopeId` | As `DeclaringScopeId` |
-- **Body output captures**: a `RuntimeOutputCapture` with `ValueId = variable:{key}` and metadata
+- **Body output captures**: a `RuntimeOutputCapture` with `ValueId = graph-variable:{key}` and metadata
   `runtime.captureTargetScopeId = <placed boundary id>`. The declared type and storage driver are pinned.
 
 ## Runtime: durable state (no new row kinds)
@@ -60,7 +60,7 @@ The nearest boundary is the first ancestor state (through `ParentActivityExecuti
 **`WorkflowInputEnvelopes`**: the boundary's input rows, keyed by `boundaryReferenceKey`.
 
 **Visible frames**, in order:
-1. A synthetic Root frame `{FrameId: graph:{boundaryExecId}, ScopeId: <placed boundary id>, Parent: null}`. Its
+1. A synthetic Root frame `{FrameId: activity-scope:{boundaryExecId}, ScopeId: <placed boundary id>, Parent: null}`. Its
    values are the variable rows, and its names come from `boundaryVariableName`. It is read-only through frame APIs:
    captures write the rows.
 2. Body container and iteration frames between the boundary and the node, parented as today. The top one is
@@ -68,8 +68,8 @@ The nearest boundary is the first ancestor state (through `ParentActivityExecuti
 
 The caller's root, container and iteration frames are not visible.
 
-**Activity results**: the producer must share the consumer's nearest boundary execution. Its declared scope is
-compared with `flowchart.executionScopeId` metadata.
+**Activity results**: the producer must share the consumer's nearest boundary execution. Below a closed
+boundary the declared producer scope is not compared (plan A-2).
 
 Nodes with no closed ancestor resolve exactly as today (FR-011).
 

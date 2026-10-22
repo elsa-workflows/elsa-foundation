@@ -333,7 +333,7 @@ values, read only by the boundary's own expressions (input defaults, variable in
 read graph variables either (`references unavailable variable … in scope 'workflow'`).
 
 **Decision (maintainer, 2026-10-19).** Refuse such reusable bodies at conversion with
-`ELS3-ACTIVITY-REUSABLE-VALUE-READ-UNSUPPORTED`; the Essentials gap is
+`ELS3-ACTIVITY-REUSABLE-VALUE-READ-UNSUPPORTED`; the Essentials gap is *(Lifted by spec 265.)*
 [#3027](https://github.com/elsa-workflows/elsa-foundation/issues/3027).
 
 **Side fix kept.** `GraphActivityProvider.Canonicalize` sorts payload keys, so a `Variable` or `ActivityResult`

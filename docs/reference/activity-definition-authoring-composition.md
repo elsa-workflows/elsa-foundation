@@ -60,7 +60,19 @@ sees the activity's variables by name (`variables.x`, `getVariable('x')`, `get<X
 request parameters, as in a workflow. A graph published before graph compiler `3.0.0` and used inside a newer one
 reads the newer graph as its caller.
 
-Publishing the activity refuses a body reference the activity does not declare or contain, with one of the
-`activity.graph.body-*` codes in the [graph scope contract](../../specs/265-graph-activity-scope-reads/contracts/graph-scope-references.md).
+Publishing the activity refuses a body reference the activity does not declare or contain:
+
+| Code | Refused when |
+|---|---|
+| `activity.graph.body-input-unknown` | A request read, or Studio's `Input` pick, names an input the activity does not declare |
+| `activity.graph.body-variable-unknown` | A `workflow`-scope variable read names a variable the activity does not declare |
+| `activity.graph.body-variable-scope-invisible` | A container-scoped read names a scope that is not a container around the node |
+| `activity.graph.body-producer-unknown` | A result read names a node that is not in the body, or a result the node does not produce |
+| `activity.graph.body-capture-target-unknown` | An output capture targets anything but one of the activity's declared variables |
+| `activity.graph.body-capture-type-incompatible` | An output capture's type does not fit the variable's type, and no conversion is authored |
+
+The last two in the table that need the body nodes' resolved contracts (the result check and the capture type check)
+run when the activity compiles; the others also run when a draft is validated. Ambient JavaScript reads and the key
+of a container-scoped variable are not checked statically; they fail at run time, as in a workflow.
 Versions compiled before graph compiler `3.0.0` keep their behaviour: their bodies still resolve against the
 caller until the activity is published again.

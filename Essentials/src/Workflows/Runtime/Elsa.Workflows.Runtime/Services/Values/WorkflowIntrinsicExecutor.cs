@@ -598,7 +598,7 @@ public sealed class WorkflowIntrinsicExecutor(
         var frameEnvelopes = ToAddressEnvelopes(visibleFrames);
         if (boundary is not null)
             RuntimeClosedScope.AliasWorkflowScope(visibleFrames[0], frameEnvelopes);
-        // Spec 265: below a closed activity execution scope the request inputs and root variables are the boundary's.
+        // Below a closed activity execution scope the request inputs and root variables are the boundary's.
         var workflowInputEnvelopes = boundary is null
             ? projections.WorkflowInputEnvelopes
             : RuntimeClosedScope.InputEnvelopes(boundary, durableValues, executable);
@@ -705,8 +705,8 @@ public sealed class WorkflowIntrinsicExecutor(
             ancestorId = ancestor.ParentActivityExecutionId;
         }
 
-        // Spec 265: inside a closed activity execution scope nothing above the boundary is a write target, and the
-        // workflow root frame is not visible. Writing the boundary's own variables is #3023.
+        // Inside a closed activity execution scope nothing above the boundary is a write target, and the
+        // workflow root frame is not visible. Writing the boundary's own variables is not supported yet.
         var boundaryIndex = ancestors.FindIndex(RuntimeClosedScope.IsClosedBoundary);
         var insideClosedScope = boundaryIndex >= 0;
         if (insideClosedScope)
@@ -751,7 +751,7 @@ public sealed class WorkflowIntrinsicExecutor(
             ancestorId = ancestor.ParentActivityExecutionId;
         }
 
-        // Spec 265: the same closed-scope rule as RuntimeContainerScopeService.BuildVisibleFramesAsync.
+        // The same closed-scope rule as RuntimeContainerScopeService.BuildVisibleFramesAsync.
         var chain = ancestors.ToList();
         var boundaryIndex = RuntimeClosedScope.IndexOfNearest(chain);
         var boundary = boundaryIndex < 0 ? null : chain[boundaryIndex];

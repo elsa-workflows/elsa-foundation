@@ -9,8 +9,7 @@ using DesignActivityContract = Elsa.Activities.Design.Core.Models.ActivityContra
 namespace Elsa.Activities.Graph.Design.Services;
 
 /// <summary>
-/// Refuses, at activity publication, a graph body reference to anything the closed scope does not hold (spec 265
-/// FR-006, FR-013): an input the activity does not declare, a variable it does not declare, a container that does not
+/// Refuses, at activity publication, a graph body reference to anything the closed scope does not hold: an input the activity does not declare, a variable it does not declare, a container that does not
 /// enclose the reading node, a producer that is not a body node, and a capture into anything but its own variables.
 /// Inside a body the root scope is the graph, so <c>"workflow"</c> (and Studio's legacy <c>"activity-graph"</c>) name
 /// the graph's variables and a request read names one of its inputs.
@@ -186,18 +185,19 @@ internal static class GraphBodyReferenceValidator
         if (value.ValueKind != JsonValueKind.Object)
             yield break;
 
-        switch (argument.Value.ExpressionType)
+        // Syntax names match case-insensitively, as the binding compiler and the placer read them.
+        switch (argument.Value.ExpressionType?.ToLowerInvariant())
         {
-            case "WorkflowRequest" when Text(value, "memberKey") is { } memberKey:
+            case "workflowrequest" when Text(value, "memberKey") is { } memberKey:
                 yield return new RequestRead(memberKey);
                 yield break;
-            case "Input" when Text(value, "referenceKey") is { } inputKey:
+            case "input" when Text(value, "referenceKey") is { } inputKey:
                 yield return new RequestRead(inputKey);
                 yield break;
-            case "Variable" when Text(value, "referenceKey") is { } variableKey:
+            case "variable" when Text(value, "referenceKey") is { } variableKey:
                 yield return new VariableRead(variableKey, Text(value, "declaringScopeId"));
                 yield break;
-            case "ActivityResult" when Text(value, "producerNodeId") is { } producer && Text(value, "projectionKey") is { } projection:
+            case "activityresult" when Text(value, "producerNodeId") is { } producer && Text(value, "projectionKey") is { } projection:
                 yield return new ResultRead(producer, projection);
                 yield break;
         }
