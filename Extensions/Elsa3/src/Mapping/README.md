@@ -60,8 +60,9 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   - no value → no starting value (the variable starts empty);
   - `Object` → the text, unparsed, even when it is JSON;
   - `String`, primitives and enums → the text converted to the type (`"5"` → `5`, `"true"` → `true`);
-  - a collection (`List<T>`, `T[]` or an array flag) → a JSON array. When Elsa 4 knows `T`, the variable is `T` with
-    collection kind List or Array and every item is converted to `T`; otherwise it is `Object` holding the array;
+  - a collection (`List<T>`, `T[]` or an array flag) whose element type Elsa 4 knows → a JSON array. The variable is
+    `T` with collection kind List or Array, and every item is converted to `T`. A collection of a type Elsa 4 does not
+    know (`FormFile[]`, uploaded files) is refused, with or without a starting value, until it has its own spec (#3194);
   - `ObjectDictionary` and `HttpHeaders` → `Object` holding a JSON object.
 
   Text is never split on commas. `ELS3-ACTIVITY-VARIABLE-VALUE-UNCONVERTIBLE` refuses, with the exact fix, a starting

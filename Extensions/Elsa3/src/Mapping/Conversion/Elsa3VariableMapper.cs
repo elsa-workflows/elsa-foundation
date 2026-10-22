@@ -54,6 +54,17 @@ internal static class Elsa3VariableMapper
 
         variable = new VariableDefinition(source.Id, source.Name, shape.Type, storageDriverType, Default: null);
         refusal = null;
+
+        // A collection of a type Elsa 4 does not know (FormFile[]: uploaded files) has nothing faithful to hold, so it is
+        // refused with or without a starting value, until its own spec gives it an Elsa 4 counterpart (#3194).
+        if (shape.Kind == ShapeKind.Collection && shape.ClrType is null)
+        {
+            refusal = new(
+                $"Variable '{source.Name}' has the type '{typeName}', a collection of a type Elsa 4 does not know, so it cannot be converted.",
+                "Elsa 4 has no counterpart for this element type yet (uploaded files, FormFile[], are tracked in #3194). Remove the variable from the Elsa 3 workflow, or convert this workflow once Elsa 4 supports the type.");
+            return false;
+        }
+
         if (source.Value is null)
             return true;
 
@@ -88,15 +99,13 @@ internal static class Elsa3VariableMapper
                     refusal = NotJsonArray(source, typeName, value, shape.ElementIsText);
                     return false;
                 }
-                if (shape.ClrType is { } collectionType && !TryConvertItems(array, collectionType, out json))
+                if (!TryConvertItems(array, shape.ClrType!, out json))
                 {
                     refusal = new(
                         $"Variable '{source.Name}' has the starting value '{Echo(value)}', whose items cannot be converted to '{shape.Type.Alias}'.",
                         $"In the Elsa 3 workflow, write every item as a JSON {shape.Type.Alias} value, for example {Example(shape.Type.Alias)}.");
                     return false;
                 }
-                if (shape.ClrType is null)
-                    json = array;
                 return true;
 
             case ShapeKind.Dictionary:
@@ -130,7 +139,8 @@ internal static class Elsa3VariableMapper
 
     /// <summary>
     /// The Elsa 4 shape of an Elsa 3 type name. Elsa 3 writes a list as <c>List&lt;T&gt;</c> and an array as <c>T[]</c>:
-    /// a collection whose element type Elsa 4 knows keeps that element type, any other becomes <c>Object</c>.
+    /// a collection whose element type Elsa 4 knows keeps that element type; any other has no <see cref="VariableShape.ClrType"/>
+    /// and is refused.
     /// </summary>
     private static VariableShape Resolve(IWellKnownTypeRegistry registry, string typeName, bool isArray)
     {
@@ -270,6 +280,6 @@ internal static class Elsa3VariableMapper
 
     private enum ShapeKind { Text, Scalar, Collection, Dictionary, Unknown }
 
-    /// <param name="ClrType">The CLR type the starting value converts to; <c>null</c> when it is kept as parsed JSON.</param>
+    /// <param name="ClrType">The CLR type the starting value converts to; <c>null</c> when it is kept as parsed JSON (a dictionary) or the type is unknown.</param>
     private sealed record VariableShape(ShapeKind Kind, TypeReference Type, Type? ClrType, bool ElementIsText = true, string? Example = null);
 }

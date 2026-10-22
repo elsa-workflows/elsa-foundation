@@ -71,7 +71,7 @@ Same throwaway method as the baseline, deleted afterwards.
 | Measure | Baseline | After |
 |---|---|---|
 | Definitions that convert end to end | 8 | 8 (the same eight) |
-| Workflow variables refused by the new rule | n/a | 0 (no corpus variable has a starting value) |
+| Workflow variables refused by the new rule | n/a | 1: `FormFiles` (`FormFile[]`, #3194) in http-endpoints, which already failed conversion. No corpus variable has a starting value |
 | Converting definitions that publish | 2 | 2 |
 
 The 6 that still do not publish stop at the same first errors as in the baseline, all outside this unit. Publishing
@@ -95,7 +95,9 @@ reports only its first error, so the corpus cannot show the #3122 fix on its own
 - Q (2026-10-22, PR #3180): Elsa 3 collections and dictionaries with a starting value: refuse them, or convert them?
   → A (maintainer): convert, and never split text on commas.
   - Elsa 3 writes a list as `List<T>` and an array as `T[]`. When Elsa 4 knows `T`, the variable becomes `T` with
-    collection kind List or Array, and every item converts to `T`. Otherwise it becomes `Object` holding the array.
+    collection kind List or Array, and every item converts to `T`.
+  - A collection of a type Elsa 4 does not know (`FormFile[]`: uploaded files) is refused, with or without a starting
+    value. It needs its own spec: #3194.
   - The starting value must be a valid JSON array. Anything else is refused with guidance showing the exact JSON array.
   - `ObjectDictionary` and `HttpHeaders` become `Object` holding a JSON object; anything else is refused.
   - This matches #3191's rule for Elsa 4 itself: a collection default is always a JSON array.

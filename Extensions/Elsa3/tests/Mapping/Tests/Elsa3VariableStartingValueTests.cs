@@ -62,8 +62,6 @@ public sealed class Elsa3VariableStartingValueTests
         { "List<Object>", false, """[{"a":1}]""", "Object", CollectionKind.List, """[{"a":1}]""" },
         { "String[]", false, """["x"]""", "String", CollectionKind.Array, """["x"]""" },
         { "String", true, """["x","y"]""", "String", CollectionKind.Array, """["x","y"]""" },
-        // An element type Elsa 4 does not know: an Object holding the parsed array.
-        { "FormFile[]", false, """[{"name":"a.txt"}]""", "Object", CollectionKind.Single, """[{"name":"a.txt"}]""" },
         // Elsa 3's dictionaries: an Object holding the parsed object.
         { "ObjectDictionary", false, """{"a":1}""", "Object", CollectionKind.Single, """{"a":1}""" },
         { "HttpHeaders", false, """{"Accept":["application/json"]}""", "Object", CollectionKind.Single, """{"Accept":["application/json"]}""" }
@@ -107,7 +105,8 @@ public sealed class Elsa3VariableStartingValueTests
         { "List<String>", "a, b", "is not a JSON array", """for example ["a","b"]""" },
         { "List<Int32>", "1, 2", "is not a JSON array", "for example [1, 2]" },
         { "List<Int32>", """["a"]""", "items cannot be converted to 'Int32'", "for example [1, 2]" },
-        { "FormFile[]", "{bad", "is not a JSON array", "as a JSON array" },
+        // A collection of a type Elsa 4 does not know is refused whatever its value (#3194).
+        { "FormFile[]", """[{"name":"a.txt"}]""", "a collection of a type Elsa 4 does not know", "#3194" },
         { "ObjectDictionary", "a=1", "is not a JSON object", """for example {"key": "value"}""" },
         { "HttpHeaders", "Accept: text/plain", "is not a JSON object", """for example {"Accept": ["application/json"]}""" },
         // A CLR type the host registers no alias for runs as Object in Elsa 4.
@@ -124,6 +123,19 @@ public sealed class Elsa3VariableStartingValueTests
         Assert.Contains("Variable 'items'", refusal!.Message);
         Assert.Contains(reason, refusal.Message);
         Assert.Contains(fix, refusal.Guidance);
+    }
+
+    [Fact]
+    public async Task A_collection_of_a_type_Elsa_4_does_not_know_is_refused_even_without_a_value()
+    {
+        var result = await ConvertAsync(new Elsa3Variable { Id = "files", Name = "FormFiles", TypeName = "FormFile[]" });
+
+        Assert.False(result.Succeeded);
+        var refusal = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.VariableValueUnconvertible, refusal.Code);
+        Assert.Equal("$.variables[0]", refusal.Path);
+        Assert.Contains("'FormFile[]'", refusal.Message);
+        Assert.Contains("#3194", refusal.Guidance);
     }
 
     [Fact]

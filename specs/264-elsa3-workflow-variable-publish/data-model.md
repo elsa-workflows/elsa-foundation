@@ -30,7 +30,7 @@ No persisted model changes. The change is in how one Elsa 3 shape maps to one El
 | `String` | any text | the text |
 | `Int32`, `Boolean`, other primitives, enums | `"5"`, `"true"`, `"OK"` | the converted value |
 | `List<T>`, `T[]`, array flag, with `T` known to Elsa 4 | a JSON array | Elsa 4 type `T`, kind List or Array; the items converted to `T` |
-| `List<T>`, `T[]` with `T` unknown (`FormFile[]`) | a JSON array | `Object` holding the array |
+| `List<T>`, `T[]` with `T` unknown (`FormFile[]`) | any, or none | refused (#3194) |
 | `ObjectDictionary`, `HttpHeaders` | a JSON object | `Object` holding the object |
 | any collection | text that is not a JSON array (`a, b`) | refused; the guidance shows `["a","b"]` |
 | any dictionary | text that is not a JSON object | refused, with an example object |
