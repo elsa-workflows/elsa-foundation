@@ -10,7 +10,7 @@ dotnet test Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj
 
 The shared finite witness starts with `seed`, derives `left/right`, then `joined`, then `final`, then commits an empty-addition round. Expect four committed rounds, Succeeded and exactly `final,joined,left,right,seed`. With MaxRounds=3 expect Faulted `rules.round-budget-exhausted` after committing the same facts. Require tests for no-addition success at the final limit, invalid budgets, omission of applicable firings, canonical UTF-8 bounds, equivalent receipt replay and cancellation before/after admission.
 
-Planned native integration cases must run real persisted Sequence and Flowchart, observe the following activity and sibling/join semantics, then cover child fault/cancellation/refusal, parent-terminal proof, duplicate delivery and recoverable Unavailable. A root-only invocation is insufficient. Results include facts and use canonical content equality after serialization.
+Native integration cases run real persisted Sequence and Flowchart, observe the following activity and sibling/join semantics, and cover child fault/cancellation/refusal, parent-terminal proof, duplicate delivery and recoverable Unavailable. A root-only invocation is insufficient. Results include facts and use canonical content equality after serialization.
 
 ## 2. Required four-engine suite
 
@@ -37,7 +37,7 @@ Resolve real immutable refs before running; angle-bracket text is a placeholder,
 
 Use `--stage pack` for packing only; this never reports a consumer pass. `--packed-run <absolute-run-directory>` reuses a successful, unchanged pack matching both immutable refs; each consumer cache and deployment remains fresh. Add `--stage process` to run the four-root direct-runtime proof followed by six independent-process PostgreSQL cases and three isolated persistence controls. Docker must be available. The coordinator creates a disposable PostgreSQL 16.15 container bound only to loopback and a separate database per case. It stops the original process after committed acceptance or consumption, then starts a successor against the same database. Two additional cases delay the original response until successor completion; the fifth cancels an accepted, unconsumed receipt and checks cancellation before admission. A sixth case holds a successor lease while the old worker submits new work, reads and releases; all three old operations must return LeaseLost without payload or semantic change. This process host uses only direct Rules runtime/storage package roots and does not register native design services. The coordinator records actual PIDs, database identity, receipt history, terminal bytes and cleanup, keeping credentials out of evidence.
 
-The cancellation-fingerprint, same-owner fence and consumed-marker controls each require an intact baseline, failure at the named assertion after removing exactly one check in the disposable source clone, and a passing rerun after source/deployed-assembly restoration. All use real worker-produced accepted receipts. `processBoundaryProofPassed` covers the original five cases; `processProofPassed` additionally requires the live-successor case and all three controls. The receipt keeps `fullAcceptancePassed: false` because broader native integration and retained-run upgrades remain pending. Repeated fresh direct processes alone are not recovery proof.
+The cancellation-fingerprint, same-owner fence and consumed-marker controls each require an intact baseline, failure at the named assertion after removing exactly one check in the disposable source clone, and a passing rerun after source/deployed-assembly restoration. All use real worker-produced accepted receipts. `processBoundaryProofPassed` covers the original five cases; `processProofPassed` additionally requires the live-successor case and all three controls. The process-stage receipt keeps `fullAcceptancePassed: false`: native integration and retained-run upgrades require their separate journeys below, and final integrated leaf gates still apply. Repeated fresh direct processes alone are not recovery proof.
 
 ## 4. Rebuilt host and upgrades
 
@@ -62,9 +62,25 @@ inspection APIs. It is registered as a separate package qualification in the
 No feature is enabled in the default Workbench shell. Retain the generated receipt and logs; a
 successful host publish alone is not a passing REST journey.
 
-Full acceptance still requires persisted Flowchart sibling/join behavior, cancellation, unavailable
-recovery and proof-before-ack regression controls in addition to successful Sequence continuation,
-fault and refusal. Only cases named in the execution receipt are proved by a particular run.
+`Test-DurableRules.ps1` includes Sequence, linear Flowchart and a parallel Flowchart whose Event
+sibling stays suspended after Rules completes. It restarts the owned host before resuming that
+Event, verifies one join/following activity and rejects a duplicate stimulus. Its public output
+assertions verify the observed JSON payload and declared snapshot alias, not CLR type identity or
+complete canonical terminal bytes. Read-only SQLite snapshots verify the join and following
+activity each have one completed internal attempt; public retry-lineage counts may be absent.
+
+The Workbench stage also runs `Test-RulesAdmissionRecovery.ps1`: publish while admission is enabled,
+restart with new Rules admissions disabled, retain two native invocations without child rows,
+cancel one via the public alteration API, and restore admission for the other. The cancelled
+invocation stays terminal; the other completes with one persisted following-activity attempt.
+An invalid round limit faults through the native boundary without a fabricated Rules row. The
+script uses Python 3 to capture read-only native/Rules SQLite snapshots after bounded durable-state
+polls. This tests unavailable admission, not an injected resume-reader outage.
+
+The separate persisted C# journeys cover resume-reader unavailability, consumed-child redelivery
+and proof-before-ack regression controls; see the [compiled-runtime](evidence/native-compiled-runtime-checkpoint.md)
+and [native recovery](evidence/native-recovery-acceptance-checkpoint.md) checkpoints. Only cases named
+in an execution receipt are proved by that run; the [task list](tasks.md) tracks final delivery gates.
 
 The Workbench stage also runs `e2e-tests/rules/Test-NativeRulesInstallation.ps1`. It first starts
 without Rules features, persists a Sequence waiting on an Event, and stops the owned process. It

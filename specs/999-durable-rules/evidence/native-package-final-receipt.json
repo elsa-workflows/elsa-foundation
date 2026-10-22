@@ -1,0 +1,1005 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-22T07:43:12.677759+00:00",
+  "localHeadAtExecution": "346ddee63940db2d1f0e135684c5d695122dec29",
+  "packageSourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+  "packagePublishStateCommit": "eb3e12531b0cbd594374df1e49df0fadef9a50f3",
+  "nativePackageCasesPassed": true,
+  "fullAcceptancePassed": false,
+  "runs": {
+    "heldSiblingAndOutcomes": {
+      "command": {
+        "command": [
+          "pwsh",
+          "-NoProfile",
+          "-File",
+          "e2e-tests/rules/Test-DurableRules.ps1",
+          "-AssemblyPath",
+          "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/workbench-package-host/deployment/Elsa.Workbench.dll",
+          "-DeploymentReceiptPath",
+          "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/workbench-package-host/deployment/elsa.rules.deployment-receipt.json",
+          "-EvidencePath",
+          "/tmp/rules-final-packaged-native-internal-attempts/result.json"
+        ],
+        "exitCode": 0,
+        "durationSeconds": 83.54,
+        "harnessSha256": {
+          "e2e-tests/rules/Test-DurableRules.ps1": "e769009682b468d3dd14b1a381727f060a9d729cbb012cca922c1f3134e73f4f",
+          "e2e-tests/rules/_RulesCommon.ps1": "9f589478818026feca903ef936ddc93cbeceba557f66eb91d4c3194e1df66057",
+          "tools/rules/native_outcome_snapshot.py": "b82d98c6a2fae14314cd50a125e442437313176fea617fd805c3771118b3ea6f",
+          "e2e-tests/_ServerLifecycle.ps1": "2b09790145f93c0e30ff1c08ff7066a172755236de51d0b7af258ac61060e93d",
+          "e2e-tests/_ElsaCommon.ps1": "16905ef3c7503c33308d596290601c2b94cd8e829220a08ab857d0680f6d469f",
+          "e2e-tests/runtime-alterations/_AlterationCommon.ps1": "e1b8eb5c03d4afb540a3883c4d77c67916ca7c92b0b6cb6217ae25a10806af41",
+          "e2e-tests/durability/_DurabilityCommon.ps1": "4f897ac422defe7dfd1ad4f37de0296fe94a6e848ce0f718e2c08c49c4f757d6"
+        },
+        "harnessUnchanged": true,
+        "deploymentFileCount": 490,
+        "deploymentChangedFiles": [
+          ".nuplane/store-state.json"
+        ],
+        "packageAssetsUnchanged": true,
+        "log": "/tmp/rules-final-packaged-native-internal-attempts/run.log"
+      },
+      "commandFile": {
+        "path": "/tmp/rules-final-packaged-native-internal-attempts/command.json",
+        "sha256": "70d818b3145a28ea80f374b086f14536c8d23eb5d1f3616b5b1b71c37401e28d"
+      },
+      "resultFile": {
+        "path": "/tmp/rules-final-packaged-native-internal-attempts/result.json",
+        "sha256": "1524a56c2d5f6886ec7f46714a3685fb4d76e1bafc9d2cb0cfb7445555972c10"
+      },
+      "log": {
+        "path": "/tmp/rules-final-packaged-native-internal-attempts/run.log",
+        "sha256": "3db2b3c390a1cb97cf3da6c665b849f518b64623b1b909686bf96be02e5da039"
+      },
+      "deploymentBefore": {
+        "path": "/tmp/rules-final-packaged-native-internal-attempts/deployment-before.json",
+        "sha256": "b6019f126d055771dbdff382ad4461f312de2d4eeefd5e0773fdb1a515af86e4"
+      },
+      "deploymentAfter": {
+        "path": "/tmp/rules-final-packaged-native-internal-attempts/deployment-after.json",
+        "sha256": "ff2aef5ddb4766c8c67766db0b34fa8854683f7529dc0a7277f6a09e67825d33"
+      },
+      "result": {
+        "passed": true,
+        "SchemaVersion": 1,
+        "StartedAt": "2026-10-22T07:40:38.143871+00:00",
+        "CompletedAt": "2026-10-22T07:41:58.69512+00:00",
+        "WorkbenchAssembly": "Elsa.Workbench.dll",
+        "WorkbenchAssemblySha256": "230d32b574cf56151e19a0b224370f1b2e4862f3ab0ab31a691eb29233f90cb2",
+        "DeploymentReceiptFile": "elsa.rules.deployment-receipt.json",
+        "DeploymentReceiptSha256": "6520f8f45024feca141856a8eed3b68ad933c91af9dd30ffd5791516bb8ac861",
+        "RestartVerification": {
+          "PreviousProcessId": 92889,
+          "ReconnectedProcessId": 93226,
+          "WorkbenchAssemblyPath": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/workbench-package-host/deployment/Elsa.Workbench.dll",
+          "SequenceStatus": "Completed",
+          "SequenceNativeResult": {
+            "Kind": "Succeeded",
+            "CommittedRounds": 2,
+            "ResultSchemaVersion": 1,
+            "ResultFacts": [
+              "derived",
+              "seed"
+            ],
+            "DiagnosticCode": null,
+            "FinalFactsSha256": "0432e7409a4f5287b577250b34ffa58eba7925a79b43f2e1a2e540ea7e0b9b2f",
+            "IsRedacted": false
+          },
+          "FlowchartStatus": "Completed",
+          "FlowchartNativeResult": {
+            "Kind": "Succeeded",
+            "CommittedRounds": 2,
+            "ResultSchemaVersion": 1,
+            "ResultFacts": [
+              "derived",
+              "seed"
+            ],
+            "DiagnosticCode": null,
+            "FinalFactsSha256": "0432e7409a4f5287b577250b34ffa58eba7925a79b43f2e1a2e540ea7e0b9b2f",
+            "IsRedacted": false
+          },
+          "HeldFlowchartStatus": "Completed",
+          "HeldFlowchartNativeResultSnapshotTypeName": "Elsa.Any",
+          "HeldFlowchartNativeResultPayloadPropertyNames": [
+            "committedRounds",
+            "diagnostic",
+            "finalFactsSha256",
+            "kind",
+            "resultFacts",
+            "resultSchemaVersion",
+            "terminalId"
+          ],
+          "HeldFlowchartNativeResultSummary": {
+            "Kind": "Succeeded",
+            "CommittedRounds": 2,
+            "ResultSchemaVersion": 1,
+            "ResultFacts": [
+              "derived",
+              "seed"
+            ],
+            "DiagnosticCode": null,
+            "FinalFactsSha256": "0432e7409a4f5287b577250b34ffa58eba7925a79b43f2e1a2e540ea7e0b9b2f",
+            "IsRedacted": false
+          },
+          "HeldFlowchartJoinInternalAttemptCount": 1,
+          "HeldFlowchartFollowingInternalAttemptCount": 1
+        },
+        "NativeOutcomeSnapshots": [
+          {
+            "phase": "Held-sibling Flowchart after Event resume",
+            "path": "/tmp/rules-final-packaged-native-internal-attempts/held-flowchart-after-event-resume.snapshot.json",
+            "fileSha256": "0fb57ab170fd126946bf94094f3f67a6fa296a494b32cb48ea6eb85442cb5ef2",
+            "snapshotSha256": "7ac0970a00fe1c2f4524965a9d931de0f34704fb043430e5156f0b7a2edde564",
+            "workflowExecutionId": "14Ye2AX5GfM"
+          },
+          {
+            "phase": "Held-sibling Flowchart after duplicate Event stimulus",
+            "path": "/tmp/rules-final-packaged-native-internal-attempts/held-flowchart-after-duplicate-stimulus.snapshot.json",
+            "fileSha256": "dcd58359e23d3a14d0ad4ae9a378228bc04cf8f2059cef3a14ec14a8f0b39e84",
+            "snapshotSha256": "2458cbe972989644620e2bd719f2c44edfab7ec988c0f570cc47bc0a41cdbe36",
+            "workflowExecutionId": "14Ye2AX5GfM"
+          },
+          {
+            "phase": "Held-sibling Flowchart after final restart",
+            "path": "/tmp/rules-final-packaged-native-internal-attempts/held-flowchart-after-final-restart.snapshot.json",
+            "fileSha256": "7130549c3c94863a29f4557e1e1defa50d6f4b63004c05eec5133904d14895c2",
+            "snapshotSha256": "0286c37d754f20e275b6c29aa8e00f2dfe0cf2f8bdc45c756f37d0ef74a294bd",
+            "workflowExecutionId": "14Ye2AX5GfM"
+          }
+        ],
+        "Runs": [
+          {
+            "Scenario": "SequenceSucceeded",
+            "WorkflowExecutionId": "14Ye0qPFXef",
+            "ArtifactId": "artifact-9cfdc06d2c25",
+            "Status": "Completed",
+            "RulesActivityStatus": "Completed",
+            "FollowingActivityStatus": "Completed",
+            "NativeResult": {
+              "Kind": "Succeeded",
+              "CommittedRounds": 2,
+              "ResultSchemaVersion": 1,
+              "ResultFacts": [
+                "derived",
+                "seed"
+              ],
+              "DiagnosticCode": null,
+              "FinalFactsSha256": "0432e7409a4f5287b577250b34ffa58eba7925a79b43f2e1a2e540ea7e0b9b2f",
+              "IsRedacted": false
+            }
+          },
+          {
+            "Scenario": "FlowchartSucceeded",
+            "WorkflowExecutionId": "14Ye1RZ4V25",
+            "ArtifactId": "artifact-a536b8e90f65",
+            "Status": "Completed",
+            "RulesActivityStatus": "Completed",
+            "FollowingActivityStatus": "Completed",
+            "NativeResult": {
+              "Kind": "Succeeded",
+              "CommittedRounds": 2,
+              "ResultSchemaVersion": 1,
+              "ResultFacts": [
+                "derived",
+                "seed"
+              ],
+              "DiagnosticCode": null,
+              "FinalFactsSha256": "0432e7409a4f5287b577250b34ffa58eba7925a79b43f2e1a2e540ea7e0b9b2f",
+              "IsRedacted": false
+            }
+          },
+          {
+            "Scenario": "FlowchartHeldSibling",
+            "WorkflowExecutionId": "14Ye2AX5GfM",
+            "ArtifactId": "artifact-c3ec4e53c0ed",
+            "EventName": "rules-held-sibling-fa34353ccced40a0869b1ad67b2dca78",
+            "BeforeResumeStatus": "Running",
+            "BeforeResumeRulesStatus": "Completed",
+            "BeforeResumeEventStatus": "Suspended",
+            "BeforeResumeJoinCount": 0,
+            "BeforeResumeFollowingCount": 0,
+            "HeldRestartProcessIds": [
+              92511,
+              92889
+            ],
+            "ResumeCount": 1,
+            "DuplicateResumeCount": 0,
+            "AfterResumeStatus": "Completed",
+            "JoinCountAfterDuplicate": 1,
+            "FollowingCountAfterDuplicate": 1,
+            "NativeResultSnapshotTypeName": "Elsa.Any",
+            "NativeResultPayloadPropertyNames": [
+              "committedRounds",
+              "diagnostic",
+              "finalFactsSha256",
+              "kind",
+              "resultFacts",
+              "resultSchemaVersion",
+              "terminalId"
+            ],
+            "NativeResultSummary": {
+              "Kind": "Succeeded",
+              "CommittedRounds": 2,
+              "ResultSchemaVersion": 1,
+              "ResultFacts": [
+                "derived",
+                "seed"
+              ],
+              "DiagnosticCode": null,
+              "FinalFactsSha256": "0432e7409a4f5287b577250b34ffa58eba7925a79b43f2e1a2e540ea7e0b9b2f",
+              "IsRedacted": false
+            },
+            "JoinInternalAttemptCount": 1,
+            "FollowingInternalAttemptCount": 1
+          },
+          {
+            "Scenario": "RoundBudgetFault",
+            "WorkflowExecutionId": "14Ye3jeUoa3",
+            "ArtifactId": "artifact-357818d6038b",
+            "Status": "Faulted",
+            "RulesActivityStatus": "Faulted",
+            "RulesIncidentCount": 1,
+            "FollowingActivityCount": 0,
+            "ExactRulesDiagnosticAvailableFromRest": false
+          },
+          {
+            "Scenario": "SemanticRefusal",
+            "WorkflowExecutionId": "14Ye4B8Dt1n",
+            "ArtifactId": "artifact-2fe12ea54ccf",
+            "Status": "Completed",
+            "RulesActivityStatus": "Completed",
+            "FollowingActivityStatus": "Completed",
+            "NativeResult": {
+              "Kind": "Refused",
+              "CommittedRounds": 0,
+              "ResultSchemaVersion": 1,
+              "ResultFacts": [],
+              "DiagnosticCode": "rules.invalid-finite-model",
+              "FinalFactsSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+              "IsRedacted": false,
+              "OutputType": null
+            }
+          }
+        ]
+      }
+    },
+    "admissionRecoveryAndCancellation": {
+      "command": {
+        "command": [
+          "pwsh",
+          "-NoProfile",
+          "-File",
+          "e2e-tests/rules/Test-RulesAdmissionRecovery.ps1",
+          "-AssemblyPath",
+          "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/workbench-package-host/deployment/Elsa.Workbench.dll",
+          "-DeploymentReceiptPath",
+          "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/workbench-package-host/deployment/elsa.rules.deployment-receipt.json",
+          "-EvidencePath",
+          "/tmp/rules-final-packaged-recovery-pins/result.json"
+        ],
+        "exitCode": 0,
+        "durationSeconds": 81.28,
+        "harnessSha256": {
+          "e2e-tests/rules/Test-RulesAdmissionRecovery.ps1": "007de85adc022d80c7860edf773fa8232526aeaf55e71693cc0307fda883c08a",
+          "e2e-tests/rules/_RulesCommon.ps1": "9f589478818026feca903ef936ddc93cbeceba557f66eb91d4c3194e1df66057",
+          "tools/rules/native_outcome_snapshot.py": "b82d98c6a2fae14314cd50a125e442437313176fea617fd805c3771118b3ea6f",
+          "e2e-tests/_ServerLifecycle.ps1": "2b09790145f93c0e30ff1c08ff7066a172755236de51d0b7af258ac61060e93d",
+          "e2e-tests/_ElsaCommon.ps1": "16905ef3c7503c33308d596290601c2b94cd8e829220a08ab857d0680f6d469f",
+          "e2e-tests/runtime-alterations/_AlterationCommon.ps1": "e1b8eb5c03d4afb540a3883c4d77c67916ca7c92b0b6cb6217ae25a10806af41",
+          "e2e-tests/durability/_DurabilityCommon.ps1": "4f897ac422defe7dfd1ad4f37de0296fe94a6e848ce0f718e2c08c49c4f757d6"
+        },
+        "harnessUnchanged": true,
+        "deploymentFileCount": 490,
+        "deploymentChangedFiles": [
+          ".nuplane/store-state.json"
+        ],
+        "packageAssetsUnchanged": true,
+        "log": "/tmp/rules-final-packaged-recovery-pins/run.log"
+      },
+      "commandFile": {
+        "path": "/tmp/rules-final-packaged-recovery-pins/command.json",
+        "sha256": "4c2d7a210853bea95bc5f6160d0308f2a0f7ab5cde80896a855d3fc77ad99d8b"
+      },
+      "resultFile": {
+        "path": "/tmp/rules-final-packaged-recovery-pins/result.json",
+        "sha256": "117d278d020905a27f2524bb137044e473114c6bcba10104deb671e62b1798cb"
+      },
+      "log": {
+        "path": "/tmp/rules-final-packaged-recovery-pins/run.log",
+        "sha256": "7e328dfe06ec18d3a588238463499ed431327f50b77f9da0f584a73416753575"
+      },
+      "deploymentBefore": {
+        "path": "/tmp/rules-final-packaged-recovery-pins/deployment-before.json",
+        "sha256": "63907ce7ea227d154a1d9782e8110de0868c9a794886342177e62f752ac469c5"
+      },
+      "deploymentAfter": {
+        "path": "/tmp/rules-final-packaged-recovery-pins/deployment-after.json",
+        "sha256": "b6019f126d055771dbdff382ad4461f312de2d4eeefd5e0773fdb1a515af86e4"
+      },
+      "result": {
+        "passed": true,
+        "schemaVersion": 1,
+        "startedAt": "2026-10-22T07:38:31.786546+00:00",
+        "scope": "Actual supplied package-backed Workbench; fresh owned native and Rules SQLite databases; admission recovery, cancellation, and invalid round-limit journeys.",
+        "workbenchAssemblySha256": "230d32b574cf56151e19a0b224370f1b2e4862f3ab0ab31a691eb29233f90cb2",
+        "workbenchDependenciesSha256": "7c589b50e822a5b4a8efcf5d93da7ea8b77153a8b4a9072f13f1f64bb6fb0dca",
+        "workbenchRuntimeConfigSha256": "eff38a9750f7cca2407b1d639a963d56ffea92088e6da971bbbfa74e3dcd7224",
+        "deploymentReceiptSha256": "6520f8f45024feca141856a8eed3b68ad933c91af9dd30ffd5791516bb8ac861",
+        "deploymentReceiptPath": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/workbench-package-host/deployment/elsa.rules.deployment-receipt.json",
+        "databaseFiles": {
+          "native": "/var/folders/63/lbnh2n0n6dv9dzm8bks0854c0000gn/T/elsa-rules-admission-recovery-1d9c75c5851d42f4b80b573de19ac183/elsa.db",
+          "rules": "/var/folders/63/lbnh2n0n6dv9dzm8bks0854c0000gn/T/elsa-rules-admission-recovery-1d9c75c5851d42f4b80b573de19ac183/rules-runtime.db"
+        },
+        "configurationTransitions": [
+          {
+            "acceptNewInvocations": true,
+            "shellsJsonSha256": "7680c9240e744661eb87f94a3b9fe4eb8ebf8543feaf0ba3455a71df863e1fd9"
+          },
+          {
+            "acceptNewInvocations": false,
+            "shellsJsonSha256": "6f35f43cf49662fe0a6f4be0a81802cf6b6d71c9b0ed7ef66ad8ebf3b7a1d1a6"
+          },
+          {
+            "acceptNewInvocations": true,
+            "shellsJsonSha256": "7680c9240e744661eb87f94a3b9fe4eb8ebf8543feaf0ba3455a71df863e1fd9"
+          }
+        ],
+        "processIds": [
+          90252,
+          90421,
+          90693,
+          90826,
+          91368
+        ],
+        "stages": [
+          {
+            "stage": "published-with-admission-enabled-without-starting",
+            "acceptNewInvocations": true,
+            "workflowDefinitionId": "14YdrczQs6W",
+            "workflowDefinitionVersionId": "14Ydrd10E1N",
+            "artifactId": "artifact-c2b0cdf43555",
+            "sourceReferenceId": "activation-ref:publication-14YdrdkHYKr",
+            "executionsStarted": 0
+          },
+          {
+            "stage": "accepted-native-starts-held-before-rules-admission",
+            "acceptNewInvocations": false,
+            "artifactId": "artifact-c2b0cdf43555",
+            "sourceReferenceId": "activation-ref:publication-14YdrdkHYKr",
+            "workflowExecutionIds": [
+              "14YdsBJl5PF",
+              "14YdsFalCIT"
+            ],
+            "rulesActivityExecutionIds": [
+              "14YdsCypxP6",
+              "14YdsFuqScF"
+            ],
+            "runIds": [
+              "rules-a52ebdf3783d5df83991cca05a1134a8089f2a91cf54cc84aeaa3e3cb529593b",
+              "rules-4d066ca3527582a47f20bf67e7717b840930d84f4b709d252cf1fa90e9664daf"
+            ],
+            "packageImplementationPin": {
+              "pinSchemaVersion": 1,
+              "packages": [
+                {
+                  "packageId": "Elsa.Rules.Core",
+                  "nuGetVersion": "4.0.0-branch-agent-codex-3181-durable-rules",
+                  "nuGetContentHash": "ZDlOpz1D8ZarEmVMQ9rGcK5iEW1P/j+JVdy6epfsM+8/e1d+ETXhX3Pe8wavZmK7K/JHUZz/aB902aPN6y+8Ag==",
+                  "selectedAssets": [
+                    {
+                      "packageRelativeAssetPath": "lib/net10.0/Elsa.Rules.Core.dll",
+                      "assemblyFullName": "Elsa.Rules.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                      "assetSha256": "1a2940d02fc187302ad7d79216ea92459e5ab43366e0db2420cea5fde27650bd"
+                    }
+                  ]
+                },
+                {
+                  "packageId": "Elsa.Rules.Persistence.Core",
+                  "nuGetVersion": "4.0.0-branch-agent-codex-3181-durable-rules",
+                  "nuGetContentHash": "TXFKK0SepUyOP0BLMO12GKyJXZ4V5TNUpA6X5egOjTlGEAnPPHPF6+ZfiGpgnxpyJydkpyTU7CKpGurSGP+PkQ==",
+                  "selectedAssets": [
+                    {
+                      "packageRelativeAssetPath": "lib/net10.0/Elsa.Rules.Persistence.Core.dll",
+                      "assemblyFullName": "Elsa.Rules.Persistence.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                      "assetSha256": "c149ad996657c4bb49886bb6fb62d923b2d3c42608b9b8f43026d19826bfa255"
+                    }
+                  ]
+                },
+                {
+                  "packageId": "Elsa.Rules.Runtime",
+                  "nuGetVersion": "4.0.0-branch-agent-codex-3181-durable-rules",
+                  "nuGetContentHash": "mxx7s4JzH10fYL/7azdzBEOAIx/ntS10FG4hXXzy1475sA5RpV+b8+0f97g5IkgV+W9lU+5U75D82a5ezdvVEA==",
+                  "selectedAssets": [
+                    {
+                      "packageRelativeAssetPath": "lib/net10.0/Elsa.Rules.Runtime.dll",
+                      "assemblyFullName": "Elsa.Rules.Runtime, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                      "assetSha256": "68ede24989228f7a9146958665ab79b04ad28aba92e7a703f7579d37a9ba5c6b"
+                    }
+                  ]
+                }
+              ],
+              "languageId": "elsa.rules.finite-positive",
+              "languageVersion": 1,
+              "receiptSchemaVersion": 1,
+              "stateSchemaVersion": 1
+            },
+            "secondImplementationPin": {
+              "pinSchemaVersion": 1,
+              "packages": [
+                {
+                  "packageId": "Elsa.Rules.Core",
+                  "nuGetVersion": "4.0.0-branch-agent-codex-3181-durable-rules",
+                  "nuGetContentHash": "ZDlOpz1D8ZarEmVMQ9rGcK5iEW1P/j+JVdy6epfsM+8/e1d+ETXhX3Pe8wavZmK7K/JHUZz/aB902aPN6y+8Ag==",
+                  "selectedAssets": [
+                    {
+                      "packageRelativeAssetPath": "lib/net10.0/Elsa.Rules.Core.dll",
+                      "assemblyFullName": "Elsa.Rules.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                      "assetSha256": "1a2940d02fc187302ad7d79216ea92459e5ab43366e0db2420cea5fde27650bd"
+                    }
+                  ]
+                },
+                {
+                  "packageId": "Elsa.Rules.Persistence.Core",
+                  "nuGetVersion": "4.0.0-branch-agent-codex-3181-durable-rules",
+                  "nuGetContentHash": "TXFKK0SepUyOP0BLMO12GKyJXZ4V5TNUpA6X5egOjTlGEAnPPHPF6+ZfiGpgnxpyJydkpyTU7CKpGurSGP+PkQ==",
+                  "selectedAssets": [
+                    {
+                      "packageRelativeAssetPath": "lib/net10.0/Elsa.Rules.Persistence.Core.dll",
+                      "assemblyFullName": "Elsa.Rules.Persistence.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                      "assetSha256": "c149ad996657c4bb49886bb6fb62d923b2d3c42608b9b8f43026d19826bfa255"
+                    }
+                  ]
+                },
+                {
+                  "packageId": "Elsa.Rules.Runtime",
+                  "nuGetVersion": "4.0.0-branch-agent-codex-3181-durable-rules",
+                  "nuGetContentHash": "mxx7s4JzH10fYL/7azdzBEOAIx/ntS10FG4hXXzy1475sA5RpV+b8+0f97g5IkgV+W9lU+5U75D82a5ezdvVEA==",
+                  "selectedAssets": [
+                    {
+                      "packageRelativeAssetPath": "lib/net10.0/Elsa.Rules.Runtime.dll",
+                      "assemblyFullName": "Elsa.Rules.Runtime, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                      "assetSha256": "68ede24989228f7a9146958665ab79b04ad28aba92e7a703f7579d37a9ba5c6b"
+                    }
+                  ]
+                }
+              ],
+              "languageId": "elsa.rules.finite-positive",
+              "languageVersion": 1,
+              "receiptSchemaVersion": 1,
+              "stateSchemaVersion": 1
+            },
+            "startOutboxItems": [
+              {
+                "outboxItemId": "commit:2d6974510a71b82b:create-bookmark:14YdsCypxP6:attempt:1:trigger:1:bookmark-created:14YdsCypxP6:attempt:1:trigger:1:rules-start:rules-a52ebdf3783d5df83991cca05a1134a8089f2a91cf54cc84aeaa3e3cb529593b",
+                "intentId": "rules-start:rules-a52ebdf3783d5df83991cca05a1134a8089f2a91cf54cc84aeaa3e3cb529593b",
+                "workflowExecutionId": "14YdsBJl5PF",
+                "activityExecutionId": "14YdsCypxP6",
+                "intentKind": "Elsa.Rules.Start.v1",
+                "status": "FailedRetryable",
+                "deliveryAttemptCount": 1,
+                "revision": 4,
+                "request": {
+                  "scope": {
+                    "tenantId": "default",
+                    "persistencePartition": "default"
+                  },
+                  "runId": "rules-a52ebdf3783d5df83991cca05a1134a8089f2a91cf54cc84aeaa3e3cb529593b",
+                  "program": {
+                    "formatVersion": 1,
+                    "sourceSha256": "793ab6f0750bd72c73946b14ba534f83338fc412c7c3608fc64feff2f2ef25c7",
+                    "artifact": {
+                      "formatVersion": 1,
+                      "artifactId": "rules:793ab6f0750bd72c73946b14ba534f83338fc412c7c3608fc64feff2f2ef25c7",
+                      "sha256": "793ab6f0750bd72c73946b14ba534f83338fc412c7c3608fc64feff2f2ef25c7",
+                      "canonicalBytes": "eyJmb3JtYXRWZXJzaW9uIjoxLCJsYW5ndWFnZUlkIjoiZWxzYS5ydWxlcy5maW5pdGUtcG9zaXRpdmUiLCJsYW5ndWFnZVZlcnNpb24iOjEsInZvY2FidWxhcnkiOlsiZGVyaXZlZCIsInNlZWQiXSwicnVsZXMiOlt7ImlkIjoiZGVyaXZlIiwicHJlbWlzZXMiOlsic2VlZCJdLCJjb25jbHVzaW9uIjoiZGVyaXZlZCJ9XX0="
+                    },
+                    "implementation": {
+                      "pinSchemaVersion": 1,
+                      "packages": [
+                        {
+                          "packageId": "Elsa.Rules.Core",
+                          "nuGetVersion": "4.0.0-branch-agent-codex-3181-durable-rules",
+                          "nuGetContentHash": "ZDlOpz1D8ZarEmVMQ9rGcK5iEW1P/j+JVdy6epfsM+8/e1d+ETXhX3Pe8wavZmK7K/JHUZz/aB902aPN6y+8Ag==",
+                          "selectedAssets": [
+                            {
+                              "packageRelativeAssetPath": "lib/net10.0/Elsa.Rules.Core.dll",
+                              "assemblyFullName": "Elsa.Rules.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                              "assetSha256": "1a2940d02fc187302ad7d79216ea92459e5ab43366e0db2420cea5fde27650bd"
+                            }
+                          ]
+                        },
+                        {
+                          "packageId": "Elsa.Rules.Persistence.Core",
+                          "nuGetVersion": "4.0.0-branch-agent-codex-3181-durable-rules",
+                          "nuGetContentHash": "TXFKK0SepUyOP0BLMO12GKyJXZ4V5TNUpA6X5egOjTlGEAnPPHPF6+ZfiGpgnxpyJydkpyTU7CKpGurSGP+PkQ==",
+                          "selectedAssets": [
+                            {
+                              "packageRelativeAssetPath": "lib/net10.0/Elsa.Rules.Persistence.Core.dll",
+                              "assemblyFullName": "Elsa.Rules.Persistence.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                              "assetSha256": "c149ad996657c4bb49886bb6fb62d923b2d3c42608b9b8f43026d19826bfa255"
+                            }
+                          ]
+                        },
+                        {
+                          "packageId": "Elsa.Rules.Runtime",
+                          "nuGetVersion": "4.0.0-branch-agent-codex-3181-durable-rules",
+                          "nuGetContentHash": "mxx7s4JzH10fYL/7azdzBEOAIx/ntS10FG4hXXzy1475sA5RpV+b8+0f97g5IkgV+W9lU+5U75D82a5ezdvVEA==",
+                          "selectedAssets": [
+                            {
+                              "packageRelativeAssetPath": "lib/net10.0/Elsa.Rules.Runtime.dll",
+                              "assemblyFullName": "Elsa.Rules.Runtime, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                              "assetSha256": "68ede24989228f7a9146958665ab79b04ad28aba92e7a703f7579d37a9ba5c6b"
+                            }
+                          ]
+                        }
+                      ],
+                      "languageId": "elsa.rules.finite-positive",
+                      "languageVersion": 1,
+                      "receiptSchemaVersion": 1,
+                      "stateSchemaVersion": 1
+                    },
+                    "vocabularyCount": 2
+                  },
+                  "initialFacts": [
+                    {
+                      "atom": "seed"
+                    }
+                  ],
+                  "maxRounds": 4,
+                  "workflowExecutionId": "14YdsBJl5PF",
+                  "activityExecutionId": "14YdsCypxP6",
+                  "executableId": "artifact-c2b0cdf43555",
+                  "executableHash": "sha256:c2b0cdf435550b4382d6c57b3e76c87cd6f7973e58d5468cb480a4615f51b046",
+                  "nodeId": "rules",
+                  "resumeTargetId": "rules:rules-completed"
+                },
+                "destination": {
+                  "formatVersion": 1,
+                  "workflowExecutionId": "14YdsBJl5PF",
+                  "activityExecutionId": "14YdsCypxP6",
+                  "executableId": "artifact-c2b0cdf43555",
+                  "executableHash": "sha256:c2b0cdf435550b4382d6c57b3e76c87cd6f7973e58d5468cb480a4615f51b046",
+                  "nodeId": "rules",
+                  "bookmarkId": "14YdsCypxP6:attempt:1:trigger:1",
+                  "resumeTargetId": "rules:rules-completed",
+                  "registrationId": "14YdsCypxP6:attempt:1:trigger:1",
+                  "stimulusType": "elsa.rules.completed.v1",
+                  "stimulusHash": "16386a9ed8e9bc00c35eb007ec2d54b3eebc0b080cfe06ee99821736d7f3db6e",
+                  "resultContractId": "Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion",
+                  "resultSchemaVersion": 1,
+                  "deduplicationPolicy": "once",
+                  "providerId": "elsa.rules.native.v1"
+                }
+              },
+              {
+                "outboxItemId": "commit:b423a0fdc198f239:create-bookmark:14YdsFuqScF:attempt:1:trigger:1:bookmark-created:14YdsFuqScF:attempt:1:trigger:1:rules-start:rules-4d066ca3527582a47f20bf67e7717b840930d84f4b709d252cf1fa90e9664daf",
+                "intentId": "rules-start:rules-4d066ca3527582a47f20bf67e7717b840930d84f4b709d252cf1fa90e9664daf",
+                "workflowExecutionId": "14YdsFalCIT",
+                "activityExecutionId": "14YdsFuqScF",
+                "intentKind": "Elsa.Rules.Start.v1",
+                "status": "FailedRetryable",
+                "deliveryAttemptCount": 1,
+                "revision": 4,
+                "request": {
+                  "scope": {
+                    "tenantId": "default",
+                    "persistencePartition": "default"
+                  },
+                  "runId": "rules-4d066ca3527582a47f20bf67e7717b840930d84f4b709d252cf1fa90e9664daf",
+                  "program": {
+                    "formatVersion": 1,
+                    "sourceSha256": "793ab6f0750bd72c73946b14ba534f83338fc412c7c3608fc64feff2f2ef25c7",
+                    "artifact": {
+                      "formatVersion": 1,
+                      "artifactId": "rules:793ab6f0750bd72c73946b14ba534f83338fc412c7c3608fc64feff2f2ef25c7",
+                      "sha256": "793ab6f0750bd72c73946b14ba534f83338fc412c7c3608fc64feff2f2ef25c7",
+                      "canonicalBytes": "eyJmb3JtYXRWZXJzaW9uIjoxLCJsYW5ndWFnZUlkIjoiZWxzYS5ydWxlcy5maW5pdGUtcG9zaXRpdmUiLCJsYW5ndWFnZVZlcnNpb24iOjEsInZvY2FidWxhcnkiOlsiZGVyaXZlZCIsInNlZWQiXSwicnVsZXMiOlt7ImlkIjoiZGVyaXZlIiwicHJlbWlzZXMiOlsic2VlZCJdLCJjb25jbHVzaW9uIjoiZGVyaXZlZCJ9XX0="
+                    },
+                    "implementation": {
+                      "pinSchemaVersion": 1,
+                      "packages": [
+                        {
+                          "packageId": "Elsa.Rules.Core",
+                          "nuGetVersion": "4.0.0-branch-agent-codex-3181-durable-rules",
+                          "nuGetContentHash": "ZDlOpz1D8ZarEmVMQ9rGcK5iEW1P/j+JVdy6epfsM+8/e1d+ETXhX3Pe8wavZmK7K/JHUZz/aB902aPN6y+8Ag==",
+                          "selectedAssets": [
+                            {
+                              "packageRelativeAssetPath": "lib/net10.0/Elsa.Rules.Core.dll",
+                              "assemblyFullName": "Elsa.Rules.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                              "assetSha256": "1a2940d02fc187302ad7d79216ea92459e5ab43366e0db2420cea5fde27650bd"
+                            }
+                          ]
+                        },
+                        {
+                          "packageId": "Elsa.Rules.Persistence.Core",
+                          "nuGetVersion": "4.0.0-branch-agent-codex-3181-durable-rules",
+                          "nuGetContentHash": "TXFKK0SepUyOP0BLMO12GKyJXZ4V5TNUpA6X5egOjTlGEAnPPHPF6+ZfiGpgnxpyJydkpyTU7CKpGurSGP+PkQ==",
+                          "selectedAssets": [
+                            {
+                              "packageRelativeAssetPath": "lib/net10.0/Elsa.Rules.Persistence.Core.dll",
+                              "assemblyFullName": "Elsa.Rules.Persistence.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                              "assetSha256": "c149ad996657c4bb49886bb6fb62d923b2d3c42608b9b8f43026d19826bfa255"
+                            }
+                          ]
+                        },
+                        {
+                          "packageId": "Elsa.Rules.Runtime",
+                          "nuGetVersion": "4.0.0-branch-agent-codex-3181-durable-rules",
+                          "nuGetContentHash": "mxx7s4JzH10fYL/7azdzBEOAIx/ntS10FG4hXXzy1475sA5RpV+b8+0f97g5IkgV+W9lU+5U75D82a5ezdvVEA==",
+                          "selectedAssets": [
+                            {
+                              "packageRelativeAssetPath": "lib/net10.0/Elsa.Rules.Runtime.dll",
+                              "assemblyFullName": "Elsa.Rules.Runtime, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                              "assetSha256": "68ede24989228f7a9146958665ab79b04ad28aba92e7a703f7579d37a9ba5c6b"
+                            }
+                          ]
+                        }
+                      ],
+                      "languageId": "elsa.rules.finite-positive",
+                      "languageVersion": 1,
+                      "receiptSchemaVersion": 1,
+                      "stateSchemaVersion": 1
+                    },
+                    "vocabularyCount": 2
+                  },
+                  "initialFacts": [
+                    {
+                      "atom": "seed"
+                    }
+                  ],
+                  "maxRounds": 4,
+                  "workflowExecutionId": "14YdsFalCIT",
+                  "activityExecutionId": "14YdsFuqScF",
+                  "executableId": "artifact-c2b0cdf43555",
+                  "executableHash": "sha256:c2b0cdf435550b4382d6c57b3e76c87cd6f7973e58d5468cb480a4615f51b046",
+                  "nodeId": "rules",
+                  "resumeTargetId": "rules:rules-completed"
+                },
+                "destination": {
+                  "formatVersion": 1,
+                  "workflowExecutionId": "14YdsFalCIT",
+                  "activityExecutionId": "14YdsFuqScF",
+                  "executableId": "artifact-c2b0cdf43555",
+                  "executableHash": "sha256:c2b0cdf435550b4382d6c57b3e76c87cd6f7973e58d5468cb480a4615f51b046",
+                  "nodeId": "rules",
+                  "bookmarkId": "14YdsFuqScF:attempt:1:trigger:1",
+                  "resumeTargetId": "rules:rules-completed",
+                  "registrationId": "14YdsFuqScF:attempt:1:trigger:1",
+                  "stimulusType": "elsa.rules.completed.v1",
+                  "stimulusHash": "691bec69609bbc92c96a15e36942df037625bfcad9aec433711919a8dad18e36",
+                  "resultContractId": "Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion",
+                  "resultSchemaVersion": 1,
+                  "deduplicationPolicy": "once",
+                  "providerId": "elsa.rules.native.v1"
+                }
+              }
+            ],
+            "publicStatuses": [
+              "Running",
+              "Running"
+            ],
+            "rulesStatuses": [
+              "Suspended",
+              "Suspended"
+            ],
+            "followingCounts": [
+              0,
+              0
+            ],
+            "childRowsForEitherRun": 0
+          },
+          {
+            "stage": "public-cancellation-before-admission",
+            "acceptNewInvocations": false,
+            "workflowExecutionId": "14YdsBJl5PF",
+            "activityExecutionId": "14YdsCypxP6",
+            "runId": "rules-a52ebdf3783d5df83991cca05a1134a8089f2a91cf54cc84aeaa3e3cb529593b",
+            "alterationPlanId": "alteration-plan-3f63f3a318e2311f3377b318ee64bcc1",
+            "alterationPlanStatus": "Completed",
+            "workflowStatus": "Cancelled",
+            "rulesActivityStatus": "Cancelled",
+            "followingCount": 0,
+            "tombstone": {
+              "runId": "rules-a52ebdf3783d5df83991cca05a1134a8089f2a91cf54cc84aeaa3e3cb529593b",
+              "workflowExecutionId": "14YdsBJl5PF",
+              "activityExecutionId": "14YdsCypxP6",
+              "status": "Cancelled",
+              "admitted": 0,
+              "modelRevision": 1,
+              "committedRounds": 0,
+              "pinHash": "91acd90a5642f2006c9811960c82af55d350ed92d7444b6b41cb6e47e1ea8bf9",
+              "implementation": {
+                "pinSchemaVersion": 1,
+                "languageId": "elsa.rules.finite-positive",
+                "languageVersion": 1,
+                "receiptSchemaVersion": 1,
+                "stateSchemaVersion": 1,
+                "packages": [
+                  {
+                    "id": "Elsa.Rules.Core",
+                    "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+                    "contentHash": "ZDlOpz1D8ZarEmVMQ9rGcK5iEW1P/j+JVdy6epfsM+8/e1d+ETXhX3Pe8wavZmK7K/JHUZz/aB902aPN6y+8Ag==",
+                    "assets": [
+                      {
+                        "path": "lib/net10.0/Elsa.Rules.Core.dll",
+                        "assembly": "Elsa.Rules.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                        "sha256": "1a2940d02fc187302ad7d79216ea92459e5ab43366e0db2420cea5fde27650bd"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "Elsa.Rules.Persistence.Core",
+                    "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+                    "contentHash": "TXFKK0SepUyOP0BLMO12GKyJXZ4V5TNUpA6X5egOjTlGEAnPPHPF6+ZfiGpgnxpyJydkpyTU7CKpGurSGP+PkQ==",
+                    "assets": [
+                      {
+                        "path": "lib/net10.0/Elsa.Rules.Persistence.Core.dll",
+                        "assembly": "Elsa.Rules.Persistence.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                        "sha256": "c149ad996657c4bb49886bb6fb62d923b2d3c42608b9b8f43026d19826bfa255"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "Elsa.Rules.Runtime",
+                    "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+                    "contentHash": "mxx7s4JzH10fYL/7azdzBEOAIx/ntS10FG4hXXzy1475sA5RpV+b8+0f97g5IkgV+W9lU+5U75D82a5ezdvVEA==",
+                    "assets": [
+                      {
+                        "path": "lib/net10.0/Elsa.Rules.Runtime.dll",
+                        "assembly": "Elsa.Rules.Runtime, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                        "sha256": "68ede24989228f7a9146958665ab79b04ad28aba92e7a703f7579d37a9ba5c6b"
+                      }
+                    ]
+                  }
+                ]
+              },
+              "terminalKind": "Cancelled",
+              "deliveryAcknowledged": 0
+            },
+            "uncancelledWorkflowExecutionId": "14YdsFalCIT",
+            "uncancelledStartOutboxStatus": "FailedRetryable",
+            "uncancelledChildRowCount": 0
+          },
+          {
+            "stage": "compatible-admission-restored",
+            "acceptNewInvocations": true,
+            "successfulWorkflowExecutionId": "14YdsFalCIT",
+            "successfulRulesActivityExecutionId": "14YdsFuqScF",
+            "successfulRun": {
+              "runId": "rules-4d066ca3527582a47f20bf67e7717b840930d84f4b709d252cf1fa90e9664daf",
+              "workflowExecutionId": "14YdsFalCIT",
+              "activityExecutionId": "14YdsFuqScF",
+              "status": "Succeeded",
+              "admitted": 1,
+              "modelRevision": 5,
+              "committedRounds": 2,
+              "pinHash": "91acd90a5642f2006c9811960c82af55d350ed92d7444b6b41cb6e47e1ea8bf9",
+              "implementation": {
+                "pinSchemaVersion": 1,
+                "languageId": "elsa.rules.finite-positive",
+                "languageVersion": 1,
+                "receiptSchemaVersion": 1,
+                "stateSchemaVersion": 1,
+                "packages": [
+                  {
+                    "id": "Elsa.Rules.Core",
+                    "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+                    "contentHash": "ZDlOpz1D8ZarEmVMQ9rGcK5iEW1P/j+JVdy6epfsM+8/e1d+ETXhX3Pe8wavZmK7K/JHUZz/aB902aPN6y+8Ag==",
+                    "assets": [
+                      {
+                        "path": "lib/net10.0/Elsa.Rules.Core.dll",
+                        "assembly": "Elsa.Rules.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                        "sha256": "1a2940d02fc187302ad7d79216ea92459e5ab43366e0db2420cea5fde27650bd"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "Elsa.Rules.Persistence.Core",
+                    "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+                    "contentHash": "TXFKK0SepUyOP0BLMO12GKyJXZ4V5TNUpA6X5egOjTlGEAnPPHPF6+ZfiGpgnxpyJydkpyTU7CKpGurSGP+PkQ==",
+                    "assets": [
+                      {
+                        "path": "lib/net10.0/Elsa.Rules.Persistence.Core.dll",
+                        "assembly": "Elsa.Rules.Persistence.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                        "sha256": "c149ad996657c4bb49886bb6fb62d923b2d3c42608b9b8f43026d19826bfa255"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "Elsa.Rules.Runtime",
+                    "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+                    "contentHash": "mxx7s4JzH10fYL/7azdzBEOAIx/ntS10FG4hXXzy1475sA5RpV+b8+0f97g5IkgV+W9lU+5U75D82a5ezdvVEA==",
+                    "assets": [
+                      {
+                        "path": "lib/net10.0/Elsa.Rules.Runtime.dll",
+                        "assembly": "Elsa.Rules.Runtime, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                        "sha256": "68ede24989228f7a9146958665ab79b04ad28aba92e7a703f7579d37a9ba5c6b"
+                      }
+                    ]
+                  }
+                ]
+              },
+              "terminalKind": "Succeeded",
+              "deliveryAcknowledged": 1
+            },
+            "nativeResult": {
+              "Kind": "Succeeded",
+              "CommittedRounds": 2,
+              "ResultSchemaVersion": 1,
+              "ResultFacts": [
+                "derived",
+                "seed"
+              ],
+              "DiagnosticCode": null,
+              "FinalFactsSha256": "0432e7409a4f5287b577250b34ffa58eba7925a79b43f2e1a2e540ea7e0b9b2f",
+              "IsRedacted": false,
+              "OutputType": null
+            },
+            "followingActivity": {
+              "activityExecutionId": "14YdvKYean6",
+              "status": "Completed",
+              "revision": 1258943721467313442,
+              "executableNodeId": "after-rules",
+              "attemptCountInternal": 1,
+              "attempts": [
+                {
+                  "attemptId": "14YdvKYean6:attempt:1",
+                  "ordinal": 1,
+                  "reason": "Initial",
+                  "transitionKind": "Complete",
+                  "startedAt": "2026-10-22T09:39:31.116308+02:00",
+                  "endedAt": "2026-10-22T09:39:31.205609+02:00"
+                }
+              ],
+              "contentJson": "{\"execution\":{\"activityExecutionId\":\"MQA0AFkAZAB2AEsAWQBlAGEAbgA2AA==\",\"workflowExecutionId\":\"MQA0AFkAZABzAEYAYQBsAEMASQBUAA==\",\"executableNodeId\":\"YQBmAHQAZQByAC0AcgB1AGwAZQBzAA==\",\"authoredActivityId\":\"YQBmAHQAZQByAC0AcgB1AGwAZQBzAA==\",\"activityType\":\"RQBsAHMAYQAuAEEAYwB0AGkAdgBpAHQAaQBlAHMALgBQAHIAaQBtAGkAdABpAHYAZQBzAC4AQQBjAHQAaQB2AGkAdABpAGUAcwAuAFcAcgBpAHQAZQBMAGkAbgBlAA==\",\"activityTypeVersion\":\"NAAuADAALgAxADcALQBwAHIAZQB2AGkAZQB3ACsAMgA2AGMANgA0ADUAYgBhADQANgA5ADEAYQBjADAANgAzADQAYQBlADMAMgAzADIAZgA5AGIAZAAzADgANgA4AGYAMQBmADcAMgBlAGMAZAA=\"},\"status\":\"Completed\",\"subStatus\":null,\"executionSequence\":1173619822260671915,\"scheduledAt\":\"2026-10-22T07:39:31.05156+00:00\",\"startedAt\":\"2026-10-22T07:39:31.116308+00:00\",\"completedAt\":\"2026-10-22T07:39:31.205609+00:00\",\"schedulingActivityExecutionId\":\"MQA0AFkAZABzAEYAdQBxAFMAYwBGAA==\",\"parentActivityExecutionId\":\"MQA0AFkAZABzAEYAbABsADAAdABPAA==\",\"branchId\":null,\"iterationId\":null,\"provenance\":{\"parentActivityExecutionId\":\"MQA0AFkAZABzAEYAbABsADAAdABPAA==\",\"schedulingActivityExecutionId\":\"MQA0AFkAZABzAEYAdQBxAFMAYwBGAA==\",\"schedulingWorkflowExecutionId\":\"MQA0AFkAZABzAEYAYQBsAEMASQBUAA==\",\"branchId\":null,\"iterationId\":null,\"executionPathId\":null,\"executionScopeId\":null,\"schedulingCause\":\"QQBjAHQAaQB2AGkAdAB5AEMAbwBtAHAAbABlAHQAaQBvAG4A\",\"metadata\":{\"cwBlAHEAdQBlAG4AYwBlAC4AcABhAHIAZQBuAHQAQQBjAHQAaQB2AGkAdAB5AEUAeABlAGMAdQB0AGkAbwBuAEkAZAA=\":\"MQA0AFkAZABzAEYAbABsADAAdABPAA==\",\"cwBlAHEAdQBlAG4AYwBlAC4AYwBvAG0AcABsAGUAdABlAGQAQwBoAGkAbABkAEEAYwB0AGkAdgBpAHQAeQBFAHgAZQBjAHUAdABpAG8AbgBJAGQA\":\"MQA0AFkAZABzAEYAdQBxAFMAYwBGAA==\",\"cwBlAHEAdQBlAG4AYwBlAC4AYwBvAG0AcABsAGUAdABlAGQAQwBoAGkAbABkAEUAeABlAGMAdQB0AGEAYgBsAGUATgBvAGQAZQBJAGQA\":\"cgB1AGwAZQBzAA==\",\"cwBlAHEAdQBlAG4AYwBlAC4AdABhAHIAZwBlAHQATgBvAGQAZQBJAGQA\":\"YQBmAHQAZQByAC0AcgB1AGwAZQBzAA==\"},\"attempt\":null},\"callStackDepth\":null,\"bookmarkIds\":[],\"incidentIds\":[],\"faultCount\":0,\"aggregateFaultCount\":0,\"metadata\":{\"cgB1AG4AdABpAG0AZQAuAHMAYwBoAGUAZAB1AGwAZQBSAGUAYQBzAG8AbgA=\":\"QQBjAHQAaQB2AGkAdAB5AEMAbwBtAHAAbABlAHQAaQBvAG4A\",\"cgB1AG4AdABpAG0AZQAuAHMAYwBoAGUAZAB1AGwAZQByAFcAbwByAGsASQB0AGUAbQBJAGQA\":\"NQA3AGYAZgAyADAAOABhADAANAA0ADIAMwBiADcANwA6AHMAYwBoAGUAZAB1AGwAZQAtAGMAaABpAGwAZAA6AGEAZgB0AGUAcgAtAHIAdQBsAGUAcwA6ADEANABZAGQAdgBLAFkAZQBhAG4ANgA=\",\"cgB1AG4AdABpAG0AZQAuAHAAaQBuAG4AZQBkAEEAcgB0AGkAZgBhAGMAdABJAGQA\":\"YQByAHQAaQBmAGEAYwB0AC0AYwAyAGIAMABjAGQAZgA0ADMANQA1ADUA\",\"cgB1AG4AdABpAG0AZQAuAHAAaQBuAG4AZQBkAEEAcgB0AGkAZgBhAGMAdABWAGUAcgBzAGkAbwBuAA==\":\"MQAuADAALgAwAA==\",\"cgB1AG4AdABpAG0AZQAuAHAAaQBuAG4AZQBkAEEAcgB0AGkAZgBhAGMAdABIAGEAcwBoAA==\":\"cwBoAGEAMgA1ADYAOgBjADIAYgAwAGMAZABmADQAMwA1ADUANQAwAGIANAAzADgAMgBkADYAYwA1ADcAYgAzAGUANwA2AGMAOAA3AGMAZAA2AGYANwA5ADcAMwBlADUAOABkADUANAA2ADgAYwBiADQAOAAwAGEANAA2ADEANQBmADUAMQBiADAANAA2AA==\",\"cgB1AG4AdABpAG0AZQAuAHMAdABhAHIAdABSAGUAYQBzAG8AbgA=\":\"UwBjAGgAZQBkAHUAbABlAGQAQQBjAHQAaQB2AGkAdAB5AA==\",\"cgB1AG4AdABpAG0AZQAuAHMAdABhAHIAdABTAGMAaABlAGQAdQBsAGUAcgBXAG8AcgBrAEkAdABlAG0ASQBkAA==\":\"YQAzAGYANwAxADYAOAAzADYAMwA2ADMAYgAxAGEAYwA6AHMAdABhAHIAdAA6ADEANABZAGQAdgBLAFkAZQBhAG4ANgA=\",\"cgB1AG4AdABpAG0AZQAuAGEAYwB0AGkAdgBpAHQAeQBBAHQAdABlAG0AcAB0AEEAYwB0AGkAdgBhAHQAaQBvAG4AQwBsAGEAaQBtAA==\":\"MQA0AFkAZAB2AEsAWQBlAGEAbgA2ADoAYQB0AHQAZQBtAHAAdAA6ADEA\",\"cgB1AG4AdABpAG0AZQAuAGEAYwB0AGkAdgBpAHQAeQBBAHQAdABlAG0AcAB0AEEAYwB0AGkAdgBhAHQAaQBvAG4AQwBsAGEAaQBtAFcAbwByAGsASQB0AGUAbQBJAGQA\":\"YgBmAGQAMgA3ADMAYQA4AGYANAA3AGMANQA1AGYAMwA6AGkAbgB2AG8AawBlADoAMQA0AFkAZAB2AEsAWQBlAGEAbgA2AA==\",\"cgB1AG4AdABpAG0AZQAuAGEAYwB0AGkAdgBpAHQAeQBBAHQAdABlAG0AcAB0AE8AcgBkAGkAbgBhAGwASABpAGcAaABXAGEAdABlAHIAbQBhAHIAawA=\":\"MQA=\",\"cgB1AG4AdABpAG0AZQAuAGkAbgB2AG8AawBlAFIAZQBhAHMAbwBuAA==\":\"UwB0AGEAcgB0AGUAZABBAGMAdABpAHYAaQB0AHkA\",\"cgB1AG4AdABpAG0AZQAuAGkAbgB2AG8AawBlAFMAYwBoAGUAZAB1AGwAZQByAFcAbwByAGsASQB0AGUAbQBJAGQA\":\"YgBmAGQAMgA3ADMAYQA4AGYANAA3AGMANQA1AGYAMwA6AGkAbgB2AG8AawBlADoAMQA0AFkAZAB2AEsAWQBlAGEAbgA2AA==\",\"cgB1AG4AdABpAG0AZQAuAGMAbwBtAHAAbABlAHQAaQBvAG4ATwB1AHQAYwBvAG0AZQBOAGEAbQBlAHMA\":\"WwAiAEQAbwBuAGUAIgBdAA==\",\"cgB1AG4AdABpAG0AZQAuAHAAYQByAGUAbgB0AEMAbwBtAHAAbABlAHQAaQBvAG4AUAByAG8AYwBlAHMAcwBlAGQAVwBvAHIAawBJAHQAZQBtAEkAZAA=\":\"NwA2AGMAMQBkAGIAYwBiAGEAZQA0ADMAMgBmAGUAYwA6AHAAYQByAGUAbgB0ADoAMQA0AFkAZABzAEYAbABsADAAdABPADoAYwBoAGkAbABkADoAMQA0AFkAZAB2AEsAWQBlAGEAbgA2AA==\"},\"documentVersion\":2,\"contractIdentity\":{\"activityTypeKey\":\"RQBsAHMAYQAuAEEAYwB0AGkAdgBpAHQAaQBlAHMALgBQAHIAaQBtAGkAdABpAHYAZQBzAC4AQQBjAHQAaQB2AGkAdABpAGUAcwAuAFcAcgBpAHQAZQBMAGkAbgBlAA==\",\"contractVersion\":\"NAAuADAALgAxADcALQBwAHIAZQB2AGkAZQB3ACsAMgA2AGMANgA0ADUAYgBhADQANgA5ADEAYQBjADAANgAzADQAYQBlADMAMgAzADIAZgA5AGIAZAAzADgANgA4AGYAMQBmADcAMgBlAGMAZAA=\",\"schemaFingerprint\":\"cwBoAGEAMgA1ADYAOgA1AGMAMwA1ADEAZABmADQANAA5ADAAYQBiADAAMwBmAGYANABkADMAOQA1ADMAYgAxAGIAOQA4ADQAZQBjAGYANgAxADkAOABhAGUAYwBiAGMAYgAwADkAMwAyADAAOQBiADcANQA2ADAAZgBhADYAMgA0ADQAOABjADIAMgAxAA==\"},\"inputSnapshot\":{\"invocationId\":\"MQA0AFkAZAB2AEsAWQBlAGEAbgA2AA==\",\"contractFingerprint\":\"cwBoAGEAMgA1ADYAOgA1AGMAMwA1ADEAZABmADQANAA5ADAAYQBiADAAMwBmAGYANABkADMAOQA1ADMAYgAxAGIAOQA4ADQAZQBjAGYANgAxADkAOABhAGUAYwBiAGMAYgAwADkAMwAyADAAOQBiADcANQA2ADAAZgBhADYAMgA0ADQAOABjADIAMgAxAA==\",\"bindingFingerprint\":\"cwBoAGEAMgA1ADYAOgA3AGQAOAAxAGUAYwBjADEANQBmADAAOQAwADAANwBlADcAMwAwADEAZABmADkAOAAzAGQAMAA3AGEAZABjAGYANAA5AGMAMgAwADkANgBkADMAMgAyADEAZABiAGYAZgA3ADgAOAA5AGMAMAA5ADkAMAA2ADcAMwA0AGMAMwBkAA==\",\"values\":{\"dABlAHgAdAA=\":{\"type\":{\"alias\":\"UwB0AHIAaQBuAGcA\",\"collectionKind\":\"Single\",\"schema\":null,\"schemaVersion\":null},\"presence\":\"Present\",\"inlineValue\":\"The retained Rules result resumed the native Sequence.\",\"externalReference\":null,\"policy\":{\"lifecycle\":\"Instance\",\"storage\":\"Inline\",\"isSensitive\":false,\"requiresEncryption\":false,\"redactionMode\":null,\"retentionPolicy\":null,\"metadata\":{}}}},\"materializedAt\":\"2026-10-22T07:39:31.116308+00:00\"},\"attempts\":[{\"attemptId\":\"MQA0AFkAZAB2AEsAWQBlAGEAbgA2ADoAYQB0AHQAZQBtAHAAdAA6ADEA\",\"invocationId\":\"MQA0AFkAZAB2AEsAWQBlAGEAbgA2AA==\",\"ordinal\":1,\"reason\":\"Initial\",\"startedAt\":\"2026-10-22T07:39:31.116308+00:00\",\"endedAt\":\"2026-10-22T07:39:31.205609+00:00\",\"triggerDeliveryId\":null,\"transitionKind\":\"Complete\",\"incidentId\":null}],\"privateState\":null,\"completion\":{\"invocationId\":\"MQA0AFkAZAB2AEsAWQBlAGEAbgA2AA==\",\"attemptId\":\"MQA0AFkAZAB2AEsAWQBlAGEAbgA2ADoAYQB0AHQAZQBtAHAAdAA6ADEA\",\"result\":{\"type\":{\"alias\":\"RQBsAHMAYQAuAEEAYwB0AGkAdgBpAHQAaQBlAHMALgBSAHUAbgB0AGkAbQBlAC4AQwBvAHIAZQAuAE0AbwBkAGUAbABzAC4AQQBjAHQAaQB2AGkAdAB5AFUAbgBpAHQA\",\"collectionKind\":\"Single\",\"schema\":null,\"schemaVersion\":null},\"presence\":\"Present\",\"inlineValue\":{},\"externalReference\":null,\"policy\":{\"lifecycle\":\"Result\",\"storage\":\"Inline\",\"isSensitive\":false,\"requiresEncryption\":false,\"redactionMode\":null,\"retentionPolicy\":null,\"metadata\":{}}},\"resultType\":{\"alias\":\"RQBsAHMAYQAuAEEAYwB0AGkAdgBpAHQAaQBlAHMALgBSAHUAbgB0AGkAbQBlAC4AQwBvAHIAZQAuAE0AbwBkAGUAbABzAC4AQQBjAHQAaQB2AGkAdAB5AFUAbgBpAHQA\",\"collectionKind\":\"Single\",\"schema\":null,\"schemaVersion\":null},\"outcomeKey\":\"RABvAG4AZQA=\",\"completedAt\":\"2026-10-22T07:39:31.203268+00:00\",\"contractFingerprint\":\"cwBoAGEAMgA1ADYAOgA1AGMAMwA1ADEAZABmADQANAA5ADAAYQBiADAAMwBmAGYANABkADMAOQA1ADMAYgAxAGIAOQA4ADQAZQBjAGYANgAxADkAOABhAGUAYwBiAGMAYgAwADkAMwAyADAAOQBiADcANQA2ADAAZgBhADYAMgA0ADQAOABjADIAMgAxAA==\"},\"fault\":null,\"triggerRegistrations\":[],\"triggerDeliveries\":[],\"valueFlowCompatibility\":{\"sourceVersion\":2,\"targetVersion\":2,\"isCompatible\":true,\"incompatibilityCode\":null,\"reason\":null},\"executionScopeId\":null,\"attempt\":null,\"supersededByActivityExecutionId\":null,\"supersededAt\":null,\"invocationId\":\"MQA0AFkAZAB2AEsAWQBlAGEAbgA2AA==\",\"enclosingExecutionScopeId\":null,\"variableFrame\":null,\"iterationVariableFrame\":null,\"iterationFrameRequest\":null}"
+            },
+            "cancelledWorkflowExecutionId": "14YdsBJl5PF",
+            "cancelledRunAfterRecovery": {
+              "runId": "rules-a52ebdf3783d5df83991cca05a1134a8089f2a91cf54cc84aeaa3e3cb529593b",
+              "workflowExecutionId": "14YdsBJl5PF",
+              "activityExecutionId": "14YdsCypxP6",
+              "status": "Cancelled",
+              "admitted": 0,
+              "modelRevision": 1,
+              "committedRounds": 0,
+              "pinHash": "91acd90a5642f2006c9811960c82af55d350ed92d7444b6b41cb6e47e1ea8bf9",
+              "implementation": {
+                "pinSchemaVersion": 1,
+                "languageId": "elsa.rules.finite-positive",
+                "languageVersion": 1,
+                "receiptSchemaVersion": 1,
+                "stateSchemaVersion": 1,
+                "packages": [
+                  {
+                    "id": "Elsa.Rules.Core",
+                    "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+                    "contentHash": "ZDlOpz1D8ZarEmVMQ9rGcK5iEW1P/j+JVdy6epfsM+8/e1d+ETXhX3Pe8wavZmK7K/JHUZz/aB902aPN6y+8Ag==",
+                    "assets": [
+                      {
+                        "path": "lib/net10.0/Elsa.Rules.Core.dll",
+                        "assembly": "Elsa.Rules.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                        "sha256": "1a2940d02fc187302ad7d79216ea92459e5ab43366e0db2420cea5fde27650bd"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "Elsa.Rules.Persistence.Core",
+                    "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+                    "contentHash": "TXFKK0SepUyOP0BLMO12GKyJXZ4V5TNUpA6X5egOjTlGEAnPPHPF6+ZfiGpgnxpyJydkpyTU7CKpGurSGP+PkQ==",
+                    "assets": [
+                      {
+                        "path": "lib/net10.0/Elsa.Rules.Persistence.Core.dll",
+                        "assembly": "Elsa.Rules.Persistence.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                        "sha256": "c149ad996657c4bb49886bb6fb62d923b2d3c42608b9b8f43026d19826bfa255"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "Elsa.Rules.Runtime",
+                    "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+                    "contentHash": "mxx7s4JzH10fYL/7azdzBEOAIx/ntS10FG4hXXzy1475sA5RpV+b8+0f97g5IkgV+W9lU+5U75D82a5ezdvVEA==",
+                    "assets": [
+                      {
+                        "path": "lib/net10.0/Elsa.Rules.Runtime.dll",
+                        "assembly": "Elsa.Rules.Runtime, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                        "sha256": "68ede24989228f7a9146958665ab79b04ad28aba92e7a703f7579d37a9ba5c6b"
+                      }
+                    ]
+                  }
+                ]
+              },
+              "terminalKind": "Cancelled",
+              "deliveryAcknowledged": 0
+            },
+            "cancelledWorkflowStatusAfterRecovery": "Cancelled"
+          },
+          {
+            "stage": "invalid-native-round-limit",
+            "acceptNewInvocations": true,
+            "workflowExecutionId": "14Ydw48RvHI",
+            "activityExecutionId": "14Ydw6bZvs1",
+            "runId": "rules-bd4d955166be8e88c05149b95cbe98e51275cf5461334bbb04fb126449518819",
+            "maxRounds": 0,
+            "workflowStatus": "Faulted",
+            "rulesActivityStatus": "Faulted",
+            "followingCount": 0,
+            "incidentCount": 1,
+            "startOutboxStatus": "Delivered",
+            "startDeliveryAttemptCount": 1,
+            "rulesRowCount": 0
+          }
+        ],
+        "snapshots": [
+          {
+            "phase": "admission-disabled-held",
+            "path": "/tmp/rules-final-packaged-recovery-pins/native-admission-held-snapshot.json",
+            "fileSha256": "9aabd3b46b2a260a330d29f2ee06615760a6f7e760041a12f56ff7bfe96fef38",
+            "snapshotSha256": "63b9455ddeeb09c82838bdb0d5c2672ad892d5fb1b3c61abadd7c5fc2cf02be6"
+          },
+          {
+            "phase": "cancelled-before-admission",
+            "path": "/tmp/rules-final-packaged-recovery-pins/native-admission-cancelled-snapshot.json",
+            "fileSha256": "3b47cef29a4ef654ca8062ae9d93877cfbca363ccb2353bb25daaddd35b718a8",
+            "snapshotSha256": "e438562487a3845c12950ace44c9b2668b557f91c5b5c9205345650392f605d3"
+          },
+          {
+            "phase": "compatible-admission-restored",
+            "path": "/tmp/rules-final-packaged-recovery-pins/native-admission-recovered-snapshot.json",
+            "fileSha256": "2836d49b07d72f8d37e50cd88a70a97809724da8de917111d7dac8363888cd94",
+            "snapshotSha256": "3fc406893ff87758ec0306365a36bb5f367a7e642c994321f16d3228e8cb4eb4"
+          },
+          {
+            "phase": "invalid-max-rounds-zero",
+            "path": "/tmp/rules-final-packaged-recovery-pins/native-admission-invalid-snapshot.json",
+            "fileSha256": "93cbd3c8420a3ded4593b9a7834c231fc2f24acbec65bfbfdf265c6e6b69858c",
+            "snapshotSha256": "8a2267bf273123e148dcd163307c9118807236ec48eddfd82bbbad9dbe892a21"
+          }
+        ],
+        "completedAt": "2026-10-22T07:39:50.56501+00:00",
+        "packageFileHashesAfter": {
+          "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/workbench-package-host/deployment/Elsa.Workbench.dll": "230d32b574cf56151e19a0b224370f1b2e4862f3ab0ab31a691eb29233f90cb2",
+          "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/workbench-package-host/deployment/Elsa.Workbench.deps.json": "7c589b50e822a5b4a8efcf5d93da7ea8b77153a8b4a9072f13f1f64bb6fb0dca",
+          "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/workbench-package-host/deployment/Elsa.Workbench.runtimeconfig.json": "eff38a9750f7cca2407b1d639a963d56ffea92088e6da971bbbfa74e3dcd7224",
+          "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/workbench-package-host/deployment/elsa.rules.deployment-receipt.json": "6520f8f45024feca141856a8eed3b68ad933c91af9dd30ffd5791516bb8ac861"
+        }
+      }
+    }
+  },
+  "earlierAttempts": [
+    {
+      "commandFile": {
+        "path": "/tmp/rules-final-packaged-native/durable-command.json",
+        "sha256": "0cc0c2452a3199375262991d7160207441de5438742aa5a06a8ed506e3b815e0"
+      },
+      "log": {
+        "path": "/tmp/rules-final-packaged-native/durable-rules.log",
+        "sha256": "25a71f15af56873740f91a6ff9182f15cb165110a3ff9d5f46dd1d11d1f882d0"
+      },
+      "finding": "The new test incorrectly expected a concrete CLR type in the public output snapshot; the actual declared snapshot alias is Elsa.Any.",
+      "productCodeChanged": false
+    },
+    {
+      "commandFile": {
+        "path": "/tmp/rules-final-packaged-native-corrected/command.json",
+        "sha256": "387c027e5aae20d15bd281cb37ff3875b3d39cf081fb4796c979e3bec1691031"
+      },
+      "log": {
+        "path": "/tmp/rules-final-packaged-native-corrected/run.log",
+        "sha256": "e2d49232736edb238028895da3befdd8d2ce059e10ab3b77e334c639fe3f72a6"
+      },
+      "finding": "The new test expected public retry-lineage totalAttempts for normal first executions. That projection is nullable. Readonly retained state confirmed one internal attempt for each join/following WriteLine.",
+      "productCodeChanged": false
+    }
+  ],
+  "limits": [
+    "These scripts reused the previously qualified six-module package deployment. The entire packaging-stage coordinator was not rerun.",
+    "All 489 deployment files outside .nuplane/store-state.json were unchanged; the runtime store-state file changed. Do not claim the entire deployment was byte-identical.",
+    "Workbench is a mixed host: six Rules modules are actual packages and other dependencies are source-backed.",
+    "Public output evidence is an observed JSON projection with Elsa.Any snapshot alias, not CLR type or canonical complete terminal-byte equality.",
+    "Internal activity-attempt counts come from readonly SQLite snapshots; public retry-lineage counts are optional.",
+    "Unavailable admission is tested here; the source-built native recovery checkpoint separately tests resume-reader unavailability.",
+    "Same-machine SQLite/process evidence, not arbitrary cluster or physical-machine qualification. External effects remain at least once.",
+    "Exact-head PR checks and resulting-main verification remain open."
+  ]
+}

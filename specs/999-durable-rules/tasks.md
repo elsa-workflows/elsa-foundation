@@ -2,6 +2,8 @@
 
 Scope: complete [specification](spec.md), not a prototype-only or SQLite-only substitute. Branch `agent/codex/3181-durable-rules`, sole active leaf [#3181](https://github.com/elsa-workflows/elsa-foundation/issues/3181). Root owns integration/review and shared registrations. `[P]` permits bounded delegation only after dependencies are satisfied and files do not overlap. Tasks are complete only with reviewed evidence, never merely generated files.
 
+Historical checkpoint paragraphs below retain the scope and open gates at each recorded run. The task checkboxes and final integrated checkpoint identify the current state.
+
 Elsa has no imposed greenfield TDD cadence (constitution 6.0.0 D9). Implement and validate each checkpoint together, with required behavior/registration tests and meaningful removal controls. No unrelated tests for planning prose.
 
 ## Phase 1: Reviewed setup
@@ -71,10 +73,10 @@ this is not a published version increment or schema-version-changing migration. 
 
 Independent acceptance: real Sequence following-activity and Flowchart sibling/join continuation, plus terminal/cancellation/refusal/unavailability settlement through rebuilt Workbench REST paths.
 
-- [ ] T027 [US3] Implement immutable artifact/pin publication contribution in `Extensions/Rules/src/Workflows/Design/`; ordinary CLR catalog/compilation path, no shared execution-model switch or capability-key registration workaround.
-- [ ] T028 [US3] Implement ordinary Rules activity, checkpoint admission/cancellation intent and durable dispatch in `Extensions/Rules/src/Workflows/Runtime/`; no Design runtime dependency or Rules state in parent checkpoint. Invalid input settles through proven existing native responsibility without fake Rules rows.
-- [ ] T029 [US3] Implement terminal delivery leases/projections/acknowledgement in Rules EF and native bookmark dispatch/proof verification in `Extensions/Rules/src/Workflows/Runtime/`; no ack on enqueue, compare full canonical result content after deserialization, direct run has no delivery outbox.
-- [ ] T030 [US3] Validate persisted Sequence and Flowchart continuation, sibling/join, fault/cancel/refusal, duplicate delivery, parent-terminal proof and unavailable retry in `Extensions/Rules/tests/Tests/`; assert authoritative parent/child state, not just method calls.
+- [x] T027 [US3] Implement immutable artifact/pin publication contribution in `Extensions/Rules/src/Workflows/Design/`; ordinary CLR catalog/compilation path, no shared execution-model switch or capability-key registration workaround.
+- [x] T028 [US3] Implement ordinary Rules activity, checkpoint admission/cancellation intent and durable dispatch in `Extensions/Rules/src/Workflows/Runtime/`; no Design runtime dependency or Rules state in parent checkpoint. Invalid input settles through proven existing native responsibility without fake Rules rows.
+- [x] T029 [US3] Implement terminal delivery leases/projections/acknowledgement in Rules EF and native bookmark dispatch/proof verification in `Extensions/Rules/src/Workflows/Runtime/`; no ack on enqueue, compare full canonical result content after deserialization, direct run has no delivery outbox.
+- [x] T030 [US3] Validate persisted Sequence and Flowchart continuation, sibling/join, fault/cancel/refusal, duplicate delivery, parent-terminal proof and unavailable retry in `Extensions/Rules/tests/Tests/`; assert authoritative parent/child state, not just method calls.
 - [x] T031 [US3] Add/register real Workbench REST journey under `e2e-tests/rules/` and required opt-in host composition; update `specs/999-durable-rules/quickstart.md` with exact runnable suite commands. Rebuild host on fresh isolated DB before running.
 - [x] T032 [US3] Execute native REST/package-host integration and proof-before-ack removal control; restore actual code and rerun affected checks; record commands and results in `specs/999-durable-rules/evidence/`.
 
@@ -82,9 +84,11 @@ Native components and intent/retry handling are implemented; see the [component 
 
 The [persisted native retry/acknowledgment checkpoint](evidence/native-recovery-acceptance-checkpoint.md) completes T032 with the preceding package-backed REST run and an actual persisted proof-before-ack removal/restoration control. A real compiled Sequence now proves temporary reader unavailability inside native resume, deferred work redrive and one continuation. The held-sibling Flowchart proves fresh completion-content validation before acknowledgment. The restored full Rules suite passes 276 tests. T027–T030 remain open for the final integrated native acceptance audit; retained upgrades and compatibility gates are not implied.
 
+The [final source-built cases](evidence/native-final-cases.md) and [final packaged native acceptance](evidence/native-package-final.md) complete T027–T030: invalid native input without a child row, consumed-child delivery reclaim after unavailable acknowledgment, packaged held-sibling/join continuation across restart, admission-unavailable retry, public cancellation, retained original pins and one persisted continuation. The [compatibility checkpoint](evidence/final-compatibility.md) records all local suites, including the full Workbench 62/62 run. Exact-head review/CI and resulting-main qualification remain open.
+
 ## Phase 7: Integrated delivery
 
-- [ ] T033 Complete module READMEs/local `EXTENSION_POINTS.md` and root index links; document actual override/registration/hosting/pin/provider behavior, deployment/recovery limits and future task-runner separation. No placeholder empty modules or duplicate canonical explanations.
+- [x] T033 Complete module READMEs/local `EXTENSION_POINTS.md` and root index links; document actual override/registration/hosting/pin/provider behavior, deployment/recovery limits and future task-runner separation. No placeholder empty modules or duplicate canonical explanations.
 - [ ] T034 Refresh claims/open PRs, review integrated diff and duplication, validate locks/API/solution profiles, affected builds/tests, architecture and current generated-map policy; record exact evidence in `specs/999-durable-rules/evidence/` and #3181.
 - [ ] T035 Open/attach scoped PR with Fixes #3181, perform bounded self-review/fix loop and record every round with exact head/validation; merge only with green applicable checks and no owner/protection hold under standing authority.
 - [ ] T036 Verify resulting-main CI/Studio/CodeQL/maps, reconcile authoritative issue/project/program status and release claim. Mark spec delivered only after every acceptance gate passes; keep broader #2892 program open.

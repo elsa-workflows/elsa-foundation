@@ -16,6 +16,7 @@ using Elsa.Primitives.Models;
 using Elsa.Rules.Core;
 using Elsa.Rules.Persistence.Core;
 using Elsa.Rules.Persistence.EntityFrameworkCore;
+using Elsa.Rules.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Rules.Runtime;
 using Elsa.Rules.Workflows.Design;
 using Elsa.Rules.Workflows.Runtime;
@@ -34,10 +35,14 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Workflows.Runtime.Services.Executables;
+using Elsa.Workflows.Runtime.Services.Bookmarks;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
 using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
+using ActivityTransitionKind = Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind;
 
 namespace Elsa.Rules.Tests;
 
@@ -89,8 +94,7 @@ public sealed class RulesPersistedNativeFlowchartTests : IAsyncLifetime
             new Dictionary<string, string>(StringComparer.Ordinal),
             IncidentStrategyBuiltIns.FaultReference);
 
-        _fixture = await RulesPersistedNativeFixture.CreateAsync(_executable, _workflowExecutionId,
-            services => services.AddSingleton(_finalCounter), _implementation);
+        _fixture = await CreateFixtureAsync();
     }
 
     public async Task DisposeAsync()
@@ -267,10 +271,8 @@ public sealed class RulesPersistedNativeFlowchartTests : IAsyncLifetime
         Assert.Equal(RuleTransitionDisposition.Invalid, rejected.Disposition);
         Assert.Equal(RuleDeliveryReadDisposition.Ready, (await reader.ReadDeliveryAsync(lease)).Disposition);
         var persistedTamper = RulesPersistedNativeFixture.StateFor(await _fixture.ActivityStatesAsync(), RulesNodeId);
-        var persistedAlteredResult = JsonSerializer.Deserialize<RuleTerminalResult>(
-            persistedTamper.Completion!.Result.InlineValue!.Value, webJson);
-        Assert.NotNull(persistedAlteredResult);
-        Assert.Equal(RuleRecordCodec.TerminalBytes(alteredResult), RuleRecordCodec.TerminalBytes(persistedAlteredResult!));
+        var persistedAlteredResult = ReadNativeResult(persistedTamper);
+        Assert.Equal(RuleRecordCodec.TerminalBytes(alteredResult), RuleRecordCodec.TerminalBytes(persistedAlteredResult));
         Assert.Equal(WorkflowExecutionStatus.Running, (await _fixture.WorkflowStateAsync())!.Status);
         AssertNoCompletedJoinOrFinal(await _fixture.ActivityStatesAsync());
 
@@ -289,6 +291,278 @@ public sealed class RulesPersistedNativeFlowchartTests : IAsyncLifetime
             RulesPersistedNativeFixture.StateFor(settledActivities, HoldNodeId).Status);
         Assert.Equal(WorkflowExecutionStatus.Running, (await _fixture.WorkflowStateAsync())!.Status);
         AssertNoCompletedJoinOrFinal(settledActivities);
+    }
+
+    [Fact]
+    public async Task Consumed_completion_is_reclaimed_and_acknowledged_without_redispatch_while_sibling_waits()
+    {
+        var unavailableGate = new OneShotProofUnavailableGate();
+        var proofProbe = new ProofValidationProbe();
+        var dispatchProbe = new BookmarkResumeDispatchProbe();
+
+        // This case needs a short real database-time lease so the still-unacknowledged terminal result can be
+        // reclaimed through the same Rules delivery executor after its first proof validation is unavailable.
+        await _fixture.DisposeAsync();
+        _fixture = await CreateFixtureAsync(services =>
+        {
+            services.RemoveAll<IRuleDeliveryProofValidator>();
+            services.AddSingleton(unavailableGate);
+            services.AddSingleton(proofProbe);
+            services.AddScoped<IRuleDeliveryProofValidator>(provider => new OneShotUnavailableProofValidator(
+                new RulesNativeDeliveryProofValidator(provider.GetRequiredService<IPersistenceOperationScopeFactory>()),
+                provider.GetRequiredService<OneShotProofUnavailableGate>(),
+                provider.GetRequiredService<ProofValidationProbe>()));
+
+            services.AddSingleton(dispatchProbe);
+            services.AddScoped<BookmarkResumeDispatcher>();
+            services.RemoveAll<IBookmarkResumeDispatcher>();
+            services.AddScoped<IBookmarkResumeDispatcher>(provider => new CountingBookmarkResumeDispatcher(
+                provider.GetRequiredService<BookmarkResumeDispatcher>(),
+                provider.GetRequiredService<BookmarkResumeDispatchProbe>()));
+        }, deliveryLeaseSeconds: 10);
+
+        var reference = await _fixture.PublishAsync($"{SourceReferenceId}-redelivery");
+        var start = await _fixture.StartPublishedAsync(reference);
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, start.CommandDispatch.Status);
+        await _fixture.SweepPartitionAsync();
+
+        var pendingActivities = await _fixture.ActivityStatesAsync();
+        var pendingRules = RulesPersistedNativeFixture.StateFor(pendingActivities, RulesNodeId);
+        var pendingSibling = RulesPersistedNativeFixture.StateFor(pendingActivities, HoldNodeId);
+        Assert.Equal(ActivityExecutionStatus.Suspended, pendingRules.Status);
+        Assert.Equal(ActivityExecutionStatus.Suspended, pendingSibling.Status);
+        Assert.Equal(WorkflowExecutionStatus.Running, (await _fixture.WorkflowStateAsync())!.Status);
+        AssertNoCompletedJoinOrFinal(pendingActivities);
+
+        var request = RulesNativeBoundary.ReadState(pendingRules);
+        var identity = new RuleRunIdentity(request.Scope, request.RunId);
+        var terminal = await _fixture.DriveRulesToTerminalAsync(identity);
+        Assert.Equal(RuleTerminalReadDisposition.Found, terminal.Disposition);
+        Assert.Equal(RuleTerminalKind.Succeeded, terminal.Result!.Kind);
+        var canonicalTerminal = RuleRecordCodec.TerminalBytes(terminal.Result);
+        var initialRun = await _fixture.FindRunAsync(identity);
+        Assert.Equal(RuleRunReadDisposition.Found, initialRun.Disposition);
+        var modelRevision = initialRun.View!.ModelRevision;
+
+        unavailableGate.Arm();
+        Assert.False(await _fixture.DeliverOneAsync("persisted-terminal-redelivery"));
+        Assert.Equal(1, dispatchProbe.DispatchCount);
+        var firstProofValidation = Assert.Single(proofProbe.Observations);
+        Assert.Equal(RuleDeliveryProofKind.Consumed, firstProofValidation.Kind);
+        Assert.Equal(RuleDeliveryProofValidationDisposition.Unavailable, firstProofValidation.Disposition);
+
+        var afterUnavailableAck = await _fixture.ActivityStatesAsync();
+        var completedRules = RulesPersistedNativeFixture.StateFor(afterUnavailableAck, RulesNodeId);
+        var waitingSibling = RulesPersistedNativeFixture.StateFor(afterUnavailableAck, HoldNodeId);
+        Assert.Equal(ActivityExecutionStatus.Completed, completedRules.Status);
+        Assert.Equal(ActivityExecutionStatus.Suspended, waitingSibling.Status);
+        Assert.Equal(WorkflowExecutionStatus.Running, (await _fixture.WorkflowStateAsync())!.Status);
+        AssertNoCompletedJoinOrFinal(afterUnavailableAck);
+        Assert.Equal(0, _finalCounter.Count);
+
+        var consumedReceipt = Assert.Single(completedRules.TriggerDeliveries!,
+            item => item.Status == ActivityTriggerDeliveryStatus.Consumed);
+        var nativeResult = ReadNativeResult(completedRules);
+        Assert.Equal(canonicalTerminal, RuleRecordCodec.TerminalBytes(nativeResult));
+        var resumeAttempts = ResumeAttempts(completedRules);
+        var attemptSnapshot = resumeAttempts.Select(attempt =>
+            (attempt.AttemptId, attempt.Ordinal, attempt.Reason, attempt.StartedAt, attempt.EndedAt,
+                attempt.TriggerDeliveryId, attempt.TransitionKind)).ToArray();
+        Assert.Single(attemptSnapshot);
+        Assert.Equal(ActivityTransitionKind.Complete, resumeAttempts[0].TransitionKind);
+        Assert.Equal(consumedReceipt.DeliveryId, resumeAttempts[0].TriggerDeliveryId);
+
+        var rowBeforeReclaim = await ReadRunRecordAsync(_fixture, identity);
+        Assert.False(rowBeforeReclaim.DeliveryAcknowledged);
+        Assert.Null(rowBeforeReclaim.DeliveryAcknowledgementJson);
+        Assert.NotNull(rowBeforeReclaim.DeliveryOwner);
+        Assert.NotNull(rowBeforeReclaim.DeliveryExpiresAtUtcTicks);
+
+        var runBeforeReclaim = await _fixture.FindRunAsync(identity);
+        Assert.Equal(modelRevision, runBeforeReclaim.View!.ModelRevision);
+        Assert.Equal(canonicalTerminal, RuleRecordCodec.TerminalBytes(
+            (await _fixture.ReadTerminalAsync(identity)).Result!));
+
+        await WaitForDeliveryLeaseExpiryAsync(_fixture, identity);
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(8);
+        var acknowledged = false;
+        while (!acknowledged && DateTimeOffset.UtcNow < deadline)
+        {
+            acknowledged = await _fixture.DeliverOneAsync("persisted-terminal-redelivery");
+            if (!acknowledged)
+                await Task.Delay(TimeSpan.FromMilliseconds(50));
+        }
+
+        Assert.True(acknowledged, "The unacknowledged native completion was not reclaimed after its database-time lease expired.");
+        Assert.Equal(1, dispatchProbe.DispatchCount);
+        Assert.Equal(2, proofProbe.Observations.Count);
+        Assert.Equal(RuleDeliveryProofKind.AlreadyConsumed, proofProbe.Observations[1].Kind);
+        Assert.Equal(RuleDeliveryProofValidationDisposition.Equivalent, proofProbe.Observations[1].Disposition);
+
+        var afterReclaim = await _fixture.ActivityStatesAsync();
+        var unchangedRules = RulesPersistedNativeFixture.StateFor(afterReclaim, RulesNodeId);
+        Assert.Equal(ActivityExecutionStatus.Completed, unchangedRules.Status);
+        Assert.Equal(canonicalTerminal, RuleRecordCodec.TerminalBytes(ReadNativeResult(unchangedRules)));
+        Assert.Equal(attemptSnapshot, ResumeAttempts(unchangedRules).Select(attempt =>
+            (attempt.AttemptId, attempt.Ordinal, attempt.Reason, attempt.StartedAt, attempt.EndedAt,
+                attempt.TriggerDeliveryId, attempt.TransitionKind)).ToArray());
+        var sameReceipt = Assert.Single(unchangedRules.TriggerDeliveries!,
+            item => item.Status == ActivityTriggerDeliveryStatus.Consumed);
+        Assert.Equal(consumedReceipt.DeliveryId, sameReceipt.DeliveryId);
+        Assert.Equal(consumedReceipt.RegistrationId, sameReceipt.RegistrationId);
+        Assert.Equal(consumedReceipt.DeduplicationKey, sameReceipt.DeduplicationKey);
+        Assert.Equal(ActivityExecutionStatus.Suspended,
+            RulesPersistedNativeFixture.StateFor(afterReclaim, HoldNodeId).Status);
+        Assert.Equal(WorkflowExecutionStatus.Running, (await _fixture.WorkflowStateAsync())!.Status);
+        AssertNoCompletedJoinOrFinal(afterReclaim);
+        Assert.Equal(0, _finalCounter.Count);
+
+        var settledRun = await _fixture.FindRunAsync(identity);
+        Assert.Equal(modelRevision, settledRun.View!.ModelRevision);
+        Assert.Equal(canonicalTerminal, RuleRecordCodec.TerminalBytes(
+            (await _fixture.ReadTerminalAsync(identity)).Result!));
+        var rowAfterAck = await ReadRunRecordAsync(_fixture, identity);
+        Assert.True(rowAfterAck.DeliveryAcknowledged);
+        Assert.NotNull(rowAfterAck.DeliveryAcknowledgementJson);
+        Assert.Null(rowAfterAck.DeliveryOwner);
+        Assert.Null(rowAfterAck.DeliveryExpiresAtUtcTicks);
+        Assert.Equal(RuleDeliveryClaimDisposition.NoEligibleDelivery,
+            await _fixture.ClaimDeliveryDispositionAsync("persisted-terminal-redelivery-after-ack"));
+    }
+
+    private async Task<RulesPersistedNativeFixture> CreateFixtureAsync(
+        Action<IServiceCollection>? configureServices = null,
+        int deliveryLeaseSeconds = 60) =>
+        await RulesPersistedNativeFixture.CreateAsync(
+            _executable,
+            _workflowExecutionId,
+            services =>
+            {
+                services.AddSingleton(_finalCounter);
+                configureServices?.Invoke(services);
+            },
+            _implementation,
+            deliveryLeaseSeconds);
+
+    private static RuleTerminalResult ReadNativeResult(ActivityExecutionState activity)
+    {
+        Assert.Equal(new ValueTypeDescriptor(typeof(RuleTerminalResult).FullName!), activity.Completion!.Result.Type);
+        Assert.True(activity.Completion.Result.InlineValue.HasValue,
+            "The compiled CLR result contract declares the bounded RuleTerminalResult inline.");
+        return JsonSerializer.Deserialize<RuleTerminalResult>(
+                   activity.Completion.Result.InlineValue!.Value,
+                   new JsonSerializerOptions(JsonSerializerDefaults.Web))
+               ?? throw new InvalidDataException("The persisted RuleTerminalResult completion could not be read.");
+    }
+
+    private static ActivityAttempt[] ResumeAttempts(ActivityExecutionState activity) =>
+        activity.Attempts!.Where(attempt => attempt.Reason == ActivityAttemptReason.Resume)
+            .OrderBy(attempt => attempt.Ordinal).ToArray();
+
+    private static async Task<RuleRunRecord> ReadRunRecordAsync(
+        RulesPersistedNativeFixture fixture,
+        RuleRunIdentity identity)
+    {
+        await using var scope = fixture.Harness.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<RulesDbContext>();
+        var runKey = RuleRecordCodec.Hash(RuleRecordCodec.ScopeBytes(identity));
+        return await db.Runs.AsNoTracking().SingleAsync(row => row.RunKey == runKey);
+    }
+
+    private static async Task WaitForDeliveryLeaseExpiryAsync(
+        RulesPersistedNativeFixture fixture,
+        RuleRunIdentity identity)
+    {
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(20);
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            var row = await ReadRunRecordAsync(fixture, identity);
+            if (row.DeliveryExpiresAtUtcTicks is { } expiresAt)
+            {
+                await using var scope = fixture.Harness.Services.CreateAsyncScope();
+                var db = scope.ServiceProvider.GetRequiredService<RulesDbContext>();
+                if (await db.ReadUtcTicksAsync(CancellationToken.None) >
+                    expiresAt + TimeSpan.FromMilliseconds(100).Ticks)
+                    return;
+            }
+            await Task.Delay(TimeSpan.FromMilliseconds(25));
+        }
+
+        throw new TimeoutException("The persisted Rules delivery lease did not expire within the bounded test interval.");
+    }
+
+    private sealed class OneShotProofUnavailableGate
+    {
+        private int _armed;
+
+        public void Arm() => Interlocked.Exchange(ref _armed, 1);
+
+        public bool TryConsume() => Interlocked.Exchange(ref _armed, 0) == 1;
+    }
+
+    private sealed class ProofValidationProbe
+    {
+        private readonly object _sync = new();
+        private readonly List<(RuleDeliveryProofKind Kind, RuleDeliveryProofValidationDisposition Disposition)> _observations = [];
+
+        public IReadOnlyList<(RuleDeliveryProofKind Kind, RuleDeliveryProofValidationDisposition Disposition)> Observations
+        {
+            get
+            {
+                lock (_sync)
+                    return _observations.ToArray();
+            }
+        }
+
+        public void Record(RuleDeliveryProof proof, RuleDeliveryProofValidationDisposition disposition)
+        {
+            lock (_sync)
+                _observations.Add((proof.Kind, disposition));
+        }
+    }
+
+    private sealed class OneShotUnavailableProofValidator(
+        IRuleDeliveryProofValidator inner,
+        OneShotProofUnavailableGate gate,
+        ProofValidationProbe probe) : IRuleDeliveryProofValidator
+    {
+        public async ValueTask<RuleDeliveryProofValidationResult> ValidateAsync(
+            RuleInvocationEnvelope invocation,
+            RuleTerminalEnvelope envelope,
+            RuleDeliveryProof proof,
+            CancellationToken cancellationToken = default)
+        {
+            if (gate.TryConsume())
+            {
+                probe.Record(proof, RuleDeliveryProofValidationDisposition.Unavailable);
+                return new(RuleDeliveryProofValidationDisposition.Unavailable);
+            }
+
+            var result = await inner.ValidateAsync(invocation, envelope, proof, cancellationToken);
+            probe.Record(proof, result.Disposition);
+            return result;
+        }
+    }
+
+    private sealed class BookmarkResumeDispatchProbe
+    {
+        private int _dispatchCount;
+        public int DispatchCount => Volatile.Read(ref _dispatchCount);
+        public void RecordDispatch() => Interlocked.Increment(ref _dispatchCount);
+    }
+
+    private sealed class CountingBookmarkResumeDispatcher(
+        BookmarkResumeDispatcher inner,
+        BookmarkResumeDispatchProbe probe) : IBookmarkResumeDispatcher
+    {
+        public ValueTask<BookmarkResumeDispatchResult> DispatchAsync(
+            BookmarkResumeDispatchRequest request,
+            WorkflowExecutionCommandDispatchOptions? dispatchOptions = null,
+            CancellationToken cancellationToken = default)
+        {
+            probe.RecordDispatch();
+            return inner.DispatchAsync(request, dispatchOptions, cancellationToken);
+        }
     }
 
     private ExecutableNode BuildGraph()

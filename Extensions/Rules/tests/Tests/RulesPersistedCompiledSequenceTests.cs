@@ -4,9 +4,14 @@ using Elsa.Activities.Primitives.Activities;
 using Elsa.Primitives.Models;
 using Elsa.Rules.Core;
 using Elsa.Rules.Persistence.Core;
+using Elsa.Rules.Persistence.EntityFrameworkCore;
 using Elsa.Rules.Workflows.Runtime.Activities;
 using Elsa.Rules.Workflows.Runtime.Services;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using ActivityTransitionKind = Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind;
 
 namespace Elsa.Rules.Tests;
 
@@ -217,5 +222,67 @@ public sealed class RulesPersistedCompiledSequenceTests
         Assert.True(await fixture.DeliverOneAsync("compiled-cancel-native-delivery"));
         Assert.Equal(RuleDeliveryClaimDisposition.NoEligibleDelivery,
             await fixture.ClaimDeliveryDispositionAsync("compiled-cancel-after-ack"));
+    }
+
+    [Fact]
+    public async Task Invalid_round_budget_faults_through_native_boundary_without_creating_a_rules_run()
+    {
+        var executable = await RulesCompiledPublicationFixture.CompileAsync(maxRounds: 0);
+        await using var fixture = await RulesPersistedNativeFixture.CreateAsync(
+            executable, $"rules-native-invalid-budget-{Guid.NewGuid():N}");
+
+        var reference = await fixture.PublishAsync($"{SourceReferenceId}-invalid-budget");
+        await fixture.StartPublishedAsync(reference);
+        await fixture.SweepPartitionAsync();
+
+        var states = await fixture.ActivityStatesAsync();
+        var rules = RulesPersistedNativeFixture.StateFor(states, RulesCompiledPublicationFixture.RulesNodeId);
+        Assert.Equal(ActivityExecutionStatus.Faulted, rules.Status);
+        Assert.Equal(RulesNativeBoundary.InvalidRoundLimit, rules.Fault?.Code);
+        Assert.Equal(typeof(ActivityFault).FullName, rules.Fault?.ExceptionType);
+        var address = RulesNativeBoundary.ReadAddress(rules);
+        var request = RulesNativeBoundary.ReadState(rules);
+        Assert.Equal(0, request.MaxRounds);
+
+        var receipt = Assert.Single(rules.TriggerDeliveries!, item =>
+            item.Status == ActivityTriggerDeliveryStatus.Consumed);
+        Assert.Equal(address.RegistrationId, receipt.RegistrationId);
+        Assert.Equal(RulesNativeBoundary.CompletionType, receipt.PayloadType);
+        Assert.Equal(RulesNativeBoundary.ProviderId, receipt.ProviderId);
+        Assert.Equal(RulesNativeBoundary.DeliveryDeduplicationKey(
+            address, RulesNativeBoundary.InvalidDeliveryId(request, address)), receipt.DeduplicationKey);
+
+        var resumeAttempt = Assert.Single(rules.Attempts!, attempt => attempt.Reason == ActivityAttemptReason.Resume);
+        Assert.Equal(receipt.DeliveryId, resumeAttempt.TriggerDeliveryId);
+        Assert.Equal(ActivityTransitionKind.Fault, resumeAttempt.TransitionKind);
+        Assert.NotNull(resumeAttempt.EndedAt);
+
+        var identity = new RuleRunIdentity(request.Scope, request.RunId);
+        Assert.Equal(RuleRunReadDisposition.NotFound, (await fixture.FindRunAsync(identity)).Disposition);
+        await using (var scope = fixture.Harness.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<RulesDbContext>();
+            Assert.Empty(await db.Runs.AsNoTracking().ToArrayAsync());
+        }
+
+        Assert.Equal(WorkflowExecutionStatus.Faulted, (await fixture.WorkflowStateAsync())!.Status);
+        Assert.DoesNotContain(states,
+            state => state.Execution.ExecutableNodeId == RulesPersistedNativeFixture.AfterRulesNodeId);
+        await AssertNoUnsettledStartIntentAsync(fixture);
+    }
+
+    private static async Task AssertNoUnsettledStartIntentAsync(RulesPersistedNativeFixture fixture)
+    {
+        await using var scope = await fixture.CreatePartitionScopeAsync();
+        var outbox = scope.ServiceProvider.GetRequiredService<IRuntimePostCommitOutboxStore>();
+        var pending = await outbox.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(
+            DateTimeOffset.MaxValue, limit: 16, workflowExecutionId: fixture.WorkflowExecutionId,
+            intentKind: RulesNativeBoundary.StartKind));
+        Assert.Empty(pending);
+
+        var claims = scope.ServiceProvider.GetRequiredService<IRuntimePostCommitOutboxClaimStore>();
+        var unsettled = await claims.ListClaimedAsync(new RuntimePostCommitOutboxClaimedQuery(
+            fixture.WorkflowExecutionId, RulesNativeBoundary.StartKind, limit: 16));
+        Assert.Empty(unsettled);
     }
 }

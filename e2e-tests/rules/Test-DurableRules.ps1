@@ -25,6 +25,7 @@ param(
 . "$PSScriptRoot/../_ElsaCommon.ps1"
 . "$PSScriptRoot/../_ServerLifecycle.ps1"
 . "$PSScriptRoot/_RulesCommon.ps1"
+. "$PSScriptRoot/../durability/_DurabilityCommon.ps1"
 
 $assemblyItem = Get-Item -LiteralPath $AssemblyPath -ErrorAction Stop
 if ($assemblyItem.PSIsContainer -or $assemblyItem.Extension -ne '.dll') {
@@ -41,141 +42,28 @@ if (-not (Test-Path -LiteralPath $hostDepsPath -PathType Leaf)) {
 $hostRoot = [IO.Path]::GetDirectoryName($assemblyPath)
 $baseUrl = Resolve-ElsaServerBaseUrl
 $contentRoot = New-ElsaContentRoot -Prefix 'elsa-rules-e2e'
+$nativeDatabasePath = Join-Path $contentRoot 'elsa.db'
+$rulesDatabasePath = Join-Path $contentRoot 'rules-runtime.db'
+$snapshotTool = (Resolve-Path "$PSScriptRoot/../../tools/rules/native_outcome_snapshot.py").Path
+$python = if ($env:OS -eq 'Windows_NT') { 'python' } else { 'python3' }
+$snapshotDirectory = if (-not [string]::IsNullOrWhiteSpace($EvidencePath)) {
+    [IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($EvidencePath))
+} else {
+    $contentRoot
+}
+if ([string]::IsNullOrWhiteSpace($snapshotDirectory)) { throw 'Could not resolve the native snapshot output directory.' }
+New-Item -Path $snapshotDirectory -ItemType Directory -Force | Out-Null
 $success = $false
 $runEvidence = [System.Collections.Generic.List[object]]::new()
+$nativeOutcomeSnapshotEvidence = [System.Collections.Generic.List[object]]::new()
 $startedAt = [DateTimeOffset]::UtcNow
-
-function New-RulesActivityNode {
-    param(
-        [Parameter(Mandatory)][string] $NodeId,
-        [Parameter(Mandatory)][string] $VersionId,
-        [Parameter(Mandatory)][string] $Program,
-        [Parameter(Mandatory)][string[]] $InitialFacts,
-        [Parameter(Mandatory)][int] $MaxRounds
-    )
-
-    New-ActivityNode -NodeId $NodeId -VersionId $VersionId -Inputs @(
-        (New-LiteralInput -ReferenceKey 'Program' -Value $Program),
-        (New-LiteralInput -ReferenceKey 'InitialFacts' -Value $InitialFacts),
-        (New-LiteralInput -ReferenceKey 'MaxRounds' -Value $MaxRounds)
-    )
-}
-
-function New-RulesResultCaptureNode {
-    param([Parameter(Mandatory)][string] $ProducerScopeId)
-
-    $resultBinding = @{
-        value = @{
-            producerNodeId = 'rules'
-            projectionKey = '$result'
-            producerScopeId = $ProducerScopeId
-        }
-        expressionType = 'ActivityResult'
-    }
-    New-SetOutputNode -NodeId 'capture-rules-result' -OutputName 'rulesResult' `
-        -Value $resultBinding -ValueAlias 'Elsa.Any'
-}
-
-function Get-FieldValue {
-    param([AllowNull()] $Object, [Parameter(Mandatory)][string] $Name)
-    if ($null -eq $Object) { return $null }
-    if ($Object -is [System.Collections.IDictionary] -and $Object.Contains($Name)) { return $Object[$Name] }
-    $property = $Object.PSObject.Properties[$Name]
-    if ($property) { return $property.Value }
-    return $null
-}
-
-function Convert-DiagnosticSnapshot {
-    param([AllowNull()] $Snapshot)
-    if ($null -eq $Snapshot) { return $null }
-
-    $snapshotKind = Get-FieldValue -Object $Snapshot -Name 'kind'
-    switch ($snapshotKind) {
-        'object' {
-            if ((Get-FieldValue -Object $Snapshot -Name 'truncated') -eq $true) {
-                throw 'The native Rules result diagnostic snapshot was truncated.'
-            }
-            $properties = @(Get-FieldValue -Object $Snapshot -Name 'properties')
-            $values = [ordered]@{}
-            foreach ($property in $properties) {
-                $name = [string](Get-FieldValue -Object $property -Name 'name')
-                if ([string]::IsNullOrWhiteSpace($name) -or $name -eq '...') {
-                    throw 'The native Rules result diagnostic snapshot omitted an object property.'
-                }
-                $values[$name] = Convert-DiagnosticSnapshot (Get-FieldValue -Object $property -Name 'value')
-            }
-            return [pscustomobject]$values
-        }
-        'array' {
-            if ((Get-FieldValue -Object $Snapshot -Name 'truncated') -eq $true) {
-                throw 'The native Rules result diagnostic snapshot truncated its fact array.'
-            }
-            $items = [System.Collections.Generic.List[object]]::new()
-            foreach ($item in @(Get-FieldValue -Object $Snapshot -Name 'items')) {
-                $items.Add((Convert-DiagnosticSnapshot $item))
-            }
-            $itemCount = Get-FieldValue -Object $Snapshot -Name 'itemCount'
-            if ($null -ne $itemCount -and [int]$itemCount -ne $items.Count) {
-                throw 'The native Rules result diagnostic snapshot did not retain every array item.'
-            }
-            return ,$items.ToArray()
-        }
-        'string' {
-            if ((Get-FieldValue -Object $Snapshot -Name 'truncated') -eq $true) {
-                throw 'A string in the native Rules result diagnostic snapshot was truncated.'
-            }
-            return Get-FieldValue -Object $Snapshot -Name 'preview'
-        }
-        { $_ -in @('number', 'scalar') } { return Get-FieldValue -Object $Snapshot -Name 'value' }
-        'null' { return $null }
-        default { return $Snapshot }
-    }
-}
-
-function Get-NativeResultSummary {
-    param([Parameter(Mandatory)] $Instance)
-
-    $outputProperty = @($Instance.outputs.PSObject.Properties | Where-Object { $_.Name -ceq 'rulesResult' })
-    if ($outputProperty.Count -ne 1) { throw 'The public workflow-instance response did not contain exactly one rulesResult output.' }
-    $output = $outputProperty[0].Value
-    if ((Get-FieldValue -Object $output -Name 'isRedacted') -ne $false) {
-        throw 'The public workflow-instance API did not expose the native Rules result inline.'
-    }
-
-    $payload = Convert-DiagnosticSnapshot (Get-FieldValue -Object $output -Name 'value')
-    $kindValue = Get-FieldValue -Object $payload -Name 'kind'
-    $kindText = [string]$kindValue
-    $kind = switch ($kindText) {
-        { $_ -in @('Succeeded', '0') } { 'Succeeded'; break }
-        { $_ -in @('Faulted', '1') } { 'Faulted'; break }
-        { $_ -in @('Cancelled', '2') } { 'Cancelled'; break }
-        { $_ -in @('Refused', '3') } { 'Refused'; break }
-        default { throw "The public Rules result had an unknown terminal kind '$kindText'." }
-    }
-    $facts = @(Get-FieldValue -Object $payload -Name 'resultFacts')
-    $atoms = @($facts | ForEach-Object { [string](Get-FieldValue -Object $_ -Name 'atom') } | Sort-Object -CaseSensitive)
-    if ($atoms | Where-Object { [string]::IsNullOrWhiteSpace($_) }) {
-        throw 'The public Rules result contained an empty fact atom.'
-    }
-
-    $diagnostic = Get-FieldValue -Object $payload -Name 'diagnostic'
-    [pscustomobject]@{
-        Kind = $kind
-        CommittedRounds = [int](Get-FieldValue -Object $payload -Name 'committedRounds')
-        ResultSchemaVersion = [int](Get-FieldValue -Object $payload -Name 'resultSchemaVersion')
-        ResultFacts = $atoms
-        DiagnosticCode = Get-FieldValue -Object $diagnostic -Name 'code'
-        FinalFactsSha256 = [string](Get-FieldValue -Object $payload -Name 'finalFactsSha256')
-        IsRedacted = $false
-        OutputType = Get-FieldValue -Object $output -Name 'type'
-    }
-}
 
 function Invoke-PublishedWorkflow {
     param(
         [Parameter(Mandatory)] $Context,
         [Parameter(Mandatory)] $RootActivity,
-        [Parameter(Mandatory)][string] $Name
+        [Parameter(Mandatory)][string] $Name,
+        [switch] $StartOnly
     )
 
     $definition = Submit-Workflow -Ctx $Context -Name $Name -Description 'Durable Rules native runtime acceptance.' -RootActivity $RootActivity
@@ -184,12 +72,217 @@ function Invoke-PublishedWorkflow {
     if ($execution.commandDispatchStatus -ne 'Accepted') {
         throw "Workflow start was not accepted: $($execution.commandDispatchStatus)."
     }
-    $instance = Wait-WorkflowInstance -Ctx $Context -ExecutionId $execution.workflowExecutionId -TimeoutSeconds 180
+    $instance = if ($StartOnly) {
+        $null
+    } else {
+        Wait-WorkflowInstance -Ctx $Context -ExecutionId $execution.workflowExecutionId -TimeoutSeconds 180
+    }
     return [pscustomobject]@{
         Definition = $definition
         Publication = $publication
         Execution = $execution
         Instance = $instance
+    }
+}
+
+function Wait-HeldSiblingFlowchart {
+    param(
+        [Parameter(Mandatory)] $Context,
+        [Parameter(Mandatory)][string] $ExecutionId,
+        [int] $TimeoutSeconds = 180
+    )
+
+    $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
+    do {
+        $instance = Get-WorkflowInstance -Ctx $Context -ExecutionId $ExecutionId
+        $rules = @($instance.activities | Where-Object { $_.executableNodeId -ceq 'rules' })
+        $wait = @($instance.activities | Where-Object { $_.executableNodeId -ceq 'wait' })
+        $capture = @($instance.activities | Where-Object { $_.executableNodeId -ceq 'capture-rules-result' })
+        if ($rules.Count -eq 1 -and $rules[0].status -eq 'Completed' -and
+            $wait.Count -eq 1 -and $wait[0].status -eq 'Suspended' -and
+            $capture.Count -eq 1 -and $capture[0].status -eq 'Completed' -and
+            $instance.instance.status -eq 'Running') {
+            return $instance
+        }
+        Start-Sleep -Milliseconds 250
+    } while ([DateTimeOffset]::UtcNow -lt $deadline)
+
+    if ($instance) { Show-WorkflowInstance -Instance $instance }
+    throw "Flowchart '$ExecutionId' did not reach the bounded state where Rules and result capture are complete while its Event sibling remains suspended."
+}
+
+function Assert-HeldSiblingFlowchart {
+    param([Parameter(Mandatory)] $Instance, [Parameter(Mandatory)][string] $Scenario)
+
+    if ($Instance.instance.status -ne 'Running' -or @($Instance.incidents).Count -ne 0) {
+        throw "$Scenario parent was not Running without incidents while the Event sibling was held."
+    }
+    foreach ($nodeId in @('fork', 'rules', 'capture-rules-result', 'wait')) {
+        if ((Get-NodeRunCount -Instance $Instance -NodeId $nodeId) -ne 1) {
+            throw "$Scenario expected one activity record for '$nodeId'."
+        }
+    }
+    if ((Get-RequiredNodeExecution -Instance $Instance -NodeId 'fork').status -ne 'Completed' -or
+        (Get-RequiredNodeExecution -Instance $Instance -NodeId 'rules').status -ne 'Completed' -or
+        (Get-RequiredNodeExecution -Instance $Instance -NodeId 'capture-rules-result').status -ne 'Completed' -or
+        (Get-RequiredNodeExecution -Instance $Instance -NodeId 'wait').status -ne 'Suspended' -or
+        (Get-NodeRunCount -Instance $Instance -NodeId 'join') -ne 0 -or
+        (Get-NodeRunCount -Instance $Instance -NodeId 'after-rules') -ne 0) {
+        throw "$Scenario did not retain the expected held-sibling state: Rules/capture complete, Event suspended, join/final absent."
+    }
+
+    return Get-VerifiedRulesResultSnapshot -Instance $Instance -Scenario $Scenario
+}
+
+function Assert-CompletedHeldSiblingFlowchart {
+    param(
+        [Parameter(Mandatory)] $Instance,
+        [Parameter(Mandatory)][string] $Scenario,
+        [Parameter(Mandatory)][string] $SnapshotPath
+    )
+
+    if ($Instance.instance.status -notin @('Completed', 'Finished') -or @($Instance.incidents).Count -ne 0) {
+        throw "$Scenario did not complete without incidents."
+    }
+    foreach ($nodeId in @('fork', 'rules', 'capture-rules-result', 'wait', 'join', 'after-rules')) {
+        if ((Get-NodeRunCount -Instance $Instance -NodeId $nodeId) -ne 1 -or
+            (Get-RequiredNodeExecution -Instance $Instance -NodeId $nodeId).status -ne 'Completed') {
+            throw "$Scenario expected one completed activity record for '$nodeId'."
+        }
+    }
+    $nativeSnapshot = Get-NativeInternalAttemptSnapshot -WorkflowExecutionId $Instance.instance.workflowExecutionId `
+        -Phase $Scenario -Path $SnapshotPath
+    $joinAttempts = Assert-NativeInternalAttemptCount -Snapshot $nativeSnapshot -WorkflowExecutionId $Instance.instance.workflowExecutionId `
+        -NodeId 'join' -Scenario $Scenario
+    $followingAttempts = Assert-NativeInternalAttemptCount -Snapshot $nativeSnapshot -WorkflowExecutionId $Instance.instance.workflowExecutionId `
+        -NodeId 'after-rules' -Scenario $Scenario
+    $resultSnapshot = Get-VerifiedRulesResultSnapshot -Instance $Instance -Scenario $Scenario
+    return [pscustomobject]@{
+        SnapshotTypeName = $resultSnapshot.SnapshotTypeName
+        PayloadPropertyNames = $resultSnapshot.PayloadPropertyNames
+        ResultSummary = $resultSnapshot.ResultSummary
+        JoinInternalAttemptCount = $joinAttempts
+        FollowingInternalAttemptCount = $followingAttempts
+    }
+}
+
+function Get-NativeInternalAttemptSnapshot {
+    param(
+        [Parameter(Mandatory)][string] $WorkflowExecutionId,
+        [Parameter(Mandatory)][string] $Phase,
+        [Parameter(Mandatory)][string] $Path
+    )
+
+    $arguments = @('--native-db', $nativeDatabasePath, '--rules-db', $rulesDatabasePath,
+        '--output', $Path, '--phase', $Phase, '--workflow-id', $WorkflowExecutionId)
+    $output = & $python $snapshotTool @arguments 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "The read-only '$Phase' native outcome snapshot failed: $($output -join ' ')"
+    }
+
+    $snapshot = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+    if ($snapshot.schemaVersion -ne 1 -or -not $snapshot.snapshotSha256) {
+        throw "The read-only '$Phase' native outcome snapshot did not return its expected schema and digest."
+    }
+    $fileHash = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+    $nativeOutcomeSnapshotEvidence.Add([pscustomobject]@{
+        phase = $Phase
+        path = $Path
+        fileSha256 = $fileHash
+        snapshotSha256 = [string]$snapshot.snapshotSha256
+        workflowExecutionId = $WorkflowExecutionId
+    })
+    return $snapshot
+}
+
+function Assert-NativeInternalAttemptCount {
+    param(
+        [Parameter(Mandatory)] $Snapshot,
+        [Parameter(Mandatory)][string] $WorkflowExecutionId,
+        [Parameter(Mandatory)][string] $NodeId,
+        [Parameter(Mandatory)][string] $Scenario
+    )
+
+    $workflowSummaries = @($Snapshot.native.workflowSummaries | Where-Object {
+        $_.workflowExecutionId -ceq $WorkflowExecutionId
+    })
+    if ($workflowSummaries.Count -ne 1) {
+        throw "$Scenario native snapshot did not contain exactly one workflow row for '$WorkflowExecutionId'."
+    }
+    $activities = @($workflowSummaries[0].activities | Where-Object { $_.executableNodeId -ceq $NodeId })
+    if ($activities.Count -ne 1 -or $activities[0].status -cne 'Completed' -or
+        $null -eq $activities[0].attemptCountInternal -or [int]$activities[0].attemptCountInternal -ne 1) {
+        $status = if ($activities.Count -eq 1) { $activities[0].status } else { '<missing or duplicated>' }
+        $attemptCount = if ($activities.Count -eq 1) { $activities[0].attemptCountInternal } else { '<missing or duplicated>' }
+        throw "$Scenario native activity '$NodeId' had status '$status' and internal attempt count '$attemptCount'; expected Completed and exactly one persisted attempt."
+    }
+    return [int]$activities[0].attemptCountInternal
+}
+
+function Get-VerifiedRulesResultSnapshot {
+    param([Parameter(Mandatory)] $Instance, [Parameter(Mandatory)][string] $Scenario)
+
+    $summary = Get-NativeResultSummary -Instance $Instance
+    $outputs = Get-FieldValue -Object $Instance -Name 'outputs'
+    $output = Get-FieldValue -Object $outputs -Name 'rulesResult'
+    $snapshot = Get-FieldValue -Object $output -Name 'value'
+    $snapshotTypeName = Get-FieldValue -Object $snapshot -Name 'typeName'
+    if ($snapshotTypeName -cne 'Elsa.Any') {
+        throw "$Scenario Rules output diagnostic snapshot type was '$snapshotTypeName', expected Elsa.Any."
+    }
+
+    # SetOutput targets Elsa.Any. The public workflow-output view exposes this snapshot typeName, not its
+    # underlying output type descriptor or CLR runtime type, so verify the full JSON shape and contents instead.
+    if ((Get-FieldValue -Object $snapshot -Name 'kind') -cne 'object') {
+        throw "$Scenario Rules output was not captured as an object snapshot."
+    }
+    $payload = Convert-DiagnosticSnapshot $snapshot
+    $payloadPropertyNames = @($payload.PSObject.Properties.Name | Sort-Object -CaseSensitive)
+    $expectedPropertyNames = @('committedRounds', 'diagnostic', 'finalFactsSha256', 'kind', 'resultFacts', 'resultSchemaVersion', 'terminalId')
+    if (($payloadPropertyNames -join "`n") -cne ($expectedPropertyNames -join "`n") -or
+        [string]::IsNullOrWhiteSpace([string](Get-FieldValue -Object $payload -Name 'terminalId'))) {
+        throw "$Scenario inline Rules payload did not match the complete RuleTerminalResult JSON property shape."
+    }
+    if ($summary.Kind -ne 'Succeeded' -or $summary.CommittedRounds -ne 2 -or
+        $summary.ResultSchemaVersion -ne 1 -or $summary.DiagnosticCode -or
+        $summary.FinalFactsSha256 -notmatch '^[0-9a-f]{64}$' -or
+        ($summary.ResultFacts -join "`n") -cne "derived`nseed") {
+        throw "$Scenario native inline result mismatch: kind=$($summary.Kind), rounds=$($summary.CommittedRounds), facts=$($summary.ResultFacts -join ',')."
+    }
+
+    $resultSummary = [pscustomobject]@{
+        Kind = $summary.Kind
+        CommittedRounds = $summary.CommittedRounds
+        ResultSchemaVersion = $summary.ResultSchemaVersion
+        ResultFacts = @($summary.ResultFacts)
+        DiagnosticCode = $summary.DiagnosticCode
+        FinalFactsSha256 = $summary.FinalFactsSha256
+        IsRedacted = $summary.IsRedacted
+    }
+    [pscustomobject]@{
+        SnapshotTypeName = $snapshotTypeName
+        PayloadPropertyNames = $payloadPropertyNames
+        ResultSummary = $resultSummary
+    }
+}
+
+function Assert-SameObservedRulesResultSnapshot {
+    param([Parameter(Mandatory)] $Expected, [Parameter(Mandatory)] $Actual, [Parameter(Mandatory)][string] $Scenario)
+
+    $expectedSnapshot = [pscustomobject]@{
+        SnapshotTypeName = $Expected.SnapshotTypeName
+        PayloadPropertyNames = $Expected.PayloadPropertyNames
+        ResultSummary = $Expected.ResultSummary
+    }
+    $actualSnapshot = [pscustomobject]@{
+        SnapshotTypeName = $Actual.SnapshotTypeName
+        PayloadPropertyNames = $Actual.PayloadPropertyNames
+        ResultSummary = $Actual.ResultSummary
+    }
+    $expectedJson = ConvertTo-Json -InputObject $expectedSnapshot -Depth 20 -Compress
+    $actualJson = ConvertTo-Json -InputObject $actualSnapshot -Depth 20 -Compress
+    if ($actualJson -cne $expectedJson) {
+        throw "$Scenario observed Rules result snapshot or content changed across the native workflow lifecycle."
     }
 }
 
@@ -210,13 +303,7 @@ function Assert-SuccessfulRulesResult {
     }
     if (@($Instance.incidents).Count -ne 0) { throw "$Scenario completed with $(@($Instance.incidents).Count) incident(s)." }
 
-    $result = Get-NativeResultSummary -Instance $Instance
-    if ($result.Kind -ne 'Succeeded' -or $result.CommittedRounds -ne 2 -or $result.ResultSchemaVersion -ne 1 -or
-        $result.DiagnosticCode -or $result.FinalFactsSha256 -notmatch '^[0-9a-f]{64}$' -or
-        ($result.ResultFacts -join "`n") -cne "derived`nseed") {
-        throw "$Scenario native inline result mismatch: kind=$($result.Kind), rounds=$($result.CommittedRounds), facts=$($result.ResultFacts -join ',')."
-    }
-    return $result
+    return (Get-VerifiedRulesResultSnapshot -Instance $Instance -Scenario $Scenario).ResultSummary
 }
 
 try {
@@ -237,6 +324,9 @@ try {
     }
     $flowchartVersion = Invoke-Step 'resolve Flowchart catalog entry' {
         Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Flowchart.Activities.Flowchart'
+    }
+    $eventVersion = Invoke-Step 'resolve Event catalog entry' {
+        Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Primitives.Activities.Event'
     }
 
     $program = '{"formatVersion":1,"languageId":"elsa.rules.finite-positive","languageVersion":1,"vocabulary":["derived","seed"],"rules":[{"id":"derive","premises":["seed"],"conclusion":"derived"}]}'
@@ -297,6 +387,108 @@ try {
         RulesActivityStatus = (Get-RequiredNodeExecution -Instance $flowchartRun.Instance -NodeId 'rules').status
         FollowingActivityStatus = (Get-RequiredNodeExecution -Instance $flowchartRun.Instance -NodeId 'after-rules').status
         NativeResult = $flowchartResult
+    })
+
+    $heldFlowchartId = "RulesFlowchartHeldSibling-$([guid]::NewGuid().ToString('N'))"
+    $heldEventName = "rules-held-sibling-$([guid]::NewGuid().ToString('N'))"
+    $heldFork = New-ActivityNode -NodeId 'fork' -VersionId $writeLineVersion -Inputs @(
+        (New-LiteralInput -ReferenceKey 'text' -Value 'Start both branches before waiting at the join.')
+    )
+    $heldRules = New-RulesActivityNode -NodeId 'rules' -VersionId $runRulesVersion `
+        -Program $program -InitialFacts @('seed') -MaxRounds 4
+    $heldEvent = New-EventWaitNode -NodeId 'wait' -EventVersionId $eventVersion -EventName $heldEventName
+    $heldCapture = New-RulesResultCaptureNode -ProducerScopeId 'scope:root'
+    $heldJoin = New-ActivityNode -NodeId 'join' -VersionId $writeLineVersion -Inputs @(
+        (New-LiteralInput -ReferenceKey 'text' -Value 'Both the Rules and Event branches reached the join.')
+    )
+    $heldAfter = New-ActivityNode -NodeId 'after-rules' -VersionId $writeLineVersion -Inputs @(
+        (New-LiteralInput -ReferenceKey 'text' -Value 'The held-sibling Flowchart continued after its join.')
+    )
+    $heldFlowchartStructure = @{
+        kind = 'elsa.flowchart.structure'
+        schemaVersion = '1.0.0'
+        payload = @{
+            startNodeId = 'fork'
+            activities = @($heldFork, $heldRules, $heldEvent, $heldCapture, $heldJoin, $heldAfter)
+            connections = @(
+                @{ id = 'fork-to-rules'; source = @{ nodeId = 'fork'; port = 'Done' }; target = @{ nodeId = 'rules' } },
+                @{ id = 'fork-to-event'; source = @{ nodeId = 'fork'; port = 'Done' }; target = @{ nodeId = 'wait' } },
+                @{ id = 'rules-to-capture'; source = @{ nodeId = 'rules'; port = 'Done' }; target = @{ nodeId = 'capture-rules-result' } },
+                @{ id = 'capture-to-join'; source = @{ nodeId = 'capture-rules-result'; port = 'Done' }; target = @{ nodeId = 'join' } },
+                @{ id = 'event-to-join'; source = @{ nodeId = 'wait'; port = 'Done' }; target = @{ nodeId = 'join' } },
+                @{ id = 'join-to-after'; source = @{ nodeId = 'join'; port = 'Done' }; target = @{ nodeId = 'after-rules' } }
+            )
+            # Parallel fork on this node; leave the host's configured default join policy in force.
+            nodeMetadata = @{ fork = @{ policyKind = 'parallelFork' } }
+            connectionMetadata = @{}
+        }
+    }
+    $heldFlowchartRoot = New-ActivityNode -NodeId 'held-flowchart-root' -VersionId $flowchartVersion `
+        -Structure $heldFlowchartStructure
+    $heldFlowchartRun = Invoke-Step 'submit, publish and start held-sibling Flowchart Rules workflow' {
+        Invoke-PublishedWorkflow -Context $ctx -RootActivity $heldFlowchartRoot -Name $heldFlowchartId -StartOnly
+    }
+    $heldFlowchartRun.Instance = Wait-HeldSiblingFlowchart -Context $ctx `
+        -ExecutionId $heldFlowchartRun.Execution.workflowExecutionId -TimeoutSeconds 180
+    $heldPendingObservation = Assert-HeldSiblingFlowchart -Instance $heldFlowchartRun.Instance -Scenario 'Held-sibling Flowchart before restart'
+
+    $heldRestartProcessIdBefore = $script:OwnedElsaServer.Process.Id
+    Invoke-Step 'restart the owned Workbench while the Flowchart Event sibling is held' { Restart-OwnedElsaServer }
+    $heldRestartProcessIdAfter = $script:OwnedElsaServer.Process.Id
+    $ctx = Connect-Elsa -BaseUrl $baseUrl -Username $Username -Password $Password
+    $heldAfterRestart = Get-WorkflowInstance -Ctx $ctx -ExecutionId $heldFlowchartRun.Execution.workflowExecutionId
+    $heldRestartObservation = Assert-HeldSiblingFlowchart -Instance $heldAfterRestart -Scenario 'Held-sibling Flowchart after restart'
+    Assert-SameObservedRulesResultSnapshot -Expected $heldPendingObservation -Actual $heldRestartObservation `
+        -Scenario 'Held-sibling Flowchart after restart'
+
+    $heldResume = Invoke-Step 'resume the held Flowchart Event sibling' {
+        Invoke-ResumeStimulus -Ctx $ctx -EventName $heldEventName
+    }
+    if ($heldResume.resumedCount -ne 1) {
+        throw "The held Flowchart Event did not resume exactly its waiting branch (resumedCount=$($heldResume.resumedCount))."
+    }
+    $heldCompleted = Wait-WorkflowInstance -Ctx $ctx `
+        -ExecutionId $heldFlowchartRun.Execution.workflowExecutionId -TimeoutSeconds 180
+    $heldFinalObservation = Assert-CompletedHeldSiblingFlowchart -Instance $heldCompleted `
+        -Scenario 'Held-sibling Flowchart after Event resume' `
+        -SnapshotPath (Join-Path $snapshotDirectory 'held-flowchart-after-event-resume.snapshot.json')
+    Assert-SameObservedRulesResultSnapshot -Expected $heldPendingObservation -Actual $heldFinalObservation `
+        -Scenario 'Held-sibling Flowchart after Event resume'
+
+    $heldDuplicateResume = Invoke-Step 'reject duplicate held Flowchart Event stimulus' {
+        Invoke-ResumeStimulus -Ctx $ctx -EventName $heldEventName
+    }
+    if ($heldDuplicateResume.resumedCount -ne 0) {
+        throw "A duplicate held Flowchart Event stimulus resumed $($heldDuplicateResume.resumedCount) branch(es), expected zero."
+    }
+    $heldAfterDuplicate = Get-WorkflowInstance -Ctx $ctx -ExecutionId $heldFlowchartRun.Execution.workflowExecutionId
+    $heldDuplicateObservation = Assert-CompletedHeldSiblingFlowchart -Instance $heldAfterDuplicate `
+        -Scenario 'Held-sibling Flowchart after duplicate Event stimulus' `
+        -SnapshotPath (Join-Path $snapshotDirectory 'held-flowchart-after-duplicate-stimulus.snapshot.json')
+    Assert-SameObservedRulesResultSnapshot -Expected $heldPendingObservation -Actual $heldDuplicateObservation `
+        -Scenario 'Held-sibling Flowchart after duplicate Event stimulus'
+
+    $runEvidence.Add([pscustomobject]@{
+        Scenario = 'FlowchartHeldSibling'
+        WorkflowExecutionId = $heldFlowchartRun.Execution.workflowExecutionId
+        ArtifactId = $heldFlowchartRun.Publication.artifactId
+        EventName = $heldEventName
+        BeforeResumeStatus = $heldAfterRestart.instance.status
+        BeforeResumeRulesStatus = (Get-RequiredNodeExecution -Instance $heldAfterRestart -NodeId 'rules').status
+        BeforeResumeEventStatus = (Get-RequiredNodeExecution -Instance $heldAfterRestart -NodeId 'wait').status
+        BeforeResumeJoinCount = Get-NodeRunCount -Instance $heldAfterRestart -NodeId 'join'
+        BeforeResumeFollowingCount = Get-NodeRunCount -Instance $heldAfterRestart -NodeId 'after-rules'
+        HeldRestartProcessIds = @($heldRestartProcessIdBefore, $heldRestartProcessIdAfter)
+        ResumeCount = $heldResume.resumedCount
+        DuplicateResumeCount = $heldDuplicateResume.resumedCount
+        AfterResumeStatus = $heldAfterDuplicate.instance.status
+        JoinCountAfterDuplicate = Get-NodeRunCount -Instance $heldAfterDuplicate -NodeId 'join'
+        FollowingCountAfterDuplicate = Get-NodeRunCount -Instance $heldAfterDuplicate -NodeId 'after-rules'
+        NativeResultSnapshotTypeName = $heldDuplicateObservation.SnapshotTypeName
+        NativeResultPayloadPropertyNames = $heldDuplicateObservation.PayloadPropertyNames
+        NativeResultSummary = $heldDuplicateObservation.ResultSummary
+        JoinInternalAttemptCount = $heldDuplicateObservation.JoinInternalAttemptCount
+        FollowingInternalAttemptCount = $heldDuplicateObservation.FollowingInternalAttemptCount
     })
 
     $budgetId = "RulesBudgetFault-$([guid]::NewGuid().ToString('N'))"
@@ -381,6 +573,12 @@ try {
     $persistedSequenceResult = Assert-SuccessfulRulesResult -Instance $persistedSequence -Scenario 'Sequence after restart'
     $persistedFlowchart = Get-WorkflowInstance -Ctx $ctx -ExecutionId $flowchartRun.Execution.workflowExecutionId
     $persistedFlowchartResult = Assert-SuccessfulRulesResult -Instance $persistedFlowchart -Scenario 'Flowchart after restart'
+    $persistedHeldFlowchart = Get-WorkflowInstance -Ctx $ctx -ExecutionId $heldFlowchartRun.Execution.workflowExecutionId
+    $persistedHeldObservation = Assert-CompletedHeldSiblingFlowchart -Instance $persistedHeldFlowchart `
+        -Scenario 'Held-sibling Flowchart after final restart' `
+        -SnapshotPath (Join-Path $snapshotDirectory 'held-flowchart-after-final-restart.snapshot.json')
+    Assert-SameObservedRulesResultSnapshot -Expected $heldPendingObservation -Actual $persistedHeldObservation `
+        -Scenario 'Held-sibling Flowchart after final restart'
     $restartEvidence = [pscustomobject]@{
         PreviousProcessId = $processIdBeforeRestart
         ReconnectedProcessId = $processIdAfterRestart
@@ -389,6 +587,12 @@ try {
         SequenceNativeResult = $persistedSequenceResult
         FlowchartStatus = $persistedFlowchart.instance.status
         FlowchartNativeResult = $persistedFlowchartResult
+        HeldFlowchartStatus = $persistedHeldFlowchart.instance.status
+        HeldFlowchartNativeResultSnapshotTypeName = $persistedHeldObservation.SnapshotTypeName
+        HeldFlowchartNativeResultPayloadPropertyNames = $persistedHeldObservation.PayloadPropertyNames
+        HeldFlowchartNativeResultSummary = $persistedHeldObservation.ResultSummary
+        HeldFlowchartJoinInternalAttemptCount = $persistedHeldObservation.JoinInternalAttemptCount
+        HeldFlowchartFollowingInternalAttemptCount = $persistedHeldObservation.FollowingInternalAttemptCount
     }
 
     $evidence = [pscustomobject]@{
@@ -401,6 +605,7 @@ try {
         DeploymentReceiptFile = [IO.Path]::GetFileName($receiptPath)
         DeploymentReceiptSha256 = (Get-FileHash -LiteralPath $receiptPath -Algorithm SHA256).Hash.ToLowerInvariant()
         RestartVerification = $restartEvidence
+        NativeOutcomeSnapshots = $nativeOutcomeSnapshotEvidence.ToArray()
         Runs = $runEvidence.ToArray()
     }
     if (-not [string]::IsNullOrWhiteSpace($EvidencePath)) {
@@ -411,9 +616,12 @@ try {
         }
         $evidence | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $resolvedEvidencePath -Encoding utf8
         Write-Host "[evidence] wrote $resolvedEvidencePath"
+    } else {
+        Write-Host "[evidence] native outcome snapshots retained at $snapshotDirectory"
     }
     $success = $true
     Write-Host "SUCCESS - durable Rules REST journey passed $($runEvidence.Count) scenarios on the owned Workbench process." -ForegroundColor Green
 } finally {
-    Remove-OwnedElsaServer -ContentRoot $contentRoot -KeepContentRoot:(-not $success)
+    Remove-OwnedElsaServer -ContentRoot $contentRoot `
+        -KeepContentRoot:((-not $success) -or [string]::IsNullOrWhiteSpace($EvidencePath))
 }

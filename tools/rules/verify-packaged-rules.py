@@ -104,14 +104,17 @@ def main():
     receipt = {'schemaVersion': 1, 'sourceCommit': args.source_ref,
                'publishStateCommit': args.publish_state_ref, 'stage': args.stage,
                'workbenchPackageHostPassed': False, 'nativeRestProofPassed': False, 'nativeInstallationPassed': False,
+               'nativeAdmissionRecoveryPassed': False,
                'directProofPassed': False, 'processBoundaryProofPassed': False, 'processProofPassed': False, 'fullAcceptancePassed': False, 'commands': [],
                'harness': {str(path.relative_to(ROOT)): sha256(path) for path in
                            [Path(__file__), Path(__file__).with_name('package_consumer.py'),
                             Path(__file__).with_name('package_process.py'), Path(__file__).with_name('package_adversarial.py'),
                             Path(__file__).with_name('package_workbench.py'),
                             Path(__file__).with_name('native_upgrade_snapshot.py'),
+                            Path(__file__).with_name('native_outcome_snapshot.py'),
                             ROOT / 'e2e-tests/_ServerLifecycle.ps1', ROOT / 'e2e-tests/_ElsaCommon.ps1',
                             ROOT / 'e2e-tests/durability/_DurabilityCommon.ps1',
+                            ROOT / 'e2e-tests/runtime-alterations/_AlterationCommon.ps1',
                             *sorted((ROOT / 'e2e-tests/rules').glob('*.ps1')),
                             *sorted(Path(__file__).with_name('PackageProbe').glob('*.cs'))]}}
     print('Rules package evidence: ' + str(evidence), flush=True)
@@ -246,6 +249,16 @@ def main():
                 raise ValueError('Workbench REST journey did not record a passing result.')
             receipt['nativeRestEvidence'] = {'path': str(rest_evidence), 'sha256': sha256(rest_evidence)}
             receipt['nativeRestProofPassed'] = True
+            recovery_evidence = evidence / 'native-admission-recovery.json'
+            run([*shell, '-File', ROOT / 'e2e-tests/rules/Test-RulesAdmissionRecovery.ps1',
+                 '-AssemblyPath', host_root / 'Elsa.Workbench.dll',
+                 '-DeploymentReceiptPath', host['deploymentReceipt'],
+                 '-EvidencePath', recovery_evidence], cwd=ROOT)
+            recovery = json.loads(recovery_evidence.read_text(encoding='utf-8-sig'))
+            if recovery.get('passed') is not True:
+                raise ValueError('Native Rules admission recovery did not record a passing result.')
+            receipt['nativeAdmissionRecoveryEvidence'] = {'path': str(recovery_evidence), 'sha256': sha256(recovery_evidence)}
+            receipt['nativeAdmissionRecoveryPassed'] = True
             upgrade_evidence = evidence / 'native-installation.json'
             run([*shell, '-File', ROOT / 'e2e-tests/rules/Test-NativeRulesInstallation.ps1',
                  '-AssemblyPath', host_root / 'Elsa.Workbench.dll',
@@ -269,6 +282,7 @@ def main():
         if not unchanged:
             receipt['workbenchPackageHostPassed'] = False
             receipt['nativeRestProofPassed'] = False
+            receipt['nativeAdmissionRecoveryPassed'] = False
             receipt['nativeInstallationPassed'] = False
             receipt['directProofPassed'] = False
             receipt['processBoundaryProofPassed'] = False
