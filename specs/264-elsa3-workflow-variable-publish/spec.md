@@ -56,7 +56,11 @@ Two throwaway tests, deleted afterwards. One converts the 36 definitions with th
 | A `Variable` binding with no reference key | events-listener, performance-commit-after-every-activity |
 | `VF-COER-001`: `Headers` value `{}` cannot become `System.String[]` | javascript-array-methods, javascript-object-methods |
 
-These three are converter defects outside this unit's scope (FR-005 and the boundary keep this unit to variable
+Found later, in the same family (2026-10-22): an imported RunJavaScript activity whose script takes no arguments
+publishes, then faults at run time with `JavaScript activity arguments must be one JSON object`. The converter leaves
+the Elsa 4 `arguments` input unset, and the evaluator requires a JSON object.
+
+These four are converter defects outside this unit's scope (FR-005 and the boundary keep this unit to variable
 starting values). They are reported to the maintainer as follow-ups. The conversion measurement cannot see any of them,
 because it never publishes.
 
@@ -88,6 +92,13 @@ reports only its first error, so the corpus cannot show the #3122 fix on its own
   `HttpHeaders` cannot be registered. Neither can an enum or CLR type that no host registers. Such a variable runs as
   `Object` in Elsa 4, and its value would stay text where Elsa 3 converted it. Under the same rule, a starting value on a
   type Elsa 4's registry does not know is refused. A variable with no starting value still converts.
+- Q (2026-10-22, PR #3180): Elsa 3 collections and dictionaries with a starting value: refuse them, or convert them?
+  → A (maintainer): convert, and never split text on commas.
+  - Elsa 3 writes a list as `List<T>` and an array as `T[]`. When Elsa 4 knows `T`, the variable becomes `T` with
+    collection kind List or Array, and every item converts to `T`. Otherwise it becomes `Object` holding the array.
+  - The starting value must be a valid JSON array. Anything else is refused with guidance showing the exact JSON array.
+  - `ObjectDictionary` and `HttpHeaders` become `Object` holding a JSON object; anything else is refused.
+  - This matches #3191's rule for Elsa 4 itself: a collection default is always a JSON array.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -152,7 +163,9 @@ it, and read every variable's starting value back; compare each with Elsa 3's ru
 - **FR-001**: A converted variable whose Elsa 3 definition has no starting value MUST have no starting value in Elsa 4.
 - **FR-002**: A converted variable whose Elsa 3 starting value converts in Elsa 4 to the same value as in Elsa 3 MUST
   carry it as authored data that publication accepts, never as an expression.
-- **FR-003**: The starting value in Elsa 4 MUST follow Elsa 3's rule in Root cause for each kind of variable type.
+- **FR-003**: The starting value in Elsa 4 MUST follow Elsa 3's rule in Root cause for each kind of variable type. A
+  collection's starting value MUST be a JSON array and a dictionary's a JSON object; text is never split on commas
+  (clarification 2026-10-22).
 - **FR-004**: The converter MUST refuse a variable whose Elsa 3 starting value cannot be converted to its type in
   strict mode, or whose type Elsa 4's type registry does not know, with a stable diagnostic that names the variable and
   gives guidance in Elsa 3 terms.

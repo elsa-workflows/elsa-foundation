@@ -72,14 +72,14 @@ internal sealed class Elsa3ActivityNormalizer(
         var variables = plan.Definition.Variables;
         for (var index = 0; index < variables.Count; index++)
         {
-            if (Elsa3VariableMapper.TryMap(wellKnownTypeRegistry, objectConverter, variables[index], out _, out var failure))
+            if (Elsa3VariableMapper.TryMap(wellKnownTypeRegistry, objectConverter, variables[index], out _, out var refusal))
                 continue;
             plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(
                 plan,
                 Elsa3MigrationDiagnosticSeverity.Error,
                 VariableValueUnconvertible,
-                failure!,
-                Elsa3VariableMapper.UnconvertibleGuidance,
+                refusal!.Message,
+                refusal.Guidance,
                 $"$.variables[{index}]",
                 new Dictionary<string, string> { ["VariableName"] = variables[index].Name }));
         }
@@ -801,10 +801,10 @@ internal sealed class Elsa3ActivityNormalizer(
                 var variable = item.Deserialize<Elsa3Variable>(Elsa3JsonOptions);
                 if (variable is null || string.IsNullOrWhiteSpace(variable.Id))
                     continue;
-                if (Elsa3VariableMapper.TryMap(wellKnownTypeRegistry, objectConverter, variable, out var mapped, out var failure))
+                if (Elsa3VariableMapper.TryMap(wellKnownTypeRegistry, objectConverter, variable, out var mapped, out var refusal))
                     context.Node.Variables.Add(mapped);
                 else
-                    context.Error(VariableValueUnconvertible, failure!, Elsa3VariableMapper.UnconvertibleGuidance, property);
+                    context.Error(VariableValueUnconvertible, refusal!.Message, refusal.Guidance, property);
             }
         }
         catch (JsonException exception)

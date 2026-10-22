@@ -11,7 +11,10 @@
     { "id": "count", "name": "count", "typeName": "Int32", "value": "5" },
     { "id": "flag", "name": "flag", "typeName": "Boolean", "value": "true" },
     { "id": "raw", "name": "raw", "typeName": "Object", "value": "{\"a\":1}" },
-    { "id": "names", "name": "names", "typeName": "String", "isArray": true, "value": "[\"x\",\"y\"]" }
+    { "id": "names", "name": "names", "typeName": "String", "isArray": true, "value": "[\"x\",\"y\"]" },
+    { "id": "list", "name": "list", "typeName": "List<String>", "value": "[\"a\",\"b\"]" },
+    { "id": "dictionary", "name": "dictionary", "typeName": "ObjectDictionary", "value": "{\"a\":1}" },
+    { "id": "headers", "name": "headers", "typeName": "HttpHeaders", "value": "{\"Accept\":[\"application/json\"]}" }
   ],
   "inputs": [],
   "outputs": [],

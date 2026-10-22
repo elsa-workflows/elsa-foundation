@@ -53,6 +53,32 @@ public sealed class WorkflowVariablePublishTests(ITestOutputHelper output)
         // Elsa 3 kept an Object variable's text unparsed.
         Assert.Equal("\"{\\u0022a\\u0022:1}\"", Variable(run, "raw"));
         Assert.Equal("""["x","y"]""", Variable(run, "names"));
+        // Collections and dictionaries start as JSON, not text.
+        Assert.Equal("""["a","b"]""", Variable(run, "list"));
+        Assert.Equal("""{"a":1}""", Variable(run, "dictionary"));
+        Assert.Equal("""{"Accept":["application/json"]}""", Variable(run, "headers"));
+    }
+
+    /// <summary>A List&lt;String&gt; variable becomes a String list in Elsa 4 and still receives a captured array.</summary>
+    [Fact]
+    public async Task A_list_variable_receives_a_captured_array()
+    {
+        await using var host = await Elsa3ImportHost.StartAsync();
+        var import = await host.ImportSelectionAsync("import-variable-captures-list", ["workflow-variable-captures-list", "publish-event-publisher-list"]);
+        Assert.True(import.Apply.StatusCode == HttpStatusCode.Created, import.Apply.Body.ToJsonString());
+        var waiter = await host.PublishWorkflowAsync(Elsa3ImportHost.Required(import.Item("workflow-variable-captures-list-v1"), "workflowVersionId"));
+        var publisher = await host.PublishWorkflowAsync(Elsa3ImportHost.Required(import.Item("publish-event-publisher-list-v1"), "workflowVersionId"));
+
+        var waiting = await host.ExecuteAsync(waiter);
+        await host.WaitForAsync(waiting, run => run.Activities.Any(state => IsEvent(state) && state.Status == ActivityExecutionStatus.Suspended));
+        var published = await host.RunAsync(publisher);
+        var run = await host.WaitForSettledAsync(waiting);
+        output.WriteLine(run.Describe());
+
+        Assert.True(published.Workflow?.Status == WorkflowExecutionStatus.Completed, published.Describe());
+        Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
+        Assert.Empty(run.Incidents);
+        Assert.Equal("""["a","b"]""", Variable(run, "names"));
     }
 
     /// <summary>The raw JSON of the variable in the run's root frame.</summary>

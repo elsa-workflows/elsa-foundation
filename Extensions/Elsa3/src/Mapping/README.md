@@ -60,13 +60,21 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   - no value → no starting value (the variable starts empty);
   - `Object` → the text, unparsed, even when it is JSON;
   - `String`, primitives and enums → the text converted to the type (`"5"` → `5`, `"true"` → `true`);
-  - an array or other structured type → text starting with `{` or `[` parsed as JSON.
+  - a collection (`List<T>`, `T[]` or an array flag) → a JSON array. When Elsa 4 knows `T`, the variable is `T` with
+    collection kind List or Array and every item is converted to `T`; otherwise it is `Object` holding the array;
+  - `ObjectDictionary` and `HttpHeaders` → `Object` holding a JSON object.
 
-  `ELS3-ACTIVITY-VARIABLE-VALUE-UNCONVERTIBLE` refuses a starting value in two cases. One is a value the rule cannot
-  convert: `"abc"` for an `Int32`, which Elsa 3 silently started as `0`, or malformed JSON, which it started empty with a
-  warning. The other is a value on a type Elsa 4's type registry does not know. That covers Elsa 3's `List<String>`,
-  `ObjectDictionary` and `HttpHeaders`, and any enum or CLR type the host registers no alias for: such a variable runs as
-  `Object`, so its value would stay text. A variable with no starting value converts whatever its type.
+  Text is never split on commas. `ELS3-ACTIVITY-VARIABLE-VALUE-UNCONVERTIBLE` refuses, with the exact fix, a starting
+  value that:
+  - is not a JSON array for a collection (the guidance shows the array the author most likely meant: `a, b` →
+    `["a","b"]`);
+  - has an item that does not convert to the element type;
+  - is not a JSON object for a dictionary;
+  - does not convert to its scalar type (`"abc"` for an `Int32`, which Elsa 3 silently started as `0`);
+  - sits on a scalar type Elsa 4's type registry does not know (an enum or CLR type the host registers no alias for):
+    such a variable runs as `Object`, so its value would stay text.
+
+  A variable with no starting value converts whatever its type.
 - **HttpEndpoint headers and query string.** A captured `Headers` or `QueryStringData` gets a synthesized `set` node
   right after the endpoint. It rebuilds the Elsa 3 shape from Elsa 4's `Request` output (one value → string, several →
   array) into the captured variable, or into `elsa3.http.{node}.headers` / `.query` for a bare memory slot. The

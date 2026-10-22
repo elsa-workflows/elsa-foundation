@@ -29,6 +29,10 @@ No persisted model changes. The change is in how one Elsa 3 shape maps to one El
 | `Object` | any text, including JSON | the text |
 | `String` | any text | the text |
 | `Int32`, `Boolean`, other primitives, enums | `"5"`, `"true"`, `"OK"` | the converted value |
-| array, list, dictionary, other structured type | text starting `{` or `[` | the parsed value |
-| any non-`Object` type | text that does not convert in strict mode (`"abc"` for `Int32`, malformed JSON) | refused |
-| a type Elsa 4's registry does not know (`List<String>`, `ObjectDictionary`, `HttpHeaders`, an unregistered enum) | any text | refused |
+| `List<T>`, `T[]`, array flag, with `T` known to Elsa 4 | a JSON array | Elsa 4 type `T`, kind List or Array; the items converted to `T` |
+| `List<T>`, `T[]` with `T` unknown (`FormFile[]`) | a JSON array | `Object` holding the array |
+| `ObjectDictionary`, `HttpHeaders` | a JSON object | `Object` holding the object |
+| any collection | text that is not a JSON array (`a, b`) | refused; the guidance shows `["a","b"]` |
+| any dictionary | text that is not a JSON object | refused, with an example object |
+| a scalar type | text that does not convert in strict mode (`"abc"` for `Int32`) | refused |
+| a scalar type Elsa 4's registry does not know (an unregistered enum) | any text | refused |
