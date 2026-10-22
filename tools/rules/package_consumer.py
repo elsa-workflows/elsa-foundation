@@ -21,6 +21,12 @@ def verify_consumer(receipt, evidence, source, feed, run, environment, process_p
     receipt['consumerTemplateSha256'] = hashlib.sha256(template.read_bytes()).hexdigest()
     shutil.copyfile(source / 'global.json', consumer / 'global.json')
     versions = {p['id']: p['version'] for p in receipt['closure']}
+    module_roots = receipt['modules']
+    if not module_roots or len(module_roots) != len(set(module_roots)):
+        raise ValueError('Package receipt must name a nonempty, unique set of module roots.')
+    missing_roots = [package for package in module_roots if package not in versions]
+    if missing_roots:
+        raise ValueError('Module roots are missing from the immutable package closure: ' + ', '.join(missing_roots))
     central = ET.parse(source / 'Directory.Packages.props')
     sqlite = next(p.attrib['Version'] for p in central.findall('.//PackageVersion')
                   if p.attrib['Include'] == 'Microsoft.EntityFrameworkCore.Sqlite')
@@ -33,11 +39,11 @@ def verify_consumer(receipt, evidence, source, feed, run, environment, process_p
         ET.SubElement(properties, key).text = value
     references = ET.SubElement(project, 'ItemGroup')
     ET.SubElement(references, 'FrameworkReference', Include='Microsoft.AspNetCore.App')
-    for package, version in {'Elsa.Rules.Runtime': versions['Elsa.Rules.Runtime'],
-                             'Elsa.Rules.Persistence.EntityFrameworkCore': versions['Elsa.Rules.Persistence.EntityFrameworkCore'],
-                             'Microsoft.EntityFrameworkCore.Sqlite': sqlite,
-                             'Npgsql.EntityFrameworkCore.PostgreSQL': postgres,
-                             'NuGet.Packaging': '7.9.0'}.items():
+    package_references = {package: versions[package] for package in module_roots}
+    package_references.update({'Microsoft.EntityFrameworkCore.Sqlite': sqlite,
+                               'Npgsql.EntityFrameworkCore.PostgreSQL': postgres,
+                               'NuGet.Packaging': '7.9.0'})
+    for package, version in package_references.items():
         ET.SubElement(references, 'PackageReference', Include=package, Version='[' + version + ']')
     ET.indent(project)
     ET.ElementTree(project).write(consumer / 'Rules.PackageProbe.csproj', encoding='unicode')
@@ -95,7 +101,11 @@ def verify_consumer(receipt, evidence, source, feed, run, environment, process_p
     run(['dotnet', executable, 'direct', evidence / 'restored.db', evidence / 'restored.json'], cwd=deployment, env=env)
     verify_identity_control(receipt, evidence, source, feed, deployment, executable, run, env)
     receipt['directProofPassed'] = True
-    receipt['proofScope'] = 'Four-module clean PackageReference direct execution and identity rejection; native/upgrade gates pending.'
+    receipt['consumerModuleRoots'] = module_roots
+    receipt['consumerModuleRootVersions'] = {package: versions[package] for package in module_roots}
+    receipt['consumerPackageReferenceRestorePassed'] = True
+    receipt['proofScope'] = ('Clean PackageReference restore of every packed module root, with direct Rules execution and '
+                             'identity rejection; full native-module execution and upgrade gates remain pending.')
     if process_proof:
         from package_process import verify_processes
         verify_processes(receipt, evidence, source, feed, deployment, executable, run, env)

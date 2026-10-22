@@ -91,7 +91,7 @@ def main():
     parser.add_argument('--publish-state-ref', required=True, type=immutable_commit)
     parser.add_argument('--evidence-dir', required=True, type=Path)
     parser.add_argument('--packed-run', type=Path, help='Reuse a verified immutable pack receipt; consumer caches remain fresh.')
-    parser.add_argument('--stage', choices=('pack', 'direct', 'process'), default='direct',
+    parser.add_argument('--stage', choices=('pack', 'direct', 'process', 'workbench'), default='direct',
                         help='pack retains build artifacts only and does not qualify a consumer.')
     args = parser.parse_args()
     base = args.evidence_dir.expanduser().resolve()
@@ -103,10 +103,14 @@ def main():
     feed.mkdir()
     receipt = {'schemaVersion': 1, 'sourceCommit': args.source_ref,
                'publishStateCommit': args.publish_state_ref, 'stage': args.stage,
+               'workbenchPackageHostPassed': False, 'nativeRestProofPassed': False,
                'directProofPassed': False, 'processBoundaryProofPassed': False, 'processProofPassed': False, 'fullAcceptancePassed': False, 'commands': [],
                'harness': {str(path.relative_to(ROOT)): sha256(path) for path in
                            [Path(__file__), Path(__file__).with_name('package_consumer.py'),
                             Path(__file__).with_name('package_process.py'), Path(__file__).with_name('package_adversarial.py'),
+                            Path(__file__).with_name('package_workbench.py'),
+                            ROOT / 'e2e-tests/_ServerLifecycle.ps1', ROOT / 'e2e-tests/_ElsaCommon.ps1',
+                            *sorted((ROOT / 'e2e-tests/rules').glob('*.ps1')),
                             *sorted(Path(__file__).with_name('PackageProbe').glob('*.cs'))]}}
     print('Rules package evidence: ' + str(evidence), flush=True)
     environment = os.environ.copy()
@@ -214,9 +218,30 @@ def main():
                 raise ValueError('The clean source checkout changed during packing.')
             receipt['packages'] = records
             receipt['packPassed'] = True
-        if args.stage in ('direct', 'process'):
+        if args.stage in ('direct', 'process', 'workbench'):
             from package_consumer import verify_consumer
             verify_consumer(receipt, evidence, source, feed, run, environment, args.stage == 'process')
+        if args.stage == 'workbench':
+            from package_workbench import verify_workbench_package_host
+            host = verify_workbench_package_host(receipt, evidence, source, feed, run, environment,
+                                                 evidence / 'deployment')
+            receipt['workbenchPackageHost'] = host
+            receipt['workbenchPackageHostPassed'] = host['passed']
+            host_root = Path(host['deploymentReceipt']).parent
+            rest_evidence = evidence / 'workbench-rest.json'
+            shell = (['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass'] if os.name == 'nt'
+                     else ['pwsh', '-NoProfile'])
+            run([*shell, '-File', ROOT / 'e2e-tests/rules/Test-DurableRules.ps1',
+                 '-AssemblyPath', host_root / 'Elsa.Workbench.dll',
+                 '-DeploymentReceiptPath', host['deploymentReceipt'],
+                 '-EvidencePath', rest_evidence], cwd=ROOT)
+            rest = json.loads(rest_evidence.read_text(encoding='utf-8-sig'))
+            if rest.get('passed') is not True:
+                raise ValueError('Workbench REST journey did not record a passing result.')
+            receipt['nativeRestEvidence'] = {'path': str(rest_evidence), 'sha256': sha256(rest_evidence)}
+            receipt['nativeRestProofPassed'] = True
+            receipt['proofScope'] = ('Six-module clean package consumer and actual package-backed Workbench REST '
+                                     'journeys; retained-run upgrades and full leaf acceptance remain pending.')
         exit_code = 0
     except (OSError, ValueError, KeyError, RuntimeError, subprocess.SubprocessError, AssertionError) as error:
         receipt['error'] = str(error) or type(error).__name__
@@ -226,6 +251,8 @@ def main():
         unchanged = all(sha256(ROOT / path) == digest for path, digest in receipt['harness'].items())
         receipt['harnessUnchanged'] = unchanged
         if not unchanged:
+            receipt['workbenchPackageHostPassed'] = False
+            receipt['nativeRestProofPassed'] = False
             receipt['directProofPassed'] = False
             receipt['processBoundaryProofPassed'] = False
             receipt['processProofPassed'] = False

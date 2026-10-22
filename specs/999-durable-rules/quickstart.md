@@ -1,6 +1,6 @@
 # Durable Rules acceptance quickstart
 
-Sections 1–3 are runnable for semantics, direct host composition, four-provider store contracts and the four-module package consumer. Section 3 also runs PostgreSQL process replacement, live-successor stale acceptance and isolated persistence controls. Section 4 remains an implementation target. See the [direct-runtime checkpoint](evidence/direct-runtime-checkpoint.md), [provider checkpoint](evidence/provider-checkpoint.md) and [package checkpoint](evidence/package-checkpoint.md) and [process qualification checkpoint](evidence/process-checkpoint.md) for executed evidence; this document alone is not evidence that a command ran. Run heavy commands through the normal build-slot wrapper. Do not parallelize full builds on the shared machine.
+Sections 1–3 are runnable for semantics, direct host composition, four-provider store contracts and the package consumer. Section 3 also runs PostgreSQL process replacement, live-successor stale acceptance and isolated persistence controls. Section 4 describes the package-backed host runner; execution receipts, not these instructions, establish its acceptance. See the [direct-runtime checkpoint](evidence/direct-runtime-checkpoint.md), [provider checkpoint](evidence/provider-checkpoint.md) and [package checkpoint](evidence/package-checkpoint.md) and [process qualification checkpoint](evidence/process-checkpoint.md) for executed evidence; this document alone is not evidence that a command ran. Run heavy commands through the normal build-slot wrapper. Do not parallelize full builds on the shared machine.
 
 ## 1. Focused semantics and direct-runtime tests
 
@@ -31,17 +31,40 @@ python3 tools/rules/verify-packaged-rules.py \
   --evidence-dir /tmp/rules-package-evidence
 ```
 
-Resolve real immutable refs before running; angle-bracket text is a placeholder, never a claimed tested command. The tool rejects mutable or missing refs. It computes repository versions, packs the actual four-module closure, creates a fresh external PackageReference consumer and cache, and records distinct NuGet content/archive/loaded-asset identities. It runs real SQLite-backed direct success, budget fault, replay, incompatible-pin and changed-asset rejection cases. An actual assembly-digest removal control must fail its intended assertion; restoration must pass direct execution again. Each run retains commands, logs, packages, resolved assets and result JSON outside the checkout. No packages are published.
+Resolve real immutable refs before running; angle-bracket text is a placeholder, never a claimed tested command. The tool rejects mutable or missing refs. It computes repository versions, packs the actual module closure, including both native bridge modules when present, creates a fresh external PackageReference consumer and cache, and records distinct NuGet content/archive/loaded-asset identities. It runs real SQLite-backed direct success, budget fault, replay, incompatible-pin and changed-asset rejection cases. An actual assembly-digest removal control must fail its intended assertion; restoration must pass direct execution again. Each run retains commands, logs, packages, resolved assets and result JSON outside the checkout. No packages are published.
 
-Use `--stage pack` for packing only; this never reports a consumer pass. `--packed-run <absolute-run-directory>` reuses a successful, unchanged pack matching both immutable refs; each consumer cache and deployment remains fresh. Add `--stage process` to run the direct proof followed by six independent-process PostgreSQL cases and three isolated persistence controls. Docker must be available. The coordinator creates a disposable PostgreSQL 16.15 container bound only to loopback and a separate database per case. It stops the original process after committed acceptance or consumption, then starts a successor against the same database. Two additional cases delay the original response until successor completion; the fifth cancels an accepted, unconsumed receipt and checks cancellation before admission. A sixth case holds a successor lease while the old worker submits new work, reads and releases; all three old operations must return LeaseLost without payload or semantic change. No design modules are present. The coordinator records actual PIDs, database identity, receipt history, terminal bytes and cleanup, keeping credentials out of evidence.
+Use `--stage pack` for packing only; this never reports a consumer pass. `--packed-run <absolute-run-directory>` reuses a successful, unchanged pack matching both immutable refs; each consumer cache and deployment remains fresh. Add `--stage process` to run the direct proof followed by six independent-process PostgreSQL cases and three isolated persistence controls. Docker must be available. The coordinator creates a disposable PostgreSQL 16.15 container bound only to loopback and a separate database per case. It stops the original process after committed acceptance or consumption, then starts a successor against the same database. Two additional cases delay the original response until successor completion; the fifth cancels an accepted, unconsumed receipt and checks cancellation before admission. A sixth case holds a successor lease while the old worker submits new work, reads and releases; all three old operations must return LeaseLost without payload or semantic change. The direct process host does not register the native design composition, even when the package consumer restores its module roots. The coordinator records actual PIDs, database identity, receipt history, terminal bytes and cleanup, keeping credentials out of evidence.
 
-The cancellation-fingerprint, same-owner fence and consumed-marker controls each require an intact baseline, failure at the named assertion after removing exactly one check in the disposable source clone, and a passing rerun after source/deployed-assembly restoration. All use real worker-produced accepted receipts. `processBoundaryProofPassed` covers the original five cases; `processProofPassed` additionally requires the live-successor case and all three controls. The receipt keeps `fullAcceptancePassed: false` because native modules and retained-run upgrades remain pending. Repeated fresh direct processes alone are not recovery proof.
+The cancellation-fingerprint, same-owner fence and consumed-marker controls each require an intact baseline, failure at the named assertion after removing exactly one check in the disposable source clone, and a passing rerun after source/deployed-assembly restoration. All use real worker-produced accepted receipts. `processBoundaryProofPassed` covers the original five cases; `processProofPassed` additionally requires the live-successor case and all three controls. The receipt keeps `fullAcceptancePassed: false` because broader native integration and retained-run upgrades remain pending. Repeated fresh direct processes alone are not recovery proof.
 
 ## 4. Rebuilt host and upgrades
 
-Run the rebuilt Workbench with a fresh isolated database using the runner documented in [backend e2e README](../../e2e-tests/README.md), then execute the new `e2e-tests/rules/` journey through that runner. The implementation supplies its exact runner switch in this document once the suite is registered. Verify publish/start, persisted Sequence continuation, persisted Flowchart sibling/join behavior, success facts, fault/cancellation/refusal and resumption. Source-only unit tests cannot substitute for this step.
+The Workbench qualification uses the same immutable package closure and a fresh package cache. It
+resolves all six Rules modules as exact PackageReferences, verifies the deployed DLLs against the
+selected archive assets, and checks the semantic deployment receipt against the host dependency graph.
+Other Workbench dependencies can remain source project references.
 
-The package harness additionally retains a pre-Rules native execution, installs the additive Rules schema, and proves native continuation unchanged. An admitted Rules run keeps its original semantic pin through an incompatible deployment and later compatible recovery. Rollback disables new admissions while preserving existing responsibility; no destructive schema rollback or automatic repinning.
+```bash
+python3 tools/rules/verify-packaged-rules.py \
+  --source-ref <immutable-source-sha> \
+  --publish-state-ref <immutable-versioning-record-sha> \
+  --evidence-dir /tmp/rules-workbench-evidence \
+  --stage workbench
+```
+
+After direct-package checks, this runner invokes `e2e-tests/rules/Test-DurableRules.ps1` with the
+published assembly path and verified receipt. The script owns its temporary content root, SQLite
+databases and loopback server; it uses actual login, CLR catalog, submit, publish, start and runtime
+inspection APIs. It is registered as a separate package qualification in the
+[backend e2e README](../../e2e-tests/README.md), not silently counted in the source-only suite.
+No feature is enabled in the default Workbench shell. Retain the generated receipt and logs; a
+successful host publish alone is not a passing REST journey.
+
+Full acceptance still requires persisted Flowchart sibling/join behavior, cancellation, unavailable
+recovery and proof-before-ack regression controls in addition to successful Sequence continuation,
+fault and refusal. Only cases named in the execution receipt are proved by a particular run.
+
+The upgrade acceptance target additionally retains a pre-Rules native execution, installs the additive Rules schema, and proves native continuation unchanged. An admitted Rules run keeps its original semantic pin through an incompatible deployment and later compatible recovery. Rollback disables new admissions while preserving existing responsibility; no destructive schema rollback or automatic repinning.
 
 ## 5. Integration gate
 

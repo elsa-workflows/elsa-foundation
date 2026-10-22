@@ -51,6 +51,16 @@
 	<!-- The computed-vs-source-build production configuration swap this host shares with Elsa.Foundation.Host (#2084, #2126). -->
 	<Import Project="$(MSBuildThisFileDirectory)../ComputedProductionSettings.targets" />
 
+	<!-- Package qualification supplies exact, computed Rules PackageReferences from an isolated local feed.
+	     Ordinary source builds retain project references. Neither mode enables Rules in a shell by itself. -->
+	<Import Project="$(RulesPackageReferencesFile)" Condition="'$(RulesPackageReferencesFile)' != ''" />
+	<ItemGroup Condition="'$(RulesPackageReferencesFile)' == ''">
+		<ProjectReference Include="..\..\..\Extensions\Rules\src\Runtime\Elsa.Rules.Runtime.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Rules\src\Persistence\EntityFrameworkCore\Elsa.Rules.Persistence.EntityFrameworkCore.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Rules\src\Workflows\Design\Elsa.Rules.Workflows.Design.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Rules\src\Workflows\Runtime\Elsa.Rules.Workflows.Runtime.csproj" />
+	</ItemGroup>
+
 	<ItemGroup>
 		<ProjectReference Include="..\..\src\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
 		<!-- Cluster membership, selected from host configuration on the host container (spec 183, FR-024). -->
