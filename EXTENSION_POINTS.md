@@ -166,6 +166,12 @@ not automatic constitution violations.
 | Workflows runtime — HTTP endpoint behaviour | [`Essentials/src/Workflows/Runtime/Http/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Http/EXTENSION_POINTS.md) |
 | Workflows runtime — durable resumption (sweep service, recurring pump, feature gating) | [`Essentials/src/Workflows/Runtime/Resumption/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Resumption/EXTENSION_POINTS.md) |
 
+### Rules
+
+| Domain | Catalog |
+|---|---|
+| Rules compilation, invocation preparation and deployment identity | [`Extensions/Rules/src/Core/EXTENSION_POINTS.md`](Extensions/Rules/src/Core/EXTENSION_POINTS.md) |
+
 ### ETL
 
 | Domain | Catalog |

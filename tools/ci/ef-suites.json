@@ -119,6 +119,11 @@
       "suite": "locking-database",
       "project": "Essentials/tests/Locking/Database/ProviderTests/Elsa.Locking.Database.ProviderTests.csproj",
       "require": "ELSA_LOCKING_DATABASE_REQUIRE_NATIVE_PROVIDERS"
+    },
+    {
+      "suite": "rules",
+      "project": "Extensions/Rules/tests/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Rules.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "require": "ELSA_RULES_EF_REQUIRE_NATIVE_PROVIDERS"
     }
   ]
 }

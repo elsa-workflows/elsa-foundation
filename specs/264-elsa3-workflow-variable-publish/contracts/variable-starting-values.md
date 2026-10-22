@@ -18,11 +18,11 @@ container variables and the variables of a reusable activity's graph manifest.
 | Severity | Error: the definition is not converted |
 | Path | `$.variables[i]` for a workflow variable; the container's `Variables` property for a container variable |
 | Message (collection) | `Variable '{name}' has the starting value '{value}', which is not a JSON array.` Guidance: `In the Elsa 3 workflow, write the '{typeName}' starting value as a JSON array, for example {suggestion}. Elsa 4 does not split text on commas.` The suggestion is the comma-separated items as a JSON array |
-| Message (unknown collection) | `Variable '{name}' has the type '{typeName}', a collection of a type Elsa 4 does not know, so it cannot be converted.` Raised with or without a starting value. Guidance links #3194 |
+| Message (resource) | `Variable '{name}' has the type '{typeName}', a resource (a file, a stream or raw bytes) Elsa 4 cannot hold yet, so it cannot be converted.` Raised with or without a starting value, for `FormFile`, `IFormFile`, `Stream` and `byte[]`, alone or as a collection element. Guidance links #3194 |
 | Message (items) | `Variable '{name}' has the starting value '{value}', whose items cannot be converted to '{element}'.` |
 | Message (dictionary) | `Variable '{name}' has the starting value '{value}', which is not a JSON object.` Guidance shows an example object |
 | Message (value) | `Variable '{name}' has the starting value '{value}', which cannot be converted to its type '{typeName}'.` Strict conversion: a value that only converts by falling back to the type's default is refused |
-| Message (type) | `Variable '{name}' has a starting value, but its type '{typeName}' is not known in Elsa 4, so the value cannot start as it did in Elsa 3.` |
+| Message (type) | `Variable '{name}' has the starting value '{value}', but its type '{typeName}' is not known in Elsa 4, and the value is not JSON, so it cannot start as it did in Elsa 3.` A JSON value on such a type converts to `Object` |
 | Guidance | `In the Elsa 3 workflow, change the variable's starting value to one its type accepts, or change its type to Object to keep the value as text. Elsa 3 started such a variable with its type's default or empty.` |
 | Metadata | the plan's usual metadata, plus `VariableName` |
 

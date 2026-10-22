@@ -123,6 +123,7 @@ function Start-OwnedElsaServer {
         [Parameter(Mandatory)][string] $BaseUrl,
         [Parameter(Mandatory)][string] $ContentRoot,
         [hashtable] $Environment = @{},
+        [string] $AssemblyPath,
         [int] $TimeoutSec = 300
     )
     if ($script:OwnedElsaServer) { throw "This script run already owns server process $($script:OwnedElsaServer.Process.Id); stop it first." }
@@ -131,7 +132,11 @@ function Start-OwnedElsaServer {
     $uri = [Uri] $BaseUrl
     $port = $uri.Port
 
-    $dll = Join-Path (Split-Path $script:WorkbenchProject) 'bin/Debug/net10.0/Elsa.Workbench.dll'
+    $dll = if ([string]::IsNullOrWhiteSpace($AssemblyPath)) {
+        Join-Path (Split-Path $script:WorkbenchProject) 'bin/Debug/net10.0/Elsa.Workbench.dll'
+    } else {
+        [IO.Path]::GetFullPath($AssemblyPath)
+    }
     if (-not (Test-Path -LiteralPath $dll -PathType Leaf)) { throw "Server DLL not found at $dll; build Elsa.Workbench first." }
 
     $childEnvironment = @{ ASPNETCORE_ENVIRONMENT = 'Development' }
@@ -157,7 +162,7 @@ function Start-OwnedElsaServer {
     } finally {
         foreach ($name in $previous.Keys) { [Environment]::SetEnvironmentVariable($name, $previous[$name], 'Process') }
     }
-    $script:OwnedElsaServer = @{ Process = $process; BaseUrl = $BaseUrl; ContentRoot = $ContentRoot; Environment = $Environment }
+    $script:OwnedElsaServer = @{ Process = $process; BaseUrl = $BaseUrl; ContentRoot = $ContentRoot; Environment = $Environment; AssemblyPath = $dll }
     Write-Host "  [server] started owned process $($process.Id) for $BaseUrl (content root $ContentRoot)"
 
     $deadline = (Get-Date).AddSeconds($TimeoutSec)
@@ -204,7 +209,7 @@ function Restart-OwnedElsaServer {
     $owned = $script:OwnedElsaServer
     if (-not $owned) { throw 'This script run has not started a server, so there is none it may restart.' }
     Stop-OwnedElsaServer
-    Start-OwnedElsaServer -BaseUrl $owned.BaseUrl -ContentRoot $owned.ContentRoot -Environment $owned.Environment
+    Start-OwnedElsaServer -BaseUrl $owned.BaseUrl -ContentRoot $owned.ContentRoot -Environment $owned.Environment -AssemblyPath $owned.AssemblyPath
 }
 
 # Cleanup for a finally block: stops the owned server, then removes its content root or, after a failed run,

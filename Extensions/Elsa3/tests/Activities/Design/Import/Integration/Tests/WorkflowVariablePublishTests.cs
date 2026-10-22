@@ -55,6 +55,9 @@ public sealed class WorkflowVariablePublishTests(ITestOutputHelper output)
         Assert.Equal("""["x","y"]""", Variable(run, "names"));
         // Collections and dictionaries start as JSON, not text.
         Assert.Equal("""["a","b"]""", Variable(run, "list"));
+        Assert.Equal("[1,2]", Variable(run, "counts"));
+        // A type Elsa 4 does not know is an Object holding the JSON Elsa 3 deserialized.
+        Assert.Equal("""{"id":1}""", Variable(run, "order"));
         Assert.Equal("""{"a":1}""", Variable(run, "dictionary"));
         Assert.Equal("""{"Accept":["application/json"]}""", Variable(run, "headers"));
     }

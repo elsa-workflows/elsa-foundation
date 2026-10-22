@@ -398,6 +398,12 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(Elsa.Etl.Persistence.EntityFrameworkCore.EtlDesignEntityFrameworkCoreFeature).Assembly,
             typeof(Elsa.Etl.Workflows.Design.EtlWorkflowsDesignFeature).Assembly,
             typeof(Elsa.Etl.Workflows.Runtime.EtlWorkflowsRuntimeFeature).Assembly,
+            // Opt-in durable Rules. Package qualification references these same host assemblies from NuGet;
+            // the configured deployment receipt must still match the active package graph and loaded assets.
+            typeof(Elsa.Rules.Runtime.RulesRuntimeFeature).Assembly,
+            typeof(Elsa.Rules.Persistence.EntityFrameworkCore.RulesRuntimeEntityFrameworkCoreFeature).Assembly,
+            typeof(Elsa.Rules.Workflows.Design.RulesWorkflowsDesignFeature).Assembly,
+            typeof(Elsa.Rules.Workflows.Runtime.RulesWorkflowsRuntimeFeature).Assembly,
             typeof(WorkflowsRuntimeAttentionFeature).Assembly,
             typeof(StructuredLogsFeature).Assembly,
             typeof(OpenTelemetryFeature).Assembly,

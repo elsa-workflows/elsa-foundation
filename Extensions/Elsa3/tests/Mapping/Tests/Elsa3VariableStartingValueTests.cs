@@ -62,9 +62,15 @@ public sealed class Elsa3VariableStartingValueTests
         { "List<Object>", false, """[{"a":1}]""", "Object", CollectionKind.List, """[{"a":1}]""" },
         { "String[]", false, """["x"]""", "String", CollectionKind.Array, """["x"]""" },
         { "String", true, """["x","y"]""", "String", CollectionKind.Array, """["x","y"]""" },
+        // Items are read as Elsa 3 read them (enums by name) and written for Elsa 4 as plain JSON (the enum's number).
+        { "List<System.Net.HttpStatusCode, System.Net.Primitives>", false, """["OK","NotFound"]""", "System.Net.HttpStatusCode", CollectionKind.List, "[200,404]" },
         // Elsa 3's dictionaries: an Object holding the parsed object.
         { "ObjectDictionary", false, """{"a":1}""", "Object", CollectionKind.Single, """{"a":1}""" },
-        { "HttpHeaders", false, """{"Accept":["application/json"]}""", "Object", CollectionKind.Single, """{"Accept":["application/json"]}""" }
+        { "HttpHeaders", false, """{"Accept":["application/json"]}""", "Object", CollectionKind.Single, """{"Accept":["application/json"]}""" },
+        // A type Elsa 4 does not know, a nested collection included, is an Object holding the parsed JSON.
+        { "List<List<String>>", false, """[["a"],["b"]]""", "Object", CollectionKind.Single, """[["a"],["b"]]""" },
+        { "ObjectDictionary[]", false, """[{"a":1}]""", "Object", CollectionKind.Single, """[{"a":1}]""" },
+        { "Acme.Orders.Order, Acme", false, """{"id":1}""", "Object", CollectionKind.Single, """{"id":1}""" }
     };
 
     [Theory]
@@ -87,6 +93,13 @@ public sealed class Elsa3VariableStartingValueTests
     [InlineData("List<Object>", "Object", CollectionKind.List)]
     [InlineData("ObjectDictionary", "Object", CollectionKind.Single)]
     [InlineData("HttpHeaders", "Object", CollectionKind.Single)]
+    [InlineData("List<List<String>>", "Object", CollectionKind.Single)]
+    [InlineData("ObjectDictionary[]", "Object", CollectionKind.Single)]
+    [InlineData("Acme.Orders.Order, Acme", "Object", CollectionKind.Single)]
+    [InlineData("System.DayOfWeek", "Object", CollectionKind.Single)]
+    // A CLR generic name without a resource argument is not a resource: it resolves to its Elsa 4 type.
+    [InlineData("System.Collections.Generic.List`1[System.String]", "String", CollectionKind.List)]
+    [InlineData("System.Collections.Generic.Dictionary`2[[System.String, System.Private.CoreLib],[System.Object, System.Private.CoreLib]]", "Object", CollectionKind.Dictionary)]
     public void A_variable_without_a_value_gets_the_same_Elsa_4_type(string typeName, string expectedAlias, CollectionKind expectedKind)
     {
         var source = new Elsa3Variable { Id = "v", Name = "v", TypeName = typeName };
@@ -105,12 +118,15 @@ public sealed class Elsa3VariableStartingValueTests
         { "List<String>", "a, b", "is not a JSON array", """for example ["a","b"]""" },
         { "List<Int32>", "1, 2", "is not a JSON array", "for example [1, 2]" },
         { "List<Int32>", """["a"]""", "items cannot be converted to 'Int32'", "for example [1, 2]" },
-        // A collection of a type Elsa 4 does not know is refused whatever its value (#3194).
-        { "FormFile[]", """[{"name":"a.txt"}]""", "a collection of a type Elsa 4 does not know", "#3194" },
+        // Elsa 3 could not read a number from a string either: it started the variable empty with a warning.
+        { "List<Int32>", """["5"]""", "items cannot be converted to 'Int32'", "for example [1, 2]" },
+        // A resource is refused whatever its value (#3194).
+        { "FormFile[]", """[{"name":"a.txt"}]""", "a resource", "#3194" },
         { "ObjectDictionary", "a=1", "is not a JSON object", """for example {"key": "value"}""" },
         { "HttpHeaders", "Accept: text/plain", "is not a JSON object", """for example {"Accept": ["application/json"]}""" },
-        // A CLR type the host registers no alias for runs as Object in Elsa 4.
-        { "System.DayOfWeek", "Monday", "is not known in Elsa 4", "change the variable's type to Object" }
+        // A type Elsa 4 does not know runs as Object, which can only hold JSON as Elsa 3 had it.
+        { "System.DayOfWeek", "Monday", "is not known in Elsa 4, and the value is not JSON", "change the variable's type to Object" },
+        { "Acme.Orders.Order, Acme", "order-1", "is not known in Elsa 4, and the value is not JSON", "as a JSON object or array" }
     };
 
     [Theory]
@@ -125,16 +141,46 @@ public sealed class Elsa3VariableStartingValueTests
         Assert.Contains(fix, refusal.Guidance);
     }
 
-    [Fact]
-    public async Task A_collection_of_a_type_Elsa_4_does_not_know_is_refused_even_without_a_value()
+    [Theory]
+    [InlineData("FormFile[]")]
+    [InlineData("FormFile")]
+    [InlineData("IFormFile")]
+    [InlineData("List<IFormFile>")]
+    [InlineData("Elsa.Http.Models.FormFile, Elsa.Http")]
+    [InlineData("Stream")]
+    [InlineData("System.IO.Stream, System.Runtime")]
+    [InlineData("byte[]")]
+    [InlineData("System.Byte[]")]
+    // CLR-style generic names carry their type arguments in [[…]].
+    [InlineData("System.Collections.Generic.List`1[[System.IO.Stream, System.Private.CoreLib]]")]
+    [InlineData("System.Collections.Generic.Dictionary`2[[System.String, System.Private.CoreLib],[Elsa.Http.Models.FormFile, Elsa.Http]]")]
+    [InlineData("System.Collections.Generic.List`1[[System.IO.Stream]]")]
+    [InlineData("System.Collections.Generic.List`1[System.IO.Stream]")]
+    [InlineData("System.Collections.Generic.Dictionary`2[System.String,System.Byte[]]")]
+    // An array of a resource as a single-bracket generic argument.
+    [InlineData("System.Collections.Generic.List`1[System.IO.Stream[]]")]
+    [InlineData("System.Collections.Generic.List`1[[Elsa.Http.Models.FormFile[], Elsa.Http]]")]
+    public async Task A_resource_variable_is_refused_even_without_a_value(string typeName)
     {
-        var result = await ConvertAsync(new Elsa3Variable { Id = "files", Name = "FormFiles", TypeName = "FormFile[]" });
+        var result = await ConvertAsync(new Elsa3Variable { Id = "resource", Name = "Resource", TypeName = typeName });
 
         Assert.False(result.Succeeded);
         var refusal = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
         Assert.Equal(Elsa3ActivityDiagnosticCodes.VariableValueUnconvertible, refusal.Code);
         Assert.Equal("$.variables[0]", refusal.Path);
-        Assert.Contains("'FormFile[]'", refusal.Message);
+        Assert.Contains($"'{typeName}'", refusal.Message);
+        Assert.Contains("#3194", refusal.Guidance);
+    }
+
+    [Theory]
+    [InlineData("Byte")]
+    [InlineData("System.Byte, System.Private.CoreLib")]
+    public void Byte_with_the_array_flag_is_raw_bytes_and_refused(string typeName)
+    {
+        var source = new Elsa3Variable { Id = "bytes", Name = "bytes", TypeName = typeName, IsArray = true };
+
+        Assert.False(Elsa3VariableMapper.TryMap(Registry(), ObjectConverter, source, out _, out var refusal));
+        Assert.Contains("a resource", refusal!.Message);
         Assert.Contains("#3194", refusal.Guidance);
     }
 
