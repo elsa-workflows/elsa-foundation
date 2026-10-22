@@ -1190,29 +1190,6 @@
   font-size: 14px;
 }
 
-.wf-run-identifiers {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  min-width: 0;
-  gap: 2px 8px;
-}
-
-.wf-run-identifiers .studio-copyable-identifier {
-  grid-template-columns: minmax(0, 1fr) max-content;
-  gap: 3px;
-  min-width: 0;
-  font-size: 10px;
-}
-
-.wf-run-identifiers .studio-copyable-identifier__label {
-  grid-column: 1 / -1;
-}
-
-.wf-run-identifiers .studio-copyable-identifier__button {
-  width: 22px;
-  height: 22px;
-}
-
 .wf-run-row-actions {
   display: flex;
   align-items: center;
@@ -7140,10 +7117,6 @@ button.wf-reference-select {
   .wf-instance-grid--deletable .wf-grid-head,
   .wf-instance-grid--deletable .wf-grid-row {
     grid-template-columns: minmax(0, 1fr) 76px minmax(0, 1fr) minmax(0, 1.1fr) 82px;
-  }
-
-  .wf-run-identifiers {
-    grid-template-columns: minmax(0, 1fr);
   }
 
   .wf-grid-head > span:nth-child(3),

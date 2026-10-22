@@ -1899,6 +1899,72 @@ describe("Activity Definition authoring", () => {
     await rendered.unmount();
   });
 
+  it("restores the displayed origin after a dirty editor vetoes Back to another collection entry", async () => {
+    const baseUrl = "test://activity-definition-history-veto";
+    const displayedCollection = {
+      entryId: "history-veto-displayed-origin",
+      runtimeScopeId: "test-runtime",
+      baseUrl,
+      authorityRevision: Number(window.sessionStorage.getItem("elsaActivityDefinitions.authorityRevision") ?? 0),
+      searchInput: "invoice",
+      search: "invoice",
+      providerInput: "",
+      providerKey: "",
+      authority: "Design" as const,
+      pageSize: 25 as const,
+      cursorStack: [null],
+      cursorIndex: 0
+    };
+    const destinationCollection = { ...displayedCollection, entryId: "history-veto-destination", searchInput: "different origin", search: "different origin" };
+    const stateAtOrigin = { elsaActivityDefinitions: { collection: destinationCollection } };
+    const stateAtWorkbench = { elsaActivityDefinitions: { collection: displayedCollection } };
+    const stateInEditor = { elsaActivityDefinitions: { collection: displayedCollection } };
+    const rendered = renderPage({
+      baseUrl,
+      historyEntries: [
+        { url: "/workflows/activity-definitions", state: stateAtOrigin },
+        { url: "/workflows/activity-definitions?definition=activity-def-1", state: stateAtWorkbench },
+        { url: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1", state: stateInEditor }
+      ],
+      contributions: [editingContribution()],
+      putJson: vi.fn(async () => { throw new Error("failed"); }),
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ revision: 3, payload: { edit: 0 } });
+        if (url === "/design/activities/definitions/activity-def-1") return managementDefinition();
+        if (url.startsWith("/design/activities/definitions?")) return page([managementDefinition()]);
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Saved revision 3");
+    click(buttonByText(rendered.container, "Edit implementation 0"));
+    await waitForText(rendered.container, "Save failed");
+    const pushState = vi.spyOn(window.history, "pushState");
+    window.history.replaceState(stateAtWorkbench, "", "/workflows/activity-definitions?definition=activity-def-1");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    await waitFor(() => expect(pushState).toHaveBeenCalled());
+    expect(window.history.state.elsaActivityDefinitions.collection).toEqual(displayedCollection);
+    pushState.mockRestore();
+
+    click(buttonByText(rendered.container, "Discard local changes and return"));
+    await waitForText(rendered.container, "Build your activity");
+    expect(new URLSearchParams(window.location.search).get("section")).toBeNull();
+    const historyGo = vi.spyOn(window.history, "go");
+    click(buttonByText(rendered.container, "Activity Definitions"));
+    await waitFor(() => expect(rendered.container.querySelector(".ad-collection")).not.toBeNull());
+    expect(historyGo).not.toHaveBeenCalled();
+    expect(window.location.pathname).toBe("/workflows/activity-definitions");
+    expect(window.history.state.elsaActivityDefinitions.collection).toMatchObject({
+      entryId: displayedCollection.entryId,
+      searchInput: displayedCollection.searchInput,
+      search: displayedCollection.search
+    });
+    expect(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")?.value).toBe("invoice");
+    historyGo.mockRestore();
+    await rendered.unmount();
+  }, 15000);
+
   it("waits for an authoritative refetch instead of opening a cached draft revision", async () => {
     let resolveDraft!: (value: unknown) => void;
     const draftResponse = new Promise(resolve => { resolveDraft = resolve; });
@@ -2409,13 +2475,22 @@ function renderPage(options: {
   contributions?: StudioActivityDefinitionImplementationEditorContribution[];
   runtime?: StudioRuntimeSettings;
   seedDraft?: ReturnType<typeof fullDraft>;
+  baseUrl?: string;
+  historyEntries?: { url: string; state: unknown }[];
 }) {
-  window.history.replaceState({}, "", options.path ?? "/workflows/activity-definitions");
+  const baseUrl = options.baseUrl ?? `test://activity-definition-authoring-${Math.random()}`;
+  if (options.historyEntries?.length) {
+    const [first, ...rest] = options.historyEntries;
+    window.history.replaceState(first.state, "", first.url);
+    for (const entry of rest) window.history.pushState(entry.state, "", entry.url);
+  } else {
+    window.history.replaceState({}, "", options.path ?? "/workflows/activity-definitions");
+  }
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
   const context = {
-    baseUrl: `test://activity-definition-authoring-${Math.random()}`,
+    baseUrl,
     http: {
       getJson: (url: string) => url === "/design/activities/catalog" ? Promise.resolve(activityCatalog()) : options.getJson(url),
       postJson: options.postJson ?? vi.fn(),

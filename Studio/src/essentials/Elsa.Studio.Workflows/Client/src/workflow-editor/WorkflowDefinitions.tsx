@@ -16,6 +16,7 @@ import "./workflowFolders.css";
 import "./workflowDefinitionTable.css";
 import { LatestDefinitionVersion, PublishedDefinitionVersion } from "./DefinitionVersionCells";
 import type { WorkflowDefinitionBrowseSession } from "./workflowDefinitionBrowseSession";
+import { WorkflowListIdentity } from "./WorkflowListIdentity";
 
 const CreateWorkflowDialog = lazy(() =>
   import("./CreateWorkflowDialog").then(module => ({ default: module.CreateWorkflowDialog }))
@@ -581,6 +582,12 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
               </div>
               {definitions.map(definition => {
                 const isDeleted = Boolean(definition.deletedAt);
+                const secondaryIdentifiers = [
+                  { label: "Draft ID", value: definition.draftId },
+                  { label: "Draft source version ID", value: definition.draftSourceVersionId },
+                  { label: "Latest version ID", value: definition.latestVersionId },
+                  { label: "Published version ID", value: definition.publishedVersionId }
+                ].filter((identifier): identifier is { label: string; value: string } => Boolean(identifier.value));
                 const definitionUrl = new URL(window.location.href);
                 definitionUrl.searchParams.set("definition", definition.id);
                 const menuItems: OverflowMenuItem[] = !isCurrentData ? [] : isDeleted
@@ -597,7 +604,14 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
                   <div
                     className="wf-grid-row"
                     role="row"
-                    {...(isCurrentData ? { "aria-label": `Open workflow definition ${definition.name}`, "aria-selected": selectedIds.has(definition.id), onClick: () => onOpen(definition.id) } : {})}
+                    {...(isCurrentData ? {
+                      "aria-label": `Open workflow definition ${definition.name}`,
+                      "aria-selected": selectedIds.has(definition.id),
+                      onClick: (event: ReactMouseEvent<HTMLDivElement>) => {
+                        if (event.target instanceof Element && event.target.closest("button, input, label, a")) return;
+                        onOpen(definition.id);
+                      }
+                    } : {})}
                     key={definition.id}
                   >
                     <div className="wf-row-select" role="cell" onClick={isCurrentData ? event => event.stopPropagation() : undefined}>
@@ -627,7 +641,17 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
                           </a>
                         ) : definition.name}
                       </strong>
-                      <small>{definition.description || definition.id}</small>
+                      {definition.description ? <small>{definition.description}</small> : !isCurrentData ? <small>{definition.id}</small> : null}
+                      {isCurrentData ? <WorkflowListIdentity
+                        primaryLabel="Definition ID"
+                        primaryValue={definition.id}
+                        secondaryIdentifiers={secondaryIdentifiers}
+                        primaryClassName="wf-definition-primary-identifier"
+                        secondaryClassName="wf-definition-secondary-identifiers"
+                        detailsClassName="wf-definition-identifiers"
+                        detailsAriaLabel={`Workflow definition identifiers for ${definition.name}`}
+                        detailsLayout="stacked"
+                      /> : null}
                       {isDeleted ? <><span className="wf-status-badge" data-status="cancelled">Deleted</span><small>{formatDate(definition.deletedAt)}</small></> : null}
                       {isCurrentData && effectiveFolderSelection === "all" ? (
                         <ResultFolderBreadcrumb definition={definition} onSelect={changeFolder} />

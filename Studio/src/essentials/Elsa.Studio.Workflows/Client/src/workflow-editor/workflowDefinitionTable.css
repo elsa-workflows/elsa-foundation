@@ -205,6 +205,10 @@
   outline-offset: 2px;
 }
 
+.wf-definitions-list .wf-definition-primary-identifier {
+  margin-top: 4px;
+}
+
 .wf-definitions-list .wf-definition-name > .wf-status-badge {
   display: inline-flex;
   margin-top: 4px;

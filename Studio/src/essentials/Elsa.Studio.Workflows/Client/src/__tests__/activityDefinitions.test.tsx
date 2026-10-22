@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { StudioHttpError, type StudioActivityDefinitionImplementationEditorContribution, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { authSessionStartedEvent, StudioHttpError, type StudioActivityDefinitionImplementationEditorContribution, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { ActivityDefinitionsPage } from "../ActivityDefinitionsPage";
 import { activityDesignKeys } from "../api/activityDesign";
 import { clearApiCapabilityCache } from "../api/capabilities";
@@ -11,6 +11,7 @@ import { activityDefinitionsObservationEvent, observeActivityDefinitions } from 
 import type { ActivityDefinitionDraftManagementView, ActivityDefinitionManagementView, ActivityDefinitionVersionManagementView, ActivityManagementPage } from "../activityDefinitionTypes";
 
 afterEach(() => {
+  vi.restoreAllMocks();
   clearApiCapabilityCache();
   window.history.replaceState({}, "", "/");
 });
@@ -111,6 +112,63 @@ describe("Activity Definitions experience", () => {
     await rendered.unmount();
   });
 
+  it("keeps exact definition identity visible and nested identifier actions out of row navigation", async () => {
+    const exactId = "activity-definition-0123456789abcdef0123456789abcdef";
+    const exactTypeKey = "Contoso.InvoiceEvaluator.With.A.Long.Type.Key";
+    const primaryDefinition = definition({
+      definitionId: exactId,
+      activityTypeKey: exactTypeKey,
+      displayName: "Invoice evaluator",
+      headVersionId: "activity-version-head-exact",
+      recommendedVersionId: "activity-version-recommended-exact"
+    });
+    const sameNameDefinition = definition({
+      definitionId: "activity-definition-duplicate-name",
+      displayName: "Invoice evaluator"
+    });
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities() : page([primaryDefinition, sameNameDefinition]));
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    const rendered = renderPage(getJson);
+
+    try {
+      await waitFor(() => expect(rendered.container.querySelectorAll(".ad-collection-row")).toHaveLength(2));
+      const [primaryRow, duplicateRow] = [...rendered.container.querySelectorAll<HTMLElement>(".ad-collection-row")];
+      expect(primaryRow.querySelector(".studio-copyable-identifier__value")?.getAttribute("aria-label")).toBe(`Definition ID: ${exactId}`);
+      expect(duplicateRow.querySelector(".studio-copyable-identifier__value")?.getAttribute("aria-label")).toBe("Definition ID: activity-definition-duplicate-name");
+
+      const disclosure = primaryRow.querySelector<HTMLButtonElement>(".studio-disclosure-fold-trigger")!;
+      const copyButton = primaryRow.querySelector<HTMLButtonElement>('button[aria-label="Copy Definition ID"]')!;
+      expect(disclosure.getAttribute("aria-expanded")).toBe("false");
+      expect(primaryRow.querySelector(".studio-disclosure-fold-body")?.hasAttribute("hidden")).toBe(true);
+      for (const key of ["Enter", " "]) {
+        flushSync(() => disclosure.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })));
+        flushSync(() => copyButton.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })));
+      }
+      expect(rendered.container.textContent).not.toContain("Build your activity");
+      expect(new URL(window.location.href).searchParams.has("definition")).toBe(false);
+
+      const copyIconPath = copyButton.querySelector("svg path")!;
+      flushSync(() => copyIconPath.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+      await waitFor(() => expect(writeText).toHaveBeenCalledWith(exactId));
+      expect(rendered.container.textContent).not.toContain("Build your activity");
+
+      click(disclosure);
+      expect(disclosure.getAttribute("aria-expanded")).toBe("true");
+      expect(primaryRow.querySelector(".studio-disclosure-fold-body")?.hasAttribute("hidden")).toBe(false);
+      expect(primaryRow.textContent).toContain(exactTypeKey);
+      expect(primaryRow.textContent).toContain("activity-version-head-exact");
+      expect(primaryRow.textContent).toContain("activity-version-recommended-exact");
+      click(copyButton);
+      await waitFor(() => expect(writeText).toHaveBeenCalledWith(exactId));
+      expect(rendered.container.textContent).not.toContain("Build your activity");
+      expect(new URL(window.location.href).searchParams.has("definition")).toBe(false);
+    } finally {
+      await rendered.unmount();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("opens the stable definition workbench and keeps an exact draft identity in the URL", async () => {
     const navigateToStudioPath = vi.fn();
     const getJson = vi.fn(async (url: string) => {
@@ -155,6 +213,294 @@ describe("Activity Definitions experience", () => {
     );
     await rendered.unmount();
   });
+
+  it("restores the current collection filters and continuation from a definition route", async () => {
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      if (url === "/design/activities/definitions/definition-2") return definition({ definitionId: "definition-2", displayName: "Second evaluator" });
+      if (url.startsWith("/design/activities/definitions/definition-2/drafts?")) return page([draft({ definitionId: "definition-2", draftId: "draft-2" })]);
+      if (url.startsWith("/design/activities/definitions/definition-2/versions?")) return page([version({ version: { ...version().version, definitionId: "definition-2", versionId: "version-2" } })]);
+      if (url.includes("cursor=activity-cursor-2")) return page([definition({ definitionId: "definition-2", displayName: "Second evaluator" })], { totalCount: 2 });
+      return page([definition()], { continuation: "activity-cursor-2", hasMore: true, totalCount: 2 });
+    });
+    const rendered = renderPage(getJson);
+    await waitForText(rendered.container, "Invoice evaluator");
+
+    const search = rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")!;
+    change(search, "invoice");
+    change(controlByLabel<HTMLInputElement>(rendered.container, "Provider key"), "visual-graph");
+    change(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page"), "10");
+    click(buttonByText(rendered.container, "All"));
+    await waitFor(() => expect(getJson.mock.calls.some(([url]) => {
+      const value = String(url);
+      return value.includes("search=invoice") && value.includes("providerKey=visual-graph") && value.includes("limit=10") && !value.includes("authority=");
+    })).toBe(true));
+    await waitFor(() => expect(buttonByText(rendered.container, "Next").disabled).toBe(false));
+    click(buttonByText(rendered.container, "Next"));
+    await waitForText(rendered.container, "Second evaluator");
+    await waitFor(() => expect(getJson.mock.calls.some(([url]) => String(url).includes("cursor=activity-cursor-2"))).toBe(true));
+    change(search, "invoice pending");
+    change(controlByLabel<HTMLInputElement>(rendered.container, "Provider key"), "visual-graph pending");
+    window.history.replaceState({ ...window.history.state, unrelatedHostState: "keep-me" }, "");
+    const pushState = vi.spyOn(window.history, "pushState");
+
+    click(rendered.container.querySelector<HTMLElement>("[role='row'][tabindex='0']")!);
+    await waitForText(rendered.container, "Build your activity");
+    expect(window.history.state.unrelatedHostState).toBe("keep-me");
+    const originCollection = JSON.parse(JSON.stringify(window.history.state.elsaActivityDefinitions.collection));
+    const requestCountBeforeReturn = getJson.mock.calls.length;
+    click(buttonByText(rendered.container, "Activity Definitions"));
+    await waitForText(rendered.container, "Second evaluator");
+    expect(pushState).toHaveBeenCalled();
+    expect(window.history.state.elsaActivityDefinitions.collection).toEqual(originCollection);
+    expect(window.history.state.unrelatedHostState).toBe("keep-me");
+
+    expect.soft(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")?.value).toBe("invoice pending");
+    expect.soft(controlByLabel<HTMLInputElement>(rendered.container, "Provider key").value).toBe("visual-graph pending");
+    expect.soft(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page").value).toBe("10");
+    click(buttonByText(rendered.container, "Refresh"));
+    await waitFor(() => expect(getJson.mock.calls.length).toBeGreaterThan(requestCountBeforeReturn));
+    const restoredRequests = getJson.mock.calls.slice(requestCountBeforeReturn).map(([url]) => String(url));
+    expect.soft(restoredRequests.some(url => {
+      return url.includes("search=invoice") && url.includes("providerKey=visual-graph") && url.includes("limit=10") && url.includes("cursor=activity-cursor-2") && !url.includes("authority=");
+    })).toBe(true);
+    await rendered.unmount();
+  }, 15000);
+
+  it("restores separate filter contexts from separate collection history entries", async () => {
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      if (url === "/design/activities/definitions/definition-1") return definition();
+      if (url.startsWith("/design/activities/definitions/definition-1/drafts?")) return page([draft()]);
+      if (url.startsWith("/design/activities/definitions/definition-1/versions?")) return page([version()]);
+      return page([definition()]);
+    });
+    const rendered = renderPage(getJson);
+    await waitForText(rendered.container, "Invoice evaluator");
+    change(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")!, "first origin");
+    await waitFor(() => expect(getJson.mock.calls.some(([url]) => new URL(String(url), "https://studio.test").searchParams.get("search") === "first origin")).toBe(true));
+    const firstOrigin = JSON.parse(JSON.stringify(window.history.state));
+
+    window.history.pushState({ hostEntry: "second" }, "", "/workflows/activity-definitions");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    await waitForText(rendered.container, "Invoice evaluator");
+    change(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")!, "second origin");
+    change(controlByLabel<HTMLInputElement>(rendered.container, "Provider key"), "provider-two");
+    change(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page"), "50");
+    click(buttonByText(rendered.container, "Built-in"));
+    await waitFor(() => expect(getJson.mock.calls.some(([url]) => {
+      const parameters = new URL(String(url), "https://studio.test").searchParams;
+      return parameters.get("search") === "second origin" && parameters.get("providerKey") === "provider-two" && parameters.get("authority") === "ProviderSource" && parameters.get("limit") === "50";
+    })).toBe(true));
+    const secondOrigin = JSON.parse(JSON.stringify(window.history.state));
+    expect(firstOrigin.elsaActivityDefinitions.collection.entryId).not.toBe(secondOrigin.elsaActivityDefinitions.collection.entryId);
+
+    click(rendered.container.querySelector<HTMLElement>("[role='row'][tabindex='0']")!);
+    await waitForText(rendered.container, "Build your activity");
+    window.history.replaceState(secondOrigin, "", "/workflows/activity-definitions");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    await waitForText(rendered.container, "Invoice evaluator");
+    expect(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")?.value).toBe("second origin");
+    expect(controlByLabel<HTMLInputElement>(rendered.container, "Provider key").value).toBe("provider-two");
+    expect(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page").value).toBe("50");
+    expect(rendered.container.querySelector(".ad-collection-view button[aria-pressed='true']")?.textContent).toBe("Built-in");
+
+    window.history.replaceState(firstOrigin, "", "/workflows/activity-definitions");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    await waitForText(rendered.container, "Invoice evaluator");
+    expect(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")?.value).toBe("first origin");
+    expect(controlByLabel<HTMLInputElement>(rendered.container, "Provider key").value).toBe("");
+    expect(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page").value).toBe("25");
+    expect(rendered.container.querySelector(".ad-collection-view button[aria-pressed='true']")?.textContent).toBe("Designed");
+    await rendered.unmount();
+  }, 15000);
+
+  it("keeps its collection context when a dirty editor vetoes browser Back", async () => {
+    const activityEditor: StudioActivityDefinitionImplementationEditorContribution = {
+      ...graphContribution(),
+      component: ({ value, onChange, readOnly }) => {
+        const payload = value.payload as { edit?: number };
+        return <button type="button" disabled={readOnly} onClick={() => onChange({ ...value, payload: { edit: (payload.edit ?? 0) + 1 } })}>Edit implementation {payload.edit ?? 0}</button>;
+      }
+    };
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      if (url === "/design/activities/definitions/definition-1") return definition();
+      if (url.startsWith("/design/activities/definitions/definition-1/drafts?")) return page([{ ...draft(), actions: [{ action: "edit-draft", allowed: true }] }]);
+      if (url.startsWith("/design/activities/definitions/definition-1/versions?")) return page([version()]);
+      if (url === "/design/activities/drafts/draft-1") return draftDetail();
+      if (url === "/design/activities/versions/version-1") return versionDetail();
+      return page([definition()]);
+    });
+    const putJson = vi.fn(async () => { throw new Error("save failed"); });
+    const rendered = renderPage(getJson, undefined, "/workflows/activity-definitions", undefined, [activityEditor], putJson);
+    await waitForText(rendered.container, "Invoice evaluator");
+    change(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")!, "origin history search");
+    await waitFor(() => expect(getJson.mock.calls.some(([url]) => String(url).includes("search=origin+history+search"))).toBe(true));
+    click(rendered.container.querySelector<HTMLElement>("[role='row'][tabindex='0']")!);
+    await waitForText(rendered.container, "Build your activity");
+    click(buttonByText(rendered.container, "Drafts"));
+    await waitForText(rendered.container, "Draft draft-1");
+    click(buttonByText(rendered.container, "Draft draft-1"));
+    click(buttonByText(rendered.container, "Open implementation editor"));
+    await waitFor(() => expect(rendered.container.textContent).toContain("Saved revision 3"));
+    click(buttonByText(rendered.container, "Edit implementation"));
+    await waitForText(rendered.container, "Save failed");
+    const editorCollection = JSON.parse(JSON.stringify(window.history.state.elsaActivityDefinitions.collection));
+
+    const pushState = vi.spyOn(window.history, "pushState");
+    window.history.back();
+    await waitFor(() => expect(pushState).toHaveBeenCalled());
+    expect(new URLSearchParams(window.location.search).get("section")).toBe("editor");
+    expect(window.history.state.elsaActivityDefinitions.collection).toEqual(editorCollection);
+    pushState.mockRestore();
+
+    click(buttonByText(rendered.container, "Discard local changes and return"));
+    await waitForText(rendered.container, "Invoice evaluator");
+    click(buttonByText(rendered.container, "Activity Definitions"));
+    await waitForText(rendered.container, "Invoice evaluator");
+    expect(window.location.pathname).toBe("/workflows/activity-definitions");
+    expect(window.history.state.elsaActivityDefinitions.collection).toEqual(editorCollection);
+    expect(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")?.value).toBe("origin history search");
+    click(buttonByText(rendered.container, "Refresh"));
+    await waitFor(() => expect(getJson.mock.calls.some(([url]) => String(url).includes("search=origin+history+search"))).toBe(true));
+    await rendered.unmount();
+  }, 20000);
+
+  it("redacts the old collection and restarts paging after auth changes while the collection is unmounted", async () => {
+    let changedScope = false;
+    let resolveAuthorized!: (value: unknown) => void;
+    const authorizedResponse = new Promise(resolve => { resolveAuthorized = resolve; });
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      if (url === "/design/activities/definitions/definition-2") return definition({ definitionId: "definition-2", displayName: "Second evaluator" });
+      if (url.startsWith("/design/activities/definitions/definition-2/drafts?")) return page([draft({ definitionId: "definition-2", draftId: "draft-2" })]);
+      if (url.startsWith("/design/activities/definitions/definition-2/versions?")) return page([version({ version: { ...version().version, definitionId: "definition-2", versionId: "version-2" } })]);
+      if (changedScope && url.startsWith("/design/activities/definitions?")) return authorizedResponse;
+      if (url.includes("cursor=unmounted-auth-cursor")) return page([definition({ definitionId: "definition-2", displayName: "Second evaluator" })], { totalCount: 2 });
+      return page([definition()], { continuation: "unmounted-auth-cursor", hasMore: true, totalCount: 2 });
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const rendered = renderPage(getJson, queryClient);
+    await waitForText(rendered.container, "Invoice evaluator");
+    change(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")!, "invoice");
+    change(controlByLabel<HTMLInputElement>(rendered.container, "Provider key"), "visual-graph");
+    change(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page"), "10");
+    await waitFor(() => expect(getJson.mock.calls.some(([url]) => String(url).includes("search=invoice") && String(url).includes("providerKey=visual-graph") && String(url).includes("limit=10"))).toBe(true));
+    click(buttonByText(rendered.container, "Next"));
+    await waitForText(rendered.container, "Second evaluator");
+    await waitFor(() => expect(getJson.mock.calls.some(([url]) => String(url).includes("cursor=unmounted-auth-cursor"))).toBe(true));
+    const originState = JSON.parse(JSON.stringify(window.history.state));
+    const baseUrl = rendered.baseUrl;
+    const originCollection = originState.elsaActivityDefinitions.collection;
+    click(rendered.container.querySelector<HTMLElement>("[role='row'][tabindex='0']")!);
+    await waitForText(rendered.container, "Second evaluator");
+    await rendered.unmount();
+
+    changedScope = true;
+    window.sessionStorage.removeItem("elsaActivityDefinitions.authorityRevision");
+    const originalSetItem = window.sessionStorage.setItem.bind(window.sessionStorage);
+    const setItem = vi.spyOn(window.sessionStorage, "setItem").mockImplementation((key, value) => {
+      if (key === "elsaActivityDefinitions.authorityRevision") throw new DOMException("Storage unavailable", "QuotaExceededError");
+      originalSetItem(key, value);
+    });
+    window.dispatchEvent(new Event(authSessionStartedEvent));
+    setItem.mockRestore();
+    window.history.replaceState(originState, "", "/workflows/activity-definitions");
+    const requestStart = getJson.mock.calls.length;
+    const remounted = renderPage(getJson, queryClient, "/workflows/activity-definitions", undefined, [], undefined, undefined, { baseUrl, preserveHistoryState: true });
+    await waitFor(() => expect(getJson.mock.calls.length).toBeGreaterThan(requestStart));
+    await waitFor(() => expect(window.history.state.elsaActivityDefinitions.collection.authorityRevision).toBeGreaterThan(originCollection.authorityRevision));
+    expect(remounted.container.textContent).not.toContain("Invoice evaluator");
+    expect(remounted.container.textContent).not.toContain("Second evaluator");
+    expect(remounted.container.textContent).toContain("scope changed");
+    expect(remounted.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")?.value).toBe("invoice");
+    expect(controlByLabel<HTMLInputElement>(remounted.container, "Provider key").value).toBe("visual-graph");
+    expect(controlByLabel<HTMLSelectElement>(remounted.container, "Rows per page").value).toBe("10");
+    const resumedRequests = getJson.mock.calls.slice(requestStart).map(([url]) => String(url)).filter(url => url.startsWith("/design/activities/definitions?") && !url.includes("cursor=unmounted-auth-cursor"));
+    expect(resumedRequests.some(url => url.includes("search=invoice") && url.includes("providerKey=visual-graph") && url.includes("limit=10"))).toBe(true);
+
+    resolveAuthorized(page([definition({ displayName: "Authorized after remount" })]));
+    await waitFor(() => expect(`${remounted.container.textContent} ${getJson.mock.calls.slice(requestStart).map(([url]) => String(url)).join(" | ")}`).toContain("Authorized after remount"));
+    await remounted.unmount();
+  }, 20000);
+
+  it("does not show cached collection rows after auth changes before a new-entry request succeeds", async () => {
+    let changedScope = false;
+    let resolveAuthorized!: (value: unknown) => void;
+    const authorizedResponse = new Promise(resolve => { resolveAuthorized = resolve; });
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      if (changedScope && url.startsWith("/design/activities/definitions?")) return authorizedResponse;
+      return page([definition({ displayName: "Cached old-authority row" })]);
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const baseUrl = "test://activity-definitions-new-entry-auth-scope";
+    const first = renderPage(getJson, queryClient, "/workflows/activity-definitions", undefined, [], undefined, undefined, { baseUrl });
+    await waitForText(first.container, "Cached old-authority row");
+    await first.unmount();
+
+    changedScope = true;
+    window.dispatchEvent(new Event(authSessionStartedEvent));
+    const requestStart = getJson.mock.calls.length;
+    const nextEntry = renderPage(getJson, queryClient, "/workflows/activity-definitions", undefined, [], undefined, undefined, { baseUrl });
+    await waitFor(() => expect(getJson.mock.calls.length).toBeGreaterThan(requestStart));
+    expect(nextEntry.container.textContent).not.toContain("Cached old-authority row");
+    expect(nextEntry.container.textContent).toContain("Loading Activity Definitions");
+
+    resolveAuthorized(page([definition({ displayName: "Authorized new-entry row" })]));
+    await waitForText(nextEntry.container, "Authorized new-entry row");
+    await nextEntry.unmount();
+  }, 15000);
+
+  it.each(["authentication", "base URL"] as const)("discards only the old cursor after a %s scope change", async scopeChange => {
+    let changedScope = false;
+    let resolveAuthorized!: (value: unknown) => void;
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      if (url === "/design/activities/definitions/definition-2") return definition({ definitionId: "definition-2", displayName: "Second evaluator" });
+      if (url.startsWith("/design/activities/definitions/definition-2/drafts?")) return page([draft({ definitionId: "definition-2", draftId: "draft-2" })]);
+      if (url.startsWith("/design/activities/definitions/definition-2/versions?")) return page([version({ version: { ...version().version, definitionId: "definition-2", versionId: "version-2" } })]);
+      if (changedScope && url.startsWith("/design/activities/definitions?")) return new Promise(resolve => { resolveAuthorized = resolve; });
+      if (url.includes("cursor=scope-cursor-2")) return page([definition({ definitionId: "definition-2", displayName: "Second evaluator" })], { totalCount: 2 });
+      return page([definition()], { continuation: "scope-cursor-2", hasMore: true, totalCount: 2 });
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const rendered = renderPage(getJson, queryClient);
+    await waitForText(rendered.container, "Invoice evaluator");
+    change(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")!, "invoice");
+    change(controlByLabel<HTMLInputElement>(rendered.container, "Provider key"), "visual-graph");
+    change(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page"), "10");
+    click(buttonByText(rendered.container, "All"));
+    await waitFor(() => expect(getJson.mock.calls.some(([url]) => String(url).includes("search=invoice") && String(url).includes("providerKey=visual-graph") && String(url).includes("limit=10"))).toBe(true));
+    click(buttonByText(rendered.container, "Next"));
+    await waitForText(rendered.container, "Second evaluator");
+    await waitFor(() => expect(getJson.mock.calls.some(([url]) => String(url).includes("cursor=scope-cursor-2"))).toBe(true));
+    const originState = JSON.parse(JSON.stringify(window.history.state));
+
+    click(rendered.container.querySelector<HTMLElement>("[role='row'][tabindex='0']")!);
+    await waitForText(rendered.container, "Build your activity");
+    changedScope = true;
+    if (scopeChange === "authentication") window.dispatchEvent(new Event(authSessionStartedEvent));
+    else rendered.setBaseUrl("test://activity-definitions-new-authority");
+    window.history.replaceState(originState, "", "/workflows/activity-definitions");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+
+    await waitFor(() => expect(resolveAuthorized).toBeDefined());
+    expect(rendered.container.textContent).not.toContain("Invoice evaluator");
+    expect(rendered.container.textContent).not.toContain("Second evaluator");
+    expect(rendered.container.textContent).toContain("scope changed");
+    expect(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")?.value).toBe("invoice");
+    expect(controlByLabel<HTMLInputElement>(rendered.container, "Provider key").value).toBe("visual-graph");
+    expect(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page").value).toBe("10");
+    const newScopeRequests = getJson.mock.calls.map(([url]) => String(url)).filter(url => url.startsWith("/design/activities/definitions?") && !url.includes("cursor=scope-cursor-2"));
+    expect(newScopeRequests.some(url => url.includes("search=invoice") && url.includes("providerKey=visual-graph") && url.includes("limit=10") && !url.includes("authority="))).toBe(true);
+    expect(queryClient.getQueriesData({ queryKey: activityDesignKeys.definitionCollections }).every(([, value]) => (value as { items?: unknown[] } | undefined)?.items?.length === 0)).toBe(true);
+
+    resolveAuthorized(page([definition({ displayName: "Authorized after scope change" })]));
+    await waitForText(rendered.container, "Authorized after scope change");
+    await rendered.unmount();
+  }, 20000);
 
   it.each([
     { scenario: "a confirmed current head and one historical draft", hasHead: true },
@@ -958,6 +1304,69 @@ describe("Activity Definitions experience", () => {
     await rendered.unmount();
   });
 
+  it("restarts only an explicitly invalid continuation without dropping collection filters", async () => {
+    const collectionRequests: URL[] = [];
+    const getJson = vi.fn(async (path: string) => {
+      if (path === "/capabilities") return capabilities();
+      const request = new URL(path, window.location.origin);
+      collectionRequests.push(request);
+      if (request.searchParams.get("cursor") === "cursor-2") {
+        throw new StudioHttpError(400, "invalid continuation", null, {
+          status: 400,
+          errorCode: "activity.management.cursor-invalid",
+          recovery: { instruction: "restart-without-cursor" }
+        });
+      }
+      return page([definition()], { continuation: "cursor-2", hasMore: true, totalCount: 2 });
+    });
+    const rendered = renderPage(getJson);
+    await waitForText(rendered.container, "Invoice evaluator");
+
+    change(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")!, "invoice");
+    change(controlByLabel<HTMLInputElement>(rendered.container, "Provider key"), "elsa.profile");
+    change(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page"), "10");
+    click(buttonByText(rendered.container, "Built-in"));
+    await waitFor(() => {
+      const request = collectionRequests.at(-1);
+      expect(request?.searchParams.get("search")).toBe("invoice");
+      expect(request?.searchParams.get("providerKey")).toBe("elsa.profile");
+      expect(request?.searchParams.get("limit")).toBe("10");
+      expect(request?.searchParams.get("authority")).toBe("ProviderSource");
+    });
+    await enabledButton(rendered.container, "Next");
+    click(buttonByText(rendered.container, "Next"));
+    await waitFor(() => expect(collectionRequests.some(request => request.searchParams.get("cursor") === "cursor-2")).toBe(true));
+    await waitForText(rendered.container, "Collection continuation is no longer valid");
+
+    click(buttonByText(rendered.container, "Restart paging"));
+    await waitFor(() => {
+      const request = collectionRequests.at(-1);
+      expect(request?.searchParams.has("cursor")).toBe(false);
+      expect(request?.searchParams.get("search")).toBe("invoice");
+      expect(request?.searchParams.get("providerKey")).toBe("elsa.profile");
+      expect(request?.searchParams.get("limit")).toBe("10");
+      expect(request?.searchParams.get("authority")).toBe("ProviderSource");
+    });
+    await rendered.unmount();
+  });
+
+  it("keeps generic bad-request failures on the ordinary retry path", async () => {
+    const getJson = vi.fn(async (path: string) => {
+      if (path === "/capabilities") return capabilities();
+      throw new StudioHttpError(400, "invalid request", null, {
+        status: 400,
+        errorCode: "activity.request.invalid",
+        recovery: { instruction: "restart-without-cursor" }
+      });
+    });
+    const rendered = renderPage(getJson);
+
+    await waitForText(rendered.container, "Couldn't load Activity Definitions");
+    expect(buttonByText(rendered.container, "Try again")).toBeTruthy();
+    expect(rendered.container.textContent).not.toContain("Restart paging");
+    await rendered.unmount();
+  });
+
   it("renders an explicit unavailable contribution and never probes a legacy endpoint", async () => {
     const getJson = vi.fn(async (url: string) => url === "/capabilities" ? { capabilities: [] } : Promise.reject(new Error(`Unexpected domain request ${url}`)));
     const rendered = renderPage(getJson);
@@ -1000,16 +1409,24 @@ function renderPage(
   postJson: (url: string, body: unknown) => Promise<unknown> = vi.fn(),
   activityEditors: StudioActivityDefinitionImplementationEditorContribution[] = [],
   putJson: (url: string, body: unknown) => Promise<unknown> = vi.fn(),
-  navigateToStudioPath?: (path: string) => void
+  navigateToStudioPath?: (path: string) => void,
+  options: { baseUrl?: string; preserveHistoryState?: boolean } = {}
 ) {
-  window.history.replaceState({}, "", path);
+  window.history.replaceState(options.preserveHistoryState ? window.history.state : {}, "", path);
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
-  const context = { baseUrl: `test://activity-definitions-${Math.random()}`, http: { getJson, postJson, putJson } } as unknown as StudioEndpointContext;
-  flushSync(() => root.render(<QueryClientProvider client={queryClient}><ActivityDefinitionsPage context={context} activityEditors={() => activityEditors} navigateToStudioPath={navigateToStudioPath} /></QueryClientProvider>));
+  const baseUrl = options.baseUrl ?? `test://activity-definitions-${Math.random()}`;
+  let context = { baseUrl, http: { getJson, postJson, putJson } } as unknown as StudioEndpointContext;
+  const render = () => <QueryClientProvider client={queryClient}><ActivityDefinitionsPage context={context} activityEditors={() => activityEditors} navigateToStudioPath={navigateToStudioPath} /></QueryClientProvider>;
+  flushSync(() => root.render(render()));
   return {
     container,
+    baseUrl,
+    setBaseUrl(baseUrl: string) {
+      context = { ...context, baseUrl };
+      flushSync(() => root.render(render()));
+    },
     async unmount() {
       flushSync(() => root.unmount());
       container.remove();
