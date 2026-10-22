@@ -43,6 +43,7 @@ import { CompensationScopeDesigner, type CompensationOperatorControls } from "..
 import { compensationStepsSlotId } from "../compensationScope";
 import { deriveCompensationRuntime, isCompensationHandlerExecution, type CompensationJournalSource, type CompensationScopeRuntime } from "../compensationRuntime";
 import { useCompensationJournals, useOperatorActions, type CompensationJournals, type OperatorActionsApi } from "./useOperatorActions";
+import { canReviewDefinition, IncidentNextStep, useDefinitionReviewAccess, type DefinitionAccessObservation } from "./IncidentNextStep";
 import { writeRunSelection } from "./runSelectionUrl";
 import { buildBpmnCanvas, type BpmnNodeData } from "../bpmn/bpmnAdapter";
 import { CopyValueButton } from "./executableShared";
@@ -920,6 +921,13 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
     labelOf: labelOfNode,
     refreshRun
   });
+  const definitionAccess = useDefinitionReviewAccess(
+    context,
+    data?.details.instance.definitionId,
+    state === "ready" && !!data
+  );
+  const selectedDefinitionId = data?.details.instance.definitionId;
+  const selectedDefinitionCanBeReviewed = canReviewDefinition(definitionAccess, context, selectedDefinitionId);
 
   // The selected occurrence lives in the URL (spec 260 FR-423): an activity execution, or the one an incident names.
   const selectedUrlActivityId = state !== "ready" || !selectedEvidenceId
@@ -1054,8 +1062,8 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
     navigate(getRunHistoryBackLocation(initialReturnTo));
   };
 
-  const openDefinitionDesigner = () => {
-    const definitionId = data?.details.instance.definitionId;
+  const openDefinitionDesigner = (requestedDefinitionId?: string) => {
+    const definitionId = requestedDefinitionId ?? data?.details.instance.definitionId;
     if (!definitionId) return;
 
     navigate(`/workflows/definitions?definition=${encodeURIComponent(definitionId)}`);
@@ -1317,8 +1325,8 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
       <div className="wf-toolbar">
         <button type="button" onClick={goBack}><ChevronLeft size={14} /> Runs</button>
         <IncidentHealthAction incidents={data?.details.incidents} onClick={openIncidents} />
-        {data?.details.instance.definitionId ? (
-          <button type="button" onClick={openDefinitionDesigner}><WorkflowIcon size={14} /> Designer</button>
+        {selectedDefinitionCanBeReviewed && selectedDefinitionId ? (
+          <button type="button" onClick={() => openDefinitionDesigner(selectedDefinitionId)}><WorkflowIcon size={14} /> Review workflow definition</button>
         ) : null}
         <button type="button" onClick={() => void load()}><RotateCcw size={14} /> Refresh</button>
         {data && instanceAction ? (
@@ -1405,6 +1413,9 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
             focusInputKey={focusInputKey}
             onSelectActivityExecution={selectActivityExecution}
             renderIncidentActions={operator.renderIncidentActions}
+            guidanceForIncident={operator.guidanceForIncident}
+            onOpenDefinition={openDefinitionDesigner}
+            definitionAccess={definitionAccess}
             activityCatalog={data.activityCatalog}
             executableGraph={data.executableGraph}
             definitionName={data.definitionName ?? data.definitionVersion?.definition.name}
@@ -2036,6 +2047,9 @@ function WorkflowInstanceInspector({
   focusInputKey,
   onSelectActivityExecution,
   renderIncidentActions,
+  guidanceForIncident,
+  onOpenDefinition,
+  definitionAccess,
   graphNodeIds,
   rootNodeId,
   activityCatalog = [],
@@ -2072,6 +2086,9 @@ function WorkflowInstanceInspector({
   focusInputKey: string | null;
   onSelectActivityExecution(activityExecutionId: string): void;
   renderIncidentActions?: OperatorActionsApi["renderIncidentActions"];
+  guidanceForIncident?: OperatorActionsApi["guidanceForIncident"];
+  onOpenDefinition?(definitionId: string): void;
+  definitionAccess?: DefinitionAccessObservation;
   graphNodeIds?: Set<string>;
   rootNodeId?: string | null;
   activityCatalog?: ActivityCatalogItem[];
@@ -2214,6 +2231,11 @@ function WorkflowInstanceInspector({
                     onViewInput={onViewInput}
                     onLoadMoreIncidentAssociations={onLoadMoreIncidentAssociations}
                     renderIncidentActions={renderIncidentActions}
+                    context={context}
+                    summary={summary}
+                    guidanceForIncident={guidanceForIncident}
+                    onOpenDefinition={onOpenDefinition}
+                    definitionAccess={definitionAccess}
                   />
                   <WorkflowUnmatchedEvidence details={details} graphNodeIds={graphNodeIds} rootNodeId={rootNodeId} activityCatalog={activityCatalog} executableGraph={executableGraph} />
                 </>
@@ -3134,6 +3156,8 @@ const incidentStackTraceMetadataKeys = [
 ];
 
 export function WorkflowIncidentList({
+  context,
+  summary,
   incidents,
   activities = [],
   activityCatalog = [],
@@ -3148,8 +3172,13 @@ export function WorkflowIncidentList({
   onShowAffectedActivity,
   onViewInput,
   onLoadMoreIncidentAssociations,
-  renderIncidentActions
+  renderIncidentActions,
+  guidanceForIncident,
+  onOpenDefinition,
+  definitionAccess
 }: {
+  context?: StudioEndpointContext;
+  summary?: WorkflowInstanceSummary | null;
   incidents?: IncidentStateSummary[] | null;
   activities?: ActivityExecutionStateSummary[];
   activityCatalog?: ActivityCatalogItem[];
@@ -3166,6 +3195,9 @@ export function WorkflowIncidentList({
   onLoadMoreIncidentAssociations?(): Promise<void>;
   /** Spec 260: the operator actions of a waiting incident, shown in its details dialog. */
   renderIncidentActions?: OperatorActionsApi["renderIncidentActions"];
+  guidanceForIncident?: OperatorActionsApi["guidanceForIncident"];
+  onOpenDefinition?(definitionId: string): void;
+  definitionAccess?: DefinitionAccessObservation;
 }) {
   const [copyStatus, setCopyStatus] = useState("");
   const [loadingAssociations, setLoadingAssociations] = useState(false);
@@ -3173,6 +3205,15 @@ export function WorkflowIncidentList({
   const incidentEvidenceAvailable = Array.isArray(incidents);
   const incidentRows = incidents ?? [];
   const incidentDetails = incidentRows.find(incident => incident.incidentId === incidentDetailsId) ?? null;
+  const incidentGuidance = incidentDetails
+    ? guidanceForIncident?.(incidentDetails) ?? {
+        actionAvailability: "unknown" as const,
+        canAct: false,
+        pendingIncidentId: null,
+        requesterCancelled: false,
+        retryReviewEligibility: { status: "unknown", reason: "source-not-loaded" }
+      }
+    : undefined;
   const permissionDeniedCount = unavailableActivityFailures.filter(failure => failure.reason === "permission-denied").length;
   const identityMismatchCount = unavailableActivityFailures.filter(failure => failure.reason === "identity-mismatch").length;
 
@@ -3275,6 +3316,11 @@ export function WorkflowIncidentList({
       {incidentDetails ? (
         <IncidentDetailsDialog
           incident={incidentDetails}
+          context={context}
+          summary={summary}
+          guidance={incidentGuidance}
+          onOpenDefinition={onOpenDefinition}
+          definitionAccess={definitionAccess}
           onClose={() => setIncidentDetailsId(null)}
           actions={renderIncidentActions?.(
             incidentDetails,
@@ -3335,7 +3381,7 @@ function IncidentStackTrace({ incident }: { incident: IncidentStateSummary }) {
   return (
     <details className="wf-incident-stacktrace">
       <summary>Stack trace</summary>
-      <pre>{stackTrace}</pre>
+      <pre tabIndex={0}>{stackTrace}</pre>
     </details>
   );
 }
@@ -3397,7 +3443,16 @@ function incidentActivityLabel(
   return getIncidentActivityLabel(association?.activityExecution ?? activityFacts, activityCatalog, activityFacts?.presentation) ?? incident.failureType;
 }
 
-function IncidentDetailsDialog({ incident, onClose, actions }: { incident: IncidentStateSummary; onClose(): void; actions?: ReactNode }) {
+function IncidentDetailsDialog({ incident, context, summary, guidance, onOpenDefinition, definitionAccess, onClose, actions }: {
+  incident: IncidentStateSummary;
+  context?: StudioEndpointContext;
+  summary?: WorkflowInstanceSummary | null;
+  guidance?: ReturnType<OperatorActionsApi["guidanceForIncident"]>;
+  onOpenDefinition?(definitionId: string): void;
+  definitionAccess?: DefinitionAccessObservation;
+  onClose(): void;
+  actions?: ReactNode;
+}) {
   const dialogRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
   const [copyStatus, setCopyStatus] = useState("");
@@ -3442,6 +3497,7 @@ function IncidentDetailsDialog({ incident, onClose, actions }: { incident: Incid
             {copyStatus ? <p className="wf-copy-status" role="status">{copyStatus}</p> : null}
           </div>
           {actions}
+          {guidance ? <IncidentNextStep context={context} summary={summary} incident={incident} guidance={guidance} onOpenDefinition={onOpenDefinition} definitionAccess={definitionAccess} /> : null}
           <IncidentTechnicalContent incident={incident} />
         </div>
       </section>
