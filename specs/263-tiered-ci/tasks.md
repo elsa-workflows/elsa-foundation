@@ -154,7 +154,13 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
   - no job named `Build & test` or `Full tier` sits behind an `if:` that can skip it.
 
   *(Done as `test_tiers.py check-workflows`, run in `Plan tiers`. It also refuses a `labeled` trigger (comments excluded) and a `Full tier` job that does not fail on a failed plan.)*
-- [ ] T023 [US1] Open this work's PR as a draft and run quickstart "Story 1". Record the push-to-`Build & test` time and the shard durations in the PR evidence comment.
+- [X] T023 [US1] Open this work's PR as a draft and run quickstart "Story 1". Record the push-to-`Build & test` time and the shard durations in the PR evidence comment.
+
+  *(Done on #3265, run 39841946697, before the switch: `Build & test` green 23 min after `Plan tiers` started.
+  - **Shards:** `pr-1`, `pr-2` and `pr-3` took 11–12 min each, build included. `workbench-rest` took 15 min, `cluster-foundation-host` 16 min, and `workbench-native-hosting` 22.5 min, which is the bound until the switch.
+  - **Coverage:** 13,098 tests ran in the shards. Against the planning baseline, all 6 tests not run here were deleted on `main` by #3199 and #3254, and `Elsa.Architecture.Tests` ran in its own job.
+  - **Outcomes:** no retries and no quarantined failures. 48 PR-tier tests over 10 s were reported only.
+  - **Still to come:** steps 4–5, the forced retry and the double failure, need a throwaway PR.)*
 
 **Checkpoint**: `Build & test` is sharded and green, and every project that ran before still runs, the integration projects included (switch off).
 
