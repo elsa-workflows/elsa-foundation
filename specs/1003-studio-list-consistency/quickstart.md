@@ -17,15 +17,15 @@ This is a future validation guide, not a record of executed tests. Implementatio
 
    ```bash
    pnpm --filter @elsa-workflows/studio-workflows exec vitest run --maxWorkers=2 --minWorkers=1 \
-     src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityDefinitions.test.tsx \
-     src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowDefinitions.test.tsx \
-     src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowDefinitionBrowseLocation.test.ts \
-     src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowDefinitionSearch.test.tsx \
-     src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowDefinitionBrowseBoundaries.test.tsx \
-     src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowDefinitionRoute.test.tsx \
-     src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowDefinitionStatus.test.tsx \
-     src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowInstances.test.tsx \
-     src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowRunHistory.test.tsx
+     src/__tests__/activityDefinitions.test.tsx \
+     src/__tests__/workflowDefinitions.test.tsx \
+     src/__tests__/workflowDefinitionBrowseLocation.test.ts \
+     src/__tests__/workflowDefinitionSearch.test.tsx \
+     src/__tests__/workflowDefinitionBrowseBoundaries.test.tsx \
+     src/__tests__/workflowDefinitionRoute.test.tsx \
+     src/__tests__/workflowDefinitionStatus.test.tsx \
+     src/__tests__/workflowInstances.test.tsx \
+     src/__tests__/workflowRunHistory.test.tsx
    ```
 
    Include Activity Definitions, Workflow Definitions browse/status, and Runs identity/action coverage. Retain the actual Vitest counts and output.

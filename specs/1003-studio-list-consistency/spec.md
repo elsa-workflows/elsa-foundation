@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-22
 
-**Status**: Draft — awaiting root scope review
+**Status**: Approved — root approval recorded in [issue comment 6343367959](https://github.com/elsa-workflows/elsa-foundation/issues/3070#issuecomment-6343367959)
 
 **Input**: Issue [#3070: Align workflow and activity lists with the Runs list conventions](https://github.com/elsa-workflows/elsa-foundation/issues/3070), including its pre-claim refinements.
 

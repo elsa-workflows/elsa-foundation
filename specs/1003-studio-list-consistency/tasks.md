@@ -12,8 +12,8 @@
 
 **Purpose**: Refresh the selected issue and establish the authorized source boundary.
 
-- [ ] T001 Re-read Issue #3070, its current claim/scope comments, prerequisite closeouts, competing claims, and open PRs; check for a failed required base gate and conflicting ownership. Confirm the pinned base or a root-selected newer base. Source work may start from the approved pinned head; do not treat pending Home CI as passed or waived. Root integrates qualified resulting main before final PR qualification or merge.
-- [ ] T002 Root reviews this package and resolves scope changes; change `specs/1003-studio-list-consistency/spec.md` from `Draft` to `Approved` before implementation begins.
+- [x] T001 Root's fresh issue, prerequisite, ownership, open-PR, and base checks confirmed the approved pinned head and no failed required base gate or conflicting claim. Home Core and Chromium checks remain pending, not waived. Root integrates qualified resulting main before final PR qualification or merge.
+- [x] T002 Root approved this package in [issue comment 6343367959](https://github.com/elsa-workflows/elsa-foundation/issues/3070#issuecomment-6343367959); the spec is now `Approved` before source implementation.
 - [ ] T003 At the approved source base, refresh the relevant consumer/API contracts in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionsPage.tsx`, `workflow-editor/WorkflowDefinitions.tsx`, `workflow-editor/pages.tsx`, and `workflow-editor/WorkflowInstances.tsx`; confirm current public controls still fit without a new dependency or API.
 
 ## Phase 2: User Story 3 — Return to the Activity Definition collection (Priority: P1)

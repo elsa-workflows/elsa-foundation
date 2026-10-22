@@ -4,7 +4,7 @@
 
 **Input**: [Issue #3070](https://github.com/elsa-workflows/elsa-foundation/issues/3070), its accepted claim/scope checkpoint, and the current issue comments.
 
-**Planning boundary**: This plan is awaiting root review. It authorizes no source implementation, runtime work, or acceptance claim yet. The assigned checkout starts at pinned frozen Home head `58a36c93f1395a0479868af19754aac2043be818`; preserve those changes. After root approves this package and confirms no failed required base gate or conflicting ownership, implementation may start from that pinned head (or a newer base selected by root). Pending Home CI remains pending, not passed or waived. Root owns the separate serial integration lane and integrates qualified resulting main before this leaf's final PR qualification or merge.
+**Planning boundary**: Root approved this package and authorized source implementation in [issue comment 6343367959](https://github.com/elsa-workflows/elsa-foundation/issues/3070#issuecomment-6343367959). The assigned checkout starts at pinned frozen Home head `58a36c93f1395a0479868af19754aac2043be818`; preserve those changes. Root's fresh ownership/prerequisite/open-PR/base checks found no failed required base gate or conflicting ownership. Home Core and Chromium checks are still running; their pending state is not a pass or waiver. Root owns the separate serial integration lane and integrates qualified resulting main before this leaf's final PR qualification or merge. This plan authorizes the scoped source work, not runtime acceptance or final delivery gates.
 
 ## Summary
 
@@ -140,4 +140,4 @@ No constitution violations, new public API, backend contract, package, dependenc
 
 ## Cadence and Ownership
 
-This is one implementation leaf under one serial integration model. A single source writer owns the entire shared-list change; the shared row components and Activity history state do not support independent source writers. The worker stops after this reviewable spec package. Root approves scope before implementation, owns integration and final review, and decides the final repository gates. The spec remains `Draft` until that review; root changes it to `Approved` before source work, and the eventual implementation PR sets `Implemented` before merge per [spec lifecycle](../../docs/reference/spec-lifecycle.md).
+This is one implementation leaf under one serial integration model. A single source writer owns the entire shared-list change; the shared row components and Activity history state do not support independent source writers. Root approved this package before source work and owns integration and final review. Root decides final repository gates. The spec is `Approved`; the eventual implementation PR sets `Implemented` before merge per [spec lifecycle](../../docs/reference/spec-lifecycle.md).
