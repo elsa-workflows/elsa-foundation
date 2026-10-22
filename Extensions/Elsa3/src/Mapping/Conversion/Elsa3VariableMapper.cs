@@ -23,6 +23,26 @@ internal static class Elsa3VariableMapper
     private static readonly ObjectConverterOptions StrictConversion = new(StrictMode: true);
 
     /// <summary>
+    /// The options Elsa 3's <c>ObjectConverter</c> read a collection's JSON text with: enums by name and case-insensitive
+    /// property names. They only read the Elsa 3 text; the result is written back with default options for Elsa 4.
+    /// </summary>
+    private static readonly JsonSerializerOptions Elsa3ReadOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+    };
+
+    /// <summary>
+    /// Elsa 3 types that stand for a resource (a file, a stream, raw bytes), not data. Elsa 4 has no counterpart yet, and
+    /// holding one as <c>Object</c> would pretend the conversion works, so a variable of one is refused (#3194).
+    /// </summary>
+    private static readonly IReadOnlySet<string> ResourceTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "FormFile", "IFormFile", "Stream", "Byte[]"
+    };
+
+    /// <summary>
     /// Elsa 3 dictionary types Elsa 4 has no type for. Each becomes an <c>Object</c> variable whose starting value is a
     /// JSON object; the value is the example a refusal shows.
     /// </summary>
@@ -55,13 +75,13 @@ internal static class Elsa3VariableMapper
         variable = new VariableDefinition(source.Id, source.Name, shape.Type, storageDriverType, Default: null);
         refusal = null;
 
-        // A collection of a type Elsa 4 does not know (FormFile[]: uploaded files) has nothing faithful to hold, so it is
-        // refused with or without a starting value, until its own spec gives it an Elsa 4 counterpart (#3194).
-        if (shape.Kind == ShapeKind.Collection && shape.ClrType is null)
+        // A resource (a file, a stream, raw bytes) has nothing faithful to hold, so it is refused with or without a starting
+        // value, until its own spec gives it an Elsa 4 counterpart (#3194).
+        if (shape.Kind == ShapeKind.Resource)
         {
             refusal = new(
-                $"Variable '{source.Name}' has the type '{typeName}', a collection of a type Elsa 4 does not know, so it cannot be converted.",
-                "Elsa 4 has no counterpart for this element type yet (uploaded files, FormFile[], are tracked in #3194). Remove the variable from the Elsa 3 workflow, or convert this workflow once Elsa 4 supports the type.");
+                $"Variable '{source.Name}' has the type '{typeName}', a resource (a file, a stream or raw bytes) Elsa 4 cannot hold yet, so it cannot be converted.",
+                "Elsa 4 has no counterpart for resource variables yet; they are tracked in #3194. Remove the variable from the Elsa 3 workflow, or convert this workflow once Elsa 4 supports it.");
             return false;
         }
 
@@ -129,21 +149,28 @@ internal static class Elsa3VariableMapper
                     $"In the Elsa 3 workflow, change the starting value to a valid {typeName} value, or change the type to Object to keep the value as text.");
                 return false;
 
+            // A type Elsa 4 does not know runs as Object. JSON keeps the shape Elsa 3 deserialized into that type; other text
+            // Elsa 3 converted in a way the converter cannot know (an enum, a type converter), so it is refused.
             default:
+                if (TryParse(value, JsonValueKind.Object, out json) || TryParse(value, JsonValueKind.Array, out json))
+                    return true;
                 refusal = new(
-                    $"Variable '{source.Name}' has a starting value, but its type '{typeName}' is not known in Elsa 4, so the value cannot start as it did in Elsa 3.",
-                    "In the Elsa 3 workflow, remove the starting value, or change the variable's type to Object to keep the value as text.");
+                    $"Variable '{source.Name}' has the starting value '{Echo(value)}', but its type '{typeName}' is not known in Elsa 4, and the value is not JSON, so it cannot start as it did in Elsa 3.",
+                    "In the Elsa 3 workflow, write the starting value as a JSON object or array, change the variable's type to Object to keep the value as text, or remove the starting value.");
                 return false;
         }
     }
 
     /// <summary>
     /// The Elsa 4 shape of an Elsa 3 type name. Elsa 3 writes a list as <c>List&lt;T&gt;</c> and an array as <c>T[]</c>:
-    /// a collection whose element type Elsa 4 knows keeps that element type; any other has no <see cref="VariableShape.ClrType"/>
-    /// and is refused.
+    /// a collection whose element type Elsa 4 knows keeps that element type. Any other type Elsa 4 does not know, a nested
+    /// collection included, becomes <c>Object</c>; a resource is refused.
     /// </summary>
     private static VariableShape Resolve(IWellKnownTypeRegistry registry, string typeName, bool isArray)
     {
+        if (IsResource(typeName))
+            return new(ShapeKind.Resource, new TypeReference(ObjectAlias), null);
+
         if (DictionaryTypes.TryGetValue(typeName, out var example))
             return new(ShapeKind.Dictionary, new TypeReference(ObjectAlias), null, Example: example);
 
@@ -158,7 +185,7 @@ internal static class Elsa3VariableMapper
         if (isCollection)
         {
             if (!TryResolveKnown(registry, elementName, out var elementType, out var elementAlias))
-                return new(ShapeKind.Collection, new TypeReference(ObjectAlias), null);
+                return new(ShapeKind.Unknown, new TypeReference(ObjectAlias), null);
             return new(
                 ShapeKind.Collection,
                 new TypeReference(elementAlias, kind),
@@ -172,9 +199,19 @@ internal static class Elsa3VariableMapper
         if (TryResolveKnown(registry, typeName, out var scalarType, out _))
             return new(ShapeKind.Scalar, TypeReferenceFactory.FromClrType(scalarType, registry.GetAliasOrDefault), scalarType);
 
-        // A type Elsa 4's registry does not know runs as Object; a starting value on it is refused.
-        var unknown = LegacyClrTypeResolver.Resolve(registry, typeName);
-        return new(ShapeKind.Unknown, TypeReferenceFactory.FromClrType(unknown, registry.GetAliasOrDefault), null);
+        // A type Elsa 4's registry does not know runs as Object.
+        return new(ShapeKind.Unknown, new TypeReference(ObjectAlias), null);
+    }
+
+    /// <summary>Whether <paramref name="typeName"/>, or the element of a collection of it, is a <see cref="ResourceTypes">resource</see>.</summary>
+    private static bool IsResource(string typeName)
+    {
+        // A CLR name may be namespace- and assembly-qualified: "System.IO.Stream, System.Runtime" → "Stream".
+        var name = typeName.Split(',')[0].Trim();
+        var simple = name[(name.LastIndexOf('.') + 1)..];
+        if (ResourceTypes.Contains(simple))
+            return true;
+        return TryReadCollection(name, out var elementName, out _) && IsResource(elementName);
     }
 
     private static bool TryReadCollection(string typeName, out string elementName, out CollectionKind kind)
@@ -239,7 +276,8 @@ internal static class Elsa3VariableMapper
     {
         try
         {
-            json = JsonSerializer.SerializeToElement(array.Deserialize(collectionType), collectionType);
+            // Read as Elsa 3 read it; write with default options, so Elsa 4 gets plain JSON (an enum as its number).
+            json = JsonSerializer.SerializeToElement(array.Deserialize(collectionType, Elsa3ReadOptions), collectionType);
             return true;
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or InvalidOperationException)
@@ -278,7 +316,7 @@ internal static class Elsa3VariableMapper
 
     private static string Echo(string value) => value.Length <= 80 ? value : $"{value[..80]}…";
 
-    private enum ShapeKind { Text, Scalar, Collection, Dictionary, Unknown }
+    private enum ShapeKind { Text, Scalar, Collection, Dictionary, Unknown, Resource }
 
     /// <param name="ClrType">The CLR type the starting value converts to; <c>null</c> when it is kept as parsed JSON (a dictionary) or the type is unknown.</param>
     private sealed record VariableShape(ShapeKind Kind, TypeReference Type, Type? ClrType, bool ElementIsText = true, string? Example = null);

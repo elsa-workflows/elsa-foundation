@@ -64,6 +64,20 @@ These four are converter defects outside this unit's scope (FR-005 and the bound
 starting values). They are reported to the maintainer as follow-ups. The conversion measurement cannot see any of them,
 because it never publishes.
 
+## Revised after review (2026-10-22)
+
+Code Review approved PR #3180 with non-blocking notes. The maintainer settled them in a follow-up PR on this spec:
+- **Collection items** are read with Elsa 3's JSON options: enums by name, property names case-insensitive. Elsa 3 had
+  no "numbers from strings" option, so `["5"]` for `List<Int32>` stays refused, as in Elsa 3. The result is written for
+  Elsa 4 with default options, so no Elsa 3 option reaches Elsa 4.
+- **A type Elsa 4 does not know becomes `Object`.** That covers a nested collection, `ObjectDictionary[]`, a custom
+  class or an unregistered enum. A JSON starting value (`{…}` or `[…]`) is held as parsed JSON. Other text is refused,
+  because Elsa 3 converted it in a way the converter cannot know.
+- **Resources are refused** with or without a starting value: `FormFile`, `IFormFile`, `Stream` and `byte[]`, alone or
+  as a collection element. #3194 now covers them all. `HttpHeaders` is not a resource: it stays `Object` holding a JSON
+  object.
+- **The diagnostic code stays** `ELS3-ACTIVITY-VARIABLE-VALUE-UNCONVERTIBLE`, for workflow-level variables too.
+
 ## Measured after (JTest corpus, 2026-10-21, this branch)
 
 Same throwaway method as the baseline, deleted afterwards.
