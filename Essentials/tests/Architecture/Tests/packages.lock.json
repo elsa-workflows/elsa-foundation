@@ -1641,17 +1641,11 @@
       "elsa.integrations.connectors.oauth2": {
         "type": "Project",
         "dependencies": {
-          "Elsa.Secrets.Core": "[4.0.0-dev, )"
-        }
-      },
-      "elsa.integrations.sdk": {
-        "type": "Project",
-        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Activities.Http": "[4.0.0-dev, )",
-          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
-          "Elsa.Primitives": "[4.0.0-dev, )",
-          "Elsa.Secrets.Core": "[4.0.0-dev, )",
-          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+          "Elsa.Connections": "[4.0.0-dev, )",
+          "Elsa.Connections.Core": "[4.0.0-dev, )",
+          "Elsa.Secrets.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.locking.core": {

@@ -10,7 +10,8 @@ The Connections API maps the REST surface for service connections and the OAuth 
 - `GET/PUT/DELETE /connections/{name}` metadata.
 - `POST /connections/{name}/revoke` and `/test`.
 - `GET /connections/{name}/oauth-redirect-uri` builds `{PublicBaseUrl}/_elsa/connections/oauth/callback`.
-- `GET /_elsa/connections/oauth/callback` (D2, phase 2 groundwork). Anonymous. Unhandled until an OAuth scheme claims it.
+- `GET /_elsa/connections/oauth/callback` (D2). Anonymous. Dispatches to `IOAuthCallbackHandler`;
+  unhandled when no handler claims the request.
 
 ## Permissions
 

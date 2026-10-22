@@ -1,4 +1,3 @@
-using Elsa.Integrations.Sdk.OAuth;
 using System.Text.Json;
 
 namespace Elsa.Integrations.Connectors.OAuth2.Tests;
@@ -9,8 +8,8 @@ public sealed class HttpConnectionTests
     public async Task SendHttpRequest_uses_the_http_connection_and_injects_the_token()
     {
         var preview = new MockOAuthServer();
-        var (harness, server) = await OAuth2TestSupport.StartAsync(OAuth2TestSupport.ClientCredentialsScheme(preview));
-        await using var _ = harness;
+        await using var harness = await OAuth2TestSupport.StartAsync(OAuth2TestSupport.ClientCredentialsScheme(preview));
+        var server = harness.Server;
 
         var completion = await OAuth2TestSupport.SendAsync(harness, server.ResourceEndpoint);
 
@@ -26,17 +25,10 @@ public sealed class HttpConnectionTests
     public async Task Authorization_code_with_pkce_works_through_the_callback()
     {
         var preview = new MockOAuthServer();
-        var (harness, server) = await OAuth2TestSupport.StartAsync(OAuth2TestSupport.AuthorizationCodeScheme(preview));
-        await using var _ = harness;
+        await using var harness = await OAuth2TestSupport.StartAsync(OAuth2TestSupport.AuthorizationCodeScheme(preview));
+        var server = harness.Server;
 
-        var started = await harness.Tokens.BeginAuthorizationCodeAsync(OAuth2TestSupport.BoundConnection(harness), harness.Callback);
-        Assert.Contains("code_challenge=", started.AuthorizationUrl, StringComparison.Ordinal);
-        Assert.Contains("code_challenge_method=S256", started.AuthorizationUrl, StringComparison.Ordinal);
-        Assert.Contains(Uri.EscapeDataString(harness.Callback.CallbackUri.ToString()), started.AuthorizationUrl, StringComparison.Ordinal);
-
-        var code = server.ApproveAuthorization(new Uri(started.AuthorizationUrl));
-        var result = await harness.CallbackHandler.HandleAsync(OAuth2TestSupport.BoundConnection(harness), code, started.State);
-        Assert.True(result.Ok, result.Error);
+        await OAuth2TestSupport.AuthorizeAsync(harness, server);
 
         var completion = await OAuth2TestSupport.SendAsync(harness, server.ResourceEndpoint);
         Assert.Equal(200, completion.Result.StatusCode);
@@ -53,8 +45,8 @@ public sealed class HttpConnectionTests
             ClientSource = clientSource,
             ClientId = clientSource == OAuth2ClientSources.BringYourOwn ? preview.ExpectedClientId : null
         };
-        var (harness, server) = await OAuth2TestSupport.StartAsync(scheme, clientSource);
-        await using var _ = harness;
+        await using var harness = await OAuth2TestSupport.StartAsync(scheme, clientSource);
+        var server = harness.Server;
 
         var completion = await OAuth2TestSupport.SendAsync(harness, server.ResourceEndpoint);
         Assert.Equal(200, completion.Result.StatusCode);

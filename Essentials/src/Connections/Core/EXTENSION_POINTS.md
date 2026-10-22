@@ -34,6 +34,7 @@ database connection string, or `RuntimeConnectionToken`.
   `oauth2`, …). Core never hard-codes a scheme list.
 - `IHttpRequestAuthenticator`: applies a scheme to an outbound `HttpRequestMessage`. Refuses to
   attach material when the request host is not allowed.
+- `IOAuthCallbackHandler`: claims the reserved `/_elsa/connections/oauth/callback` route.
 
 ## Safety Rules
 

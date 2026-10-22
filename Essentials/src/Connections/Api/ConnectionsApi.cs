@@ -298,10 +298,29 @@ public static class ConnectionsApi
         await Json(new OAuthRedirectUriResponse { RedirectUri = origin + OAuthCallbackPath }).ExecuteAsync(context);
     }
 
-    private static Task HandleOAuthCallbackAsync(HttpContext context)
+    private static async Task HandleOAuthCallbackAsync(HttpContext context)
     {
-        // Phase 2 groundwork (D2): the route exists so OAuth schemes can plug in without relocating it.
-        return Results.Json(
+        var request = new OAuthCallbackRequest(
+            Value(context.Request.Query, "code"),
+            Value(context.Request.Query, "state"),
+            Value(context.Request.Query, "error"),
+            Value(context.Request.Query, "error_description"));
+
+        foreach (var handler in context.RequestServices.GetServices<IOAuthCallbackHandler>())
+        {
+            var handled = await handler.TryHandleAsync(request, context.RequestAborted);
+            if (handled is null)
+                continue;
+
+            await Results.Json(
+                new { status = handled.Status, message = handled.Message },
+                JsonOptions,
+                contentType: "application/json",
+                statusCode: handled.StatusCode).ExecuteAsync(context);
+            return;
+        }
+
+        await Results.Json(
             new
             {
                 status = "unhandled",

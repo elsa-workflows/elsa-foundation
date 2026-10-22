@@ -1,6 +1,4 @@
 using System.Text.Json;
-using Elsa.Integrations.Sdk.OAuth;
-using Elsa.Integrations.Sdk.Signing;
 using Elsa.Secrets.Core.Models;
 
 namespace Elsa.Integrations.Connectors.OAuth2.Tests;
@@ -11,22 +9,22 @@ public sealed class SecretIsolationTests
     public async Task Tokens_are_resolved_through_ISecretValueResolver_and_masked()
     {
         var preview = new MockOAuthServer();
-        var (harness, server) = await OAuth2TestSupport.StartAsync(OAuth2TestSupport.ClientCredentialsScheme(preview));
-        await using var _ = harness;
+        await using var harness = await OAuth2TestSupport.StartAsync(OAuth2TestSupport.ClientCredentialsScheme(preview));
 
-        var completion = await OAuth2TestSupport.SendAsync(harness, server.ResourceEndpoint);
+        var completion = await OAuth2TestSupport.SendAsync(harness, harness.Server.ResourceEndpoint);
         Assert.Equal(200, completion.Result.StatusCode);
 
         var grantName = OAuth2SecretKeys.Grant(OAuth2TestSupport.ConnectionName);
-        var resolved = await harness.Secrets.ResolveAsync(OAuth2TestSupport.TenantId, new SecretReference(grantName));
+        var resolved = await harness.SecretValues.ResolveAsync(OAuth2TestSupport.TenantId, new SecretReference(grantName));
         Assert.True(resolved.Succeeded);
         Assert.False(string.IsNullOrWhiteSpace(resolved.Value));
 
-        Assert.True(harness.Auth.Mask.HasRegistrations(OAuth2TestSupport.ActivityExecutionId));
-        var leaked = harness.Auth.Mask.Registrations(OAuth2TestSupport.ActivityExecutionId)
+        var mask = (RecordingMask)harness.Mask;
+        Assert.True(mask.HasRegistrations(OAuth2TestSupport.ActivityExecutionId));
+        var leaked = mask.Registrations(OAuth2TestSupport.ActivityExecutionId)
             .Select(entry => entry.Value)
-            .First(value => value.StartsWith(MockOAuthServer.CanaryAccessToken, StringComparison.Ordinal));
-        var masked = harness.Auth.Mask.Mask(OAuth2TestSupport.ActivityExecutionId, $"token={leaked}");
+            .First(value => value.Contains(MockOAuthServer.CanaryAccessToken, StringComparison.Ordinal));
+        var masked = mask.Mask(OAuth2TestSupport.ActivityExecutionId, $"token={leaked}");
         Assert.DoesNotContain(leaked, masked, StringComparison.Ordinal);
         Assert.Contains("[secret:", masked, StringComparison.Ordinal);
 

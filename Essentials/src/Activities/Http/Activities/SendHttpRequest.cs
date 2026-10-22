@@ -106,12 +106,6 @@ public sealed class SendHttpRequest(
         method = string.IsNullOrWhiteSpace(method) ? "GET" : method.Trim();
 
         var client = httpClientFactory.CreateClient(HttpActivityConstants.HttpClientName);
-
-        using var request = new HttpRequestMessage(new HttpMethod(method), url);
-        AddHeaders(request);
-        AddContent(request);
-        await connectionApplicator.ApplyAsync(request, Connection, context, context.CancellationToken);
-
         var effectiveTimeout = Timeout is { } t && t > TimeSpan.Zero ? t : httpActivityOptions.Value.DefaultTimeout;
 
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
@@ -119,13 +113,24 @@ public sealed class SendHttpRequest(
 
         try
         {
-            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseContentRead, timeoutCts.Token);
-            var body = await response.Content.ReadAsStringAsync(timeoutCts.Token);
-            var status = (int)response.StatusCode;
+            using var first = await CreateRequestAsync(url, method, refreshCredentials: false, context, timeoutCts.Token);
+            var response = await client.SendAsync(first, HttpCompletionOption.ResponseContentRead, timeoutCts.Token);
+            if ((int)response.StatusCode == 401 && Connection is not null)
+            {
+                response.Dispose();
+                using var retry = await CreateRequestAsync(url, method, refreshCredentials: true, context, timeoutCts.Token);
+                response = await client.SendAsync(retry, HttpCompletionOption.ResponseContentRead, timeoutCts.Token);
+            }
 
-            return ActivityTransition.Complete(
-                new SendHttpRequestResult(status, body, CollectHeaders(response)),
-                DetermineResponseOutcome(status, response.IsSuccessStatusCode));
+            using (response)
+            {
+                var body = await response.Content.ReadAsStringAsync(timeoutCts.Token);
+                var status = (int)response.StatusCode;
+
+                return ActivityTransition.Complete(
+                    new SendHttpRequestResult(status, body, CollectHeaders(response)),
+                    DetermineResponseOutcome(status, response.IsSuccessStatusCode));
+            }
         }
         catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
         {
@@ -141,6 +146,24 @@ public sealed class SendHttpRequest(
         {
             return ActivityTransition.Complete(SendHttpRequestResult.NoResponse, HttpActivityOutcomes.Failed);
         }
+    }
+
+    private async ValueTask<HttpRequestMessage> CreateRequestAsync(
+        Uri url,
+        string method,
+        bool refreshCredentials,
+        ActivityExecutionContext context,
+        CancellationToken cancellationToken)
+    {
+        var request = new HttpRequestMessage(new HttpMethod(method), url);
+        AddHeaders(request);
+        AddContent(request);
+        if (refreshCredentials)
+            request.Options.Set(HttpConnectionApplyOptions.RefreshCredentials, true);
+        await connectionApplicator.ApplyAsync(request, Connection, context, cancellationToken);
+        if (request.Content is not null)
+            await request.Content.LoadIntoBufferAsync(cancellationToken);
+        return request;
     }
 
     private void AddHeaders(HttpRequestMessage request)

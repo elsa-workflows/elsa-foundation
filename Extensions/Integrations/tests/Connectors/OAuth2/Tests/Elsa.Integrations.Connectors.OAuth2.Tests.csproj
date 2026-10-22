@@ -21,7 +21,14 @@
     <ProjectReference Include="..\..\..\..\src\Connectors\OAuth2\Elsa.Integrations.Connectors.OAuth2.csproj" />
     <ProjectReference Include="..\..\..\..\src\Sdk\Elsa.Integrations.Sdk.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\Essentials\src\Activities\Http\Elsa.Activities.Http.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\Essentials\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\Essentials\src\Connections\Api\Elsa.Connections.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\Essentials\src\Connections\Core\Elsa.Connections.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\Essentials\src\Connections\Elsa.Connections\Elsa.Connections.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\Essentials\src\Connections\Workflows\Elsa.Connections.Workflows.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\Essentials\src\Secrets\Core\Elsa.Secrets.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\Essentials\src\Secrets\Elsa.Secrets\Elsa.Secrets.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\Essentials\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\Essentials\src\Workflows\Runtime\Elsa.Workflows.Runtime\Elsa.Workflows.Runtime.csproj" />
   </ItemGroup>
 
   <ItemGroup>

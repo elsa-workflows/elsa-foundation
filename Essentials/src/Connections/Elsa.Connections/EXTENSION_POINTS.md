@@ -56,8 +56,10 @@ Use `services.AddConnections()` to register defaults, then replace these service
 
 ## HTTP type (phase 1)
 
-The built-in `http` connection type supports `api-key` (header or query), `basic`, and `bearer`.
-OAuth schemes are ordinary plugins on the same type; they are not a second HTTP activity.
+The built-in `http` connection type supports `api-key` (header or query), `basic`, `bearer`, and
+`oauth2`. The `oauth2` scheme is provided by the Integrations OAuth2 connector (#2728); creating an
+`http` connection with that scheme requires the connector's `IAuthenticationSchemeProvider` and
+`IHttpRequestAuthenticator`. OAuth is not a second HTTP activity.
 
 ## OAuth callback (phase 2 groundwork)
 

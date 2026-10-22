@@ -2,7 +2,7 @@ using Elsa.Connections.Core.Models;
 
 namespace Elsa.Connections.Http;
 
-internal sealed class HttpConnectionApplication
+public sealed class HttpConnectionApplication
 {
     public required string ConnectionName { get; init; }
     public required AllowedHostsPolicy Hosts { get; init; }
@@ -11,7 +11,7 @@ internal sealed class HttpConnectionApplication
     public string? QueryName { get; set; }
 }
 
-internal static class HttpConnectionRequestOptionKeys
+public static class HttpConnectionRequestOptionKeys
 {
     public static readonly HttpRequestOptionsKey<HttpConnectionApplication> Applied = new("Elsa.Connections.Applied");
 }

@@ -1,11 +1,15 @@
-using System.Collections.Concurrent;
-using Elsa.Integrations.Sdk.OAuth;
+namespace Elsa.Integrations.Connectors.OAuth2;
 
-namespace Elsa.Integrations.Sdk.Harness;
+public sealed record ValenceOAuthApp(string AppId, string ClientId, string? ClientSecret);
+
+public interface IValenceOAuthAppRegistry
+{
+    ValueTask<ValenceOAuthApp?> GetAsync(string appId, CancellationToken cancellationToken = default);
+}
 
 internal sealed class InMemoryValenceOAuthAppRegistry : IValenceOAuthAppRegistry
 {
-    private readonly ConcurrentDictionary<string, ValenceOAuthApp> _apps = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, ValenceOAuthApp> _apps = new(StringComparer.Ordinal);
 
     public void Register(ValenceOAuthApp app)
     {
