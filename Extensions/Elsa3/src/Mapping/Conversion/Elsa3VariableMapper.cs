@@ -217,9 +217,9 @@ internal static class Elsa3VariableMapper
         // A CLR name may be namespace- and assembly-qualified: "System.IO.Stream, System.Runtime" → "Stream". A generic
         // argument keeps its closing brackets ("Stream]]"); "[]" is an array and stays.
         var name = typeName.Split(',')[0].Trim();
+        while (name.EndsWith(']') && !name.EndsWith("[]", StringComparison.Ordinal))
+            name = name[..^1];
         var simple = name[(name.LastIndexOf('.') + 1)..];
-        while (simple.EndsWith(']') && !simple.EndsWith("[]", StringComparison.Ordinal))
-            simple = simple[..^1];
         if (ResourceTypes.Contains(simple))
             return true;
         return TryReadCollection(name, out var elementName, out _) && IsResource(elementName);

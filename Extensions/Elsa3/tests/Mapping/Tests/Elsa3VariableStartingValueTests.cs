@@ -157,6 +157,9 @@ public sealed class Elsa3VariableStartingValueTests
     [InlineData("System.Collections.Generic.List`1[[System.IO.Stream]]")]
     [InlineData("System.Collections.Generic.List`1[System.IO.Stream]")]
     [InlineData("System.Collections.Generic.Dictionary`2[System.String,System.Byte[]]")]
+    // An array of a resource as a single-bracket generic argument.
+    [InlineData("System.Collections.Generic.List`1[System.IO.Stream[]]")]
+    [InlineData("System.Collections.Generic.List`1[[Elsa.Http.Models.FormFile[], Elsa.Http]]")]
     public async Task A_resource_variable_is_refused_even_without_a_value(string typeName)
     {
         var result = await ConvertAsync(new Elsa3Variable { Id = "resource", Name = "Resource", TypeName = typeName });
