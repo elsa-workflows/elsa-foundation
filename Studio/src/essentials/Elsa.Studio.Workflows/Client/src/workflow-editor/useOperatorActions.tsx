@@ -10,12 +10,14 @@ import {
 } from "../api/alterations";
 import { getActivityStateView, supportsActivityStateView } from "../api/runtime";
 import { isCompensationScope } from "../compensationScope";
+import { isActiveIncident } from "../workflowRuntimeOverlays";
 import {
   compensationDecisions,
   deriveCompensationRuntime,
   interventionDecisionLabel,
   interventionRequesterOf,
   isWaitingForIntervention,
+  isRetryDue,
   offeredDecisions,
   readCompensationJournal,
   type CompensationJournalSource
@@ -42,7 +44,7 @@ import {
   type PendingOperatorAction
 } from "../operatorActions";
 import { findActivityNode } from "../workflowAdapter";
-import type { ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary, WorkflowInstanceDetails } from "../workflowTypes";
+import type { ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
 import { OperatorActionDialog, type OperatorActionForm } from "./OperatorActionDialog";
 
 // Spec 260 (T422, T423): the run view's operator actions. One action per run at a time: a confirmed action is submitted
@@ -130,9 +132,68 @@ export interface UseOperatorActionsInput {
   refreshRun(): Promise<WorkflowInstanceDetails | null>;
 }
 
+/** Read-only discovery state for the canonical operator action routes. */
+export type OperatorActionAvailability = "checking" | "available" | "unavailable" | "unknown";
+
+export type RetryReviewEligibility = "eligible" | "ineligible" | "unknown";
+
+export type RetryReviewReason = "historical-incident" | "ended-run" | "source-not-faulted" | "parent-not-running" | "source-not-loaded" | "parent-not-loaded";
+
+export interface IncidentRetryReviewEligibility {
+  status: RetryReviewEligibility;
+  reason?: RetryReviewReason;
+  observedStatus?: string;
+}
+
+const endedWorkflowRunStatuses = new Set(["completed", "faulted", "cancelled", "canceled"]);
+
+/** Local Retry review eligibility mirrors the existing server preflight; the server remains authoritative. */
+export function getIncidentRetryReviewEligibility(
+  incident: IncidentStateSummary,
+  run: Pick<WorkflowInstanceSummary, "status"> | null | undefined,
+  activities: ActivityExecutionStateSummary[]
+): IncidentRetryReviewEligibility {
+  if (!isActiveIncident(incident)) return { status: "ineligible", reason: "historical-incident" };
+  const runStatus = run?.status?.trim().toLowerCase();
+  if (runStatus && endedWorkflowRunStatuses.has(runStatus)) return { status: "ineligible", reason: "ended-run" };
+
+  const sourceId = incident.activityExecutionId?.trim() || incident.metadata?.["runtime.activityExecutionId"]?.trim();
+  if (!sourceId) return { status: "unknown", reason: "source-not-loaded" };
+  const source = activities.find(activity => activity.activityExecutionId === sourceId);
+  if (!source) return { status: "unknown", reason: "source-not-loaded" };
+  const sourceStatus = source.status?.trim();
+  if (!sourceStatus) return { status: "unknown", reason: "source-not-loaded" };
+  if (sourceStatus.toLowerCase() !== "faulted") {
+    return { status: "ineligible", reason: "source-not-faulted", observedStatus: sourceStatus };
+  }
+
+  const parentId = source.parentActivityExecutionId?.trim() || source.provenance?.parentActivityExecutionId?.trim();
+  if (!parentId) return { status: "eligible" };
+  const parent = activities.find(activity => activity.activityExecutionId === parentId);
+  if (!parent) return { status: "unknown", reason: "parent-not-loaded" };
+  const parentStatus = parent.status?.trim();
+  if (!parentStatus) return { status: "unknown", reason: "parent-not-loaded" };
+  if (parentStatus.toLowerCase() !== "running") {
+    return { status: "ineligible", reason: "parent-not-running", observedStatus: parentStatus };
+  }
+  return { status: "eligible" };
+}
+
+export interface IncidentNextStepGuidance {
+  actionAvailability: OperatorActionAvailability;
+  canAct: boolean;
+  pendingIncidentId: string | null;
+  requesterCancelled: boolean;
+  retryReviewEligibility: IncidentRetryReviewEligibility;
+  retryNotBefore?: string;
+  retryDue?: boolean;
+}
+
 export interface OperatorActionsApi {
   canAct: boolean;
+  actionAvailability: OperatorActionAvailability;
   pending: { incidentId: string; label: string } | null;
+  guidanceForIncident(incident: IncidentStateSummary): IncidentNextStepGuidance;
   open(model: OperatorActionModel, focusFallback?: () => void): void;
   /** The Retry and decision buttons of the incident dialog; `close` closes that dialog first. */
   renderIncidentActions(incident: IncidentStateSummary, activityLabel: string, close: () => void, focusFallback: () => void): ReactNode;
@@ -160,7 +221,7 @@ export function useOperatorActions({
   labelOf,
   refreshRun
 }: UseOperatorActionsInput): OperatorActionsApi {
-  const [linksAvailable, setLinksAvailable] = useState(false);
+  const [availabilityObservation, setAvailabilityObservation] = useState<{ context: StudioEndpointContext; status: OperatorActionAvailability }>({ context, status: "checking" });
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const [followed, setFollowed] = useState<FollowedAction | null>(null);
   const [message, setMessage] = useState<{ text: string; tone: "info" | "error" } | null>(null);
@@ -172,14 +233,16 @@ export function useOperatorActions({
   journalsRef.current = journals;
 
   const permissions = readWorkflowInstancePermissions(details);
-  const canAct = permissions.canManage && linksAvailable;
+  const actionAvailability = availabilityObservation.context === context ? availabilityObservation.status : "checking";
+  const canAct = permissions.canManage && actionAvailability === "available";
 
   useEffect(() => {
     let active = true;
+    setAvailabilityObservation({ context, status: "checking" });
     supportsOperatorAlterations(context).then(supported => {
-      if (active) setLinksAvailable(supported);
+      if (active) setAvailabilityObservation({ context, status: supported ? "available" : "unavailable" });
     }, () => {
-      if (active) setLinksAvailable(false);
+      if (active) setAvailabilityObservation({ context, status: "unknown" });
     });
     return () => {
       active = false;
@@ -274,10 +337,10 @@ export function useOperatorActions({
 
   // A reload resumes the plan this run was following; it is never submitted again (FR-423).
   useEffect(() => {
-    if (!linksAvailable) return;
+    if (actionAvailability !== "available") return;
     const stored = readPendingOperatorAction(workflowExecutionId);
     if (stored) void follow(stored);
-  }, [follow, linksAvailable, workflowExecutionId]);
+  }, [actionAvailability, follow, workflowExecutionId]);
 
   const open = useCallback((model: OperatorActionModel, focusFallback?: () => void) => {
     setMessage(null);
@@ -367,12 +430,58 @@ export function useOperatorActions({
       requester);
   };
 
+  const guidanceForIncident = (incident: IncidentStateSummary): IncidentNextStepGuidance => {
+    const retryReviewEligibility = getIncidentRetryReviewEligibility(incident, details?.instance, activities);
+    const requester = interventionRequesterOf(incident);
+    const requesterActivity = requester ? activities.find(activity => activity.activityExecutionId === requester) : undefined;
+    const scopeNode = requesterActivity && root
+      ? findActivityNode(root, requesterActivity.authoredActivityId) ?? findActivityNode(root, requesterActivity.executableNodeId)
+      : undefined;
+    const source = requester ? journals.get(requester) : undefined;
+    if (requester && requesterActivity && scopeNode && isCompensationScope(scopeNode) && typeof source === "object") {
+      const runtime = deriveCompensationRuntime(scopeNode, activities, details?.incidents ?? [], {
+        complete: !details?.activityNextContinuationToken,
+        selectedActivityExecutionId: requester,
+        root,
+        journal: source
+      });
+      const activityExecutionId = incident.activityExecutionId?.trim() || incident.metadata?.["runtime.activityExecutionId"]?.trim();
+      const row = [...runtime.rows, ...(runtime.received ?? [])]
+        .find(candidate => candidate.actions?.incidentId === incident.incidentId
+          || candidate.recovery.incidentId === incident.incidentId
+          || (!!activityExecutionId && candidate.recovery.activityExecutionId === activityExecutionId));
+      if (row?.recovery.state === "RetryScheduled" && row.recovery.retryNotBefore) {
+        return {
+          actionAvailability,
+          canAct,
+          pendingIncidentId: followed?.incidentId ?? null,
+          requesterCancelled: requesterActivity.status === "Cancelled",
+          retryReviewEligibility,
+          retryNotBefore: row.recovery.retryNotBefore,
+          retryDue: isRetryDue(row.recovery)
+        };
+      }
+    }
+
+    return {
+      actionAvailability,
+      canAct,
+      pendingIncidentId: followed?.incidentId ?? null,
+      requesterCancelled: requesterActivity?.status === "Cancelled",
+      retryReviewEligibility
+    };
+  };
+
   const renderIncidentActions = (incident: IncidentStateSummary, activityLabel: string, closeIncident: () => void, focusFallback: () => void): ReactNode => {
     if (!canAct || followed || !isWaitingForIntervention(incident)) return null;
+    const retryEligibility = getIncidentRetryReviewEligibility(incident, details?.instance, activities);
+    if (retryEligibility.reason === "historical-incident" || retryEligibility.reason === "ended-run") return null;
     const requester = interventionRequesterOf(incident);
     // A cancelled scope never starts a handler, and decides nothing (spec 260 R9).
     if (requester && activities.find(activity => activity.activityExecutionId === requester)?.status === "Cancelled") return null;
     const decisions = offeredDecisions(incident);
+    const showRetry = retryEligibility.status === "eligible";
+    if (!showRetry && decisions.length === 0) return null;
     const launch = async (action: "retry" | { decision: string }) => {
       closeIncident();
       // Read the journal when the run view has none yet (or is still reading it), and use what the read returned: the
@@ -385,9 +494,11 @@ export function useOperatorActions({
     };
     return (
       <div className="wf-incident-operator-actions" role="group" aria-label="Operator actions">
-        <button type="button" onClick={() => void launch("retry")}>
-          <RotateCw size={13} aria-hidden="true" /> Retry
-        </button>
+        {showRetry ? (
+          <button type="button" onClick={() => void launch("retry")}>
+            <RotateCw size={13} aria-hidden="true" /> Retry
+          </button>
+        ) : null}
         {decisions.map(decision => (
           <button key={decision} type="button" data-tone={decision === compensationDecisions.abandon ? "danger" : undefined} onClick={() => void launch({ decision })}>
             {decision === compensationDecisions.abandon ? <OctagonX size={13} aria-hidden="true" /> : <UserCheck size={13} aria-hidden="true" />}
@@ -400,7 +511,9 @@ export function useOperatorActions({
 
   return {
     canAct,
+    actionAvailability,
     pending: followed ? { incidentId: followed.incidentId, label: followed.label } : null,
+    guidanceForIncident,
     open,
     renderIncidentActions,
     dialog: dialog ? (

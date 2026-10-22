@@ -3220,6 +3220,10 @@ describe("workflows module", () => {
         })] });
       }
 
+      if (url === "https://server.example/design/workflows/definitions/definition-1") {
+        return response({ definition: definition({ id: "definition-1", name: "Order fulfillment" }), draft: null, versions: [] });
+      }
+
       if (url.startsWith("https://server.example/design/workflows/definitions")) {
         return response({ items: [definition({ id: "definition-1", name: "Order fulfillment" })] });
       }
@@ -3230,6 +3234,7 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1");
 
     await waitForText(container, "Pinned Runtime executable");
+    await waitForText(container, "Review workflow definition");
     expect(container.textContent).toContain("Run");
     expect(container.textContent).toContain("Workflow Instance ID");
     expect(container.querySelector(".wf-page-header .wf-page-context")?.textContent).toContain("wfexec-1");
@@ -3237,7 +3242,7 @@ describe("workflows module", () => {
     expect(runInspector).not.toBeNull();
     expect(runInspector?.textContent).not.toContain("Workflow Instance ID");
     expect([...runInspector!.querySelectorAll("button")].filter(button => button.textContent?.includes("Explain"))).toHaveLength(0);
-    await click(buttonByText(container, "Designer"));
+    await click(buttonByText(container, "Review workflow definition"));
     expect(window.location.pathname).toBe("/workflows/definitions");
     expect(new URLSearchParams(window.location.search).get("definition")).toBe("definition-1");
     window.history.replaceState({}, "", "/workflows/instances/wfexec-1");
@@ -3298,7 +3303,7 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1", undefined, true);
 
     await waitForText(container, "Pinned Runtime executable");
-    await click(buttonByText(container, "Designer"));
+    await click(buttonByText(container, "Review workflow definition"));
     await waitForEditor(container);
 
     expect(window.location.pathname).toBe("/workflows/definitions");
@@ -3328,7 +3333,7 @@ describe("workflows module", () => {
 
     for (const tab of ["Activity", "Issues", "Details"] as const) {
       await openTab(tab);
-      await click(buttonByText(container, "Designer"));
+      await click(buttonByText(container, "Review workflow definition"));
       await waitForEditor(container);
       expect(window.location.pathname).toBe("/workflows/definitions");
       expect(container.querySelector(".wf-instance-detail-workbench")).toBeNull();

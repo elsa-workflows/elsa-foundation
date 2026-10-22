@@ -17,7 +17,8 @@ import {
   type OperatorActionModel
 } from "../operatorActions";
 import { AlterationRequestError } from "../api/alterations";
-import { useCompensationJournals, useOperatorActions, type CompensationJournals, type OperatorActionsApi } from "../workflow-editor/useOperatorActions";
+import { getIncidentRetryReviewEligibility, useCompensationJournals, useOperatorActions, type CompensationJournals, type OperatorActionsApi } from "../workflow-editor/useOperatorActions";
+import type { CompensationJournalSource } from "../compensationRuntime";
 import { compensationScopeStructureKind } from "../compensationScope";
 import type { ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary, WorkflowInstanceDetails } from "../workflowTypes";
 
@@ -180,6 +181,93 @@ describe("the pending plan in session storage", () => {
 });
 
 describe("useOperatorActions", () => {
+  it("distinguishes checking, advertised, unsupported and failed action discovery while ignoring stale context results", async () => {
+    let resolveOld!: (document: unknown) => void;
+    const oldContext = {
+      baseUrl: "https://operator-check.example/old",
+      http: { getJson: vi.fn(() => new Promise(resolve => { resolveOld = resolve; })) }
+    } as unknown as StudioEndpointContext;
+    const newContext = fakeBackend({}).context;
+    const sink: { api?: OperatorActionsApi } = {};
+
+    flushSync(() => root.render(<Harness context={oldContext} sink={sink} />));
+    expect(sink.api?.actionAvailability).toBe("checking");
+    flushSync(() => root.render(<Harness context={newContext} sink={sink} />));
+    await flush();
+    expect(sink.api?.actionAvailability).toBe("available");
+    expect(sink.api?.canAct).toBe(true);
+    resolveOld({ capabilities: [] });
+    await flush();
+    expect(sink.api?.actionAvailability).toBe("available");
+
+    const unsupportedContext = {
+      baseUrl: "https://operator-check.example/unsupported",
+      http: { getJson: vi.fn(async () => ({ capabilities: [] })) }
+    } as unknown as StudioEndpointContext;
+    flushSync(() => root.render(<Harness context={unsupportedContext} sink={sink} />));
+    await flush();
+    expect(sink.api?.actionAvailability).toBe("unavailable");
+    expect(sink.api?.canAct).toBe(false);
+
+    const failedContext = {
+      baseUrl: "https://operator-check.example/failed",
+      http: { getJson: vi.fn(async () => { throw new TypeError("network failure"); }) }
+    } as unknown as StudioEndpointContext;
+    flushSync(() => root.render(<Harness context={failedContext} sink={sink} />));
+    await flush();
+    expect(sink.api?.actionAvailability).toBe("unknown");
+    expect(sink.api?.canAct).toBe(false);
+  });
+
+  it("only calls a requester canceled when the exact requester execution is known canceled", async () => {
+    const backend = fakeBackend({});
+    const harness = await mount(backend.context);
+    const canceled = { ...journalRun()[0], workflowExecutionId: "wf-42", status: "Cancelled" };
+    const canceledRequester = {
+      ...waitingIncident(),
+      resolutionOutcome: { ...waitingIncident().resolutionOutcome!, metadata: {
+        ...waitingIncident().resolutionOutcome!.metadata,
+        "runtime.interventionRequestedBy": "ae-scope"
+      } }
+    };
+    flushSync(() => root.render(<Harness context={backend.context} sink={harness.sink} activities={[canceled]} extra={api => <output>{JSON.stringify(api.guidanceForIncident(canceledRequester))}</output>} />));
+    await flush();
+
+    const unrelatedRequester = {
+      ...waitingIncident(),
+      resolutionOutcome: { ...waitingIncident().resolutionOutcome!, metadata: { "runtime.interventionRequestedBy": "ae-other" } }
+    };
+    expect(harness.current().guidanceForIncident(canceledRequester).requesterCancelled).toBe(true);
+    expect(harness.current().guidanceForIncident(unrelatedRequester).requesterCancelled).toBe(false);
+  });
+
+  it("maps a RetryScheduled row back only to its exact failed handler execution", async () => {
+    const backend = fakeBackend({});
+    const source = scheduledJournalView();
+    const incident = journalIncidents()[1];
+    let actions: OperatorActionsApi | undefined;
+    function ScheduledHarness() {
+      const api = useOperatorActions({
+        context: backend.context,
+        workflowExecutionId: "wf-1",
+        details: { instance: { workflowExecutionId: "wf-1" } as WorkflowInstanceDetails["instance"], activities: journalRun(), incidents: [incident], permissions: { canManage: true, canInspectValues: false } },
+        root: journalScope(),
+        activities: journalRun().filter(activity => activity.activityExecutionId !== "ae-4" && activity.activityExecutionId !== "ae-5"),
+        journals: { get: () => source, request: vi.fn(), reload: async () => source, reset: vi.fn(), generation: 0 },
+        labelOf: () => undefined,
+        refreshRun: async () => null
+      });
+      actions = api;
+      return null;
+    }
+    flushSync(() => root.render(<ScheduledHarness />));
+    await flush();
+
+    expect(actions?.guidanceForIncident(incident)).toMatchObject({ retryNotBefore: "2026-10-23T10:42:30Z", retryDue: false });
+    const unrelated = { ...incident, activityExecutionId: "different-execution" };
+    expect(actions?.guidanceForIncident(unrelated).retryNotBefore).toBeUndefined();
+  });
+
   it("submits once with the dialog's key, then shows submitted, Applying… and the result, and clears the stored plan", async () => {
     const backend = fakeBackend({ plans: ["Queued", "Completed"], job: { status: "Succeeded", outcomes: [] } });
     const refreshRun = vi.fn()
@@ -193,6 +281,8 @@ describe("useOperatorActions", () => {
     expect(backend.submits[0].key).toMatch(/^studio-/);
     expect(JSON.parse(sessionStorage.getItem(pendingOperatorActionKey("wf-42"))!)).toMatchObject({ planId: "plan-1", incidentId: "inc-5", key: backend.submits[0].key });
     expect(harness.current().pending).toEqual({ incidentId: "inc-5", label: "Retry submitted" });
+    expect(harness.current().guidanceForIncident(waitingIncident()).pendingIncidentId).toBe("inc-5");
+    expect(harness.current().guidanceForIncident({ ...waitingIncident(), incidentId: "inc-6" }).pendingIncidentId).toBe("inc-5");
     expect(status()).toBe("Retry submitted");
     expect(container.querySelector("[role=dialog]")).toBeNull();
 
@@ -298,7 +388,7 @@ describe("useOperatorActions", () => {
     const backend = fakeBackend({});
     const harness = await mount(backend.context);
     const close = vi.fn();
-    flushSync(() => root.render(<Harness context={backend.context} sink={harness.sink} extra={api => api.renderIncidentActions(waitingIncident(), "Cancel delivery", close, vi.fn())} />));
+    flushSync(() => root.render(<Harness context={backend.context} sink={harness.sink} activities={retryActivities()} extra={api => api.renderIncidentActions(waitingIncident(), "Cancel delivery", close, vi.fn())} />));
     await flush();
 
     expect([...container.querySelectorAll(".wf-incident-operator-actions button")].map(button => button.textContent!.trim()))
@@ -309,9 +399,43 @@ describe("useOperatorActions", () => {
     expect(close).toHaveBeenCalled();
     expect(container.querySelector("[role=dialog] h3")!.textContent).toBe('Retry "Cancel delivery"?');
 
-    flushSync(() => root.render(<Harness context={backend.context} sink={harness.sink} canManage={false} extra={api => api.renderIncidentActions(waitingIncident(), "Cancel delivery", close, vi.fn())} />));
+    flushSync(() => root.render(<Harness context={backend.context} sink={harness.sink} canManage={false} activities={retryActivities()} extra={api => api.renderIncidentActions(waitingIncident(), "Cancel delivery", close, vi.fn())} />));
     await flush();
     expect(container.querySelector(".wf-incident-operator-actions")).toBeNull();
+  });
+
+  it.each([
+    ["a Scheduled source", retryActivities("Scheduled"), "ineligible", "source-not-faulted"],
+    ["a missing exact source", [], "unknown", "source-not-loaded"],
+    ["a missing recorded parent", retryActivities("Faulted", "missing"), "unknown", "parent-not-loaded"],
+    ["a non-Running recorded parent", retryActivities("Faulted", "Completed"), "ineligible", "parent-not-running"]
+  ] as const)("keeps Retry hidden for %s while preserving offered decisions", async (_case, activities, expectedStatus, expectedReason) => {
+    const backend = fakeBackend({});
+    const harness = await mount(backend.context);
+    flushSync(() => root.render(<Harness context={backend.context} sink={harness.sink} activities={[...activities]} extra={api => api.renderIncidentActions(waitingIncident(), "Cancel delivery", vi.fn(), vi.fn())} />));
+    await flush();
+
+    expect(harness.current().guidanceForIncident(waitingIncident()).retryReviewEligibility).toMatchObject({ status: expectedStatus, reason: expectedReason });
+    expect([...container.querySelectorAll(".wf-incident-operator-actions button")].map(button => button.textContent!.trim()))
+      .toEqual(["Resolve: effect absent or undone", "Resolve: effect present, keep it", "Abandon recovery"]);
+  });
+
+  it.each([
+    ["a terminal run", waitingIncident(), "Completed"],
+    ["a historical incident", { ...waitingIncident(), status: "Resolved" }, "Running"]
+  ] as const)("suppresses all controls for %s", async (_case, selectedIncident, runStatus) => {
+    const backend = fakeBackend({});
+    const harness = await mount(backend.context);
+    const runDetails = { ...details([selectedIncident]), instance: { ...details([selectedIncident]).instance, status: runStatus } };
+    flushSync(() => root.render(<Harness context={backend.context} sink={harness.sink} activities={retryActivities()} runDetails={runDetails} extra={api => api.renderIncidentActions(selectedIncident, "Cancel delivery", vi.fn(), vi.fn())} />));
+    await flush();
+
+    expect(container.querySelector(".wf-incident-operator-actions")).toBeNull();
+  });
+
+  it("requires exact Faulted source and Running recorded parent before showing Retry", () => {
+    const eligibility = getIncidentRetryReviewEligibility(waitingIncident(), details([waitingIncident()]).instance, retryActivities());
+    expect(eligibility).toEqual({ status: "eligible" });
   });
 });
 
@@ -436,19 +560,50 @@ function details(incidents: IncidentStateSummary[], canManage = true): WorkflowI
 
 const journals: CompensationJournals = { get: () => undefined, request: () => undefined, reload: async () => "unavailable", reset: () => undefined, generation: 0 };
 
-function Harness({ context, sink, canManage = true, refreshRun, extra }: {
+function retryActivities(sourceStatus = "Faulted", parentStatus: "Running" | "Completed" | "missing" = "Running"): ActivityExecutionStateSummary[] {
+  const parentId = "ae-parent";
+  const parent: ActivityExecutionStateSummary = {
+    activityExecutionId: parentId,
+    workflowExecutionId: "wf-42",
+    executableNodeId: "parent-node",
+    authoredActivityId: "parent-node",
+    activityType: "Elsa.Test.Parent",
+    activityTypeVersion: "1.0.0",
+    status: parentStatus === "missing" ? "Running" : parentStatus,
+    scheduledAt: "2026-10-20T10:00:00Z",
+    metadata: {}
+  };
+  const source: ActivityExecutionStateSummary = {
+    activityExecutionId: "ae-11",
+    workflowExecutionId: "wf-42",
+    executableNodeId: "source-node",
+    authoredActivityId: "source-node",
+    activityType: "Elsa.Test.Source",
+    activityTypeVersion: "1.0.0",
+    status: sourceStatus,
+    scheduledAt: "2026-10-20T10:00:01Z",
+    parentActivityExecutionId: parentId,
+    provenance: { parentActivityExecutionId: parentId },
+    metadata: {}
+  };
+  return parentStatus === "missing" ? [source] : [parent, source];
+}
+
+function Harness({ context, sink, canManage = true, refreshRun, extra, activities = [], runDetails }: {
   context: StudioEndpointContext;
   sink: { api?: OperatorActionsApi };
   canManage?: boolean;
   refreshRun?: () => Promise<WorkflowInstanceDetails | null>;
+  activities?: ActivityExecutionStateSummary[];
+  runDetails?: WorkflowInstanceDetails;
   extra?: (api: OperatorActionsApi) => React.ReactNode;
 }) {
   const api = useOperatorActions({
     context,
     workflowExecutionId: "wf-42",
-    details: details([waitingIncident()], canManage),
+    details: runDetails ?? details([waitingIncident()], canManage),
     root: null,
-    activities: [],
+    activities,
     journals,
     labelOf: () => undefined,
     refreshRun: refreshRun ?? (async () => details([waitingIncident()]))
@@ -679,4 +834,24 @@ function journalView() {
       abandonment: null
     }
   };
+}
+
+function scheduledJournalView(): CompensationJournalSource {
+  const view = journalView();
+  return {
+    ...view,
+    view: {
+      ...view.view,
+      phase: "Compensating",
+      entries: view.view.entries.map((entry, index) => index === 1 ? {
+        ...entry,
+        status: "Compensating",
+        waiting: null,
+        attempts: [
+          { number: 1, activityExecutionId: "ae-6", incidentId: "inc-6", result: "Faulted" },
+          { number: 2, activityExecutionId: null, incidentId: null, result: "Running", notBefore: "2026-10-23T10:42:30Z" }
+        ]
+      } : entry)
+    }
+  } as unknown as CompensationJournalSource;
 }

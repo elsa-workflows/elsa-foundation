@@ -79,6 +79,7 @@ code.
 | DataGrid | `exists` | `ui/data-grid/DataGrid`: row click (or Enter/Space) opens. |
 | DataGrid extras | `target, phase 4` | Sortable headers with an indicator; optional column picker persisted per grid; secondary actions in a ⋯ menu. |
 | Status | `exists` | `StatusChip` (filled) for run and definition status; `StatusPill` (outline) for low-emphasis metadata. Colours from the status tokens only. |
+| Incident details | `exists` | A compact **Next step** block sits before technical evidence and stays attached to the selected incident and current run. Keep active blocking, active non-blocking and historical states distinct; expose automatic retry timing only when the exact journal supplies it. Preserve copy, exact activity/input navigation, dialog Escape and trigger-focus return. |
 | Feedback | `exists` (primitives) / `target, phase 2` (rich pattern) | `EmptyState`, `SkeletonRows` and `StudioAlert` exist. The richer pattern — icon, title, one-line hint, optional action — is the phase 2 target. |
 | Overlays | `target, phase 3` | Popovers and dialogs animate in (fade + 4px slide/scale, ≤ 150ms) and honour `prefers-reduced-motion`. |
 | Icons | `exists` | lucide, 16px in controls, 20px in nodes and tiles. |
