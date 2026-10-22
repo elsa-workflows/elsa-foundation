@@ -385,15 +385,14 @@ public sealed class GraphActivityProvider(
             }
 
             // A graph body runs published activities only; engine intrinsics need graph-scope support first.
-            if (candidate.Element.ValueKind == JsonValueKind.Object &&
-                candidate.Element.TryGetProperty("intrinsic", out var intrinsic) &&
-                intrinsic.ValueKind != JsonValueKind.Null)
+            if (TryGetPropertyIgnoreCase(candidate.Element, "intrinsic", out var intrinsic) &&
+                intrinsic.Value.ValueKind != JsonValueKind.Null)
             {
                 diagnostics.Add(Diagnostic(
                     "activity.graph.intrinsic-unsupported",
                     "A graph activity cannot hold an engine intrinsic (Set variable, Set output, Correlate, Set name) yet.",
                     subject,
-                    $"{candidate.JsonPointer}/intrinsic"));
+                    $"{candidate.JsonPointer}/{EscapePointer(intrinsic.Name)}"));
             }
         }
 
@@ -1071,14 +1070,15 @@ public sealed class GraphActivityProvider(
     // The relative pointer of each argument the activity node reader cannot read, or that has no reference key.
     private static IEnumerable<string> MalformedArguments(JsonElement node, string propertyName)
     {
-        if (node.ValueKind != JsonValueKind.Object ||
-            !node.TryGetProperty(propertyName, out var arguments) ||
-            arguments.ValueKind == JsonValueKind.Null)
+        if (!TryGetPropertyIgnoreCase(node, propertyName, out var property) ||
+            property.Value.ValueKind == JsonValueKind.Null)
             yield break;
 
+        var name = EscapePointer(property.Name);
+        var arguments = property.Value;
         if (arguments.ValueKind != JsonValueKind.Array)
         {
-            yield return $"/{propertyName}";
+            yield return $"/{name}";
             yield break;
         }
 
@@ -1096,9 +1096,28 @@ public sealed class GraphActivityProvider(
             }
 
             if (state is null || string.IsNullOrWhiteSpace(state.ReferenceKey))
-                yield return $"/{propertyName}/{index}";
+                yield return $"/{name}/{index}";
             index++;
         }
+    }
+
+    // The node reader matches property names without regard to case, so these checks do too.
+    private static bool TryGetPropertyIgnoreCase(JsonElement element, string propertyName, out JsonProperty property)
+    {
+        property = default;
+        if (element.ValueKind != JsonValueKind.Object)
+            return false;
+
+        foreach (var candidate in element.EnumerateObject())
+        {
+            if (string.Equals(candidate.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+            {
+                property = candidate;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool TryReadRequiredString(JsonElement element, string propertyName, out string? value)

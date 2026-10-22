@@ -146,15 +146,17 @@ public sealed partial class GraphActivityProviderTests
         Assert.DoesNotContain(diagnostics, x => x.Code == "activity.graph.argument-malformed" || x.Code.StartsWith("activity.graph.body-", StringComparison.Ordinal));
     }
 
-    [Fact]
-    public async Task Arguments_that_are_not_a_list_are_refused()
+    [Theory]
+    [InlineData("outputs")]
+    [InlineData("Outputs")]
+    public async Task Arguments_that_are_not_a_list_are_refused(string propertyName)
     {
-        var manifest = WithRootProperty(BodyManifest([], []), "outputs", JsonNode.Parse("""{"referenceKey":"result"}"""));
+        var manifest = WithRootProperty(BodyManifest([], []), propertyName, JsonNode.Parse("""{"referenceKey":"result"}"""));
 
         var diagnostics = await _provider.ValidateAsync(manifest, BodyContract());
 
         var finding = Assert.Single(diagnostics, x => x.Code == "activity.graph.argument-malformed");
-        Assert.Equal("/rootActivity/outputs", finding.Location?.JsonPointer);
+        Assert.Equal($"/rootActivity/{propertyName}", finding.Location?.JsonPointer);
     }
 
     [Fact]
@@ -169,12 +171,14 @@ public sealed partial class GraphActivityProviderTests
         Assert.Contains(compilation.Diagnostics, x => x.Code == "activity.graph.root-activity-malformed");
     }
 
-    [Fact]
-    public async Task An_engine_intrinsic_in_a_graph_body_is_refused()
+    [Theory]
+    [InlineData("intrinsic")]
+    [InlineData("Intrinsic")]
+    public async Task An_engine_intrinsic_in_a_graph_body_is_refused(string propertyName)
     {
         var manifest = WithRootProperty(
             BodyManifest([], []),
-            "intrinsic",
+            propertyName,
             JsonNode.Parse("""{"kind":"Set","valueType":{"alias":"String","collectionKind":"Single"},"variable":{"referenceKey":"label","declaringScopeId":"workflow"}}"""));
 
         var draft = await _provider.ValidateAsync(manifest, BodyContract());
@@ -182,8 +186,7 @@ public sealed partial class GraphActivityProviderTests
 
         foreach (var diagnostics in new[] { draft, compilation.Diagnostics })
         {
-            var finding = Assert.Single(diagnostics, x => x.Code == "activity.graph.intrinsic-unsupported");
-            Assert.Equal("/rootActivity/intrinsic", finding.Location?.JsonPointer);
+            Assert.Single(diagnostics, x => x.Code == "activity.graph.intrinsic-unsupported" && x.Location?.JsonPointer == $"/rootActivity/{propertyName}");
         }
     }
 
@@ -221,10 +224,11 @@ public sealed partial class GraphActivityProviderTests
         var compilation = await _provider.CompileAsync(request);
 
         Assert.DoesNotContain(compilation.Diagnostics, x => x.Severity == ActivityDiagnosticSeverity.Error);
-        Assert.All(
-            compilation.Occurrences.Where(x => x.OccurrenceId is "first" or "second"),
-            x => Assert.Equal("running-total", x.OutputBindings!.Value[0].GetProperty("value").GetProperty("value").GetProperty("referenceKey").GetString()));
-        Assert.Equal(2, compilation.Occurrences.Count(x => x.OutputBindings is not null));
+        foreach (var occurrenceId in new[] { "first", "second" })
+        {
+            var occurrence = Assert.Single(compilation.Occurrences, x => x.OccurrenceId == occurrenceId);
+            Assert.Equal("running-total", occurrence.OutputBindings!.Value[0].GetProperty("value").GetProperty("value").GetProperty("referenceKey").GetString());
+        }
     }
 
     [Fact]
@@ -274,7 +278,10 @@ public sealed partial class GraphActivityProviderTests
     private static ActivityProviderManifest WithRootProperty(ActivityProviderManifest manifest, string name, JsonNode? value)
     {
         var payload = JsonNode.Parse(manifest.Payload.GetRawText())!;
-        payload["rootActivity"]![name] = value;
+        var root = payload["rootActivity"]!.AsObject();
+        foreach (var existing in root.Select(x => x.Key).Where(x => string.Equals(x, name, StringComparison.OrdinalIgnoreCase)).ToArray())
+            root.Remove(existing);
+        root[name] = value;
         return manifest with { Payload = JsonSerializer.SerializeToElement(payload) };
     }
 
