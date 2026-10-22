@@ -6,12 +6,14 @@
 | Active nonblocking | Current attention without claiming the run is blocked or offering an invented retry. |
 | Historical/resolved/suppressed | Historical outcome, current-run context and inspection; no new mutation through guidance. |
 | RetryScheduled | Existing scheduled attempt and recorded due time; no duplicate manual action even after due time. |
+| Known compensation requester with unavailable schedule evidence | Explain unknown Retry availability and offer a retryable read-only check. A successful matching observation may expose canonical Retry; failure cannot open its confirmation. Keep generic/non-compensation behavior distinct. |
 | Pending/followed action | Explain the exact selected target versus another action in this run; preserve canonical suppression. |
 | Canceled requester | No handler-start/decision shortcut; preserve canonical guard. |
 | Scheduled/non-Faulted source or non-Running parent | Suppress ineligible Retry; exact source evidence and canonical preflight govern reviewability. No new recovery path. |
 | Known loaded descendant blocker | Suppress source Retry using exact loaded same-run ancestry and active blocking incident evidence; do not infer a complete subtree from partial pages. Preserve independently offered canonical decisions. |
+| Another known active blocker on the exact source | Suppress Retry when that blocker is not waiting for intervention, matching existing preflight. Preserve independent decisions; historical, nonblocking and cross-run incidents do not establish this blocker. |
 | Known blocker with unresolved ancestry | Keep Retry eligibility unknown when an active same-run blocker is known but its recorded ancestry cannot establish descendant versus unrelated. Preserve independent decisions and inspection/share guidance; entirely unseen descendants remain part of server preflight. |
-| Action-state read during navigation | Pending controls are scoped to the active run/incident/read lifetime. Late results cannot reopen a dismissed dialog, retain disabled buttons after revisiting a run, or clear a newer read. |
+| Action-state read during navigation | Pending controls and confirmations are scoped to the active endpoint/auth context, run, incident and read lifetime. Late results cannot reopen a dismissed dialog, retain disabled buttons after revisiting a run, clear a newer read, populate another origin's journal cache or submit an old confirmation through a replacement context. |
 | Missing current-run summary | Explain unavailable context; reserve a run-mismatch claim for a supplied different execution ID. |
 | Missing exact source/recorded parent | Explain incomplete action evidence; do not claim an applicable Retry before its existing preconditions are confirmed. |
 | Terminal run or historical incident | Preserve inspection/handoff; no actionable controls for a state the existing runtime refuses. |
