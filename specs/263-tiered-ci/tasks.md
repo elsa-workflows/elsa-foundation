@@ -239,7 +239,7 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
   - add `check-docs` to `tools/ci/test_tiers.py` (with self-test cases for each missing link and each mismatched literal) and run it in `Plan tiers`;
   - refresh the changed skills' hashes in `.specify/integrations/claude.manifest.json`.
 
-  *(Done. The page's "Post-merge gates" paragraph no longer says the EF suites never run on PRs. `.agents/` is a git-ignored local install, so the Codex skill copies are not repository content.)*
+  *(Done. The page's "Post-merge gates" paragraph no longer says the EF suites never run on PRs. The tracked Codex copy `.agents/skills/speckit-implement/SKILL.md` got the same draft rule, and `codex.manifest.json` its hash.)*
 
 **Checkpoint**: FR-023 to FR-025. Removing a link or renaming the dispatch input fails `Plan tiers`.
 
