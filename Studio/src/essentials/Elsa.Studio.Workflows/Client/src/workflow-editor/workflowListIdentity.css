@@ -57,9 +57,6 @@
 
 .wf-list-identity-details .studio-copyable-identifier__button {
   grid-area: 2 / 2 / 3 / 3;
-}
-
-.wf-list-identity-details .studio-copyable-identifier__button {
   width: 22px;
   height: 22px;
 }
