@@ -63,7 +63,7 @@ While a PR is a draft, only the PR tier runs. Once it is marked ready for review
 **Acceptance Scenarios**:
 
 1. **Given** a draft PR, **When** a commit is pushed, **Then** the PR tier runs and the full tier does not.
-2. **Given** a PR is marked ready for review, or a commit is pushed to a PR that is not a draft, **When** CI runs, **Then** the full tier runs on that head and reports a required check.
+2. **Given** a PR is opened as ready for review, reopened while not a draft, marked ready for review, or receives a commit while it is not a draft, **When** CI runs, **Then** the full tier runs on that head and reports a required check.
 3. **Given** a ready PR whose full tier failed or has not finished, **When** someone tries to merge it, **Then** GitHub blocks the merge.
 4. **Given** a draft PR, **When** its author adds the `ci:full` label or starts the workflow manually on the branch with the full tier selected, **Then** the full tier runs on that head without the PR leaving draft.
 5. **Given** a PR whose whole diff is documentation, **When** it is ready for review, **Then** the full tier follows spec 257's fast path and reports success without building or testing.
@@ -162,7 +162,7 @@ A backend-only PR does not start Studio's lint, unit, browser and .NET jobs; a P
 **Full tier (Story 2)**
 
 - **FR-005**: The full tier MUST contain every integration-tier test project, every EF container suite, and the Secrets EF composition proof.
-- **FR-006**: The full tier MUST run on a pull request when it is marked ready for review and on every push while it is not a draft. It MUST NOT run on draft commits unless asked for (FR-008).
+- **FR-006**: The full tier MUST run on a pull request whenever it becomes ready: when it is opened as ready for review, reopened while not a draft, or marked ready for review. It MUST also run on every push while the PR is not a draft, so the required check never waits for another push. It MUST NOT run on draft commits unless asked for (FR-008).
 - **FR-007**: The full tier MUST report a required status check, and the `main-2` ruleset MUST require it.
 - **FR-008**: An author MUST be able to run the full tier on a draft's head by adding the `ci:full` label, and on any branch through a manual workflow run that selects the full tier.
 - **FR-009**: A PR whose whole diff is documentation (spec 257) MUST get a full-tier result without building or testing.
@@ -278,4 +278,5 @@ Settled with Joey Barten on 2026-10-21 and revised on 2026-10-22 after review.
 | Sipke 8: checklist accuracy | Checklist corrected. |
 | CodeRabbit: documentation-only entries in the queue | Moot. Documentation-only PRs keep the fast path in both tiers (FR-003, FR-009). |
 | CodeRabbit: SC-004 vs the Workbench duration | Replaced by SC-002, which class sharding makes reachable. |
+| Sipke, follow-up: the full tier must also run on a PR opened or reopened as ready | FR-006 and Story 2, scenario 2 cover opened, reopened and marked-ready PRs. |
 | CodeRabbit: merge authority | Not changed. The org AGENTS.md has allowed Claude and Codex standing self-merge since 18 Oct 2026, and this spec no longer touches merge authority. |
