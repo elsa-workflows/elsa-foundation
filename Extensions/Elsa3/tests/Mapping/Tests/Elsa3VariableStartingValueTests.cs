@@ -97,6 +97,9 @@ public sealed class Elsa3VariableStartingValueTests
     [InlineData("ObjectDictionary[]", "Object", CollectionKind.Single)]
     [InlineData("Acme.Orders.Order, Acme", "Object", CollectionKind.Single)]
     [InlineData("System.DayOfWeek", "Object", CollectionKind.Single)]
+    // A CLR generic name without a resource argument is not a resource: it resolves to its Elsa 4 type.
+    [InlineData("System.Collections.Generic.List`1[System.String]", "String", CollectionKind.List)]
+    [InlineData("System.Collections.Generic.Dictionary`2[[System.String, System.Private.CoreLib],[System.Object, System.Private.CoreLib]]", "Object", CollectionKind.Dictionary)]
     public void A_variable_without_a_value_gets_the_same_Elsa_4_type(string typeName, string expectedAlias, CollectionKind expectedKind)
     {
         var source = new Elsa3Variable { Id = "v", Name = "v", TypeName = typeName };
@@ -151,6 +154,9 @@ public sealed class Elsa3VariableStartingValueTests
     // CLR-style generic names carry their type arguments in [[…]].
     [InlineData("System.Collections.Generic.List`1[[System.IO.Stream, System.Private.CoreLib]]")]
     [InlineData("System.Collections.Generic.Dictionary`2[[System.String, System.Private.CoreLib],[Elsa.Http.Models.FormFile, Elsa.Http]]")]
+    [InlineData("System.Collections.Generic.List`1[[System.IO.Stream]]")]
+    [InlineData("System.Collections.Generic.List`1[System.IO.Stream]")]
+    [InlineData("System.Collections.Generic.Dictionary`2[System.String,System.Byte[]]")]
     public async Task A_resource_variable_is_refused_even_without_a_value(string typeName)
     {
         var result = await ConvertAsync(new Elsa3Variable { Id = "resource", Name = "Resource", TypeName = typeName });

@@ -207,14 +207,19 @@ internal static class Elsa3VariableMapper
     /// <summary>Whether <paramref name="typeName"/>, or the element of a collection of it, is a <see cref="ResourceTypes">resource</see>.</summary>
     private static bool IsResource(string typeName)
     {
-        // A CLR generic name carries its type arguments in [[…],[…]]: any resource argument makes it a resource.
-        var arguments = typeName.IndexOf("[[", StringComparison.Ordinal);
-        if (arguments >= 0 && typeName[(arguments + 2)..].Split("],[").Any(IsResource))
+        // A CLR generic name carries its type arguments after the arity: List`1[[A, Asm]] or List`1[A]. Any resource
+        // argument makes it a resource. Each part is shorter than the name, so the recursion ends.
+        var arity = typeName.IndexOf('`');
+        var arguments = arity >= 0 ? typeName.IndexOf('[', arity) : -1;
+        if (arguments >= 0 && typeName[(arguments + 1)..].TrimStart('[').Split(["],[", ","], StringSplitOptions.TrimEntries).Any(IsResource))
             return true;
 
-        // A CLR name may be namespace- and assembly-qualified: "System.IO.Stream, System.Runtime" → "Stream".
+        // A CLR name may be namespace- and assembly-qualified: "System.IO.Stream, System.Runtime" → "Stream". A generic
+        // argument keeps its closing brackets ("Stream]]"); "[]" is an array and stays.
         var name = typeName.Split(',')[0].Trim();
         var simple = name[(name.LastIndexOf('.') + 1)..];
+        while (simple.EndsWith(']') && !simple.EndsWith("[]", StringComparison.Ordinal))
+            simple = simple[..^1];
         if (ResourceTypes.Contains(simple))
             return true;
         return TryReadCollection(name, out var elementName, out _) && IsResource(elementName);
