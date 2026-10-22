@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import os
 import subprocess
 import sys
@@ -99,6 +100,7 @@ def container_matrix(manifest: dict) -> dict:
             "shard": shard["name"],
             "suites": [suites[name] for name in shard["suites"] if name in suites],
             "secrets": secrets in shard["suites"],
+            "secretsProject": manifest.get("secretsCompositionSuite", {}).get("project", ""),
         })
     return {"include": include}
 
@@ -198,6 +200,89 @@ def run_select(args: argparse.Namespace, fetch: Callable[[str], object] = gh_fet
     return 0
 
 
+# Workflow and documentation guards (FR-003, FR-007, FR-024, FR-025) -------------------------------------------------
+
+CI = ".github/workflows/ci.yml"
+CI_FULL = ".github/workflows/ci-full.yml"
+MERGING = "docs/contributing/merging.md"
+DOCS_ANCHOR = "merging.md#ci-tiers"
+SKILLS = [".claude/skills/elsa-auto-review-merge/SKILL.md", ".claude/skills/elsa-quality-fix/SKILL.md",
+          ".claude/skills/speckit-implement/SKILL.md", ".claude/skills/elsa-add-unit-tests/SKILL.md"]
+DISPATCH = "gh workflow run ci.yml --ref <branch> -f tier=full"
+
+
+def _jobs(text: str) -> dict[str, str]:
+    """Top-level job blocks of a workflow, by key. A text scan: the runners carry no YAML library."""
+    body = text.split("\njobs:\n", 1)[1] if "\njobs:\n" in text else ""
+    blocks = re.split(r"^  ([A-Za-z0-9_-]+):[ \t]*\n", body, flags=re.M)
+    return {blocks[i]: blocks[i + 1] for i in range(1, len(blocks) - 1, 2)}
+
+
+def _job_name(block: str) -> str:
+    match = re.search(r"^    name:\s*(.+)$", block, re.M)
+    return match.group(1).strip().strip('"') if match else ""
+
+
+def check_workflows(ci: str, ci_full: str) -> list[str]:
+    """A required context must never be skippable, and no labeled trigger may sit on a required workflow (research R8)."""
+    problems = []
+    build = [block for block in _jobs(ci).values() if _job_name(block) == "Build & test"]
+    if len(build) != 1:
+        problems.append(f"{CI}: expected exactly one job named `Build & test`, found {len(build)}")
+    else:
+        block = build[0]
+        if "if: ${{ !cancelled() }}" not in block:
+            problems.append(f"{CI}: `Build & test` must run with `if: ${{{{ !cancelled() }}}}` so it always reports")
+        needs = re.search(r"^    needs:\s*\[([^\]]*)\]", block, re.M)
+        for job in ("plan-tiers", "pr-shard", "architecture-guards", "core-only"):
+            if not needs or job not in [n.strip() for n in needs.group(1).split(",")]:
+                problems.append(f"{CI}: `Build & test` must need `{job}`")
+    full = [block for block in _jobs(ci_full).values() if "'Full tier'" in _job_name(block) or _job_name(block) == FULL_TIER_CONTEXT]
+    if len(full) != 1:
+        problems.append(f"{CI_FULL}: expected exactly one job that reports `Full tier`, found {len(full)}")
+    else:
+        block = full[0]
+        if "if: ${{ !cancelled() }}" not in block:
+            problems.append(f"{CI_FULL}: the `Full tier` job must run with `if: ${{{{ !cancelled() }}}}`")
+        if "needs.plan.result != 'success'" not in _job_name(block) or 'PLAN" != success' not in block:
+            problems.append(f"{CI_FULL}: the `Full tier` job must be named `Full tier` and fail when the plan did not succeed")
+    for path, text in ((CI, ci), (CI_FULL, ci_full)):
+        # Comments explain why there is no label trigger; only YAML outside them counts.
+        trigger = "\n".join(line.split("#", 1)[0] for line in text.split("\njobs:\n", 1)[0].splitlines())
+        if re.search(r"\blabeled\b", trigger):
+            problems.append(f"{path}: a `labeled` trigger on a workflow that reports a required check lets any label cancel a real run")
+    return problems
+
+
+def check_docs(read: Callable[[str], str | None]) -> list[str]:
+    """The CI tiers section exists, the PR-driving skills link to it, and its literals match the workflows."""
+    problems = []
+    merging = read(MERGING) or ""
+    section = merging.split("## CI tiers", 1)[1].split("\n## ", 1)[0] if "## CI tiers" in merging else None
+    if section is None:
+        problems.append(f"{MERGING}: no `## CI tiers` section")
+    else:
+        for literal in (DISPATCH, "PR tier", "full tier", "gh pr ready", "draft", MANIFEST):
+            if literal.lower() not in section.lower():
+                problems.append(f"{MERGING}#ci-tiers does not mention `{literal}`")
+    for skill in SKILLS:
+        text = read(skill)
+        if text is None or DOCS_ANCHOR not in text:
+            problems.append(f"{skill}: no link to docs/contributing/{DOCS_ANCHOR}")
+    ci = read(CI) or ""
+    if not re.search(r"^      tier:\n(?:        .*\n)*?        options: \[full, pr\]", ci, re.M):
+        problems.append(f"{CI}: the workflow_dispatch input `tier` with options [full, pr] is what `{DISPATCH}` relies on")
+    return problems
+
+
+def _read_file(path: str) -> str | None:
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return handle.read()
+    except OSError:
+        return None
+
+
 # Self-test -----------------------------------------------------------------------------------------------------------
 
 def _fixture(switch: bool = False) -> dict:
@@ -252,7 +337,8 @@ def self_test() -> int:
     check("full: whole project beside a split unit", m["integration"]["include"][0]["whole"] == ["t/C/C.Tests.csproj"])
     check("full: container shard carries the suite and the Secrets proof",
           m["container"]["include"] == [{"shard": "ef-1", "suites": [{"suite": "db", "project": "t/Db/Db.Tests.csproj",
-                                                                       "require": ""}], "secrets": True}])
+                                                                       "require": ""}], "secrets": True,
+                                         "secretsProject": "t/S/S.Tests.csproj"}])
     check("full: no PR matrix", not m["pr"]["include"])
 
     check("push, switch off: no integration shards", not select(_fixture(False), "push")["integration"]["include"])
@@ -287,6 +373,38 @@ def self_test() -> int:
     check("ruleset: present Full tier allows",
           ruleset_requires(FULL_TIER_CONTEXT, _ruleset_fetch(["Build & test", FULL_TIER_CONTEXT])))
 
+    good_ci = ("on:\n  pull_request:\njobs:\n  build-and-test:\n    name: Build & test\n"
+               "    needs: [plan-tiers, pr-shard, architecture-guards, core-only]\n    if: ${{ !cancelled() }}\n")
+    good_full = ("on:\n  pull_request:\n    types: [opened, reopened, synchronize, ready_for_review]\njobs:\n  full-tier:\n"
+                 "    name: \"${{ (needs.plan.result != 'success' || x) && 'Full tier' || 'Full tier (not run: draft)' }}\"\n"
+                 "    if: ${{ !cancelled() }}\n    steps:\n      - run: if [[ \"$PLAN\" != success ]]; then exit 1; fi\n")
+    check("workflows: the real shape passes", not check_workflows(good_ci, good_full))
+    check("workflows: a skippable Build & test fails",
+          bool(check_workflows(good_ci.replace("if: ${{ !cancelled() }}", "if: ${{ needs.x.outputs.y }}"), good_full)))
+    check("workflows: Build & test without the shards fails",
+          bool(check_workflows(good_ci.replace("pr-shard, ", ""), good_full)))
+    check("workflows: a comment that mentions `labeled` is not a trigger",
+          not check_workflows(good_ci, "# There is no `labeled` trigger here.\n" + good_full))
+    check("workflows: a labeled trigger fails",
+          bool(check_workflows(good_ci, good_full.replace("ready_for_review]", "ready_for_review, labeled]"))))
+    check("workflows: a Full tier that ignores a failed plan fails",
+          bool(check_workflows(good_ci, good_full.replace("needs.plan.result != 'success' || ", ""))))
+
+    docs = {
+        MERGING: f"# Merging\n\n## CI tiers\n\nThe PR tier and the full tier, per {MANIFEST}. Open a draft, then "
+                 f"`gh pr ready <n>`. Run `{DISPATCH}`.\n\n## Review and merge\n",
+        CI: "      tier:\n        description: Which tier\n        type: choice\n        options: [full, pr]\n",
+        **{skill: f"See [CI tiers](../../../docs/contributing/{DOCS_ANCHOR})." for skill in SKILLS},
+    }
+    check("docs: the real shape passes", not check_docs(docs.get))
+    check("docs: a missing skill link fails",
+          bool(check_docs(lambda p: "no link" if p == SKILLS[1] else docs.get(p))))
+    check("docs: a renamed dispatch option fails",
+          bool(check_docs(lambda p: docs[CI].replace("[full, pr]", "[everything, pr]") if p == CI else docs.get(p))))
+    check("docs: a missing section fails", bool(check_docs(lambda p: "# Merging\n" if p == MERGING else docs.get(p))))
+    check("docs: a section without the dispatch command fails",
+          bool(check_docs(lambda p: docs[MERGING].replace(DISPATCH, "run it by hand") if p == MERGING else docs.get(p))))
+
     for failure in failures:
         print(f"test_tiers self-test: {failure}", file=sys.stderr)
     if failures:
@@ -306,6 +424,8 @@ def main() -> int:
     sel.add_argument("--head")
     sel.add_argument("--github-output")
     sel.add_argument("--summary")
+    sub.add_parser("check-workflows")
+    sub.add_parser("check-docs")
     args = parser.parse_args()
 
     if args.self_test:
@@ -313,6 +433,16 @@ def main() -> int:
     try:
         if args.command == "select":
             return run_select(args)
+        if args.command in ("check-workflows", "check-docs"):
+            if args.command == "check-workflows":
+                problems = check_workflows(_read_file(CI) or "", _read_file(CI_FULL) or "")
+            else:
+                problems = check_docs(_read_file)
+            for problem in problems:
+                print(f"test_tiers {args.command}: {problem}", file=sys.stderr)
+            if not problems:
+                print(f"test_tiers {args.command}: ok")
+            return 1 if problems else 0
     except (ManifestError, OSError) as error:
         print(f"test_tiers: {error}", file=sys.stderr)
         return 1

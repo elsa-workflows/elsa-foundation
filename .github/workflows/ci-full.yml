@@ -1,0 +1,133 @@
+name: CI full tier
+
+# The full tier on pull requests (spec 263): the integration-tier projects and the EF container suites. "Full tier" is a
+# required status check once ruleset main-2 lists it, matched by JOB name, so that name is load-bearing.
+#
+# WHEN IT RUNS (FR-006): on a pull request that is not a draft, whenever it is opened, reopened, marked ready or pushed.
+# A draft runs only the PR tier (ci.yml), unless its diff changes the tier manifest or the tier tooling.
+# There is no label trigger: a `labeled` event from any label would cancel a real run here. To run the full tier on a
+# draft, start ci.yml by hand: `gh workflow run ci.yml --ref <branch> -f tier=full` (FR-008).
+#
+# WHY A DRAFT CARRIES NO "Full tier" CHECK (Code Review round 1, research R8): a skipped or placeholder success under
+# the required name would stay green on the head after `gh pr ready` until the real run starts, and a merge in that
+# window would skip the full tier. So on a draft whose full tier did not run, the aggregate job is named
+# "Full tier (not run: draft)". The required context is then missing, GitHub shows it as expected, and the merge stays
+# blocked until a real run reports. The aggregate fails unless the plan succeeded (Code Review round 2), so a broken
+# plan can never report a green "Full tier".
+#
+# Kept separate from ci.yml so that marking a PR ready runs only the full tier: re-running the PR tier on a head that
+# already passed it would only spend job slots.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-full-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: Plan full tier
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+      docs_only: ${{ steps.scope.outputs.docs_only }}
+      integration_matrix: ${{ steps.select.outputs.integration_matrix }}
+      integration_count: ${{ steps.select.outputs.integration_count }}
+      container_matrix: ${{ steps.select.outputs.container_matrix }}
+      container_count: ${{ steps.select.outputs.container_count }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Classify the change scope
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: >-
+          python3 tools/ci/change_scope.py --base "$BASE_SHA" --head "$GITHUB_SHA"
+          --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Decide whether the full tier runs
+        id: decide
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          DRAFT: ${{ github.event.pull_request.draft }}
+          DOCS_ONLY: ${{ steps.scope.outputs.docs_only }}
+        run: |
+          set -euo pipefail
+          # The spec's "Manifest change" edge case: a draft that changes the tiers runs both tiers.
+          tier_change=$(git diff --name-only --no-renames "$BASE_SHA...$GITHUB_SHA" -- \
+            tools/ci/test-tiers.json tools/ci/test_tiers.py tools/ci/test_results.py tools/ci/run_shard.py \
+            .github/workflows/ci-full.yml .github/workflows/full-tier.yml | head -1)
+          if [[ "$DOCS_ONLY" == true ]]; then
+            run=false; reason="documentation only (spec 257)"
+          elif [[ "$DRAFT" != true ]]; then
+            run=true; reason="the pull request is ready for review"
+          elif [[ -n "$tier_change" ]]; then
+            run=true; reason="this draft changes the tiers ($tier_change)"
+          else
+            run=false; reason="draft: the full tier runs once the pull request is ready for review"
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          printf '### Full tier\n\n%s\n' "$reason" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Select the full-tier shards
+        id: select
+        run: >-
+          python3 tools/ci/test_tiers.py select --tier full
+          --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
+
+  shards:
+    needs: plan
+    if: ${{ needs.plan.outputs.run == 'true' }}
+    uses: ./.github/workflows/full-tier.yml
+    with:
+      integration_matrix: ${{ needs.plan.outputs.integration_matrix }}
+      integration_count: ${{ needs.plan.outputs.integration_count }}
+      container_matrix: ${{ needs.plan.outputs.container_matrix }}
+      container_count: ${{ needs.plan.outputs.container_count }}
+
+  # The required context. Its name reads `needs` and `github` (allowed for jobs.<id>.name): on a draft whose full tier
+  # did not run it reports under another name, so the head carries no "Full tier" check at all. If the run is cancelled
+  # before this job starts, GitHub may show the raw expression as the check name; that never equals "Full tier".
+  full-tier:
+    name: "${{ (needs.plan.result != 'success' || needs.plan.outputs.run == 'true' || !github.event.pull_request.draft) && 'Full tier' || 'Full tier (not run: draft)' }}"
+    needs: [plan, shards]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify the full tier passed
+        env:
+          PLAN: ${{ needs.plan.result }}
+          RUN: ${{ needs.plan.outputs.run }}
+          DOCS_ONLY: ${{ needs.plan.outputs.docs_only }}
+          DRAFT: ${{ github.event.pull_request.draft }}
+          SHARDS: ${{ needs.shards.result }}
+        run: |
+          if [[ "$PLAN" != success ]]; then
+            echo "::error::Plan full tier did not succeed ($PLAN), so nothing proves the full tier."; exit 1
+          fi
+          if [[ "$RUN" == false && "$DOCS_ONLY" == true ]]; then
+            echo "Documentation-only change: the full tier has nothing to test (spec 257)."; exit 0
+          fi
+          if [[ "$RUN" == false && "$DRAFT" == true ]]; then
+            echo "Not run: draft. The full tier runs once the pull request is marked ready for review."; exit 0
+          fi
+          if [[ "$RUN" != true ]]; then
+            echo "::error::Plan full tier gave no decision (run='$RUN')."; exit 1
+          fi
+          if [[ "$SHARDS" != success ]]; then
+            echo "::error::The full-tier shards did not succeed ($SHARDS)."; exit 1
+          fi
+          echo "Every integration shard and EF container shard passed."

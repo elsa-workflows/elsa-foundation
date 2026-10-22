@@ -149,9 +149,11 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
   - no step interpolates artifact content into a shell command; names are passed through files or environment variables.
 
   *(Done. The tracker's number is `flakeTrackerIssue` in the manifest, and the validation lives in `test_results.py record-flakes`, with self-test cases for an injected name, a path-like shard and malformed JSON. GitHub runs `workflow_run` workflows from the default branch only, so it first fires after this PR merges.)*
-- [ ] T022 [US1] Extend `tools/contributor-checkpoints/test_workflow_guards.py`, or add `tools/ci/test_tiers.py --self-test` cases if the guards' scope does not fit, to assert:
+- [X] T022 [US1] Extend `tools/contributor-checkpoints/test_workflow_guards.py`, or add `tools/ci/test_tiers.py --self-test` cases if the guards' scope does not fit, to assert:
   - `ci.yml` still has a job named `Build & test` whose `needs` include every shard job;
   - no job named `Build & test` or `Full tier` sits behind an `if:` that can skip it.
+
+  *(Done as `test_tiers.py check-workflows`, run in `Plan tiers`. It also refuses a `labeled` trigger (comments excluded) and a `Full tier` job that does not fail on a failed plan.)*
 - [ ] T023 [US1] Open this work's PR as a draft and run quickstart "Story 1". Record the push-to-`Build & test` time and the shard durations in the PR evidence comment.
 
 **Checkpoint**: `Build & test` is sharded and green, and every project that ran before still runs, the integration projects included (switch off).
@@ -164,16 +166,16 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
 
 **Independent test**: quickstart "Story 2", steps 1–9.
 
-- [ ] T024 [US2] Create `.github/workflows/full-tier.yml` (`on: workflow_call`, inputs `run: boolean` and `containers: boolean`):
+- [X] T024 [US2] Create `.github/workflows/full-tier.yml` (`on: workflow_call`, inputs `run: boolean` and `containers: boolean`):
   - **`Integration shard (${{ matrix.shard }})`**: from `test_tiers.py select --tier full`, with the same steps as T020's shard.
   - **`EF container shard (${{ matrix.shard }})`**: restore and build its suites' projects once. For each suite, run `dotnet test` with that suite's `require` variable set in that step's `env` only (never `GITHUB_ENV`), then retry and evaluate. The shard that holds `secrets-ef-composition` also starts PostgreSQL and runs the Secrets proof with the steps now at `ci.yml:347-375`.
-  - **Docs-only and draft**: when the caller passes `run: false`, every job is skipped.
-- [ ] T025 [US2] Create `.github/workflows/ci-full.yml` (`name: CI full tier`):
+  - **Docs-only and draft**: when the caller passes `run: false`, every job is skipped. *(Done: the callers skip the whole `uses:` job instead, so the workflow takes only the matrices and their counts. Container suites run one at a time per shard through `run_shard.py`, each with only its own `require` variable armed.)*
+- [X] T025 [US2] Create `.github/workflows/ci-full.yml` (`name: CI full tier`):
   - triggers: `pull_request` types `[opened, reopened, synchronize, ready_for_review]` on `main`; concurrency `ci-full-pr-<n>`, cancel in progress;
   - **`Plan` job**: runs `change_scope.py`, and sets `run=true` when the PR is not a draft, or its diff touches `tools/ci/test-tiers.json`, `tools/ci/test_tiers.py`, `tools/ci/test_results.py` or `.github/workflows/full-tier.yml`, and is not docs-only;
   - calls `full-tier.yml` with `containers: true`;
   - **`Full tier` job**: the aggregate, a plain job with `if: ${{ !cancelled() }}`, whose `name` follows research R8 point 3: `Full tier` when `run=true` or the PR is not a draft, otherwise `Full tier (not run: draft)`. On a draft it succeeds under the draft name, so the head carries no required `Full tier` context. It fails unless `needs.plan.result == 'success'`. On a ready PR it succeeds with summary "documentation only" only on an explicit `run == 'false'` from that successful plan, never on an empty output. Otherwise it succeeds only when every shard succeeded. Add a quickstart case for a failing plan on a ready PR (Code Review round 2).
-- [ ] T026 [US2] In `.github/workflows/ci.yml`:
+- [X] T026 [US2] In `.github/workflows/ci.yml`:
   - add the `workflow_dispatch` input `tier` (choice `full`/`pr`, default `full`);
   - on `push`, `schedule` and `tier=full` dispatch, call `full-tier.yml`, with `containers` true for schedule and dispatch and false for push (FR-010);
   - remove the now-duplicated jobs `select-ef-suites`, `ef-container-suites`, `ef-container-result` and `secrets-ef-composition` (`:225-375`);
@@ -191,8 +193,8 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
 
 **Independent test**: quickstart "Story 3".
 
-- [ ] T028 [US3] Add `check-quarantine` to `tools/ci/test_results.py`. It runs `gh issue view <n> --json state` for each entry it checks and exits 1 on a missing or closed issue, naming the entry, the issue and the fix. With `--base <sha>` it reads the manifest at `<sha>` and checks only new or changed entries. It first checks that the commit is readable (`git cat-file -e <sha>^{commit}`) and exits 2 if not; only "path not in that commit" counts as an absent file, which means every entry is new. Any other `git show` failure exits 2, so a shallow checkout can never fall back to checking the whole list (Code Review round 2). Without `--base` it checks every entry. Add self-test cases with a stubbed `gh`, through a `GH` environment override: an unchanged entry with a closed issue passes with `--base`, a new entry with a closed issue fails with `--base`, the same closed issue fails without `--base`, and an unreadable base commit exits 2.
-- [ ] T029 [US3] In `.github/workflows/ci.yml`, with `permissions: issues: read` on the running job only:
+- [X] T028 [US3] Add `check-quarantine` to `tools/ci/test_results.py`. It runs `gh issue view <n> --json state` for each entry it checks and exits 1 on a missing or closed issue, naming the entry, the issue and the fix. With `--base <sha>` it reads the manifest at `<sha>` and checks only new or changed entries. It first checks that the commit is readable (`git cat-file -e <sha>^{commit}`) and exits 2 if not; only "path not in that commit" counts as an absent file, which means every entry is new. Any other `git show` failure exits 2, so a shallow checkout can never fall back to checking the whole list (Code Review round 2). Without `--base` it checks every entry. Add self-test cases with a stubbed `gh`, through a `GH` environment override: an unchanged entry with a closed issue passes with `--base`, a new entry with a closed issue fails with `--base`, the same closed issue fails without `--base`, and an unreadable base commit exits 2.
+- [X] T029 [US3] In `.github/workflows/ci.yml`, with `permissions: issues: read` on the running job only:
   - on `pull_request`, fetch the base commit explicitly first (`git fetch --no-tags --depth=1 origin <PR base sha>`; `actions/checkout` fetches one commit by default), then run `test_results.py check-quarantine --manifest tools/ci/test-tiers.json --base <PR base sha>` in `Plan tiers`; it runs on documentation-only PRs too;
   - on `push` to `main` and `schedule`, run it without `--base` in a job that the `alert` job's `needs` include, so a closed issue files or updates the `main is red` issue.
 - [ ] T030 [US3] Run quickstart "Story 3", steps 1–4, and the retry case from "Story 1" step 4, and confirm a `ci-flake-record` comment appears on the T003 issue. Record the links in the PR.
