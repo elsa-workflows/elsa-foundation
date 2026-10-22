@@ -198,6 +198,32 @@ public sealed class GraphBodyScopeTests
     }
 
     [Fact]
+    public async Task Sequential_captures_into_one_graph_variable_leave_the_last_value()
+    {
+        // No concurrency rule applies to graph-variable captures yet; the last committed capture wins.
+        await using var harness = ScriptingHarness();
+        var body = GraphBoundaryCompleteTests.Sequence(
+            "node-body",
+            CaptureInto(Echo("node-first", Literal("Value", 5)), "total"),
+            CaptureInto(Echo("node-second", Literal("Value", 7)), "total"),
+            Echo("node-read-total", Variable("total", BoundaryNodeId)));
+        var boundary = Boundary(
+            body,
+            variables: [new GraphActivityVariableDescriptor("total", "RunningTotal", ObjectType, WellKnownRuntimeDurableValueStorageDrivers.Json, new GraphActivityExpression("Literal", JsonSerializer.SerializeToElement(10)))],
+            outputs: [new GraphActivityOutputDescriptor("sum", ObjectType, WellKnownRuntimeDurableValueStorageDrivers.Json, "Sum")],
+            outputMappings: [new GraphActivityOutputMappingDescriptor("sum", new GraphActivityExpression("JavaScript", JsonSerializer.SerializeToElement("getVariable('RunningTotal')")))]);
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(boundary));
+
+        run.AssertWorkflowCompleted();
+        Assert.Equal(7, ReadInput(run, "node-read-total"));
+        var durableValues = await harness.Services.GetRequiredService<IDurableValueStateStore>()
+            .ListAllDurableValueStatesAsync(run.WorkflowState!.WorkflowExecutionId);
+        var output = Assert.Single(durableValues, value => value.DurableValueId.EndsWith(":output:3:sum", StringComparison.Ordinal));
+        Assert.Equal(7, output.InlineValue!.Value.GetInt32());
+    }
+
+    [Fact]
     public async Task A_captured_value_reaches_the_boundary_output_mapping()
     {
         await using var harness = ScriptingHarness();
@@ -242,7 +268,7 @@ public sealed class GraphBodyScopeTests
     [Fact]
     public async Task After_a_resume_the_body_reads_the_same_input_and_variable_values()
     {
-        // SC-006: the body suspends on an Event before reading; the reads after the resume see the boundary's values.
+        // The body suspends on an Event before reading; the reads after the resume see the boundary's values.
         await using var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new SerializationFeature().ConfigureServices(services))
             .WithFeature(services => new Primitives.ActivitiesPrimitivesFeature().ConfigureServices(services))

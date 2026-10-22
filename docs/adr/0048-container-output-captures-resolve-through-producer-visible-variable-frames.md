@@ -30,6 +30,10 @@ rows. For this target only:
 Publication still refuses a capture into anything but the activity's own declared variables, and a body cannot target
 a frame above its boundary.
 
+Tests pin both halves: publication accepts two body nodes capturing into one graph variable
+(`Compilation_accepts_two_body_nodes_capturing_into_one_graph_variable`), and a run leaves the second captured value
+for later reads and the boundary output (`Sequential_captures_into_one_graph_variable_leave_the_last_value`).
+
 ## Context
 
 The first activity output-capture authoring slice lets an author bind a named activity-result
