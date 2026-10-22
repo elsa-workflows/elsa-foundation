@@ -199,6 +199,10 @@ internal static class GraphBodyReferenceValidator
     private static IEnumerable<Reference> References(ArgumentState argument)
     {
         // Syntax names match case-insensitively, as the binding compiler and the placer read them.
+        // An argument without a value is unbound and refers to nothing.
+        if (argument.Value is null)
+            yield break;
+
         var expressionType = argument.Value.ExpressionType?.ToLowerInvariant();
         // A variable reference is read exactly as the compiler reads it, in its string or object form.
         if (expressionType == "variable")

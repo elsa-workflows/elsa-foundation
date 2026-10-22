@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Graph.Design.Services;
@@ -42,6 +43,7 @@ public sealed partial class GraphActivityProviderTests
     [InlineData("Input", """{"referenceKey":"unknown"}""", GraphBodyReferenceCodes.InputUnknown)]
     [InlineData("Variable", """{"referenceKey":"unknown","declaringScopeId":"workflow"}""", GraphBodyReferenceCodes.VariableUnknown)]
     [InlineData("Variable", """{"referenceKey":"running-total","declaringScopeId":"elsewhere"}""", GraphBodyReferenceCodes.VariableScopeInvisible)]
+    [InlineData("Variable", """{"referenceKey":"running-total","declaringScopeId":" "}""", GraphBodyReferenceCodes.VariableScopeInvisible)]
     // The string form of a variable reference, read as the compiler reads it.
     [InlineData("Variable", "\"unknown\"", GraphBodyReferenceCodes.VariableUnknown)]
     [InlineData("ActivityResult", """{"producerNodeId":"ghost","projectionKey":"result","producerScopeId":"graph-root"}""", GraphBodyReferenceCodes.ProducerUnknown)]
@@ -62,6 +64,7 @@ public sealed partial class GraphActivityProviderTests
     [Theory]
     [InlineData("""{"referenceKey":"unknown","declaringScopeId":"workflow"}""")]
     [InlineData("""{"referenceKey":"running-total","declaringScopeId":"caller-container"}""")]
+    [InlineData("""{"referenceKey":"running-total","declaringScopeId":" "}""")]
     public async Task A_capture_into_anything_but_the_activitys_own_variables_is_refused(string target)
     {
         var diagnostics = await ValidateBodyAsync(
@@ -118,12 +121,70 @@ public sealed partial class GraphActivityProviderTests
     [InlineData("""{"referenceKey":5,"value":"not an argument value"}""")]
     [InlineData("""{"referenceKey":"value","value":{"expressionType":7,"value":{}}}""")]
     [InlineData("""{"referenceKey":"value","value":[1,2]}""")]
+    [InlineData("""{"value":{"expressionType":"Literal","value":1}}""")]
     [InlineData("\"not an argument\"")]
-    public async Task A_malformed_body_argument_does_not_throw_out_of_validation(string argument)
+    public async Task A_malformed_body_argument_is_refused_where_it_is(string argument)
     {
-        var diagnostics = await ValidateBodyAsync(inputs: [JsonDocument.Parse(argument).RootElement.Clone()], outputs: []);
+        var manifest = BodyManifest([JsonDocument.Parse(argument).RootElement.Clone()], []);
 
-        Assert.DoesNotContain(diagnostics, x => x.Code.StartsWith("activity.graph.body-", StringComparison.Ordinal));
+        var draft = await _provider.ValidateAsync(manifest, BodyContract());
+        var compilation = await _provider.CompileAsync(CompilationRequest(manifest));
+
+        foreach (var diagnostics in new[] { draft, compilation.Diagnostics })
+        {
+            var finding = Assert.Single(diagnostics, x => x.Code == "activity.graph.argument-malformed");
+            Assert.Equal("/rootActivity/inputs/0", finding.Location?.JsonPointer);
+            Assert.DoesNotContain(diagnostics, x => x.Code == "activity.graph.root-activity-malformed");
+        }
+    }
+
+    [Fact]
+    public async Task An_argument_without_a_value_is_unbound_and_accepted()
+    {
+        var diagnostics = await ValidateBodyAsync(inputs: [JsonDocument.Parse("""{"referenceKey":"value"}""").RootElement.Clone()], outputs: []);
+
+        Assert.DoesNotContain(diagnostics, x => x.Code == "activity.graph.argument-malformed" || x.Code.StartsWith("activity.graph.body-", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Arguments_that_are_not_a_list_are_refused()
+    {
+        var manifest = WithRootProperty(BodyManifest([], []), "outputs", JsonNode.Parse("""{"referenceKey":"result"}"""));
+
+        var diagnostics = await _provider.ValidateAsync(manifest, BodyContract());
+
+        var finding = Assert.Single(diagnostics, x => x.Code == "activity.graph.argument-malformed");
+        Assert.Equal("/rootActivity/outputs", finding.Location?.JsonPointer);
+    }
+
+    [Fact]
+    public async Task A_body_that_cannot_be_read_is_refused_rather_than_left_unchecked()
+    {
+        var manifest = WithRootProperty(BodyManifest([], []), "executionPlacement", JsonNode.Parse("""{"not":"a placement"}"""));
+
+        var draft = await _provider.ValidateAsync(manifest, BodyContract());
+        var compilation = await _provider.CompileAsync(CompilationRequest(manifest));
+
+        Assert.Contains(draft, x => x.Code == "activity.graph.root-activity-malformed");
+        Assert.Contains(compilation.Diagnostics, x => x.Code == "activity.graph.root-activity-malformed");
+    }
+
+    [Fact]
+    public async Task An_engine_intrinsic_in_a_graph_body_is_refused()
+    {
+        var manifest = WithRootProperty(
+            BodyManifest([], []),
+            "intrinsic",
+            JsonNode.Parse("""{"kind":"Set","valueType":{"alias":"String","collectionKind":"Single"},"variable":{"referenceKey":"label","declaringScopeId":"workflow"}}"""));
+
+        var draft = await _provider.ValidateAsync(manifest, BodyContract());
+        var compilation = await _provider.CompileAsync(CompilationRequest(manifest));
+
+        foreach (var diagnostics in new[] { draft, compilation.Diagnostics })
+        {
+            var finding = Assert.Single(diagnostics, x => x.Code == "activity.graph.intrinsic-unsupported");
+            Assert.Equal("/rootActivity/intrinsic", finding.Location?.JsonPointer);
+        }
     }
 
     [Fact]
@@ -164,6 +225,17 @@ public sealed partial class GraphActivityProviderTests
         Assert.Contains(compilation.Diagnostics, x => x.Code == GraphBodyReferenceCodes.ProducerUnknown && x.Location?.ReferenceKey == "value");
         var incompatible = Assert.Single(compilation.Diagnostics, x => x.Code == GraphBodyReferenceCodes.CaptureTypeIncompatible);
         Assert.Equal("/rootActivity/outputs/0", incompatible.Location?.JsonPointer);
+    }
+
+    private ActivityTemplateCompilationRequest CompilationRequest(ActivityProviderManifest manifest) =>
+        new("definition-1", "activity-type-1", "draft-1", 1, "1.0.0", BodyContract(), manifest,
+            [CreateDependency("graph-root", "activity-ver-root", "root-origin")], "provider-fingerprint");
+
+    private static ActivityProviderManifest WithRootProperty(ActivityProviderManifest manifest, string name, JsonNode? value)
+    {
+        var payload = JsonNode.Parse(manifest.Payload.GetRawText())!;
+        payload["rootActivity"]![name] = value;
+        return manifest with { Payload = JsonSerializer.SerializeToElement(payload) };
     }
 
     private Task<IReadOnlyList<ActivityDiagnostic>> ValidateBodyAsync(params object[] inputs) =>

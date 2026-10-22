@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -32,6 +33,9 @@ public sealed class GraphActivityProvider(
     public const string CompleteActivityTypeKey = "Elsa.Activities.Graph.Runtime.Activities.Complete";
 
     private const string CompleteOutcomeInputKey = "outcome";
+    private const string ArgumentMalformedCode = "activity.graph.argument-malformed";
+    private static readonly JsonSerializerOptions NodeSerializerOptions = new(JsonSerializerDefaults.Web);
+
     /// <summary>
     /// The catalog definition id of <see cref="CompleteActivityTypeKey"/>: CLR catalog rows derive it from the type key, so
     /// a version is recognised by its own definition id without loading the definition.
@@ -367,6 +371,40 @@ public sealed class GraphActivityProvider(
                     subject,
                     $"{candidate.JsonPointer}/activityVersionId"));
             }
+
+            foreach (var propertyName in new[] { "inputs", "outputs" })
+            {
+                foreach (var pointer in MalformedArguments(candidate.Element, propertyName))
+                {
+                    diagnostics.Add(Diagnostic(
+                        ArgumentMalformedCode,
+                        $"A graph node's '{propertyName}' must be a list of arguments, each with a non-empty 'referenceKey' and, when bound, an expression 'value' object.",
+                        subject,
+                        $"{candidate.JsonPointer}{pointer}"));
+                }
+            }
+
+            // A graph body runs published activities only; engine intrinsics need graph-scope support first.
+            if (candidate.Element.ValueKind == JsonValueKind.Object &&
+                candidate.Element.TryGetProperty("intrinsic", out var intrinsic) &&
+                intrinsic.ValueKind != JsonValueKind.Null)
+            {
+                diagnostics.Add(Diagnostic(
+                    "activity.graph.intrinsic-unsupported",
+                    "A graph activity cannot hold an engine intrinsic (Set variable, Set output, Correlate, Set name) yet.",
+                    subject,
+                    $"{candidate.JsonPointer}/intrinsic"));
+            }
+        }
+
+        // Anything else that keeps the body from being read is refused rather than leaving the body unchecked.
+        if (!diagnostics.Any(x => x.Code == ArgumentMalformedCode) && !TryReadRootNode(graph.RootActivity, out _))
+        {
+            diagnostics.Add(Diagnostic(
+                "activity.graph.root-activity-malformed",
+                "The graph's root activity cannot be read as an activity node.",
+                subject,
+                "/rootActivity"));
         }
 
         var nodes = EnumerateNodes(graph.RootActivity);
@@ -800,16 +838,9 @@ public sealed class GraphActivityProvider(
 
     private IReadOnlyList<GraphNode> EnumerateNodes(JsonElement root)
     {
-        ActivityNode rootNode;
-        try
-        {
-            rootNode = root.Deserialize<ActivityNode>(new JsonSerializerOptions(JsonSerializerDefaults.Web))
-                       ?? throw new JsonException("The root activity is null.");
-        }
-        catch (JsonException)
-        {
+        // ValidateGraph refuses a root that cannot be read, so an empty body here is never accepted.
+        if (!TryReadRootNode(root, out var rootNode))
             return [];
-        }
 
         var pointers = EnumerateNodeCandidates(root)
             .Where(x => TryReadNode(x.Element, out _, out _))
@@ -1020,6 +1051,53 @@ public sealed class GraphActivityProvider(
                     }
                 }
             }
+        }
+    }
+
+    private static bool TryReadRootNode(JsonElement root, [NotNullWhen(true)] out ActivityNode? node)
+    {
+        try
+        {
+            node = root.Deserialize<ActivityNode>(NodeSerializerOptions);
+        }
+        catch (JsonException)
+        {
+            node = null;
+        }
+
+        return node is not null;
+    }
+
+    // The relative pointer of each argument the activity node reader cannot read, or that has no reference key.
+    private static IEnumerable<string> MalformedArguments(JsonElement node, string propertyName)
+    {
+        if (node.ValueKind != JsonValueKind.Object ||
+            !node.TryGetProperty(propertyName, out var arguments) ||
+            arguments.ValueKind == JsonValueKind.Null)
+            yield break;
+
+        if (arguments.ValueKind != JsonValueKind.Array)
+        {
+            yield return $"/{propertyName}";
+            yield break;
+        }
+
+        var index = 0;
+        foreach (var argument in arguments.EnumerateArray())
+        {
+            ArgumentState? state;
+            try
+            {
+                state = argument.Deserialize<ArgumentState>(NodeSerializerOptions);
+            }
+            catch (JsonException)
+            {
+                state = null;
+            }
+
+            if (state is null || string.IsNullOrWhiteSpace(state.ReferenceKey))
+                yield return $"/{propertyName}/{index}";
+            index++;
         }
     }
 

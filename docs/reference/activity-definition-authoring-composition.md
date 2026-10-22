@@ -76,3 +76,12 @@ run when the activity compiles; the others also run when a draft is validated. A
 of a container-scoped variable are not checked statically; they fail at run time, as in a workflow.
 Versions compiled before graph compiler `3.0.0` keep their behaviour: their bodies still resolve against the
 caller until the activity is published again.
+
+A body that cannot be read is refused instead of being left unchecked, and so is a node the graph cannot run yet.
+These checks run both when a draft is validated and when the activity compiles:
+
+| Code | Refused when |
+|---|---|
+| `activity.graph.argument-malformed` | A node's `inputs` or `outputs` is not a list of arguments, or an argument has no `referenceKey` or a `value` that is not an expression object. An argument without a value is unbound, not malformed |
+| `activity.graph.root-activity-malformed` | The root activity cannot be read as an activity node for any other reason |
+| `activity.graph.intrinsic-unsupported` | A node is an engine intrinsic (Set variable, Set output, Correlate, Set name). Graph activities cannot run intrinsics yet ([#3023](https://github.com/elsa-workflows/elsa-foundation/issues/3023)) |
