@@ -1563,7 +1563,7 @@ describe("Activity Definition authoring", () => {
     click(rendered.container.querySelector<HTMLButtonElement>("[aria-label='Focus activity.graph.mapping']")!);
     if (lazyMappings) {
       await waitFor(() => expect(document.activeElement?.getAttribute("aria-label")).toBe("Provider boundary mappings"));
-      expect(rendered.container.textContent).toContain("while its controls load");
+      await waitForText(rendered.container, "while its controls load");
       resolveMapping({ default: MappingEditor });
       await waitForText(rendered.container, "Outcome mappings");
       click(rendered.container.querySelector<HTMLButtonElement>("[aria-label='Focus activity.graph.mapping']")!);

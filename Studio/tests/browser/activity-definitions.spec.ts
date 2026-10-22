@@ -633,10 +633,21 @@ test("Activity Definition dependency explorer keeps exact snapshot pages, repeat
   await expect(page.getByText("3 visible rows · 2 server pages")).toBeVisible();
 
   await page.getByRole("radio", { name: "Used by" }).check();
-  await page.locator("details.ad-scan-details summary").click();
+  await expect(page.getByText("workflow-use-a")).toBeVisible();
+  await expect(page.getByText("DerivedProjection")).toBeAttached();
+  const scanSummary = scanDetails.locator("summary");
+  await scanSummary.focus();
+  await page.keyboard.press("Enter");
+  await expect(scanDetails).toHaveJSProperty("open", true);
   await expect(page.getByText("DerivedProjection")).toBeVisible();
   await expect(page.getByText("7/18/2026")).toBeVisible();
   await expect(page.getByText("workflow-use-a")).toBeVisible();
+  await scanSummary.focus();
+  await page.keyboard.press("Enter");
+  await expect(scanDetails).toHaveJSProperty("open", false);
+  await page.keyboard.press("Enter");
+  await expect(scanDetails).toHaveJSProperty("open", true);
+  await expect(page.getByText("DerivedProjection")).toBeVisible();
 
   state.nextFailure = 409;
   await page.locator("details.ad-dependency-advanced summary").click();

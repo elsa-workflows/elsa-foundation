@@ -4556,22 +4556,25 @@ describe("workflows module", () => {
       workflowFolderMutationCapabilities()
     );
 
+    const allWorkflowRow = () => container.querySelector('[role="row"][aria-label="Open workflow definition All workflow"]');
+    await vi.waitFor(() => expect(allWorkflowRow()).not.toBeNull());
     await waitForText(container, "Delete me");
     await click(container.querySelector<HTMLElement>("[data-folder-id='folder-delete']"));
     await waitForText(container, "Folder workflow");
+    const globalRequestsBeforeDelete = globalDefinitionRequests;
     await click(buttonByText(container, "Delete"));
     try {
       await vi.waitFor(() => expect(rootFolderRequests).toBe(2));
-      // Hold the folder refresh open so the selection-change request is observable before the
-      // mutation callback runs. This makes a duplicate rebase deterministic instead of timing-based.
-      await vi.waitFor(() => expect(globalDefinitionRequests).toBe(2));
+      // Hold the folder refresh open while the survivor collection loads. This makes an extra
+      // rebase request from the folder mutation observable before refresh completes.
+      await vi.waitFor(() => expect(globalDefinitionRequests).toBe(globalRequestsBeforeDelete + 1));
     } finally {
       resolveDeletedRootRefresh?.(response({ items: [], nextContinuationToken: null }));
     }
     await waitForText(container, "Deleted folder Delete me");
-    await waitForText(container, "All workflow");
+    await vi.waitFor(() => expect(allWorkflowRow()).not.toBeNull());
 
-    expect(globalDefinitionRequests).toBe(2);
+    expect(globalDefinitionRequests).toBe(globalRequestsBeforeDelete + 1);
     expect(new URLSearchParams(window.location.search).has("folderId")).toBe(false);
     await unmount();
   });
