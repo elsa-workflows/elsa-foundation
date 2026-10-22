@@ -214,7 +214,16 @@ jobs:
       # this job now that no test writes a plan.
       - name: Test (fast unit tests, no containers)
         if: steps.scope.outputs.docs_only != 'true'
-        run: dotnet test Elsa.Server.test.slnf -c Release --no-build -p:WarningsNotAsErrors=NU1603
+        run: dotnet test Elsa.Server.test.slnf -c Release --no-build -p:WarningsNotAsErrors=NU1603 --logger trx
+
+      # TEMPORARY (spec 263 planning): per-class durations for shard balancing. Reverted in the next commit.
+      - name: Upload test results
+        if: ${{ !cancelled() && steps.scope.outputs.docs_only != 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: spec263-trx
+          path: '**/TestResults/*.trx'
+          if-no-files-found: warn
 
   # The EF container jobs below run on the nightly schedule and on manual dispatch only (#2632): they are not
   # a required check, and a pull request or a push to main skips all four. Every run is the full matrix.
