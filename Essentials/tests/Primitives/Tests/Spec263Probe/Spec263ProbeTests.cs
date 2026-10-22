@@ -20,6 +20,10 @@ public class Spec263ProbeTests
     [Fact]
     public void Quarantined_always_fails() => Assert.Fail("Spec 263 probe: quarantined failure.");
 
+    // Probe B: always fails and is not quarantined, so its retry fails too and the run must fail, naming it.
+    [Fact]
+    public void Fails_twice() => Assert.Fail("Spec 263 probe B: deliberate double failure.");
+
     // Takes 12 seconds; a PR-tier test over 10 s must be reported, not failed.
     [Fact]
     public async Task Takes_twelve_seconds() => await Task.Delay(TimeSpan.FromSeconds(12));
