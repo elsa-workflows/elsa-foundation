@@ -699,6 +699,17 @@ describe("Runtime-pinned workflow instance rendering", () => {
 });
 
 describe("Incident diagnostic presentation", () => {
+  it("shows a selected incident next step before its technical evidence", () => {
+    renderIncidentList([incident()], [activityExecution()], vi.fn(), vi.fn());
+    const container = mounted!.container;
+    click(buttonByText(container, "Open incident details"));
+
+    const dialog = container.querySelector<HTMLElement>("[role=dialog]")!;
+    const content = dialog.textContent ?? "";
+    expect(content).toContain("Next step");
+    expect(content.indexOf("Next step")).toBeLessThan(content.indexOf("Failure type"));
+  });
+
   it("keeps technical details collapsed and labels the trace without exposing a raw frame as its summary", () => {
     const stackTrace = "at Example.VeryLongMethod(" + "node-id-".repeat(50) + ")\n at Example.NextFrame()";
     const failure = incident({
