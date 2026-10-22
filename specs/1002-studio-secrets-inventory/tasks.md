@@ -40,7 +40,7 @@ Independent test:search/filter→exact detail→Close/Escape retains applied cri
 
 - [x] T012 Update relevant Secrets inventory guidance in Studio/docs/ux/design-spec.md and/or existing Secrets module docs, keeping the shared broader filter pattern as3071 target; review changed source/tests for DRY and remove only obsolete in-scope copy.
 - [x] T013 Run complete affected @elsa-workflows/studio-secrets tests/typecheck/scopedlint, Studio lint/CSS/layout and focused secret-scopes browser checks with at most2workers; retain raw failure/skip/warning boundaries in the external handoff.
-- [ ] T014 Root reviews integrated source/delegated evidence and meaningful RED→GREEN/bite-proof, then sets specs/1002-studio-secrets-inventory/spec.md to Implemented and removes the temporary checklist in the coherent implementation PR. This does not pre-claim review/CI/live acceptance.
+- [x] T014 Root reviews integrated source/delegated evidence and meaningful RED→GREEN/bite-proof, then sets specs/1002-studio-secrets-inventory/spec.md to Implemented and removes the temporary checklist in the coherent implementation PR. This does not pre-claim review/CI/live acceptance.
 
 ## Dependencies and execution
 

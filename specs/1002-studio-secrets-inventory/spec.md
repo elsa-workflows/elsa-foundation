@@ -4,9 +4,9 @@
 
 **Created**: 2026-10-22
 
-**Status**: Approved — root reviewed requirements and bounded contract before planning
+**Status**: Implemented — source complete; independent review, normal-host proof and canonical acceptance remain gated
 
-**Input**: #3069 / Studio UX epic #3057 / program #2559. Make inventory limits and loaded-scope coverage clear, find a known secret beyond the initial100 through supported server search, and retain search/filter context through the existing detail dialog. Winning claim6331801398; qualified base5d1df7097db3a731330735a94c2b6a5fb7f9a476; prerequisite3062 accepted. This is the next independent leaf while3067 requires a review-limit decision and3063 requires requeue.
+**Input**: #3069 / Studio UX epic #3057 / program #2559. Make inventory limits and loaded-scope coverage clear, find a known secret beyond the initial100 through supported server search, and retain search/filter context through the existing detail dialog. Winning claim6331801398; qualified base5d1df7097db3a731330735a94c2b6a5fb7f9a476; prerequisite3062 accepted.
 
 ## User Scenarios & Testing
 

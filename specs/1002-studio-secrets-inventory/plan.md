@@ -2,7 +2,7 @@
 
 **Branch**: `agent/codex/3069-secrets-inventory` | **Date**: 2026-10-22 | **Spec**: [spec.md](spec.md)
 
-**Input**: #3069 / #3057 / #2559, winning App claim6331801398; qualified base5d1df7097db3a731330735a94c2b6a5fb7f9a476. Sole prerequisite3062 accepted;3063 and3067 are independent decision-blocked leaves.
+**Input**: #3069 / #3057 / #2559, winning App claim6331801398; qualified base5d1df7097db3a731330735a94c2b6a5fb7f9a476. Sole prerequisite3062 accepted. Final source integration includes separately reviewed incident head4ad8179d6496d11896bff9778ef39bb153a6cd97 without widening this leaf; its canonical verification remains separate.
 
 ## Summary
 

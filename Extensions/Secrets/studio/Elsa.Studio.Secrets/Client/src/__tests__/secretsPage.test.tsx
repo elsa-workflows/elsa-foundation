@@ -302,12 +302,7 @@ describe("secrets page", () => {
 
   it("distinguishes loaded coverage from the completed search total", async () => {
     const { container } = render({
-      getItems: () => Array.from({ length: 100 }, (_, index) => secret({
-        id: String(index + 1),
-        name: `inventory.secret.${index + 1}`,
-        displayName: `Inventory secret ${index + 1}`,
-        scope: `scope.${index + 1}`
-      })),
+      getItems: () => inventoryPage(),
       totalCount: 101
     });
 
@@ -333,11 +328,7 @@ describe("secrets page", () => {
 
   it("does not label a complete full page as partial", async () => {
     const { container } = render({
-      getItems: () => Array.from({ length: 100 }, (_, index) => secret({
-        id: String(index + 1),
-        name: `complete.secret.${index + 1}`,
-        displayName: `Complete secret ${index + 1}`
-      })),
+      getItems: () => inventoryPage("Complete"),
       totalCount: 100
     });
 
@@ -419,7 +410,7 @@ describe("secrets page", () => {
 
     expect(container.querySelector("[data-secret-open='latest.secret']")).not.toBeNull();
     expect(container.querySelector("[data-secret-open='earlier.secret']")).toBeNull();
-    expect(container.querySelector(".secrets-count")?.textContent).toContain("1");
+    expect(container.querySelector(".secrets-count")?.textContent).toBe("1 shown · 1 loaded · 1 result for “latest”");
   });
 
   it("ignores a pending result after its endpoint context changes", async () => {
@@ -489,11 +480,7 @@ describe("secrets page", () => {
       displayName: "Known later credentials",
       scope: "Integration:Later"
     });
-    const firstPage = Array.from({ length: 100 }, (_, index) => secret({
-      id: String(index + 1),
-      name: `inventory.secret.${index + 1}`,
-      displayName: `Inventory secret ${index + 1}`
-    }));
+    const firstPage = inventoryPage();
     const { container, listRequests } = render({
       getItems: url => {
         const term = getSearchTerm(url);
@@ -694,6 +681,15 @@ function render(options: {
 
 function getSearchTerm(url: string) {
   return new URL(url, "https://fixture.example").searchParams.get("search") ?? "";
+}
+
+function inventoryPage(displayPrefix = "Inventory") {
+  return Array.from({ length: 100 }, (_, index) => secret({
+    id: String(index + 1),
+    name: `${displayPrefix.toLowerCase()}.secret.${index + 1}`,
+    displayName: `${displayPrefix} secret ${index + 1}`,
+    scope: `scope.${index + 1}`
+  }));
 }
 
 function paymentSecret(overrides: Partial<ReturnType<typeof secret>> = {}) {
