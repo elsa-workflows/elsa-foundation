@@ -51,6 +51,29 @@ internal static class RuntimeClosedScope
                 RuntimeInputBindingStateProjection.BoundaryVariableRole));
 
     /// <summary>
+    /// The request a body node reads below <paramref name="boundary"/>: the boundary's captured inputs by reference key,
+    /// and an explicit null for every input its pinned contract declares that was neither passed nor defaulted, so an
+    /// optional input reads as null instead of being unavailable.
+    /// </summary>
+    public static IReadOnlyDictionary<string, ValueEnvelope> InputEnvelopes(
+        ActivityExecutionState boundary,
+        IEnumerable<DurableValueState> durableValues,
+        WorkflowExecutable executable)
+    {
+        var envelopes = RuntimeInputBindingStateProjection.ProjectBoundaryEnvelopes(
+                durableValues, boundary.InvocationId, RuntimeInputBindingStateProjection.BoundaryInputRole)
+            .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        if (executable.NodesById.TryGetValue(boundary.Execution.ExecutableNodeId, out var node) &&
+            node.ActivityContract is { } contract)
+        {
+            foreach (var input in contract.Inputs.Values.Where(input => !envelopes.ContainsKey(input.Key)))
+                envelopes[input.Key] = ValueEnvelope.Null(input.Type, ValueProtectionPolicy.InstanceInline);
+        }
+
+        return envelopes;
+    }
+
+    /// <summary>
     /// Activity execution id of the nearest closed boundary above <paramref name="state"/> (never the state itself),
     /// walking scheduling parents through <paramref name="statesByInvocationId"/>; null outside every closed scope.
     /// </summary>

@@ -21,7 +21,7 @@ using DesignActivityContract = Elsa.Activities.Design.Core.Models.ActivityContra
 
 namespace Elsa.Activities.Graph.Tests;
 
-public sealed class GraphActivityProviderTests
+public sealed partial class GraphActivityProviderTests
 {
     private readonly GraphActivityProvider _provider = new(
         new TestActivityStructureService(),

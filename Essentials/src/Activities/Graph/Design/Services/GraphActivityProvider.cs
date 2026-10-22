@@ -106,8 +106,11 @@ public sealed class GraphActivityProvider(
         if (graph is not null)
         {
             // A draft has no resolved dependencies yet, so Complete nodes are recognised through the catalog.
-            var completeNodes = await FindCompleteNodesInCatalogAsync(EnumerateNodes(graph.RootActivity), cancellationToken);
+            var nodes = EnumerateNodes(graph.RootActivity);
+            var completeNodes = await FindCompleteNodesInCatalogAsync(nodes, cancellationToken);
             ValidateGraph(graph, contract, subject, diagnostics, completeNodes);
+            // A draft has no resolved dependencies yet, so producer results and capture types are checked at compile.
+            ValidateBodyReferences(graph, contract, nodes, dependencyContracts: null, subject, diagnostics);
         }
 
         return ActivityDiagnosticOrderer.Order(diagnostics);
@@ -135,6 +138,15 @@ public sealed class GraphActivityProvider(
             ValidateDependencies(nodes, request.ResolvedDirectDependencies, subject, diagnostics);
             ValidateDeclaredStructures(nodes, request.ResolvedDirectDependencies, subject, diagnostics);
             ValidateOutcomeMappings(graph, nodes, request.ResolvedDirectDependencies, subject, diagnostics);
+            ValidateBodyReferences(
+                graph,
+                request.Contract,
+                nodes,
+                request.ResolvedDirectDependencies
+                    .GroupBy(x => x.OccurrenceId, StringComparer.Ordinal)
+                    .ToDictionary(x => x.Key, x => x.First().Contract, StringComparer.Ordinal),
+                subject,
+                diagnostics);
         }
 
         var orderedDiagnostics = ActivityDiagnosticOrderer.Order(diagnostics);
@@ -172,7 +184,9 @@ public sealed class GraphActivityProvider(
             .Select(node => new ActivityTemplateOccurrenceCompilation(
                 node.NodeId,
                 ReadCanonicalArray(node.Element, "inputs"),
-                activityStructureService.CompileExecutableStructure(node.Activity)))
+                activityStructureService.CompileExecutableStructure(node.Activity),
+                // Spec 265 D-2: a body node's captures into graph variables; absent when it captures nothing.
+                ReadCanonicalArray(node.Element, "outputs") is { } outputs && outputs.GetArrayLength() > 0 ? outputs : null))
             .ToArray();
 
         return ValueTask.FromResult(new ActivityTemplateCompilation(
@@ -1227,6 +1241,22 @@ public sealed class GraphActivityProvider(
     }
 
     private static ActivityDiagnosticSubject ProposalSubject() => new("ActivityDefinition", Key);
+
+    // Spec 265: a closed-scope body refers only to what the activity declares or contains.
+    private static void ValidateBodyReferences(
+        ActivityGraphManifest graph,
+        DesignActivityContract contract,
+        IReadOnlyList<GraphNode> nodes,
+        IReadOnlyDictionary<string, DesignActivityContract>? dependencyContracts,
+        ActivityDiagnosticSubject subject,
+        List<ActivityDiagnostic> diagnostics)
+    {
+        var bodyNodes = nodes
+            .Select(node => new GraphBodyReferenceValidator.BodyNode(node.NodeId, node.JsonPointer, node.ParentOccurrenceId, node.Element))
+            .ToArray();
+        foreach (var finding in GraphBodyReferenceValidator.Validate(graph, contract, bodyNodes, dependencyContracts))
+            diagnostics.Add(Diagnostic(finding.Code, finding.Message, subject, finding.JsonPointer, finding.ReferenceKey));
+    }
 
     private static ActivityDiagnostic Diagnostic(
         string code,

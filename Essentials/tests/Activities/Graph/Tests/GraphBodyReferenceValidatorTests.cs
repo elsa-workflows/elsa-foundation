@@ -1,0 +1,128 @@
+using System.Text.Json;
+using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Services;
+using Elsa.Activities.Graph.Design.Services;
+using Elsa.Primitives.Models;
+using Xunit;
+using DesignActivityContract = Elsa.Activities.Design.Core.Models.ActivityContract;
+
+namespace Elsa.Activities.Graph.Tests;
+
+/// <summary>
+/// Spec 265 FR-006, FR-013: a closed-scope graph body may refer only to what the activity declares or contains, and a
+/// reference to anything else is refused at publication with the node and the reference named.
+/// </summary>
+public sealed partial class GraphActivityProviderTests
+{
+    [Fact]
+    public async Task A_body_that_reads_only_what_the_activity_declares_has_no_reference_findings()
+    {
+        var diagnostics = await ValidateBodyAsync(
+            BodyArgument("a", "WorkflowRequest", new { memberKey = "amount" }),
+            BodyArgument("b", "Input", new { referenceKey = "amount" }),
+            BodyArgument("c", "Variable", new { referenceKey = "running-total", declaringScopeId = "workflow" }),
+            BodyArgument("d", "Variable", new { referenceKey = "running-total", declaringScopeId = "activity-graph" }),
+            BodyArgument("e", "JavaScript", new
+            {
+                source = "args.amount + args.total",
+                parameters = new Dictionary<string, object>
+                {
+                    ["amount"] = new { kind = "WorkflowRequest", memberKey = "amount" },
+                    ["total"] = new { kind = "Variable", declaringScopeNodeId = "workflow", variableKey = "running-total" }
+                }
+            }));
+
+        Assert.DoesNotContain(diagnostics, x => x.Code.StartsWith("activity.graph.body-", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("WorkflowRequest", """{"memberKey":"unknown"}""", GraphBodyReferenceCodes.InputUnknown)]
+    [InlineData("Input", """{"referenceKey":"unknown"}""", GraphBodyReferenceCodes.InputUnknown)]
+    [InlineData("Variable", """{"referenceKey":"unknown","declaringScopeId":"workflow"}""", GraphBodyReferenceCodes.VariableUnknown)]
+    [InlineData("Variable", """{"referenceKey":"running-total","declaringScopeId":"elsewhere"}""", GraphBodyReferenceCodes.VariableScopeInvisible)]
+    [InlineData("ActivityResult", """{"producerNodeId":"ghost","projectionKey":"result","producerScopeId":"graph-root"}""", GraphBodyReferenceCodes.ProducerUnknown)]
+    [InlineData("JavaScript", """{"source":"args.x","parameters":{"x":{"kind":"WorkflowRequest","memberKey":"unknown"}}}""", GraphBodyReferenceCodes.InputUnknown)]
+    [InlineData("JavaScript", """{"source":"args.x","parameters":{"x":{"kind":"ActivityResult","producerNodeId":"ghost","projectionKey":"result"}}}""", GraphBodyReferenceCodes.ProducerUnknown)]
+    public async Task A_body_reference_to_something_the_activity_does_not_hold_is_refused(string syntax, string value, string code)
+    {
+        var diagnostics = await ValidateBodyAsync(BodyArgument("value", syntax, JsonDocument.Parse(value).RootElement.Clone()));
+
+        var finding = Assert.Single(diagnostics, x => x.Code == code);
+        Assert.Equal(ActivityDiagnosticSeverity.Error, finding.Severity);
+        Assert.Equal("/rootActivity/inputs/0", finding.Location?.JsonPointer);
+        Assert.Equal("value", finding.Location?.ReferenceKey);
+        Assert.Contains("'graph-root'", finding.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("""{"referenceKey":"unknown","declaringScopeId":"workflow"}""")]
+    [InlineData("""{"referenceKey":"running-total","declaringScopeId":"caller-container"}""")]
+    public async Task A_capture_into_anything_but_the_activitys_own_variables_is_refused(string target)
+    {
+        var diagnostics = await ValidateBodyAsync(
+            inputs: [],
+            outputs: [BodyArgument("result", "Variable", JsonDocument.Parse(target).RootElement.Clone())]);
+
+        var finding = Assert.Single(diagnostics, x => x.Code == GraphBodyReferenceCodes.CaptureTargetUnknown);
+        Assert.Equal("/rootActivity/outputs/0", finding.Location?.JsonPointer);
+    }
+
+    [Fact]
+    public async Task A_capture_into_a_declared_graph_variable_is_accepted()
+    {
+        var diagnostics = await ValidateBodyAsync(
+            inputs: [],
+            outputs: [BodyArgument("result", "Variable", new { referenceKey = "running-total", declaringScopeId = "workflow" })]);
+
+        Assert.DoesNotContain(diagnostics, x => x.Code.StartsWith("activity.graph.body-", StringComparison.Ordinal));
+    }
+
+    private Task<IReadOnlyList<ActivityDiagnostic>> ValidateBodyAsync(params object[] inputs) =>
+        ValidateBodyAsync(inputs, []).AsTask();
+
+    private ValueTask<IReadOnlyList<ActivityDiagnostic>> ValidateBodyAsync(object[] inputs, object[] outputs) =>
+        _provider.ValidateAsync(
+            new ActivityProviderManifest(
+                GraphActivityProvider.Key,
+                Design.Models.ActivityGraphManifest.SchemaVersion,
+                JsonSerializer.SerializeToElement(new
+                {
+                    variables = new[]
+                    {
+                        new
+                        {
+                            referenceKey = "running-total",
+                            name = "RunningTotal",
+                            type = new { alias = "Object", collectionKind = "Single" },
+                            storageDriverKey = "elsa.json"
+                        }
+                    },
+                    rootActivity = new
+                    {
+                        nodeId = "graph-root",
+                        activityVersionId = "activity-ver-root",
+                        inputs,
+                        outputs,
+                        structure = (object?)null
+                    },
+                    outputMappings = Array.Empty<object>()
+                })),
+            new DesignActivityContract(
+                "1",
+                [new ActivityInputContract("amount", "Amount", new TypeReference("Int64"), false, true, null, "elsa.json")],
+                [],
+                [new ActivityOutcomeContract("done", "Done", true)]));
+
+    private static object BodyArgument(string referenceKey, string expressionType, object value) =>
+        new { referenceKey, value = new { expressionType, value } };
+}
+
+/// <summary>The refusal codes, as the published contract names them.</summary>
+internal static class GraphBodyReferenceCodes
+{
+    public const string InputUnknown = "activity.graph.body-input-unknown";
+    public const string VariableUnknown = "activity.graph.body-variable-unknown";
+    public const string VariableScopeInvisible = "activity.graph.body-variable-scope-invisible";
+    public const string ProducerUnknown = "activity.graph.body-producer-unknown";
+    public const string CaptureTargetUnknown = "activity.graph.body-capture-target-unknown";
+}

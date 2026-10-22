@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Activities.Runtime.Core.Models;
@@ -52,7 +53,8 @@ public sealed class ActivityTemplatePlacer(
     IWorkflowExecutableSourceReferenceReader sourceReferences,
     IActivityPlacementHasher placementHasher,
     IActivityStructureService activityStructureService,
-    RuntimeInputBindingCompiler inputBindingCompiler)
+    RuntimeInputBindingCompiler inputBindingCompiler,
+    RuntimeOutputCaptureCompiler? outputCaptureCompiler = null)
 {
     private static readonly JsonSerializerOptions OccurrenceSerializerOptions = new(JsonSerializerDefaults.Web)
     {
@@ -106,7 +108,8 @@ public sealed class ActivityTemplatePlacer(
                     dependency.ParentOccurrenceId,
                     dependency.ChildSlotName,
                     dependency.ChildIndex,
-                    dependency.OccurrenceOverlay));
+                    dependency.OccurrenceOverlay,
+                    IsClosedScope(frame.Template.Root.Descriptor)));
                 continue;
             }
 
@@ -170,7 +173,7 @@ public sealed class ActivityTemplatePlacer(
                 .ToList();
             if (ReferenceEquals(current.Node, frame.Template.Root) && frame.Children.Count > 0)
             {
-                foreach (var slot in ReconstructOccurrenceRoots(frame.Children, closedScopeId)
+                foreach (var slot in ReconstructOccurrenceRoots(frame.Children, closedScopeId, ReadGraphVariables(frame.Template.Root.Descriptor))
                              .GroupBy(x => x.ChildSlotName, StringComparer.Ordinal)
                              .OrderBy(x => x.Key, StringComparer.Ordinal))
                     MergeChildSlot(childSlots, slot.Key, slot.OrderBy(x => x.ChildIndex).Select(x => x.Root));
@@ -278,12 +281,16 @@ public sealed class ActivityTemplatePlacer(
             frame.OccurrenceId,
             frame.ParentOccurrenceId,
             frame.ChildSlotName,
-            frame.ChildIndex);
+            frame.ChildIndex,
+            frame.OccurrenceOverlay);
 
         static bool stackIsRoot(PlacementFrame candidate) => candidate.OccurrenceId is null;
     }
 
-    private IReadOnlyList<PlacementBuild> ReconstructOccurrenceRoots(IReadOnlyList<PlacementBuild> occurrences, string? closedScopeId)
+    private IReadOnlyList<PlacementBuild> ReconstructOccurrenceRoots(
+        IReadOnlyList<PlacementBuild> occurrences,
+        string? closedScopeId,
+        IReadOnlyCollection<GraphVariableCaptureTarget> graphVariables)
     {
         if (occurrences.Count == 0)
             return [];
@@ -314,7 +321,11 @@ public sealed class ActivityTemplatePlacer(
             var occurrence = byId[occurrenceId];
             var root = occurrenceNodeIds is null
                 ? occurrence.Root
-                : PlacedReferenceRemapper.Remap(occurrence.Root, occurrenceNodeIds, closedScopeId!);
+                : CompileGraphVariableCaptures(
+                    PlacedReferenceRemapper.Remap(occurrence.Root, occurrenceNodeIds, closedScopeId!),
+                    occurrence,
+                    graphVariables,
+                    closedScopeId!);
             if (children.TryGetValue(occurrenceId, out var authoredChildren))
             {
                 var childSlots = root.ChildSlots.ToList();
@@ -344,6 +355,65 @@ public sealed class ActivityTemplatePlacer(
             .OrderBy(x => x.ChildSlotName, StringComparer.Ordinal)
             .ThenBy(x => x.ChildIndex)
             .Select(x => rebuilt[x.OccurrenceId!])
+            .ToArray();
+    }
+
+    // Spec 265 D-2: a closed-scope body node's authored outputs capture into the graph's own variables.
+    private ExecutableNode CompileGraphVariableCaptures(
+        ExecutableNode root,
+        PlacementBuild occurrence,
+        IReadOnlyCollection<GraphVariableCaptureTarget> graphVariables,
+        string graphScopeId)
+    {
+        if (occurrence.OccurrenceOverlay?.OutputBindings is not { } outputBindings)
+            return root;
+
+        var outputStates = outputBindings.Deserialize<ArgumentState[]>(OccurrenceSerializerOptions) ?? [];
+        if (outputStates.Length == 0)
+            return root;
+        var contract = root.ActivityContract
+            ?? throw new InvalidOperationException($"Occurrence '{occurrence.OccurrenceId}' captures outputs but its exact template root has no pinned activity contract.");
+        var compiler = outputCaptureCompiler
+            ?? throw new InvalidOperationException($"Occurrence '{occurrence.OccurrenceId}' captures outputs, which needs an output capture compiler.");
+        var captures = root.OutputCaptures.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
+        foreach (var (key, capture) in compiler.CompileGraphVariableOutputs(
+                     occurrence.OccurrenceId!,
+                     contract.Result.Projections.Values.ToArray(),
+                     outputStates,
+                     graphVariables,
+                     graphScopeId))
+            captures[key] = capture;
+
+        return new ExecutableNode(
+            root.ExecutableNodeId,
+            root.AuthoredActivityId,
+            root.ActivityType,
+            root.ActivityTypeVersion,
+            root.Descriptor,
+            root.InputBindings,
+            captures,
+            root.Metadata,
+            root.ExecutionPlacement,
+            root.ChildSlots,
+            root.Structure,
+            root.ActivityContract,
+            root.IntrinsicKind,
+            root.IntrinsicVariable);
+    }
+
+    private static IReadOnlyCollection<GraphVariableCaptureTarget> ReadGraphVariables(RuntimeActivityDescriptor descriptor)
+    {
+        if (descriptor.Payload.ValueKind != JsonValueKind.Object ||
+            !descriptor.Payload.TryGetProperty("variables", out var variables) ||
+            variables.ValueKind != JsonValueKind.Array)
+            return [];
+
+        return variables.EnumerateArray()
+            .Select(variable => new GraphVariableCaptureTarget(
+                variable.GetProperty("referenceKey").GetString()!,
+                variable.TryGetProperty("name", out var name) ? name.GetString() ?? string.Empty : string.Empty,
+                variable.GetProperty("type").Clone(),
+                variable.GetProperty("storageDriverKey").GetString()!))
             .ToArray();
     }
 
@@ -414,6 +484,8 @@ public sealed class ActivityTemplatePlacer(
     {
         var overlay = frame.OccurrenceOverlay!;
         var inputStates = overlay.InputBindings.Deserialize<ArgumentState[]>(OccurrenceSerializerOptions) ?? [];
+        if (frame.InClosedScope)
+            inputStates = inputStates.Select(ToGraphInputRead).ToArray();
         var contract = templateRoot.ActivityContract;
         if (contract is null)
         {
@@ -428,6 +500,26 @@ public sealed class ActivityTemplatePlacer(
         // to it against its template root's activity kind and type.
         inputBindingCompiler.EnsureSecretBindingsAdmissible(frame.OccurrenceId!, templateRoot.Descriptor, inputStates);
         return inputBindingCompiler.CompileAll(frame.OccurrenceId!, contract.Inputs.Values, inputStates);
+    }
+
+    // Spec 265: Studio picks a graph input as Input {referenceKey}. Inside a closed-scope body the request is the
+    // graph's own inputs, keyed by reference key, so the pick is a request read of that key.
+    private static ArgumentState ToGraphInputRead(ArgumentState state)
+    {
+        if (!StringComparer.OrdinalIgnoreCase.Equals(state.Value.ExpressionType, "Input"))
+            return state;
+        var value = state.Value.Value is JsonElement element ? element : JsonSerializer.SerializeToElement(state.Value.Value);
+        if (value.ValueKind != JsonValueKind.Object ||
+            !value.TryGetProperty("referenceKey", out var referenceKey) ||
+            referenceKey.ValueKind != JsonValueKind.String)
+            return state;
+
+        return state with
+        {
+            Value = new ArgumentValue(
+                JsonSerializer.SerializeToElement(new { memberKey = referenceKey.GetString() }),
+                "WorkflowRequest")
+        };
     }
 
     private ExecutableActivityStructure? RewriteStructure(
@@ -531,7 +623,8 @@ public sealed class ActivityTemplatePlacer(
         string? parentOccurrenceId,
         string childSlotName,
         int childIndex,
-        ExecutableActivityTemplateOccurrenceOverlay? occurrenceOverlay)
+        ExecutableActivityTemplateOccurrenceOverlay? occurrenceOverlay,
+        bool inClosedScope = false)
     {
         public ActivityDefinitionVersionPublication Publication { get; } = publication;
         public ExecutableActivityTemplate Template { get; } = template;
@@ -543,6 +636,8 @@ public sealed class ActivityTemplatePlacer(
         public string ChildSlotName { get; } = childSlotName;
         public int ChildIndex { get; } = childIndex;
         public ExecutableActivityTemplateOccurrenceOverlay? OccurrenceOverlay { get; } = occurrenceOverlay;
+        /// <summary>Spec 265: this occurrence is a body node of a closed-scope graph.</summary>
+        public bool InClosedScope { get; } = inClosedScope;
         public ExecutableActivityTemplateDependency[] Dependencies { get; } = template.DirectDependencies
             .OrderBy(x => x.OccurrenceId, StringComparer.Ordinal)
             .ThenBy(x => x.DefinitionVersionId, StringComparer.Ordinal)
@@ -560,5 +655,6 @@ public sealed class ActivityTemplatePlacer(
         string? OccurrenceId,
         string? ParentOccurrenceId,
         string ChildSlotName,
-        int ChildIndex);
+        int ChildIndex,
+        ExecutableActivityTemplateOccurrenceOverlay? OccurrenceOverlay = null);
 }

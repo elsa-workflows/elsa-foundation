@@ -1,14 +1,19 @@
 using System.Text.Json;
 using Elsa.Activities.Behavioral.Infrastructure;
+using Elsa.Activities.Graph.Runtime;
 using Elsa.Activities.Graph.Runtime.Models;
+using Elsa.Activities.Sequence;
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
+using Elsa.Serialization.SystemText;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
 
@@ -125,6 +130,99 @@ public sealed class GraphBodyScopeTests
         Assert.Equal(99, ReadInput(run, "node-read-a"));
     }
 
+    [Fact]
+    public async Task A_body_node_captures_an_output_that_a_later_node_reads()
+    {
+        // D-2: the capture writes the graph's own variable row, and the caller's variable of the same name is untouched.
+        await using var harness = GraphBoundaryCompleteTests.NewHarness();
+        var body = GraphBoundaryCompleteTests.Sequence(
+            "node-body",
+            CaptureInto(Echo("node-lookup", Literal("Value", 5)), "total"),
+            Echo("node-read-total", Variable("total", BoundaryNodeId)));
+        var boundary = Boundary(
+            body,
+            variables: [new GraphActivityVariableDescriptor("total", "RunningTotal", ObjectType, WellKnownRuntimeDurableValueStorageDrivers.Json, new GraphActivityExpression("Literal", JsonSerializer.SerializeToElement(10)))]);
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(boundary, CallerTotal()));
+
+        run.AssertWorkflowCompleted();
+        Assert.Equal(5, ReadInput(run, "node-read-total"));
+        Assert.Equal(0, run.WorkflowState!.RootVariableFrame!.Values["total"].InlineValue!.Value.GetInt32());
+    }
+
+    [Fact]
+    public async Task A_captured_value_reaches_the_boundary_output_mapping()
+    {
+        await using var harness = ScriptingHarness();
+        var body = CaptureInto(Echo("node-lookup", Literal("Value", 5)), "total");
+        var boundary = Boundary(
+            body,
+            variables: [new GraphActivityVariableDescriptor("total", "RunningTotal", ObjectType, WellKnownRuntimeDurableValueStorageDrivers.Json, new GraphActivityExpression("Literal", JsonSerializer.SerializeToElement(10)))],
+            outputs: [new GraphActivityOutputDescriptor("sum", ObjectType, WellKnownRuntimeDurableValueStorageDrivers.Json, "Sum")],
+            outputMappings: [new GraphActivityOutputMappingDescriptor("sum", new GraphActivityExpression("JavaScript", JsonSerializer.SerializeToElement("getVariable('RunningTotal')")))]);
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(boundary));
+
+        run.AssertWorkflowCompleted();
+        var durableValues = await harness.Services.GetRequiredService<IDurableValueStateStore>()
+            .ListAllDurableValueStatesAsync(run.WorkflowState!.WorkflowExecutionId);
+        var output = Assert.Single(durableValues, value => value.DurableValueId.EndsWith(":output:3:sum", StringComparison.Ordinal));
+        Assert.Equal(5, output.InlineValue!.Value.GetInt32());
+    }
+
+    [Fact]
+    public async Task Body_javascript_reads_graph_variables_by_name_not_the_callers()
+    {
+        // FR-003: the ambient variables surface below a closed scope is the graph's variables, named by their rows.
+        await using var harness = ScriptingHarness();
+        var body = Echo("node-read-total", new RuntimeInputBinding(
+            nameof(EchoActivity.Value), new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Expression,
+            expression: new RuntimeExpressionBinding("JavaScript", "variables.RunningTotal + 1")));
+        var boundary = Boundary(
+            body,
+            variables: [new GraphActivityVariableDescriptor("total", "RunningTotal", ObjectType, WellKnownRuntimeDurableValueStorageDrivers.Json, new GraphActivityExpression("Literal", JsonSerializer.SerializeToElement(10)))]);
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(boundary, CallerTotal()));
+
+        run.AssertWorkflowCompleted();
+        Assert.Equal(11, ReadInput(run, "node-read-total"));
+    }
+
+    private static WorkflowExecutionHarness ScriptingHarness() =>
+        WorkflowExecutionHarness.Create()
+            .WithFeature(services => new SerializationFeature().ConfigureServices(services))
+            .WithFeature(services => new GraphActivitiesRuntimeFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
+            .WithFeature(services => new Expressions.ExpressionsFeature().ConfigureServices(services))
+            .WithFeature(services => new Expressions.JavaScript.JavaScriptFeature().ConfigureServices(services))
+            .WithFeature(services => new Expressions.JavaScript.Jint.JintFeature().ConfigureServices(services))
+            .WithFeature(services => services.AddMemoryCache())
+            .Build(Enumerable.Range(1, 64).Select(index => $"actexec-{index}"));
+
+    private static ExecutableNode CaptureInto(ExecutableNode node, string variableKey)
+    {
+        var capture = new RuntimeOutputCapture(
+            nameof(EchoResult.Value),
+            $"graph-variable:{variableKey}",
+            new RuntimeValueTypeDescriptor("object", WellKnownRuntimeDurableValueStorageDrivers.Json, ObjectType),
+            DurableValueLifecycle.Instance,
+            DurableValueStorage.Custom,
+            captureOnSuccessfulCompletion: true,
+            new Dictionary<string, string>
+            {
+                [RuntimeMetadataKeys.TargetVariableReferenceKey] = variableKey,
+                [RuntimeMetadataKeys.VariableName] = "RunningTotal",
+                [RuntimeMetadataKeys.StorageDriverKey] = WellKnownRuntimeDurableValueStorageDrivers.Json,
+                [RuntimeMetadataKeys.CaptureTargetScopeId] = BoundaryNodeId
+            },
+            WellKnownRuntimeDurableValueStorageDrivers.Json);
+        return new ExecutableNode(
+            node.ExecutableNodeId, node.AuthoredActivityId, node.ActivityType, node.ActivityTypeVersion,
+            node.DescriptorType, node.DescriptorPayload, node.InputBindings, node.Metadata,
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture> { [capture.OutputName] = capture });
+    }
+
     private static RuntimeVariableDeclaration CallerTotal() => new(
         "total", "RunningTotal", new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline, Literal("total", 0));
 
@@ -166,7 +264,9 @@ public sealed class GraphBodyScopeTests
         IReadOnlyList<GraphActivityInputDescriptor>? inputs = null,
         IReadOnlyList<GraphActivityVariableDescriptor>? variables = null,
         IReadOnlyList<RuntimeInputBinding>? boundaryInputs = null,
-        bool closed = true)
+        bool closed = true,
+        IReadOnlyList<GraphActivityOutputDescriptor>? outputs = null,
+        IReadOnlyList<GraphActivityOutputMappingDescriptor>? outputMappings = null)
     {
         var descriptor = new GraphActivityDescriptor(
             definitionId: "definition-graph",
@@ -177,8 +277,8 @@ public sealed class GraphBodyScopeTests
             entryOccurrenceId: null,
             inputs: inputs ?? [],
             variables: variables ?? [],
-            outputs: [],
-            outputMappings: [],
+            outputs: outputs ?? [],
+            outputMappings: outputMappings ?? [],
             requiredInputReferenceKeys: [],
             requiredOutputReferenceKeys: []);
         var payload = JsonSerializer.SerializeToElement(descriptor, SerializerOptions);

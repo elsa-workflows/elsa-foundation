@@ -598,7 +598,12 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 (IActivityCompletionTransition)returnedTransition,
                 valueFlowCompletion,
                 TimeProvider.GetUtcNow(),
-                cancellationToken);
+                cancellationToken,
+                // Spec 265 D-2: a capture into a graph variable writes the row of the producer's nearest closed scope.
+                closedScopeBoundary: await new RuntimeContainerScopeService(
+                        serviceProvider.GetRequiredService<IActivityExecutionStateStore>(),
+                        serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>())
+                    .FindClosedScopeBoundaryAsync(workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId, executableNode, cancellationToken));
             durableValueChanges = MergeDurableValueChanges(durableValueChanges, captureProjection.DurableValues);
             workflowVariableWrites = captureProjection.WorkflowVariableWrites;
             return valueFlowCompletion.Projections

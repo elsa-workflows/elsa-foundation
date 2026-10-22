@@ -39,7 +39,7 @@ public sealed class RuntimeActivityInputSnapshotMaterializer(
             .BuildVisibleFramesAsync(state.Execution.WorkflowExecutionId, state, cancellationToken: cancellationToken, durableValues: durableValues);
         // Spec 265: below a closed activity execution scope the request inputs are the boundary's own.
         var workflowInputEnvelopes = visibleFrames.ClosedScopeBoundary is { } boundary
-            ? RuntimeInputBindingStateProjection.ProjectBoundaryEnvelopes(durableValues, boundary.InvocationId, RuntimeInputBindingStateProjection.BoundaryInputRole)
+            ? RuntimeClosedScope.InputEnvelopes(boundary, durableValues, executable)
             : projections.WorkflowInputEnvelopes;
         var resolutionContext = new RuntimeInputBindingResolutionContext(
             workflowExecutionId: state.Execution.WorkflowExecutionId,

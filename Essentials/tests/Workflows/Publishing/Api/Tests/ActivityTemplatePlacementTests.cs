@@ -15,6 +15,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Services.Values;
 using Xunit;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
@@ -446,19 +447,46 @@ public sealed class ActivityTemplatePlacementTests
         Assert.Equal("workflow", format.InputBindings["total"].Variable!.DeclaringScopeId);
     }
 
-    private static (ActivityTemplatePlacer Placer, ActivityTemplatePlacementRequest Request) ClosedScopeGraph(string? scopeModel)
+    [Fact]
+    public async Task A_closed_scope_input_pick_reads_the_graph_input_and_a_capture_writes_the_graph_variable()
+    {
+        // Spec 265: Studio picks a graph input as Input {referenceKey}; an authored output capture targets a graph
+        // variable. Both compile against this placement's graph.
+        var (placer, request) = ClosedScopeGraph(
+            scopeModel: "closed",
+            formatInputs: """[{"referenceKey":"total","value":{"value":{"referenceKey":"amount"},"expressionType":"Input"}}]""",
+            computeOutputs: """[{"referenceKey":"result","value":{"value":{"referenceKey":"total","declaringScopeId":"workflow"},"expressionType":"Variable"}}]""");
+
+        var placement = await placer.PlaceAsync(request);
+
+        var body = placement.Root.DescendantsAndSelf().Where(x => x.Metadata.GetValueOrDefault("activity.templateNodeId") == "source-owned-root").ToArray();
+        var format = Assert.Single(body, x => x.InputBindings.TryGetValue("total", out var total) && total.Source == RuntimeInputBindingSource.WorkflowRequest);
+        Assert.Equal("amount", format.InputBindings["total"].WorkflowRequest!.MemberKey);
+        var capture = Assert.Single(Assert.Single(body, x => x.OutputCaptures.Count > 0).OutputCaptures.Values);
+        Assert.Equal(placement.Root.ExecutableNodeId, capture.Metadata[RuntimeMetadataKeys.CaptureTargetScopeId]);
+        Assert.Equal("total", capture.Metadata[RuntimeMetadataKeys.TargetVariableReferenceKey]);
+        Assert.Equal("elsa.json", capture.StorageDriverKey);
+        Assert.Equal("object", capture.Type.Kind);
+    }
+
+    private static (ActivityTemplatePlacer Placer, ActivityTemplatePlacementRequest Request) ClosedScopeGraph(
+        string? scopeModel,
+        string? formatInputs = null,
+        string? computeOutputs = null)
     {
         var formatOverlay = new ExecutableActivityTemplateOccurrenceOverlay(
             "1",
-            Json("""
+            Json(formatInputs ?? """
                  [
                    {"referenceKey":"condition","value":{"value":{"producerNodeId":"compute","projectionKey":"result","producerScopeId":"compute"},"expressionType":"ActivityResult"}},
                    {"referenceKey":"total","value":{"value":{"referenceKey":"total","declaringScopeId":"workflow"},"expressionType":"Variable"}}
                  ]
                  """),
             null);
-        var emptyOverlay = new ExecutableActivityTemplateOccurrenceOverlay("1", Json("[]"), null);
-        var payload = scopeModel is null ? Json("""{"entryOccurrenceId":"compute"}""") : Json($$"""{"entryOccurrenceId":"compute","scopeModel":"{{scopeModel}}"}""");
+        var emptyOverlay = new ExecutableActivityTemplateOccurrenceOverlay("1", Json("[]"), null, computeOutputs is null ? null : Json(computeOutputs));
+        var payload = scopeModel is null
+            ? Json("""{"entryOccurrenceId":"compute"}""")
+            : Json($$"""{"entryOccurrenceId":"compute","scopeModel":"{{scopeModel}}","variables":[{"referenceKey":"total","name":"Total","type":{"alias":"object","collectionKind":"Single"},"storageDriverKey":"elsa.json"}]}""");
         var graphRoot = new ExecutableNode("graph-boundary", "graph-boundary", "elsa.graph-activity", "1",
             new RuntimeActivityDescriptor("elsa.graph-activity", "1", payload),
             new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>());
@@ -470,11 +498,11 @@ public sealed class ActivityTemplatePlacementTests
         var computeTemplate = Template("template-compute", "hash-compute", new ExecutableNode(
             "source-owned-root", "source-owned-root", "type.compute", "1", new("compute", "1", Json("{}")),
             new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(),
-            new Dictionary<string, string>(), activityContract: RuntimeContractWithInputs("condition")));
+            new Dictionary<string, string>(), activityContract: RuntimeContractWithInputs(["condition"], ["result"])));
         var formatTemplate = Template("template-format", "hash-format", new ExecutableNode(
             "source-owned-root", "source-owned-root", "type.format", "1", new("format", "1", Json("{}")),
             new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(),
-            new Dictionary<string, string>(), activityContract: RuntimeContractWithInputs("condition", "total")));
+            new Dictionary<string, string>(), activityContract: RuntimeContractWithInputs(["condition", "total"], [])));
         var graphPublication = Publication("definition-graph", "version-graph", "type.graph", graphTemplate);
         var computePublication = Publication("definition-compute", "version-compute", "type.compute", computeTemplate);
         var formatPublication = Publication("definition-format", "version-format", "type.format", formatTemplate);
@@ -499,7 +527,7 @@ public sealed class ActivityTemplatePlacementTests
             new Dictionary<string, RuntimeOutputCapture>()));
     }
 
-    private static Elsa.Activities.Runtime.Core.Models.ActivityContract RuntimeContractWithInputs(params string[] inputKeys) => new(
+    private static Elsa.Activities.Runtime.Core.Models.ActivityContract RuntimeContractWithInputs(string[] inputKeys, string[] projectionKeys) => new(
         "type.local",
         "1",
         "local",
@@ -517,7 +545,8 @@ public sealed class ActivityTemplatePlacementTests
             new ValueTypeDescriptor("Object"),
             isRequired: true,
             policy: ActivityValuePolicy.Default,
-            projections: []),
+            projections: projectionKeys.Select(key => new ActivityResultProjectionContract(
+                key, "$", new ValueTypeDescriptor("Object"), isRequired: false, ActivityValuePolicy.Default)).ToArray()),
         [ActivityOutcomes.Done],
         new ActivityActivationRequirement("type.local", "local"));
 
@@ -621,7 +650,8 @@ public sealed class ActivityTemplatePlacementTests
         references,
         hasher,
         new SequenceOccurrenceStructureService(),
-        new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create()));
+        new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create()),
+        new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()])));
 
     private static ExecutableNode Node(string id, params ExecutableNode[] children) => new(
         id, id, "local", "1", new("local", "1", Json("{}")),

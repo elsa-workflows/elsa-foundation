@@ -87,7 +87,7 @@ import {
   type ActivityInspectorTabId
 } from "./workflow-editor/InspectorPanel";
 import { compareWorkflowPanelTabs } from "./workflow-editor/PanelTabList";
-import { supportsScopedVariables } from "./scopedVariables";
+import { supportsScopedVariables, WORKFLOW_SCOPE_ID } from "./scopedVariables";
 import { getActivityGraphOutcomeMappingOptions, type ActivityGraphOutcomeChoice } from "./activityGraphOutcomeMappingOptions";
 import { SequenceDesigner } from "./graph-authoring/SequenceDesigner";
 export { getActivityGraphOutcomeMappingOptions } from "./activityGraphOutcomeMappingOptions";
@@ -158,9 +158,10 @@ export function ActivityGraphPublicInterfaceEditor({
     () => payload.variables.flatMap(toVisibleGraphVariable),
     [payload.variables]
   );
+  // Spec 265: the root lets pickers offer the variables of containers inside the body, as the workflow editor does.
   const workflowState = useMemo<WorkflowDefinitionState>(
-    () => ({ inputs: publicInputs, variables: toWorkflowVariables(payload.variables) }),
-    [payload.variables, publicInputs]
+    () => ({ inputs: publicInputs, variables: toWorkflowVariables(payload.variables), rootActivity: root }),
+    [payload.variables, publicInputs, root]
   );
 
   useEffect(() => {
@@ -396,9 +397,10 @@ export function ActivityGraphImplementationEditor({
     () => (contract?.inputs ?? []).map(toWorkflowInput),
     [contract?.inputs]
   );
+  // Spec 265: the root lets pickers offer the variables of containers inside the body, as the workflow editor does.
   const workflowState = useMemo<WorkflowDefinitionState>(
-    () => ({ inputs: publicInputs, variables: toWorkflowVariables(payload.variables) }),
-    [payload.variables, publicInputs]
+    () => ({ inputs: publicInputs, variables: toWorkflowVariables(payload.variables), rootActivity: root }),
+    [payload.variables, publicInputs, root]
   );
   const visibleVariables = useMemo(
     () => payload.variables.flatMap(toVisibleGraphVariable),
@@ -1132,7 +1134,9 @@ function toVisibleGraphVariable(value: unknown) {
   const referenceKey = typeof value.referenceKey === "string" ? value.referenceKey.trim() : "";
   const name = typeof value.name === "string" ? value.name.trim() : "";
   if (!referenceKey || !name) return [];
-  return [{ referenceKey, name, scopeId: "activity-graph", isWorkflowScope: true }];
+  // Spec 265: inside a graph body the root scope is the graph, so its variables are referenced as workflow-scope
+  // variables; placement remaps them to the placed graph.
+  return [{ referenceKey, name, scopeId: WORKFLOW_SCOPE_ID, isWorkflowScope: true }];
 }
 
 function toVariableEditorRecords(values: unknown[]) {

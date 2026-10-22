@@ -665,7 +665,12 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 (IActivityCompletionTransition)completionTransition,
                 completionProjection,
                 completedAt,
-                cancellationToken);
+                cancellationToken,
+                // Spec 265 D-2: a capture into a graph variable writes the row of the producer's nearest closed scope.
+                closedScopeBoundary: await new RuntimeContainerScopeService(
+                        serviceProvider.GetRequiredService<IActivityExecutionStateStore>(),
+                        serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>())
+                    .FindClosedScopeBoundaryAsync(workItem.WorkflowExecutionId, currentParentState.InvocationId, parentExecutableNode, cancellationToken));
             completionDurableValueChanges = (completionCheckpointPreparation?.DurableValueChanges ?? [])
                 .Concat(captureProjection.DurableValues)
                 .GroupBy(change => change.StateId, StringComparer.Ordinal)

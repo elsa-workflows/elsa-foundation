@@ -599,7 +599,7 @@ public sealed class WorkflowIntrinsicExecutor(
         // Spec 265: below a closed activity execution scope the request inputs and root variables are the boundary's.
         var workflowInputEnvelopes = boundary is null
             ? projections.WorkflowInputEnvelopes
-            : RuntimeInputBindingStateProjection.ProjectBoundaryEnvelopes(durableValues, boundary.InvocationId, RuntimeInputBindingStateProjection.BoundaryInputRole);
+            : RuntimeClosedScope.InputEnvelopes(boundary, durableValues, executable);
         var rootVariableNames = boundary is null
             ? null
             : RuntimeInputBindingStateProjection.ProjectBoundaryVariableNames(durableValues, boundary.InvocationId);

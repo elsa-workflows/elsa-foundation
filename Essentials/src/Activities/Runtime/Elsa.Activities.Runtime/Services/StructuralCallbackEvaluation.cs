@@ -373,7 +373,12 @@ internal static class StructuralCallbackEvaluation
                 workItem.WorkflowExecutionId, currentParentState.InvocationId, openAttempt, contract, completionTransition, completedAt, cancellationToken);
             var captureProjection = await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().ProjectAsync(
                 workItem.WorkflowExecutionId, currentParentState.InvocationId, parentExecutableNode,
-                (IActivityCompletionTransition)completionTransition, completionProjection, completedAt, cancellationToken);
+                (IActivityCompletionTransition)completionTransition, completionProjection, completedAt, cancellationToken,
+                // Spec 265 D-2: a capture into a graph variable writes the row of the producer's nearest closed scope.
+                closedScopeBoundary: await new RuntimeContainerScopeService(
+                        serviceProvider.GetRequiredService<IActivityExecutionStateStore>(),
+                        serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>())
+                    .FindClosedScopeBoundaryAsync(workItem.WorkflowExecutionId, currentParentState.InvocationId, parentExecutableNode, cancellationToken));
             completionDurableValueChanges = (completionCheckpointPreparation?.DurableValueChanges ?? [])
                 .Concat(captureProjection.DurableValues)
                 .GroupBy(change => change.StateId, StringComparer.Ordinal)

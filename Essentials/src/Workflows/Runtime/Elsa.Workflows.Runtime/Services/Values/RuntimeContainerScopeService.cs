@@ -1,4 +1,5 @@
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -86,6 +87,36 @@ public sealed class RuntimeContainerScopeService(
                 durableValues is null
                     ? new Dictionary<string, string>(StringComparer.Ordinal)
                     : RuntimeInputBindingStateProjection.ProjectBoundaryVariableNames(durableValues, boundary.InvocationId));
+    }
+
+    /// <summary>
+    /// The nearest closed activity execution scope above an activity (spec 265), or null outside every closed scope.
+    /// Looked up only for a node that captures into a graph variable, which writes that boundary's own row.
+    /// </summary>
+    public async ValueTask<ActivityExecutionState?> FindClosedScopeBoundaryAsync(
+        string workflowExecutionId,
+        string activityExecutionId,
+        ExecutableNode node,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        if (!node.OutputCaptures.Values.Any(capture => capture.Metadata.ContainsKey(RuntimeMetadataKeys.CaptureTargetScopeId)))
+            return null;
+
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        var state = await activityExecutionStateStore.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
+        var parentId = state?.ParentActivityExecutionId;
+        while (!string.IsNullOrWhiteSpace(parentId) && visited.Add(parentId))
+        {
+            var parent = await activityExecutionStateStore.FindAsync(workflowExecutionId, parentId, cancellationToken);
+            if (parent is null)
+                return null;
+            if (RuntimeClosedScope.IsClosedBoundary(parent))
+                return parent;
+            parentId = parent.ParentActivityExecutionId;
+        }
+
+        return null;
     }
 
     public async ValueTask<ActivityExecutionState> ActivateOwnedFramesAsync(
