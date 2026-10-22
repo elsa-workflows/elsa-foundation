@@ -160,7 +160,8 @@ describe("incident next-step state guidance", () => {
       canAct: true,
       pendingIncidentId: null,
       requesterCancelled: false,
-      retryReviewEligibility: { status: "eligible" }
+      retryReviewEligibility: { status: "eligible" },
+      retryJournalAvailability: "not-required"
     });
 
     expect(container.textContent).toContain("This incident is historical.");
@@ -173,7 +174,8 @@ describe("incident next-step state guidance", () => {
       canAct: true,
       pendingIncidentId: null,
       requesterCancelled: false,
-      retryReviewEligibility: { status: "eligible" }
+      retryReviewEligibility: { status: "eligible" },
+      retryJournalAvailability: "not-required"
     });
 
     expect(container.textContent).toContain(`This run has ended (${runStatus}).`);
@@ -260,7 +262,8 @@ const guidance: IncidentNextStepGuidance = {
   canAct: false,
   pendingIncidentId: null,
   requesterCancelled: false,
-  retryReviewEligibility: { status: "unknown", reason: "source-not-loaded" }
+  retryReviewEligibility: { status: "unknown", reason: "source-not-loaded" },
+  retryJournalAvailability: "not-required"
 };
 
 function definitionContext(name: string, load: (id: string) => Promise<unknown>) {

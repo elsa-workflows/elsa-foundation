@@ -124,6 +124,12 @@ export function IncidentNextStep({
     nextStep = "Another blocking incident is recorded on a descendant activity. Review that incident before retrying this activity.";
   } else if (guidance.retryReviewEligibility.reason === "descendant-ancestry-not-loaded") {
     nextStep = "A blocking incident is recorded, but its activity ancestry is incomplete. Inspect the run evidence or share this incident before retrying.";
+  } else if (guidance.retryReviewEligibility.reason === "same-source-blocking-incident-not-waiting") {
+    nextStep = "Another blocking incident on this activity is not ready for Retry. Inspect its evidence or share the incident with an operator.";
+  } else if (guidance.canAct && guidance.retryReviewEligibility.status === "eligible" && guidance.retryJournalAvailability === "checking") {
+    nextStep = "Checking whether a retry is already scheduled. Wait for this read before choosing Retry.";
+  } else if (guidance.canAct && guidance.retryReviewEligibility.status === "eligible" && guidance.retryJournalAvailability === "unknown") {
+    nextStep = "The run has not confirmed whether a retry is already scheduled. Check Retry availability before retrying.";
   } else if (guidance.retryReviewEligibility.status === "unknown") {
     nextStep = "The exact activity state needed to confirm Retry is unavailable here. Inspect the selected run evidence or share the incident with an operator.";
   } else if (guidance.actionAvailability === "checking") {
