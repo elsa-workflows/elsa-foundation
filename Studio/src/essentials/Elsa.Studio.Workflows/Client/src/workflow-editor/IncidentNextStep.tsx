@@ -96,7 +96,9 @@ export function IncidentNextStep({
     && (!hasCurrentObservation || definitionAccess.status === "checking");
 
   let nextStep: string;
-  if (!sameRun) {
+  if (!summary) {
+    nextStep = "The current run context is unavailable here. Inspect this incident's recorded evidence or reopen its run for guidance.";
+  } else if (!sameRun) {
     nextStep = "This incident does not match the run currently open. Its run guidance is unavailable here.";
   } else if (!isActiveIncident(incident)) {
     nextStep = "This incident is historical. Review its recorded outcome and the current run status before taking any action.";
@@ -118,6 +120,8 @@ export function IncidentNextStep({
     nextStep = `The source activity is ${guidance.retryReviewEligibility.observedStatus}; Retry applies only after it is Faulted. Inspect the exact activity or input evidence before changing the workflow.`;
   } else if (guidance.retryReviewEligibility.reason === "parent-not-running") {
     nextStep = "The recorded parent is not running, so Retry is not available for this scope. Review the activity evidence or share the incident with an operator.";
+  } else if (guidance.retryReviewEligibility.reason === "blocking-descendant-incident") {
+    nextStep = "Another blocking incident is recorded on a descendant activity. Review that incident before retrying this activity.";
   } else if (guidance.retryReviewEligibility.status === "unknown") {
     nextStep = "The exact activity state needed to confirm Retry is unavailable here. Inspect the selected run evidence or share the incident with an operator.";
   } else if (guidance.actionAvailability === "checking") {

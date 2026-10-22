@@ -124,6 +124,13 @@ describe("incident next-step definition handoff", () => {
     expect(active?.container.textContent).not.toContain("Definition ID");
     expect(getJson).not.toHaveBeenCalled();
   });
+
+  it("says current run context is unavailable when no run summary was loaded", () => {
+    const container = render(undefined, null, incident());
+
+    expect(container.textContent).toContain("The current run context is unavailable here.");
+    expect(container.textContent).not.toContain("This incident does not match the run currently open.");
+  });
 });
 
 describe("incident next-step state guidance", () => {
@@ -194,7 +201,7 @@ describe("incident next-step state guidance", () => {
 
 function render(
   context: StudioEndpointContext | undefined,
-  currentSummary: WorkflowInstanceSummary,
+  currentSummary: WorkflowInstanceSummary | null,
   currentIncident: IncidentStateSummary,
   onOpenDefinition?: (id: string) => void,
   currentGuidance: IncidentNextStepGuidance = guidance

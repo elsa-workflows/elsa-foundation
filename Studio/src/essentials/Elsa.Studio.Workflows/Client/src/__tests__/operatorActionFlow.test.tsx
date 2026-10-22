@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushSync } from "react-dom";
+import { useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { clearApiCapabilityCache } from "../api/capabilities";
@@ -18,9 +19,10 @@ import {
 } from "../operatorActions";
 import { AlterationRequestError } from "../api/alterations";
 import { getIncidentRetryReviewEligibility, useCompensationJournals, useOperatorActions, type CompensationJournals, type OperatorActionsApi } from "../workflow-editor/useOperatorActions";
+import { WorkflowIncidentList } from "../workflow-editor/WorkflowInstances";
 import type { CompensationJournalSource } from "../compensationRuntime";
 import { compensationScopeStructureKind } from "../compensationScope";
-import type { ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary, WorkflowInstanceDetails } from "../workflowTypes";
+import type { ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
 
 // Spec 260 T423: the submission flow. A key per dialog, the pending plan in session storage, polling with back-off and a
 // budget, "Applying…" until the run shows the change, refusals and HTTP errors as messages, and a reload that resumes
@@ -32,6 +34,7 @@ let root: Root;
 beforeEach(() => {
   // React schedules its work with setImmediate here; only the polling clock is faked.
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+  if (typeof globalThis.CSS === "undefined") vi.stubGlobal("CSS", { escape: (value: string) => value });
   sessionStorage.clear();
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -42,6 +45,7 @@ afterEach(() => {
   flushSync(() => root.unmount());
   container.remove();
   vi.useRealTimers();
+  vi.unstubAllGlobals();
   clearApiCapabilityCache();
 });
 
@@ -268,6 +272,135 @@ describe("useOperatorActions", () => {
     expect(actions?.guidanceForIncident(unrelated).retryNotBefore).toBeUndefined();
   });
 
+  it.each([
+    ["future", "2026-10-23T10:42:30Z", "An automatic retry is scheduled"],
+    ["due", "2026-10-21T10:42:30Z", "An automatic retry is due"]
+  ])("hides duplicate incident controls in the actual details dialog when the exact retry is %s", async (_state, notBefore, expectedGuidance) => {
+    vi.setSystemTime(new Date("2026-10-22T10:00:00Z"));
+    const backend = fakeBackend({});
+    const incident = journalIncidents()[1];
+    const source = scheduledJournalView(notBefore);
+    const activities = journalRun().filter(activity => activity.activityExecutionId !== "ae-4" && activity.activityExecutionId !== "ae-5");
+
+    flushSync(() => root.render(<ScheduledIncidentListHarness context={backend.context} incidents={[incident]} activities={activities} source={source} />));
+    await flush();
+    flushSync(() => container.querySelector<HTMLButtonElement>(".wf-incident-open-details")!.click());
+    await flush();
+
+    const dialog = container.querySelector<HTMLElement>("[role=dialog]")!;
+    expect(dialog.textContent).toContain(expectedGuidance);
+    expect(dialog.querySelector(".wf-incident-operator-actions")).toBeNull();
+  });
+
+  it("keeps canonical controls for an unrelated incident while another incident has a scheduled retry", async () => {
+    const backend = fakeBackend({});
+    const scheduled = journalIncidents()[1];
+    const unrelated = { ...scheduled, incidentId: "inc-7", activityExecutionId: "ae-7" };
+    const activities = [
+      ...journalRun().filter(activity => activity.activityExecutionId !== "ae-4" && activity.activityExecutionId !== "ae-5"),
+      { ...journalRun()[6], activityExecutionId: "ae-7" }
+    ];
+
+    flushSync(() => root.render(<ScheduledIncidentListHarness context={backend.context} incidents={[scheduled, unrelated]} activities={activities} source={scheduledJournalView()} />));
+    await flush();
+    const unrelatedRow = container.querySelector<HTMLElement>('[data-incident-id="inc-7"]')!;
+    flushSync(() => unrelatedRow.querySelector<HTMLButtonElement>(".wf-incident-open-details")!.click());
+    await flush();
+
+    const dialog = container.querySelector<HTMLElement>("[role=dialog]")!;
+    expect(dialog.textContent).not.toContain("An automatic retry is scheduled");
+    expect([...dialog.querySelectorAll(".wf-incident-operator-actions button")].map(button => button.textContent!.trim()))
+      .toEqual(["Retry", "Resolve: effect absent or undone", "Resolve: effect present, keep it", "Abandon recovery"]);
+  });
+
+  it("keeps the selected incident's controls available while its journal is not loaded", async () => {
+    const backend = fakeBackend({});
+    const incident = journalIncidents()[1];
+    const activities = journalRun().filter(activity => activity.activityExecutionId !== "ae-4" && activity.activityExecutionId !== "ae-5");
+
+    flushSync(() => root.render(<ScheduledIncidentListHarness context={backend.context} incidents={[incident]} activities={activities} />));
+    await flush();
+    flushSync(() => container.querySelector<HTMLButtonElement>(".wf-incident-open-details")!.click());
+    await flush();
+
+    const dialog = container.querySelector<HTMLElement>("[role=dialog]")!;
+    expect(dialog.textContent).not.toMatch(/no automatic retry|no retry is scheduled/i);
+    expect([...dialog.querySelectorAll(".wf-incident-operator-actions button")].map(button => button.textContent!.trim()))
+      .toContain("Retry");
+  });
+
+  it("keeps the incident open when its first Retry click reloads an exact scheduled attempt", async () => {
+    const backend = fakeBackend({});
+    const incident = journalIncidents()[1];
+    const activities = journalRun().filter(activity => activity.activityExecutionId !== "ae-4" && activity.activityExecutionId !== "ae-5");
+    const reload = vi.fn(async () => scheduledJournalView());
+
+    flushSync(() => root.render(<ScheduledIncidentListHarness context={backend.context} incidents={[incident]} activities={activities} reload={reload} />));
+    await flush();
+    const returnTrigger = container.querySelector<HTMLButtonElement>(".wf-incident-open-details")!;
+    returnTrigger.focus();
+    flushSync(() => returnTrigger.click());
+    await flush();
+
+    const retryButton = container.querySelector<HTMLButtonElement>(".wf-incident-details-dialog .wf-incident-operator-actions button")!;
+    expect(retryButton.textContent).toContain("Retry");
+    retryButton.focus();
+    expect(document.activeElement).toBe(retryButton);
+    flushSync(() => retryButton.click());
+    await flush();
+
+    expect(reload).toHaveBeenCalledTimes(1);
+    const detailsDialog = container.querySelector<HTMLElement>(".wf-incident-details-dialog");
+    expect(detailsDialog).not.toBeNull();
+    expect(detailsDialog!.contains(document.activeElement)).toBe(true);
+    expect(container.querySelector(".wf-incident-details-dialog .wf-incident-next-step")?.textContent).toContain("An automatic retry is scheduled");
+    expect(container.querySelector(".wf-operator-dialog")).toBeNull();
+    expect(backend.submits).toHaveLength(0);
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await flush();
+    expect(container.querySelector(".wf-incident-details-dialog")).toBeNull();
+    expect(document.activeElement).toBe(returnTrigger);
+  });
+
+  it("keeps focus inside and cancels repeated incident actions while the exact journal reload is pending", async () => {
+    const backend = fakeBackend({});
+    const incident = journalIncidents()[1];
+    const activities = journalRun().filter(activity => activity.activityExecutionId !== "ae-4" && activity.activityExecutionId !== "ae-5");
+    let resolveReload!: (source: CompensationJournalSource) => void;
+    const reload = vi.fn(() => new Promise<CompensationJournalSource>(resolve => { resolveReload = resolve; }));
+
+    flushSync(() => root.render(<ScheduledIncidentListHarness context={backend.context} incidents={[incident]} activities={activities} reload={reload} />));
+    await flush();
+    const returnTrigger = container.querySelector<HTMLButtonElement>(".wf-incident-open-details")!;
+    returnTrigger.focus();
+    flushSync(() => returnTrigger.click());
+    await flush();
+
+    const retryButton = container.querySelector<HTMLButtonElement>(".wf-incident-details-dialog .wf-incident-operator-actions button")!;
+    retryButton.focus();
+    expect(document.activeElement).toBe(retryButton);
+    flushSync(() => {
+      retryButton.click();
+      retryButton.click();
+    });
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(container.querySelector<HTMLButtonElement>(".wf-incident-details-dialog .wf-incident-operator-actions button")?.disabled).toBe(true);
+    const detailsDialog = container.querySelector<HTMLElement>(".wf-incident-details-dialog")!;
+    expect(detailsDialog.contains(document.activeElement)).toBe(true);
+
+    flushSync(() => document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    await flush();
+    expect(container.querySelector(".wf-incident-details-dialog")).toBeNull();
+    expect(document.activeElement).toBe(returnTrigger);
+
+    resolveReload(journalView());
+    await flush();
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(container.querySelector(".wf-operator-dialog")).toBeNull();
+    expect(backend.submits).toHaveLength(0);
+  });
+
   it("submits once with the dialog's key, then shows submitted, Applying… and the result, and clears the stored plan", async () => {
     const backend = fakeBackend({ plans: ["Queued", "Completed"], job: { status: "Succeeded", outcomes: [] } });
     const refreshRun = vi.fn()
@@ -418,6 +551,93 @@ describe("useOperatorActions", () => {
     expect(harness.current().guidanceForIncident(waitingIncident()).retryReviewEligibility).toMatchObject({ status: expectedStatus, reason: expectedReason });
     expect([...container.querySelectorAll(".wf-incident-operator-actions button")].map(button => button.textContent!.trim()))
       .toEqual(["Resolve: effect absent or undone", "Resolve: effect present, keep it", "Abandon recovery"]);
+  });
+
+  it("hides Retry and explains a known active same-run descendant blocker", async () => {
+    const backend = fakeBackend({});
+    const harness = await mount(backend.context);
+    const selected = waitingIncident();
+    const descendant = {
+      ...retryActivities()[1],
+      activityExecutionId: "ae-descendant",
+      parentActivityExecutionId: "ae-11",
+      provenance: { parentActivityExecutionId: "ae-11" }
+    };
+    const blocker: IncidentStateSummary = {
+      ...selected,
+      incidentId: "inc-descendant",
+      activityExecutionId: "ae-descendant",
+      resolutionOutcome: null
+    };
+    const runDetails = details([selected, blocker]);
+    const activities = [...retryActivities(), descendant];
+
+    flushSync(() => root.render(<Harness context={backend.context} sink={harness.sink} activities={activities} runDetails={runDetails} extra={api => api.renderIncidentActions(selected, "Cancel delivery", vi.fn(), vi.fn())} />));
+    await flush();
+
+    expect(harness.current().guidanceForIncident(selected).retryReviewEligibility)
+      .toMatchObject({ status: "ineligible", reason: "blocking-descendant-incident" });
+    expect([...container.querySelectorAll(".wf-incident-operator-actions button")].map(button => button.textContent!.trim()))
+      .toEqual(["Resolve: effect absent or undone", "Resolve: effect present, keep it", "Abandon recovery"]);
+  });
+
+  it.each([
+    ["a different run", (selected: IncidentStateSummary, descendantId: string) => ({ ...selected, incidentId: "inc-other-run", workflowExecutionId: "wf-other", activityExecutionId: descendantId })],
+    ["a historical descendant", (selected: IncidentStateSummary, descendantId: string) => ({ ...selected, incidentId: "inc-historical", activityExecutionId: descendantId, status: "Resolved" })],
+    ["an unrelated activity", (selected: IncidentStateSummary, _descendantId: string) => ({ ...selected, incidentId: "inc-unrelated", activityExecutionId: "ae-other" })]
+  ] as const)("keeps Retry available for %s evidence", async (_label, makeIncident) => {
+    const backend = fakeBackend({});
+    const harness = await mount(backend.context);
+    const selected = waitingIncident();
+    const descendant = {
+      ...retryActivities()[1],
+      activityExecutionId: "ae-descendant",
+      parentActivityExecutionId: "ae-11",
+      provenance: { parentActivityExecutionId: "ae-11" }
+    };
+    const unrelatedActivity = {
+      ...retryActivities()[1],
+      activityExecutionId: "ae-other",
+      parentActivityExecutionId: "ae-parent",
+      provenance: { parentActivityExecutionId: "ae-parent" }
+    };
+    const blocker = { ...makeIncident(selected, "ae-descendant"), isBlocking: true };
+    const runDetails = details([selected, blocker]);
+    const activities = [...retryActivities(), descendant, unrelatedActivity];
+
+    flushSync(() => root.render(<Harness context={backend.context} sink={harness.sink} activities={activities} runDetails={runDetails} extra={api => api.renderIncidentActions(selected, "Cancel delivery", vi.fn(), vi.fn())} />));
+    await flush();
+
+    expect(harness.current().guidanceForIncident(selected).retryReviewEligibility.status).toBe("eligible");
+    expect([...container.querySelectorAll(".wf-incident-operator-actions button")].map(button => button.textContent!.trim()))
+      .toContain("Retry");
+  });
+
+  it("does not classify a blocker as a descendant when its activity ancestry is only partially loaded", async () => {
+    const backend = fakeBackend({});
+    const harness = await mount(backend.context);
+    const selected = waitingIncident();
+    const partialDescendant = {
+      ...retryActivities()[1],
+      activityExecutionId: "ae-partial-descendant",
+      parentActivityExecutionId: "ae-not-loaded",
+      provenance: { parentActivityExecutionId: "ae-not-loaded" }
+    };
+    const blocker: IncidentStateSummary = {
+      ...selected,
+      incidentId: "inc-partial-descendant",
+      activityExecutionId: "ae-partial-descendant",
+      resolutionOutcome: null
+    };
+    const runDetails = { ...details([selected, blocker]), activityNextContinuationToken: "page-2" };
+    const activities = [...retryActivities(), partialDescendant];
+
+    flushSync(() => root.render(<Harness context={backend.context} sink={harness.sink} activities={activities} runDetails={runDetails} extra={api => api.renderIncidentActions(selected, "Cancel delivery", vi.fn(), vi.fn())} />));
+    await flush();
+
+    expect(harness.current().guidanceForIncident(selected).retryReviewEligibility.status).toBe("eligible");
+    expect([...container.querySelectorAll(".wf-incident-operator-actions button")].map(button => button.textContent!.trim()))
+      .toContain("Retry");
   });
 
   it.each([
@@ -836,7 +1056,7 @@ function journalView() {
   };
 }
 
-function scheduledJournalView(): CompensationJournalSource {
+function scheduledJournalView(notBefore = "2026-10-23T10:42:30Z"): CompensationJournalSource {
   const view = journalView();
   return {
     ...view,
@@ -849,9 +1069,48 @@ function scheduledJournalView(): CompensationJournalSource {
         waiting: null,
         attempts: [
           { number: 1, activityExecutionId: "ae-6", incidentId: "inc-6", result: "Faulted" },
-          { number: 2, activityExecutionId: null, incidentId: null, result: "Running", notBefore: "2026-10-23T10:42:30Z" }
+          { number: 2, activityExecutionId: null, incidentId: null, result: "Running", notBefore }
         ]
       } : entry)
     }
   } as unknown as CompensationJournalSource;
+}
+
+function ScheduledIncidentListHarness({
+  context,
+  incidents,
+  activities,
+  source,
+  reload
+}: {
+  context: StudioEndpointContext;
+  incidents: IncidentStateSummary[];
+  activities: ActivityExecutionStateSummary[];
+  source?: CompensationJournalSource;
+  reload?: () => Promise<CompensationJournalSource>;
+}) {
+  const [journalSource, setJournalSource] = useState(source);
+  const summary = { workflowExecutionId: "wf-1", status: "Running" } as WorkflowInstanceSummary;
+  const api = useOperatorActions({
+    context,
+    workflowExecutionId: summary.workflowExecutionId,
+    details: { ...details(incidents), instance: summary, activities },
+    root: journalScope(),
+    activities,
+    journals: {
+      get: id => id === "ae-scope" ? journalSource : undefined,
+      request: () => undefined,
+      reload: async () => {
+        const updated = reload ? await reload() : journalSource ?? "unavailable";
+        setJournalSource(updated);
+        return updated;
+      },
+      reset: () => undefined,
+      generation: 0
+    },
+    labelOf: () => undefined,
+    refreshRun: async () => null
+  });
+
+  return <>{api.dialog}<WorkflowIncidentList summary={summary} incidents={incidents} activities={activities} renderIncidentActions={api.renderIncidentActions} guidanceForIncident={api.guidanceForIncident} /></>;
 }
