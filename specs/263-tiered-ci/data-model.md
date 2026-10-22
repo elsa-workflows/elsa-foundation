@@ -46,7 +46,7 @@ It replaces `tools/ci/ef-suites.json` and is the single list that both tiers and
     { "suite": "migrations",
       "project": "Essentials/tests/Persistence/EntityFrameworkCore/Migrations/ProviderTests/Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests.csproj",
       "require": "ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX" }
-    // ... the 23 suites moved from ef-suites.json, unchanged
+    // ... the 25 suites moved from ef-suites.json, unchanged
   ],
 
   "slowAllowList": [

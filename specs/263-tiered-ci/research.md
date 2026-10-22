@@ -48,25 +48,25 @@ A test counts as flaky when it failed on a head that later passed unchanged, or 
 |---|---|---|---|
 | `Elsa.Workbench.Tests.NativeHostingConformanceTests.Original_uncancelled_checkpoint_is_rejected_after_a_real_successor_acquires` | First attempt failed in 11 re-run runs, 4 of them on `main`; also 4 failed runs | #3147 (open) | quarantine |
 | `Elsa.Workbench.Tests.NativeHostingGracefulHandoffTests.Draining_owner_hands_off_accepted_execution_while_survivor_admits_work` | 5 re-run first attempts, 1 failed `main` run | #3252 (open) | quarantine |
-| `Elsa.Workbench.Tests.NativeHostingConformanceTests.Departed_routing_owner_is_reclaimed_and_its_real_transport_command_completes_on_survivor` | 2 re-run first attempts (one on `main`), 1 failed run | none | file an issue, quarantine |
-| `Elsa.Workbench.Tests.WorkbenchBackgroundActivityRecoveryTests.Killed_workers_are_reclaimed_with_stable_invocations_and_one_native_continuation` | 4 failed runs on 4 branches, 2026-10-17 to 19 ("Timed out waiting for the real EF receipt") | none | file an issue, quarantine |
-| `Elsa.Workbench.Tests.WorkbenchCompensationSampleTests.The_sample_workflows_end_as_the_readme_says` | Failed PR #3173's first attempt, timeout after 2 m 31 s | none (#3187 is a related compensation defect) | file an issue, quarantine |
-| `Elsa.Activities.Http.IntegrationTests.ResponseReplaySafetyProcessTests.NormalPublication_PreservesExternalBaselineAndExecutesReplaySafeCandidate` | 2 failed runs on 2 branches, plus 1 re-run first attempt | none | file an issue, quarantine |
+| `Elsa.Workbench.Tests.NativeHostingConformanceTests.Departed_routing_owner_is_reclaimed_and_its_real_transport_command_completes_on_survivor` | 2 re-run first attempts (one on `main`), 1 failed run | #3259 | quarantine |
+| `Elsa.Workbench.Tests.WorkbenchBackgroundActivityRecoveryTests.Killed_workers_are_reclaimed_with_stable_invocations_and_one_native_continuation` | 4 failed runs on 4 branches, 2026-10-17 to 19 ("Timed out waiting for the real EF receipt") | #3260 | quarantine |
+| `Elsa.Workbench.Tests.WorkbenchCompensationSampleTests.The_sample_workflows_end_as_the_readme_says` | Failed PR #3173's first attempt, timeout after 2 m 31 s | #3261 (#3187 is a related compensation defect) | quarantine |
 | `Elsa.Activities.Http.IntegrationTests.DurableDrainCycleTests.An_HTTP_triggered_Durable_sequence_of_200_WriteLines_completes_under_the_default_drain_cycle_bound` | 13 failed runs on 7 branches and `main`, 2026-10-16 to 17, none since `f3e5a96e9` (#2926) | #3213 (open, follow-up) | watch: no failure since the fix; quarantine only if it recurs |
-| `Elsa.Expressions.JavaScript.Jint.Tests.StatementBindingTests.Statement_body_honors_cancellation_during_evaluation` | 2 failed runs on 2 branches, one on `main`, 2026-10-19 | none | file an issue, quarantine |
+| `Elsa.Expressions.JavaScript.Jint.Tests.StatementBindingTests.Statement_body_honors_cancellation_during_evaluation` | 2 failed runs on 2 branches, one on `main`, 2026-10-19 | #3262 | quarantine |
 
 **Not flaky.** These failed on more than one branch, but the failures were real and the authors fixed them on their branches:
 
 - `ActivityContractSurfaceSnapshotTests` (a baseline the PR changed);
 - `ClrAssemblyScannerTests.BuiltInDescriptorHashes_MatchMainSnapshot` (hash snapshots);
 - `EfCommandBudgetTests` (a budget the PR exceeded);
-- `ActivityDriveHealthTests` and `ActivityOutcomeReachabilityTests` (a new activity without coverage).
+- `ActivityDriveHealthTests` and `ActivityOutcomeReachabilityTests` (a new activity without coverage);
+- `ResponseReplaySafetyProcessTests.NormalPublication_PreservesExternalBaselineAndExecutesReplaySafeCandidate` (corrected during implementation, 2026-10-22). Both failures carry the same semantic assertion ("Normal candidate publication changed authored variables, node order/types, or input bindings beyond the review"), not a timeout. Both happened on PRs that change what it guards: #3149/#3129 (rescheduling and routing data), which then passed after further commits, and #3168 (expression recording), which was closed. Run 39523263296 failed on both attempts. The spec's Evidence named it from the failure list; reading the failures shows a guard doing its job, so it is not quarantined.
 
 A retry would not have hidden any of them: each fails deterministically on its head.
 
 **Other failure causes** among the 53 failed jobs: 8 were locked-restore failures (NU1004, a stale `packages.lock.json`) and 4 were compile errors. Retries do not apply to either.
 
-**Decision**: FR-014 is met by quarantining the seven tests marked "quarantine" with a tracking issue each. Five of those issues still need filing, as `needs-triage` with the evidence above. `DurableDrainCycleTests` is watched, not quarantined.
+**Decision**: FR-014 is met by quarantining the six tests marked "quarantine", each with its tracking issue: #3147, #3252 and #3259–#3262 (filed 2026-10-22, `needs-triage`). Retried passes are recorded on the standing tracker #3263 (label `ci-flake`). `DurableDrainCycleTests` is watched, not quarantined.
 
 **Rationale**: quarantine keeps these tests running and visible (FR-012), and fixing them is test work outside this spec (Out of Scope).
 
@@ -272,7 +272,7 @@ Full tier (`full-tier.yml`), at most 8 jobs:
 |---|---|---|---|
 | `Plan` | 1 | classifier, draft decision, matrix | 0.5 |
 | `Integration shard` | 4 | `workbench-native-hosting` (17.1); `workbench-rest` (about 10); `cluster-foundation-host` (12.3); `integration-other`: Http.IntegrationTests, Cli, Workflows.Runtime.Persistence.EF and `cluster-rest` (about 6–8) | test time + 4.65 setup, restore and build: about 22, 15, 17 and 13 |
-| `EF container shard` | 3 | the 23 suites plus the Secrets EF proof, balanced by leg duration. Each shard restores and builds its container projects once, then runs its suites in sequence, arming each suite's required-provider mode for that suite only. About 37 runner-minutes of tests in all, about 12 per shard. | about 16 |
+| `EF container shard` | 3 | the 25 suites (23 when measured; #3192 added `rules`) plus the Secrets EF proof, balanced by leg duration. Each shard restores and builds its container projects once, then runs its suites in sequence, arming each suite's required-provider mode for that suite only. About 37 runner-minutes of tests in all, about 12 per shard. | about 16 |
 
 - **Job count**: 1 + 4 + 3 = 8, meeting FR-022's full-tier limit of 8. The `Full tier` aggregate lives in the caller and takes a few seconds; see [data-model](data-model.md#job-budget-accounting).
 - **SC-002** (full tier within 25 min of ready): about **22 min**, bounded by `workbench-native-hosting`.

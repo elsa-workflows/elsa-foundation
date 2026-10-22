@@ -21,20 +21,19 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirm the baseline on the branch tip:
+- [X] T001 Confirm the baseline on the branch tip:
   - `python3 tools/ci/change_scope.py --self-test`, `python3 tools/contributor-checkpoints/test_workflow_guards.py` and `dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -- ef-suites-self-test` pass;
   - `gh api repos/elsa-workflows/elsa-foundation/rulesets` lists ruleset `main-2` with required contexts `Build & test` and `Generated maps fresh`.
 
-  Record the outputs in the PR notes.
-- [ ] T002 [P] File five flake-tracking issues, `needs-triage` only, one per test in [research R2](research.md#r2--flaky-tests) that has none:
+  Record the outputs in the PR notes. *(Done 2026-10-22: all pass. `ef-suites-select` returns 25 suites, not the 23 of the planning nightly: #3192 added `rules`, so there are 26 container legs with the Secrets proof.)*
+- [X] T002 [P] File four flake-tracking issues, `needs-triage` only, one per test in [research R2](research.md#r2--flaky-tests) that has none:
   - `NativeHostingConformanceTests.Departed_routing_owner_is_reclaimed_and_its_real_transport_command_completes_on_survivor`
   - `WorkbenchBackgroundActivityRecoveryTests.Killed_workers_are_reclaimed_with_stable_invocations_and_one_native_continuation`
   - `WorkbenchCompensationSampleTests.The_sample_workflows_end_as_the_readme_says`
-  - `ResponseReplaySafetyProcessTests.NormalPublication_PreservesExternalBaselineAndExecutesReplaySafeCandidate`
   - `StatementBindingTests.Statement_body_honors_cancellation_during_evaluation`
 
-  Each body carries R2's evidence (run IDs, dates, error line), and each is added as a sub-issue of the CI program issue, per the epic-link rule. Record the numbers for T008.
-- [ ] T003 [P] Create the label `ci-flake`. File one standing issue, "CI flake tracker" (`needs-triage`, `ci-flake`), whose body explains that `ci-flake-record.yml` comments on it. Record its number for T021.
+  Each body carries R2's evidence (run IDs, dates, error line). *(Done: #3259–#3262. No CI program issue or epic exists, so they have no parent; each references spec 263. `ResponseReplaySafetyProcessTests` was dropped: it is a real failure, not a flake, research R2.)*
+- [X] T003 [P] Create the label `ci-flake`. File one standing issue, "CI flake tracker" (`needs-triage`, `ci-flake`), whose body explains that `ci-flake-record.yml` comments on it. Record its number for T021. *(Done: #3263.)*
 
 ---
 
@@ -54,11 +53,11 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
 - [ ] T006 In `tools/ci/test-tiers.json`, add `shards` from [research R9](research.md#r9--job-budgets-and-layout):
   - `pr`: pr-1, pr-2 and pr-3 as listed there. While the switch is off, they also hold `integration-other` and `cluster-rest`, and `pr` has three more shards: `workbench-native-hosting`, `workbench-rest` and `cluster-foundation-host`.
   - `integration`: the 4 shards.
-  - `containers`: 3 shards that balance the 24 legs (23 suites plus `secrets-ef-composition`) by the nightly durations in research R1.
+  - `containers`: 3 shards that balance the 26 legs (25 suites, `rules` included, plus `secrets-ef-composition`) by the nightly durations in research R1.
 
   `Elsa.Architecture.Tests` is in no shard; it runs in `Architecture guards`.
-- [ ] T007 Move the 23 suites from `tools/ci/ef-suites.json` into `containerSuites` in `tools/ci/test-tiers.json`, with fields and order unchanged.
-- [ ] T008 In `tools/ci/test-tiers.json`, add `quarantine` entries for the seven tests R2 marks "quarantine": #3147, #3252 and the five issues from T002, each with `since: <merge date>`. Add an empty `slowAllowList`.
+- [ ] T007 Move the 25 suites from `tools/ci/ef-suites.json` into `containerSuites` in `tools/ci/test-tiers.json`, with fields and order unchanged.
+- [ ] T008 In `tools/ci/test-tiers.json`, add `quarantine` entries for the six tests R2 marks "quarantine": #3147, #3252 and #3259–#3262, each with `since: <merge date>`. Add an empty `slowAllowList`.
 - [ ] T009 Retarget the generator's EF suite code to `containerSuites` in `tools/ci/test-tiers.json`, keeping the `ef-suites-select` output and every failure message's meaning:
   - `tools/maps/Elsa.Maps.Generator/EfSuiteSelector.cs:12` (`ManifestPath`) and its JSON reading;
   - `tools/maps/Elsa.Maps.Generator/EfSuiteSelectorContractTests.cs:39`.
@@ -142,7 +141,7 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
 - [ ] T021 [US1] Create `.github/workflows/ci-flake-record.yml`, a `workflow_run` workflow, per [research R7](research.md#r7--retry-and-quarantine-mechanics):
   - triggers: `CI` and `CI full tier`, on `completed`;
   - permissions: `actions: read`, `issues: write`;
-  - it downloads every `test-outcomes-*` artifact of the triggering run, validates each name against `^[A-Za-z_][A-Za-z0-9_.]*$` and the SHA against 40 hex characters, and adds one comment per run to the T003 issue listing `passedOnRetry` with the run URL;
+  - it downloads every `test-outcomes-*` artifact of the triggering run, validates each name against `^[A-Za-z_][A-Za-z0-9_.]*$` and the SHA against 40 hex characters, and adds one comment per run to the T003 issue (#3263) listing `passedOnRetry` with the run URL;
   - no step interpolates artifact content into a shell command; names are passed through files or environment variables.
 - [ ] T022 [US1] Extend `tools/contributor-checkpoints/test_workflow_guards.py`, or add `tools/ci/test_tiers.py --self-test` cases if the guards' scope does not fit, to assert:
   - `ci.yml` still has a job named `Build & test` whose `needs` include every shard job;
@@ -192,7 +191,7 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
   - on `push` to `main` and `schedule`, run it without `--base` in a job that the `alert` job's `needs` include, so a closed issue files or updates the `main is red` issue.
 - [ ] T030 [US3] Run quickstart "Story 3", steps 1–4, and the retry case from "Story 1" step 4, and confirm a `ci-flake-record` comment appears on the T003 issue. Record the links in the PR.
 
-**Checkpoint**: FR-012 to FR-014 are met. Each of R2's seven tests is quarantined with an open issue, and `DurableDrainCycleTests` is watched.
+**Checkpoint**: FR-012 to FR-014 are met. Each of R2's six tests is quarantined with an open issue, and `DurableDrainCycleTests` is watched.
 
 ---
 
