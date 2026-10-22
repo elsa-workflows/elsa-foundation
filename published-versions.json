@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "156ddf3c8698fd24b056cb9fa476c92666b9a2fa",
+  "last_publish_commit": "48ae25167fd8289d73c34a906e25209491c6544d",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -789,8 +789,8 @@
     },
     {
       "package_id": "Elsa3.Mapping",
-      "version": "4.0.23-preview",
-      "commit": "45f9a3b9b226ad7a94e9c176503729ebadfea9f5"
+      "version": "4.0.24-preview",
+      "commit": "48ae25167fd8289d73c34a906e25209491c6544d"
     },
     {
       "package_id": "Elsa3.Models",
