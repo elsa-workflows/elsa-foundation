@@ -66,10 +66,12 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
     number written as a string (`["5"]` for `List<Int32>`) does not convert;
   - `ObjectDictionary` and `HttpHeaders` → `Object` holding a JSON object;
   - any other type Elsa 4 does not know (a nested collection such as `List<List<String>>`, `ObjectDictionary[]`, a
-    custom class or an unregistered enum) → `Object`. A JSON starting value (`{…}` or `[…]`) is held as parsed JSON.
+    custom class or an unregistered enum) → `Object`. A JSON starting value (`{…}` or `[…]`) is held as parsed JSON,
+    exactly as written: Elsa 3 deserialized it case-insensitively and wrote camelCase names, but `Object` keeps the
+    names as the author wrote them (`{"ID":1}` stays `ID`).
 
-  A resource type (`FormFile`, `IFormFile`, `Stream`, `byte[]`, alone or as a collection element) is refused with or
-  without a starting value: it stands for a file, a stream or raw bytes, which Elsa 4 cannot hold yet (#3194).
+  A resource type (`FormFile`, `IFormFile`, `Stream`, `byte[]` or `Byte` with the array flag, alone, as a collection
+  element or as a CLR generic type argument) is refused with or without a starting value: it stands for a file, a stream or raw bytes, which Elsa 4 cannot hold yet (#3194).
 
   Text is never split on commas. `ELS3-ACTIVITY-VARIABLE-VALUE-UNCONVERTIBLE` refuses, with the exact fix, a starting
   value that:

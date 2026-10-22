@@ -72,9 +72,11 @@ Code Review approved PR #3180 with non-blocking notes. The maintainer settled th
   Elsa 4 with default options, so no Elsa 3 option reaches Elsa 4.
 - **A type Elsa 4 does not know becomes `Object`.** That covers a nested collection, `ObjectDictionary[]`, a custom
   class or an unregistered enum. A JSON starting value (`{…}` or `[…]`) is held as parsed JSON. Other text is refused,
-  because Elsa 3 converted it in a way the converter cannot know.
-- **Resources are refused** with or without a starting value: `FormFile`, `IFormFile`, `Stream` and `byte[]`, alone or
-  as a collection element. #3194 now covers them all. `HttpHeaders` is not a resource: it stays `Object` holding a JSON
+  because Elsa 3 converted it in a way the converter cannot know. The JSON is kept exactly as written: Elsa 3's
+  case-insensitive deserialize and camelCase re-serialize are not applied (`{"ID":1}` stays `ID`). That is a known,
+  accepted difference for `Object` (Code Review, PR #3254).
+- **Resources are refused** with or without a starting value: `FormFile`, `IFormFile`, `Stream` and `byte[]` (also
+  `Byte` with the array flag), alone, as a collection element or as a CLR generic type argument. #3194 now covers them all. `HttpHeaders` is not a resource: it stays `Object` holding a JSON
   object.
 - **The diagnostic code stays** `ELS3-ACTIVITY-VARIABLE-VALUE-UNCONVERTIBLE`, for workflow-level variables too.
 

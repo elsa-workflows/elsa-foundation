@@ -148,6 +148,9 @@ public sealed class Elsa3VariableStartingValueTests
     [InlineData("System.IO.Stream, System.Runtime")]
     [InlineData("byte[]")]
     [InlineData("System.Byte[]")]
+    // CLR-style generic names carry their type arguments in [[…]].
+    [InlineData("System.Collections.Generic.List`1[[System.IO.Stream, System.Private.CoreLib]]")]
+    [InlineData("System.Collections.Generic.Dictionary`2[[System.String, System.Private.CoreLib],[Elsa.Http.Models.FormFile, Elsa.Http]]")]
     public async Task A_resource_variable_is_refused_even_without_a_value(string typeName)
     {
         var result = await ConvertAsync(new Elsa3Variable { Id = "resource", Name = "Resource", TypeName = typeName });
@@ -157,6 +160,18 @@ public sealed class Elsa3VariableStartingValueTests
         Assert.Equal(Elsa3ActivityDiagnosticCodes.VariableValueUnconvertible, refusal.Code);
         Assert.Equal("$.variables[0]", refusal.Path);
         Assert.Contains($"'{typeName}'", refusal.Message);
+        Assert.Contains("#3194", refusal.Guidance);
+    }
+
+    [Theory]
+    [InlineData("Byte")]
+    [InlineData("System.Byte, System.Private.CoreLib")]
+    public void Byte_with_the_array_flag_is_raw_bytes_and_refused(string typeName)
+    {
+        var source = new Elsa3Variable { Id = "bytes", Name = "bytes", TypeName = typeName, IsArray = true };
+
+        Assert.False(Elsa3VariableMapper.TryMap(Registry(), ObjectConverter, source, out _, out var refusal));
+        Assert.Contains("a resource", refusal!.Message);
         Assert.Contains("#3194", refusal.Guidance);
     }
 

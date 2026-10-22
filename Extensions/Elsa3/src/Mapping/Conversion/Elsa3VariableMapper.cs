@@ -168,7 +168,8 @@ internal static class Elsa3VariableMapper
     /// </summary>
     private static VariableShape Resolve(IWellKnownTypeRegistry registry, string typeName, bool isArray)
     {
-        if (IsResource(typeName))
+        // Byte with the array flag is Byte[]: raw bytes, a resource.
+        if (IsResource(typeName) || isArray && IsResource($"{typeName.Split(',')[0].Trim()}[]"))
             return new(ShapeKind.Resource, new TypeReference(ObjectAlias), null);
 
         if (DictionaryTypes.TryGetValue(typeName, out var example))
@@ -206,6 +207,11 @@ internal static class Elsa3VariableMapper
     /// <summary>Whether <paramref name="typeName"/>, or the element of a collection of it, is a <see cref="ResourceTypes">resource</see>.</summary>
     private static bool IsResource(string typeName)
     {
+        // A CLR generic name carries its type arguments in [[…],[…]]: any resource argument makes it a resource.
+        var arguments = typeName.IndexOf("[[", StringComparison.Ordinal);
+        if (arguments >= 0 && typeName[(arguments + 2)..].Split("],[").Any(IsResource))
+            return true;
+
         // A CLR name may be namespace- and assembly-qualified: "System.IO.Stream, System.Runtime" → "Stream".
         var name = typeName.Split(',')[0].Trim();
         var simple = name[(name.LastIndexOf('.') + 1)..];
