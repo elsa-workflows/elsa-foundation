@@ -51,10 +51,11 @@ how it was found:
 |---|---|
 | `stack` | The stack the command was issued on reaches the caller. Every SQLite command is attributed this way, because SQLite's asynchronous calls complete synchronously and never lose a stack. |
 | `save-changes` | The command ran inside `SaveChanges` after an asynchronous hop, so no Elsa frame was left on its stack. It is attributed to the `SaveChanges` call site, captured when `SaveChanges` was entered. On PostgreSQL this covers the batched writes and commit-marker inserts after the savepoint round trip: a batch carries the rows of several participants and has no single Elsa caller, so the call site that saved them owns it. |
-| `stitched` | A store method resumed after real I/O, so its stack holds the store but not the store's caller. The stack is completed with the latest whole stack of the same asynchronous flow that ran through the same store frame, normally the store's own earlier command or the opening of its connection. `<~` in the frames marks the seam. |
+| `stitched` | A store method resumed after real I/O, so its stack holds the store but not the store's caller. The stack is completed with the latest whole stack of the same asynchronous flow that ran through the same store frame, normally the store's own earlier command or the opening of its connection. When no whole stack runs through that frame, the latest stitched stack of the flow that does is used instead: nested awaits that complete one after the other can resume a store on a stack whose outermost frame is a helper it awaited, such as the deletion guard of `EfSchedulerWorkQueueStore.EnqueueAsync`, and only that helper's own stitched command ran through it. `<~` in the frames marks the seam; a stack stitched onto a stitched one shows only the newer seam. |
 | `none` | No caller was found. The run fails if any command ends up here. |
 
-Each measured call, each request of the measured host and each engine span starts a flow's memory of whole stacks.
+Each measured call and each request of the measured host starts a flow's memory of whole and stitched stacks; an engine
+span gives its flow one when it has none.
 
 Callers are read from stack frames, so they depend on what the JIT inlined. With tiered compilation a method is
 inlined only once it is hot, so the provider measured second in a process lost frames the first kept. The project
