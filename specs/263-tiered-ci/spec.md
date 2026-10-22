@@ -17,7 +17,7 @@ All findings were verified against `main` and the GitHub API on 2026-10-21 and 2
   - The two commits it brought in (#3123, #3174) merged cleanly with the PR. The update cost a full cycle and bought nothing.
 - **Where the time goes.**
   - Recent successful PR runs of `CI` take 37-57 minutes. In `Build & test`, restore takes about 40 s, the full build about 3 minutes, and the container-free test step 30-40 minutes, on one 4-core runner. The test projects' durations add up to 99 minutes.
-  - The long pole is `Elsa.Workbench.Tests`: 28-31 minutes for 61 tests in 13 test classes. Only 3 of those classes share an xUnit collection.
+  - The long pole is `Elsa.Workbench.Tests`: 28-31 minutes for 62 tests in 17 test classes. Four of those classes share one non-parallel xUnit collection and two share another (corrected during planning; see research R6).
   - Next are `Elsa.Cluster.EntityFrameworkCore.Tests` (16 min; it starts child host processes), `Elsa.Activities.Compensation.Tests` (9), `Elsa.Activities.Http.IntegrationTests` (8), `Elsa.Cli.Tests` (6), `Elsa.Architecture.Tests` (4.5), `Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests` (4), `Elsa.Secrets.Workflows.Tests` (4) and `Elsa3.Activities.Design.Import.Integration.Tests` (3).
   - The job's budget was raised from 30 to 45 minutes (#3056) and on 2026-10-21 to 60 minutes.
 - **Flaky tests are the largest measured waste.**
@@ -179,7 +179,7 @@ A backend-only PR does not start Studio's lint, unit, browser and .NET jobs; a P
 
 - **FR-015**: A committed tier manifest MUST assign every test project to exactly one tier, PR or integration. It MUST be the single list that both tiers and the shard jobs read.
 - **FR-016**: CI MUST fail when a test project is missing from the manifest, or when the manifest names a project that does not exist.
-- **FR-017**: CI MUST fail when a PR-tier project references Testcontainers or starts a child process, directly or through a referenced test project. Any other project MUST be assigned by its measured duration.
+- **FR-017**: CI MUST fail when a PR-tier project, directly or through a referenced test project, references Testcontainers, or starts a child host process (a `dotnet` launch of a host, worker, probe or the CLI) and has a median duration of 2 minutes or more. Launching `git` or `bash` is not a child host process. Any other project MUST be assigned by its measured duration.
 - **FR-018**: A test project MUST be wholly one tier. Per-test traits MUST NOT be a supported way to assign a tier.
 - **FR-019**: A PR-tier shard MUST report every test that takes longer than 10 seconds and is not on the manifest's allow-list.
 - **FR-020**: The report of FR-019 MUST become a failure only after two weeks of reports, once the allow-list matches them, and only with the owner's approval.
@@ -226,7 +226,7 @@ Settled with Joey Barten on 2026-10-21 and revised on 2026-10-22 after review.
 2. **Shard by project, and by test class for long projects.** Sharding by project alone cannot get under the 30-minute `Workbench.Tests` floor.
 3. **The full tier becomes required once a PR leaves draft.** That meets "expensive tests gate the merge, not every commit" without a merge queue: the draft state already means work in progress, and approval already sits on the exact head.
 4. **One reported retry in both tiers, plus a quarantine list.** A retry that is reported keeps flakiness visible. At about 25 merges a day, blocking on known flakes costs more than it protects.
-5. **Hard tier traits are Testcontainers and starting a child process.** Those are what make tests slow and flaky here. An in-memory test server is not, and is tiered by measured duration.
+5. **Hard tier traits are Testcontainers, and a child host process in a project of 2 minutes or more.** Those are what make tests slow and flaky here. A fast project that starts a short-lived child host stays in the PR tier, so draft commits keep its feedback. An in-memory test server is not a trait, and is tiered by measured duration.
 6. **The 10-second gate starts report-only.** Switching it to fail is a separate owner decision after two weeks of data.
 7. **Studio CI is path-filtered.** The missing contract check between Studio and the backend is #3177.
 8. **The push-to-`main` run stays full.** It is free, blocks nothing, and catches combination breaks and admin bypasses.
@@ -247,7 +247,7 @@ Settled with Joey Barten on 2026-10-21 and revised on 2026-10-22 after review.
 
 ## Assumptions
 
-- `Elsa.Workbench.Tests`, `Elsa.Cluster.EntityFrameworkCore.Tests`, `Elsa.Activities.Http.IntegrationTests` and `Elsa3.Activities.Design.Import.Integration.Tests` start child processes and are integration tier. Planning confirms each other project's tier from its references and measured durations.
+- `Elsa.Workbench.Tests`, `Elsa.Cluster.EntityFrameworkCore.Tests` and `Elsa.Activities.Http.IntegrationTests` start child processes and are integration tier. Planning confirmed each other project's tier from its references and measured durations (research R5): `Elsa3.Activities.Design.Import.Integration.Tests` uses an in-memory test host and stays in the PR tier.
 - Splitting a project by test class across runners needs no change to the tests. Classes that share state through an xUnit collection stay together.
 - The 20-concurrent-job organization limit is shared with other repositories. The budgets in FR-022 are a starting point that planning checks against observed queueing.
 - Agents can open PRs as drafts and mark them ready with the tools they already use.
@@ -280,3 +280,6 @@ Settled with Joey Barten on 2026-10-21 and revised on 2026-10-22 after review.
 | CodeRabbit: SC-004 vs the Workbench duration | Replaced by SC-002, which class sharding makes reachable. |
 | Sipke, follow-up: the full tier must also run on a PR opened or reopened as ready | FR-006 and Story 2, scenario 2 cover opened, reopened and marked-ready PRs. |
 | CodeRabbit: merge authority | Not changed. The org AGENTS.md has allowed Claude and Codex standing self-merge since 18 Oct 2026, and this spec no longer touches merge authority. |
+
+- **2026-10-22 (planning)**: two factual corrections from research R5 and R6, with no change to any requirement. Workbench has 17 classes and two shared collections (four classes and two), not 13 classes and one collection of three; `Elsa3.Activities.Design.Import.Integration.Tests` starts no child process.
+- **2026-10-22 (planning, Joey Barten)**: FR-017 and Decision 5 narrowed so the PR tier loses as little as possible. A child host process is a hard trait only in a project with a median of 2 minutes or more, and `git` or `bash` launches never are. `Elsa.Etl.Tests`, `Elsa.Secrets.Persistence.EntityFrameworkCore.Tests` and `Elsa.Workflows.Publishing.Tests` stay in the PR tier.
