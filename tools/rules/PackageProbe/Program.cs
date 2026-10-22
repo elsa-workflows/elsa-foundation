@@ -50,7 +50,7 @@ internal static partial class Program
     {
         if (args.Length < 2)
         {
-            Console.Error.WriteLine("Usage: PackageProbe <receipt|direct|unavailable|incompatible> <arguments...> <output-json>");
+            Console.Error.WriteLine("Usage: PackageProbe <receipt|direct|unavailable|incompatible|process-upgrade-admission|process-upgrade-successor|process-upgrade-recover> <arguments...> <output-json>");
             return 2;
         }
 
@@ -65,6 +65,10 @@ internal static partial class Program
                 "process-control" when args.Length == 4 => await RunPersistenceControlAsync(args[1], args[2]),
                 "process-boundary" when args.Length == 4 => await RunProcessBoundaryAsync(args[1], args[2]),
                 "process-recover" when args.Length == 3 => await RunProcessRecoverAsync(args[1]),
+                "process-upgrade-admission" when args.Length == 4 => await RunProcessUpgradeAdmissionCheckAsync(args[1], args[2]),
+                "process-upgrade-successor" when args.Length == 4 => await RunProcessUpgradeSuccessorAsync(args[1], args[2]),
+                "process-upgrade-recover" when args.Length == 3 => await RunProcessRecoverAsync(args[1],
+                    acceptNewInvocations: false, command: "process-upgrade-recover"),
                 "process-cancel" when args.Length == 3 => await RunProcessCancelAsync(args[1]),
                 "receipt" when args.Length == 3 => await CreateReceiptAsync(args[1]),
                 "direct" when args.Length == 3 => await RunDirectAsync(args[1]),

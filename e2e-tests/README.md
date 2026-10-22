@@ -127,7 +127,7 @@ $selfHosted = 'Test-RestartRecovery.ps1', 'Test-AlterationReplayAndRestart.ps1',
               'Test-SharedPersistence.ps1', 'Test-SharedDiagnosticsPersistence.ps1', 'Test-ServerLifecycleGuard.ps1',
               'Test-JsonSourceComposition.ps1', 'Test-UnknownFeatures.ps1', 'Test-HttpResponseFlowchart.ps1'
 # Package-backed Rules is qualified separately with an immutable feed and deployment receipt.
-$packageQualified = 'Test-DurableRules.ps1'
+$packageQualified = 'Test-DurableRules.ps1', 'Test-NativeRulesInstallation.ps1'
 $failed = @()
 Get-ChildItem ./e2e-tests -Recurse -Filter 'Test-*.ps1' | Sort-Object FullName | ForEach-Object {
     if ($_.Name -in $packageQualified) {
@@ -407,7 +407,7 @@ These are genuine defects surfaced by the tests and fixed in the source (candida
 
 ## Durable Rules package-backed journey
 
-`rules/Test-DurableRules.ps1` owns its Workbench process and fresh content root. It requires a
+`rules/Test-DurableRules.ps1` and `rules/Test-NativeRulesInstallation.ps1` each own their Workbench process and fresh content root. It requires a
 published host whose six Rules modules are real PackageReferences and a verified deployment receipt;
 the ordinary source-built host cannot establish that package identity. Run it through
 `tools/rules/verify-packaged-rules.py --stage workbench` with the immutable inputs documented in the
@@ -415,3 +415,7 @@ the ordinary source-built host cannot establish that package identity. Run it th
 package-backed host, verifies its selected package assets, then supplies `-AssemblyPath`,
 `-DeploymentReceiptPath` and `-EvidencePath` to the REST suite. The generic source-suite loop above
 explicitly excludes this separate qualification and does not count it as passed.
+
+The installation journey first persists native work with Rules features disabled, then adds Rules to
+the same database and verifies unchanged state/schema and the original continuation. It additionally
+requires Python 3 for read-only SQLite snapshots; its evidence is distinct from the ordinary REST journeys.

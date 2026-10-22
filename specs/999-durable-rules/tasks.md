@@ -54,8 +54,18 @@ Independent acceptance: identical invariants actually run on all four engines, o
 - [x] T022 [US4] Build shared real-engine contract suite in `Extensions/Rules/tests/Persistence/EntityFrameworkCore/ProviderTests/`; cover null/case/Unicode-normalization scope, exact/one-over UTF-8 scope limits, simulated index-hash collision, key-size/collation, admission races, lease/model revision, receipts, delivery and bounded read consistency.
 - [x] T023 [US4] Implement `tools/rules/verify-providers.py` and register the suite in `tools/ci/ef-suites.json`; require-all mode fails for missing engines, avoids credentials in evidence and cleans up only owned disposable resources. No workflow changes.
 - [x] T024 [US4] Execute all four provider suites and record engine versions/counts/no missing qualification in `specs/999-durable-rules/evidence/`; scheduled CI skips are not substitute evidence.
-- [ ] T025 [US4] Extend package harness upgrade scenarios with retained original Rules pin, incompatible successor, capable recovery and admission-disabled rollback; preserve original artifact/receipt/state schemas without destructive migration or repinning.
-- [ ] T026 [US4] Capture persisted native pre-Rules state, install additive Rules schema and prove identity/continuation unchanged in `tools/rules/` acceptance; run alongside Rules upgrade/rollback and retain evidence. Depends on native T030/T031.
+- [x] T025 [US4] Extend package harness upgrade scenarios with retained original Rules pin, incompatible successor, capable recovery and admission-disabled rollback; preserve original artifact/receipt/state schemas without destructive migration or repinning.
+- [x] T026 [US4] Capture persisted native pre-Rules state, install additive Rules schema and prove identity/continuation unchanged in `tools/rules/` acceptance; run alongside Rules upgrade/rollback and retain evidence. Depends on native T030/T031.
+
+The [native installation checkpoint](evidence/native-installation-checkpoint.md) proves T026's additive
+SQLite feature/schema installation: a pre-existing Event wait retains identical native state and
+schema, resumes with its original variable, and ignores a duplicate stimulus. Its same qualified
+host already contains Rules assemblies; this is not an old-binary upgrade claim. The paired
+[retained deployment checkpoint](evidence/retained-upgrade-checkpoint.md) completes T025/T026: A
+accepts real work, incompatible-pin B consumes only its common receipt, and capable A resumes
+with new admissions disabled. Both actual deployments retain their original file sets and hashes.
+The same computed package version is used with distinct immutable sources and selected assets;
+this is not a published version increment or schema-version-changing migration. Final leaf gates remain open.
 
 ## Phase 6: US3 — Persisted native composite integration (P1)
 

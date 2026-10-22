@@ -13,7 +13,7 @@ DIRECT_RUNTIME_ROOTS = (
 )
 
 
-def verify_consumer(receipt, evidence, source, feed, run, environment, process_proof=False):
+def verify_consumer(receipt, evidence, source, feed, run, environment, process_proof=False, runtime_only=False):
     consumer, deployment = evidence / 'consumer', evidence / 'deployment'
     consumer.mkdir()
     for ancestor in consumer.parents:
@@ -32,7 +32,7 @@ def verify_consumer(receipt, evidence, source, feed, run, environment, process_p
     # The ordinary clean consumer proves every packed module root, including the native Design
     # bridge. The process witness deliberately has no Design package in its dependency graph, so
     # it uses only the four direct runtime/storage modules while reusing the same six-module feed.
-    consumer_roots = list(DIRECT_RUNTIME_ROOTS) if process_proof else module_roots
+    consumer_roots = list(DIRECT_RUNTIME_ROOTS) if process_proof or runtime_only else module_roots
     missing_roots = [package for package in consumer_roots if package not in versions]
     if missing_roots:
         raise ValueError('Consumer module roots are missing from the immutable package closure: ' + ', '.join(missing_roots))
@@ -103,7 +103,7 @@ def verify_consumer(receipt, evidence, source, feed, run, environment, process_p
         key = package + '/' + versions[package]
         if key not in libraries or libraries[key]['type'] != 'package':
             raise ValueError('Consumer did not resolve exact selected package root: ' + key)
-    if not process_proof:
+    if not process_proof and not runtime_only:
         missing_closure = sorted(set(versions) - resolved_packed_ids)
         if missing_closure:
             raise ValueError('Six-module consumer did not resolve the full packed closure: ' + ', '.join(missing_closure))
@@ -132,7 +132,11 @@ def verify_consumer(receipt, evidence, source, feed, run, environment, process_p
     receipt['consumerModuleRootVersions'] = {package: versions[package] for package in consumer_roots}
     receipt['consumerResolvedPackedClosure'] = sorted(resolved_packed, key=lambda item: item['id'])
     receipt['consumerPackageReferenceRestorePassed'] = True
-    if process_proof:
+    if runtime_only:
+        receipt['proofScope'] = ('Clean PackageReference restore of the four direct-runtime Rules roots, with direct '
+                                 'execution and identity rejection; prepared for a separately executed retained-upgrade '
+                                 'proof. This stage does not run process recovery, native execution or upgrade acceptance.')
+    elif process_proof:
         receipt['proofScope'] = ('Clean PackageReference restore of the four direct-runtime Rules roots, with direct Rules '
                                  'execution and PostgreSQL process recovery; native Design packages are absent from this '
                                  'consumer graph. The six-module clean consumer is a separate direct-stage proof; native '

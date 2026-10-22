@@ -87,25 +87,52 @@ internal static partial class Program
         }
     }
 
-    private static async Task<object> RunProcessRecoverAsync(string statePath)
+    private static async Task<object> RunProcessRecoverAsync(string statePath, bool acceptNewInvocations = true,
+        string command = "process-recover")
     {
         var state = ReadProcessState(statePath);
         var connection = RequiredProcessConnection();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(180));
-        using var host = BuildProcessHost(connection, control: null, suppressWorker: false);
+        using var host = BuildProcessHost(connection, control: null, suppressWorker: false,
+            acceptNewInvocations: acceptNewInvocations);
         try
         {
             await StartProcessHostAsync(host, timeout.Token);
             await using var scope = host.Services.CreateAsyncScope();
             var services = scope.ServiceProvider;
             var invocation = state.Invocation;
+            var installedPin = await services.GetRequiredService<IRuleImplementationIdentitySource>().ReadAsync(timeout.Token);
+            Require(installedPin is not null
+                    && RuleRecordCodec.PinHash(installedPin) == RuleRecordCodec.PinHash(invocation.ExpectedImplementation),
+                "Recovery deployment does not load the invocation's retained semantic pin.");
+            RuleAdmissionDisposition? replayDisposition = null;
+            RuleAdmissionDisposition? freshAdmission = null;
+            RuleRunReadDisposition? freshLookup = null;
+            if (!acceptNewInvocations)
+            {
+                var replay = await services.GetRequiredService<IRuleRunStore>()
+                    .AdmitAsync(new RuleRunAdmission(invocation), timeout.Token);
+                replayDisposition = replay.Disposition;
+                Require(replay.Disposition == RuleAdmissionDisposition.Replay,
+                    $"Exact retained invocation replay returned {replay.Disposition}.");
+                var fresh = new RuleInvocationEnvelope(NewIdentity("upgrade-disabled-new-admission"), invocation.Artifact,
+                    invocation.InitialFacts, invocation.MaxRounds, invocation.ExpectedImplementation,
+                    invocation.InvocationSchemaVersion, invocation.NativeDestination);
+                freshAdmission = (await services.GetRequiredService<IRuleRunStore>()
+                    .AdmitAsync(new RuleRunAdmission(fresh), timeout.Token)).Disposition;
+                freshLookup = (await services.GetRequiredService<IRuleRunReader>()
+                    .FindAsync(fresh.Identity, timeout.Token)).Disposition;
+                Require(freshAdmission == RuleAdmissionDisposition.Unavailable
+                        && freshLookup == RuleRunReadDisposition.NotFound,
+                    "Disabled recovery deployment admitted a fresh invocation or created durable state.");
+            }
             var reader = services.GetRequiredService<IRuleRunReader>();
             var profile = await ReadPostgresProfileAsync(connection, timeout.Token);
             Require(profile.DatabaseName == state.DatabaseName, "Recovery connected to a different PostgreSQL database.");
             Require(Environment.MachineName == state.MachineName, "Recovery ran on a different machine from the committed boundary.");
             Require(Environment.ProcessId != state.ProcessId, "Recovery did not run in an independent process.");
 
-            // The successor deliberately does not prepare or admit. Its hosted worker claims the durable row itself.
+            // Recovery starts only from the persisted invocation; no replacement invocation is prepared.
             var view = await WaitForTerminalAsync(reader, invocation.Identity, timeout.Token);
             var terminal = await ReadFoundTerminalAsync(reader, invocation.Identity, timeout.Token);
             Require(view.Status == RuleRunStatus.Succeeded && terminal.Kind == RuleTerminalKind.Succeeded,
@@ -141,10 +168,22 @@ internal static partial class Program
             Require(stable.View.TerminalId == view.TerminalId && stable.View.ModelRevision == view.ModelRevision
                     && stable.Terminal.TerminalId == terminal.TerminalId,
                 "Recovered terminal changed during the stability read.");
+            var recoveredSnapshot = await ReadRunSnapshotAsync(reader, invocation.Identity, timeout.Token);
+            await Task.Delay(250, timeout.Token);
+            var stableSnapshot = await ReadRunSnapshotAsync(reader, invocation.Identity, timeout.Token);
+            Require(SameSnapshot(recoveredSnapshot, stableSnapshot)
+                    && stableSnapshot.View.TerminalId == terminal.TerminalId,
+                "Recovered terminal changed between full stability snapshots.");
             return new
             {
-                command = "process-recover",
+                command,
                 passed = true,
+                acceptNewInvocations,
+                loadedImplementationPinHash = RuleRecordCodec.PinHash(installedPin),
+                retainedImplementationPinHash = RuleRecordCodec.PinHash(invocation.ExpectedImplementation),
+                exactAdmissionReplay = replayDisposition?.ToString(),
+                freshAdmission = freshAdmission?.ToString(),
+                freshLookup = freshLookup?.ToString(),
                 recoveredBoundary = state.Boundary,
                 terminalBase64 = Convert.ToBase64String(RuleRecordCodec.TerminalBytes(terminal)),
                 modelRevision = view.ModelRevision,
@@ -170,6 +209,7 @@ internal static partial class Program
                     consumedModelRevision = round.ConsumedModelRevision
                 }).ToArray(),
                 terminalId = terminal.TerminalId,
+                recoveredSnapshot = SnapshotEvidence(stableSnapshot),
                 terminalStabilityVerified = true,
                 designStorageUsed = false
             };
@@ -312,12 +352,14 @@ internal static partial class Program
         }
     }
 
-    private static IHost BuildProcessHost(string connection, ProcessBoundaryControl? control, bool suppressWorker) =>
+    private static IHost BuildProcessHost(string connection, ProcessBoundaryControl? control, bool suppressWorker,
+        bool acceptNewInvocations = true) =>
         BuildObservedProcessHost(connection, suppressWorker,
-            control is null ? null : (store, reader) => new ProcessBoundaryStore(store, reader, control));
+            control is null ? null : (store, reader) => new ProcessBoundaryStore(store, reader, control),
+            acceptNewInvocations);
 
     private static IHost BuildObservedProcessHost(string connection, bool suppressWorker,
-        Func<IRuleRunStore, IRuleRunReader, IRuleRunStore>? observer)
+        Func<IRuleRunStore, IRuleRunReader, IRuleRunStore>? observer, bool acceptNewInvocations = true)
     {
         var entryAssembly = Assembly.GetEntryAssembly() ?? throw new ProbeAssertionException("Entry assembly is unavailable.");
         var hostRoot = ResolvePhysicalPath(AppContext.BaseDirectory);
@@ -330,7 +372,8 @@ internal static partial class Program
             HostDepsPath = depsPath,
             DeploymentReceiptPath = Path.Combine(hostRoot, ReceiptFileName),
             MaxConcurrentAttempts = 1,
-            PollIntervalMilliseconds = 10
+            PollIntervalMilliseconds = 10,
+            AcceptNewInvocations = acceptNewInvocations
         };
         var beforeRuntime = new HashSet<ServiceDescriptor>(builder.Services, ReferenceEqualityComparer.Instance);
         runtimeFeature.ConfigureServices(builder.Services);

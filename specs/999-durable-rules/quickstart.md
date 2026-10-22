@@ -66,7 +66,47 @@ Full acceptance still requires persisted Flowchart sibling/join behavior, cancel
 recovery and proof-before-ack regression controls in addition to successful Sequence continuation,
 fault and refusal. Only cases named in the execution receipt are proved by a particular run.
 
-The upgrade acceptance target additionally retains a pre-Rules native execution, installs the additive Rules schema, and proves native continuation unchanged. An admitted Rules run keeps its original semantic pin through an incompatible deployment and later compatible recovery. Rollback disables new admissions while preserving existing responsibility; no destructive schema rollback or automatic repinning.
+The Workbench stage also runs `e2e-tests/rules/Test-NativeRulesInstallation.ps1`. It first starts
+without Rules features, persists a Sequence waiting on an Event, and stops the owned process. It
+then enables Rules against the same SQLite database and checks every pre-existing schema object
+plus the complete retained workflow/activity/bookmark/value/artifact rows before resuming the
+original Event. The original variable must survive, the following output executes once, and a
+second stimulus must resume nothing. Rules assemblies are already present in the qualified host;
+this proves additive feature/schema installation, not an upgrade from an older binary release.
+
+To repeat that journey against a previously qualified deployment:
+
+```bash
+pwsh -NoProfile -File e2e-tests/rules/Test-NativeRulesInstallation.ps1 \
+  -AssemblyPath <qualified-Elsa.Workbench.dll> \
+  -DeploymentReceiptPath <qualified-deployment-receipt.json> \
+  -EvidencePath /tmp/rules-native-installation/result.json
+```
+
+The script needs Python 3 for read-only SQLite snapshots. Retain the evidence JSON and both
+snapshot files. The snapshot comparator fails if existing state or schema changes; a passing
+HTTP readiness response alone is insufficient.
+
+For retained Rules deployment acceptance, prepare two independent four-runtime-root consumer runs
+with `verify-packaged-rules.py --stage runtime` and their own immutable `--source-ref` and verified
+`--packed-run`. This stage runs direct execution and identity removal/restoration checks but does
+not run the full process suite. Never share a NuGet cache between the two runs. Then run:
+
+```bash
+python3 tools/rules/package_upgrade.py \
+  --baseline-run <completed-runtime-consumer-A> \
+  --successor-run <completed-runtime-consumer-B> \
+  --evidence-dir /tmp/rules-retained-upgrade
+```
+
+The coordinator verifies both package feeds and loaded assets, requires distinct trusted pins with
+compatible common record schemas, and owns one disposable PostgreSQL container/database. A commits
+an accepted receipt and is stopped. B consumes only that common receipt, retains A's pin, and cannot
+claim the next semantic round. A returns with `AcceptNewInvocations=false`: the original invocation
+replays and completes, while a fresh identity is rejected without a row. Exact round history, pins,
+process IDs, full semantic snapshots, immutable deployment hashes and container cleanup are recorded.
+These are local proof deployments, not package releases; the computed versions may match while
+selected assembly hashes differ. No destructive schema rollback or automatic repinning is permitted.
 
 ## 5. Integration gate
 

@@ -1,0 +1,1741 @@
+{
+  "commands": [],
+  "fullAcceptancePassed": false,
+  "retainedUpgradeEvidenceDirectory": "/private/tmp/rules-retained-upgrade-final/upgrade/run-074b8b46562441e58cb9ba87a87172ae",
+  "retainedUpgradeProof": {
+    "acceptedBoundary": {
+      "acceptedAttemptId": "a3ba02453d26427da150dfd8bfd17726",
+      "acceptedLeaseFence": 1,
+      "acceptedModelRevision": 2,
+      "acceptedWorkerId": "rules-f3a84aef892547f7b6301a7af2fca284",
+      "afterFacts": [
+        "seed"
+      ],
+      "beforeFacts": [
+        "seed"
+      ],
+      "boundary": "accepted",
+      "capturedUtc": "2026-10-22T06:32:40.986274+00:00",
+      "committedRounds": 0,
+      "databaseEngine": "PostgreSQL",
+      "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+      "databaseName": "rules_upgrade_dc9924b8bcb34e779dcce4fd5711d309",
+      "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+      "invocationBase64": "eyJpbnZvY2F0aW9uU2NoZW1hVmVyc2lvbiI6MSwiaWRlbnRpdHkiOnsidGVuYW50IjpudWxsLCJwYXJ0aXRpb24iOiJwYWNrYWdlZC1ydWxlcy1wcm9iZSIsImludm9jYXRpb24iOiJwcm9jZXNzLWFjY2VwdGVkLWE0YmQ4MzY4MzZhNTQ5YmNiNWZlZTlhZjE2OTM5YmUyIn0sImFydGlmYWN0Ijp7ImZvcm1hdFZlcnNpb24iOjEsImlkIjoicnVsZXM6MGYwMzA5ZDU4MTM2NzFhZTZhNDliMzE2NzM2NjUxNDI4NTRkM2U2MDFjZjAwMWJjZjBmNDdjMTM1ZDMzMDg0MSIsInNoYTI1NiI6IjBmMDMwOWQ1ODEzNjcxYWU2YTQ5YjMxNjczNjY1MTQyODU0ZDNlNjAxY2YwMDFiY2YwZjQ3YzEzNWQzMzA4NDEiLCJieXRlcyI6ImV5Sm1iM0p0WVhSV1pYSnphVzl1SWpveExDSnNZVzVuZFdGblpVbGtJam9pWld4ellTNXlkV3hsY3k1bWFXNXBkR1V0Y0c5emFYUnBkbVVpTENKc1lXNW5kV0ZuWlZabGNuTnBiMjRpT2pFc0luWnZZMkZpZFd4aGNua2lPbHNpWm1sdVlXd2lMQ0pxYjJsdVpXUWlMQ0pzWldaMElpd2libVYyWlhJdFpHVnlhWFpsWkNJc0luSnBaMmgwSWl3aWMyVmxaQ0lzSW5WdWNtVmhZMmhoWW14bElsMHNJbkoxYkdWeklqcGJleUpwWkNJNkltWnBibUZzSWl3aWNISmxiV2x6WlhNaU9sc2lhbTlwYm1Wa0lsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKbWFXNWhiQ0o5TEhzaWFXUWlPaUpxYjJsdUlpd2ljSEpsYldselpYTWlPbHNpYkdWbWRDSXNJbkpwWjJoMElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKcWIybHVaV1FpZlN4N0ltbGtJam9pYkdWbWRDSXNJbkJ5WlcxcGMyVnpJanBiSW5ObFpXUWlYU3dpWTI5dVkyeDFjMmx2YmlJNklteGxablFpZlN4N0ltbGtJam9pY21sbmFIUWlMQ0p3Y21WdGFYTmxjeUk2V3lKelpXVmtJbDBzSW1OdmJtTnNkWE5wYjI0aU9pSnlhV2RvZENKOUxIc2lhV1FpT2lKMWJuSmxZV05vWVdKc1pTSXNJbkJ5WlcxcGMyVnpJanBiSW5WdWNtVmhZMmhoWW14bElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKdVpYWmxjaTFrWlhKcGRtVmtJbjFkZlE9PSJ9LCJpbml0aWFsRmFjdHMiOlsic2VlZCJdLCJtYXhSb3VuZHMiOjcsImltcGxlbWVudGF0aW9uIjp7InBpblNjaGVtYVZlcnNpb24iOjEsImxhbmd1YWdlSWQiOiJlbHNhLnJ1bGVzLmZpbml0ZS1wb3NpdGl2ZSIsImxhbmd1YWdlVmVyc2lvbiI6MSwicmVjZWlwdFNjaGVtYVZlcnNpb24iOjEsInN0YXRlU2NoZW1hVmVyc2lvbiI6MSwicGFja2FnZXMiOlt7ImlkIjoiRWxzYS5SdWxlcy5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IlpEbE9wejFEOFphckVtVk1ROXJHY0s1aUVXMVAvalx1MDAyQkpWZHk2ZXBmc01cdTAwMkI4L2UxZFx1MDAyQkVUWGhYM1BlOHdhdlptSzdLL0pIVVp6L2FCOTAyYVBONnlcdTAwMkI4QWc9PSIsImFzc2V0cyI6W3sicGF0aCI6ImxpYi9uZXQxMC4wL0Vsc2EuUnVsZXMuQ29yZS5kbGwiLCJhc3NlbWJseSI6IkVsc2EuUnVsZXMuQ29yZSwgVmVyc2lvbj00LjAuMC4wLCBDdWx0dXJlPW5ldXRyYWwsIFB1YmxpY0tleVRva2VuPW51bGwiLCJzaGEyNTYiOiIxYTI5NDBkMDJmYzE4NzMwMmFkN2Q3OTIxNmVhOTI0NTllNWFiNDMzNjZlMGRiMjQyMGNlYTVmZGUyNzY1MGJkIn1dfSx7ImlkIjoiRWxzYS5SdWxlcy5QZXJzaXN0ZW5jZS5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IlRYRktLMFNlcFV5T1AwQkxNTzEyR0t5SlhaNFY1VE5VcEE2WDVlZ09qVGxHRUFuUFBIUEY2XHUwMDJCWmZpR3BnbnhweUp5ZGtweVRVN0NLcEd1clNHUFx1MDAyQlBrUT09IiwiYXNzZXRzIjpbeyJwYXRoIjoibGliL25ldDEwLjAvRWxzYS5SdWxlcy5QZXJzaXN0ZW5jZS5Db3JlLmRsbCIsImFzc2VtYmx5IjoiRWxzYS5SdWxlcy5QZXJzaXN0ZW5jZS5Db3JlLCBWZXJzaW9uPTQuMC4wLjAsIEN1bHR1cmU9bmV1dHJhbCwgUHVibGljS2V5VG9rZW49bnVsbCIsInNoYTI1NiI6ImMxNDlhZDk5NjY1N2M0YmI0OTg4NmJiNmZiNjJkOTIzYjJkM2M0MjYwOGI5YjhmNDMwMjZkMTk4MjZiZmEyNTUifV19LHsiaWQiOiJFbHNhLlJ1bGVzLlJ1bnRpbWUiLCJ2ZXJzaW9uIjoiNC4wLjAtYnJhbmNoLWFnZW50LWNvZGV4LTMxODEtZHVyYWJsZS1ydWxlcyIsImNvbnRlbnRIYXNoIjoibXh4N3M0SnpIMTBmWUwvN2F6ZHpCRU9BSXgvbnRTMTBGRzRoWFh6eTE0NzVzQTVScFZcdTAwMkJiOFx1MDAyQjBmOTdnNUlrZ1ZcdTAwMkJXOWxVXHUwMDJCNVU3NUQ4MmE1ZXpkdlZFQT09IiwiYXNzZXRzIjpbeyJwYXRoIjoibGliL25ldDEwLjAvRWxzYS5SdWxlcy5SdW50aW1lLmRsbCIsImFzc2VtYmx5IjoiRWxzYS5SdWxlcy5SdW50aW1lLCBWZXJzaW9uPTQuMC4wLjAsIEN1bHR1cmU9bmV1dHJhbCwgUHVibGljS2V5VG9rZW49bnVsbCIsInNoYTI1NiI6IjY4ZWRlMjQ5ODkyMjhmN2E5MTQ2OTU4NjY1YWI3OWIwNGFkMjhhYmE5MmU3YTcwM2Y3NTc5ZDM3YTliYTVjNmIifV19XX0sIm5hdGl2ZURlc3RpbmF0aW9uIjpudWxsfQ==",
+      "invocationFingerprint": "2ab0f801eb7ede8f640e4ddd320ebaceba2209b4d89db3b11476d3ca1945b2dc",
+      "machineName": "Sipkes-MacBook-Air",
+      "modelRevision": 2,
+      "pendingReceiptId": "c9479b71bdff04e407829a50fb3d5b0749c60543bdb38a1dcd91db3f078c1963",
+      "processId": 19556,
+      "receiptId": "c9479b71bdff04e407829a50fb3d5b0749c60543bdb38a1dcd91db3f078c1963",
+      "receiptRecordBase64": "eyJyZWNlaXB0Ijp7ImlkZW50aXR5Ijp7InRlbmFudCI6bnVsbCwicGFydGl0aW9uIjoicGFja2FnZWQtcnVsZXMtcHJvYmUiLCJpbnZvY2F0aW9uIjoicHJvY2Vzcy1hY2NlcHRlZC1hNGJkODM2ODM2YTU0OWJjYjVmZWU5YWYxNjkzOWJlMiIsImZpbmdlcnByaW50IjoiMmFiMGY4MDFlYjdlZGU4ZjY0MGU0ZGRkMzIwZWJhY2ViYTIyMDliNGQ4OWRiM2IxMTQ3NmQzY2ExOTQ1YjJkYyIsIm9yZGluYWwiOjAsImlucHV0U3RhdGVTaGEyNTYiOiI4MGIwMTBkYzI2ZjI1NjhjOTM3NWEyOTllMzcwN2ViN2M0NWQwNDZhMTM5ODVmYTFmYWMwYzcyMmNhYWIwY2M0In0sImltcGxlbWVudGF0aW9uUGluSGFzaCI6IjkxYWNkOTBhNTY0MmYyMDA2Yzk4MTE5NjBjODJhZjU1ZDM1MGVkOTJkNzQ0NGI2YjQxY2I2ZTQ3ZTFlYThiZjkiLCJhZGRlZEZhY3RzIjpbImxlZnQiLCJyaWdodCJdLCJmaXJpbmdzIjpbeyJydWxlSWQiOiJsZWZ0IiwiY29uY2x1c2lvbiI6ImxlZnQifSx7InJ1bGVJZCI6InJpZ2h0IiwiY29uY2x1c2lvbiI6InJpZ2h0In1dfSwic2VtYW50aWNSZWNlaXB0U2hhMjU2IjoiMjMzNjI1MDNhMzcxNTQ5ODE3MGI0YWY5MDhiMmY1NDM0MjdhODQzOTlmZTFkMTBmZjYwYTc0MTYwMDk0MzNiZSJ9",
+      "schemaVersion": 1,
+      "semanticReceiptSha256": "23362503a3715498170b4af908b2f543427a84399fe1d10ff60a7416009433be",
+      "tokenExpectedModelRevision": 1,
+      "tokenExpiresAtUtc": "2026-10-22T06:32:43.745616+00:00",
+      "tokenFence": 1,
+      "tokenOwner": "rules-f3a84aef892547f7b6301a7af2fca284"
+    },
+    "baselineOriginProcessId": 19556,
+    "database": {
+      "boundPort": 32778,
+      "containerImage": "sha256:ed134ce8cc303c24d12c4bc6f5a2a43dc7ee7bbde8f67d9f60be5cc03206eab0",
+      "databaseName": "rules_upgrade_dc9924b8bcb34e779dcce4fd5711d309",
+      "engine": "PostgreSQL",
+      "serverVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit"
+    },
+    "deploymentFilesUnchanged": true,
+    "deployments": {
+      "baseline": {
+        "deploymentDirectory": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment",
+        "deploymentFiles": {
+          "CShells.Abstractions.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/CShells.Abstractions.dll",
+            "sha256": "dbcf0e5d572791124ac582e3a10519d80f01b9f2e4228cffadb61171f796b5a0"
+          },
+          "CShells.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/CShells.dll",
+            "sha256": "b0afda775aa0c330f982856ebfaeb461c7ea1c5d201998351ba7ca105f69ebc0"
+          },
+          "Elsa.Persistence.EntityFramework.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/Elsa.Persistence.EntityFramework.dll",
+            "sha256": "9a78957f776ec0d272bc78a592cde2daf4add8ddb045d323efb7c89eaee8f421"
+          },
+          "Elsa.Persistence.Schema.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/Elsa.Persistence.Schema.dll",
+            "sha256": "5443f9daea44899a236693e1bffbaea6e2c03d9287e7ac52a136f18d3b056bb6"
+          },
+          "Elsa.Primitives.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/Elsa.Primitives.dll",
+            "sha256": "6fadf887c21a739abd8a911f6da2c033d33bcf1c48a7dd8b4be36283fde6852d"
+          },
+          "Elsa.Rules.Core.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/Elsa.Rules.Core.dll",
+            "sha256": "1a2940d02fc187302ad7d79216ea92459e5ab43366e0db2420cea5fde27650bd"
+          },
+          "Elsa.Rules.Persistence.Core.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/Elsa.Rules.Persistence.Core.dll",
+            "sha256": "c149ad996657c4bb49886bb6fb62d923b2d3c42608b9b8f43026d19826bfa255"
+          },
+          "Elsa.Rules.Persistence.EntityFrameworkCore.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/Elsa.Rules.Persistence.EntityFrameworkCore.dll",
+            "sha256": "8938685de4edd197ca76f8e55ad2730783d94c79b48d62ad343fd45d958d709b"
+          },
+          "Elsa.Rules.Runtime.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/Elsa.Rules.Runtime.dll",
+            "sha256": "68ede24989228f7a9146958665ab79b04ad28aba92e7a703f7579d37a9ba5c6b"
+          },
+          "Elsa.Tasks.Core.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/Elsa.Tasks.Core.dll",
+            "sha256": "d0f3b66e7a2c98e7986db7b7d22b59e3ec066a197b6a95cfa34e54a82fa72934"
+          },
+          "JetBrains.Annotations.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/JetBrains.Annotations.dll",
+            "sha256": "8f2c837af3f4f61b1726a2e67eafcf5bae23debd9e1de425bb5ce1d4837508d6"
+          },
+          "Microsoft.Data.Sqlite.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/Microsoft.Data.Sqlite.dll",
+            "sha256": "1078d41c6c0f2cee48a8b706e3a54ce145705993f19f703d2b3bdf2abcc59088"
+          },
+          "Microsoft.EntityFrameworkCore.Abstractions.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/Microsoft.EntityFrameworkCore.Abstractions.dll",
+            "sha256": "98c8252995283ef0884b904dbab03696ca7f71a05b8dde34dace5eeb9bf4382c"
+          },
+          "Microsoft.EntityFrameworkCore.Relational.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/Microsoft.EntityFrameworkCore.Relational.dll",
+            "sha256": "ac1146e68d53d56b79e9473f68c557999de99674be392bbbbb02ae93a296b93e"
+          },
+          "Microsoft.EntityFrameworkCore.Sqlite.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/Microsoft.EntityFrameworkCore.Sqlite.dll",
+            "sha256": "b8c5027b27be2012094699cbd5260239778a1891dc5c1887797d331b67f0ef89"
+          },
+          "Microsoft.EntityFrameworkCore.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/Microsoft.EntityFrameworkCore.dll",
+            "sha256": "acb89dff050d681fab6f86d2175929471200b9bed66ac9321cbe6a17eaa26933"
+          },
+          "Microsoft.Extensions.DependencyModel.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/Microsoft.Extensions.DependencyModel.dll",
+            "sha256": "2385bfbc9344e03acb2ff44f1ed21a3770fbafdf1ba4be2dbcacd42027b8c3bd"
+          },
+          "Newtonsoft.Json.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/Newtonsoft.Json.dll",
+            "sha256": "22c649f75fce5be7c7ccda8880473b634ef69ecf33f5d1ab8ad892caf47d5a07"
+          },
+          "Npgsql.EntityFrameworkCore.PostgreSQL.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/Npgsql.EntityFrameworkCore.PostgreSQL.dll",
+            "sha256": "0b8ca4484e12f1cd119fc6b4711015ba6ce2364f9890504f6f4f13036c2075bf"
+          },
+          "Npgsql.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/Npgsql.dll",
+            "sha256": "9d8db086e9eda5ff20c4a7f83fa3eae7689198f57277ff9ceea1ee3526f5fcf8"
+          },
+          "NuGet.Common.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/NuGet.Common.dll",
+            "sha256": "c863232a273017d8a82a8bfe058c1ccc95322e2e5076b2138c78112ab63eca5b"
+          },
+          "NuGet.Configuration.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/NuGet.Configuration.dll",
+            "sha256": "6566f9cc2a6db2052caab346a53ae89f178ded40c1384bc4441dbe2224d6a5ab"
+          },
+          "NuGet.Frameworks.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/NuGet.Frameworks.dll",
+            "sha256": "52c4e004a50f6e0552ae73843cff4d68f05c94531287f8fa3da78283166b1949"
+          },
+          "NuGet.Packaging.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/NuGet.Packaging.dll",
+            "sha256": "80fb5126f79664c8ad628f18041cb13d2c887b071edc9d8b353b14af24bc59d1"
+          },
+          "NuGet.Versioning.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/NuGet.Versioning.dll",
+            "sha256": "fc2f75a7a5f3be9b4c3dcfc21644b871bb5a41ada8615c92d778713d2a310670"
+          },
+          "Rules.PackageProbe": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/Rules.PackageProbe",
+            "sha256": "3b07eb31ae3f04ce9db0d37f663613eaaf60246706cb2e96984c51e779667f97"
+          },
+          "Rules.PackageProbe.deps.json": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/Rules.PackageProbe.deps.json",
+            "sha256": "67c0eabbe6ab99f074f5f25a75604d204adbf4b3044ddce9d4e39d36006e5f64"
+          },
+          "Rules.PackageProbe.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/Rules.PackageProbe.dll",
+            "sha256": "d91edcda0769a754a1615187780af4c437943909f2900a92e55e1f3e37eb37c8"
+          },
+          "Rules.PackageProbe.pdb": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/Rules.PackageProbe.pdb",
+            "sha256": "2b4d258f19da6edfae484415522ac15a3bd57a05aeda9e7a972af462dc8c366a"
+          },
+          "Rules.PackageProbe.runtimeconfig.json": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/Rules.PackageProbe.runtimeconfig.json",
+            "sha256": "bdbb6b43e509fbbab6c78b7004c4debf1e9791a648a08f730ff5997f71ef7099"
+          },
+          "SQLitePCLRaw.batteries_v2.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/SQLitePCLRaw.batteries_v2.dll",
+            "sha256": "94ac800c6b93ae50a025f247547781debe18391110667c5e242f51d8ac188ffb"
+          },
+          "SQLitePCLRaw.core.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/SQLitePCLRaw.core.dll",
+            "sha256": "3d2ed8e186f124f988ebdb45d0354185b424357be2433bba0033ab9ec31bd25b"
+          },
+          "SQLitePCLRaw.provider.e_sqlite3.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/SQLitePCLRaw.provider.e_sqlite3.dll",
+            "sha256": "232990c8372aff30574eef9cc280b486ee6f39f8a66f83ea495dd0dbae98740c"
+          },
+          "System.Security.Cryptography.ProtectedData.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/System.Security.Cryptography.ProtectedData.dll",
+            "sha256": "5e04d6cff3b6fe9706908970cd594861f0c08b3824f7827b2331b5f4fcee1bd1"
+          },
+          "elsa.rules.deployment-receipt.json": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/elsa.rules.deployment-receipt.json",
+            "sha256": "d45277ecf40d516042cb746f4bad385a14790e2056a532ef75ed5e16b1dbd95d"
+          },
+          "runtimes/browser-wasm/nativeassets/net9.0/e_sqlite3.a": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/runtimes/browser-wasm/nativeassets/net9.0/e_sqlite3.a",
+            "sha256": "419622488300b7a26e21bc11e76a3e161e80440a22fa4c0519aa6cbac71fcb10"
+          },
+          "runtimes/linux-arm/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/runtimes/linux-arm/native/libe_sqlite3.so",
+            "sha256": "de29ad722adc039f3a3a08fe222ed2bb46948a4acefeaeda86fc57d8ab7edc24"
+          },
+          "runtimes/linux-arm64/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/runtimes/linux-arm64/native/libe_sqlite3.so",
+            "sha256": "3d73c00244173f89bd264d9605e7753ffef8336f487b4ff059ef027261c5d623"
+          },
+          "runtimes/linux-armel/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/runtimes/linux-armel/native/libe_sqlite3.so",
+            "sha256": "83863b2c9dce8b1e4da72a3818025dee6506653149daad14c9bb81b5293baba1"
+          },
+          "runtimes/linux-mips64/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/runtimes/linux-mips64/native/libe_sqlite3.so",
+            "sha256": "31ab04e827923a286649fb060b05cb5020e393a7abe542ceadc60735df090f93"
+          },
+          "runtimes/linux-musl-arm/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/runtimes/linux-musl-arm/native/libe_sqlite3.so",
+            "sha256": "635afd4379650f7bc2599ab2b6606ad6bac44fefc0f2c09018d20d0e1f828593"
+          },
+          "runtimes/linux-musl-arm64/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/runtimes/linux-musl-arm64/native/libe_sqlite3.so",
+            "sha256": "18468c67541ae7cacf359968fb7427d57978cf0a903ffb42708aae6360d9782c"
+          },
+          "runtimes/linux-musl-riscv64/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/runtimes/linux-musl-riscv64/native/libe_sqlite3.so",
+            "sha256": "06a2faceb613b95e291cbe84a3ec2550e1ae69ffe65b9783fcf557888f2995c1"
+          },
+          "runtimes/linux-musl-s390x/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/runtimes/linux-musl-s390x/native/libe_sqlite3.so",
+            "sha256": "02a3d327c3746c0e9883e4d2203d5e5311c3d98d3755ddd3d7670becf7cd4f8d"
+          },
+          "runtimes/linux-musl-x64/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/runtimes/linux-musl-x64/native/libe_sqlite3.so",
+            "sha256": "24868846aa49e7d030908d44051a7ecec0e1315524e92bc21a5f6dda816790f6"
+          },
+          "runtimes/linux-ppc64le/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/runtimes/linux-ppc64le/native/libe_sqlite3.so",
+            "sha256": "ccffec6414fb012c4e52326172ba50006a845f67962d8612cec48790acaa3d13"
+          },
+          "runtimes/linux-riscv64/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/runtimes/linux-riscv64/native/libe_sqlite3.so",
+            "sha256": "a10ee61703cc90a6069b919f39e12b95bee072210bcf82cb49c119ecb61485f0"
+          },
+          "runtimes/linux-s390x/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/runtimes/linux-s390x/native/libe_sqlite3.so",
+            "sha256": "547b6553a9ad65b214366b4372637b772265388a8ce0d7d3eb75995783a69611"
+          },
+          "runtimes/linux-x64/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/runtimes/linux-x64/native/libe_sqlite3.so",
+            "sha256": "965400c23fde16a19d000c1c6062af577f048410f85253a793f569d5520daaad"
+          },
+          "runtimes/linux-x86/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/runtimes/linux-x86/native/libe_sqlite3.so",
+            "sha256": "a9382cc28bcf354d15f0b6d392db0dbc9b3dcca1756f11b18d209dc357bc5f66"
+          },
+          "runtimes/maccatalyst-arm64/native/libe_sqlite3.dylib": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/runtimes/maccatalyst-arm64/native/libe_sqlite3.dylib",
+            "sha256": "2d1b982eadaae830abdc9edba3ccbe77036342b19ae00117b96136a6e122d84a"
+          },
+          "runtimes/maccatalyst-x64/native/libe_sqlite3.dylib": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/runtimes/maccatalyst-x64/native/libe_sqlite3.dylib",
+            "sha256": "2bdb87f40497aa0d744835ae43f948586ff6e8df861c9fbf7be29b7f3fed6b39"
+          },
+          "runtimes/osx-arm64/native/libe_sqlite3.dylib": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/runtimes/osx-arm64/native/libe_sqlite3.dylib",
+            "sha256": "bea557311c6ef51eb6a69834dbd7a4e1ebd9d3654790cf311d942bf6a6ade0a2"
+          },
+          "runtimes/osx-x64/native/libe_sqlite3.dylib": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/runtimes/osx-x64/native/libe_sqlite3.dylib",
+            "sha256": "858192f4089b1e643a8b972100e71e17fb83dea0c352d9f161684f6dcb69034a"
+          },
+          "runtimes/win-arm/native/e_sqlite3.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/runtimes/win-arm/native/e_sqlite3.dll",
+            "sha256": "2ff400c5bbfd7d08b393eccdc9e0065b525f7fe5ff790b17779d3892bb1de66d"
+          },
+          "runtimes/win-arm64/native/e_sqlite3.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/runtimes/win-arm64/native/e_sqlite3.dll",
+            "sha256": "d28ff71188b00e30489bb7bef15dd2ebc2fded92fd9cd8af97ce222d5cfa4c61"
+          },
+          "runtimes/win-x64/native/e_sqlite3.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/runtimes/win-x64/native/e_sqlite3.dll",
+            "sha256": "4dcbb2ad197d893355efa004257e048f2c850feb1078158f4baab0f7b53ac45f"
+          },
+          "runtimes/win-x86/native/e_sqlite3.dll": {
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/runtimes/win-x86/native/e_sqlite3.dll",
+            "sha256": "d067d9e40d4bc93df3d142e19cd3a92ebae865d245e7335020478929489d5c8f"
+          }
+        },
+        "deploymentReceiptPath": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/elsa.rules.deployment-receipt.json",
+        "deploymentReceiptSha256": "d45277ecf40d516042cb746f4bad385a14790e2056a532ef75ed5e16b1dbd95d",
+        "directEvidencePath": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/direct.json",
+        "directEvidenceSha256": "c10b56f26ec9f87843b0bab2cd0be9f3d1683854b73e8bc125685a4ec0143fd0",
+        "directPinHash": "91acd90a5642f2006c9811960c82af55d350ed92d7444b6b41cb6e47e1ea8bf9",
+        "executable": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/Rules.PackageProbe.dll",
+        "feedDirectory": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/feed",
+        "label": "baseline",
+        "publishStateCommit": "eb3e12531b0cbd594374df1e49df0fadef9a50f3",
+        "publishStateCommitValue": "eb3e12531b0cbd594374df1e49df0fadef9a50f3",
+        "reusedPackReceipt": {
+          "path": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/receipt.json",
+          "sha256": "c2798681181f3bdbb960563e93013bf11aaae55b8b96b4f145607ebeddd072f1"
+        },
+        "runDirectory": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556",
+        "runReceiptSha256": "425d1f9734442aeb7398e60505ff2e35af9b6c6486c3942cec97263f4169c82e",
+        "runtimeAssetSha256": "68ede24989228f7a9146958665ab79b04ad28aba92e7a703f7579d37a9ba5c6b",
+        "sourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+        "stage": "runtime",
+        "trustedAssets": [
+          {
+            "deployedSha256": "1a2940d02fc187302ad7d79216ea92459e5ab43366e0db2420cea5fde27650bd",
+            "packageId": "Elsa.Rules.Core",
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/Elsa.Rules.Core.dll",
+            "receiptSha256": "1a2940d02fc187302ad7d79216ea92459e5ab43366e0db2420cea5fde27650bd"
+          },
+          {
+            "deployedSha256": "c149ad996657c4bb49886bb6fb62d923b2d3c42608b9b8f43026d19826bfa255",
+            "packageId": "Elsa.Rules.Persistence.Core",
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/Elsa.Rules.Persistence.Core.dll",
+            "receiptSha256": "c149ad996657c4bb49886bb6fb62d923b2d3c42608b9b8f43026d19826bfa255"
+          },
+          {
+            "deployedSha256": "68ede24989228f7a9146958665ab79b04ad28aba92e7a703f7579d37a9ba5c6b",
+            "packageId": "Elsa.Rules.Runtime",
+            "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/deployment/Elsa.Rules.Runtime.dll",
+            "receiptSha256": "68ede24989228f7a9146958665ab79b04ad28aba92e7a703f7579d37a9ba5c6b"
+          }
+        ],
+        "trustedPin": {
+          "languageId": "elsa.rules.finite-positive",
+          "languageVersion": 1,
+          "packages": [
+            {
+              "assets": [
+                {
+                  "assembly": "Elsa.Rules.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                  "path": "lib/net10.0/Elsa.Rules.Core.dll",
+                  "sha256": "1a2940d02fc187302ad7d79216ea92459e5ab43366e0db2420cea5fde27650bd"
+                }
+              ],
+              "contentHash": "ZDlOpz1D8ZarEmVMQ9rGcK5iEW1P/j+JVdy6epfsM+8/e1d+ETXhX3Pe8wavZmK7K/JHUZz/aB902aPN6y+8Ag==",
+              "id": "Elsa.Rules.Core",
+              "version": "4.0.0-branch-agent-codex-3181-durable-rules"
+            },
+            {
+              "assets": [
+                {
+                  "assembly": "Elsa.Rules.Persistence.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                  "path": "lib/net10.0/Elsa.Rules.Persistence.Core.dll",
+                  "sha256": "c149ad996657c4bb49886bb6fb62d923b2d3c42608b9b8f43026d19826bfa255"
+                }
+              ],
+              "contentHash": "TXFKK0SepUyOP0BLMO12GKyJXZ4V5TNUpA6X5egOjTlGEAnPPHPF6+ZfiGpgnxpyJydkpyTU7CKpGurSGP+PkQ==",
+              "id": "Elsa.Rules.Persistence.Core",
+              "version": "4.0.0-branch-agent-codex-3181-durable-rules"
+            },
+            {
+              "assets": [
+                {
+                  "assembly": "Elsa.Rules.Runtime, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                  "path": "lib/net10.0/Elsa.Rules.Runtime.dll",
+                  "sha256": "68ede24989228f7a9146958665ab79b04ad28aba92e7a703f7579d37a9ba5c6b"
+                }
+              ],
+              "contentHash": "mxx7s4JzH10fYL/7azdzBEOAIx/ntS10FG4hXXzy1475sA5RpV+b8+0f97g5IkgV+W9lU+5U75D82a5ezdvVEA==",
+              "id": "Elsa.Rules.Runtime",
+              "version": "4.0.0-branch-agent-codex-3181-durable-rules"
+            }
+          ],
+          "pinSchemaVersion": 1,
+          "receiptSchemaVersion": 1,
+          "stateSchemaVersion": 1
+        }
+      },
+      "commonSchemas": {
+        "languageId": "elsa.rules.finite-positive",
+        "languageVersion": 1,
+        "pinSchemaVersion": 1,
+        "receiptSchemaVersion": 1,
+        "stateSchemaVersion": 1
+      },
+      "distinctLoadedPinHashes": [
+        "91acd90a5642f2006c9811960c82af55d350ed92d7444b6b41cb6e47e1ea8bf9",
+        "d466bdc6fa9835e2f4d4b7f4cf87e0147e8c5f364d0d9dd182393b4288f5b7c5"
+      ],
+      "distinctRuntimeAssetSha256": [
+        "68ede24989228f7a9146958665ab79b04ad28aba92e7a703f7579d37a9ba5c6b",
+        "d4ecf4d9c37c73418a84aab8b47907ea92fdbcc6276ba29e582df3b77db00ebc"
+      ],
+      "distinctSourceCommits": true,
+      "samePublishStateCommit": "eb3e12531b0cbd594374df1e49df0fadef9a50f3",
+      "successor": {
+        "deploymentDirectory": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment",
+        "deploymentFiles": {
+          "CShells.Abstractions.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/CShells.Abstractions.dll",
+            "sha256": "dbcf0e5d572791124ac582e3a10519d80f01b9f2e4228cffadb61171f796b5a0"
+          },
+          "CShells.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/CShells.dll",
+            "sha256": "b0afda775aa0c330f982856ebfaeb461c7ea1c5d201998351ba7ca105f69ebc0"
+          },
+          "Elsa.Persistence.EntityFramework.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/Elsa.Persistence.EntityFramework.dll",
+            "sha256": "753fd07954c96426b5d01bac41b5f87b7222f73cb3c683097dfbc01fa83150f3"
+          },
+          "Elsa.Persistence.Schema.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/Elsa.Persistence.Schema.dll",
+            "sha256": "02a25edcfa961fa36d5489a32575cfdc1b7de8291dfe2ab56f756deb7acc41ed"
+          },
+          "Elsa.Primitives.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/Elsa.Primitives.dll",
+            "sha256": "f375a3e6542fbdf447b18fac3837469c25966952d1d7ffcd483414fda843dd21"
+          },
+          "Elsa.Rules.Core.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/Elsa.Rules.Core.dll",
+            "sha256": "0414e68c2a5111f0b4ba5b4763f43a384d9cd93e2b6b76e486bf52af04fa492f"
+          },
+          "Elsa.Rules.Persistence.Core.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/Elsa.Rules.Persistence.Core.dll",
+            "sha256": "59a13b2df9a1bae177a31f04a58aa30a6868a90795725f8ce3ead44a66f2561e"
+          },
+          "Elsa.Rules.Persistence.EntityFrameworkCore.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/Elsa.Rules.Persistence.EntityFrameworkCore.dll",
+            "sha256": "6e6b8dd2126d6021fe4b900609af0f255468051dbfb8a05b24a17adeb5ad1275"
+          },
+          "Elsa.Rules.Runtime.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/Elsa.Rules.Runtime.dll",
+            "sha256": "d4ecf4d9c37c73418a84aab8b47907ea92fdbcc6276ba29e582df3b77db00ebc"
+          },
+          "Elsa.Tasks.Core.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/Elsa.Tasks.Core.dll",
+            "sha256": "5e6b65cf0be2fcd4b01dce3f4fea01e7bb9c0d1992ea5eac8d6c69f62c0f570d"
+          },
+          "JetBrains.Annotations.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/JetBrains.Annotations.dll",
+            "sha256": "8f2c837af3f4f61b1726a2e67eafcf5bae23debd9e1de425bb5ce1d4837508d6"
+          },
+          "Microsoft.Data.Sqlite.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/Microsoft.Data.Sqlite.dll",
+            "sha256": "1078d41c6c0f2cee48a8b706e3a54ce145705993f19f703d2b3bdf2abcc59088"
+          },
+          "Microsoft.EntityFrameworkCore.Abstractions.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/Microsoft.EntityFrameworkCore.Abstractions.dll",
+            "sha256": "98c8252995283ef0884b904dbab03696ca7f71a05b8dde34dace5eeb9bf4382c"
+          },
+          "Microsoft.EntityFrameworkCore.Relational.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/Microsoft.EntityFrameworkCore.Relational.dll",
+            "sha256": "ac1146e68d53d56b79e9473f68c557999de99674be392bbbbb02ae93a296b93e"
+          },
+          "Microsoft.EntityFrameworkCore.Sqlite.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/Microsoft.EntityFrameworkCore.Sqlite.dll",
+            "sha256": "b8c5027b27be2012094699cbd5260239778a1891dc5c1887797d331b67f0ef89"
+          },
+          "Microsoft.EntityFrameworkCore.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/Microsoft.EntityFrameworkCore.dll",
+            "sha256": "acb89dff050d681fab6f86d2175929471200b9bed66ac9321cbe6a17eaa26933"
+          },
+          "Microsoft.Extensions.DependencyModel.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/Microsoft.Extensions.DependencyModel.dll",
+            "sha256": "2385bfbc9344e03acb2ff44f1ed21a3770fbafdf1ba4be2dbcacd42027b8c3bd"
+          },
+          "Newtonsoft.Json.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/Newtonsoft.Json.dll",
+            "sha256": "22c649f75fce5be7c7ccda8880473b634ef69ecf33f5d1ab8ad892caf47d5a07"
+          },
+          "Npgsql.EntityFrameworkCore.PostgreSQL.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/Npgsql.EntityFrameworkCore.PostgreSQL.dll",
+            "sha256": "0b8ca4484e12f1cd119fc6b4711015ba6ce2364f9890504f6f4f13036c2075bf"
+          },
+          "Npgsql.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/Npgsql.dll",
+            "sha256": "9d8db086e9eda5ff20c4a7f83fa3eae7689198f57277ff9ceea1ee3526f5fcf8"
+          },
+          "NuGet.Common.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/NuGet.Common.dll",
+            "sha256": "c863232a273017d8a82a8bfe058c1ccc95322e2e5076b2138c78112ab63eca5b"
+          },
+          "NuGet.Configuration.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/NuGet.Configuration.dll",
+            "sha256": "6566f9cc2a6db2052caab346a53ae89f178ded40c1384bc4441dbe2224d6a5ab"
+          },
+          "NuGet.Frameworks.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/NuGet.Frameworks.dll",
+            "sha256": "52c4e004a50f6e0552ae73843cff4d68f05c94531287f8fa3da78283166b1949"
+          },
+          "NuGet.Packaging.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/NuGet.Packaging.dll",
+            "sha256": "80fb5126f79664c8ad628f18041cb13d2c887b071edc9d8b353b14af24bc59d1"
+          },
+          "NuGet.Versioning.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/NuGet.Versioning.dll",
+            "sha256": "fc2f75a7a5f3be9b4c3dcfc21644b871bb5a41ada8615c92d778713d2a310670"
+          },
+          "Rules.PackageProbe": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/Rules.PackageProbe",
+            "sha256": "3b07eb31ae3f04ce9db0d37f663613eaaf60246706cb2e96984c51e779667f97"
+          },
+          "Rules.PackageProbe.deps.json": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/Rules.PackageProbe.deps.json",
+            "sha256": "bb405ab649d37b545752b9697c06f77c7039cf6ce7a1ce7d8d9dd4ece5a937c5"
+          },
+          "Rules.PackageProbe.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/Rules.PackageProbe.dll",
+            "sha256": "4a797bdc550e8262e1a2fe690c5a1c87a90c5b1a4fbffdf60a42617ad0c31ec5"
+          },
+          "Rules.PackageProbe.pdb": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/Rules.PackageProbe.pdb",
+            "sha256": "75f1d3ecfdb22c654245c40d52196a2937bcc8aa7a204e5694ddac3d20438575"
+          },
+          "Rules.PackageProbe.runtimeconfig.json": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/Rules.PackageProbe.runtimeconfig.json",
+            "sha256": "bdbb6b43e509fbbab6c78b7004c4debf1e9791a648a08f730ff5997f71ef7099"
+          },
+          "SQLitePCLRaw.batteries_v2.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/SQLitePCLRaw.batteries_v2.dll",
+            "sha256": "94ac800c6b93ae50a025f247547781debe18391110667c5e242f51d8ac188ffb"
+          },
+          "SQLitePCLRaw.core.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/SQLitePCLRaw.core.dll",
+            "sha256": "3d2ed8e186f124f988ebdb45d0354185b424357be2433bba0033ab9ec31bd25b"
+          },
+          "SQLitePCLRaw.provider.e_sqlite3.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/SQLitePCLRaw.provider.e_sqlite3.dll",
+            "sha256": "232990c8372aff30574eef9cc280b486ee6f39f8a66f83ea495dd0dbae98740c"
+          },
+          "System.Security.Cryptography.ProtectedData.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/System.Security.Cryptography.ProtectedData.dll",
+            "sha256": "5e04d6cff3b6fe9706908970cd594861f0c08b3824f7827b2331b5f4fcee1bd1"
+          },
+          "elsa.rules.deployment-receipt.json": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/elsa.rules.deployment-receipt.json",
+            "sha256": "30ba47a0ff8b0ee8527f19823c97668df51f801097a45cd94d0dd10b4871d9fd"
+          },
+          "runtimes/browser-wasm/nativeassets/net9.0/e_sqlite3.a": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/runtimes/browser-wasm/nativeassets/net9.0/e_sqlite3.a",
+            "sha256": "419622488300b7a26e21bc11e76a3e161e80440a22fa4c0519aa6cbac71fcb10"
+          },
+          "runtimes/linux-arm/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/runtimes/linux-arm/native/libe_sqlite3.so",
+            "sha256": "de29ad722adc039f3a3a08fe222ed2bb46948a4acefeaeda86fc57d8ab7edc24"
+          },
+          "runtimes/linux-arm64/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/runtimes/linux-arm64/native/libe_sqlite3.so",
+            "sha256": "3d73c00244173f89bd264d9605e7753ffef8336f487b4ff059ef027261c5d623"
+          },
+          "runtimes/linux-armel/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/runtimes/linux-armel/native/libe_sqlite3.so",
+            "sha256": "83863b2c9dce8b1e4da72a3818025dee6506653149daad14c9bb81b5293baba1"
+          },
+          "runtimes/linux-mips64/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/runtimes/linux-mips64/native/libe_sqlite3.so",
+            "sha256": "31ab04e827923a286649fb060b05cb5020e393a7abe542ceadc60735df090f93"
+          },
+          "runtimes/linux-musl-arm/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/runtimes/linux-musl-arm/native/libe_sqlite3.so",
+            "sha256": "635afd4379650f7bc2599ab2b6606ad6bac44fefc0f2c09018d20d0e1f828593"
+          },
+          "runtimes/linux-musl-arm64/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/runtimes/linux-musl-arm64/native/libe_sqlite3.so",
+            "sha256": "18468c67541ae7cacf359968fb7427d57978cf0a903ffb42708aae6360d9782c"
+          },
+          "runtimes/linux-musl-riscv64/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/runtimes/linux-musl-riscv64/native/libe_sqlite3.so",
+            "sha256": "06a2faceb613b95e291cbe84a3ec2550e1ae69ffe65b9783fcf557888f2995c1"
+          },
+          "runtimes/linux-musl-s390x/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/runtimes/linux-musl-s390x/native/libe_sqlite3.so",
+            "sha256": "02a3d327c3746c0e9883e4d2203d5e5311c3d98d3755ddd3d7670becf7cd4f8d"
+          },
+          "runtimes/linux-musl-x64/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/runtimes/linux-musl-x64/native/libe_sqlite3.so",
+            "sha256": "24868846aa49e7d030908d44051a7ecec0e1315524e92bc21a5f6dda816790f6"
+          },
+          "runtimes/linux-ppc64le/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/runtimes/linux-ppc64le/native/libe_sqlite3.so",
+            "sha256": "ccffec6414fb012c4e52326172ba50006a845f67962d8612cec48790acaa3d13"
+          },
+          "runtimes/linux-riscv64/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/runtimes/linux-riscv64/native/libe_sqlite3.so",
+            "sha256": "a10ee61703cc90a6069b919f39e12b95bee072210bcf82cb49c119ecb61485f0"
+          },
+          "runtimes/linux-s390x/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/runtimes/linux-s390x/native/libe_sqlite3.so",
+            "sha256": "547b6553a9ad65b214366b4372637b772265388a8ce0d7d3eb75995783a69611"
+          },
+          "runtimes/linux-x64/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/runtimes/linux-x64/native/libe_sqlite3.so",
+            "sha256": "965400c23fde16a19d000c1c6062af577f048410f85253a793f569d5520daaad"
+          },
+          "runtimes/linux-x86/native/libe_sqlite3.so": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/runtimes/linux-x86/native/libe_sqlite3.so",
+            "sha256": "a9382cc28bcf354d15f0b6d392db0dbc9b3dcca1756f11b18d209dc357bc5f66"
+          },
+          "runtimes/maccatalyst-arm64/native/libe_sqlite3.dylib": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/runtimes/maccatalyst-arm64/native/libe_sqlite3.dylib",
+            "sha256": "2d1b982eadaae830abdc9edba3ccbe77036342b19ae00117b96136a6e122d84a"
+          },
+          "runtimes/maccatalyst-x64/native/libe_sqlite3.dylib": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/runtimes/maccatalyst-x64/native/libe_sqlite3.dylib",
+            "sha256": "2bdb87f40497aa0d744835ae43f948586ff6e8df861c9fbf7be29b7f3fed6b39"
+          },
+          "runtimes/osx-arm64/native/libe_sqlite3.dylib": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/runtimes/osx-arm64/native/libe_sqlite3.dylib",
+            "sha256": "bea557311c6ef51eb6a69834dbd7a4e1ebd9d3654790cf311d942bf6a6ade0a2"
+          },
+          "runtimes/osx-x64/native/libe_sqlite3.dylib": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/runtimes/osx-x64/native/libe_sqlite3.dylib",
+            "sha256": "858192f4089b1e643a8b972100e71e17fb83dea0c352d9f161684f6dcb69034a"
+          },
+          "runtimes/win-arm/native/e_sqlite3.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/runtimes/win-arm/native/e_sqlite3.dll",
+            "sha256": "2ff400c5bbfd7d08b393eccdc9e0065b525f7fe5ff790b17779d3892bb1de66d"
+          },
+          "runtimes/win-arm64/native/e_sqlite3.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/runtimes/win-arm64/native/e_sqlite3.dll",
+            "sha256": "d28ff71188b00e30489bb7bef15dd2ebc2fded92fd9cd8af97ce222d5cfa4c61"
+          },
+          "runtimes/win-x64/native/e_sqlite3.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/runtimes/win-x64/native/e_sqlite3.dll",
+            "sha256": "4dcbb2ad197d893355efa004257e048f2c850feb1078158f4baab0f7b53ac45f"
+          },
+          "runtimes/win-x86/native/e_sqlite3.dll": {
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/runtimes/win-x86/native/e_sqlite3.dll",
+            "sha256": "d067d9e40d4bc93df3d142e19cd3a92ebae865d245e7335020478929489d5c8f"
+          }
+        },
+        "deploymentReceiptPath": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/elsa.rules.deployment-receipt.json",
+        "deploymentReceiptSha256": "30ba47a0ff8b0ee8527f19823c97668df51f801097a45cd94d0dd10b4871d9fd",
+        "directEvidencePath": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/direct.json",
+        "directEvidenceSha256": "5640f371d140b6200b6b08801957d18b7a6110d412a26e3f01ef595d877931da",
+        "directPinHash": "d466bdc6fa9835e2f4d4b7f4cf87e0147e8c5f364d0d9dd182393b4288f5b7c5",
+        "executable": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/Rules.PackageProbe.dll",
+        "feedDirectory": "/private/tmp/rules-upgrade-successor-pack/run-0a3e4b03ddb14899acd2f1fc9a8495be/feed",
+        "label": "successor",
+        "publishStateCommit": "eb3e12531b0cbd594374df1e49df0fadef9a50f3",
+        "publishStateCommitValue": "eb3e12531b0cbd594374df1e49df0fadef9a50f3",
+        "reusedPackReceipt": {
+          "path": "/private/tmp/rules-upgrade-successor-pack/run-0a3e4b03ddb14899acd2f1fc9a8495be/receipt.json",
+          "sha256": "5c32f4568c6dee6d630555a525596973179335146368997be5a10828ec28975e"
+        },
+        "runDirectory": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6",
+        "runReceiptSha256": "3bfcc7d77d81329733cf926dd5c41663fc655e6bfb5f02d0d7a69891493140a0",
+        "runtimeAssetSha256": "d4ecf4d9c37c73418a84aab8b47907ea92fdbcc6276ba29e582df3b77db00ebc",
+        "sourceCommit": "6f8a6f9d5c81794f1cf67b34143cb923f5c3e4a9",
+        "stage": "runtime",
+        "trustedAssets": [
+          {
+            "deployedSha256": "0414e68c2a5111f0b4ba5b4763f43a384d9cd93e2b6b76e486bf52af04fa492f",
+            "packageId": "Elsa.Rules.Core",
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/Elsa.Rules.Core.dll",
+            "receiptSha256": "0414e68c2a5111f0b4ba5b4763f43a384d9cd93e2b6b76e486bf52af04fa492f"
+          },
+          {
+            "deployedSha256": "59a13b2df9a1bae177a31f04a58aa30a6868a90795725f8ce3ead44a66f2561e",
+            "packageId": "Elsa.Rules.Persistence.Core",
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/Elsa.Rules.Persistence.Core.dll",
+            "receiptSha256": "59a13b2df9a1bae177a31f04a58aa30a6868a90795725f8ce3ead44a66f2561e"
+          },
+          {
+            "deployedSha256": "d4ecf4d9c37c73418a84aab8b47907ea92fdbcc6276ba29e582df3b77db00ebc",
+            "packageId": "Elsa.Rules.Runtime",
+            "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/deployment/Elsa.Rules.Runtime.dll",
+            "receiptSha256": "d4ecf4d9c37c73418a84aab8b47907ea92fdbcc6276ba29e582df3b77db00ebc"
+          }
+        ],
+        "trustedPin": {
+          "languageId": "elsa.rules.finite-positive",
+          "languageVersion": 1,
+          "packages": [
+            {
+              "assets": [
+                {
+                  "assembly": "Elsa.Rules.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                  "path": "lib/net10.0/Elsa.Rules.Core.dll",
+                  "sha256": "0414e68c2a5111f0b4ba5b4763f43a384d9cd93e2b6b76e486bf52af04fa492f"
+                }
+              ],
+              "contentHash": "gPzl3avusCXqZQIDOG42pAGILPgrCysbuTD36h540T7JDDmu4eDJeKsUCi1UQZnoPtdG4HW3p4+bXdIiJKa96A==",
+              "id": "Elsa.Rules.Core",
+              "version": "4.0.0-branch-agent-codex-3181-durable-rules"
+            },
+            {
+              "assets": [
+                {
+                  "assembly": "Elsa.Rules.Persistence.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                  "path": "lib/net10.0/Elsa.Rules.Persistence.Core.dll",
+                  "sha256": "59a13b2df9a1bae177a31f04a58aa30a6868a90795725f8ce3ead44a66f2561e"
+                }
+              ],
+              "contentHash": "eOpz8SjvjMFKTpMr85n41zS+NsU8kP59ujATsq8VQ6XAL/wykAmRDZcqV1HSHi7wFp0vpGKO1FL8R1dxaQlYAw==",
+              "id": "Elsa.Rules.Persistence.Core",
+              "version": "4.0.0-branch-agent-codex-3181-durable-rules"
+            },
+            {
+              "assets": [
+                {
+                  "assembly": "Elsa.Rules.Runtime, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                  "path": "lib/net10.0/Elsa.Rules.Runtime.dll",
+                  "sha256": "d4ecf4d9c37c73418a84aab8b47907ea92fdbcc6276ba29e582df3b77db00ebc"
+                }
+              ],
+              "contentHash": "pzkfo5OaH1VFmPXvAsD1xbndK76nemY/tv/5UHmpeC4gYmdAZ/KWsPkQczLU8RIzTZ6bpnNCXcxU2iy5vGylvA==",
+              "id": "Elsa.Rules.Runtime",
+              "version": "4.0.0-branch-agent-codex-3181-durable-rules"
+            }
+          ],
+          "pinSchemaVersion": 1,
+          "receiptSchemaVersion": 1,
+          "stateSchemaVersion": 1
+        }
+      }
+    },
+    "evidenceDirectory": "/private/tmp/rules-retained-upgrade-final/upgrade/run-074b8b46562441e58cb9ba87a87172ae",
+    "fullAcceptancePassed": false,
+    "harnessSourceSha256": {
+      "tools/rules/package_adversarial.py": "411ea8d9a7f5bfaf279339e5807d6532b86ee8a76a16aba19e23544365ffc832",
+      "tools/rules/package_upgrade.py": "f22c91b8f0cf0816dacebd711eaf47ebe1ac49bafcb51e484b67c81fc03ad3c4"
+    },
+    "harnessUnchanged": true,
+    "isolatedRuntimeEnvironments": {
+      "baseline": {
+        "nugetHttpCache": "/private/tmp/rules-retained-upgrade-final/upgrade/run-074b8b46562441e58cb9ba87a87172ae/host-environments/baseline/nuget-http-cache",
+        "nugetPackages": "/private/tmp/rules-retained-upgrade-final/upgrade/run-074b8b46562441e58cb9ba87a87172ae/host-environments/baseline/nuget-packages"
+      },
+      "successor": {
+        "nugetHttpCache": "/private/tmp/rules-retained-upgrade-final/upgrade/run-074b8b46562441e58cb9ba87a87172ae/host-environments/successor/nuget-http-cache",
+        "nugetPackages": "/private/tmp/rules-retained-upgrade-final/upgrade/run-074b8b46562441e58cb9ba87a87172ae/host-environments/successor/nuget-packages"
+      }
+    },
+    "ownedPostgresContainer": {
+      "cleanupAttempted": true,
+      "cleanupExitCode": 0,
+      "containerId": "e93a5e3c62fdbd957cefd824441386993c28d035d5512269515d1e214c1ede31",
+      "image": "postgres:16.15",
+      "imageId": "sha256:ed134ce8cc303c24d12c4bc6f5a2a43dc7ee7bbde8f67d9f60be5cc03206eab0",
+      "name": "rules-upgrade-258053845c1e47ffa9bffac5454e1e4e",
+      "removed": true
+    },
+    "passed": true,
+    "qualified": true,
+    "rollbackAdmissionPreflight": {
+      "acceptNewInvocations": false,
+      "command": "process-upgrade-admission",
+      "databaseEngine": "PostgreSQL",
+      "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+      "databaseName": "rules_upgrade_dc9924b8bcb34e779dcce4fd5711d309",
+      "exactAdmissionReplay": "Replay",
+      "freshAdmission": "Unavailable",
+      "freshLookup": "NotFound",
+      "installedPin": {
+        "languageId": "elsa.rules.finite-positive",
+        "languageVersion": 1,
+        "packages": [
+          {
+            "nuGetContentHash": "ZDlOpz1D8ZarEmVMQ9rGcK5iEW1P/j+JVdy6epfsM+8/e1d+ETXhX3Pe8wavZmK7K/JHUZz/aB902aPN6y+8Ag==",
+            "nuGetVersion": "4.0.0-branch-agent-codex-3181-durable-rules",
+            "packageId": "Elsa.Rules.Core",
+            "selectedAssets": [
+              {
+                "assemblyFullName": "Elsa.Rules.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                "assetSha256": "1a2940d02fc187302ad7d79216ea92459e5ab43366e0db2420cea5fde27650bd",
+                "packageRelativeAssetPath": "lib/net10.0/Elsa.Rules.Core.dll"
+              }
+            ]
+          },
+          {
+            "nuGetContentHash": "TXFKK0SepUyOP0BLMO12GKyJXZ4V5TNUpA6X5egOjTlGEAnPPHPF6+ZfiGpgnxpyJydkpyTU7CKpGurSGP+PkQ==",
+            "nuGetVersion": "4.0.0-branch-agent-codex-3181-durable-rules",
+            "packageId": "Elsa.Rules.Persistence.Core",
+            "selectedAssets": [
+              {
+                "assemblyFullName": "Elsa.Rules.Persistence.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                "assetSha256": "c149ad996657c4bb49886bb6fb62d923b2d3c42608b9b8f43026d19826bfa255",
+                "packageRelativeAssetPath": "lib/net10.0/Elsa.Rules.Persistence.Core.dll"
+              }
+            ]
+          },
+          {
+            "nuGetContentHash": "mxx7s4JzH10fYL/7azdzBEOAIx/ntS10FG4hXXzy1475sA5RpV+b8+0f97g5IkgV+W9lU+5U75D82a5ezdvVEA==",
+            "nuGetVersion": "4.0.0-branch-agent-codex-3181-durable-rules",
+            "packageId": "Elsa.Rules.Runtime",
+            "selectedAssets": [
+              {
+                "assemblyFullName": "Elsa.Rules.Runtime, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                "assetSha256": "68ede24989228f7a9146958665ab79b04ad28aba92e7a703f7579d37a9ba5c6b",
+                "packageRelativeAssetPath": "lib/net10.0/Elsa.Rules.Runtime.dll"
+              }
+            ]
+          }
+        ],
+        "pinSchemaVersion": 1,
+        "receiptSchemaVersion": 1,
+        "stateSchemaVersion": 1
+      },
+      "installedPinHash": "91acd90a5642f2006c9811960c82af55d350ed92d7444b6b41cb6e47e1ea8bf9",
+      "passed": true,
+      "processId": 19663,
+      "retainedInvocationFingerprint": "2ab0f801eb7ede8f640e4ddd320ebaceba2209b4d89db3b11476d3ca1945b2dc",
+      "retainedPinHash": "91acd90a5642f2006c9811960c82af55d350ed92d7444b6b41cb6e47e1ea8bf9",
+      "role": "rollback",
+      "snapshotAfterFreshAdmission": {
+        "facts": [
+          "left",
+          "right",
+          "seed"
+        ],
+        "rounds": [
+          {
+            "acceptedAttemptId": "a3ba02453d26427da150dfd8bfd17726",
+            "acceptedLeaseFence": 1,
+            "acceptedModelRevision": 2,
+            "acceptedWorkerId": "rules-f3a84aef892547f7b6301a7af2fca284",
+            "addedFactCount": 2,
+            "consumedModelRevision": 3,
+            "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+            "ordinal": 0,
+            "receiptId": "c9479b71bdff04e407829a50fb3d5b0749c60543bdb38a1dcd91db3f078c1963",
+            "semanticReceiptSha256": "23362503a3715498170b4af908b2f543427a84399fe1d10ff60a7416009433be"
+          }
+        ],
+        "terminalFacts": [],
+        "view": {
+          "artifactId": "rules:0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+          "artifactSha256": "0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+          "committedFactCount": 3,
+          "committedRounds": 1,
+          "fingerprint": {
+            "sha256": "2ab0f801eb7ede8f640e4ddd320ebaceba2209b4d89db3b11476d3ca1945b2dc"
+          },
+          "identity": {
+            "invocationId": "process-accepted-a4bd836836a549bcb5fee9af16939be2",
+            "scope": {
+              "persistencePartition": "packaged-rules-probe"
+            }
+          },
+          "implementationPinHash": "91acd90a5642f2006c9811960c82af55d350ed92d7444b6b41cb6e47e1ea8bf9",
+          "modelRevision": 3,
+          "status": 0
+        }
+      },
+      "snapshotAfterReplay": {
+        "facts": [
+          "left",
+          "right",
+          "seed"
+        ],
+        "rounds": [
+          {
+            "acceptedAttemptId": "a3ba02453d26427da150dfd8bfd17726",
+            "acceptedLeaseFence": 1,
+            "acceptedModelRevision": 2,
+            "acceptedWorkerId": "rules-f3a84aef892547f7b6301a7af2fca284",
+            "addedFactCount": 2,
+            "consumedModelRevision": 3,
+            "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+            "ordinal": 0,
+            "receiptId": "c9479b71bdff04e407829a50fb3d5b0749c60543bdb38a1dcd91db3f078c1963",
+            "semanticReceiptSha256": "23362503a3715498170b4af908b2f543427a84399fe1d10ff60a7416009433be"
+          }
+        ],
+        "terminalFacts": [],
+        "view": {
+          "artifactId": "rules:0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+          "artifactSha256": "0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+          "committedFactCount": 3,
+          "committedRounds": 1,
+          "fingerprint": {
+            "sha256": "2ab0f801eb7ede8f640e4ddd320ebaceba2209b4d89db3b11476d3ca1945b2dc"
+          },
+          "identity": {
+            "invocationId": "process-accepted-a4bd836836a549bcb5fee9af16939be2",
+            "scope": {
+              "persistencePartition": "packaged-rules-probe"
+            }
+          },
+          "implementationPinHash": "91acd90a5642f2006c9811960c82af55d350ed92d7444b6b41cb6e47e1ea8bf9",
+          "modelRevision": 3,
+          "status": 0
+        }
+      },
+      "snapshotBefore": {
+        "facts": [
+          "left",
+          "right",
+          "seed"
+        ],
+        "rounds": [
+          {
+            "acceptedAttemptId": "a3ba02453d26427da150dfd8bfd17726",
+            "acceptedLeaseFence": 1,
+            "acceptedModelRevision": 2,
+            "acceptedWorkerId": "rules-f3a84aef892547f7b6301a7af2fca284",
+            "addedFactCount": 2,
+            "consumedModelRevision": 3,
+            "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+            "ordinal": 0,
+            "receiptId": "c9479b71bdff04e407829a50fb3d5b0749c60543bdb38a1dcd91db3f078c1963",
+            "semanticReceiptSha256": "23362503a3715498170b4af908b2f543427a84399fe1d10ff60a7416009433be"
+          }
+        ],
+        "terminalFacts": [],
+        "view": {
+          "artifactId": "rules:0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+          "artifactSha256": "0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+          "committedFactCount": 3,
+          "committedRounds": 1,
+          "fingerprint": {
+            "sha256": "2ab0f801eb7ede8f640e4ddd320ebaceba2209b4d89db3b11476d3ca1945b2dc"
+          },
+          "identity": {
+            "invocationId": "process-accepted-a4bd836836a549bcb5fee9af16939be2",
+            "scope": {
+              "persistencePartition": "packaged-rules-probe"
+            }
+          },
+          "implementationPinHash": "91acd90a5642f2006c9811960c82af55d350ed92d7444b6b41cb6e47e1ea8bf9",
+          "modelRevision": 3,
+          "status": 0
+        }
+      },
+      "snapshotUnchanged": true,
+      "sourceProcessId": 19556,
+      "workerSuppressedForAdmissionSnapshot": true
+    },
+    "rollbackRecovery": {
+      "acceptNewInvocations": false,
+      "command": "process-upgrade-recover",
+      "committedRounds": 4,
+      "databaseEngine": "PostgreSQL",
+      "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+      "databaseName": "rules_upgrade_dc9924b8bcb34e779dcce4fd5711d309",
+      "designStorageUsed": false,
+      "exactAdmissionReplay": "Replay",
+      "finalFacts": [
+        "final",
+        "joined",
+        "left",
+        "right",
+        "seed"
+      ],
+      "freshAdmission": "Unavailable",
+      "freshLookup": "NotFound",
+      "invocationFingerprint": "2ab0f801eb7ede8f640e4ddd320ebaceba2209b4d89db3b11476d3ca1945b2dc",
+      "loadedImplementationPinHash": "91acd90a5642f2006c9811960c82af55d350ed92d7444b6b41cb6e47e1ea8bf9",
+      "machineName": "Sipkes-MacBook-Air",
+      "modelRevision": 9,
+      "originalProcessId": 19556,
+      "passed": true,
+      "processId": 19665,
+      "recoveredBoundary": "accepted",
+      "recoveredSnapshot": {
+        "facts": [
+          "final",
+          "joined",
+          "left",
+          "right",
+          "seed"
+        ],
+        "rounds": [
+          {
+            "acceptedAttemptId": "a3ba02453d26427da150dfd8bfd17726",
+            "acceptedLeaseFence": 1,
+            "acceptedModelRevision": 2,
+            "acceptedWorkerId": "rules-f3a84aef892547f7b6301a7af2fca284",
+            "addedFactCount": 2,
+            "consumedModelRevision": 3,
+            "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+            "ordinal": 0,
+            "receiptId": "c9479b71bdff04e407829a50fb3d5b0749c60543bdb38a1dcd91db3f078c1963",
+            "semanticReceiptSha256": "23362503a3715498170b4af908b2f543427a84399fe1d10ff60a7416009433be"
+          },
+          {
+            "acceptedAttemptId": "56ac3307c4fb43e1abc422123a3d2386",
+            "acceptedLeaseFence": 6,
+            "acceptedModelRevision": 4,
+            "acceptedWorkerId": "rules-07d52694a39b489a94bf25dfa8778fe7",
+            "addedFactCount": 1,
+            "consumedModelRevision": 5,
+            "inputStateSha256": "05e32593f4691aca87c7e3c2239c32d0539c2ca6365fb98dff891e2e5dde9d0b",
+            "ordinal": 1,
+            "receiptId": "383bef217cffc52b070837f1730faf1fc04d9eb85f4ca817bb7325dfffa2fb6c",
+            "semanticReceiptSha256": "b0f7c076632c7b2ead615e71224b598362150dae592a070cae0cdb1ecc4e9084"
+          },
+          {
+            "acceptedAttemptId": "217000742eb94fda9462484078b833ee",
+            "acceptedLeaseFence": 8,
+            "acceptedModelRevision": 6,
+            "acceptedWorkerId": "rules-07d52694a39b489a94bf25dfa8778fe7",
+            "addedFactCount": 1,
+            "consumedModelRevision": 7,
+            "inputStateSha256": "7b2fc38900c18542b35c8683ea0a105e58ee722295cb4a221aa05cf8ad9eb82b",
+            "ordinal": 2,
+            "receiptId": "cdf6a984f391c0f87e96169a9849014f174d017264a5b7df11c8b2ab25015153",
+            "semanticReceiptSha256": "39b351e2f8afe5f772097a745f7410cdb369b972843303625eea507bec5db4ec"
+          },
+          {
+            "acceptedAttemptId": "195fc9c29cc74ec99a51347103ab117c",
+            "acceptedLeaseFence": 10,
+            "acceptedModelRevision": 8,
+            "acceptedWorkerId": "rules-07d52694a39b489a94bf25dfa8778fe7",
+            "addedFactCount": 0,
+            "consumedModelRevision": 9,
+            "inputStateSha256": "5e970dd206181c41d95b534f7b76430392ef659db8521c660e2f67237eec4ccc",
+            "ordinal": 3,
+            "receiptId": "ea7271d2db22f88ce39e80b12a0302210a1042bffdcc5de8da9471608a64792b",
+            "semanticReceiptSha256": "d62bf2d42503188d32781701feb122c08d7174cf2c7e3979670051bed245485d"
+          }
+        ],
+        "terminal": {
+          "committedRounds": 4,
+          "finalFactsSha256": "5e970dd206181c41d95b534f7b76430392ef659db8521c660e2f67237eec4ccc",
+          "kind": 0,
+          "resultFacts": [
+            {
+              "atom": "final"
+            },
+            {
+              "atom": "joined"
+            },
+            {
+              "atom": "left"
+            },
+            {
+              "atom": "right"
+            },
+            {
+              "atom": "seed"
+            }
+          ],
+          "resultSchemaVersion": 1,
+          "terminalId": "a8a1246f22ca579a142cabea9adca78f6e45808e621cbba089d84d8583bb25ca"
+        },
+        "terminalFacts": [
+          "final",
+          "joined",
+          "left",
+          "right",
+          "seed"
+        ],
+        "view": {
+          "artifactId": "rules:0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+          "artifactSha256": "0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+          "committedFactCount": 5,
+          "committedRounds": 4,
+          "fingerprint": {
+            "sha256": "2ab0f801eb7ede8f640e4ddd320ebaceba2209b4d89db3b11476d3ca1945b2dc"
+          },
+          "identity": {
+            "invocationId": "process-accepted-a4bd836836a549bcb5fee9af16939be2",
+            "scope": {
+              "persistencePartition": "packaged-rules-probe"
+            }
+          },
+          "implementationPinHash": "91acd90a5642f2006c9811960c82af55d350ed92d7444b6b41cb6e47e1ea8bf9",
+          "modelRevision": 9,
+          "status": 1,
+          "terminalId": "a8a1246f22ca579a142cabea9adca78f6e45808e621cbba089d84d8583bb25ca",
+          "terminalKind": 0
+        }
+      },
+      "retainedImplementationPinHash": "91acd90a5642f2006c9811960c82af55d350ed92d7444b6b41cb6e47e1ea8bf9",
+      "roundHistory": [
+        {
+          "acceptedAttemptId": "a3ba02453d26427da150dfd8bfd17726",
+          "acceptedLeaseFence": 1,
+          "acceptedModelRevision": 2,
+          "acceptedWorkerId": "rules-f3a84aef892547f7b6301a7af2fca284",
+          "consumedModelRevision": 3,
+          "ordinal": 0,
+          "receiptId": "c9479b71bdff04e407829a50fb3d5b0749c60543bdb38a1dcd91db3f078c1963",
+          "semanticReceiptSha256": "23362503a3715498170b4af908b2f543427a84399fe1d10ff60a7416009433be"
+        },
+        {
+          "acceptedAttemptId": "56ac3307c4fb43e1abc422123a3d2386",
+          "acceptedLeaseFence": 6,
+          "acceptedModelRevision": 4,
+          "acceptedWorkerId": "rules-07d52694a39b489a94bf25dfa8778fe7",
+          "consumedModelRevision": 5,
+          "ordinal": 1,
+          "receiptId": "383bef217cffc52b070837f1730faf1fc04d9eb85f4ca817bb7325dfffa2fb6c",
+          "semanticReceiptSha256": "b0f7c076632c7b2ead615e71224b598362150dae592a070cae0cdb1ecc4e9084"
+        },
+        {
+          "acceptedAttemptId": "217000742eb94fda9462484078b833ee",
+          "acceptedLeaseFence": 8,
+          "acceptedModelRevision": 6,
+          "acceptedWorkerId": "rules-07d52694a39b489a94bf25dfa8778fe7",
+          "consumedModelRevision": 7,
+          "ordinal": 2,
+          "receiptId": "cdf6a984f391c0f87e96169a9849014f174d017264a5b7df11c8b2ab25015153",
+          "semanticReceiptSha256": "39b351e2f8afe5f772097a745f7410cdb369b972843303625eea507bec5db4ec"
+        },
+        {
+          "acceptedAttemptId": "195fc9c29cc74ec99a51347103ab117c",
+          "acceptedLeaseFence": 10,
+          "acceptedModelRevision": 8,
+          "acceptedWorkerId": "rules-07d52694a39b489a94bf25dfa8778fe7",
+          "consumedModelRevision": 9,
+          "ordinal": 3,
+          "receiptId": "ea7271d2db22f88ce39e80b12a0302210a1042bffdcc5de8da9471608a64792b",
+          "semanticReceiptSha256": "d62bf2d42503188d32781701feb122c08d7174cf2c7e3979670051bed245485d"
+        }
+      ],
+      "status": "Succeeded",
+      "terminalBase64": "eyJ0ZXJtaW5hbElkIjoiYThhMTI0NmYyMmNhNTc5YTE0MmNhYmVhOWFkY2E3OGY2ZTQ1ODA4ZTYyMWNiYmEwODlkODRkODU4M2JiMjVjYSIsImtpbmQiOiJTdWNjZWVkZWQiLCJjb21taXR0ZWRSb3VuZHMiOjQsInJlc3VsdFNjaGVtYVZlcnNpb24iOjEsImZhY3RzIjpbImZpbmFsIiwiam9pbmVkIiwibGVmdCIsInJpZ2h0Iiwic2VlZCJdLCJmYWN0c1NoYTI1NiI6IjVlOTcwZGQyMDYxODFjNDFkOTViNTM0ZjdiNzY0MzAzOTJlZjY1OWRiODUyMWM2NjBlMmY2NzIzN2VlYzRjY2MiLCJkaWFnbm9zdGljIjpudWxsfQ==",
+      "terminalId": "a8a1246f22ca579a142cabea9adca78f6e45808e621cbba089d84d8583bb25ca",
+      "terminalStabilityVerified": true
+    },
+    "snapshotAfterRollback": {
+      "facts": [
+        "final",
+        "joined",
+        "left",
+        "right",
+        "seed"
+      ],
+      "rounds": [
+        {
+          "acceptedAttemptId": "a3ba02453d26427da150dfd8bfd17726",
+          "acceptedLeaseFence": 1,
+          "acceptedModelRevision": 2,
+          "acceptedWorkerId": "rules-f3a84aef892547f7b6301a7af2fca284",
+          "addedFactCount": 2,
+          "consumedModelRevision": 3,
+          "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+          "ordinal": 0,
+          "receiptId": "c9479b71bdff04e407829a50fb3d5b0749c60543bdb38a1dcd91db3f078c1963",
+          "semanticReceiptSha256": "23362503a3715498170b4af908b2f543427a84399fe1d10ff60a7416009433be"
+        },
+        {
+          "acceptedAttemptId": "56ac3307c4fb43e1abc422123a3d2386",
+          "acceptedLeaseFence": 6,
+          "acceptedModelRevision": 4,
+          "acceptedWorkerId": "rules-07d52694a39b489a94bf25dfa8778fe7",
+          "addedFactCount": 1,
+          "consumedModelRevision": 5,
+          "inputStateSha256": "05e32593f4691aca87c7e3c2239c32d0539c2ca6365fb98dff891e2e5dde9d0b",
+          "ordinal": 1,
+          "receiptId": "383bef217cffc52b070837f1730faf1fc04d9eb85f4ca817bb7325dfffa2fb6c",
+          "semanticReceiptSha256": "b0f7c076632c7b2ead615e71224b598362150dae592a070cae0cdb1ecc4e9084"
+        },
+        {
+          "acceptedAttemptId": "217000742eb94fda9462484078b833ee",
+          "acceptedLeaseFence": 8,
+          "acceptedModelRevision": 6,
+          "acceptedWorkerId": "rules-07d52694a39b489a94bf25dfa8778fe7",
+          "addedFactCount": 1,
+          "consumedModelRevision": 7,
+          "inputStateSha256": "7b2fc38900c18542b35c8683ea0a105e58ee722295cb4a221aa05cf8ad9eb82b",
+          "ordinal": 2,
+          "receiptId": "cdf6a984f391c0f87e96169a9849014f174d017264a5b7df11c8b2ab25015153",
+          "semanticReceiptSha256": "39b351e2f8afe5f772097a745f7410cdb369b972843303625eea507bec5db4ec"
+        },
+        {
+          "acceptedAttemptId": "195fc9c29cc74ec99a51347103ab117c",
+          "acceptedLeaseFence": 10,
+          "acceptedModelRevision": 8,
+          "acceptedWorkerId": "rules-07d52694a39b489a94bf25dfa8778fe7",
+          "addedFactCount": 0,
+          "consumedModelRevision": 9,
+          "inputStateSha256": "5e970dd206181c41d95b534f7b76430392ef659db8521c660e2f67237eec4ccc",
+          "ordinal": 3,
+          "receiptId": "ea7271d2db22f88ce39e80b12a0302210a1042bffdcc5de8da9471608a64792b",
+          "semanticReceiptSha256": "d62bf2d42503188d32781701feb122c08d7174cf2c7e3979670051bed245485d"
+        }
+      ],
+      "terminal": {
+        "committedRounds": 4,
+        "finalFactsSha256": "5e970dd206181c41d95b534f7b76430392ef659db8521c660e2f67237eec4ccc",
+        "kind": 0,
+        "resultFacts": [
+          {
+            "atom": "final"
+          },
+          {
+            "atom": "joined"
+          },
+          {
+            "atom": "left"
+          },
+          {
+            "atom": "right"
+          },
+          {
+            "atom": "seed"
+          }
+        ],
+        "resultSchemaVersion": 1,
+        "terminalId": "a8a1246f22ca579a142cabea9adca78f6e45808e621cbba089d84d8583bb25ca"
+      },
+      "terminalFacts": [
+        "final",
+        "joined",
+        "left",
+        "right",
+        "seed"
+      ],
+      "view": {
+        "artifactId": "rules:0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+        "artifactSha256": "0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+        "committedFactCount": 5,
+        "committedRounds": 4,
+        "fingerprint": {
+          "sha256": "2ab0f801eb7ede8f640e4ddd320ebaceba2209b4d89db3b11476d3ca1945b2dc"
+        },
+        "identity": {
+          "invocationId": "process-accepted-a4bd836836a549bcb5fee9af16939be2",
+          "scope": {
+            "persistencePartition": "packaged-rules-probe"
+          }
+        },
+        "implementationPinHash": "91acd90a5642f2006c9811960c82af55d350ed92d7444b6b41cb6e47e1ea8bf9",
+        "modelRevision": 9,
+        "status": 1,
+        "terminalId": "a8a1246f22ca579a142cabea9adca78f6e45808e621cbba089d84d8583bb25ca",
+        "terminalKind": 0
+      }
+    },
+    "snapshotAfterSuccessor": {
+      "facts": [
+        "left",
+        "right",
+        "seed"
+      ],
+      "rounds": [
+        {
+          "acceptedAttemptId": "a3ba02453d26427da150dfd8bfd17726",
+          "acceptedLeaseFence": 1,
+          "acceptedModelRevision": 2,
+          "acceptedWorkerId": "rules-f3a84aef892547f7b6301a7af2fca284",
+          "addedFactCount": 2,
+          "consumedModelRevision": 3,
+          "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+          "ordinal": 0,
+          "receiptId": "c9479b71bdff04e407829a50fb3d5b0749c60543bdb38a1dcd91db3f078c1963",
+          "semanticReceiptSha256": "23362503a3715498170b4af908b2f543427a84399fe1d10ff60a7416009433be"
+        }
+      ],
+      "terminalFacts": [],
+      "view": {
+        "artifactId": "rules:0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+        "artifactSha256": "0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+        "committedFactCount": 3,
+        "committedRounds": 1,
+        "fingerprint": {
+          "sha256": "2ab0f801eb7ede8f640e4ddd320ebaceba2209b4d89db3b11476d3ca1945b2dc"
+        },
+        "identity": {
+          "invocationId": "process-accepted-a4bd836836a549bcb5fee9af16939be2",
+          "scope": {
+            "persistencePartition": "packaged-rules-probe"
+          }
+        },
+        "implementationPinHash": "91acd90a5642f2006c9811960c82af55d350ed92d7444b6b41cb6e47e1ea8bf9",
+        "modelRevision": 3,
+        "status": 0
+      }
+    },
+    "snapshotBeforeUpgrade": {
+      "facts": [
+        "seed"
+      ],
+      "rounds": [
+        {
+          "acceptedAttemptId": "a3ba02453d26427da150dfd8bfd17726",
+          "acceptedLeaseFence": 1,
+          "acceptedModelRevision": 2,
+          "acceptedWorkerId": "rules-f3a84aef892547f7b6301a7af2fca284",
+          "addedFactCount": 2,
+          "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+          "ordinal": 0,
+          "receiptId": "c9479b71bdff04e407829a50fb3d5b0749c60543bdb38a1dcd91db3f078c1963",
+          "semanticReceiptSha256": "23362503a3715498170b4af908b2f543427a84399fe1d10ff60a7416009433be"
+        }
+      ],
+      "terminalFacts": [],
+      "view": {
+        "artifactId": "rules:0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+        "artifactSha256": "0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+        "committedFactCount": 1,
+        "committedRounds": 0,
+        "fingerprint": {
+          "sha256": "2ab0f801eb7ede8f640e4ddd320ebaceba2209b4d89db3b11476d3ca1945b2dc"
+        },
+        "identity": {
+          "invocationId": "process-accepted-a4bd836836a549bcb5fee9af16939be2",
+          "scope": {
+            "persistencePartition": "packaged-rules-probe"
+          }
+        },
+        "implementationPinHash": "91acd90a5642f2006c9811960c82af55d350ed92d7444b6b41cb6e47e1ea8bf9",
+        "modelRevision": 2,
+        "pendingReceiptId": "c9479b71bdff04e407829a50fb3d5b0749c60543bdb38a1dcd91db3f078c1963",
+        "status": 0
+      }
+    },
+    "successorAdmissionPreflight": {
+      "acceptNewInvocations": false,
+      "command": "process-upgrade-admission",
+      "databaseEngine": "PostgreSQL",
+      "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+      "databaseName": "rules_upgrade_dc9924b8bcb34e779dcce4fd5711d309",
+      "exactAdmissionReplay": "Replay",
+      "freshAdmission": "Unavailable",
+      "freshLookup": "NotFound",
+      "installedPin": {
+        "languageId": "elsa.rules.finite-positive",
+        "languageVersion": 1,
+        "packages": [
+          {
+            "nuGetContentHash": "gPzl3avusCXqZQIDOG42pAGILPgrCysbuTD36h540T7JDDmu4eDJeKsUCi1UQZnoPtdG4HW3p4+bXdIiJKa96A==",
+            "nuGetVersion": "4.0.0-branch-agent-codex-3181-durable-rules",
+            "packageId": "Elsa.Rules.Core",
+            "selectedAssets": [
+              {
+                "assemblyFullName": "Elsa.Rules.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                "assetSha256": "0414e68c2a5111f0b4ba5b4763f43a384d9cd93e2b6b76e486bf52af04fa492f",
+                "packageRelativeAssetPath": "lib/net10.0/Elsa.Rules.Core.dll"
+              }
+            ]
+          },
+          {
+            "nuGetContentHash": "eOpz8SjvjMFKTpMr85n41zS+NsU8kP59ujATsq8VQ6XAL/wykAmRDZcqV1HSHi7wFp0vpGKO1FL8R1dxaQlYAw==",
+            "nuGetVersion": "4.0.0-branch-agent-codex-3181-durable-rules",
+            "packageId": "Elsa.Rules.Persistence.Core",
+            "selectedAssets": [
+              {
+                "assemblyFullName": "Elsa.Rules.Persistence.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                "assetSha256": "59a13b2df9a1bae177a31f04a58aa30a6868a90795725f8ce3ead44a66f2561e",
+                "packageRelativeAssetPath": "lib/net10.0/Elsa.Rules.Persistence.Core.dll"
+              }
+            ]
+          },
+          {
+            "nuGetContentHash": "pzkfo5OaH1VFmPXvAsD1xbndK76nemY/tv/5UHmpeC4gYmdAZ/KWsPkQczLU8RIzTZ6bpnNCXcxU2iy5vGylvA==",
+            "nuGetVersion": "4.0.0-branch-agent-codex-3181-durable-rules",
+            "packageId": "Elsa.Rules.Runtime",
+            "selectedAssets": [
+              {
+                "assemblyFullName": "Elsa.Rules.Runtime, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                "assetSha256": "d4ecf4d9c37c73418a84aab8b47907ea92fdbcc6276ba29e582df3b77db00ebc",
+                "packageRelativeAssetPath": "lib/net10.0/Elsa.Rules.Runtime.dll"
+              }
+            ]
+          }
+        ],
+        "pinSchemaVersion": 1,
+        "receiptSchemaVersion": 1,
+        "stateSchemaVersion": 1
+      },
+      "installedPinHash": "d466bdc6fa9835e2f4d4b7f4cf87e0147e8c5f364d0d9dd182393b4288f5b7c5",
+      "passed": true,
+      "processId": 19562,
+      "retainedInvocationFingerprint": "2ab0f801eb7ede8f640e4ddd320ebaceba2209b4d89db3b11476d3ca1945b2dc",
+      "retainedPinHash": "91acd90a5642f2006c9811960c82af55d350ed92d7444b6b41cb6e47e1ea8bf9",
+      "role": "successor",
+      "snapshotAfterFreshAdmission": {
+        "facts": [
+          "seed"
+        ],
+        "rounds": [
+          {
+            "acceptedAttemptId": "a3ba02453d26427da150dfd8bfd17726",
+            "acceptedLeaseFence": 1,
+            "acceptedModelRevision": 2,
+            "acceptedWorkerId": "rules-f3a84aef892547f7b6301a7af2fca284",
+            "addedFactCount": 2,
+            "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+            "ordinal": 0,
+            "receiptId": "c9479b71bdff04e407829a50fb3d5b0749c60543bdb38a1dcd91db3f078c1963",
+            "semanticReceiptSha256": "23362503a3715498170b4af908b2f543427a84399fe1d10ff60a7416009433be"
+          }
+        ],
+        "terminalFacts": [],
+        "view": {
+          "artifactId": "rules:0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+          "artifactSha256": "0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+          "committedFactCount": 1,
+          "committedRounds": 0,
+          "fingerprint": {
+            "sha256": "2ab0f801eb7ede8f640e4ddd320ebaceba2209b4d89db3b11476d3ca1945b2dc"
+          },
+          "identity": {
+            "invocationId": "process-accepted-a4bd836836a549bcb5fee9af16939be2",
+            "scope": {
+              "persistencePartition": "packaged-rules-probe"
+            }
+          },
+          "implementationPinHash": "91acd90a5642f2006c9811960c82af55d350ed92d7444b6b41cb6e47e1ea8bf9",
+          "modelRevision": 2,
+          "pendingReceiptId": "c9479b71bdff04e407829a50fb3d5b0749c60543bdb38a1dcd91db3f078c1963",
+          "status": 0
+        }
+      },
+      "snapshotAfterReplay": {
+        "facts": [
+          "seed"
+        ],
+        "rounds": [
+          {
+            "acceptedAttemptId": "a3ba02453d26427da150dfd8bfd17726",
+            "acceptedLeaseFence": 1,
+            "acceptedModelRevision": 2,
+            "acceptedWorkerId": "rules-f3a84aef892547f7b6301a7af2fca284",
+            "addedFactCount": 2,
+            "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+            "ordinal": 0,
+            "receiptId": "c9479b71bdff04e407829a50fb3d5b0749c60543bdb38a1dcd91db3f078c1963",
+            "semanticReceiptSha256": "23362503a3715498170b4af908b2f543427a84399fe1d10ff60a7416009433be"
+          }
+        ],
+        "terminalFacts": [],
+        "view": {
+          "artifactId": "rules:0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+          "artifactSha256": "0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+          "committedFactCount": 1,
+          "committedRounds": 0,
+          "fingerprint": {
+            "sha256": "2ab0f801eb7ede8f640e4ddd320ebaceba2209b4d89db3b11476d3ca1945b2dc"
+          },
+          "identity": {
+            "invocationId": "process-accepted-a4bd836836a549bcb5fee9af16939be2",
+            "scope": {
+              "persistencePartition": "packaged-rules-probe"
+            }
+          },
+          "implementationPinHash": "91acd90a5642f2006c9811960c82af55d350ed92d7444b6b41cb6e47e1ea8bf9",
+          "modelRevision": 2,
+          "pendingReceiptId": "c9479b71bdff04e407829a50fb3d5b0749c60543bdb38a1dcd91db3f078c1963",
+          "status": 0
+        }
+      },
+      "snapshotBefore": {
+        "facts": [
+          "seed"
+        ],
+        "rounds": [
+          {
+            "acceptedAttemptId": "a3ba02453d26427da150dfd8bfd17726",
+            "acceptedLeaseFence": 1,
+            "acceptedModelRevision": 2,
+            "acceptedWorkerId": "rules-f3a84aef892547f7b6301a7af2fca284",
+            "addedFactCount": 2,
+            "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+            "ordinal": 0,
+            "receiptId": "c9479b71bdff04e407829a50fb3d5b0749c60543bdb38a1dcd91db3f078c1963",
+            "semanticReceiptSha256": "23362503a3715498170b4af908b2f543427a84399fe1d10ff60a7416009433be"
+          }
+        ],
+        "terminalFacts": [],
+        "view": {
+          "artifactId": "rules:0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+          "artifactSha256": "0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+          "committedFactCount": 1,
+          "committedRounds": 0,
+          "fingerprint": {
+            "sha256": "2ab0f801eb7ede8f640e4ddd320ebaceba2209b4d89db3b11476d3ca1945b2dc"
+          },
+          "identity": {
+            "invocationId": "process-accepted-a4bd836836a549bcb5fee9af16939be2",
+            "scope": {
+              "persistencePartition": "packaged-rules-probe"
+            }
+          },
+          "implementationPinHash": "91acd90a5642f2006c9811960c82af55d350ed92d7444b6b41cb6e47e1ea8bf9",
+          "modelRevision": 2,
+          "pendingReceiptId": "c9479b71bdff04e407829a50fb3d5b0749c60543bdb38a1dcd91db3f078c1963",
+          "status": 0
+        }
+      },
+      "snapshotUnchanged": true,
+      "sourceProcessId": 19556,
+      "workerSuppressedForAdmissionSnapshot": true
+    },
+    "successorWorker": {
+      "acceptNewInvocations": false,
+      "command": "process-upgrade-successor",
+      "commonReceiptConsumed": true,
+      "compatibleClaimControlDisposition": "Claimed",
+      "compatibleClaimControlExpectedModelRevision": 3,
+      "compatibleClaimControlLeaseRelease": "Released",
+      "databaseEngine": "PostgreSQL",
+      "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+      "databaseName": "rules_upgrade_dc9924b8bcb34e779dcce4fd5711d309",
+      "installedPin": {
+        "languageId": "elsa.rules.finite-positive",
+        "languageVersion": 1,
+        "packages": [
+          {
+            "nuGetContentHash": "gPzl3avusCXqZQIDOG42pAGILPgrCysbuTD36h540T7JDDmu4eDJeKsUCi1UQZnoPtdG4HW3p4+bXdIiJKa96A==",
+            "nuGetVersion": "4.0.0-branch-agent-codex-3181-durable-rules",
+            "packageId": "Elsa.Rules.Core",
+            "selectedAssets": [
+              {
+                "assemblyFullName": "Elsa.Rules.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                "assetSha256": "0414e68c2a5111f0b4ba5b4763f43a384d9cd93e2b6b76e486bf52af04fa492f",
+                "packageRelativeAssetPath": "lib/net10.0/Elsa.Rules.Core.dll"
+              }
+            ]
+          },
+          {
+            "nuGetContentHash": "eOpz8SjvjMFKTpMr85n41zS+NsU8kP59ujATsq8VQ6XAL/wykAmRDZcqV1HSHi7wFp0vpGKO1FL8R1dxaQlYAw==",
+            "nuGetVersion": "4.0.0-branch-agent-codex-3181-durable-rules",
+            "packageId": "Elsa.Rules.Persistence.Core",
+            "selectedAssets": [
+              {
+                "assemblyFullName": "Elsa.Rules.Persistence.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                "assetSha256": "59a13b2df9a1bae177a31f04a58aa30a6868a90795725f8ce3ead44a66f2561e",
+                "packageRelativeAssetPath": "lib/net10.0/Elsa.Rules.Persistence.Core.dll"
+              }
+            ]
+          },
+          {
+            "nuGetContentHash": "pzkfo5OaH1VFmPXvAsD1xbndK76nemY/tv/5UHmpeC4gYmdAZ/KWsPkQczLU8RIzTZ6bpnNCXcxU2iy5vGylvA==",
+            "nuGetVersion": "4.0.0-branch-agent-codex-3181-durable-rules",
+            "packageId": "Elsa.Rules.Runtime",
+            "selectedAssets": [
+              {
+                "assemblyFullName": "Elsa.Rules.Runtime, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+                "assetSha256": "d4ecf4d9c37c73418a84aab8b47907ea92fdbcc6276ba29e582df3b77db00ebc",
+                "packageRelativeAssetPath": "lib/net10.0/Elsa.Rules.Runtime.dll"
+              }
+            ]
+          }
+        ],
+        "pinSchemaVersion": 1,
+        "receiptSchemaVersion": 1,
+        "stateSchemaVersion": 1
+      },
+      "installedPinHash": "d466bdc6fa9835e2f4d4b7f4cf87e0147e8c5f364d0d9dd182393b4288f5b7c5",
+      "noEligibleSemanticEvaluationClaim": true,
+      "passed": true,
+      "processId": 19573,
+      "retainedInvocationFingerprint": "2ab0f801eb7ede8f640e4ddd320ebaceba2209b4d89db3b11476d3ca1945b2dc",
+      "retainedPinHash": "91acd90a5642f2006c9811960c82af55d350ed92d7444b6b41cb6e47e1ea8bf9",
+      "retainedReceiptId": "c9479b71bdff04e407829a50fb3d5b0749c60543bdb38a1dcd91db3f078c1963",
+      "retainedReceiptSemanticSha256": "23362503a3715498170b4af908b2f543427a84399fe1d10ff60a7416009433be",
+      "semanticEvaluationAfterReceipt": false,
+      "snapshotAfterReceiptConsumption": {
+        "facts": [
+          "left",
+          "right",
+          "seed"
+        ],
+        "rounds": [
+          {
+            "acceptedAttemptId": "a3ba02453d26427da150dfd8bfd17726",
+            "acceptedLeaseFence": 1,
+            "acceptedModelRevision": 2,
+            "acceptedWorkerId": "rules-f3a84aef892547f7b6301a7af2fca284",
+            "addedFactCount": 2,
+            "consumedModelRevision": 3,
+            "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+            "ordinal": 0,
+            "receiptId": "c9479b71bdff04e407829a50fb3d5b0749c60543bdb38a1dcd91db3f078c1963",
+            "semanticReceiptSha256": "23362503a3715498170b4af908b2f543427a84399fe1d10ff60a7416009433be"
+          }
+        ],
+        "terminalFacts": [],
+        "view": {
+          "artifactId": "rules:0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+          "artifactSha256": "0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+          "committedFactCount": 3,
+          "committedRounds": 1,
+          "fingerprint": {
+            "sha256": "2ab0f801eb7ede8f640e4ddd320ebaceba2209b4d89db3b11476d3ca1945b2dc"
+          },
+          "identity": {
+            "invocationId": "process-accepted-a4bd836836a549bcb5fee9af16939be2",
+            "scope": {
+              "persistencePartition": "packaged-rules-probe"
+            }
+          },
+          "implementationPinHash": "91acd90a5642f2006c9811960c82af55d350ed92d7444b6b41cb6e47e1ea8bf9",
+          "modelRevision": 3,
+          "status": 0
+        }
+      },
+      "snapshotAfterStabilityRead": {
+        "facts": [
+          "left",
+          "right",
+          "seed"
+        ],
+        "rounds": [
+          {
+            "acceptedAttemptId": "a3ba02453d26427da150dfd8bfd17726",
+            "acceptedLeaseFence": 1,
+            "acceptedModelRevision": 2,
+            "acceptedWorkerId": "rules-f3a84aef892547f7b6301a7af2fca284",
+            "addedFactCount": 2,
+            "consumedModelRevision": 3,
+            "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+            "ordinal": 0,
+            "receiptId": "c9479b71bdff04e407829a50fb3d5b0749c60543bdb38a1dcd91db3f078c1963",
+            "semanticReceiptSha256": "23362503a3715498170b4af908b2f543427a84399fe1d10ff60a7416009433be"
+          }
+        ],
+        "terminalFacts": [],
+        "view": {
+          "artifactId": "rules:0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+          "artifactSha256": "0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+          "committedFactCount": 3,
+          "committedRounds": 1,
+          "fingerprint": {
+            "sha256": "2ab0f801eb7ede8f640e4ddd320ebaceba2209b4d89db3b11476d3ca1945b2dc"
+          },
+          "identity": {
+            "invocationId": "process-accepted-a4bd836836a549bcb5fee9af16939be2",
+            "scope": {
+              "persistencePartition": "packaged-rules-probe"
+            }
+          },
+          "implementationPinHash": "91acd90a5642f2006c9811960c82af55d350ed92d7444b6b41cb6e47e1ea8bf9",
+          "modelRevision": 3,
+          "status": 0
+        }
+      },
+      "snapshotAfterSuccessorClaimCheck": {
+        "facts": [
+          "left",
+          "right",
+          "seed"
+        ],
+        "rounds": [
+          {
+            "acceptedAttemptId": "a3ba02453d26427da150dfd8bfd17726",
+            "acceptedLeaseFence": 1,
+            "acceptedModelRevision": 2,
+            "acceptedWorkerId": "rules-f3a84aef892547f7b6301a7af2fca284",
+            "addedFactCount": 2,
+            "consumedModelRevision": 3,
+            "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+            "ordinal": 0,
+            "receiptId": "c9479b71bdff04e407829a50fb3d5b0749c60543bdb38a1dcd91db3f078c1963",
+            "semanticReceiptSha256": "23362503a3715498170b4af908b2f543427a84399fe1d10ff60a7416009433be"
+          }
+        ],
+        "terminalFacts": [],
+        "view": {
+          "artifactId": "rules:0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+          "artifactSha256": "0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+          "committedFactCount": 3,
+          "committedRounds": 1,
+          "fingerprint": {
+            "sha256": "2ab0f801eb7ede8f640e4ddd320ebaceba2209b4d89db3b11476d3ca1945b2dc"
+          },
+          "identity": {
+            "invocationId": "process-accepted-a4bd836836a549bcb5fee9af16939be2",
+            "scope": {
+              "persistencePartition": "packaged-rules-probe"
+            }
+          },
+          "implementationPinHash": "91acd90a5642f2006c9811960c82af55d350ed92d7444b6b41cb6e47e1ea8bf9",
+          "modelRevision": 3,
+          "status": 0
+        }
+      },
+      "snapshotAtWorkerStart": {
+        "facts": [
+          "seed"
+        ],
+        "rounds": [
+          {
+            "acceptedAttemptId": "a3ba02453d26427da150dfd8bfd17726",
+            "acceptedLeaseFence": 1,
+            "acceptedModelRevision": 2,
+            "acceptedWorkerId": "rules-f3a84aef892547f7b6301a7af2fca284",
+            "addedFactCount": 2,
+            "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+            "ordinal": 0,
+            "receiptId": "c9479b71bdff04e407829a50fb3d5b0749c60543bdb38a1dcd91db3f078c1963",
+            "semanticReceiptSha256": "23362503a3715498170b4af908b2f543427a84399fe1d10ff60a7416009433be"
+          }
+        ],
+        "terminalFacts": [],
+        "view": {
+          "artifactId": "rules:0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+          "artifactSha256": "0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+          "committedFactCount": 1,
+          "committedRounds": 0,
+          "fingerprint": {
+            "sha256": "2ab0f801eb7ede8f640e4ddd320ebaceba2209b4d89db3b11476d3ca1945b2dc"
+          },
+          "identity": {
+            "invocationId": "process-accepted-a4bd836836a549bcb5fee9af16939be2",
+            "scope": {
+              "persistencePartition": "packaged-rules-probe"
+            }
+          },
+          "implementationPinHash": "91acd90a5642f2006c9811960c82af55d350ed92d7444b6b41cb6e47e1ea8bf9",
+          "modelRevision": 2,
+          "pendingReceiptId": "c9479b71bdff04e407829a50fb3d5b0749c60543bdb38a1dcd91db3f078c1963",
+          "status": 0
+        }
+      },
+      "snapshotBeforeWorker": {
+        "facts": [
+          "seed"
+        ],
+        "rounds": [
+          {
+            "acceptedAttemptId": "a3ba02453d26427da150dfd8bfd17726",
+            "acceptedLeaseFence": 1,
+            "acceptedModelRevision": 2,
+            "acceptedWorkerId": "rules-f3a84aef892547f7b6301a7af2fca284",
+            "addedFactCount": 2,
+            "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+            "ordinal": 0,
+            "receiptId": "c9479b71bdff04e407829a50fb3d5b0749c60543bdb38a1dcd91db3f078c1963",
+            "semanticReceiptSha256": "23362503a3715498170b4af908b2f543427a84399fe1d10ff60a7416009433be"
+          }
+        ],
+        "terminalFacts": [],
+        "view": {
+          "artifactId": "rules:0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+          "artifactSha256": "0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841",
+          "committedFactCount": 1,
+          "committedRounds": 0,
+          "fingerprint": {
+            "sha256": "2ab0f801eb7ede8f640e4ddd320ebaceba2209b4d89db3b11476d3ca1945b2dc"
+          },
+          "identity": {
+            "invocationId": "process-accepted-a4bd836836a549bcb5fee9af16939be2",
+            "scope": {
+              "persistencePartition": "packaged-rules-probe"
+            }
+          },
+          "implementationPinHash": "91acd90a5642f2006c9811960c82af55d350ed92d7444b6b41cb6e47e1ea8bf9",
+          "modelRevision": 2,
+          "pendingReceiptId": "c9479b71bdff04e407829a50fb3d5b0749c60543bdb38a1dcd91db3f078c1963",
+          "status": 0
+        }
+      },
+      "sourceProcessId": 19556,
+      "stateStableAfterReceiptConsumption": true,
+      "successorClaimDisposition": "NoEligibleWork",
+      "successorClaimTokenAbsent": true,
+      "workerEnabled": true
+    },
+    "topology": "two-independent-package-deployments-on-one-machine-and-one-disposable-postgresql-database"
+  },
+  "retainedUpgradeProofPassed": true,
+  "schemaVersion": 1
+}
