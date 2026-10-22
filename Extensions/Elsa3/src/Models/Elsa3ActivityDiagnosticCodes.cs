@@ -83,13 +83,6 @@ public static class Elsa3ActivityDiagnosticCodes
     /// </summary>
     public const string ReusableIntrinsicUnsupported = "ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED";
 
-    /// <summary>
-    /// A reusable workflow's body reads a value a graph activity body cannot reach in Elsa 4 yet: one of its own inputs
-    /// (<c>getInput</c>), a variable (<c>getVariable</c>, a memory reference), or another activity's result or captured
-    /// output. A graph body node's bindings resolve against the started workflow, not the graph (spec 246 D-8).
-    /// </summary>
-    public const string ReusableValueReadUnsupported = "ELS3-ACTIVITY-REUSABLE-VALUE-READ-UNSUPPORTED";
-
     /// <summary>Activities nest deeper than the conversion supports.</summary>
     public const string NestingTooDeep = "ELS3-ACTIVITY-NESTING-TOO-DEEP";
 

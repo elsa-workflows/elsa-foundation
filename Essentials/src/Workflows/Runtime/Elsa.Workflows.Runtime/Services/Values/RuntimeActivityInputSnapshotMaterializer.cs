@@ -36,18 +36,22 @@ public sealed class RuntimeActivityInputSnapshotMaterializer(
             ?? serviceProvider.GetService<IWorkflowExecutionStateStore>()
             ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires the canonical workflow variable-frame owner store.");
         var visibleFrames = await new RuntimeContainerScopeService(activityExecutionStateStore, resolvedWorkflowExecutionStateStore)
-            .BuildVisibleFramesAsync(state.Execution.WorkflowExecutionId, state, cancellationToken: cancellationToken);
+            .BuildVisibleFramesAsync(state.Execution.WorkflowExecutionId, state, cancellationToken: cancellationToken, durableValues: durableValues);
+        // Below a closed activity execution scope the request inputs are the boundary's own.
+        var workflowInputEnvelopes = visibleFrames.ClosedScopeBoundary is { } boundary
+            ? RuntimeClosedScope.InputEnvelopes(boundary, durableValues, executable)
+            : projections.WorkflowInputEnvelopes;
         var resolutionContext = new RuntimeInputBindingResolutionContext(
             workflowExecutionId: state.Execution.WorkflowExecutionId,
             activityExecutionId: state.InvocationId,
             consumerInvocation: state,
             runtimeView: runtimeView,
             executable: executable,
-            workflowInputEnvelopes: projections.WorkflowInputEnvelopes,
+            workflowInputEnvelopes: workflowInputEnvelopes,
             variableEnvelopes: visibleFrames.Values,
             // Issue #984: expose the lexically visible variables to JavaScript value expressions
             // (variables.X / getVariable('X') / get<Name>()) through the isolated engine's ambient read surface.
-            visibleVariablesByName: RuntimeContainerScopeService.ProjectAmbientVisibleVariableEnvelopes(executable, visibleFrames.Frames),
+            visibleVariablesByName: RuntimeContainerScopeService.ProjectAmbientVisibleVariableEnvelopes(executable, visibleFrames.Frames, visibleFrames.RootVariableNames),
             correlationId: projections.CorrelationId);
 
         return await inputMaterializer.MaterializeSnapshotAsync(

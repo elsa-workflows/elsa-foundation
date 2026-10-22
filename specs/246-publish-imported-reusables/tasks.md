@@ -216,7 +216,7 @@ no versions. Nothing publishes yet.
 `caller-routes-outcome`.
 
 - [X] T021b [US1] D-8 (added 2026-10-19): in `M/Services/Elsa3ValueFlowLowerer.cs`, refuse input, variable and
-  result reads and memory references in a reusable body with `ELS3-ACTIVITY-REUSABLE-VALUE-READ-UNSUPPORTED`; Mapping
+  result reads and memory references in a reusable body with `ELS3-ACTIVITY-REUSABLE-VALUE-READ-UNSUPPORTED`; Mapping *(Lifted by spec 265.)*
   tests in `MT/Elsa3ReusableValueReadTests.cs`; Essentials side fix `DescriptorPayloadSerializer.Options`
   (`AllowOutOfOrderMetadataProperties`). Integration fixtures route on literal logic.
 - [X] T021a [US1] D-7 (added 2026-10-19): in `M/Conversion/Elsa3DefinitionConverter.cs`, refuse every node of a

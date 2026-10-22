@@ -349,7 +349,7 @@ public sealed class ExecutableNodeCompiler(
             ? null
             : new RuntimeVariableReference(
                 intrinsic.Variable.ReferenceKey,
-                intrinsic.Variable.DeclaringScopeId ?? VariableReference.WorkflowScopeId);
+                intrinsic.Variable.IsWorkflowScope ? VariableReference.WorkflowScopeId : intrinsic.Variable.DeclaringScopeId!);
         var activityType = $"elsa.intrinsic.{intrinsic.Kind.ToString().ToLowerInvariant()}";
         var descriptorPayload = JsonSerializer.SerializeToElement(new
         {

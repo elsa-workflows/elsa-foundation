@@ -6,6 +6,7 @@ using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Values;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Xunit;
 
 namespace Elsa.Activities.Runtime.Tests;
@@ -114,6 +115,38 @@ public sealed class RuntimeOutputCaptureConversionTests
         Assert.Contains("destination storage policy 'Custom'", exception.Message, StringComparison.Ordinal);
         Assert.Contains("execution-local activity-result binding", exception.Message, StringComparison.Ordinal);
         Assert.Contains("DurableReference/resource-handle", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Project_rejects_a_transient_resource_captured_into_a_graph_variable()
+    {
+        // A capture into a graph variable persists a durable row too, so a live resource is refused alike.
+        var type = new ValueTypeDescriptor("String");
+        var (node, transition, completion) = NewCaptureScenario(
+            type,
+            new ValueConversionPlan(
+                ValueConversionPlan.CurrentSchemaVersion,
+                ValueRepresentation.TransientResource,
+                type,
+                type,
+                ValueConversionMode.Auto,
+                ValueConversionOperation.Identity,
+                profile: null,
+                limits: null,
+                options: null),
+            graphScopeId: "node-boundary");
+        var drivers = new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new RuntimeOutputCaptureProjector(drivers).ProjectAsync(
+                "workflow",
+                "activity",
+                node,
+                (IActivityCompletionTransition)transition,
+                completion,
+                DateTimeOffset.UnixEpoch).AsTask());
+
+        Assert.Contains("VF-ACT-005", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -306,7 +339,8 @@ public sealed class RuntimeOutputCaptureConversionTests
 
     private static (ExecutableNode Node, ActivityTransition Transition, ActivityCompletionProjection Completion) NewCaptureScenario(
         ValueTypeDescriptor sourceType,
-        ValueConversionPlan plan)
+        ValueConversionPlan plan,
+        string? graphScopeId = null)
     {
         var descriptor = JsonSerializer.SerializeToElement(new { type = "test.echo" });
         var contract = new ActivityContract(
@@ -336,6 +370,13 @@ public sealed class RuntimeOutputCaptureConversionTests
             DurableValueLifecycle.Instance,
             DurableValueStorage.Custom,
             captureOnSuccessfulCompletion: true,
+            metadata: graphScopeId is null
+                ? null
+                : new Dictionary<string, string>
+                {
+                    [RuntimeMetadataKeys.CaptureTargetScopeId] = graphScopeId,
+                    [RuntimeMetadataKeys.TargetVariableReferenceKey] = "total"
+                },
             conversionPlan: plan);
         var node = new ExecutableNode(
             "echo",

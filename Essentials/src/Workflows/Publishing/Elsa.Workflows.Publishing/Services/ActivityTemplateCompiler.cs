@@ -379,7 +379,8 @@ public sealed class ActivityTemplateCompiler(
                     overlay = new(
                         ExecutableActivityTemplateOccurrenceOverlay.SupportedSchemaVersion,
                         occurrence.InputBindings,
-                        structure);
+                        structure,
+                        occurrence.OutputBindings);
                 }
 
                 return new ExecutableActivityTemplateDependency(

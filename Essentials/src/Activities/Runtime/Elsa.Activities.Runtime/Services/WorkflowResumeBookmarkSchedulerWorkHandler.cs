@@ -273,7 +273,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             // element reads the collection variable through the same committed-basis projection as the other paths.
             var scopeService = new RuntimeContainerScopeService(
                 serviceProvider.GetRequiredService<IActivityExecutionStateStore>(),
-                serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>());
+                serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
+                serviceProvider.GetRequiredService<IDurableValueStateStore>());
             var scopedVariableEnvelopes = await scopeService.ProjectScopedVariablesForReaderAsync(
                 activity, executable, executionState, cancellationToken);
 
@@ -496,7 +497,9 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 completionTransition!,
                 typedCompletion,
                 _timeProvider.GetUtcNow(),
-                cancellationToken);
+                cancellationToken,
+                // A capture into a graph variable writes the row of the producer's nearest closed scope.
+                closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, executionState.InvocationId, executableNode, cancellationToken));
         // A workflow-variable output capture writes the canonical root frame in the SAME commit as the
         // completion (#972), mirroring how the Set intrinsic commits its changed frame.
         var workflowVariableWriteBack = await RuntimeWorkflowVariableCaptureWriteBack.BuildStateChangeAsync(

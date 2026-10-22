@@ -78,6 +78,96 @@ public sealed class RuntimeOutputCaptureCompiler(
             authoredOutputs,
             workflowVariables);
 
+    /// <summary>
+    /// Compiles the authored outputs of a node inside a closed-scope graph body into captures that write
+    /// the graph's own variables. Inside a graph body the root scope is the graph, so the authored target is a
+    /// workflow-scope <c>Variable</c> reference (or Studio's legacy <c>activity-graph</c> scope) naming one of
+    /// <paramref name="graphVariables"/>. The capture is pinned to that variable's declared type and storage driver, so
+    /// the row it writes is the row the graph boundary itself owns, and it names the placed boundary it writes into.
+    /// </summary>
+    internal IReadOnlyDictionary<string, RuntimeOutputCapture> CompileGraphVariableOutputs(
+        string nodeId,
+        IReadOnlyCollection<ActivityResultProjectionContract> projections,
+        IEnumerable<ArgumentState> authoredOutputs,
+        IReadOnlyCollection<GraphVariableCaptureTarget> graphVariables,
+        string graphScopeId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(graphScopeId);
+        var projectionsByKey = projections.ToDictionary(x => x.Key, StringComparer.Ordinal);
+        var variablesByReferenceKey = graphVariables.ToDictionary(x => x.ReferenceKey, StringComparer.Ordinal);
+        var authored = authoredOutputs.ToArray();
+        var duplicate = authored.GroupBy(x => x.ReferenceKey, StringComparer.Ordinal).FirstOrDefault(x => x.Count() > 1);
+        if (duplicate is not null)
+            throw new ArgumentException($"Activity node '{nodeId}' declares output '{duplicate.Key}' more than once.");
+
+        var captures = new Dictionary<string, RuntimeOutputCapture>(StringComparer.Ordinal);
+        foreach (var output in authored.OrderBy(x => x.ReferenceKey, StringComparer.Ordinal))
+        {
+            if (!projectionsByKey.TryGetValue(output.ReferenceKey, out var projection))
+                throw new ArgumentException($"Activity node '{nodeId}' output '{output.ReferenceKey}' does not match the published activity contract.");
+            if (!StringComparer.OrdinalIgnoreCase.Equals(output.Value.ExpressionType, VariableExpressionType) ||
+                !VariableReference.TryParse(output.Value.Value, out var target) || target is null)
+                throw new ArgumentException($"Activity node '{nodeId}' output '{output.ReferenceKey}' must target a declared graph variable using a Variable reference.");
+            if (!target.IsWorkflowScope && !StringComparer.Ordinal.Equals(target.DeclaringScopeId, PlacedReferenceRemapper.LegacyGraphScopeId))
+                throw new ArgumentException($"Activity node '{nodeId}' output '{output.ReferenceKey}' targets scope '{target.DeclaringScopeId}'; a graph body can capture only into its own variables.");
+            if (!variablesByReferenceKey.TryGetValue(target.ReferenceKey, out var variable))
+                throw new ArgumentException($"Activity node '{nodeId}' output '{output.ReferenceKey}' targets unknown graph variable '{target.ReferenceKey}'.");
+
+            storageDrivers.GetRequired(variable.StorageDriverKey);
+            var sourceType = new ValueTypeDescriptor(projection.Type.Alias, projection.Type.CollectionKind);
+            var sourceRepresentation = projection.SourceRepresentation ?? ValueRepresentationDefaults.Infer(sourceType);
+            if (sourceRepresentation == ValueRepresentation.TransientResource)
+                throw new ArgumentException(
+                    $"VF-ACT-005: Activity node '{nodeId}' output '{output.ReferenceKey}' has source representation '{ValueRepresentation.TransientResource}' and cannot be captured into graph variable '{variable.Name}'.");
+
+            var alias = variable.Type.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                        variable.Type.TryGetProperty("alias", out var aliasElement)
+                ? aliasElement.GetString() ?? "object"
+                : "object";
+            var conversionPlan = output.Conversion is null
+                ? null
+                : resolvedConversionPlanResolver.Resolve(
+                    sourceType,
+                    sourceRepresentation,
+                    new ValueTypeDescriptor(alias, CollectionKindOf(variable.Type)),
+                    AuthoredValueConversionMapper.Mode(output.Conversion),
+                    AuthoredValueConversionMapper.Profile(output.Conversion),
+                    AuthoredValueConversionMapper.Limits(output.Conversion),
+                    AuthoredValueConversionMapper.Options(output.Conversion),
+                    new ValueConversionBindingContext(nodeId, output.ReferenceKey, ValueConversionBindingKind.Output));
+            captures.Add(output.ReferenceKey, new RuntimeOutputCapture(
+                output.ReferenceKey,
+                $"{GraphVariableValueIdPrefix}{variable.ReferenceKey}",
+                new RuntimeValueTypeDescriptor(alias, variable.StorageDriverKey, variable.Type.Clone()),
+                DurableValueLifecycle.Instance,
+                DurableValueStorage.Custom,
+                captureOnSuccessfulCompletion: true,
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["referenceKey"] = output.ReferenceKey,
+                    [RuntimeMetadataKeys.TargetVariableReferenceKey] = variable.ReferenceKey,
+                    [RuntimeMetadataKeys.VariableName] = variable.Name,
+                    [RuntimeMetadataKeys.StorageDriverKey] = variable.StorageDriverKey,
+                    [RuntimeMetadataKeys.CaptureTargetScopeId] = graphScopeId
+                },
+                variable.StorageDriverKey,
+                conversionPlan));
+        }
+
+        return captures;
+    }
+
+    private static CollectionKind CollectionKindOf(System.Text.Json.JsonElement type) =>
+        type.ValueKind == System.Text.Json.JsonValueKind.Object &&
+        type.TryGetProperty("collectionKind", out var kind) &&
+        kind.ValueKind == System.Text.Json.JsonValueKind.String &&
+        Enum.TryParse<CollectionKind>(kind.GetString(), ignoreCase: true, out var parsed)
+            ? parsed
+            : CollectionKind.Single;
+
+    /// <summary>Value id prefix of a capture into a graph variable; the runtime writes the boundary's own row.</summary>
+    internal const string GraphVariableValueIdPrefix = "graph-variable:";
+
     private IReadOnlyDictionary<string, RuntimeOutputCapture> Compile(
         string nodeId,
         IReadOnlyCollection<OutputCaptureTarget> definitions,
@@ -177,3 +267,10 @@ public sealed class RuntimeOutputCaptureCompiler(
     }
 
 }
+
+/// <summary>A graph variable a body node can capture into: its declared type JSON and storage driver.</summary>
+internal sealed record GraphVariableCaptureTarget(
+    string ReferenceKey,
+    string Name,
+    System.Text.Json.JsonElement Type,
+    string StorageDriverKey);

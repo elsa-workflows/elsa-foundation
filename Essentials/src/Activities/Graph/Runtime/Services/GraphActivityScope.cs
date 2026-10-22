@@ -187,7 +187,8 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
                     drivers[descriptor.ReferenceKey],
                     value,
                     capturedAt,
-                    cancellationToken));
+                    cancellationToken,
+                    boundaryVariableName: descriptor.Name));
         }
 
         Publish(_variables, staged);
@@ -300,7 +301,8 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
             driver,
             value,
             capturedAt,
-            cancellationToken);
+            cancellationToken,
+            boundaryVariableName: descriptor.Name);
         _variables[descriptor.ReferenceKey] = state;
         return state;
     }
@@ -320,7 +322,8 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
         object? value,
         DateTimeOffset capturedAt,
         CancellationToken cancellationToken,
-        string? boundaryInputName = null)
+        string? boundaryInputName = null,
+        string? boundaryVariableName = null)
     {
         var durableValueId = role switch
         {
@@ -332,15 +335,14 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
 
         var typeDescriptor = TypeDescriptor(type, storageDriverKey);
         var encoding = await storageDriver.EncodeAsync(value, typeDescriptor, cancellationToken);
-        var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            [RuntimeMetadataKeys.BoundaryExecutionScopeId] = ExecutionScope.ExecutionScopeId,
-            [RuntimeMetadataKeys.BoundaryValueRole] = role,
-            [RuntimeMetadataKeys.BoundaryReferenceKey] = referenceKey,
-            ["runtime.storageDriverKey"] = storageDriverKey
-        };
-        if (boundaryInputName is not null)
-            metadata[RuntimeMetadataKeys.BoundaryInputName] = boundaryInputName;
+        // Body nodes read graph variables by name (variables.x), and the runtime has no graph descriptor.
+        var metadata = ActivityExecutionScopeValues.Metadata(
+            ExecutionScope.ExecutionScopeId,
+            role,
+            referenceKey,
+            storageDriverKey,
+            boundaryInputName,
+            boundaryVariableName);
 
         return new DurableValueState(
             durableValueId,

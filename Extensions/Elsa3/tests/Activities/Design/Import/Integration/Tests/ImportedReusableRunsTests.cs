@@ -18,8 +18,9 @@ namespace Elsa3.Activities.Design.Import.Integration.Tests;
 /// <summary>
 /// One host that imported two flowchart-bodied reusables declaring Approved and Rejected, <c>reusable-two-outcomes</c>
 /// (completes with Approved; declares an <c>approve</c> input it does not read) and <c>reusable-rejects</c> (completes
-/// with Rejected), and a flowchart caller of each with one branch per outcome. A graph body cannot read values (spec
-/// 246 D-8), so each body chooses its outcome from a constant. Shared by the scenarios that read or run that import.
+/// with Rejected), and a flowchart caller of each with one branch per outcome. Each body chooses its outcome from a
+/// constant; bodies that read values are covered by <see cref="ImportedReusableValueReadTests"/>. Shared by the
+/// scenarios that read or run that import.
 /// </summary>
 public sealed class ImportedApprovalFixture : IAsyncLifetime
 {
@@ -98,7 +99,7 @@ public sealed class ImportedReusableRunsTests(ImportedApprovalFixture fixture) :
     [Fact]
     public async Task Caller_runs_the_published_activity_with_its_input()
     {
-        // The caller binds a literal to the activity's declared approve input; the body does not read it (D-8).
+        // The caller binds a literal to the activity's declared approve input; this body does not read it.
         var caller = await fixture.PublishAsync("caller-v1");
 
         var run = await Host.RunAsync(caller);
@@ -158,12 +159,6 @@ public sealed class ImportedReusableRunsTests(ImportedApprovalFixture fixture) :
     public Task Reusable_using_an_intrinsic_is_refused_and_nothing_is_written() =>
         AssertRefusedAsync("reusable-sets-variable", Elsa3ActivityDiagnosticCodes.ReusableIntrinsicUnsupported);
 
-    [Theory]
-    [InlineData("reusable-reads-input")]
-    [InlineData("reusable-reads-result")]
-    public Task Reusable_reading_a_value_in_its_body_is_refused_and_nothing_is_written(string fixtureName) =>
-        AssertRefusedAsync(fixtureName, Elsa3ActivityDiagnosticCodes.ReusableValueReadUnsupported);
-
     /// <summary>Applies the one reusable of <paramref name="fixtureName"/> in a fresh host; the refusal writes nothing.</summary>
     private static async Task AssertRefusedAsync(string fixtureName, string code)
     {
@@ -187,4 +182,45 @@ public sealed class ImportedReusableRunsTests(ImportedApprovalFixture fixture) :
     private static ActivityExecutionState Node(RunState run, string nodeId) =>
         run.Activities.SingleOrDefault(state => state.Execution.ExecutableNodeId == nodeId)
         ?? throw new Xunit.Sdk.XunitException($"Node '{nodeId}' did not run: {run.Describe()}.");
+}
+
+/// <summary>
+/// An imported Elsa 3 reusable whose body reads its own input converts, publishes and runs,
+/// reading the value its caller passed. Result reads and captures are converted (mapping tests)
+/// but not run here: any converted RunJavaScript, reusable or not, faults on its default arguments, and its Object
+/// result cannot feed a Boolean input without a conversion.
+/// </summary>
+public sealed class ImportedReusableValueReadTests
+{
+    [Theory]
+    [InlineData(true, "Approved")]
+    [InlineData(false, "Rejected")]
+    public async Task A_body_reads_the_input_its_wrapper_passed(bool approve, string outcome)
+    {
+        await using var host = await Elsa3ImportHost.StartAsync();
+        var (apply, items) = await host.ImportAsync("reads-input", "reusable-reads-input");
+        var reusable = Assert.Single(items);
+        var wrapper = await host.PublishWorkflowAsync(Elsa3ImportHost.Required(reusable, "workflowVersionId"));
+
+        var run = await host.RunAsync(wrapper, new JsonObject { ["approve"] = approve });
+
+        Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
+        var activity = Assert.Single(run.Activities, state => state.Execution.ActivityType == Elsa3ImportHost.Required(reusable, "activityTypeKey"));
+        Assert.Equal(outcome, activity.Completion?.OutcomeKey);
+    }
+
+    [Fact]
+    public async Task A_body_reads_the_value_its_caller_passed_not_the_callers_own_input()
+    {
+        // The caller's own approve input is true, but it passes false to the activity.
+        await using var host = await Elsa3ImportHost.StartAsync();
+        await host.ImportAsync("caller-passes-input", "reusable-reads-input", "caller-passes-input");
+        var caller = await host.PublishWorkflowAsync("input-caller-v1");
+
+        var run = await host.RunAsync(caller, new JsonObject { ["approve"] = true });
+
+        Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
+        Assert.Contains("on-rejected", run.ExecutedNodeIds);
+        Assert.DoesNotContain("on-approved", run.ExecutedNodeIds);
+    }
 }
