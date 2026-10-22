@@ -7,14 +7,15 @@ using Elsa.Rules.Runtime;
 using Elsa.Rules.Workflows.Runtime.Activities;
 using Elsa.Rules.Workflows.Runtime.Models;
 using Elsa.Rules.Workflows.Runtime.Services;
+using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Rules.Tests;
 
 /// <summary>
-/// Direct source-build composition evidence: a real CLR catalog and registered compiler produce a pinned
-/// Sequence/RunRules executable. The synthetic identity in the fixture is not package qualification and this
-/// test does not exercise the workflow publication handler, source-reference persistence, or REST authoring path.
+/// Source-build composition evidence for the registered compiler and persisted submit/publication services.
+/// The synthetic Rules identity does not establish package qualification; HTTP routing and authorization
+/// remain separate acceptance gates.
 /// </summary>
 public sealed class RulesCompiledPublicationTests
 {
@@ -48,7 +49,53 @@ public sealed class RulesCompiledPublicationTests
         Assert.Equal(4, maxRounds!.Value.GetInt32());
 
         Assert.True(rules.Metadata.TryGetValue(RunRules.PinMetadataKey, out var serializedPin));
-        var pin = RuleWorkflowProgramPin.Parse(serializedPin!, RulesCompiledPublicationFixture.ProgramLiteral);
+        AssertProgramPin(serializedPin!);
+
+        var target = Assert.Single(executable.ResumeTargets.Values,
+            item => item.ExecutableNodeId == RulesCompiledPublicationFixture.RulesNodeId);
+        Assert.Equal("ResumeAsync", target.HandlerKey);
+        Assert.Equal(RulesNativeBoundary.ResumeTargetKey, target.LocalResumeTargetId);
+        Assert.Equal(WorkflowExecutableResumeTarget.ComposeScopedId(rules.ExecutableNodeId, RulesNativeBoundary.ResumeTargetKey),
+            target.ResumeTargetId);
+    }
+
+    [Fact]
+    public async Task Persisted_submit_and_mediator_publish_save_compiled_rules_artifact_reference_and_active_record()
+    {
+        var evidence = await RulesCompiledPublicationFixture.SubmitAndPublishAsync();
+
+        Assert.Equal(evidence.Submitted.VersionId, evidence.Version.Id);
+        Assert.Equal(evidence.Submitted.DefinitionId, evidence.Version.DefinitionId);
+        Assert.Equal(evidence.Submitted.DefinitionId, evidence.Version.Definition?.Id);
+        Assert.Equal(evidence.Submitted.VersionId, evidence.Published.VersionId);
+        Assert.Equal(evidence.Submitted.DefinitionId, evidence.Published.DefinitionId);
+
+        Assert.Equal(PublicationStatusView.Active, evidence.Published.Status);
+        Assert.Equal(evidence.Published.PublicationId, evidence.Publication.PublicationId);
+        Assert.Equal(PublicationStatus.Active, evidence.Publication.Status);
+        Assert.Equal(evidence.Submitted.VersionId, evidence.Publication.WorkflowDefinitionVersionId);
+        Assert.Equal(evidence.Published.ArtifactId, evidence.Publication.ArtifactId);
+
+        Assert.Equal(evidence.Published.ArtifactId, evidence.Executable.Identity.ArtifactId);
+        Assert.Equal(evidence.Published.ArtifactHash, evidence.Executable.Identity.ArtifactHash);
+        Assert.Equal(evidence.Submitted.VersionId, evidence.Executable.Identity.DefinitionVersionId);
+        Assert.Equal(evidence.Published.SourceReferenceId, evidence.SourceReference.SourceReferenceId);
+        Assert.Equal(evidence.Published.ArtifactId, evidence.SourceReference.ArtifactId);
+        Assert.Equal(evidence.Submitted.DefinitionId, evidence.SourceReference.DefinitionId);
+        Assert.Equal(evidence.Submitted.VersionId, evidence.SourceReference.DefinitionVersionId);
+        Assert.Equal(WorkflowExecutableReferenceScope.Published, evidence.SourceReference.Scope);
+        Assert.Equal(evidence.Published.PublicationId, evidence.SourceReference.ActivationId);
+        Assert.Equal(evidence.Publication.SlotId, evidence.SourceReference.SlotId);
+
+        var rules = Assert.Single(evidence.Executable.RootActivity.ChildSlots).Activities
+            .Single(activity => activity.ExecutableNodeId == RulesCompiledPublicationFixture.RulesNodeId);
+        Assert.True(rules.Metadata.TryGetValue(RunRules.PinMetadataKey, out var serializedPin));
+        AssertProgramPin(serializedPin!);
+    }
+
+    private static void AssertProgramPin(string serializedPin)
+    {
+        var pin = RuleWorkflowProgramPin.Parse(serializedPin, RulesCompiledPublicationFixture.ProgramLiteral);
         var expectedProgram = RuleTestData.Program(["derived", "seed"],
             [RuleTestData.Rule("derive", ["seed"], "derived")]);
         var expectedArtifact = new RuleArtifactCompiler().Compile(expectedProgram);
@@ -59,12 +106,5 @@ public sealed class RulesCompiledPublicationTests
         var expectedImplementation = RuleTestData.Invocation().ExpectedImplementation;
         Assert.Equal(RuleRecordCodec.PinHash(expectedImplementation),
             RuleRecordCodec.PinHash(pin.Implementation));
-
-        var target = Assert.Single(executable.ResumeTargets.Values,
-            item => item.ExecutableNodeId == RulesCompiledPublicationFixture.RulesNodeId);
-        Assert.Equal("ResumeAsync", target.HandlerKey);
-        Assert.Equal(RulesNativeBoundary.ResumeTargetKey, target.LocalResumeTargetId);
-        Assert.Equal(WorkflowExecutableResumeTarget.ComposeScopedId(rules.ExecutableNodeId, RulesNativeBoundary.ResumeTargetKey),
-            target.ResumeTargetId);
     }
 }

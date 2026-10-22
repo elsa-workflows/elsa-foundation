@@ -59,10 +59,9 @@ public sealed class RulesPersistedNativeFlowchartTests : IAsyncLifetime
     private const string SourceReferenceId = "rules-native-persisted-source";
     private const string ProgramJson = "{\"formatVersion\":1,\"languageId\":\"elsa.rules.finite-positive\",\"languageVersion\":1,\"vocabulary\":[\"derived\",\"seed\"],\"rules\":[{\"id\":\"derive\",\"premises\":[\"seed\"],\"conclusion\":\"derived\"}]}";
 
-    private readonly string _databasePath = Path.Combine(Path.GetTempPath(), $"elsa-rules-native-flowchart-{Guid.NewGuid():N}.db");
     private readonly string _workflowExecutionId = $"rules-native-{Guid.NewGuid():N}";
     private readonly FinalCounter _finalCounter = new();
-    private WorkflowExecutionHarness _harness = null!;
+    private RulesPersistedNativeFixture _fixture = null!;
     private WorkflowExecutable _executable = null!;
     private RuleSemanticPin _implementation = null!;
 
@@ -90,114 +89,73 @@ public sealed class RulesPersistedNativeFlowchartTests : IAsyncLifetime
             new Dictionary<string, string>(StringComparer.Ordinal),
             IncidentStrategyBuiltIns.FaultReference);
 
-        _harness = WorkflowExecutionHarness.Create()
-            .WithFeature(services => new WorkflowsRuntimeResumptionFeature().ConfigureServices(services))
-            .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
-            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
-            .WithFeature(services => new RulesRuntimeFeature { MaxConcurrentAttempts = 1, PollIntervalMilliseconds = 10 }.ConfigureServices(services))
-            .WithFeature(services => new RulesWorkflowsRuntimeFeature { MaxConcurrentDeliveries = 1, PollIntervalMilliseconds = 10 }.ConfigureServices(services))
-            .WithFeature(services => new RulesRuntimeEntityFrameworkCoreFeature
-            {
-                ConnectionString = $"Data Source={_databasePath};Pooling=False"
-            }.ConfigureServices(services))
-            .ConfigureServices(services =>
-            {
-                services.AddLogging();
-                services.AddSingleton(_finalCounter);
-                services.AddSingleton<IRuleImplementationIdentitySource>(new TestImplementationIdentitySource(_implementation));
-                services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
-                {
-                    Provider = "Sqlite",
-                    ConnectionString = $"Data Source={_databasePath};Pooling=False",
-                    RecoveryContinuationSigningKey = "rules-native-test-recovery-key-32-bytes",
-                    HierarchyCursorSigningKey = "rules-native-test-hierarchy-key-32-bytes"
-                }).AddEfModuleMigrations<RuntimeDbContext>("Sqlite");
-            })
-            .WithPersistenceMode(PersistenceMode.Durable)
-            .Build(identity, _workflowExecutionId, Enumerable.Range(1, 64).Select(index => $"{_workflowExecutionId}-activity-{index}"));
-
-        foreach (var initializer in _harness.Services.GetServices<IShellInitializer>())
-            await initializer.InitializeAsync();
-        _harness.InitializeActivityTypes();
+        _fixture = await RulesPersistedNativeFixture.CreateAsync(_executable, _workflowExecutionId,
+            services => services.AddSingleton(_finalCounter), _implementation);
     }
 
     public async Task DisposeAsync()
     {
-        if (_harness is not null)
-            await _harness.DisposeAsync();
-
-        foreach (var file in new[] { _databasePath, $"{_databasePath}-wal", $"{_databasePath}-shm" })
-            if (File.Exists(file))
-                File.Delete(file);
+        if (_fixture is not null)
+            await _fixture.DisposeAsync();
     }
 
     [Fact]
     public async Task Rules_terminal_and_native_completion_do_not_release_parallel_join_until_sibling_resumes()
     {
-        var reference = await _harness.PublishAsync(_executable, SourceReferenceId);
-        await CopyPublicationIntoPartitionAsync(reference);
+        var reference = await _fixture.PublishAsync(SourceReferenceId);
 
-        var start = await _harness.StartPublishedAsync(reference, _workflowExecutionId,
-            tenantId: WorkflowExecutionHarness.Partition.Value, partition: WorkflowExecutionHarness.Partition);
+        var start = await _fixture.StartPublishedAsync(reference);
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, start.CommandDispatch.Status);
 
         // The Start intent is committed with the native suspension. Sweep delivery is a separate generation.
-        await SweepPartitionAsync();
+        await _fixture.SweepPartitionAsync();
 
-        var initialActivities = await ActivityStatesAsync();
-        var rulesActivity = StateFor(initialActivities, RulesNodeId);
-        var holdActivity = StateFor(initialActivities, HoldNodeId);
+        var initialActivities = await _fixture.ActivityStatesAsync();
+        var rulesActivity = RulesPersistedNativeFixture.StateFor(initialActivities, RulesNodeId);
+        var holdActivity = RulesPersistedNativeFixture.StateFor(initialActivities, HoldNodeId);
         Assert.Equal(ActivityExecutionStatus.Suspended, rulesActivity.Status);
         Assert.Equal(ActivityExecutionStatus.Suspended, holdActivity.Status);
         Assert.Equal(0, _finalCounter.Count);
 
         var request = RulesNativeBoundary.ReadState(rulesActivity);
         var identity = new RuleRunIdentity(request.Scope, request.RunId);
-        Assert.Equal(WorkflowExecutionHarness.Partition.Value, identity.Scope.TenantId);
-        Assert.Equal(WorkflowExecutionHarness.Partition.Value, identity.Scope.PersistencePartition);
+        Assert.Equal(RulesPersistedNativeFixture.Partition.Value, identity.Scope.TenantId);
+        Assert.Equal(RulesPersistedNativeFixture.Partition.Value, identity.Scope.PersistencePartition);
 
         // Real store admission precedes model work; each direct RuleExecution step is one durable claim.
-        var modelTerminal = await DriveRulesToTerminalAsync(identity);
+        var modelTerminal = await _fixture.DriveRulesToTerminalAsync(identity);
         Assert.Equal(RuleTerminalReadDisposition.Found, modelTerminal.Disposition);
         Assert.Equal(RuleTerminalKind.Succeeded, modelTerminal.Result!.Kind);
         Assert.Equal(new[] { "derived", "seed" }, modelTerminal.Result.ResultFacts
             .Select(fact => fact.Atom).Order(StringComparer.Ordinal));
-        var beforeNativeDelivery = await ActivityStatesAsync();
-        Assert.Equal(ActivityExecutionStatus.Suspended, StateFor(beforeNativeDelivery, RulesNodeId).Status);
-        Assert.Equal(ActivityExecutionStatus.Suspended, StateFor(beforeNativeDelivery, HoldNodeId).Status);
-        Assert.Equal(WorkflowExecutionStatus.Running, (await WorkflowStateAsync())!.Status);
+        var beforeNativeDelivery = await _fixture.ActivityStatesAsync();
+        Assert.Equal(ActivityExecutionStatus.Suspended, RulesPersistedNativeFixture.StateFor(beforeNativeDelivery, RulesNodeId).Status);
+        Assert.Equal(ActivityExecutionStatus.Suspended, RulesPersistedNativeFixture.StateFor(beforeNativeDelivery, HoldNodeId).Status);
+        Assert.Equal(WorkflowExecutionStatus.Running, (await _fixture.WorkflowStateAsync())!.Status);
         AssertNoCompletedJoinOrFinal(beforeNativeDelivery);
         Assert.Equal(0, _finalCounter.Count);
 
         // The real delivery executor dispatches through the persisted bookmark and independently proves consumption.
-        await using (var scope = _harness.Services.CreateAsyncScope())
-        {
-            var delivery = scope.ServiceProvider.GetRequiredService<RulesNativeDeliveryExecution>();
-            var acknowledged = await delivery.ExecuteOneAsync("native-test-delivery");
-            Assert.True(acknowledged, "Native delivery was not acknowledged. Persisted activities: " +
-                string.Join(", ", (await ActivityStatesAsync()).Select(state =>
-                    $"{state.Execution.ExecutableNodeId}={state.Status}, result schema={state.Completion?.Result.Type.SchemaVersion?.ToString() ?? "none"}")));
-        }
+        var acknowledged = await _fixture.DeliverOneAsync("native-test-delivery");
+        Assert.True(acknowledged, "Native delivery was not acknowledged. Persisted activities: " +
+            string.Join(", ", (await _fixture.ActivityStatesAsync()).Select(state =>
+                $"{state.Execution.ExecutableNodeId}={state.Status}, result schema={state.Completion?.Result.Type.SchemaVersion?.ToString() ?? "none"}")));
 
-        var afterRules = await ActivityStatesAsync();
-        var completedRules = StateFor(afterRules, RulesNodeId);
-        var stillWaiting = StateFor(afterRules, HoldNodeId);
+        var afterRules = await _fixture.ActivityStatesAsync();
+        var completedRules = RulesPersistedNativeFixture.StateFor(afterRules, RulesNodeId);
+        var stillWaiting = RulesPersistedNativeFixture.StateFor(afterRules, HoldNodeId);
         Assert.Equal(ActivityExecutionStatus.Completed, completedRules.Status);
         Assert.Equal(ActivityExecutionStatus.Suspended, stillWaiting.Status);
         Assert.Contains(completedRules.TriggerDeliveries!, item => item.Status == ActivityTriggerDeliveryStatus.Consumed);
-        Assert.Equal(WorkflowExecutionStatus.Running, (await WorkflowStateAsync())!.Status);
+        Assert.Equal(WorkflowExecutionStatus.Running, (await _fixture.WorkflowStateAsync())!.Status);
         AssertNoCompletedJoinOrFinal(afterRules);
         Assert.Equal(0, _finalCounter.Count);
 
-        using (var scope = _harness.Services.CreateScope())
-        {
-            var store = scope.ServiceProvider.GetRequiredService<IRuleRunStore>();
-            Assert.Equal(RuleDeliveryClaimDisposition.NoEligibleDelivery,
-                (await store.ClaimDeliveryAsync(new("native-test-after-ack", [1]))).Disposition);
-        }
+        Assert.Equal(RuleDeliveryClaimDisposition.NoEligibleDelivery,
+            await _fixture.ClaimDeliveryDispositionAsync("native-test-after-ack"));
 
         var holdBookmarkId = Assert.Single(stillWaiting.BookmarkIds);
-        await using (var scope = await CreatePartitionScopeAsync())
+        await using (var scope = await _fixture.CreatePartitionScopeAsync())
         {
             var bookmark = await scope.ServiceProvider.GetRequiredService<IBookmarkStateStore>()
                 .FindAsync(_workflowExecutionId, holdBookmarkId);
@@ -216,48 +174,13 @@ public sealed class RulesPersistedNativeFlowchartTests : IAsyncLifetime
             Assert.Equal(BookmarkResumeDispatchStatus.Dispatched, resumed.Status);
         }
 
-        var finalActivities = await ActivityStatesAsync();
-        var completedHold = StateFor(finalActivities, HoldNodeId);
+        var finalActivities = await _fixture.ActivityStatesAsync();
+        var completedHold = RulesPersistedNativeFixture.StateFor(finalActivities, HoldNodeId);
         Assert.Equal(ActivityExecutionStatus.Completed, completedHold.Status);
-        Assert.Equal(ActivityExecutionStatus.Completed, StateFor(finalActivities, JoinNodeId).Status);
-        Assert.Equal(ActivityExecutionStatus.Completed, StateFor(finalActivities, FinalNodeId).Status);
-        Assert.Equal(WorkflowExecutionStatus.Completed, (await WorkflowStateAsync())!.Status);
+        Assert.Equal(ActivityExecutionStatus.Completed, RulesPersistedNativeFixture.StateFor(finalActivities, JoinNodeId).Status);
+        Assert.Equal(ActivityExecutionStatus.Completed, RulesPersistedNativeFixture.StateFor(finalActivities, FinalNodeId).Status);
+        Assert.Equal(WorkflowExecutionStatus.Completed, (await _fixture.WorkflowStateAsync())!.Status);
         Assert.Equal(1, _finalCounter.Count);
-    }
-
-    private async Task SweepPartitionAsync()
-    {
-        await using var scope = await CreatePartitionScopeAsync();
-        var resumption = scope.ServiceProvider.GetRequiredService<IRuntimeResumptionService>();
-        for (var pass = 0; pass < 8; pass++)
-            if ((await resumption.SweepAsync(new RuntimeResumptionSweepRequest())).OutboxAttemptedCount == 0)
-                return;
-        throw new InvalidOperationException("Native post-commit intents did not settle within eight sweeps.");
-    }
-
-    private async Task<RuleTerminalReadResult> DriveRulesToTerminalAsync(RuleRunIdentity identity)
-    {
-        for (var attempt = 0; attempt < 8; attempt++)
-        {
-            RuleTerminalReadResult terminal;
-            using (var scope = _harness.Services.CreateScope())
-            {
-                var reader = scope.ServiceProvider.GetRequiredService<IRuleRunReader>();
-                Assert.Equal(RuleRunReadDisposition.Found, (await reader.FindAsync(identity)).Disposition);
-                terminal = await reader.ReadTerminalAsync(identity);
-                if (terminal.Disposition == RuleTerminalReadDisposition.Found)
-                    return terminal;
-
-                var execution = scope.ServiceProvider.GetRequiredService<RuleExecution>();
-                Assert.True(await execution.ExecuteOneAsync("native-test-computation", CancellationToken.None),
-                    "The persisted Rules invocation stopped making progress before a terminal result was stored.");
-            }
-        }
-
-        using var finalScope = _harness.Services.CreateScope();
-        var finalRead = await finalScope.ServiceProvider.GetRequiredService<IRuleRunReader>().ReadTerminalAsync(identity);
-        Assert.Equal(RuleTerminalReadDisposition.Found, finalRead.Disposition);
-        return finalRead;
     }
 
     private ExecutableNode BuildGraph()
@@ -347,39 +270,6 @@ public sealed class RulesPersistedNativeFlowchartTests : IAsyncLifetime
         };
     }
 
-    private async Task CopyPublicationIntoPartitionAsync(WorkflowExecutableSourceReference reference)
-    {
-        WorkflowExecutable? saved;
-        await using (var source = await _harness.Services.GetRequiredService<IPersistenceOperationScopeFactory>()
-                         .CreateAsync(new PersistenceScope(PersistenceScope.DefaultValue)))
-            saved = await source.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>()
-                .FindAsync(reference.ArtifactId);
-
-        Assert.Equal(_executable.Identity.ArtifactHash, new WorkflowExecutableHasher().ComputeHash(Assert.IsType<WorkflowExecutable>(saved).RootActivity));
-        await using var target = await CreatePartitionScopeAsync();
-        await target.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>()
-            .SaveAsync(Assert.IsType<WorkflowExecutable>(saved));
-        await target.ServiceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(reference);
-    }
-
-    private async ValueTask<PersistenceOperationScope> CreatePartitionScopeAsync() =>
-        await _harness.Services.GetRequiredService<IPersistenceOperationScopeFactory>()
-            .CreateAsync(new PersistenceScope(WorkflowExecutionHarness.Partition.Value));
-
-    private async Task<IReadOnlyCollection<ActivityExecutionState>> ActivityStatesAsync()
-    {
-        await using var scope = await CreatePartitionScopeAsync();
-        return await scope.ServiceProvider.GetRequiredService<IActivityExecutionStateStore>()
-            .ListAllAsync(_workflowExecutionId);
-    }
-
-    private async Task<WorkflowExecutionState?> WorkflowStateAsync()
-    {
-        await using var scope = await CreatePartitionScopeAsync();
-        return await scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>()
-            .FindAsync(_workflowExecutionId);
-    }
-
     private static async Task<ExecutableNode> EnrichThroughRegisteredEventPipelineAsync(
         ExecutableNode root,
         RuleSemanticPin implementation)
@@ -415,9 +305,6 @@ public sealed class RulesPersistedNativeFlowchartTests : IAsyncLifetime
         Assert.DoesNotContain(states, item => item.Execution.ExecutableNodeId == JoinNodeId && item.Status == ActivityExecutionStatus.Completed);
         Assert.DoesNotContain(states, item => item.Execution.ExecutableNodeId == FinalNodeId && item.Status == ActivityExecutionStatus.Completed);
     }
-
-    private static ActivityExecutionState StateFor(IEnumerable<ActivityExecutionState> states, string nodeId) =>
-        Assert.Single(states, item => item.Execution.ExecutableNodeId == nodeId);
 
     private sealed class TestImplementationIdentitySource(RuleSemanticPin implementation) : IRuleImplementationIdentitySource
     {

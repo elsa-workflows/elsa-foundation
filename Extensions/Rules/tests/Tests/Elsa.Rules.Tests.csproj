@@ -21,7 +21,10 @@
     <ProjectReference Include="../../../../Essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Elsa.Workflows.Publishing.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Mediator/Elsa.Mediator/Elsa.Mediator.csproj" />
     <ProjectReference Include="../../../../Essentials/tests/Activities/Testing/Elsa.Activities.Testing.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
