@@ -155,6 +155,62 @@ test("inventory coverage stays truthful through search, local scope filtering an
   await expect(page.locator("body")).not.toContainText("raw-secret-value");
 });
 
+test("partial-results explanation aligns with the list at desktop and narrow viewports", async ({ page }, testInfo) => {
+  const measured: Array<{
+    width: number;
+    colorScheme: string;
+    coverage: { left: number; right: number };
+    layout: { left: number; right: number };
+    table: { left: number; right: number };
+  }> = [];
+
+  for (const viewport of [
+    { width: 1280, height: 800, colorScheme: "light" as const },
+    { width: 390, height: 844, colorScheme: "dark" as const }
+  ]) {
+    await page.emulateMedia({ colorScheme: viewport.colorScheme });
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto("/secret-scopes.html?scenario=inventory");
+
+    const coverage = page.locator(".secrets-coverage");
+    await expect(coverage).toBeVisible();
+    await expect(page.locator("html")).toHaveAttribute("data-theme-mode", viewport.colorScheme);
+    const geometry = await page.evaluate(() => {
+      const bounds = (selector: string) => {
+        const element = document.querySelector<HTMLElement>(selector)!;
+        const rect = element.getBoundingClientRect();
+        return { left: rect.left, right: rect.right };
+      };
+      return {
+        coverage: bounds(".secrets-coverage"),
+        layout: bounds(".secrets-layout"),
+        table: bounds(".secrets-table-shell")
+      };
+    });
+    measured.push({ width: viewport.width, colorScheme: viewport.colorScheme, ...geometry });
+    await testInfo.attach(`coverage-geometry-${viewport.width}-${viewport.colorScheme}`, {
+      body: JSON.stringify(geometry),
+      contentType: "application/json"
+    });
+  }
+
+  const alignment = measured.map(geometry => ({
+    viewport: `${geometry.width}px ${geometry.colorScheme}`,
+    layout: {
+      left: Number((geometry.coverage.left - geometry.layout.left).toFixed(2)),
+      right: Number((geometry.coverage.right - geometry.layout.right).toFixed(2))
+    },
+    table: {
+      left: Number((geometry.coverage.left - geometry.table.left).toFixed(2)),
+      right: Number((geometry.coverage.right - geometry.table.right).toFixed(2))
+    }
+  }));
+  expect(alignment).toEqual([
+    { viewport: "1280px light", layout: { left: 0, right: 0 }, table: { left: 0, right: 0 } },
+    { viewport: "390px dark", layout: { left: 0, right: 0 }, table: { left: 0, right: 0 } }
+  ]);
+});
+
 test("keeps an active loaded scope visible when search returns a different scope", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/secret-scopes.html?scenario=inventory");
