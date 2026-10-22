@@ -117,5 +117,10 @@
   ],
   "integrationToolingSha256": {
     "tools/rules/verify-packaged-rules.py": "850d66be0601356b74130b197de40965d6144611da595297e0ae3f03c81eb6b7"
+  },
+  "postExecutionFormatting": {
+    "path": "e2e-tests/rules/_RulesCommon.ps1",
+    "change": "Removed one trailing blank line only; harnessSha256 preserves the actually executed bytes.",
+    "currentSha256": "9c51f937eb6fc3581eb98e96ca42b234af1aa598fa7340f561eb9119fc92581e"
   }
 }

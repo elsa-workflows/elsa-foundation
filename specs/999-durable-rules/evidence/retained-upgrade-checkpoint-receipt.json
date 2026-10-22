@@ -106,7 +106,7 @@
   },
   "nativeInstallationEvidence": {
     "path": "native-installation-checkpoint-receipt.json",
-    "sha256": "4b2661e7117b37d0fff3a30ffea847d995254613096fc690a743a052f51f30fa"
+    "sha256": "49d7ef61093bc11a5dcfd839b49ab16749eb155a39f2012f6f39761b7ca81f35"
   },
   "limits": [
     "Same-machine PostgreSQL package replacement plus separate SQLite native additive installation; not a distributed multi-machine qualification.",
