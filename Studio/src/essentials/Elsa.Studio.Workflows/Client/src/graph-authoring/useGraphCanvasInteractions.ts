@@ -27,7 +27,7 @@ import {
   type WorkflowNodeData
 } from "../workflowAdapter";
 import { resolveActivityIcon, resolveActivityIconTone } from "../activityIcons";
-import { useGraphViewport } from "./useGraphViewport";
+import { graphFitViewOptions, useGraphViewport } from "./useGraphViewport";
 import { computeAutoLayout } from "../workflowLayout";
 import { activityDragDataType, pointerDragThreshold } from "../workflow-editor/constants";
 import {
@@ -611,7 +611,7 @@ export function useGraphCanvasInteractions({
     });
     setNodes(nextNodes);
     commitCanvas(nextNodes, edges);
-    window.requestAnimationFrame(() => reactFlowInstance?.fitView({ padding: 0.2 }));
+    window.requestAnimationFrame(() => reactFlowInstance?.fitView(graphFitViewOptions));
     onStatus?.("Rearranged the canvas.");
   }, [commitCanvas, edges, isUnsupported, mode, nodes, onStatus, reactFlowInstance, setNodes]);
 
