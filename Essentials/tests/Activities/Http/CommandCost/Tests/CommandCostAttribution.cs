@@ -14,7 +14,8 @@ internal readonly record struct ElsaFrame(string Name, bool IsInfrastructure, st
 /// <item><c>save-changes</c>: the stack <c>SaveChanges</c> was entered on, for a command EF sent inside it after an
 /// asynchronous hop, such as a batched write after the savepoint round trip.</item>
 /// <item><c>stitched</c>: a stack that lost its callers in an asynchronous hop, completed with the latest whole stack of
-/// the same asynchronous flow that ran through its outermost frame. <see cref="Seam"/> is where the two meet.</item>
+/// the same asynchronous flow that ran through its outermost frame, or, when no whole stack did, the latest stitched one.
+/// <see cref="Seam"/> is where the two meet; on a stack stitched onto a stitched one it marks the newer seam.</item>
 /// <item><c>none</c>: no Elsa caller could be found.</item>
 /// </list>
 /// </summary>
