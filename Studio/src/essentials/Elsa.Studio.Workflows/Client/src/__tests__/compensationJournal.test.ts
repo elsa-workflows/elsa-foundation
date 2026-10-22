@@ -206,6 +206,29 @@ describe("compensation journal fallback", () => {
     expect(readCompensationJournal(malformed([validPending], { cause: { kind: 42, step: "Confirm", activityExecutionId: "ae-3" } }))).toBeNull();
   });
 
+  it("treats unknown v1 journal enum values as unknown evidence", () => {
+    const base = view(journal("Compensating", [entry("e2", "Reserve delivery", 2, "Compensating", "ae-2", { handler: "cancel", attempts: ["ae-4"], resolution: "EffectAbsent" })], {
+      cause: { kind: "fault", step: "Confirm order", activityExecutionId: "ae-3" }
+    }));
+    const payload = base.view as CompensationJournal;
+    const entryValue = payload.entries[0];
+    const invalid: Array<[string, ActivityStateView]> = [
+      ["phase", { ...base, view: { ...payload, phase: "Unexpected" } }],
+      ["entry status", { ...base, view: { ...payload, entries: [{ ...entryValue, status: "Unexpected" }] } }],
+      ["forward outcome", { ...base, view: { ...payload, entries: [{ ...entryValue, forwardOutcome: "Unexpected" }] } }],
+      ["attempt result", { ...base, view: { ...payload, entries: [{ ...entryValue, attempts: [{ ...entryValue.attempts[0], result: "Unexpected" }] }] } }],
+      ["resolution outcome", { ...base, view: { ...payload, entries: [{ ...entryValue, resolution: { outcome: "Unexpected", incidentId: "inc-6" } }] } }],
+      ["cause kind", { ...base, view: { ...payload, cause: { ...payload.cause!, kind: "Unexpected" } } }]
+    ];
+
+    for (const [name, view] of invalid) expect(readCompensationJournal(view), name).toBeNull();
+
+    const requested = journal("Running", [], {
+      cause: { kind: "requested", step: "Compensate", activityExecutionId: "ae-request" }
+    });
+    expect(readCompensationJournal(view(requested))?.cause?.kind).toBe("requested");
+  });
+
   it("derives operator results from incidents when there is no journal", () => {
     const resolvedRun = [
       ...waitingRun("Running").map(activity => activity.activityExecutionId === "ae-scope" ? { ...activity, status: "Completed", outcomeNames: ["Compensated"] } : activity),

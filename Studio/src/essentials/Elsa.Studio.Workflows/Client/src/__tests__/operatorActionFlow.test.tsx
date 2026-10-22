@@ -294,6 +294,36 @@ describe("useOperatorActions", () => {
     expect(dialog.querySelector(".wf-incident-operator-actions")).toBeNull();
   });
 
+  it.each(["phase", "entry status", "attempt result"] as const)(
+    "keeps Retry unknown in the details dialog when a scheduled journal has an unsupported %s",
+    async discriminator => {
+      const backend = fakeBackend({});
+      const incident = journalIncidents()[1];
+      const activities = journalRun().filter(activity => activity.activityExecutionId !== "ae-4" && activity.activityExecutionId !== "ae-5");
+      const source = scheduledJournalWithUnexpectedValue(discriminator);
+      const reload = vi.fn(async () => source);
+
+      flushSync(() => root.render(<ScheduledIncidentListHarness context={backend.context} incidents={[incident]} activities={activities} source={source} reload={reload} />));
+      await flush();
+      flushSync(() => container.querySelector<HTMLButtonElement>(".wf-incident-open-details")!.click());
+      await flush();
+
+      const dialog = container.querySelector<HTMLElement>(".wf-incident-details-dialog")!;
+      const buttons = () => [...dialog.querySelectorAll<HTMLButtonElement>(".wf-incident-operator-actions button")].map(button => button.textContent!.trim());
+      expect(buttons()).toContain("Check Retry availability");
+      expect(buttons()).not.toContain("Retry");
+      expect(container.querySelector(".wf-operator-dialog")).toBeNull();
+      expect(backend.submits).toHaveLength(0);
+
+      flushSync(() => dialog.querySelector<HTMLButtonElement>(".wf-incident-operator-actions button")!.click());
+      await flush();
+      expect(buttons()).toContain("Check Retry availability");
+      expect(buttons()).not.toContain("Retry");
+      expect(container.querySelector(".wf-operator-dialog")).toBeNull();
+      expect(backend.submits).toHaveLength(0);
+    }
+  );
+
   it("keeps canonical controls for an unrelated incident while another incident has a scheduled retry", async () => {
     const backend = fakeBackend({});
     const scheduled = journalIncidents()[1];
@@ -1671,6 +1701,24 @@ function scheduledJournalView(notBefore = "2026-10-23T10:42:30Z"): CompensationJ
           { number: 1, activityExecutionId: "ae-6", incidentId: "inc-6", result: "Faulted" },
           { number: 2, activityExecutionId: null, incidentId: null, result: "Running", notBefore }
         ]
+      } : entry)
+    }
+  } as unknown as CompensationJournalSource;
+}
+
+function scheduledJournalWithUnexpectedValue(discriminator: "phase" | "entry status" | "attempt result"): CompensationJournalSource {
+  const source = scheduledJournalView() as unknown as ReturnType<typeof journalView>;
+  return {
+    ...source,
+    view: {
+      ...source.view,
+      ...(discriminator === "phase" ? { phase: "Unexpected" } : {}),
+      entries: source.view.entries.map((entry, index) => index === 1 ? {
+        ...entry,
+        ...(discriminator === "entry status" ? { status: "Unexpected" } : {}),
+        attempts: entry.attempts.map((attempt, attemptIndex) => attemptIndex === 1 && discriminator === "attempt result"
+          ? { ...attempt, result: "Unexpected" }
+          : attempt)
       } : entry)
     }
   } as unknown as CompensationJournalSource;
