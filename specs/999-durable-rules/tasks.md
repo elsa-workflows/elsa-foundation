@@ -91,7 +91,7 @@ The [final source-built cases](evidence/native-final-cases.md) and [final packag
 - [x] T033 Complete module READMEs/local `EXTENSION_POINTS.md` and root index links; document actual override/registration/hosting/pin/provider behavior, deployment/recovery limits and future task-runner separation. No placeholder empty modules or duplicate canonical explanations.
 - [ ] T034 Refresh claims/open PRs, review integrated diff and duplication, validate locks/API/solution profiles, affected builds/tests, architecture and current generated-map policy; record exact evidence in `specs/999-durable-rules/evidence/` and #3181.
 - [ ] T035 Open/attach scoped PR with Fixes #3181, perform bounded self-review/fix loop and record every round with exact head/validation; merge only with green applicable checks and no owner/protection hold under standing authority.
-- [ ] T036 Verify resulting-main CI/Studio/CodeQL/maps, reconcile authoritative issue/project/program status and release claim. Mark spec delivered only after every acceptance gate passes; keep broader #2892 program open.
+- [ ] T036 Verify resulting-main CI/Studio/CodeQL/maps, reconcile authoritative issue/project/program status and release claim. Record full delivery acceptance only after every acceptance gate passes; the implementation status lands with T035 under the spec lifecycle policy. Keep broader #2892 program open.
 
 ## Dependencies and parallel examples
 

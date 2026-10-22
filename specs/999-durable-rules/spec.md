@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-21
 
-**Status**: In progress — scope and implementation plan reviewed under the owner-delegated program authority; implementation and local native acceptance are on the branch, with exact-head PR review/CI and resulting-main gates still open for [#3181](https://github.com/elsa-workflows/elsa-foundation/issues/3181), under [Program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892). See the [task list](tasks.md) and its evidence links for completed versus pending qualification.
+**Status**: Implemented — effective when [PR #3192](https://github.com/elsa-workflows/elsa-foundation/pull/3192) merges, as required by the [spec lifecycle](../../docs/reference/spec-lifecycle.md). This implementation status does not close delivery acceptance: exact-head review/CI and resulting-main verification for [#3181](https://github.com/elsa-workflows/elsa-foundation/issues/3181) remain pending in the [task list](tasks.md). [Program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892) remains active.
 
 **Input**: Owner-approved production fourth-model objective in Program #2892 and claimed implementation leaf #3181. The bounded finite fixed-point witness from research #2901 supplies the semantic example. Production lifecycle, packaging, persistence, native invocation, and provider acceptance are the delivery scope of this specification; the [task list](tasks.md) records current implementation and verification status.
 
