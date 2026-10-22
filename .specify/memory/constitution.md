@@ -1,8 +1,8 @@
 <!--
 SYNC IMPACT REPORT — 6.1.0 -> 6.2.0 (2026-10-21)
-MINOR: adds optional Elsa.Rules to §E2.1 for unified-execution #2892/#3181, ADR 0088. No existing domain purpose, native runtime contract or framework pin changes.
+MINOR: adds optional Elsa.Rules to §E2.1 for unified-execution #2892/#3181, ADR 0088. Its implementation adds a narrow shared runtime scheduler/checkpoint contract for retaining bookmark trigger-claim work and deferring temporary unavailability; no existing domain purpose or framework pin changes.
 Authority: the program lead adopts ADR 0088 after the bounded planning review on 2026-10-21 under Sipke Schoorstra's standing delegated architecture and self-review authority; no multi-architect consensus or provisional-section ratification is asserted.
-Propagation: docs/reference/elsa-domain-tree.md and ADR 0088; Speckit templates have no pinned domain list and require no change. Framework remains v6.1.0.
+Propagation: docs/reference/elsa-domain-tree.md, ADR 0088, and the shared runtime scheduler contract and extension-point catalog; Speckit templates have no pinned domain list and require no change. Framework remains v6.1.0.
 -->
 <!--
 SYNC IMPACT REPORT — 6.0.3 -> 6.1.0 (2026-10-20)

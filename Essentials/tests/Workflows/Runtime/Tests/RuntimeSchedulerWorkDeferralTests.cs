@@ -46,6 +46,11 @@ public sealed class RuntimeSchedulerWorkDeferralTests
         var deferredItem = Assert.Single(deferred.Items);
         Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Deferred, deferredItem.Status);
         Assert.Equal("work-source", deferredItem.WorkItemId);
+        var commandResult = WorkflowExecutionCommandProcessResult.FromDrain(deferred);
+        Assert.Equal(RuntimeSchedulerDrainStopReason.Deferred, commandResult.StopReason);
+        Assert.False(commandResult.IsFaulted);
+        Assert.False(commandResult.WorkflowTerminated);
+        Assert.Equal(deferredItem.Error, commandResult.FaultReason);
         Assert.Equal(0, deferred.DrainedCount);
         Assert.Equal(0, queue.CompleteClaimCalls);
         Assert.Equal(0, queue.ConsumeClaimedCalls);
