@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Coalescing;
 using Elsa.Workflows.Runtime.Services.Scheduler;
@@ -107,6 +108,38 @@ public sealed class CoalescingSchedulerVisibilityTests
 
         var retained = Assert.Single((await _queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery(ExecutionId))).Items);
         Assert.Equal(visibleAt, retained.VisibleAfter);
+    }
+
+    [Fact]
+    public async Task Deferred_flush_preserves_the_latest_renewal_timeout_without_adding_elapsed_lifetime()
+    {
+        await _queue.EnqueueAsync(Work("resume"));
+        var provider = new ClaimRecordingVisibilityQueue(_queue);
+        var session = new RuntimeCoalescingSession(ExecutionId, provider, new PersistenceModeOptions());
+        var initial = Assert.IsType<RuntimeSchedulerWorkClaim>(await session.ClaimOverlayAsync(Request(), default));
+        var timeout = TimeSpan.FromMinutes(3);
+        var renewal = await session.RenewOverlayClaimAsync(initial, _now.AddHours(2), timeout, default);
+        var renewed = Assert.IsType<RuntimeSchedulerWorkClaim>(renewal.Claim);
+        Assert.True((await session.ReleaseOverlayClaimAsync(renewed, _now.AddDays(2), default)).Succeeded);
+
+        await session.AdvanceInnerQueueAsync(consumeInFlightClaims: true, default);
+
+        Assert.Equal(timeout, Assert.Single(provider.Requests).VisibilityTimeout);
+        Assert.Equal(_now.AddDays(2), Assert.Single((await _queue.ListWithVisibilityAsync(
+            new RuntimeSchedulerWorkQuery(ExecutionId))).Items).VisibleAfter);
+    }
+
+    private sealed class ClaimRecordingVisibilityQueue(InMemoryWorkflowSchedulerWorkQueue inner)
+        : QueueWithoutVisibility(inner), IWorkflowSchedulerWorkVisibilityReader
+    {
+        public List<RuntimeSchedulerWorkClaimRequest> Requests { get; } = [];
+        public override ValueTask<RuntimeSchedulerWorkClaim?> ClaimAsync(RuntimeSchedulerWorkClaimRequest request, CancellationToken token = default)
+        {
+            Requests.Add(request);
+            return base.ClaimAsync(request, token);
+        }
+        public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkVisibility>> ListWithVisibilityAsync(RuntimeSchedulerWorkQuery query, CancellationToken token = default) =>
+            inner.ListWithVisibilityAsync(query, token);
     }
 
     private RuntimeCoalescingSession Session() => new(ExecutionId, _queue, new PersistenceModeOptions());

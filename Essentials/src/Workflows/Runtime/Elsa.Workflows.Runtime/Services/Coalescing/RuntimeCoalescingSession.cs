@@ -26,7 +26,7 @@ public sealed class RuntimeCoalescingSession
     private readonly HashSet<string> _knownOverlayWorkItemIds = new(StringComparer.Ordinal);
     private readonly Dictionary<string, RuntimeSchedulerWorkItem> _activeFusedScheduleAnchors = new(StringComparer.Ordinal);
     private readonly List<string> _activeFusedScheduleAnchorOrder = [];
-    private readonly ConcurrentDictionary<RuntimeSchedulerWorkClaim, byte> _overlayClaims =
+    private readonly ConcurrentDictionary<RuntimeSchedulerWorkClaim, TimeSpan> _overlayClaims =
         new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<string, DateTimeOffset?> _durableVisibility = new(StringComparer.Ordinal);
     private readonly Dictionary<string, PendingRelease> _pendingReleases = new(StringComparer.Ordinal);
@@ -834,7 +834,7 @@ public sealed class RuntimeCoalescingSession
 
         var claim = await _overlayQueue.ClaimAsync(request, cancellationToken);
         if (claim is not null)
-            _overlayClaims.TryAdd(claim, 0);
+            _overlayClaims.TryAdd(claim, request.VisibilityTimeout);
         return claim;
     }
 
@@ -847,7 +847,7 @@ public sealed class RuntimeCoalescingSession
         var result = await _overlayQueue.RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken);
         _overlayClaims.TryRemove(claim, out _);
         if (result.Claim is not null)
-            _overlayClaims.TryAdd(result.Claim, 0);
+            _overlayClaims.TryAdd(result.Claim, visibilityTimeout);
         return result;
     }
 
@@ -870,11 +870,11 @@ public sealed class RuntimeCoalescingSession
             return RuntimeSchedulerWorkClaimTransitionResult.Stale;
 
         var result = await _overlayQueue.ReleaseClaimAsync(claim, visibleAt, cancellationToken);
-        _overlayClaims.TryRemove(claim, out _);
-        if (result.Succeeded && SupportsDeferredOverlayRelease &&
+        var owned = _overlayClaims.TryRemove(claim, out var visibilityTimeout);
+        if (result.Succeeded && owned && SupportsDeferredOverlayRelease &&
             claim.Item.CommandKind == WorkflowExecutionCommandKind.ResumeBookmark)
         {
-            _pendingReleases[claim.Item.WorkItemId] = new PendingRelease(claim, visibleAt);
+            _pendingReleases[claim.Item.WorkItemId] = new PendingRelease(claim, visibleAt, visibilityTimeout);
             // A handler can cross a durable boundary before reporting unavailable. If it deactivated the overlay,
             // its source must still exist; persist the release now rather than waiting for an inactive scope's flush.
             if (!IsActive)
@@ -1070,7 +1070,7 @@ public sealed class RuntimeCoalescingSession
             var now = _timeProvider.GetUtcNow();
             var claim = await _innerQueue.ClaimAsync(new RuntimeSchedulerWorkClaimRequest(
                 WorkflowExecutionId, pending.Claim.OwnerId, now,
-                pending.Claim.VisibleAfter - pending.Claim.ClaimedAt), cancellationToken);
+                pending.VisibilityTimeout), cancellationToken);
             if (claim is null)
                 throw new InvalidOperationException("The deferred scheduler work could not be claimed durably.");
             if (!StringComparer.Ordinal.Equals(claim.Item.WorkItemId, workItemId))
@@ -1085,7 +1085,7 @@ public sealed class RuntimeCoalescingSession
         }
     }
 
-    private sealed record PendingRelease(RuntimeSchedulerWorkClaim Claim, DateTimeOffset VisibleAt);
+    private sealed record PendingRelease(RuntimeSchedulerWorkClaim Claim, DateTimeOffset VisibleAt, TimeSpan VisibilityTimeout);
 
     private HashSet<string> CreateDurableWorkItemIdSet()
     {

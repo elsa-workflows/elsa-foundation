@@ -39,6 +39,14 @@ The two core-only skips are the existing platform-sensitive `PayloadCatalogFileT
 
 Workbench rebuilt successfully; the owned-server restart/recovery and HTTP Flowchart journeys passed. Generated maps were refreshed, remained byte-identical, and passed freshness checking. The solution-filter check passed after correcting an invocation typo (`check-solution-filters` to `solution-filters-check`); the original command error remains visible in the receipt and is not a test failure. No whole-program or resulting-main completion is claimed.
 
+## Renewal timeout correction after main integration
+
+The normal merge of main `3625ca163b84059ef21e9d8a630baae8d125a184` into the repair produced `dab62015bf182039552aadbc432ccaffc21c3bd0` without conflicts. Main changed Studio and Elsa 3 import code; it did not alter the repaired Runtime or Rules inputs. Integrated architecture, generated maps, solution filters and diff checks passed.
+
+A subsequent focused check found that deriving a new durable claim timeout from a renewed claim's `VisibleAfter - ClaimedAt` includes its elapsed lifetime. The new regression requested a three-minute renewal after two hours and observed an incorrect 02:03:00 timeout. The session now records the latest claim/renewal timeout explicitly and uses that duration when persisting a deferred release. The regression passed with restoration of 00:03:00 and the intended retry deadline.
+
+Final focused validation: full Runtime 2,560, Rules 278, Architecture 585 and all 10 unchanged command-budget cases passed, with zero failures/skips. Map freshness and diff checks passed. [The renewal receipt](coalescing-visibility-renewal.json) preserves the red/green logs and source hashes. Earlier full HTTP, EF, core-only and server results above retain their pre-correction scope; this does not relabel them as reruns of the final head.
+
 ## Gate limits
 
 The six formal self-review rounds remain exhausted. Focused diagnosis, repairs and regression validation are not a seventh formal round or a new clean final full review. Code Review reassessment of the new head, its required hosted checks and resulting-main qualification remain required. This evidence does not authorize merging a red or unapproved head or declare the program complete.
