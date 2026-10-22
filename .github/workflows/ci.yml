@@ -156,6 +156,7 @@ jobs:
           python3 tools/ci/test_tiers.py --self-test
           python3 tools/ci/test_results.py --self-test
           python3 tools/ci/test_tiers.py check-workflows
+          python3 tools/ci/test_tiers.py check-docs
 
       # FR-013. On a pull request only the entries its diff adds or changes are checked, so closing a tracking issue
       # never turns unrelated PRs red; the base commit is fetched explicitly so a shallow clone cannot silently widen the

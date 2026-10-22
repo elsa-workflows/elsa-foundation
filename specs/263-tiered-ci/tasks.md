@@ -210,12 +210,12 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
 **Independent test**: quickstart "Story 4", steps 1–5.
 
 - [ ] T031 [US4] Run quickstart "Story 4" steps 1–5 on a throwaway draft PR, and record the failing messages in the PR evidence. They exercise T014's checks and T018's slow-test report end to end.
-- [ ] T032 [P] [US4] Add the tier rule to `.claude/skills/elsa-add-unit-tests/SKILL.md`:
+- [X] T032 [P] [US4] Add the tier rule to `.claude/skills/elsa-add-unit-tests/SKILL.md`:
   - a new test project needs a `tools/ci/test-tiers.json` entry;
   - Testcontainers, or a child host in a project of 2 min or more, means integration tier;
   - otherwise the project is PR tier;
   - a link to `docs/contributing/merging.md#ci-tiers`.
-- [ ] T033 [P] [US4] Add a "Test tier" row to `docs/contributing/review-checklist.md` that points at the manifest and `test-tiers-check`. Add the Gate-index row "§— Test tier: every test project in one tier; Testcontainers or a ≥2 min child host is integration tier | `Elsa.Maps.Generator test-tiers-check`" to `.specify/memory/constitution.md`. Bump it to 6.2.0 (MINOR) with a Sync Impact Report naming spec 263 and leaving the approval line for the owner; Joey Barten approves in the PR.
+- [X] T033 [P] [US4] Add a "Test tier" row to `docs/contributing/review-checklist.md` that points at the manifest and `test-tiers-check`. Add the Gate-index row "§— Test tier: every test project in one tier; Testcontainers or a ≥2 min child host is integration tier | `Elsa.Maps.Generator test-tiers-check`" to `.specify/memory/constitution.md`. Bump it to 6.2.0 (MINOR) with a Sync Impact Report naming spec 263 and leaving the approval line for the owner; Joey Barten approves in the PR. *(Done as 6.2.0 → 6.3.0, because #3192 had already taken 6.2.0. The Gate-index row needs a section to point at, so a short §E7 states the rule and links the docs.)*
 
 **Checkpoint**: SC-005. Each drift check has a self-test case (T015, T019) and a PR-level demonstration (T031).
 
@@ -227,7 +227,7 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
 
 **Independent test**: quickstart "Story 5".
 
-- [ ] T034 [US5] Add `## CI tiers` to `docs/contributing/merging.md`, between "PR evidence" and "Review and merge". It covers:
+- [X] T034 [US5] Add `## CI tiers` to `docs/contributing/merging.md`, between "PR evidence" and "Review and merge". It covers:
   - the two tiers and what each runs;
   - the draft rule: open as draft, then `gh pr ready <n>` before requesting review;
   - `gh workflow run ci.yml --ref <branch> -f tier=full`;
@@ -239,6 +239,8 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
   - add `check-docs` to `tools/ci/test_tiers.py` (with self-test cases for each missing link and each mismatched literal) and run it in `Plan tiers`;
   - refresh the changed skills' hashes in `.specify/integrations/claude.manifest.json`.
 
+  *(Done. The page's "Post-merge gates" paragraph no longer says the EF suites never run on PRs. `.agents/` is a git-ignored local install, so the Codex skill copies are not repository content.)*
+
 **Checkpoint**: FR-023 to FR-025. Removing a link or renaming the dispatch input fails `Plan tiers`.
 
 ---
@@ -249,7 +251,7 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
 
 **Independent test**: quickstart "Story 6".
 
-- [ ] T035 [P] [US6] Add `paths:` to the `pull_request` trigger of `.github/workflows/studio-ci.yml`, with the list from [research R10](research.md#r10--studio-ci-path-filter). Leave `push` unfiltered. Add a header comment explaining that none of its checks is required, so a path filter is safe. Run quickstart "Story 6" and record the results.
+- [X] T035 [P] [US6] Add `paths:` to the `pull_request` trigger of `.github/workflows/studio-ci.yml`, with the list from [research R10](research.md#r10--studio-ci-path-filter). Leave `push` unfiltered. Add a header comment explaining that none of its checks is required, so a path filter is safe. Run quickstart "Story 6" and record the results. *(Filter done; `tools/ci/verify_studio_nuget_packages.py` was added to R10's list because Studio CI runs it. The Story 6 run is recorded in the PR evidence.)*
 
 **Checkpoint**: SC-007.
 

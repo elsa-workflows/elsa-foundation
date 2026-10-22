@@ -1,4 +1,10 @@
 <!--
+SYNC IMPACT REPORT — 6.2.0 -> 6.3.0 (2026-10-22)
+MINOR: adds §E7, the CI test tier gate (spec 263, FR-021): every test project is in tools/ci/test-tiers.json in exactly one tier, and a project that reaches Testcontainers, or launches a child host and takes 2 minutes or more, is integration tier. Checked by Elsa.Maps.Generator test-tiers-check in "Generated maps fresh". No existing rule changes; the Gate index intro now also names generator checks.
+Authority: owner approval pending in the implementing PR (Joey Barten agreed on 2026-10-22 to approve it there).
+Propagation: docs/contributing/merging.md#ci-tiers, docs/contributing/review-checklist.md, the elsa-add-unit-tests skill. Speckit templates pin no CI gates and need no change.
+-->
+<!--
 SYNC IMPACT REPORT — 6.1.0 -> 6.2.0 (2026-10-21)
 MINOR: adds optional Elsa.Rules to §E2.1 for unified-execution #2892/#3181, ADR 0088. Its implementation adds a narrow shared runtime scheduler/checkpoint contract for retaining bookmark trigger-claim work and deferring temporary unavailability; no existing domain purpose or framework pin changes.
 Authority: the program lead adopts ADR 0088 after the bounded planning review on 2026-10-21 under Sipke Schoorstra's standing delegated architecture and self-review authority; no multi-architect consensus or provisional-section ratification is asserted.
@@ -36,7 +42,7 @@ Approval: Sipke Schoorstra, 2026-10-12 (#2578), on his authority alone; open to 
 -->
 # Elsa Workflow Engine Constitution
 
-**Version:** 6.2.0 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-10-21 | **Derives from:** [framework constitution](constitution-framework.md) **v6.1.0**
+**Version:** 6.3.0 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-10-22 | **Derives from:** [framework constitution](constitution-framework.md) **v6.1.0**
 
 **Status:** Ratified 2026-08-08 by Sipke Schoorstra. Governance calls for consensus among Joey Barten, Sipke Schoorstra and Frans van Ek; this ratification was taken on Sipke Schoorstra's authority alone and is open to revision if the other architects dissent. Sections marked draft or provisional (§E2.8 activity versioning and Model X, §E2.9) are **not** covered by it.
 
@@ -44,7 +50,7 @@ Approval: Sipke Schoorstra, 2026-10-12 (#2578), on his authority alone; open to 
 
 ## Gate index
 
-The framework Gate index applies. Elsa-specific gates with an automated check (tests in `Essentials/tests/Architecture/Tests/`); every other gate is on [docs/contributing/review-checklist.md](../../docs/contributing/review-checklist.md).
+The framework Gate index applies. Elsa-specific gates with an automated check (tests in `Essentials/tests/Architecture/Tests/`, or the generator check named); every other gate is on [docs/contributing/review-checklist.md](../../docs/contributing/review-checklist.md).
 
 | § | Gate | Check |
 |---|---|---|
@@ -52,6 +58,7 @@ The framework Gate index applies. Elsa-specific gates with an automated check (t
 | §E2.3 | `Elsa.Primitives` has no external package | `ArchitectureGuardTests.Elsa_primitives_has_no_external_package_references` |
 | §E2.7 | Elsa 3 stays behind the import boundary | `Elsa3MigrationBoundaryTests`, `ArchitectureGuardTests.Runtime_projects_do_not_reference_elsa3_compatibility_projects` |
 | §E5 | No project hand-maintains its package version; own-package ranges are bounded at the next major | `NoLiteralProjectVersionGuardTests`, `PackageRangesBuildCheckTests` |
+| §E7 | Every test project is in one CI tier; Testcontainers, or a child host in a project of 2 minutes or more, is integration tier | `Elsa.Maps.Generator test-tiers-check` (in "Generated maps fresh") |
 
 ## Derivation
 
@@ -132,6 +139,10 @@ Every activity the design-time picker can show is a persisted `ActivityDefinitio
 - **R8** `Agent` is reserved for the AI-assistant domain; workflow-execution roles use `Actor`/`Worker`/`Host`.
 
 **Exceptions:** provenance `Source…` names, OpenTelemetry `ActivitySource` mirrors and the existing origin-value `…Source` types; the serialized single-payload `…Response` types in `Elsa.Agent.Api` and `Elsa.Foundation.Identity.Api`; older `…State` enums with serialized values; the scheduler `…WorkHandler` family. New and renamed types conform or record an explicit exception. **Protected names (NM-14):** `Bookmark`, `Trigger`, `Incident`, `Outbox`, `Checkpoint`, `WorkItem`, `Hold`, `PauseGate`, `Envelope` and `Slot` are exempt from shortening pressure.
+
+## §E7 CI test tiers
+
+Every test project is in `tools/ci/test-tiers.json` in exactly one tier (spec 263). A project that reaches Testcontainers, directly or through a referenced test project, or that launches a child host and takes 2 minutes or more, is **integration** tier; every other project is **PR** tier. A project is wholly one tier: per-test traits never assign one. The two tiers, the draft rule and the quarantine list: [docs/contributing/merging.md](../../docs/contributing/merging.md#ci-tiers).
 
 ## Governance
 
