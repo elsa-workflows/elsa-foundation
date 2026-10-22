@@ -147,6 +147,12 @@
       "Extensions/Etl/src/Workflows/Design/Elsa.Etl.Workflows.Design.csproj",
       "Extensions/Etl/src/Workflows/Runtime/Elsa.Etl.Workflows.Runtime.csproj",
       "Extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj",
+      "Extensions/Rules/src/Core/Elsa.Rules.Core.csproj",
+      "Extensions/Rules/src/Persistence/Core/Elsa.Rules.Persistence.Core.csproj",
+      "Extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj",
+      "Extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj",
+      "Extensions/Rules/src/Workflows/Design/Elsa.Rules.Workflows.Design.csproj",
+      "Extensions/Rules/src/Workflows/Runtime/Elsa.Rules.Workflows.Runtime.csproj",
       "samples/Elsa.Samples.Compensation/Elsa.Samples.Compensation.csproj"
     ]
   }

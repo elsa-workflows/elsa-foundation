@@ -152,10 +152,10 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
                 await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
                 // A deactivating boundary — and a cap fold, whose trailing commit rode the in-flight dispatch — already
                 // carries the in-flight item's effect in this flush, so the item must be consumed here instead of
-                // surviving as a durable duplicate (see AdvanceInnerQueueAsync). Only the pre-activation attempt boundary
-                // keeps it.
+                // surviving as a durable duplicate (see AdvanceInnerQueueAsync). A retaining checkpoint or
+                // pre-activation attempt boundary keeps it for redrive.
                 await session.AdvanceInnerQueueAsync(
-                    consumeInFlightClaims: capFold || !continueAfterBoundary,
+                    consumeInFlightClaims: !commit.RetainSchedulerWork && (capFold || !continueAfterBoundary),
                     cancellationToken,
                     preserveActiveFusedScheduleAnchors: capFold);
             }
@@ -182,7 +182,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
                 session.RecordDurableBoundaryState(commit.StateChanges);
             await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
             await session.AdvanceInnerQueueAsync(
-                consumeInFlightClaims: !continueAfterBoundary,
+                consumeInFlightClaims: !commit.RetainSchedulerWork && !continueAfterBoundary,
                 cancellationToken,
                 preserveActiveFusedScheduleAnchors: false);
         }

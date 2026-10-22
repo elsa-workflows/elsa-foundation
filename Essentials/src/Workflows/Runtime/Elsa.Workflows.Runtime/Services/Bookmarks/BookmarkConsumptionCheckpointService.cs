@@ -168,7 +168,12 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
                     workItem,
                     occurredAt))
                 .ToArray(),
-            Metadata: metadata);
+            Metadata: metadata)
+        {
+            RetainSchedulerWork = request.TransitionKind is
+                BookmarkResumeCheckpointTransitionKind.InitialTriggerClaim or
+                BookmarkResumeCheckpointTransitionKind.RedeliveryClaim
+        };
 
         var result = await _checkpointCommitter.CommitAsync(commit, cancellationToken);
 

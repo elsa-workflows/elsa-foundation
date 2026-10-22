@@ -103,6 +103,26 @@
     <Project Path="tools/versioning/Elsa.Versioning.Publisher/Elsa.Versioning.Publisher.csproj" />
   </Folder>
   <Folder Name="/src/" />
+  <Folder Name="/Extensions/Rules/" />
+  <Folder Name="/Extensions/Rules/src/">
+    <Project Path="Extensions/Rules/src/Core/Elsa.Rules.Core.csproj" />
+    <Project Path="Extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj" />
+    <Project Path="Extensions/Rules/src/Tooling/Elsa.Rules.Tooling.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Rules/src/Persistence/">
+    <Project Path="Extensions/Rules/src/Persistence/Core/Elsa.Rules.Persistence.Core.csproj" />
+    <Project Path="Extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Rules/src/Workflows/">
+    <Project Path="Extensions/Rules/src/Workflows/Runtime/Elsa.Rules.Workflows.Runtime.csproj" />
+    <Project Path="Extensions/Rules/src/Workflows/Design/Elsa.Rules.Workflows.Design.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Rules/tests/">
+    <Project Path="Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Rules/tests/Persistence/EntityFrameworkCore/">
+    <Project Path="Extensions/Rules/tests/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Rules.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
+  </Folder>
   <Folder Name="/Essentials/apps/">
     <Project Path="Essentials/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj" />
     <Project Path="Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj" />

@@ -57,7 +57,8 @@ public sealed class WorkflowDrainOrchestratorOptions
     /// drain has not dispatched before. Each follow-up work item id is derived from the hop that produced it, so a run
     /// that advances dispatches new ids, while a drain that keeps delivering work that dispatches nothing, or keeps
     /// dispatching the same work item again, does not. Cycles that make progress reset the count, so this does not limit
-    /// how long a workflow can be. Each drain starts its own count.
+    /// how long a workflow can be. During the durable resume-to-coalescing handoff, delivery of a previously unseen
+    /// outbox item also makes progress; repeated delivery IDs do not. Each drain starts its own count.
     /// </summary>
     public int MaxCyclesWithoutProgress { get; }
 

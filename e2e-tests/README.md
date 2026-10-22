@@ -126,13 +126,19 @@ $base = 'http://localhost:5295'
 $selfHosted = 'Test-RestartRecovery.ps1', 'Test-AlterationReplayAndRestart.ps1', 'Test-FileBasedDeployment.ps1',
               'Test-SharedPersistence.ps1', 'Test-SharedDiagnosticsPersistence.ps1', 'Test-ServerLifecycleGuard.ps1',
               'Test-JsonSourceComposition.ps1', 'Test-UnknownFeatures.ps1', 'Test-HttpResponseFlowchart.ps1'
+# Package-backed Rules is qualified separately with an immutable feed and deployment receipt.
+$packageQualified = 'Test-DurableRules.ps1', 'Test-NativeRulesInstallation.ps1', 'Test-RulesAdmissionRecovery.ps1'
 $failed = @()
 Get-ChildItem ./e2e-tests -Recurse -Filter 'Test-*.ps1' | Sort-Object FullName | ForEach-Object {
+    if ($_.Name -in $packageQualified) {
+        Write-Host "Separate package qualification required: $($_.Name) (not counted as passed)"
+        return
+    }
     if ($_.Name -in $selfHosted) { pwsh -NoProfile -File $_.FullName }
     else { pwsh -NoProfile -File $_.FullName -BaseUrl $base }
     if ($LASTEXITCODE -ne 0) { $failed += $_.Name }
 }
-if ($failed) { "FAILED: $($failed -join ', ')" } else { 'all scripts passed' }
+if ($failed) { "FAILED: $($failed -join ', ')" } else { 'all source-suite scripts passed; package qualification remains separate' }
 ```
 
 Each script runs in its own process, so one failure does not end the loop. The two `Test-Shared*` journeys need
@@ -398,3 +404,24 @@ These are genuine defects surfaced by the tests and fixed in the source (candida
    "non-literal" and threw - contradicting its own documented contract that unauthored options apply defaults.
    Fix: `HttpEndpointTriggerStimulusProvider` now rejects only genuinely non-`Literal` sources and treats an
    omitted/null literal as unauthored (applies the default).
+
+## Durable Rules package-backed journey
+
+The three scripts under `rules/` each own their Workbench process and fresh content root. They require a
+published host whose six Rules modules are real PackageReferences and a verified deployment receipt;
+the ordinary source-built host cannot establish that package identity. Run them through
+`tools/rules/verify-packaged-rules.py --stage workbench` with the immutable inputs documented in the
+[Rules acceptance quickstart](../specs/999-durable-rules/quickstart.md). The harness publishes the
+package-backed host, verifies its selected package assets, then supplies `-AssemblyPath`,
+`-DeploymentReceiptPath` and `-EvidencePath` to the REST suite. The generic source-suite loop above
+explicitly excludes this separate qualification and does not count it as passed.
+
+`Test-DurableRules.ps1` covers Sequence/Flowchart completion, a held Event sibling and join across
+restart, duplicate stimulus, budget fault and refusal. `Test-RulesAdmissionRecovery.ps1` publishes
+with admissions enabled, disables new admission across restarts, cancels one waiting invocation
+and recovers another when admission returns. It also verifies invalid input without a Rules row.
+Its read-only SQLite snapshots distinguish persisted attempts from public inspection summaries.
+
+The installation journey first persists native work with Rules features disabled, then adds Rules to
+the same database and verifies unchanged state/schema and the original continuation. It additionally
+requires Python 3 for read-only SQLite snapshots; its evidence is distinct from the ordinary REST journeys.
