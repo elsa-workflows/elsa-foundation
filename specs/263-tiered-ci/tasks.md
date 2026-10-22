@@ -114,11 +114,13 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
 
 **Independent test**: quickstart "Story 1", steps 1–5.
 
-- [ ] T018 [US1] Create `tools/ci/test_results.py` with `failures`, `retry-filter` and `evaluate`, per [contracts](contracts/cli-and-ci.md#toolscitest_resultspy) and the [data-model](data-model.md#shard-result--test-outcomesjson):
+- [X] T018 [US1] Create `tools/ci/test_results.py` with `failures`, `retry-filter` and `evaluate`, per [contracts](contracts/cli-and-ci.md#toolscitest_resultspy) and the [data-model](data-model.md#shard-result--test-outcomesjson):
   - it parses TRX `UnitTestResult` and `TestMethod` (className, name);
   - `evaluate` exits 1 on a non-quarantined double failure, on a test missing from try2, or on an aborted host;
   - it writes `test-outcomes.json` and a summary with retried passes, quarantined failures with issue links, and tests over `slowTestSeconds` that are not on `slowAllowList`.
-- [ ] T019 [US1] Add `--self-test` to `tools/ci/test_results.py`, with small TRX fixtures written in code:
+
+  *(Done. The shard orchestration went into a separate `tools/ci/run_shard.py`, which runs each unit as its own `dotnet test` with its own results directory, in parallel up to the core count. A shared directory or one `.slnf` invocation would let VSTest overwrite TRX files that share a timestamped name, which the local smoke run showed. Abort detection reads only Error-level run messages; a Warning naming a test like `…_crashed_incumbent…` gave a false positive.)*
+- [X] T019 [US1] Add `--self-test` to `tools/ci/test_results.py`, with small TRX fixtures written in code:
   - pass;
   - fail then pass;
   - fail twice;
