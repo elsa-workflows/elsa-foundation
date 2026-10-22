@@ -10,6 +10,7 @@ namespace Elsa3.Mapping.Mappings;
 /// </summary>
 public sealed class Elsa3WorkflowDefinitionToState(
     IWellKnownTypeRegistry wellKnownTypeRegistry,
+    IObjectConverter objectConverter,
     Elsa3ActivityToState activityMapper,
     Elsa3ArgumentDefinitionToInputOutput argumentMapper
 )
@@ -17,7 +18,7 @@ public sealed class Elsa3WorkflowDefinitionToState(
     internal WorkflowDefinitionState Map(Elsa3ConversionPlan plan)
     {
         var definition = plan.Definition;
-        var variables = definition.Variables.Select(variable => Elsa3VariableMapper.Map(wellKnownTypeRegistry, variable)).ToList();
+        var variables = definition.Variables.Select(variable => Elsa3VariableMapper.Map(wellKnownTypeRegistry, objectConverter, variable)).ToList();
         var rootActivity = definition.Root is null ? null : activityMapper.Map(plan, definition.Root);
         var inputs = (definition.Inputs ?? []).Select(argumentMapper.MapInput).ToList();
         var outputs = (definition.Outputs ?? []).Select(argumentMapper.MapOutput).ToList();
