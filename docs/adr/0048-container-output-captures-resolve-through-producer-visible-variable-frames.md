@@ -12,28 +12,6 @@ does not ratify or amend the constitution. ADR 0027 remains proposed; this decis
 stable declaration address, per-activation frame identity, and ancestor-visibility rules needed for
 output-capture targets rather than ratifying ADR 0027 wholesale.
 
-## Amendment — 2026-10-22, proposed (spec 265)
-
-[Spec 265](../../specs/265-graph-activity-scope-reads/spec.md) (#3027) lets a node inside a closed-scope graph
-activity body capture an output into one of the graph's own variables. That target is not a frame owned by an
-activity activation: the graph boundary's variables are durable value rows owned by the boundary's activity
-execution scope (spec 221 FR-035), and the visible root frame below the boundary is a read-only projection of those
-rows. For this target only:
-
-- the rows are the single store, not a shadow of a frame (section 4 is unaffected); the capture writes the row in the
-  producer's completion commit, and the projection reads it;
-- section 5's concurrency rule is not yet enforced for graph variables, as it is not for workflow-root captures: no
-  concurrency analysis for captures exists, and refusing every repeated capture would reject sequential ones. The
-  last committed capture wins, as for a workflow-root capture today. [#3198](https://github.com/elsa-workflows/elsa-foundation/issues/3198)
-  tracks the analysis for both.
-
-Publication still refuses a capture into anything but the activity's own declared variables, and a body cannot target
-a frame above its boundary.
-
-Tests pin both halves: publication accepts two body nodes capturing into one graph variable
-(`Compilation_accepts_two_body_nodes_capturing_into_one_graph_variable`), and a run leaves the second captured value
-for later reads and the boundary output (`Sequential_captures_into_one_graph_variable_leave_the_last_value`).
-
 ## Context
 
 The first activity output-capture authoring slice lets an author bind a named activity-result

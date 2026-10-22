@@ -96,7 +96,7 @@ corruption.
 from the rows, not from `executable.WorkflowVariables`, so `Workflows.Runtime` does not depend on `Activities.Graph`.
 
 **Storage trade-off.** ADR 0048 §4 forbids durable rows that *shadow* a frame. Here the rows are the only store, and
-the frame is a projection of them. ADR 0048 gets an amendment note saying so.
+the frame is a projection of them. The reference doc says so (plan A-12).
 - The rows have no frame revision guard, so concurrent captures into the same graph variable must be refused at
   publication, as ADR 0048 §5 already requires for frames.
 - **Alternative rejected:** a real container frame stored on the boundary activation. It changes the checkpoint

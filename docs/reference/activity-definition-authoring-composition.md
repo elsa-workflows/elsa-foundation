@@ -71,6 +71,12 @@ Publishing the activity refuses a body reference the activity does not declare o
 | `activity.graph.body-capture-target-unknown` | An output capture targets anything but one of the activity's declared variables |
 | `activity.graph.body-capture-type-incompatible` | An output capture's type does not fit the variable's type, and no conversion is authored |
 
+A capture writes the activity's own variable row. That row is the variable's only store: the variables the body
+reads are projected from it, not kept as a separate frame. Several nodes may capture into one variable one after
+another, and later reads see the last captured value. ADR 0048 §5 requires publication to refuse captures that can
+run concurrently into one variable, unless a merge or reduction governs them. That check is not built yet, for
+workflow variables or graph variables ([#3198](https://github.com/elsa-workflows/elsa-foundation/issues/3198)).
+
 The last two in the table that need the body nodes' resolved contracts (the result check and the capture type check)
 run when the activity compiles; the others also run when a draft is validated. Ambient JavaScript reads and the key
 of a container-scoped variable are not checked statically; they fail at run time, as in a workflow.
