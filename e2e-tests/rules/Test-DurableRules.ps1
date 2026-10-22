@@ -318,16 +318,17 @@ try {
     $flowAfter = New-ActivityNode -NodeId 'after-rules' -VersionId $writeLineVersion -Inputs @(
         (New-LiteralInput -ReferenceKey 'text' -Value 'Flowchart continued after durable Rules completion.')
     )
-    $flowCapture = New-RulesResultCaptureNode -ProducerScopeId 'flowchart-root'
+    # The root Flowchart's local execution scope is distinct from its executable node ID.
+    $flowCapture = New-RulesResultCaptureNode -ProducerScopeId 'scope:root'
     $flowchartStructure = @{
         kind = 'elsa.flowchart.structure'
         schemaVersion = '1.0.0'
         payload = @{
             startNodeId = 'rules'
-            activities = @($flowRules, $flowAfter, $flowCapture)
+            activities = @($flowRules, $flowCapture, $flowAfter)
             connections = @(
-                @{ id = 'rules-to-after'; source = @{ nodeId = 'rules'; port = 'Done' }; target = @{ nodeId = 'after-rules' } },
-                @{ id = 'after-to-capture'; source = @{ nodeId = 'after-rules'; port = 'Done' }; target = @{ nodeId = 'capture-rules-result' } }
+                @{ id = 'rules-to-capture'; source = @{ nodeId = 'rules'; port = 'Done' }; target = @{ nodeId = 'capture-rules-result' } },
+                @{ id = 'capture-to-after'; source = @{ nodeId = 'capture-rules-result'; port = 'Done' }; target = @{ nodeId = 'after-rules' } }
             )
             nodeMetadata = @{}
             connectionMetadata = @{}

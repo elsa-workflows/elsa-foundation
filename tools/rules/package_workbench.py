@@ -31,10 +31,9 @@ def verify_workbench_package_host(receipt, evidence, source, feed, run, environm
     execute a native Rules workflow in Workbench.
     """
     evidence, source, feed, probe_deployment = map(Path, (evidence, source, feed, probe_deployment))
-    workbench_project = source / 'Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj'
-    workbench_source = workbench_project.parent
-    if not workbench_project.is_file():
-        raise ValueError('Immutable source does not contain the expected Workbench project: ' + str(workbench_project))
+    original_project = source / 'Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj'
+    if not original_project.is_file():
+        raise ValueError('Immutable source does not contain the expected Workbench project: ' + str(original_project))
     module_roots = receipt.get('modules')
     if not isinstance(module_roots, list) or len(module_roots) != len(RULES_MODULES) or set(module_roots) != set(RULES_MODULES):
         raise ValueError('Workbench package-host proof requires all six Rules module roots.')
@@ -71,6 +70,34 @@ def verify_workbench_package_host(receipt, evidence, source, feed, run, environm
     ET.indent(props)
     ET.ElementTree(props).write(props_path, encoding='unicode', xml_declaration=True)
 
+    # Keep the production dependency graph unconditional. The qualification host is a copy at
+    # the same directory depth, so ordinary relative references/imports and host sources retain
+    # their meaning. Only its direct Rules references are replaced with exact package roots.
+    workbench_source = original_project.parent.with_name('RulesPackageWorkbench')
+    shutil.copytree(original_project.parent, workbench_source,
+                    ignore=shutil.ignore_patterns('bin', 'obj'))
+    workbench_project = workbench_source / original_project.name
+    project = ET.parse(workbench_project)
+    replaced = []
+    for group in project.findall('ItemGroup'):
+        for reference in list(group.findall('ProjectReference')):
+            include = reference.get('Include', '').replace('\\', '/')
+            if '/Extensions/Rules/' not in include:
+                continue
+            module = PurePosixPath(include).stem
+            if module not in RULES_MODULES or group.get('Condition') or reference.get('Condition'):
+                raise ValueError('Unexpected or conditional Rules host reference: ' + include)
+            replaced.append(module)
+            group.remove(reference)
+    expected_references = set(RULES_MODULES) - {'Elsa.Rules.Core', 'Elsa.Rules.Persistence.Core'}
+    if len(replaced) != len(expected_references) or set(replaced) != expected_references:
+        raise ValueError('The qualification host must replace exactly the four direct Rules project references.')
+    ET.SubElement(project.getroot(), 'Import', Project=str(props_path.resolve()))
+    ET.indent(project)
+    project.write(workbench_project, encoding='unicode', xml_declaration=True)
+    if (workbench_source / 'Program.cs').read_bytes() != (original_project.parent / 'Program.cs').read_bytes():
+        raise ValueError('Qualification host entry point differs from immutable Workbench source.')
+
     nuget_config = ET.parse(source / 'NuGet.Config')
     sources = nuget_config.find('packageSources')
     mappings = nuget_config.find('packageSourceMapping')
@@ -92,7 +119,6 @@ def verify_workbench_package_host(receipt, evidence, source, feed, run, environm
         raise ValueError('The immutable package run is missing its computed version properties: ' + str(computed_props))
     property_args = [
         '-p:CustomBeforeDirectoryBuildProps=' + str(computed_props.resolve()),
-        '-p:RulesPackageReferencesFile=' + str(props_path.resolve()),
     ]
     env = environment.copy()
     env['NUGET_PACKAGES'] = str(package_cache)
@@ -157,9 +183,12 @@ def verify_workbench_package_host(receipt, evidence, source, feed, run, environm
         'sourceCommit': receipt['sourceCommit'],
         'workbenchProject': str(workbench_project),
         'workbenchSourceSha256': {
-            'project': _sha256(workbench_project),
-            'program': _sha256(workbench_source / 'Program.cs'),
+            'project': _sha256(original_project),
+            'program': _sha256(original_project.parent / 'Program.cs'),
         },
+        'qualificationProjectSha256': _sha256(workbench_project),
+        'qualificationProgramSha256': _sha256(workbench_source / 'Program.cs'),
+        'replacedProjectReferences': sorted(replaced),
         'moduleVersions': {package: versions[package] for package in RULES_MODULES},
         'sourceProjectLibraryCount': len(project_libraries),
         'projectAssetsRulesModules': asset_records,

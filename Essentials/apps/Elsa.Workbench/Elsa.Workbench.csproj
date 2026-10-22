@@ -51,10 +51,8 @@
 	<!-- The computed-vs-source-build production configuration swap this host shares with Elsa.Foundation.Host (#2084, #2126). -->
 	<Import Project="$(MSBuildThisFileDirectory)../ComputedProductionSettings.targets" />
 
-	<!-- Package qualification supplies exact, computed Rules PackageReferences from an isolated local feed.
-	     Ordinary source builds retain project references. Neither mode enables Rules in a shell by itself. -->
-	<Import Project="$(RulesPackageReferencesFile)" Condition="'$(RulesPackageReferencesFile)' != ''" />
-	<ItemGroup Condition="'$(RulesPackageReferencesFile)' == ''">
+	<!-- Rules is discoverable here and enabled only by an explicit shell composition. -->
+	<ItemGroup>
 		<ProjectReference Include="..\..\..\Extensions\Rules\src\Runtime\Elsa.Rules.Runtime.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Rules\src\Persistence\EntityFrameworkCore\Elsa.Rules.Persistence.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Rules\src\Workflows\Design\Elsa.Rules.Workflows.Design.csproj" />

@@ -7,6 +7,11 @@ from pathlib import Path
 import shutil
 import xml.etree.ElementTree as ET
 
+DIRECT_RUNTIME_ROOTS = (
+    'Elsa.Rules.Core', 'Elsa.Rules.Persistence.Core', 'Elsa.Rules.Runtime',
+    'Elsa.Rules.Persistence.EntityFrameworkCore',
+)
+
 
 def verify_consumer(receipt, evidence, source, feed, run, environment, process_proof=False):
     consumer, deployment = evidence / 'consumer', evidence / 'deployment'
@@ -24,9 +29,13 @@ def verify_consumer(receipt, evidence, source, feed, run, environment, process_p
     module_roots = receipt['modules']
     if not module_roots or len(module_roots) != len(set(module_roots)):
         raise ValueError('Package receipt must name a nonempty, unique set of module roots.')
-    missing_roots = [package for package in module_roots if package not in versions]
+    # The ordinary clean consumer proves every packed module root, including the native Design
+    # bridge. The process witness deliberately has no Design package in its dependency graph, so
+    # it uses only the four direct runtime/storage modules while reusing the same six-module feed.
+    consumer_roots = list(DIRECT_RUNTIME_ROOTS) if process_proof else module_roots
+    missing_roots = [package for package in consumer_roots if package not in versions]
     if missing_roots:
-        raise ValueError('Module roots are missing from the immutable package closure: ' + ', '.join(missing_roots))
+        raise ValueError('Consumer module roots are missing from the immutable package closure: ' + ', '.join(missing_roots))
     central = ET.parse(source / 'Directory.Packages.props')
     sqlite = next(p.attrib['Version'] for p in central.findall('.//PackageVersion')
                   if p.attrib['Include'] == 'Microsoft.EntityFrameworkCore.Sqlite')
@@ -39,7 +48,7 @@ def verify_consumer(receipt, evidence, source, feed, run, environment, process_p
         ET.SubElement(properties, key).text = value
     references = ET.SubElement(project, 'ItemGroup')
     ET.SubElement(references, 'FrameworkReference', Include='Microsoft.AspNetCore.App')
-    package_references = {package: versions[package] for package in module_roots}
+    package_references = {package: versions[package] for package in consumer_roots}
     package_references.update({'Microsoft.EntityFrameworkCore.Sqlite': sqlite,
                                'Npgsql.EntityFrameworkCore.PostgreSQL': postgres,
                                'NuGet.Packaging': '7.9.0'})
@@ -71,15 +80,33 @@ def verify_consumer(receipt, evidence, source, feed, run, environment, process_p
     libraries = assets['libraries']
     if any(p['type'] == 'project' for p in libraries.values()):
         raise ValueError('Consumer has a direct or transitive ProjectReference.')
-    for package, version in versions.items():
-        key = package + '/' + version
-        if key not in libraries or libraries[key]['type'] != 'package':
-            raise ValueError('Consumer did not resolve exact packed package: ' + key)
-        restored = Path(env['NUGET_PACKAGES']) / libraries[key]['path'] / (package.lower() + '.' + version.lower() + '.nupkg')
+    resolved_packed = []
+    resolved_packed_ids = set()
+    for key, library in libraries.items():
+        package, version = key.rsplit('/', 1)
+        expected_version = versions.get(package)
+        if expected_version is None:
+            continue
+        if library.get('type') != 'package':
+            raise ValueError('Resolved packed closure library is not a NuGet package: ' + key)
+        if version != expected_version:
+            raise ValueError('Consumer resolved a different version of a packed package: ' + key)
+        restored = Path(env['NUGET_PACKAGES']) / library['path'] / (package.lower() + '.' + version.lower() + '.nupkg')
         archive_hash = base64.b64encode(hashlib.sha512(restored.read_bytes()).digest()).decode()
         expected = next(p for p in receipt['packages'] if p['id'] == package)
         if archive_hash != expected['archiveSha512']:
             raise ValueError('Restored archive differs from local packed artifact: ' + key)
+        resolved_packed_ids.add(package)
+        resolved_packed.append({'id': package, 'version': version, 'archiveSha512': archive_hash})
+
+    for package in consumer_roots:
+        key = package + '/' + versions[package]
+        if key not in libraries or libraries[key]['type'] != 'package':
+            raise ValueError('Consumer did not resolve exact selected package root: ' + key)
+    if not process_proof:
+        missing_closure = sorted(set(versions) - resolved_packed_ids)
+        if missing_closure:
+            raise ValueError('Six-module consumer did not resolve the full packed closure: ' + ', '.join(missing_closure))
     receipt['restoredProjectLibraries'] = 0
     receipt['resolvedPackages'] = {k: v['sha512'] for k, v in libraries.items()}
     run(['dotnet', 'restore', project_path, '--locked-mode', '--configfile', consumer / 'NuGet.Config'], cwd=consumer, env=env)
@@ -101,11 +128,18 @@ def verify_consumer(receipt, evidence, source, feed, run, environment, process_p
     run(['dotnet', executable, 'direct', evidence / 'restored.db', evidence / 'restored.json'], cwd=deployment, env=env)
     verify_identity_control(receipt, evidence, source, feed, deployment, executable, run, env)
     receipt['directProofPassed'] = True
-    receipt['consumerModuleRoots'] = module_roots
-    receipt['consumerModuleRootVersions'] = {package: versions[package] for package in module_roots}
+    receipt['consumerModuleRoots'] = consumer_roots
+    receipt['consumerModuleRootVersions'] = {package: versions[package] for package in consumer_roots}
+    receipt['consumerResolvedPackedClosure'] = sorted(resolved_packed, key=lambda item: item['id'])
     receipt['consumerPackageReferenceRestorePassed'] = True
-    receipt['proofScope'] = ('Clean PackageReference restore of every packed module root, with direct Rules execution and '
-                             'identity rejection; full native-module execution and upgrade gates remain pending.')
+    if process_proof:
+        receipt['proofScope'] = ('Clean PackageReference restore of the four direct-runtime Rules roots, with direct Rules '
+                                 'execution and PostgreSQL process recovery; native Design packages are absent from this '
+                                 'consumer graph. The six-module clean consumer is a separate direct-stage proof; native '
+                                 'workflow execution and upgrade gates remain pending.')
+    else:
+        receipt['proofScope'] = ('Clean PackageReference restore of every packed module root, with direct Rules execution '
+                                 'and identity rejection; native workflow execution and upgrade gates remain pending.')
     if process_proof:
         from package_process import verify_processes
         verify_processes(receipt, evidence, source, feed, deployment, executable, run, env)
