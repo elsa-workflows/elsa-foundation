@@ -2,11 +2,11 @@
 
 | Context | Required explanation / behavior |
 |---|---|
-| Active blocking | Current intervention context; only an actually applicable canonical recovery action, otherwise inspection/share/operator handoff. |
+| Active blocking | Current intervention context; only an actually applicable canonical recovery action, otherwise inspection/share/operator handoff. A non-waiting incident with no controls receives that explicit handoff without referring to actions below. |
 | Active nonblocking | Current attention without claiming the run is blocked or offering an invented retry. |
 | Historical/resolved/suppressed | Historical outcome, current-run context and inspection; no new mutation through guidance. |
 | RetryScheduled | Existing scheduled attempt and recorded due time; no duplicate manual action even after due time. |
-| Known compensation requester with unavailable schedule evidence | Explain unknown Retry availability and offer a retryable read-only check. A successful matching observation may expose canonical Retry; failure cannot open its confirmation. Keep generic/non-compensation behavior distinct. |
+| Known compensation requester with unavailable schedule evidence | Explain unknown Retry availability and offer a retryable read-only check. A successful matching observation with valid consumed nested journal structure may expose canonical Retry; failed/malformed reads cannot open its confirmation. Reuse the canonical parser and keep generic/non-compensation behavior distinct. |
 | Pending/followed action | Explain the exact selected target versus another action in this run; preserve canonical suppression. |
 | Canceled requester | No handler-start/decision shortcut; preserve canonical guard. |
 | Scheduled/non-Faulted source or non-Running parent | Suppress ineligible Retry; exact source evidence and canonical preflight govern reviewability. No new recovery path. |

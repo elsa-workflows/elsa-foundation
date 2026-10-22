@@ -75,7 +75,7 @@ The operator can still reach the affected activity/input and return to the origi
 - **FR-001**: Investigation MUST show a concise next-step explanation for the selected incident in the context of the current run.
 - **FR-002**: Active blocking, active nonblocking, history and unavailable/no-evidence outcomes MUST remain distinct without conflating incident health and run lifecycle.
 - **FR-003**: Scheduled automatic retry and incomplete recovery evidence MUST be represented honestly; guidance MUST NOT offer a duplicate or invented action.
-  When an exact compensation requester is known but its journal cannot confirm retry scheduling, a read-only availability check MUST remain usable without opening Retry confirmation. Only a successful matching current-context/run/requester observation may establish that schedule evidence; failed reads remain unknown.
+  When an exact compensation requester is known but its journal cannot confirm retry scheduling, a read-only availability check MUST remain usable without opening Retry confirmation. Only a successful matching current-context/run/requester observation with valid consumed nested journal structure may establish that schedule evidence; failed or malformed reads remain unknown.
 - **FR-004**: Existing supported recovery controls MUST retain their target, consequences, confirmation, authority, pending-state and cancellation guards. No new recovery command or generic Retry is introduced.
   The UI MUST suppress locally known ineligible Retry and historical/terminal action controls using the existing runtime preflight contract. Retry review requires the exact loaded Faulted source and, when a parent identity is recorded, a confirmed Running parent. A known active blocking incident on an exact loaded descendant MUST suppress source Retry, matching the existing preflight refusal. Unknown or partial evidence MUST NOT be promoted to confirmed applicability or proof of an absent descendant. Dynamic concurrency, final authorization and execution remain server-owned; canonical payload/target mapping is unchanged.
 - **FR-005**: An absent action MUST NOT by itself be described as unsupported functionality or denied permission; guidance MUST preserve known versus unknown availability.
@@ -84,7 +84,7 @@ The operator can still reach the affected activity/input and return to the origi
 - **FR-008**: Existing exact activity/input association, protected/unavailable value states and list return context MUST remain intact. Navigation alone MUST NOT be represented as proof of resolved input values.
 - **FR-009**: Read-only investigation/navigation MUST perform zero run/recovery/design mutations; existing explicit confirmed operator actions remain unchanged.
 - **FR-010**: Guidance MUST follow existing Studio tokens, disclosure and focus conventions, remain readable at both laptop sizes in light/dark and reflow for narrow/zoom and keyboard use.
-- **FR-011**: Guidance MUST update for the currently selected incident/run and endpoint/auth context and never show another target's stale explanation after selection or evidence changes. Pending reads, journal observations and open confirmations MUST retain that origin; replacing the context with the same run ID MUST invalidate old reads and confirmations before submission.
+- **FR-011**: Guidance MUST update for the currently selected incident/run and endpoint/auth context and never show another target's stale explanation after selection or evidence changes. Incident-action availability reads, journal observations and open confirmations MUST retain that origin; replacing the context with the same run ID MUST invalidate old reads and confirmations before submission.
 
 ### Key Entities
 
@@ -107,6 +107,7 @@ The operator can still reach the affected activity/input and return to the origi
 
 - Runs3062 is qualified on main5d1; Home3063 is not a dependency. This leaf is the sole implementation selected by the 22 October scheduling decision6329077033.
 - Canonical compensation controls from PR3140 and M5 scheduled-retry state are already delivered. Reuse them; #2747/#3035/#3047 retain runtime/recovery ownership.
+- Persisted and already-following operator-plan ownership retains its existing contract. Source-confirmed cross-context gaps are triaged separately in #3184; this leaf's new origin guards cover incident availability reads, journal observations and confirmations.
 - No backend, permission policy, runtime semantics, new module references, optional provider setup or production deployment is included.
 - Existing valid tests stay valid. Changed guidance/selection/availability behavior receives focused observable regression and red/green evidence, followed by normal-host and exact-head/resulting-main qualification.
 - A failed required base gate stops implementation until reconciled. Final3075's nine composed acceptance rows remain separate.
