@@ -51,6 +51,11 @@ Independent test:search/filter→exact detail→Close/Escape retains applied cri
 - [x] T017 Add the combined selected-facet plus authoritative zero-search result regression; show query-specific no-match copy before local-facet empty copy.
 - [x] T018 Re-run complete affected tests/typecheck/scoped lint/Secrets browser checks, root review the correction batch and carry all round1 findings into round2 without resetting the counter. Final normal-host and canonical acceptance remain separate.
 
+### Round3 visual correction — same partial-results explanation
+
+- [ ] T019 Reproduce the normal-host screenshot's partial-coverage paragraph misalignment in a desktop/narrow browser geometry regression; align the explanation with the existing filter/table content inset without a broader list redesign.
+- [ ] T020 Verify the CSS correction, root controlled revert and scoped checks, then carry the root visual finding into independent round4 on the final head. The failed first normal-host proof remains retained; final source-bound proof and canonical acceptance stay separate.
+
 T001→T002→T003→T004 precedes US1; US2 and US3 depend on accepted observation ownership and share SecretsPage/test/browser files, so one writer executes them serially. T012→T013→T014 follows the stories. Read-only root/audit review may run alongside work; no parallel source writers or overlapping heavy builds.
 
 MVP is truthful coverage (US1), but deliver all3issueACs before accepting3069. Do not pick up Home3063, Incident3067, lists3070 or consistency3071 from this task file. No performance work or deployment.
