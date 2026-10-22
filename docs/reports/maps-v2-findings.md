@@ -6,13 +6,13 @@ This is a point-in-time report from generated map facts. It is not a constitutio
 
 ## Summary
 
-- Domains in domain map: 34
-- Source extension catalogs discovered: 77
-- Source extension catalogs indexed from root: 77
+- Domains in domain map: 35
+- Source extension catalogs discovered: 78
+- Source extension catalogs indexed from root: 78
 - Discovered source catalogs not linked from root index: 0
 - Root-indexed catalogs missing on disk: 0
 - Runtime-to-design direct reference signals: 0
-- Design-to-runtime direct reference signals: 15
+- Design-to-runtime direct reference signals: 19
 - Bridge-like direct reference shapes: 23
 
 ## Reference Signals
@@ -29,6 +29,10 @@ This is a point-in-time report from generated map facts. It is not a constitutio
 - Elsa.Etl.Workflows.Design -> Elsa.Activities.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
 - Elsa.Etl.Workflows.Design -> Elsa.Etl.Workflows.Runtime (design-to-runtime): expected in some design/read/publish paths; review context.
 - Elsa.Etl.Workflows.Design -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
+- Elsa.Rules.Workflows.Design -> Elsa.Activities.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
+- Elsa.Rules.Workflows.Design -> Elsa.Rules.Runtime (design-to-runtime): expected in some design/read/publish paths; review context.
+- Elsa.Rules.Workflows.Design -> Elsa.Rules.Workflows.Runtime (design-to-runtime): expected in some design/read/publish paths; review context.
+- Elsa.Rules.Workflows.Design -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
 - Elsa.Workflows.Design.Persistence.EntityFrameworkCore -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
 - Elsa3.Activities.Design.Import -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
 - Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
