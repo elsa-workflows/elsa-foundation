@@ -128,7 +128,7 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
   - a theory (FQN without arguments);
   - an aborted run;
   - a slow test, on and off the allow-list.
-- [ ] T020 [US1] Restructure the PR tier in `.github/workflows/ci.yml`.
+- [X] T020 [US1] Restructure the PR tier in `.github/workflows/ci.yml`.
   - **`Plan tiers` job**: it takes the current `Build & test` steps up to `Check catalog and module README links` (`:104-137`), adds `python3 tools/ci/test_tiers.py --self-test`, `python3 tools/ci/test_results.py --self-test` and `python3 tools/ci/test_tiers.py select --tier pr …`, and outputs `docs_only` and the matrix.
   - **`PR shard (${{ matrix.shard }})` job**: a matrix job, skipped when `docs_only`, with steps per [contracts "Shard job steps"](contracts/cli-and-ci.md#shard-job-steps-pr-and-integration):
     - restore with `restore-ci-project-graph.sh`;
@@ -142,11 +142,13 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
   - **`Build & test` job**: becomes the aggregate. It `needs` the plan job, the shards, `architecture-guards` and `core-only`, uses `if: ${{ !cancelled() }}`, and succeeds when the plan succeeded and the rest succeeded, or the change is `docs_only`. Keep the name and the `docs_only` output, and repoint `architecture-guards` and `core-only` (`:385-386`, `:428-429`) from `needs: build-and-test` to the plan job.
   - **Remove** the "Generate container-free test solution filter" step (`:153-190`); `select` replaces it.
   - **Header comment**: update `:1-63` to describe the tiers, and keep the `python3 tools/contributor-checkpoints/test_workflow_guards.py` literal.
-- [ ] T021 [US1] Create `.github/workflows/ci-flake-record.yml`, a `workflow_run` workflow, per [research R7](research.md#r7--retry-and-quarantine-mechanics):
+- [X] T021 [US1] Create `.github/workflows/ci-flake-record.yml`, a `workflow_run` workflow, per [research R7](research.md#r7--retry-and-quarantine-mechanics):
   - triggers: `CI` and `CI full tier`, on `completed`;
   - permissions: `actions: read`, `issues: write`;
   - it downloads every `test-outcomes-*` artifact of the triggering run, validates each name against `^[A-Za-z_][A-Za-z0-9_.]*$` and the SHA against 40 hex characters, and adds one comment per run to the T003 issue (#3263) listing `passedOnRetry` with the run URL;
   - no step interpolates artifact content into a shell command; names are passed through files or environment variables.
+
+  *(Done. The tracker's number is `flakeTrackerIssue` in the manifest, and the validation lives in `test_results.py record-flakes`, with self-test cases for an injected name, a path-like shard and malformed JSON. GitHub runs `workflow_run` workflows from the default branch only, so it first fires after this PR merges.)*
 - [ ] T022 [US1] Extend `tools/contributor-checkpoints/test_workflow_guards.py`, or add `tools/ci/test_tiers.py --self-test` cases if the guards' scope does not fit, to assert:
   - `ci.yml` still has a job named `Build & test` whose `needs` include every shard job;
   - no job named `Build & test` or `Full tier` sits behind an `if:` that can skip it.

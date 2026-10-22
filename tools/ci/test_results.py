@@ -16,6 +16,7 @@ Usage:
   test_results.py retry-filter <trx-dir>
   test_results.py evaluate <shard-dir> --shard <name> --head <sha> [--manifest <file>] [--summary <file>] [--outcomes <file>]
   test_results.py check-quarantine [--manifest <file>] [--base <sha>]
+  test_results.py record-flakes <artifacts-dir> --run-url <url> --body <file>
   test_results.py --self-test
 
 <shard-dir> holds runs.json (the list of {project, group, filter} the shard ran) and try1/<index>/, try2/<index>/.
@@ -239,6 +240,45 @@ def check_quarantine(manifest: dict, base_sha: str | None,
     return (1 if problems else 0), problems
 
 
+# Flake record (FR-004) ----------------------------------------------------------------------------------------------
+
+SHA = re.compile(r"^[0-9a-f]{40}$")
+SHARD = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+
+
+def flake_comment(artifacts_dir: str, run_url: str) -> str | None:
+    """A comment for the flake tracker from a run's test-outcomes artifacts; None when nothing passed on retry.
+
+    The artifacts come from a run that may have started from a fork, so they are data only: every name must match a
+    strict pattern before it is written, and anything that does not is dropped and logged.
+    """
+    rows, head = [], None
+    for root, _, files in os.walk(artifacts_dir):
+        for name in sorted(files):
+            if name != "test-outcomes.json":
+                continue
+            try:
+                with open(os.path.join(root, name), encoding="utf-8") as handle:
+                    data = json.load(handle)
+                shard, sha, retried = data["shard"], data["headSha"], data.get("passedOnRetry") or []
+            except (OSError, json.JSONDecodeError, KeyError, TypeError) as error:
+                print(f"record-flakes: skipping an unreadable outcome file: {error}", file=sys.stderr)
+                continue
+            if not (isinstance(shard, str) and SHARD.match(shard) and isinstance(sha, str) and SHA.match(sha)):
+                print("record-flakes: skipping an outcome file with an invalid shard or SHA", file=sys.stderr)
+                continue
+            head = head or sha
+            for test in retried:
+                if isinstance(test, str) and TEST_NAME.match(test):
+                    rows.append(f"| `{test}` | {shard} |")
+                else:
+                    print("record-flakes: skipping an invalid test name", file=sys.stderr)
+    if not rows:
+        return None
+    return "\n".join([f"Passed on retry in [this run]({run_url}) at `{head}`:", "", "| Test | Shard |", "|---|---|",
+                      *sorted(set(rows)), ""])
+
+
 def _run(command: list[str]) -> subprocess.CompletedProcess:
     return subprocess.run(command, capture_output=True, text=True)
 
@@ -359,6 +399,21 @@ def self_test() -> int:
     check("quarantine: unreadable base commit exits 2",
           check_quarantine(head, "b" * 40, stub(base_same, {42: "OPEN"}, commit_present=False))[0] == 2)
 
+    with tempfile.TemporaryDirectory() as tmp:
+        def outcome(folder: str, data: object) -> None:
+            os.makedirs(os.path.join(tmp, folder))
+            with open(os.path.join(tmp, folder, "test-outcomes.json"), "w", encoding="utf-8") as handle:
+                handle.write(data if isinstance(data, str) else json.dumps(data))
+        outcome("a", {"shard": "pr-1", "headSha": "a" * 40, "passedOnRetry": ["A.T.Flip", "bad name`; rm -rf /"]})
+        outcome("b", {"shard": "pr-2", "headSha": "a" * 40, "passedOnRetry": []})
+        outcome("c", {"shard": "../evil", "headSha": "a" * 40, "passedOnRetry": ["A.T.Other"]})
+        outcome("d", "{not json")
+        comment = flake_comment(tmp, "https://example.test/run/1") or ""
+        check("record-flakes: lists a valid retried test", "`A.T.Flip` | pr-1" in comment)
+        check("record-flakes: drops invalid names and shards", "rm -rf" not in comment and "A.T.Other" not in comment)
+    with tempfile.TemporaryDirectory() as tmp:
+        check("record-flakes: nothing to record gives no comment", flake_comment(tmp, "u") is None)
+
     for failure in failures:
         print(f"test_results self-test: {failure}", file=sys.stderr)
     if failures:
@@ -385,11 +440,24 @@ def main() -> int:
     quarantine = sub.add_parser("check-quarantine")
     quarantine.add_argument("--manifest", default=MANIFEST)
     quarantine.add_argument("--base")
+    record = sub.add_parser("record-flakes")
+    record.add_argument("artifacts_dir")
+    record.add_argument("--run-url", required=True)
+    record.add_argument("--body", required=True)
     args = parser.parse_args()
 
     if args.self_test:
         return self_test()
     try:
+        if args.command == "record-flakes":
+            comment = flake_comment(args.artifacts_dir, args.run_url)
+            if comment is None:
+                print("record-flakes: no test passed on retry")
+                return 0
+            with open(args.body, "w", encoding="utf-8") as body:
+                body.write(comment)
+            print(comment)
+            return 0
         if args.command == "failures":
             print("\n".join(read_trx(args.trx_dir).failed()))
             return 0

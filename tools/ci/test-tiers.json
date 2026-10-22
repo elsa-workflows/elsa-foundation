@@ -5,6 +5,7 @@
   "shardTargetMinutes": 6,
   "slowTestSeconds": 10,
   "slowTestMode": "report",
+  "flakeTrackerIssue": 3263,
   "ownJobs": {
     "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj": "Architecture guards"
   },
