@@ -1,6 +1,6 @@
 import React from "react";
 import { flushSync } from "react-dom";
-import { createRoot } from "react-dom/client";
+import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { authSessionStartedEvent, StudioHttpError, type StudioActivityDefinitionImplementationEditorContribution, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -10,7 +10,14 @@ import { clearApiCapabilityCache } from "../api/capabilities";
 import { activityDefinitionsObservationEvent, observeActivityDefinitions } from "../activityDefinitionObservability";
 import type { ActivityDefinitionDraftManagementView, ActivityDefinitionManagementView, ActivityDefinitionVersionManagementView, ActivityManagementPage } from "../activityDefinitionTypes";
 
-afterEach(() => {
+const mountedRoots = new Map<Root, HTMLElement>();
+const queryClients = new Set<QueryClient>();
+
+afterEach(async () => {
+  for (const [root, container] of mountedRoots) unmountPage(root, container);
+  await Promise.all([...queryClients].map(queryClient => queryClient.cancelQueries()));
+  queryClients.forEach(queryClient => queryClient.clear());
+  queryClients.clear();
   vi.restoreAllMocks();
   clearApiCapabilityCache();
   window.history.replaceState({}, "", "/");
@@ -1516,6 +1523,8 @@ function renderPage(
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
+  mountedRoots.set(root, container);
+  queryClients.add(queryClient);
   const baseUrl = options.baseUrl ?? `test://activity-definitions-${Math.random()}`;
   let context = { baseUrl, http: { getJson, postJson, putJson } } as unknown as StudioEndpointContext;
   const render = () => <QueryClientProvider client={queryClient}><ActivityDefinitionsPage context={context} activityEditors={() => activityEditors} navigateToStudioPath={navigateToStudioPath} /></QueryClientProvider>;
@@ -1528,10 +1537,15 @@ function renderPage(
       flushSync(() => root.render(render()));
     },
     async unmount() {
-      flushSync(() => root.unmount());
-      container.remove();
+      unmountPage(root, container);
     }
   };
+}
+
+function unmountPage(root: Root, container: HTMLElement) {
+  if (!mountedRoots.delete(root)) return;
+  flushSync(() => root.unmount());
+  container.remove();
 }
 
 function renderOverview({ drafts, versions = page([version()]), actions = [], postJson, definitionView, withAuthoringCapabilities = false, activityEditors }: {
