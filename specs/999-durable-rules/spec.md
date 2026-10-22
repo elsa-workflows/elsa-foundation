@@ -6,7 +6,7 @@
 
 **Status**: In progress — scope and implementation plan reviewed under the owner-delegated program authority; implementation and local native acceptance are on the branch, with exact-head PR review/CI and resulting-main gates still open for [#3181](https://github.com/elsa-workflows/elsa-foundation/issues/3181), under [Program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892). See the [task list](tasks.md) and its evidence links for completed versus pending qualification.
 
-**Input**: Owner-approved production fourth-model objective in Program #2892 and claimed implementation leaf #3181. The bounded finite fixed-point witness from research #2901 supplies the semantic example; production lifecycle, packaging, persistence, native invocation, and provider acceptance remain to be delivered.
+**Input**: Owner-approved production fourth-model objective in Program #2892 and claimed implementation leaf #3181. The bounded finite fixed-point witness from research #2901 supplies the semantic example. Production lifecycle, packaging, persistence, native invocation, and provider acceptance are the delivery scope of this specification; the [task list](tasks.md) records current implementation and verification status.
 
 ## User Scenarios & Testing
 

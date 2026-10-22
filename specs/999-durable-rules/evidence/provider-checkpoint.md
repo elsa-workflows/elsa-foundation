@@ -2,6 +2,12 @@
 
 This internal checkpoint completes T021–T024: Rules provider contexts, separate generated migration sets, shared real-engine store contracts, and required-provider evidence tooling. It does not complete #3181. Installed-package identity, independent-process recovery, actual native continuation, upgrade/rollback, Workbench REST and final PR/main gates remain pending.
 
+## Integrated-review refresh
+
+PR #3192 round 1 identified that the original matrix preceded the later delivery-validator invocation argument. The current delivery path was rebuilt and requalified on all four real providers at base `6557ace50173b491d3a8ffde1ec61de752d7ff36`, with a stable working-tree fingerprint including the API tracking/catalog and spec wording fixes. All **8 cases passed, zero failures/skips**, including both pooling settings on every provider. Actual versions remain SQLite 3.50.4, PostgreSQL 16.15, SQL Server 16.00.4185, and MySQL 8.4.11. See [current-source qualification receipt](provider-review-qualification.json) for source fingerprints, full counters and raw artifact hashes. The validator remains synthetic; this refresh proves store behavior, not native parent completion. The historical checkpoint below remains unchanged as prior evidence.
+
+Command: `python3 tools/rules/verify-providers.py --require-all --evidence-dir /tmp/rules-pr3192-providers` (exit 0).
+
 ## Implemented boundary
 
 The Rules EF feature selects SQLite, PostgreSQL, SQL Server or MySQL through the existing module binding and schema gate. Each context supplies a live database clock, ordinal string storage, bounded indexed keys and provider-appropriate large text/binary columns. MySQL explicitly uses utf8mb4 for supplementary Unicode. The product package still references only the common EF closure; engine packages belong to the test/migration host and the deploying host. Pooled and non-pooled factories resolve the same store/reader implementation.
