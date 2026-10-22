@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { AlertCircle, Check, Package, Plus, Search } from "lucide-react";
 import { StudioHttpError, type StudioAiContributionApi, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { OverflowMenu, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
+import { OverflowMenu, StudioButton, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
 import { createDefinition, deleteDefinition, deleteDefinitionPermanently, listDefinitions, restoreDefinition, workflowDefinitionFolderMovePath } from "../api/workflowDesign";
 import type { ActivityCatalogItem, DefinitionListState, WorkflowDefinitionDetails, WorkflowDefinitionSummary } from "../workflowTypes";
 import { formatDate } from "../workflowFormatting";
@@ -503,8 +503,8 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
           <p>Create and organize workflow definitions, then open a definition to edit its behavior.</p>
         </div>
         <div className="wf-definition-page-actions" role="group" aria-label="Workflow definition page actions">
-          <button type="button" title="Create workflow" onClick={openCreateDialog}><Plus size={15} /> Create workflow</button>
-          <button ref={refreshButtonRef} type="button" title="Refresh workflow definitions" aria-label="Refresh workflow definitions" onClick={retry}>Refresh</button>
+          <StudioButton variant="primary" size="md" title="Create workflow" aria-label="Create workflow" onClick={openCreateDialog}><Plus size={15} /> Create workflow</StudioButton>
+          <StudioButton ref={refreshButtonRef} variant="default" size="md" title="Refresh workflow definitions" aria-label="Refresh workflow definitions" onClick={retry}>Refresh</StudioButton>
         </div>
       </header>
       <div className="wf-definitions-list">

@@ -205,6 +205,119 @@ test("Workflow Definitions groups its create and refresh actions above the colle
   await expect(page.getByRole("dialog", { name: "Create workflow" })).toBeVisible();
 });
 
+test("Activity and Workflow definition pages use the same desktop and narrow content inset", async ({ page }) => {
+  await page.route("**/capabilities", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(activityCapabilities())
+  }));
+  await page.route(/\/design\/activities\/definitions\?.*/, route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(emptyActivityCollection("inset-fixture"))
+  }));
+
+  for (const { width, expectedInset } of [{ width: 1280, expectedInset: 18 }, { width: 390, expectedInset: 12 }]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/?mode=activity-definitions&theme=light");
+    const activityInset = await page.getByRole("heading", { name: "Activity Definitions" }).evaluate(heading => {
+      const page = heading.closest("main")!;
+      return heading.getBoundingClientRect().left - page.getBoundingClientRect().left;
+    });
+    await expect(page.getByRole("heading", { name: "No designed activities yet" })).toBeVisible();
+
+    await page.goto(`${browseUrl}&theme=light`);
+    const workflowInset = await page.getByRole("heading", { name: "Workflow definitions", level: 1 }).evaluate(heading => {
+      const page = heading.closest(".wf-page")!;
+      return heading.getBoundingClientRect().left - page.getBoundingClientRect().left;
+    });
+
+    expect(activityInset).toBe(expectedInset);
+    expect(workflowInset).toBe(expectedInset);
+    expect(workflowInset).toBe(activityInset);
+  }
+});
+
+test("definition header actions use the shared button recipe in the custom material fixture and remain actionable", async ({ page }) => {
+  let activityReads = 0;
+  let holdActivityRefresh = false;
+  let releaseActivityRefresh: (() => void) | undefined;
+  await page.route("**/capabilities", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(activityCapabilities())
+  }));
+  await page.route(/\/design\/activities\/definitions\?.*/, async route => {
+    activityReads += 1;
+    if (holdActivityRefresh && activityReads > 1) {
+      await new Promise<void>(resolve => { releaseActivityRefresh = resolve; });
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(emptyActivityCollection("actions-fixture"))
+    });
+  });
+
+  await page.goto("/?mode=activity-definitions&theme=material");
+  await expect(page.getByRole("heading", { name: "No designed activities yet" })).toBeVisible();
+  const activityHeader = page.locator("header").filter({ has: page.getByRole("heading", { name: "Activity Definitions" }) });
+  const activityCreate = activityHeader.getByRole("button", { name: "Create activity" });
+  await expectMaterialPrimaryRecipe(activityCreate);
+  await activityCreate.click();
+  await expect(page.getByRole("dialog", { name: "Create Activity Definition" })).toBeVisible();
+  await page.getByRole("button", { name: "Close" }).click();
+  const activityReadsBeforeRefresh = activityReads;
+  holdActivityRefresh = true;
+  const activityRefresh = activityHeader.getByRole("button", { name: "Refresh" });
+  await activityRefresh.click();
+  await expect(activityRefresh).toBeDisabled();
+  const disabledStyle = await activityRefresh.evaluate(element => ({
+    cursor: getComputedStyle(element).cursor
+  }));
+  expect(disabledStyle.cursor).toBe("not-allowed");
+  await expect.poll(async () => Number(await activityRefresh.evaluate(element => getComputedStyle(element).opacity))).toBeLessThanOrEqual(0.55);
+  releaseActivityRefresh?.();
+  await expect(activityRefresh).toBeEnabled();
+  await expect.poll(() => activityReads).toBeGreaterThan(activityReadsBeforeRefresh);
+
+  await page.goto(`${browseUrl}&theme=material`);
+  const workflowCreate = page.getByRole("button", { name: "Create workflow" });
+  await expectMaterialPrimaryRecipe(workflowCreate);
+  await workflowCreate.click();
+  const workflowCreateDialog = page.getByRole("dialog", { name: "Create workflow" });
+  await expect(workflowCreateDialog).toBeVisible();
+  await workflowCreateDialog.getByRole("button", { name: "Cancel" }).click();
+  const requestsBeforeRefresh = (await recordedPageRequests(page)).length;
+  await page.getByRole("button", { name: "Refresh workflow definitions" }).click();
+  await expect.poll(async () => (await recordedPageRequests(page)).length).toBeGreaterThan(requestsBeforeRefresh);
+});
+
+async function expectMaterialPrimaryRecipe(button: import("@playwright/test").Locator) {
+  const colors = await button.evaluate(element => ({
+    actual: getComputedStyle(element).backgroundColor,
+    material: getComputedStyle(document.documentElement).getPropertyValue("--studio-material-send-bg").trim(),
+    accent: getComputedStyle(document.documentElement).getPropertyValue("--studio-accent").trim()
+  }));
+  expect(colors.material).toBe("rgb(31, 87, 123)");
+  expect(colors.actual).toBe(colors.material);
+  expect(colors.actual).not.toBe(colors.accent);
+}
+
+function activityCapabilities() {
+  return { capabilities: [{ id: "elsa.api.activity-design", contractVersion: "1", links: [
+    { rel: "activity-definitions", href: "design/activities/definitions" },
+    { rel: "activity-definition", href: "design/activities/definitions/{definitionId}", templated: true },
+    { rel: "activity-definition-drafts", href: "design/activities/definitions/{definitionId}/drafts", templated: true },
+    { rel: "activity-definition-draft", href: "design/activities/drafts/{draftId}", templated: true },
+    { rel: "activity-definition-versions", href: "design/activities/definitions/{definitionId}/versions", templated: true }
+  ] }] };
+}
+
+function emptyActivityCollection(snapshotId: string) {
+  return { items: [], count: 0, totalCount: 0, hasMore: false, continuation: null, snapshot: { snapshotId, asOf: "2026-10-20T00:00:00Z" } };
+}
+
 test("browser Back restores the later workflow page with its observed opaque cursor", async ({ page }) => {
   await openSecondPage(page);
   const requestCountBeforeOpen = (await recordedPageRequests(page)).length;
@@ -260,7 +373,7 @@ for (const variant of searchStatusVariants) {
     await expectPriorPageIsDisplayOnly(page);
     await page.screenshot({ path: testInfo.outputPath(`${variant.name.replaceAll(" ", "-")}-deferred.png`), fullPage: true });
 
-    await page.getByRole("button", { name: "Refresh", exact: true }).focus();
+    await page.getByRole("button", { name: "Refresh workflow definitions" }).focus();
     await page.keyboard.press("Enter");
     await expect.poll(async () => (await recordedSearchRequests(page, "latest")).length)
       .toBe(1);

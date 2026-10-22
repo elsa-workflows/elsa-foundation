@@ -11,6 +11,7 @@ import type {
   StudioWorkflowRunInputEditorContribution
 } from "@elsa-workflows/studio-sdk";
 import { authSessionEndedEvent, authSessionStartedEvent } from "@elsa-workflows/studio-sdk";
+import { StudioButton } from "@elsa-workflows/studio-ui";
 import {
   type ActivityDefinitionCollectionRequest,
   type ActivityDefinitionManagementView
@@ -54,10 +55,9 @@ type ActivityCollectionHistoryContext = {
 
 type ActivityHistoryMetadata = { collection?: ActivityCollectionHistoryContext };
 const activityHistoryStateKey = "elsaActivityDefinitions";
-const activityAuthorityRevisionStorageKey = "elsaActivityDefinitions.authorityRevision";
 const activityRuntimeScopeId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 let activityHistoryEntrySequence = 0;
-let activityAuthorityRevision = readStoredActivityAuthorityRevision();
+let activityAuthorityRevision = 0;
 
 if (typeof window !== "undefined") {
   const recordAuthorityChange = incrementActivityAuthorityRevision;
@@ -93,7 +93,7 @@ export function ActivityDefinitionsPage({
   }, []);
   const queryClient = useQueryClient();
   const restoredHistoryContext = readActivityHistoryMetadata()?.collection;
-  const currentAuthorityRevision = getActivityAuthorityRevision();
+  const currentAuthorityRevision = activityAuthorityRevision;
   const initialScopeChanged = Boolean(restoredHistoryContext && (restoredHistoryContext.runtimeScopeId !== activityRuntimeScopeId || restoredHistoryContext.baseUrl !== context.baseUrl || restoredHistoryContext.authorityRevision !== currentAuthorityRevision));
   const [authorizationRevision, setAuthorizationRevision] = useState(currentAuthorityRevision);
   const [authorizationInvalidating, setAuthorizationInvalidating] = useState(initialScopeChanged);
@@ -103,7 +103,7 @@ export function ActivityDefinitionsPage({
   const baseUrlRef = useRef(context.baseUrl);
 
   const invalidateAuthorizationScope = useCallback(() => {
-    setAuthorizationRevision(getActivityAuthorityRevision());
+    setAuthorizationRevision(activityAuthorityRevision);
     setAuthorizationInvalidating(true);
     pendingRedactionsRef.current += 1;
     void redactActivityDefinitionManagementCache(queryClient).then(() => queryClient.invalidateQueries({ queryKey: activityDesignKeys.definitionCollections })).finally(() => {
@@ -351,7 +351,7 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
     <main className="ad-page ad-designed-collection" aria-labelledby="activity-definitions-title">
       <header className="ad-page-header">
         <div><span className="ad-kicker">Workflows</span><h1 id="activity-definitions-title">Activity Definitions</h1><p>Design reusable activities here. Drafts stay editable, while published versions remain in history.</p></div>
-        <div className="ad-header-actions"><button type="button" className="ad-primary-action" onClick={() => setCreateOpen(true)}>Create activity</button><button type="button" onClick={refresh} disabled={query.isFetching}><RefreshCw size={16} aria-hidden /> {query.isFetching && data ? "Refreshing" : "Refresh"}</button><details className="ad-collection-disclosure ad-tools-disclosure"><summary>Tools</summary><div className="ad-disclosure-panel"><button type="button" onClick={onImport}>Import from Elsa 3</button><button type="button" onClick={onPlanUpgrade}>Plan broad upgrade</button></div></details></div>
+        <div className="ad-header-actions"><StudioButton variant="primary" size="md" onClick={() => setCreateOpen(true)}>Create activity</StudioButton><StudioButton variant="default" size="md" onClick={refresh} disabled={query.isFetching}><RefreshCw size={16} aria-hidden /> {query.isFetching && data ? "Refreshing" : "Refresh"}</StudioButton><details className="ad-collection-disclosure ad-tools-disclosure"><summary>Tools</summary><div className="ad-disclosure-panel"><button type="button" onClick={onImport}>Import from Elsa 3</button><button type="button" onClick={onPlanUpgrade}>Plan broad upgrade</button></div></details></div>
       </header>
 
       <section className="ad-filters ad-collection-filters" aria-label="Activity Definition filters">
@@ -485,43 +485,8 @@ function writeActivityCollectionHistoryContext(context: ActivityCollectionHistor
   window.history.replaceState({ ...state, [activityHistoryStateKey]: { ...metadata, collection: context } }, "");
 }
 
-function readStoredActivityAuthorityRevision() {
-  if (typeof window === "undefined") return 0;
-  try {
-    const raw = window.sessionStorage.getItem(activityAuthorityRevisionStorageKey);
-    if (raw === null) return 0;
-    const stored = Number(raw);
-    return Number.isSafeInteger(stored) && stored >= 0 ? stored : 0;
-  } catch {
-    return 0;
-  }
-}
-
-function getActivityAuthorityRevision() {
-  if (typeof window === "undefined") return activityAuthorityRevision;
-  try {
-    const raw = window.sessionStorage.getItem(activityAuthorityRevisionStorageKey);
-    if (raw !== null) {
-      const stored = Number(raw);
-      if (Number.isSafeInteger(stored) && stored >= 0) activityAuthorityRevision = Math.max(activityAuthorityRevision, stored);
-    }
-  } catch {
-    // Keep the in-memory generation when session storage is unavailable.
-  }
-  return activityAuthorityRevision;
-}
-
 function incrementActivityAuthorityRevision() {
-  activityAuthorityRevision = getActivityAuthorityRevision() + 1;
-  persistActivityAuthorityRevision();
-}
-
-function persistActivityAuthorityRevision() {
-  try {
-    window.sessionStorage.setItem(activityAuthorityRevisionStorageKey, String(activityAuthorityRevision));
-  } catch {
-    // The current document still has its in-memory generation if storage is unavailable.
-  }
+  activityAuthorityRevision += 1;
 }
 
 function readRouteState(): RouteState {

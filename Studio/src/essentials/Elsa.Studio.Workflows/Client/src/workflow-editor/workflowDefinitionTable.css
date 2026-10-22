@@ -2,6 +2,7 @@
 .wf-page.wf-page--definitions {
   border: 0;
   border-radius: 0;
+  padding: 0 18px;
 }
 
 .wf-page--definitions > .wf-definition-page-header {
@@ -32,40 +33,6 @@
   display: flex;
   flex: 0 0 auto;
   gap: .5rem;
-}
-
-.wf-definition-page-actions button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: .4rem;
-  min-height: 2.4rem;
-  padding: .45rem .75rem;
-  border: 1px solid var(--studio-border);
-  border-radius: var(--studio-radius);
-  color: var(--studio-text);
-  background: var(--studio-surface);
-  cursor: pointer;
-}
-
-.wf-definition-page-actions button:first-child {
-  border-color: var(--studio-accent);
-  color: var(--studio-accent-text);
-  background: var(--studio-accent);
-}
-
-.wf-definition-page-actions button:hover {
-  background: var(--studio-surface-muted);
-}
-
-.wf-definition-page-actions button:first-child:hover {
-  border-color: color-mix(in srgb, var(--studio-accent) 88%, var(--studio-text));
-  background: color-mix(in srgb, var(--studio-accent) 88%, var(--studio-text));
-}
-
-.wf-definition-page-actions button:focus-visible {
-  outline: 3px solid var(--studio-focus);
-  outline-offset: 2px;
 }
 
 .wf-definitions-list {
@@ -472,6 +439,12 @@
   .wf-definitions-list .wf-toolbar > .wf-search {
     flex-basis: 100%;
     width: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .wf-page.wf-page--definitions {
+    padding: 0 12px;
   }
 }
 

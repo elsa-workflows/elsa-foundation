@@ -92,8 +92,8 @@ describe("workflow definition list", () => {
     expect(states).not.toBeNull();
     expect(header?.querySelector("p")?.textContent).toContain("Create and organize workflow definitions");
     const actions = header?.querySelector<HTMLElement>('[role="group"][aria-label="Workflow definition page actions"]');
-    expect(actions?.querySelector("button[title='Create workflow']")).toBeTruthy();
-    expect(actions?.querySelector("button[title='Refresh workflow definitions']")).toBeTruthy();
+    expect(actions?.querySelector("button[aria-label='Create workflow']")).toBeTruthy();
+    expect(actions?.querySelector("button[aria-label='Refresh workflow definitions']")).toBeTruthy();
     expect(header!.compareDocumentPosition(search!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(header!.compareDocumentPosition(states!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 

@@ -3,7 +3,6 @@
 .ad-designed-collection .ad-page-header h1 { margin: 2px 0 4px; }
 .ad-designed-collection .ad-page-header p { max-width: 62ch; font-size: var(--studio-body-size); line-height: 1.45; }
 .ad-designed-collection .ad-header-actions { flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
-.ad-designed-collection .ad-header-actions > button,
 .ad-designed-collection .ad-header-actions .ad-collection-disclosure > summary { min-height: 32px; padding: 0 9px; border-radius: var(--studio-radius-sm); font-size: var(--studio-label-size); }
 .ad-designed-collection .ad-filters { gap: 8px; padding: 10px; margin-bottom: 12px; border-radius: var(--studio-radius); box-shadow: none; }
 .ad-designed-collection .ad-filters input,
@@ -86,4 +85,4 @@
   .ad-designed-collection .ad-collection-empty > div { display: grid; width: 100%; }
   .ad-create-dialog { width: 100%; }
 }
-.ad-designed-collection .ad-header-actions > .ad-primary-action, .ad-create-dialog footer > .ad-primary-action { border-color: var(--studio-accent); color: var(--studio-accent-text); background: var(--studio-accent); }
+.ad-create-dialog footer > .ad-primary-action { border-color: var(--studio-accent); color: var(--studio-accent-text); background: var(--studio-accent); }

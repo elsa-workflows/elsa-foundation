@@ -1805,7 +1805,7 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute();
 
     await waitForText(container, "Hello World");
-    await click(buttonByText(container, "Create"));
+    await click(buttonByText(container, "Create workflow"));
     await waitForText(container, "Create Workflow");
     const rootCards = dialog(container).querySelectorAll(".wf-root-card");
     expect(rootCards).toHaveLength(3);
@@ -1875,7 +1875,7 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute();
 
     await waitForText(container, "Hello World");
-    await click(buttonByText(container, "Create"));
+    await click(buttonByText(container, "Create workflow"));
     await waitForText(container, "Create Workflow");
     await fill(inputByLabel(container, "Display name"), "Customer onboarding");
     await click(buttonByText(dialog(container), "Create"));
@@ -4235,7 +4235,7 @@ describe("workflows module", () => {
     await click(buttonByLabel(container, "Create folder"));
     await vi.waitFor(() => expect(api.dialogs.prompt).toHaveBeenCalled());
     await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith("/folders") && (init as RequestInit)?.method === "POST")).toBe(true));
-    await click(buttonByText(container, "Create"));
+    await click(buttonByText(container, "Create workflow"));
     await waitForText(container, "Create Workflow");
     await fill(inputByLabel(container, "Display name"), "Placed workflow");
     await click(buttonByText(dialog(container), "Create"));
@@ -5081,7 +5081,7 @@ async function openCreateDialogWithSuggest() {
   });
 
   await waitForText(rendered.container, "Hello World");
-  await click(buttonByText(rendered.container, "Create"));
+  await click(buttonByText(rendered.container, "Create workflow"));
   await waitForText(rendered.container, "Create Workflow");
   // The button reveals the intent field rather than firing a context-free prompt.
   await click(buttonByText(dialog(rendered.container), "Suggest name and description"));

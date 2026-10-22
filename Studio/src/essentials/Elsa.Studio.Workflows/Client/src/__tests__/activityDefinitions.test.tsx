@@ -33,7 +33,11 @@ describe("Activity Definitions experience", () => {
       navigateToStudioPath
     );
     await waitForText(rendered.container, "No designed activities yet");
-    expect(buttonByText(rendered.container, "Create activity").classList.contains("ad-primary-action")).toBe(true);
+    const createActivity = buttonByText(rendered.container, "Create activity");
+    expect(createActivity.getAttribute("aria-label") ?? createActivity.textContent).toContain("Create activity");
+    click(createActivity);
+    await waitForText(rendered.container, "Create Activity Definition");
+    click(rendered.container.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!);
     expect(buttonByText(rendered.container, "Browse built-in activities")).toBeTruthy();
 
     const tools = rendered.container.querySelector<HTMLDetailsElement>(".ad-tools-disclosure")!;
@@ -398,14 +402,7 @@ describe("Activity Definitions experience", () => {
     await rendered.unmount();
 
     changedScope = true;
-    window.sessionStorage.removeItem("elsaActivityDefinitions.authorityRevision");
-    const originalSetItem = window.sessionStorage.setItem.bind(window.sessionStorage);
-    const setItem = vi.spyOn(window.sessionStorage, "setItem").mockImplementation((key, value) => {
-      if (key === "elsaActivityDefinitions.authorityRevision") throw new DOMException("Storage unavailable", "QuotaExceededError");
-      originalSetItem(key, value);
-    });
     window.dispatchEvent(new Event(authSessionStartedEvent));
-    setItem.mockRestore();
     window.history.replaceState(originState, "", "/workflows/activity-definitions");
     const requestStart = getJson.mock.calls.length;
     const remounted = renderPage(getJson, queryClient, "/workflows/activity-definitions", undefined, [], undefined, undefined, { baseUrl, preserveHistoryState: true });
