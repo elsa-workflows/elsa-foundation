@@ -160,7 +160,8 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
   - **Shards:** `pr-1`, `pr-2` and `pr-3` took 11–12 min each, build included. `workbench-rest` took 15 min, `cluster-foundation-host` 16 min, and `workbench-native-hosting` 22.5 min, which is the bound until the switch.
   - **Coverage:** 13,098 tests ran in the shards. Against the planning baseline, all 6 tests not run here were deleted on `main` by #3199 and #3254, and `Elsa.Architecture.Tests` ran in its own job.
   - **Outcomes:** no retries and no quarantined failures. 48 PR-tier tests over 10 s were reported only.
-  - **Still to come:** steps 4–5, the forced retry and the double failure, need a throwaway PR.)*
+  - **Steps 4–5:** done on the throwaway draft #3266, since closed. Probe A, run 39846345735: shard `pr-1` passed, with `Fails_once_then_passes` under "passed on retry", `Quarantined_always_fails` reported with #3263, and the 12-second test reported. Probe B, run 39853035144: `Fails_twice` failed `pr-1` and `Build & test`, and was the only failure counted.
+  - **Gap found and fixed:** probe A showed `Core-only build & test` still ran a plain `dotnet test`, so a retried or quarantined core test failed `Build & test` through it. Since `ded6f551f`, Core-only and Architecture guards run through `run_shard.py`, and probe B showed Core-only applying the same retry and quarantine.)*
 
 **Checkpoint**: `Build & test` is sharded and green, and every project that ran before still runs, the integration projects included (switch off).
 
@@ -203,7 +204,13 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
 - [X] T029 [US3] In `.github/workflows/ci.yml`, with `permissions: issues: read` on the running job only:
   - on `pull_request`, fetch the base commit explicitly first (`git fetch --no-tags --depth=1 origin <PR base sha>`; `actions/checkout` fetches one commit by default), then run `test_results.py check-quarantine --manifest tools/ci/test-tiers.json --base <PR base sha>` in `Plan tiers`; it runs on documentation-only PRs too;
   - on `push` to `main` and `schedule`, run it without `--base` in a job that the `alert` job's `needs` include, so a closed issue files or updates the `main is red` issue.
-- [ ] T030 [US3] Run quickstart "Story 3", steps 1–4, and the retry case from "Story 1" step 4, and confirm a `ci-flake-record` comment appears on the T003 issue. Record the links in the PR.
+- [X] T030 [US3] Run quickstart "Story 3", steps 1–4, and the retry case from "Story 1" step 4, and confirm a `ci-flake-record` comment appears on the T003 issue. Record the links in the PR. *(Done on #3265 and #3266.
+  - **Step 1:** `check-quarantine` passed for the six entries.
+  - **Step 2:** a quarantined failure was reported, not counted (probe A).
+  - **Step 3:** an entry pointing at closed #3068 failed `Plan tiers` and named the entry (probe C, run 39857927384).
+  - **Step 4:** the unchanged-entry case on a PR is covered by the self-test; a real one needs a closed issue on `main`.
+  - **Step 5:** an unreadable base is covered by the self-test.
+  - **The flake-tracker comment** cannot appear before merge, because `workflow_run` runs from `main` only. Check it on the first retried pass after the merge.)*
 
 **Checkpoint**: FR-012 to FR-014 are met. Each of R2's six tests is quarantined with an open issue, and `DurableDrainCycleTests` is watched.
 
@@ -215,7 +222,11 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
 
 **Independent test**: quickstart "Story 4", steps 1–5.
 
-- [ ] T031 [US4] Run quickstart "Story 4" steps 1–5 on a throwaway draft PR, and record the failing messages in the PR evidence. They exercise T014's checks and T018's slow-test report end to end.
+- [X] T031 [US4] Run quickstart "Story 4" steps 1–5 on a throwaway draft PR, and record the failing messages in the PR evidence. They exercise T014's checks and T018's slow-test report end to end. *(Done in probe C, run 39857927384. `Generated maps fresh` failed, naming:
+  - the unlisted project (step 1);
+  - Testcontainers in `Elsa.Primitives.Tests` (step 2);
+  - a `dotnet` launch in `Elsa.Secrets.Workflows.Tests` at 3.54 min (step 3).
+  Probe A reported the 12-second test without failing (step 4). Step 5, a new class in a split project running in the rest group, rests on the rest group's negated filter, which the `select` self-test asserts. Every split project ran its rest group in all runs.)*
 - [X] T032 [P] [US4] Add the tier rule to `.claude/skills/elsa-add-unit-tests/SKILL.md`:
   - a new test project needs a `tools/ci/test-tiers.json` entry;
   - Testcontainers, or a child host in a project of 2 min or more, means integration tier;
