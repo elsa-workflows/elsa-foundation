@@ -10,7 +10,7 @@ using DesignActivityContract = Elsa.Activities.Design.Core.Models.ActivityContra
 namespace Elsa.Activities.Graph.Tests;
 
 /// <summary>
-/// Spec 265 FR-006, FR-013: a closed-scope graph body may refer only to what the activity declares or contains, and a
+/// A closed-scope graph body may refer only to what the activity declares or contains, and a
 /// reference to anything else is refused at publication with the node and the reference named.
 /// </summary>
 public sealed partial class GraphActivityProviderTests
@@ -23,6 +23,7 @@ public sealed partial class GraphActivityProviderTests
             BodyArgument("b", "Input", new { referenceKey = "amount" }),
             BodyArgument("c", "Variable", new { referenceKey = "running-total", declaringScopeId = "workflow" }),
             BodyArgument("d", "Variable", new { referenceKey = "running-total", declaringScopeId = "activity-graph" }),
+            BodyArgument("f", "Variable", new { referenceKey = "running-total", declaringScopeId = (string?)null }),
             BodyArgument("e", "JavaScript", new
             {
                 source = "args.amount + args.total",
@@ -92,10 +93,12 @@ public sealed partial class GraphActivityProviderTests
         Assert.DoesNotContain(diagnostics, x => x.Code.StartsWith("activity.graph.body-", StringComparison.Ordinal));
     }
 
-    [Fact]
-    public async Task A_capture_written_as_a_plain_variable_name_is_accepted()
+    [Theory]
+    [InlineData("\"running-total\"")]
+    [InlineData("""{"referenceKey":"running-total","declaringScopeId":null}""")]
+    public async Task A_capture_into_a_graph_variable_without_a_named_scope_is_accepted(string target)
     {
-        var diagnostics = await ValidateBodyAsync(inputs: [], outputs: [BodyArgument("result", "Variable", "running-total")]);
+        var diagnostics = await ValidateBodyAsync(inputs: [], outputs: [BodyArgument("result", "Variable", JsonDocument.Parse(target).RootElement.Clone())]);
 
         Assert.DoesNotContain(diagnostics, x => x.Code.StartsWith("activity.graph.body-", StringComparison.Ordinal));
     }

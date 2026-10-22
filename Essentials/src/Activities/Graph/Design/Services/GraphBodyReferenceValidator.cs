@@ -156,8 +156,9 @@ internal static class GraphBodyReferenceValidator
         return keys.Any(key => !seen.Add(key));
     }
 
+    // An absent or empty scope is the root scope, as the compiler reads it.
     private static bool IsGraphScope(string? scopeId) =>
-        scopeId is null or WorkflowScopeId or LegacyGraphScopeId;
+        string.IsNullOrEmpty(scopeId) || scopeId is WorkflowScopeId or LegacyGraphScopeId;
 
     private static bool IsAncestor(string scopeId, BodyNode node, IReadOnlyDictionary<string, BodyNode> nodesById)
     {
