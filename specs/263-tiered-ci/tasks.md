@@ -167,7 +167,7 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
   - triggers: `pull_request` types `[opened, reopened, synchronize, ready_for_review]` on `main`; concurrency `ci-full-pr-<n>`, cancel in progress;
   - **`Plan` job**: runs `change_scope.py`, and sets `run=true` when the PR is not a draft, or its diff touches `tools/ci/test-tiers.json`, `tools/ci/test_tiers.py`, `tools/ci/test_results.py` or `.github/workflows/full-tier.yml`, and is not docs-only;
   - calls `full-tier.yml` with `containers: true`;
-  - **`Full tier` job**: the aggregate, a plain job with `if: ${{ !cancelled() }}`, whose `name` follows research R8 point 3: `Full tier` when `run=true` or the PR is not a draft, otherwise `Full tier (not run: draft)`. On a draft it succeeds under the draft name, so the head carries no required `Full tier` context. On a ready PR with `run=false` it succeeds as `Full tier` with summary "documentation only". Otherwise it succeeds only when every shard succeeded.
+  - **`Full tier` job**: the aggregate, a plain job with `if: ${{ !cancelled() }}`, whose `name` follows research R8 point 3: `Full tier` when `run=true` or the PR is not a draft, otherwise `Full tier (not run: draft)`. On a draft it succeeds under the draft name, so the head carries no required `Full tier` context. It fails unless `needs.plan.result == 'success'`. On a ready PR it succeeds with summary "documentation only" only on an explicit `run == 'false'` from that successful plan, never on an empty output. Otherwise it succeeds only when every shard succeeded. Add a quickstart case for a failing plan on a ready PR (Code Review round 2).
 - [ ] T026 [US2] In `.github/workflows/ci.yml`:
   - add the `workflow_dispatch` input `tier` (choice `full`/`pr`, default `full`);
   - on `push`, `schedule` and `tier=full` dispatch, call `full-tier.yml`, with `containers` true for schedule and dispatch and false for push (FR-010);
@@ -186,9 +186,9 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
 
 **Independent test**: quickstart "Story 3".
 
-- [ ] T028 [US3] Add `check-quarantine` to `tools/ci/test_results.py`. It runs `gh issue view <n> --json state` for each entry it checks and exits 1 on a missing or closed issue, naming the entry, the issue and the fix. With `--base <sha>` it reads the manifest at `<sha>` (`git show <sha>:tools/ci/test-tiers.json`; an absent file means every entry is new) and checks only new or changed entries. Without `--base` it checks every entry. Add self-test cases with a stubbed `gh`, through a `GH` environment override: an unchanged entry with a closed issue passes with `--base`, a new entry with a closed issue fails with `--base`, and the same closed issue fails without `--base`.
+- [ ] T028 [US3] Add `check-quarantine` to `tools/ci/test_results.py`. It runs `gh issue view <n> --json state` for each entry it checks and exits 1 on a missing or closed issue, naming the entry, the issue and the fix. With `--base <sha>` it reads the manifest at `<sha>` and checks only new or changed entries. It first checks that the commit is readable (`git cat-file -e <sha>^{commit}`) and exits 2 if not; only "path not in that commit" counts as an absent file, which means every entry is new. Any other `git show` failure exits 2, so a shallow checkout can never fall back to checking the whole list (Code Review round 2). Without `--base` it checks every entry. Add self-test cases with a stubbed `gh`, through a `GH` environment override: an unchanged entry with a closed issue passes with `--base`, a new entry with a closed issue fails with `--base`, the same closed issue fails without `--base`, and an unreadable base commit exits 2.
 - [ ] T029 [US3] In `.github/workflows/ci.yml`, with `permissions: issues: read` on the running job only:
-  - on `pull_request`, run `test_results.py check-quarantine --manifest tools/ci/test-tiers.json --base <PR base sha>` in `Plan tiers`; it runs on documentation-only PRs too;
+  - on `pull_request`, fetch the base commit explicitly first (`git fetch --no-tags --depth=1 origin <PR base sha>`; `actions/checkout` fetches one commit by default), then run `test_results.py check-quarantine --manifest tools/ci/test-tiers.json --base <PR base sha>` in `Plan tiers`; it runs on documentation-only PRs too;
   - on `push` to `main` and `schedule`, run it without `--base` in a job that the `alert` job's `needs` include, so a closed issue files or updates the `main is red` issue.
 - [ ] T030 [US3] Run quickstart "Story 3", steps 1–4, and the retry case from "Story 1" step 4, and confirm a `ci-flake-record` comment appears on the T003 issue. Record the links in the PR.
 
@@ -250,7 +250,7 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
 
 ## Phase 9: The switch (FR-011) and outcomes
 
-- [ ] T036 After the PR with Phases 2–5 merges and `Full tier` is green on a `main` push, ask the admin (Joey Barten or Sipke Schoorstra) to add `Full tier` to ruleset `main-2`'s required contexts. Confirm with `gh api repos/elsa-workflows/elsa-foundation/rulesets/<id> --jq '.rules[] | select(.type=="required_status_checks")'`, and record the output on the program issue. In the same step, update every merge path that names the required checks, so it waits for `Full tier` instead of trying a merge the ruleset refuses: `docs/contributing/merging.md`, `docs/contributing/review-checklist.md`, and the `elsa-auto-review-merge` and `elsa-quality-fix` skills (refresh `.specify/integrations/claude.manifest.json`).
+- [ ] T036 After the implementation PR (Phases 1–8) merges and `Full tier` is green on a `main` push, ask the admin (Joey Barten or Sipke Schoorstra) to add `Full tier` to ruleset `main-2`'s required contexts. Confirm with `gh api repos/elsa-workflows/elsa-foundation/rulesets/<id> --jq '.rules[] | select(.type=="required_status_checks")'`, and record the output on the program issue. In the same step, update every merge path that names the required checks, so it waits for `Full tier` instead of trying a merge the ruleset refuses: `docs/contributing/merging.md`, `docs/contributing/review-checklist.md`, and the `elsa-auto-review-merge` and `elsa-quality-fix` skills (refresh `.specify/integrations/claude.manifest.json`).
 - [ ] T037 In a separate PR, set `integrationLeavesPrTier: true` in `tools/ci/test-tiers.json` and drop the integration units from `shards.pr`, leaving pr-1 to pr-3 per research R9. Its `Plan tiers` must show the ruleset check passing. Afterwards the PR tier runs at most 5 test jobs (FR-022).
 - [ ] T038 Measure the outcomes after T037 and post them on the program issue:
   - **SC-001**: the median push-to-`Build & test` time over the first 20 code PRs, from the runs API;
@@ -297,9 +297,12 @@ T028 and T018 edit the same file, so run them one after the other even though th
 
 ## Implementation Strategy
 
-1. **MVP = Phase 2 + US1.** This alone shortens waiting: the PR tier is sharded and retries are reported, with every test still in `Build & test` while the switch is off. It can merge on its own.
-2. **US2 + US3 next.** They add the required full tier and quarantine. Then comes the admin step T036.
-3. **US4 to US6** are guards, documentation and Studio. They can ship with step 2 or alone.
-4. **Phase 9** is the switch and the measurements, in its own PR by construction (FR-011).
+**One implementation PR (Joey Barten, 2026-10-22).** Phases 1–8 land together on `agent/claude/263-tiered-ci-impl`, in this order, with a commit per phase so a review can follow them:
 
-The scale is 39 tasks, in at least two PRs and the switch PR. Keep each PR to one tier change, so a red `main` points at one cause.
+1. **Phase 2 + US1 (MVP):** the PR tier is sharded and retries are reported, with every test still in `Build & test` while the switch is off.
+2. **US2 + US3:** the full tier and quarantine.
+3. **US4 to US6:** guards, documentation, skills, the constitution row and Studio.
+
+**Phase 9 is a second, small PR by construction (FR-011).** An admin can only make `Full tier` required once `ci-full.yml` is on `main`. Before that, every other open PR would wait for a check its branch cannot produce. So T036 runs after the implementation PR merges, and T037 to T039 follow in the switch PR.
+
+The scale is 39 tasks in two PRs.
