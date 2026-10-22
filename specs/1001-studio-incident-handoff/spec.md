@@ -41,6 +41,7 @@ An operator can use an existing supported recovery control or pass the investiga
 3. **Given** capability discovery is loading or failed, **When** no action appears, **Then** copy does not misstate that as proven unsupported functionality or proven lack of permission.
 4. **Given** the caller has only runtime inspection authority, **When** handoff options are shown, **Then** the view does not promise unauthorized design editing or publishing.
 5. **Given** definition inspection/authoring navigation is permitted, **When** it is offered, **Then** the exact definition identity is retained and copy explains that changes affect future executions, not this run's pinned executable.
+6. **Given** an exact source is still Scheduled/non-Faulted, a recorded parent is not Running, or the run/incident has ended, **When** handoff is shown, **Then** it does not offer a Retry the existing runtime preflight rejects. Missing source/parent evidence remains unknown and prompts inspection rather than a promise of applicability.
 
 ### User Story 3 - Keep evidence and navigation intact (Priority: P2)
 
@@ -75,6 +76,7 @@ The operator can still reach the affected activity/input and return to the origi
 - **FR-002**: Active blocking, active nonblocking, history and unavailable/no-evidence outcomes MUST remain distinct without conflating incident health and run lifecycle.
 - **FR-003**: Scheduled automatic retry and incomplete recovery evidence MUST be represented honestly; guidance MUST NOT offer a duplicate or invented action.
 - **FR-004**: Existing supported recovery controls MUST retain their target, consequences, confirmation, authority, pending-state and cancellation guards. No new recovery command or generic Retry is introduced.
+  The UI MUST suppress locally known ineligible Retry and historical/terminal action controls using the existing runtime preflight contract. Retry review requires the exact loaded Faulted source and, when a parent identity is recorded, a confirmed Running parent. Unknown evidence MUST NOT be promoted to confirmed applicability. Dynamic concurrency, final authorization and execution remain server-owned; canonical payload/target mapping is unchanged.
 - **FR-005**: An absent action MUST NOT by itself be described as unsupported functionality or denied permission; guidance MUST preserve known versus unknown availability.
 - **FR-006**: When recovery is unavailable, the view MUST provide a supported inspection/share/operator handoff, with definition navigation only where appropriate authority is established.
 - **FR-007**: Definition handoff MUST retain exact identity and explain that editing/publishing affects future executions rather than replacing the executable pinned to this run.
