@@ -6,7 +6,7 @@ using Elsa.Connections.Core.Models;
 
 namespace Elsa.Connections.Http;
 
-public static class HttpConnectionHostGuard
+internal static class HttpConnectionHostGuard
 {
     public static string ReadSetting(IResolvedConnection connection, string key, string fallback) =>
         connection.Settings.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : fallback;

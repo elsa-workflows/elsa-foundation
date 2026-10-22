@@ -63,7 +63,10 @@ The built-in `http` connection type supports `api-key` (header or query), `basic
 
 ## OAuth callback (phase 2 groundwork)
 
-The API maps `GET /_elsa/connections/oauth/callback`. The redirect URI is
+The API maps `GET /_elsa/connections/oauth/callback` and
+`POST /connections/{name}/oauth/authorize`. The redirect URI is
 `{PublicBaseUrl}/_elsa/connections/oauth/callback`. `PublicBaseUrl` is required; the API does not
 fall back to the request host. Token refresh writes the grant with compare-and-swap on the expected
-secret version (`IConnectionGrantWriter`).
+secret version (`IConnectionGrantWriter`). `HttpConnectionApplication`,
+`HttpConnectionRequestOptionKeys` and `HttpConnectionHostGuard` stay internal; authenticators use
+`HttpConnectionCredentials`.

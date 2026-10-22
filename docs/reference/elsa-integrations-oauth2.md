@@ -12,8 +12,11 @@ catalog ([#2726](https://github.com/elsa-workflows/elsa-foundation/issues/2726) 
 3. BYO client only. Client secret is a connection secret field or a named credential
    (`IAccessTokenSource` / `named-credential`).
 4. Callback at `/_elsa/connections/oauth/callback`, built from `PublicBaseUrl`.
+   Authorization-code flow starts at `POST /connections/{name}/oauth/authorize`.
 5. Refresh on 401 or expiry writes the grant with compare-and-swap on the secret version; a lost
    race re-reads and uses the winner and never overwrites it. Grants require a writable store.
+   A refresh that omits `refresh_token` keeps the existing one. A refresh that omits `expires_in`
+   stores no expiry.
 6. `SendHttpRequest` uses the foundation `http` connection through `IHttpConnectionApplicator`.
 7. Access and refresh tokens resolve through `ISecretValueResolver` and are registered with
    `IRuntimeSecretMask` for logs, outputs and errors.

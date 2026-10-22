@@ -545,6 +545,30 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
             ExpiresAt = DateTimeOffset.UtcNow.AddHours(1)
         });
         Assert.Equal(GrantWriteStatus.Missing, missing.Status);
+
+        var createdWithoutExpiry = await _secrets.CreateAsync(Tenant, new CreateSecretRequest
+        {
+            Name = "oauth-grant-shape",
+            Value = "{}",
+            TypeName = SecretTypeNames.Text
+        });
+        var written = await writer.TryCompareAndSwapAsync(new GrantWriteRequest
+        {
+            TenantId = Tenant,
+            ConnectionName = "oauth",
+            GrantSecretName = "oauth-grant-shape",
+            ExpectedSecretVersion = createdWithoutExpiry.CurrentVersion!.Value,
+            AccessToken = "kept",
+            RefreshToken = "refresh-kept",
+            TokenType = "Bearer",
+            Scope = "read"
+        });
+        Assert.Equal(GrantWriteStatus.Written, written.Status);
+        var payload = await _scope.ServiceProvider.GetRequiredService<ISecretValueResolver>()
+            .ResolveAsync(Tenant, new SecretReference("oauth-grant-shape"));
+        Assert.Contains("\"token_type\":\"Bearer\"", payload.Value, StringComparison.Ordinal);
+        Assert.Contains("\"scope\":\"read\"", payload.Value, StringComparison.Ordinal);
+        Assert.DoesNotContain("1970-01-01", payload.Value, StringComparison.Ordinal);
     }
 
     [Fact]

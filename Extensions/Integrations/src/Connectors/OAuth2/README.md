@@ -22,11 +22,13 @@ Grants require a writable secret store (`RequiresWritableStore`).
 
 The provider redirects to `/_elsa/connections/oauth/callback`, built from `PublicBaseUrl`.
 This package claims that reserved route through `IOAuthCallbackHandler`.
+`POST /connections/{name}/oauth/authorize` starts the authorization-code flow through
+`IOAuthAuthorizeBeginHandler`.
 
 ## Refresh (AC 5)
 
 On 401 or expiry, the new grant is written with **compare-and-swap on the secret version**
-(`IConnectionGrantWriter`). A lock is only an optimization.
+(`IConnectionGrantWriter`). Concurrent refreshes rely on that compare-and-swap.
 
 ## Secrets (AC 7)
 

@@ -11,7 +11,7 @@ internal sealed class OAuth2HttpRequestAuthenticator(OAuth2TokenService tokens) 
 
     public async ValueTask ApplyAsync(HttpRequestMessage request, IResolvedConnection connection, CancellationToken cancellationToken = default)
     {
-        HttpConnectionHostGuard.EnsureAllowed(request, connection);
+        HttpConnectionCredentials.EnsureHostAllowed(request, connection);
 
         var refresh = request.Options.TryGetValue(HttpConnectionApplyOptions.RefreshCredentials, out var force) && force;
         var grant = refresh
@@ -22,7 +22,7 @@ internal sealed class OAuth2HttpRequestAuthenticator(OAuth2TokenService tokens) 
         var header = grant.AccessToken.StartsWith($"{scheme} ", StringComparison.OrdinalIgnoreCase)
             ? grant.AccessToken
             : $"{scheme} {grant.AccessToken}";
-        HttpConnectionHostGuard.SetAuthorization(request, connection, header);
+        HttpConnectionCredentials.SetAuthorization(request, connection, header);
         HttpConnectionApplyOptions.MaskSecret(request, $"{connection.Name}:access_token", grant.AccessToken);
         HttpConnectionApplyOptions.MaskSecret(request, $"{connection.Name}:refresh_token", grant.RefreshToken);
     }

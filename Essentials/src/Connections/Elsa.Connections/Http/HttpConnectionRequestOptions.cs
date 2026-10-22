@@ -1,8 +1,9 @@
+using Elsa.Connections.Core.Contracts;
 using Elsa.Connections.Core.Models;
 
 namespace Elsa.Connections.Http;
 
-public sealed class HttpConnectionApplication
+internal sealed class HttpConnectionApplication
 {
     public required string ConnectionName { get; init; }
     public required AllowedHostsPolicy Hosts { get; init; }
@@ -11,7 +12,19 @@ public sealed class HttpConnectionApplication
     public string? QueryName { get; set; }
 }
 
-public static class HttpConnectionRequestOptionKeys
+internal static class HttpConnectionRequestOptionKeys
 {
     public static readonly HttpRequestOptionsKey<HttpConnectionApplication> Applied = new("Elsa.Connections.Applied");
+}
+
+/// <summary>
+/// Narrow public helper for first-party authenticators that attach credentials to an outbound request.
+/// </summary>
+public static class HttpConnectionCredentials
+{
+    public static void EnsureHostAllowed(HttpRequestMessage request, IResolvedConnection connection) =>
+        HttpConnectionHostGuard.EnsureAllowed(request, connection);
+
+    public static void SetAuthorization(HttpRequestMessage request, IResolvedConnection connection, string value) =>
+        HttpConnectionHostGuard.SetAuthorization(request, connection, value);
 }

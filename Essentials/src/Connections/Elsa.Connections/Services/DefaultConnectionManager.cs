@@ -102,11 +102,12 @@ internal sealed class DefaultConnectionManager(
             ?? throw new ArgumentException($"Unknown connection type '{request.TypeName}'.", nameof(request));
         if (!type.Descriptor.SupportedSchemes.Contains(request.AuthScheme, StringComparer.OrdinalIgnoreCase))
             throw new ArgumentException($"Connection type '{type.Descriptor.Name}' does not support scheme '{request.AuthScheme}'.", nameof(request));
-        if (schemes.Find(request.AuthScheme) is null)
-            throw new ArgumentException($"Unknown authentication scheme '{request.AuthScheme}'.", nameof(request));
+        var scheme = schemes.Find(request.AuthScheme)
+            ?? throw new ArgumentException($"Unknown authentication scheme '{request.AuthScheme}'.", nameof(request));
         ValidateSettings(type, request.Settings);
         ValidateCredentialSources(request.SecretFields);
         await permissionGate.EnsureManageAsync(tenantId, cancellationToken);
+        await scheme.ValidateAsync(tenantId, cancellationToken);
         await EnsureBindSecretAsync(tenantId, request.SecretFields, cancellationToken);
         await ValidateExistingSecretReferencesAsync(tenantId, request.SecretFields, cancellationToken);
 
@@ -270,14 +271,15 @@ internal sealed class DefaultConnectionManager(
 
         var type = types.Find(document.Definition.TypeName)
             ?? throw new ArgumentException($"Unknown connection type '{document.Definition.TypeName}'.", nameof(request));
-        if (schemes.Find(document.Definition.AuthScheme) is null)
-            throw new ArgumentException($"Unknown authentication scheme '{document.Definition.AuthScheme}'.", nameof(request));
+        var scheme = schemes.Find(document.Definition.AuthScheme)
+            ?? throw new ArgumentException($"Unknown authentication scheme '{document.Definition.AuthScheme}'.", nameof(request));
         if (request.Settings is not null)
             ValidateSettings(type, request.Settings);
         if (request.SecretFields is not null)
             ValidateCredentialSources(request.SecretFields);
 
         await permissionGate.EnsureManageAsync(tenantId, cancellationToken);
+        await scheme.ValidateAsync(tenantId, cancellationToken);
 
         IDictionary<string, ConnectionSecretField>? previousSecretFields = null;
         IDictionary<string, ConnectionSecretField>? nextSecretFields = null;

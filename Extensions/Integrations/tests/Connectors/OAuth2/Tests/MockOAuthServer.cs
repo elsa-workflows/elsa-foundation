@@ -30,6 +30,9 @@ public sealed class MockOAuthServer : HttpMessageHandler
     public bool ExpireImmediately { get; set; }
     public bool UnauthorizedOnce { get; set; }
     public bool RotateRefreshTokens { get; set; }
+    public bool OmitRefreshTokenOnRefresh { get; set; }
+    public bool OmitExpiresIn { get; set; }
+    public int TokenRequestCount { get; private set; }
 
     public IReadOnlyCollection<string> IssuedAccessTokens => _tokens.Keys.ToArray();
 
@@ -74,6 +77,7 @@ public sealed class MockOAuthServer : HttpMessageHandler
 
     private HttpResponseMessage Token(HttpRequestMessage request)
     {
+        TokenRequestCount++;
         var form = ReadForm(request);
         var grantType = form.Get("grant_type");
         var clientId = form.Get("client_id");
@@ -85,7 +89,7 @@ public sealed class MockOAuthServer : HttpMessageHandler
         return grantType switch
         {
             "authorization_code" => ExchangeAuthorizationCode(form, clientId!),
-            "client_credentials" => IssueTokens(form.Get("scope"), refresh: false),
+            "client_credentials" => IssueTokens(form.Get("scope"), includeRefreshToken: false),
             "refresh_token" => Refresh(form),
             _ => Json(HttpStatusCode.BadRequest, new { error = "unsupported_grant_type" })
         };
@@ -99,7 +103,7 @@ public sealed class MockOAuthServer : HttpMessageHandler
             return Json(HttpStatusCode.BadRequest, new { error = "invalid_grant" });
         if (verifier is null || !string.Equals(PkceChallenge(verifier), issued.Challenge, StringComparison.Ordinal))
             return Json(HttpStatusCode.BadRequest, new { error = "invalid_grant", error_description = "pkce" });
-        return IssueTokens(scope: null, refresh: true);
+        return IssueTokens(scope: null, includeRefreshToken: true);
     }
 
     private HttpResponseMessage Refresh(System.Collections.Specialized.NameValueCollection form)
@@ -109,26 +113,32 @@ public sealed class MockOAuthServer : HttpMessageHandler
         if (match.Value is null || refresh is null)
             return Json(HttpStatusCode.BadRequest, new { error = "invalid_grant" });
         _tokens.TryRemove(match.Key, out _);
-        return IssueTokens(match.Value.Scope, refresh: true);
+        return IssueTokens(match.Value.Scope, includeRefreshToken: !OmitRefreshTokenOnRefresh, reusedRefreshToken: OmitRefreshTokenOnRefresh ? refresh : null);
     }
 
-    private HttpResponseMessage IssueTokens(string? scope, bool refresh)
+    private HttpResponseMessage IssueTokens(string? scope, bool includeRefreshToken, string? reusedRefreshToken = null)
     {
         var access = ExpireImmediately
             ? $"expired-{Interlocked.Increment(ref _accessSerial)}"
             : $"{CanaryAccessToken}-{Interlocked.Increment(ref _accessSerial)}";
-        var refreshToken = refresh ? $"{CanaryRefreshToken}-{access}" : null;
-        if (RotateRefreshTokens && refreshToken is not null)
+        var refreshToken = reusedRefreshToken;
+        if (includeRefreshToken && refreshToken is null)
+            refreshToken = $"{CanaryRefreshToken}-{access}";
+        if (RotateRefreshTokens && refreshToken is not null && reusedRefreshToken is null)
             refreshToken = $"{refreshToken}-rotated";
         _tokens[access] = new IssuedToken(refreshToken, scope);
-        return Json(HttpStatusCode.OK, new
+
+        var payload = new Dictionary<string, object?>
         {
-            access_token = access,
-            token_type = "Bearer",
-            expires_in = ExpireImmediately ? 1 : AccessTokenLifetimeSeconds,
-            refresh_token = refreshToken,
-            scope
-        });
+            ["access_token"] = access,
+            ["token_type"] = "Bearer",
+            ["scope"] = scope
+        };
+        if (!OmitExpiresIn)
+            payload["expires_in"] = ExpireImmediately ? 1 : AccessTokenLifetimeSeconds;
+        if (refreshToken is not null)
+            payload["refresh_token"] = refreshToken;
+        return Json(HttpStatusCode.OK, payload);
     }
 
     private HttpResponseMessage Resource(HttpRequestMessage request)

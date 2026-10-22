@@ -14,6 +14,7 @@ namespace Elsa.Connections.Workflows.Services;
 internal sealed class HttpConnectionApplicator(
     IConnectionResolver resolver,
     IEnumerable<IHttpRequestAuthenticator> authenticators,
+    IAuthenticationSchemeRegistry schemes,
     IWorkflowExecutionPartitionAccessor partitionAccessor,
     IRuntimeSecretMask secretMask) : IHttpConnectionApplicator
 {
@@ -55,6 +56,9 @@ internal sealed class HttpConnectionApplicator(
                 $"No HTTP authenticator is registered for scheme '{resolved.AuthScheme}'.");
         }
 
+        if (schemes.Find(resolved.AuthScheme)?.Descriptor.HasRefreshableState == true)
+            request.Options.Set(HttpConnectionApplyOptions.HasRefreshableState, true);
+
         var masked = new MaskingResolvedConnection(resolved, secretMask, context.InvocationId);
         await authenticator.ApplyAsync(request, masked, cancellationToken);
         RegisterAppliedValues(request, secretMask, context.InvocationId, resolved.Name);
@@ -81,11 +85,8 @@ internal sealed class HttpConnectionApplicator(
             }
         }
 
-        if (request.Options.TryGetValue(HttpConnectionApplyOptions.MaskedSecrets, out var extra) && extra is not null)
-        {
-            foreach (var (name, value) in extra)
-                mask.Register(activityExecutionId, name, value);
-        }
+        foreach (var (name, value) in HttpConnectionApplyOptions.GetMaskedSecrets(request))
+            mask.Register(activityExecutionId, name, value);
     }
 
     private sealed class MaskingResolvedConnection(

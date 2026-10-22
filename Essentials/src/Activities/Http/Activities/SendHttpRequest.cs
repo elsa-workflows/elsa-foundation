@@ -114,8 +114,12 @@ public sealed class SendHttpRequest(
         try
         {
             using var first = await CreateRequestAsync(url, method, refreshCredentials: false, context, timeoutCts.Token);
+            var canRetry = first.Options.TryGetValue(HttpConnectionApplyOptions.HasRefreshableState, out var refreshable) && refreshable;
+            if (canRetry && first.Content is not null)
+                await first.Content.LoadIntoBufferAsync(timeoutCts.Token);
+
             var response = await client.SendAsync(first, HttpCompletionOption.ResponseContentRead, timeoutCts.Token);
-            if ((int)response.StatusCode == 401 && Connection is not null)
+            if ((int)response.StatusCode == 401 && canRetry)
             {
                 response.Dispose();
                 using var retry = await CreateRequestAsync(url, method, refreshCredentials: true, context, timeoutCts.Token);
@@ -161,8 +165,6 @@ public sealed class SendHttpRequest(
         if (refreshCredentials)
             request.Options.Set(HttpConnectionApplyOptions.RefreshCredentials, true);
         await connectionApplicator.ApplyAsync(request, Connection, context, cancellationToken);
-        if (request.Content is not null)
-            await request.Content.LoadIntoBufferAsync(cancellationToken);
         return request;
     }
 

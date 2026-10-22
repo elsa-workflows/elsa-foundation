@@ -1,5 +1,6 @@
 using Elsa.Connections.Core.Contracts;
 using Elsa.Connections.Core.Models;
+using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
 
 namespace Elsa.Integrations.Connectors.OAuth2;
@@ -45,7 +46,7 @@ public sealed record OAuth2AuthenticationScheme
         OAuth2GrantStorePolicy.EnsureWritable(store);
 }
 
-internal sealed class OAuth2SchemeProvider : IAuthenticationSchemeProvider
+internal sealed class OAuth2SchemeProvider(ISecretStoreRegistry stores) : IAuthenticationSchemeProvider
 {
     public AuthSchemeDescriptor Descriptor { get; } = new(
         HttpAuthSchemes.OAuth2,
@@ -60,6 +61,16 @@ internal sealed class OAuth2SchemeProvider : IAuthenticationSchemeProvider
         ],
         HasInteractiveAuthorization: true,
         HasRefreshableState: true,
-        HasRevocation: true,
+        HasRevocation: false,
         RequiresWritableStore: true);
+
+    public ValueTask ValidateAsync(string tenantId, CancellationToken cancellationToken = default)
+    {
+        _ = tenantId;
+        _ = cancellationToken;
+        if (!stores.TryGet(SecretStoreNames.Encrypted, out var store) || store is null)
+            throw new InvalidOperationException("OAuth2 grants require a writable secret store.");
+        OAuth2GrantStorePolicy.EnsureWritable(store.Descriptor);
+        return ValueTask.CompletedTask;
+    }
 }

@@ -28,4 +28,26 @@ internal static class Pkce
 
     public static string Base64Url(ReadOnlySpan<byte> bytes) =>
         Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+    public static bool TryBase64UrlDecode(string text, out byte[] bytes)
+    {
+        bytes = [];
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var padded = text.Replace('-', '+').Replace('_', '/');
+        var remainder = padded.Length % 4;
+        if (remainder != 0)
+            padded = padded.PadRight(padded.Length + (4 - remainder), '=');
+
+        try
+        {
+            bytes = Convert.FromBase64String(padded);
+            return true;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
 }

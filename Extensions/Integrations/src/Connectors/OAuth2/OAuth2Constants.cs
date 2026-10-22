@@ -34,6 +34,8 @@ internal static class OAuth2SecretKeys
 
 internal static class OAuth2GrantStorePolicy
 {
+    public static readonly TimeSpan PkceLifetime = TimeSpan.FromMinutes(10);
+
     public static void EnsureWritable(SecretStoreDescriptor store)
     {
         ArgumentNullException.ThrowIfNull(store);

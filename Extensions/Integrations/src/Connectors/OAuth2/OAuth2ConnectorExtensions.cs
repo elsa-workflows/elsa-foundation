@@ -13,6 +13,7 @@ public static class OAuth2ConnectorExtensions
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IAuthenticationSchemeProvider, OAuth2SchemeProvider>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IHttpRequestAuthenticator, OAuth2HttpRequestAuthenticator>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IOAuthCallbackHandler, OAuth2CallbackHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IOAuthAuthorizeBeginHandler, OAuth2AuthorizeBeginHandler>());
         return services;
     }
 }

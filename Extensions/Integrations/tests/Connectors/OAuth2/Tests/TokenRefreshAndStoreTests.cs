@@ -66,6 +66,67 @@ public sealed class TokenRefreshAndStoreTests
     }
 
     [Fact]
+    public async Task Refresh_that_omits_refresh_token_still_refreshes_after_a_later_expiry()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);
+        var preview = new MockOAuthServer();
+        await using var harness = await OAuth2TestSupport.StartAsync(
+            OAuth2TestSupport.AuthorizationCodeScheme(preview),
+            configureServer: mock => mock.AccessTokenLifetimeSeconds = 90,
+            timeProvider: clock);
+
+        await OAuth2TestSupport.AuthorizeAsync(harness, harness.Server);
+        var first = await OAuth2TestSupport.SendAsync(harness, harness.Server.ResourceEndpoint);
+        Assert.Equal(200, first.Result.StatusCode);
+
+        harness.Server.OmitRefreshTokenOnRefresh = true;
+        clock.Advance(TimeSpan.FromMinutes(2));
+        var afterOmittedRefresh = await OAuth2TestSupport.SendAsync(harness, harness.Server.ResourceEndpoint);
+        Assert.Equal(200, afterOmittedRefresh.Result.StatusCode);
+
+        var grant = await harness.SecretValues.ResolveAsync(
+            OAuth2TestSupport.TenantId,
+            new SecretReference(OAuth2SecretKeys.Grant(OAuth2TestSupport.ConnectionName)));
+        Assert.Contains("refresh_token", grant.Value, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"refresh_token\":null", grant.Value, StringComparison.Ordinal);
+
+        clock.Advance(TimeSpan.FromMinutes(2));
+        var afterLaterExpiry = await OAuth2TestSupport.SendAsync(harness, harness.Server.ResourceEndpoint);
+        Assert.Equal(200, afterLaterExpiry.Result.StatusCode);
+    }
+
+    [Fact]
+    public async Task Refresh_with_no_expires_in_does_not_refresh_again()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);
+        var preview = new MockOAuthServer();
+        await using var harness = await OAuth2TestSupport.StartAsync(
+            OAuth2TestSupport.ClientCredentialsScheme(preview),
+            configureServer: mock => mock.AccessTokenLifetimeSeconds = 90,
+            timeProvider: clock);
+
+        var first = await OAuth2TestSupport.SendAsync(harness, harness.Server.ResourceEndpoint);
+        Assert.Equal(200, first.Result.StatusCode);
+
+        harness.Server.OmitExpiresIn = true;
+        clock.Advance(TimeSpan.FromMinutes(2));
+        var refreshed = await OAuth2TestSupport.SendAsync(harness, harness.Server.ResourceEndpoint);
+        Assert.Equal(200, refreshed.Result.StatusCode);
+
+        var grant = await harness.SecretValues.ResolveAsync(
+            OAuth2TestSupport.TenantId,
+            new SecretReference(OAuth2SecretKeys.Grant(OAuth2TestSupport.ConnectionName)));
+        Assert.DoesNotContain("1970-01-01", grant.Value, StringComparison.Ordinal);
+        Assert.Contains("token_type", grant.Value, StringComparison.Ordinal);
+        Assert.Contains("scope", grant.Value, StringComparison.Ordinal);
+
+        var tokenCalls = harness.Server.TokenRequestCount;
+        var again = await OAuth2TestSupport.SendAsync(harness, harness.Server.ResourceEndpoint);
+        Assert.Equal(200, again.Result.StatusCode);
+        Assert.Equal(tokenCalls, harness.Server.TokenRequestCount);
+    }
+
+    [Fact]
     public async Task Lost_compare_and_swap_keeps_the_winning_grant()
     {
         var preview = new MockOAuthServer();

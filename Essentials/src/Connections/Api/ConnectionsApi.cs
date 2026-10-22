@@ -82,6 +82,10 @@ public static class ConnectionsApi
                 typeof(OAuthRedirectUriResponse), StatusCodes.Status200OK, null, HandleOAuthRedirectUriAsync, containFailures: false)
             .RequireAnyPermission(PermissionKey.Wildcard, ConnectionsPermissions.Manage);
 
+        api.MapUnboundOperation("POST", $"{ConnectionRoute}/oauth/authorize", "ConnectionsOAuthAuthorize",
+                typeof(OAuthAuthorizeUrlResponse), StatusCodes.Status200OK, null, HandleOAuthAuthorizeAsync, containFailures: false)
+            .RequireAnyPermission(PermissionKey.Wildcard, ConnectionsPermissions.Manage);
+
         endpoints.MapGet(OAuthCallbackPath, HandleOAuthCallbackAsync)
             .WithName("ConnectionsOAuthCallback")
             .AllowAnonymous();
@@ -298,6 +302,68 @@ public static class ConnectionsApi
         await Json(new OAuthRedirectUriResponse { RedirectUri = origin + OAuthCallbackPath }).ExecuteAsync(context);
     }
 
+    private static async Task HandleOAuthAuthorizeAsync(HttpContext context)
+    {
+        var tenantId = await RequireTenantAsync(context);
+        if (tenantId is null)
+            return;
+
+        var options = context.RequestServices.GetRequiredService<IOptions<ConnectionsOptions>>().Value;
+        if (string.IsNullOrWhiteSpace(options.PublicBaseUrl))
+        {
+            await Results.Json(
+                new { error = "Elsa:Connections:PublicBaseUrl must be configured before authorization can begin." },
+                JsonOptions,
+                contentType: "application/json",
+                statusCode: StatusCodes.Status400BadRequest).ExecuteAsync(context);
+            return;
+        }
+
+        var name = RouteName(context);
+        var found = await Manager(context).FindAsync(tenantId, name, context.RequestAborted);
+        if (found is null)
+        {
+            await Results.NotFound().ExecuteAsync(context);
+            return;
+        }
+
+        var request = new OAuthAuthorizeBeginRequest(tenantId, name);
+        try
+        {
+            foreach (var handler in context.RequestServices.GetServices<IOAuthAuthorizeBeginHandler>())
+            {
+                var begun = await handler.TryBeginAsync(request, context.RequestAborted);
+                if (begun is null)
+                    continue;
+
+                await Json(new OAuthAuthorizeUrlResponse { AuthorizationUrl = begun.AuthorizationUrl }).ExecuteAsync(context);
+                return;
+            }
+        }
+        catch (Exception exception)
+        {
+            if (await WriteMappedErrorAsync(context, exception))
+                return;
+            if (exception is InvalidOperationException invalid)
+            {
+                await Results.Json(
+                    new { error = invalid.Message },
+                    JsonOptions,
+                    contentType: "application/json",
+                    statusCode: StatusCodes.Status400BadRequest).ExecuteAsync(context);
+                return;
+            }
+
+            throw;
+        }
+
+        await Results.Json(
+            new { error = "No authentication scheme started authorization for this connection." },
+            JsonOptions,
+            contentType: "application/json",
+            statusCode: StatusCodes.Status400BadRequest).ExecuteAsync(context);
+    }
+
     private static async Task HandleOAuthCallbackAsync(HttpContext context)
     {
         var request = new OAuthCallbackRequest(
@@ -416,4 +482,9 @@ public sealed class ConnectionPickerResponse
 public sealed class OAuthRedirectUriResponse
 {
     public string RedirectUri { get; set; } = "";
+}
+
+public sealed class OAuthAuthorizeUrlResponse
+{
+    public string AuthorizationUrl { get; set; } = "";
 }

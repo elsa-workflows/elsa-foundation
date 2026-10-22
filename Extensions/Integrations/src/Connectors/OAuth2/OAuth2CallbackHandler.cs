@@ -11,14 +11,8 @@ internal sealed class OAuth2CallbackHandler(
         OAuthCallbackRequest request,
         CancellationToken cancellationToken = default)
     {
-        if (!string.IsNullOrWhiteSpace(request.Error))
-            return new OAuthCallbackResponse(400, "error", request.ErrorDescription ?? request.Error);
-
-        if (string.IsNullOrWhiteSpace(request.Code) ||
-            !OAuth2TokenService.TryParseState(request.State, out var tenantId, out var connectionName, out _))
-        {
+        if (!OAuth2TokenService.TryParseState(request.State, out var tenantId, out var connectionName, out var nonce))
             return null;
-        }
 
         try
         {
@@ -33,12 +27,25 @@ internal sealed class OAuth2CallbackHandler(
             if (!string.Equals(connection.AuthScheme, HttpAuthSchemes.OAuth2, StringComparison.OrdinalIgnoreCase))
                 return null;
 
+            if (!string.IsNullOrWhiteSpace(request.Error))
+            {
+                await tokens.DeletePkceAsync(tenantId, connectionName, nonce, cancellationToken);
+                return new OAuthCallbackResponse(400, "error", request.ErrorDescription ?? request.Error);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Code))
+            {
+                await tokens.DeletePkceAsync(tenantId, connectionName, nonce, cancellationToken);
+                return new OAuthCallbackResponse(400, "failed", "missing_code");
+            }
+
             await tokens.CompleteAuthorizationCodeAsync(connection, request.Code, request.State!, cancellationToken);
             return new OAuthCallbackResponse(200, "authorized", null);
         }
-        catch (Exception exception)
+        catch (Exception)
         {
-            return new OAuthCallbackResponse(400, "failed", exception.GetType().Name);
+            await tokens.DeletePkceAsync(tenantId, connectionName, nonce, cancellationToken);
+            return new OAuthCallbackResponse(400, "failed", "authorization_failed");
         }
     }
 }

@@ -1,5 +1,5 @@
-using System.Collections.Concurrent;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Http.Constants;
 using Elsa.Connections.Core.Contracts;
@@ -16,6 +16,7 @@ namespace Elsa.Integrations.Connectors.OAuth2;
 internal sealed class OAuth2TokenService(
     ISecretValueResolver secrets,
     ISecretManager secretManager,
+    ISecretStoreRegistry stores,
     IConnectionGrantWriter grants,
     IHttpClientFactory httpClientFactory,
     IOptions<ConnectionsOptions> connectionsOptions,
@@ -29,8 +30,6 @@ internal sealed class OAuth2TokenService(
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
     };
 
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new(StringComparer.Ordinal);
-
     public Uri CallbackUri
     {
         get
@@ -38,7 +37,7 @@ internal sealed class OAuth2TokenService(
             var origin = connectionsOptions.Value.PublicBaseUrl?.Trim().TrimEnd('/');
             if (string.IsNullOrWhiteSpace(origin) || !Uri.TryCreate(origin, UriKind.Absolute, out var baseUri))
                 throw new InvalidOperationException("Elsa:Connections:PublicBaseUrl must be an absolute URL.");
-            return new Uri(baseUri, "/_elsa/connections/oauth/callback");
+            return new Uri(baseUri.GetLeftPart(UriPartial.Path).TrimEnd('/') + "/_elsa/connections/oauth/callback");
         }
     }
 
@@ -47,12 +46,18 @@ internal sealed class OAuth2TokenService(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(connection);
+        EnsureGrantStoreWritable();
         var authorizationUrl = RequiredSetting(connection, OAuth2SettingKeys.AuthorizationUrl);
         var client = await ResolveClientAsync(connection, cancellationToken);
         var verifier = Pkce.CreateVerifier();
         var nonce = Pkce.CreateNonce();
-        var state = $"{connection.TenantId}:{connection.Name}:{nonce}";
-        await WriteNewAsync(connection.TenantId, OAuth2SecretKeys.Pkce(connection.Name, nonce), verifier, cancellationToken);
+        var state = EncodeState(connection.TenantId, connection.Name, nonce);
+        await WriteNewAsync(
+            connection.TenantId,
+            OAuth2SecretKeys.Pkce(connection.Name, nonce),
+            verifier,
+            timeProvider.GetUtcNow().Add(OAuth2GrantStorePolicy.PkceLifetime),
+            cancellationToken);
 
         var challenge = Pkce.ChallengeS256(verifier);
         var uri = new UriBuilder(authorizationUrl);
@@ -85,25 +90,38 @@ internal sealed class OAuth2TokenService(
             throw new InvalidOperationException("Unknown or expired authorization state.");
         }
 
-        var verifier = await ReadRawAsync(connection.TenantId, OAuth2SecretKeys.Pkce(connection.Name, nonce), cancellationToken)
+        var pkceName = OAuth2SecretKeys.Pkce(connection.Name, nonce);
+        var verifier = await ReadRawAsync(connection.TenantId, pkceName, cancellationToken)
             ?? throw new InvalidOperationException("Unknown or expired authorization state.");
 
-        var client = await ResolveClientAsync(connection, cancellationToken);
-        var form = new Dictionary<string, string>
+        try
         {
-            ["grant_type"] = OAuth2GrantTypes.AuthorizationCode,
-            ["code"] = code,
-            ["client_id"] = client.ClientId,
-            ["code_verifier"] = verifier,
-            ["redirect_uri"] = CallbackUri.ToString()
-        };
-        if (client.ClientSecret is not null)
-            form["client_secret"] = client.ClientSecret;
+            var client = await ResolveClientAsync(connection, cancellationToken);
+            var form = new Dictionary<string, string>
+            {
+                ["grant_type"] = OAuth2GrantTypes.AuthorizationCode,
+                ["code"] = code,
+                ["client_id"] = client.ClientId,
+                ["code_verifier"] = verifier,
+                ["redirect_uri"] = CallbackUri.ToString()
+            };
+            if (client.ClientSecret is not null)
+                form["client_secret"] = client.ClientSecret;
 
-        var grant = await ExchangeAsync(connection, form, expectedVersion: null, cancellationToken);
-        await secretManager.DeleteAsync(connection.TenantId, OAuth2SecretKeys.Pkce(connection.Name, nonce), cancellationToken);
-        return grant;
+            return await ExchangeAsync(connection, form, expectedVersion: null, previous: null, cancellationToken);
+        }
+        finally
+        {
+            await DeletePkceAsync(connection.TenantId, connection.Name, nonce, cancellationToken);
+        }
     }
+
+    public ValueTask<bool> DeletePkceAsync(
+        string tenantId,
+        string connectionName,
+        string nonce,
+        CancellationToken cancellationToken = default) =>
+        secretManager.DeleteAsync(tenantId, OAuth2SecretKeys.Pkce(connectionName, nonce), cancellationToken);
 
     public async ValueTask<OAuth2Grant> GetValidGrantAsync(IResolvedConnection connection, CancellationToken cancellationToken = default)
     {
@@ -121,48 +139,46 @@ internal sealed class OAuth2TokenService(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(connection);
-        var gate = _locks.GetOrAdd($"{connection.TenantId}/{connection.Name}", _ => new SemaphoreSlim(1, 1));
-        await gate.WaitAsync(cancellationToken);
-        try
+        var latest = await ReadGrantAsync(connection, cancellationToken);
+        if (latest is { HasAccessToken: true } && !IsExpired(latest) && latest.Version != current?.Version)
+            return latest;
+
+        latest ??= current;
+        if (latest?.RefreshToken is { Length: > 0 })
         {
-            var latest = await ReadGrantAsync(connection, cancellationToken);
-            if (latest is { HasAccessToken: true } && !IsExpired(latest) && latest.Version != current?.Version)
-                return latest;
-
-            latest ??= current;
-            if (latest?.RefreshToken is { Length: > 0 })
+            var client = await ResolveClientAsync(connection, cancellationToken);
+            var form = new Dictionary<string, string>
             {
-                var client = await ResolveClientAsync(connection, cancellationToken);
-                var form = new Dictionary<string, string>
-                {
-                    ["grant_type"] = OAuth2GrantTypes.RefreshToken,
-                    ["refresh_token"] = latest.RefreshToken,
-                    ["client_id"] = client.ClientId
-                };
-                if (client.ClientSecret is not null)
-                    form["client_secret"] = client.ClientSecret;
-                return await ExchangeAsync(connection, form, latest.Version, cancellationToken);
-            }
-
-            var grantType = connection.Settings.GetValueOrDefault(OAuth2SettingKeys.GrantType) ?? OAuth2GrantTypes.ClientCredentials;
-            if (!string.Equals(grantType, OAuth2GrantTypes.ClientCredentials, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException(
-                    $"Connection '{connection.Name}' needs authorization; its grant is missing or expired and has no refresh token.");
-            }
-
-            return await AcquireClientCredentialsAsync(connection, latest?.Version, cancellationToken);
+                ["grant_type"] = OAuth2GrantTypes.RefreshToken,
+                ["refresh_token"] = latest.RefreshToken,
+                ["client_id"] = client.ClientId
+            };
+            if (client.ClientSecret is not null)
+                form["client_secret"] = client.ClientSecret;
+            return await ExchangeAsync(connection, form, latest.Version, latest, cancellationToken);
         }
-        finally
+
+        var grantType = connection.Settings.GetValueOrDefault(OAuth2SettingKeys.GrantType) ?? OAuth2GrantTypes.ClientCredentials;
+        if (!string.Equals(grantType, OAuth2GrantTypes.ClientCredentials, StringComparison.OrdinalIgnoreCase))
         {
-            gate.Release();
+            throw new InvalidOperationException(
+                $"Connection '{connection.Name}' needs authorization; its grant is missing or expired and has no refresh token.");
         }
+
+        return await AcquireClientCredentialsAsync(connection, latest?.Version, latest, cancellationToken);
     }
 
-    public async ValueTask<OAuth2Grant> AcquireClientCredentialsAsync(
+    public ValueTask<OAuth2Grant> AcquireClientCredentialsAsync(
         IResolvedConnection connection,
         int? expectedVersion = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        AcquireClientCredentialsAsync(connection, expectedVersion, previous: null, cancellationToken);
+
+    private async ValueTask<OAuth2Grant> AcquireClientCredentialsAsync(
+        IResolvedConnection connection,
+        int? expectedVersion,
+        OAuth2Grant? previous,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(connection);
         var client = await ResolveClientAsync(connection, cancellationToken);
@@ -175,7 +191,7 @@ internal sealed class OAuth2TokenService(
             form["client_secret"] = client.ClientSecret;
         if (connection.Settings.TryGetValue(OAuth2SettingKeys.Scopes, out var scopes) && !string.IsNullOrWhiteSpace(scopes))
             form["scope"] = scopes;
-        return await ExchangeAsync(connection, form, expectedVersion, cancellationToken);
+        return await ExchangeAsync(connection, form, expectedVersion, previous, cancellationToken);
     }
 
     public bool IsExpired(OAuth2Grant grant)
@@ -200,22 +216,40 @@ internal sealed class OAuth2TokenService(
         return grant with { Version = meta?.CurrentVersion ?? grant.Version };
     }
 
+    public static string EncodeState(string tenantId, string connectionName, string nonce)
+    {
+        var json = JsonSerializer.Serialize(new OAuth2StatePayload(tenantId, connectionName, nonce), JsonOptions);
+        return Pkce.Base64Url(Encoding.UTF8.GetBytes(json));
+    }
+
     public static bool TryParseState(string? state, out string tenantId, out string connectionName, out string nonce)
     {
         tenantId = "";
         connectionName = "";
         nonce = "";
-        if (string.IsNullOrWhiteSpace(state))
+        if (string.IsNullOrWhiteSpace(state) || !Pkce.TryBase64UrlDecode(state, out var bytes))
             return false;
 
-        var parts = state.Split(':');
-        if (parts.Length != 3 || parts.Any(string.IsNullOrWhiteSpace))
-            return false;
+        try
+        {
+            var payload = JsonSerializer.Deserialize<OAuth2StatePayload>(bytes, JsonOptions);
+            if (payload is null ||
+                string.IsNullOrWhiteSpace(payload.TenantId) ||
+                string.IsNullOrWhiteSpace(payload.ConnectionName) ||
+                string.IsNullOrWhiteSpace(payload.Nonce))
+            {
+                return false;
+            }
 
-        tenantId = parts[0];
-        connectionName = parts[1];
-        nonce = parts[2];
-        return true;
+            tenantId = payload.TenantId;
+            connectionName = payload.ConnectionName;
+            nonce = payload.Nonce;
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     internal async ValueTask<OAuth2ClientCredentials> ResolveClientAsync(
@@ -234,10 +268,18 @@ internal sealed class OAuth2TokenService(
         }
     }
 
+    private void EnsureGrantStoreWritable()
+    {
+        if (!stores.TryGet(SecretStoreNames.Encrypted, out var store) || store is null)
+            throw new InvalidOperationException("OAuth2 grants require a writable secret store.");
+        OAuth2GrantStorePolicy.EnsureWritable(store.Descriptor);
+    }
+
     private async ValueTask<OAuth2Grant> ExchangeAsync(
         IResolvedConnection connection,
         IReadOnlyDictionary<string, string> form,
         int? expectedVersion,
+        OAuth2Grant? previous,
         CancellationToken cancellationToken)
     {
         var tokenUrl = RequiredSetting(connection, OAuth2SettingKeys.TokenUrl);
@@ -263,17 +305,28 @@ internal sealed class OAuth2TokenService(
         if (root.TryGetProperty("expires_in", out var expires) && expires.TryGetInt32(out var seconds))
             expiresAt = timeProvider.GetUtcNow().AddSeconds(seconds);
 
+        var responseRefresh = root.TryGetProperty("refresh_token", out var refresh) ? refresh.GetString() : null;
+        var refreshToken = !string.IsNullOrWhiteSpace(responseRefresh)
+            ? responseRefresh
+            : form.TryGetValue("refresh_token", out var existingRefresh) ? existingRefresh : previous?.RefreshToken;
+
+        var tokenType = root.TryGetProperty("token_type", out var type) && !string.IsNullOrWhiteSpace(type.GetString())
+            ? type.GetString()!
+            : previous?.TokenType ?? "Bearer";
+        var scope = root.TryGetProperty("scope", out var scopeElement) && !string.IsNullOrWhiteSpace(scopeElement.GetString())
+            ? scopeElement.GetString()
+            : previous?.Scope;
+
         var grant = new OAuth2Grant
         {
             AccessToken = accessToken,
-            RefreshToken = root.TryGetProperty("refresh_token", out var refresh) ? refresh.GetString() : null,
+            RefreshToken = refreshToken,
             ExpiresAt = expiresAt,
-            TokenType = root.TryGetProperty("token_type", out var type) ? type.GetString() ?? "Bearer" : "Bearer",
-            Scope = root.TryGetProperty("scope", out var scope) ? scope.GetString() : null
+            TokenType = tokenType,
+            Scope = scope
         };
 
-        var written = await WriteGrantAsync(connection, grant, expectedVersion, cancellationToken);
-        return written;
+        return await WriteGrantAsync(connection, grant, expectedVersion, cancellationToken);
     }
 
     private async ValueTask<OAuth2Grant> WriteGrantAsync(
@@ -313,7 +366,9 @@ internal sealed class OAuth2TokenService(
             ExpectedSecretVersion = expectedVersion ?? current.CurrentVersion ?? 0,
             AccessToken = grant.AccessToken,
             RefreshToken = grant.RefreshToken,
-            ExpiresAt = grant.ExpiresAt ?? DateTimeOffset.UnixEpoch
+            ExpiresAt = grant.ExpiresAt,
+            TokenType = grant.TokenType,
+            Scope = grant.Scope
         }, cancellationToken);
 
         if (cas.Status == GrantWriteStatus.Written)
@@ -325,13 +380,19 @@ internal sealed class OAuth2TokenService(
         throw new InvalidOperationException("Grant compare-and-swap lost and no grant could be re-read.");
     }
 
-    private async ValueTask WriteNewAsync(string tenantId, string name, string value, CancellationToken cancellationToken)
+    private async ValueTask WriteNewAsync(
+        string tenantId,
+        string name,
+        string value,
+        DateTimeOffset? expiresAt,
+        CancellationToken cancellationToken)
     {
         await secretManager.CreateAsync(tenantId, new CreateSecretRequest
         {
             Name = name,
             Value = value,
-            TypeName = SecretTypeNames.Text
+            TypeName = SecretTypeNames.Text,
+            ExpiresAt = expiresAt
         }, cancellationToken);
     }
 
@@ -359,3 +420,5 @@ internal sealed class OAuth2TokenService(
 internal sealed record OAuth2ClientCredentials(string ClientId, string? ClientSecret);
 
 internal sealed record AuthorizationCodeRequest(string AuthorizationUrl, string State, string Challenge);
+
+internal sealed record OAuth2StatePayload(string TenantId, string ConnectionName, string Nonce);
