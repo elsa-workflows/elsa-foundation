@@ -1,3 +1,4 @@
+import { compensationScopeStructureKind, compensationStepsFromExecutableSlots } from "./compensationScope";
 import { bpmnStructureKind, flowchartStructureKind, readStructureDesignFacet, type StructureDesignSlotDescriptor } from "./workflowAdapter";
 import type {
   ActivityCatalogItem,
@@ -221,6 +222,14 @@ function synthesizeStructure(
 ): ActivityNodeStructure | null {
   const slots = node.childSlots ?? [];
   if (slots.length === 0 && !(node.structureKind === bpmnStructureKind && node.bpmnStructure)) return null;
+
+  if (node.structureKind === compensationScopeStructureKind) {
+    return {
+      kind: compensationScopeStructureKind,
+      schemaVersion: "1.0.0",
+      payload: { steps: compensationStepsFromExecutableSlots(slots, adapt) }
+    };
+  }
 
   const facet = readStructureDesignFacet(catalogItem);
   const facetMatch = facet && (!node.structureKind || facet.kind === node.structureKind)

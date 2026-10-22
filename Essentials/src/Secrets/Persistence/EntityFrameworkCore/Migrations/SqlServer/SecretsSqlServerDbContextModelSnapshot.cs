@@ -107,6 +107,11 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.SqlServer
                         .HasColumnType("nvarchar(256)")
                         .UseCollation("Latin1_General_100_BIN2");
 
+                    b.Property<string>("Tombstone")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
                     b.Property<byte[]>("ConcurrencyToken")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -157,7 +162,7 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.SqlServer
                         .HasColumnType("nvarchar(max)")
                         .UseCollation("Latin1_General_100_BIN2");
 
-                    b.HasKey("TenantId", "NormalizedName");
+                    b.HasKey("TenantId", "NormalizedName", "Tombstone");
 
                     b.HasIndex("SchemaVersion");
 

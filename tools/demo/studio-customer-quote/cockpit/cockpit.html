@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#071521">
+  <title>Customer API cockpit · Elsa Studio</title>
+  <link rel="stylesheet" href="/cockpit/style.css">
+  <script src="/cockpit/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <img src="/cockpit/elsa-icon.png" alt="" id="brand-icon">
+        <span id="brand-fallback" hidden>E</span>
+      </div>
+      <div>
+        <div class="eyebrow">ELSA STUDIO · LOCAL DEMO</div>
+        <h1>Customer API cockpit</h1>
+      </div>
+    </div>
+    <div id="connection-status" class="connection-status loading" role="status" aria-live="polite">
+      <span class="status-dot" aria-hidden="true"></span>
+      <span id="connection-label">Loading cockpit state</span>
+    </div>
+  </header>
+
+  <main class="page-shell">
+    <section class="service-strip" aria-label="Customer API service status">
+      <div class="service-item"><span>Service</span><strong id="service-name">Not observed</strong></div>
+      <div class="service-item"><span>Endpoint</span><strong id="service-endpoint" class="mono">Not observed</strong></div>
+      <div class="service-item"><span>Authentication</span><strong id="service-auth">Not observed</strong></div>
+      <div class="service-item"><span>Started</span><strong id="service-started">Not observed</strong></div>
+      <div id="snapshot-status" class="snapshot-status">Waiting for first state snapshot</div>
+    </section>
+
+    <div class="workspace-grid">
+      <aside class="panel recent-panel" aria-labelledby="recent-title">
+        <div class="panel-heading">
+          <div>
+            <div class="eyebrow">OBSERVED TRAFFIC</div>
+            <h2 id="recent-title">Recent requests</h2>
+          </div>
+          <button id="refresh" class="icon-button" type="button" aria-label="Refresh observed state" title="Refresh">↻</button>
+        </div>
+        <p id="history-note" class="panel-note">Live calls received by the demo API.</p>
+        <div id="request-list" class="request-list" role="group" aria-label="Recent Customer API requests"></div>
+        <p id="list-empty" class="empty-note" hidden>No Customer API requests observed yet.</p>
+      </aside>
+
+      <section class="panel request-panel" aria-labelledby="request-panel-title">
+        <div class="panel-heading request-heading">
+          <div>
+            <div class="eyebrow">CUSTOMER API</div>
+            <h2 id="request-panel-title">Selected request</h2>
+          </div>
+          <span id="selection-mode" class="mode-label">Waiting for observed traffic</span>
+        </div>
+        <div id="request-placeholder" class="request-placeholder">
+          <div class="placeholder-mark" aria-hidden="true">↗</div>
+          <h3>Waiting for a real request</h3>
+          <p>Run the quote test below or send a request from Studio.</p>
+        </div>
+        <div id="request-detail" hidden>
+          <div class="request-title-row">
+            <div class="request-route">
+              <div class="route-badges"><span id="request-method" class="method-badge">Not observed</span><span id="request-status" class="http-badge">Not observed</span></div>
+              <h3 id="request-path" class="mono route-path">Not observed</h3>
+            </div>
+            <div class="request-timing"><span>Duration</span><strong id="request-duration">Not observed</strong></div>
+          </div>
+          <div class="auth-card">
+            <div class="auth-copy">
+              <div class="auth-heading">
+                <h3>Bearer authentication</h3>
+                <span id="auth-decision" class="auth-decision unknown">Not observed</span>
+              </div>
+              <p id="auth-help" class="auth-help">Credential values stay hidden until you request a reveal.</p>
+              <div class="auth-value-line">
+                <span class="auth-key">Authorization</span>
+                <code id="auth-value" class="auth-value">Not observed</code>
+              </div>
+              <div class="auth-metadata">
+                <span>Demo key <strong id="auth-version">Not observed</strong></span>
+                <span>Fingerprint <code id="auth-fingerprint">Not observed</code></span>
+              </div>
+            </div>
+            <button id="reveal" class="secondary-button reveal-button" type="button" disabled>Reveal demo key</button>
+          </div>
+          <details id="request-disclosure" class="details-disclosure">
+            <summary>Request and response details</summary>
+            <div class="details-grid">
+              <section>
+                <h4>Request headers</h4>
+                <dl id="request-headers" class="header-list"></dl>
+                <h4>Request body</h4>
+                <pre id="request-body" class="json-view">Not observed</pre>
+              </section>
+              <section>
+                <h4>Response headers</h4>
+                <dl id="response-headers" class="header-list"></dl>
+                <h4>Response body</h4>
+                <pre id="response-body" class="json-view">Not observed</pre>
+              </section>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section class="panel quote-panel" aria-labelledby="quote-title">
+        <div class="quote-intro">
+          <div class="eyebrow">TRY THE WORKFLOW</div>
+          <h2 id="quote-title">Run a quote test</h2>
+          <p>Send a real request to the prepared quote workflow. The Customer API returns customer details; the workflow calculates the total.</p>
+          <div class="workflow-route"><span>POST</span><code>/workflows/http/quotes</code></div>
+        </div>
+        <form id="quote-form" class="quote-form">
+          <label for="subtotal">Subtotal<input id="subtotal" name="subtotal" type="number" min="0" max="1000000" step="1" value="40" required></label>
+          <span class="operator" aria-hidden="true">+</span>
+          <label for="shipping">Shipping<input id="shipping" name="shipping" type="number" min="0" max="1000000" step="1" value="2" required></label>
+          <button id="quote-submit" class="primary-button" type="submit">Send quote request</button>
+          <p class="form-hint">Whole numbers from 0 to 1,000,000.</p>
+        </form>
+        <div class="quote-result" aria-live="polite">
+          <div class="quote-result-heading">
+            <div><span class="eyebrow">WORKFLOW RESULT</span><h3 id="quote-outcome">No result observed</h3></div>
+            <div class="quote-total"><span>Total</span><strong id="quote-total">—</strong></div>
+          </div>
+          <p id="quote-feedback" class="quote-feedback">No quote result has been observed yet.</p>
+          <details id="quote-disclosure" class="details-disclosure" hidden>
+            <summary>Quote request and response</summary>
+            <div class="details-grid">
+              <section><h4>Request</h4><pre id="quote-request" class="json-view">Not observed</pre></section>
+              <section><h4>Response</h4><pre id="quote-response" class="json-view">Not observed</pre></section>
+            </div>
+          </details>
+        </div>
+      </section>
+    </div>
+    <footer class="page-footer"><nav aria-label="Demo links"><a href="http://localhost:5589/workflows/definitions" target="_blank" rel="noopener">Open workflow ↗</a><a href="http://127.0.0.1:5584/slides.html" target="_blank" rel="noopener">Slides ↗</a></nav><span>Local demo · no browser storage</span></footer>
+  </main>
+</body>
+</html>

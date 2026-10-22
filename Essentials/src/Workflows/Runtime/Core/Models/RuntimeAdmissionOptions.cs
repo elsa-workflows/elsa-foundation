@@ -5,7 +5,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// writer so a burst of concurrent commands cannot overwhelm the host: past the limit a command is <b>refused</b>
 /// rather than parked behind the writer's connection gate. This is the same intent
 /// <c>RuntimeResumptionOptions</c> already applies to the recovery sweep, ported to live dispatch, which nothing
-/// bounded — <c>MaxDrainCycles</c> bounds cycles within one drain, <c>MaxWorkItems</c> bounds items within one cycle,
+/// bounded — <c>MaxCyclesWithoutProgress</c> bounds the cycles of one drain that dispatch no new work, <c>MaxWorkItems</c> bounds items within one cycle,
 /// and <c>RuntimeActorEvictionOptions</c> bounds memory.
 ///
 /// <para><b>Why the limit moves.</b> The right concurrency is a property of the deployment, not of Elsa: it differs

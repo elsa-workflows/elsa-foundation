@@ -1,5 +1,6 @@
 using Elsa.Activities.Http.Activities;
 using Elsa.Http.Core;
+using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 
 namespace Elsa.Activities.Http.Tests;
@@ -67,6 +68,23 @@ public sealed class HttpEndpointStimulusTests
             var method = descriptor.Metadata[HttpEndpointRouting.MethodMetadataKey];
             Assert.Equal(HttpEndpointStimulus.Hash("orders/{id}", method), descriptor.StimulusHash);
         }
+    }
+
+    [Fact]
+    public void Describe_EmitsASafeDisplayDescriptorWithoutRoutingOptions()
+    {
+        var descriptor = Assert.Single(HttpEndpointStimulus.Describe(
+            "/Orders/{Id}",
+            ["get"],
+            new HttpEndpointStimulusOptions(
+                Authorize: true,
+                Policy: "internal-policy",
+                RequestTimeout: TimeSpan.FromSeconds(30),
+                RequestSizeLimit: 1024,
+                ResponseMode: ResponseMode.Sync)));
+
+        Assert.Equal("GET /orders/{id}", descriptor.Metadata[TriggerStimulusDescriptor.SafeDisplayDescriptorMetadataKey]);
+        Assert.DoesNotContain("internal-policy", descriptor.Metadata[TriggerStimulusDescriptor.SafeDisplayDescriptorMetadataKey], StringComparison.Ordinal);
     }
 
     [Fact]
@@ -204,15 +222,14 @@ public sealed class HttpEndpointStimulusTests
     }
 
     [Fact]
-    public void Describe_ResponseModeAsync_IsOmittedFromMetadata()
+    public void Describe_ResponseModeAsync_IsStampedInMetadata()
     {
-        // Async is the default and contributes no key, so an async endpoint's metadata is byte-for-byte the
-        // pre-E shape (round-trip identity).
+        // The selected mode is explicit even when Async is chosen, so it stays stable when the activity default changes.
         var withAsync = Assert.Single(HttpEndpointStimulus.Describe("orders/{id}", ["GET"], new HttpEndpointStimulusOptions(ResponseMode: ResponseMode.Async)));
         var withoutOptions = Assert.Single(HttpEndpointStimulus.Describe("orders/{id}", ["GET"]));
 
         foreach (var descriptor in new[] { withAsync, withoutOptions })
-            Assert.DoesNotContain(HttpEndpointRouting.ResponseModeMetadataKey, descriptor.Metadata.Keys);
+            Assert.Equal("Async", descriptor.Metadata[HttpEndpointRouting.ResponseModeMetadataKey]);
     }
 
     [Fact]

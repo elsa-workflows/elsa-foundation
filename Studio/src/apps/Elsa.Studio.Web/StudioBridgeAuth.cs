@@ -53,22 +53,22 @@ internal static class StudioBridgeAuth
 
     /// <summary>
     /// Policy for host-control READ surfaces (bridge status/registry, Studio's own module/feature READ endpoints).
-    /// Requires <c>module-management.read</c>; a holder of <c>module-management.manage</c> satisfies it too (locally
+    /// Requires <c>module-management:read</c>; a holder of <c>module-management:manage</c> satisfies it too (locally
     /// expanded — Studio never relies on the backend to expand the implication).
     /// </summary>
     public const string ModuleManagementReadPolicyName = "StudioManagementBridge:ModuleManagement.Read";
 
     /// <summary>
     /// Policy for Studio's own module-management MUTATION endpoints (upload, delete, reconcile, prune, feed CRUD,
-    /// retention, feature apply). Requires <c>module-management.manage</c>. A mere authenticated session is not enough.
+    /// retention, feature apply). Requires <c>module-management:manage</c>. A mere authenticated session is not enough.
     /// </summary>
     public const string ModuleManagementManagePolicyName = "StudioManagementBridge:ModuleManagement.Manage";
 
     // Host-control permission keys owned by the backend feature (mirrored here from
     // Elsa.Modularity.Api.Authorization.ModuleManagementPermissionKeys). These string values are the stable
     // identity-permission contract; Studio only needs the keys to check the user's permission claims.
-    public const string ModuleManagementReadPermission = "module-management.read";
-    public const string ModuleManagementManagePermission = "module-management.manage";
+    public const string ModuleManagementReadPermission = "module-management:read";
+    public const string ModuleManagementManagePermission = "module-management:manage";
 
     /// <summary>
     /// The query-string parameter carrying the browser bearer on the console-stream hub handshake. See the class

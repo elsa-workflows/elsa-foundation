@@ -45,6 +45,12 @@ public sealed class RuntimeInputBindingCompiler(
     /// </summary>
     public const string SecretExpressionType = "Secret";
 
+    /// <summary>
+    /// The authored expression type of a connection reference. Duplicates the Connections module's expression
+    /// type name so this project needs no reference to that module.
+    /// </summary>
+    public const string ConnectionExpressionType = "Connection";
+
     // A resolved secret is text: the conversion plan of a secret read starts from a text value.
     private static readonly ValueTypeDescriptor SecretSourceType = new("String");
 
@@ -72,6 +78,8 @@ public sealed class RuntimeInputBindingCompiler(
         var definitionsByKey = definitions.ToDictionary(x => x.ReferenceKey, StringComparer.Ordinal);
         EnsureNoCredentialLiterals(nodeId, states, key =>
             definitionsByKey.TryGetValue(key, out var definition) && definition.IsCredential == true ? definition.Name : null);
+        EnsureConnectionBindings(nodeId, states, key =>
+            definitionsByKey.TryGetValue(key, out var definition) && IsConnectionInput(definition));
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
         foreach (var state in states)
         {
@@ -102,6 +110,8 @@ public sealed class RuntimeInputBindingCompiler(
         var contractsByKey = contracts.ToDictionary(x => x.Key, StringComparer.Ordinal);
         EnsureNoCredentialLiterals(nodeId, states, key =>
             contractsByKey.TryGetValue(key, out var contract) && contract.IsCredential ? contract.Name : null);
+        EnsureConnectionBindings(nodeId, states, key =>
+            contractsByKey.TryGetValue(key, out var contract) && IsConnectionInput(contract));
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
         foreach (var state in states)
         {
@@ -134,10 +144,73 @@ public sealed class RuntimeInputBindingCompiler(
             throw new CredentialLiteralRefusedException(findings);
     }
 
+    /// <summary>
+    /// A connection-typed input may only carry a Connection expression (name and type). A string
+    /// literal of a token is refused so credentials never enter workflow JSON (issue #2729).
+    /// </summary>
+    private static void EnsureConnectionBindings(
+        string nodeId,
+        IEnumerable<ArgumentState> states,
+        Func<string, bool> isConnectionInput)
+    {
+        foreach (var state in states.OrderBy(candidate => candidate.ReferenceKey, StringComparer.Ordinal))
+        {
+            if (!isConnectionInput(state.ReferenceKey))
+                continue;
+            if (ConnectionInputBinding.IsAccepted(state))
+                continue;
+
+            throw new ArgumentException(
+                $"Activity node '{nodeId}' input '{state.ReferenceKey}' must be a Connection reference (name and type), not a literal credential.");
+        }
+    }
+
+    private static bool IsConnectionInput(InputDefinition definition) =>
+        !string.IsNullOrWhiteSpace(definition.ConnectionType) || IsConnectionTyped(definition.Type.Alias);
+
+    private static bool IsConnectionInput(RuntimeActivityInputContract contract) =>
+        !string.IsNullOrWhiteSpace(contract.ConnectionType) || IsConnectionTyped(contract.Type);
+
+    private static bool IsConnectionTyped(Elsa.Primitives.Models.ValueTypeDescriptor type) =>
+        IsConnectionTyped(type.Alias);
+
+    private static bool IsConnectionTyped(string? alias) =>
+        string.Equals(alias, typeof(Elsa.Activities.Runtime.Core.Models.ConnectionReference).FullName, StringComparison.Ordinal);
+
     public RuntimeInputBinding Compile(string nodeId, InputDefinition inputDefinition, ArgumentState state)
     {
         ArgumentNullException.ThrowIfNull(state);
         return CompileAuthored(nodeId, inputDefinition, state, DeclaredPolicy(inputDefinition));
+    }
+
+    /// <summary>
+    /// Compiles an authored input on a published activity boundary. The boundary contract's storage-driver key
+    /// selects its value codec; it is not an external payload-storage profile. Authored per-binding storage policy
+    /// still flows through <see cref="CompileAuthored"/> and can strengthen the inline default.
+    /// </summary>
+    internal RuntimeInputBinding CompilePublishedBoundaryInput(
+        string nodeId,
+        ActivityInputContract contract,
+        ArgumentState state)
+    {
+        ArgumentNullException.ThrowIfNull(contract);
+        ArgumentNullException.ThrowIfNull(state);
+
+        return CompileAuthored(
+            nodeId,
+            ToInputDefinition(contract),
+            state,
+            ActivityValuePolicy.Default);
+    }
+
+    /// <summary>Compiles a published boundary input that has no authored state or declared default.</summary>
+    internal RuntimeInputBinding CompileUnboundPublishedBoundaryInput(
+        string nodeId,
+        ActivityInputContract contract)
+    {
+        ArgumentNullException.ThrowIfNull(contract);
+
+        return CompileUnbound(nodeId, ToInputDefinition(contract), ActivityValuePolicy.Default);
     }
 
     public RuntimeInputBinding Compile(string nodeId, InputDefinition inputDefinition, ArgumentValue value) =>
@@ -291,7 +364,25 @@ public sealed class RuntimeInputBindingCompiler(
         IsNullable: contract.IsNullable,
         IsRequired: contract.IsRequired,
         DefaultValue: contract.DefaultValue,
-        DefaultSyntax: contract.HasDefault ? LiteralExpressionType : null);
+        DefaultSyntax: contract.HasDefault ? LiteralExpressionType : null,
+        IsCredential: contract.IsCredential ? true : null,
+        ConnectionType: contract.ConnectionType);
+
+    private static InputDefinition ToInputDefinition(ActivityInputContract contract) => new(
+        contract.ReferenceKey,
+        contract.Name,
+        contract.Type,
+        contract.StorageDriverKey,
+        contract.DisplayName ?? contract.Name,
+        contract.Category,
+        contract.IsNullable,
+        Description: contract.Description,
+        Order: contract.Order,
+        UiHint: contract.UiHint,
+        UISpecifications: contract.UiSpecifications,
+        IsRequired: contract.IsRequired,
+        DefaultValue: contract.Default?.Value,
+        DefaultSyntax: contract.Default?.Syntax);
 
     private static void AddBinding(
         IDictionary<string, RuntimeInputBinding> bindings,
@@ -360,12 +451,19 @@ public sealed class RuntimeInputBindingCompiler(
         if (IsSecretBinding(value))
             return CompileSecretInput(nodeId, inputDefinition, value, effectivePolicy, conversion);
 
+        if (IsConnectionBinding(value))
+            return CompileConnectionInput(nodeId, inputDefinition, value, effectivePolicy);
+
         return CompileExpressionInput(nodeId, inputDefinition, value, effectivePolicy);
     }
 
     /// <summary>True when the authored value is a secret reference.</summary>
     public static bool IsSecretBinding(ArgumentValue? value) =>
         string.Equals(value?.ExpressionType, SecretExpressionType, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>True when the authored value is a connection reference.</summary>
+    public static bool IsConnectionBinding(ArgumentValue? value) =>
+        string.Equals(value?.ExpressionType, ConnectionExpressionType, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Refuses (<c>VF-ACT-012</c>) a secret reference on a node that would read the value anywhere but CLR
@@ -453,6 +551,44 @@ public sealed class RuntimeInputBindingCompiler(
             metadata: BuildInputMetadata(inputDefinition),
             conversionPlan: conversionPlan,
             secret: reference);
+    }
+
+    /// <summary>
+    /// Compiles a connection reference into an inline literal of name and type only. Credentials stay
+    /// on the connection and are resolved at send time.
+    /// </summary>
+    private RuntimeInputBinding CompileConnectionInput(
+        string nodeId,
+        InputDefinition inputDefinition,
+        ArgumentValue value,
+        ValueProtectionPolicy effectivePolicy)
+    {
+        var reading = ConnectionReferencePayload.Read(value.Value);
+        if (reading.Reference is not { } members)
+        {
+            throw new ArgumentException(
+                $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' uses expression type '{ConnectionExpressionType}' but {reading.Defect}.");
+        }
+
+        var requiredType = inputDefinition.ConnectionType;
+        if (requiredType is { Length: > 0 } &&
+            members.Type is { Length: > 0 } &&
+            !string.Equals(members.Type, requiredType, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException(
+                $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' requires connection type '{requiredType}' but the binding names '{members.Type}'.");
+        }
+
+        var reference = new Elsa.Activities.Runtime.Core.Models.ConnectionReference(members.Name, members.Type ?? requiredType);
+        var targetType = ToValueTypeDescriptor(inputDefinition);
+        var literal = JsonSerializer.SerializeToElement(reference);
+        return new RuntimeInputBinding(
+            inputKey: inputDefinition.ReferenceKey,
+            targetType: targetType,
+            effectivePolicy: effectivePolicy,
+            source: RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(targetType, literal, effectivePolicy),
+            metadata: BuildInputMetadata(inputDefinition));
     }
 
     // Read through the one definition of a well-formed reference, which the credential-literal rule applies at save.
@@ -770,7 +906,7 @@ public sealed class RuntimeInputBindingCompiler(
             return true;
         }
 
-        var element = value as JsonElement? ?? (value is null ? null : JsonSerializer.SerializeToElement(value));
+        var element = value as JsonElement? ?? (value is null ? null : JsonSerializer.SerializeToElement(value, DescriptorPayloadSerializer.Options));
         if (element is not { ValueKind: JsonValueKind.Object } payload ||
             !payload.TryGetProperty("language", out _) ||
             !payload.TryGetProperty("source", out _) ||
@@ -780,7 +916,7 @@ public sealed class RuntimeInputBindingCompiler(
             return false;
         }
 
-        definition = payload.Deserialize<ExpressionDefinition>()
+        definition = payload.Deserialize<ExpressionDefinition>(DescriptorPayloadSerializer.Options)
             ?? throw new ArgumentException("Portable expression definition payload could not be deserialized.");
         return true;
     }

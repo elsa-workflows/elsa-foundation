@@ -8,7 +8,7 @@
 
 The feature registers owner-local source-generated JSON metadata and dynamic API Explorer refresh. API request/response contracts come from `Elsa.Activities.Design.Api.Core`; implementation handlers, providers, stores, authorization adapters, and compiler-generated delegate state remain outside endpoint/OpenAPI metadata so a removed feature generation can be collected.
 
-The owner contributes `activity-design.read`, `activity-design.manage`, `activity-design.author-provider`, and `activity-design.read-provider-payload` to the Foundation Identity catalog. Route metadata uses only the read/manage action appropriate to the operation. The author-provider and provider-payload actions remain inner resource decisions through the authorization context seams below; permission implication and wildcard grants remain evaluator-owned.
+The owner contributes `activities/design:read`, `activities/design:manage`, `activities/design:author`, and `activities/design/provider-payload:read` to the Foundation Identity catalog. Route metadata uses only the read/manage action appropriate to the operation. The author-provider and provider-payload actions remain inner resource decisions through the authorization context seams below; permission implication and wildcard grants remain evaluator-owned.
 
 ## Replacement contracts
 
@@ -34,6 +34,10 @@ These are single-owner seams. Replace them through DI; do not register competing
 
 Provider packages own these implementations and their feature registrations. The Activity Graph contribution is
 documented in its [contributing-feature catalog](../../Graph/Design/EXTENSION_POINTS.md).
+
+Each authorable manifest schema declares its supported migration sources. The legacy schema-version list applies only
+to that same provider; cross-provider migrations must declare exact provider-key and schema-version pairs. Capability
+projection reads these declarations without running a migration.
 
 ## Sources and reconciliation
 

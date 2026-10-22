@@ -19,7 +19,8 @@ public sealed class Endpoint(
     PublicationSnapshotReviewService reviews,
     TimeProvider timeProvider,
     IWorkflowExecutableCompiler compiler,
-    WorkflowPublicationPreflightReader preflightReader) : ApiEndpoint<PreflightWorkflowPublicationSnapshot, PublicationSnapshotPreflightView>
+    WorkflowPublicationPreflightReader preflightReader,
+    NormalizedPrincipalValidator principalValidator) : ApiEndpoint<PreflightWorkflowPublicationSnapshot, PublicationSnapshotPreflightView>
 {
     public override void Configure(ApiEndpointOptions options)
     {
@@ -36,9 +37,11 @@ public sealed class Endpoint(
         var candidateHash = reviews.ComputeCandidateHash(request.State, request.Layout);
         var snapshotId = $"snapshot:{candidateHash}";
         var now = timeProvider.GetUtcNow();
+        var tenantId = PublicationRequestTenant.Resolve(HttpContext.User, principalValidator);
         var executable = await compiler.CompileAsync(
             new WorkflowExecutableCompileRequest(snapshotId, WorkflowExecutableReferenceScope.Published, now, null, null,
-                "artifact-", new Dictionary<string, string> { ["slice"] = "workflow-publication-snapshot-preflight" })
+                "artifact-", new Dictionary<string, string> { ["slice"] = "workflow-publication-snapshot-preflight" },
+                TenantId: tenantId)
             {
                 Source = new WorkflowExecutableCompileSource(request.DefinitionId, snapshotId, "snapshot", request.State,
                     "WorkflowDefinitionSnapshot", snapshotId, SourceVersion: null)
@@ -48,7 +51,7 @@ public sealed class Endpoint(
             $"preflight:{candidateHash}", cancellationToken);
         var issued = await reviews.IssueAsync(candidateHash, plan,
             request.Action is { } action ? PublicationIntentContract.ToModel(action) : null,
-            request.SlotName, request.ExpectedPublicationId, PublicationRequestTenant.Resolve(HttpContext.User), cancellationToken);
+            request.SlotName, request.ExpectedPublicationId, tenantId, cancellationToken);
         var resolved = plan.ResolvedAction;
         return new PublicationSnapshotPreflightView(
             issued.PreflightToken, issued.CandidateHash, resolved.WorkflowDefinitionId, VersionId: null,

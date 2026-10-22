@@ -87,7 +87,8 @@ public sealed record ActivityInputDescriptorView(
     JsonElement? UiSpecifications,
     bool IsSensitive,
     bool IsCredential,
-    string? Tier = null);
+    string? Tier = null,
+    string? ConnectionType = null);
 
 public sealed record ActivityOutputDescriptorView(
     string Name,
@@ -96,7 +97,11 @@ public sealed record ActivityOutputDescriptorView(
     string? DisplayName,
     string? Description,
     string? Category,
-    bool IsBrowsable);
+    bool IsBrowsable)
+{
+    /// <summary>The stable contract reference key, when the output declares one.</summary>
+    public string? ReferenceKey { get; init; }
+}
 
 public sealed record ActivityPortDescriptorView(
     string Name,

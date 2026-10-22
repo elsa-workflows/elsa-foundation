@@ -51,6 +51,80 @@ describe("authenticated HTTP transport", () => {
     expect(new Headers(init.headers).get("Accept")).toBe("application/json");
   });
 
+  it("returns the untouched authenticated response for module-owned protocol actions", async () => {
+    const fetchMock = vi.fn(async () => new Response("accepted by HTTP driver", {
+      status: 202,
+      headers: { "content-type": "text/plain", "x-driver-result": "deferred" }
+    }));
+    const auth = stubAuth("token-1");
+    const client = createAuthenticatedHttpClient("https://foundation.example/", auth, { fetch: fetchMock });
+
+    const response = await client.requestResponse!("/test-runs/run-1/http", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+      retryOnUnauthorized: false
+    });
+
+    expect(response.status).toBe(202);
+    expect(response.headers.get("x-driver-result")).toBe("deferred");
+    await expect(response.text()).resolves.toBe("accepted by HTTP driver");
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(url).toBe("https://foundation.example/test-runs/run-1/http");
+    expect(new Headers((init as RequestInit).headers).get("Authorization")).toBe("Bearer token-1");
+  });
+
+  it("returns the untouched response through the authenticated transport", async () => {
+    const fetchMock = vi.fn(async () => new Response("workflow response", {
+      status: 202,
+      statusText: "Accepted",
+      headers: { "content-type": "text/plain; charset=utf-8" }
+    }));
+    const auth = stubAuth("token-1");
+    const client = createAuthenticatedHttpClient("https://foundation.example/", auth, { fetch: fetchMock });
+
+    const response = await client.requestResponse!("/workflows/http/orders/1", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{\"name\":\"Ada\"}",
+      timeoutMs: 5_000
+    });
+
+    expect(response.status).toBe(202);
+    expect(response.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+    await expect(response.text()).resolves.toBe("workflow response");
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://foundation.example/workflows/http/orders/1");
+    expect(new Headers(init.headers).get("Authorization")).toBe("Bearer token-1");
+    expect(init.credentials).toBe("include");
+  });
+
+  it("preserves a Test Drive HTTP 401 without refreshing and replaying a live request", async () => {
+    const fetchMock = vi.fn(async () => new Response("workflow says unauthorized", {
+      status: 401,
+      statusText: "Unauthorized",
+      headers: { "content-type": "text/plain" }
+    }));
+    const auth = stubAuth("token-1");
+    const client = createAuthenticatedHttpClient("https://foundation.example/", auth, { fetch: fetchMock });
+
+    const response = await client.requestResponse!("/test-runs/run-1/http", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+      retryOnUnauthorized: false
+    });
+
+    expect(response.status).toBe(401);
+    await expect(response.text()).resolves.toBe("workflow says unauthorized");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(auth.refresh).not.toHaveBeenCalled();
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit & { retryOnUnauthorized?: boolean };
+    expect(new Headers(init.headers).get("Authorization")).toBe("Bearer token-1");
+    expect(init.credentials).toBe("include");
+    expect(init.retryOnUnauthorized).toBeUndefined();
+  });
+
   it("maps a failed getJsonWithHeaders response onto the same error as the JSON verbs", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ status: 409, detail: "Never published." }), {
       status: 409,

@@ -25,6 +25,9 @@ internal sealed class WorkflowsRuntimeFaultRenderer : IEndpointFaultRenderer
     {
         switch (exception)
         {
+            case RuntimeRunDeletionRejectedSignal deletion:
+                await RuntimeProblemWriting.ProblemAsync(context, deletion.Status, deletion.Detail);
+                return true;
             case RuntimeResourceMissingSignal:
                 context.Response.StatusCode = StatusCodes.Status404NotFound;
                 return true;

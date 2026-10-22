@@ -38,10 +38,12 @@ export interface HomeLayoutDocument {
 export const builtInHomeLayout: HomeLayoutValue = {
   widgets: [
     { id: homeWidgetIds.getStarted, size: "full", visible: true },
+    { id: "workflows.run-health", size: "full", visible: true },
+    { id: "workflows.portfolio", size: "medium", visible: true },
     { id: homeWidgetIds.quickActions, size: "medium", visible: true },
-    { id: homeWidgetIds.recentWorkflows, size: "medium", visible: true },
-    { id: homeWidgetIds.recentRuns, size: "medium", visible: true },
     { id: homeWidgetIds.needsAttention, size: "medium", visible: true },
+    { id: homeWidgetIds.recentRuns, size: "medium", visible: true },
+    { id: homeWidgetIds.recentWorkflows, size: "medium", visible: true },
     { id: homeWidgetIds.tasks, size: "medium", visible: true }
   ]
 };
@@ -178,8 +180,8 @@ export class HomeLayoutStore {
   }
 
   async saveDefault(document: HomeLayoutDocument): Promise<HomeLayoutDocument> {
-    const revision = document.source === "default" ? document.revision : undefined;
-    const headers = { ...this.headers(), ...(revision ? { "If-Match": `"${revision}"` } : { "If-None-Match": "*" }) };
+    const currentDefault = normalizeDocument(await this.api.backend.http.getJson<HomeLayoutDocument>(homeLayoutDefaultRoute, { headers: this.headers() }));
+    const headers = { ...this.headers(), ...preconditionHeaders(currentDefault.revision) };
     const saved = await this.api.backend.http.putJson<HomeLayoutDocument>(homeLayoutDefaultRoute, {
       schemaVersion: homeLayoutSchemaVersion,
       value: document.value
@@ -189,7 +191,7 @@ export class HomeLayoutStore {
 
   private async saveNow(document: HomeLayoutDocument): Promise<HomeLayoutDocument> {
     const revision = this.revision ?? document.revision;
-    const headers = { ...this.headers(), ...(revision ? { "If-Match": `"${revision}"` } : { "If-None-Match": "*" }) };
+    const headers = { ...this.headers(), ...preconditionHeaders(revision) };
     try {
       const saved = await this.api.backend.http.putJson<HomeLayoutDocument>(homeLayoutRoute, {
         schemaVersion: homeLayoutSchemaVersion,
@@ -224,6 +226,10 @@ export class HomeLayoutStore {
     } catch { /* fall through to builtin */ }
     return defaultHomeLayoutDocument();
   }
+}
+
+function preconditionHeaders(revision?: string): Record<string, string> {
+  return revision ? { "If-Match": `"${revision}"` } : { "If-None-Match": "*" };
 }
 
 function normalizeDocument(document: HomeLayoutDocument): HomeLayoutDocument {

@@ -67,7 +67,7 @@ public sealed class RuntimeWorkflowAlterationCheckpointWriter(
                 builder.ActivityExecutions,
                 [],
                 [],
-                [],
+                builder.Incidents,
                 [],
                 null,
                 builder.ActivityExecutionInspections,

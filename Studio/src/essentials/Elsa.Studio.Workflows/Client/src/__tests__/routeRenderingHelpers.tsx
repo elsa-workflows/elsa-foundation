@@ -92,9 +92,10 @@ export async function renderRegisteredRoute(
     return <Component navigate={navigate} />;
   }
 
-  flushSync(() => {
+  const rerender = () => flushSync(() => {
     root.render(<QueryClientProvider client={queryClient}><RegisteredRouteHost /></QueryClientProvider>);
   });
+  rerender();
 
   const unmount = async () => {
     if (!mountedRouteHosts.delete(unmount)) return;
@@ -104,7 +105,7 @@ export async function renderRegisteredRoute(
   };
   mountedRouteHosts.add(unmount);
 
-  return { api, container, unmount };
+  return { api, container, rerender, unmount };
 }
 
 function routeMatchesPath(routePath: string, path: string) {
@@ -130,6 +131,7 @@ export function testApi(): ElsaStudioModuleApi {
     propertyEditors: registry(),
     expressionEditors: registry(),
     workflowRunInputEditors: registry(),
+    workflowTestStimulusEditors: registry(),
     workflowDesigner: {
       panels: registry()
     },
@@ -319,6 +321,7 @@ export function capabilityDocument() {
           { rel: "workflow-publish", href: "publishing/workflows/{versionId}/publish", templated: true },
           { rel: "publication-record", href: "publishing/publications/{publicationId}", templated: true },
           { rel: "publication-policy", href: "publishing/workflows/{definitionId}/policy", templated: true },
+          { rel: "workflow-draft-test-run-options", href: "publishing/workflows/drafts/test-run-options" },
           { rel: "workflow-test-runs", href: "publishing/workflows/{versionId}/test-runs", templated: true },
           { rel: "workflow-draft-test-runs", href: "publishing/workflows/drafts/test-runs" }
         ]

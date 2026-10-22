@@ -290,6 +290,41 @@ internal static class ActivityAttemptActivationClaimer
         ActivityTriggerDelivery? triggerDelivery,
         CancellationToken cancellationToken)
     {
+        var prepared = PrepareClaim(
+            timeProvider, workItem, payload, state, sideEffectProfile,
+            freshAttemptReason, claimedReplacementReason, triggerDeliveryId,
+            requireFreshAttempt, triggerDelivery);
+        await checkpointCommitter.CommitAsync(prepared.Commit, cancellationToken);
+        return prepared.Claim;
+    }
+
+    /// <summary>
+    /// Prepares a background invocation's logical attempt without persisting it separately from owed work.
+    /// The admission caller adds its work participant to this checkpoint and commits both atomically.
+    /// </summary>
+    public static (ActivityAttemptActivationClaim Claim, RuntimeCheckpointCommit Commit) PrepareBackgroundInvokeClaim(
+        TimeProvider timeProvider,
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeInvokeActivityCommandPayload payload,
+        ActivityExecutionState state) =>
+        PrepareClaim(
+            timeProvider, workItem, payload, state,
+            Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External,
+            ActivityAttemptReason.Retry, ActivityAttemptReason.Retry,
+            triggerDeliveryId: null, requireFreshAttempt: false, triggerDelivery: null);
+
+    private static (ActivityAttemptActivationClaim Claim, RuntimeCheckpointCommit Commit) PrepareClaim(
+        TimeProvider timeProvider,
+        RuntimeSchedulerWorkItem workItem,
+        IActivityCommandPayload payload,
+        ActivityExecutionState state,
+        Elsa.Activities.Runtime.Core.Models.SideEffectProfile sideEffectProfile,
+        ActivityAttemptReason freshAttemptReason,
+        ActivityAttemptReason claimedReplacementReason,
+        string? triggerDeliveryId,
+        bool requireFreshAttempt,
+        ActivityTriggerDelivery? triggerDelivery)
+    {
         if (state.Completion is not null)
             throw new InvalidOperationException($"VF-ACT-007: Completed activity invocation '{state.InvocationId}' cannot create another attempt.");
 
@@ -387,8 +422,7 @@ internal static class ActivityAttemptActivationClaimer
             PostCommitIntents: [],
             Metadata: checkpointMetadata);
 
-        await checkpointCommitter.CommitAsync(commit, cancellationToken);
-        return new ActivityAttemptActivationClaim(claimedState, openAttempt);
+        return (new ActivityAttemptActivationClaim(claimedState, openAttempt), commit);
     }
 
     private static ActivityAttempt EndAttempt(

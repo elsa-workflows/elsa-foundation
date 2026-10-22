@@ -129,7 +129,8 @@ stay green. Stage 2 pushed without it and CI caught a real boundary question the
    they reach the nightly EF container matrix: `dotnet run --project tools/maps/Elsa.Maps.Generator -- solution-filter-roots
    Elsa.Server.Persistence.Integration.slnf` must list them, and `tools/ci/ef-suites.json` must name each one
    (`-- ef-suites-self-test` fails until it does).
-4. Refresh the maps with `dotnet run --project tools/maps/Elsa.Maps.Generator -- all` and stage every
-   changed file under `docs/maps/`, `manifest.json` included.
+4. Check that the dependency map still derives with `dotnet run --project tools/maps/Elsa.Maps.Generator -- dependency-map`
+   (its output is git-ignored), and commit the solution filters only when they change. The dependency map and the
+   documentation maps are not committed; see [Generated maps](../docs/contributing/generated-maps.md).
 5. If the move introduces an extension-to-extension edge, declare it in the guard's allowlist with a
    comment saying why it is legitimate.

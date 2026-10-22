@@ -174,14 +174,16 @@ public sealed class WorkflowTriggerBindingExtractorTests
     [Fact]
     public void Evaluate_RejectsWholePreflightWhenLaterTriggerNodeIsInvalid()
     {
+        // Spec 238: a start trigger below a composite must lie on the start path, so the root carries a structure
+        // whose start-entry strategy makes every child an entry. What this test asserts is unchanged.
         IWorkflowTriggerBindingExtractor extractor = new WorkflowTriggerBindingExtractor([
             new FakeProvider("Elsa.Event", "Event", "sha256:event:hello", providerId: "provider.event")
-        ]);
-        var executable = Executable(ActionNode(
+        ], [StartEntryTestSupport.AnyChild]);
+        var executable = Executable(StartEntryTestSupport.WithStructure(ActionNode(
             "root",
             "Elsa.Sequence",
             TriggerNode("node-invalid", "Elsa.Unknown"),
-            TriggerNode("node-valid", "Elsa.Event")));
+            TriggerNode("node-valid", "Elsa.Event")), StartEntryTestSupport.AnyChildKind));
 
         var exception = Assert.Throws<WorkflowTriggerPreflightException>(() => extractor.Evaluate(executable));
 
@@ -194,12 +196,14 @@ public sealed class WorkflowTriggerBindingExtractorTests
     {
         var first = new CountingProvider("provider.event", "Elsa.Event", recognized: true, "sha256:event:hello");
         var second = new CountingProvider("provider.other", "Elsa.Other", recognized: true, "sha256:other");
-        IWorkflowTriggerBindingExtractor extractor = new WorkflowTriggerBindingExtractor([first, second]);
-        var executable = Executable(ActionNode(
+        // Spec 238: a start trigger below a composite must lie on the start path, so the root carries a structure
+        // whose start-entry strategy makes every child an entry. What this test asserts is unchanged.
+        IWorkflowTriggerBindingExtractor extractor = new WorkflowTriggerBindingExtractor([first, second], [StartEntryTestSupport.AnyChild]);
+        var executable = Executable(StartEntryTestSupport.WithStructure(ActionNode(
             "root",
             "Elsa.Sequence",
             TriggerNode("node-event", "Elsa.Event"),
-            TriggerNode("node-other", "Elsa.Other")));
+            TriggerNode("node-other", "Elsa.Other")), StartEntryTestSupport.AnyChildKind));
 
         var outcome = extractor.Evaluate(executable);
 
@@ -322,8 +326,10 @@ public sealed class WorkflowTriggerBindingExtractorTests
     [Fact]
     public void Extract_WalksChildSlots()
     {
-        var extractor = new WorkflowTriggerBindingExtractor([new FakeProvider("Elsa.Event", "Event", "sha256:event:hello")]);
-        var root = ActionNode("root", "Elsa.Sequence", TriggerNode("child-event", "Elsa.Event"));
+        // Spec 238: a start trigger below a composite must lie on the start path, so the root carries a structure
+        // whose first-child strategy makes child 0 the entry, which is where the trigger sits. What this test asserts is unchanged.
+        var extractor = new WorkflowTriggerBindingExtractor([new FakeProvider("Elsa.Event", "Event", "sha256:event:hello")], [StartEntryTestSupport.FirstChild]);
+        var root = StartEntryTestSupport.WithStructure(ActionNode("root", "Elsa.Sequence", TriggerNode("child-event", "Elsa.Event")), StartEntryTestSupport.FirstChildKind);
         var executable = Executable(root);
 
         var binding = Assert.Single(extractor.Extract(executable));

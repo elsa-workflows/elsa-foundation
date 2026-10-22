@@ -44,7 +44,8 @@ public static class ExecutionEvidenceApi
         api.MapUnboundOperation(
                 "DELETE", ExecutionEvidenceRoutes.Base, "DeleteEvidence",
                 null, StatusCodes.Status204NoContent, null, HandleDeleteAsync)
-            .RequirePermission(ExecutionEvidencePermissionKeys.Delete);
+            // Manage administers evidence, deleting included; the catalog no longer implies one from the other.
+            .RequireAnyPermission(ExecutionEvidencePermissionKeys.Delete, ExecutionEvidencePermissionKeys.Manage);
     }
 
     private static async Task HandleCorrelatedAsync(HttpContext context)

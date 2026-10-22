@@ -44,7 +44,7 @@ public sealed class FlowchartExecutionEngine(
 
         var graph = context.ExecutableNode.GetOrAddRoutingStructure(FlowchartGraph.From);
         reachabilityAnalyzer.ValidateNoAmbiguousLoopbacks(graph);
-        var startNode = graph.SelectStartNode();
+        var startNode = graph.SelectEntryNode(context.TriggerNodeId);
 
         if (startNode is null)
         {
@@ -64,7 +64,7 @@ public sealed class FlowchartExecutionEngine(
         ArgumentNullException.ThrowIfNull(completionContext);
 
         var graph = context.ExecutableNode.GetOrAddRoutingStructure(FlowchartGraph.From);
-        var state = FlowchartStatePersister.LoadState(context.ActivityExecutionState) ?? FlowchartStatePersister.CreateInitialState(graph.SelectStartNode()?.ExecutableNodeId);
+        var state = FlowchartStatePersister.LoadState(context.ActivityExecutionState) ?? FlowchartStatePersister.CreateInitialState(graph.SelectEntryNode(context.TriggerNodeId)?.ExecutableNodeId);
         var (pathId, fromMetadata) = ResolveExecutionPathId(context, state, completionContext.CompletedChildExecutableNodeId);
         var path = state.ExecutionPaths.FirstOrDefault(item => StringComparer.Ordinal.Equals(item.ExecutionPathId, pathId))
                    ?? throw new FlowchartExecutionException($"Flowchart execution path '{pathId}' was not found for completed child '{completionContext.CompletedChildExecutableNodeId}'.");
@@ -225,7 +225,7 @@ public sealed class FlowchartExecutionEngine(
         ArgumentNullException.ThrowIfNull(faultContext);
 
         var graph = context.ExecutableNode.GetOrAddRoutingStructure(FlowchartGraph.From);
-        var state = FlowchartStatePersister.LoadState(context.ActivityExecutionState) ?? FlowchartStatePersister.CreateInitialState(graph.SelectStartNode()?.ExecutableNodeId);
+        var state = FlowchartStatePersister.LoadState(context.ActivityExecutionState) ?? FlowchartStatePersister.CreateInitialState(graph.SelectEntryNode(context.TriggerNodeId)?.ExecutableNodeId);
 
         var faultedNodeId = faultContext.FaultedChildExecutableNodeId;
         var faultedChild = state.ActiveChildren.FirstOrDefault(child => StringComparer.Ordinal.Equals(child.NodeId, faultedNodeId));

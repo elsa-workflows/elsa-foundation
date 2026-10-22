@@ -94,7 +94,8 @@ public sealed class RuntimeCheckpointStateChangeSet
         IReadOnlyCollection<ActivityScopeCleanupRequest>? activityScopeCleanups,
         IReadOnlyCollection<WorkflowDispatchCancellationRequest>? workflowDispatchCancellations,
         IReadOnlyCollection<ConsumedSchedulerWorkItem>? consumedSchedulerWorkItems = null,
-        WorkflowAlterationJobTerminalChange? alterationJobTerminalChange = null)
+        WorkflowAlterationJobTerminalChange? alterationJobTerminalChange = null,
+        BackgroundActivityWorkCheckpointChanges? backgroundActivityWork = null)
     {
         activityExecutionInspections ??= [];
         postCommitOutbox ??= [];
@@ -125,6 +126,7 @@ public sealed class RuntimeCheckpointStateChangeSet
         WorkflowDispatchCancellations = NormalizeCancellations(workflowDispatchCancellations);
         ConsumedSchedulerWorkItems = NormalizeConsumedSchedulerWorkItems(consumedSchedulerWorkItems);
         AlterationJobTerminalChange = NormalizeAlterationJobTerminalChange(alterationJobTerminalChange);
+        BackgroundActivityWork = backgroundActivityWork ?? BackgroundActivityWorkCheckpointChanges.Empty;
     }
 
     public RuntimeStateChange<WorkflowExecutionState>? WorkflowExecution { get; }
@@ -154,6 +156,9 @@ public sealed class RuntimeCheckpointStateChangeSet
     /// <summary>Terminal alteration-job evidence committed in the same atomic unit as the workflow mutation.</summary>
     public WorkflowAlterationJobTerminalChange? AlterationJobTerminalChange { get; }
 
+    /// <summary>Admission, acceptance, and cancellation are atomic participants of this checkpoint.</summary>
+    public BackgroundActivityWorkCheckpointChanges BackgroundActivityWork { get; }
+
     /// <summary>
     /// Pending post-commit outbox items, applied atomically with the rest of the change set. Built by the
     /// checkpoint committer from <see cref="RuntimeCheckpointCommit.PostCommitIntents"/>; folding them into the
@@ -179,7 +184,8 @@ public sealed class RuntimeCheckpointStateChangeSet
             ActivityScopeCleanups,
             WorkflowDispatchCancellations,
             ConsumedSchedulerWorkItems,
-            AlterationJobTerminalChange);
+            AlterationJobTerminalChange,
+            BackgroundActivityWork);
 
     /// <summary>Returns a copy with the supplied workflow-dispatch lifecycle changes.</summary>
     public RuntimeCheckpointStateChangeSet WithWorkflowDispatches(
@@ -198,7 +204,8 @@ public sealed class RuntimeCheckpointStateChangeSet
             ActivityScopeCleanups,
             WorkflowDispatchCancellations,
             ConsumedSchedulerWorkItems,
-            AlterationJobTerminalChange);
+            AlterationJobTerminalChange,
+            BackgroundActivityWork);
 
     /// <summary>Returns a copy with the supplied provider-resolved dispatch cancellation requests.</summary>
     public RuntimeCheckpointStateChangeSet WithWorkflowDispatchCancellations(
@@ -217,7 +224,8 @@ public sealed class RuntimeCheckpointStateChangeSet
             ActivityScopeCleanups,
             workflowDispatchCancellations,
             ConsumedSchedulerWorkItems,
-            AlterationJobTerminalChange);
+            AlterationJobTerminalChange,
+            BackgroundActivityWork);
 
     /// <summary>Returns a copy with the supplied claimed scheduler work items folded in for atomic consumption.</summary>
     public RuntimeCheckpointStateChangeSet WithConsumedSchedulerWorkItems(
@@ -236,7 +244,8 @@ public sealed class RuntimeCheckpointStateChangeSet
             ActivityScopeCleanups,
             WorkflowDispatchCancellations,
             consumedSchedulerWorkItems,
-            AlterationJobTerminalChange);
+            AlterationJobTerminalChange,
+            BackgroundActivityWork);
 
     /// <summary>Returns a copy with checkpoint-integrated terminal alteration evidence.</summary>
     public RuntimeCheckpointStateChangeSet WithAlterationJobTerminalChange(
@@ -255,7 +264,28 @@ public sealed class RuntimeCheckpointStateChangeSet
             ActivityScopeCleanups,
             WorkflowDispatchCancellations,
             ConsumedSchedulerWorkItems,
-            alterationJobTerminalChange);
+            alterationJobTerminalChange,
+            BackgroundActivityWork);
+
+    /// <summary>Returns a copy with background-work admission, acceptance, and cancellation participants.</summary>
+    public RuntimeCheckpointStateChangeSet WithBackgroundActivityWork(
+        BackgroundActivityWorkCheckpointChanges backgroundActivityWork) =>
+        new(
+            WorkflowExecution,
+            Scheduler,
+            ActivityExecutions,
+            Bookmarks,
+            DurableValues,
+            Incidents,
+            Operational,
+            WorkflowDispatches,
+            ActivityExecutionInspections,
+            PostCommitOutbox,
+            ActivityScopeCleanups,
+            WorkflowDispatchCancellations,
+            ConsumedSchedulerWorkItems,
+            AlterationJobTerminalChange,
+            backgroundActivityWork ?? throw new ArgumentNullException(nameof(backgroundActivityWork)));
 
     private static WorkflowAlterationJobTerminalChange? NormalizeAlterationJobTerminalChange(WorkflowAlterationJobTerminalChange? change) =>
         change is null
@@ -342,7 +372,8 @@ public sealed class RuntimePostCommitIntent
         IReadOnlyDictionary<string, string>? metadata = null,
         string? dependsOnWaitRegistrationId = null,
         RuntimeWaitDependentIntentFailurePolicy? waitFailurePolicy = null,
-        RuntimeSchedulerWorkItem? materializedSchedulerWorkItem = null)
+        RuntimeSchedulerWorkItem? materializedSchedulerWorkItem = null,
+        DateTimeOffset? notBefore = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(intentId);
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
@@ -368,6 +399,7 @@ public sealed class RuntimePostCommitIntent
         DependsOnWaitRegistrationId = dependsOnWaitRegistrationId;
         WaitFailurePolicy = waitFailurePolicy;
         MaterializedSchedulerWorkItem = materializedSchedulerWorkItem;
+        NotBefore = notBefore?.ToUniversalTime();
     }
 
     public string IntentId { get; }
@@ -381,6 +413,17 @@ public sealed class RuntimePostCommitIntent
     public string? DependsOnWaitRegistrationId { get; }
     public RuntimeWaitDependentIntentFailurePolicy? WaitFailurePolicy { get; }
     public bool IsWaitDependent => !string.IsNullOrWhiteSpace(DependsOnWaitRegistrationId);
+
+    /// <summary>
+    /// The time before which the intent must not be delivered (R-7, spec 261): its outbox item becomes available then
+    /// instead of at the commit. Null, or a time at or before the commit, delivers it after the commit as usual. A
+    /// checkpoint that carries a later one is mandatory and durable in every persistence mode, and neither the
+    /// in-process hop nor a drain's own delivery hands it over early.
+    /// </summary>
+    public DateTimeOffset? NotBefore { get; }
+
+    /// <summary>Whether this intent must wait past <paramref name="committedAt"/>, its checkpoint's time.</summary>
+    public bool IsDelayedPast(DateTimeOffset committedAt) => NotBefore is { } notBefore && notBefore > committedAt;
 
     /// <summary>
     /// Whether <paramref name="other"/> is the same logical intent. Payloads compare as JSON values, not text: an intent
@@ -397,6 +440,7 @@ public sealed class RuntimePostCommitIntent
         StringComparer.Ordinal.Equals(IdempotencyKey, other.IdempotencyKey) &&
         StringComparer.Ordinal.Equals(DependsOnWaitRegistrationId, other.DependsOnWaitRegistrationId) &&
         WaitFailurePolicy == other.WaitFailurePolicy &&
+        NotBefore == other.NotBefore &&
         (Payload is { } payload ? other.Payload is { } otherPayload && JsonElement.DeepEquals(payload, otherPayload) : other.Payload is null) &&
         RuntimeModelMetadata.AreEqual(Metadata, other.Metadata);
 

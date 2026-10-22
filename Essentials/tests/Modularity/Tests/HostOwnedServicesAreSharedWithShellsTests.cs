@@ -118,7 +118,8 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         Entries(
             IntentionallyPerShell + "holds no state; a shell's startup validation runs the host's options checks again, in the shell's own container (#2331)",
             "Nuplane.Feeds.Configuration.FeedCredentialOptionsValidator",
-            "Nuplane.Loading.LoadingOptionsValidator"),
+            "Nuplane.Loading.LoadingOptionsValidator",
+            "Nuplane.Store.Maintenance.PackageStoreMaintenanceOptionsValidator"),
         Entries(
             "unreachable from shell code: a hosted service the host starts once, and a shell container never starts its copy (a disposable one could not be shared in any case)",
             "Elsa.Persistence.EntityFramework.EfModuleMigrator<Elsa.Cluster.EntityFrameworkCore.ClusterMembershipDbContext>",
@@ -129,6 +130,31 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         Entries(
             IntentionallyPerShell + "records what its own container's options pipeline resolved the store's AutoMigrate to, for the host's migrator, which a shell never starts",
             "Elsa.Workbench.WorkbenchOpenIddictMigrationSwitch"),
+        Entries(
+            UnreachableFromShells + "; these registrations support the host's reconciliation/loading route, which shells reach only through the shared adapter",
+            "Nuplane.Abstractions.PackageStoreProtection.IPackageStoreAdmission",
+            "Nuplane.Feeds.MultiFeedPackageResolver",
+            "Nuplane.Feeds.NuGetRemotePackageAcquirer",
+            "Nuplane.Loading.IScopedPackageLoader",
+            "Nuplane.Reconciliation.ILeasedPackageGraphLoadingObserver",
+            "Nuplane.Reconciliation.ILeasedPackageGraphRecoveryLoadingObserver"),
+        Entries(
+            UnreachableFromShells + "; native store coordination belongs to the host package runtime and has no shell consumer",
+            "Nuplane.Store.Coordination.IPackageGraphUseLifetimeObserver",
+            "Nuplane.Store.Coordination.IPhysicalStoreFileSystem",
+            "Nuplane.Store.Coordination.IResolvedPackageGraphUseLeaseAcquisition",
+            "Nuplane.Store.Coordination.ITrustedPackageStoreMemberDeclarationCatalog",
+            "Nuplane.Store.Coordination.ITrustedPackageStoreRootCatalog",
+            "Nuplane.Store.Coordination.PackageGraphUseLeaseAcquisition",
+            "Nuplane.Store.Coordination.PackageGraphUseLifetimeObserver",
+            "Nuplane.Store.Coordination.TrustedPackageStoreMemberDeclarationCatalog",
+            "Nuplane.Store.Coordination.TrustedPackageStoreRootCatalog"),
+        Entries(
+            UnreachableFromShells + "; optional enrollment-preview helpers are not consumed by Foundation's ordinary AddNuplaneAdmin composition",
+            "Nuplane.Store.Maintenance.IPackageStoreEnrollmentPreviewService",
+            "Nuplane.Store.Maintenance.IPackageStoreRootResolver",
+            "Nuplane.Store.Maintenance.PackageStoreEnrollmentPreviewService",
+            "Nuplane.Store.Maintenance.PackageStoreRootResolver"),
         Entries(
             UnreachableFromShells,
         "Nuplane.Abstractions.IActivePackageCatalog", "Nuplane.Abstractions.ICycleFailureContributor", "Nuplane.Abstractions.IDesiredPackageSource", "Nuplane.Abstractions.IDesiredStateContributor", "Nuplane.Abstractions.INuplaneObserver", "Nuplane.Abstractions.IPackageResolver",

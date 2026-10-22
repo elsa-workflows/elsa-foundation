@@ -14,7 +14,8 @@ import {
   type StudioActivityPropertyEditorContribution,
   type StudioActivityPropertyEditorContext,
   type StudioExpressionEditorContribution,
-  type StudioFeatureAreaContribution
+  type StudioFeatureAreaContribution,
+  type StudioTestStimulusEditorContribution
 } from "../sdk";
 
 describe("studio registry", () => {
@@ -64,11 +65,36 @@ describe("studio registry", () => {
     api.workflowDesigner.registerActivityIcons?.({});
     expect(api.propertyEditors.slot.id).toBe(studioSlotIds.propertyEditors);
     expect(api.workflowRunInputEditors?.slot.id).toBe(studioSlotIds.workflowRunInputEditors);
+    expect(api.workflowTestStimulusEditors?.slot.id).toBe(studioSlotIds.workflowTestStimulusEditors);
     expect(api.agent.promptStarters.slot.id).toBe(studioSlotIds.agentPromptStarters);
     expect(api.agent.toolSlots.slot.id).toBe(studioSlotIds.agentToolSlots);
     expect(api.agent.toolContracts.slot.id).toBe(studioSlotIds.agentToolContracts);
     expect(api.agent.resultRenderers.slot.id).toBe(studioSlotIds.agentResultRenderers);
     expect(api.ai.tools.slot.id).toBe(studioSlotIds.aiTools);
+  });
+
+  it("lets third-party modules register driver-specific Test Run stimulus editors", () => {
+    const api = createStudioRegistry({ hostVersion: "1.0.0", sdkVersion: "1.0.0", ...createEndpointContext("https://studio.example/") });
+    const editor: StudioTestStimulusEditorContribution = {
+      id: "custom.events.configuration-v1",
+      supports: ({ option, mode }) => option.driverId === "custom.events" && mode.configurationVersion === 1,
+      component: () => null,
+      validate: () => undefined,
+      serialize: ({ draft }) => JSON.parse(draft)
+    };
+    const mode = { modeId: "event", label: "Event", configurationVersion: 1 };
+    const option = {
+      optionId: "custom-event",
+      driverId: "custom.events",
+      nodeId: "event-node",
+      label: "Custom event",
+      modes: [mode]
+    };
+
+    api.workflowTestStimulusEditors?.add(editor);
+
+    expect(api.workflowTestStimulusEditors?.list()).toEqual([editor]);
+    expect(editor.supports({ option, mode })).toBe(true);
   });
 
   it("registers host-framed Dashboard Widgets with loaders, sizes, permissions, and settings", () => {

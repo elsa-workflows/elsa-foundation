@@ -11,6 +11,7 @@ using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Middleware;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Options;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Elsa.Workflows.Runtime.Diagnostics;
 using Elsa.Workflows.Runtime.Middleware;
@@ -20,6 +21,7 @@ using Elsa.Workflows.Runtime.Services.Alterations;
 using Elsa.Workflows.Runtime.Services.Alterations.Handlers;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 using Elsa.Workflows.Runtime.Services.Dispatch;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Executions;
@@ -29,6 +31,7 @@ using Elsa.Workflows.Runtime.Services.Recovery;
 using Elsa.Workflows.Runtime.Services.Scheduler;
 using Elsa.Workflows.Runtime.Services.Values;
 using Elsa.Workflows.Runtime.Services.WorkHandlers;
+using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -92,12 +95,22 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<IWorkflowMigrationQuiescenceProbe, RuntimeWorkflowMigrationQuiescenceProbe>();
         services.TryAddScoped<MigrateWorkflowAlterationHandler>();
         services.TryAddScoped<RescheduleActivityAlterationHandler>();
+        services.TryAddScoped<RetryFaultedActivityAlterationHandler>();
+        services.TryAddScoped<DecideInterventionAlterationHandler>();
         services.TryAddScoped<ActivityExecutionSupersessionPlanner>();
         AddRuntimeOwnedAlterationContribution(services, new("CancelWorkflow", 1, "Cancel workflow"), typeof(CancelWorkflowAlterationHandler));
         AddRuntimeOwnedAlterationContribution(services, new("ModifyVariable", 1, "Modify variable"), typeof(ModifyVariableAlterationHandler));
         AddRuntimeOwnedAlterationContribution(services, new("ScheduleActivity", 1, "Schedule activity"), typeof(ScheduleActivityAlterationHandler));
         AddRuntimeOwnedAlterationContribution(services, new("Migrate", 1, "Migrate workflow"), typeof(MigrateWorkflowAlterationHandler));
         AddRuntimeOwnedAlterationContribution(services, new("RescheduleActivity", 1, "Reschedule activity"), typeof(RescheduleActivityAlterationHandler));
+        AddRuntimeOwnedAlterationContribution(
+            services,
+            new(RetryFaultedActivityAlterationHandler.Kind, RetryFaultedActivityAlterationHandler.SchemaVersion, "Retry faulted activity"),
+            typeof(RetryFaultedActivityAlterationHandler));
+        AddRuntimeOwnedAlterationContribution(
+            services,
+            new(DecideInterventionAlterationHandler.Kind, DecideInterventionAlterationHandler.SchemaVersion, "Decide intervention"),
+            typeof(DecideInterventionAlterationHandler));
         services.TryAddScoped<IWorkflowAlterationCheckpointWriter, RuntimeWorkflowAlterationCheckpointWriter>();
         services.TryAddScoped<WorkflowAlterationJobExecutor>();
         services.TryAddScoped<IWorkflowAlterationActorCommandExecutor, WorkflowAlterationActorCommandExecutor>();
@@ -170,7 +183,9 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IActivityExecutionHierarchyStore, RuntimeInMemoryActivityExecutionHierarchyStore>();
         services.TryAddSingleton<IActivityExecutionHierarchyReader>(serviceProvider => serviceProvider.GetRequiredService<IActivityExecutionHierarchyStore>());
         services.TryAddSingleton<IActivityExecutionHierarchyWriter>(serviceProvider => serviceProvider.GetRequiredService<IActivityExecutionHierarchyStore>());
-        services.TryAddSingleton<IWorkflowExecutionStateStore, InMemoryWorkflowExecutionStateStore>();
+        services.TryAddSingleton<IWorkflowExecutionStateStore>(serviceProvider => new InMemoryWorkflowExecutionStateStore(
+            serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointStoreState>(),
+            serviceProvider.GetService<IExecutionLivenessStateStore>()));
         services.TryAddSingleton<IActivityExecutionStateStore, InMemoryActivityExecutionStateStore>();
         // Do not resurrect the in-memory concrete when a durable backend already owns
         // the inspection contracts (AddWorkflowRuntime is intentionally reorderable).
@@ -232,9 +247,16 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<TimeProvider>(),
                 serviceProvider.GetRequiredService<RuntimeExecutionOwnershipOptions>()));
         services.TryAddSingleton<InMemoryRuntimeCheckpointStoreState>();
+        services.TryAddScoped<IBackgroundActivityWorkStore, InMemoryBackgroundActivityWorkStore>();
         services.TryAddSingleton<InMemoryWorkflowTestScopeStore>();
         services.TryAddSingleton<IWorkflowTestScopeStore>(serviceProvider =>
             serviceProvider.GetRequiredService<InMemoryWorkflowTestScopeStore>());
+        services.TryAddSingleton<MemoryTestRunTargetStore>();
+        services.TryAddSingleton<ITestRunTargetStore>(serviceProvider =>
+            serviceProvider.GetRequiredService<MemoryTestRunTargetStore>());
+        services.TryAddScoped<ITestRunTargetDispatcher, TestRunTargetDispatcher>();
+        services.TryAddScoped<ITestRunTargetCleaner, TestRunTargetCleaner>();
+        services.TryAddScoped<ITestRunRootCanceller, TestRunRootCanceller>();
         services.TryAddSingleton<IWorkflowTestScopeAdmissionStore>(serviceProvider =>
             serviceProvider.GetRequiredService<InMemoryWorkflowTestScopeStore>());
         if (WorkflowTestScopeStoreBackend.Find(services)?.Name != WorkflowTestScopeStoreBackend.EntityFramework)
@@ -256,7 +278,8 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IWorkflowDispatchCancellationStore>(serviceProvider =>
             serviceProvider.GetRequiredService<IWorkflowDispatchStore>() as IWorkflowDispatchCancellationStore ??
             throw new InvalidOperationException("The configured workflow dispatch store does not provide atomic parent cancellation resolution."));
-        services.TryAddScoped<InMemoryRuntimeCheckpointCommitStore>();
+        services.TryAddScoped(serviceProvider => ActivatorUtilities.CreateInstance<InMemoryRuntimeCheckpointCommitStore>(
+            serviceProvider, serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>()));
         services.TryAddScoped<IRuntimeCheckpointCommitStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddScoped<IRuntimePostCommitOutboxStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddScoped<IPostCommitOutboxLookupStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
@@ -277,6 +300,25 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
         services.TryAddSingleton<RuntimeSchedulerWorkClaimOptions>();
         services.TryAddSingleton<IDurableTimerStore, InMemoryDurableTimerStore>();
+        services.TryAddScoped<IWorkflowExecutionDeletionStore>(serviceProvider =>
+            new InMemoryWorkflowExecutionDeletionStore(
+                serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointStoreState>(),
+                ResolveUnderlyingStore<IRuntimeCheckpointCommitStore>(serviceProvider, typeof(CoalescingRuntimeCheckpointCommitStore)),
+                ResolveUnderlyingStore<IActivityExecutionInspectionStore>(serviceProvider, typeof(CoalescingActivityExecutionInspectionStore)),
+                serviceProvider.GetRequiredService<IActivityExecutionHierarchyStore>(),
+                ResolveUnderlyingStore<IWorkflowExecutionStateStore>(serviceProvider, typeof(CoalescingWorkflowExecutionStateStore)),
+                serviceProvider.GetRequiredService<IExecutionLivenessStateStore>(),
+                ResolveUnderlyingStore<IActivityExecutionStateStore>(serviceProvider, typeof(CoalescingActivityExecutionStateStore)),
+                serviceProvider.GetRequiredService<IActivityExecutionInspectionWriter>(),
+                serviceProvider.GetRequiredService<IActivityExecutionHierarchyWriter>(),
+                serviceProvider.GetRequiredService<IBookmarkStateStore>(),
+                ResolveUnderlyingStore<IDurableValueStateStore>(serviceProvider, typeof(CoalescingDurableValueStateStore)),
+                ResolveUnderlyingStore<ISchedulerStateStore>(serviceProvider, typeof(CoalescingSchedulerStateStore)),
+                serviceProvider.GetRequiredService<IDurableTimerStore>(),
+                ResolveUnderlyingStore<IWorkflowSchedulerWorkQueue>(serviceProvider, typeof(CoalescingWorkflowSchedulerWorkQueue)),
+                serviceProvider.GetRequiredService<IIncidentStateStore>(),
+                serviceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>(),
+                serviceProvider.GetRequiredService<IWorkflowHoldStateStore>()));
         services.TryAddScoped<IActivityScopeCleanupStore, ActivityScopeCleanupStore>();
         services.TryAddScoped<ActivitySubtreeCancellationPlanner>();
         services.TryAddSingleton<WorkflowDrainOrchestratorOptions>();
@@ -316,7 +358,8 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetService<IRuntimeCoalescingDrainScopeFactory>(),
                 serviceProvider.GetService<IRuntimeLiveDrainDeliveryAccessor>(),
                 serviceProvider.GetService<IRuntimePersistenceModeResolver>(),
-                serviceProvider.GetRequiredService<TimeProvider>()));
+                serviceProvider.GetRequiredService<TimeProvider>(),
+                serviceProvider.GetService<ILogger<WorkflowDrainOrchestrator>>()));
         services.TryAddScoped<WorkflowSchedulerCommandRouter>();
         services.TryAddSingleton<IWorkflowExecutionCommandExecutor, ScopedWorkflowExecutionCommandExecutor>();
         services.TryAddSingleton<InMemoryRuntimeDiagnosticsSettingsStore>();
@@ -384,6 +427,9 @@ public static class RuntimeCoreServiceCollectionExtensions
         // registering RuntimeInProcessHopFastPathOptions { Enabled = false } before this call; the durable deserialize
         // path then runs everywhere and MUST commit byte-identical state.
         services.TryAddSingleton<RuntimeInProcessHopFastPathOptions>();
+        // R-7 (spec 261): the limit on delayed child schedules. The capability that makes them deliverable is registered
+        // by the feature that registers the outbox sweep (WorkflowsRuntimeResumption), not here.
+        services.TryAddSingleton<RuntimeDelayedScheduleOptions>();
         // Explicit factory (not greedy ctor selection): the coalescing session accessor is only registered when the
         // coalescing feature is enabled, so the container cannot always satisfy every constructor parameter. The factory
         // injects each optional collaborator with GetService so the live-drain accessor and fast-path options are wired
@@ -494,6 +540,15 @@ public static class RuntimeCoreServiceCollectionExtensions
         return services;
     }
 
+    private static TStore ResolveUnderlyingStore<TStore>(IServiceProvider serviceProvider, Type decoratorType)
+        where TStore : class
+    {
+        var selected = serviceProvider.GetRequiredService<TStore>();
+        return selected.GetType() == decoratorType
+            ? serviceProvider.GetRequiredService<CoalescingInner<TStore>>().Value
+            : selected;
+    }
+
     /// <summary>
     /// The provider-neutral activation defaults: the in-memory slot authority, the in-memory switch that commits a slot
     /// with its serving projections, and the coordinator; and the shell-start check that the switch composes with the
@@ -503,6 +558,7 @@ public static class RuntimeCoreServiceCollectionExtensions
     public static IServiceCollection AddWorkflowActivationDefaults(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+        services.AddActivationChannelOptions();
         services.TryAddSingleton<IWorkflowActivationAuthority, InMemoryWorkflowActivationAuthority>();
         services.TryAddScoped<IWorkflowActivationSwitch, InMemoryWorkflowActivationSwitch>();
         services.TryAddScoped<IWorkflowActivationCoordinator, WorkflowActivationCoordinator>();

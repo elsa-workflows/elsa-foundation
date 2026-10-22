@@ -4,7 +4,7 @@ namespace Elsa.Workflows.Runtime.JavaScript.Authorization;
 
 public static class JavaScriptExecutionPermissions
 {
-    public const string Execute = "workflows.runtime.javascript.execute";
+    public const string Execute = "workflows/runtime/javascript:execute";
 }
 
 public sealed class JavaScriptExecutionPermissionContributor : IPermissionContributor

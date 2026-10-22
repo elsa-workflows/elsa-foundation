@@ -1,0 +1,78 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The import host (spec 246 R-13) is a CShells web host on a test server. -->
+    <PackageReference Include="CShells.AspNetCore" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <PackageReference Include="coverlet.collector" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The import, its EF persistence, its publishing bridge and the conversion it runs. -->
+    <ProjectReference Include="..\..\..\..\..\..\src\Activities\Design\Import\Elsa3.Activities.Design.Import\Elsa3.Activities.Design.Import.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Activities\Design\Import\Persistence\EntityFrameworkCore\Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Activities\Design\Import\Publishing\Elsa3.Activities.Design.Import.Publishing.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Mapping\Elsa3.Mapping.csproj" />
+    <!-- The host's composition: the features its one shell enables, by assembly. -->
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\Http\Elsa.Activities.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Http\Elsa.Http\Elsa.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Workflows\Runtime\Http\Elsa.Workflows.Runtime.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Mediator\Elsa.Mediator\Elsa.Mediator.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Events\Elsa.Events\Elsa.Events.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Expressions\Elsa.Expressions\Elsa.Expressions.csproj" />
+    <!-- Converted Elsa 3 conditions and the direct-start wrapper's input bindings are JavaScript. -->
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Expressions\JavaScript\Elsa.Expressions.JavaScript\Elsa.Expressions.JavaScript.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
+    <!-- RunJavaScript, whose result a graph body node reads (spec 246 D-8 probe). -->
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\Scripting\Elsa.Activities.Scripting.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Tasks\Elsa.Tasks\Elsa.Tasks.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
+    <!-- Dispatch Workflow: what an Elsa 3 DispatchWorkflow or ExecuteWorkflow converts to. -->
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\DispatchWorkflow\Design\Elsa.Activities.DispatchWorkflow.Design.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\DispatchWorkflow\Runtime\Elsa.Activities.DispatchWorkflow.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\Graph\Design\Elsa.Activities.Graph.Design.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\Graph\Runtime\Elsa.Activities.Graph.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\Design\Persistence\EntityFrameworkCore\Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\Design\Reconciliation\Elsa.Activities.Design.Reconciliation\Elsa.Activities.Design.Reconciliation.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\Design\Reconciliation\Clr\Elsa.Activities.Design.Reconciliation.Clr.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Workflows\Design\Api\Elsa.Workflows.Design.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Workflows\Design\Validations\Elsa.Workflows.Design.Validations\Elsa.Workflows.Design.Validations.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Workflows\Design\Persistence\EntityFrameworkCore\Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Workflows\Publishing\Elsa.Workflows.Publishing\Elsa.Workflows.Publishing.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Workflows\Publishing\Persistence\EntityFrameworkCore\Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
+    <!-- The EF activation switch publishes through the recurring-schedule projection this feature prepares. -->
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Fixtures\**\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, EyeOff, RefreshCw, Settings } from "lucide-react";
 import { OverflowMenu, selectSettingEditor } from "@elsa-workflows/studio-ui";
-import { normalizeHomeWidgetSize, type ElsaStudioModuleApi, type StudioDashboardWidgetContribution, type StudioDashboardWidgetSize } from "@elsa-workflows/studio-sdk";
+import { normalizeHomeWidgetSize, useDialogFocus, type ElsaStudioModuleApi, type StudioDashboardWidgetContribution, type StudioDashboardWidgetSize } from "@elsa-workflows/studio-sdk";
 import { useDashboardWidget } from "./useDashboardWidgets";
 
 const sizeLabels: Record<StudioDashboardWidgetSize, string> = {
@@ -159,12 +159,36 @@ function formatTime(value: number) { return new Date(value).toLocaleTimeString()
 function WidgetSettings({ api, widget, value, onSave, onClose }: { api: ElsaStudioModuleApi; widget: StudioDashboardWidgetContribution; value: unknown; onSave(value: unknown): void; onClose(): void }) {
   const definition = widget.settings!;
   const [draft, setDraft] = useState<Record<string, unknown>>(() => ({ ...(value as Record<string, unknown>) }));
-  return <div className="dashboard-settings-backdrop"><section role="dialog" aria-modal="true" aria-label={`${widget.title} settings`} className="dashboard-settings-dialog">
-    <h4>{widget.title} settings</h4>
-    {definition.descriptors.map(descriptor => {
-      const Editor = selectSettingEditor(api, descriptor).component;
-      return <label key={descriptor.name}><span>{descriptor.displayName}</span><Editor setting={descriptor} value={draft[descriptor.name]} onChange={next => setDraft(current => ({ ...current, [descriptor.name]: next }))} /></label>;
-    })}
-    <div><button type="button" onClick={onClose}>Cancel</button><button type="button" onClick={() => { const valid = definition.validate(draft); if (valid != null) onSave(valid); }}>Save</button></div>
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  const titleId = useId();
+  const errorId = useId();
+  useDialogFocus(dialogRef, onClose);
+
+  function submit(event: React.FormEvent) {
+    event.preventDefault();
+    const valid = definition.validate(draft);
+    if (valid == null) {
+      setValidationError("Review the settings and try again.");
+      return;
+    }
+    onSave(valid);
+  }
+
+  return <div className="dashboard-settings-backdrop" role="presentation"><section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={validationError ? errorId : undefined} className="dashboard-settings-dialog dashboard-widget-settings-dialog" tabIndex={-1}>
+    <h4 id={titleId}>{widget.title} settings</h4>
+    <form className="dashboard-widget-settings-form" onSubmit={submit}>
+      <div className="dashboard-widget-settings-fields">
+        {definition.descriptors.map(descriptor => {
+          const Editor = selectSettingEditor(api, descriptor).component;
+          return <label key={descriptor.name}><span>{descriptor.displayName}</span><Editor setting={descriptor} value={draft[descriptor.name]} onChange={next => { setDraft(current => ({ ...current, [descriptor.name]: next })); setValidationError(null); }} /></label>;
+        })}
+        {validationError ? <p id={errorId} className="dashboard-widget-settings-error" role="alert">{validationError}</p> : null}
+      </div>
+      <footer className="dashboard-widget-settings-actions">
+        <button type="button" className="studio-button" data-variant="ghost" onClick={onClose}>Cancel</button>
+        <button type="submit" className="studio-button" data-variant="primary">Save</button>
+      </footer>
+    </form>
   </section></div>;
 }

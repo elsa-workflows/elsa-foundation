@@ -1,0 +1,89 @@
+{
+  "id": "sets-variable-v1",
+  "definitionId": "sets-variable",
+  "name": "sets-variable",
+  "description": "Test-owned reusable whose body uses SetVariable, an engine intrinsic a graph activity cannot hold.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [
+    {
+      "id": "note",
+      "name": "note",
+      "typeName": "String"
+    }
+  ],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": true
+  },
+  "root": {
+    "id": "sets-variable-root",
+    "nodeId": "sets-variable-root",
+    "name": "sets-variable-root",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "size": {
+          "width": 100,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "set",
+        "nodeId": "set",
+        "name": "set",
+        "type": "Elsa.SetVariable",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "variable": {
+          "id": "note",
+          "name": "note",
+          "typeName": "String"
+        },
+        "value": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "x"
+          }
+        }
+      }
+    ],
+    "connections": [],
+    "variables": []
+  }
+}

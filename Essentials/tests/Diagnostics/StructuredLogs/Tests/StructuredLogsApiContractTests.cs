@@ -119,7 +119,7 @@ public sealed class StructuredLogsApiContractTests
             var policy = codec.Parse(entry.SecurityDisposition!.Value!);
             Assert.Equal(PermissionPolicyParseStatus.Valid, policy.Status);
             Assert.Equal(PermissionRequirementMode.Any, policy.Descriptor!.Mode);
-            Assert.Equal([PermissionKey.Wildcard, "DIAGNOSTICS:STRUCTUREDLOGS"], policy.Descriptor.Permissions);
+            Assert.Equal([PermissionKey.Wildcard, "DIAGNOSTICS/STRUCTURED-LOGS:READ"], policy.Descriptor.Permissions);
         });
     }
 

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Boxes, Code2, Download, ListTree, Package, PackageOpen, Play, Plus, SlidersHorizontal, Sparkles, Upload, Workflow as WorkflowIcon } from "lucide-react";
-import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, type StudioActivityPropertyEditorContribution, type StudioAiContributionApi, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, type StudioActivityPropertyEditorContribution, type StudioAiContributionApi, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
 import {
   collectActivityNodeIds,
@@ -30,8 +30,8 @@ import { loadActivityIconRegistry } from "../activityIconView";
 import { weaverUnavailableTitle } from "./constants";
 
 void loadActivityIconRegistry().catch(() => undefined);
-import type { CanvasView, WorkflowDesignerPanelContext, WorkflowEditorError, WorkflowEditorOperation, WorkflowEditorPanelTab, WorkflowErrorInput } from "./editorTypes";
-import type { WorkflowSlotNavigation } from "./contexts";
+import type { CanvasView, WorkflowDesignerPanelContext, WorkflowEditorError, WorkflowEditorOperation, WorkflowEditorPanelTab, WorkflowErrorInput, WorkflowTestDriveSetupState } from "./editorTypes";
+import type { WorkflowNodeActions, WorkflowSlotNavigation } from "./contexts";
 import {
   createNodeId,
   dispatchAiAction,
@@ -57,8 +57,9 @@ import { ValidationPanel, TestRunStatus, WorkflowRuntimePanel } from "./editorPa
 import { useDraftValidations } from "./useDraftValidations";
 import { useExecutableArtifactExport } from "./useExecutableArtifactExport";
 import { combineValidationErrors, detectStructuralValidationErrors } from "../draftValidation";
+import { createValidationActivityLabels, humanizeValidationErrors } from "../validationActivityLabels";
 import { WorkflowArtifactsPanel } from "./WorkflowExecutables";
-import { WorkflowRunInputDialog } from "./WorkflowRunInputDialog";
+import { LazyWorkflowTestDrivePanel } from "./lazyTestDriveUi";
 import { useSidePanelLayout } from "./useSidePanelLayout";
 import { useDraftHistory } from "./useDraftHistory";
 import { forgetRemovedNodes, useWorkflowDocument } from "./workflowDocument";
@@ -72,6 +73,17 @@ import { useDraftEquivalence } from "./useDraftEquivalence";
 import { useWorkflowScope } from "./useWorkflowScope";
 import { useWorkflowContextBridge } from "./useWorkflowContextBridge";
 import { ActivityPalettePanel } from "./ActivityPalettePanel";
+import { SequenceDesigner } from "../graph-authoring/SequenceDesigner";
+import { CompensationScopeDesigner, type CompensationActivityTarget } from "../graph-authoring/CompensationScopeDesigner";
+import {
+  addCompensationStep,
+  compensationStepsSlotId,
+  compensationValidationTarget,
+  readCompensationSteps,
+  updateCompensationStep,
+  withCompensationSteps,
+  type CompensationStep
+} from "../compensationScope";
 import { GraphAuthoringCanvas } from "../graph-authoring/GraphAuthoringCanvas";
 import { GraphAuthoringWorkbench } from "../graph-authoring/GraphAuthoringWorkbench";
 import { AddStepButton, authorsInline } from "../graph-authoring/AddStepButton";
@@ -91,6 +103,7 @@ import { PublicationReviewDialog } from "./PublicationReviewDialog";
 import { useAiProviderAvailability } from "./useAiProviderAvailability";
 import { useFullActivityDefinitionVersion } from "../api/activityDesign";
 import type { ActivityDefinitionVersionView, RecommendedActivityDefinition } from "../activityDefinitionTypes";
+import { isHttpEndpointType } from "./httpTestRequest";
 import type { ActivityVersionChangeApplyRequest } from "./ActivityVersionChangeDialog";
 import {
   applyActivityVersionChange,
@@ -102,6 +115,8 @@ import type { ExpressionToolingCacheIdentity } from "../expression-tooling/expre
 
 const ActivityVersionChangeDialog = React.lazy(() =>
   import("./ActivityVersionChangeDialog").then(module => ({ default: module.ActivityVersionChangeDialog })));
+const HttpTestRequestDialog = React.lazy(() =>
+  import("./HttpTestRequestDialog").then(module => ({ default: module.HttpTestRequestDialog })));
 
 export { PublicationReviewDialog } from "./PublicationReviewDialog";
 
@@ -114,6 +129,7 @@ export function WorkflowEditor({
   expressionTooling,
   expressionToolingIdentity,
   runInputEditors,
+  testStimulusEditors,
   workflowDesignerPanels,
   autosaveEnabledByDefault,
   onBack
@@ -126,6 +142,7 @@ export function WorkflowEditor({
   expressionTooling?: StudioExpressionToolingClient;
   expressionToolingIdentity?: ExpressionToolingCacheIdentity;
   runInputEditors: StudioWorkflowRunInputEditorContribution[];
+  testStimulusEditors: StudioTestStimulusEditorContribution[];
   workflowDesignerPanels: StudioWorkflowDesignerPanelContribution[];
   autosaveEnabledByDefault?: boolean;
   onBack(): void;
@@ -169,7 +186,6 @@ export function WorkflowEditor({
     navigateToScope,
     resetToRoot,
     startTestRun,
-    clearTestRun,
     setPublishedArtifact
   } = editorDoc;
   const [error, setErrorState] = useState<WorkflowEditorError | null>(null);
@@ -181,46 +197,15 @@ export function WorkflowEditor({
   const [activeLeftPanelId, setActiveLeftPanelId] = useState("activities");
   const themeLayout = useStudioThemeLayout();
   const [activeRightPanelId, setActiveRightPanelId] = useState("inspector");
+  const [testDriveSetup, setTestDriveSetup] = useState<WorkflowTestDriveSetupState | null>(null);
   const [activeInspectorTabId, setActiveInspectorTabId] = useState<ActivityInspectorTabId>("inputs");
   const [canvasView, setCanvasView] = useState<CanvasView>("designer");
+  const [httpTestRequestActivityId, setHttpTestRequestActivityId] = useState<string | null>(null);
   const [versionChange, setVersionChange] = useState<{
     occurrence: ActivityNode;
     current: ActivityDefinitionVersionView;
     recommendation?: RecommendedActivityDefinition | null;
   } | null>(null);
-
-  const {
-    paletteWidth,
-    inspectorWidth,
-    paletteCollapsed,
-    inspectorCollapsed,
-    maximizedSidePanel,
-    setInspectorCollapsed,
-    paletteExpanded,
-    inspectorExpanded,
-    editorBodyClassName,
-    editorBodyStyle,
-    toggleSidePanelCollapsed,
-    toggleSidePanelMaximized,
-    startSidePanelResize,
-    handleSidePanelResizeKeyDown
-  } = useSidePanelLayout();
-  const sidePanelLayout = {
-    paletteWidth,
-    inspectorWidth,
-    paletteCollapsed,
-    inspectorCollapsed,
-    maximizedSidePanel,
-    setInspectorCollapsed,
-    paletteExpanded,
-    inspectorExpanded,
-    editorBodyClassName,
-    editorBodyStyle,
-    toggleSidePanelCollapsed,
-    toggleSidePanelMaximized,
-    startSidePanelResize,
-    handleSidePanelResizeKeyDown
-  };
 
   const { resetHistory, undo, redo, canUndoNow, canRedoNow } = useDraftHistory({ draft, restoreDraft: loadDraft });
 
@@ -267,11 +252,19 @@ export function WorkflowEditor({
     selectedBpmnElement,
     canAddActivitiesToCanvas
   } = useWorkflowScope({ context, draft, frames, selectedNodeId, catalog, activityDescriptors, availabilityDiagnostics });
+  const inlineSteps = authorsInline(themeLayout, isBpmnDesigner);
+  const availableDesignerPanels = filterGraphAuthoringContributions(workflowDesignerPanels, "workflow-definition");
+  const sidePanelLayout = useSidePanelLayout(undefined, {
+    palettePresent: !inlineSteps || availableDesignerPanels.some(panel => panel.side === "left")
+  });
+  const { setInspectorCollapsed } = sidePanelLayout;
   useEffect(() => {
     setActiveInspectorTabId(current =>
       resolveActivityInspectorTabId(current, inspectedSupportsScopedVariables, inspectedSlots.length > 0));
   }, [inspectedSlots.length, inspectedSupportsScopedVariables]);
   const inspectedCatalogItem = inspectedNode ? catalogByVersion.get(inspectedNode.activityVersionId) : null;
+  const inspectedIsHttpEndpoint = !!inspectedNode && isHttpEndpointType(
+    inspectedDescriptor?.typeName ?? inspectedCatalogItem?.activityTypeKey);
   const inspectedReusableDefinitionId = inspectedCatalogItem?.activityDefinitionId ?? null;
   const inspectedReusableVersion = useFullActivityDefinitionVersion(
     context,
@@ -308,16 +301,25 @@ export function WorkflowEditor({
   // simply renders no button.
   const executableArtifactExport = useExecutableArtifactExport({ context, definitionId, publishedArtifactId });
   const publishedExecutable = executableArtifactExport.target;
+  // Live HTTP requests need only the published runtime artifact; they do not depend on export support.
+  const publishedRuntimeExecutable = executableArtifactExport.publishedTarget;
+  const activityLabels = useMemo(
+    () => createValidationActivityLabels({
+      root: draft?.state.rootActivity,
+      presentation: draft?.activityPresentation,
+      catalogByVersion
+    }),
+    [catalogByVersion, draft?.activityPresentation, draft?.state.rootActivity]);
   const structuralValidationErrors = useMemo(
-    () => detectStructuralValidationErrors(draft?.state),
-    [draft?.state]);
+    () => detectStructuralValidationErrors(draft?.state, activityLabels),
+    [activityLabels, draft?.state]);
   const combinedValidationErrors = useMemo(
-    () => combineValidationErrors({
+    () => humanizeValidationErrors(combineValidationErrors({
       draftErrors: draft?.validationErrors,
       serverErrors: draftValidations.available ? draftValidations.errors : null,
       structuralErrors: structuralValidationErrors
-    }),
-    [draft?.validationErrors, draftValidations.available, draftValidations.errors, structuralValidationErrors]);
+    }), activityLabels),
+    [activityLabels, draft?.validationErrors, draftValidations.available, draftValidations.errors, structuralValidationErrors]);
   const findRisksAction = findAiAction(ai, "weaver.workflows.find-draft-risks");
   const proposeUpdateAction = findAiAction(ai, "weaver.workflows.propose-update");
   const aiProviderAvailable = useAiProviderAvailability(ai);
@@ -333,7 +335,8 @@ export function WorkflowEditor({
     catalogByVersion,
     isUnsupportedDesigner,
     isBpmnDesigner,
-    canAddActivitiesToCanvas,
+    // A compensation scope's steps change only through its step list, never by a palette drop on the canvas.
+    canAddActivitiesToCanvas: canAddActivitiesToCanvas && scope?.slot.id !== compensationStepsSlotId,
     selectedNodeId,
     editDraft,
     editDraftAndSelect,
@@ -347,6 +350,8 @@ export function WorkflowEditor({
     edges,
     canvasRef,
     setReactFlowInstance,
+    queueCanvasNodeFocus,
+    onMoveEnd,
     canCreateActivityFromPort,
     connectMenu,
     setConnectMenu,
@@ -368,6 +373,9 @@ export function WorkflowEditor({
     onCanvasDrop,
     openEmptyConnectMenu,
     openAddStepMenu,
+    openSequenceInsertMenu,
+    insertSequenceActivity,
+    moveSequenceActivity,
     onConnectMenuPick,
     addActivity,
     addBpmnShape,
@@ -392,12 +400,47 @@ export function WorkflowEditor({
     frames,
     catalogByVersion,
     selectedNodeIds: selectedCanvasNodeIds,
-    disabled: isUnsupportedDesigner || !canAddActivitiesToCanvas,
+    // The compensation scope's Steps view is not a slot to paste into: an activity belongs to a step, so it is added
+    // through the scope designer.
+    disabled: isUnsupportedDesigner || !canAddActivitiesToCanvas || scope?.slot.id === compensationStepsSlotId,
     definitionId,
     editDraft,
-    select,
+    select: nodeId => {
+      select(nodeId);
+      if (nodeId) queueCanvasNodeFocus(nodeId);
+    },
     setStatus
   });
+
+  const deleteCanvasNode = useCallback((nodeId: string) => {
+    const node = nodes.find(candidate => candidate.id === nodeId);
+    if (!node) return;
+    onNodesDelete([node]);
+    if (nodes.length === 1) canvasRef.current?.focus({ preventScroll: true });
+  }, [nodes, onNodesDelete, canvasRef]);
+
+  const nodeActions = useMemo<WorkflowNodeActions | null>(() => {
+    if (isUnsupportedDesigner || isBpmnDesigner || !canAddActivitiesToCanvas) return null;
+    return {
+      selectedNodeCount: selectedCanvasNodeIds.length,
+      canAddAfter: canCreateActivityFromPort,
+      addAfter: (nodeId, portName, anchor) => {
+        if (selectedCanvasNodeIds.length !== 1 || selectedCanvasNodeIds[0] !== nodeId) return;
+        openAddStepMenu(anchor, { nodeId, handleId: portName });
+      },
+      duplicate: nodeId => { duplicateSelectedActivities([nodeId]); },
+      delete: deleteCanvasNode
+    };
+  }, [
+    canAddActivitiesToCanvas,
+    canCreateActivityFromPort,
+    deleteCanvasNode,
+    duplicateSelectedActivities,
+    isBpmnDesigner,
+    isUnsupportedDesigner,
+    openAddStepMenu,
+    selectedCanvasNodeIds
+  ]);
 
   // Inside a slot (breadcrumb non-empty) whose resolved slot is empty, show a guided picker instead of a
   // blank grid. Root-level empty canvas keeps its own affordances (the flowchart "Add activity" button or
@@ -501,13 +544,12 @@ export function WorkflowEditor({
     confirmPublication,
     cancelPublication,
     openPublishedExecutable,
-    runInputPrompt,
-    confirmRunInputs,
-    cancelRunInputs,
     expressionValidationWarning,
     confirmUnavailableExpressionValidation,
     cancelUnavailableExpressionValidation,
-    run
+    run,
+    runTestDrive,
+    updateTestDriveResult
   } = useWorkflowOperations({
     context,
     draft,
@@ -519,7 +561,6 @@ export function WorkflowEditor({
     flushPendingSave,
     reload,
     startTestRun,
-    clearTestRun,
     setPublishedArtifact,
     setOperation,
     setStatus,
@@ -671,6 +712,60 @@ export function WorkflowEditor({
       };
     });
   }, [catalogByVersion, editDraft, scopeOwner?.nodeId]);
+
+  // A compensation scope's designer edits the owner's steps directly, as the BPMN canvas edits its payload.
+  const isCompensationScopeCanvas = scope?.slot.id === compensationStepsSlotId;
+  const [compensationPick, setCompensationPick] = useState<{ target: CompensationActivityTarget; clientX: number; clientY: number } | null>(null);
+  const updateCompensationSteps = useCallback((edit: (steps: CompensationStep[]) => CompensationStep[], nextStatus: string, selectNodeId?: string) => {
+    const ownerNodeId = scopeOwner?.nodeId;
+    if (!ownerNodeId) return;
+    const recipe = ({ draft: current }: { draft: WorkflowDraft | null }) => {
+      const rootActivity = current?.state.rootActivity;
+      if (!current || !rootActivity) return null;
+      // The edit runs against the scope as it is in this draft, not as it was when the designer rendered.
+      const owner = findActivityNode(rootActivity, ownerNodeId, catalogByVersion);
+      if (!owner) return null;
+      const nextOwner = withCompensationSteps(owner, edit(readCompensationSteps(owner)));
+      // Deleting a step, removing a compensation or replacing an activity drops nodes: forget their layout and
+      // presentation records, as replacing a slot activity does.
+      const kept = collectOwnedNodeIds(nextOwner, catalogByVersion, new Set<string>());
+      const removed = new Set([...collectOwnedNodeIds(owner, catalogByVersion, new Set<string>())].filter(nodeId => !kept.has(nodeId)));
+      return {
+        ...current,
+        ...forgetRemovedNodes(current, removed),
+        state: {
+          ...current.state,
+          rootActivity: updateActivity(rootActivity, ownerNodeId, () => nextOwner, catalogByVersion)
+        }
+      };
+    };
+    if (selectNodeId) editDraftAndSelect(recipe, selectNodeId);
+    else editDraft(recipe);
+    setStatus(nextStatus);
+  }, [catalogByVersion, editDraft, editDraftAndSelect, scopeOwner?.nodeId]);
+  const pickCompensationActivity = useCallback((activity: ActivityCatalogItem) => {
+    const pick = compensationPick;
+    setCompensationPick(null);
+    if (!pick || !scopeOwner) return;
+    const node = createActivityNode(activity, createNodeId(activity));
+    const label = getActivityDisplay(activity);
+    const { target } = pick;
+    if (target.kind === "new-step") {
+      updateCompensationSteps(steps => addCompensationStep(steps, target.index, node), `Added step ${label}`, node.nodeId);
+    } else if (target.kind === "step-activity") {
+      updateCompensationSteps(steps => updateCompensationStep(steps, target.index, { activity: node }), `Set ${label} as the step's activity`, node.nodeId);
+    } else {
+      const stepName = readCompensationSteps(scopeOwner)[target.index]?.name || `step ${target.index + 1}`;
+      updateCompensationSteps(steps => updateCompensationStep(steps, target.index, { compensation: node }), `${label} now undoes ${stepName}`, node.nodeId);
+    }
+  }, [compensationPick, scopeOwner, updateCompensationSteps]);
+  // On the compensation scope's canvas, a palette click adds a new last step with that activity.
+  const addCompensationStepFromPalette = useCallback((activity: ActivityCatalogItem) => {
+    if (!canAddActivitiesToCanvas || isUnsupportedDesigner) return;
+    const node = createActivityNode(activity, createNodeId(activity));
+    setCompensationPick(null);
+    updateCompensationSteps(steps => addCompensationStep(steps, steps.length, node), `Added step ${getActivityDisplay(activity)}`, node.nodeId);
+  }, [canAddActivitiesToCanvas, isUnsupportedDesigner, updateCompensationSteps]);
 
   // A start node is a Flowchart concept; a Sequence runs in authored order and has none.
   const isFlowchartScope = scope?.slot.mode === "flowchart";
@@ -829,6 +924,13 @@ export function WorkflowEditor({
     setInspectorCollapsed(false);
   }, [draft?.state.rootActivity, catalogByVersion, setInspectorCollapsed, navigateToScope]);
 
+  // "Go to" for a validation error: a compensation scope row's path selects that row's activity inside the scope.
+  const goToValidationNode = useCallback((nodeId: string, path?: string) => {
+    const currentRoot = draft?.state.rootActivity;
+    const scope = currentRoot ? findActivityNode(currentRoot, nodeId, catalogByVersion) : null;
+    repairVariableReference(compensationValidationTarget(scope, path) ?? nodeId);
+  }, [draft?.state.rootActivity, catalogByVersion, repairVariableReference]);
+
   const togglePaletteCategory = (category: string) => {
     setExpandedPaletteCategories(current => {
       const next = new Set(current);
@@ -841,13 +943,12 @@ export function WorkflowEditor({
     });
   };
 
-  const renderedTestRun = draft && testRun?.draftSignature === getDraftSignature(draft)
-    ? testRun.view
-    : null;
+  const currentTestRun = draft && testRun?.draftSignature === getDraftSignature(draft) ? testRun.view : null;
+  const renderedTestRun = testRun?.view ?? null;
   // ADR 0040's equivalence signal: a test run resolving to a published artifact id proves the current
   // draft is behaviorally identical to that published version. Above the loading return — hooks must
   // run on every render.
-  const publishedEquivalent = useDraftEquivalence(context, definitionId, renderedTestRun);
+  const publishedEquivalent = useDraftEquivalence(context, definitionId, currentTestRun);
 
   if (!details || !draft) {
     return <div className="wf-empty">{error?.message || "Loading workflow editor..."}</div>;
@@ -891,8 +992,7 @@ export function WorkflowEditor({
     window.history.pushState({}, "", `/workflows/instances/${encodeURIComponent(workflowExecutionId)}${tabQuery}`);
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
-  const inlineSteps = authorsInline(themeLayout, isBpmnDesigner);
-  const contributedPanelTabs = filterGraphAuthoringContributions(workflowDesignerPanels, "workflow-definition")
+  const contributedPanelTabs = availableDesignerPanels
     .map(panel => {
       const ContributedPanel = panel.component;
       return {
@@ -919,7 +1019,7 @@ export function WorkflowEditor({
             groups={filteredPaletteGroups}
             expandedCategories={expandedPaletteCategories}
             onToggleCategory={togglePaletteCategory}
-            onActivityClick={onPaletteClick}
+            onActivityClick={isCompensationScopeCanvas ? addCompensationStepFromPalette : onPaletteClick}
             onActivityDragStart={onPaletteDragStart}
             onActivityDragEnd={onPaletteDragEnd}
             onActivityPointerDown={onPalettePointerDown}
@@ -990,6 +1090,10 @@ export function WorkflowEditor({
           onReplaceSlotActivity={replaceSlotActivity}
           isStartNode={isFlowchartScope && inspectedNode ? inspectedNode.nodeId === flowchartStartNodeId : undefined}
           onSetAsStartNode={isFlowchartScope ? setStartNode : undefined}
+          httpTestRequest={inspectedIsHttpEndpoint ? {
+            available: !!publishedRuntimeExecutable?.artifactId,
+            onOpen: () => { if (inspectedNode) setHttpTestRequestActivityId(inspectedNode.nodeId); }
+          } : undefined}
         />
       )
     },
@@ -998,7 +1102,26 @@ export function WorkflowEditor({
       title: "Runtime",
       order: 5,
       icon: <Play size={15} />,
-      render: () => <WorkflowRuntimePanel testRun={renderedTestRun} publishedEquivalent={publishedEquivalent} onOpenRun={openWorkflowRun} />
+      render: () => <WorkflowRuntimePanel testRun={testRun} context={context} currentDraftSignature={draft ? getDraftSignature(draft) : ""} stimulusEditors={testStimulusEditors} publishedEquivalent={publishedEquivalent} onOpenRun={openWorkflowRun} activityLabels={activityLabels} onRunViewUpdated={editorDoc.updateTestRunView} onWaitDraftUpdated={editorDoc.updateTestRunWaitDraft} />
+    },
+    {
+      id: "test-drive",
+      title: "Test Run",
+      order: 6,
+      icon: <Play size={15} />,
+      render: () => (
+        <LazyWorkflowTestDrivePanel
+          context={context}
+          draft={draft}
+          runInputEditors={runInputEditors}
+          stimulusEditors={testStimulusEditors}
+          setupState={testDriveSetup}
+          onSetupStateChange={setTestDriveSetup}
+          busy={busy}
+          onStart={runTestDrive}
+          onUpdateRun={updateTestDriveResult}
+        />
+      )
     },
     {
       id: "artifacts",
@@ -1042,13 +1165,14 @@ export function WorkflowEditor({
         onAutoLayout={autoLayout}
         onBack={onBack}
         onSave={() => void save()}
-        onPublish={() => void preparePublication()}
+        onPublish={mode => void preparePublication(mode)}
         onRun={() => void run()}
         canRun={canRunTest}
         runTitle={draft.state.rootActivity ? "Run a transient test of the current design" : "Add a root activity before running"}
         runStatus={renderedTestRun ? (
           <TestRunStatus
             testRun={renderedTestRun}
+            stale={Boolean(testRun && draft && testRun.draftSignature !== getDraftSignature(draft))}
             onOpenDetails={() => {
               setActiveRightPanelId("runtime");
               setInspectorCollapsed(false);
@@ -1156,13 +1280,16 @@ export function WorkflowEditor({
         />
       ) : null}
 
-      {runInputPrompt ? (
-        <WorkflowRunInputDialog
-          inputs={runInputPrompt.inputs}
-          editors={runInputEditors}
-          onSubmit={values => { void confirmRunInputs(values); }}
-          onCancel={cancelRunInputs}
-        />
+      {httpTestRequestActivityId ? (
+        <React.Suspense fallback={<p role="status">Loading HTTP request tool…</p>}>
+          <HttpTestRequestDialog
+            context={context}
+            open
+            artifactId={publishedRuntimeExecutable?.artifactId ?? null}
+            authoredActivityId={httpTestRequestActivityId}
+            onClose={() => setHttpTestRequestActivityId(null)}
+          />
+        </React.Suspense>
       ) : null}
 
       {expressionValidationWarning ? (
@@ -1215,9 +1342,58 @@ export function WorkflowEditor({
           ) : (
           <>
           <ScopeBreadcrumb frames={visibleFrames} onNavigate={next => navigateToScope(next, null)} />
-          <GraphAuthoringCanvas
+          {isCompensationScopeCanvas && scopeOwner && !isUnsupportedDesigner ? (
+            <CompensationScopeDesigner
+              owner={scopeOwner}
+              nodes={nodes}
+              selectedNodeId={selectedNodeId}
+              readOnly={!canAddActivitiesToCanvas}
+              canvasRef={canvasRef}
+              onSelect={select}
+              onChangeSteps={(edit, nextStatus) => {
+                // An open picker targets a row by index; once rows change, that index may name another step.
+                setCompensationPick(null);
+                updateCompensationSteps(edit, nextStatus);
+              }}
+              onRequestActivity={(target, anchor) => setCompensationPick({ target, ...anchor })}
+              onOpenSlot={(ownerId, label, slot) => enterSlotScope(ownerId, slot, slotCrumbLabel(label, slot))}
+            >
+              {compensationPick ? (
+                <ConnectMenu
+                  clientX={compensationPick.clientX}
+                  clientY={compensationPick.clientY}
+                  activities={paletteCatalog}
+                  onPick={pickCompensationActivity}
+                  onClose={() => setCompensationPick(null)}
+                />
+              ) : null}
+            </CompensationScopeDesigner>
+          ) : scope?.slot.mode === "sequence" && scope.slot.cardinality === "many" && !isUnsupportedDesigner ? (
+            <SequenceDesigner
+              nodes={nodes}
+              selectedNodeId={selectedNodeId}
+              readOnly={!canAddActivitiesToCanvas}
+              canvasRef={canvasRef}
+              availabilityLookup={availabilityLookup}
+              onSelect={select}
+              onInsert={openSequenceInsertMenu}
+              onDropActivity={(versionId, index) => {
+                const activity = paletteCatalog.find(item => item.activityVersionId === versionId);
+                if (activity) insertSequenceActivity(activity, index);
+              }}
+              onMove={moveSequenceActivity}
+              onDelete={deleteCanvasNode}
+              onDuplicate={nodeId => duplicateSelectedActivities([nodeId])}
+              onOpenSlot={(ownerId, label, slot) => enterSlotScope(ownerId, slot, slotCrumbLabel(label, slot))}
+            >
+              {connectMenu ? <ConnectMenu clientX={connectMenu.clientX} clientY={connectMenu.clientY} activities={paletteCatalog} onPick={onConnectMenuPick} onClose={() => setConnectMenu(null)} /> : null}
+            </SequenceDesigner>
+          ) : <GraphAuthoringCanvas
             canvasRef={canvasRef}
+            nodeActions={nodeActions}
             canvasProps={{
+              tabIndex: -1,
+              "aria-label": "Workflow canvas",
               onDragOver: onCanvasDragOver,
               onDragLeave: onCanvasDragLeave,
               onDrop: onCanvasDrop
@@ -1229,6 +1405,7 @@ export function WorkflowEditor({
               nodes,
               edges,
               onInit: setReactFlowInstance,
+              onMoveEnd,
               onNodesChange,
               onEdgesChange,
               onNodesDelete,
@@ -1298,12 +1475,12 @@ export function WorkflowEditor({
               />
             ) : null}
             </>}
-          />
+          />}
           <ValidationPanel
             draft={draft}
             errors={combinedValidationErrors}
             onRepair={repairVariableReference}
-            onSelectNode={repairVariableReference}
+            onSelectNode={goToValidationNode}
             onSetAsStartNode={isFlowchartScope ? setStartNode : undefined}
             unavailable={draftValidations.available === false}
           />

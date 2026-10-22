@@ -153,10 +153,14 @@ public sealed class ExpressionDraftSemanticValidatorTests
         Assert.Equal("node/inputs/text", diagnostic.AuthoredPath);
     }
 
-    [Fact]
-    public async Task Real_JavaScript_provider_rejects_empty_source_for_full_draft_gates()
+    [Theory]
+    [InlineData("")]
+    [InlineData(" \n\t")]
+    [InlineData("// A comment is not a value.")]
+    [InlineData("/* A comment is not a value. */")]
+    public async Task Real_JavaScript_provider_rejects_empty_source_for_full_draft_gates(string source)
     {
-        var result = await Validate(ExpressionServices.JavaScriptToolingProvider(), StateWith(string.Empty));
+        var result = await Validate(ExpressionServices.JavaScriptToolingProvider(), StateWith(source));
 
         Assert.Equal(ExpressionDraftValidationState.Errors, result.State);
         var diagnostic = Assert.Single(result.Diagnostics);

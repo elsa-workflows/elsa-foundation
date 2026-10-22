@@ -72,6 +72,7 @@ public sealed class PermissionAuthorizationBoundaryTests
         Assert.Contains(Elsa.Workflows.Design.Api.Authorization.WorkflowDesignPermissions.Read, scan.ContributedPermissionKeys);
         Assert.Contains(DefaultIdentityPermissionKeys.IdentityUsersRead, scan.ContributedPermissionKeys);
         Assert.Contains(Elsa.Secrets.Core.Permissions.SecretsPermissions.Read, scan.ContributedPermissionKeys);
+        Assert.Contains(Elsa.Connections.Core.Permissions.ConnectionsPermissions.Manage, scan.ContributedPermissionKeys);
         foreach (var (assembly, type) in AuthorizationContexts)
         {
             Assert.True(
@@ -392,7 +393,7 @@ public sealed class PermissionAuthorizationBoundaryTests
                 public static class StudioPreferencesPermissions
                 {
                     public const string OwnerId = "elsa.studio.preferences";
-                    public const string Read = "studio.preferences.read";
+                    public const string Read = "studio/preferences:read";
                 }
 
                 public sealed class StudioPreferencesPermissionContributor : IPermissionContributor

@@ -234,9 +234,9 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
     }
 
     [Fact]
-    public void Describe_ResponseModeAsyncLiteral_OmitsModeKey()
+    public void Describe_ResponseModeAsyncLiteral_StampsModeKey()
     {
-        // Async is the default and contributes no key (round-trip identity with the unauthored default).
+        // A newly published endpoint records Async explicitly so its selected mode remains stable on republish.
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
         {
             [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), "orders/webhook"),
@@ -245,17 +245,17 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
 
         var descriptor = Assert.Single(_provider.Describe(NodeWith(bindings, authorCanStartWorkflow: true)).Descriptors);
 
-        Assert.DoesNotContain(HttpEndpointRouting.ResponseModeMetadataKey, descriptor.Metadata.Keys);
+        Assert.Equal("Async", descriptor.Metadata[HttpEndpointRouting.ResponseModeMetadataKey]);
     }
 
     [Fact]
-    public void Describe_UnauthoredResponseMode_OmitsModeKey()
+    public void Describe_UnauthoredResponseMode_UsesAndStampsSyncDefault()
     {
         var node = EndpointNode(path: "orders/webhook");
 
         var descriptor = Assert.Single(_provider.Describe(node).Descriptors);
 
-        Assert.DoesNotContain(HttpEndpointRouting.ResponseModeMetadataKey, descriptor.Metadata.Keys);
+        Assert.Equal("Sync", descriptor.Metadata[HttpEndpointRouting.ResponseModeMetadataKey]);
     }
 
     [Fact]
@@ -414,14 +414,14 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
     public void Describe_AbsentOptionalOptions_ApplyDeclaredDefaults_AndDoNotThrow()
     {
         // Issue #925: with only the required Path authored, every optional option falls back to its declared default
-        // (methods → GET, response mode → Async, the rest omitted) instead of demanding an authored literal each.
+        // (methods → GET, response mode → Sync, the rest omitted) instead of demanding an authored literal each.
         var node = EndpointNode(path: "orders/webhook");
 
         var descriptor = Assert.Single(_provider.Describe(node).Descriptors);
 
         Assert.Equal(HttpEndpointStimulus.Hash("orders/webhook", "GET"), descriptor.StimulusHash);
         Assert.Equal("get", descriptor.Metadata[HttpEndpointRouting.MethodMetadataKey]);
-        Assert.DoesNotContain(HttpEndpointRouting.ResponseModeMetadataKey, descriptor.Metadata.Keys);
+        Assert.Equal("Sync", descriptor.Metadata[HttpEndpointRouting.ResponseModeMetadataKey]);
         Assert.DoesNotContain(HttpEndpointRouting.AuthorizeMetadataKey, descriptor.Metadata.Keys);
     }
 

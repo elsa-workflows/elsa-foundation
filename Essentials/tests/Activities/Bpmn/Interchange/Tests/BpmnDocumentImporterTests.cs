@@ -111,6 +111,21 @@ public sealed class BpmnDocumentImporterTests
     }
 
     [Fact]
+    public void Import_AuthorsNestedSubprocessAsNonStarting()
+    {
+        // Spec 238: a nested process never starts the workflow, so it must produce no start bindings, which the
+        // start-path rule would refuse below its parent process. The root process keeps its default.
+        var structure = ImportStructure(out var result);
+
+        var child = Assert.Single(structure.Activities);
+        var canStartWorkflow = Assert.Single(child.Inputs, input => input.ReferenceKey == nameof(BpmnProcessActivity.CanStartWorkflow));
+        // The child is read back through the structure payload, so the literal arrives as JSON.
+        Assert.Equal(JsonValueKind.False, Assert.IsType<JsonElement>(canStartWorkflow.Value.Value).ValueKind);
+        Assert.Equal("Literal", canStartWorkflow.Value.ExpressionType);
+        Assert.DoesNotContain(result.ProcessNode.Inputs, input => input.ReferenceKey == nameof(BpmnProcessActivity.CanStartWorkflow));
+    }
+
+    [Fact]
     public void Import_ReportsDegradedAndDroppedElements()
     {
         ImportStructure(out var result);

@@ -30,7 +30,10 @@ export interface PublicationReviewState {
   proposedVersion: string;
   unsavedChangesIncluded: true;
   executableStatus: "ready" | "blocked";
+  /** Validation errors: each blocks publication. */
   validationErrors: string[];
+  /** Validation warnings (spec 261 FR-515): listed for the author, never blocking. */
+  validationWarnings: string[];
   changes: PublicationChangeSummary;
   policy: PublicationPolicy;
   slots: PublicationSlot[];
@@ -72,9 +75,7 @@ export function createPublicationReview(input: {
     ?? input.details?.definition.latestVersion
     ?? "None";
   const draftSnapshot = structuredClone(input.draft);
-  const validationErrors = draftSnapshot.validationErrors
-    .map(error => error.message?.trim())
-    .filter((message): message is string => Boolean(message));
+  const { errors: validationErrors, warnings: validationWarnings } = splitPublicationValidations(draftSnapshot.validationErrors);
   if (!draftSnapshot.state.rootActivity) validationErrors.unshift("Workflow has no root activity.");
   const triggerActivityVersionIds = input.catalog
     .filter(activity => activity.executionType.toLowerCase() === "trigger")
@@ -89,6 +90,7 @@ export function createPublicationReview(input: {
     unsavedChangesIncluded: true,
     executableStatus: validationErrors.length ? "blocked" : "ready",
     validationErrors,
+    validationWarnings,
     changes: summarizePublicationChanges(
       input.slotVersions[initialSlotName]?.state ?? null,
       draftSnapshot.state,
@@ -107,6 +109,42 @@ export function createPublicationReview(input: {
       ? { action: "sideBySide", slotName: "" }
       : { action: "replace", slotName: policy.defaultSlotName }
   };
+}
+
+/** A validation entry as the draft and the validations endpoint report it; only its message and severity matter here. */
+export interface PublicationValidationEntry {
+  message?: string | null;
+  severity?: string | null;
+}
+
+/** Whether a validation's severity is a warning, which does not block publication. A missing severity is an error. */
+export function isWarningSeverity(severity: string | null | undefined): boolean {
+  return typeof severity === "string" && severity.trim().toLowerCase() === "warning";
+}
+
+/**
+ * Splits validation entries into the errors that block publication and the warnings that are only listed (spec 261
+ * FR-515). An entry without a severity is an error, as the backend's default is; entries without a message are dropped.
+ */
+export function splitPublicationValidations(entries: readonly PublicationValidationEntry[] | null | undefined): { errors: string[]; warnings: string[] } {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  for (const entry of entries ?? []) {
+    const message = entry?.message?.trim();
+    if (!message) continue;
+    (isWarningSeverity(entry.severity) ? warnings : errors).push(message);
+  }
+  return { errors, warnings };
+}
+
+/**
+ * Adds the warnings the server's draft validations report to a review, once each. The server's errors are left to the
+ * paths that already enforce them (the draft and the promotion), so a warning never changes whether publication can go on.
+ */
+export function withPublicationWarnings(review: PublicationReviewState, entries: readonly PublicationValidationEntry[] | null | undefined): PublicationReviewState {
+  const { warnings } = splitPublicationValidations(entries);
+  const added = warnings.filter((message, index) => !review.validationWarnings.includes(message) && warnings.indexOf(message) === index);
+  return added.length ? { ...review, validationWarnings: [...review.validationWarnings, ...added] } : review;
 }
 
 /**

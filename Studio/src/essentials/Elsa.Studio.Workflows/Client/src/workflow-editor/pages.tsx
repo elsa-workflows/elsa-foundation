@@ -1,8 +1,10 @@
-import React, { lazy, useCallback, useEffect, useState } from "react";
-import type { StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionToolingClient, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
+import React, { lazy, useCallback, useEffect, useRef, useState } from "react";
+import type { StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionToolingClient, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution, StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
 import { WorkflowLazyBoundary } from "../WorkflowLazyBoundary";
 import { updateWorkflowDefinitionIdInUrl } from "./workflowDefinitionUrl";
 import type { ExpressionToolingCacheIdentity } from "../expression-tooling/expressionToolingClient";
+import { useWorkflowDefinitionBrowseSession } from "./workflowDefinitionBrowseSession";
+import { readRunSelection } from "./runSelectionUrl";
 
 const WorkflowEditor = lazy(() => import("./WorkflowEditor").then(module => ({ default: module.WorkflowEditor })));
 const WorkflowDefinitions = lazy(() => import("./WorkflowDefinitions").then(module => ({ default: module.WorkflowDefinitions })));
@@ -19,6 +21,7 @@ export function WorkflowManagementPage({
   expressionTooling,
   expressionToolingIdentity,
   runInputEditors,
+  testStimulusEditors,
   workflowDesignerPanels,
   autosaveEnabledByDefault
 }: {
@@ -29,10 +32,12 @@ export function WorkflowManagementPage({
   expressionTooling?: StudioExpressionToolingClient;
   expressionToolingIdentity?: ExpressionToolingCacheIdentity;
   runInputEditors: StudioWorkflowRunInputEditorContribution[];
+  testStimulusEditors?: StudioTestStimulusEditorContribution[];
   workflowDesignerPanels: StudioWorkflowDesignerPanelContribution[];
   autosaveEnabledByDefault?: boolean;
 }) {
   const [definitionId, setDefinitionId] = useState(readDefinitionIdFromUrl);
+  const browseSession = useWorkflowDefinitionBrowseSession(context);
 
   useEffect(() => {
     const syncFromLocation = () => setDefinitionId(readDefinitionIdFromUrl());
@@ -49,13 +54,13 @@ export function WorkflowManagementPage({
   return definitionId
     ? (
       <WorkflowLazyBoundary label="workflow designer">
-        <WorkflowEditor context={context} definitionId={definitionId} ai={ai} propertyEditors={propertyEditors} expressionEditors={expressionEditors} expressionTooling={expressionTooling} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors} workflowDesignerPanels={workflowDesignerPanels} autosaveEnabledByDefault={autosaveEnabledByDefault} onBack={() => openDefinition(null)} />
+        <WorkflowEditor context={context} definitionId={definitionId} ai={ai} propertyEditors={propertyEditors} expressionEditors={expressionEditors} expressionTooling={expressionTooling} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors} testStimulusEditors={testStimulusEditors ?? []} workflowDesignerPanels={workflowDesignerPanels} autosaveEnabledByDefault={autosaveEnabledByDefault} onBack={() => openDefinition(null)} />
       </WorkflowLazyBoundary>
     )
     : (
-      <WorkflowsPageFrame title="Definitions">
+      <WorkflowsPageFrame title="Workflow definitions" definitions>
         <WorkflowLazyBoundary label="workflow definitions">
-          <WorkflowDefinitions context={context} ai={ai} onOpen={openDefinition} />
+          <WorkflowDefinitions context={context} ai={ai} onOpen={openDefinition} session={browseSession} />
         </WorkflowLazyBoundary>
       </WorkflowsPageFrame>
     );
@@ -151,8 +156,29 @@ export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [
 }) {
   const workflowExecutionId = readWorkflowExecutionIdFromUrl();
   const searchParams = new URLSearchParams(window.location.search);
-  const initialActivityExecutionId = searchParams.get("activityExecutionId");
-  const initialInspectorTab = searchParams.get("tab") === "issues" ? "issues" : "timeline";
+  // The run view rewrites the selection in the URL as the operator moves around (spec 260 FR-423); read it once per run
+  // so a later render never reloads the run for a selection the view itself wrote. Keep the list destination from that
+  // same initial URL because the detail view may replace its query while the operator moves between activities.
+  const initialSelection = useRef<{ workflowExecutionId: string; activityExecutionId: string | null; returnTo: string | null } | null>(null);
+  if (initialSelection.current?.workflowExecutionId !== workflowExecutionId) {
+    initialSelection.current = {
+      workflowExecutionId,
+      activityExecutionId: readRunSelection(window.location.search),
+      returnTo: searchParams.get("returnTo")
+    };
+  }
+  const initialActivityExecutionId = initialSelection.current.activityExecutionId;
+  const initialReturnTo = initialSelection.current.returnTo;
+  const requestedInspectorTab = searchParams.get("tab");
+  const initialInspectorTab = requestedInspectorTab === "issues"
+    ? "issues"
+    : requestedInspectorTab === "details"
+      ? "details"
+      : requestedInspectorTab === "timeline"
+        ? "timeline"
+        : requestedInspectorTab === "activity" || initialActivityExecutionId
+          ? "activity"
+          : "timeline";
 
   return (
     <WorkflowsPageFrame
@@ -166,23 +192,24 @@ export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [
       ) : null}
     >
       <WorkflowLazyBoundary label="workflow run">
-        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} expressionEditors={expressionEditors} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} initialInspectorTab={initialInspectorTab} navigate={navigate} />
+        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} expressionEditors={expressionEditors} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} initialInspectorTab={initialInspectorTab} initialReturnTo={initialReturnTo} navigate={navigate} />
       </WorkflowLazyBoundary>
     </WorkflowsPageFrame>
   );
 }
 
-function WorkflowsPageFrame({ title, context, workbench = false, children }: {
+function WorkflowsPageFrame({ title, context, workbench = false, definitions = false, children }: {
   title: string;
   context?: React.ReactNode;
   workbench?: boolean;
+  definitions?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <section className={workbench ? "wf-page wf-page--run-workbench" : "wf-page"}>
+    <section className={`wf-page${workbench ? " wf-page--run-workbench" : ""}${definitions ? " wf-page--definitions" : ""}`}>
       <div className="wf-page-header">
         <div>
-          <span className="wf-kicker">Workflow management</span>
+          {!definitions ? <span className="wf-kicker">Workflow management</span> : null}
           <h2>{title}</h2>
         </div>
         {context}

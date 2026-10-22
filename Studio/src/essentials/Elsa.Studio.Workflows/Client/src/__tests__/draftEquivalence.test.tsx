@@ -91,11 +91,11 @@ describe("WorkflowRuntimePanel equivalence caption", () => {
 
   it("surfaces the behavioral-identity message when the test run resolves to a published artifact", () => {
     const container = render(
-      <WorkflowRuntimePanel testRun={testRun()} publishedEquivalent={executable()} onOpenRun={() => {}} />
+      <WorkflowRuntimePanel testRun={testRun()} publishedEquivalent={executable({ artifactVersion: "draft" })} onOpenRun={() => {}} />
     );
 
     expect(container.querySelector(".wf-runtime-equivalence")?.textContent)
-      .toContain("Current draft is behaviorally identical to published v2.0.0");
+      .toContain("Current draft has the same behavior as a published version.");
   });
 
   it("shows no equivalence message without a published match", () => {

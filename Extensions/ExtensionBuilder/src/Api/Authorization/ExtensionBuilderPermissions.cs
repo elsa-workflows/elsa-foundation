@@ -11,9 +11,9 @@ public static class ExtensionBuilderPermissionKeys
 {
     public const string OwnerId = "elsa.extension-builder";
 
-    public const string Read = "extension-builder.read";
+    public const string Read = "extension-builder:read";
 
-    public const string Manage = "extension-builder.manage";
+    public const string Manage = "extension-builder:manage";
 }
 
 /// <summary>
@@ -37,7 +37,6 @@ public sealed class ExtensionBuilderPermissionContributor : IPermissionContribut
             ExtensionBuilderPermissionKeys.Manage,
             "Manage Extension Builder",
             Category,
-            "Edit repositories, run builds, and promote or roll back extension packages on the backend host.",
-            new HashSet<string> { ExtensionBuilderPermissionKeys.Read });
+            "Edit repositories, run builds, and promote or roll back extension packages on the backend host.");
     }
 }

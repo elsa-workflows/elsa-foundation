@@ -106,7 +106,7 @@ public sealed class BpmnCatchEventTests
 
         var resumed = await fixture.ResumeAsync(
             bookmark,
-            JsonSerializer.SerializeToElement(new EventReceived("order-shipped")));
+            JsonSerializer.SerializeToElement(new { eventName = "order-shipped" }));
 
         resumed.AssertCompleted("node-wait");
         resumed.AssertRan("node-after");
@@ -153,13 +153,13 @@ public sealed class BpmnCatchEventTests
         var bookmarkA = Assert.Single(bookmarks, candidate => candidate.StimulusHash == EventStimulus.Hash("evt-a"));
         var bookmarkB = Assert.Single(bookmarks, candidate => candidate.StimulusHash == EventStimulus.Hash("evt-b"));
 
-        var afterFirst = await fixture.ResumeAsync(bookmarkA, JsonSerializer.SerializeToElement(new EventReceived("evt-a")));
+        var afterFirst = await fixture.ResumeAsync(bookmarkA, JsonSerializer.SerializeToElement(new { eventName = "evt-a" }));
 
         // One arrival is not enough: the join still waits for the second inbound flow.
         Assert.Equal(WorkflowExecutionStatus.Running, afterFirst.WorkflowState?.Status);
         afterFirst.AssertCompleted("node-wait-a");
 
-        var afterSecond = await fixture.ResumeAsync(bookmarkB, JsonSerializer.SerializeToElement(new EventReceived("evt-b")));
+        var afterSecond = await fixture.ResumeAsync(bookmarkB, JsonSerializer.SerializeToElement(new { eventName = "evt-b" }));
 
         afterSecond.AssertCompleted("node-wait-b");
         afterSecond.AssertCompleted(BpmnRuntimeFixture.ProcessNodeId);

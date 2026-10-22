@@ -8,6 +8,7 @@
     {
       "outputPath": "Elsa.Server.Core.slnf",
       "includeProjectNames": [
+        "Elsa.Activities.Compensation",
         "Elsa.Activities.ControlFlow",
         "Elsa.Activities.Design.Api",
         "Elsa.Activities.Design.Api.Tests",
@@ -129,11 +130,13 @@
       "outputPath": "Elsa.Server.Workbench.slnf",
       "includeProjectNames": [
         "Elsa.Workbench",
-        "Elsa.Workbench.Tests"
+        "Elsa.Workbench.Tests",
+        "Elsa.Workbench.BackgroundActivities.Tests"
       ],
       "requiredRootPaths": [
         "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj",
-        "Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj"
+        "Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj",
+        "Essentials/tests/Workbench/BackgroundActivities/Tests/Elsa.Workbench.BackgroundActivities.Tests.csproj"
       ]
     }
   ]

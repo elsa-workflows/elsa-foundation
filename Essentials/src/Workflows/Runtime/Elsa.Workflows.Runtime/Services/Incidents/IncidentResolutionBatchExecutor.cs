@@ -34,6 +34,12 @@ public sealed class IncidentResolutionBatchExecutor(
         if (workflow is null || workflow.Status.IsTerminal())
             return;
 
+        // Local quiescence does not settle a fault whose combined parent evaluation is still in the outbox.
+        // Inspect the whole workflow, including incidents outside this batch, to preserve bubbling outcomes.
+        var blockingIncidents = await incidentStateStore.ListBlockingAsync(workflow.WorkflowExecutionId, cancellationToken);
+        if (await PendingParentOutcome.ExistsAsync(blockingIncidents, activityExecutionStateStore, cancellationToken))
+            return;
+
         var executable = await workflowExecutableStore.FindAsync(workflow.PinnedExecutable.ArtifactId, cancellationToken)
             ?? throw new InvalidOperationException($"Pinned executable '{workflow.PinnedExecutable.ArtifactId}' was not found for workflow execution '{workflow.WorkflowExecutionId}'.");
         if (!WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(executable.Identity, workflow.PinnedExecutable))

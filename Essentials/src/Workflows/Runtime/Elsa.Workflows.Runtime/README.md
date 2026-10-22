@@ -4,6 +4,36 @@
 checkpointing, durable runtime state, scheduling, recovery, and runtime alterations. It does not load Design
 definitions at execution time.
 
+## Activation channels
+
+An activation slot belongs to one `(definitionId, slotName)` pair. A declared channel gives the same slot name
+shared display metadata across a shell. Compose the optional `WorkflowsActivationChannels` feature to configure it:
+
+```json
+{
+  "WorkflowsActivationChannels": {
+    "AllowAdHocChannels": false,
+    "Channels": [
+      { "Name": "default", "DisplayName": "Production", "Description": "Normal traffic" },
+      { "Name": "canary", "DisplayName": "Canary", "Description": "Separate endpoint routes" }
+    ]
+  }
+}
+```
+
+Place this entry under the shell's `Features` configuration. Code-only hosts can configure
+`ActivationChannelOptions` with `services.Configure<ActivationChannelOptions>(...)` before composing the Runtime.
+The feature registers options and startup validation; it registers no events, contributors or recurring tasks.
+Channel names match exactly with ordinal case-sensitive comparison. Declarations do not create slots, rewrite
+HTTP routes, or select a transport; concurrent HTTP activations still need nonconflicting endpoints.
+
+The default is an empty declaration list with `AllowAdHocChannels = true`, preserving existing compositions.
+With it disabled, every activation request must name a declared channel, including artifact-reconciliation and
+restore requests. Runtime refuses before it writes references or serving projections. Existing slots stay readable;
+configuration changes do not deactivate them or interrupt executions pinned to their artifacts. Declare their names
+before replacing or restoring them. The Runtime slot-list API includes declarations even before a definition has a
+slot, and the publishing preflight rejects an undeclared channel before publication writes.
+
 ## Runtime alterations
 
 A runtime alteration is a durable, authenticated plan over a sealed set of workflow executions. Plans capture all
@@ -13,9 +43,24 @@ mandatory Runtime checkpoint, or stores one failed outcome and skips all non-app
 at-least-once; deterministic checkpoint IDs reconcile a lost acknowledgement without replaying an applied change.
 
 The built-in descriptors are `CancelWorkflow/1`, `ModifyVariable/1`, `ScheduleActivity/1`,
-`RescheduleActivity/1`, and `Migrate/1`. `CancelWorkflow` must be the sole envelope. Scheduling requires an
-activity-owned compiled scheduling capability; migration is limited to a quiescent suspended execution and an exact
-compatible executable artifact. Alterations never recover a workflow or resolve an incident implicitly.
+`RescheduleActivity/1`, `RetryFaultedActivity/1`, `DecideIntervention/1`, and `Migrate/1`. `CancelWorkflow` must be
+the sole envelope. Scheduling requires an activity-owned compiled scheduling capability; migration is limited to a
+quiescent suspended execution and an exact compatible executable artifact. Alterations never recover a workflow or
+resolve an incident implicitly. Two explicit exceptions resolve an incident that waits for intervention in a running
+run, and they are the only two outcomes the incident rule lets replace a committed `WaitForIntervention`:
+
+- `RetryFaultedActivity/1` retries the faulted activity, resolving the incident with an `OperatorRetry` outcome and
+  scheduling a successor that keeps the source's inputs, parent, scheduling cause, provenance metadata and operation
+  keys. It refuses a source whose parent is no longer running (`SourceParentNotRunning`).
+- `DecideIntervention/1` (spec 260) applies one of the decisions the waiting structural parent offered, with a
+  required reason: it resolves the incident with an `OperatorDecision` outcome from `OperatorDecisionAlteration` and
+  enqueues the decision for the parent, which applies it in its own evaluation
+  (`IRuntimeActivityInterventionDecisionHandler`). The runtime carries the decision code without interpreting it.
+
+An alteration that names runs by id captures every run of the plan's tenant, whatever execution authority started it;
+the run's authority is still captured for the concurrency check. A query target keeps the authority filter. Through
+the runtime API each named run is also authorized at submission as run deletion does (`workflows/runtime:manage` with
+the run as the permission resource); a refused run fails `TargetNotFound`, like a missing one, and is never captured.
 
 Deferred envelopes are encrypted before plan persistence. Plan and job reads contain stable descriptor identity,
 ordinal, status, bounded safe code/message, and structural IDs only—never an envelope payload, variable value,
@@ -98,6 +143,10 @@ At run time:
 The run inspector and execution evidence render a withheld value by its marker; see the
 [Runtime API](../Api/README.md#withheld-and-protected-values) and
 [execution evidence](../../ExecutionEvidence/README.md#value-dispositions) documentation.
+
+## Delayed child schedules
+
+A structural activity can schedule a child not before a due time (spec 261 R-7) with the `ScheduleChildActivity` overload that takes `notBefore`. The child's schedule commits in the evaluation's checkpoint as a post-commit outbox item that becomes available at the due time; the checkpoint is durable in every persistence mode, and the outbox sweep of `WorkflowsRuntimeResumption` delivers the item once it is due, so the delay is a minimum of one sweep interval's precision (10 seconds by default). Nothing else of the run waits behind the item. A host without that feature refuses delayed schedules (`runtime.delayed-schedule.unavailable`), as does a due time more than `RuntimeDelayedScheduleOptions.MaxDelay` ahead (`runtime.delayed-schedule.too-far`). When the item is delivered to a run that is gone or terminal, or to a parent that is no longer running, it schedules nothing. See the `IRuntimeStructuralActivity` entry in [EXTENSION_POINTS.md](EXTENSION_POINTS.md).
 
 ## Composition
 

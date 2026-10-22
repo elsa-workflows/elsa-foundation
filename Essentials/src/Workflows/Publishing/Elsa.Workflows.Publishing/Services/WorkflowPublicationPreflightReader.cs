@@ -2,6 +2,8 @@ using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Options;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Publishing.Services;
 
@@ -40,7 +42,8 @@ public sealed class WorkflowPublicationPreflightReader(
     IPublicationPreflightService preflightService,
     IWorkflowTriggerBindingExtractor triggerExtractor,
     IWorkflowTriggerBindingStore triggerBindingStore,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    IOptions<ActivationChannelOptions>? channelOptions = null)
 {
     public async ValueTask<WorkflowPublicationPreflightPlan> EvaluateAsync(
         WorkflowExecutable executable,
@@ -61,6 +64,10 @@ public sealed class WorkflowPublicationPreflightReader(
             requestIntent,
             workflowPolicy,
             hostPolicy);
+        if (channelOptions is not null && !channelOptions.Value.Allows(resolved.SlotName))
+            throw new PublicationPolicyResolutionException(
+                PublicationFailureCodes.ChannelNotDeclared,
+                $"Activation channel '{resolved.SlotName}' is not declared for this shell and ad-hoc channels are disabled.");
         var slot = await activationAuthority.FindAsync(identity.DefinitionId, resolved.SlotName, cancellationToken);
         ValidateExpectedPublication(expectedPublicationId, slot);
 

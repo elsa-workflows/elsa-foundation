@@ -1,76 +1,23 @@
 namespace Elsa.Maps.Generator;
 
 /// <summary>
-/// Reports whether the committed maps still describe the tree.
+/// Reports whether the generated files committed to <c>main</c> still describe the tree: only the
+/// <c>Elsa.Server.*.slnf</c> solution filters are left.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The check regenerates every map into a scratch directory and compares the bytes with what is
-/// committed. It deliberately does <b>not</b> gate on any fingerprint over the inputs: that would change
-/// on every source edit, obliging every code PR to regenerate and commit thirteen map files even though
-/// most source edits change no map at all. Comparing outputs asks the question that actually matters —
-/// are the committed maps still true? — and stays quiet otherwise. That is also why the manifest carries
-/// no input fingerprint any more.
+/// The documentation maps, their manifest and the findings reports are not committed (spec 257), and neither is
+/// <c>docs/maps/dependency-map.json</c> (spec 259): the versioning calculator derives the dataset from each commit's own
+/// tree with the scan in <c>tools/maps/Elsa.Maps.Projects</c>, so there is no copy to hold fresh. A tree that scan cannot
+/// read fails <c>DependencyMapTests</c> in <c>Build &amp; test</c> instead.
 /// </para>
 /// <para>
-/// It exists because the committed maps went three projects stale and carried 25 corrupted rows with
-/// nothing objecting. Generation itself stays manually initiated; this only reports.
+/// So <c>check</c> is the solution-filter check, the same as <c>solution-filters-check</c>, kept under its old name so
+/// "run <c>-- check</c>" keeps meaning "check what generated output is committed".
 /// </para>
 /// </remarks>
 public static class MapFreshness
 {
-    /// <summary>Returns 0 when the committed maps match freshly generated ones, 1 otherwise.</summary>
-    public static int Check(RepoContext repo)
-    {
-        var scratch = Path.Combine(Path.GetTempPath(), $"elsa-maps-check-{Environment.ProcessId}");
-
-        try
-        {
-            Directory.CreateDirectory(scratch);
-            MarkdownTable.Redirect = (repo.Root, scratch);
-
-            var projects = ProjectGraph.Read(repo);
-            var generated = new List<string>();
-            generated.AddRange(DependencyMap.Generate(repo, projects));
-            generated.AddRange(CoreMapsGenerator.Generate(repo, projects));
-            generated.AddRange(DomainMapGenerator.Generate(repo, projects));
-            generated.AddRange(ExtensionPointMapGenerator.Generate(repo, projects));
-            generated.AddRange(ArchitectureReferenceMapGenerator.Generate(repo, projects));
-            generated.AddRange(FeatureDependencyMapGenerator.Generate(repo, projects));
-
-            // manifest.json is compared like every other generated file. It used to be excluded, because it
-            // carried git metadata and an input fingerprint that moved on every commit; those fields are
-            // gone, so what is left is a description of the tree and is worth holding to the same bar.
-            var stale = generated
-                .Where(path => !SameBytes(Path.Combine(repo.Root, path), Path.Combine(scratch, path)))
-                .Order(StringComparer.Ordinal)
-                .ToArray();
-
-            if (stale.Length == 0)
-            {
-                Console.WriteLine("Generated maps still describe the tree.");
-                return 0;
-            }
-
-            Console.Error.WriteLine(
-                $"""
-                 Generated maps no longer describe the tree. {stale.Length} file(s) would change:
-
-                 {string.Join(Environment.NewLine, stale.Select(path => "  " + path))}
-
-                 Refresh them and commit the result:
-
-                   dotnet run --project tools/maps/Elsa.Maps.Generator -- all
-                 """);
-            return 1;
-        }
-        finally
-        {
-            MarkdownTable.Redirect = null;
-            try { Directory.Delete(scratch, recursive: true); } catch (IOException) { /* best-effort cleanup */ }
-        }
-    }
-
-    private static bool SameBytes(string left, string right) =>
-        File.Exists(left) && File.Exists(right) && File.ReadAllBytes(left).AsSpan().SequenceEqual(File.ReadAllBytes(right));
+    /// <summary>Returns 0 when the committed solution filters match freshly generated ones, 1 otherwise.</summary>
+    public static int Check(RepoContext repo) => SolutionFilterGenerator.Check(repo);
 }

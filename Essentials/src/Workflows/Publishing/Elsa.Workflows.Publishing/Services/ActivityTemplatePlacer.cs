@@ -213,6 +213,7 @@ public sealed class ActivityTemplatePlacer(
                 inputBindings,
                 outputCaptures,
                 metadata,
+                current.Node.ExecutionPlacement,
                 childSlots,
                 isBoundary && frame.OccurrenceOverlay is not null
                     ? frame.OccurrenceOverlay.Structure
@@ -380,6 +381,7 @@ public sealed class ActivityTemplatePlacer(
         node.InputBindings,
         node.OutputCaptures,
         node.Metadata,
+        node.ExecutionPlacement,
         childSlots,
         structure,
         node.ActivityContract,

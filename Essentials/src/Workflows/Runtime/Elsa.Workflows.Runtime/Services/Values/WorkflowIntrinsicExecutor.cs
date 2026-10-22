@@ -605,7 +605,8 @@ public sealed class WorkflowIntrinsicExecutor(
             executable: executable,
             workflowInputEnvelopes: projections.WorkflowInputEnvelopes,
             variableEnvelopes: frameEnvelopes,
-            visibleVariablesByName: RuntimeContainerScopeService.ProjectAmbientVisibleVariableEnvelopes(executable, visibleFrames));
+            visibleVariablesByName: RuntimeContainerScopeService.ProjectAmbientVisibleVariableEnvelopes(executable, visibleFrames),
+            correlationId: projections.CorrelationId);
         var resolved = inputBindingResolver.Resolve(binding, context);
         if (resolved.Source == RuntimeInputBindingSource.Expression)
         {

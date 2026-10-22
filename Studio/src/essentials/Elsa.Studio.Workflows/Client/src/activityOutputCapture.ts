@@ -28,8 +28,7 @@ export interface ActivityOutputCapture {
  * the descriptor's stable `referenceKey` verbatim, falling back to the output `name` verbatim (its stable
  * backend identity, e.g. "Result") for descriptors that don't carry one. Unlike the input side, the output
  * name is NOT camelized — output identities are PascalCase and must ride the wire untransformed.
- * (`referenceKey` is not on the SDK output descriptor type yet, but rides the runtime JSON, so it is read
- * structurally.)
+ * `referenceKey` is optional so descriptors from older catalogs can continue using their output name.
  */
 export function getOutputPropertyName(descriptor: StudioActivityOutputDescriptor): string {
   const referenceKey = readStringField(descriptor as unknown as Record<string, unknown>, referenceKeyKeys).trim();
@@ -37,7 +36,12 @@ export function getOutputPropertyName(descriptor: StudioActivityOutputDescriptor
 }
 
 export function readOutputCapture(activity: ActivityNode, descriptor: StudioActivityOutputDescriptor): ActivityOutputCapture | null {
-  return readOutputCaptureValue(activity[getOutputPropertyName(descriptor)]);
+  const key = getOutputPropertyName(descriptor);
+  const capture = readOutputCaptureValue(activity[key]);
+  if (capture || key === descriptor.name) return capture;
+  // A descriptor can gain a stable referenceKey after the workflow was authored with an older catalog
+  // that only exposed the output name. Keep showing that capture until the author changes or clears it.
+  return readOutputCaptureValue(activity[descriptor.name]);
 }
 
 /** Reads a stored output-capture value into the structured model, or null when nothing is bound. */
@@ -59,10 +63,17 @@ export function writeOutputCapture(
   capture: ActivityOutputCapture | null
 ): ActivityNode {
   const key = getOutputPropertyName(descriptor);
-  if (capture) return { ...activity, [key]: capture };
-  if (!(key in activity)) return activity;
+  const legacyName = descriptor.name === key ? null : descriptor.name;
+  const hasLegacyCapture = legacyName !== null && readOutputCaptureValue(activity[legacyName]) !== null;
+  if (capture) {
+    const next = { ...activity, [key]: capture };
+    if (legacyName !== null && hasLegacyCapture) delete next[legacyName];
+    return next;
+  }
+  if (!(key in activity) && !hasLegacyCapture) return activity;
   const next = { ...activity };
   delete next[key];
+  if (legacyName !== null && hasLegacyCapture) delete next[legacyName];
   return next;
 }
 

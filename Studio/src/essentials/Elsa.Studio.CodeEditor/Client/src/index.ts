@@ -1,5 +1,6 @@
 import "./styles.css";
 
+export { jsonLanguageAdapter, xmlLanguageAdapter, htmlLanguageAdapter, plainTextLanguageAdapter } from "./languages/documents";
 export { StudioCodeEditor } from "./StudioCodeEditor";
 export { javaScriptLanguageAdapter } from "./languages/javascript";
 export { liquidLanguageAdapter } from "./languages/liquid";

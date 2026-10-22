@@ -42,11 +42,10 @@ public sealed class AspNetCoreIdentityUserManager(IUserStore users, IExternalIde
         return user;
     }
 
+    // The status is written on its own, so a role or profile change made after any earlier read is not undone.
     public async ValueTask DisableAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
     {
-        var user = await users.FindAsync(tenantId, userId, cancellationToken) ??
-                   throw new InvalidOperationException("Cannot disable a missing user.");
-
-        await users.SaveAsync(user with { Status = UserStatus.Disabled }, cancellationToken);
+        if (!await users.SetStatusAsync(tenantId, userId, UserStatus.Disabled, cancellationToken))
+            throw new InvalidOperationException("Cannot disable a missing user.");
     }
 }

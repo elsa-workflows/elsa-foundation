@@ -60,6 +60,13 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
   const [refreshIntervalMs, setRefreshIntervalMs] = useState(api.runtime.dashboard?.defaultRefreshIntervalMs ?? 300_000);
   const [active, setActive] = useState(!globalThis.document.hidden);
   const [getStartedSnapshot, setGetStartedSnapshot] = useState<GetStartedSnapshot | null>(null);
+  const widgetSettings = useMemo(() => {
+    const contributions = new Map(available.map(widget => [widget.id, widget]));
+    return new Map((document?.value.widgets ?? []).flatMap(entry => {
+      const widget = contributions.get(entry.id);
+      return widget ? [[entry.id, resolveWidgetSettings(widget.settings?.defaults, entry.options)] as const] : [];
+    }));
+  }, [available, document]);
 
   useEffect(() => {
     let live = true;
@@ -121,9 +128,14 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
     update(value => ({ widgets: value.widgets.map(entry => entry.id === id ? { ...entry, ...patch } : entry) }));
   const move = (id: string, delta: -1 | 1) => update(value => {
     const widgets = [...value.widgets];
-    const from = widgets.findIndex(entry => entry.id === id);
-    const to = Math.max(0, Math.min(widgets.length - 1, from + delta));
-    if (from >= 0 && from !== to) widgets.splice(to, 0, widgets.splice(from, 1)[0]);
+    const visibleIndexes = widgets.flatMap((entry, index) => entry.visible && known.has(entry.id) ? [index] : []);
+    const fromIndex = widgets.findIndex(entry => entry.id === id);
+    const from = visibleIndexes.indexOf(fromIndex);
+    const to = Math.max(0, Math.min(visibleIndexes.length - 1, from + delta));
+    if (from >= 0 && from !== to) {
+      const toIndex = visibleIndexes[to];
+      [widgets[fromIndex], widgets[toIndex]] = [widgets[toIndex], widgets[fromIndex]];
+    }
     const title = known.get(id)?.title ?? id;
     const visibleAfter = widgets.filter(entry => entry.visible && known.has(entry.id));
     const position = visibleAfter.findIndex(entry => entry.id === id) + 1;
@@ -201,7 +213,7 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
               api={api}
               widget={widget}
               size={entry.size}
-              settings={entry.options ?? widget.settings?.defaults}
+              settings={widgetSettings.get(entry.id)}
               refreshIntervalMs={refreshIntervalMs}
               globalRefreshVersion={refreshVersion}
               active={active}
@@ -293,6 +305,15 @@ function AddWidgetGroup({
       </ul>
     </section>
   );
+}
+
+function resolveWidgetSettings(defaults: unknown, options?: Record<string, unknown>): unknown {
+  if (!isSettingsRecord(defaults)) return options ?? defaults;
+  return { ...defaults, ...(options ?? {}) };
+}
+
+function isSettingsRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 export { HomePage as DashboardPage };

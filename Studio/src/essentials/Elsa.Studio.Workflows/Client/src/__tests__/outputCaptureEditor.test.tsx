@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StudioActivityDescriptor, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { ActivityOutputsPanel } from "../ActivityOutputsPanel";
+import { canonicalizeStateForWire } from "../activityInputWire";
 import { InspectorPanel } from "../workflow-editor/InspectorPanel";
 import type { ActivityNode, VisibleVariableView } from "../workflowTypes";
 
@@ -161,6 +162,63 @@ describe("ActivityOutputsPanel capture editor", () => {
       nodeId: "read-1",
       Result: { target: { referenceKey: "line", declaringScopeId: "workflow" } }
     }));
+  });
+
+  it("uses an output's stable referenceKey when its name differs and migrates a legacy name-keyed capture", () => {
+    const onChange = vi.fn();
+    const outputDescriptor = descriptor({
+      outputs: [{ name: "Sum", referenceKey: "sum", typeName: "System.Int32" }]
+    });
+    const scopedVariableAnalysis = {
+      visibleVariables: [...visibleVariables, { referenceKey: "other", name: "Other", scopeId: "workflow", isWorkflowScope: true }],
+      shadowingWarnings: [],
+      status: "ready" as const
+    };
+    const node: ActivityNode = {
+      ...readLineNode,
+      Sum: { target: { referenceKey: "line", declaringScopeId: "workflow" } }
+    };
+    const overrides = { selectedDescriptor: outputDescriptor, scopedVariableAnalysis };
+    const container = render(panel(node, onChange, overrides));
+
+    const select = outputSelect(container);
+    expect(select.value).toBe("workflow::line");
+    change(select, "workflow::other");
+
+    const written = onChange.mock.calls[0][0] as ActivityNode;
+    expect(written.sum).toEqual({ target: { referenceKey: "other", declaringScopeId: "workflow" } });
+    expect(written).not.toHaveProperty("Sum");
+    expect(canonicalizeStateForWire({ rootActivity: written }).rootActivity?.outputs).toEqual([{
+      referenceKey: "sum",
+      value: { value: { referenceKey: "other", declaringScopeId: "workflow" }, expressionType: "Variable" }
+    }]);
+
+    flushSync(() => active!.root.render(panel(written, onChange, overrides)));
+    change(outputSelect(container), "");
+    const cleared = onChange.mock.calls[1][0] as ActivityNode;
+    expect(cleared).not.toHaveProperty("Sum");
+    expect(cleared).not.toHaveProperty("sum");
+  });
+
+  it("preserves a non-capture property that matches an output name when setting or clearing a capture", () => {
+    const onChange = vi.fn();
+    const outputDescriptor = descriptor({
+      outputs: [{ name: "Sum", referenceKey: "sum", typeName: "System.Int32" }]
+    });
+    const node: ActivityNode = { ...readLineNode, Sum: "keep me" };
+    const overrides = { selectedDescriptor: outputDescriptor };
+    const container = render(panel(node, onChange, overrides));
+
+    change(outputSelect(container), "workflow::line");
+    const written = onChange.mock.calls[0][0] as ActivityNode;
+    expect(written.sum).toEqual({ target: { referenceKey: "line", declaringScopeId: "workflow" } });
+    expect(written.Sum).toBe("keep me");
+
+    flushSync(() => active!.root.render(panel(written, onChange, overrides)));
+    change(outputSelect(container), "");
+    const cleared = onChange.mock.calls[1][0] as ActivityNode;
+    expect(cleared).not.toHaveProperty("sum");
+    expect(cleared.Sum).toBe("keep me");
   });
 
   it("reflects an authored capture in the picker and clears it on empty selection", () => {

@@ -78,6 +78,10 @@ public sealed class FlowchartRuntimeFixture : IAsyncDisposable
         await _harness.RunAsync(executable);
     }
 
+    /// <summary>Runs as a trigger-started run whose matched trigger is <paramref name="triggerNodeId"/>.</summary>
+    public Task<WorkflowExecutionRun> ExecuteAsync(WorkflowExecutable executable, string triggerNodeId) =>
+        _harness.RunAsync(executable, JsonSerializer.SerializeToElement(new { }), triggerNodeId);
+
     public async Task<FlowchartExecutionState> GetFlowchartStateAsync() =>
         JsonSerializer.Deserialize<FlowchartExecutionState>(await GetRawFlowchartStateAsync(), new JsonSerializerOptions(JsonSerializerDefaults.Web))
         ?? throw new InvalidOperationException("Flowchart execution state resolved to null.");
@@ -102,7 +106,8 @@ public sealed class FlowchartRuntimeFixture : IAsyncDisposable
         IReadOnlyCollection<FlowchartConnection> connections,
         string? startNodeId = null,
         IReadOnlyDictionary<string, FlowchartNodeMetadata>? nodeMetadata = null,
-        IReadOnlyDictionary<string, FlowchartConnectionMetadata>? connectionMetadata = null)
+        IReadOnlyDictionary<string, FlowchartConnectionMetadata>? connectionMetadata = null,
+        bool opensActivityBoundary = false)
     {
         var root = new ExecutableNode(
             executableNodeId: "node-flowchart",
@@ -112,7 +117,9 @@ public sealed class FlowchartRuntimeFixture : IAsyncDisposable
             descriptorType: typeof(FlowchartDescriptor).FullName!,
             descriptorPayload: JsonSerializer.SerializeToElement(new FlowchartDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            metadata: new Dictionary<string, string>(),
+            metadata: opensActivityBoundary
+                ? new Dictionary<string, string> { ["activity.definitionVersionId"] = "activity-version" }
+                : new Dictionary<string, string>(),
             childSlots:
             [
                 new ExecutableChildSlot(

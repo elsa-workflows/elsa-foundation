@@ -1,6 +1,7 @@
-import React, { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import React, { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
+  Blocks,
   ChevronDown,
   ChevronRight,
   ChevronUp,
@@ -15,6 +16,7 @@ import {
   Maximize2,
   Minimize2,
   Paintbrush,
+  PackageCheck,
   PackagePlus,
   PackageSearch,
   PanelLeftClose,
@@ -22,7 +24,9 @@ import {
   PlayCircle,
   RefreshCw,
   Search,
-  Settings
+  Server,
+  Settings,
+  SlidersHorizontal
 } from "lucide-react";
 import type {
   ElsaStudioModuleApi,
@@ -43,6 +47,7 @@ import { StudioAuthBoundary, createStudioAuthManager, createStudioEndpointContex
 import { loadStudioModules } from "./loader";
 import { ThemeProvider, useNavMode } from "./components/ThemeProvider";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
+import { UserMenu } from "./components/UserMenu";
 import { defaultThemeStoreCapabilities, getThemeStoreCapabilities, type ThemeStoreCapabilities } from "./themes/themeStoreApi";
 import { QueryProvider } from "./providers/QueryProvider";
 import { useStudioManifest } from "./hooks/useStudioManifest";
@@ -370,7 +375,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
   if (state === "loading") {
     return (
       <ThemeProvider storeContext={shellContext}>
-        <ShellFrame navigation={navigation} panels={[]} path={path} title="Loading modules" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl} enabledFeatures={enabledFeatures}>
+        <ShellFrame navigation={navigation} panels={[]} path={path} title="Loading modules" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl} enabledFeatures={enabledFeatures} accountAction={<UserMenu />}>
           <SkeletonRows rows={8} label="Loading Studio modules" />
         </ShellFrame>
       </ThemeProvider>
@@ -380,7 +385,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
   if (state === "failed") {
     return (
       <ThemeProvider storeContext={shellContext}>
-        <ShellFrame navigation={navigation} panels={[]} path={path} title="Startup failed" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl} enabledFeatures={enabledFeatures}>
+        <ShellFrame navigation={navigation} panels={[]} path={path} title="Startup failed" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl} enabledFeatures={enabledFeatures} accountAction={<UserMenu />}>
           <div className="error-state">{error}</div>
         </ShellFrame>
       </ThemeProvider>
@@ -409,6 +414,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
         enabledFeatures={enabledFeatures}
         assistantAction={<AgentLauncher open={assistantOpen} sessions={agentSessions} onClick={() => setAssistantOpen(current => !current)} />}
         themeAction={themeCapabilities.pickerEnabled ? <ThemeSwitcher /> : null}
+        accountAction={<UserMenu />}
       >
         {settingsSurface ? (
           <Suspense fallback={<SkeletonRows rows={8} label="Loading settings" />}>
@@ -422,7 +428,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
             />
           </Suspense>
         ) : null}
-        {path === "/diagnostics" ? <Diagnostics api={api!} /> : null}
+        {path === "/diagnostics" ? <Diagnostics api={api!} navigation={filterAccessibleNavigation(navigation, access)} onNavigate={navigateTo} /> : null}
         {path === "/diagnostics/modules" ? <ModuleDiagnostics api={api!} /> : null}
         {DevDisclosurePage && path === "/dev/disclosure" ? (
           <Suspense fallback={null}>
@@ -466,6 +472,7 @@ export function ShellFrame({
   backendBaseUrl,
   assistantAction,
   themeAction,
+  accountAction,
   enabledFeatures,
   onNavigate,
   children
@@ -477,6 +484,7 @@ export function ShellFrame({
   backendBaseUrl: string;
   assistantAction?: React.ReactNode;
   themeAction?: React.ReactNode;
+  accountAction?: React.ReactNode;
   enabledFeatures?: ReadonlySet<string> | readonly string[];
   onNavigate: (path: string) => void;
   children: React.ReactNode;
@@ -484,6 +492,10 @@ export function ShellFrame({
   const [navQuery, setNavQuery] = useState("");
   const [navCollapsed, setNavCollapsed] = useState(() => getInitialBoolean(sidebarCollapsedStorageKey, false));
   const [moreToolsOpen, setMoreToolsOpen] = useState(() => readMoreToolsOpen());
+  const [topMoreToolsOpen, setTopMoreToolsOpen] = useState(false);
+  const [dismissedMoreToolsQuery, setDismissedMoreToolsQuery] = useState<string | null>(null);
+  const moreToolsSectionRef = useRef<HTMLElement>(null);
+  const moreToolsButtonRef = useRef<HTMLButtonElement>(null);
   // The top navigation mode turns the sidebar into a menubar and moves backend status into a
   // status bar; the icon-rail collapse has no meaning there, so it is ignored (not forgotten).
   const topNav = useNavMode() === "top";
@@ -529,6 +541,21 @@ export function ShellFrame({
   }
 
   const query = navQuery.trim().toLowerCase();
+  const previousPathRef = useRef(path);
+  useLayoutEffect(() => {
+    if (previousPathRef.current === path) return;
+    previousPathRef.current = path;
+    setTopMoreToolsOpen(false);
+    setDismissedMoreToolsQuery(query || null);
+  }, [path, query]);
+
+  const navigateFromTopNavigation = (destination: string) => {
+    setTopMoreToolsOpen(false);
+    setDismissedMoreToolsQuery(null);
+    setNavQuery("");
+    onNavigate(destination);
+  };
+  const navigateFromMainNavigation = topNav ? navigateFromTopNavigation : onNavigate;
   const matchesQuery = (item: StudioNavigationContribution) => item.label.toLowerCase().includes(query);
   // A parent stays visible when it matches directly or when any of its children match, so a filtered
   // child never becomes orphaned. Children are filtered independently in the render below.
@@ -543,14 +570,42 @@ export function ShellFrame({
   const searchableSettingsItems = [...settingsItems, ...adminItems];
   const showSettingsEntry = hasSettingsSections(settingsGroups) && (!query || "settings".includes(query));
   const settingsActive = isSettingsSurfacePath(path, navigation);
-  const moreToolsExpanded = moreToolsOpen || Boolean(query);
+  const moreToolsExpanded = topNav
+    ? topMoreToolsOpen || Boolean(query && query !== dismissedMoreToolsQuery)
+    : moreToolsOpen || Boolean(query);
+  const dismissTopMoreTools = useCallback((returnFocus = false) => {
+    setTopMoreToolsOpen(false);
+    if (query) setDismissedMoreToolsQuery(query);
+    if (returnFocus) moreToolsButtonRef.current?.focus();
+  }, [query]);
   const hasNavResults = mainItems.length + moreItems.length + searchableSettingsItems.length + (showSettingsEntry ? 1 : 0) > 0;
+
+  useEffect(() => {
+    if (!topNav || !moreToolsExpanded) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.key !== "Escape") return;
+      event.preventDefault();
+      dismissTopMoreTools(true);
+    };
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && moreToolsSectionRef.current?.contains(event.target)) return;
+      dismissTopMoreTools();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [dismissTopMoreTools, moreToolsExpanded, topNav]);
 
   return (
     <div className={navCollapsed && !topNav ? "studio-shell sidebar-collapsed" : "studio-shell"}>
       <aside className="sidebar">
         <div className="sidebar-top">
-          <a className="brand" href="/" onClick={event => { event.preventDefault(); onNavigate("/"); }}>
+          <a className="brand" href="/" onClick={event => { event.preventDefault(); navigateFromMainNavigation("/"); }}>
             <span className="brand-mark" aria-hidden="true">
               <img src={elsaLogo} alt="" />
             </span>
@@ -578,9 +633,16 @@ export function ShellFrame({
             aria-label="Search modules"
             placeholder="Search modules"
             value={navQuery}
-            onChange={event => setNavQuery(event.target.value)}
+            onChange={event => {
+              setDismissedMoreToolsQuery(null);
+              setNavQuery(event.target.value);
+            }}
             onKeyDown={event => {
-              if (event.key === "Escape" && navQuery) {
+              if (event.key !== "Escape") return;
+              if (topNav && moreToolsExpanded) {
+                event.preventDefault();
+                dismissTopMoreTools(true);
+              } else if (navQuery) {
                 event.preventDefault();
                 setNavQuery("");
               }
@@ -602,21 +664,42 @@ export function ShellFrame({
                 items={visibleNavigation}
                 path={path}
                 collapsed={navCollapsed}
-                onNavigate={onNavigate}
+                onNavigate={navigateFromMainNavigation}
               />
             ))}
           </nav>
         ) : null}
 
         {moreItems.length > 0 ? (
-          <nav className="nav-section nav-section-more" aria-label="More tools">
+          <nav
+            ref={moreToolsSectionRef}
+            className="nav-section nav-section-more"
+            aria-label="More tools"
+            onBlur={event => {
+              if (!topNav) return;
+              const nextTarget = event.relatedTarget;
+              if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+              dismissTopMoreTools();
+            }}
+          >
             <button
+              ref={moreToolsButtonRef}
               type="button"
               className={["nav-disclosure", moreToolsExpanded ? "open" : ""].filter(Boolean).join(" ")}
               aria-expanded={moreToolsExpanded}
               aria-controls="studio-nav-more-tools"
               title={navCollapsed ? "More tools" : undefined}
-              onClick={() => setMoreToolsOpen(current => !current)}
+              onClick={() => {
+                if (!topNav) {
+                  setMoreToolsOpen(current => !current);
+                  return;
+                }
+                if (moreToolsExpanded) dismissTopMoreTools();
+                else {
+                  setTopMoreToolsOpen(true);
+                  setDismissedMoreToolsQuery(null);
+                }
+              }}
             >
               <span className="nav-icon-tile" aria-hidden="true">
                 <Ellipsis size={18} />
@@ -634,7 +717,7 @@ export function ShellFrame({
                     items={visibleNavigation}
                     path={path}
                     collapsed={navCollapsed}
-                    onNavigate={onNavigate}
+                    onNavigate={topNav ? navigateFromTopNavigation : onNavigate}
                   />
                 ))}
               </div>
@@ -653,7 +736,7 @@ export function ShellFrame({
                 items={visibleNavigation}
                 path={path}
                 collapsed={navCollapsed}
-                onNavigate={onNavigate}
+                onNavigate={navigateFromMainNavigation}
               />
             ))}
           </nav>
@@ -667,7 +750,7 @@ export function ShellFrame({
               title={navCollapsed ? "Settings" : undefined}
               onClick={event => {
                 event.preventDefault();
-                onNavigate("/settings");
+                navigateFromMainNavigation("/settings");
               }}
             >
               <span className="nav-icon-tile" style={{ "--nav-icon-color": navIconColors.themes } as NavIconTileStyle} aria-hidden="true">
@@ -678,12 +761,15 @@ export function ShellFrame({
           </nav>
         ) : null}
 
-        <div className="sidebar-footer" aria-label="Backend API status">
-          <span className="sidebar-status-dot" aria-hidden="true" />
-          <span>
-            <strong>Backend API</strong>
-            <small>{backendHost}</small>
-          </span>
+        <div className="sidebar-footer" role="group" aria-label="Environment and account">
+          <div className="sidebar-environment" role="group" aria-label={`Configured backend endpoint: ${backendHost}`} title="Configured backend endpoint; connectivity is not measured">
+            <span className="sidebar-environment-icon" aria-hidden="true"><Server size={16} /></span>
+            <span className="sidebar-environment-copy">
+              <strong>Backend API</strong>
+              <small>{backendHost}</small>
+            </span>
+          </div>
+          <div className="sidebar-account">{topNav ? null : accountAction}</div>
         </div>
       </aside>
 
@@ -702,14 +788,15 @@ export function ShellFrame({
               <ExternalLink size={18} />
             </a>
             {themeAction}
+            {accountAction}
           </div>
         </header>
         <main className="content">{children}</main>
       </div>
       {panels.length > 0 ? <BottomPanel panels={panels} /> : null}
       {topNav ? (
-        <footer className="studio-statusbar" aria-label="Status">
-          <span><span className="sidebar-status-dot" aria-hidden="true" />Backend API · {backendHost}</span>
+        <footer className="studio-statusbar" aria-label="Environment status">
+          <span title="Configured backend endpoint; connectivity is not measured"><span className="sidebar-status-dot" aria-hidden="true" />Backend API · {backendHost}</span>
           <span>Studio / {title}</span>
         </footer>
       ) : null}
@@ -958,31 +1045,112 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   );
 }
 
-export function Diagnostics({ api }: { api: ElsaStudioModuleApi }) {
+export function Diagnostics({
+  api,
+  navigation,
+  onNavigate
+}: {
+  api: ElsaStudioModuleApi;
+  navigation: StudioNavigationContribution[];
+  onNavigate: (path: string) => void;
+}) {
   const widgets = api.diagnosticsWidgets.list().sort(compareOrderedContributions);
+  const destinations = getDiagnosticDestinations(navigation);
 
   return (
     <section className="diagnostics-view">
-      <div className="section-header">
-        <div>
-          <h2>Diagnostics</h2>
-          <p>Runtime and operational widgets contributed through the Studio SDK.</p>
-        </div>
-      </div>
+      <section className="diagnostics-index" aria-labelledby="diagnostics-index-heading">
+        <header className="diagnostics-section-heading">
+          <h2 id="diagnostics-index-heading">Diagnostic tasks</h2>
+          <p>Choose a tool for the task you need to complete.</p>
+        </header>
+        {destinations.length === 0 ? (
+          <p className="diagnostics-index-empty" role="status">No diagnostic tool links are available to you in this app.</p>
+        ) : (
+          <ul className="diagnostics-task-list">
+            {destinations.map(destination => (
+              <li key={destination.id}>
+                <a
+                  className="diagnostics-task-link"
+                  href={destination.path}
+                  onClick={event => {
+                    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                    event.preventDefault();
+                    onNavigate(destination.path);
+                  }}
+                >
+                  <span className="diagnostics-task-content">
+                    <span className="diagnostics-task-title">{destination.label}</span>
+                    <span className="diagnostics-task-description">{describeDiagnosticDestination(destination)}</span>
+                  </span>
+                  <ChevronRight size={16} aria-hidden="true" />
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
-      <div className="widget-grid">
-        {widgets.length === 0 ? (
-          <div className="empty-state">
-            <FileText size={22} />
-            <span>No diagnostics widgets are registered.</span>
-          </div>
-        ) : null}
-        {widgets.map(widget => (
-          <DiagnosticsWidgetHost widget={widget} key={widget.id} />
-        ))}
-      </div>
+      <section className="diagnostics-widgets" aria-labelledby="diagnostics-widgets-heading">
+        <header className="diagnostics-section-heading">
+          <h2 id="diagnostics-widgets-heading">Diagnostics widgets</h2>
+          <p>Runtime and operational widgets contributed through the Studio SDK.</p>
+        </header>
+        <div className="widget-grid">
+          {widgets.length === 0 ? (
+            <div className="empty-state">
+              <FileText size={22} />
+              <span>No diagnostics widgets are registered.</span>
+            </div>
+          ) : null}
+          {widgets.map(widget => (
+            <DiagnosticsWidgetHost widget={widget} key={widget.id} />
+          ))}
+        </div>
+      </section>
     </section>
   );
+}
+
+function getDiagnosticDestinations(navigation: StudioNavigationContribution[]) {
+  const navigationById = new Map(navigation.map(item => [item.id, item]));
+  const diagnosticsRegistered = navigationById.has("diagnostics");
+
+  function isDiagnosticsDescendant(item: StudioNavigationContribution) {
+    if (!diagnosticsRegistered) return false;
+
+    const visited = new Set([item.id]);
+    let parentId = item.parentId;
+    while (parentId) {
+      if (parentId === "diagnostics") return true;
+      if (visited.has(parentId)) return false;
+      visited.add(parentId);
+      parentId = navigationById.get(parentId)?.parentId;
+    }
+    return false;
+  }
+
+  return navigation.filter(item => {
+    if (item.id === "diagnostics" || item.path === "/diagnostics") return false;
+    const isRuntimeEvidenceSettings = item.id === "workflows-runtime-diagnostics" && item.path === "/workflows/runtime-diagnostics";
+    return isRuntimeEvidenceSettings || isDiagnosticsDescendant(item);
+  });
+}
+
+function describeDiagnosticDestination(item: StudioNavigationContribution) {
+  if (item.id === "open-telemetry" && item.path === "/diagnostics/open-telemetry") {
+    return "Inspect distributed traces. Metrics and OpenTelemetry Logs are not available in this experience.";
+  }
+  if (item.id === "structured-logs" && item.path === "/diagnostics/structured-logs") {
+    return "Inspect application logs and follow the live structured log stream.";
+  }
+  if (item.id === "console" && item.path === "/diagnostics/console") {
+    return "Inspect live console output.";
+  }
+  if (item.id === "workflows-runtime-diagnostics" && item.path === "/workflows/runtime-diagnostics") {
+    return "Review runtime evidence capture policy settings.";
+  }
+  return "Open this destination.";
 }
 
 function DiagnosticsWidgetHost({ widget }: { widget: StudioDiagnosticsWidgetContribution }) {
@@ -1185,6 +1353,18 @@ function NavIcon({ id, icon: Icon }: Pick<StudioNavigationContribution, "id" | "
 
   if (id.includes("task")) {
     return <ListChecks size={18} />;
+  }
+
+  if (id === "workflows-executables") {
+    return <PackageCheck size={18} />;
+  }
+
+  if (id === "workflows-activity-definitions") {
+    return <Blocks size={18} />;
+  }
+
+  if (id === "workflows-activity-availability") {
+    return <SlidersHorizontal size={18} />;
   }
 
   if (id.includes("workflow")) {

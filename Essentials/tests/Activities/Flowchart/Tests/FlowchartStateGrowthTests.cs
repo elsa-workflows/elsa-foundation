@@ -34,13 +34,7 @@ public sealed class FlowchartStateGrowthTests
         }
         ids.Add("actexec-c");
 
-        await using var fixture = await FlowchartRuntimeFixture.CreateAsync(ids, services =>
-        {
-            services.AddSingleton<IFlowchartPolicy>(loopPolicy);
-            // A 100-iteration loop needs more drain cycles than the default 64; the limit exists to
-            // catch runaway drains, not to bound legitimate long loops.
-            services.AddSingleton(new WorkflowDrainOrchestratorOptions(maxDrainCycles: 4096));
-        });
+        await using var fixture = await FlowchartRuntimeFixture.CreateAsync(ids, services => services.AddSingleton<IFlowchartPolicy>(loopPolicy));
         var executable = fixture.NewExecutable(
             children:
             [

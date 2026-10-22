@@ -6,6 +6,8 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Scheduler;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Workflows.Runtime.Services.WorkHandlers;
 
@@ -21,6 +23,8 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
     private readonly TimeProvider _timeProvider;
     private readonly IWorkflowExecutableReader? _executableReader;
     private readonly ReplaySafeFusionDriver? _fusionDriver;
+    private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
+    private readonly ILogger _logger;
 
     public WorkflowScheduleActivitySchedulerWorkHandler(
         IWorkflowExecutableStore workflowExecutableStore,
@@ -30,7 +34,9 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
         TimeProvider timeProvider,
         IWorkflowExecutableReader? executableReader = null,
-        ReplaySafeFusionDriver? fusionDriver = null)
+        ReplaySafeFusionDriver? fusionDriver = null,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
+        ILogger<WorkflowScheduleActivitySchedulerWorkHandler>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutableStore);
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
@@ -45,6 +51,8 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         _timeProvider = timeProvider;
         _executableReader = executableReader;
         _fusionDriver = fusionDriver;
+        _workflowExecutionStateStore = workflowExecutionStateStore;
+        _logger = logger ?? (ILogger)NullLogger.Instance;
     }
 
     public string Name => HandlerName;
@@ -79,6 +87,18 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         cancellationToken.ThrowIfCancellationRequested();
 
         var schedulePayload = DeserializeSchedulePayload(workItem);
+
+        // R-7 (spec 261): a delayed schedule reaches its run some time after the parent staged it. By then the run may be
+        // gone or terminal, or the parent may have finished; such a schedule is acknowledged and schedules nothing.
+        if (RuntimeDelayedSchedules.ReadNotBefore(workItem) is { } notBefore &&
+            await DelayedScheduleRefusalAsync(workItem, schedulePayload, cancellationToken) is { } refusal)
+        {
+            _logger.LogInformation(
+                "Acknowledged delayed schedule {WorkItemId} of node {ExecutableNodeId} for workflow execution {WorkflowExecutionId} (due {NotBefore}) without scheduling it: {Reason}.",
+                workItem.WorkItemId, schedulePayload.ExecutableNodeId, workItem.WorkflowExecutionId, notBefore, refusal);
+            return null;
+        }
+
         var executable = await PinnedExecutableRead.FindAsync(_executableReader, _workflowExecutableStore, schedulePayload.PinnedExecutable.ArtifactId, cancellationToken);
         if (executable is null)
             throw new WorkflowExecutableNotFoundException(schedulePayload.PinnedExecutable.ArtifactId);
@@ -143,6 +163,31 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         return await NewCommitAsync(workItem, schedulePayload, state, cancellationToken);
     }
 
+    // Why a delivered delayed schedule must not schedule its child, or null when it may. The parent is the activity the
+    // payload names as parent; it staged the schedule while running and must still be running.
+    private async ValueTask<string?> DelayedScheduleRefusalAsync(
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeScheduleActivityCommandPayload schedulePayload,
+        CancellationToken cancellationToken)
+    {
+        if (_workflowExecutionStateStore is { } workflowStore)
+        {
+            var run = await workflowStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken);
+            if (run is null)
+                return "the workflow execution no longer exists";
+            if (run.Status.IsTerminal())
+                return $"the workflow execution is {run.Status}";
+        }
+
+        var parentId = schedulePayload.ParentActivityExecutionId ?? schedulePayload.SchedulingActivityExecutionId;
+        if (parentId is null)
+            return null;
+        var parent = await _activityExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, parentId, cancellationToken);
+        if (parent is null)
+            return $"its parent activity execution '{parentId}' no longer exists";
+        return parent.Status == ActivityExecutionStatus.Running ? null : $"its parent activity execution '{parentId}' is {parent.Status}";
+    }
+
     private static RuntimeScheduleActivityCommandPayload DeserializeSchedulePayload(RuntimeSchedulerWorkItem workItem) =>
         SchedulerWorkHandlerHelpers.DeserializePayload(
             workItem,
@@ -174,6 +219,11 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         var executionScopeId = opensExecutionScope
             ? schedulePayload.ActivityExecutionId
             : provenance.ExecutionScopeId;
+        var enclosingExecutionScopeId = opensExecutionScope &&
+                                        provenance.ExecutionScopeId is { } enclosingScopeId &&
+                                        !StringComparer.Ordinal.Equals(enclosingScopeId, schedulePayload.ActivityExecutionId)
+            ? enclosingScopeId
+            : null;
         if (opensExecutionScope)
             provenance = provenance with { ExecutionScopeId = executionScopeId };
         var execution = new ActivityExecution(
@@ -231,6 +281,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         {
             IterationFrameRequest = schedulePayload.IterationFrame,
             ExecutionScopeId = executionScopeId,
+            EnclosingExecutionScopeId = enclosingExecutionScopeId,
             Attempt = provenance.Attempt
         };
     }
@@ -379,10 +430,20 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             recordedAt: now,
             sequence: scheduleWorkItem.Sequence is { } sequence ? sequence + 1 : null,
             payload: JsonSerializer.SerializeToElement(payload),
-            commandMetadata: scheduleWorkItem.CommandMetadata,
+            // The due time of a delayed schedule belongs to the schedule alone; the started child must not inherit it.
+            commandMetadata: WithoutScheduleNotBefore(scheduleWorkItem.CommandMetadata),
             envelopeMetadata: scheduleWorkItem.EnvelopeMetadata,
             executionScopeId: scheduleWorkItem.ExecutionScopeId ?? schedulePayload.SchedulingProvenance.ExecutionScopeId,
             attempt: scheduleWorkItem.Attempt ?? schedulePayload.SchedulingProvenance.Attempt);
+    }
+
+    private static IReadOnlyDictionary<string, string> WithoutScheduleNotBefore(IReadOnlyDictionary<string, string> metadata)
+    {
+        if (!metadata.ContainsKey(RuntimeMetadataKeys.ScheduleNotBefore))
+            return metadata;
+        return metadata
+            .Where(item => !StringComparer.Ordinal.Equals(item.Key, RuntimeMetadataKeys.ScheduleNotBefore))
+            .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
     }
 
     private static ActivitySchedulingProvenance NormalizeProvenance(

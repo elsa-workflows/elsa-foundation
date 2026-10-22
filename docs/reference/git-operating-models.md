@@ -7,7 +7,7 @@ This reference describes the publication paths defined in [personal operating pr
 Maintainer work, including Sipke’s sessions, always uses feature/work-unit branches in the organization repository. Never create a fork PR for maintainer work.
 
 1. Check the existing remotes and use the remote pointing to the organization repository. Do not assume `origin` identifies the correct repository or rewrite remotes just to match an example.
-2. Work on a branch such as `codex/<work-unit-name>`.
+2. Work on a feature/work-unit branch. An agent session names it `agent/<worker>/<issue>-<slug>`, per [Issue Bus Lite][org-agents-work]; human maintainers are free to name their branches.
 3. Commit coherent work-unit checkpoints locally.
 4. Push the branch to the organization repository.
 5. Open a draft pull request from that branch to the appropriate organization base branch.
@@ -44,9 +44,11 @@ Preferred model: organization-branch
 
 organization remote: origin
 organization repository: https://github.com/elsa-workflows/elsa-foundation.git
-default branch prefix: codex/
+default branch prefix: agent/codex/
 use draft PRs: yes
 commit style: coherent work-unit checkpoints
 ```
 
 Only commit `.agent-prefs/.gitkeep`; never commit the personal preference file.
+
+[org-agents-work]: https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#work
