@@ -1,15 +1,16 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace Elsa.Maps.Generator;
 
 /// <summary>
-/// Reads the EF container matrix from the suite manifest and proves the manifest still names every Testcontainers
-/// test project of the solution. The matrix runs nightly and on manual dispatch only (#2632), always in full.
+/// Reads the EF container matrix from the <c>containerSuites</c> of the tier manifest (spec 263) and proves it still names
+/// every Testcontainers test project of the solution. The full tier runs the matrix on ready PRs, nightly and on dispatch.
 /// </summary>
 public static partial class EfSuiteSelector
 {
-    private const string ManifestPath = "tools/ci/ef-suites.json";
+    private const string ManifestPath = "tools/ci/test-tiers.json";
     private const string IntegrationFilterPath = "Elsa.Server.Persistence.Integration.slnf";
     private const string SeparateSecretsProject = "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj";
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
@@ -108,7 +109,9 @@ public sealed record EfSuiteSelection(IReadOnlyList<EfSuite> Suites)
     });
 }
 
+/// <summary>The part of <c>tools/ci/test-tiers.json</c> this selector reads; the rest belongs to the tier tooling.</summary>
 public sealed class EfSuiteManifest
 {
+    [JsonPropertyName("containerSuites")]
     public IReadOnlyList<EfSuite> Suites { get; init; } = [];
 }

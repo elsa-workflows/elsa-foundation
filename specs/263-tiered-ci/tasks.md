@@ -39,31 +39,33 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
 
 ## Phase 2: Foundational (blocks every story)
 
-- [ ] T004 Create `tools/ci/test-tiers.json` with the schema in [data-model](data-model.md#tier-manifest--toolscitest-tiersjson):
+- [X] T004 Create `tools/ci/test-tiers.json` with the schema in [data-model](data-model.md#tier-manifest--toolscitest-tiersjson):
   - `schema: 1`, `integrationLeavesPrTier: false`, `shardTargetMinutes: 6`, `slowTestSeconds: 10`, `slowTestMode: "report"`;
   - one `projects` entry for each of the 120 test projects (every `*.csproj` under `Essentials/tests/**` and `Extensions/*/tests/**`, outside `studio/`, that references `Microsoft.NET.Test.Sdk`), with its `tier`, its `trait` and its `medianMinutes` from research R1 and R5.
 
-  The integration tier is the 25 Testcontainers projects plus `Elsa.Workbench.Tests`, `Elsa.Cluster.EntityFrameworkCore.Tests`, `Elsa.Activities.Http.IntegrationTests`, `Elsa.Cli.Tests` and `Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests`. Every other project is `pr`.
-- [ ] T005 In `tools/ci/test-tiers.json`, add `splits` from [research R3](research.md#r3--per-class-durations-in-the-two-long-projects):
+  *(Done: 122 test projects, since #3192 added `Elsa.Rules.Tests` and a Rules provider suite. 31 are integration tier: 26 Testcontainers roots, Secrets PostgreSQL included, plus the 5 below. `Elsa.Rules.Tests` has no measured median yet (`null`). `Elsa.Architecture.Tests` is in `hostLaunchExemptions`: it launches SDK commands, not a host; research R5.)*
+
+  The integration tier is the Testcontainers projects plus `Elsa.Workbench.Tests`, `Elsa.Cluster.EntityFrameworkCore.Tests`, `Elsa.Activities.Http.IntegrationTests`, `Elsa.Cli.Tests` and `Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests`. Every other project is `pr`.
+- [X] T005 In `tools/ci/test-tiers.json`, add `splits` from [research R3](research.md#r3--per-class-durations-in-the-two-long-projects):
   - **Workbench**: `workbench-native-hosting` (`WorkbenchBackgroundActivityRecoveryTests`, `NativeHostingConformanceTests`, `NativeHostingGracefulHandoffTests`, `WorkbenchProcessTests`) and `workbench-rest` (rest);
   - **Cluster EF**: `cluster-foundation-host` (the 7 `FoundationHostCollection` classes) and `cluster-rest` (rest);
   - **Compensation**: `compensation-nesting` (`CompensationNestingJourneyTests`), `compensation-provider` (`CompensationProviderSubsetTests`, `CompensationBackoffJourneyTests`) and `compensation-rest` (rest).
 
   Use fully qualified class names.
-- [ ] T006 In `tools/ci/test-tiers.json`, add `shards` from [research R9](research.md#r9--job-budgets-and-layout):
+- [X] T006 In `tools/ci/test-tiers.json`, add `shards` from [research R9](research.md#r9--job-budgets-and-layout):
   - `pr`: pr-1, pr-2 and pr-3 as listed there. While the switch is off, they also hold `integration-other` and `cluster-rest`, and `pr` has three more shards: `workbench-native-hosting`, `workbench-rest` and `cluster-foundation-host`.
   - `integration`: the 4 shards.
   - `containers`: 3 shards that balance the 26 legs (25 suites, `rules` included, plus `secrets-ef-composition`) by the nightly durations in research R1.
 
   `Elsa.Architecture.Tests` is in no shard; it runs in `Architecture guards`.
-- [ ] T007 Move the 25 suites from `tools/ci/ef-suites.json` into `containerSuites` in `tools/ci/test-tiers.json`, with fields and order unchanged.
-- [ ] T008 In `tools/ci/test-tiers.json`, add `quarantine` entries for the six tests R2 marks "quarantine": #3147, #3252 and #3259–#3262, each with `since: <merge date>`. Add an empty `slowAllowList`.
-- [ ] T009 Retarget the generator's EF suite code to `containerSuites` in `tools/ci/test-tiers.json`, keeping the `ef-suites-select` output and every failure message's meaning:
+- [X] T007 Move the 25 suites from `tools/ci/ef-suites.json` into `containerSuites` in `tools/ci/test-tiers.json`, with fields and order unchanged.
+- [X] T008 In `tools/ci/test-tiers.json`, add `quarantine` entries for the six tests R2 marks "quarantine": #3147, #3252 and #3259–#3262, each with `since: <merge date>`. Add an empty `slowAllowList`.
+- [X] T009 Retarget the generator's EF suite code to `containerSuites` in `tools/ci/test-tiers.json`, keeping the `ef-suites-select` output and every failure message's meaning:
   - `tools/maps/Elsa.Maps.Generator/EfSuiteSelector.cs:12` (`ManifestPath`) and its JSON reading;
   - `tools/maps/Elsa.Maps.Generator/EfSuiteSelectorContractTests.cs:39`.
 
-  Run `ef-suites-self-test` and `ef-suites-select`, and diff the matrix against T001's output; it must be identical.
-- [ ] T010 Delete `tools/ci/ef-suites.json` in the same commit as T009, and update the references that point at it:
+  Run `ef-suites-self-test` and `ef-suites-select`, and diff the matrix against T001's output; it must be identical. *(Done: byte-identical, 25 suites.)*
+- [X] T010 Delete `tools/ci/ef-suites.json` in the same commit as T009, and update the references that point at it:
   - `.github/workflows/ci.yml:573` (comment);
   - `Extensions/README.md:130`;
   - `docs/reference/developer-solution-filters.md:25,112`;
