@@ -3303,6 +3303,7 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1", undefined, true);
 
     await waitForText(container, "Pinned Runtime executable");
+    await waitForText(container, "Review workflow definition");
     await click(buttonByText(container, "Review workflow definition"));
     await waitForEditor(container);
 
@@ -3333,6 +3334,7 @@ describe("workflows module", () => {
 
     for (const tab of ["Activity", "Issues", "Details"] as const) {
       await openTab(tab);
+      await waitForText(container, "Review workflow definition");
       await click(buttonByText(container, "Review workflow definition"));
       await waitForEditor(container);
       expect(window.location.pathname).toBe("/workflows/definitions");
