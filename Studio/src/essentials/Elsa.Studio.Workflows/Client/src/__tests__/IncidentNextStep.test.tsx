@@ -168,6 +168,24 @@ describe("incident next-step state guidance", () => {
     expect(container.textContent).not.toContain("Review the run evidence and any available actions below");
   });
 
+  it("gives an active non-waiting blocker a useful inspection and operator handoff", () => {
+    const nonWaitingBlocker = incident({
+      isBlocking: true,
+      resolutionOutcome: { actionKind: "OperatorRetry", systemSource: "Runtime", metadata: {} }
+    });
+    const container = render(undefined, summary(), nonWaitingBlocker, undefined, {
+      ...guidance,
+      actionAvailability: "available",
+      canAct: true,
+      retryReviewEligibility: { status: "eligible" },
+      retryJournalAvailability: "not-required"
+    });
+
+    expect(container.querySelector(".wf-incident-next-step-copy")?.textContent)
+      .toBe("This blocking incident is not waiting for an operator action. Inspect its evidence or share it with an operator.");
+    expect(container.textContent).not.toContain("any available actions below");
+  });
+
   it.each(["Completed", "Faulted", "Cancelled"])("does not describe an available action for an ended %s run", runStatus => {
     const container = render(undefined, summary({ status: runStatus }), incident(), undefined, {
       actionAvailability: "available",

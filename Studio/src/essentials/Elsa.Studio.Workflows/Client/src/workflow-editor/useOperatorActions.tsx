@@ -103,24 +103,19 @@ export function useCompensationJournals(context: StudioEndpointContext, workflow
     return result;
   }, [context, workflowExecutionId]);
 
+  const requestEpoch = readGeneration.current;
   const request = useCallback((scopeActivityExecutionId: string, activityStatus?: string) => {
     const requestContext = context;
     const requestRun = workflowExecutionId;
-    const requestGeneration = readGeneration.current;
-    if (contextRef.current !== requestContext || runRef.current !== requestRun || readGeneration.current !== requestGeneration) return;
+    if (contextRef.current !== requestContext || runRef.current !== requestRun || readGeneration.current !== requestEpoch) return;
     if (activityStatus === "Completed" || requested.current.has(scopeActivityExecutionId)) return;
     requested.current.add(scopeActivityExecutionId);
     setJournals(current => current.has(scopeActivityExecutionId) ? current : new Map(current).set(scopeActivityExecutionId, "loading"));
     void reload(scopeActivityExecutionId);
-  }, [context, reload, workflowExecutionId]);
+  }, [context, reload, requestEpoch, workflowExecutionId]);
 
   const get = useCallback((id: string | undefined) => (id ? journals.get(id) : undefined), [journals]);
-  const requestEpoch = readGeneration.current;
-  const guardedRequest = useCallback((scopeActivityExecutionId: string, activityStatus?: string) => {
-    if (readGeneration.current !== requestEpoch) return;
-    request(scopeActivityExecutionId, activityStatus);
-  }, [request, requestEpoch]);
-  return { get, request: guardedRequest, reload, reset, generation };
+  return { get, request, reload, reset, generation };
 }
 
 interface DialogState {

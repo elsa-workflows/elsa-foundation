@@ -415,6 +415,11 @@ describe("useOperatorActions", () => {
     ["a journal for another requester", (): unknown => ({ ...journalView(), activityExecutionId: "ae-other" })],
     ["an unavailable journal", (): unknown => ({ ...journalView(), available: false })],
     ["a malformed journal", (): unknown => ({ ...journalView(), view: null })],
+    ["an entry without its required association", (): unknown => journalViewWithEntries([{}])],
+    ["a null entry", (): unknown => journalViewWithEntries([null])],
+    ["a null forward association", (): unknown => journalViewWithEntries(journalView().view.entries.map((entry, index) => index === 1 ? { ...entry, forward: null } : entry))],
+    ["a non-array attempts field", (): unknown => journalViewWithEntries(journalView().view.entries.map((entry, index) => index === 1 ? { ...entry, attempts: null } : entry))],
+    ["a null attempt", (): unknown => journalViewWithEntries(journalView().view.entries.map((entry, index) => index === 1 ? { ...entry, attempts: [null] } : entry))],
     ["a null journal response", (): unknown => null]
   ] as const)("keeps Retry unknown after %s", async (_label, makeSource) => {
     const backend = fakeBackend({});
@@ -1634,6 +1639,11 @@ function journalView() {
       abandonment: null
     }
   };
+}
+
+function journalViewWithEntries(entries: unknown[]) {
+  const source = journalView();
+  return { ...source, view: { ...source.view, entries } } as unknown as CompensationJournalSource;
 }
 
 function journalViewWithVersion(stateVersion: number, workflowExecutionId = "wf-1"): CompensationJournalSource {

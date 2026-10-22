@@ -78,6 +78,6 @@
 }
 
 .wf-incident-next-step-open-definition:focus-visible {
-  outline: 2px solid var(--wf-accent);
+  outline: 2px solid var(--studio-focus);
   outline-offset: 2px;
 }

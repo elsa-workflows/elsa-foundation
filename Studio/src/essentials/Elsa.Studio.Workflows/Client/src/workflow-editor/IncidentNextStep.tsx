@@ -3,6 +3,7 @@ import "./IncidentNextStep.css";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { CopyableIdentifier } from "@elsa-workflows/studio-ui";
 import { getDefinition } from "../api/workflowDesign";
+import { isWaitingForIntervention } from "../compensationRuntime";
 import { isActiveIncident } from "../workflowRuntimeOverlays";
 import { formatDate } from "../workflowFormatting";
 import type { IncidentStateSummary, WorkflowInstanceSummary } from "../workflowTypes";
@@ -140,6 +141,8 @@ export function IncidentNextStep({
     nextStep = "No run action is available in this view for this incident. Inspect the run evidence or share the incident with an operator.";
   } else if (!guidance.canAct) {
     nextStep = "This view does not confirm permission to change the run. Inspect the evidence or share the incident with an operator.";
+  } else if (incident.isBlocking && !isWaitingForIntervention(incident)) {
+    nextStep = "This blocking incident is not waiting for an operator action. Inspect its evidence or share it with an operator.";
   } else {
     nextStep = "Review the run evidence and any available actions below; choose one only if it matches the situation.";
   }
