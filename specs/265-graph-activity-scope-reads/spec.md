@@ -232,7 +232,9 @@ publish and run, and a caller that passes `approve` gets the branch that value s
 - **FR-002**: A body node MUST be able to bind an input to one of its graph activity's declared variables and
   receive that variable's current value in this invocation.
 - **FR-003**: Body JavaScript expressions MUST see the activity's inputs and variables through the same parameter
-  and ambient accessors that a workflow node uses for its workflow's inputs and variables.
+  and ambient accessors that a workflow node uses for its workflow's inputs and variables. *(Amended 2026-10-22:
+  Elsa 4 has ambient accessors for variables only, `variables.x`, `getVariable('x')` and `get<X>()`; inputs are
+  read through request parameters, as in workflows.)*
 - **FR-004**: A body node MUST be able to reference another body node's result. Each such reference MUST resolve to
   the producer in the same activity invocation.
 - **FR-005**: When a template is placed into an executable, every reference inside the body (to a producer node, to a
@@ -240,7 +242,10 @@ publish and run, and a caller that passes `approve` gets the branch that value s
   Placing one template several times MUST give independent references.
 - **FR-006**: Graph activity publication MUST refuse a body reference to an input, variable or producer node that
   the activity does not declare or contain. The diagnostic MUST name the reference and the node that holds it. A
-  workflow publish MUST NOT be the first place such a reference fails.
+  workflow publish MUST NOT be the first place such a reference fails. *(Amended 2026-10-22: two kinds of reference
+  are not checked statically and fail at run time, as they do in workflows. Ambient JavaScript reads cannot be
+  analysed. A variable of a body container is checked for the container being an ancestor, not for the container
+  declaring the key; plan A-5.)*
 - **FR-007**: Inside a graph body, input and variable reads MUST resolve to the nearest enclosing graph activity.
   They MUST NOT fall through to the started workflow or to an outer graph activity (D-1).
 - **FR-008**: Values read in the body MUST be the activity's durable values, so suspension, resume, retry and
@@ -256,7 +261,8 @@ publish and run, and a caller that passes `approve` gets the branch that value s
 - **FR-012**: A body node MUST be able to capture an output into one of its graph activity's declared variables. The
   captured value MUST be durable and visible to later body nodes and to output mappings in the same invocation, and
   MUST NOT change a caller variable (D-2). Graph activity publication MUST refuse a capture into an undeclared or
-  type-incompatible variable.
+  type-incompatible variable. *(The type check needs the producer's resolved contract, so it runs when the activity
+  compiles.)*
 - **FR-013**: Activity publication MUST refuse a body node's capture into a variable of the started workflow or of
   an outer graph activity (D-1).
 
@@ -274,10 +280,12 @@ publish and run, and a caller that passes `approve` gets the branch that value s
 
 - **SC-001**: "Add two numbers", with `Sum` computed by a body node and not by an output mapping, returns `5` for
   `2 + 3`. It is built through the API and through Studio, and called from a workflow that has its own `A` and `B`.
+  *(Amended 2026-10-22: the Studio build is deferred with the result pickers, #3197.)*
 - **SC-002**: A body that chains two nodes through a result reference publishes, and returns correct, independent
   results when placed twice in one workflow and when nested one graph activity deep.
 - **SC-003**: Every body reference to an undeclared input or variable, or to a producer that is not in the body, is
-  refused at activity publication. None reaches workflow publish or run time in the test suite.
+  refused at activity publication. None reaches workflow publish or run time in the test suite. *(The FR-006
+  amendment's exceptions apply.)*
 - **SC-004**: The spec 246 fixtures `reusable-reads-input` and `reusable-reads-result`, and a memory-reference
   capture fixture, import, publish and run to the expected result. The D-8 refusal tests now assert conversion.
   *(Implementation note: met for input reads, which import, publish and run, including against a caller's own input.

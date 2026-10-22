@@ -170,7 +170,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
         // and the completed-scope evidence capture on the completion path.
         var scopeService = new RuntimeContainerScopeService(
             activityExecutionStateStore,
-            serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>());
+            serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
+            serviceProvider.GetService<IDurableValueStateStore>());
 
         SimpleActivityExecutionContext? context = null;
         RuntimeStructuralContinuation? continuation = null;
@@ -667,10 +668,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 completedAt,
                 cancellationToken,
                 // Spec 265 D-2: a capture into a graph variable writes the row of the producer's nearest closed scope.
-                closedScopeBoundary: await new RuntimeContainerScopeService(
-                        serviceProvider.GetRequiredService<IActivityExecutionStateStore>(),
-                        serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>())
-                    .FindClosedScopeBoundaryAsync(workItem.WorkflowExecutionId, currentParentState.InvocationId, parentExecutableNode, cancellationToken));
+                closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, currentParentState.InvocationId, parentExecutableNode, cancellationToken));
             completionDurableValueChanges = (completionCheckpointPreparation?.DurableValueChanges ?? [])
                 .Concat(captureProjection.DurableValues)
                 .GroupBy(change => change.StateId, StringComparer.Ordinal)

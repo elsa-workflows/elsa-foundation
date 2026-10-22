@@ -67,16 +67,16 @@ ancestor states it already loads (`RuntimeContainerScopeService.cs:45-57`).
 | Gate | Status | Notes |
 |---|---|---|
 | §E2.2 Runtime takes no Design reference | PASS | Runtime changes stay in `Workflows.Runtime*` and `Activities.Runtime`. Design-side validation is in `Activities.Graph.Design`. No project reference changes. |
-| §E2.1 domain boundaries | PASS | `Workflows.Runtime` recognises a scope boundary through a neutral, hashed `ExecutableNode` field (D-3), not through `Activities.Graph` types. Graph inputs and variables are read through `ActivityExecutionScopeKeys` and `RuntimeMetadataKeys`, which already live in `Workflows.Runtime.Core`. |
+| §E2.1 domain boundaries | PASS | `Workflows.Runtime` recognises a scope boundary through neutral node metadata stamped from the hashed descriptor (D-3 as amended by A-1), not through `Activities.Graph` types. Graph inputs and variables are read through `ActivityExecutionScopeKeys` and `RuntimeMetadataKeys`, which already live in `Workflows.Runtime.Core`. |
 | §E2.7 Elsa 3 stays behind the import boundary | PASS | Converter changes stay in `Extensions/Elsa3`. Elsa 4 gains nothing Elsa 3-specific. |
-| §E5 versioning / §2.23.3 visibility | ACTION | Additive public surface only: `ExecutableNode.ActivityExecutionScope`, `GraphActivityDescriptor.ScopeModel`, optional `OutputBindings` on the occurrence compilation and overlay records, and new `RuntimeMetadataKeys` constants. Update `PublicAPI.Unshipped.txt` in each project. New services are `internal sealed`. |
+| §E5 versioning / §2.23.3 visibility | PASS | Additive public surface: optional `OutputBindings` on the occurrence compilation and overlay records, new `RuntimeMetadataKeys` constants, and `RuntimeContainerScopeService`'s optional store and lookup. One deliberate removal: `Elsa3ActivityDiagnosticCodes.ReusableValueReadUnsupported` (pre-GA cleanup, ADR 0080). None of the touched projects tracks a `PublicAPI` file. New services are internal. |
 | §2.6.2 replacement contracts | PASS | None added or changed |
 | §2.17 duplication beats dependency | PASS | The ten-line `ActivityResult` reference readers are copied into Graph.Design and not referenced from Validations (R-9). |
 | §2.24.2 sanctioned patterns | PASS | Existing patterns only: placement-time id rewriting (as `RewriteStructure`), a provider-side validator, and runtime projection of durable rows. No new extension point. |
 | §2.22 / §2.22.1 docs and extension points | ACTION | The authoring reference `docs/reference/activity-definition-authoring-composition.md` (body value model), the glossary row for "Graph activity", the Elsa 3 Mapping README and migration readiness guide, and spec 246 D-8 notes. No contributor or replacement contract changes, so `EXTENSION_POINTS.md` and the generated maps are unchanged. |
 | §2.23.1–§2.23.2 tests | PASS | Behaviour tests for each story, each refusal code, remap shape, the legacy flag path, resume and FR-011 non-regression. No new features, so no registration tests. |
 | §2.23.5 exception boundaries | PASS | Remap and validation produce diagnostics, not exceptions. Runtime resolution failures keep their existing domain exceptions. |
-| ADR 0038 content-addressed executables | PASS | The closed-scope flag is in the hashed descriptor and node field (R-5, D-3). Node metadata is not used for behaviour. |
+| ADR 0038 content-addressed executables | PASS | The closed-scope flag is in the hashed descriptor (R-5). The node metadata marker is derived from it, so it never differs between equal hashes (A-1). |
 | ADR 0048 container output captures | ACTION | An amendment note: graph variable rows are the single store and the graph frame is a projection, not a shadow (R-3). Concurrent captures into one graph variable are refused (R-9). |
 | ADR 0027 scoped references | PASS | Placement remaps the template's scoped references to placed identities, as line 33 already describes for copied subtrees. |
 
@@ -86,7 +86,7 @@ ancestor states it already loads (`RuntimeContainerScopeService.cs:45-57`).
 |---|---|---|
 | D-1 | Inputs are re-rooted, not re-addressed | Below a closed boundary, `WorkflowInputEnvelopes` is the boundary's input rows, keyed by `BoundaryReferenceKey`. `WorkflowRequest` bindings and parameters are unchanged (R-2). |
 | D-2 | Variables are re-addressed at placement | Body `"workflow"` (and legacy `"activity-graph"`) variable references are rewritten to the placed boundary node id. The runtime's graph frame has that `ScopeId`, so a write can never land on the caller's root (R-3). |
-| D-3 | Neutral scope marker on the executable node | The placer sets a hashed `ExecutableNode.ActivityExecutionScope` (`Closed`) on a boundary whose descriptor says `scopeModel: closed`. `WorkflowExecutableHasher.FormatNode` includes it next to the intrinsic. `Workflows.Runtime` keys every re-rooting rule on this field, never on `Activities.Graph` types or unhashed metadata (R-5). |
+| D-3 | Neutral scope marker on the executable node | *Superseded by A-1:* the placer stamps node metadata `runtime.activityExecutionScope = closed` from the hashed `scopeModel: closed`, and scheduling copies it into the boundary's state. `Workflows.Runtime` keys every re-rooting rule on that marker, never on `Activities.Graph` types (R-5). |
 | D-4 | Boundary found by ancestor walk | The nearest ancestor state whose executable node is a closed scope, through `ParentActivityExecutionId`. A node is never its own boundary, so a boundary's own bindings resolve in the parent scope (R-2). |
 | D-5 | One store | The graph frame is a synthetic read-only Root frame projected from the variable rows. Captures write the rows. Output mappings and `NewEvaluator` are unchanged (R-3, R-4). |
 | D-6 | Remap in the parent placement frame | `PlacedReferenceRemapper` runs in `ReconstructOccurrenceRoots` over each occurrence root's own bindings, captures and intrinsic variable. All constructor fields are kept, and unknown ids are left alone (R-6). |
@@ -106,10 +106,12 @@ ancestor states it already loads (`RuntimeContainerScopeService.cs:45-57`).
 | A-2 | **Result visibility below a closed scope** compares no declared structural scope. It requires producer and consumer to share the nearest closed boundary invocation. | Every placed body node carries `activity.definitionVersionId` and so opens its own execution scope. A declared scope can never equal a runtime one there. |
 | A-3 | **Body captures** are compiled in the parent placement frame, next to the reference remap, through `RuntimeOutputCaptureCompiler.CompileGraphVariableOutputs`. They are written by `RuntimeOutputCaptureProjector` as the boundary's own `ActivityExecutionScopeKeys.Variable` row. The four completion handlers pass the producer's nearest closed boundary through `RuntimeContainerScopeService.FindClosedScopeBoundaryAsync`, which is looked up only for nodes with such a capture. | The row passes `GraphActivityScope.Rehydrate`'s type checks, so output mappings read it unchanged. |
 | A-4 | **`activity.graph.body-capture-concurrent` dropped.** | No concurrency analysis for captures exists, and workflow-root captures don't enforce ADR 0048 §5 either. A slot-based guess would refuse exclusive If/Switch branches. Recorded in the ADR 0048 amendment note, plus a follow-up issue. |
-| A-5 | **Container variable checks** confirm that the scope is an ancestor container. They do not check that the container declares the key. | Placement and the runtime frame lookup still refuse an undeclared key. |
+| A-5 | **Container variable checks** confirm that the scope is an ancestor container. They do not check that the container declares the key. | An undeclared key fails at run time, when the frame lookup finds no such variable. The spec's FR-006 is amended to say so. |
 | A-6 | **An optional input that was neither passed nor defaulted** reads as `null` below a closed scope. The runtime fills every input that the boundary's pinned contract declares and that has no row. | Spec edge case. The graph runtime's own capture of inputs is unchanged. |
 | A-7 | **FR-009 narrowed.** Studio offers graph inputs, graph variables (root scope) and body container variables. Pickers for earlier body results need the graph editor wired to expression tooling, which can't be built or tested on this machine (no Node). That moves to a follow-up issue. The Studio unit test is added, but CI runs it. | D-11 fallback. |
-| A-8 | **SC-004 partly blocked.** The Elsa 3 run tests prove body input reads, including D-1 against a caller's own input. Result reads and captures from an imported body can't run end to end, because of two existing limits that affect every converted workflow: a RunJavaScript without arguments faults when it runs, and a RunJavaScript `Object` result has no Auto conversion into a typed input. Captures and results are proven in `GraphBodyScopeTests` (Behavioral) and in placement tests. | Found during T058. Two issue drafts are in the PR description. |
+| A-8 | **SC-004 partly blocked** (filed as #3195 and #3196). The Elsa 3 run tests prove body input reads, including D-1 against a caller's own input. Result reads and captures from an imported body can't run end to end, because of two existing limits that affect every converted workflow: a RunJavaScript without arguments faults when it runs, and a RunJavaScript `Object` result has no Auto conversion into a typed input. Captures and results are proven in `GraphBodyScopeTests` (Behavioral) and in placement tests. | Found during T058. Two issue drafts are in the PR description. |
+| A-10 | **A graph compiled before closed scopes, nested in a closed one,** reads the enclosing closed graph as its root. The closed root frame is also addressed under the `workflow` scope (`RuntimeClosedScope.AliasWorkflowScope`). A closed body never contains `workflow`, because placement remaps it. | Found in review. Without it, the legacy body's request reads switch to the closed graph while its variable reads fail. |
+| A-11 | **Studio `Input` picks** become request reads in the placer (`ActivityTemplatePlacer.ToGraphInputRead`), for occurrences of a closed scope. They are not handled by a `RuntimeInputBindingCompiler` option. | The placer knows whether the parent graph is closed; the binding compiler does not. |
 | A-9 | **Runtime tests live in `Essentials/tests/Activities/Behavioral/Tests/GraphBodyScopeTests.cs`.** That project runs real graph boundaries through the engine. It gains a reference to `Elsa.Expressions` for the JavaScript cases. | Not `GraphActivityBodyScopeTests` in the Graph tests, which use hand-made contexts. |
 
 ## Project Structure
@@ -134,7 +136,6 @@ specs/265-graph-activity-scope-reads/
 Essentials/src/Activities/Graph/
 ├── Design/Services/GraphActivityProvider.cs           # scopeModel, fingerprint 3.0.0, overlay outputs, validator calls
 ├── Design/Services/GraphBodyReferenceValidator.cs     # new: D-9
-├── Runtime/Models/GraphActivityDescriptor.cs          # ScopeModel
 └── Runtime/Services/GraphActivityScope.cs             # BoundaryVariableName on variable rows
 docs/reference/activity-definition-authoring-composition.md  # body value model (closed scope, references, captures)
 Essentials/src/Workflows/Publishing/
@@ -143,14 +144,11 @@ Essentials/src/Workflows/Publishing/
     ├── ActivityTemplatePlacer.cs                      # remap hook, capture compile, scope marker, parent graph variables
     ├── PlacedReferenceRemapper.cs                     # new: D-6
     ├── ActivityTemplateCompiler.cs                    # carry outputs into the overlay
-    ├── RuntimeInputBindingCompiler.cs                 # graph-body option: Input → WorkflowRequest
     └── RuntimeOutputCaptureCompiler.cs                # graph-target entry point
 Essentials/src/Workflows/Runtime/
-├── Core/Models/ExecutableNode.cs                      # ActivityExecutionScope
 ├── Core/Models/ReusableActivityRuntimeModels.cs       # overlay OutputBindings
 ├── Core/Constants/RuntimeMetadataKeys.cs              # BoundaryVariableName, CaptureTargetScopeId
 └── Elsa.Workflows.Runtime/Services/
-    ├── Executables/WorkflowExecutableHasher.cs        # hash the scope marker
     ├── Values/RuntimeContainerScopeService.cs         # cut the chain, graph frame, names from rows
     ├── Values/RuntimeActivityInputSnapshotMaterializer.cs  # re-rooted request envelopes
     ├── Values/RuntimeInputBindingStateProjection.cs   # project graph inputs by reference key
@@ -188,5 +186,5 @@ Each slice is testable on its own and follows the spec's story priorities:
 
 | Item | Why needed | Simpler alternative rejected because |
 |---|---|---|
-| New hashed `ExecutableNode.ActivityExecutionScope` field (D-3) | Runtime must recognise a closed scope without depending on Graph, and the flag must be content-addressed | Node metadata is not hashed (ADR 0038). Reading the Graph descriptor from `Workflows.Runtime` breaks the domain boundary. |
+| Closed-scope node metadata derived from the hashed descriptor (D-3 as amended by A-1) | Runtime must recognise a closed scope without depending on Graph, and the flag must be content-addressed | A new hashed `ExecutableNode` field widens seven public constructors for no added guarantee. Reading the Graph descriptor from `Workflows.Runtime` breaks the domain boundary. |
 | Synthetic graph frame (D-5) | Body JavaScript and bindings use the frame machinery | A real stored frame changes the checkpoint, rehydration and retry contracts for the same behaviour (R-3) |

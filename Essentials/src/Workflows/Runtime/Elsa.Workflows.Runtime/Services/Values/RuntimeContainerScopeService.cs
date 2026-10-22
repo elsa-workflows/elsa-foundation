@@ -13,7 +13,8 @@ namespace Elsa.Workflows.Runtime.Services.Values;
 /// </summary>
 public sealed class RuntimeContainerScopeService(
     IActivityExecutionStateStore activityExecutionStateStore,
-    IWorkflowExecutionStateStore workflowExecutionStateStore)
+    IWorkflowExecutionStateStore workflowExecutionStateStore,
+    IDurableValueStateStore? durableValueStateStore = null)
 {
     private readonly RuntimeVariableDeclarationProjector _declarations = new();
     private readonly RuntimeLoopIterationFrameFactory _iterations = new();
@@ -25,7 +26,17 @@ public sealed class RuntimeContainerScopeService(
         bool includeCurrentIteration = true,
         bool includeOwnContainer = false,
         CancellationToken cancellationToken = default,
-        IReadOnlyCollection<DurableValueState>? durableValues = null)
+        IReadOnlyCollection<DurableValueState>? durableValues = null) =>
+        await BuildVisibleFramesCoreAsync(workflowExecutionId, activityState, includeCurrentIteration, includeOwnContainer, durableValues, loadClosedScopeValues: false, cancellationToken);
+
+    private async ValueTask<RuntimeVisibleVariableFrames> BuildVisibleFramesCoreAsync(
+        string workflowExecutionId,
+        ActivityExecutionState activityState,
+        bool includeCurrentIteration,
+        bool includeOwnContainer,
+        IReadOnlyCollection<DurableValueState>? durableValues,
+        bool loadClosedScopeValues,
+        CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentNullException.ThrowIfNull(activityState);
@@ -61,6 +72,9 @@ public sealed class RuntimeContainerScopeService(
         var chain = ancestors.ToList();
         var boundaryIndex = RuntimeClosedScope.IndexOfNearest(chain);
         var boundary = boundaryIndex < 0 ? null : chain[boundaryIndex];
+        // The scoped-variable reader seam reads no durable values of its own; it still gets the closed scope's variables.
+        if (loadClosedScopeValues && boundary is not null && durableValues is null && durableValueStateStore is not null)
+            durableValues = await durableValueStateStore.ListAllDurableValueStatesAsync(workflowExecutionId, cancellationToken);
         var ordered = new List<VariableFrameState>
         {
             boundary is null ? root : RuntimeClosedScope.CreateFrame(boundary, durableValues)
@@ -421,11 +435,13 @@ public sealed class RuntimeContainerScopeService(
         if (activity is not IRuntimeScopedVariableReader)
             return null;
 
-        var visible = await BuildVisibleFramesAsync(
+        var visible = await BuildVisibleFramesCoreAsync(
             activityState.Execution.WorkflowExecutionId,
             activityState,
             includeCurrentIteration: true,
             includeOwnContainer: true,
+            durableValues: null,
+            loadClosedScopeValues: true,
             cancellationToken);
         return ProjectVisibleVariableEnvelopes(executable, visible);
     }
@@ -509,6 +525,8 @@ public sealed class RuntimeVisibleVariableFrames
         foreach (var frame in Frames)
         foreach (var (key, value) in frame.Values)
             values[new RuntimeVariableValueAddress(frame.ScopeId, key)] = value;
+        if (closedScopeBoundary is not null)
+            RuntimeClosedScope.AliasWorkflowScope(Frames[0], values);
         Values = values;
     }
 

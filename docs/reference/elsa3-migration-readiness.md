@@ -69,8 +69,9 @@ Its variables are its own, but Correlate, Set Name and Finish act on that callin
    refused in every workflow (`VF-IMP-005`), and the Set, Correlate or Set Name activity its guidance points to is not
    available in a reusable body yet.
 3. **Reading values.** A body reads its own values as in Elsa 3 (spec 265): `getInput(...)`, a generated `get{Name}()`
-   accessor, `getVariable(...)`, `variables.x`, Liquid `Input.x` and `Variables.x`, a property bound to a variable or to
-   another activity's output, and an output captured into one of its variables. A caller's inputs and variables are not
+   accessor, `getVariable(...)`, `variables.x`, a property bound to a variable or to another activity's output, and an
+   output captured into one of its variables. These convert to the same bindings as in a regular workflow; Liquid
+   `Input.x` and `Variables.x` do too, but have not been run in a reusable body yet. A caller's inputs and variables are not
    visible in the body; pass what the body needs as an input.
    - Allowed as before: `getWorkflowInstanceId()` and `getCorrelationId()` read the running workflow instance.
    - Known Elsa 4 limits that apply to every converted workflow, reusable or not: a RunJavaScript result bound straight

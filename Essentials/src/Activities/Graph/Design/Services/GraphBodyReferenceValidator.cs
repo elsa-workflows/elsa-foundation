@@ -130,8 +130,8 @@ internal static class GraphBodyReferenceValidator
                 pointer, output.ReferenceKey));
     }
 
-    // An exact alias and collection kind, or a target that holds any value. Anything else needs an authored conversion;
-    // placement resolves it as the authoritative check.
+    // An exact alias and collection kind, or a target that holds any value. Anything else needs an authored conversion,
+    // which placement resolves into a conversion plan.
     private static bool IsCaptureCompatible(TypeReference source, TypeReference target) =>
         IsAnyType(target.Alias) ||
         (StringComparer.OrdinalIgnoreCase.Equals(source.Alias, target.Alias) && source.CollectionKind == target.CollectionKind);

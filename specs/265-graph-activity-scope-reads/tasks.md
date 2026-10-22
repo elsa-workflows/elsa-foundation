@@ -84,7 +84,7 @@ caller's inputs are not visible (plan D-1, D-4).
 **Independent test**: "Add two numbers", with `Sum` computed by a body node, returns `5` for `A = 2`, `B = 3`. The
 caller has its own `A = 99`.
 
-- [x] T016 [US1] Write a failing end-to-end test in `Essentials/tests/Activities/Behavioral/Tests/GraphBodyScopeTests.cs` (new; plan A-9). Follow the publish-and-run helpers in `GraphActivityExecutionTests.cs`.
+- [x] T016 [US1] Write a failing end-to-end test in `Essentials/tests/Activities/Behavioral/Tests/GraphBodyScopeTests.cs` (new; plan A-9). Follow the publish-and-run helpers in `GraphActivityExecutionTests.cs`. — Review round 1: "Add two numbers" (SC-001, API half) and the caller-input case are tested. An unpassed optional input reading null (A-6) is not run end to end: the harness cannot build a compiled default binding.
   - Fixture: a graph activity with inputs `A` and `B`, a body JavaScript node binding `args.a`/`args.b` through `WorkflowRequest` parameters, and an output mapping `Sum` from its result.
   - Cases: a caller passes 2 and 3 and gets 5; a caller with its own request input `A = 99` still gets 5; an optional input with a default that is not passed gives the default; an optional input with no default gives `null`.
 - [x] T017 [US1] In `Runtime.Values/RuntimeInputBindingStateProjection.cs`, add `ProjectGraphInputEnvelopes(IEnumerable<DurableValueState> values, string boundaryExecutionId)`. It selects rows whose `runtime.boundaryExecutionScopeId` equals the boundary and whose `boundaryValueRole` is `input`, keyed by `runtime.boundaryReferenceKey`. Use `RuntimeMetadataKeys` constants only; no `Activities.Graph` reference.
@@ -93,7 +93,7 @@ caller has its own `A = 99`.
   - Walk `ParentActivityExecutionId` as `BuildVisibleFramesAsync` does (:45-57).
 - [x] T019 [US1] In `Runtime.Values/RuntimeActivityInputSnapshotMaterializer.cs` (:32-51), use T017 to build `WorkflowInputEnvelopes` when T018 finds a boundary, instead of `ProjectWorkflowInputEnvelopes`.
 - [x] T020 [US1] Apply the same input rule in `Runtime.Values/WorkflowIntrinsicExecutor.cs` (:606-608).
-- [x] T021 [US1] Make sure the boundary node's own input bindings still resolve in the parent scope. The helper never returns the node itself. Add a nested-graph case to T016: an outer graph passes its own input `X` to an inner graph's input `Y`, and the inner body reads `Y` (Story 4 scenario 3).
+- [x] T021 [US1] Make sure the boundary node's own input bindings still resolve in the parent scope. The helper never returns the node itself. Add a nested-graph case to T016: an outer graph passes its own input `X` to an inner graph's input `Y`, and the inner body reads `Y` (Story 4 scenario 3). — Tested in round 1: `A_nested_graph_reads_the_value_the_outer_graph_passed_it`, plus the legacy-in-closed case (A-10).
 - [x] T022 [US1] Run the T016 tests to green. Then run the Runtime, Flowchart and Behavioral tests (FR-011).
 
 **Checkpoint**: US1 works through the API.
@@ -106,21 +106,21 @@ scope's variable rows. Caller frames are excluded, and body container frames are
 **Independent test**: graph variable `RunningTotal = 10` read in the body gives a result computed from 10. The
 caller's own `RunningTotal = 0` does not affect it.
 
-- [x] T023 [US2] Add tests to `GraphActivityBodyScopeTests.cs`:
+- [x] T023 [US2] Add tests to `GraphActivityBodyScopeTests.cs`: — Round 1 covers `variables.x`, `getVariable` and `get<X>()`, a container in the body, and resume. Two placements are covered by placement tests, not run here.
   - a `Variable` binding to a graph variable gives its initial value;
   - JavaScript `variables.RunningTotal`, `getVariable('RunningTotal')` and `getRunningTotal()` give the graph's value;
   - a caller variable with the same name is ignored;
   - a body Sequence with its own variable is read by a node inside it (Story 2 scenario 4);
   - a graph placed twice in one workflow reads independent values;
   - a body suspended on a bookmark and resumed after a restart reads the same input and variable values (FR-008, SC-006). Use the rehydrate harness from `GraphActivityRecoveryTests.cs`.
-- [x] T024 [P] [US2] In `Graph.Runtime/Services/GraphActivityScope.cs` (`NewStateAsync` :314-357), stamp `RuntimeMetadataKeys.BoundaryVariableName` on variable rows. Add a `GraphActivityExecutionTests` assertion for it.
+- [x] T024 [P] [US2] In `Graph.Runtime/Services/GraphActivityScope.cs` (`NewStateAsync` :314-357), stamp `RuntimeMetadataKeys.BoundaryVariableName` on variable rows. Add a `GraphActivityExecutionTests` assertion for it. — Covered indirectly: the JavaScript name tests read graph variables by the names on their rows.
 - [x] T025 [US2] In `Runtime.Values/RuntimeContainerScopeService.cs` `BuildVisibleFramesAsync` (:21-74), when T018 finds a boundary:
   - begin the chain with a synthetic Root `VariableFrameState` (`FrameId = graph:{boundaryExecutionId}`, `ScopeId = boundary ExecutableNodeId`, parent null), with values from the boundary's variable rows;
   - skip the caller root frame and every frame owned by the boundary or its ancestors;
   - keep the frames of descendants between the boundary and the node.
 - [x] T026 [US2] In `RuntimeContainerScopeService.ActivateOwnedFramesAsync` (:76-152), parent a body container's new frame to `graph:{boundaryExecutionId}` when its nearest visible root is the graph frame. Do not persist the synthetic frame.
 - [x] T027 [US2] In the ambient name projection (`ProjectAmbientVisibleVariableEnvelopes`, around :293-346), take names for the graph frame from the rows' `BoundaryVariableName`, not from `executable.WorkflowVariables` (:326-327).
-- [x] T028 [US2] In `WorkflowIntrinsicExecutor.cs` (:721-752), build the same chain. Make the Set owner lookup (:713) unable to resolve the caller's root from inside a body. #3023 builds on this; for now, add a test that the lookup fails closed.
+- [ ] T028 [US2] In `WorkflowIntrinsicExecutor.cs` (:721-752), build the same chain. Make the Set owner lookup (:713) unable to resolve the caller's root from inside a body. #3023 builds on this; for now, add a test that the lookup fails closed. — No dedicated test. The fail-closed Set lookup is unreachable until #3023 lets a graph hold intrinsics.
 - [x] T029 [US2] Run the T023 tests to green, then the Runtime, Activities.Runtime (`ContainerScopedVariableEvaluatorTests`, `SetVariableDurabilityExecutionTests`), Flowchart and Behavioral tests.
 
 ## Phase 5: User Story 3 - A body node reads another body node's result (P1)
@@ -130,7 +130,7 @@ caller's own `RunningTotal = 0` does not affect it.
 **Independent test**: an activity with `compute` → `format` publishes inside a workflow without `VF-COER-001`.
 Placed twice, and run in a loop, each invocation reads its own `compute`.
 
-- [x] T030 [US3] Add tests:
+- [x] T030 [US3] Add tests: — Round 1: the linker regression test (`The_result_linker_accepts_a_closed_scope_body_result...`) and a body result read whose nodes open their own execution scope. A loop of 3 and a JavaScript result parameter are not run.
   - in `Essentials/tests/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerTests.cs`, a workflow using a chained-result body publishes, and the linker finds the placed producer;
   - in `GraphActivityBodyScopeTests.cs`, run with two placements, in a loop with three iterations, and through both a direct `ActivityResult` binding and a JavaScript `ActivityResultExpressionParameterBinding`.
 - [x] T031 [US3] In `Runtime.Values/CausalActivityResultResolver.cs` `IsStructurallyVisible` (:128-140), when the producer has a closed boundary (T018):
@@ -138,7 +138,7 @@ Placed twice, and run in a loop, each invocation reads its own `compute`.
   - require producer and consumer to share the same nearest boundary execution id.
 
   Outside a boundary, behaviour is unchanged.
-- [x] T032 [US3] Extend `Essentials/tests/Workflows/Runtime/Tests/CausalActivityResultResolverTests.cs`: the body scope match, the cross-boundary refusal, and unchanged behaviour outside a boundary.
+- [x] T032 [US3] Extend `Essentials/tests/Workflows/Runtime/Tests/CausalActivityResultResolverTests.cs`: the body scope match, the cross-boundary refusal, and unchanged behaviour outside a boundary. — Added in round 1: same-boundary match and cross-boundary refusal.
 - [x] T033 [US3] Run the T030–T032 tests to green.
 
 **Checkpoint**: all P1 stories work through the API. This is the MVP.
@@ -150,7 +150,7 @@ contract codes).
 
 **Independent test**: each refusal code fires with the node pointer and reference named. A valid body publishes.
 
-- [x] T034 [US4] Write refusal tests in `Essentials/tests/Activities/Graph/Tests/GraphBodyReferenceValidatorTests.cs` (new), through `GraphActivityProvider.ValidateAsync` and `CompileAsync`:
+- [x] T034 [US4] Write refusal tests in `Essentials/tests/Activities/Graph/Tests/GraphBodyReferenceValidatorTests.cs` (new), through `GraphActivityProvider.ValidateAsync` and `CompileAsync`: — Round 1 adds the CompileAsync cases (missing projection, incompatible capture) and the JavaScript Variable parameter.
   - one case per code in [contracts/graph-scope-references.md](contracts/graph-scope-references.md);
   - a valid body with every reference shape, which passes;
   - a nested graph whose inner body reads an outer input, which is refused.
@@ -172,7 +172,7 @@ contract codes).
 **Independent test**: `lookup` captures `Customer` into `CurrentCustomer`. A later node and the output mapping read
 it, the caller's `CurrentCustomer` is unchanged, and the value survives resume after a restart.
 
-- [x] T039 [US5] Add tests to `GraphActivityBodyScopeTests.cs`:
+- [x] T039 [US5] Add tests to `GraphActivityBodyScopeTests.cs`: — Round 1: a capture survives suspend and resume. A withheld capture into a graph variable is refused in code, but has no test.
   - the capture is seen by a later node and by the output mapping;
   - the caller's same-name variable is unchanged;
   - the value is present after suspend, restart and resume (use the rehydrate harness from `GraphActivityRecoveryTests.cs`);
@@ -204,7 +204,7 @@ picks publish and run (plan D-11).
 - [ ] T051 [US6] Wire expression tooling into the graph editor's `InspectorPanel` (:812ff): pass `draftId`, `expressionTooling` and `expressionEditorSessionScope`, as `WorkflowEditor.tsx:1051-1053` does. First check whether the expression-tooling server answers for an activity draft. — deferred to a follow-up (plan A-7): no Node on this machine to build or test the tooling wiring
   - If it does, wire it in.
   - If it needs a new endpoint, stop: draft a follow-up issue, show it to the owner, then narrow FR-009 in `spec.md` and note it in `plan.md` D-11.
-- [x] T052 [US6] Extend `Studio.Client/__tests__/activityGraphImplementationEditor.test.tsx`:
+- [ ] T052 [US6] Extend `Studio.Client/__tests__/activityGraphImplementationEditor.test.tsx`: — Only the graph-variable scope case is added; the other cases go to #3197.
   - a graph variable option is enabled, and a pick stores `declaringScopeId: "workflow"`;
   - an output capture into a graph variable;
   - a container variable is offered;
@@ -234,7 +234,7 @@ run (plan D-12).
   - Otherwise, keep today's missing-variable diagnostic and add a test pinning it.
 
   Record the finding in `research.md` R-10.
-- [x] T058 [US7] Add `Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/Fixtures/reusable-captures-variable.json`: an output memory reference into a declared variable, then a later node that reads it. In `ImportedReusableRunsTests.cs` (:157-165), replace the D-8 refusal theory with run tests for `reusable-reads-input` (`approve` true → Approved, false → Rejected, with a caller whose own `approve` differs), `reusable-reads-result` and `reusable-captures-variable`. Keep the `reusable-sets-variable` refusal. Update the comments (:17-22, :101) and the `description` in `reusable-reads-input.json`.
+- [ ] T058 [US7] Add `Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/Fixtures/reusable-captures-variable.json`: an output memory reference into a declared variable, then a later node that reads it. In `ImportedReusableRunsTests.cs` (:157-165), replace the D-8 refusal theory with run tests for `reusable-reads-input` (`approve` true → Approved, false → Rejected, with a caller whose own `approve` differs), `reusable-reads-result` and `reusable-captures-variable`. Keep the `reusable-sets-variable` refusal. Update the comments (:17-22, :101) and the `description` in `reusable-reads-input.json`. — Replaced by `caller-passes-input.json` plus the input run tests. Result reads and captures from an imported body are blocked by #3195 and #3196 (plan A-8).
 - [x] T059 [US7] Run the Elsa 3 mapping and import tests to green.
 
 ## Phase 10: Polish and cross-cutting

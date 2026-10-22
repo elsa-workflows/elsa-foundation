@@ -19,14 +19,13 @@ A body node keeps template-local identities:
 - **`ActivityTemplateOccurrenceCompilation`** / **`ExecutableActivityTemplateOccurrenceOverlay`** gain
   `OutputBindings` (optional). These are the authored occurrence `outputs`, carried in the overlay so the placer can
   compile them.
-- **Boundary descriptor payload** gains `scopeModel: "closed"`. `GraphActivityDescriptor.ScopeModel` is a string,
-  null for legacy.
+- **Boundary descriptor payload** gains `scopeModel: "closed"`. The graph runtime does not read it; placement does.
 - **Provider fingerprint**: `elsa.activity-graph/compiler/3.0.0`.
 
 ## Compiled: placed executable
 
-- **`ExecutableNode.ActivityExecutionScope`** (new, optional enum `Closed`). It is set by the placer on a boundary
-  whose descriptor has `scopeModel: closed`, and hashed by `WorkflowExecutableHasher.FormatNode`.
+- **Boundary node metadata** `runtime.activityExecutionScope = closed`. The placer sets it only on a boundary whose
+  hashed descriptor has `scopeModel: closed`. Scheduling copies it into the boundary's activity state (plan A-1).
 - **Remapped references** in body occurrence roots, all to placed ids:
 
   | Field | Remapped value |
@@ -55,8 +54,8 @@ A body node keeps template-local identities:
 
 ## Runtime: resolution view for a node below a closed boundary
 
-The nearest boundary is the first ancestor state (through `ParentActivityExecutionId`) whose executable node has
-`ActivityExecutionScope == Closed`.
+The nearest boundary is the first ancestor state (through `ParentActivityExecutionId`) whose state metadata has
+`runtime.activityExecutionScope = closed`.
 
 **`WorkflowInputEnvelopes`**: the boundary's input rows, keyed by `boundaryReferenceKey`.
 

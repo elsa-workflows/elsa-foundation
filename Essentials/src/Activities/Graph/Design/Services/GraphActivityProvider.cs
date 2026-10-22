@@ -40,8 +40,6 @@ public sealed class GraphActivityProvider(
 
     public const string Key = "elsa.activity-graph";
     public const string Fingerprint = "elsa.activity-graph/compiler/3.0.0";
-    /// <summary>Boundary descriptor <c>scopeModel</c> value for a closed value scope (spec 265).</summary>
-    public const string ClosedScopeModel = "closed";
     public const string RuntimeConsumerKey = "elsa.graph-activity";
     public const string RuntimeDescriptorSchemaVersion = "1";
 
@@ -1142,7 +1140,7 @@ public sealed class GraphActivityProvider(
         var closedPayload = JsonNode.Parse(payload.GetRawText())!.AsObject();
         // Spec 265: the body is a closed value scope. Placement reads this to remap body references and mark the
         // boundary; versions compiled before it keep resolving their body against the caller.
-        closedPayload["scopeModel"] = ClosedScopeModel;
+        closedPayload["scopeModel"] = Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.ActivityExecutionScopeClosed;
         if (!StringComparer.Ordinal.Equals(graph.ManifestSchemaVersion, ActivityGraphManifest.MultipleOutcomesSchemaVersion))
             return Canonicalize(JsonSerializer.SerializeToElement(closedPayload, serializerOptions));
 

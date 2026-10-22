@@ -1469,7 +1469,8 @@ public sealed class WorkflowExecutableCompilerTests
             new ReusableSourceReader(sourceReference),
             new Sha256ActivityPlacementHasher(),
             _activityStructureService,
-            new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create()));
+            new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create()),
+            new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()])));
         var placed = await placer.PlaceAsync(new(
             publication,
             template,
@@ -3076,7 +3077,8 @@ public sealed class WorkflowExecutableCompilerTests
                 references,
                 new Sha256ActivityPlacementHasher(),
                 _activityStructureService,
-                inputCompiler),
+                inputCompiler,
+                outputCompiler),
             inputCompiler,
             outputCompiler,
             new WorkflowExecutableHasher(),

@@ -85,7 +85,7 @@ public sealed class RuntimeOutputCaptureCompiler(
     /// <paramref name="graphVariables"/>. The capture is pinned to that variable's declared type and storage driver, so
     /// the row it writes is the row the graph boundary itself owns, and it names the placed boundary it writes into.
     /// </summary>
-    public IReadOnlyDictionary<string, RuntimeOutputCapture> CompileGraphVariableOutputs(
+    internal IReadOnlyDictionary<string, RuntimeOutputCapture> CompileGraphVariableOutputs(
         string nodeId,
         IReadOnlyCollection<ActivityResultProjectionContract> projections,
         IEnumerable<ArgumentState> authoredOutputs,
@@ -158,7 +158,7 @@ public sealed class RuntimeOutputCaptureCompiler(
     }
 
     /// <summary>Value id prefix of a capture into a graph variable; the runtime writes the boundary's own row.</summary>
-    public const string GraphVariableValueIdPrefix = "graph-variable:";
+    internal const string GraphVariableValueIdPrefix = "graph-variable:";
 
     private IReadOnlyDictionary<string, RuntimeOutputCapture> Compile(
         string nodeId,
@@ -261,7 +261,7 @@ public sealed class RuntimeOutputCaptureCompiler(
 }
 
 /// <summary>A graph variable a body node can capture into (spec 265): its declared type JSON and storage driver.</summary>
-public sealed record GraphVariableCaptureTarget(
+internal sealed record GraphVariableCaptureTarget(
     string ReferenceKey,
     string Name,
     System.Text.Json.JsonElement Type,

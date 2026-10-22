@@ -7,7 +7,7 @@
 | `WorkflowRequest {memberKey: k}` (binding or JS parameter) | Graph input `k` (reference key): the caller-passed value, else its default, else `null` | `k` is not a declared graph input |
 | `Input {referenceKey: k}` (Studio) | As `WorkflowRequest {memberKey: k}` | As above |
 | `Variable {k, "workflow"}` / `{k, "activity-graph"}` | Graph variable `k` in this invocation | `k` is not a declared graph variable |
-| `Variable {k, c}`, where `c` is a body container node id | Container `c`'s variable `k` in this placement | `c` is not an ancestor container of the node (an undeclared `k` fails at placement or run time) |
+| `Variable {k, c}`, where `c` is a body container node id | Container `c`'s variable `k` in this placement | `c` is not an ancestor container of the node (an undeclared `k` fails at run time) |
 | `ActivityResult {p, projection, scope?}` (binding or JS parameter) | Node `p`'s result in the same invocation | `p` is not a body node, or its contract has no such projection |
 | Ambient JS `variables.k`, `getVariable('k')`, `getK()` | Graph or container variable `k` | Not checked statically. At run time it fails as for workflows. |
 | Capture `outputs[] → Variable {k, "workflow"}` | Writes graph variable `k` | See the capture codes below |
@@ -15,7 +15,7 @@
 
 ## Refusal codes
 
-All are raised by `GraphActivityProvider` at validation and compile, with `Severity = Error`. The pointer is the
+All are raised by `GraphActivityProvider` with `Severity = Error`: at validation and compile, except the producer projection check and `body-capture-type-incompatible`, which need resolved dependencies and run at compile only. The pointer is the
 body node's JSON pointer in the manifest. Each code below gives its message pattern.
 
 | Code | Message pattern |
@@ -25,7 +25,7 @@ body node's JSON pointer in the manifest. Each code below gives its message patt
 | `activity.graph.body-variable-scope-invisible` | Body node '{node}' input '{input}' reads variable '{k}' of scope '{c}', which is not a container around this node. |
 | `activity.graph.body-producer-unknown` | Body node '{node}' input '{input}' reads the result '{projection}' of '{p}', which is not a node of this activity's body or has no such result. |
 | `activity.graph.body-capture-target-unknown` | Body node '{node}' output '{output}' captures into '{k}' of scope '{s}'. A body can capture only into this activity's declared variables. |
-| `activity.graph.body-capture-type-incompatible` | Body node '{node}' output '{output}' of type '{t1}' cannot be captured into graph variable '{k}' of type '{t2}' without a conversion. |
+| `activity.graph.body-capture-type-incompatible` | Body node '{node}' output '{output}' of type '{t1}' cannot be captured into graph variable '{name}' of type '{t2}' without a conversion. |
 
 A workflow that uses an activity published under these rules never fails publication with `VF-COER-001` for a
 body reference (SC-003).

@@ -94,6 +94,17 @@ internal static class RuntimeClosedScope
         return null;
     }
 
+    /// <summary>
+    /// Also addresses the closed scope's root variables under the <c>workflow</c> scope. A closed body never refers to
+    /// <c>workflow</c> (placement remaps it to the boundary), but the body of a graph compiled before closed scopes and
+    /// nested in a closed one does: its root, the caller it reads, is the enclosing closed scope.
+    /// </summary>
+    public static void AliasWorkflowScope(VariableFrameState rootFrame, IDictionary<RuntimeVariableValueAddress, ValueEnvelope> values)
+    {
+        foreach (var (key, value) in rootFrame.Values)
+            values.TryAdd(new RuntimeVariableValueAddress(Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId, key), value);
+    }
+
     public static string FrameId(string boundaryActivityExecutionId) => $"{FramePrefix}{boundaryActivityExecutionId}";
 
     public static bool IsClosedScopeFrame(VariableFrameState frame) =>

@@ -596,6 +596,8 @@ public sealed class WorkflowIntrinsicExecutor(
         var projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
         var (visibleFrames, boundary) = BuildVisibleFrames(workflowState, intrinsicState, runtimeView, durableValues);
         var frameEnvelopes = ToAddressEnvelopes(visibleFrames);
+        if (boundary is not null)
+            RuntimeClosedScope.AliasWorkflowScope(visibleFrames[0], frameEnvelopes);
         // Spec 265: below a closed activity execution scope the request inputs and root variables are the boundary's.
         var workflowInputEnvelopes = boundary is null
             ? projections.WorkflowInputEnvelopes

@@ -24,7 +24,8 @@ rows. For this target only:
   producer's completion commit, and the projection reads it;
 - section 5's concurrency rule is not yet enforced for graph variables, as it is not for workflow-root captures: no
   concurrency analysis for captures exists, and refusing every repeated capture would reject sequential ones. The
-  last committed capture wins, as for a workflow-root capture today. A follow-up issue tracks the analysis for both.
+  last committed capture wins, as for a workflow-root capture today. [#3198](https://github.com/elsa-workflows/elsa-foundation/issues/3198)
+  tracks the analysis for both.
 
 Publication still refuses a capture into anything but the activity's own declared variables, and a body cannot target
 a frame above its boundary.

@@ -54,7 +54,7 @@ public sealed class ActivityTemplatePlacer(
     IActivityPlacementHasher placementHasher,
     IActivityStructureService activityStructureService,
     RuntimeInputBindingCompiler inputBindingCompiler,
-    RuntimeOutputCaptureCompiler? outputCaptureCompiler = null)
+    RuntimeOutputCaptureCompiler outputCaptureCompiler)
 {
     private static readonly JsonSerializerOptions OccurrenceSerializerOptions = new(JsonSerializerDefaults.Web)
     {
@@ -373,10 +373,8 @@ public sealed class ActivityTemplatePlacer(
             return root;
         var contract = root.ActivityContract
             ?? throw new InvalidOperationException($"Occurrence '{occurrence.OccurrenceId}' captures outputs but its exact template root has no pinned activity contract.");
-        var compiler = outputCaptureCompiler
-            ?? throw new InvalidOperationException($"Occurrence '{occurrence.OccurrenceId}' captures outputs, which needs an output capture compiler.");
         var captures = root.OutputCaptures.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
-        foreach (var (key, capture) in compiler.CompileGraphVariableOutputs(
+        foreach (var (key, capture) in outputCaptureCompiler.CompileGraphVariableOutputs(
                      occurrence.OccurrenceId!,
                      contract.Result.Projections.Values.ToArray(),
                      outputStates,

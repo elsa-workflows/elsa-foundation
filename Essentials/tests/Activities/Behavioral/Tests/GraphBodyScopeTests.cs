@@ -104,14 +104,61 @@ public sealed class GraphBodyScopeTests
         await using var harness = GraphBoundaryCompleteTests.NewHarness();
         var body = GraphBoundaryCompleteTests.Sequence(
             "node-body",
-            Echo("node-compute", Literal("Value", 5)),
-            Echo("node-format", Result("node-compute", "node-body")));
+            Echo("node-compute", Literal("Value", 5), PlacedOccurrence),
+            Echo("node-format", Result("node-compute", "node-body"), PlacedOccurrence));
         var boundary = Boundary(body);
 
         var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(boundary));
 
         run.AssertWorkflowCompleted();
         Assert.Equal(5, ReadInput(run, "node-format"));
+    }
+
+    [Fact]
+    public async Task A_nested_graph_reads_the_value_the_outer_graph_passed_it()
+    {
+        // US4 AS2-3: the inner boundary's own binding resolves in the outer graph; its body resolves in the inner one.
+        await using var harness = GraphBoundaryCompleteTests.NewHarness();
+        var inner = Boundary(
+            Echo("node-read-y", Request("Y")),
+            inputs: [Input("Y")],
+            boundaryInputs: [Request("X", inputName: "Y")],
+            nodeId: "node-inner");
+        var outer = Boundary(inner, inputs: [Input("X")], boundaryInputs: [Literal("X", 5)]);
+
+        var run = await harness.RunAsync(
+            WorkflowExecutionHarness.NewExecutable(outer),
+            new Dictionary<string, JsonElement> { ["X"] = JsonSerializer.SerializeToElement(99), ["Y"] = JsonSerializer.SerializeToElement(98) });
+
+        run.AssertWorkflowCompleted();
+        Assert.Equal(5, ReadInput(run, "node-read-y"));
+    }
+
+    [Fact]
+    public async Task A_graph_compiled_before_closed_scopes_nested_in_a_closed_one_reads_the_enclosing_graph()
+    {
+        // The legacy body's caller is the closed graph around it, so its root reads land there, not on the workflow.
+        await using var harness = GraphBoundaryCompleteTests.NewHarness();
+        var legacy = Boundary(
+            GraphBoundaryCompleteTests.Sequence(
+                "node-legacy-body",
+                Echo("node-read-a", Request("A")),
+                Echo("node-read-total", Variable("total", VariableReference.WorkflowScopeId))),
+            closed: false,
+            nodeId: "node-legacy");
+        var outer = Boundary(
+            legacy,
+            inputs: [Input("A")],
+            variables: [new GraphActivityVariableDescriptor("total", "RunningTotal", ObjectType, WellKnownRuntimeDurableValueStorageDrivers.Json, new GraphActivityExpression("Literal", JsonSerializer.SerializeToElement(10)))],
+            boundaryInputs: [Literal("A", 2)]);
+
+        var run = await harness.RunAsync(
+            WorkflowExecutionHarness.NewExecutable(outer, CallerTotal()),
+            new Dictionary<string, JsonElement> { ["A"] = JsonSerializer.SerializeToElement(99) });
+
+        run.AssertWorkflowCompleted();
+        Assert.Equal(2, ReadInput(run, "node-read-a"));
+        Assert.Equal(10, ReadInput(run, "node-read-total"));
     }
 
     [Fact]
@@ -170,15 +217,18 @@ public sealed class GraphBodyScopeTests
         Assert.Equal(5, output.InlineValue!.Value.GetInt32());
     }
 
-    [Fact]
-    public async Task Body_javascript_reads_graph_variables_by_name_not_the_callers()
+    [Theory]
+    [InlineData("variables.RunningTotal + 1")]
+    [InlineData("getVariable('RunningTotal') + 1")]
+    [InlineData("getRunningTotal() + 1")]
+    public async Task Body_javascript_reads_graph_variables_by_name_not_the_callers(string script)
     {
         // FR-003: the ambient variables surface below a closed scope is the graph's variables, named by their rows.
         await using var harness = ScriptingHarness();
         var body = Echo("node-read-total", new RuntimeInputBinding(
             nameof(EchoActivity.Value), new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline,
             RuntimeInputBindingSource.Expression,
-            expression: new RuntimeExpressionBinding("JavaScript", "variables.RunningTotal + 1")));
+            expression: new RuntimeExpressionBinding("JavaScript", script)));
         var boundary = Boundary(
             body,
             variables: [new GraphActivityVariableDescriptor("total", "RunningTotal", ObjectType, WellKnownRuntimeDurableValueStorageDrivers.Json, new GraphActivityExpression("Literal", JsonSerializer.SerializeToElement(10)))]);
@@ -201,6 +251,7 @@ public sealed class GraphBodyScopeTests
             .Build(Enumerable.Range(1, 64).Select(index => $"actexec-{index}"));
         var body = GraphBoundaryCompleteTests.Sequence(
             "node-body",
+            CaptureInto(Echo("node-lookup", Literal("Value", 5)), "total"),
             Nodes.Leaf("node-wait", typeof(Primitives.Activities.Event), new Dictionary<string, object?> { ["EventName"] = "go", ["CanStartWorkflow"] = false }),
             Echo("node-read-a", Request("A")),
             Echo("node-read-total", Variable("total", BoundaryNodeId)));
@@ -235,7 +286,33 @@ public sealed class GraphBodyScopeTests
 
         resumed.AssertWorkflowCompleted();
         Assert.Equal(2, ReadInput(resumed, "node-read-a"));
-        Assert.Equal(10, ReadInput(resumed, "node-read-total"));
+        // The value captured before the suspension, not the variable's initial 10.
+        Assert.Equal(5, ReadInput(resumed, "node-read-total"));
+    }
+
+    [Fact]
+    public async Task Add_two_numbers_computes_its_sum_in_a_body_node_from_its_own_inputs()
+    {
+        // SC-001 through the API: Sum comes from a body node reading A and B as request parameters, and the caller's
+        // own A and B are not what it reads.
+        await using var harness = ScriptingHarness();
+        var parameters = new Dictionary<string, ExpressionParameterBinding>
+        {
+            ["a"] = new WorkflowRequestExpressionParameterBinding("A"),
+            ["b"] = new WorkflowRequestExpressionParameterBinding("B")
+        };
+        var body = Echo("node-sum", new RuntimeInputBinding(
+            nameof(EchoActivity.Value), new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Expression,
+            expression: new RuntimeExpressionBinding("JavaScript", "args.a + args.b", parameters: parameters)));
+        var boundary = Boundary(body, inputs: [Input("A"), Input("B")], boundaryInputs: [Literal("A", 2), Literal("B", 3)]);
+
+        var run = await harness.RunAsync(
+            WorkflowExecutionHarness.NewExecutable(boundary),
+            new Dictionary<string, JsonElement> { ["A"] = JsonSerializer.SerializeToElement(40), ["B"] = JsonSerializer.SerializeToElement(50) });
+
+        run.AssertWorkflowCompleted();
+        Assert.Equal(5, ReadInput(run, "node-sum"));
     }
 
     private static WorkflowExecutionHarness ScriptingHarness() =>
@@ -275,10 +352,14 @@ public sealed class GraphBodyScopeTests
     private static RuntimeVariableDeclaration CallerTotal() => new(
         "total", "RunningTotal", new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline, Literal("total", 0));
 
+    // A placed body occurrence carries its template's identity, which makes it open its own execution scope (plan A-2).
+    private static readonly IReadOnlyDictionary<string, string> PlacedOccurrence =
+        new Dictionary<string, string> { ["activity.definitionVersionId"] = "version-echo" };
+
     private static int ReadInput(WorkflowExecutionRun run, string nodeId) =>
         run.State(nodeId).InputSnapshot!.Values[nameof(EchoActivity.Value)].InlineValue!.Value.GetInt32();
 
-    private static ExecutableNode Echo(string nodeId, RuntimeInputBinding value) => new(
+    private static ExecutableNode Echo(string nodeId, RuntimeInputBinding value, IReadOnlyDictionary<string, string>? metadata = null) => new(
         executableNodeId: nodeId,
         authoredActivityId: $"authored-{nodeId}",
         activityType: typeof(EchoActivity).FullName!,
@@ -286,10 +367,10 @@ public sealed class GraphBodyScopeTests
         descriptorType: "test",
         descriptorPayload: JsonSerializer.SerializeToElement(new { }),
         inputBindings: new Dictionary<string, RuntimeInputBinding> { [value.InputName] = value },
-        metadata: new Dictionary<string, string>());
+        metadata: metadata ?? new Dictionary<string, string>());
 
-    private static RuntimeInputBinding Request(string memberKey) => new(
-        nameof(EchoActivity.Value), new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline,
+    private static RuntimeInputBinding Request(string memberKey, string inputName = nameof(EchoActivity.Value)) => new(
+        inputName, new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline,
         RuntimeInputBindingSource.WorkflowRequest, workflowRequest: new RuntimeWorkflowRequestReference(memberKey));
 
     private static RuntimeInputBinding Variable(string key, string scopeId) => new(
@@ -315,7 +396,8 @@ public sealed class GraphBodyScopeTests
         IReadOnlyList<RuntimeInputBinding>? boundaryInputs = null,
         bool closed = true,
         IReadOnlyList<GraphActivityOutputDescriptor>? outputs = null,
-        IReadOnlyList<GraphActivityOutputMappingDescriptor>? outputMappings = null)
+        IReadOnlyList<GraphActivityOutputMappingDescriptor>? outputMappings = null,
+        string nodeId = BoundaryNodeId)
     {
         var descriptor = new GraphActivityDescriptor(
             definitionId: "definition-graph",
@@ -353,8 +435,8 @@ public sealed class GraphBodyScopeTests
             metadata[RuntimeMetadataKeys.ActivityExecutionScope] = RuntimeMetadataKeys.ActivityExecutionScopeClosed;
 
         return new ExecutableNode(
-            BoundaryNodeId,
-            $"authored-{BoundaryNodeId}",
+            nodeId,
+            $"authored-{nodeId}",
             "graph",
             "1.0.0",
             new RuntimeActivityDescriptor(

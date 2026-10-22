@@ -448,6 +448,24 @@ public sealed class ActivityTemplatePlacementTests
     }
 
     [Fact]
+    public async Task The_result_linker_accepts_a_closed_scope_body_result_and_still_refuses_a_legacy_one()
+    {
+        // #3027's failure: a body ActivityResult kept its template-local producer id, so the workflow publish refused it
+        // with VF-COER-001. A closed-scope body links; a template compiled before closed scopes fails as it did.
+        var linker = new ActivityResultConversionPlanLinker(new ValueConversionPlanResolver());
+        var (closedPlacer, closedRequest) = ClosedScopeGraph(scopeModel: "closed");
+        var (legacyPlacer, legacyRequest) = ClosedScopeGraph(scopeModel: null);
+
+        var closed = linker.Link((await closedPlacer.PlaceAsync(closedRequest)).Root);
+        var legacy = await legacyPlacer.PlaceAsync(legacyRequest);
+
+        var format = closed.DescendantsAndSelf().Single(x => x.InputBindings.ContainsKey("total"));
+        Assert.Equal(RuntimeInputBindingSource.ActivityResult, format.InputBindings["condition"].Source);
+        var exception = Assert.ThrowsAny<Exception>(() => linker.Link(legacy.Root));
+        Assert.Contains("VF-COER-001", exception.Message);
+    }
+
+    [Fact]
     public async Task A_closed_scope_input_pick_reads_the_graph_input_and_a_capture_writes_the_graph_variable()
     {
         // Spec 265: Studio picks a graph input as Input {referenceKey}; an authored output capture targets a graph

@@ -3,6 +3,7 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Graph.Design.Services;
 using Elsa.Primitives.Models;
+using Elsa.Workflows.Publishing.Core.Models;
 using Xunit;
 using DesignActivityContract = Elsa.Activities.Design.Core.Models.ActivityContract;
 
@@ -43,6 +44,7 @@ public sealed partial class GraphActivityProviderTests
     [InlineData("ActivityResult", """{"producerNodeId":"ghost","projectionKey":"result","producerScopeId":"graph-root"}""", GraphBodyReferenceCodes.ProducerUnknown)]
     [InlineData("JavaScript", """{"source":"args.x","parameters":{"x":{"kind":"WorkflowRequest","memberKey":"unknown"}}}""", GraphBodyReferenceCodes.InputUnknown)]
     [InlineData("JavaScript", """{"source":"args.x","parameters":{"x":{"kind":"ActivityResult","producerNodeId":"ghost","projectionKey":"result"}}}""", GraphBodyReferenceCodes.ProducerUnknown)]
+    [InlineData("JavaScript", """{"source":"args.x","parameters":{"x":{"kind":"Variable","declaringScopeNodeId":"workflow","variableKey":"unknown"}}}""", GraphBodyReferenceCodes.VariableUnknown)]
     public async Task A_body_reference_to_something_the_activity_does_not_hold_is_refused(string syntax, string value, string code)
     {
         var diagnostics = await ValidateBodyAsync(BodyArgument("value", syntax, JsonDocument.Parse(value).RootElement.Clone()));
@@ -77,11 +79,38 @@ public sealed partial class GraphActivityProviderTests
         Assert.DoesNotContain(diagnostics, x => x.Code.StartsWith("activity.graph.body-", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task Compilation_refuses_a_missing_result_projection_and_an_incompatible_capture()
+    {
+        // These two need the body nodes' resolved contracts, so they are checked when the activity compiles.
+        var manifest = BodyManifest(
+            inputs: [BodyArgument("value", "ActivityResult", new { producerNodeId = "graph-root", projectionKey = "missing", producerScopeId = "graph-root" })],
+            outputs: [BodyArgument("total", "Variable", new { referenceKey = "label", declaringScopeId = "workflow" })]);
+        var request = new ActivityTemplateCompilationRequest(
+            "definition-1",
+            "activity-type-1",
+            "draft-1",
+            1,
+            "1.0.0",
+            BodyContract(),
+            manifest,
+            [CreateDependency("graph-root", "activity-ver-root", "root-origin")],
+            "provider-fingerprint");
+
+        var compilation = await _provider.CompileAsync(request);
+
+        Assert.Contains(compilation.Diagnostics, x => x.Code == GraphBodyReferenceCodes.ProducerUnknown && x.Location?.ReferenceKey == "value");
+        var incompatible = Assert.Single(compilation.Diagnostics, x => x.Code == GraphBodyReferenceCodes.CaptureTypeIncompatible);
+        Assert.Equal("/rootActivity/outputs/0", incompatible.Location?.JsonPointer);
+    }
+
     private Task<IReadOnlyList<ActivityDiagnostic>> ValidateBodyAsync(params object[] inputs) =>
         ValidateBodyAsync(inputs, []).AsTask();
 
     private ValueTask<IReadOnlyList<ActivityDiagnostic>> ValidateBodyAsync(object[] inputs, object[] outputs) =>
-        _provider.ValidateAsync(
+        _provider.ValidateAsync(BodyManifest(inputs, outputs), BodyContract());
+
+    private static ActivityProviderManifest BodyManifest(object[] inputs, object[] outputs) =>
             new ActivityProviderManifest(
                 GraphActivityProvider.Key,
                 Design.Models.ActivityGraphManifest.SchemaVersion,
@@ -95,6 +124,13 @@ public sealed partial class GraphActivityProviderTests
                             name = "RunningTotal",
                             type = new { alias = "Object", collectionKind = "Single" },
                             storageDriverKey = "elsa.json"
+                        },
+                        new
+                        {
+                            referenceKey = "label",
+                            name = "Label",
+                            type = new { alias = "String", collectionKind = "Single" },
+                            storageDriverKey = "elsa.json"
                         }
                     },
                     rootActivity = new
@@ -106,12 +142,14 @@ public sealed partial class GraphActivityProviderTests
                         structure = (object?)null
                     },
                     outputMappings = Array.Empty<object>()
-                })),
+                }));
+
+    private static DesignActivityContract BodyContract() =>
             new DesignActivityContract(
                 "1",
                 [new ActivityInputContract("amount", "Amount", new TypeReference("Int64"), false, true, null, "elsa.json")],
                 [],
-                [new ActivityOutcomeContract("done", "Done", true)]));
+                [new ActivityOutcomeContract("done", "Done", true)]);
 
     private static object BodyArgument(string referenceKey, string expressionType, object value) =>
         new { referenceKey, value = new { expressionType, value } };
@@ -125,4 +163,5 @@ internal static class GraphBodyReferenceCodes
     public const string VariableScopeInvisible = "activity.graph.body-variable-scope-invisible";
     public const string ProducerUnknown = "activity.graph.body-producer-unknown";
     public const string CaptureTargetUnknown = "activity.graph.body-capture-target-unknown";
+    public const string CaptureTypeIncompatible = "activity.graph.body-capture-type-incompatible";
 }

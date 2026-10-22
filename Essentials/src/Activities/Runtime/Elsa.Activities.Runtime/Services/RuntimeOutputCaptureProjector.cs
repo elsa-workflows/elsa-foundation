@@ -161,14 +161,15 @@ public sealed class RuntimeOutputCaptureProjector
         DateTimeOffset capturedAt,
         CancellationToken cancellationToken)
     {
+        if (projected.Presence == ValuePresence.Withheld || projected.HoldsValueRequiringEncryption())
+            throw SecretBindingDiagnostics.WithheldOutputNotCaptured(capture.OutputName);
+        ValidateDurableCaptureBoundary(capture, projected);
         if (closedScopeBoundary is null ||
             !StringComparer.Ordinal.Equals(closedScopeBoundary.Execution.ExecutableNodeId, targetScopeId))
         {
             throw new InvalidOperationException(
                 $"Output capture '{capture.OutputName}' writes a variable of graph scope '{targetScopeId}', which is not the nearest closed activity execution scope of activity '{activityExecutionId}'.");
         }
-        if (projected.Presence == ValuePresence.Withheld || projected.HoldsValueRequiringEncryption())
-            throw SecretBindingDiagnostics.WithheldOutputNotCaptured(capture.OutputName);
 
         var value = capture.ConversionPlan is null
             ? StringComparer.Ordinal.Equals(projectionContract.Path, "$")
