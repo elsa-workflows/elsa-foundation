@@ -14,7 +14,7 @@ registers as `IAuthenticationSchemeProvider` and `IHttpRequestAuthenticator`.
 - `authorization_code` with PKCE S256
 - `client_credentials`
 - Configurable `authorizationUrl`, `tokenUrl`, `scopesUrl`, and `scopes`
-- `clientSource`: `valence` (Valence-registered app) or `byo` (bring-your-own client)
+- BYO client id (setting) and client secret (connection secret field or named credential)
 
 Grants require a writable secret store (`RequiresWritableStore`).
 
@@ -30,8 +30,8 @@ On 401 or expiry, the new grant is written with **compare-and-swap on the secret
 
 ## Secrets (AC 7)
 
-Tokens are resolved through foundation `ISecretValueResolver` and registered with
-`IRuntimeSecretMask`. They never appear in workflow JSON or activity results.
+Access and refresh tokens are resolved through foundation `ISecretValueResolver` and
+registered with `IRuntimeSecretMask` so they are replaced in logs, outputs and errors.
 
 ## SDK
 

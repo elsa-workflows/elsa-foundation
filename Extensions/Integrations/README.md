@@ -29,5 +29,7 @@ reference it. When #2825 lands, delete `src/Sdk` and PackageReference the real S
 `DelegatingHandler` on the named `Elsa.Activities.Http` client and no `IActiveConnectionAccessor`.
 
 - Callback: reserved `GET /_elsa/connections/oauth/callback` via `IOAuthCallbackHandler`
-- Refresh: `IConnectionGrantWriter` compare-and-swap on the secret version
+- Refresh: `IConnectionGrantWriter` compare-and-swap on the secret version; a lost race uses the winner
+- Client secret: connection secret field or named credential (`IAccessTokenSource`)
+- Access and refresh tokens: `IRuntimeSecretMask`
 - Grants: `RequiresWritableStore`

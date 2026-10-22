@@ -6,13 +6,13 @@ namespace Elsa.Integrations.Connectors.OAuth2;
 
 /// <summary>
 /// One authentication scheme (connections plan D3) for the foundation <c>http</c> connection.
+/// Client credentials are BYO and resolve through the connection's secret field, including the
+/// named-credential source (<see cref="ConnectionCredentialSourceKinds.NamedCredential"/>).
 /// </summary>
 public sealed record OAuth2AuthenticationScheme
 {
     public const string Name = HttpAuthSchemes.OAuth2;
     public const bool RequiresWritableStore = true;
-    public const string ClientSourceValence = OAuth2ClientSources.Valence;
-    public const string ClientSourceBringYourOwn = OAuth2ClientSources.BringYourOwn;
     public const string GrantTypeAuthorizationCode = OAuth2GrantTypes.AuthorizationCode;
     public const string GrantTypeClientCredentials = OAuth2GrantTypes.ClientCredentials;
 
@@ -21,8 +21,6 @@ public sealed record OAuth2AuthenticationScheme
     public required string TokenUrl { get; init; }
     public string? ScopesUrl { get; init; }
     public string? Scopes { get; init; }
-    public string ClientSource { get; init; } = ClientSourceValence;
-    public string? ValenceAppId { get; init; }
     public string? ClientId { get; init; }
 
     public IReadOnlyDictionary<string, string> ToConnectionSettings()
@@ -30,8 +28,7 @@ public sealed record OAuth2AuthenticationScheme
         var settings = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             [OAuth2SettingKeys.GrantType] = GrantType,
-            [OAuth2SettingKeys.TokenUrl] = TokenUrl,
-            [OAuth2SettingKeys.ClientSource] = ClientSource
+            [OAuth2SettingKeys.TokenUrl] = TokenUrl
         };
         if (!string.IsNullOrWhiteSpace(AuthorizationUrl))
             settings[OAuth2SettingKeys.AuthorizationUrl] = AuthorizationUrl;
@@ -39,8 +36,6 @@ public sealed record OAuth2AuthenticationScheme
             settings[OAuth2SettingKeys.ScopesUrl] = ScopesUrl;
         if (!string.IsNullOrWhiteSpace(Scopes))
             settings[OAuth2SettingKeys.Scopes] = Scopes;
-        if (!string.IsNullOrWhiteSpace(ValenceAppId))
-            settings[OAuth2SettingKeys.ValenceAppId] = ValenceAppId;
         if (!string.IsNullOrWhiteSpace(ClientId))
             settings[OAuth2SettingKeys.ClientId] = ClientId;
         return settings;
@@ -60,8 +55,7 @@ internal sealed class OAuth2SchemeProvider : IAuthenticationSchemeProvider
             new AuthSchemeField(OAuth2SettingKeys.TokenUrl, "Token URL", Sensitive: false, "url"),
             new AuthSchemeField(OAuth2SettingKeys.AuthorizationUrl, "Authorization URL", Sensitive: false, "url", Required: false),
             new AuthSchemeField(OAuth2SettingKeys.Scopes, "Scopes", Sensitive: false, "text", Required: false),
-            new AuthSchemeField(OAuth2SettingKeys.ClientSource, "Client source", Sensitive: false, "text", Required: false),
-            new AuthSchemeField(OAuth2SettingKeys.ClientId, "Client ID", Sensitive: false, "text", Required: false),
+            new AuthSchemeField(OAuth2SettingKeys.ClientId, "Client ID", Sensitive: false, "text"),
             new AuthSchemeField(OAuth2SecretFields.ClientSecret, "Client secret", Sensitive: true, "password", Required: false)
         ],
         HasInteractiveAuthorization: true,

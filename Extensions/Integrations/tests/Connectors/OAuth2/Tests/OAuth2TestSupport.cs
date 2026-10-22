@@ -24,16 +24,23 @@ using Microsoft.Extensions.Options;
 
 namespace Elsa.Integrations.Connectors.OAuth2.Tests;
 
+public enum OAuth2ClientCredentialBinding
+{
+    Secret,
+    NamedCredential
+}
+
 internal static class OAuth2TestSupport
 {
     public const string TenantId = "tenant-a";
     public const string ConnectionName = "http-oauth";
     public const string ActivityExecutionId = "actexec-oauth2";
     public const string EncryptionKey = "oauth2-connector-tests-key";
+    public const string NamedCredentialName = "oauth-client";
 
     public static async Task<OAuth2Harness> StartAsync(
         OAuth2AuthenticationScheme scheme,
-        string clientSource = OAuth2ClientSources.Valence,
+        OAuth2ClientCredentialBinding credentials = OAuth2ClientCredentialBinding.Secret,
         Action<MockOAuthServer>? configureServer = null,
         TimeProvider? timeProvider = null)
     {
@@ -44,7 +51,9 @@ internal static class OAuth2TestSupport
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Elsa:Secrets:EncryptionKey"] = EncryptionKey,
-                ["Elsa:Connections:PublicBaseUrl"] = "https://app.example"
+                ["Elsa:Connections:PublicBaseUrl"] = "https://app.example",
+                [$"{NamedCredentialOptionKeys.SectionName}:{NamedCredentialName}:{NamedCredentialOptionKeys.Kind}"] = "configuration",
+                [$"{NamedCredentialOptionKeys.SectionName}:{NamedCredentialName}:{NamedCredentialOptionKeys.Token}"] = server.ExpectedClientSecret
             })
             .Build();
 
@@ -74,15 +83,17 @@ internal static class OAuth2TestSupport
         var scope = provider.CreateAsyncScope();
         var sp = scope.ServiceProvider;
 
-        if (clientSource == OAuth2ClientSources.Valence &&
-            sp.GetRequiredService<IValenceOAuthAppRegistry>() is InMemoryValenceOAuthAppRegistry valence)
-        {
-            valence.Register(new ValenceOAuthApp(scheme.ValenceAppId ?? "elsa.oauth2", server.ExpectedClientId, server.ExpectedClientSecret));
-        }
-
         var secrets = sp.GetRequiredService<ISecretManager>();
         var secretFields = new Dictionary<string, ConnectionSecretFieldInput>();
-        if (clientSource == OAuth2ClientSources.BringYourOwn)
+        if (credentials == OAuth2ClientCredentialBinding.NamedCredential)
+        {
+            secretFields[OAuth2SecretFields.ClientSecret] = new()
+            {
+                SourceKind = ConnectionCredentialSourceKinds.NamedCredential,
+                NamedCredentialName = NamedCredentialName
+            };
+        }
+        else
         {
             await secrets.CreateAsync(TenantId, new CreateSecretRequest
             {
@@ -116,8 +127,7 @@ internal static class OAuth2TestSupport
         TokenUrl = server.TokenEndpoint.ToString(),
         ScopesUrl = server.ScopesEndpoint.ToString(),
         Scopes = "read",
-        ClientSource = OAuth2ClientSources.Valence,
-        ValenceAppId = "elsa.oauth2"
+        ClientId = server.ExpectedClientId
     };
 
     public static OAuth2AuthenticationScheme AuthorizationCodeScheme(MockOAuthServer server) => new()
@@ -127,8 +137,7 @@ internal static class OAuth2TestSupport
         TokenUrl = server.TokenEndpoint.ToString(),
         ScopesUrl = server.ScopesEndpoint.ToString(),
         Scopes = "read write",
-        ClientSource = OAuth2ClientSources.Valence,
-        ValenceAppId = "elsa.oauth2"
+        ClientId = server.ExpectedClientId
     };
 
     public static async Task<IActivityCompletionTransition<SendHttpRequestResult>> SendAsync(OAuth2Harness harness, Uri url)

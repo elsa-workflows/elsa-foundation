@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using Elsa.Activities.Http.Constants;
 using Elsa.Connections.Core.Contracts;
+using Elsa.Connections.Core.Exceptions;
 using Elsa.Connections.Core.Models;
 using Elsa.Connections.Options;
 using Elsa.Secrets.Core.Contracts;
@@ -16,7 +17,6 @@ internal sealed class OAuth2TokenService(
     ISecretValueResolver secrets,
     ISecretManager secretManager,
     IConnectionGrantWriter grants,
-    IValenceOAuthAppRegistry valenceApps,
     IHttpClientFactory httpClientFactory,
     IOptions<ConnectionsOptions> connectionsOptions,
     TimeProvider timeProvider)
@@ -222,18 +222,16 @@ internal sealed class OAuth2TokenService(
         IResolvedConnection connection,
         CancellationToken cancellationToken)
     {
-        var source = connection.Settings.GetValueOrDefault(OAuth2SettingKeys.ClientSource) ?? OAuth2ClientSources.Valence;
-        if (string.Equals(source, OAuth2ClientSources.BringYourOwn, StringComparison.OrdinalIgnoreCase))
+        var clientId = RequiredSetting(connection, OAuth2SettingKeys.ClientId);
+        try
         {
-            var clientId = RequiredSetting(connection, OAuth2SettingKeys.ClientId);
             var secret = await connection.GetSensitiveAsync(OAuth2SecretFields.ClientSecret, cancellationToken);
             return new OAuth2ClientCredentials(clientId, secret.IsEmpty ? null : secret.Reveal());
         }
-
-        var appId = connection.Settings.GetValueOrDefault(OAuth2SettingKeys.ValenceAppId) ?? "elsa.oauth2";
-        var app = await valenceApps.GetAsync(appId, cancellationToken)
-            ?? throw new InvalidOperationException($"No Valence OAuth app is registered for '{appId}'.");
-        return new OAuth2ClientCredentials(app.ClientId, app.ClientSecret);
+        catch (ConnectionUnavailableException)
+        {
+            return new OAuth2ClientCredentials(clientId, null);
+        }
     }
 
     private async ValueTask<OAuth2Grant> ExchangeAsync(

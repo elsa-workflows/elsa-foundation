@@ -80,6 +80,12 @@ internal sealed class HttpConnectionApplicator(
                     mask.Register(activityExecutionId, $"{connectionName}:query", value);
             }
         }
+
+        if (request.Options.TryGetValue(HttpConnectionApplyOptions.MaskedSecrets, out var extra) && extra is not null)
+        {
+            foreach (var (name, value) in extra)
+                mask.Register(activityExecutionId, name, value);
+        }
     }
 
     private sealed class MaskingResolvedConnection(

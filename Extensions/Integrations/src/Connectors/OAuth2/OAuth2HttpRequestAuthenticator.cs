@@ -23,5 +23,7 @@ internal sealed class OAuth2HttpRequestAuthenticator(OAuth2TokenService tokens) 
             ? grant.AccessToken
             : $"{scheme} {grant.AccessToken}";
         HttpConnectionHostGuard.SetAuthorization(request, connection, header);
+        HttpConnectionApplyOptions.MaskSecret(request, $"{connection.Name}:access_token", grant.AccessToken);
+        HttpConnectionApplyOptions.MaskSecret(request, $"{connection.Name}:refresh_token", grant.RefreshToken);
     }
 }

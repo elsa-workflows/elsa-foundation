@@ -9,12 +9,6 @@ public static class OAuth2GrantTypes
     public const string RefreshToken = "refresh_token";
 }
 
-public static class OAuth2ClientSources
-{
-    public const string Valence = "valence";
-    public const string BringYourOwn = "byo";
-}
-
 public static class OAuth2SettingKeys
 {
     public const string GrantType = "grantType";
@@ -22,8 +16,6 @@ public static class OAuth2SettingKeys
     public const string TokenUrl = "tokenUrl";
     public const string ScopesUrl = "scopesUrl";
     public const string Scopes = "scopes";
-    public const string ClientSource = "clientSource";
-    public const string ValenceAppId = "valenceAppId";
     public const string ClientId = "clientId";
 }
 

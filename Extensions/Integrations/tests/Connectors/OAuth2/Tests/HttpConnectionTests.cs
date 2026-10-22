@@ -35,20 +35,16 @@ public sealed class HttpConnectionTests
     }
 
     [Theory]
-    [InlineData(OAuth2ClientSources.Valence)]
-    [InlineData(OAuth2ClientSources.BringYourOwn)]
-    public async Task Valence_and_byo_clients_both_work(string clientSource)
+    [InlineData(OAuth2ClientCredentialBinding.Secret)]
+    [InlineData(OAuth2ClientCredentialBinding.NamedCredential)]
+    public async Task Secret_and_named_credential_clients_both_work(OAuth2ClientCredentialBinding credentials)
     {
         var preview = new MockOAuthServer();
-        var scheme = OAuth2TestSupport.ClientCredentialsScheme(preview) with
-        {
-            ClientSource = clientSource,
-            ClientId = clientSource == OAuth2ClientSources.BringYourOwn ? preview.ExpectedClientId : null
-        };
-        await using var harness = await OAuth2TestSupport.StartAsync(scheme, clientSource);
-        var server = harness.Server;
+        await using var harness = await OAuth2TestSupport.StartAsync(
+            OAuth2TestSupport.ClientCredentialsScheme(preview),
+            credentials);
 
-        var completion = await OAuth2TestSupport.SendAsync(harness, server.ResourceEndpoint);
+        var completion = await OAuth2TestSupport.SendAsync(harness, harness.Server.ResourceEndpoint);
         Assert.Equal(200, completion.Result.StatusCode);
     }
 }

@@ -27,6 +27,8 @@ public sealed class SecretIsolationTests
         var masked = mask.Mask(OAuth2TestSupport.ActivityExecutionId, $"token={leaked}");
         Assert.DoesNotContain(leaked, masked, StringComparison.Ordinal);
         Assert.Contains("[secret:", masked, StringComparison.Ordinal);
+        Assert.Contains(mask.Registrations(OAuth2TestSupport.ActivityExecutionId), entry =>
+            entry.Name.EndsWith(":access_token", StringComparison.Ordinal));
 
         var state = JsonSerializer.Serialize(completion.Result);
         Assert.DoesNotContain(leaked, state, StringComparison.Ordinal);
@@ -36,6 +38,24 @@ public sealed class SecretIsolationTests
             Assert.DoesNotContain(leaked, line, StringComparison.Ordinal);
             Assert.DoesNotContain(MockOAuthServer.CanaryClientSecret, line, StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public async Task Authorization_code_refresh_token_is_masked()
+    {
+        var preview = new MockOAuthServer();
+        await using var harness = await OAuth2TestSupport.StartAsync(OAuth2TestSupport.AuthorizationCodeScheme(preview));
+        await OAuth2TestSupport.AuthorizeAsync(harness, harness.Server);
+        await OAuth2TestSupport.SendAsync(harness, harness.Server.ResourceEndpoint);
+
+        var mask = (RecordingMask)harness.Mask;
+        Assert.Contains(mask.Registrations(OAuth2TestSupport.ActivityExecutionId), entry =>
+            entry.Name.EndsWith(":refresh_token", StringComparison.Ordinal) &&
+            entry.Value.StartsWith(MockOAuthServer.CanaryRefreshToken, StringComparison.Ordinal));
+        var refresh = mask.Registrations(OAuth2TestSupport.ActivityExecutionId)
+            .First(entry => entry.Name.EndsWith(":refresh_token", StringComparison.Ordinal)).Value;
+        var masked = mask.Mask(OAuth2TestSupport.ActivityExecutionId, $"refresh={refresh}");
+        Assert.DoesNotContain(refresh, masked, StringComparison.Ordinal);
     }
 
     [Fact]

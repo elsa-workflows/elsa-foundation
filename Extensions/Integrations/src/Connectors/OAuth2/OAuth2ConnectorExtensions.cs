@@ -10,7 +10,6 @@ public static class OAuth2ConnectorExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
         services.TryAddScoped<OAuth2TokenService>();
-        services.TryAddSingleton<IValenceOAuthAppRegistry, InMemoryValenceOAuthAppRegistry>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IAuthenticationSchemeProvider, OAuth2SchemeProvider>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IHttpRequestAuthenticator, OAuth2HttpRequestAuthenticator>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IOAuthCallbackHandler, OAuth2CallbackHandler>());
