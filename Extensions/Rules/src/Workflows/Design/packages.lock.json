@@ -126,8 +126,12 @@
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Rules.Core": "[4.0.0-dev, )",
           "Elsa.Rules.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Rules.Runtime": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.10, )"
+          "Microsoft.Extensions.DependencyInjection": "[10.0.10, )",
+          "Microsoft.Extensions.Hosting.Abstractions": "[10.0.10, )",
+          "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )"
         }
       },
       "elsa.serialization.core": {

@@ -60,3 +60,10 @@ static Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion.operator !=(Elsa.R
 static Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion.operator ==(Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion? left, Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion? right) -> bool
 static Elsa.Rules.Workflows.Runtime.Models.RunRulesState.operator !=(Elsa.Rules.Workflows.Runtime.Models.RunRulesState? left, Elsa.Rules.Workflows.Runtime.Models.RunRulesState? right) -> bool
 static Elsa.Rules.Workflows.Runtime.Models.RunRulesState.operator ==(Elsa.Rules.Workflows.Runtime.Models.RunRulesState? left, Elsa.Rules.Workflows.Runtime.Models.RunRulesState? right) -> bool
+Elsa.Rules.Workflows.Runtime.RulesWorkflowsRuntimeFeature
+Elsa.Rules.Workflows.Runtime.RulesWorkflowsRuntimeFeature.MaxConcurrentDeliveries.get -> int
+Elsa.Rules.Workflows.Runtime.RulesWorkflowsRuntimeFeature.MaxConcurrentDeliveries.set -> void
+Elsa.Rules.Workflows.Runtime.RulesWorkflowsRuntimeFeature.PollIntervalMilliseconds.get -> int
+Elsa.Rules.Workflows.Runtime.RulesWorkflowsRuntimeFeature.PollIntervalMilliseconds.set -> void
+Elsa.Rules.Workflows.Runtime.RulesWorkflowsRuntimeFeature.RulesWorkflowsRuntimeFeature() -> void
+virtual Elsa.Rules.Workflows.Runtime.RulesWorkflowsRuntimeFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

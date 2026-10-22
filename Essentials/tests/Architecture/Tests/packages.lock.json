@@ -1797,6 +1797,8 @@
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Rules.Core": "[4.0.0-dev, )",
           "Elsa.Rules.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Rules.Runtime": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },

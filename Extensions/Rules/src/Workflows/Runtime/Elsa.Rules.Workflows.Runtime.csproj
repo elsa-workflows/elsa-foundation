@@ -5,10 +5,14 @@
   <ItemGroup>
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../Core/Elsa.Rules.Core.csproj" />
+    <ProjectReference Include="../../Runtime/Elsa.Rules.Runtime.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj" />
     <ProjectReference Include="../../Persistence/Core/Elsa.Rules.Persistence.Core.csproj" />
     <ProjectReference Include="../../../../../Essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="../../../../../Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />

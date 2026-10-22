@@ -8,6 +8,17 @@
         "resolved": "6.0.2",
         "contentHash": "bJShQ6uWRTQ100ZeyiMqcFlhP7WJ+bCuabUs885dJiBEzMsJMSFr7BOyeCw4rgvQokteGi5rKQTlkhfQPUXg2A=="
       },
+      "CShells": {
+        "type": "Direct",
+        "requested": "[0.0.31, )",
+        "resolved": "0.0.31",
+        "contentHash": "0BzVoyFzBjhs6GeyFkOlsNC/0708/M0eS86d3nuQ/iSCUAcd/qcCbbVCE/0cY+1Awyu/awYkHIjIPRT1PQ8mgQ==",
+        "dependencies": {
+          "CShells.Abstractions": "0.0.31",
+          "JetBrains.Annotations": "2025.2.4",
+          "Microsoft.Extensions.DependencyModel": "10.0.1"
+        }
+      },
       "Microsoft.EntityFrameworkCore.Sqlite": {
         "type": "Direct",
         "requested": "[10.0.10, )",
@@ -178,6 +189,37 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
+      "elsa.activities.design.persistence.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.activities.primitives": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Activities.Runtime": "[4.0.0-dev, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.activities.runtime": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.activities.runtime.core": {
         "type": "Project",
         "dependencies": {
@@ -186,10 +228,37 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
+      "elsa.attention.core": {
+        "type": "Project"
+      },
+      "elsa.cluster.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.events": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Events.Strategies": "[4.0.0-dev, )",
+          "Elsa.Pipelines.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.events.core": {
         "type": "Project",
         "dependencies": {
           "Elsa.Pipelines.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.events.strategies": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
       "elsa.expressions.core": {
@@ -197,6 +266,9 @@
         "dependencies": {
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
+      },
+      "elsa.locking.core": {
+        "type": "Project"
       },
       "elsa.mediator.core": {
         "type": "Project",
@@ -271,6 +343,8 @@
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Rules.Core": "[4.0.0-dev, )",
           "Elsa.Rules.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Rules.Runtime": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
@@ -281,8 +355,37 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
+      "elsa.serialization.systemtext": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.tasks": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Cluster.Core": "[4.0.0-dev, )",
+          "Elsa.Locking.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.tasks.core": {
         "type": "Project"
+      },
+      "elsa.tasks.schedules": {
+        "type": "Project",
+        "dependencies": {
+          "Cronos": "[0.13.0, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )"
+        }
       },
       "elsa.workflows.design.core": {
         "type": "Project",
@@ -291,6 +394,50 @@
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Expressions.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.design.persistence.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.design.validations": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.design.validations.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.publishing": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Activities.Design.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Locking.Core": "[4.0.0-dev, )",
+          "Elsa.Mediator.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Validations": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.workflows.publishing.core": {
@@ -304,6 +451,17 @@
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.workflows.runtime": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Attention.Core": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Elsa.Tasks.Schedules": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.workflows.runtime.core": {
         "type": "Project",
         "dependencies": {
@@ -313,16 +471,21 @@
           "Elsa.Serialization.Core": "[4.0.0-dev, )"
         }
       },
-      "CShells": {
-        "type": "CentralTransitive",
-        "requested": "[0.0.31, )",
-        "resolved": "0.0.31",
-        "contentHash": "0BzVoyFzBjhs6GeyFkOlsNC/0708/M0eS86d3nuQ/iSCUAcd/qcCbbVCE/0cY+1Awyu/awYkHIjIPRT1PQ8mgQ==",
+      "elsa.workflows.runtime.resumption": {
+        "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "0.0.31",
-          "JetBrains.Annotations": "2025.2.4",
-          "Microsoft.Extensions.DependencyModel": "10.0.1"
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Elsa.Tasks.Schedules": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
+      },
+      "Cronos": {
+        "type": "CentralTransitive",
+        "requested": "[0.13.0, )",
+        "resolved": "0.13.0",
+        "contentHash": "Nkve+Yi0+ol3ntSBRHeW0ka9cJQ8vndSUvvkXqF9LVqwpoqWueyxu/HS275r98RDOmF7/mzRnZW5XXUBXob+TA=="
       },
       "CShells.Abstractions": {
         "type": "CentralTransitive",
