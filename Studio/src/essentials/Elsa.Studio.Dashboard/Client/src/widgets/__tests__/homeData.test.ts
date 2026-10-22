@@ -35,7 +35,7 @@ describe("home dashboard data", () => {
         {
           id: "definition-1",
           name: "Orders",
-        draftId: "draft-orders",
+          draftId: "draft-orders",
           description: "Processes new orders.",
           createdAt: "2026-10-17T10:00:00Z",
           lastModifiedAt: "2026-10-18T11:30:00Z",

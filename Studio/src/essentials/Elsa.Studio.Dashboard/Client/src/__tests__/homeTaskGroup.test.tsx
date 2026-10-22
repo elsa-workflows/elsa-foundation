@@ -1,14 +1,17 @@
-import React from "react";
+import React, { useLayoutEffect } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { AnonymousAuthProvider, AuthProvider, type AuthProviderManager, type AuthSession } from "@elsa-workflows/studio-sdk";
+import { AnonymousAuthProvider, AuthProvider, useAuthContext, type AuthProviderManager, type AuthSession } from "@elsa-workflows/studio-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { hasEffectivePermission, HomeTaskGroup } from "../HomeTaskGroup";
 import { stubApi, waitUntil } from "./testSupport";
 
 const definitionsPath = "/design/workflows/definitions?take=8";
+const mountedViews = new Set<{ unmount(): void }>();
 
 afterEach(() => {
+  for (const view of [...mountedViews]) view.unmount();
+  mountedViews.clear();
   vi.restoreAllMocks();
   window.history.replaceState({}, "", "/");
 });
@@ -88,6 +91,23 @@ describe("Home workflow task group", () => {
     view.unmount();
   });
 
+  it("keeps empty recovery safe for an authenticated read-only user", async () => {
+    const api = stubApi();
+    vi.spyOn(api.backend.http, "getJson").mockResolvedValue({ items: [] } as never);
+    const view = mount(<AuthProvider manager={authenticatedManager({ permissions: ["workflows/design:read"] })}><HomeTaskGroup api={api} /></AuthProvider>);
+
+    await waitUntil(() => view.container.querySelector("button.home-task-card") !== null);
+    click(view.container.querySelector("button.home-task-card"));
+    await waitUntil(() => view.container.textContent?.includes("No workflows have a current draft to continue.") === true);
+
+    const actionableCreateControls = [...view.container.querySelectorAll("a[href], button:not(:disabled), [role='button']:not([aria-disabled='true'])")]
+      .filter(element => /create workflow/i.test(element.textContent ?? ""));
+    expect(actionableCreateControls).toHaveLength(0);
+    expect(view.container.textContent).toContain("Creating a workflow requires workflow design access.");
+    expect(view.container.querySelector("[role='dialog'] a[href^='/workflows/definitions']")?.textContent).toContain("Browse workflows");
+    view.unmount();
+  });
+
   it("reports a server-side denial without guessing a draft or weakening endpoint authority", async () => {
     const api = stubApi();
     const forbidden = Object.assign(new Error("Forbidden"), { status: 403 });
@@ -156,6 +176,62 @@ describe("Home workflow task group", () => {
     view.unmount();
   });
 
+  it("hides a loaded chooser and disables its focus trap in the authority-change commit", async () => {
+    const api = stubApi();
+    vi.spyOn(api.backend.http, "getJson").mockResolvedValue({ items: [
+      { id: "old-definition-a", name: "Old authority A", draftId: "old-draft-a" },
+      { id: "old-definition-b", name: "Old authority B", draftId: "old-draft-b" }
+    ] } as never);
+    const manager = authenticatedManager({ subject: "alice", tenantId: "tenant-before", permissions: ["workflows/design:read"] });
+    const nextSession: AuthSession = { ...manager.getSession(), subject: "bob", tenantId: "tenant-after" };
+    manager.refresh = async () => nextSession;
+    let refreshSession: (() => Promise<AuthSession>) | undefined;
+    let captureAuthorityCommit = false;
+    const authoritySnapshots: Array<{ dialogVisible: boolean; candidateText: string[]; tabPrevented: boolean; outsideKeepsFocus: boolean }> = [];
+    const view = mount(
+      <AuthProvider manager={manager}>
+        <>
+          <button type="button" data-testid="outside-home-dialog">Outside Home dialog</button>
+          <HomeTaskGroup api={api} />
+          <AuthRefreshProbe
+            onRefresh={refresh => { refreshSession = refresh; }}
+            onAuthorityCommit={() => {
+              if (!captureAuthorityCommit) return;
+              captureAuthorityCommit = false;
+              const outside = view.container.querySelector<HTMLButtonElement>("[data-testid='outside-home-dialog']")!;
+              outside.focus();
+              const tab = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+              window.dispatchEvent(tab);
+              authoritySnapshots.push({
+                dialogVisible: view.container.querySelector("[role='dialog']") !== null,
+                candidateText: [...view.container.querySelectorAll("[aria-label='Current workflow drafts'] li")].map(item => item.textContent ?? ""),
+                tabPrevented: tab.defaultPrevented,
+                outsideKeepsFocus: document.activeElement === outside
+              });
+            }}
+          />
+        </>
+      </AuthProvider>
+    );
+    await waitUntil(() => refreshSession !== undefined);
+    await waitUntil(() => view.container.querySelector("button.home-task-card") !== null);
+    click(view.container.querySelector("button.home-task-card"));
+    await waitUntil(() => view.container.textContent?.includes("old-definition-a") === true && view.container.textContent?.includes("old-definition-b") === true);
+
+    captureAuthorityCommit = true;
+    await refreshSession!();
+    await waitUntil(() => authoritySnapshots.length === 1);
+
+    expect(authoritySnapshots).toHaveLength(1);
+    expect(authoritySnapshots[0].dialogVisible).toBe(false);
+    expect(authoritySnapshots[0].candidateText).toEqual([]);
+    expect(authoritySnapshots[0].tabPrevented).toBe(false);
+    expect(authoritySnapshots[0].outsideKeepsFocus).toBe(true);
+    expect(view.container.textContent).not.toContain("Old authority A");
+    expect(view.container.textContent).not.toContain("Old authority B");
+    view.unmount();
+  });
+
   it("closes an open chooser when Workflows turns off and ignores its pending result", async () => {
     const api = stubApi();
     let resolveDefinitions: ((value: { items: Array<{ id: string; draftId: string; name: string }> }) => void) | undefined;
@@ -215,17 +291,34 @@ function mount(node: React.ReactElement) {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
-  flushSync(() => root.render(node));
-  return {
+  const render = (next: React.ReactElement) => flushSync(() => root.render(next));
+  render(node);
+  let mounted = true;
+  const view = {
     container,
     rerender(next: React.ReactElement) {
-      flushSync(() => root.render(next));
+      render(next);
     },
     unmount() {
+      if (!mounted) return;
+      mounted = false;
       flushSync(() => root.unmount());
       container.remove();
+      mountedViews.delete(view);
     }
   };
+  mountedViews.add(view);
+  return view;
+}
+
+function AuthRefreshProbe({ onRefresh, onAuthorityCommit }: {
+  onRefresh(refresh: () => Promise<AuthSession>): void;
+  onAuthorityCommit(): void;
+}) {
+  const { refresh, session } = useAuthContext();
+  useLayoutEffect(() => { onRefresh(refresh); }, [onRefresh, refresh]);
+  useLayoutEffect(() => { onAuthorityCommit(); }, [onAuthorityCommit, session]);
+  return null;
 }
 
 function click(element: Element | null) {

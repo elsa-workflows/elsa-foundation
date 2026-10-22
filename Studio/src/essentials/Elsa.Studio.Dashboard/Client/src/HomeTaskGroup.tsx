@@ -9,10 +9,12 @@ const designRead = "workflows/design:read";
 const designManage = "workflows/design:manage";
 
 type DiscoveryState =
-  | { kind: "idle" | "loading" }
+  | { kind: "loading" }
   | { kind: "empty" }
   | { kind: "failed"; message: string; denied: boolean }
   | { kind: "ready"; candidates: HomeWorkflowSummary[]; total: number };
+
+type ActiveDialog = { authorityKey: string; discovery: DiscoveryState };
 
 export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
   const session = useAuthSession();
@@ -36,17 +38,21 @@ export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
   const controllerRef = useRef<AbortController | null>(null);
   const continueButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [discovery, setDiscovery] = useState<DiscoveryState>({ kind: "idle" });
+  const [dialogState, setDialogState] = useState<ActiveDialog | null>(null);
+  const activeDialog = workflowsEnabled && dialogState?.authorityKey === authorityKey ? dialogState : null;
 
   const closeDialog = useCallback(() => {
     controllerRef.current?.abort();
     controllerRef.current = null;
     generationRef.current++;
-    setDialogOpen(false);
-    setDiscovery({ kind: "idle" });
+    setDialogState(null);
   }, []);
-  useHomeDialogFocus(dialogRef, dialogOpen && workflowsEnabled ? closeDialog : null);
+  const updateDiscovery = useCallback((requestedAuthority: string, discovery: DiscoveryState) => {
+    setDialogState(current => authorityRef.current === requestedAuthority && current?.authorityKey === requestedAuthority
+      ? { ...current, discovery }
+      : current);
+  }, []);
+  useHomeDialogFocus(dialogRef, activeDialog ? closeDialog : null);
 
   useEffect(() => () => {
     controllerRef.current?.abort();
@@ -67,25 +73,24 @@ export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
     controllerRef.current = controller;
     const generation = ++generationRef.current;
     const requestedAuthority = authorityKey;
-    setDialogOpen(true);
-    setDiscovery({ kind: "loading" });
+    setDialogState({ authorityKey: requestedAuthority, discovery: { kind: "loading" } });
 
     void loadRecentWorkflows(api, controller.signal).then(workflows => {
       if (controller.signal.aborted || generation !== generationRef.current || authorityRef.current !== requestedAuthority) return;
       const candidates = workflows.filter(workflow => Boolean(workflow.draftId?.trim()));
       if (candidates.length === 0) {
-        setDiscovery({ kind: "empty" });
+        updateDiscovery(requestedAuthority, { kind: "empty" });
         return;
       }
       if (candidates.length === 1 && navigateStudioPath(workflowDefinitionHref(candidates[0].id))) {
         closeDialog();
         return;
       }
-      setDiscovery({ kind: "ready", candidates: candidates.slice(0, 8), total: candidates.length });
+      updateDiscovery(requestedAuthority, { kind: "ready", candidates: candidates.slice(0, 8), total: candidates.length });
     }).catch(error => {
       if (controller.signal.aborted || generation !== generationRef.current || authorityRef.current !== requestedAuthority) return;
       const status = errorStatus(error);
-      setDiscovery({
+      updateDiscovery(requestedAuthority, {
         kind: "failed",
         denied: status === 401 || status === 403,
         message: status === 401 || status === 403
@@ -93,7 +98,7 @@ export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
           : "Current drafts couldn’t be checked. Retry or browse workflows."
       });
     });
-  }, [api, authorityKey, canRead, closeDialog]);
+  }, [api, authorityKey, canRead, closeDialog, updateDiscovery]);
 
   if (!workflowsEnabled) return null;
 
@@ -118,7 +123,7 @@ export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
         {canManage ? (
           <a className="home-task-card home-task-card--primary" href={createHref} onClick={event => handleLinkClick(event, createHref)}>
             <span className="home-task-card-icon"><Plus size={19} aria-hidden="true" /></span>
-            <span className="home-task-card-copy"><strong>Create workflow</strong><span>Start with the existing workflow catalog.</span></span>
+            <span className="home-task-card-copy"><strong>Create workflow</strong><span>Choose a starting point for your workflow.</span></span>
             <ArrowRight size={16} aria-hidden="true" />
           </a>
         ) : (
@@ -144,27 +149,29 @@ export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
           : <span aria-disabled="true">Browse workflows · requires workflow design access</span>}
         {accessLimited ? <span id="home-task-access" role="note">Create requires workflow design access. Continue and Browse require access to read workflow definitions.</span> : null}
       </div>
-      {dialogOpen ? (
+      {activeDialog ? (
         <div className="dashboard-settings-backdrop">
           <section ref={dialogRef} className="dashboard-settings-dialog home-continue-dialog" role="dialog" aria-modal="true" aria-labelledby="home-continue-title" tabIndex={-1}>
             <h4 id="home-continue-title">Continue editing</h4>
-            {discovery.kind === "loading" ? <p role="status"><LoaderCircle size={16} aria-hidden="true" /> Checking current workflow drafts…</p> : null}
-            {discovery.kind === "empty" ? <div>
+            {activeDialog.discovery.kind === "loading" ? <p role="status"><LoaderCircle size={16} aria-hidden="true" /> Checking current workflow drafts…</p> : null}
+            {activeDialog.discovery.kind === "empty" ? <div>
               <p>No workflows have a current draft to continue.</p>
-              <a href={createHref} onClick={event => handleLinkClick(event, createHref, closeDialog)}>Create workflow</a>
+              {canManage
+                ? <a href={createHref} onClick={event => handleLinkClick(event, createHref, closeDialog)}>Create workflow</a>
+                : <p role="note">Creating a workflow requires workflow design access.</p>}
               <a href={browseHref} onClick={event => handleLinkClick(event, browseHref, closeDialog)}>Browse workflows</a>
             </div> : null}
-            {discovery.kind === "failed" ? <div>
-              <p role={discovery.denied ? "alert" : "status"}>{discovery.message}</p>
-              {!discovery.denied ? <button type="button" onClick={startDiscovery}>Retry</button> : null}
+            {activeDialog.discovery.kind === "failed" ? <div>
+              <p role={activeDialog.discovery.denied ? "alert" : "status"}>{activeDialog.discovery.message}</p>
+              {!activeDialog.discovery.denied ? <button type="button" onClick={startDiscovery}>Retry</button> : null}
               <a href={browseHref} onClick={event => handleLinkClick(event, browseHref, closeDialog)}>Browse workflows</a>
             </div> : null}
-            {discovery.kind === "ready" ? <div>
-              <p role="status">{discovery.total > discovery.candidates.length
-                ? `Showing the 8 most recently changed of ${discovery.total} current drafts.`
-                : `${discovery.total} current ${discovery.total === 1 ? "draft" : "drafts"}.`}</p>
+            {activeDialog.discovery.kind === "ready" ? <div>
+              <p role="status">{activeDialog.discovery.total > activeDialog.discovery.candidates.length
+                ? `Showing the 8 most recently changed of ${activeDialog.discovery.total} current drafts.`
+                : `${activeDialog.discovery.total} current ${activeDialog.discovery.total === 1 ? "draft" : "drafts"}.`}</p>
               <ul aria-label="Current workflow drafts">
-                {discovery.candidates.map(workflow => {
+                {activeDialog.discovery.candidates.map(workflow => {
                   const href = workflowDefinitionHref(workflow.id);
                   return <li key={workflow.id}>
                     <a href={href} onClick={event => handleLinkClick(event, href, closeDialog)}>
