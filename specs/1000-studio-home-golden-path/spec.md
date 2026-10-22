@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-22
 
-**Status**: Approved
+**Status**: Implemented — implementation PR sets this terminal status for merge; exact-head acceptance evidence remains on #3063 and its PR.
 
 **Input**: [#3063](https://github.com/elsa-workflows/elsa-foundation/issues/3063), the Home slice of Studio UX epic #3057 / Elsa 4 Simplification #2559: durable Create workflow, Continue editing and Needs attention entry points while preserving configurable widgets.
 

@@ -39,7 +39,17 @@ Independent test: the group precedes configurable widgets on both laptop sizes; 
 
 - [x] T014 Update only relevant Home entries in Studio/docs/ux/design-spec.md and Studio/docs/ux-polish-plan.md, describing actual delivered behavior and retained domain exceptions; review changed source/tests for repetition and remove only obsolete in-scope paths with evidence.
 - [x] T015 Run complete affected Dashboard/Workflows suites and typechecks, Studio lint and affected client builds from Studio/package.json; compare listed/executed counts, retain failures/skips, and record focused behavior RED→GREEN evidence outside the repo for the PR.
-- [ ] T016 Root reviews the integrated diff, local evidence and delegated report; finalize specs/1000-studio-home-golden-path/spec.md terminal status/process-residue cleanup and the issue-acceptance mapping for the coherent implementation candidate. Keep exact-head review/CI/normal-host/resulting-main evidence on #3063/the PR rather than inventing passed receipts in source.
+- [x] T016 Root reviews the integrated diff, local evidence and delegated report; finalize specs/1000-studio-home-golden-path/spec.md terminal status/process-residue cleanup and the issue-acceptance mapping for the coherent implementation candidate. Keep exact-head review/CI/normal-host/resulting-main evidence on #3063/the PR rather than inventing passed receipts in source.
+
+## Issue acceptance mapping
+
+| #3063 criterion | Implementation and local evidence | Integration evidence required before acceptance |
+|---|---|---|
+| Direct creation with Browse and existing authority/readiness | Home task links, consumed route intent, existing create dialog; focused route/catalog/access tests | Normal-host create/cancel/history and exact returned-definition navigation |
+| Exact current-draft continuation and recovery | Complete collection before eight-choice preview; IDs, cancellation/authority isolation and editor retry/no-draft tests | Real empty/populated discovery, exact chosen draft and editor identity |
+| Durable laptop entries and active-health Runs without layout writes | Stable task group before widgets; laptop themes, chooser keyboard/zoom, feature-off and preference tests | Normal-host laptop/theme screenshots, Needs attention filter, saved-layout digest and served asset provenance |
+
+Root read the integrated source and delegated report at source checkpoint `1c13e95d0cc69798f8457c134e1c32af39383116`. Dashboard65 and Workflows2380 tests, affected typechecks/builds and lint passed; the Home fixture had9 passes and1 optional screenshot skip. Fixture link/history checks do not substitute for the actual Workflows host consuming creation intent. The temporary complete requirements checklist is removed per spec lifecycle. Independent exact-head reviews, architecture/generated-map qualification, normal-host proof, canonical CI and resulting-main qualification remain external gates, not completed claims in this source checkpoint.
 
 ## Dependencies and execution
 
