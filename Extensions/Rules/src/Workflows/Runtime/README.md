@@ -1,0 +1,11 @@
+# Elsa.Rules.Workflows.Runtime
+
+`RunRules` is an ordinary typed stateful activity. Its literal `Program` is compiled and pinned during publication by the sibling Design module. Initial facts and an optional round limit belong to each invocation. Execution reads the exact executable metadata and freezes the initial facts and resolved limit; it does not recompile the artifact, query design storage, or select the currently installed implementation. The model's later admission validator decides whether the frozen implementation is available.
+
+The native checkpoint enricher captures both the actual bookmark and registration identity and records the frozen destination with the Start intent in one native checkpoint. Cancellation reuses that retained destination after trigger payload retirement. Only invocation and destination information belong in native state; Rules rounds, accepted receipts and result responsibility belong in the Rules persistence domain.
+
+Resume validates the frozen destination, consumed typed receipt and delivery deduplication identity. A terminal payload must have the same canonical content as the Rules store's retained terminal result, including all facts. Succeeded and Refused return that complete result through normal native outcomes; Faulted and Cancelled use the existing native fault/cancellation transitions. Invalid nonpositive or excessive round limits have a native refusal path without constructing a Rules invocation or row.
+
+This is an implementation checkpoint on the #3181 branch. Native intent handling, delivery hosting/proof acknowledgement and registration are still pending, as are persisted Sequence/Flowchart and REST acceptance. The activity and checkpoint component alone do not constitute a runnable end-to-end native integration. See [spec 999 tasks](../../../../../specs/999-durable-rules/tasks.md).
+
+Open recovery gate: a temporary Rules reader outage during `RunRules.ResumeAsync` currently enters the native scheduler's activity-fault path. The delivery/resume integration must preserve retryable responsibility instead, with an actual persisted unavailable/recovery test, before this module is registered for use. The component result-comparison test does not establish that behavior.

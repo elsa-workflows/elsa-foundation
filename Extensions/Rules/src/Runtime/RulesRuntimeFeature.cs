@@ -52,6 +52,7 @@ public class RulesRuntimeFeature : IShellFeature
         services.AddSingleton(options);
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IRuleImplementationIdentitySource>(_ => new RuleDeploymentIdentitySource(deps, receipt, root));
+        services.TryAddScoped<IRuleArtifactCompiler, RuleArtifactCompiler>();
         services.TryAddScoped<IRuleInvocationFactory, RuleInvocationFactory>();
         services.TryAddScoped<IRuleAdmissionValidator>(provider =>
             new RuleAdmissionValidator(provider.GetRequiredService<IRuleImplementationIdentitySource>(), acceptNewInvocations));

@@ -1,0 +1,62 @@
+#nullable enable
+Elsa.Rules.Workflows.Runtime.Activities.RunRules
+Elsa.Rules.Workflows.Runtime.Activities.RunRules.InitialFacts.get -> string![]!
+Elsa.Rules.Workflows.Runtime.Activities.RunRules.InitialFacts.set -> void
+Elsa.Rules.Workflows.Runtime.Activities.RunRules.MaxRounds.get -> int?
+Elsa.Rules.Workflows.Runtime.Activities.RunRules.MaxRounds.set -> void
+Elsa.Rules.Workflows.Runtime.Activities.RunRules.Program.get -> string!
+Elsa.Rules.Workflows.Runtime.Activities.RunRules.Program.set -> void
+Elsa.Rules.Workflows.Runtime.Activities.RunRules.RunRules(Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! workflows, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore! executables, Elsa.Workflows.Runtime.Core.Contracts.IActivityExecutionStateStore! activities, Elsa.Rules.Persistence.Core.IRuleRunReader! runs, Elsa.Workflows.Runtime.Core.Contracts.IPersistenceAccessContextAccessor! access) -> void
+Elsa.Rules.Workflows.Runtime.Models.RuleWorkflowProgramPin
+Elsa.Rules.Workflows.Runtime.Models.RuleWorkflowProgramPin.<Clone>$() -> Elsa.Rules.Workflows.Runtime.Models.RuleWorkflowProgramPin!
+Elsa.Rules.Workflows.Runtime.Models.RuleWorkflowProgramPin.Artifact.get -> Elsa.Rules.Core.RuleArtifactSnapshot!
+Elsa.Rules.Workflows.Runtime.Models.RuleWorkflowProgramPin.Equals(Elsa.Rules.Workflows.Runtime.Models.RuleWorkflowProgramPin? other) -> bool
+Elsa.Rules.Workflows.Runtime.Models.RuleWorkflowProgramPin.FormatVersion.get -> int
+Elsa.Rules.Workflows.Runtime.Models.RuleWorkflowProgramPin.Implementation.get -> Elsa.Rules.Core.RuleSemanticPin!
+Elsa.Rules.Workflows.Runtime.Models.RuleWorkflowProgramPin.RuleWorkflowProgramPin(int formatVersion, string! sourceSha256, Elsa.Rules.Core.RuleArtifactSnapshot! artifact, Elsa.Rules.Core.RuleSemanticPin! implementation, int vocabularyCount) -> void
+Elsa.Rules.Workflows.Runtime.Models.RuleWorkflowProgramPin.Serialize() -> string!
+Elsa.Rules.Workflows.Runtime.Models.RuleWorkflowProgramPin.SourceSha256.get -> string!
+Elsa.Rules.Workflows.Runtime.Models.RuleWorkflowProgramPin.VocabularyCount.get -> int
+Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion
+Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion.<Clone>$() -> Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion!
+Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion.Deconstruct(out int FormatVersion, out Elsa.Rules.Core.RuleNativeResultAddress! Destination, out string! DeliveryId, out System.Text.Json.JsonElement? Result, out string? InvalidCode) -> void
+Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion.DeliveryId.get -> string!
+Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion.DeliveryId.init -> void
+Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion.Destination.get -> Elsa.Rules.Core.RuleNativeResultAddress!
+Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion.Destination.init -> void
+Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion.Equals(Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion? other) -> bool
+Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion.FormatVersion.get -> int
+Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion.FormatVersion.init -> void
+Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion.InvalidCode.get -> string?
+Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion.InvalidCode.init -> void
+Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion.Result.get -> System.Text.Json.JsonElement?
+Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion.Result.init -> void
+Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion.RunRulesCompletion(int FormatVersion, Elsa.Rules.Core.RuleNativeResultAddress! Destination, string! DeliveryId, System.Text.Json.JsonElement? Result, string? InvalidCode) -> void
+Elsa.Rules.Workflows.Runtime.Models.RunRulesState
+Elsa.Rules.Workflows.Runtime.Models.RunRulesState.<Clone>$() -> Elsa.Rules.Workflows.Runtime.Models.RunRulesState!
+Elsa.Rules.Workflows.Runtime.Models.RunRulesState.Deconstruct(out int FormatVersion, out System.Text.Json.JsonElement Invocation) -> void
+Elsa.Rules.Workflows.Runtime.Models.RunRulesState.Equals(Elsa.Rules.Workflows.Runtime.Models.RunRulesState? other) -> bool
+Elsa.Rules.Workflows.Runtime.Models.RunRulesState.FormatVersion.get -> int
+Elsa.Rules.Workflows.Runtime.Models.RunRulesState.FormatVersion.init -> void
+Elsa.Rules.Workflows.Runtime.Models.RunRulesState.Invocation.get -> System.Text.Json.JsonElement
+Elsa.Rules.Workflows.Runtime.Models.RunRulesState.Invocation.init -> void
+Elsa.Rules.Workflows.Runtime.Models.RunRulesState.RunRulesState(int FormatVersion, System.Text.Json.JsonElement Invocation) -> void
+const Elsa.Rules.Workflows.Runtime.Activities.RunRules.ActivityType = "Elsa.Rules.Workflows.Runtime.Activities.RunRules" -> string!
+const Elsa.Rules.Workflows.Runtime.Activities.RunRules.PinMetadataKey = "rules.program.v1" -> string!
+override Elsa.Rules.Workflows.Runtime.Models.RuleWorkflowProgramPin.Equals(object? obj) -> bool
+override Elsa.Rules.Workflows.Runtime.Models.RuleWorkflowProgramPin.GetHashCode() -> int
+override Elsa.Rules.Workflows.Runtime.Models.RuleWorkflowProgramPin.ToString() -> string!
+override Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion.Equals(object? obj) -> bool
+override Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion.GetHashCode() -> int
+override Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion.ToString() -> string!
+override Elsa.Rules.Workflows.Runtime.Models.RunRulesState.Equals(object? obj) -> bool
+override Elsa.Rules.Workflows.Runtime.Models.RunRulesState.GetHashCode() -> int
+override Elsa.Rules.Workflows.Runtime.Models.RunRulesState.ToString() -> string!
+static Elsa.Rules.Workflows.Runtime.Models.RuleWorkflowProgramPin.Parse(string! json, string! source) -> Elsa.Rules.Workflows.Runtime.Models.RuleWorkflowProgramPin!
+static Elsa.Rules.Workflows.Runtime.Models.RuleWorkflowProgramPin.SourceHash(string! source) -> string!
+static Elsa.Rules.Workflows.Runtime.Models.RuleWorkflowProgramPin.operator !=(Elsa.Rules.Workflows.Runtime.Models.RuleWorkflowProgramPin? left, Elsa.Rules.Workflows.Runtime.Models.RuleWorkflowProgramPin? right) -> bool
+static Elsa.Rules.Workflows.Runtime.Models.RuleWorkflowProgramPin.operator ==(Elsa.Rules.Workflows.Runtime.Models.RuleWorkflowProgramPin? left, Elsa.Rules.Workflows.Runtime.Models.RuleWorkflowProgramPin? right) -> bool
+static Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion.operator !=(Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion? left, Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion? right) -> bool
+static Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion.operator ==(Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion? left, Elsa.Rules.Workflows.Runtime.Models.RunRulesCompletion? right) -> bool
+static Elsa.Rules.Workflows.Runtime.Models.RunRulesState.operator !=(Elsa.Rules.Workflows.Runtime.Models.RunRulesState? left, Elsa.Rules.Workflows.Runtime.Models.RunRulesState? right) -> bool
+static Elsa.Rules.Workflows.Runtime.Models.RunRulesState.operator ==(Elsa.Rules.Workflows.Runtime.Models.RunRulesState? left, Elsa.Rules.Workflows.Runtime.Models.RunRulesState? right) -> bool

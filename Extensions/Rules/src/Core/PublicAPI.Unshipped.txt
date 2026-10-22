@@ -1,4 +1,6 @@
 #nullable enable
+Elsa.Rules.Core.IRuleArtifactCompiler
+Elsa.Rules.Core.IRuleArtifactCompiler.Compile(Elsa.Rules.Core.RuleProgram! program) -> Elsa.Rules.Core.RuleArtifactCompilation!
 Elsa.Rules.Core.IRuleImplementationIdentitySource
 Elsa.Rules.Core.IRuleImplementationIdentitySource.ReadAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Rules.Core.RuleSemanticPin?>
 Elsa.Rules.Core.RuleAdmissionRefusal
@@ -10,6 +12,12 @@ Elsa.Rules.Core.RuleAdmissionRefusal.Equals(Elsa.Rules.Core.RuleAdmissionRefusal
 Elsa.Rules.Core.RuleAdmissionRefusal.Invocation.get -> Elsa.Rules.Core.RuleInvocationEnvelope!
 Elsa.Rules.Core.RuleAdmissionRefusal.Invocation.init -> void
 Elsa.Rules.Core.RuleAdmissionRefusal.RuleAdmissionRefusal(Elsa.Rules.Core.RuleInvocationEnvelope! Invocation, Elsa.Rules.Core.RuleRunDiagnostic! Diagnostic) -> void
+Elsa.Rules.Core.RuleArtifactCompilation
+Elsa.Rules.Core.RuleArtifactCompilation.<Clone>$() -> Elsa.Rules.Core.RuleArtifactCompilation!
+Elsa.Rules.Core.RuleArtifactCompilation.Artifact.get -> Elsa.Rules.Core.RuleArtifactSnapshot!
+Elsa.Rules.Core.RuleArtifactCompilation.Equals(Elsa.Rules.Core.RuleArtifactCompilation? other) -> bool
+Elsa.Rules.Core.RuleArtifactCompilation.RuleArtifactCompilation(Elsa.Rules.Core.RuleArtifactSnapshot! artifact, int vocabularyCount) -> void
+Elsa.Rules.Core.RuleArtifactCompilation.VocabularyCount.get -> int
 Elsa.Rules.Core.RuleArtifactSnapshot
 Elsa.Rules.Core.RuleArtifactSnapshot.ArtifactId.get -> string!
 Elsa.Rules.Core.RuleArtifactSnapshot.CanonicalBytes.get -> System.ReadOnlyMemory<byte>
@@ -171,6 +179,9 @@ const Elsa.Rules.Core.RuleLimits.MaxVocabularyFacts = 4096 -> int
 override Elsa.Rules.Core.RuleAdmissionRefusal.Equals(object? obj) -> bool
 override Elsa.Rules.Core.RuleAdmissionRefusal.GetHashCode() -> int
 override Elsa.Rules.Core.RuleAdmissionRefusal.ToString() -> string!
+override Elsa.Rules.Core.RuleArtifactCompilation.Equals(object? obj) -> bool
+override Elsa.Rules.Core.RuleArtifactCompilation.GetHashCode() -> int
+override Elsa.Rules.Core.RuleArtifactCompilation.ToString() -> string!
 override Elsa.Rules.Core.RuleAssetPin.Equals(object? obj) -> bool
 override Elsa.Rules.Core.RuleAssetPin.GetHashCode() -> int
 override Elsa.Rules.Core.RuleAssetPin.ToString() -> string!
@@ -206,6 +217,8 @@ override Elsa.Rules.Core.RuleTerminalEnvelope.GetHashCode() -> int
 override Elsa.Rules.Core.RuleTerminalEnvelope.ToString() -> string!
 static Elsa.Rules.Core.RuleAdmissionRefusal.operator !=(Elsa.Rules.Core.RuleAdmissionRefusal? left, Elsa.Rules.Core.RuleAdmissionRefusal? right) -> bool
 static Elsa.Rules.Core.RuleAdmissionRefusal.operator ==(Elsa.Rules.Core.RuleAdmissionRefusal? left, Elsa.Rules.Core.RuleAdmissionRefusal? right) -> bool
+static Elsa.Rules.Core.RuleArtifactCompilation.operator !=(Elsa.Rules.Core.RuleArtifactCompilation? left, Elsa.Rules.Core.RuleArtifactCompilation? right) -> bool
+static Elsa.Rules.Core.RuleArtifactCompilation.operator ==(Elsa.Rules.Core.RuleArtifactCompilation? left, Elsa.Rules.Core.RuleArtifactCompilation? right) -> bool
 static Elsa.Rules.Core.RuleAssetPin.operator !=(Elsa.Rules.Core.RuleAssetPin? left, Elsa.Rules.Core.RuleAssetPin? right) -> bool
 static Elsa.Rules.Core.RuleAssetPin.operator ==(Elsa.Rules.Core.RuleAssetPin? left, Elsa.Rules.Core.RuleAssetPin? right) -> bool
 static Elsa.Rules.Core.RuleCancellationRequest.operator !=(Elsa.Rules.Core.RuleCancellationRequest? left, Elsa.Rules.Core.RuleCancellationRequest? right) -> bool

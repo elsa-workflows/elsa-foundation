@@ -113,6 +113,10 @@
     <Project Path="Extensions/Rules/src/Persistence/Core/Elsa.Rules.Persistence.Core.csproj" />
     <Project Path="Extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
+  <Folder Name="/Extensions/Rules/src/Workflows/">
+    <Project Path="Extensions/Rules/src/Workflows/Runtime/Elsa.Rules.Workflows.Runtime.csproj" />
+    <Project Path="Extensions/Rules/src/Workflows/Design/Elsa.Rules.Workflows.Design.csproj" />
+  </Folder>
   <Folder Name="/Extensions/Rules/tests/">
     <Project Path="Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj" />
   </Folder>

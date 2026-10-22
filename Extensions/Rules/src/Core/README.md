@@ -5,3 +5,5 @@ This module owns immutable finite-positive Rules values and language limits. A p
 Canonical serialization, evaluation, receipt verification, persistence, and native delivery proof belong to their respective Runtime, Persistence, and adapter modules.
 
 `IRuleInvocationFactory` is the direct preparation contract. It returns one frozen envelope or a bounded Invalid/Unavailable outcome without writing state. Its implementation belongs to Runtime; store admission and result inspection remain separate persistence contracts. Retries reuse the original prepared envelope, including its captured budget and package pin.
+
+`IRuleArtifactCompiler` compiles reusable program content without selecting a deployment or creating a run. It returns the canonical immutable artifact and validated vocabulary count. Native publication uses that count to freeze a later invocation's default budget without interpreting the artifact again.

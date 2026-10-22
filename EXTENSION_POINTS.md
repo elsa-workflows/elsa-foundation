@@ -170,6 +170,7 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
+| Rules compilation, invocation preparation and deployment identity | [`Extensions/Rules/src/Core/EXTENSION_POINTS.md`](Extensions/Rules/src/Core/EXTENSION_POINTS.md) |
 | Safe scoped binding discovery | [`Extensions/Etl/src/Core/EXTENSION_POINTS.md`](Extensions/Etl/src/Core/EXTENSION_POINTS.md) |
 | Draft and immutable publication metadata | [`Extensions/Etl/src/Design/Elsa.Etl.Design/EXTENSION_POINTS.md`](Extensions/Etl/src/Design/Elsa.Etl.Design/EXTENSION_POINTS.md) |
 | Shared ETL API transport | [`Extensions/Etl/src/Api/EXTENSION_POINTS.md`](Extensions/Etl/src/Api/EXTENSION_POINTS.md) |

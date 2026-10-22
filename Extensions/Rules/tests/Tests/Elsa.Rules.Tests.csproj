@@ -12,6 +12,7 @@
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
     <ProjectReference Include="../../src/Runtime/Elsa.Rules.Runtime.csproj" />
     <ProjectReference Include="../../src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../src/Workflows/Design/Elsa.Rules.Workflows.Design.csproj" />
     <Using Include="Xunit" />
   </ItemGroup>
 </Project>

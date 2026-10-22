@@ -68,6 +68,8 @@ Independent acceptance: real Sequence following-activity and Flowchart sibling/j
 - [ ] T031 [US3] Add/register real Workbench REST journey under `e2e-tests/rules/` and required opt-in host composition; update `specs/999-durable-rules/quickstart.md` with exact runnable suite commands. Rebuild host on fresh isolated DB before running.
 - [ ] T032 [US3] Execute native REST/package-host integration and proof-before-ack removal control; restore actual code and rerun affected checks; record commands and results in `specs/999-durable-rules/evidence/`.
 
+Native component checkpoint: the compiler/publication contribution, frozen ordinary activity request, canonical result comparison and checkpoint Start/cancellation components are implemented. The [native component evidence](evidence/native-component-checkpoint.md) records scope and validation. T027–T032 remain unchecked: ordinary catalog publication, intent dispatch, delivery proof/acknowledgement, retryable unavailable resume, registration, persisted composites and REST/package-host acceptance are still required. No runnable native integration or actual scheduler recovery is claimed by these component fixtures.
+
 ## Phase 7: Integrated delivery
 
 - [ ] T033 Complete module READMEs/local `EXTENSION_POINTS.md` and root index links; document actual override/registration/hosting/pin/provider behavior, deployment/recovery limits and future task-runner separation. No placeholder empty modules or duplicate canonical explanations.

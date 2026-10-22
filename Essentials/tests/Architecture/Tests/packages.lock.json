@@ -1762,6 +1762,7 @@
       "elsa.rules.persistence.entityframeworkcore": {
         "type": "Project",
         "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
           "Elsa.Rules.Persistence.Core": "[4.0.0-dev, )",
           "Microsoft.EntityFrameworkCore": "[10.0.10, )",
@@ -1771,8 +1772,10 @@
       "elsa.rules.runtime": {
         "type": "Project",
         "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Rules.Core": "[4.0.0-dev, )",
-          "Elsa.Rules.Persistence.Core": "[4.0.0-dev, )"
+          "Elsa.Rules.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.secrets": {
