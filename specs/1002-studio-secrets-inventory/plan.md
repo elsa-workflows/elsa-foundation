@@ -40,6 +40,10 @@ Both6.1.0 constitutions/Gate indexes and review checklist are unchanged from the
 5. Keep loaded-scope help, currently selected filter values, metadata-only rows and existing detail/focus lifecycle. Opening/closing detail must not reload/reset criteria. Existing mutation/create/rotate/test/revoke/delete controls/payloads are outside this correction;3071 owns operation-specific presentation consistency.
 6. Source audit is an input, not runtime proof. Root will prove real endpoint first100/total/beyond100/search by exact identity on disposable normal hosts, then exercise the same search/detail-return UI against those hosts. Browser fixtures additionally cover complete/partial/error/theme/narrow edge states; do not call a mocked route a backend proof.
 
+### Round1 clarification — retained criteria
+
+The three independent axes found missing interaction combinations within FR-006–009. Preserve a selected scope as an explicitly qualified choice when it is absent from newly loaded metadata; this does not make descriptors or prior rows a complete catalog. Distinguish an authoritative server zero result before considering a local-facet miss. Refresh and post-mutation list reloads use the accepted query; failed-load Retry repeats its attempted query, while Search/Enter applies the input draft. Mutation targets, payloads, permissions and admission remain unchanged. These are list-context corrections, not the broader3071 filter/layout redesign.
+
 ## Project Structure
 
 Feature artifacts: specs/1002-studio-secrets-inventory/{spec,plan,research,data-model,quickstart,tasks}.md and contracts/inventory-ui.md. A temporary requirements checklist is removed when the spec becomes terminal in the implementation PR.

@@ -51,6 +51,8 @@ An operator opens a result in the existing detail dialog and closes it to contin
 
 1. **Given** applied search/filter criteria, **When** a matching detail dialog opens and closes, **Then** the applied criteria and corresponding result context remain.
 2. **Given** a metadata-only inventory response, **When** rows/counts/filter labels are rendered, **Then** secret values and configuration keys are neither required nor exposed.
+3. **Given** a selected local scope is absent from a later search result, **When** the result arrives, **Then** the control still identifies that active scope, qualified as absent from loaded results; clearing it reveals the matching loaded rows.
+4. **Given** an applied query and different unsubmitted text, **When** a detail mutation reloads the list or the operator uses Refresh, **Then** the applied query remains; Search/Enter explicitly applies the draft. Retry repeats its failed query rather than a later draft.
 
 ### Edge Cases
 
@@ -59,6 +61,7 @@ An operator opens a result in the existing detail dialog and closes it to contin
 - Unknown custom scopes may exist outside loaded records. Registered scope suggestions are not an inventory catalog.
 - Search terms, criteria or endpoint/tenant context change while a request is pending; late results cannot relabel another query's coverage.
 - A failed initial or later request remains distinguishable from no secrets/no matches; normal retry remains available.
+- An authoritative zero-result search takes precedence over local-facet empty wording, even when a facet remains selected.
 - The existing very-large-inventory substring-search boundary is not removed by this leaf. A server refusal remains an honest error, not a fabricated zero result.
 - Long secret names/scope labels, narrow viewports, both themes, keyboard access and read-only callers retain usable controls and metadata-only disclosure.
 
