@@ -213,17 +213,18 @@ FR-017's hard traits are Testcontainers and starting a child process. Both were 
 
 - **GitHub's rule**: a job skipped by `if:` reports as successful for a required check. Any design that can create a skipped check run under a required name, on a head whose real run failed, would let a failure merge. Three consequences follow.
   1. **The full tier lives in its own workflow, `ci-full.yml`** (name `CI full tier`), with `pull_request` types `[opened, reopened, synchronize, ready_for_review]`. `ci.yml` keeps its default types. Marking a PR ready therefore runs only the full tier; it does not re-run the PR tier on a head that already passed it.
-  2. **No `labeled` trigger on a workflow that reports a required check.** Any label added to a PR, such as `auto-fix` or `ready-for-agent`, would start a run, cancel the real one through the concurrency group, and leave a skipped or cancelled result. The `ci:full` label is handled by a third workflow, `ci-full-request.yml`, on `pull_request: [labeled]`. Its jobs run only when the added label is `ci:full`, and its aggregate reports under a different name, `Full tier (requested)`, which is never required.
-  3. **On a draft, `CI full tier` reports success with "not run: draft" in its summary.** A draft cannot merge, and `ready_for_review` starts a fresh run on the same head, whose result supersedes it. If the draft carries `ci:full`, or its diff changes `tools/ci/test-tiers.json` or the shard tooling (the spec's "Manifest change" edge case), the full tier runs for real on that push.
-- **Required context**: the aggregate job of `ci-full.yml` is named `Full tier` and calls nothing reusable, so the context is exactly `Full tier`. The test jobs come from a reusable workflow, `full-tier.yml` (`on: workflow_call`), shared by `ci-full.yml`, `ci-full-request.yml` and `ci.yml`'s push, schedule and dispatch runs. The aggregate is a plain job in each caller, so its context name is not prefixed.
-- **Manual run (FR-008)**: `ci.yml` gains a `workflow_dispatch` input `tier` with choices `full` (default, today's behavior: everything, including the EF container suites) and `pr`.
+  2. **No `labeled` trigger.** Any label added to a PR, such as `auto-fix` or `ready-for-agent`, would start a run, cancel the real one through the concurrency group, and leave a skipped or cancelled result. A `ci:full` label would have needed a third workflow with its own, never-required check name to avoid that. The spec drops the label (FR-008, as amended), and the manual run covers the early full tier.
+  3. **On a draft, `CI full tier` reports success with "not run: draft" in its summary.** A draft cannot merge, and `ready_for_review` starts a fresh run on the same head, whose result supersedes it. If the draft's diff changes `tools/ci/test-tiers.json` or the shard tooling (the spec's "Manifest change" edge case), the full tier runs for real on that push.
+- **Required context**: the aggregate job of `ci-full.yml` is named `Full tier` and calls nothing reusable, so the context is exactly `Full tier`. The test jobs come from a reusable workflow, `full-tier.yml` (`on: workflow_call`), shared by `ci-full.yml` and `ci.yml`'s push, schedule and dispatch runs. The aggregate is a plain job in each caller, so its context name is not prefixed.
+- **Manual run (FR-008)**: `ci.yml` gains a `workflow_dispatch` input `tier` with choices `full` (default, today's behavior: everything, including the EF container suites) and `pr`. It is the one way to run the full tier on a draft. Its results appear in the Actions run and on the commit's checks, not under the required `Full tier` context. That is intended: marking the PR ready runs the required one.
 - **Push to `main`, nightly, dispatch (FR-010)**: unchanged coverage.
   - Push runs the PR tier plus the non-container integration projects, which is what `Build & test` runs today.
   - Nightly and `tier: full` dispatch also run the EF container suites and the Secrets EF proof.
   - The alert job's `needs` gain the new full-tier jobs.
 - **Ruleset**: `main-2` gains `Full tier` as a required context. This is an admin action (Joey Barten or Sipke Schoorstra). FR-011's move waits for it.
 - **Alternatives**:
-  - one workflow with all triggers: rejected, because `ready_for_review` would re-run the PR tier and `labeled` would cancel real runs;
+  - one workflow with all triggers: rejected, because `ready_for_review` would re-run the PR tier;
+  - a `ci:full` label: dropped with the spec's FR-008 amendment, because a third workflow and a second check name cost more than the manual run they duplicate;
   - reporting the full tier through the Checks API from a `workflow_run`: rejected as more moving parts for the same result.
 
 ## R9 — Job budgets and layout
@@ -259,7 +260,7 @@ Full tier (`full-tier.yml`), at most 8 jobs:
 
 | Job | Count | Content | Estimated wall time |
 |---|---|---|---|
-| `Plan` | 1 | classifier, draft or label decision, matrix | 0.5 |
+| `Plan` | 1 | classifier, draft decision, matrix | 0.5 |
 | `Integration shard` | 4 | `workbench-native-hosting` (17.1); `workbench-rest` (about 10); `cluster-foundation-host` (12.3); `integration-other`: Http.IntegrationTests, Cli, Workflows.Runtime.Persistence.EF and `cluster-rest` (about 6–8) | test time + 4.65 setup, restore and build: about 22, 15, 17 and 13 |
 | `EF container shard` | 3 | the 23 suites plus the Secrets EF proof, balanced by leg duration. Each shard restores and builds its container projects once, then runs its suites in sequence, arming each suite's required-provider mode for that suite only. About 37 runner-minutes of tests in all, about 12 per shard. | about 16 |
 
@@ -302,7 +303,7 @@ Full tier (`full-tier.yml`), at most 8 jobs:
   - The framework's §2.23 is about unit-test shape, and §2.23.6 (integration testing) is Deferred. The Elsa constitution has no testing section (D9: no Elsa test-cadence gate).
   - **Decision**: add one row to the Elsa constitution's Gate index for the tier gate, naming `test-tiers-check` and the manifest. That is a MINOR bump (6.1.0 → 6.2.0, new Elsa guidance) and needs owner approval under Governance.
   - Also add the tier rule to `docs/contributing/review-checklist.md` and to the `elsa-add-unit-tests` skill.
-- **FR-023**: a new section, "CI tiers", in `docs/contributing/merging.md`, between "PR evidence" and "Review and merge". It covers the two tiers, the draft rule, `gh pr edit <n> --add-label ci:full`, and `gh workflow run ci.yml --ref <branch> -f tier=full`.
+- **FR-023**: a new section, "CI tiers", in `docs/contributing/merging.md`, between "PR evidence" and "Review and merge". It covers the two tiers, the draft rule, and `gh workflow run ci.yml --ref <branch> -f tier=full`.
 - **FR-024**:
   - `elsa-auto-review-merge`, `elsa-quality-fix`, `speckit-implement` and `elsa-add-unit-tests` link to `docs/contributing/merging.md#ci-tiers`.
   - `elsa-quality-fix` changes from "open a ready PR" to "open a draft PR, then `gh pr ready` before requesting review".

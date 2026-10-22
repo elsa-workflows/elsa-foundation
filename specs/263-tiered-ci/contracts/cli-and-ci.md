@@ -6,8 +6,7 @@
 |---|---|---|---|
 | `Build & test` | `ci.yml` | yes, unchanged name | Aggregate of `Plan tiers`, every `PR shard (n)`, `Architecture guards` and `Core-only build & test`. Success when all of them succeeded, or when the diff is documentation-only (spec 257). |
 | `Generated maps fresh` | `ci.yml` | yes, unchanged | Gains `test-tiers-check` beside `ef-suites-self-test`. |
-| `Full tier` | `ci-full.yml` | **yes, new** (added to ruleset `main-2` by an admin) | Aggregate of the full-tier plan, integration shards and EF container shards. On a draft without `ci:full` and with no manifest change: success, summary "not run: draft". |
-| `Full tier (requested)` | `ci-full-request.yml` | never | The same jobs, for a draft that got the `ci:full` label |
+| `Full tier` | `ci-full.yml` | **yes, new** (added to ruleset `main-2` by an admin) | Aggregate of the full-tier plan, integration shards and EF container shards. On a draft with no manifest change: success, summary "not run: draft". |
 | `PR shard (n)`, `Integration shard (n)`, `EF container shard (n)`, `Plan tiers`, `Architecture guards`, `Core-only build & test` | as above | no | per job |
 
 The job names `Build & test`, `Generated maps fresh` and `Full tier` are load-bearing: branch protection matches them by job name. They are top-level jobs of their workflows, never jobs inside a reusable workflow, so the context carries no `caller / callee` prefix.
@@ -18,9 +17,8 @@ The job names `Build & test`, `Generated maps fresh` and `Full tier` are load-be
 |---|---|---|
 | `ci.yml` | `pull_request` (default types) on `main`; `push` to `main`; `schedule` (unchanged cron); `workflow_dispatch` with input `tier` | unchanged (`ci-pr-<n>`, `ci-push-<ref>`, `ci-run-<id>`) |
 | `ci-full.yml` | `pull_request` types `[opened, reopened, synchronize, ready_for_review]` on `main` | `ci-full-pr-<n>`, cancel in progress |
-| `ci-full-request.yml` | `pull_request` types `[labeled]` on `main`; every job is gated on `github.event.label.name == 'ci:full'` | `ci-full-request-pr-<n>`, cancel in progress |
 | `full-tier.yml` | `workflow_call` with inputs `containers: boolean`, `run: boolean` | inherited from the caller |
-| `ci-flake-record.yml` | `workflow_run` on `[CI, CI full tier, CI full tier (requested)]`, types `[completed]` | `ci-flake-record`, no cancel |
+| `ci-flake-record.yml` | `workflow_run` on `[CI, CI full tier]`, types `[completed]` | `ci-flake-record`, no cancel |
 | `studio-ci.yml` | `pull_request` on `main` with the `paths:` list from research R10; `push` to `main` with no filter | unchanged |
 
 **`workflow_dispatch` input of `ci.yml`:**
@@ -33,7 +31,7 @@ tier:
   default: full
 ```
 
-**Label:** `ci:full`. The label name, the input name `tier` and the value `full` are the three literals that `test_tiers.py check-docs` compares with `docs/contributing/merging.md#ci-tiers` (FR-025).
+**No label.** The full tier has no label trigger (FR-008). The input name `tier` and the value `full` are the two literals that `test_tiers.py check-docs` compares with `docs/contributing/merging.md#ci-tiers` (FR-025).
 
 ## tools/ci/test_tiers.py
 
@@ -53,9 +51,9 @@ test_tiers.py --self-test
   - Exit 1 when the switch is being set to `true` without `Full tier` in ruleset `main-2`.
 - **`check-docs`**:
   - Exit 1 when `docs/contributing/merging.md` has no `## CI tiers` section.
-  - Exit 1 when that section does not name `ci:full`, `-f tier=full` and the two tier names.
+  - Exit 1 when that section does not name `-f tier=full` and the two tier names.
   - Exit 1 when any of the four skills (`.claude/skills/{elsa-auto-review-merge,elsa-quality-fix,speckit-implement,elsa-add-unit-tests}/SKILL.md`) lacks a link to `docs/contributing/merging.md#ci-tiers`.
-  - Exit 1 when the literals in `ci.yml`'s dispatch input or `ci-full-request.yml`'s label gate differ from the documented ones.
+  - Exit 1 when the literals in `ci.yml`'s dispatch input differ from the documented ones.
   - It runs in `Plan tiers`, including on documentation-only PRs, because it reads only documentation and workflow files.
 - **`--self-test`**: built-in cases for selection (split, rest negation, the switch on and off) and for the docs check (each missing link, each mismatched literal). Exits 1 on any miss.
 

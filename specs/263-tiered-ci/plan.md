@@ -40,7 +40,7 @@ Measurements and decisions are in [research.md](research.md).
 - **Constraints**:
   - the context names `Build & test` and `Generated maps fresh` are unchanged;
   - spec 257's documentation fast path holds in both tiers;
-  - no `labeled` trigger and no reusable-workflow prefix on a required context (R8);
+  - no `labeled` trigger, no label for the full tier, and no reusable-workflow prefix on a required context (R8);
   - integration projects leave the PR tier only after `Full tier` is required (FR-011);
   - every failing test is retried exactly once;
   - test code is not refactored for speed (spec Out of Scope).
@@ -95,7 +95,6 @@ tools/maps/Elsa.Maps.Generator/
 .github/workflows/
 ├── ci.yml                                   # plan + PR shards + aggregate; dispatch input `tier`; calls full-tier.yml on push/schedule/dispatch
 ├── ci-full.yml                              # new: required `Full tier` on PR events
-├── ci-full-request.yml                      # new: `ci:full` label → `Full tier (requested)`
 ├── full-tier.yml                            # new: reusable integration and EF shards
 ├── ci-flake-record.yml                      # new: workflow_run → flake-tracking issue
 └── studio-ci.yml                            # pull_request paths filter
@@ -121,7 +120,7 @@ FR-011 fixes the order of steps 3 and 6. The other steps can overlap.
 2. **Sharded PR tier with retry and quarantine** (Stories 1 and 3).
    - `ci.yml` gets `Plan tiers`, `PR shard (n)` and the `Build & test` aggregate. `integrationLeavesPrTier` is `false`, so the PR tier still runs every non-container project, in up to 8 test jobs.
    - Add `ci-flake-record.yml`.
-3. **Full tier** (Story 2). Add `full-tier.yml`, `ci-full.yml` and `ci-full-request.yml`, and have `ci.yml` call `full-tier.yml` on push, schedule and dispatch. Then the **admin step**: add `Full tier` to ruleset `main-2`.
+3. **Full tier** (Story 2). Add `full-tier.yml` and `ci-full.yml`, and have `ci.yml` call `full-tier.yml` on push, schedule and dispatch. Then the **admin step**: add `Full tier` to ruleset `main-2`.
 4. **Studio CI path filter** (Story 6). Independent; can go first.
 5. **Documentation, skills and constitution** (Stories 4 and 5): the `merging.md#ci-tiers` section, the skill links, the draft rule in `elsa-quality-fix`, the review-checklist row, the constitution MINOR, the manifest hashes and `check-docs` in `Plan tiers`.
 6. **The switch** (FR-011). After step 3's admin step, a PR sets `integrationLeavesPrTier: true`, and `select` verifies the ruleset. Then measure SC-001 over the next 20 code PRs, and SC-002 on each ready PR. Set `Status: Implemented` in the PR that finishes the measured outcomes.

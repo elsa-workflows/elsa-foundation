@@ -65,7 +65,7 @@ While a PR is a draft, only the PR tier runs. Once it is marked ready for review
 1. **Given** a draft PR, **When** a commit is pushed, **Then** the PR tier runs and the full tier does not.
 2. **Given** a PR is opened as ready for review, reopened while not a draft, marked ready for review, or receives a commit while it is not a draft, **When** CI runs, **Then** the full tier runs on that head and reports a required check.
 3. **Given** a ready PR whose full tier failed or has not finished, **When** someone tries to merge it, **Then** GitHub blocks the merge.
-4. **Given** a draft PR, **When** its author adds the `ci:full` label or starts the workflow manually on the branch with the full tier selected, **Then** the full tier runs on that head without the PR leaving draft.
+4. **Given** a draft PR, **When** its author starts the workflow manually on the branch with the full tier selected, **Then** the full tier runs on that head without the PR leaving draft.
 5. **Given** a PR whose whole diff is documentation, **When** it is ready for review, **Then** the full tier follows spec 257's fast path and reports success without building or testing.
 6. **Given** a push to `main` or the nightly schedule, **When** CI runs, **Then** the full set runs as it does today, and a red result files or updates the `main is red` issue.
 
@@ -115,9 +115,9 @@ Any author, including a Claude or Codex session, knows to open a PR as a draft w
 
 **Acceptance Scenarios**:
 
-1. **Given** the contributor documentation, **When** an author looks for how CI tiers work, **Then** one section explains the two tiers, the draft rule, and the exact commands for the `ci:full` label and the manual run.
+1. **Given** the contributor documentation, **When** an author looks for how CI tiers work, **Then** one section explains the two tiers, the draft rule, and the exact command for the manual run.
 2. **Given** the skills that open or drive a PR (`elsa-auto-review-merge`, `elsa-quality-fix`, `speckit-implement`'s finishing step) and the test skill (`elsa-add-unit-tests`), **When** the guard that checks them runs, **Then** each links to that section; removing a link fails CI.
-3. **Given** the label name or the manual-run input changes, **When** the workflow's self-test runs, **Then** it fails until the documentation names the same values.
+3. **Given** the manual-run input changes, **When** the workflow's self-test runs, **Then** it fails until the documentation names the same values.
 
 ---
 
@@ -164,7 +164,7 @@ A backend-only PR does not start Studio's lint, unit, browser and .NET jobs; a P
 - **FR-005**: The full tier MUST contain every integration-tier test project, every EF container suite, and the Secrets EF composition proof.
 - **FR-006**: The full tier MUST run on a pull request whenever it becomes ready: when it is opened as ready for review, reopened while not a draft, or marked ready for review. It MUST also run on every push while the PR is not a draft, so the required check never waits for another push. It MUST NOT run on draft commits unless asked for (FR-008).
 - **FR-007**: The full tier MUST report a required status check, and the `main-2` ruleset MUST require it.
-- **FR-008**: An author MUST be able to run the full tier on a draft's head by adding the `ci:full` label, and on any branch through a manual workflow run that selects the full tier.
+- **FR-008**: An author MUST be able to run the full tier on any branch, a draft's head included, through a manual workflow run that selects the full tier. There is no label for it.
 - **FR-009**: A PR whose whole diff is documentation (spec 257) MUST get a full-tier result without building or testing.
 - **FR-010**: The full CI run on every push to `main`, the nightly schedule, the maps publication and the red-main alert MUST stay as they are.
 - **FR-011**: Integration-tier projects MUST NOT leave the PR tier until the full tier is a required check, so that no test stops gating merges in between.
@@ -191,9 +191,9 @@ A backend-only PR does not start Studio's lint, unit, browser and .NET jobs; a P
 
 **Documentation and skills (Story 5)**
 
-- **FR-023**: The contributor merging documentation MUST have one section that explains the two tiers, the draft rule, and the exact commands for the `ci:full` label and the manual run.
+- **FR-023**: The contributor merging documentation MUST have one section that explains the two tiers, the draft rule, and the exact command for the manual run.
 - **FR-024**: `elsa-auto-review-merge`, `elsa-quality-fix`, `speckit-implement`'s finishing step and `elsa-add-unit-tests` MUST link to that section. The PR-driving skills MUST open PRs as drafts and mark them ready before requesting review. A guard MUST fail CI when one of those links is missing.
-- **FR-025**: A self-test MUST fail when the label name or manual-run input the workflow uses differs from the one the documentation names.
+- **FR-025**: A self-test MUST fail when the manual-run input the workflow uses differs from the one the documentation names.
 
 **Studio CI (Story 6)**
 
@@ -283,3 +283,4 @@ Settled with Joey Barten on 2026-10-21 and revised on 2026-10-22 after review.
 
 - **2026-10-22 (planning)**: two factual corrections from research R5 and R6, with no change to any requirement. Workbench has 17 classes and two shared collections (four classes and two), not 13 classes and one collection of three; `Elsa3.Activities.Design.Import.Integration.Tests` starts no child process.
 - **2026-10-22 (planning, Joey Barten)**: FR-017 and Decision 5 narrowed so the PR tier loses as little as possible. A child host process is a hard trait only in a project with a median of 2 minutes or more, and `git` or `bash` launches never are. `Elsa.Etl.Tests`, `Elsa.Secrets.Persistence.EntityFrameworkCore.Tests` and `Elsa.Workflows.Publishing.Tests` stay in the PR tier.
+- **2026-10-22 (planning, Joey Barten)**: the `ci:full` label is dropped from FR-008, FR-023, FR-025 and Story 2 scenario 4, and the manual run is the one way to run the full tier early. This follows Sipke's review point 4 ("Agents won't add `ci:full`"): the label was never the safety net once the full tier became required on ready PRs. Keeping it would have cost a third workflow and a second check name (research R8).

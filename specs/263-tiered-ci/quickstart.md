@@ -27,7 +27,7 @@ Each command exits 0 on a clean tree.
 ## Story 2 — full tier gates the merge
 
 1. On the draft from Story 1, confirm `Full tier` is success with "not run: draft", and that no integration or EF shard ran.
-2. Run `gh pr edit <n> --add-label ci:full`. Confirm `Full tier (requested)` runs the integration and EF shards, and that the PR stays a draft.
+2. Run `gh workflow run ci.yml --ref <branch> -f tier=full`. Confirm the integration and EF shards run on the draft's head, and that the PR stays a draft.
 3. Run `gh pr ready <n>`. Confirm `CI full tier` runs on the same head, `Build & test` does not re-run, and `Full tier` reports after the shards.
 4. Push another commit. Confirm both workflows run.
 5. Close and reopen the PR. Confirm both run again.
@@ -53,7 +53,7 @@ Each command exits 0 on a clean tree.
 ## Story 5 — documentation and skills
 
 1. Remove the `#ci-tiers` link from one of the four skills. Confirm `Plan tiers` fails, naming the skill.
-2. Rename the label in `ci-full-request.yml` only. Confirm `check-docs` fails.
+2. Rename the `tier` input's `full` option in `ci.yml` only. Confirm `check-docs` fails.
 
 ## Story 6 — Studio CI
 

@@ -84,7 +84,7 @@ It replaces `tools/ci/ef-suites.json` and is the single list that both tiers and
   | Event | Shards run |
   |---|---|
   | Pull request (`ci.yml`) | `shards.pr`. While `integrationLeavesPrTier` is false, those shards include the integration units. |
-  | Full tier on a pull request (`ci-full.yml`, `ci-full-request.yml`) | `shards.integration` + `shards.containers` |
+  | Full tier on a pull request (`ci-full.yml`) | `shards.integration` + `shards.containers` |
   | Push to `main` | `shards.pr` + `shards.integration` (no containers, as today) |
   | Nightly, `workflow_dispatch tier=full` | `shards.pr` + `shards.integration` + `shards.containers` |
   | `workflow_dispatch tier=pr` | `shards.pr` |
@@ -115,8 +115,7 @@ Written by `test_results.py evaluate`, read by `ci-flake-record.yml` and by the 
 
 | PR state | `Build & test` | `Full tier` |
 |---|---|---|
-| draft, no `ci:full`, manifest untouched | runs (PR tier) | success, summary "not run: draft" |
-| draft with `ci:full` added | unchanged | `Full tier (requested)` runs and reports separately, never required. Later pushes while the label is present run `Full tier` for real. |
+| draft, manifest untouched | runs (PR tier) | success, summary "not run: draft" |
 | draft, diff touches `tools/ci/test-tiers.json` or the tier tooling | runs | runs for real |
 | opened as ready, reopened while not a draft, or marked ready | runs on open and reopen; not re-run on `ready_for_review` | runs on that head |
 | push while not a draft | runs | runs |
