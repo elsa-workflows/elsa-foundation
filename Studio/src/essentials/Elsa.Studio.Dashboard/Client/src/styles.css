@@ -131,6 +131,7 @@
 .home-continue-dialog a { color: var(--studio-accent); }
 .home-continue-dialog ul { display: grid; gap: .375rem; max-height: 18rem; overflow: auto; margin: 0; padding: 0; list-style: none; }
 .home-continue-dialog li a { display: grid; gap: .2rem; padding: .625rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-sm); background: var(--studio-surface-muted); color: var(--studio-text); text-decoration: none; }
+.home-continue-dialog li a strong { min-width: 0; overflow-wrap: anywhere; }
 .home-continue-dialog li a:hover { border-color: var(--studio-accent); }
 .home-continue-dialog li code { overflow-wrap: anywhere; color: var(--studio-text-muted); font-family: var(--studio-font-mono); font-size: var(--studio-label-size); }
 .home-continue-dialog-actions { display: flex; justify-content: flex-end; padding-block-start: .25rem; border-block-start: 1px solid var(--studio-border); }

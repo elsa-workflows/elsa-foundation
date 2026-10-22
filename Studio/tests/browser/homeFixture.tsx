@@ -213,7 +213,13 @@ function createHomeApi(): ElsaStudioModuleApi {
 }
 
 function installCurrentDraftFixture(api: ElsaStudioModuleApi, scenario: string) {
-  const items = scenario === "multiple"
+  const items = scenario === "multiple-long-names"
+    ? [
+        { id: "definition-long-name", name: `Home3063-long-${"x".repeat(89)}`, draftId: "draft-long-name" },
+        { id: "definition-another", name: "Home3063-draft-a", draftId: "draft-a" },
+        { id: "definition-published-current", name: "Home3063-published-current", draftId: "draft-published", publicationState: "published" }
+      ]
+    : scenario === "multiple"
     ? [
         { id: "definition-a", name: "Duplicate workflow", draftId: "draft-a" },
         { id: "definition-b", name: "Duplicate workflow", draftId: "draft-b" }

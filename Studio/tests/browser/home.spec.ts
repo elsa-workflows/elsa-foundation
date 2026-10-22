@@ -158,6 +158,64 @@ test.describe("customizable Home", () => {
     await expect(narrowOpener).toBeFocused();
   });
 
+  test("wraps a long current-draft name within the narrow chooser and keeps exact selection usable", async ({ page }) => {
+    const longWorkflowName = `Home3063-long-${"x".repeat(89)}`;
+    expect(longWorkflowName).toHaveLength(103);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/?mode=home&drafts=multiple-long-names");
+
+    const opener = page.getByRole("button", { name: /Continue editing/ });
+    await opener.focus();
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog", { name: "Continue editing" });
+    const list = dialog.getByRole("list", { name: "Current workflow drafts" });
+    await expect(dialog).toBeVisible();
+    await expect(list.getByRole("link")).toHaveCount(3);
+    const longCandidate = list.locator("li").filter({ hasText: "definition-long-name" }).getByRole("link");
+    await expect(longCandidate).toBeFocused();
+    await expect(list.getByText(longWorkflowName, { exact: true })).toBeVisible();
+    await expect(list.getByText("definition-another", { exact: true })).toBeVisible();
+    await expect(list.getByText("definition-published-current", { exact: true })).toBeVisible();
+
+    const metrics = await list.evaluate(element => {
+      const bounds = element.getBoundingClientRect();
+      const rows = [...element.querySelectorAll("li")].map(row => {
+        const name = row.querySelector("strong")!;
+        const id = row.querySelector("code")!;
+        const nameBounds = name.getBoundingClientRect();
+        return {
+          id: id.textContent,
+          rowClientWidth: row.clientWidth,
+          rowScrollWidth: row.scrollWidth,
+          nameClientWidth: name.clientWidth,
+          nameScrollWidth: name.scrollWidth,
+          nameInsideList: nameBounds.left >= bounds.left - 1 && nameBounds.right <= bounds.right + 1,
+          nameText: name.textContent
+        };
+      });
+      return { listClientWidth: element.clientWidth, listScrollWidth: element.scrollWidth, rows };
+    });
+    await test.info().attach("current-draft-list-layout.json", {
+      body: JSON.stringify(metrics, null, 2),
+      contentType: "application/json"
+    });
+    expect(metrics.rows.map(row => row.id)).toEqual([
+      "definition-long-name",
+      "definition-another",
+      "definition-published-current"
+    ]);
+    expect(metrics.listScrollWidth, JSON.stringify(metrics)).toBeLessThanOrEqual(metrics.listClientWidth);
+    for (const row of metrics.rows) {
+      expect(row.rowScrollWidth, JSON.stringify(row)).toBeLessThanOrEqual(row.rowClientWidth);
+      expect(row.nameScrollWidth, JSON.stringify(row)).toBeLessThanOrEqual(row.nameClientWidth);
+      expect(row.nameInsideList).toBe(true);
+    }
+    expect(metrics.rows[0].nameText).toBe(longWorkflowName);
+
+    await page.keyboard.press("Enter");
+    await expect.poll(() => new URL(page.url()).searchParams.get("definition")).toBe("definition-long-name");
+  });
+
   test("renders run trends, exact buckets, definition names, and portfolio counts from the real widgets", async ({ page }) => {
     await page.goto("/?mode=home-dashboard&state=ready");
     await expect(page.getByRole("heading", { level: 2, name: "Home" })).toBeVisible();
