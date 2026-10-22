@@ -594,8 +594,15 @@ public sealed class WorkflowIntrinsicExecutor(
         ThrowIfWithheld(binding);
         var durableValues = await durableValueStateStore.ListAllDurableValueStatesAsync(workflowState.WorkflowExecutionId, cancellationToken);
         var projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
-        var visibleFrames = BuildVisibleFrames(workflowState, intrinsicState, runtimeView);
+        var (visibleFrames, boundary) = BuildVisibleFrames(workflowState, intrinsicState, runtimeView, durableValues);
         var frameEnvelopes = ToAddressEnvelopes(visibleFrames);
+        // Spec 265: below a closed activity execution scope the request inputs and root variables are the boundary's.
+        var workflowInputEnvelopes = boundary is null
+            ? projections.WorkflowInputEnvelopes
+            : RuntimeInputBindingStateProjection.ProjectBoundaryEnvelopes(durableValues, boundary.InvocationId, RuntimeInputBindingStateProjection.BoundaryInputRole);
+        var rootVariableNames = boundary is null
+            ? null
+            : RuntimeInputBindingStateProjection.ProjectBoundaryVariableNames(durableValues, boundary.InvocationId);
 
         var context = new RuntimeInputBindingResolutionContext(
             workflowState.WorkflowExecutionId,
@@ -603,9 +610,9 @@ public sealed class WorkflowIntrinsicExecutor(
             consumerInvocation: intrinsicState,
             runtimeView: runtimeView,
             executable: executable,
-            workflowInputEnvelopes: projections.WorkflowInputEnvelopes,
+            workflowInputEnvelopes: workflowInputEnvelopes,
             variableEnvelopes: frameEnvelopes,
-            visibleVariablesByName: RuntimeContainerScopeService.ProjectAmbientVisibleVariableEnvelopes(executable, visibleFrames),
+            visibleVariablesByName: RuntimeContainerScopeService.ProjectAmbientVisibleVariableEnvelopes(executable, visibleFrames, rootVariableNames),
             correlationId: projections.CorrelationId);
         var resolved = inputBindingResolver.Resolve(binding, context);
         if (resolved.Source == RuntimeInputBindingSource.Expression)
@@ -696,6 +703,13 @@ public sealed class WorkflowIntrinsicExecutor(
             ancestorId = ancestor.ParentActivityExecutionId;
         }
 
+        // Spec 265: inside a closed activity execution scope nothing above the boundary is a write target, and the
+        // workflow root frame is not visible. Writing the boundary's own variables is #3023.
+        var boundaryIndex = ancestors.FindIndex(RuntimeClosedScope.IsClosedBoundary);
+        var insideClosedScope = boundaryIndex >= 0;
+        if (insideClosedScope)
+            ancestors = ancestors.Take(boundaryIndex).ToList();
+
         var activityOwner = ancestors.FirstOrDefault(state =>
             state.VariableFrame is { Status: VariableFrameStatus.Active } frame &&
             StringComparer.Ordinal.Equals(frame.ScopeId, declaringScopeId));
@@ -710,7 +724,8 @@ public sealed class WorkflowIntrinsicExecutor(
         if (readOnlyIteration is not null)
             throw new InvalidOperationException($"Iteration variable scope '{declaringScopeId}' is read-only and cannot be targeted by a Set, merge, or reduce intrinsic.");
 
-        if (workflowState.RootVariableFrame is { Status: VariableFrameStatus.Active } root &&
+        if (!insideClosedScope &&
+            workflowState.RootVariableFrame is { Status: VariableFrameStatus.Active } root &&
             StringComparer.Ordinal.Equals(root.ScopeId, declaringScopeId))
             return new FrameOwner(root, WorkflowOwned: true, ActivityOwner: null);
 
@@ -718,15 +733,12 @@ public sealed class WorkflowIntrinsicExecutor(
             $"Variable scope '{declaringScopeId}' is not visible to intrinsic execution '{intrinsicState.InvocationId}'.");
     }
 
-    private static List<VariableFrameState> BuildVisibleFrames(
+    private static (List<VariableFrameState> Frames, ActivityExecutionState? ClosedScopeBoundary) BuildVisibleFrames(
         WorkflowExecutionState workflowState,
         ActivityExecutionState intrinsicState,
-        IReadOnlyCollection<ActivityExecutionState> runtimeView)
+        IReadOnlyCollection<ActivityExecutionState> runtimeView,
+        IReadOnlyCollection<DurableValueState> durableValues)
     {
-        var ordered = new List<VariableFrameState>();
-        if (workflowState.RootVariableFrame is { Status: VariableFrameStatus.Active } root)
-            ordered.Add(root);
-
         var byId = runtimeView.ToDictionary(state => state.InvocationId, StringComparer.Ordinal);
         var ancestors = new Stack<ActivityExecutionState>();
         var ancestorId = intrinsicState.ParentActivityExecutionId;
@@ -737,7 +749,17 @@ public sealed class WorkflowIntrinsicExecutor(
             ancestorId = ancestor.ParentActivityExecutionId;
         }
 
-        foreach (var ancestor in ancestors)
+        // Spec 265: the same closed-scope rule as RuntimeContainerScopeService.BuildVisibleFramesAsync.
+        var chain = ancestors.ToList();
+        var boundaryIndex = RuntimeClosedScope.IndexOfNearest(chain);
+        var boundary = boundaryIndex < 0 ? null : chain[boundaryIndex];
+        var ordered = new List<VariableFrameState>();
+        if (boundary is not null)
+            ordered.Add(RuntimeClosedScope.CreateFrame(boundary, durableValues));
+        else if (workflowState.RootVariableFrame is { Status: VariableFrameStatus.Active } root)
+            ordered.Add(root);
+
+        foreach (var ancestor in chain.Skip(boundaryIndex + 1))
         {
             if (ancestor.IterationVariableFrame is { Status: VariableFrameStatus.Active } iteration)
                 ordered.Add(iteration);
@@ -748,7 +770,7 @@ public sealed class WorkflowIntrinsicExecutor(
         if (intrinsicState.IterationVariableFrame is { Status: VariableFrameStatus.Active } currentIteration)
             ordered.Add(currentIteration);
 
-        return ordered;
+        return (ordered, boundary);
     }
 
     private static Dictionary<RuntimeVariableValueAddress, ValueEnvelope> ToAddressEnvelopes(

@@ -1,7 +1,7 @@
 namespace Elsa3.Mapping.Conversion;
 
 /// <summary>
-/// What an engineer can do about a reusable workflow Elsa 4 graph activities cannot hold yet (spec 246 D-7, D-8). Each
+/// What an engineer can do about a reusable workflow Elsa 4 graph activities cannot hold yet (spec 246 D-7). Each
 /// text names what is unsupported, where it is tracked, and the change to the Elsa 3 workflow that makes it import, or
 /// says plainly that the workflow has to wait.
 /// </summary>
@@ -12,7 +12,6 @@ namespace Elsa3.Mapping.Conversion;
 internal static class Elsa3ReusableGuidance
 {
     private const string IntrinsicIssue = "elsa-foundation#3023";
-    private const string ValueReadIssue = "elsa-foundation#3027";
 
     /// <summary>
     /// How a workflow that stops being reusable is still called, and what that costs: the import does not carry a captured
@@ -36,8 +35,8 @@ internal static class Elsa3ReusableGuidance
         "SetVariable" =>
             $"Elsa 4 graph activities cannot set variables yet (tracked in {IntrinsicIssue}). A reusable workflow's variables " +
             "are its own, so only its body can read them. If nothing in the body reads this variable, remove the Set Variable: " +
-            "nothing else changes. If the body reads it, that read is refused too (ELS3-ACTIVITY-REUSABLE-VALUE-READ-UNSUPPORTED): " +
-            $"keep the workflow in Elsa 3 until {IntrinsicIssue} and {ValueReadIssue} are done, or " + ImportAsRegularWorkflow,
+            "nothing else changes. If a value only needs to pass from one activity to the next, capture that activity's output " +
+            $"into the variable instead. Otherwise keep the workflow in Elsa 3 until {IntrinsicIssue} is done, or " + ImportAsRegularWorkflow,
         "SetOutput" =>
             $"Elsa 4 graph activities cannot set their outputs yet (tracked in {IntrinsicIssue}). If no workflow that uses this " +
             $"activity reads the output, remove the Set Output. If one does, keep the workflow in Elsa 3 until {IntrinsicIssue} " +
@@ -66,18 +65,7 @@ internal static class Elsa3ReusableGuidance
     /// </summary>
     public static string HttpProjection(string outputName) =>
         $"Elsa 4 rebuilds the captured '{outputName}' value with a Set Variable step, which a graph activity cannot run yet " +
-        $"(tracked in {IntrinsicIssue}), and nothing in a reusable body can read the variable yet ({ValueReadIssue}). Remove " +
-        $"the capture of '{outputName}' from the HTTP Endpoint.";
-
-    public const string ValueRead =
-        $"Elsa 4 graph activities cannot read their own inputs, variables or other activities' results yet (tracked in {ValueReadIssue}). " +
-        "Change the reusable workflow so its body works from literal values only, or " + ImportAsRegularWorkflow;
-
-    public const string Capture =
-        $"Nothing in an Elsa 4 graph activity body can read a captured value yet (tracked in {ValueReadIssue}), and a reusable " +
-        "workflow's variables are its own, so no caller sees them. Remove the capture from this property. If the body reads " +
-        $"the variable later, that read is refused too: keep the workflow in Elsa 3 until {ValueReadIssue} is done, or " +
-        ImportAsRegularWorkflow;
+        $"(tracked in {IntrinsicIssue}). Remove the capture of '{outputName}' from the HTTP Endpoint.";
 
     private static string ShortName(string elsa3Type) =>
         elsa3Type.StartsWith("Elsa.", StringComparison.Ordinal) ? elsa3Type["Elsa.".Length..] : elsa3Type;

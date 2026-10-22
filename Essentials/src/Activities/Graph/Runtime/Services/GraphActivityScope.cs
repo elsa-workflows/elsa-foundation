@@ -187,7 +187,8 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
                     drivers[descriptor.ReferenceKey],
                     value,
                     capturedAt,
-                    cancellationToken));
+                    cancellationToken,
+                    boundaryVariableName: descriptor.Name));
         }
 
         Publish(_variables, staged);
@@ -300,7 +301,8 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
             driver,
             value,
             capturedAt,
-            cancellationToken);
+            cancellationToken,
+            boundaryVariableName: descriptor.Name);
         _variables[descriptor.ReferenceKey] = state;
         return state;
     }
@@ -320,7 +322,8 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
         object? value,
         DateTimeOffset capturedAt,
         CancellationToken cancellationToken,
-        string? boundaryInputName = null)
+        string? boundaryInputName = null,
+        string? boundaryVariableName = null)
     {
         var durableValueId = role switch
         {
@@ -341,6 +344,9 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
         };
         if (boundaryInputName is not null)
             metadata[RuntimeMetadataKeys.BoundaryInputName] = boundaryInputName;
+        // Spec 265: body nodes read graph variables by name (variables.x), and the runtime has no graph descriptor.
+        if (boundaryVariableName is not null)
+            metadata[RuntimeMetadataKeys.BoundaryVariableName] = boundaryVariableName;
 
         return new DurableValueState(
             durableValueId,

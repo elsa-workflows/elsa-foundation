@@ -69,25 +69,26 @@ public sealed class Elsa3ReusableGuidanceTests
     }
 
     [Fact]
-    public async Task A_captured_output_is_told_to_remove_the_capture()
+    public async Task A_captured_output_converts_to_a_capture_into_the_reusables_own_variable()
     {
+        // Spec 265 D-2: a graph body captures into its own variables.
         var result = await ConvertReusableAsync(Activity("n", "Elsa.ReadLine", ("result", Captured("variable-total", "String"))));
 
-        var error = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
-        Assert.Equal(Elsa3ActivityDiagnosticCodes.ReusableValueReadUnsupported, error.Code);
-        Assert.Contains("is captured into a variable", error.Message, StringComparison.Ordinal);
-        Assert.Contains("Remove the capture from this property", error.Guidance, StringComparison.Ordinal);
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var output = Assert.Single(Node(result.Value!.State, "n").Outputs);
+        Assert.Equal("Variable", output.Value.ExpressionType);
+        var reference = output.Value.Value is JsonElement element ? element : JsonSerializer.SerializeToElement(output.Value.Value);
+        Assert.Equal("variable-total", reference.GetProperty("referenceKey").GetString());
+        Assert.Equal("workflow", reference.GetProperty("declaringScopeId").GetString());
     }
 
     [Fact]
-    public async Task A_bound_variable_is_reported_as_a_read()
+    public async Task A_bound_variable_converts_to_a_read_of_the_reusables_own_variable()
     {
         var result = await ConvertReusableAsync(Activity("n", "Elsa.WriteLine", ("text", Captured("variable-total", "String"))));
 
-        var error = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
-        Assert.Equal(Elsa3ActivityDiagnosticCodes.ReusableValueReadUnsupported, error.Code);
-        Assert.Contains("reads a variable or another activity's result", error.Message, StringComparison.Ordinal);
-        Assert.Contains("literal values only", error.Guidance, StringComparison.Ordinal);
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.Equal("Variable", Input(Node(result.Value!.State, "n"), "text").Value.ExpressionType);
     }
 
     [Fact]

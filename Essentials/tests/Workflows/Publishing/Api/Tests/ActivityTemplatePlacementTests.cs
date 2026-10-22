@@ -394,6 +394,133 @@ public sealed class ActivityTemplatePlacementTests
         Assert.Equal("target", placed.IntrinsicVariable?.VariableKey);
     }
 
+    [Fact]
+    public async Task Closed_scope_body_references_follow_the_placement_and_the_boundary_is_marked()
+    {
+        // Spec 265 FR-005: body node "format" reads body node "compute"'s result and a graph variable by their
+        // template-local identities; both must point at this placement's identities.
+        var (placer, request) = ClosedScopeGraph(scopeModel: "closed");
+
+        var placement = await placer.PlaceAsync(request);
+
+        Assert.Equal("closed", placement.Root.Metadata[RuntimeMetadataKeys.ActivityExecutionScope]);
+        var body = Assert.Single(placement.Root.ChildSlots, x => x.Name == "activity-graph").Activities;
+        var compute = Assert.Single(body, x => !x.InputBindings.ContainsKey("total"));
+        var format = Assert.Single(body, x => x.InputBindings.ContainsKey("total"));
+        var result = format.InputBindings["condition"].ActivityResult!;
+        Assert.Equal(compute.ExecutableNodeId, result.ProducerExecutableNodeId);
+        Assert.Equal(compute.ExecutableNodeId, result.ProducerScopeId);
+        Assert.Equal(placement.Root.ExecutableNodeId, format.InputBindings["total"].Variable!.DeclaringScopeId);
+    }
+
+    [Fact]
+    public async Task Two_placements_of_a_closed_scope_body_get_independent_references()
+    {
+        var (placer, request) = ClosedScopeGraph(scopeModel: "closed");
+        var other = request with
+        {
+            InvocationOrigin = new([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow-version"), new(ActivityInvocationOriginSegmentKind.AuthoredNode, "second")])
+        };
+
+        var first = await placer.PlaceAsync(request);
+        var second = await placer.PlaceAsync(other);
+
+        var firstFormat = first.Root.DescendantsAndSelf().Single(x => x.InputBindings.ContainsKey("total"));
+        var secondFormat = second.Root.DescendantsAndSelf().Single(x => x.InputBindings.ContainsKey("total"));
+        Assert.NotEqual(firstFormat.InputBindings["condition"].ActivityResult!.ProducerExecutableNodeId, secondFormat.InputBindings["condition"].ActivityResult!.ProducerExecutableNodeId);
+        Assert.Equal(first.Root.ExecutableNodeId, firstFormat.InputBindings["total"].Variable!.DeclaringScopeId);
+        Assert.Equal(second.Root.ExecutableNodeId, secondFormat.InputBindings["total"].Variable!.DeclaringScopeId);
+    }
+
+    [Fact]
+    public async Task A_template_compiled_before_closed_scopes_keeps_its_references_and_is_not_marked()
+    {
+        // Published versions keep their behaviour: no scopeModel, no remap, no marker.
+        var (placer, request) = ClosedScopeGraph(scopeModel: null);
+
+        var placement = await placer.PlaceAsync(request);
+
+        Assert.False(placement.Root.Metadata.ContainsKey(RuntimeMetadataKeys.ActivityExecutionScope));
+        var format = placement.Root.DescendantsAndSelf().Single(x => x.InputBindings.ContainsKey("total"));
+        Assert.Equal("compute", format.InputBindings["condition"].ActivityResult!.ProducerExecutableNodeId);
+        Assert.Equal("workflow", format.InputBindings["total"].Variable!.DeclaringScopeId);
+    }
+
+    private static (ActivityTemplatePlacer Placer, ActivityTemplatePlacementRequest Request) ClosedScopeGraph(string? scopeModel)
+    {
+        var formatOverlay = new ExecutableActivityTemplateOccurrenceOverlay(
+            "1",
+            Json("""
+                 [
+                   {"referenceKey":"condition","value":{"value":{"producerNodeId":"compute","projectionKey":"result","producerScopeId":"compute"},"expressionType":"ActivityResult"}},
+                   {"referenceKey":"total","value":{"value":{"referenceKey":"total","declaringScopeId":"workflow"},"expressionType":"Variable"}}
+                 ]
+                 """),
+            null);
+        var emptyOverlay = new ExecutableActivityTemplateOccurrenceOverlay("1", Json("[]"), null);
+        var payload = scopeModel is null ? Json("""{"entryOccurrenceId":"compute"}""") : Json($$"""{"entryOccurrenceId":"compute","scopeModel":"{{scopeModel}}"}""");
+        var graphRoot = new ExecutableNode("graph-boundary", "graph-boundary", "elsa.graph-activity", "1",
+            new RuntimeActivityDescriptor("elsa.graph-activity", "1", payload),
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>());
+        var graphTemplate = Template("template-graph", "hash-graph", graphRoot,
+        [
+            new("definition-compute", "version-compute", "1.0.0", "template-compute", "hash-compute", "compute", ActivityInvocationOrigin.Empty, null, "activity-graph", 0, emptyOverlay),
+            new("definition-format", "version-format", "1.0.0", "template-format", "hash-format", "format", ActivityInvocationOrigin.Empty, null, "activity-graph", 1, formatOverlay)
+        ]);
+        var computeTemplate = Template("template-compute", "hash-compute", new ExecutableNode(
+            "source-owned-root", "source-owned-root", "type.compute", "1", new("compute", "1", Json("{}")),
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(),
+            new Dictionary<string, string>(), activityContract: RuntimeContractWithInputs("condition")));
+        var formatTemplate = Template("template-format", "hash-format", new ExecutableNode(
+            "source-owned-root", "source-owned-root", "type.format", "1", new("format", "1", Json("{}")),
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(),
+            new Dictionary<string, string>(), activityContract: RuntimeContractWithInputs("condition", "total")));
+        var graphPublication = Publication("definition-graph", "version-graph", "type.graph", graphTemplate);
+        var computePublication = Publication("definition-compute", "version-compute", "type.compute", computeTemplate);
+        var formatPublication = Publication("definition-format", "version-format", "type.format", formatTemplate);
+        var references = new[]
+        {
+            Reference(graphPublication, ExecutableLayoutSidecar.Empty),
+            Reference(computePublication, ExecutableLayoutSidecar.Empty),
+            Reference(formatPublication, ExecutableLayoutSidecar.Empty)
+        };
+        var placer = CreatePlacer(
+            new PublicationStore([graphPublication, computePublication, formatPublication]),
+            new TemplateReader([graphTemplate, computeTemplate, formatTemplate]),
+            new SourceReader(references),
+            new Sha256ActivityPlacementHasher());
+        return (placer, new(
+            graphPublication,
+            graphTemplate,
+            references[0],
+            new ActivityInvocationOrigin([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow-version")]),
+            graphPublication.ActivityTypeKey,
+            new Dictionary<string, RuntimeInputBinding>(),
+            new Dictionary<string, RuntimeOutputCapture>()));
+    }
+
+    private static Elsa.Activities.Runtime.Core.Models.ActivityContract RuntimeContractWithInputs(params string[] inputKeys) => new(
+        "type.local",
+        "1",
+        "local",
+        Json("{}"),
+        inputKeys.Select(key => new Elsa.Activities.Runtime.Core.Models.ActivityInputContract(
+            key,
+            key,
+            new ValueTypeDescriptor("Object"),
+            isRequired: false,
+            isNullable: true,
+            hasDefault: false,
+            defaultValue: null,
+            policy: ActivityValuePolicy.Default)).ToArray(),
+        new ActivityResultContract(
+            new ValueTypeDescriptor("Object"),
+            isRequired: true,
+            policy: ActivityValuePolicy.Default,
+            projections: []),
+        [ActivityOutcomes.Done],
+        new ActivityActivationRequirement("type.local", "local"));
+
     private sealed record Fixture(ActivityTemplatePlacer Placer, ActivityTemplatePlacementRequest Request)
     {
         public static Fixture Create(

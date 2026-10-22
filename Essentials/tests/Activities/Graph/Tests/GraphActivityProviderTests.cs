@@ -387,6 +387,9 @@ public sealed class GraphActivityProviderTests
         Assert.False(first.ExecutableRoot.Descriptor.Payload.TryGetProperty("rootActivity", out _));
         Assert.False(first.ExecutableRoot.Descriptor.Payload.TryGetProperty("provider", out _));
         Assert.False(first.ExecutableRoot.Descriptor.Payload.TryGetProperty("templateHash", out _));
+        // Spec 265: every graph compiled now is a closed value scope, so placement remaps its body.
+        Assert.Equal(GraphActivityProvider.ClosedScopeModel, first.ExecutableRoot.Descriptor.Payload.GetProperty("scopeModel").GetString());
+        Assert.Equal("elsa.activity-graph/compiler/3.0.0", GraphActivityProvider.Fingerprint);
         Assert.Equal(2, first.ResourceMeasurements.LocalNodeCount);
         Assert.Equal(2, first.ResourceMeasurements.MaximumObservedAuthoredDepth);
         Assert.Equal(2, first.ResourceMeasurements.DependencyCount);

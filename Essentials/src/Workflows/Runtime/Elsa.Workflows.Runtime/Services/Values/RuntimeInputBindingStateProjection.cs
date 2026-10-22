@@ -34,6 +34,57 @@ public static class RuntimeInputBindingStateProjection
         ProjectEnvelopesByMetadataKey(durableValues, RuntimeMetadataKeys.InputName);
 
     /// <summary>
+    /// Projects one closed activity execution scope's values of one role (<c>input</c> or <c>variable</c>), keyed by
+    /// reference key (spec 265). These are the rows the boundary activation wrote under its own execution id; a body
+    /// node reads them in place of the started workflow's request and root variables.
+    /// </summary>
+    public static IReadOnlyDictionary<string, ValueEnvelope> ProjectBoundaryEnvelopes(
+        IEnumerable<DurableValueState> durableValues,
+        string boundaryActivityExecutionId,
+        string role)
+    {
+        ArgumentNullException.ThrowIfNull(durableValues);
+        ArgumentException.ThrowIfNullOrWhiteSpace(boundaryActivityExecutionId);
+
+        var result = new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal);
+        foreach (var durableValue in BoundaryRows(durableValues, boundaryActivityExecutionId, role))
+            result[durableValue.Metadata[RuntimeMetadataKeys.BoundaryReferenceKey]] = ToEnvelope(durableValue);
+        return result;
+    }
+
+    /// <summary>Reference key → declared name of one closed scope's variables, for name-based JavaScript reads.</summary>
+    public static IReadOnlyDictionary<string, string> ProjectBoundaryVariableNames(
+        IEnumerable<DurableValueState> durableValues,
+        string boundaryActivityExecutionId)
+    {
+        ArgumentNullException.ThrowIfNull(durableValues);
+        ArgumentException.ThrowIfNullOrWhiteSpace(boundaryActivityExecutionId);
+
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var durableValue in BoundaryRows(durableValues, boundaryActivityExecutionId, BoundaryVariableRole))
+        {
+            var referenceKey = durableValue.Metadata[RuntimeMetadataKeys.BoundaryReferenceKey];
+            result[referenceKey] = durableValue.Metadata.GetValueOrDefault(RuntimeMetadataKeys.BoundaryVariableName, referenceKey);
+        }
+
+        return result;
+    }
+
+    public const string BoundaryInputRole = "input";
+    public const string BoundaryVariableRole = "variable";
+
+    private static IEnumerable<DurableValueState> BoundaryRows(
+        IEnumerable<DurableValueState> durableValues,
+        string boundaryActivityExecutionId,
+        string role) =>
+        durableValues
+            .Where(value => StringComparer.Ordinal.Equals(value.SourceActivityExecutionId, boundaryActivityExecutionId) &&
+                            value.Metadata.TryGetValue(RuntimeMetadataKeys.BoundaryValueRole, out var valueRole) &&
+                            StringComparer.Ordinal.Equals(valueRole, role) &&
+                            value.Metadata.ContainsKey(RuntimeMetadataKeys.BoundaryReferenceKey))
+            .OrderBy(value => value.CapturedAt);
+
+    /// <summary>
     /// Projects the start stimulus payload from its reserved single-slot channel
     /// (<see cref="RuntimeMetadataKeys.StimulusInputName"/>). Null when the execution was not started by a
     /// stimulus carrying a payload. Deliberately not part of the workflow-input namespace.

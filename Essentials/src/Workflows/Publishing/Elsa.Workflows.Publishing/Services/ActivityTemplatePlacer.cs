@@ -6,6 +6,7 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -142,6 +143,11 @@ public sealed class ActivityTemplatePlacer(
                     : GenerateId("node", frame.Origin, $"node:{node.ExecutableNodeId}", generatedIds);
         }
 
+        // Spec 265: a closed-scope body's references are template-local. They are rewritten to this placement once
+        // every body occurrence has its placed identity, with the graph's own scope as the placed boundary id.
+        var closedScopeId = IsClosedScope(frame.Template.Root.Descriptor)
+            ? nodeIds[frame.Template.Root.ExecutableNodeId]
+            : null;
         var placedNodes = new Dictionary<string, ExecutableNode>(StringComparer.Ordinal);
         var pending = new Stack<(ExecutableNode Node, bool Visited)>();
         pending.Push((frame.Template.Root, false));
@@ -164,7 +170,7 @@ public sealed class ActivityTemplatePlacer(
                 .ToList();
             if (ReferenceEquals(current.Node, frame.Template.Root) && frame.Children.Count > 0)
             {
-                foreach (var slot in ReconstructOccurrenceRoots(frame.Children)
+                foreach (var slot in ReconstructOccurrenceRoots(frame.Children, closedScopeId)
                              .GroupBy(x => x.ChildSlotName, StringComparer.Ordinal)
                              .OrderBy(x => x.Key, StringComparer.Ordinal))
                     MergeChildSlot(childSlots, slot.Key, slot.OrderBy(x => x.ChildIndex).Select(x => x.Root));
@@ -187,6 +193,8 @@ public sealed class ActivityTemplatePlacer(
                 metadata["activity.sourceReferenceId"] = frame.SourceReference.SourceReferenceId;
                 if (StringComparer.Ordinal.Equals(descriptor.ConsumerKey, "elsa.graph-activity"))
                     metadata["graph.templateHash"] = frame.Template.TemplateHash;
+                if (closedScopeId is not null)
+                    metadata[RuntimeMetadataKeys.ActivityExecutionScope] = RuntimeMetadataKeys.ActivityExecutionScopeClosed;
             }
 
             var inputBindings = isBoundary && stackIsRoot(frame)
@@ -275,7 +283,7 @@ public sealed class ActivityTemplatePlacer(
         static bool stackIsRoot(PlacementFrame candidate) => candidate.OccurrenceId is null;
     }
 
-    private IReadOnlyList<PlacementBuild> ReconstructOccurrenceRoots(IReadOnlyList<PlacementBuild> occurrences)
+    private IReadOnlyList<PlacementBuild> ReconstructOccurrenceRoots(IReadOnlyList<PlacementBuild> occurrences, string? closedScopeId)
     {
         if (occurrences.Count == 0)
             return [];
@@ -283,6 +291,10 @@ public sealed class ActivityTemplatePlacer(
         var byId = occurrences.ToDictionary(
             x => x.OccurrenceId ?? throw new InvalidOperationException("A nested placement occurrence must have an identity."),
             StringComparer.Ordinal);
+        // A body occurrence is authored under its occurrence id, which is the body node id its siblings refer to.
+        var occurrenceNodeIds = closedScopeId is null
+            ? null
+            : byId.ToDictionary(x => x.Key, x => x.Value.Root.ExecutableNodeId, StringComparer.Ordinal);
         var children = occurrences
             .Where(x => x.ParentOccurrenceId is not null)
             .GroupBy(x => x.ParentOccurrenceId!, StringComparer.Ordinal)
@@ -300,7 +312,9 @@ public sealed class ActivityTemplatePlacer(
         while (ready.TryDequeue(out var occurrenceId))
         {
             var occurrence = byId[occurrenceId];
-            var root = occurrence.Root;
+            var root = occurrenceNodeIds is null
+                ? occurrence.Root
+                : PlacedReferenceRemapper.Remap(occurrence.Root, occurrenceNodeIds, closedScopeId!);
             if (children.TryGetValue(occurrenceId, out var authoredChildren))
             {
                 var childSlots = root.ChildSlots.ToList();
@@ -332,6 +346,12 @@ public sealed class ActivityTemplatePlacer(
             .Select(x => rebuilt[x.OccurrenceId!])
             .ToArray();
     }
+
+    private static bool IsClosedScope(RuntimeActivityDescriptor descriptor) =>
+        descriptor.Payload.ValueKind == JsonValueKind.Object &&
+        descriptor.Payload.TryGetProperty("scopeModel", out var scopeModel) &&
+        scopeModel.ValueKind == JsonValueKind.String &&
+        StringComparer.Ordinal.Equals(scopeModel.GetString(), RuntimeMetadataKeys.ActivityExecutionScopeClosed);
 
     private static void MergeChildSlot(
         IList<ExecutableChildSlot> slots,

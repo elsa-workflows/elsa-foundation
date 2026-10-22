@@ -67,10 +67,15 @@ public sealed class CausalActivityResultResolver
             .Where(state => StringComparer.Ordinal.Equals(state.Execution.WorkflowExecutionId, workflowExecutionId))
             .ToDictionary(state => state.InvocationId, StringComparer.Ordinal);
         var causalLineage = BuildCausalLineage(consumer, statesByInvocationId);
+        // Spec 265: producer and consumer must share their nearest closed activity execution scope. Inside one, every
+        // placed body node opens its own execution scope, so the declared structural scope cannot be compared with a
+        // runtime scope; the placed producer id and the shared boundary invocation identify the producer instead.
+        var consumerBoundaryId = RuntimeClosedScope.NearestBoundaryId(consumer, statesByInvocationId);
         var candidates = statesByInvocationId.Values
             .Where(state => causalLineage.Contains(state.InvocationId))
             .Where(state => StringComparer.Ordinal.Equals(state.Execution.ExecutableNodeId, producerNodeId))
-            .Where(state => IsStructurallyVisible(producerScopeId, state, consumer))
+            .Where(state => StringComparer.Ordinal.Equals(RuntimeClosedScope.NearestBoundaryId(state, statesByInvocationId), consumerBoundaryId))
+            .Where(state => IsStructurallyVisible(consumerBoundaryId is null ? producerScopeId : null, state, consumer))
             .Where(IsCommittedCompletion)
             .OrderBy(state => state.ExecutionSequence)
             .ThenBy(state => state.InvocationId, StringComparer.Ordinal)

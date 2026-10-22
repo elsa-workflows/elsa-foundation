@@ -39,7 +39,9 @@ public sealed class GraphActivityProvider(
     public static readonly string CompleteDefinitionId = ActivityCatalogStableIds.DefinitionId(CompleteActivityTypeKey)!;
 
     public const string Key = "elsa.activity-graph";
-    public const string Fingerprint = "elsa.activity-graph/compiler/2.0.0";
+    public const string Fingerprint = "elsa.activity-graph/compiler/3.0.0";
+    /// <summary>Boundary descriptor <c>scopeModel</c> value for a closed value scope (spec 265).</summary>
+    public const string ClosedScopeModel = "closed";
     public const string RuntimeConsumerKey = "elsa.graph-activity";
     public const string RuntimeDescriptorSchemaVersion = "1";
 
@@ -1123,10 +1125,14 @@ public sealed class GraphActivityProvider(
         };
         var serializerOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         var payload = JsonSerializer.SerializeToElement(plan, serializerOptions);
+        var closedPayload = JsonNode.Parse(payload.GetRawText())!.AsObject();
+        // Spec 265: the body is a closed value scope. Placement reads this to remap body references and mark the
+        // boundary; versions compiled before it keep resolving their body against the caller.
+        closedPayload["scopeModel"] = ClosedScopeModel;
         if (!StringComparer.Ordinal.Equals(graph.ManifestSchemaVersion, ActivityGraphManifest.MultipleOutcomesSchemaVersion))
-            return Canonicalize(payload);
+            return Canonicalize(JsonSerializer.SerializeToElement(closedPayload, serializerOptions));
 
-        var schemaTwoPayload = JsonNode.Parse(payload.GetRawText())!.AsObject();
+        var schemaTwoPayload = closedPayload;
         schemaTwoPayload["outcomeMappings"] = JsonSerializer.SerializeToNode(outcomeMappings, serializerOptions);
 
         // Written only when the body has a Complete node, so every other graph compiles to the same bytes as before.
