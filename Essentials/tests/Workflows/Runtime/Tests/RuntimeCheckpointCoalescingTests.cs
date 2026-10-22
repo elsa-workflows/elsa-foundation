@@ -88,8 +88,10 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             Assert.NotSame(first, second);
     }
 
-    [Fact]
-    public async Task AdvanceInnerQueue_RemovesConsumedSeededItemsByIdentity_WhenListOrderDiffersFromDequeueOrder()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AdvanceInnerQueue_RemovesConsumedSeededItemsByIdentity_WhenListOrderDiffersFromDequeueOrder(bool visibilitySnapshots)
     {
         const string workflowExecutionId = "wfexec-list-dequeue-order";
         var inner = new InMemoryWorkflowSchedulerWorkQueue();
@@ -107,20 +109,20 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
 
         var session = new RuntimeCoalescingSession(
             workflowExecutionId,
-            inner,
+            visibilitySnapshots ? inner : new QueueWithoutVisibility(inner),
             new PersistenceModeOptions());
         await session.EnsureQueueSeededAsync(CancellationToken.None);
 
-        Assert.Equal("work-5", (await session.DequeueOverlayAsync(CancellationToken.None))!.WorkItemId);
-        Assert.Equal("work-20", (await session.DequeueOverlayAsync(CancellationToken.None))!.WorkItemId);
+        Assert.Equal(visibilitySnapshots ? "work-30" : "work-5", (await session.DequeueOverlayAsync(CancellationToken.None))!.WorkItemId);
+        Assert.Equal(visibilitySnapshots ? "work-5" : "work-20", (await session.DequeueOverlayAsync(CancellationToken.None))!.WorkItemId);
 
         await session.AdvanceInnerQueueAsync(consumeInFlightClaims: false, CancellationToken.None);
 
         Assert.Equal(
-            ["work-30"],
+            [visibilitySnapshots ? "work-20" : "work-30"],
             (await inner.ListAllAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId))).Select(item => item.WorkItemId));
         Assert.Equal(
-            ["work-30"],
+            [visibilitySnapshots ? "work-20" : "work-30"],
             (await session.ListOverlayAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId), CancellationToken.None))
                 .Items.Select(item => item.WorkItemId));
     }

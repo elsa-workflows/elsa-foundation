@@ -85,7 +85,8 @@ public sealed class CoalescingWorkflowSchedulerWorkQueue(
             var head = await session.ListOverlayAsync(
                 new RuntimeSchedulerWorkQuery(request.WorkflowExecutionId, limit: 1),
                 cancellationToken);
-            if (head.Items.FirstOrDefault()?.CommandKind == WorkflowExecutionCommandKind.ResumeBookmark)
+            if (!session.SupportsDeferredOverlayRelease &&
+                head.Items.FirstOrDefault()?.CommandKind == WorkflowExecutionCommandKind.ResumeBookmark)
             {
                 // The resume handler may explicitly defer while its dependency is unavailable. Flush the current
                 // coalesced segment before claiming this item so the drainer's later release updates the real durable

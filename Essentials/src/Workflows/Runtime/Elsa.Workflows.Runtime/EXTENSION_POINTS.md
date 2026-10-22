@@ -635,6 +635,12 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 
 - **Coalescing reconciliation:** `SupportsTargetedDeletion` defaults to false. Providers opting in must delete exactly the named identity independently of listing order and concurrent enqueue; a missing identity returns false without deleting other work. Both shipped providers support it, and queue decorators must forward it. The default coalescing scope disables buffering for unsupported providers and persists checkpoints with Immediate decisions. It deletes only overlay-known consumed identities after their effects commit; unrelated concurrent outbox additions are preserved.
 
+### `IWorkflowSchedulerWorkVisibilityReader` *(Core — `Elsa.Workflows.Runtime.Core`)*
+
+- **Usage:** optional capability of the configured scheduler queue. Reads each bounded page of work together with its current visibility deadline, including active claims and released retry delays, in the same provider read. The coalescing working set uses it under the workflow execution's single-writer lease; it does not acquire ownership or replace claim fencing.
+- **Implementations:** `InMemoryWorkflowSchedulerWorkQueue` and `EfSchedulerWorkQueueStore`. Visibility pages follow actual claim FIFO order with scope-bound continuations; the in-memory provider keeps its existing item-only keyset listing unchanged. EF does not issue an additional query for visibility.
+- **Fallback:** a queue without this reader retains the durable pre-claim boundary for bookmark resumes. A visibility-aware queue can keep successful resumes coalesced; on explicit temporary unavailability, the drain flushes the retained source and persists the delay through a real FIFO claim/release before returning Deferred. An unavailable, changed or lost durable head fails the drain rather than reporting a durable deferral.
+
 ### `IDurableTimerStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one store owns durable timers for a runtime composition).
 - **Signature:** `SaveAsync(DurableTimer timer, ...)`, `FindAsync(string workflowExecutionId, string timerId, ...)`, `DeleteAsync(string workflowExecutionId, string timerId, ...)`, `ListDueAsync(DateTimeOffset now, int limit, ...)`.

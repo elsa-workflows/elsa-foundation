@@ -4,6 +4,8 @@
 
 The old overlay remains inactive while all durable continuation batches are delivered. Starting a replacement earlier would hide later durable batches behind the new overlay. Distinct durably delivered outbox IDs count as progress only during this handoff, including another worker's deliveries confirmed by lookup. Repeated IDs cannot reset the progress limit. Delivery retains the existing rule that newly emitted work can advance a following scheduler cycle even when the preceding cycle reached its item cap.
 
+The subsequent [visibility and command-budget repair](coalescing-visibility-repair.md) supersedes the unconditional boundary for providers that can return claim/retry visibility. The handoff below remains the compatibility path for other providers.
+
 ## Regression and removal evidence
 
 - On the pre-repair runtime, the first regression set executed 12 tests: five failed and seven passed. Failures covered post-resume coalescing and the missing safe deferral explanation.

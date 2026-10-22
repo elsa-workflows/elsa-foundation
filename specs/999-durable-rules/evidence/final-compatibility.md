@@ -4,7 +4,7 @@ The [receipt](final-compatibility-receipt.json) retains command records, log/TRX
 for the completed local checks. These are local branch results, not exact-head hosted CI or
 resulting-main evidence. Full leaf acceptance remains false.
 
-Subsequent Code Review found that bookmark-resume boundaries disabled coalescing for the rest of a drain. The [coalescing review repair](coalescing-review-repair.md) supersedes the earlier clean-review conclusion for that path and records fresh source-built verification. The historical suite results below retain their original scope.
+Subsequent Code Review found that bookmark-resume boundaries disabled coalescing for the rest of a drain. The [coalescing review repair](coalescing-review-repair.md) supersedes the earlier clean-review conclusion for that path and records fresh source-built verification. The later [visibility and command-budget repair](coalescing-visibility-repair.md) records the CI failure and provider-capability correction. The historical suite results below retain their original scope.
 
 | Suite | Passed | Failed | Skipped |
 |---|---:|---:|---:|

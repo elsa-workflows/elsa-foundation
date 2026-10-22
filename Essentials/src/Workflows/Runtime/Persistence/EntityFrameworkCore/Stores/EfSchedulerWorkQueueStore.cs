@@ -21,7 +21,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 public sealed class EfSchedulerWorkQueueStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    IRuntimeRecoveryContinuationCodec continuationCodec) : IWorkflowSchedulerWorkQueue, IWorkflowSchedulerWorkClaimInspection
+    IRuntimeRecoveryContinuationCodec continuationCodec) : IWorkflowSchedulerWorkQueue, IWorkflowSchedulerWorkClaimInspection, IWorkflowSchedulerWorkVisibilityReader
 {
     private const string CursorPurpose = "ef-runtime-scheduler-work-v1";
     private static readonly EfWriteRetry Transitions = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Concurrency);
@@ -150,9 +150,23 @@ public sealed class EfSchedulerWorkQueueStore(
             workflowExecutionId);
     }
 
-    public async ValueTask<RuntimeStorePage<RuntimeSchedulerWorkItem>> ListAsync(
+    public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkItem>> ListAsync(
         RuntimeSchedulerWorkQuery query,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        ListPageAsync(query, static (_, item) => item, cancellationToken);
+
+    public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkVisibility>> ListWithVisibilityAsync(
+        RuntimeSchedulerWorkQuery query,
+        CancellationToken cancellationToken = default) =>
+        ListPageAsync(
+            query,
+            static (row, item) => new RuntimeSchedulerWorkVisibility(item, ReadVisibleAfter(row)),
+            cancellationToken);
+
+    private async ValueTask<RuntimeStorePage<TResult>> ListPageAsync<TResult>(
+        RuntimeSchedulerWorkQuery query,
+        Func<SchedulerWorkItemEntity, RuntimeSchedulerWorkItem, TResult> project,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
         ValidateWorkflowExecutionId(query.WorkflowExecutionId);
@@ -175,11 +189,11 @@ public sealed class EfSchedulerWorkQueueStore(
         var hasNext = rows.Length > query.Limit;
         if (hasNext)
             rows = rows[..query.Limit];
-        var items = rows.Select(row => ReadChecked(row, scope.Value, query.WorkflowExecutionId)).ToArray();
+        var items = rows.Select(row => project(row, ReadChecked(row, scope.Value, query.WorkflowExecutionId))).ToArray();
         var next = hasNext
             ? EncodeCursor(scope.Hash, workflowHash, rows[^1].WorkOrderKey)
             : null;
-        return new RuntimeStorePage<RuntimeSchedulerWorkItem>(query, items, next);
+        return new RuntimeStorePage<TResult>(query, items, next);
     }
 
     public async ValueTask<RuntimeSchedulerWorkItem?> DequeueAsync(
@@ -639,6 +653,11 @@ public sealed class EfSchedulerWorkQueueStore(
             EfRuntimeOperationalStoreSupport.FromUtcTicks(row.ClaimedAtUtcTicks!.Value, row.ClaimedAtOffsetMinutes!.Value),
             EfRuntimeOperationalStoreSupport.FromUtcTicks(row.VisibleAfterUtcTicks!.Value, row.VisibleAfterOffsetMinutes!.Value));
     }
+
+    private static DateTimeOffset? ReadVisibleAfter(SchedulerWorkItemEntity row) =>
+        row.VisibleAfterUtcTicks is { } utcTicks
+            ? EfRuntimeOperationalStoreSupport.FromUtcTicks(utcTicks, row.VisibleAfterOffsetMinutes!.Value)
+            : null;
 
     private static bool Matches(SchedulerWorkItemEntity row, RuntimeSchedulerWorkClaim claim) =>
         row.Revision == claim.Revision &&

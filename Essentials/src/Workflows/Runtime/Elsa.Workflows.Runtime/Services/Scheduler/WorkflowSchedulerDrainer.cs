@@ -317,8 +317,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         }
         catch (RuntimeSchedulerWorkUnavailableException exception)
         {
-            // Only bookmark resumes currently establish a durable pre-claim boundary under coalescing.
-            // Other command kinds must retain their source without claiming that an overlay release is durable.
+            // Bookmark resumes preserve their retry delay either through a durable claim or through a visibility-aware
+            // overlay whose drain flush persists the release before returning. Other command kinds retain their source.
             if (workItem.CommandKind != WorkflowExecutionCommandKind.ResumeBookmark ||
                 renewal is null || _consumedWorkClaimAccessor?.WasConsumedDurably == true)
                 throw;

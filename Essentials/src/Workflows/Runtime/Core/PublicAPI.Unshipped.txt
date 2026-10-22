@@ -8866,3 +8866,19 @@ virtual Elsa.Workflows.Runtime.Core.Models.WorkflowTriggerBindingPageRequest.Pri
 ~override Elsa.Workflows.Runtime.Core.Models.RuntimeAdmissionCompletion.ToString() -> string
 ~override Elsa.Workflows.Runtime.Core.Models.RuntimeVariableValueAddress.Equals(object obj) -> bool
 ~override Elsa.Workflows.Runtime.Core.Models.RuntimeVariableValueAddress.ToString() -> string
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowSchedulerWorkVisibilityReader
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowSchedulerWorkVisibilityReader.ListWithVisibilityAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkQuery! query, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeStorePage<Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility!>!>
+Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility
+Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility!
+Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility.Deconstruct(out Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem! Item, out System.DateTimeOffset? VisibleAfter) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility.Equals(Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility.Item.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem!
+Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility.Item.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility.RuntimeSchedulerWorkVisibility(Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem! Item, System.DateTimeOffset? VisibleAfter) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility.VisibleAfter.get -> System.DateTimeOffset?
+Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility.VisibleAfter.init -> void
+override Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility.operator !=(Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility? left, Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility.operator ==(Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility? left, Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility? right) -> bool

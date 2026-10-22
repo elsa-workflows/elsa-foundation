@@ -326,6 +326,73 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         Assert.Empty(await shared.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)));
     }
 
+    [Fact]
+    public async Task Visibility_snapshot_keeps_successful_resume_and_surrounding_work_in_one_segment()
+    {
+        var shared = new SharedPersistence(new FakeTimeProvider(Now));
+        var probe = new ProbeRecorder(deferFirstResume: false);
+        await using var provider = BuildProvider(shared, probe, visibilitySnapshots: true);
+        await shared.Queue.EnqueueAsync(ScheduleWork("schedule-1", 1));
+        await shared.Queue.EnqueueAsync(ResumeWork("resume-1", 2));
+        await shared.Queue.EnqueueAsync(ScheduleWork("schedule-2", 3));
+        await using var scope = provider.CreateAsyncScope();
+
+        var result = await scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+            .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+
+        Assert.Equal(["schedule-1", "resume-1", "schedule-2"], result.Items.Select(item => item.WorkItemId));
+        Assert.All(result.Items, item => Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, item.Status));
+        var resume = Assert.Single(probe.ResumeSnapshots);
+        Assert.True(resume.SessionActive);
+        Assert.Empty(resume.ActiveClaimWorkItemIds);
+        Assert.Equal(0, resume.DurableCommitCount);
+        AssertCoalescedVersions(scope.ServiceProvider, 2);
+        Assert.Empty(await shared.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Overlay_deferral_flushes_prefix_and_preserves_delay_across_provider_rebuild_and_early_drain(bool retainingBoundary)
+    {
+        var shared = new SharedPersistence(new FakeTimeProvider(Now));
+        var probe = new ProbeRecorder(deferFirstResume: true, retainingBoundaryBeforeDeferral: retainingBoundary);
+        await using (var first = BuildProvider(shared, probe, visibilitySnapshots: true))
+        {
+            await shared.Queue.EnqueueAsync(ScheduleWork("schedule-1", 1));
+            await shared.Queue.EnqueueAsync(ResumeWork("resume-1", 2));
+            await shared.Queue.EnqueueAsync(ScheduleWork("schedule-2", 3));
+            await using var scope = first.CreateAsyncScope();
+            var deferred = await scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+                .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+            Assert.True(deferred.StoppedOnDeferral);
+            Assert.Equal(["schedule-1", "resume-1"], deferred.Items.Select(item => item.WorkItemId));
+            var persisted = Assert.Single(InnerCommitStore(scope.ServiceProvider).ListCommits());
+            Assert.Equal(1L, persisted.Commit.StateChanges.Scheduler?.State.Version);
+            Assert.Equal(retainingBoundary ? RuntimeCheckpointNames.WorkflowSuspended : RuntimeCoalescingMetadataKeys.FlushCheckpointName,
+                persisted.Commit.Checkpoint.Name);
+            Assert.True(Assert.Single(probe.ResumeSnapshots).SessionActive);
+        }
+
+        await using var reopened = BuildProvider(shared, probe, visibilitySnapshots: true);
+        await using var reopenedScope = reopened.CreateAsyncScope();
+        var orchestrator = reopenedScope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>();
+        shared.TimeProvider.Advance(RetryDelay - TimeSpan.FromTicks(1));
+        var early = await orchestrator.DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+        Assert.Empty(early.Items);
+        Assert.Single(probe.ResumeSnapshots);
+        Assert.Equal(["resume-1", "schedule-2"],
+            (await shared.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).Select(item => item.WorkItemId));
+
+        shared.TimeProvider.Advance(TimeSpan.FromTicks(1));
+        var retried = await orchestrator.DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+        Assert.Equal(["resume-1", "schedule-2"], retried.Items.Select(item => item.WorkItemId));
+        Assert.All(retried.Items, item => Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, item.Status));
+        Assert.Equal(2, probe.ResumeSnapshots.Count);
+        Assert.Empty(await shared.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)));
+        Assert.Empty(await reopenedScope.ServiceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync(WorkflowExecutionId));
+    }
+
     private static void AssertCoalescedVersions(IServiceProvider services, params long[] versions)
     {
         var commits = InnerCommitStore(services).ListCommits();
@@ -349,13 +416,16 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         SharedPersistence shared,
         ProbeRecorder probe,
         WorkflowDrainOrchestratorOptions? drainOptions = null,
-        ExternalOutboxDeliveryProbe? externalOutboxDelivery = null)
+        ExternalOutboxDeliveryProbe? externalOutboxDelivery = null,
+        bool visibilitySnapshots = false)
     {
         var services = new ServiceCollection();
         services.AddSingleton<TimeProvider>(shared.TimeProvider);
         services.AddSingleton(new RuntimeSchedulerWorkClaimOptions { UnavailableRetryDelay = RetryDelay });
         services.AddSingleton(drainOptions ?? new WorkflowDrainOrchestratorOptions(outboxDeliveryBatchSize: 1));
-        services.AddSingleton<IWorkflowSchedulerWorkQueue>(shared.Queue);
+        services.AddSingleton<IWorkflowSchedulerWorkQueue>(visibilitySnapshots
+            ? shared.Queue
+            : new QueueWithoutVisibility(shared.Queue));
         services.AddSingleton<ISchedulerStateStore>(shared.SchedulerStateStore);
         services.AddSingleton(shared.CommitState);
         services.AddSingleton<IRuntimePersistenceModeResolver>(new FixedPersistenceModeResolver(PersistenceMode.Balanced));
@@ -444,6 +514,7 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
             Now);
     }
 
+    // Keeps the conservative provider path covered after the shipped in-memory queue adopts visibility snapshots.
     private sealed class SharedPersistence(FakeTimeProvider timeProvider)
     {
         public FakeTimeProvider TimeProvider { get; } = timeProvider;
@@ -455,7 +526,8 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
     private sealed class ProbeRecorder(
         bool deferFirstResume,
         bool enqueueScheduleSuffixAfterSuccessfulResume = false,
-        int scheduleSuffixCount = 2)
+        int scheduleSuffixCount = 2,
+        bool retainingBoundaryBeforeDeferral = false)
     {
         private bool _didDefer;
         private bool _didEnqueueScheduleSuffix;
@@ -464,6 +536,7 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         public List<int> ScheduleDurableCommitCounts { get; } = [];
         public List<ResumeSnapshot> ResumeSnapshots { get; } = [];
         public int ScheduleSuffixCount => scheduleSuffixCount;
+        public bool RetainingBoundaryBeforeDeferral => retainingBoundaryBeforeDeferral;
 
         public bool ShouldDeferResume()
         {
@@ -604,9 +677,20 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
                 activeClaims.Select(claim => claim.Item.WorkItemId).ToArray()));
 
             if (probe.ShouldDeferResume())
+            {
+                if (probe.RetainingBoundaryBeforeDeferral)
+                {
+                    var boundary = Commit(workItem, state: null);
+                    await committer.CommitAsync(boundary with
+                    {
+                        Checkpoint = boundary.Checkpoint with { Name = RuntimeCheckpointNames.WorkflowSuspended },
+                        RetainSchedulerWork = true
+                    }, cancellationToken);
+                }
                 throw new RuntimeSchedulerWorkUnavailableException(
                     "probe.resume-unavailable",
                     "The resume dependency is temporarily unavailable.");
+            }
 
             if (probe.ShouldEnqueueScheduleSuffixAfterSuccessfulResume())
             {
