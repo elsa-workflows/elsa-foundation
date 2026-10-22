@@ -224,6 +224,9 @@ public sealed class RuntimeCheckpointCommitter
 
     private IReadOnlyCollection<ConsumedSchedulerWorkItem> ResolveConsumedWorkItems(RuntimeCheckpointCommit commit)
     {
+        if (commit.RetainSchedulerWork)
+            return [];
+
         if (_consumedWorkClaimAccessor is not { PendingConsume: { } pending, WasConsumedDurably: false })
             return [];
 

@@ -1,4 +1,10 @@
 <!--
+SYNC IMPACT REPORT — 6.1.0 -> 6.2.0 (2026-10-21)
+MINOR: adds optional Elsa.Rules to §E2.1 for unified-execution #2892/#3181, ADR 0088. Its implementation adds a narrow shared runtime scheduler/checkpoint contract for retaining bookmark trigger-claim work and deferring temporary unavailability; no existing domain purpose or framework pin changes.
+Authority: the program lead adopts ADR 0088 after the bounded planning review on 2026-10-21 under Sipke Schoorstra's standing delegated architecture and self-review authority; no multi-architect consensus or provisional-section ratification is asserted.
+Propagation: docs/reference/elsa-domain-tree.md, ADR 0088, and the shared runtime scheduler contract and extension-point catalog; Speckit templates have no pinned domain list and require no change. Framework remains v6.1.0.
+-->
+<!--
 SYNC IMPACT REPORT — 6.0.3 -> 6.1.0 (2026-10-20)
 MINOR: adds optional Elsa.Etl to §E2.1 for the approved unified-execution program (#2892/#3109, ADR 0087). Existing domain purposes, package boundaries, runtime contracts and framework pin remain unchanged.
 Authority: Sipke Schoorstra reaffirmed delegated self-review/PR approval in the owning session on 2026-10-20. The program lead adopts this additive domain decision after the self-review loop under that owner exception; this does not claim a multi-architect vote or ratify provisional sections.
@@ -30,7 +36,7 @@ Approval: Sipke Schoorstra, 2026-10-12 (#2578), on his authority alone; open to 
 -->
 # Elsa Workflow Engine Constitution
 
-**Version:** 6.1.0 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-10-20 | **Derives from:** [framework constitution](constitution-framework.md) **v6.1.0**
+**Version:** 6.2.0 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-10-21 | **Derives from:** [framework constitution](constitution-framework.md) **v6.1.0**
 
 **Status:** Ratified 2026-08-08 by Sipke Schoorstra. Governance calls for consensus among Joey Barten, Sipke Schoorstra and Frans van Ek; this ratification was taken on Sipke Schoorstra's authority alone and is open to revision if the other architects dissent. Sections marked draft or provisional (§E2.8 activity versioning and Model X, §E2.9) are **not** covered by it.
 
@@ -55,7 +61,7 @@ The framework Gate index applies. Elsa-specific gates with an automated check (t
 
 ### §E2.1 The Elsa domain tree
 
-The pinned root-level domains (D1): `Elsa.Activities`, `Elsa.Agent`, `Elsa.Api`, `Elsa.Attention`, `Elsa.Caching`, `Elsa.Diagnostics`, `Elsa.Etl`, `Elsa.Events`, `Elsa.Expressions`, `Elsa.Foundation`, `Elsa.Git`, `Elsa.Http`, `Elsa.Locking`, `Elsa.Mediator`, `Elsa.Modularity`, `Elsa.Persistence`, `Elsa.Pipelines`, `Elsa.Primitives`, `Elsa.Secrets`, `Elsa.Serialization`, `Elsa.Studio`, `Elsa.Tasks`, `Elsa.Workflows.Dashboard`, `Elsa.Workflows.Design`, `Elsa.Workflows.Publishing`, `Elsa.Workflows.Runtime`, `Elsa3`. Purposes: [docs/reference/elsa-domain-tree.md](../../docs/reference/elsa-domain-tree.md); packages: the generated [domain map](https://github.com/elsa-workflows/elsa-foundation/blob/generated-maps/docs/maps/domain-map.md) (published on the `generated-maps` branch). `Elsa.Workbench`, `Elsa.Architecture`, `Elsa.Samples` and `Elsa.Testing` are host and test groupings, not domains.
+The pinned root-level domains (D1): `Elsa.Activities`, `Elsa.Agent`, `Elsa.Api`, `Elsa.Attention`, `Elsa.Caching`, `Elsa.Diagnostics`, `Elsa.Etl`, `Elsa.Events`, `Elsa.Expressions`, `Elsa.Foundation`, `Elsa.Git`, `Elsa.Http`, `Elsa.Locking`, `Elsa.Mediator`, `Elsa.Modularity`, `Elsa.Persistence`, `Elsa.Pipelines`, `Elsa.Primitives`, `Elsa.Rules`, `Elsa.Secrets`, `Elsa.Serialization`, `Elsa.Studio`, `Elsa.Tasks`, `Elsa.Workflows.Dashboard`, `Elsa.Workflows.Design`, `Elsa.Workflows.Publishing`, `Elsa.Workflows.Runtime`, `Elsa3`. Purposes: [docs/reference/elsa-domain-tree.md](../../docs/reference/elsa-domain-tree.md); packages: the generated [domain map](https://github.com/elsa-workflows/elsa-foundation/blob/generated-maps/docs/maps/domain-map.md) (published on the `generated-maps` branch). `Elsa.Workbench`, `Elsa.Architecture`, `Elsa.Samples` and `Elsa.Testing` are host and test groupings, not domains.
 
 ### §E2.2 Workflows.Design ↔ Workflows.Runtime bounded-context split
 

@@ -144,8 +144,8 @@ completed actions become toasts.
 
 | Item | Status | Notes |
 |---|---|---|
-| Minimap | `exists` | `MiniMap` on `GraphAuthoringCanvas` (and run / executable canvases). |
-| Fit / zoom | `exists` | xyflow `Controls` on the same canvases. |
+| Minimap | `exists` | Designer (`GraphAuthoringCanvas`) shows `MiniMap` only when the graph’s unzoomed bounds exceed the canvas pane. Run / executable canvases still render `MiniMap` unconditionally. |
+| Fit / zoom | `exists` | xyflow `Controls` on the same canvases. First-visit and Auto layout `fitView` clamp `maxZoom` to 1 so small graphs stay at their natural size. |
 | Empty-canvas add | `exists` | `.wf-empty-canvas-add`; editorial layout also has **Add step**. |
 | Save-state indicator | `exists` | `.wf-editor-save-status` in the Designer header (pending spinner / saved check). |
 | Duplicate / copy-paste | `exists` | In-workflow only. Ctrl/Cmd+C and Ctrl/Cmd+V copy the selected activities; Duplicate is on the node context menu and Ctrl/Cmd+D. Fresh ids and names, offset position, one undo step, nested containers remapped. Cross-workflow clipboard and graph-editor paste are later slices. |
@@ -168,6 +168,8 @@ create a workflow and open the designer. Recent runs show status. List widgets h
 title / description / CTA empty states. **Tasks** is in the default layout and the widget
 registry, and only renders when `user-tasks` is enabled (`Elsa.Studio.UserTasks` matches).
 `requiresFeature: "workflows"` matches `Elsa.Studio.Workflows` only (not `Contoso.Workflows` or `Elsa.Studio.WorkflowsX`). A missing `enabledFeatures` list hides gated widgets.
+
+`exists`: a durable **Workflow tasks** group sits before the configurable grid and is not a widget. **Create workflow** consumes a one-use request to open the existing Workflows create dialog; **Browse workflows** still opens the definition collection. **Continue editing** reads the complete authorized definition list and uses actual current `draftId` values: one candidate opens that exact definition, while multiple candidates show a chooser with names and stable IDs. Empty results, request failures and missing current drafts remain distinct; a failed or stale selected definition keeps its ID and offers retry/browse recovery without silently choosing another workflow or creating a draft. **Needs attention** links to Runs' active-incident view. When Workflows is not composed the task group is absent; known permission denials are explained at Home while the existing server endpoints remain authoritative. None of these entries alter saved widget order, options or Get started behavior.
 
 **Edit home** is a tinted mode with add, remove, reorder, Add widget, Reset to default, and
 (for `studio/preferences/defaults:manage`) Save as server default. Normal view collapses

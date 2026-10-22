@@ -22,7 +22,8 @@ namespace Elsa3.Mapping.Conversion;
 internal sealed class Elsa3ActivityNormalizer(
     Elsa3ActivityResolver resolver,
     IEnumerable<IElsa3NodeRewrite> rewrites,
-    IWellKnownTypeRegistry wellKnownTypeRegistry)
+    IWellKnownTypeRegistry wellKnownTypeRegistry,
+    IObjectConverter objectConverter)
 {
     /// <summary>
     /// The deepest JSON level an activity node may sit at. The state is limited to 64 JSON levels (System.Text.Json's
@@ -50,6 +51,8 @@ internal sealed class Elsa3ActivityNormalizer(
         if (clone.Root is null)
             return plan;
 
+        CheckWorkflowVariables(plan);
+
         var pending = new Dictionary<Elsa3Activity, string>(ReferenceEqualityComparer.Instance);
         await VisitAsync(plan, clone.Root, "$.root", null, RootJsonLevel, pending, cancellationToken);
 
@@ -58,6 +61,28 @@ internal sealed class Elsa3ActivityNormalizer(
         foreach (var flowchart in plan.Nodes.Values.Reverse().Where(Elsa3FlowchartGraphBuilder.IsFlowchart).ToArray())
             Elsa3FlowchartGraphBuilder.Build(plan, flowchart);
         return plan;
+    }
+
+    /// <summary>
+    /// A workflow variable's starting value converts by Elsa 3's rule or is refused here, before mapping, so a converted
+    /// definition never carries a starting value that fails at publish (spec 264 D-4).
+    /// </summary>
+    private void CheckWorkflowVariables(Elsa3ConversionPlan plan)
+    {
+        var variables = plan.Definition.Variables;
+        for (var index = 0; index < variables.Count; index++)
+        {
+            if (Elsa3VariableMapper.TryMap(wellKnownTypeRegistry, objectConverter, variables[index], out _, out var refusal))
+                continue;
+            plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(
+                plan,
+                Elsa3MigrationDiagnosticSeverity.Error,
+                VariableValueUnconvertible,
+                refusal!.Message,
+                refusal.Guidance,
+                $"$.variables[{index}]",
+                new Dictionary<string, string> { ["VariableName"] = variables[index].Name }));
+        }
     }
 
     /// <summary>
@@ -776,7 +801,10 @@ internal sealed class Elsa3ActivityNormalizer(
                 var variable = item.Deserialize<Elsa3Variable>(Elsa3JsonOptions);
                 if (variable is null || string.IsNullOrWhiteSpace(variable.Id))
                     continue;
-                context.Node.Variables.Add(Elsa3VariableMapper.Map(wellKnownTypeRegistry, variable));
+                if (Elsa3VariableMapper.TryMap(wellKnownTypeRegistry, objectConverter, variable, out var mapped, out var refusal))
+                    context.Node.Variables.Add(mapped);
+                else
+                    context.Error(VariableValueUnconvertible, refusal!.Message, refusal.Guidance, property);
             }
         }
         catch (JsonException exception)

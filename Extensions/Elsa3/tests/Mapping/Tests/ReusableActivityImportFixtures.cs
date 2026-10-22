@@ -108,6 +108,7 @@ internal static class ReusableActivityImportFixtures
         services.AddLogging();
         services.AddSingleton<IActivityDefinitionLookup>(catalog);
         services.AddSingleton<IWellKnownTypeRegistry>(TypeRegistry());
+        services.AddSingleton(SerializationServices.ObjectConverter());
         services.AddSingleton(command);
         new WorkflowDesignValidationsFeature().ConfigureServices(services);
         new Elsa3MappingFeature().ConfigureServices(services);

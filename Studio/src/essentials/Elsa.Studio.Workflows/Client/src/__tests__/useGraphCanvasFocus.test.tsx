@@ -95,6 +95,21 @@ describe("useGraphCanvasInteractions focus", () => {
   });
 });
 
+describe("useGraphCanvasInteractions auto-layout", () => {
+  it("clamps fit-view zoom so a small graph stays at its natural size", () => {
+    const fitView = vi.fn();
+    const fixture = renderHook([node("a"), node("b")]);
+
+    flushSync(() => {
+      fixture.result.current!.setReactFlowInstance({ fitView } as never);
+    });
+    fixture.result.current!.autoLayout();
+    flushAnimationFrames();
+
+    expect(fitView).toHaveBeenCalledWith({ padding: 0.2, maxZoom: 1 });
+  });
+});
+
 function renderHook(nodes: Node<WorkflowNodeData>[]) {
   const container = document.createElement("div");
   document.body.append(container);

@@ -54,6 +54,35 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
     scope only.
   - A loop's current value captured into a variable is read as the loop's scoped variable (`index`, `currentItem`)
     inside the loop body. Outside the loop that read is not representable.
+- **Variable starting values** (spec 264). Elsa 3 stored a variable's starting value as text and converted it to the
+  variable's type when the workflow started. The converter applies that rule, through Elsa 4's object converter, and
+  carries the result as a `Literal`:
+  - no value → no starting value (the variable starts empty);
+  - `Object` → the text, unparsed, even when it is JSON;
+  - `String`, primitives and enums → the text converted to the type (`"5"` → `5`, `"true"` → `true`);
+  - a collection (`List<T>`, `T[]` or an array flag) whose element type Elsa 4 knows → a JSON array. The variable is
+    `T` with collection kind List or Array. Every item must be JSON of `T`, read as Elsa 3 read it (enums by name,
+    property names case-insensitive) and written for Elsa 4 as plain JSON (an enum as its number). As in Elsa 3, a
+    number written as a string (`["5"]` for `List<Int32>`) does not convert;
+  - `ObjectDictionary` and `HttpHeaders` → `Object` holding a JSON object;
+  - any other type Elsa 4 does not know (a nested collection such as `List<List<String>>`, `ObjectDictionary[]`, a
+    custom class or an unregistered enum) → `Object`. A JSON starting value (`{…}` or `[…]`) is held as parsed JSON,
+    exactly as written: Elsa 3 deserialized it case-insensitively and wrote camelCase names, but `Object` keeps the
+    names as the author wrote them (`{"ID":1}` stays `ID`).
+
+  A resource type (`FormFile`, `IFormFile`, `Stream`, `byte[]` or `Byte` with the array flag, alone, as a collection
+  element or as a CLR generic type argument) is refused with or without a starting value: it stands for a file, a stream or raw bytes, which Elsa 4 cannot hold yet (#3194).
+
+  Text is never split on commas. `ELS3-ACTIVITY-VARIABLE-VALUE-UNCONVERTIBLE` refuses, with the exact fix, a starting
+  value that:
+  - is not a JSON array for a collection (the guidance shows the array the author most likely meant: `a, b` →
+    `["a","b"]`);
+  - has an item that does not convert to the element type;
+  - is not a JSON object for a dictionary;
+  - does not convert to its scalar type (`"abc"` for an `Int32`, which Elsa 3 silently started as `0`);
+  - is not JSON, on a type Elsa 4 does not know: Elsa 3 converted such text in a way the converter cannot know.
+
+  Any other variable with no starting value converts.
 - **HttpEndpoint headers and query string.** A captured `Headers` or `QueryStringData` gets a synthesized `set` node
   right after the endpoint. It rebuilds the Elsa 3 shape from Elsa 4's `Request` output (one value → string, several →
   array) into the captured variable, or into `elsa3.http.{node}.headers` / `.query` for a bare memory slot. The

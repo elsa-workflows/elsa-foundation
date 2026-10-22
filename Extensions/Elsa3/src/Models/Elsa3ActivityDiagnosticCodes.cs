@@ -31,6 +31,9 @@ public static class Elsa3ActivityDiagnosticCodes
     /// <summary>A value does not provably fit the narrower Elsa 4 contract.</summary>
     public const string ValueOutsideContract = "ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT";
 
+    /// <summary>A variable's starting value cannot be converted to the variable's own type by Elsa 3's rule.</summary>
+    public const string VariableValueUnconvertible = "ELS3-ACTIVITY-VARIABLE-VALUE-UNCONVERTIBLE";
+
     /// <summary>A captured output has no Elsa 4 counterpart and no exact projection.</summary>
     public const string OutputNotRepresentable = "ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE";
 

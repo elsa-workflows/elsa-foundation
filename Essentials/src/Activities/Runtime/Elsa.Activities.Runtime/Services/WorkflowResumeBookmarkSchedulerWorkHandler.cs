@@ -231,6 +231,10 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         {
             throw;
         }
+        catch (RuntimeSchedulerWorkUnavailableException)
+        {
+            throw;
+        }
         catch (Exception exception)
         {
             await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, faultMasking, workItem, resumePayload, executionState, exception, "InputMaterializationFailed", [], cancellationToken);
@@ -295,6 +299,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         {
             var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
             activationLease = null;
+            if (disposalException is null && exception is RuntimeSchedulerWorkUnavailableException)
+                throw;
             // The arm above takes the activation's cancellation, so this failure is never it.
             var fault = disposalException is null
                 ? exception
@@ -369,6 +375,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         {
             var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
             activationLease = null;
+            if (disposalException is null && exception is RuntimeSchedulerWorkUnavailableException)
+                throw;
             var fault = disposalException is null
                 ? exception
                 : ActivityActivationLeaseDisposer.CombineExecutionFailure(exception, disposalException);

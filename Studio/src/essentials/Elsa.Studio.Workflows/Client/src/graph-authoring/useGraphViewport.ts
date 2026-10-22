@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { Node, OnMove, ReactFlowInstance, Viewport } from "@xyflow/react";
 
+/** First-visit and auto-layout fit: keep small diagrams at their natural size. */
+export const graphFitViewOptions = { padding: 0.2, maxZoom: 1 } as const;
+
 /** One initial fit per projected scope; later visits restore the user's viewport. */
 export function useGraphViewport<TNode extends Node = Node>({ nodes, scopeKey, instance }: {
   nodes: readonly unknown[];
@@ -43,7 +46,7 @@ export function useGraphViewport<TNode extends Node = Node>({ nodes, scopeKey, i
       } else if ((firstVisit || remounted) && nodes.length > 0) {
         // React Flow queues this until its nodes have been measured. Keep small diagrams at
         // their natural size while fitting larger graphs inside the available canvas.
-        void instance.fitView({ padding: 0.2, maxZoom: 1 });
+        void instance.fitView(graphFitViewOptions);
       }
     });
     return () => window.cancelAnimationFrame(frame);

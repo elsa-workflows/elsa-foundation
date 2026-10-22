@@ -20,6 +20,7 @@ internal static class ConversionServices
         if (catalog is Elsa.Activities.Design.Persistence.Core.Stores.IActivityDefinitionVersionStore store)
             services.AddSingleton(store);
         services.AddSingleton(TypeRegistry());
+        services.AddSingleton(SerializationServices.ObjectConverter());
         new Elsa3MappingFeature().ConfigureServices(services);
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
@@ -41,6 +42,14 @@ internal static class ConversionServices
         var registry = SerializationServices.TypeRegistry();
         registry.RegisterType(typeof(string), "String");
         registry.RegisterType(typeof(object), "Object");
+        // The primitives a host seeds from its type descriptors; a variable's starting value converts only to a known type.
+        registry.RegisterType(typeof(int), "Int32");
+        registry.RegisterType(typeof(long), "Int64");
+        registry.RegisterType(typeof(double), "Double");
+        registry.RegisterType(typeof(decimal), "Decimal");
+        registry.RegisterType(typeof(bool), "Boolean");
+        registry.RegisterType(typeof(DateTime), "DateTime");
+        registry.RegisterType(typeof(Guid), "Guid");
         return registry;
     }
 

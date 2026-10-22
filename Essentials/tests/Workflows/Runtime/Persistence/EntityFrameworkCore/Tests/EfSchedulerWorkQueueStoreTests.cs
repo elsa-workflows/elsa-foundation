@@ -19,7 +19,7 @@ using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.Schedu
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
-public sealed class EfSchedulerWorkQueueStoreTests
+public sealed partial class EfSchedulerWorkQueueStoreTests
 {
     [Fact]
     public async Task Enqueue_is_existing_wins_scoped_and_survives_restart()
@@ -117,6 +117,65 @@ public sealed class EfSchedulerWorkQueueStoreTests
         var second = await restarted.Store.ListAsync(new RuntimeSchedulerWorkQuery("wf-page", 2, first.NextContinuationToken));
         Assert.Equal(new long?[] { 3L }, second.Items.Select(item => item.Sequence));
         Assert.Null(second.NextContinuationToken);
+    }
+
+    [Fact]
+    public async Task List_with_visibility_matches_scoped_pages_in_one_query_per_page()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var capture = new CommandCaptureInterceptor();
+        await using var fixture = database.Open("tenant-a", capture);
+        foreach (var sequence in new[] { 3L, 1L, 2L })
+            await fixture.Store.EnqueueAsync(Work("wf-visible-page", $"work-{sequence}", sequence));
+        await using (var otherScope = database.Open("tenant-b"))
+            await otherScope.Store.EnqueueAsync(Work("wf-visible-page", "other-tenant", 0));
+
+        var query = new RuntimeSchedulerWorkQuery("wf-visible-page", limit: 2);
+        var commandCount = capture.Commands.Count;
+        var ordinary = await fixture.Store.ListAsync(query);
+        Assert.Equal(commandCount + 1, capture.Commands.Count);
+        commandCount = capture.Commands.Count;
+        var snapshot = await fixture.Store.ListWithVisibilityAsync(query);
+        Assert.Equal(commandCount + 1, capture.Commands.Count);
+
+        Assert.Equal(new long?[] { 1L, 2L }, ordinary.Items.Select(item => item.Sequence));
+        Assert.Equal(ordinary.Items.Select(item => item.WorkItemId), snapshot.Items.Select(entry => entry.Item.WorkItemId));
+        Assert.Equal(ordinary.NextContinuationToken, snapshot.NextContinuationToken);
+        Assert.All(snapshot.Items, entry => Assert.Null(entry.VisibleAfter));
+
+        var nextQuery = new RuntimeSchedulerWorkQuery("wf-visible-page", limit: 2, continuationToken: snapshot.NextContinuationToken);
+        commandCount = capture.Commands.Count;
+        var ordinaryNext = await fixture.Store.ListAsync(nextQuery);
+        Assert.Equal(commandCount + 1, capture.Commands.Count);
+        commandCount = capture.Commands.Count;
+        var snapshotNext = await fixture.Store.ListWithVisibilityAsync(nextQuery);
+        Assert.Equal(commandCount + 1, capture.Commands.Count);
+        Assert.Equal(ordinaryNext.Items.Select(item => item.WorkItemId), snapshotNext.Items.Select(entry => entry.Item.WorkItemId));
+        Assert.Equal(ordinaryNext.NextContinuationToken, snapshotNext.NextContinuationToken);
+        Assert.Equal(["work-3"], snapshotNext.Items.Select(entry => entry.Item.WorkItemId));
+    }
+
+    [Fact]
+    public async Task List_with_visibility_preserves_expired_claim_and_released_retry_deadlines()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Store.EnqueueAsync(Work("wf-visible-claim", "work-1", 1));
+        var claimedAt = new DateTimeOffset(2020, 1, 2, 3, 4, 5, TimeSpan.Zero);
+        var claim = await fixture.Store.ClaimAsync(new RuntimeSchedulerWorkClaimRequest(
+            "wf-visible-claim", "owner-1", claimedAt, TimeSpan.FromMinutes(1)));
+        Assert.NotNull(claim);
+
+        var claimDeadline = claimedAt.AddMinutes(1);
+        Assert.True(claimDeadline < DateTimeOffset.UtcNow);
+        var expiredSnapshot = await fixture.Store.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery("wf-visible-claim"));
+        Assert.Equal(claimDeadline, Assert.Single(expiredSnapshot.Items).VisibleAfter);
+
+        var retryDeadline = new DateTimeOffset(2099, 1, 2, 3, 9, 5, TimeSpan.Zero);
+        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Succeeded,
+            (await fixture.Store.ReleaseClaimAsync(claim!, retryDeadline)).Status);
+        var releasedSnapshot = await fixture.Store.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery("wf-visible-claim"));
+        Assert.Equal(retryDeadline, Assert.Single(releasedSnapshot.Items).VisibleAfter);
     }
 
     [Fact]
