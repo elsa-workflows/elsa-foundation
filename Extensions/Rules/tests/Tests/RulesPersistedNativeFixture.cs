@@ -53,7 +53,8 @@ internal sealed class RulesPersistedNativeFixture : IAsyncDisposable
         WorkflowExecutable executable,
         string workflowExecutionId,
         Action<IServiceCollection>? configureServices = null,
-        RuleSemanticPin? implementation = null)
+        RuleSemanticPin? implementation = null,
+        int deliveryLeaseSeconds = 60)
     {
         ArgumentNullException.ThrowIfNull(executable);
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
@@ -72,7 +73,8 @@ internal sealed class RulesPersistedNativeFixture : IAsyncDisposable
                 .WithFeature(services => new RulesWorkflowsRuntimeFeature { MaxConcurrentDeliveries = 1, PollIntervalMilliseconds = 10 }.ConfigureServices(services))
                 .WithFeature(services => new RulesRuntimeEntityFrameworkCoreFeature
                 {
-                    ConnectionString = $"Data Source={databasePath};Pooling=False"
+                    ConnectionString = $"Data Source={databasePath};Pooling=False",
+                    DeliveryLeaseSeconds = deliveryLeaseSeconds
                 }.ConfigureServices(services))
                 .ConfigureServices(services =>
                 {

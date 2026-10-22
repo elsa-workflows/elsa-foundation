@@ -183,6 +183,114 @@ public sealed class RulesPersistedNativeFlowchartTests : IAsyncLifetime
         Assert.Equal(1, _finalCounter.Count);
     }
 
+    [Fact]
+    public async Task Store_revalidates_real_consumed_completion_before_acknowledging_delivery()
+    {
+        var reference = await _fixture.PublishAsync(SourceReferenceId);
+        var start = await _fixture.StartPublishedAsync(reference);
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, start.CommandDispatch.Status);
+        await _fixture.SweepPartitionAsync();
+
+        var rulesActivity = RulesPersistedNativeFixture.StateFor(await _fixture.ActivityStatesAsync(), RulesNodeId);
+        var request = RulesNativeBoundary.ReadState(rulesActivity);
+        var identity = new RuleRunIdentity(request.Scope, request.RunId);
+        Assert.Equal(RuleTerminalReadDisposition.Found,
+            (await _fixture.DriveRulesToTerminalAsync(identity)).Disposition);
+
+        await using var ruleScope = _fixture.Harness.Services.CreateAsyncScope();
+        var runs = ruleScope.ServiceProvider.GetRequiredService<IRuleRunStore>();
+        var reader = ruleScope.ServiceProvider.GetRequiredService<IRuleRunReader>();
+        var claim = await runs.ClaimDeliveryAsync(new("persisted-proof-before-ack", [RulesNativeBoundary.FormatVersion]));
+        Assert.Equal(RuleDeliveryClaimDisposition.Claimed, claim.Disposition);
+        var lease = Assert.IsType<RuleDeliveryLease>(claim.Lease);
+        var delivery = await reader.ReadDeliveryAsync(lease);
+        Assert.Equal(RuleDeliveryReadDisposition.Ready, delivery.Disposition);
+        var envelope = Assert.IsType<RuleTerminalEnvelope>(delivery.Envelope);
+        var run = await reader.FindAsync(identity);
+        Assert.Equal(RuleRunReadDisposition.Found, run.Disposition);
+        var fingerprint = Assert.IsType<RuleRunView>(run.View).Fingerprint;
+
+        using var terminalDocument = JsonDocument.Parse(RuleRecordCodec.TerminalBytes(envelope.Result));
+        var completion = new RunRulesCompletion(RulesNativeBoundary.FormatVersion, envelope.Destination,
+            envelope.DeliveryId, terminalDocument.RootElement.Clone(), InvalidCode: null);
+        await using (var dispatchScope = await _fixture.CreatePartitionScopeAsync())
+        {
+            var dispatched = await dispatchScope.ServiceProvider.GetRequiredService<IBookmarkResumeDispatcher>()
+                .DispatchAsync(new BookmarkResumeDispatchRequest(
+                    envelope.Destination.WorkflowExecutionId,
+                    envelope.Destination.StimulusType,
+                    envelope.Destination.StimulusHash,
+                    JsonSerializer.SerializeToElement(completion),
+                    envelope.DeliveryId,
+                    requestedBy: "rules-persisted-proof-test",
+                    metadata: null,
+                    payloadType: RulesNativeBoundary.CompletionType,
+                    providerId: RulesNativeBoundary.ProviderId,
+                    bookmarkId: envelope.Destination.BookmarkId,
+                    testRunDelivery: null));
+            Assert.Equal(BookmarkResumeDispatchStatus.Dispatched, dispatched.Status);
+        }
+
+        var originalActivity = RulesPersistedNativeFixture.StateFor(await _fixture.ActivityStatesAsync(), RulesNodeId);
+        Assert.Equal(ActivityExecutionStatus.Completed, originalActivity.Status);
+        var waiting = RulesPersistedNativeFixture.StateFor(await _fixture.ActivityStatesAsync(), HoldNodeId);
+        Assert.Equal(ActivityExecutionStatus.Suspended, waiting.Status);
+        Assert.Equal(WorkflowExecutionStatus.Running, (await _fixture.WorkflowStateAsync())!.Status);
+
+        RuleDeliveryProof proof;
+        await using (var proofScope = await _fixture.CreatePartitionScopeAsync())
+        {
+            var inspection = await proofScope.ServiceProvider.GetRequiredService<RulesNativeDeliveryInspector>()
+                .InspectAsync(identity, fingerprint, envelope);
+            proof = Assert.IsType<RuleDeliveryProof>(inspection.Proof);
+            Assert.Equal(RuleDeliveryProofKind.AlreadyConsumed, proof.Kind);
+        }
+
+        var originalCompletion = Assert.IsType<ActivityCompletion>(originalActivity.Completion);
+        var alteredFacts = new[] { new RuleFact("seed") };
+        var alteredResult = new RuleTerminalResult(envelope.Result.TerminalId, envelope.Result.Kind,
+            envelope.Result.CommittedRounds, envelope.Result.ResultSchemaVersion, alteredFacts,
+            RuleRecordCodec.FactsHash(alteredFacts), envelope.Result.Diagnostic);
+        Assert.NotEqual(RuleRecordCodec.TerminalBytes(envelope.Result), RuleRecordCodec.TerminalBytes(alteredResult));
+        var webJson = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var alteredValue = ValueEnvelope.Inline(originalCompletion.Result.Type,
+            JsonSerializer.SerializeToElement(alteredResult, webJson), originalCompletion.Result.Policy);
+        var tamperedActivity = originalActivity with
+        {
+            Completion = new ActivityCompletion(originalCompletion.InvocationId, originalCompletion.AttemptId,
+                alteredValue, originalCompletion.OutcomeKey, originalCompletion.CompletedAt,
+                originalCompletion.ContractFingerprint)
+        };
+        await SaveActivityStateAsync(tamperedActivity);
+
+        var rejected = await runs.AcknowledgeDeliveryAsync(lease, new(proof));
+        Assert.Equal(RuleTransitionDisposition.Invalid, rejected.Disposition);
+        Assert.Equal(RuleDeliveryReadDisposition.Ready, (await reader.ReadDeliveryAsync(lease)).Disposition);
+        var persistedTamper = RulesPersistedNativeFixture.StateFor(await _fixture.ActivityStatesAsync(), RulesNodeId);
+        var persistedAlteredResult = JsonSerializer.Deserialize<RuleTerminalResult>(
+            persistedTamper.Completion!.Result.InlineValue!.Value, webJson);
+        Assert.NotNull(persistedAlteredResult);
+        Assert.Equal(RuleRecordCodec.TerminalBytes(alteredResult), RuleRecordCodec.TerminalBytes(persistedAlteredResult!));
+        Assert.Equal(WorkflowExecutionStatus.Running, (await _fixture.WorkflowStateAsync())!.Status);
+        AssertNoCompletedJoinOrFinal(await _fixture.ActivityStatesAsync());
+
+        // Restore the exact native completion, then reuse the still-current lease and the proof observed before
+        // corruption. A fresh validator read must now permit the same durable obligation to settle once.
+        await SaveActivityStateAsync(originalActivity);
+        var acknowledged = await runs.AcknowledgeDeliveryAsync(lease, new(proof));
+        Assert.Equal(RuleTransitionDisposition.Acknowledged, acknowledged.Disposition);
+        Assert.Equal(envelope.DeliveryId, acknowledged.TransitionId);
+        Assert.Equal(envelope.Result.TerminalId, acknowledged.TerminalId);
+        Assert.Equal(RuleDeliveryClaimDisposition.NoEligibleDelivery,
+            await _fixture.ClaimDeliveryDispositionAsync("persisted-proof-after-ack"));
+
+        var settledActivities = await _fixture.ActivityStatesAsync();
+        Assert.Equal(ActivityExecutionStatus.Suspended,
+            RulesPersistedNativeFixture.StateFor(settledActivities, HoldNodeId).Status);
+        Assert.Equal(WorkflowExecutionStatus.Running, (await _fixture.WorkflowStateAsync())!.Status);
+        AssertNoCompletedJoinOrFinal(settledActivities);
+    }
+
     private ExecutableNode BuildGraph()
     {
         var rulesContract = ClrActivityContractTestBuilder.BuildContract(typeof(RunRules));
@@ -299,6 +407,12 @@ public sealed class RulesPersistedNativeFlowchartTests : IAsyncLifetime
 
     private static FlowchartConnection Connection(string source, string target) =>
         new(new FlowchartEndpoint(source), new FlowchartEndpoint(target));
+
+    private async Task SaveActivityStateAsync(ActivityExecutionState state)
+    {
+        await using var scope = await _fixture.CreatePartitionScopeAsync();
+        await scope.ServiceProvider.GetRequiredService<IActivityExecutionStateStore>().SaveAsync(state);
+    }
 
     private static void AssertNoCompletedJoinOrFinal(IReadOnlyCollection<ActivityExecutionState> states)
     {
