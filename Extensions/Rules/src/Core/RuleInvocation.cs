@@ -181,7 +181,8 @@ public sealed record RuleNativeResultAddress
         RuleValueValidation.Identifier(workflowExecutionId, nameof(workflowExecutionId));
         RuleValueValidation.Identifier(activityExecutionId, nameof(activityExecutionId));
         RuleValueValidation.Identifier(executableId, nameof(executableId));
-        RuleValueValidation.Sha256(executableHash, nameof(executableHash));
+        // This identity belongs to the native runtime (currently sha256:<digest>), not the Rules digest format.
+        RuleValueValidation.Identifier(executableHash, nameof(executableHash));
         RuleValueValidation.Identifier(nodeId, nameof(nodeId));
         RuleValueValidation.Identifier(bookmarkId, nameof(bookmarkId));
         RuleValueValidation.Identifier(resumeTargetId, nameof(resumeTargetId));

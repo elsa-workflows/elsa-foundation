@@ -57,7 +57,7 @@ internal static class RulesNativeBoundary
             string.IsNullOrEmpty(request.NodeId) || string.IsNullOrEmpty(request.ResumeTargetId) ||
             string.IsNullOrEmpty(request.ExecutableId))
             throw Invalid();
-        _ = new RuleInvocationFingerprint(request.ExecutableHash);
+        RuleValueValidation.Identifier(request.ExecutableHash, nameof(request.ExecutableHash));
         _ = RuleRecordCodec.CanonicalFacts(request.InitialFacts);
         return request;
     }

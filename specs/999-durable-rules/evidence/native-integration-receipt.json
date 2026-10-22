@@ -1,0 +1,98 @@
+{
+  "checkpoint": "native-rules-compiler-composite",
+  "baseCommit": "c279035aabe5893f44d35eb437f45b30d02956c7",
+  "rulesTests": {
+    "passed": 269,
+    "failed": 0,
+    "skipped": 0
+  },
+  "controls": [
+    {
+      "control": "native-hash",
+      "exitCode": 1,
+      "sourceRestored": true,
+      "restoredSha256": "6865bab5474e2d75b1e8b3e794d46a29899a22394fb8dc1d5fce06526f947f4a"
+    },
+    {
+      "control": "result-descriptor",
+      "exitCode": 1,
+      "sourceRestored": true,
+      "restoredSha256": "59f3004caab1d30b57c9cac6b7d41c6b960b286c4bfd180a46d637c9a0a33f50"
+    }
+  ],
+  "logs": [
+    {
+      "path": "/tmp/rules-native-integration-restored.log",
+      "sha256": "465719d0cc4e0f880cb802dcba485adde16f55e593113ec6df951191169f920b"
+    },
+    {
+      "path": "/tmp/rules-control-native-hash.log",
+      "sha256": "ca2a2e59f1ecfa99ec273151be9b3cb1b48f1307d5946546089deb9801a503d7"
+    },
+    {
+      "path": "/tmp/rules-control-result-descriptor.log",
+      "sha256": "24aecbff3601a66c1c918dc936df385083edbea91813620bbacd19b23e8f31f6"
+    }
+  ],
+  "remaining": [
+    "actual compiled artifact executing in persisted native runtime",
+    "persisted publication handler and REST journey",
+    "additional native outcomes and retry/cancellation cases",
+    "package-host and upgrade/rollback qualification"
+  ],
+  "schemaVersion": 1,
+  "issue": 3181,
+  "capturedAtUtc": "2026-10-22T04:15:52.131507+00:00",
+  "architectureTests": {
+    "passed": 585,
+    "failed": 0,
+    "skipped": 0
+  },
+  "review": {
+    "rounds": 3,
+    "outcome": "clean within checkpoint scope",
+    "independentReadOnlyReviews": [
+      "native external identity and result descriptor",
+      "CLR compiler fixture and evidence boundaries"
+    ]
+  },
+  "checks": [
+    {
+      "command": "dotnet restore Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj",
+      "exitCode": 0,
+      "log": "/tmp/rules-native-integration-restore3.log",
+      "sha256": "4d26aa7e2899a0bd1288eeea0d5e992d3f8161faac404c0acc964d649a327b23"
+    },
+    {
+      "command": "dotnet test Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj --no-restore --logger trx;LogFileName=rules-native-integration-restored.trx",
+      "exitCode": 0,
+      "log": "/tmp/rules-native-integration-restored.log",
+      "sha256": "465719d0cc4e0f880cb802dcba485adde16f55e593113ec6df951191169f920b"
+    },
+    {
+      "command": "dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj --no-restore --logger trx;LogFileName=rules-native-integration-architecture.trx",
+      "exitCode": 0,
+      "log": "/tmp/rules-native-integration-architecture.log",
+      "sha256": "392a348fe769930d6804b1f1bfc1820c5d99902c2804400501104f1dcecb45e9"
+    },
+    {
+      "command": "dotnet run --project tools/maps/Elsa.Maps.Generator -- all",
+      "exitCode": 0,
+      "log": "/tmp/rules-native-integration-maps-generate.log",
+      "sha256": "7d064c50c1916c048e7fe2d72a2dd4d2dacd6033d45ace418552da2c01f8fe2d"
+    },
+    {
+      "command": "dotnet run --project tools/maps/Elsa.Maps.Generator -- check",
+      "exitCode": 0,
+      "log": "/tmp/rules-native-integration-maps-check.log",
+      "sha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04"
+    }
+  ],
+  "mapsFindings": {
+    "runtimeToDesignSignals": 0,
+    "unlinkedCatalogs": 0,
+    "missingCatalogs": 0,
+    "generatedDocsCommitted": false
+  },
+  "warnings": "Existing package/analyzer and generator-hint conflicts remain visible; no warning or check policy changed."
+}

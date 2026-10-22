@@ -6,5 +6,6 @@
     <!-- Shared structural value validation within the Rules domain; no public helper API. -->
     <InternalsVisibleTo Include="Elsa.Rules.Persistence.Core" />
     <InternalsVisibleTo Include="Elsa.Rules.Runtime" />
+    <InternalsVisibleTo Include="Elsa.Rules.Workflows.Runtime" />
   </ItemGroup>
 </Project>

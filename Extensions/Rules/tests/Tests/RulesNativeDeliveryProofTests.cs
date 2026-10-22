@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Rules.Core;
 using Elsa.Rules.Persistence.Core;
@@ -37,6 +38,25 @@ public sealed class RulesNativeDeliveryProofTests
         Assert.Equal(RuleDeliveryProofKind.AlreadyConsumed, completed.Proof?.Kind);
         Assert.Null(completed.Bookmark);
         Assert.Equal(fixture.Envelope.Result.TerminalId, completed.Proof?.TerminalId);
+    }
+
+    [Fact]
+    public async Task Result_descriptor_must_match_the_clr_contract_not_the_trigger_payload_version()
+    {
+        var fixture = new RulesNativeDeliveryTestFixture();
+        fixture.SetCompleted(retirePrivateState: true, retireReceiptPayload: true);
+        Assert.Equal(RuleDeliveryProofKind.AlreadyConsumed, (await fixture.InspectAsync()).Proof?.Kind);
+        var activity = fixture.Activities.State!;
+        var completion = activity.Completion!;
+        Assert.Null(completion.Result.Type.SchemaVersion);
+        var wrongResult = ValueEnvelope.Inline(new(completion.Result.Type.Alias, schemaVersion: 1),
+            completion.Result.InlineValue!.Value, completion.Result.Policy);
+        fixture.Activities.State = activity with
+        {
+            Completion = new(completion.InvocationId, completion.AttemptId, wrongResult,
+                completion.OutcomeKey, completion.CompletedAt, completion.ContractFingerprint)
+        };
+        Assert.Null((await fixture.InspectAsync()).Proof);
     }
 
     [Fact]
@@ -245,7 +265,7 @@ internal sealed class RulesNativeDeliveryTestFixture
     private static readonly IReadOnlyDictionary<string, string> EmptyMetadata = new Dictionary<string, string>(StringComparer.Ordinal);
     private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
 
-    internal RulesNativeDeliveryTestFixture()
+    internal RulesNativeDeliveryTestFixture(string executableHash = ExecutableHash)
     {
         var sample = Invocation();
         var scope = new RuleScope(TenantId, Partition);
@@ -253,8 +273,8 @@ internal sealed class RulesNativeDeliveryTestFixture
             sample.ExpectedImplementation, vocabularyCount: 7);
         var runId = RulesNativeBoundary.RunId(scope, WorkflowId, ActivityId);
         Request = new(scope, runId, program, Facts("seed"), 4, WorkflowId, ActivityId,
-            ExecutableId, ExecutableHash, NodeId, "compiled-resume-target-id");
-        Address = new(RulesNativeBoundary.FormatVersion, WorkflowId, ActivityId, ExecutableId, ExecutableHash,
+            ExecutableId, executableHash, NodeId, "compiled-resume-target-id");
+        Address = new(RulesNativeBoundary.FormatVersion, WorkflowId, ActivityId, ExecutableId, executableHash,
             NodeId, BookmarkId, Request.ResumeTargetId, RegistrationId, RulesNativeBoundary.StimulusType,
             RulesNativeBoundary.StimulusHash(Request), RulesNativeBoundary.CompletionType.Alias,
             RulesNativeBoundary.FormatVersion, "once", RulesNativeBoundary.ProviderId);
@@ -361,7 +381,7 @@ internal sealed class RulesNativeDeliveryTestFixture
         attempts.Add(final);
 
         activityResult ??= Envelope.Result;
-        var resultType = new ValueTypeDescriptor(typeof(RuleTerminalResult).FullName!, schemaVersion: RulesNativeBoundary.FormatVersion);
+        var resultType = ClrActivityContractTestBuilder.BuildContract(typeof(RunRules)).Result.Type;
         ValueEnvelope completionResult;
         if (externalCompletionResult)
         {
@@ -452,7 +472,7 @@ internal sealed class RulesNativeDeliveryTestFixture
     }
 
     private WorkflowExecutionState NewParent() => new(WorkflowId,
-        new(ExecutableId, "native-definition", "native-version", "1.0.0", ExecutableHash),
+        new(ExecutableId, "native-definition", "native-version", "1.0.0", Request.ExecutableHash),
         WorkflowExecutionStatus.Running, null, Now, Now, Now, null, null, null, TenantId, EmptyMetadata)
     {
         Partition = new WorkflowExecutionPartition(Partition)

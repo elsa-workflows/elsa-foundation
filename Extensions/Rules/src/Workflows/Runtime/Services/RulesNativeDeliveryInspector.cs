@@ -336,8 +336,7 @@ internal sealed class RulesNativeDeliveryInspector(
             completion.AttemptId != finalAttempt.AttemptId || activity.CompletedAt is not { } activityCompletedAt ||
             finalAttempt.EndedAt != activityCompletedAt || finalAttempt.StartedAt > completion.CompletedAt ||
             completion.CompletedAt > activityCompletedAt || finalAttempt.TransitionKind != ActivityTransitionKind.Complete ||
-            completion.Result.Type != new ValueTypeDescriptor(typeof(RuleTerminalResult).FullName!,
-                schemaVersion: RulesNativeBoundary.FormatVersion) ||
+            completion.Result.Type != new ValueTypeDescriptor(typeof(RuleTerminalResult).FullName!) ||
             activity.ContractIdentity is not { } contract || contract.ActivityTypeKey != RunRules.ActivityType ||
             completion.ContractFingerprint != contract.SchemaFingerprint)
             return false;

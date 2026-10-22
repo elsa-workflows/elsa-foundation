@@ -22,6 +22,16 @@
     <ProjectReference Include="../../../../Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Elsa.Workflows.Publishing.csproj" />
+    <ProjectReference Include="../../../../Essentials/tests/Activities/Testing/Elsa.Activities.Testing.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation/Elsa.Activities.Design.Reconciliation.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Expressions/Elsa.Expressions/Elsa.Expressions.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Primitives/Hosting/Elsa.Primitives.Hosting.csproj" />
     <Using Include="Xunit" />
   </ItemGroup>
 </Project>
