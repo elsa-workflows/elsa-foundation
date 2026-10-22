@@ -50,6 +50,111 @@ async function beginCustomScopeRefresh(dialog: import("@playwright/test").Locato
   return custom;
 }
 
+test("inventory coverage stays truthful through search, local scope filtering and detail return", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/secret-scopes.html?scenario=inventory");
+
+  const count = page.locator(".secrets-count");
+  const coverage = page.locator(".secrets-coverage");
+  await expect(count).toHaveText("100 shown · 100 loaded · 101 results");
+  await expect(coverage).toHaveText("Only the first 100 results are loaded. Search by name or display name to find other secrets. Filters apply to loaded results.");
+  await expect(page.locator("html")).toHaveAttribute("data-theme-mode", "light");
+
+  const search = page.getByRole("textbox", { name: "Search secrets", exact: true });
+  await search.fill("knownlaterintegrationbillingcredentialsforregionalpartnernetwork");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Known later credentials", exact: true })).toBeVisible();
+  await expect(count).toHaveText("1 shown · 1 loaded · 1 result for “knownlaterintegrationbillingcredentialsforregionalpartnernetwork”");
+  await search.fill("draft should not relabel this search");
+  await expect(count).toHaveText("1 shown · 1 loaded · 1 result for “knownlaterintegrationbillingcredentialsforregionalpartnernetwork”");
+
+  const scope = page.getByRole("combobox", { name: "Scope", exact: true });
+  await scope.selectOption("Integration:Later");
+  const rowTrigger = page.getByRole("button", { name: "Known later credentials", exact: true });
+  await rowTrigger.click();
+  const detail = page.getByRole("dialog", { name: "Edit secret" });
+  await expect(detail).toBeVisible();
+  await detail.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(rowTrigger).toBeFocused();
+  await expect(scope).toHaveValue("Integration:Later");
+  await expect(count).toHaveText("1 shown · 1 loaded · 1 result for “knownlaterintegrationbillingcredentialsforregionalpartnernetwork”");
+
+  await rowTrigger.click();
+  await expect(detail).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(detail).toHaveCount(0);
+  await expect(rowTrigger).toBeFocused();
+  await expect(page.getByRole("button", { name: "Known later credentials", exact: true })).toBeVisible();
+  await expect(scope).toHaveValue("Integration:Later");
+
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.setViewportSize({ width: 360, height: 640 });
+  await expect(page.locator("html")).toHaveAttribute("data-theme-mode", "dark");
+  const measuredLayout = await page.evaluate(() => ({
+    documentWidth: document.documentElement.scrollWidth,
+    viewportWidth: window.innerWidth,
+    count: (() => {
+      const element = document.querySelector<HTMLElement>(".secrets-count")!;
+      const bounds = element.getBoundingClientRect();
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      return {
+        left: bounds.left,
+        right: bounds.right,
+        textRects: [...range.getClientRects()].map(textBounds => ({ left: textBounds.left, right: textBounds.right }))
+      };
+    })()
+  }));
+  expect(measuredLayout.documentWidth).toBeLessThanOrEqual(measuredLayout.viewportWidth);
+  expect(measuredLayout.count.textRects.length).toBeGreaterThan(1);
+  expect(measuredLayout.count.left).toBeGreaterThanOrEqual(0);
+  expect(measuredLayout.count.right).toBeLessThanOrEqual(measuredLayout.viewportWidth);
+  for (const bounds of measuredLayout.count.textRects) {
+    expect(bounds.left).toBeGreaterThanOrEqual(0);
+    expect(bounds.right).toBeLessThanOrEqual(measuredLayout.count.right);
+  }
+  const overflowsWithoutCountWrapping = await count.evaluate(element => {
+    const previous = element.style.overflowWrap;
+    const countBounds = element.getBoundingClientRect();
+    element.style.overflowWrap = "normal";
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    const overflows = [...range.getClientRects()].some(bounds => bounds.right > countBounds.right);
+    element.style.overflowWrap = previous;
+    return overflows;
+  });
+  expect(overflowsWithoutCountWrapping).toBe(true);
+
+  await page.goto("/secret-scopes.html?scenario=inventory");
+  await expect(page.locator("html")).toHaveAttribute("data-theme-mode", "dark");
+  await expect(count).toHaveText("100 shown · 100 loaded · 101 results");
+  await expect(coverage).toBeVisible();
+  const guidanceLayout = await coverage.evaluate(element => {
+    const bounds = element.getBoundingClientRect();
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    return {
+      left: bounds.left,
+      right: bounds.right,
+      textRects: [...range.getClientRects()].map(textBounds => ({ left: textBounds.left, right: textBounds.right })),
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth
+    };
+  });
+  expect(guidanceLayout.left).toBeGreaterThanOrEqual(0);
+  expect(guidanceLayout.right).toBeLessThanOrEqual(guidanceLayout.viewportWidth);
+  expect(guidanceLayout.textRects.length).toBeGreaterThan(1);
+  for (const bounds of guidanceLayout.textRects) {
+    expect(bounds.left).toBeGreaterThanOrEqual(0);
+    expect(bounds.right).toBeLessThanOrEqual(guidanceLayout.viewportWidth);
+  }
+  expect(guidanceLayout.documentWidth).toBeLessThanOrEqual(guidanceLayout.viewportWidth);
+  await expect(page.getByTestId("secret-mutation-requests")).toHaveText("0");
+  await expect(page.getByTestId("unexpected-secret-reads")).toHaveText("0");
+  await expect(page.locator("body")).not.toContainText("raw-secret-value");
+});
+
 for (const source of [
   { scenario: "default", label: "Value", wrapper: ".secrets-value-field" },
   { scenario: "configuration", label: "Configuration key", wrapper: "label" }

@@ -11,35 +11,35 @@ One issue/PR:3069. Brownfield observable regression cadence; one isolated implem
 
 ## Phase2 — Foundational observation ownership
 
-- [ ] T003 Extend shared response/record fixtures in Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/__tests__/secretsPage.test.tsx so loaded items and authoritative server total can differ; retain actual existing-UI assertion failures for partial/facet-empty coverage before implementing new copy.
-- [ ] T004 Bind accepted result coverage to its submitted query and latest request/context cleanup in Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretsPage.tsx; add observable superseded-request/draft-versus-submitted cases in the existing SecretsPage tests. Do not change unrelated mutation semantics or global authorization.
+- [x] T003 Extend shared response/record fixtures in Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/__tests__/secretsPage.test.tsx so loaded items and authoritative server total can differ; retain actual existing-UI assertion failures for partial/facet-empty coverage before implementing new copy.
+- [x] T004 Bind accepted result coverage to its submitted query and latest request/context cleanup in Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretsPage.tsx; add observable superseded-request/draft-versus-submitted cases in the existing SecretsPage tests. Do not change unrelated mutation semantics or global authorization.
 
 ## Phase3 — US1: Understand inventory coverage
 
 Independent test:100loaded/101total with local facet subset/zero differs from complete100/1/0 and request failure.
 
-- [ ] T005 [US1] Render honest displayed/local, loaded and completed-server-search counts with a concise supported beyond-cap direction in Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretsPage.tsx; preserve current facets and loaded-scope help.
-- [ ] T006 [US1] Qualify local-facet empty copy and distinguish initial empty/no matches/loading/failure/partial states in SecretsPage.tsx and Client/src/__tests__/secretsPage.test.tsx. Base partial status on actual total versus loaded count, not request-limit equality.
-- [ ] T007 [US1] Verify descriptor suggestions never become a complete inventory facet and unsubmitted search text cannot relabel accepted counts in Client/src/__tests__/secretsPage.test.tsx.
+- [x] T005 [US1] Render honest displayed/local, loaded and completed-server-search counts with a concise supported beyond-cap direction in Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretsPage.tsx; preserve current facets and loaded-scope help.
+- [x] T006 [US1] Qualify local-facet empty copy and distinguish initial empty/no matches/loading/failure/partial states in SecretsPage.tsx and Client/src/__tests__/secretsPage.test.tsx. Base partial status on actual total versus loaded count, not request-limit equality.
+- [x] T007 [US1] Verify descriptor suggestions never become a complete inventory facet and unsubmitted search text cannot relabel accepted counts in Client/src/__tests__/secretsPage.test.tsx.
 
 ## Phase4 — US2: Find a later record
 
 Independent test:known exact metadata record absent from the initial100 is returned through supported server search.
 
-- [ ] T008 [US2] Extend Client/src/__tests__/secretsPage.test.tsx using the actual Search/Enter controls and request query to retrieve an exact named record beyond the first loaded result; preserve metadata-only response/presentation and truthful new-result count.
-- [ ] T009 [US2] Extend Studio/tests/browser/secretScopesFixture.tsx and secret-scopes.spec.ts with a representative100-loaded/101-total scenario and search to the exact later record. Identify this as mocked browser evidence; root actual-endpoint proof remains mandatory.
+- [x] T008 [US2] Extend Client/src/__tests__/secretsPage.test.tsx using the actual Search/Enter controls and request query to retrieve an exact named record beyond the first loaded result; preserve metadata-only response/presentation and truthful new-result count.
+- [x] T009 [US2] Extend Studio/tests/browser/secretScopesFixture.tsx and secret-scopes.spec.ts with a representative100-loaded/101-total scenario and search to the exact later record. Identify this as mocked browser evidence; root actual-endpoint proof remains mandatory.
 
 ## Phase5 — US3: Retain detail context
 
 Independent test:search/filter→exact detail→Close/Escape retains applied criteria, corresponding results and focus.
 
-- [ ] T010 [US3] Add/extend retained search/filter/detail-close and keyboard-return assertions in Client/src/__tests__/secretsPage.test.tsx; preserve existing SecretDetail dialog behavior.
-- [ ] T011 [US3] Complete the browser journey in Studio/tests/browser/secret-scopes.spec.ts for detail close, both themes/narrow layouts and new guidance readability; use existing semantic tokens and modify module CSS only if concrete layout evidence requires it.
+- [x] T010 [US3] Add/extend retained search/filter/detail-close and keyboard-return assertions in Client/src/__tests__/secretsPage.test.tsx; preserve existing SecretDetail dialog behavior.
+- [x] T011 [US3] Complete the browser journey in Studio/tests/browser/secret-scopes.spec.ts for detail close, both themes/narrow layouts and new guidance readability; use existing semantic tokens and modify module CSS only if concrete layout evidence requires it.
 
 ## Phase6 — Polish and handoff
 
-- [ ] T012 Update relevant Secrets inventory guidance in Studio/docs/ux/design-spec.md and/or existing Secrets module docs, keeping the shared broader filter pattern as3071 target; review changed source/tests for DRY and remove only obsolete in-scope copy.
-- [ ] T013 Run complete affected @elsa-workflows/studio-secrets tests/typecheck/scopedlint, Studio lint/CSS/layout and focused secret-scopes browser checks with at most2workers; retain raw failure/skip/warning boundaries in the external handoff.
+- [x] T012 Update relevant Secrets inventory guidance in Studio/docs/ux/design-spec.md and/or existing Secrets module docs, keeping the shared broader filter pattern as3071 target; review changed source/tests for DRY and remove only obsolete in-scope copy.
+- [x] T013 Run complete affected @elsa-workflows/studio-secrets tests/typecheck/scopedlint, Studio lint/CSS/layout and focused secret-scopes browser checks with at most2workers; retain raw failure/skip/warning boundaries in the external handoff.
 - [ ] T014 Root reviews integrated source/delegated evidence and meaningful RED→GREEN/bite-proof, then sets specs/1002-studio-secrets-inventory/spec.md to Implemented and removes the temporary checklist in the coherent implementation PR. This does not pre-claim review/CI/live acceptance.
 
 ## Dependencies and execution

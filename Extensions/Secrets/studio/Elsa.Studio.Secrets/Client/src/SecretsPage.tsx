@@ -11,6 +11,7 @@ const secretStatuses: SecretStatus[] = ["Active", "Retired", "Expired", "Revoked
 
 export function SecretsPage({ context, dialogs }: { context: StudioEndpointContext; dialogs: StudioDialogApi }) {
   const [search, setSearch] = useState("");
+  const [completedSearch, setCompletedSearch] = useState("");
   const [secrets, setSecrets] = useState<SecretMetadata[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [descriptors, setDescriptors] = useState<SecretDescriptorsResponse | null>(null);
@@ -27,6 +28,7 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const descriptorRequestSequence = useRef(0);
+  const secretsRequestSequence = useRef(0);
 
   const scopes = useMemo(() => Array.from(new Set(secrets.map(secret => secret.scope).filter((scope): scope is string => !!scope))).sort(), [secrets]);
   const filteredSecrets = useMemo(() => {
@@ -41,28 +43,44 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
   const dialogSecret = dialog?.kind === "edit" || dialog?.kind === "rotate"
     ? secrets.find(secret => secret.name === dialog.name) ?? null
     : null;
-  const hasActiveFilters = Boolean(search.trim() || typeFilter || storeFilter || scopeFilter || statusFilter);
+  const hasLocalFilters = Boolean(typeFilter || storeFilter || scopeFilter || statusFilter);
+  const hasActiveFilters = Boolean(completedSearch.trim() || hasLocalFilters);
+  const partialResult = totalCount > secrets.length;
+  const emptyTitle = hasLocalFilters
+    ? "No loaded secrets match your filters"
+    : completedSearch.trim()
+      ? `No results for “${completedSearch}”`
+      : "No secrets yet";
+  const emptyDescription = hasLocalFilters
+    ? "Local filters only cover loaded secrets. Try adjusting them or clear the filters."
+    : completedSearch.trim()
+      ? "Try another name or display name, or clear the search."
+      : "Create a secret to make it available to workflows.";
 
   const loadSecrets = useCallback(async (searchTerm: string) => {
+    const requestSequence = ++secretsRequestSequence.current;
     setLoading(true);
     setLoadError(false);
     setError(null);
     try {
       const list = await listSecrets(context, { search: searchTerm, activeOnly: false, pageSize: 100 });
+      if (requestSequence !== secretsRequestSequence.current) return;
       setSecrets(list.items);
       setTotalCount(list.totalCount);
+      setCompletedSearch(searchTerm);
       setDialog(current => {
         if (current?.kind === "edit" && !list.items.some(secret => secret.name === current.name)) return null;
         if (current?.kind === "rotate" && !list.items.some(secret => secret.name === current.name)) return null;
         return current;
       });
     } catch {
+      if (requestSequence !== secretsRequestSequence.current) return;
       setLoadError(true);
       setError(null);
       setSecrets([]);
       setDialog(current => current?.kind === "create" ? current : null);
     } finally {
-      setLoading(false);
+      if (requestSequence === secretsRequestSequence.current) setLoading(false);
     }
   }, [context]);
 
@@ -87,9 +105,13 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
   }, [loadDescriptors, loadSecrets]);
 
   useEffect(() => {
-    const requestSequence = descriptorRequestSequence;
+    const descriptorSequence = descriptorRequestSequence;
+    const secretsSequence = secretsRequestSequence;
     void load("");
-    return () => { requestSequence.current++; };
+    return () => {
+      descriptorSequence.current++;
+      secretsSequence.current++;
+    };
   }, [load]);
 
   async function refreshWithStatus(message: string) {
@@ -195,7 +217,11 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
           <span className="secrets-kicker">Secret management</span>
           <h2><KeyRound size={18} aria-hidden /> Secrets</h2>
         </div>
-        {!loading && !loadError ? <p className="secrets-count" aria-live="polite">{filteredSecrets.length} shown · {totalCount} total</p> : null}
+        {!loading && !loadError ? (
+          <p className="secrets-count" aria-live="polite">
+            {filteredSecrets.length} shown · {secrets.length} loaded · {totalCount} {totalCount === 1 ? "result" : "results"}{completedSearch.trim() ? ` for “${completedSearch}”` : ""}
+          </p>
+        ) : null}
       </header>
 
       <section className="secrets-toolbar" aria-label="Secret filters">
@@ -231,6 +257,11 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
       ) : null}
       {error ? <SecretNotification message={error} error onDismiss={() => setError(null)} /> : null}
       {status ? <SecretNotification message={status} onDismiss={() => setStatus(null)} /> : null}
+      {!loading && !loadError && partialResult ? (
+        <p className="secrets-coverage">
+          Only the first 100 results are loaded. Search by name or display name to find other secrets. Filters apply to loaded results.
+        </p>
+      ) : null}
 
       <section className="secrets-layout">
         <div className="secrets-table-shell">
@@ -264,8 +295,8 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
                 <tr><td colSpan={7} className="secrets-empty">
                   <div className="secrets-empty-state" role="status">
                     <span className="secrets-empty-icon" aria-hidden><KeyRound size={20} /></span>
-                    <strong>{hasActiveFilters ? "No secrets match your filters" : "No secrets yet"}</strong>
-                    <p>{hasActiveFilters ? "Try adjusting your search or filters." : "Create a secret to make it available to workflows."}</p>
+                    <strong>{emptyTitle}</strong>
+                    <p>{emptyDescription}</p>
                     {hasActiveFilters ? <button type="button" onClick={clearFilters}>Clear filters</button>
                       : <button type="button" className="secrets-primary" onClick={() => setDialog({ kind: "create" })} disabled={!descriptors}><Plus size={14} aria-hidden /> Create secret</button>}
                   </div>
