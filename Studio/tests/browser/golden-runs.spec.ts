@@ -167,7 +167,9 @@ test("long run identities remain copyable and keyboard inspection works at lapto
       await expect(page.getByRole("row", { name: /run-01/ })).toBeVisible();
       await page.getByLabel("Workflow run page size").selectOption("50");
       await expect(page.getByRole("button", { name: /Inspect workflow run run-14-quarterly-reconciliation/ })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Copy Definition version ID" }).first()).toBeVisible();
+      const moreIdentifiers = page.getByRole("button", { name: /More identifiers/ }).last();
+      await moreIdentifiers.click();
+      await expect(page.getByRole("button", { name: "Copy Definition version ID" }).last()).toBeVisible();
       await expectIdentifierValues(targetRow, identifiers);
       expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
     }
@@ -178,6 +180,42 @@ test("long run identities remain copyable and keyboard inspection works at lapto
     expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
     await expect(targetRow.getByRole("button", { name: `Delete workflow run ${executionId}` })).toBeVisible();
     await expectIdentifierValues(targetRow, identifiers);
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/golden-runs.html");
+  await page.getByLabel("Workflow run page size").selectOption("50");
+  const narrowTarget = runRow(page, executionId);
+  await expect(narrowTarget).toBeVisible();
+  await narrowTarget.getByRole("button", { name: /More identifiers/ }).click();
+  const narrowDetails = narrowTarget.locator(".wf-run-identifiers");
+  await expect(narrowDetails.getByLabel(/^Artifact ID:/)).toBeVisible();
+  const geometry = await narrowTarget.evaluate(element => {
+    const grid = element.closest(".wf-instance-grid")!;
+    const cell = element.querySelector<HTMLElement>(".wf-run-identity-cell")!;
+    const details = element.querySelector<HTMLElement>(".wf-run-identifiers")!;
+    const fields = Array.from(details.querySelectorAll<HTMLElement>(".studio-copyable-identifier")).map(field => {
+      const label = field.querySelector<HTMLElement>(".studio-copyable-identifier__label")!.getBoundingClientRect();
+      const value = field.querySelector<HTMLElement>(".studio-copyable-identifier__value")!.getBoundingClientRect();
+      const bounds = field.getBoundingClientRect();
+      return { labelTop: label.top, labelBottom: label.bottom, valueTop: value.top, left: bounds.left, right: bounds.right };
+    });
+    const gridBounds = grid.getBoundingClientRect();
+    const cellBounds = cell.getBoundingClientRect();
+    return {
+      grid: { left: gridBounds.left, right: gridBounds.right, clientWidth: grid.clientWidth },
+      cell: { left: cellBounds.left, right: cellBounds.right, width: cellBounds.width },
+      fields
+    };
+  });
+  expect(geometry.cell.width).toBeLessThanOrEqual(250);
+  expect(geometry.fields.length).toBeGreaterThanOrEqual(3);
+  for (const field of geometry.fields) {
+    expect(field.labelTop).toBeLessThan(field.valueTop);
+    expect(field.labelBottom).toBeLessThanOrEqual(field.valueTop);
+    expect(field.left).toBeGreaterThanOrEqual(geometry.cell.left - 1);
+    expect(field.right).toBeLessThanOrEqual(geometry.cell.right + 1);
+    expect(field.right).toBeLessThanOrEqual(geometry.grid.right + 1);
   }
 
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);

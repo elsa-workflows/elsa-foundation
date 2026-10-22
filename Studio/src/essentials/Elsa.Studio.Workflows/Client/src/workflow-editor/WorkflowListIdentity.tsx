@@ -13,8 +13,7 @@ export function WorkflowListIdentity({
   primaryClassName,
   secondaryClassName,
   detailsClassName,
-  detailsAriaLabel,
-  detailsLayout = "inline"
+  detailsAriaLabel
 }: {
   primaryLabel: string;
   primaryValue: string;
@@ -23,7 +22,6 @@ export function WorkflowListIdentity({
   secondaryClassName?: string;
   detailsClassName?: string;
   detailsAriaLabel?: string;
-  detailsLayout?: "inline" | "stacked";
 }) {
   return <>
     <div className={["wf-list-identity-primary", primaryClassName].filter(Boolean).join(" ")}>
@@ -32,7 +30,7 @@ export function WorkflowListIdentity({
     {secondaryIdentifiers.length ? (
       <div className={["wf-list-identity-secondary", secondaryClassName].filter(Boolean).join(" ")}>
         <AdvancedSection label="More identifiers" summary={`${secondaryIdentifiers.length} exact IDs`}>
-          <div className={["wf-list-identity-details", detailsClassName].filter(Boolean).join(" ")} aria-label={detailsAriaLabel} data-layout={detailsLayout}>
+          <div className={["wf-list-identity-details", detailsClassName].filter(Boolean).join(" ")} aria-label={detailsAriaLabel}>
             {secondaryIdentifiers.map(identifier => <CopyableIdentifier key={identifier.label} label={identifier.label} value={identifier.value} />)}
           </div>
         </AdvancedSection>

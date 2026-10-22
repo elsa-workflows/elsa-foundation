@@ -100,6 +100,22 @@ test("Activity Definitions restores each collection origin through real browser 
   await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect.poll(() => requests.slice(requestStart).some(request => request.search === "first-origin" &&
     request.limit === "50" && request.cursor === firstCursor)).toBe(true);
+
+  requestStart = requests.length;
+  await page.goForward();
+  await expect(page.getByRole("heading", { name: "Invoice evaluator" })).toBeVisible();
+  await page.goForward();
+  await expect(page.getByRole("textbox", { name: "Search" })).toHaveValue("second-origin");
+  await expect(page.getByText("Page 2", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await expect.poll(() => requests.slice(requestStart).some(request => request.search === "second-origin" &&
+    request.limit === "50" && request.cursor === secondCursor)).toBe(true);
+
+  await page.goForward();
+  await expect(page.getByRole("heading", { name: "Invoice evaluator" })).toBeVisible();
+  await page.goForward();
+  await expect(page.getByRole("textbox", { name: "Search" })).toHaveValue("second-origin");
+  await expect(page.getByText("Page 2", { exact: false })).toBeVisible();
 });
 
 test("Activity Definition expanded identities remain within the 390px row bounds", async ({ page }, testInfo) => {
@@ -121,6 +137,24 @@ test("Activity Definition expanded identities remain within the 390px row bounds
   await page.locator(".ad-row-identifiers .studio-disclosure-fold-trigger").click();
   await expect(page.getByRole("button", { name: "Copy Activity Type Key" })).toBeVisible();
 
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  const disclosure = page.locator(".ad-row-identifiers .studio-disclosure-fold-trigger");
+  await disclosure.focus();
+  await page.keyboard.press("Enter");
+  await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+  await page.keyboard.press("Space");
+  await expect(disclosure).toHaveAttribute("aria-expanded", "true");
+
+  const copyActivityType = page.getByRole("button", { name: "Copy Activity Type Key" });
+  await copyActivityType.focus();
+  await page.keyboard.press("Space");
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(longDefinition.definition.activityTypeKey);
+  const copyDefinitionId = page.getByRole("button", { name: "Copy Definition ID" });
+  await copyDefinitionId.focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(longDefinition.definition.definitionId);
+  await expect(page.getByRole("heading", { name: "Activity Definitions" })).toBeVisible();
+
   const measurements = await page.evaluate(() => [
     ".ad-collection",
     ".ad-collection-row",
@@ -137,6 +171,22 @@ test("Activity Definition expanded identities remain within the 390px row bounds
     expect(measurement.left, `${measurement.selector} left edge`).toBeGreaterThanOrEqual(-1);
     expect(measurement.right, `${measurement.selector} right edge`).toBeLessThanOrEqual(391);
     expect(measurement.width, `${measurement.selector} width`).toBeLessThanOrEqual(390);
+  }
+  const identityFields = await page.locator(".ad-row-identifiers-list").evaluate(details => {
+    const detailsBounds = details.getBoundingClientRect();
+    return Array.from(details.querySelectorAll<HTMLElement>(".studio-copyable-identifier")).map(field => {
+      const label = field.querySelector<HTMLElement>(".studio-copyable-identifier__label")!.getBoundingClientRect();
+      const value = field.querySelector<HTMLElement>(".studio-copyable-identifier__value")!.getBoundingClientRect();
+      const bounds = field.getBoundingClientRect();
+      return { labelTop: label.top, labelBottom: label.bottom, valueTop: value.top, left: bounds.left, right: bounds.right, detailsLeft: detailsBounds.left, detailsRight: detailsBounds.right };
+    });
+  });
+  expect(identityFields.length).toBeGreaterThanOrEqual(3);
+  for (const field of identityFields) {
+    expect(field.labelTop, JSON.stringify(field)).toBeLessThan(field.valueTop);
+    expect(field.labelBottom).toBeLessThanOrEqual(field.valueTop);
+    expect(field.left).toBeGreaterThanOrEqual(field.detailsLeft - 1);
+    expect(field.right).toBeLessThanOrEqual(field.detailsRight + 1);
   }
   await page.screenshot({ path: testInfo.outputPath("activity-identities-390px.png"), fullPage: true });
 });

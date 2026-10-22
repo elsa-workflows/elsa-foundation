@@ -565,7 +565,6 @@ export function WorkflowInstances({ context, navigate }: {
                     secondaryClassName="wf-run-secondary-identifiers"
                     detailsClassName="wf-run-identifiers"
                     detailsAriaLabel={`Workflow run identifiers for ${instance.workflowExecutionId}`}
-                    detailsLayout="stacked"
                   />
                 </div>
               </div>
@@ -581,6 +580,7 @@ export function WorkflowInstances({ context, navigate }: {
               {canDeleteRuns ? <span role="cell" className="wf-run-row-actions wf-row-actions">
                 <button
                   type="button"
+                  className="danger"
                   disabled={deletingRuns}
                   aria-label={`Delete workflow run ${instance.workflowExecutionId}`}
                   onClick={() => void deleteRuns([instance.workflowExecutionId])}

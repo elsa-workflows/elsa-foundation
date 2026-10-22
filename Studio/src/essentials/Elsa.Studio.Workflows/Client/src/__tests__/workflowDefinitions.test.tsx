@@ -76,6 +76,29 @@ describe("workflow definition list", () => {
     click(row.querySelector<HTMLElement>(".wf-definition-name")!);
     expect(navigate).toHaveBeenCalledWith(definition.id);
   });
+
+  it("places the definition title and create action above the collection controls", async () => {
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? definitionCapabilities : { items: [{ id: "definition-1", name: "Invoice evaluator" }] });
+    const container = render(context(getJson), vi.fn());
+
+    await waitFor(() => expect(container.textContent).toContain("Invoice evaluator"));
+    const heading = container.querySelector<HTMLElement>("h1");
+    expect(heading?.textContent).toBe("Workflow definitions");
+    const header = heading?.closest("header");
+    const search = container.querySelector<HTMLInputElement>("input[aria-label='Search all workflows']");
+    const states = container.querySelector<HTMLElement>('[role="group"][aria-label="Definition state"]');
+    expect(header).not.toBeNull();
+    expect(search).not.toBeNull();
+    expect(states).not.toBeNull();
+    expect(header?.querySelector("p")?.textContent).toContain("Create and organize workflow definitions");
+    const actions = header?.querySelector<HTMLElement>('[role="group"][aria-label="Workflow definition page actions"]');
+    expect(actions?.querySelector("button[title='Create workflow']")).toBeTruthy();
+    expect(actions?.querySelector("button[title='Refresh workflow definitions']")).toBeTruthy();
+    expect(header!.compareDocumentPosition(search!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(header!.compareDocumentPosition(states!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    expect(actions?.querySelector("button")?.textContent).toContain("Create workflow");
+  });
 });
 
 function render(contextValue: StudioEndpointContext, onOpen: (id: string) => void) {

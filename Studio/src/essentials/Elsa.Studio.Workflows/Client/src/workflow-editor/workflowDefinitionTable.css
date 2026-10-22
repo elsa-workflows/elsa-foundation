@@ -4,14 +4,68 @@
   border-radius: 0;
 }
 
-.wf-page--definitions > .wf-page-header {
+.wf-page--definitions > .wf-definition-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
   border-bottom: 0;
   background: transparent;
   padding: 16px 0 8px;
 }
 
-.wf-page--definitions > .wf-page-header h2 {
+.wf-definition-page-header h1 {
+  margin: .2rem 0 .35rem;
+  font-family: var(--studio-font-display);
+  font-size: var(--studio-page-title-size);
+  font-weight: var(--studio-title-weight, 700);
   color: var(--studio-text);
+}
+
+.wf-definition-page-header p {
+  margin: 0;
+  color: var(--studio-text-muted);
+  line-height: 1.55;
+}
+
+.wf-definition-page-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: .5rem;
+}
+
+.wf-definition-page-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+  min-height: 2.4rem;
+  padding: .45rem .75rem;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  color: var(--studio-text);
+  background: var(--studio-surface);
+  cursor: pointer;
+}
+
+.wf-definition-page-actions button:first-child {
+  border-color: var(--studio-accent);
+  color: var(--studio-accent-text);
+  background: var(--studio-accent);
+}
+
+.wf-definition-page-actions button:hover {
+  background: var(--studio-surface-muted);
+}
+
+.wf-definition-page-actions button:first-child:hover {
+  border-color: color-mix(in srgb, var(--studio-accent) 88%, var(--studio-text));
+  background: color-mix(in srgb, var(--studio-accent) 88%, var(--studio-text));
+}
+
+.wf-definition-page-actions button:focus-visible {
+  outline: 3px solid var(--studio-focus);
+  outline-offset: 2px;
 }
 
 .wf-definitions-list {
@@ -389,8 +443,14 @@
 }
 
 @media (max-width: 760px) {
-  .wf-page--definitions > .wf-page-header {
+  .wf-page--definitions > .wf-definition-page-header {
+    display: grid;
     padding: 14px 0 8px;
+  }
+
+  .wf-definition-page-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .wf-definitions-list > .wf-toolbar {

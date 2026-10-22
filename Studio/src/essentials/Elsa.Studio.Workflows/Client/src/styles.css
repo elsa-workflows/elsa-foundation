@@ -3191,7 +3191,7 @@
   white-space: nowrap;
 }
 
-.wf-row-actions button:hover {
+.wf-row-actions button:not(:disabled):hover {
   background: var(--wf-panel-muted);
 }
 
@@ -3200,8 +3200,20 @@
   color: var(--wf-danger);
 }
 
-.wf-row-actions button.danger:hover {
+.wf-row-actions button.danger:not(:disabled):hover {
   background: var(--wf-danger-soft);
+}
+
+.wf-row-actions button:disabled,
+.wf-row-actions button:disabled:hover {
+  background: var(--wf-panel);
+  color: var(--wf-muted-text);
+  cursor: not-allowed;
+  opacity: .65;
+}
+
+.wf-row-actions button.danger:disabled {
+  border-color: var(--wf-border);
 }
 
 .wf-pagination {

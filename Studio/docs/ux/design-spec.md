@@ -81,8 +81,10 @@ hierarchy is a presentation rule, not a shared data-grid or filtering framework.
   visible by default. Put additional technical IDs in the existing keyboard-accessible
   `AdvancedSection`, with exact copy values and display-only truncation. A copy or disclosure
   action must not open its containing row. A row reacts to Enter or Space only when the row
-  itself is the event target. Previous search results that remain visible while a new query is
-  pending stay non-actionable, including their identifiers.
+  itself is the event target. In Workflow Definitions, previous search results retained while a
+  new query is pending stay non-actionable and do not expose their secondary identifiers.
+  Activity Definitions keeps its same-authority live-search placeholder rows and their existing
+  interactions while a replacement query is pending.
 - **Activity Definitions exception:** Keep the custom Activity collection and its live search,
   Designed/Built-in/All authority filter, provider filter, page size, and server-owned opaque
   cursor contract. The cursor stays in history state and never appears in a newly invented URL

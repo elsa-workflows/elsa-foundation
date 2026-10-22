@@ -496,6 +496,17 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
 
   return (
     <>
+      <header className="wf-definition-page-header" aria-labelledby="workflow-definitions-title">
+        <div>
+          <span className="wf-kicker">Workflows</span>
+          <h1 id="workflow-definitions-title">Workflow definitions</h1>
+          <p>Create and organize workflow definitions, then open a definition to edit its behavior.</p>
+        </div>
+        <div className="wf-definition-page-actions" role="group" aria-label="Workflow definition page actions">
+          <button type="button" title="Create workflow" onClick={openCreateDialog}><Plus size={15} /> Create workflow</button>
+          <button ref={refreshButtonRef} type="button" title="Refresh workflow definitions" aria-label="Refresh workflow definitions" onClick={retry}>Refresh</button>
+        </div>
+      </header>
       <div className="wf-definitions-list">
         <WorkflowFolderNavigation
           context={context}
@@ -520,10 +531,6 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
             <input aria-label={searchLabel} value={search} onChange={event => changeSearch(event.target.value)} placeholder="Search definitions" />
           </label>
           {effectiveFolderSelection !== "all" ? <button type="button" onClick={() => changeFolder("all")}>Search all workflows</button> : null}
-          <button ref={refreshButtonRef} type="button" onClick={retry}>Refresh</button>
-          <div className="wf-actions">
-            <button type="button" title="Create workflow" onClick={openCreateDialog}><Plus size={15} /> Create</button>
-          </div>
         </div>
 
         {staleStatus ? <div className="wf-status-line wf-definition-refresh-status" role="status">{staleStatus}</div> : null}
@@ -650,7 +657,6 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
                         secondaryClassName="wf-definition-secondary-identifiers"
                         detailsClassName="wf-definition-identifiers"
                         detailsAriaLabel={`Workflow definition identifiers for ${definition.name}`}
-                        detailsLayout="stacked"
                       /> : null}
                       {isDeleted ? <><span className="wf-status-badge" data-status="cancelled">Deleted</span><small>{formatDate(definition.deletedAt)}</small></> : null}
                       {isCurrentData && effectiveFolderSelection === "all" ? (

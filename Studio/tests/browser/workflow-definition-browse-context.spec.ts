@@ -136,6 +136,75 @@ test("editor Back restores the later workflow page with its observed opaque curs
   });
 });
 
+test("expanded workflow definition identifiers stack labels above exact values at 390px", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${browseUrl}&long-identities=1`);
+  await page.getByRole("button", { name: "Next page" }).click();
+  const row = page.getByRole("row", { name: /Second page renewal/ });
+  await expect(row).toBeVisible();
+  await row.getByRole("button", { name: /More identifiers/ }).click();
+  const details = row.locator(".wf-definition-identifiers");
+  await expect(details.getByLabel(/^Draft ID:/)).toBeVisible();
+
+  const geometry = await row.evaluate(element => {
+    const scroll = element.closest(".wf-definition-table-scroll")!;
+    const cell = element.querySelector<HTMLElement>(".wf-definition-name")!;
+    const detailsElement = element.querySelector<HTMLElement>(".wf-definition-identifiers")!;
+    const fields = Array.from(detailsElement.querySelectorAll<HTMLElement>(".studio-copyable-identifier")).map(field => {
+      const label = field.querySelector<HTMLElement>(".studio-copyable-identifier__label")!.getBoundingClientRect();
+      const value = field.querySelector<HTMLElement>(".studio-copyable-identifier__value")!.getBoundingClientRect();
+      const bounds = field.getBoundingClientRect();
+      return {
+        labelTop: label.top,
+        labelBottom: label.bottom,
+        valueTop: value.top,
+        left: bounds.left,
+        right: bounds.right
+      };
+    });
+    const scrollBounds = scroll.getBoundingClientRect();
+    const cellBounds = cell.getBoundingClientRect();
+    return {
+      scroll: { left: scrollBounds.left, right: scrollBounds.right, clientWidth: scroll.clientWidth },
+      cell: { left: cellBounds.left, right: cellBounds.right, width: cellBounds.width },
+      rowWidth: element.getBoundingClientRect().width,
+      fields
+    };
+  });
+  expect(geometry.rowWidth).toBeGreaterThan(geometry.scroll.clientWidth);
+  expect(geometry.cell.width).toBeLessThanOrEqual(330);
+  expect(geometry.cell.right).toBeLessThanOrEqual(geometry.scroll.right + 1);
+  expect(geometry.fields.length).toBeGreaterThanOrEqual(4);
+  for (const field of geometry.fields) {
+    expect(field.labelTop).toBeLessThan(field.valueTop);
+    expect(field.labelBottom, JSON.stringify(field)).toBeLessThanOrEqual(field.valueTop);
+    expect(field.left).toBeGreaterThanOrEqual(geometry.cell.left - 1);
+    expect(field.right).toBeLessThanOrEqual(geometry.cell.right + 1);
+    expect(field.right).toBeLessThanOrEqual(geometry.scroll.right + 1);
+  }
+});
+
+test("Workflow Definitions groups its create and refresh actions above the collection filters", async ({ page }) => {
+  await page.goto(browseUrl);
+  const heading = page.getByRole("heading", { name: "Workflow definitions", level: 1 });
+  await expect(heading).toBeVisible();
+  const header = page.locator("header").filter({ has: heading });
+  const actions = header.getByRole("group", { name: "Workflow definition page actions" });
+  await expect(header.getByText("Create and organize workflow definitions")).toBeVisible();
+  await expect(actions.getByRole("button", { name: "Create workflow" })).toBeVisible();
+  await expect(actions.getByRole("button", { name: "Refresh workflow definitions" })).toBeVisible();
+  const search = page.getByRole("textbox", { name: "Search selected folder" });
+  await expect(page.getByRole("group", { name: "Definition state" })).toBeVisible();
+  const headingBounds = await heading.boundingBox();
+  const searchBounds = await search.boundingBox();
+  expect(headingBounds).not.toBeNull();
+  expect(searchBounds).not.toBeNull();
+  expect(headingBounds!.y).toBeLessThan(searchBounds!.y);
+
+  await actions.getByRole("button", { name: "Create workflow" }).click();
+  await expect(page.getByRole("dialog", { name: "Create workflow" })).toBeVisible();
+});
+
 test("browser Back restores the later workflow page with its observed opaque cursor", async ({ page }) => {
   await openSecondPage(page);
   const requestCountBeforeOpen = (await recordedPageRequests(page)).length;

@@ -1283,6 +1283,41 @@ describe("Activity Definitions experience", () => {
     await rendered.unmount();
   });
 
+  it("shows an authorized collection after a scope change clears a prior denial", async () => {
+    let mode: "authorized" | "denied" | "pending" = "authorized";
+    let resolveAuthorized!: (value: unknown) => void;
+    let collectionReads = 0;
+    const authorizedResponse = new Promise(resolve => { resolveAuthorized = resolve; });
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      collectionReads += 1;
+      if (mode === "denied") throw new StudioHttpError(403, "not authorized", null);
+      if (mode === "pending") return authorizedResponse;
+      return page([definition({ displayName: "Initial authorized row" })]);
+    });
+    const rendered = renderPage(getJson);
+
+    await waitForText(rendered.container, "Initial authorized row");
+    rendered.setBaseUrl(rendered.baseUrl);
+    await waitFor(() => expect(rendered.container.textContent).toContain("Initial authorized row"));
+
+    mode = "denied";
+    window.dispatchEvent(new Event(authSessionStartedEvent));
+    await waitForText(rendered.container, "No identities or counts were loaded");
+    expect(rendered.container.textContent).not.toContain("Initial authorized row");
+
+    mode = "pending";
+    const authorizedReads = collectionReads;
+    window.dispatchEvent(new Event(authSessionStartedEvent));
+    await waitFor(() => expect(collectionReads).toBeGreaterThan(authorizedReads));
+    expect(rendered.container.textContent).not.toContain("Initial authorized row");
+    expect(rendered.container.textContent).not.toContain("definition-1");
+
+    resolveAuthorized(page([definition({ displayName: "Authorized after reauthentication" })]));
+    await waitForText(rendered.container, "Authorized after reauthentication");
+    await rendered.unmount();
+  }, 20000);
+
   it("restarts from the first page when a retained cursor snapshot expires", async () => {
     let firstPageReads = 0;
     const getJson = vi.fn(async (url: string) => {
@@ -1303,6 +1338,74 @@ describe("Activity Definitions experience", () => {
     expect(rendered.container.textContent).toContain("Invoice evaluator");
     await rendered.unmount();
   });
+
+  it.each([
+    { scenario: "expired snapshot", title: "Collection snapshot expired", rejectedError: () => new StudioHttpError(410, "expired", null) },
+    {
+      scenario: "invalid continuation",
+      title: "Collection continuation is no longer valid",
+      rejectedError: () => new StudioHttpError(400, "invalid continuation", null, {
+        status: 400,
+        errorCode: "activity.management.cursor-invalid",
+        recovery: { instruction: "restart-without-cursor" }
+      })
+    }
+  ])("hides a loaded page after a $scenario refresh and cached first page until Restart paging succeeds", async ({ title, rejectedError }) => {
+    const collectionRequests: URL[] = [];
+    let expireContinuation = false;
+    let recoveryPending = false;
+    let resolveRecovery!: (value: unknown) => void;
+    const recoveryResponse = new Promise(resolve => { resolveRecovery = resolve; });
+    const getJson = vi.fn(async (path: string) => {
+      if (path === "/capabilities") return capabilities();
+      const request = new URL(path, window.location.origin);
+      collectionRequests.push(request);
+      if (request.searchParams.get("cursor") === "cursor-2") {
+        if (expireContinuation) throw rejectedError();
+        return page([definition({ definitionId: "definition-2", displayName: "Loaded later page" })], { totalCount: 2 });
+      }
+      if (recoveryPending) return recoveryResponse;
+      return page([definition({ displayName: "Cached first page" })], { continuation: "cursor-2", hasMore: true, totalCount: 2 });
+    });
+    const rendered = renderPage(getJson);
+
+    await waitForText(rendered.container, "Cached first page");
+    change(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")!, "recovery search");
+    change(controlByLabel<HTMLInputElement>(rendered.container, "Provider key"), "elsa.profile");
+    change(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page"), "10");
+    click(buttonByText(rendered.container, "Built-in"));
+    await waitFor(() => expect(collectionRequests.some(request => request.searchParams.get("search") === "recovery search"
+      && request.searchParams.get("providerKey") === "elsa.profile"
+      && request.searchParams.get("limit") === "10"
+      && request.searchParams.get("authority") === "ProviderSource")).toBe(true));
+
+    click(buttonByText(rendered.container, "Next"));
+    await waitForText(rendered.container, "Loaded later page");
+    expireContinuation = true;
+    click(buttonByText(rendered.container, "Refresh"));
+    await waitForText(rendered.container, title);
+    expect(rendered.container.textContent).not.toContain("Loaded later page");
+    expect(rendered.container.querySelector("[role='row'][tabindex='0']")).toBeNull();
+    expect(rendered.container.querySelector("button[aria-label='Copy Definition ID']")).toBeNull();
+
+    recoveryPending = true;
+    const requestCountBeforeRestart = collectionRequests.length;
+    click(buttonByText(rendered.container, "Restart paging"));
+    await waitFor(() => expect(collectionRequests.length).toBeGreaterThan(requestCountBeforeRestart));
+    const restartRequest = collectionRequests.at(-1)!;
+    expect(restartRequest.searchParams.has("cursor")).toBe(false);
+    expect(restartRequest.searchParams.get("search")).toBe("recovery search");
+    expect(restartRequest.searchParams.get("providerKey")).toBe("elsa.profile");
+    expect(restartRequest.searchParams.get("limit")).toBe("10");
+    expect(restartRequest.searchParams.get("authority")).toBe("ProviderSource");
+    expect(rendered.container.textContent).not.toContain("Cached first page");
+    expect(rendered.container.textContent).not.toContain("Loaded later page");
+    expect(rendered.container.querySelector("[role='row'][tabindex='0']")).toBeNull();
+
+    resolveRecovery(page([definition({ displayName: "Fresh restarted page" })], { totalCount: 1 }));
+    await waitForText(rendered.container, "Fresh restarted page");
+    await rendered.unmount();
+  }, 20000);
 
   it("restarts only an explicitly invalid continuation without dropping collection filters", async () => {
     const collectionRequests: URL[] = [];

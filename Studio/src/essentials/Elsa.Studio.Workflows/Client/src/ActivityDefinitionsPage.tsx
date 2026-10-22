@@ -222,6 +222,7 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
   const [cursorIndex, setCursorIndex] = useState(restoredScopeMatches ? restoredContext?.cursorIndex ?? 0 : 0);
   const [lastConfirmedAt, setLastConfirmedAt] = useState<number | null>(null);
   const [privacyFailure, setPrivacyFailure] = useState<"unavailable" | "forbidden" | null>(null);
+  const [freshPageRequired, setFreshPageRequired] = useState(false);
   const [scopeRecoveryNotice, setScopeRecoveryNotice] = useState(Boolean(restoredContext && !restoredScopeMatches && restoredContext.cursorIndex > 0));
   const [createOpen, setCreateOpen] = useState(false);
   const observation = useRef({ fetching: false, startedAt: 0 });
@@ -254,7 +255,8 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
   const invalidCursor = query.error ? isInvalidActivityDefinitionCursor(query.error) : false;
   const failure = privacyFailure ?? directFailure;
   const mustDiscardData = failure === "forbidden" || failure === "unavailable";
-  const data = authorizationInvalidating || scopeChanged || mustDiscardData ? undefined : query.data;
+  const rejectedContinuation = failure === "expired" || invalidCursor;
+  const data = authorizationInvalidating || scopeChanged || mustDiscardData || rejectedContinuation || freshPageRequired ? undefined : query.data;
   const defaultDesignedView = authority === "Design" && !searchInput.trim() && !providerInput.trim();
   const filtersActive = Boolean(searchInput.trim() || providerInput.trim() || authority !== "Design");
 
@@ -262,10 +264,16 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
     if (!scopeChanged) return;
     const hadContinuation = cursorIndex > 0;
     scopeRef.current = { baseUrl, authorityRevision };
+    setPrivacyFailure(null);
+    setFreshPageRequired(false);
     setCursorStack([null]);
     setCursorIndex(0);
     if (hadContinuation) setScopeRecoveryNotice(true);
   }, [authorityRevision, baseUrl, cursorIndex, scopeChanged]);
+
+  useEffect(() => {
+    if (freshPageRequired && query.isSuccess && !query.isFetching && !query.isPlaceholderData) setFreshPageRequired(false);
+  }, [freshPageRequired, query.isFetching, query.isPlaceholderData, query.isSuccess]);
 
   useEffect(() => {
     const previous = previousFilters.current;
@@ -322,10 +330,13 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
   };
   const restartPaging = () => {
     setPrivacyFailure(null);
+    setFreshPageRequired(true);
     if (cursorIndex === 0) {
       void query.refetch();
       return;
     }
+    const firstPageRequest = { ...request, cursor: null };
+    void queryClient.invalidateQueries({ queryKey: [...activityDesignKeys.definitionCollection(firstPageRequest), authorityScope], exact: true });
     setCursorStack([null]);
     setCursorIndex(0);
   };
@@ -387,7 +398,7 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
               { label: "Recommended Version ID", value: definition.definition.recommendedVersionId ?? definition.lifecycle.recommendation?.versionId ?? "" }
             ].filter(identifier => identifier.value);
             return <div key={definition.definition.definitionId} className="ad-collection-row" role="row" tabIndex={0} aria-label={`Open Activity Definition ${title}`} title={rowDetails} onClick={event => { if ((event.target as HTMLElement).closest("button, input, label, a")) return; openDefinition(definition); }} onKeyDown={event => { if (event.target !== event.currentTarget || (event.key !== "Enter" && event.key !== " ")) return; event.preventDefault(); openDefinition(definition); }}>
-            <span role="cell" data-label="Activity" className="ad-collection-activity"><strong>{title}</strong>{definition.definition.description ? <small className="ad-collection-description">{definition.definition.description}</small> : null}<small className="ad-collection-category">{definition.definition.category}</small><WorkflowListIdentity primaryLabel="Definition ID" primaryValue={definition.definition.definitionId} secondaryIdentifiers={additionalIdentifiers} primaryClassName="ad-primary-identifier" secondaryClassName="ad-row-identifiers" detailsClassName="ad-row-identifiers-list" detailsLayout="inline" detailsAriaLabel={`Activity Definition identifiers for ${title}`} /></span>
+            <span role="cell" data-label="Activity" className="ad-collection-activity"><strong>{title}</strong>{definition.definition.description ? <small className="ad-collection-description">{definition.definition.description}</small> : null}<small className="ad-collection-category">{definition.definition.category}</small><WorkflowListIdentity primaryLabel="Definition ID" primaryValue={definition.definition.definitionId} secondaryIdentifiers={additionalIdentifiers} primaryClassName="ad-primary-identifier" secondaryClassName="ad-row-identifiers" detailsClassName="ad-row-identifiers-list" detailsAriaLabel={`Activity Definition identifiers for ${title}`} /></span>
             <span role="cell" data-label="State" className="ad-collection-state">
               {definition.lifecycle.versionCount === 0 && definition.lifecycle.draftCount > 0 ? <span className="ad-status-chip is-draft">Draft</span> : null}
               {definition.lifecycle.versionCount > 0 ? <span className="ad-status-chip is-published">Published</span> : null}

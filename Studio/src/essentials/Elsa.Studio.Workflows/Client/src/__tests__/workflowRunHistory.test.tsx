@@ -596,8 +596,10 @@ describe("workflow run history", () => {
     confirmRuns.mockResolvedValue(true);
 
     await waitFor(() => expect(container.textContent).toContain("old-run"));
-    click(button(container, "Delete workflow run old-run"));
+    const deleteAction = button(container, "Delete workflow run old-run");
+    click(deleteAction);
     await waitFor(() => expect(oldDeleteJson).toHaveBeenCalledTimes(1));
+    expect(deleteAction.disabled).toBe(true);
 
     const nextGetJson = vi.fn(async (url: string) => url === "/capabilities" ? deletionCapabilities : page("new-run"));
     rerender(context(nextGetJson), navigate);

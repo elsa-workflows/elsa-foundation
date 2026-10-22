@@ -1839,6 +1839,10 @@ async function renderRequestedFixture() {
     return;
   }
 
+  if (activityDefinitionsFixture) {
+    await import("../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css");
+  }
+
   root.render(
     searchParams.get("mode") === "workflow-toolbar"
     ? <WorkflowToolbarFixture />
