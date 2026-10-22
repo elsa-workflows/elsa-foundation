@@ -20,7 +20,7 @@ Persist `1.0.0`, `2.0.0`, `10.0.0`, `1.2.0` for one definition; query the ordere
 `(DefinitionId, "2.1.0")` returns the one record; `(DefinitionId, "9.9.9")` returns none (exact, not nearest). `1.0.0` and `1.0.0+build` resolve as the **same** logical version (build metadata ignored, FR-013).
 
 ## Mis-versioned source fails loudly (US5 / SC-004)
-Reconcile at `1.0.0`; mutate content without changing the version → re-reconcile → `ActivityVersionHashMismatchException` reporting `"1.0.0"`. Never a silent overwrite, except the tier-only catalog-field refresh introduced in #2804, which rewrites `Hash` and `InputsSource` in place.
+Reconcile at `1.0.0`; mutate content without changing the version → re-reconcile → `ActivityVersionHashMismatchException` reporting `"1.0.0"`. Never a silent overwrite, except the tier-only catalog-field refresh introduced in #2740, which rewrites `Hash` and `InputsSource` in place.
 
 ## Resilient scan (FR-023)
 Point the CLR source at a folder containing (a) an activity DLL, (b) a non-activity DLL, (c) a DLL with unresolvable references. Reconciliation discovers activities from (a), silently skips (b), logs-and-skips (c), and completes. A discovered activity with an **invalid** `[Version]` still throws a domain-scoped exception.
