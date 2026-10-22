@@ -65,11 +65,13 @@ function canRetainBrowseSnapshot(previous: BrowseIdentity, next: BrowseIdentity)
     && (previous.search === next.search ? previous.page === next.page : true);
 }
 
-export function WorkflowDefinitions({ context, ai, onOpen, session }: {
+export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRequestId = null, onHomeCreateRequestHandled }: {
   context: StudioEndpointContext;
   ai: StudioAiContributionApi;
   onOpen(id: string): void;
   session: WorkflowDefinitionBrowseSession;
+  homeCreateRequestId?: string | null;
+  onHomeCreateRequestHandled?(requestId: string): void;
 }) {
   const {
     browseLocation,
@@ -113,6 +115,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session }: {
   const [catalogState, setCatalogState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
   const [catalogError, setCatalogError] = useState("");
   const createInFlightRef = useRef(false);
+  const handledHomeCreateRequestRef = useRef<string | null>(null);
   const [folderCapability, setFolderCapability] = useState<"unknown" | "available" | "unavailable">("unknown");
   const [moveCapabilityAvailable, setMoveCapabilityAvailable] = useState(false);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
@@ -184,7 +187,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session }: {
     const canonical = updateWorkflowDefinitionBrowseUrl(new URL(window.location.href), browseLocation);
     const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     const next = `${canonical.pathname}${canonical.search}${canonical.hash}`;
-    if (current !== next) window.history.replaceState({}, "", next);
+    if (current !== next) window.history.replaceState(window.history.state, "", next);
   }, [browseLocation]);
 
   useEffect(() => {
@@ -303,13 +306,20 @@ export function WorkflowDefinitions({ context, ai, onOpen, session }: {
     }
   }, [catalogState, context]);
 
-  const openCreateDialog = () => {
+  const openCreateDialog = useCallback(() => {
     setRequestError(null);
     setCreateError("");
     setStatus("");
     setCreateDraft({ name: "", description: "", rootActivityVersionId: null });
     void loadCatalog();
-  };
+  }, [loadCatalog]);
+
+  useEffect(() => {
+    if (!homeCreateRequestId || handledHomeCreateRequestRef.current === homeCreateRequestId) return;
+    handledHomeCreateRequestRef.current = homeCreateRequestId;
+    onHomeCreateRequestHandled?.(homeCreateRequestId);
+    openCreateDialog();
+  }, [homeCreateRequestId, onHomeCreateRequestHandled, openCreateDialog]);
 
   const submitCreate = async () => {
     if (createInFlightRef.current || !createDraft?.name.trim() || catalogState !== "ready") return;

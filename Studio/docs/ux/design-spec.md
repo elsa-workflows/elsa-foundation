@@ -169,6 +169,8 @@ title / description / CTA empty states. **Tasks** is in the default layout and t
 registry, and only renders when `user-tasks` is enabled (`Elsa.Studio.UserTasks` matches).
 `requiresFeature: "workflows"` matches `Elsa.Studio.Workflows` only (not `Contoso.Workflows` or `Elsa.Studio.WorkflowsX`). A missing `enabledFeatures` list hides gated widgets.
 
+`exists`: a durable **Workflow tasks** group sits before the configurable grid and is not a widget. **Create workflow** consumes a one-use request to open the existing Workflows create dialog; **Browse workflows** still opens the definition collection. **Continue editing** reads the complete authorized definition list and uses actual current `draftId` values: one candidate opens that exact definition, while multiple candidates show a chooser with names and stable IDs. Empty results, request failures and missing current drafts remain distinct; a failed or stale selected definition keeps its ID and offers retry/browse recovery without silently choosing another workflow or creating a draft. **Needs attention** links to Runs' active-incident view. When Workflows is not composed the task group is absent; known permission denials are explained at Home while the existing server endpoints remain authoritative. None of these entries alter saved widget order, options or Get started behavior.
+
 **Edit home** is a tinted mode with add, remove, reorder, Add widget, Reset to default, and
 (for `studio/preferences/defaults:manage`) Save as server default. Normal view collapses
 per-widget chrome into `OverflowMenu`. Add widget moves focus into the dialog, closes on

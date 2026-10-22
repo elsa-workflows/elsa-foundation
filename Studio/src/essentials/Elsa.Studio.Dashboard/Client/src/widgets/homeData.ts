@@ -2,6 +2,7 @@ import { requestStudioNavigation, type ElsaStudioModuleApi } from "@elsa-workflo
 
 export interface HomeWorkflowSummary {
   id: string;
+  draftId?: string;
   name: string;
   description?: string;
   createdAt?: string;
@@ -48,6 +49,10 @@ function optionalString(value: unknown) {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
+function optionalIdentifier(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+}
+
 function optionalNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
@@ -55,6 +60,7 @@ function optionalNumber(value: unknown) {
 function toWorkflowSummary(record: Record<string, unknown>): HomeWorkflowSummary {
   return {
     id: String(record.id ?? record.definitionId ?? ""),
+    draftId: optionalIdentifier(record.draftId),
     name: workflowName(record),
     description: optionalString(record.description),
     createdAt: optionalString(record.createdAt),
@@ -158,9 +164,10 @@ export async function homeHasRun(api: ElsaStudioModuleApi, signal: AbortSignal) 
 }
 
 export function navigateStudioPath(href: string) {
-  if (!requestStudioNavigation(window.location.pathname, href)) return;
-  window.history.pushState({}, "", href);
+  if (!requestStudioNavigation(window.location.pathname, href)) return false;
+  window.history.pushState(window.history.state, "", href);
   window.dispatchEvent(new PopStateEvent("popstate"));
+  return true;
 }
 
 export function runStatusTone(status: string | undefined): "neutral" | "success" | "warning" | "danger" | "accent" {

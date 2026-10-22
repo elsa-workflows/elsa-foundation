@@ -212,10 +212,38 @@ function createHomeApi(): ElsaStudioModuleApi {
   return api;
 }
 
+function installCurrentDraftFixture(api: ElsaStudioModuleApi, scenario: string) {
+  const items = scenario === "multiple-long-names"
+    ? [
+        { id: "definition-long-name", name: `Home3063-long-${"x".repeat(89)}`, draftId: "draft-long-name" },
+        { id: "definition-another", name: "Home3063-draft-a", draftId: "draft-a" },
+        { id: "definition-published-current", name: "Home3063-published-current", draftId: "draft-published", publicationState: "published" }
+      ]
+    : scenario === "multiple"
+    ? [
+        { id: "definition-a", name: "Duplicate workflow", draftId: "draft-a" },
+        { id: "definition-b", name: "Duplicate workflow", draftId: "draft-b" }
+      ]
+    : scenario === "one"
+      ? [{ id: "definition-only", name: "Only workflow", draftId: "draft-only" }]
+      : [];
+  Object.defineProperty(api.backend.http, "getJson", {
+    configurable: true,
+    value: async (url: string) => {
+      if (url.startsWith("/design/workflows/definitions")) return { items };
+      const error = new Error("missing") as Error & { status: number };
+      error.status = 404;
+      throw error;
+    }
+  });
+}
+
 export function HomeFixture() {
   writeAppearancePreferences({ themeId: "classic", mode: appearance, navigation: "left" });
   const navigation = getStudioNavigation(moduleNavigation);
   const api = before ? createEmptyHomeApi() : createHomeApi();
+  const draftScenario = searchParams.get("drafts");
+  if (draftScenario) installCurrentDraftFixture(api, draftScenario);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", "classic");
