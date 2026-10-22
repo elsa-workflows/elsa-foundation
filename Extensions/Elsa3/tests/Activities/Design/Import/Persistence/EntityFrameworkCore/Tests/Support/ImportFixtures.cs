@@ -88,6 +88,7 @@ internal static class ImportFixtures
         var services = new ServiceCollection();
         services.AddSingleton<IActivityDefinitionLookup>(new BuiltInActivityLookup());
         services.AddSingleton(registry);
+        services.AddSingleton(SerializationServices.ObjectConverter());
         new Elsa3MappingFeature().ConfigureServices(services);
         var scope = services.BuildServiceProvider().CreateScope();
         return new(

@@ -30,6 +30,16 @@ export const compensationDecisions = {
 /** The read-only journal a live scope's state view carries (spec 260 FR-414). */
 export const compensationJournalViewKind = "compensation.journal";
 export const compensationJournalViewVersion = 1;
+const compensationJournalPhases: ReadonlySet<string> = new Set([
+  "Running", "Compensating", "AwaitingIntervention", "Completed", "Compensated", "Abandoned"
+]);
+const compensationJournalEntryStatuses: ReadonlySet<string> = new Set([
+  "Registered", "NoHandler", "Compensating", "Compensated", "Uncertain", "Failed", "Confirmed", "ResolvedManually"
+]);
+const compensationJournalForwardOutcomes: ReadonlySet<string> = new Set(["Completed", "Uncertain"]);
+const compensationJournalAttemptResults: ReadonlySet<string> = new Set(["Running", "Completed", "Faulted"]);
+const compensationJournalResolutionOutcomes: ReadonlySet<string> = new Set(["EffectAbsent", "EffectAccepted"]);
+const compensationJournalCauseKinds: ReadonlySet<string> = new Set(["fault", "uncertain", "explicit", "requested"]);
 // Spec 258 (M3): the activities that confirm a scope's work or ask it to compensate, and the scope input that makes
 // a completing scope confirm instead of handing its entries to the enclosing scope.
 export const compensationScopeActivityType = "Elsa.Activities.Compensation.Activities.CompensationScope";
@@ -215,14 +225,93 @@ export type CompensationJournalSource = ActivityStateView | "loading" | "unavail
 /** The journal inside a state view, when the view is the compensation journal this Studio reads. */
 export function readCompensationJournal(view: ActivityStateView | null | undefined): CompensationJournal | null {
   if (!view?.available || view.viewKind !== compensationJournalViewKind || view.viewVersion !== compensationJournalViewVersion) return null;
-  const journal = view.view as Partial<CompensationJournal> | null | undefined;
-  if (!journal || typeof journal !== "object" || typeof journal.phase !== "string" || !Array.isArray(journal.entries)) return null;
+  const journal = view.view;
+  if (!isJournalRecord(journal) || typeof journal.phase !== "string" || !compensationJournalPhases.has(journal.phase) || !Array.isArray(journal.entries)
+    || !journal.entries.every(isJournalEntry) || !Array.isArray(journal.remaining)
+    || !journal.remaining.every(isNonEmptyText) || !isOptionalNullableRecord(journal, "cause", isJournalCause)) return null;
   return {
     ...journal,
     phase: journal.phase,
-    entries: journal.entries.map(entry => ({ ...entry, attempts: Array.isArray(entry.attempts) ? entry.attempts : [] })),
-    remaining: Array.isArray(journal.remaining) ? journal.remaining : []
-  };
+    entries: journal.entries.map(entry => ({
+      ...entry,
+      ...(entry.waiting && !Object.hasOwn(entry.waiting, "decisions")
+        ? { waiting: { ...entry.waiting, decisions: [] } }
+        : {})
+    }))
+  } as CompensationJournal;
+}
+
+type JournalRecord = Record<string, unknown>;
+
+function isJournalRecord(value: unknown): value is JournalRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isNonEmptyText(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isNullableText(value: unknown): value is string | null {
+  return value === null || typeof value === "string";
+}
+
+function isNullableOccurrenceId(value: unknown): value is string | null {
+  return value === null || isNonEmptyText(value);
+}
+
+function isOptionalField(record: JournalRecord, field: string, validate: (value: unknown) => boolean): boolean {
+  return !Object.hasOwn(record, field) || validate(record[field]);
+}
+
+function isOptionalNullableRecord(
+  record: JournalRecord,
+  field: string,
+  validate: (value: JournalRecord) => boolean
+): boolean {
+  if (!Object.hasOwn(record, field) || record[field] === null) return true;
+  return isJournalRecord(record[field]) && validate(record[field]);
+}
+
+function isJournalEntry(value: unknown): value is CompensationJournalEntry {
+  if (!isJournalRecord(value) || !isNonEmptyText(value.id) || !isNonEmptyText(value.step)
+    || typeof value.ordinal !== "number" || !Number.isInteger(value.ordinal) || value.ordinal < 1
+    || typeof value.status !== "string" || !compensationJournalEntryStatuses.has(value.status)
+    || typeof value.forwardOutcome !== "string" || !compensationJournalForwardOutcomes.has(value.forwardOutcome)
+    || !isNonEmptyText(value.operationKey)
+    || !isJournalRecord(value.forward) || !isNonEmptyText(value.forward.activityExecutionId)
+    || !isOptionalField(value.forward, "iterationId", isNullableText)
+    || !Array.isArray(value.attempts) || !value.attempts.every((attempt, index) => isJournalAttempt(attempt) && attempt.number === index + 1)) return false;
+
+  return isOptionalNullableRecord(value, "handler", handler =>
+      isNonEmptyText(handler.executableNodeId) && typeof handler.remaining === "boolean")
+    && isOptionalNullableRecord(value, "origin", origin => isNonEmptyText(origin.scopeActivityExecutionId) && isNonEmptyText(origin.entryId))
+    && isOptionalNullableRecord(value, "waiting", waiting => isNonEmptyText(waiting.incidentId)
+      && (!Object.hasOwn(waiting, "decisions") || Array.isArray(waiting.decisions) && waiting.decisions.every(isNonEmptyText)))
+    && isOptionalNullableRecord(value, "resolution", resolution => typeof resolution.outcome === "string"
+      && compensationJournalResolutionOutcomes.has(resolution.outcome) && isNonEmptyText(resolution.incidentId))
+    && isOptionalField(value, "confirmedBy", isNullableOccurrenceId);
+}
+
+function isJournalAttempt(value: unknown): boolean {
+  if (!isJournalRecord(value) || typeof value.number !== "number" || !Number.isInteger(value.number) || value.number < 1
+    || typeof value.result !== "string" || !compensationJournalAttemptResults.has(value.result)) return false;
+  return isOptionalField(value, "activityExecutionId", isNullableOccurrenceId)
+    && isOptionalField(value, "incidentId", isNullableOccurrenceId)
+    && isOptionalField(value, "notBefore", candidate => candidate === null || isNonEmptyText(candidate))
+    && isOptionalField(value, "delayClamped", candidate => candidate === null || typeof candidate === "boolean");
+}
+
+function isJournalCause(value: JournalRecord): boolean {
+  return typeof value.kind === "string"
+    && compensationJournalCauseKinds.has(value.kind)
+    && isNonEmptyText(value.step)
+    && isNonEmptyText(value.activityExecutionId)
+    && isOptionalField(value, "incidentId", isNullableOccurrenceId)
+    && isOptionalField(value, "failureType", isNullableText)
+    && isOptionalField(value, "message", isNullableText)
+    && isOptionalField(value, "messageWithheld", candidate => typeof candidate === "boolean")
+    && isOptionalField(value, "requestedBy", isNullableOccurrenceId)
+    && isOptionalField(value, "target", isNullableText);
 }
 
 export function isCompensationHandlerExecution(activity: Pick<ActivityExecutionStateSummary, "provenance">): boolean {
