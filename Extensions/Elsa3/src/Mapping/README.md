@@ -54,6 +54,28 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
     scope only.
   - A loop's current value captured into a variable is read as the loop's scoped variable (`index`, `currentItem`)
     inside the loop body. Outside the loop that read is not representable.
+- **Variable starting values** (spec 264). Elsa 3 stored a variable's starting value as text and converted it to the
+  variable's type when the workflow started. The converter applies that rule, through Elsa 4's object converter, and
+  carries the result as a `Literal`:
+  - no value → no starting value (the variable starts empty);
+  - `Object` → the text, unparsed, even when it is JSON;
+  - `String`, primitives and enums → the text converted to the type (`"5"` → `5`, `"true"` → `true`);
+  - a collection (`List<T>`, `T[]` or an array flag) whose element type Elsa 4 knows → a JSON array. The variable is
+    `T` with collection kind List or Array, and every item is converted to `T`. A collection of a type Elsa 4 does not
+    know (`FormFile[]`, uploaded files) is refused, with or without a starting value, until it has its own spec (#3194);
+  - `ObjectDictionary` and `HttpHeaders` → `Object` holding a JSON object.
+
+  Text is never split on commas. `ELS3-ACTIVITY-VARIABLE-VALUE-UNCONVERTIBLE` refuses, with the exact fix, a starting
+  value that:
+  - is not a JSON array for a collection (the guidance shows the array the author most likely meant: `a, b` →
+    `["a","b"]`);
+  - has an item that does not convert to the element type;
+  - is not a JSON object for a dictionary;
+  - does not convert to its scalar type (`"abc"` for an `Int32`, which Elsa 3 silently started as `0`);
+  - sits on a scalar type Elsa 4's type registry does not know (an enum or CLR type the host registers no alias for):
+    such a variable runs as `Object`, so its value would stay text.
+
+  A variable with no starting value converts whatever its type.
 - **HttpEndpoint headers and query string.** A captured `Headers` or `QueryStringData` gets a synthesized `set` node
   right after the endpoint. It rebuilds the Elsa 3 shape from Elsa 4's `Request` output (one value → string, several →
   array) into the captured variable, or into `elsa3.http.{node}.headers` / `.query` for a bare memory slot. The

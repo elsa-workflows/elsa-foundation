@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, Loader, OctagonX, RotateCw, UserCheck } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
@@ -10,12 +10,14 @@ import {
 } from "../api/alterations";
 import { getActivityStateView, supportsActivityStateView } from "../api/runtime";
 import { isCompensationScope } from "../compensationScope";
+import { isActiveIncident } from "../workflowRuntimeOverlays";
 import {
   compensationDecisions,
   deriveCompensationRuntime,
   interventionDecisionLabel,
   interventionRequesterOf,
   isWaitingForIntervention,
+  isRetryDue,
   offeredDecisions,
   readCompensationJournal,
   type CompensationJournalSource
@@ -42,7 +44,7 @@ import {
   type PendingOperatorAction
 } from "../operatorActions";
 import { findActivityNode } from "../workflowAdapter";
-import type { ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary, WorkflowInstanceDetails } from "../workflowTypes";
+import type { ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
 import { OperatorActionDialog, type OperatorActionForm } from "./OperatorActionDialog";
 
 // Spec 260 (T422, T423): the run view's operator actions. One action per run at a time: a confirmed action is submitted
@@ -67,38 +69,50 @@ export function useCompensationJournals(context: StudioEndpointContext, workflow
   const [generation, setGeneration] = useState(0);
   const requested = useRef(new Set<string>());
   const runRef = useRef(workflowExecutionId);
+  const contextRef = useRef(context);
+  const readGeneration = useRef(0);
 
   const reset = useCallback(() => {
+    readGeneration.current += 1;
     requested.current = new Set();
     setJournals(new Map());
     setGeneration(current => current + 1);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     runRef.current = workflowExecutionId;
+    contextRef.current = context;
     reset();
-  }, [reset, workflowExecutionId]);
+  }, [context, reset, workflowExecutionId]);
 
   const reload = useCallback(async (scopeActivityExecutionId: string): Promise<CompensationJournalSource> => {
-    const run = runRef.current;
+    const run = workflowExecutionId;
+    const readContext = context;
+    const readGenerationAtStart = readGeneration.current;
     let result: CompensationJournalSource;
     try {
-      result = await supportsActivityStateView(context)
-        ? await getActivityStateView(context, run, scopeActivityExecutionId)
+      result = await supportsActivityStateView(readContext)
+        ? await getActivityStateView(readContext, run, scopeActivityExecutionId)
         : "unavailable";
     } catch {
       result = "unavailable";
     }
-    if (runRef.current === run) setJournals(current => new Map(current).set(scopeActivityExecutionId, result));
+    if (contextRef.current === readContext && runRef.current === run && readGeneration.current === readGenerationAtStart) {
+      setJournals(current => new Map(current).set(scopeActivityExecutionId, result));
+    }
     return result;
-  }, [context]);
+  }, [context, workflowExecutionId]);
 
+  const requestEpoch = readGeneration.current;
   const request = useCallback((scopeActivityExecutionId: string, activityStatus?: string) => {
+    const requestContext = context;
+    const requestRun = workflowExecutionId;
+    if (contextRef.current !== requestContext || runRef.current !== requestRun || readGeneration.current !== requestEpoch) return;
     if (activityStatus === "Completed" || requested.current.has(scopeActivityExecutionId)) return;
     requested.current.add(scopeActivityExecutionId);
     setJournals(current => current.has(scopeActivityExecutionId) ? current : new Map(current).set(scopeActivityExecutionId, "loading"));
     void reload(scopeActivityExecutionId);
-  }, [reload]);
+  }, [context, reload, requestEpoch, workflowExecutionId]);
 
   const get = useCallback((id: string | undefined) => (id ? journals.get(id) : undefined), [journals]);
   return { get, request, reload, reset, generation };
@@ -109,6 +123,10 @@ interface DialogState {
   key: string;
   busy: boolean;
   error: string | null;
+  context: StudioEndpointContext;
+  contextGeneration: number;
+  workflowExecutionId: string;
+  originGeneration: number;
   trigger: HTMLElement | null;
   focusFallback?: () => void;
 }
@@ -130,9 +148,152 @@ export interface UseOperatorActionsInput {
   refreshRun(): Promise<WorkflowInstanceDetails | null>;
 }
 
+/** Read-only discovery state for the canonical operator action routes. */
+export type OperatorActionAvailability = "checking" | "available" | "unavailable" | "unknown";
+
+export type RetryReviewEligibility = "eligible" | "ineligible" | "unknown";
+
+export type RetryReviewReason = "historical-incident" | "ended-run" | "source-not-faulted" | "parent-not-running" | "source-not-loaded" | "parent-not-loaded" | "blocking-descendant-incident" | "descendant-ancestry-not-loaded" | "same-source-blocking-incident-not-waiting";
+
+export interface IncidentRetryReviewEligibility {
+  status: RetryReviewEligibility;
+  reason?: RetryReviewReason;
+  observedStatus?: string;
+}
+
+const endedWorkflowRunStatuses = new Set(["completed", "faulted", "cancelled", "canceled"]);
+
+/** Local Retry review eligibility mirrors the existing server preflight; the server remains authoritative. */
+export function getIncidentRetryReviewEligibility(
+  incident: IncidentStateSummary,
+  run: Pick<WorkflowInstanceSummary, "status"> | null | undefined,
+  activities: ActivityExecutionStateSummary[],
+  incidents: IncidentStateSummary[] = [],
+  workflowExecutionId = incident.workflowExecutionId
+): IncidentRetryReviewEligibility {
+  if (!isActiveIncident(incident)) return { status: "ineligible", reason: "historical-incident" };
+  const runStatus = run?.status?.trim().toLowerCase();
+  if (runStatus && endedWorkflowRunStatuses.has(runStatus)) return { status: "ineligible", reason: "ended-run" };
+
+  const sourceId = incident.activityExecutionId?.trim() || incident.metadata?.["runtime.activityExecutionId"]?.trim();
+  if (!sourceId) return { status: "unknown", reason: "source-not-loaded" };
+  const source = activities.find(activity => activity.activityExecutionId === sourceId);
+  if (!source || source.workflowExecutionId !== workflowExecutionId) return { status: "unknown", reason: "source-not-loaded" };
+  const sourceStatus = source.status?.trim();
+  if (!sourceStatus) return { status: "unknown", reason: "source-not-loaded" };
+  if (sourceStatus.toLowerCase() !== "faulted") {
+    return { status: "ineligible", reason: "source-not-faulted", observedStatus: sourceStatus };
+  }
+
+  const parentId = source.parentActivityExecutionId?.trim() || source.provenance?.parentActivityExecutionId?.trim();
+  if (parentId) {
+    const parent = activities.find(activity => activity.activityExecutionId === parentId);
+    if (!parent || parent.workflowExecutionId !== workflowExecutionId) return { status: "unknown", reason: "parent-not-loaded" };
+    const parentStatus = parent.status?.trim();
+    if (!parentStatus) return { status: "unknown", reason: "parent-not-loaded" };
+    if (parentStatus.toLowerCase() !== "running") {
+      return { status: "ineligible", reason: "parent-not-running", observedStatus: parentStatus };
+    }
+  }
+
+  const blockingIncident = getBlockingIncidentStatus(incident, sourceId, workflowExecutionId, activities, incidents);
+  if (blockingIncident === "confirmed") {
+    return { status: "ineligible", reason: "blocking-descendant-incident" };
+  }
+  if (blockingIncident === "unknown") {
+    return { status: "unknown", reason: "descendant-ancestry-not-loaded" };
+  }
+  if (blockingIncident === "same-source-not-waiting") {
+    return { status: "ineligible", reason: "same-source-blocking-incident-not-waiting" };
+  }
+
+  return { status: "eligible" };
+}
+
+function getBlockingIncidentStatus(
+  selectedIncident: IncidentStateSummary,
+  sourceId: string,
+  workflowExecutionId: string,
+  activities: ActivityExecutionStateSummary[],
+  incidents: IncidentStateSummary[]
+): "confirmed" | "unknown" | "same-source-not-waiting" | "none" {
+  if (selectedIncident.workflowExecutionId !== workflowExecutionId) return "none";
+  const activitiesById = new Map(activities.map(activity => [activity.activityExecutionId, activity] as const));
+  const source = activitiesById.get(sourceId);
+  if (!source || source.workflowExecutionId !== workflowExecutionId) return "none";
+
+  let incompleteKnownAncestry = false;
+  for (const blocker of incidents) {
+    if (blocker.incidentId === selectedIncident.incidentId
+      || blocker.workflowExecutionId !== workflowExecutionId
+      || !blocker.isBlocking
+      || !isActiveIncident(blocker)) continue;
+
+    const blockerActivityId = blocker.activityExecutionId?.trim() || blocker.metadata?.["runtime.activityExecutionId"]?.trim();
+    // An incident with no exact activity cannot be tied to an ancestry. Once it names an activity, missing or
+    // cross-run rows leave that known blocker's relationship unresolved.
+    if (!blockerActivityId) continue;
+    if (blockerActivityId === sourceId) {
+      if (!isWaitingForIntervention(blocker)) return "same-source-not-waiting";
+      continue;
+    }
+    let current = activitiesById.get(blockerActivityId);
+    if (!current || current.workflowExecutionId !== workflowExecutionId) {
+      incompleteKnownAncestry = true;
+      continue;
+    }
+
+    const visited = new Set<string>();
+    while (current) {
+      if (visited.has(current.activityExecutionId)) {
+        incompleteKnownAncestry = true;
+        break;
+      }
+      visited.add(current.activityExecutionId);
+      const parentId = current.parentActivityExecutionId?.trim() || current.provenance?.parentActivityExecutionId?.trim();
+      if (!parentId) break;
+      if (parentId === sourceId) return "confirmed";
+      const parent = activitiesById.get(parentId);
+      if (!parent) {
+        incompleteKnownAncestry = true;
+        break;
+      }
+      if (parent.workflowExecutionId !== workflowExecutionId) {
+        incompleteKnownAncestry = true;
+        break;
+      }
+      current = parent;
+    }
+  }
+
+  return incompleteKnownAncestry ? "unknown" : "none";
+}
+
+export interface IncidentNextStepGuidance {
+  actionAvailability: OperatorActionAvailability;
+  canAct: boolean;
+  pendingIncidentId: string | null;
+  requesterCancelled: boolean;
+  retryReviewEligibility: IncidentRetryReviewEligibility;
+  retryJournalAvailability?: "not-required" | "unknown" | "checking" | "available";
+  retryNotBefore?: string;
+  retryDue?: boolean;
+}
+
+type RetryJournalAssessment =
+  | { status: "not-applicable" }
+  | { status: "unknown" }
+  | { status: "loaded"; scheduledRetry?: { retryNotBefore: string; retryDue: boolean } };
+
+function incidentActionReadKey(workflowExecutionId: string, incidentId: string) {
+  return `${workflowExecutionId}\u0000${incidentId}`;
+}
+
 export interface OperatorActionsApi {
   canAct: boolean;
+  actionAvailability: OperatorActionAvailability;
   pending: { incidentId: string; label: string } | null;
+  guidanceForIncident(incident: IncidentStateSummary): IncidentNextStepGuidance;
   open(model: OperatorActionModel, focusFallback?: () => void): void;
   /** The Retry and decision buttons of the incident dialog; `close` closes that dialog first. */
   renderIncidentActions(incident: IncidentStateSummary, activityLabel: string, close: () => void, focusFallback: () => void): ReactNode;
@@ -160,10 +321,12 @@ export function useOperatorActions({
   labelOf,
   refreshRun
 }: UseOperatorActionsInput): OperatorActionsApi {
-  const [linksAvailable, setLinksAvailable] = useState(false);
+  const [availabilityObservation, setAvailabilityObservation] = useState<{ context: StudioEndpointContext; status: OperatorActionAvailability }>({ context, status: "checking" });
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const [followed, setFollowed] = useState<FollowedAction | null>(null);
   const [message, setMessage] = useState<{ text: string; tone: "info" | "error" } | null>(null);
+  const [pendingIncidentActionReads, setPendingIncidentActionReads] = useState<ReadonlySet<string>>(() => new Set());
+  const pendingIncidentActionReadKeys = useRef(new Map<string, symbol>());
   // The plan being followed and the controller that stops following it; one at a time.
   const following = useRef<{ planId: string; controller: AbortController } | null>(null);
   const refreshRunRef = useRef(refreshRun);
@@ -172,14 +335,16 @@ export function useOperatorActions({
   journalsRef.current = journals;
 
   const permissions = readWorkflowInstancePermissions(details);
-  const canAct = permissions.canManage && linksAvailable;
+  const actionAvailability = availabilityObservation.context === context ? availabilityObservation.status : "checking";
+  const canAct = permissions.canManage && actionAvailability === "available";
 
   useEffect(() => {
     let active = true;
+    setAvailabilityObservation({ context, status: "checking" });
     supportsOperatorAlterations(context).then(supported => {
-      if (active) setLinksAvailable(supported);
+      if (active) setAvailabilityObservation({ context, status: supported ? "available" : "unavailable" });
     }, () => {
-      if (active) setLinksAvailable(false);
+      if (active) setAvailabilityObservation({ context, status: "unknown" });
     });
     return () => {
       active = false;
@@ -188,6 +353,36 @@ export function useOperatorActions({
 
   // The run this hook shows now; null once it unmounts. A submission that resolves after a switch only stores its plan.
   const currentRun = useRef<string | null>(workflowExecutionId);
+  const selectedRun = useRef(workflowExecutionId);
+  selectedRun.current = workflowExecutionId;
+  const originContext = useRef(context);
+  const endpointContextGeneration = useRef(0);
+  const incidentActionOriginGeneration = useRef(0);
+
+  useLayoutEffect(() => {
+    const pendingReadsForRun = pendingIncidentActionReadKeys.current;
+    if (originContext.current !== context) {
+      originContext.current = context;
+      endpointContextGeneration.current += 1;
+    }
+    incidentActionOriginGeneration.current += 1;
+    pendingReadsForRun.clear();
+    setPendingIncidentActionReads(new Set());
+    setDialog(current => current && (current.context !== context || current.workflowExecutionId !== workflowExecutionId) ? null : current);
+    return () => {
+      incidentActionOriginGeneration.current += 1;
+      pendingReadsForRun.clear();
+    };
+  }, [context, workflowExecutionId]);
+
+  const isCurrentOrigin = (origin: Pick<DialogState, "context" | "workflowExecutionId" | "originGeneration">) =>
+    origin.context === context
+    && origin.workflowExecutionId === workflowExecutionId
+    && origin.originGeneration === incidentActionOriginGeneration.current;
+
+  const isCurrentEndpoint = (origin: Pick<DialogState, "context" | "contextGeneration">) =>
+    origin.context === context
+    && origin.contextGeneration === endpointContextGeneration.current;
 
   // A different run, or leaving the page, stops following; the stored plan is resumed when the run is opened again.
   useEffect(() => {
@@ -274,10 +469,10 @@ export function useOperatorActions({
 
   // A reload resumes the plan this run was following; it is never submitted again (FR-423).
   useEffect(() => {
-    if (!linksAvailable) return;
+    if (actionAvailability !== "available") return;
     const stored = readPendingOperatorAction(workflowExecutionId);
     if (stored) void follow(stored);
-  }, [follow, linksAvailable, workflowExecutionId]);
+  }, [actionAvailability, follow, workflowExecutionId]);
 
   const open = useCallback((model: OperatorActionModel, focusFallback?: () => void) => {
     setMessage(null);
@@ -286,10 +481,14 @@ export function useOperatorActions({
       key: mintIdempotencyKey(),
       busy: false,
       error: null,
+      context,
+      contextGeneration: endpointContextGeneration.current,
+      workflowExecutionId,
+      originGeneration: incidentActionOriginGeneration.current,
       trigger: document.activeElement instanceof HTMLElement ? document.activeElement : null,
       ...(focusFallback ? { focusFallback } : {})
     });
-  }, []);
+  }, [context, workflowExecutionId]);
 
   const returnFocus = (state: DialogState) => {
     requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -304,9 +503,10 @@ export function useOperatorActions({
   };
 
   const confirm = async (state: DialogState, form: OperatorActionForm) => {
+    if (!isCurrentOrigin(state)) return;
     setDialog({ ...state, busy: true, error: null });
     try {
-      const submission = await apiRef.current.submit(operatorActionPlan(state.model, form), state.key);
+      const submission = await submitAlterationPlan(state.context, operatorActionPlan(state.model, form), state.key);
       const pending: PendingOperatorAction = {
         planId: submission.planId,
         kind: state.model.kind,
@@ -315,13 +515,15 @@ export function useOperatorActions({
         submittedLabel: state.model.submittedLabel,
         ...(state.model.scopeActivityExecutionId ? { scopeActivityExecutionId: state.model.scopeActivityExecutionId } : {})
       };
-      storePendingOperatorAction(workflowExecutionId, pending);
-      // The page moved on while the submission was in flight: the stored plan is followed when this run opens again.
-      if (currentRun.current !== workflowExecutionId) return;
+      // Keep same-endpoint run navigation resumable under the original run; never persist or follow it through a new endpoint.
+      if (!isCurrentEndpoint(state)) return;
+      storePendingOperatorAction(state.workflowExecutionId, pending);
+      if (selectedRun.current !== state.workflowExecutionId || currentRun.current !== state.workflowExecutionId) return;
       setMessage({ text: state.model.submittedLabel, tone: "info" });
-      close(state);
+      if (isCurrentOrigin(state)) close(state);
       void follow(pending);
     } catch (error) {
+      if (!isCurrentOrigin(state)) return;
       const failure = operatorErrorMessage(error);
       if (failure.refreshPermissions || failure.refreshRun || (error as { status?: number })?.status === 401) {
         close(state);
@@ -334,15 +536,27 @@ export function useOperatorActions({
     }
   };
 
-  // `journal` is the requester's journal when the caller has just read it: `journals` is this render's snapshot, so a
-  // journal read after the click is not in it yet.
-  const modelForIncident = (incident: IncidentStateSummary, activityLabel: string, action: "retry" | { decision: string }, journal?: CompensationJournalSource) => {
+  const compensationRequesterForIncident = (incident: IncidentStateSummary) => {
     const requester = interventionRequesterOf(incident);
     const requesterActivity = requester ? activities.find(activity => activity.activityExecutionId === requester) : undefined;
     const scopeNode = requesterActivity && root
       ? findActivityNode(root, requesterActivity.authoredActivityId) ?? findActivityNode(root, requesterActivity.executableNodeId)
       : undefined;
-    if (requester && scopeNode && isCompensationScope(scopeNode)) {
+    return incident.workflowExecutionId === workflowExecutionId
+      && requesterActivity?.workflowExecutionId === workflowExecutionId
+      && requester
+      && scopeNode
+      && isCompensationScope(scopeNode)
+      ? { requester, requesterActivity, scopeNode }
+      : undefined;
+  };
+
+  // `journal` is the requester's exact journal when a caller has just read it; React state may not have rendered it yet.
+  const modelForIncident = (incident: IncidentStateSummary, activityLabel: string, action: "retry" | { decision: string }, journal?: CompensationJournalSource) => {
+    const requester = interventionRequesterOf(incident);
+    const compensationRequester = compensationRequesterForIncident(incident);
+    if (compensationRequester) {
+      const { requester, scopeNode } = compensationRequester;
       const derived = deriveCompensationRuntime(scopeNode, activities, details?.incidents ?? [], {
         complete: !details?.activityNextContinuationToken,
         selectedActivityExecutionId: requester,
@@ -367,29 +581,159 @@ export function useOperatorActions({
       requester);
   };
 
+  const assessRetryJournal = (incident: IncidentStateSummary, journalOverride?: CompensationJournalSource): RetryJournalAssessment => {
+    const compensationRequester = compensationRequesterForIncident(incident);
+    if (!compensationRequester) return { status: "not-applicable" };
+    const { requester, scopeNode } = compensationRequester;
+    const source = journalOverride ?? journals.get(requester);
+    if (!source
+      || source === null
+      || typeof source !== "object"
+      || source.available !== true
+      || source.workflowExecutionId !== workflowExecutionId
+      || source.activityExecutionId !== requester) return { status: "unknown" };
+
+    const journal = readCompensationJournal(source);
+    if (!journal) return { status: "unknown" };
+    const runtime = deriveCompensationRuntime(scopeNode, activities, details?.incidents ?? [], {
+      complete: !details?.activityNextContinuationToken,
+      selectedActivityExecutionId: requester,
+      root,
+      journal: source
+    });
+    const activityExecutionId = incident.activityExecutionId?.trim() || incident.metadata?.["runtime.activityExecutionId"]?.trim();
+    const row = [...runtime.rows, ...(runtime.received ?? [])].find(candidate => {
+      if (candidate.recovery.state !== "RetryScheduled" || !candidate.recovery.retryNotBefore || !candidate.entryId) return false;
+      const entry = journal.entries.find(item => item.id === candidate.entryId);
+      return entry?.attempts.some(attempt => attempt.incidentId === incident.incidentId
+        && (!activityExecutionId || attempt.activityExecutionId === activityExecutionId)) ?? false;
+    });
+
+    return {
+      status: "loaded",
+      ...(row?.recovery.retryNotBefore
+        ? { scheduledRetry: { retryNotBefore: row.recovery.retryNotBefore, retryDue: isRetryDue(row.recovery) } }
+        : {})
+    };
+  };
+
+  const canOfferRetry = (incident: IncidentStateSummary, eligibility: IncidentRetryReviewEligibility) => {
+    if (!canAct || followed || !isWaitingForIntervention(incident) || eligibility.status !== "eligible") return false;
+    const requester = interventionRequesterOf(incident);
+    return !requester || activities.find(activity => activity.activityExecutionId === requester)?.status !== "Cancelled";
+  };
+
+  const guidanceForIncident = (incident: IncidentStateSummary): IncidentNextStepGuidance => {
+    const retryReviewEligibility = getIncidentRetryReviewEligibility(incident, details?.instance, activities, details?.incidents ?? [], workflowExecutionId);
+    const retryJournal = assessRetryJournal(incident);
+    const actionReadKey = incidentActionReadKey(workflowExecutionId, incident.incidentId);
+    const retryControlAvailable = canOfferRetry(incident, retryReviewEligibility);
+    const retryJournalAvailability = !retryControlAvailable ? "not-required" : retryJournal.status === "unknown"
+      ? pendingIncidentActionReads.has(actionReadKey) ? "checking" : "unknown"
+      : retryJournal.status === "loaded" ? "available" : "not-required";
+    const requester = interventionRequesterOf(incident);
+    const requesterActivity = requester ? activities.find(activity => activity.activityExecutionId === requester) : undefined;
+    if (retryJournal.status === "loaded" && retryJournal.scheduledRetry) {
+      return {
+        actionAvailability,
+        canAct,
+        pendingIncidentId: followed?.incidentId ?? null,
+        requesterCancelled: requesterActivity?.status === "Cancelled",
+        retryReviewEligibility,
+        retryJournalAvailability,
+        ...retryJournal.scheduledRetry
+      };
+    }
+
+    return {
+      actionAvailability,
+      canAct,
+      pendingIncidentId: followed?.incidentId ?? null,
+      requesterCancelled: requesterActivity?.status === "Cancelled",
+      retryReviewEligibility,
+      retryJournalAvailability
+    };
+  };
+
   const renderIncidentActions = (incident: IncidentStateSummary, activityLabel: string, closeIncident: () => void, focusFallback: () => void): ReactNode => {
     if (!canAct || followed || !isWaitingForIntervention(incident)) return null;
+    const retryEligibility = getIncidentRetryReviewEligibility(incident, details?.instance, activities, details?.incidents ?? [], workflowExecutionId);
+    if (retryEligibility.reason === "historical-incident" || retryEligibility.reason === "ended-run") return null;
     const requester = interventionRequesterOf(incident);
     // A cancelled scope never starts a handler, and decides nothing (spec 260 R9).
     if (requester && activities.find(activity => activity.activityExecutionId === requester)?.status === "Cancelled") return null;
+    const retryJournal = assessRetryJournal(incident);
+    if (retryJournal.status === "loaded" && retryJournal.scheduledRetry) return null;
     const decisions = offeredDecisions(incident);
-    const launch = async (action: "retry" | { decision: string }) => {
-      closeIncident();
-      // Read the journal when the run view has none yet (or is still reading it), and use what the read returned: the
-      // journals state only reaches this closure on the next render.
-      const cached = requester ? journals.get(requester) : undefined;
-      const journal = requester && (!cached || cached === "loading")
-        ? await journals.reload(requester).catch(() => undefined)
-        : cached;
-      open(modelForIncident(incident, activityLabel, action, journal), focusFallback);
+    const retryControlAvailable = canOfferRetry(incident, retryEligibility);
+    const showCheckRetryAvailability = retryJournal.status === "unknown" && retryControlAvailable;
+    const showRetry = retryControlAvailable && retryJournal.status !== "unknown";
+    if (!showCheckRetryAvailability && !showRetry && decisions.length === 0) return null;
+    const actionReadKey = incidentActionReadKey(workflowExecutionId, incident.incidentId);
+    const actionReadPending = pendingIncidentActionReads.has(actionReadKey);
+    const launch = async (action: "retry" | "retry-availability" | { decision: string }) => {
+      if (pendingIncidentActionReadKeys.current.has(actionReadKey)) return;
+      const origin = { context, workflowExecutionId, originGeneration: incidentActionOriginGeneration.current };
+      const ownerDialog = document.activeElement instanceof HTMLElement
+        ? document.activeElement.closest<HTMLElement>("[role=dialog]")
+        : null;
+      const readToken = Symbol();
+      pendingIncidentActionReadKeys.current.set(actionReadKey, readToken);
+      // Keep focus in the incident dialog before the pending state disables its action buttons.
+      ownerDialog?.focus();
+      setPendingIncidentActionReads(current => new Set(current).add(actionReadKey));
+      try {
+        // Read the exact requester journal for an explicit availability check or when the incident action has no cache.
+        const cached = requester ? journals.get(requester) : undefined;
+        const needsAvailabilityRead = action === "retry-availability";
+        const journal = requester && (needsAvailabilityRead || !cached || cached === "loading")
+          ? await journals.reload(requester).catch(() => undefined)
+          : cached;
+        if (!isCurrentOrigin(origin)) return;
+        // Escape or another close can end the incident dialog while the journal is loading. Do not reopen a
+        // confirmation after the operator has left this incident.
+        if (ownerDialog && !ownerDialog.isConnected) return;
+        const latestRetryJournal = assessRetryJournal(incident, journal);
+        if (latestRetryJournal.status === "loaded" && latestRetryJournal.scheduledRetry) {
+          if (ownerDialog?.isConnected) ownerDialog.focus();
+          return;
+        }
+        if (action === "retry-availability") {
+          if (ownerDialog?.isConnected) ownerDialog.focus();
+          return;
+        }
+        if (action === "retry" && compensationRequesterForIncident(incident) && latestRetryJournal.status !== "loaded") {
+          if (ownerDialog?.isConnected) ownerDialog.focus();
+          return;
+        }
+        closeIncident();
+        open(modelForIncident(incident, activityLabel, action, journal), focusFallback);
+      } finally {
+        if (pendingIncidentActionReadKeys.current.get(actionReadKey) === readToken) {
+          pendingIncidentActionReadKeys.current.delete(actionReadKey);
+          setPendingIncidentActionReads(current => {
+            if (!current.has(actionReadKey)) return current;
+            const next = new Set(current);
+            next.delete(actionReadKey);
+            return next;
+          });
+        }
+      }
     };
     return (
-      <div className="wf-incident-operator-actions" role="group" aria-label="Operator actions">
-        <button type="button" onClick={() => void launch("retry")}>
-          <RotateCw size={13} aria-hidden="true" /> Retry
-        </button>
+      <div className="wf-incident-operator-actions" role="group" aria-label="Operator actions" aria-busy={actionReadPending}>
+        {showCheckRetryAvailability ? (
+          <button type="button" disabled={actionReadPending} onClick={() => void launch("retry-availability")}>
+            <RotateCw size={13} aria-hidden="true" /> {actionReadPending ? "Checking…" : "Check Retry availability"}
+          </button>
+        ) : null}
+        {showRetry ? (
+          <button type="button" disabled={actionReadPending} onClick={() => void launch("retry")}>
+            <RotateCw size={13} aria-hidden="true" /> Retry
+          </button>
+        ) : null}
         {decisions.map(decision => (
-          <button key={decision} type="button" data-tone={decision === compensationDecisions.abandon ? "danger" : undefined} onClick={() => void launch({ decision })}>
+          <button key={decision} type="button" disabled={actionReadPending} data-tone={decision === compensationDecisions.abandon ? "danger" : undefined} onClick={() => void launch({ decision })}>
             {decision === compensationDecisions.abandon ? <OctagonX size={13} aria-hidden="true" /> : <UserCheck size={13} aria-hidden="true" />}
             {" "}{interventionDecisionLabel(decision)}
           </button>
@@ -398,20 +742,24 @@ export function useOperatorActions({
     );
   };
 
+  const visibleDialog = dialog && isCurrentOrigin(dialog) ? dialog : null;
+
   return {
     canAct,
+    actionAvailability,
     pending: followed ? { incidentId: followed.incidentId, label: followed.label } : null,
+    guidanceForIncident,
     open,
     renderIncidentActions,
-    dialog: dialog ? (
+    dialog: visibleDialog ? (
       <OperatorActionDialog
-        key={dialog.key}
-        model={dialog.model}
-        busy={dialog.busy}
-        error={dialog.error}
-        onCancel={() => close(dialog)}
-        onConfirm={form => void confirm(dialog, form)}
-        restoreFocus={dialog.focusFallback}
+        key={visibleDialog.key}
+        model={visibleDialog.model}
+        busy={visibleDialog.busy}
+        error={visibleDialog.error}
+        onCancel={() => close(visibleDialog)}
+        onConfirm={form => void confirm(visibleDialog, form)}
+        restoreFocus={visibleDialog.focusFallback}
       />
     ) : null,
     status: (

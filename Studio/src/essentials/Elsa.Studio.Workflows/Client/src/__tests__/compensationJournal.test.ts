@@ -168,6 +168,67 @@ describe("compensation journal fallback", () => {
     expect(readCompensationJournal(view(journal("Running", [])))).toMatchObject({ phase: "Running", entries: [], remaining: [] });
   });
 
+  it("rejects malformed consumed records while preserving valid pending attempt IDs and legacy wait offers", () => {
+    const validPending = entry("e2", "Reserve delivery", 2, "Compensating", "ae-2", { handler: "cancel" });
+    validPending.attempts = [
+      { number: 1, activityExecutionId: "ae-4", incidentId: "inc-4", result: "Faulted" },
+      { number: 2, activityExecutionId: null, incidentId: null, result: "Running", notBefore: "2026-10-23T10:00:00Z" }
+    ];
+    validPending.waiting = { incidentId: "inc-6", decisions: [] };
+    const valid = journal("Compensating", [validPending]);
+    expect(readCompensationJournal(view(valid))?.entries[0].attempts).toEqual(validPending.attempts);
+    const waitingWithoutLegacyOffers = entry("e2", "Reserve delivery", 2, "Failed", "ae-2", { waiting: "inc-6" });
+    if (waitingWithoutLegacyOffers.waiting) delete (waitingWithoutLegacyOffers.waiting as { decisions?: string[] }).decisions;
+    const legacy = readCompensationJournal(view(journal("AwaitingIntervention", [waitingWithoutLegacyOffers])));
+    expect(legacy?.entries[0].waiting?.decisions).toEqual([]);
+
+    const base = view(journal("Running", [entry("e1", "Reserve inventory", 1, "Registered", "ae-1")]));
+    const malformed = (entries: unknown[], extra: Record<string, unknown> = {}) => ({
+      ...base,
+      view: { ...(base.view as object), entries, ...extra }
+    } as ActivityStateView);
+    expect(readCompensationJournal(malformed([{}]))).toBeNull();
+    expect(readCompensationJournal(malformed([null]))).toBeNull();
+    expect(readCompensationJournal(malformed([{ ...validPending, forward: null }]))).toBeNull();
+    expect(readCompensationJournal(malformed([{ ...validPending, forward: { activityExecutionId: 5 } }]))).toBeNull();
+    expect(readCompensationJournal(malformed([{ ...validPending, attempts: null }]))).toBeNull();
+    expect(readCompensationJournal(malformed([{ ...validPending, attempts: [null] }]))).toBeNull();
+    expect(readCompensationJournal(malformed([{ ...validPending, attempts: [{ number: 1, result: 5 }] }]))).toBeNull();
+    expect(readCompensationJournal(malformed([{ ...validPending, attempts: [{ number: 2, result: "Running" }] }]))).toBeNull();
+    expect(readCompensationJournal(malformed([{ ...validPending, attempts: [{ number: 1, result: "Running", delayClamped: "yes" }] }]))).toBeNull();
+    expect(readCompensationJournal(malformed([{ ...validPending, handler: { executableNodeId: 5, remaining: true } }]))).toBeNull();
+    expect(readCompensationJournal(malformed([{ ...validPending, handler: { executableNodeId: null, remaining: false } }]))).toBeNull();
+    expect(readCompensationJournal(malformed([{ ...validPending, origin: { scopeActivityExecutionId: "ae-inner" } }]))).toBeNull();
+    expect(readCompensationJournal(malformed([{ ...validPending, waiting: { incidentId: "inc-6", decisions: "compensation.resolve.effect-absent" } }]))).toBeNull();
+    expect(readCompensationJournal(malformed([{ ...validPending, resolution: { outcome: "EffectAbsent" } }]))).toBeNull();
+    expect(readCompensationJournal(malformed([validPending], { remaining: undefined }))).toBeNull();
+    expect(readCompensationJournal(malformed([validPending], { remaining: null }))).toBeNull();
+    expect(readCompensationJournal(malformed([validPending], { cause: { kind: 42, step: "Confirm", activityExecutionId: "ae-3" } }))).toBeNull();
+  });
+
+  it("treats unknown v1 journal enum values as unknown evidence", () => {
+    const base = view(journal("Compensating", [entry("e2", "Reserve delivery", 2, "Compensating", "ae-2", { handler: "cancel", attempts: ["ae-4"], resolution: "EffectAbsent" })], {
+      cause: { kind: "fault", step: "Confirm order", activityExecutionId: "ae-3" }
+    }));
+    const payload = base.view as CompensationJournal;
+    const entryValue = payload.entries[0];
+    const invalid: Array<[string, ActivityStateView]> = [
+      ["phase", { ...base, view: { ...payload, phase: "Unexpected" } }],
+      ["entry status", { ...base, view: { ...payload, entries: [{ ...entryValue, status: "Unexpected" }] } }],
+      ["forward outcome", { ...base, view: { ...payload, entries: [{ ...entryValue, forwardOutcome: "Unexpected" }] } }],
+      ["attempt result", { ...base, view: { ...payload, entries: [{ ...entryValue, attempts: [{ ...entryValue.attempts[0], result: "Unexpected" }] }] } }],
+      ["resolution outcome", { ...base, view: { ...payload, entries: [{ ...entryValue, resolution: { outcome: "Unexpected", incidentId: "inc-6" } }] } }],
+      ["cause kind", { ...base, view: { ...payload, cause: { ...payload.cause!, kind: "Unexpected" } } }]
+    ];
+
+    for (const [name, view] of invalid) expect(readCompensationJournal(view), name).toBeNull();
+
+    const requested = journal("Running", [], {
+      cause: { kind: "requested", step: "Compensate", activityExecutionId: "ae-request" }
+    });
+    expect(readCompensationJournal(view(requested))?.cause?.kind).toBe("requested");
+  });
+
   it("derives operator results from incidents when there is no journal", () => {
     const resolvedRun = [
       ...waitingRun("Running").map(activity => activity.activityExecutionId === "ae-scope" ? { ...activity, status: "Completed", outcomeNames: ["Compensated"] } : activity),
