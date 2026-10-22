@@ -16,6 +16,441 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.10");
 
+            modelBuilder.Entity("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorPartitionRecord", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RunKey")
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("PartitionOrdinal")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Completed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CurrentRequestHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("CurrentRequestSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ExpiresAtUtcTicks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("NotBeforeUtcTicks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Fence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("BatchMetadataBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("AcceptedBatchCount")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("AcceptedRecords")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RejectedRecords")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("FilteredRecords")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RetainedOutputBytes")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("MetadataBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Owner")
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwedBatchId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PositionJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("PageBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("SourceInputReservedBytes")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("PageCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ScopeKey", "RunKey", "PartitionOrdinal");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKey", "RunKey", "Completed", "ExpiresAtUtcTicks");
+
+                    b.HasIndex("ScopeKey", "RunKey", "Completed", "NotBeforeUtcTicks", "ExpiresAtUtcTicks");
+
+                    b.HasIndex("ScopeKey", "RunKey", "PartitionOrdinal", "CurrentRequestSequence", "CurrentRequestHash");
+
+                    b.HasIndex("ScopeKey", "RunKey", "PartitionOrdinal", "OwedBatchId");
+
+                    b.ToTable("elsa_etl_connector_partitions", t =>
+                        {
+                            t.HasCheckConstraint("CK_elsa_etl_connector_partitions_CurrentRequestPointer", "(CurrentRequestSequence IS NULL AND CurrentRequestHash IS NULL) OR (CurrentRequestSequence IS NOT NULL AND CurrentRequestHash IS NOT NULL)");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_partitions_NonNegativeCounters", "PageCount >= 0 AND PageBytes >= 0 AND MetadataBytes >= 0 AND BatchMetadataBytes >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_partitions_SourceInputReservedBytes", "SourceInputReservedBytes >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_partitions_NonNegativeAcceptanceCounts", "AcceptedBatchCount >= 0 AND AcceptedRecords >= 0 AND RejectedRecords >= 0 AND FilteredRecords >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_partitions_NotBeforeUtcTicks", "NotBeforeUtcTicks IS NULL OR NotBeforeUtcTicks > 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_partitions_RetainedOutputBytes", "RetainedOutputBytes >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorBatchRecord", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RunKey")
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("PartitionOrdinal")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("BatchId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DescriptorDigest")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OutputDigest")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HttpDeliveryDigest")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("MainEffectKind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("ErrorEffectKind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("BatchOrdinal")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("HttpPageSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("AcceptanceMetadataBytes")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("MainFilePublished")
+                        .HasDefaultValue(false)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("ErrorFilePublished")
+                        .HasDefaultValue(false)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("DescriptorJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("OutputBytes")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("OutputJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HttpDeliveryJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("InputBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("MetadataBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RecordCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Settled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("StartKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ScopeKey", "RunKey", "PartitionOrdinal", "BatchId");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKey", "RunKey", "PartitionOrdinal", "StartKey")
+                        .IsUnique();
+
+                    b.HasIndex("ScopeKey", "RunKey", "PartitionOrdinal", "BatchOrdinal")
+                        .IsUnique();
+
+                    b.HasIndex("ScopeKey", "RunKey", "PartitionOrdinal", "HttpPageSequence");
+
+                    b.HasIndex("ScopeKey", "RunKey", "Settled", "PartitionOrdinal", "MainEffectKind", "ErrorEffectKind");
+
+                    b.ToTable("elsa_etl_connector_batches", t =>
+                        {
+                            t.HasCheckConstraint("CK_elsa_etl_connector_batches_OutputBytes", "OutputBytes >= 0 AND (OutputJson IS NOT NULL OR OutputBytes = 0)");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_batches_OutputPlan", "(OutputJson IS NULL AND OutputDigest IS NULL) OR (OutputJson IS NOT NULL AND OutputDigest IS NOT NULL AND length(OutputDigest) = 64)");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_batches_HttpDeliveryPlan", "(HttpDeliveryJson IS NULL AND HttpDeliveryDigest IS NULL) OR (HttpDeliveryJson IS NOT NULL AND HttpDeliveryDigest IS NOT NULL AND length(HttpDeliveryDigest) = 64 AND OutputJson IS NOT NULL)");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_batches_BatchOrdinal", "BatchOrdinal >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_batches_HttpPageSequence", "HttpPageSequence IS NULL OR HttpPageSequence >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_batches_AcceptanceMetadataBytes", "AcceptanceMetadataBytes >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_batches_MainFilePublishedRequiresOutput", "MainFilePublished = 0 OR OutputJson IS NOT NULL");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_batches_ErrorFilePublishedRequiresOutput", "ErrorFilePublished = 0 OR OutputJson IS NOT NULL");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_batches_MainEffectKind", "MainEffectKind IS NULL OR MainEffectKind IN (1, 2)");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_batches_ErrorEffectKind", "ErrorEffectKind IS NULL OR ErrorEffectKind IN (1, 2)");
+                        });
+                });
+
+            modelBuilder.Entity("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorHttpPageRecord", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RunKey")
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("PartitionOrdinal")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("PageSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ByteLength")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("AcceptedItemCount")
+                        .HasDefaultValue(0)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("HasContinuation")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("MetadataBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PageJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PageDigest")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NextRequestHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ScopeKey", "RunKey", "PartitionOrdinal", "PageSequence");
+
+                    b.HasAlternateKey("ScopeKey", "RunKey", "PartitionOrdinal", "PageSequence", "NextRequestHash", "HasContinuation")
+                        .HasName("AK_elsa_etl_connector_http_pages_ScopeKey_RunKey_PartitionOrdinal_PageSequence_NextRequestHash_HasContinuation");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKey", "RunKey", "PartitionOrdinal", "RequestHash")
+                        .IsUnique();
+
+                    b.HasIndex("ScopeKey", "RunKey", "PartitionOrdinal", "PageSequence", "RequestHash");
+
+                    b.ToTable("elsa_etl_connector_http_pages", t =>
+                        {
+                            t.HasCheckConstraint("CK_elsa_etl_connector_http_pages_NonNegativeByteCounts", "ByteLength >= 0 AND MetadataBytes >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_http_pages_AcceptedItemCount", "AcceptedItemCount >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorHttpRequestRecord", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RunKey")
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("PartitionOrdinal")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("PreviousPageSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool?>("PreviousHasContinuation")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("MetadataBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("FetchMetadataBytes")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("InputReservationBytes")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("SourceMetadataReserveBytes")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FetchDigest")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FetchJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequestJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("PageSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ScopeKey", "RunKey", "PartitionOrdinal", "PageSequence");
+
+                    b.HasAlternateKey("ScopeKey", "RunKey", "PartitionOrdinal", "PageSequence", "RequestHash")
+                        .HasName("AK_elsa_etl_connector_http_requests_ScopeKey_RunKey_PartitionOrdinal_PageSequence_RequestHash");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKey", "RunKey", "PartitionOrdinal", "RequestHash")
+                        .IsUnique();
+
+                    b.HasIndex("ScopeKey", "RunKey", "PartitionOrdinal", "PreviousPageSequence", "RequestHash", "PreviousHasContinuation");
+
+                    b.ToTable("elsa_etl_connector_http_requests", t =>
+                        {
+                            t.HasCheckConstraint("CK_elsa_etl_connector_http_requests_NonNegativeMetadataBytes", "MetadataBytes >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_http_requests_SourceFetchMetadata", "FetchMetadataBytes >= 0 AND SourceMetadataReserveBytes >= 0 AND InputReservationBytes >= 0 AND ((FetchJson IS NULL AND FetchDigest IS NULL AND FetchMetadataBytes = 0 AND SourceMetadataReserveBytes = 0 AND InputReservationBytes = 0) OR (FetchJson IS NOT NULL AND FetchDigest IS NOT NULL AND length(FetchDigest) = 64))");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_http_requests_SequencePredecessor", "(PageSequence = 0 AND PreviousPageSequence IS NULL AND PreviousHasContinuation IS NULL) OR (PageSequence > 0 AND PreviousPageSequence IS NOT NULL AND PreviousHasContinuation IS NOT NULL AND PreviousPageSequence = PageSequence - 1 AND PreviousHasContinuation = 1)");
+                        });
+                });
+
+            modelBuilder.Entity("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorRunRecord", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RunKey")
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BindingsJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PreparedJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RetainedInputBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("SourceInputReservedBytes")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RetainedMetadataBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RetainedOutputBytes")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ScopeKey", "RunKey");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.ToTable("elsa_etl_connector_runs", t =>
+                        {
+                            t.HasCheckConstraint("CK_elsa_etl_connector_runs_RetainedByteCounts", "RetainedInputBytes >= 0 AND RetainedMetadataBytes >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_runs_SourceInputReservedBytes", "SourceInputReservedBytes >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_runs_RetainedOutputBytes", "RetainedOutputBytes >= 0");
+                        });
+                });
+
             modelBuilder.Entity("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlRuntimeManifestRecord", b =>
                 {
                     b.Property<string>("ScopeKey")
@@ -493,6 +928,78 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                     b.HasIndex("SchemaVersion");
 
                     b.ToTable("__ElsaSchemaFinalization_EtlRuntime", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorRunRecord", b =>
+                {
+                    b.HasOne("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlRuntimeRunRecord", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeKey", "RunKey")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorPartitionRecord", b =>
+                {
+                    b.HasOne("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorRunRecord", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeKey", "RunKey")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorHttpRequestRecord", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeKey", "RunKey", "PartitionOrdinal", "CurrentRequestSequence", "CurrentRequestHash")
+                        .HasPrincipalKey("ScopeKey", "RunKey", "PartitionOrdinal", "PageSequence", "RequestHash")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired(false);
+
+                    b.HasOne("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorBatchRecord", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeKey", "RunKey", "PartitionOrdinal", "OwedBatchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired(false);
+                });
+
+            modelBuilder.Entity("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorBatchRecord", b =>
+                {
+                    b.HasOne("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorPartitionRecord", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeKey", "RunKey", "PartitionOrdinal")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorHttpRequestRecord", b =>
+                {
+                    b.HasOne("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorPartitionRecord", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeKey", "RunKey", "PartitionOrdinal")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorHttpPageRecord", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeKey", "RunKey", "PartitionOrdinal", "PreviousPageSequence", "RequestHash", "PreviousHasContinuation")
+                        .HasPrincipalKey("ScopeKey", "RunKey", "PartitionOrdinal", "PageSequence", "NextRequestHash", "HasContinuation")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired(false);
+                });
+
+            modelBuilder.Entity("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorHttpPageRecord", b =>
+                {
+                    b.HasOne("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorPartitionRecord", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeKey", "RunKey", "PartitionOrdinal")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorHttpRequestRecord", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeKey", "RunKey", "PartitionOrdinal", "PageSequence", "RequestHash")
+                        .HasPrincipalKey("ScopeKey", "RunKey", "PartitionOrdinal", "PageSequence", "RequestHash")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

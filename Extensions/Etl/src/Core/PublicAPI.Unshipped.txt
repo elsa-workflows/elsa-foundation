@@ -517,6 +517,7 @@ Elsa.Etl.Core.Runtime.EtlStoreStatus.Applied = 0 -> Elsa.Etl.Core.Runtime.EtlSto
 Elsa.Etl.Core.Runtime.EtlStoreStatus.BudgetExceeded = 5 -> Elsa.Etl.Core.Runtime.EtlStoreStatus
 Elsa.Etl.Core.Runtime.EtlStoreStatus.Conflict = 2 -> Elsa.Etl.Core.Runtime.EtlStoreStatus
 Elsa.Etl.Core.Runtime.EtlStoreStatus.Invalid = 7 -> Elsa.Etl.Core.Runtime.EtlStoreStatus
+Elsa.Etl.Core.Runtime.EtlStoreStatus.PermanentBudgetExceeded = 8 -> Elsa.Etl.Core.Runtime.EtlStoreStatus
 Elsa.Etl.Core.Runtime.EtlStoreStatus.LeaseLost = 4 -> Elsa.Etl.Core.Runtime.EtlStoreStatus
 Elsa.Etl.Core.Runtime.EtlStoreStatus.NotFound = 3 -> Elsa.Etl.Core.Runtime.EtlStoreStatus
 Elsa.Etl.Core.Runtime.EtlStoreStatus.Replay = 1 -> Elsa.Etl.Core.Runtime.EtlStoreStatus
@@ -754,3 +755,1124 @@ override Elsa.Etl.Core.Runtime.EtlBindingSummary.ToString() -> string!
 static Elsa.Etl.Core.Runtime.EtlBindingSummary.operator !=(Elsa.Etl.Core.Runtime.EtlBindingSummary? left, Elsa.Etl.Core.Runtime.EtlBindingSummary? right) -> bool
 static Elsa.Etl.Core.Runtime.EtlBindingSummary.operator ==(Elsa.Etl.Core.Runtime.EtlBindingSummary? left, Elsa.Etl.Core.Runtime.EtlBindingSummary? right) -> bool
 Elsa.Etl.Core.Runtime.IEtlRuntimeStore.MaximumPageSize.get -> int
+Elsa.Etl.Core.EtlArtifactV2Json
+Elsa.Etl.Core.EtlConnectorLimits
+Elsa.Etl.Core.EtlConnectorLimits.<Clone>$() -> Elsa.Etl.Core.EtlConnectorLimits!
+Elsa.Etl.Core.EtlConnectorLimits.Equals(Elsa.Etl.Core.EtlConnectorLimits? other) -> bool
+Elsa.Etl.Core.EtlConnectorLimits.EtlConnectorLimits() -> void
+Elsa.Etl.Core.EtlConnectorLimits.FilePartitionCount.get -> int
+Elsa.Etl.Core.EtlConnectorLimits.FilePartitionCount.init -> void
+Elsa.Etl.Core.EtlConnectorLimits.MaxArtifactBytes.get -> int
+Elsa.Etl.Core.EtlConnectorLimits.MaxArtifactBytes.init -> void
+Elsa.Etl.Core.EtlConnectorLimits.MaxBatchBytes.get -> long
+Elsa.Etl.Core.EtlConnectorLimits.MaxBatchBytes.init -> void
+Elsa.Etl.Core.EtlConnectorLimits.MaxBatchRecords.get -> int
+Elsa.Etl.Core.EtlConnectorLimits.MaxBatchRecords.init -> void
+Elsa.Etl.Core.EtlConnectorLimits.MaxFields.get -> int
+Elsa.Etl.Core.EtlConnectorLimits.MaxFields.init -> void
+Elsa.Etl.Core.EtlConnectorLimits.MaxLookupBytes.get -> long
+Elsa.Etl.Core.EtlConnectorLimits.MaxLookupBytes.init -> void
+Elsa.Etl.Core.EtlConnectorLimits.MaxLookupRecords.get -> long
+Elsa.Etl.Core.EtlConnectorLimits.MaxLookupRecords.init -> void
+Elsa.Etl.Core.EtlConnectorLimits.MaxOutputBatchBytes.get -> long
+Elsa.Etl.Core.EtlConnectorLimits.MaxOutputBatchBytes.init -> void
+Elsa.Etl.Core.EtlConnectorLimits.MaxOutstandingBytes.get -> long
+Elsa.Etl.Core.EtlConnectorLimits.MaxOutstandingBytes.init -> void
+Elsa.Etl.Core.EtlConnectorLimits.MaxOutstandingRecords.get -> long
+Elsa.Etl.Core.EtlConnectorLimits.MaxOutstandingRecords.init -> void
+Elsa.Etl.Core.EtlConnectorLimits.MaxPartitions.get -> int
+Elsa.Etl.Core.EtlConnectorLimits.MaxPartitions.init -> void
+Elsa.Etl.Core.EtlConnectorLimits.MaxRecordBytes.get -> int
+Elsa.Etl.Core.EtlConnectorLimits.MaxRecordBytes.init -> void
+Elsa.Etl.Core.EtlConnectorLimits.MaxSnapshotBytes.get -> long
+Elsa.Etl.Core.EtlConnectorLimits.MaxSnapshotBytes.init -> void
+Elsa.Etl.Core.EtlCsvLookup
+Elsa.Etl.Core.EtlCsvLookup.<Clone>$() -> Elsa.Etl.Core.EtlCsvLookup!
+Elsa.Etl.Core.EtlCsvLookup.Binding.get -> string!
+Elsa.Etl.Core.EtlCsvLookup.Binding.init -> void
+Elsa.Etl.Core.EtlCsvLookup.Deconstruct(out string! Binding, out System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlColumn!>! Schema, out string! SourceKeyField, out string! LookupKeyField) -> void
+Elsa.Etl.Core.EtlCsvLookup.Equals(Elsa.Etl.Core.EtlCsvLookup? other) -> bool
+Elsa.Etl.Core.EtlCsvLookup.EtlCsvLookup(string! Binding, System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlColumn!>! Schema, string! SourceKeyField, string! LookupKeyField) -> void
+Elsa.Etl.Core.EtlCsvLookup.LookupKeyField.get -> string!
+Elsa.Etl.Core.EtlCsvLookup.LookupKeyField.init -> void
+Elsa.Etl.Core.EtlCsvLookup.Schema.get -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlColumn!>!
+Elsa.Etl.Core.EtlCsvLookup.Schema.init -> void
+Elsa.Etl.Core.EtlCsvLookup.SourceKeyField.get -> string!
+Elsa.Etl.Core.EtlCsvLookup.SourceKeyField.init -> void
+Elsa.Etl.Core.EtlCsvSource
+Elsa.Etl.Core.EtlCsvSource.Binding.get -> string!
+Elsa.Etl.Core.EtlCsvSource.Binding.init -> void
+Elsa.Etl.Core.EtlCsvSource.Deconstruct(out string! Binding, out System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlColumn!>! Schema) -> void
+Elsa.Etl.Core.EtlCsvSource.Equals(Elsa.Etl.Core.EtlCsvSource? other) -> bool
+Elsa.Etl.Core.EtlCsvSource.EtlCsvSource(string! Binding, System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlColumn!>! Schema) -> void
+Elsa.Etl.Core.EtlCsvSource.Schema.get -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlColumn!>!
+Elsa.Etl.Core.EtlCsvSource.Schema.init -> void
+Elsa.Etl.Core.EtlDestination
+Elsa.Etl.Core.EtlDestination.EtlDestination() -> void
+Elsa.Etl.Core.EtlDestination.EtlDestination(Elsa.Etl.Core.EtlDestination! original) -> void
+Elsa.Etl.Core.EtlHttpDestination
+Elsa.Etl.Core.EtlHttpDestination.Binding.get -> string!
+Elsa.Etl.Core.EtlHttpDestination.Binding.init -> void
+Elsa.Etl.Core.EtlHttpDestination.Deconstruct(out string! Binding) -> void
+Elsa.Etl.Core.EtlHttpDestination.Equals(Elsa.Etl.Core.EtlHttpDestination? other) -> bool
+Elsa.Etl.Core.EtlHttpDestination.EtlHttpDestination(string! Binding) -> void
+Elsa.Etl.Core.EtlHttpJsonSource
+Elsa.Etl.Core.EtlHttpJsonSource.Binding.get -> string!
+Elsa.Etl.Core.EtlHttpJsonSource.Binding.init -> void
+Elsa.Etl.Core.EtlHttpJsonSource.Deconstruct(out string! Binding, out string! RecordsPointer, out System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlJsonField!>! Fields, out Elsa.Etl.Core.EtlHttpPagination! Pagination) -> void
+Elsa.Etl.Core.EtlHttpJsonSource.Equals(Elsa.Etl.Core.EtlHttpJsonSource? other) -> bool
+Elsa.Etl.Core.EtlHttpJsonSource.EtlHttpJsonSource(string! Binding, string! RecordsPointer, System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlJsonField!>! Fields, Elsa.Etl.Core.EtlHttpPagination! Pagination) -> void
+Elsa.Etl.Core.EtlHttpJsonSource.Fields.get -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlJsonField!>!
+Elsa.Etl.Core.EtlHttpJsonSource.Fields.init -> void
+Elsa.Etl.Core.EtlHttpJsonSource.Pagination.get -> Elsa.Etl.Core.EtlHttpPagination!
+Elsa.Etl.Core.EtlHttpJsonSource.Pagination.init -> void
+Elsa.Etl.Core.EtlHttpJsonSource.RecordsPointer.get -> string!
+Elsa.Etl.Core.EtlHttpJsonSource.RecordsPointer.init -> void
+Elsa.Etl.Core.EtlHttpPagination
+Elsa.Etl.Core.EtlHttpPagination.EtlHttpPagination() -> void
+Elsa.Etl.Core.EtlHttpPagination.EtlHttpPagination(Elsa.Etl.Core.EtlHttpPagination! original) -> void
+Elsa.Etl.Core.EtlHttpPolicy
+Elsa.Etl.Core.EtlHttpPolicy.<Clone>$() -> Elsa.Etl.Core.EtlHttpPolicy!
+Elsa.Etl.Core.EtlHttpPolicy.DeadlineSeconds.get -> int
+Elsa.Etl.Core.EtlHttpPolicy.DeadlineSeconds.init -> void
+Elsa.Etl.Core.EtlHttpPolicy.Equals(Elsa.Etl.Core.EtlHttpPolicy? other) -> bool
+Elsa.Etl.Core.EtlHttpPolicy.EtlHttpPolicy() -> void
+Elsa.Etl.Core.EtlHttpPolicy.InitialDelaySeconds.get -> int
+Elsa.Etl.Core.EtlHttpPolicy.InitialDelaySeconds.init -> void
+Elsa.Etl.Core.EtlHttpPolicy.MaxAttempts.get -> int
+Elsa.Etl.Core.EtlHttpPolicy.MaxAttempts.init -> void
+Elsa.Etl.Core.EtlHttpPolicy.MaxContinuationBytes.get -> int
+Elsa.Etl.Core.EtlHttpPolicy.MaxContinuationBytes.init -> void
+Elsa.Etl.Core.EtlHttpPolicy.MaxDelaySeconds.get -> int
+Elsa.Etl.Core.EtlHttpPolicy.MaxDelaySeconds.init -> void
+Elsa.Etl.Core.EtlHttpPolicy.MaxJsonDepth.get -> int
+Elsa.Etl.Core.EtlHttpPolicy.MaxJsonDepth.init -> void
+Elsa.Etl.Core.EtlHttpPolicy.MaxPageBytes.get -> long
+Elsa.Etl.Core.EtlHttpPolicy.MaxPageBytes.init -> void
+Elsa.Etl.Core.EtlHttpPolicy.MaxPageRecords.get -> int
+Elsa.Etl.Core.EtlHttpPolicy.MaxPageRecords.init -> void
+Elsa.Etl.Core.EtlHttpPolicy.MaxPagesPerPartition.get -> int
+Elsa.Etl.Core.EtlHttpPolicy.MaxPagesPerPartition.init -> void
+Elsa.Etl.Core.EtlHttpPolicy.MaxRetainedInputBytes.get -> long
+Elsa.Etl.Core.EtlHttpPolicy.MaxRetainedInputBytes.init -> void
+Elsa.Etl.Core.EtlHttpPolicy.MaxRetainedMetadataBytes.get -> long
+Elsa.Etl.Core.EtlHttpPolicy.MaxRetainedMetadataBytes.init -> void
+Elsa.Etl.Core.EtlHttpPolicy.RequestTimeoutSeconds.get -> int
+Elsa.Etl.Core.EtlHttpPolicy.RequestTimeoutSeconds.init -> void
+const Elsa.Etl.Core.EtlHttpPolicy.MaximumSupportedContinuationBytes = 65536 -> int
+Elsa.Etl.Core.EtlJsonField
+Elsa.Etl.Core.EtlJsonField.<Clone>$() -> Elsa.Etl.Core.EtlJsonField!
+Elsa.Etl.Core.EtlJsonField.Deconstruct(out string! Name, out string! Pointer, out Elsa.Etl.Core.EtlColumnType Type, out bool Required) -> void
+Elsa.Etl.Core.EtlJsonField.Equals(Elsa.Etl.Core.EtlJsonField? other) -> bool
+Elsa.Etl.Core.EtlJsonField.EtlJsonField(string! Name, string! Pointer, Elsa.Etl.Core.EtlColumnType Type, bool Required) -> void
+Elsa.Etl.Core.EtlJsonField.Name.get -> string!
+Elsa.Etl.Core.EtlJsonField.Name.init -> void
+Elsa.Etl.Core.EtlJsonField.Pointer.get -> string!
+Elsa.Etl.Core.EtlJsonField.Pointer.init -> void
+Elsa.Etl.Core.EtlJsonField.Required.get -> bool
+Elsa.Etl.Core.EtlJsonField.Required.init -> void
+Elsa.Etl.Core.EtlJsonField.Type.get -> Elsa.Etl.Core.EtlColumnType
+Elsa.Etl.Core.EtlJsonField.Type.init -> void
+Elsa.Etl.Core.EtlJsonlDestination
+Elsa.Etl.Core.EtlJsonlDestination.Binding.get -> string!
+Elsa.Etl.Core.EtlJsonlDestination.Binding.init -> void
+Elsa.Etl.Core.EtlJsonlDestination.Deconstruct(out string! Binding) -> void
+Elsa.Etl.Core.EtlJsonlDestination.Equals(Elsa.Etl.Core.EtlJsonlDestination? other) -> bool
+Elsa.Etl.Core.EtlJsonlDestination.EtlJsonlDestination(string! Binding) -> void
+Elsa.Etl.Core.EtlNextLinkPagination
+Elsa.Etl.Core.EtlNextLinkPagination.ContinuationPointer.get -> string!
+Elsa.Etl.Core.EtlNextLinkPagination.ContinuationPointer.init -> void
+Elsa.Etl.Core.EtlNextLinkPagination.Deconstruct(out string! ContinuationPointer) -> void
+Elsa.Etl.Core.EtlNextLinkPagination.Equals(Elsa.Etl.Core.EtlNextLinkPagination? other) -> bool
+Elsa.Etl.Core.EtlNextLinkPagination.EtlNextLinkPagination(string! ContinuationPointer) -> void
+Elsa.Etl.Core.EtlPipelineV2
+Elsa.Etl.Core.EtlPipelineV2.<Clone>$() -> Elsa.Etl.Core.EtlPipelineV2!
+Elsa.Etl.Core.EtlPipelineV2.Deconstruct(out Elsa.Etl.Core.EtlSource! Source, out Elsa.Etl.Core.EtlCsvLookup? Lookup, out Elsa.Etl.Core.EtlRoutes! Routes, out System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlOutputField!>! Mapping, out System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlFilter!>! Filters, out Elsa.Etl.Core.EtlConnectorLimits! Limits, out Elsa.Etl.Core.EtlHttpPolicy! Http) -> void
+Elsa.Etl.Core.EtlPipelineV2.Equals(Elsa.Etl.Core.EtlPipelineV2? other) -> bool
+Elsa.Etl.Core.EtlPipelineV2.EtlPipelineV2(Elsa.Etl.Core.EtlSource! Source, Elsa.Etl.Core.EtlCsvLookup? Lookup, Elsa.Etl.Core.EtlRoutes! Routes, System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlOutputField!>! Mapping, System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlFilter!>! Filters, Elsa.Etl.Core.EtlConnectorLimits! Limits, Elsa.Etl.Core.EtlHttpPolicy! Http) -> void
+Elsa.Etl.Core.EtlPipelineV2.Filters.get -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlFilter!>!
+Elsa.Etl.Core.EtlPipelineV2.Filters.init -> void
+Elsa.Etl.Core.EtlPipelineV2.Http.get -> Elsa.Etl.Core.EtlHttpPolicy!
+Elsa.Etl.Core.EtlPipelineV2.Http.init -> void
+Elsa.Etl.Core.EtlPipelineV2.Limits.get -> Elsa.Etl.Core.EtlConnectorLimits!
+Elsa.Etl.Core.EtlPipelineV2.Limits.init -> void
+Elsa.Etl.Core.EtlPipelineV2.Lookup.get -> Elsa.Etl.Core.EtlCsvLookup?
+Elsa.Etl.Core.EtlPipelineV2.Lookup.init -> void
+Elsa.Etl.Core.EtlPipelineV2.Mapping.get -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlOutputField!>!
+Elsa.Etl.Core.EtlPipelineV2.Mapping.init -> void
+Elsa.Etl.Core.EtlPipelineV2.Routes.get -> Elsa.Etl.Core.EtlRoutes!
+Elsa.Etl.Core.EtlPipelineV2.Routes.init -> void
+Elsa.Etl.Core.EtlPipelineV2.Source.get -> Elsa.Etl.Core.EtlSource!
+Elsa.Etl.Core.EtlPipelineV2.Source.init -> void
+Elsa.Etl.Core.EtlRoutes
+Elsa.Etl.Core.EtlRoutes.<Clone>$() -> Elsa.Etl.Core.EtlRoutes!
+Elsa.Etl.Core.EtlRoutes.Deconstruct(out Elsa.Etl.Core.EtlDestination! Main, out Elsa.Etl.Core.EtlDestination! Errors) -> void
+Elsa.Etl.Core.EtlRoutes.Equals(Elsa.Etl.Core.EtlRoutes? other) -> bool
+Elsa.Etl.Core.EtlRoutes.Errors.get -> Elsa.Etl.Core.EtlDestination!
+Elsa.Etl.Core.EtlRoutes.Errors.init -> void
+Elsa.Etl.Core.EtlRoutes.EtlRoutes(Elsa.Etl.Core.EtlDestination! Main, Elsa.Etl.Core.EtlDestination! Errors) -> void
+Elsa.Etl.Core.EtlRoutes.Main.get -> Elsa.Etl.Core.EtlDestination!
+Elsa.Etl.Core.EtlRoutes.Main.init -> void
+Elsa.Etl.Core.EtlSinglePagePagination
+Elsa.Etl.Core.EtlSinglePagePagination.Equals(Elsa.Etl.Core.EtlSinglePagePagination? other) -> bool
+Elsa.Etl.Core.EtlSinglePagePagination.EtlSinglePagePagination() -> void
+Elsa.Etl.Core.EtlSource
+Elsa.Etl.Core.EtlSource.EtlSource() -> void
+Elsa.Etl.Core.EtlSource.EtlSource(Elsa.Etl.Core.EtlSource! original) -> void
+Elsa.Etl.Core.EtlTokenPagination
+Elsa.Etl.Core.EtlTokenPagination.ContinuationPointer.get -> string!
+Elsa.Etl.Core.EtlTokenPagination.ContinuationPointer.init -> void
+Elsa.Etl.Core.EtlTokenPagination.Deconstruct(out string! ContinuationPointer, out string! QueryParameter) -> void
+Elsa.Etl.Core.EtlTokenPagination.Equals(Elsa.Etl.Core.EtlTokenPagination? other) -> bool
+Elsa.Etl.Core.EtlTokenPagination.EtlTokenPagination(string! ContinuationPointer, string! QueryParameter) -> void
+Elsa.Etl.Core.EtlTokenPagination.QueryParameter.get -> string!
+Elsa.Etl.Core.EtlTokenPagination.QueryParameter.init -> void
+abstract Elsa.Etl.Core.EtlDestination.<Clone>$() -> Elsa.Etl.Core.EtlDestination!
+abstract Elsa.Etl.Core.EtlHttpPagination.<Clone>$() -> Elsa.Etl.Core.EtlHttpPagination!
+abstract Elsa.Etl.Core.EtlSource.<Clone>$() -> Elsa.Etl.Core.EtlSource!
+const Elsa.Etl.Core.EtlArtifactV2Json.FormatVersion = 2 -> int
+const Elsa.Etl.Core.EtlArtifactV2Json.MaximumByteLength = 262144 -> int
+override Elsa.Etl.Core.EtlConnectorLimits.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlConnectorLimits.GetHashCode() -> int
+override Elsa.Etl.Core.EtlConnectorLimits.ToString() -> string!
+override Elsa.Etl.Core.EtlCsvLookup.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlCsvLookup.GetHashCode() -> int
+override Elsa.Etl.Core.EtlCsvLookup.ToString() -> string!
+override Elsa.Etl.Core.EtlCsvSource.<Clone>$() -> Elsa.Etl.Core.EtlCsvSource!
+override Elsa.Etl.Core.EtlCsvSource.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlCsvSource.GetHashCode() -> int
+override Elsa.Etl.Core.EtlCsvSource.ToString() -> string!
+override Elsa.Etl.Core.EtlDestination.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlDestination.GetHashCode() -> int
+override Elsa.Etl.Core.EtlDestination.ToString() -> string!
+override Elsa.Etl.Core.EtlHttpDestination.<Clone>$() -> Elsa.Etl.Core.EtlHttpDestination!
+override Elsa.Etl.Core.EtlHttpDestination.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlHttpDestination.GetHashCode() -> int
+override Elsa.Etl.Core.EtlHttpDestination.ToString() -> string!
+override Elsa.Etl.Core.EtlHttpJsonSource.<Clone>$() -> Elsa.Etl.Core.EtlHttpJsonSource!
+override Elsa.Etl.Core.EtlHttpJsonSource.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlHttpJsonSource.GetHashCode() -> int
+override Elsa.Etl.Core.EtlHttpJsonSource.ToString() -> string!
+override Elsa.Etl.Core.EtlHttpPagination.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlHttpPagination.GetHashCode() -> int
+override Elsa.Etl.Core.EtlHttpPagination.ToString() -> string!
+override Elsa.Etl.Core.EtlHttpPolicy.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlHttpPolicy.GetHashCode() -> int
+override Elsa.Etl.Core.EtlHttpPolicy.ToString() -> string!
+override Elsa.Etl.Core.EtlJsonField.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlJsonField.GetHashCode() -> int
+override Elsa.Etl.Core.EtlJsonField.ToString() -> string!
+override Elsa.Etl.Core.EtlJsonlDestination.<Clone>$() -> Elsa.Etl.Core.EtlJsonlDestination!
+override Elsa.Etl.Core.EtlJsonlDestination.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlJsonlDestination.GetHashCode() -> int
+override Elsa.Etl.Core.EtlJsonlDestination.ToString() -> string!
+override Elsa.Etl.Core.EtlNextLinkPagination.<Clone>$() -> Elsa.Etl.Core.EtlNextLinkPagination!
+override Elsa.Etl.Core.EtlNextLinkPagination.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlNextLinkPagination.GetHashCode() -> int
+override Elsa.Etl.Core.EtlNextLinkPagination.ToString() -> string!
+override Elsa.Etl.Core.EtlPipelineV2.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlPipelineV2.GetHashCode() -> int
+override Elsa.Etl.Core.EtlPipelineV2.ToString() -> string!
+override Elsa.Etl.Core.EtlRoutes.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlRoutes.GetHashCode() -> int
+override Elsa.Etl.Core.EtlRoutes.ToString() -> string!
+override Elsa.Etl.Core.EtlSinglePagePagination.<Clone>$() -> Elsa.Etl.Core.EtlSinglePagePagination!
+override Elsa.Etl.Core.EtlSinglePagePagination.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlSinglePagePagination.GetHashCode() -> int
+override Elsa.Etl.Core.EtlSinglePagePagination.ToString() -> string!
+override Elsa.Etl.Core.EtlSource.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlSource.GetHashCode() -> int
+override Elsa.Etl.Core.EtlSource.ToString() -> string!
+override Elsa.Etl.Core.EtlTokenPagination.<Clone>$() -> Elsa.Etl.Core.EtlTokenPagination!
+override Elsa.Etl.Core.EtlTokenPagination.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlTokenPagination.GetHashCode() -> int
+override Elsa.Etl.Core.EtlTokenPagination.ToString() -> string!
+override sealed Elsa.Etl.Core.EtlCsvSource.Equals(Elsa.Etl.Core.EtlSource? other) -> bool
+override sealed Elsa.Etl.Core.EtlHttpDestination.Equals(Elsa.Etl.Core.EtlDestination? other) -> bool
+override sealed Elsa.Etl.Core.EtlHttpJsonSource.Equals(Elsa.Etl.Core.EtlSource? other) -> bool
+override sealed Elsa.Etl.Core.EtlJsonlDestination.Equals(Elsa.Etl.Core.EtlDestination? other) -> bool
+override sealed Elsa.Etl.Core.EtlNextLinkPagination.Equals(Elsa.Etl.Core.EtlHttpPagination? other) -> bool
+override sealed Elsa.Etl.Core.EtlSinglePagePagination.Equals(Elsa.Etl.Core.EtlHttpPagination? other) -> bool
+override sealed Elsa.Etl.Core.EtlTokenPagination.Equals(Elsa.Etl.Core.EtlHttpPagination? other) -> bool
+static Elsa.Etl.Core.EtlArtifactV2Json.Read(System.ReadOnlyMemory<byte> utf8Json) -> Elsa.Etl.Core.EtlPipelineV2!
+static Elsa.Etl.Core.EtlArtifactV2Json.Read(System.Text.Json.JsonElement document) -> Elsa.Etl.Core.EtlPipelineV2!
+static Elsa.Etl.Core.EtlArtifactV2Json.Write(Elsa.Etl.Core.EtlPipelineV2! pipeline) -> System.Text.Json.JsonElement
+static Elsa.Etl.Core.EtlConnectorLimits.operator !=(Elsa.Etl.Core.EtlConnectorLimits? left, Elsa.Etl.Core.EtlConnectorLimits? right) -> bool
+static Elsa.Etl.Core.EtlConnectorLimits.operator ==(Elsa.Etl.Core.EtlConnectorLimits? left, Elsa.Etl.Core.EtlConnectorLimits? right) -> bool
+static Elsa.Etl.Core.EtlCsvLookup.operator !=(Elsa.Etl.Core.EtlCsvLookup? left, Elsa.Etl.Core.EtlCsvLookup? right) -> bool
+static Elsa.Etl.Core.EtlCsvLookup.operator ==(Elsa.Etl.Core.EtlCsvLookup? left, Elsa.Etl.Core.EtlCsvLookup? right) -> bool
+static Elsa.Etl.Core.EtlCsvSource.operator !=(Elsa.Etl.Core.EtlCsvSource? left, Elsa.Etl.Core.EtlCsvSource? right) -> bool
+static Elsa.Etl.Core.EtlCsvSource.operator ==(Elsa.Etl.Core.EtlCsvSource? left, Elsa.Etl.Core.EtlCsvSource? right) -> bool
+static Elsa.Etl.Core.EtlDestination.operator !=(Elsa.Etl.Core.EtlDestination? left, Elsa.Etl.Core.EtlDestination? right) -> bool
+static Elsa.Etl.Core.EtlDestination.operator ==(Elsa.Etl.Core.EtlDestination? left, Elsa.Etl.Core.EtlDestination? right) -> bool
+static Elsa.Etl.Core.EtlHttpDestination.operator !=(Elsa.Etl.Core.EtlHttpDestination? left, Elsa.Etl.Core.EtlHttpDestination? right) -> bool
+static Elsa.Etl.Core.EtlHttpDestination.operator ==(Elsa.Etl.Core.EtlHttpDestination? left, Elsa.Etl.Core.EtlHttpDestination? right) -> bool
+static Elsa.Etl.Core.EtlHttpJsonSource.operator !=(Elsa.Etl.Core.EtlHttpJsonSource? left, Elsa.Etl.Core.EtlHttpJsonSource? right) -> bool
+static Elsa.Etl.Core.EtlHttpJsonSource.operator ==(Elsa.Etl.Core.EtlHttpJsonSource? left, Elsa.Etl.Core.EtlHttpJsonSource? right) -> bool
+static Elsa.Etl.Core.EtlHttpPagination.operator !=(Elsa.Etl.Core.EtlHttpPagination? left, Elsa.Etl.Core.EtlHttpPagination? right) -> bool
+static Elsa.Etl.Core.EtlHttpPagination.operator ==(Elsa.Etl.Core.EtlHttpPagination? left, Elsa.Etl.Core.EtlHttpPagination? right) -> bool
+static Elsa.Etl.Core.EtlHttpPolicy.operator !=(Elsa.Etl.Core.EtlHttpPolicy? left, Elsa.Etl.Core.EtlHttpPolicy? right) -> bool
+static Elsa.Etl.Core.EtlHttpPolicy.operator ==(Elsa.Etl.Core.EtlHttpPolicy? left, Elsa.Etl.Core.EtlHttpPolicy? right) -> bool
+static Elsa.Etl.Core.EtlJsonField.operator !=(Elsa.Etl.Core.EtlJsonField? left, Elsa.Etl.Core.EtlJsonField? right) -> bool
+static Elsa.Etl.Core.EtlJsonField.operator ==(Elsa.Etl.Core.EtlJsonField? left, Elsa.Etl.Core.EtlJsonField? right) -> bool
+static Elsa.Etl.Core.EtlJsonlDestination.operator !=(Elsa.Etl.Core.EtlJsonlDestination? left, Elsa.Etl.Core.EtlJsonlDestination? right) -> bool
+static Elsa.Etl.Core.EtlJsonlDestination.operator ==(Elsa.Etl.Core.EtlJsonlDestination? left, Elsa.Etl.Core.EtlJsonlDestination? right) -> bool
+static Elsa.Etl.Core.EtlNextLinkPagination.operator !=(Elsa.Etl.Core.EtlNextLinkPagination? left, Elsa.Etl.Core.EtlNextLinkPagination? right) -> bool
+static Elsa.Etl.Core.EtlNextLinkPagination.operator ==(Elsa.Etl.Core.EtlNextLinkPagination? left, Elsa.Etl.Core.EtlNextLinkPagination? right) -> bool
+static Elsa.Etl.Core.EtlPipelineV2.operator !=(Elsa.Etl.Core.EtlPipelineV2? left, Elsa.Etl.Core.EtlPipelineV2? right) -> bool
+static Elsa.Etl.Core.EtlPipelineV2.operator ==(Elsa.Etl.Core.EtlPipelineV2? left, Elsa.Etl.Core.EtlPipelineV2? right) -> bool
+static Elsa.Etl.Core.EtlRoutes.operator !=(Elsa.Etl.Core.EtlRoutes? left, Elsa.Etl.Core.EtlRoutes? right) -> bool
+static Elsa.Etl.Core.EtlRoutes.operator ==(Elsa.Etl.Core.EtlRoutes? left, Elsa.Etl.Core.EtlRoutes? right) -> bool
+static Elsa.Etl.Core.EtlSinglePagePagination.operator !=(Elsa.Etl.Core.EtlSinglePagePagination? left, Elsa.Etl.Core.EtlSinglePagePagination? right) -> bool
+static Elsa.Etl.Core.EtlSinglePagePagination.operator ==(Elsa.Etl.Core.EtlSinglePagePagination? left, Elsa.Etl.Core.EtlSinglePagePagination? right) -> bool
+static Elsa.Etl.Core.EtlSource.operator !=(Elsa.Etl.Core.EtlSource? left, Elsa.Etl.Core.EtlSource? right) -> bool
+static Elsa.Etl.Core.EtlSource.operator ==(Elsa.Etl.Core.EtlSource? left, Elsa.Etl.Core.EtlSource? right) -> bool
+static Elsa.Etl.Core.EtlTokenPagination.operator !=(Elsa.Etl.Core.EtlTokenPagination? left, Elsa.Etl.Core.EtlTokenPagination? right) -> bool
+static Elsa.Etl.Core.EtlTokenPagination.operator ==(Elsa.Etl.Core.EtlTokenPagination? left, Elsa.Etl.Core.EtlTokenPagination? right) -> bool
+virtual Elsa.Etl.Core.EtlDestination.EqualityContract.get -> System.Type!
+virtual Elsa.Etl.Core.EtlDestination.Equals(Elsa.Etl.Core.EtlDestination? other) -> bool
+virtual Elsa.Etl.Core.EtlDestination.PrintMembers(System.Text.StringBuilder! builder) -> bool
+virtual Elsa.Etl.Core.EtlHttpPagination.EqualityContract.get -> System.Type!
+virtual Elsa.Etl.Core.EtlHttpPagination.Equals(Elsa.Etl.Core.EtlHttpPagination? other) -> bool
+virtual Elsa.Etl.Core.EtlHttpPagination.PrintMembers(System.Text.StringBuilder! builder) -> bool
+virtual Elsa.Etl.Core.EtlSource.EqualityContract.get -> System.Type!
+virtual Elsa.Etl.Core.EtlSource.Equals(Elsa.Etl.Core.EtlSource? other) -> bool
+virtual Elsa.Etl.Core.EtlSource.PrintMembers(System.Text.StringBuilder! builder) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorAdmissionResult
+Elsa.Etl.Core.Runtime.EtlConnectorAdmissionResult.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorAdmissionResult!
+Elsa.Etl.Core.Runtime.EtlConnectorAdmissionResult.Deconstruct(out Elsa.Etl.Core.Runtime.EtlStoreStatus Status, out Elsa.Etl.Core.Runtime.EtlConnectorRunView? Run) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorAdmissionResult.Equals(Elsa.Etl.Core.Runtime.EtlConnectorAdmissionResult? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorAdmissionResult.EtlConnectorAdmissionResult(Elsa.Etl.Core.Runtime.EtlStoreStatus Status, Elsa.Etl.Core.Runtime.EtlConnectorRunView? Run) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorAdmissionResult.Run.get -> Elsa.Etl.Core.Runtime.EtlConnectorRunView?
+Elsa.Etl.Core.Runtime.EtlConnectorAdmissionResult.Run.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorAdmissionResult.Status.get -> Elsa.Etl.Core.Runtime.EtlStoreStatus
+Elsa.Etl.Core.Runtime.EtlConnectorAdmissionResult.Status.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision
+Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision!
+Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision.Deconstruct(out Elsa.Etl.Core.Runtime.EtlConnectorKind Kind, out Elsa.Etl.Core.Runtime.EtlBindingRevision! Revision) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision.Equals(Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision.EtlConnectorBindingRevision(Elsa.Etl.Core.Runtime.EtlConnectorKind Kind, Elsa.Etl.Core.Runtime.EtlBindingRevision! Revision) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision.Kind.get -> Elsa.Etl.Core.Runtime.EtlConnectorKind
+Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision.Kind.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision.Revision.get -> Elsa.Etl.Core.Runtime.EtlBindingRevision!
+Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision.Revision.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorFilePosition
+Elsa.Etl.Core.Runtime.EtlConnectorFilePosition.Deconstruct(out long StartOrdinal, out long EndOrdinalExclusive, out long NextOrdinal) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorFilePosition.EndOrdinalExclusive.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorFilePosition.EndOrdinalExclusive.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorFilePosition.Equals(Elsa.Etl.Core.Runtime.EtlConnectorFilePosition? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorFilePosition.EtlConnectorFilePosition(long StartOrdinal, long EndOrdinalExclusive, long NextOrdinal) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorFilePosition.NextOrdinal.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorFilePosition.NextOrdinal.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorFilePosition.StartOrdinal.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorFilePosition.StartOrdinal.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpPosition
+Elsa.Etl.Core.Runtime.EtlConnectorHttpPosition.Deconstruct(out long PageSequence, out int NextItem, out Elsa.Etl.Core.Runtime.EtlHttpRequest! Request, out Elsa.Etl.Core.Runtime.EtlRetainedHttpPage? Page, out bool Exhausted) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpPosition.Equals(Elsa.Etl.Core.Runtime.EtlConnectorHttpPosition? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorHttpPosition.EtlConnectorHttpPosition(long PageSequence, int NextItem, Elsa.Etl.Core.Runtime.EtlHttpRequest! Request, Elsa.Etl.Core.Runtime.EtlRetainedHttpPage? Page, bool Exhausted) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpPosition.Exhausted.get -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorHttpPosition.Exhausted.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpPosition.NextItem.get -> int
+Elsa.Etl.Core.Runtime.EtlConnectorHttpPosition.NextItem.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpPosition.Page.get -> Elsa.Etl.Core.Runtime.EtlRetainedHttpPage?
+Elsa.Etl.Core.Runtime.EtlConnectorHttpPosition.Page.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpPosition.PageSequence.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorHttpPosition.PageSequence.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpPosition.Request.get -> Elsa.Etl.Core.Runtime.EtlHttpRequest!
+Elsa.Etl.Core.Runtime.EtlConnectorHttpPosition.Request.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorKind
+Elsa.Etl.Core.Runtime.EtlConnectorKind.Csv = 0 -> Elsa.Etl.Core.Runtime.EtlConnectorKind
+Elsa.Etl.Core.Runtime.EtlConnectorKind.Http = 1 -> Elsa.Etl.Core.Runtime.EtlConnectorKind
+Elsa.Etl.Core.Runtime.EtlConnectorKind.Jsonl = 2 -> Elsa.Etl.Core.Runtime.EtlConnectorKind
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease!
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.Deconstruct(out Elsa.Etl.Core.EtlScope! Scope, out string! RunId, out int PartitionOrdinal, out string! Owner, out long Fence, out System.DateTimeOffset ExpiresAt, out Elsa.Etl.Core.Runtime.EtlConnectorPosition! Position) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.Equals(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.EtlConnectorPartitionLease(Elsa.Etl.Core.EtlScope! Scope, string! RunId, int PartitionOrdinal, string! Owner, long Fence, System.DateTimeOffset ExpiresAt, Elsa.Etl.Core.Runtime.EtlConnectorPosition! Position) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.ExpiresAt.get -> System.DateTimeOffset
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.ExpiresAt.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.Fence.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.Fence.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.Owner.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.Owner.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.PartitionOrdinal.get -> int
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.PartitionOrdinal.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.Position.get -> Elsa.Etl.Core.Runtime.EtlConnectorPosition!
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.Position.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.RunId.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.RunId.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.Scope.get -> Elsa.Etl.Core.EtlScope!
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.Scope.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPosition
+Elsa.Etl.Core.Runtime.EtlConnectorPosition.EtlConnectorPosition() -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPosition.EtlConnectorPosition(Elsa.Etl.Core.Runtime.EtlConnectorPosition! original) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun
+Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun!
+Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun.Deconstruct(out Elsa.Etl.Core.Runtime.EtlPreparedCsvInput? File, out Elsa.Etl.Core.Runtime.EtlObjectReference? Lookup) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun.Equals(Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun.EtlConnectorPreparedRun(Elsa.Etl.Core.Runtime.EtlPreparedCsvInput? File, Elsa.Etl.Core.Runtime.EtlObjectReference? Lookup) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun.File.get -> Elsa.Etl.Core.Runtime.EtlPreparedCsvInput?
+Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun.File.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun.Lookup.get -> Elsa.Etl.Core.Runtime.EtlObjectReference?
+Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun.Lookup.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission
+Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission!
+Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission.Bindings.get -> Elsa.Etl.Core.Runtime.EtlConnectorRunBindings!
+Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission.Bindings.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission.Deconstruct(out Elsa.Etl.Core.Runtime.EtlInvocation! Invocation, out Elsa.Etl.Core.Runtime.EtlConnectorRunBindings! Bindings) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission.Equals(Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission.EtlConnectorRunAdmission(Elsa.Etl.Core.Runtime.EtlInvocation! Invocation, Elsa.Etl.Core.Runtime.EtlConnectorRunBindings! Bindings) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission.Invocation.get -> Elsa.Etl.Core.Runtime.EtlInvocation!
+Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission.Invocation.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRunBindings
+Elsa.Etl.Core.Runtime.EtlConnectorRunBindings.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorRunBindings!
+Elsa.Etl.Core.Runtime.EtlConnectorRunBindings.Deconstruct(out Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision! Source, out Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision? Lookup, out Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision! Main, out Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision! Errors, out System.Collections.Generic.IReadOnlyList<string!>! HttpShardIds) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRunBindings.Equals(Elsa.Etl.Core.Runtime.EtlConnectorRunBindings? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorRunBindings.Errors.get -> Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision!
+Elsa.Etl.Core.Runtime.EtlConnectorRunBindings.Errors.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRunBindings.EtlConnectorRunBindings(Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision! Source, Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision? Lookup, Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision! Main, Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision! Errors, System.Collections.Generic.IReadOnlyList<string!>! HttpShardIds) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRunBindings.HttpShardIds.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Etl.Core.Runtime.EtlConnectorRunBindings.HttpShardIds.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRunBindings.Lookup.get -> Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision?
+Elsa.Etl.Core.Runtime.EtlConnectorRunBindings.Lookup.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRunBindings.Main.get -> Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision!
+Elsa.Etl.Core.Runtime.EtlConnectorRunBindings.Main.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRunBindings.Source.get -> Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision!
+Elsa.Etl.Core.Runtime.EtlConnectorRunBindings.Source.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRunView
+Elsa.Etl.Core.Runtime.EtlConnectorRunView.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorRunView!
+Elsa.Etl.Core.Runtime.EtlConnectorRunView.Bindings.get -> Elsa.Etl.Core.Runtime.EtlConnectorRunBindings!
+Elsa.Etl.Core.Runtime.EtlConnectorRunView.Bindings.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRunView.Deconstruct(out Elsa.Etl.Core.Runtime.EtlRunView! Run, out Elsa.Etl.Core.Runtime.EtlConnectorRunBindings! Bindings, out Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun? Prepared, out long RetainedInputBytes) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRunView.Equals(Elsa.Etl.Core.Runtime.EtlConnectorRunView? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorRunView.EtlConnectorRunView(Elsa.Etl.Core.Runtime.EtlRunView! Run, Elsa.Etl.Core.Runtime.EtlConnectorRunBindings! Bindings, Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun? Prepared, long RetainedInputBytes) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRunView.Prepared.get -> Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun?
+Elsa.Etl.Core.Runtime.EtlConnectorRunView.Prepared.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRunView.RetainedInputBytes.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorRunView.RetainedInputBytes.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRunView.Run.get -> Elsa.Etl.Core.Runtime.EtlRunView!
+Elsa.Etl.Core.Runtime.EtlConnectorRunView.Run.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpRequest
+Elsa.Etl.Core.Runtime.EtlHttpRequest.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlHttpRequest!
+Elsa.Etl.Core.Runtime.EtlHttpRequest.Continuation.get -> string?
+Elsa.Etl.Core.Runtime.EtlHttpRequest.Continuation.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpRequest.Deconstruct(out string! ShardId, out string? Continuation) -> void
+Elsa.Etl.Core.Runtime.EtlHttpRequest.Equals(Elsa.Etl.Core.Runtime.EtlHttpRequest? other) -> bool
+Elsa.Etl.Core.Runtime.EtlHttpRequest.EtlHttpRequest(string! ShardId, string? Continuation) -> void
+Elsa.Etl.Core.Runtime.EtlHttpRequest.ShardId.get -> string!
+Elsa.Etl.Core.Runtime.EtlHttpRequest.ShardId.init -> void
+Elsa.Etl.Core.Runtime.EtlPreparedCsvInput
+Elsa.Etl.Core.Runtime.EtlPreparedCsvInput.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlPreparedCsvInput!
+Elsa.Etl.Core.Runtime.EtlPreparedCsvInput.Deconstruct(out Elsa.Etl.Core.Runtime.EtlObjectReference! Source, out Elsa.Etl.Core.Runtime.EtlObjectReference! Index, out long RecordCount) -> void
+Elsa.Etl.Core.Runtime.EtlPreparedCsvInput.Equals(Elsa.Etl.Core.Runtime.EtlPreparedCsvInput? other) -> bool
+Elsa.Etl.Core.Runtime.EtlPreparedCsvInput.EtlPreparedCsvInput(Elsa.Etl.Core.Runtime.EtlObjectReference! Source, Elsa.Etl.Core.Runtime.EtlObjectReference! Index, long RecordCount) -> void
+Elsa.Etl.Core.Runtime.EtlPreparedCsvInput.Index.get -> Elsa.Etl.Core.Runtime.EtlObjectReference!
+Elsa.Etl.Core.Runtime.EtlPreparedCsvInput.Index.init -> void
+Elsa.Etl.Core.Runtime.EtlPreparedCsvInput.RecordCount.get -> long
+Elsa.Etl.Core.Runtime.EtlPreparedCsvInput.RecordCount.init -> void
+Elsa.Etl.Core.Runtime.EtlPreparedCsvInput.Source.get -> Elsa.Etl.Core.Runtime.EtlObjectReference!
+Elsa.Etl.Core.Runtime.EtlPreparedCsvInput.Source.init -> void
+Elsa.Etl.Core.Runtime.EtlRetainedHttpPage
+Elsa.Etl.Core.Runtime.EtlRetainedHttpPage.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlRetainedHttpPage!
+Elsa.Etl.Core.Runtime.EtlRetainedHttpPage.Body.get -> Elsa.Etl.Core.Runtime.EtlObjectReference!
+Elsa.Etl.Core.Runtime.EtlRetainedHttpPage.Body.init -> void
+Elsa.Etl.Core.Runtime.EtlRetainedHttpPage.Deconstruct(out long PageSequence, out string! RequestHash, out Elsa.Etl.Core.Runtime.EtlObjectReference! Body, out int RecordCount, out string? NextContinuation) -> void
+Elsa.Etl.Core.Runtime.EtlRetainedHttpPage.Equals(Elsa.Etl.Core.Runtime.EtlRetainedHttpPage? other) -> bool
+Elsa.Etl.Core.Runtime.EtlRetainedHttpPage.EtlRetainedHttpPage(long PageSequence, string! RequestHash, Elsa.Etl.Core.Runtime.EtlObjectReference! Body, int RecordCount, string? NextContinuation) -> void
+Elsa.Etl.Core.Runtime.EtlRetainedHttpPage.NextContinuation.get -> string?
+Elsa.Etl.Core.Runtime.EtlRetainedHttpPage.NextContinuation.init -> void
+Elsa.Etl.Core.Runtime.EtlRetainedHttpPage.PageSequence.get -> long
+Elsa.Etl.Core.Runtime.EtlRetainedHttpPage.PageSequence.init -> void
+Elsa.Etl.Core.Runtime.EtlRetainedHttpPage.RecordCount.get -> int
+Elsa.Etl.Core.Runtime.EtlRetainedHttpPage.RecordCount.init -> void
+Elsa.Etl.Core.Runtime.EtlRetainedHttpPage.RequestHash.get -> string!
+Elsa.Etl.Core.Runtime.EtlRetainedHttpPage.RequestHash.init -> void
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.AdmitConnectorAsync(Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission! admission, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorAdmissionResult!>
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.ClaimConnectorPartitionAsync(Elsa.Etl.Core.EtlScope! scope, string? runId, string! workerId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease?>
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.ClaimConnectorPreparationAsync(Elsa.Etl.Core.EtlScope! scope, string! workerId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlPreparationLease?>
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.CommitConnectorPreparationAsync(Elsa.Etl.Core.Runtime.EtlPreparationLease! lease, Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun! prepared, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlStoreStatus>
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.FindConnectorRunAsync(Elsa.Etl.Core.EtlScope! scope, string! runId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorRunView?>
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.ReleaseConnectorPartitionAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlStoreStatus>
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.RenewConnectorPartitionAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlStoreStatus>
+abstract Elsa.Etl.Core.Runtime.EtlConnectorPosition.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorPosition!
+override Elsa.Etl.Core.Runtime.EtlConnectorAdmissionResult.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorAdmissionResult.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorAdmissionResult.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorFilePosition.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorFilePosition!
+override Elsa.Etl.Core.Runtime.EtlConnectorFilePosition.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorFilePosition.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorFilePosition.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpPosition.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorHttpPosition!
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpPosition.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpPosition.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpPosition.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorPosition.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorPosition.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorPosition.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorRunBindings.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorRunBindings.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorRunBindings.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorRunView.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorRunView.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorRunView.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlHttpRequest.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlHttpRequest.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlHttpRequest.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlPreparedCsvInput.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlPreparedCsvInput.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlPreparedCsvInput.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlRetainedHttpPage.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlRetainedHttpPage.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlRetainedHttpPage.ToString() -> string!
+override sealed Elsa.Etl.Core.Runtime.EtlConnectorFilePosition.Equals(Elsa.Etl.Core.Runtime.EtlConnectorPosition? other) -> bool
+override sealed Elsa.Etl.Core.Runtime.EtlConnectorHttpPosition.Equals(Elsa.Etl.Core.Runtime.EtlConnectorPosition? other) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorAdmissionResult.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorAdmissionResult? left, Elsa.Etl.Core.Runtime.EtlConnectorAdmissionResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorAdmissionResult.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorAdmissionResult? left, Elsa.Etl.Core.Runtime.EtlConnectorAdmissionResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision? left, Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision? left, Elsa.Etl.Core.Runtime.EtlConnectorBindingRevision? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorFilePosition.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorFilePosition? left, Elsa.Etl.Core.Runtime.EtlConnectorFilePosition? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorFilePosition.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorFilePosition? left, Elsa.Etl.Core.Runtime.EtlConnectorFilePosition? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpPosition.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorHttpPosition? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpPosition? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpPosition.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorHttpPosition? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpPosition? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease? left, Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease? left, Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorPosition.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorPosition? left, Elsa.Etl.Core.Runtime.EtlConnectorPosition? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorPosition.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorPosition? left, Elsa.Etl.Core.Runtime.EtlConnectorPosition? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun? left, Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun? left, Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission? left, Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission? left, Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorRunBindings.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorRunBindings? left, Elsa.Etl.Core.Runtime.EtlConnectorRunBindings? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorRunBindings.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorRunBindings? left, Elsa.Etl.Core.Runtime.EtlConnectorRunBindings? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorRunView.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorRunView? left, Elsa.Etl.Core.Runtime.EtlConnectorRunView? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorRunView.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorRunView? left, Elsa.Etl.Core.Runtime.EtlConnectorRunView? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpRequest.operator !=(Elsa.Etl.Core.Runtime.EtlHttpRequest? left, Elsa.Etl.Core.Runtime.EtlHttpRequest? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpRequest.operator ==(Elsa.Etl.Core.Runtime.EtlHttpRequest? left, Elsa.Etl.Core.Runtime.EtlHttpRequest? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlPreparedCsvInput.operator !=(Elsa.Etl.Core.Runtime.EtlPreparedCsvInput? left, Elsa.Etl.Core.Runtime.EtlPreparedCsvInput? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlPreparedCsvInput.operator ==(Elsa.Etl.Core.Runtime.EtlPreparedCsvInput? left, Elsa.Etl.Core.Runtime.EtlPreparedCsvInput? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRetainedHttpPage.operator !=(Elsa.Etl.Core.Runtime.EtlRetainedHttpPage? left, Elsa.Etl.Core.Runtime.EtlRetainedHttpPage? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRetainedHttpPage.operator ==(Elsa.Etl.Core.Runtime.EtlRetainedHttpPage? left, Elsa.Etl.Core.Runtime.EtlRetainedHttpPage? right) -> bool
+virtual Elsa.Etl.Core.Runtime.EtlConnectorPosition.EqualityContract.get -> System.Type!
+virtual Elsa.Etl.Core.Runtime.EtlConnectorPosition.Equals(Elsa.Etl.Core.Runtime.EtlConnectorPosition? other) -> bool
+virtual Elsa.Etl.Core.Runtime.EtlConnectorPosition.PrintMembers(System.Text.StringBuilder! builder) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorPositionResult
+Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorPositionResult!
+Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.Deconstruct(out Elsa.Etl.Core.Runtime.EtlStoreStatus Status, out Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease? Lease) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.Equals(Elsa.Etl.Core.Runtime.EtlConnectorPositionResult? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.EtlConnectorPositionResult(Elsa.Etl.Core.Runtime.EtlStoreStatus Status, Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease? Lease) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.Lease.get -> Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease?
+Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.Lease.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.Status.get -> Elsa.Etl.Core.Runtime.EtlStoreStatus
+Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.Status.init -> void
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.AdvanceEmptyHttpPageAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorPositionResult!>
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.AttachHttpPageAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, Elsa.Etl.Core.Runtime.EtlRetainedHttpPage! page, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorPositionResult!>
+override Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.ToString() -> string!
+static Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorPositionResult? left, Elsa.Etl.Core.Runtime.EtlConnectorPositionResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorPositionResult? left, Elsa.Etl.Core.Runtime.EtlConnectorPositionResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.HttpRequestHash(Elsa.Etl.Core.Runtime.EtlHttpRequest! request) -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor
+Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor!
+Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.BatchId.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.BatchId.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.Deconstruct(out string! BatchId, out Elsa.Etl.Core.Runtime.EtlConnectorBatchRange! Range, out long InputBytes, out string! InputHash) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.Equals(Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.EtlConnectorBatchDescriptor(string! BatchId, Elsa.Etl.Core.Runtime.EtlConnectorBatchRange! Range, long InputBytes, string! InputHash) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.InputBytes.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.InputBytes.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.InputHash.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.InputHash.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.Range.get -> Elsa.Etl.Core.Runtime.EtlConnectorBatchRange!
+Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.Range.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchRange
+Elsa.Etl.Core.Runtime.EtlConnectorBatchRange.EtlConnectorBatchRange() -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchRange.EtlConnectorBatchRange(Elsa.Etl.Core.Runtime.EtlConnectorBatchRange! original) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation!
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.Batch.get -> Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor!
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.Batch.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.Deconstruct(out Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor! Batch, out bool Settled) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.Equals(Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.EtlConnectorBatchReservation(Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor! Batch, bool Settled) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.Settled.get -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.Settled.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange
+Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.Deconstruct(out long StartOrdinal, out long EndOrdinalExclusive) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.EndOrdinalExclusive.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.EndOrdinalExclusive.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.Equals(Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.EtlConnectorFileBatchRange(long StartOrdinal, long EndOrdinalExclusive) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.StartOrdinal.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.StartOrdinal.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.Deconstruct(out long PageSequence, out string! RequestHash, out string! PageContentHash, out int StartItem, out int EndItemExclusive) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.EndItemExclusive.get -> int
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.EndItemExclusive.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.Equals(Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.EtlConnectorHttpBatchRange(long PageSequence, string! RequestHash, string! PageContentHash, int StartItem, int EndItemExclusive) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.PageContentHash.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.PageContentHash.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.PageSequence.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.PageSequence.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.RequestHash.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.RequestHash.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.StartItem.get -> int
+Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.StartItem.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.OwedBatch.get -> Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation?
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.OwedBatch.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorReservationResult
+Elsa.Etl.Core.Runtime.EtlConnectorReservationResult.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorReservationResult!
+Elsa.Etl.Core.Runtime.EtlConnectorReservationResult.Deconstruct(out Elsa.Etl.Core.Runtime.EtlStoreStatus Status, out Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation? Reservation) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorReservationResult.Equals(Elsa.Etl.Core.Runtime.EtlConnectorReservationResult? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorReservationResult.EtlConnectorReservationResult(Elsa.Etl.Core.Runtime.EtlStoreStatus Status, Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation? Reservation) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorReservationResult.Reservation.get -> Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation?
+Elsa.Etl.Core.Runtime.EtlConnectorReservationResult.Reservation.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorReservationResult.Status.get -> Elsa.Etl.Core.Runtime.EtlStoreStatus
+Elsa.Etl.Core.Runtime.EtlConnectorReservationResult.Status.init -> void
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.ReserveConnectorBatchAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor! batch, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorReservationResult!>
+abstract Elsa.Etl.Core.Runtime.EtlConnectorBatchRange.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorBatchRange!
+override Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorBatchRange.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorBatchRange.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorBatchRange.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange!
+override Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange!
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorReservationResult.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorReservationResult.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorReservationResult.ToString() -> string!
+override sealed Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.Equals(Elsa.Etl.Core.Runtime.EtlConnectorBatchRange? other) -> bool
+override sealed Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.Equals(Elsa.Etl.Core.Runtime.EtlConnectorBatchRange? other) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor? left, Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor? left, Elsa.Etl.Core.Runtime.EtlConnectorBatchDescriptor? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorBatchRange.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorBatchRange? left, Elsa.Etl.Core.Runtime.EtlConnectorBatchRange? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorBatchRange.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorBatchRange? left, Elsa.Etl.Core.Runtime.EtlConnectorBatchRange? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation? left, Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation? left, Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange? left, Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange? left, Elsa.Etl.Core.Runtime.EtlConnectorFileBatchRange? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpBatchRange? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorReservationResult.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorReservationResult? left, Elsa.Etl.Core.Runtime.EtlConnectorReservationResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorReservationResult.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorReservationResult? left, Elsa.Etl.Core.Runtime.EtlConnectorReservationResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorBatchId(Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission! admission, Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun! prepared, int partitionOrdinal, Elsa.Etl.Core.Runtime.EtlConnectorBatchRange! range, long inputBytes, string! inputHash) -> string!
+virtual Elsa.Etl.Core.Runtime.EtlConnectorBatchRange.EqualityContract.get -> System.Type!
+virtual Elsa.Etl.Core.Runtime.EtlConnectorBatchRange.Equals(Elsa.Etl.Core.Runtime.EtlConnectorBatchRange? other) -> bool
+virtual Elsa.Etl.Core.Runtime.EtlConnectorBatchRange.PrintMembers(System.Text.StringBuilder! builder) -> bool
+Elsa.Etl.Core.EtlConnectorLimits.MaxRetainedOutputBytes.get -> long
+Elsa.Etl.Core.EtlConnectorLimits.MaxRetainedOutputBytes.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput!
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.AcceptedRecords.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.AcceptedRecords.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.Deconstruct(out long AcceptedRecords, out long RejectedRecords, out long FilteredRecords, out Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput? Main, out Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput? Errors) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.Equals(Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.Errors.get -> Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput?
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.Errors.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.EtlConnectorBatchOutput(long AcceptedRecords, long RejectedRecords, long FilteredRecords, Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput? Main, Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput? Errors) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.FilteredRecords.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.FilteredRecords.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.Main.get -> Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput?
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.Main.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.RejectedRecords.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.RejectedRecords.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.Output.get -> Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput?
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.Output.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorOutputResult
+Elsa.Etl.Core.Runtime.EtlConnectorOutputResult.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorOutputResult!
+Elsa.Etl.Core.Runtime.EtlConnectorOutputResult.Deconstruct(out Elsa.Etl.Core.Runtime.EtlStoreStatus Status, out Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput? Output) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorOutputResult.Equals(Elsa.Etl.Core.Runtime.EtlConnectorOutputResult? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorOutputResult.EtlConnectorOutputResult(Elsa.Etl.Core.Runtime.EtlStoreStatus Status, Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput? Output) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorOutputResult.Output.get -> Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput?
+Elsa.Etl.Core.Runtime.EtlConnectorOutputResult.Output.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorOutputResult.Status.get -> Elsa.Etl.Core.Runtime.EtlStoreStatus
+Elsa.Etl.Core.Runtime.EtlConnectorOutputResult.Status.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput
+Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput!
+Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.Body.get -> Elsa.Etl.Core.Runtime.EtlObjectReference!
+Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.Body.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.Deconstruct(out Elsa.Etl.Core.Runtime.EtlConnectorKind Kind, out Elsa.Etl.Core.Runtime.EtlObjectReference! Body, out long RecordCount, out string! EffectId) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.EffectId.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.EffectId.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.Equals(Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.EtlConnectorRouteOutput(Elsa.Etl.Core.Runtime.EtlConnectorKind Kind, Elsa.Etl.Core.Runtime.EtlObjectReference! Body, long RecordCount, string! EffectId) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.Kind.get -> Elsa.Etl.Core.Runtime.EtlConnectorKind
+Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.Kind.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.RecordCount.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.RecordCount.init -> void
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.RetainConnectorBatchOutputAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, string! batchId, Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput! output, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorOutputResult!>
+override Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorOutputResult.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorOutputResult.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorOutputResult.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.ToString() -> string!
+static Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput? left, Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput? left, Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorOutputResult.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorOutputResult? left, Elsa.Etl.Core.Runtime.EtlConnectorOutputResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorOutputResult.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorOutputResult? left, Elsa.Etl.Core.Runtime.EtlConnectorOutputResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput? left, Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput? left, Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorEffectId(Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission! admission, string! batchId, Elsa.Etl.Core.Runtime.EtlOutputRoute route, string! contentHash, long byteLength, long recordCount) -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.HttpDeliveries.get -> Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries?
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.HttpDeliveries.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries!
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries.Deconstruct(out Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery? Main, out Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery? Errors) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries.Equals(Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries.Errors.get -> Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery?
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries.Errors.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries.EtlConnectorHttpDeliveries(Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery? Main, Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery? Errors) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries.Main.get -> Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery?
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries.Main.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery!
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.Attempts.get -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord!>!
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.Attempts.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.Deadline.get -> System.DateTimeOffset
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.Deadline.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.Deconstruct(out System.DateTimeOffset Deadline, out System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord!>! Attempts, out Elsa.Etl.Core.Runtime.EtlHttpDeliveryPhase Phase, out System.DateTimeOffset? NotBefore, out Elsa.Etl.Core.Runtime.EtlHttpDeliveryFailure Failure, out System.DateTimeOffset UpdatedAt) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.Equals(Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.EtlConnectorHttpDelivery(System.DateTimeOffset Deadline, System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord!>! Attempts, Elsa.Etl.Core.Runtime.EtlHttpDeliveryPhase Phase, System.DateTimeOffset? NotBefore, Elsa.Etl.Core.Runtime.EtlHttpDeliveryFailure Failure, System.DateTimeOffset UpdatedAt) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.Failure.get -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryFailure
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.Failure.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.NotBefore.get -> System.DateTimeOffset?
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.NotBefore.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.Phase.get -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryPhase
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.Phase.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.UpdatedAt.get -> System.DateTimeOffset
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.UpdatedAt.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult!
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.Deconstruct(out Elsa.Etl.Core.Runtime.EtlStoreStatus Status, out Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery? Delivery, out Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt? Permit) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.Delivery.get -> Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery?
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.Delivery.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.Equals(Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.EtlConnectorHttpDeliveryResult(Elsa.Etl.Core.Runtime.EtlStoreStatus Status, Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery? Delivery, Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt? Permit) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.Permit.get -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt?
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.Permit.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.Status.get -> Elsa.Etl.Core.Runtime.EtlStoreStatus
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.Status.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt!
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.Deconstruct(out string! RequestId, out int Number, out long Fence, out string! EffectId, out System.DateTimeOffset StartedAt, out System.DateTimeOffset ExpiresAt) -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.EffectId.get -> string!
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.EffectId.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.Equals(Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt? other) -> bool
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.EtlHttpDeliveryAttempt(string! RequestId, int Number, long Fence, string! EffectId, System.DateTimeOffset StartedAt, System.DateTimeOffset ExpiresAt) -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.ExpiresAt.get -> System.DateTimeOffset
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.ExpiresAt.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.Fence.get -> long
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.Fence.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.Number.get -> int
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.Number.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.RequestId.get -> string!
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.RequestId.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.StartedAt.get -> System.DateTimeOffset
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.StartedAt.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord!
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.Attempt.get -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt!
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.Attempt.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.CompletedAt.get -> System.DateTimeOffset?
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.CompletedAt.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.Deconstruct(out Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt! Attempt, out Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse? Response, out System.DateTimeOffset? CompletedAt) -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.Equals(Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord? other) -> bool
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.EtlHttpDeliveryAttemptRecord(Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt! Attempt, Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse? Response, System.DateTimeOffset? CompletedAt) -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.Response.get -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse?
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.Response.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryFailure
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryFailure.AttemptsExhausted = 1 -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryFailure
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryFailure.DeadlineExceeded = 2 -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryFailure
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryFailure.None = 0 -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryFailure
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryFailure.ResponseRejected = 3 -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryFailure
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryPhase
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryPhase.Acknowledged = 2 -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryPhase
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryPhase.Failed = 3 -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryPhase
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryPhase.InFlight = 0 -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryPhase
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryPhase.Waiting = 1 -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryPhase
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse!
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.Deconstruct(out int? StatusCode, out System.DateTimeOffset? RetryAfter) -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.Equals(Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse? other) -> bool
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.EtlHttpDeliveryResponse(int? StatusCode, System.DateTimeOffset? RetryAfter) -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.RetryAfter.get -> System.DateTimeOffset?
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.RetryAfter.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.ResponseReceivedAtUtc.get -> System.DateTimeOffset?
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.ResponseReceivedAtUtc.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.StatusCode.get -> int?
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.StatusCode.init -> void
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.BeginConnectorHttpDeliveryAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, string! batchId, Elsa.Etl.Core.Runtime.EtlOutputRoute route, string! requestId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult!>
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.CompleteConnectorHttpDeliveryAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, string! batchId, Elsa.Etl.Core.Runtime.EtlOutputRoute route, Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt! attempt, Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse! response, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult!>
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.ToString() -> string!
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.operator !=(Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt? left, Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.operator ==(Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt? left, Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.operator !=(Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord? left, Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.operator ==(Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord? left, Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.operator !=(Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse? left, Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.operator ==(Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse? left, Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse? right) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorFilePublications.Main.get -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorFilePublications.Main.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorFilePublications.Errors.get -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorFilePublications.Errors.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorFilePublications
+override Elsa.Etl.Core.Runtime.EtlConnectorFilePublications.ToString() -> string!
+static Elsa.Etl.Core.Runtime.EtlConnectorFilePublications.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorFilePublications? left, Elsa.Etl.Core.Runtime.EtlConnectorFilePublications? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorFilePublications.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorFilePublications? left, Elsa.Etl.Core.Runtime.EtlConnectorFilePublications? right) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorFilePublications.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorFilePublications.Equals(object? obj) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorFilePublications.Equals(Elsa.Etl.Core.Runtime.EtlConnectorFilePublications? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorFilePublications.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorFilePublications!
+Elsa.Etl.Core.Runtime.EtlConnectorFilePublications.Deconstruct(out bool Main, out bool Errors) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.FilePublications.get -> Elsa.Etl.Core.Runtime.EtlConnectorFilePublications!
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.FilePublications.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorFilePublications.EtlConnectorFilePublications(bool Main, bool Errors) -> void
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.AcceptConnectorBatchAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, string! batchId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorPositionResult!>
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.RecordConnectorFilePublicationAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, string! batchId, Elsa.Etl.Core.Runtime.EtlOutputRoute route, Elsa.Etl.Core.Runtime.EtlObjectReference! publication, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlStoreStatus>
+static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorFileOutputKey(string! effectId) -> string!
+static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorHttpPageId(Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission! admission, int partitionOrdinal, long pageSequence, Elsa.Etl.Core.Runtime.EtlHttpRequest! request) -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch!
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.Attempts.get -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord!>!
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.Attempts.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.Capture.get -> Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture?
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.Capture.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.Deadline.get -> System.DateTimeOffset
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.Deadline.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.Equals(Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.Failure.get -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.Failure.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.NotBefore.get -> System.DateTimeOffset?
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.NotBefore.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.Phase.get -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchPhase
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.Phase.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.RequestHash.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.RequestHash.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.UpdatedAt.get -> System.DateTimeOffset
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.UpdatedAt.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure.AttemptsExhausted = 1 -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure.DeadlineExceeded = 2 -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure.InvalidPage = 4 -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure.None = 0 -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure.ResponseRejected = 3 -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchPhase
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchPhase.Captured = 3 -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchPhase
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchPhase.Failed = 2 -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchPhase
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchPhase.InFlight = 0 -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchPhase
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchPhase.Waiting = 1 -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchPhase
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult!
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.Deconstruct(out Elsa.Etl.Core.Runtime.EtlStoreStatus Status, out Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch? Fetch, out Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt? Permit) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.Equals(Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.EtlConnectorHttpSourceFetchResult(Elsa.Etl.Core.Runtime.EtlStoreStatus Status, Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch? Fetch, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt? Permit) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.Fetch.get -> Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch?
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.Fetch.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.Permit.get -> Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt?
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.Permit.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.Status.get -> Elsa.Etl.Core.Runtime.EtlStoreStatus
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.Status.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt!
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.Deconstruct(out string! RequestId, out int Number, out long Fence, out string! RequestHash, out System.DateTimeOffset StartedAt, out System.DateTimeOffset ExpiresAt) -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.Equals(Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt? other) -> bool
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.EtlHttpSourceFetchAttempt(string! RequestId, int Number, long Fence, string! RequestHash, System.DateTimeOffset StartedAt, System.DateTimeOffset ExpiresAt) -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.ExpiresAt.get -> System.DateTimeOffset
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.ExpiresAt.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.Fence.get -> long
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.Fence.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.Number.get -> int
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.Number.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.RequestHash.get -> string!
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.RequestHash.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.RequestId.get -> string!
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.RequestId.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.StartedAt.get -> System.DateTimeOffset
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.StartedAt.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord!
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.Attempt.get -> Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt!
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.Attempt.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.CompletedAt.get -> System.DateTimeOffset?
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.CompletedAt.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.Deconstruct(out Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt! Attempt, out Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome? Outcome, out System.DateTimeOffset? CompletedAt) -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.Equals(Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord? other) -> bool
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.EtlHttpSourceFetchAttemptRecord(Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt! Attempt, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome? Outcome, System.DateTimeOffset? CompletedAt) -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.Outcome.get -> Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome?
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.Outcome.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture!
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.Deconstruct(out Elsa.Etl.Core.Runtime.EtlRetainedHttpPage! Page, out string! RequestId, out long Fence, out System.DateTimeOffset ResponseReceivedAtUtc) -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.Equals(Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture? other) -> bool
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.EtlHttpSourceFetchCapture(Elsa.Etl.Core.Runtime.EtlRetainedHttpPage! Page, string! RequestId, long Fence, System.DateTimeOffset ResponseReceivedAtUtc) -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.Fence.get -> long
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.Fence.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.Page.get -> Elsa.Etl.Core.Runtime.EtlRetainedHttpPage!
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.Page.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.RequestId.get -> string!
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.RequestId.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.ResponseReceivedAtUtc.get -> System.DateTimeOffset
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.ResponseReceivedAtUtc.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome!
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.Deconstruct(out int? StatusCode, out System.DateTimeOffset? RetryAfter, out bool InvalidPage, out System.DateTimeOffset? ResponseReceivedAtUtc) -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.Deconstruct(out int? StatusCode, out System.DateTimeOffset? RetryAfter, out bool InvalidPage) -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.Equals(Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome? other) -> bool
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.EtlHttpSourceFetchOutcome(int? StatusCode, System.DateTimeOffset? RetryAfter, bool InvalidPage, System.DateTimeOffset? ResponseReceivedAtUtc = null) -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.InvalidPage.get -> bool
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.InvalidPage.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.RetryAfter.get -> System.DateTimeOffset?
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.RetryAfter.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.ResponseReceivedAtUtc.get -> System.DateTimeOffset?
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.ResponseReceivedAtUtc.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.StatusCode.get -> int?
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.StatusCode.init -> void
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.ToString() -> string!
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.operator !=(Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt? left, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt.operator ==(Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt? left, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.operator !=(Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord? left, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord.operator ==(Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord? left, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.operator !=(Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture? left, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.operator ==(Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture? left, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.operator !=(Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome? left, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.operator ==(Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome? left, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome? right) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.Deconstruct(out string! RequestHash, out long PageSequence, out System.DateTimeOffset Deadline, out System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord!>! Attempts, out Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchPhase Phase, out System.DateTimeOffset? NotBefore, out Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure Failure, out System.DateTimeOffset UpdatedAt, out Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture? Capture) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.PageSequence.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.PageSequence.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.EtlConnectorHttpSourceFetch(string! RequestHash, long PageSequence, System.DateTimeOffset Deadline, System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttemptRecord!>! Attempts, Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchPhase Phase, System.DateTimeOffset? NotBefore, Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchFailure Failure, System.DateTimeOffset UpdatedAt, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture? Capture) -> void
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.BeginConnectorHttpSourceAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, string! requestId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult!>
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.CompleteConnectorHttpSourceAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt! attempt, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome! outcome, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult!>
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.CaptureConnectorHttpSourceAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt! attempt, Elsa.Etl.Core.Runtime.EtlRetainedHttpPage! page, System.DateTimeOffset responseReceivedAtUtc, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult!>
+Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution
+Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution!
+Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution.Bindings.get -> Elsa.Etl.Core.Runtime.EtlConnectorRunBindings?
+Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution.Bindings.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution.Deconstruct(out Elsa.Etl.Core.Runtime.EtlConnectorRunBindings? Bindings, out string? FailureCode) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution.Equals(Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution.EtlConnectorBindingResolution(Elsa.Etl.Core.Runtime.EtlConnectorRunBindings? Bindings, string? FailureCode) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution.FailureCode.get -> string?
+Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution.FailureCode.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary
+Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary!
+Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.Alias.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.Alias.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.Deconstruct(out string! Alias, out string! Role, out Elsa.Etl.Core.Runtime.EtlConnectorKind Kind) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.Equals(Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.EtlConnectorBindingSummary(string! Alias, string! Role, Elsa.Etl.Core.Runtime.EtlConnectorKind Kind) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.Kind.get -> Elsa.Etl.Core.Runtime.EtlConnectorKind
+Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.Kind.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.Role.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.Role.init -> void
+Elsa.Etl.Core.Runtime.IEtlConnectorBindingCatalog
+Elsa.Etl.Core.Runtime.IEtlConnectorBindingCatalog.ListBindings(Elsa.Etl.Core.EtlScope! scope, string? afterAlias, string? afterRole, int take) -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary!>!
+Elsa.Etl.Core.Runtime.IEtlConnectorBindingResolver
+Elsa.Etl.Core.Runtime.IEtlConnectorBindingResolver.ResolveAsync(Elsa.Etl.Core.EtlScope! scope, Elsa.Etl.Core.EtlPipelineV2! pipeline, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution!>
+override Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.ToString() -> string!
+static Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution? left, Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution? left, Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary? left, Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary? left, Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary? right) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection
+Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection!
+Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection.Deconstruct(out Elsa.Etl.Core.Runtime.EtlConnectorKind Kind, out long RecordCount, out string! State, out Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection? Retry) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection.Equals(Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection.EtlConnectorEffectInspection(Elsa.Etl.Core.Runtime.EtlConnectorKind Kind, long RecordCount, string! State, Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection? Retry) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection.Kind.get -> Elsa.Etl.Core.Runtime.EtlConnectorKind
+Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection.Kind.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection.RecordCount.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection.RecordCount.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection.Retry.get -> Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection?
+Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection.Retry.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection.State.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection.State.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress
+Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress!
+Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress.Deconstruct(out long PageSequence, out int NextItem, out int? PageRecordCount, out bool Exhausted, out Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection? Fetch) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress.Equals(Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress.EtlConnectorHttpProgress(long PageSequence, int NextItem, int? PageRecordCount, bool Exhausted, Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection? Fetch) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress.Exhausted.get -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress.Exhausted.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress.Fetch.get -> Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection?
+Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress.Fetch.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress.NextItem.get -> int
+Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress.NextItem.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress.PageRecordCount.get -> int?
+Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress.PageRecordCount.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress.PageSequence.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress.PageSequence.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection
+Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection!
+Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection.Deconstruct(out long RecordCount, out long InputBytes, out bool OutputRetained, out Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection? Main, out Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection? Errors) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection.Equals(Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection.Errors.get -> Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection?
+Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection.Errors.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection.EtlConnectorOwedInspection(long RecordCount, long InputBytes, bool OutputRetained, Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection? Main, Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection? Errors) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection.InputBytes.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection.InputBytes.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection.Main.get -> Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection?
+Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection.Main.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection.OutputRetained.get -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection.OutputRetained.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection.RecordCount.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection.RecordCount.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection!
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.AcceptedErrorEffects.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.AcceptedErrorEffects.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.AcceptedMainEffects.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.AcceptedMainEffects.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.ClaimExpiresAt.get -> System.DateTimeOffset?
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.ClaimExpiresAt.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.ClaimFence.get -> long?
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.ClaimFence.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.Deconstruct(out int PartitionOrdinal, out Elsa.Etl.Core.Runtime.EtlConnectorFilePosition? File, out Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress? Http, out bool IsClaimed, out long? ClaimFence, out System.DateTimeOffset? ClaimExpiresAt, out System.DateTimeOffset? NotBefore, out Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection? OwedBatch, out long AcceptedMainEffects, out long AcceptedErrorEffects) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.Equals(Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.EtlConnectorPartitionInspection(int PartitionOrdinal, Elsa.Etl.Core.Runtime.EtlConnectorFilePosition? File, Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress? Http, bool IsClaimed, long? ClaimFence, System.DateTimeOffset? ClaimExpiresAt, System.DateTimeOffset? NotBefore, Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection? OwedBatch, long AcceptedMainEffects, long AcceptedErrorEffects) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.File.get -> Elsa.Etl.Core.Runtime.EtlConnectorFilePosition?
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.File.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.Http.get -> Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress?
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.Http.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.IsClaimed.get -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.IsClaimed.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.NotBefore.get -> System.DateTimeOffset?
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.NotBefore.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.OwedBatch.get -> Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection?
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.OwedBatch.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.PartitionOrdinal.get -> int
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.PartitionOrdinal.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection
+Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection!
+Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection.AttemptCount.get -> int
+Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection.AttemptCount.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection.Deadline.get -> System.DateTimeOffset
+Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection.Deadline.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection.Deconstruct(out string! Phase, out int AttemptCount, out System.DateTimeOffset Deadline, out System.DateTimeOffset? NotBefore, out int? LastStatusCode) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection.Equals(Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection.EtlConnectorRetryInspection(string! Phase, int AttemptCount, System.DateTimeOffset Deadline, System.DateTimeOffset? NotBefore, int? LastStatusCode) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection.LastStatusCode.get -> int?
+Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection.LastStatusCode.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection.NotBefore.get -> System.DateTimeOffset?
+Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection.NotBefore.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection.Phase.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection.Phase.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRunInspection
+Elsa.Etl.Core.Runtime.EtlConnectorRunInspection.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorRunInspection!
+Elsa.Etl.Core.Runtime.EtlConnectorRunInspection.AcceptedErrorEffects.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorRunInspection.AcceptedErrorEffects.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRunInspection.AcceptedMainEffects.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorRunInspection.AcceptedMainEffects.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRunInspection.Deconstruct(out Elsa.Etl.Core.Runtime.EtlConnectorRunView! Run, out long AcceptedMainEffects, out long AcceptedErrorEffects) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRunInspection.Equals(Elsa.Etl.Core.Runtime.EtlConnectorRunInspection? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorRunInspection.EtlConnectorRunInspection(Elsa.Etl.Core.Runtime.EtlConnectorRunView! Run, long AcceptedMainEffects, long AcceptedErrorEffects) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRunInspection.Run.get -> Elsa.Etl.Core.Runtime.EtlConnectorRunView!
+Elsa.Etl.Core.Runtime.EtlConnectorRunInspection.Run.init -> void
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeInspector
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeInspector.FindConnectorInspectionAsync(Elsa.Etl.Core.EtlScope! scope, string! runId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorRunInspection?>
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeInspector.ListConnectorPartitionsAsync(Elsa.Etl.Core.EtlScope! scope, string! runId, int afterPartitionOrdinal, int take, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection!>!>
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeInspector.MaximumPageSize.get -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorRunInspection.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorRunInspection.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorRunInspection.ToString() -> string!
+static Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection? left, Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection? left, Elsa.Etl.Core.Runtime.EtlConnectorEffectInspection? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpProgress? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection? left, Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection? left, Elsa.Etl.Core.Runtime.EtlConnectorOwedInspection? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection? left, Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection? left, Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection? left, Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection? left, Elsa.Etl.Core.Runtime.EtlConnectorRetryInspection? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorRunInspection.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorRunInspection? left, Elsa.Etl.Core.Runtime.EtlConnectorRunInspection? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorRunInspection.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorRunInspection? left, Elsa.Etl.Core.Runtime.EtlConnectorRunInspection? right) -> bool

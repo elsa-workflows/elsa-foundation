@@ -16,13 +16,21 @@ internal sealed class EtlClaimHeartbeat : IAsyncDisposable
     public EtlClaimHeartbeat(IServiceScopeFactory scopes,
         Func<IEtlRuntimeStore, CancellationToken, ValueTask<EtlStoreStatus>> renew,
         TimeProvider clock, ILogger logger, CancellationToken cancellationToken)
+        : this(scopes, (IServiceProvider provider, CancellationToken token) => renew(provider.GetRequiredService<IEtlRuntimeStore>(), token),
+            clock, logger, cancellationToken)
+    {
+    }
+
+    public EtlClaimHeartbeat(IServiceScopeFactory scopes,
+        Func<IServiceProvider, CancellationToken, ValueTask<EtlStoreStatus>> renew,
+        TimeProvider clock, ILogger logger, CancellationToken cancellationToken)
     {
         _stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _renewal = RenewAsync(scopes, renew, clock, logger);
     }
 
     private async Task RenewAsync(IServiceScopeFactory scopes,
-        Func<IEtlRuntimeStore, CancellationToken, ValueTask<EtlStoreStatus>> renew,
+        Func<IServiceProvider, CancellationToken, ValueTask<EtlStoreStatus>> renew,
         TimeProvider clock, ILogger logger)
     {
         try
@@ -31,7 +39,7 @@ internal sealed class EtlClaimHeartbeat : IAsyncDisposable
             {
                 await using (var scope = scopes.CreateAsyncScope())
                 {
-                    var status = await renew(scope.ServiceProvider.GetRequiredService<IEtlRuntimeStore>(), _stop.Token);
+                    var status = await renew(scope.ServiceProvider, _stop.Token);
                     if (status is not (EtlStoreStatus.Applied or EtlStoreStatus.Replay))
                     {
                         await _stop.CancelAsync();

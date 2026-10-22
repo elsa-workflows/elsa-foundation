@@ -40,6 +40,10 @@ database connection string, or `RuntimeConnectionToken`.
 - Public metadata models must not expose raw secret or token values.
 - Runtime resolution returns secrets only through `ISecretValueResolver` or
   `IConnectionCredentialSource`, wrapped in `SensitiveValue`.
-- Tokens injected into outbound requests are registered with `IRuntimeSecretMask`.
+- The workflow connection adapter registers injected token values with
+  [`IRuntimeSecretMask`](../../Workflows/Runtime/Core/Contracts/IRuntimeSecretMask.cs) for activity fault
+  handling. That mask is not a general logger, trace, console, output or persisted-state scrubber.
+  Non-workflow consumers such as ETL must enforce their own diagnostic boundary; using Connections
+  does not require coupling their runtime to workflow fault handling.
 - `SensitiveValue` has no implicit string conversion; `ToString` returns `[redacted]`; JSON
   serialization throws.

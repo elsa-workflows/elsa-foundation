@@ -36,10 +36,15 @@ internal static class EtlDefinitionRecordCodec
         return new(EfRelationalIdentity.Hash(definitionId), EfRelationalIdentity.Encode(definitionId));
     }
 
-    public static string WritePipeline(EtlPipeline pipeline)
+    public static string WritePipeline(object pipeline)
     {
         ArgumentNullException.ThrowIfNull(pipeline);
-        return EtlArtifactJson.Write(pipeline).GetRawText();
+        return pipeline switch
+        {
+            EtlPipeline v1 => EtlArtifactJson.Write(v1).GetRawText(),
+            EtlPipelineV2 v2 => EtlArtifactV2Json.Write(v2).GetRawText(),
+            _ => throw new NotSupportedException("The ETL pipeline format is not supported.")
+        };
     }
 
     public static string HashPipeline(string json)
@@ -50,7 +55,27 @@ internal static class EtlDefinitionRecordCodec
 
     public static EtlDefinitionDraft ReadDraft(EtlDefinitionDraftRecord row, EtlScope scope, string definitionId)
     {
+        var decoded = ReadDraftContent(row, scope, definitionId);
+        if (decoded.Pipeline is not EtlPipeline pipeline)
+            throw new NotSupportedException("This ETL draft requires the connector-capable draft reader.");
+        return new(definitionId, row.Revision, row.LastPublishedVersion, pipeline, decoded.UpdatedAt);
+    }
+
+    public static EtlDefinitionDraftV2 ReadDraftV2(EtlDefinitionDraftRecord row, EtlScope scope, string definitionId)
+    {
+        var decoded = ReadDraftContent(row, scope, definitionId);
+        if (decoded.Pipeline is not EtlPipelineV2 pipeline)
+            throw new NotSupportedException("This ETL draft requires the v1 file-pipeline draft reader.");
+        return new(definitionId, row.Revision, row.LastPublishedVersion, pipeline, decoded.UpdatedAt);
+    }
+
+    public static DecodedDraft ReadDraftContent(EtlDefinitionDraftRecord row, EtlScope scope, string definitionId)
+    {
         EnsureSchemaVersion(row.SchemaVersion);
+        EnsureFormatVersion(row.FormatVersion);
+        if (row.FormatVersion == EtlArtifactV2Json.FormatVersion &&
+            (row.PipelineJson.Length > EtlArtifact.MaximumByteLength || Encoding.UTF8.GetByteCount(row.PipelineJson) > EtlArtifact.MaximumByteLength))
+            throw new InvalidDataException("The retained ETL connector draft exceeds the supported byte limit.");
         EnsureIdentityResidual(row.TenantId, scope.TenantId, "tenant id");
         EnsureIdentityResidual(row.PersistencePartition, scope.PersistencePartition, "persistence partition");
         EnsureIdentityResidual(row.DefinitionId, definitionId, "definition id");
@@ -59,9 +84,9 @@ internal static class EtlDefinitionRecordCodec
             !StringComparer.Ordinal.Equals(row.PipelineHash, HashPipeline(row.PipelineJson)))
             throw new InvalidDataException("The ETL draft row does not match its scoped identity or content hash.");
 
-        EtlPipeline pipeline;
+        object pipeline;
         using (var document = JsonDocument.Parse(row.PipelineJson))
-            pipeline = EtlArtifactJson.Read(document.RootElement);
+            pipeline = ReadPipeline(row.FormatVersion, document.RootElement);
         if (!StringComparer.Ordinal.Equals(WritePipeline(pipeline), row.PipelineJson))
             throw new InvalidDataException("The ETL draft row is not in the canonical pipeline representation.");
         DateTimeOffset updatedAt;
@@ -76,7 +101,20 @@ internal static class EtlDefinitionRecordCodec
 
         if (row.Revision <= 0 || row.LastPublishedVersion < 0)
             throw new InvalidDataException("The ETL draft row has an invalid revision or publication version.");
-        return new EtlDefinitionDraft(definitionId, row.Revision, row.LastPublishedVersion, pipeline, updatedAt);
+        return new(pipeline, updatedAt);
+    }
+
+    private static object ReadPipeline(int formatVersion, JsonElement document) => formatVersion switch
+    {
+        EtlArtifact.CurrentFormatVersion => EtlArtifactJson.Read(document),
+        EtlArtifactV2Json.FormatVersion => EtlArtifactV2Json.Read(document),
+        _ => throw new NotSupportedException("The ETL pipeline format is not supported.")
+    };
+
+    private static void EnsureFormatVersion(int formatVersion)
+    {
+        if (formatVersion is not (EtlArtifact.CurrentFormatVersion or EtlArtifactV2Json.FormatVersion))
+            throw new NotSupportedException("The ETL pipeline format is not supported.");
     }
 
     public static EtlDefinitionSummary ReadDraftSummary(
@@ -89,8 +127,10 @@ internal static class EtlDefinitionRecordCodec
         int lastPublishedVersion,
         string schemaVersion,
         long updatedAtUtcTicks,
-        EtlScope scope)
+        EtlScope scope,
+        int formatVersion = EtlArtifact.CurrentFormatVersion)
     {
+        EnsureFormatVersion(formatVersion);
         EnsureSchemaVersion(schemaVersion);
         EnsureScopeIdentity(scopeKey, tenantId, persistencePartition, scope);
         var definitionId = DecodeIdentity(encodedDefinitionId, "definition id");
@@ -109,7 +149,7 @@ internal static class EtlDefinitionRecordCodec
             throw new InvalidDataException("The ETL draft row has an invalid update timestamp.", exception);
         }
 
-        return new(definitionId, revision, lastPublishedVersion, updatedAt);
+        return new(definitionId, revision, lastPublishedVersion, updatedAt) { FormatVersion = formatVersion };
     }
 
     public static EtlPublishedVersionSummary ReadPublishedVersionSummary(
@@ -124,8 +164,10 @@ internal static class EtlDefinitionRecordCodec
         string contentHash,
         long publishedAtUtcTicks,
         EtlScope scope,
-        string expectedDefinitionId)
+        string expectedDefinitionId,
+        int formatVersion = EtlArtifact.CurrentFormatVersion)
     {
+        EnsureFormatVersion(formatVersion);
         EnsureSchemaVersion(schemaVersion);
         EnsureScopeIdentity(scopeKey, tenantId, persistencePartition, scope);
         var definitionId = DecodeIdentity(encodedDefinitionId, "definition id");
@@ -157,14 +199,14 @@ internal static class EtlDefinitionRecordCodec
             throw new InvalidDataException("The published ETL artifact row has an invalid publication timestamp.", exception);
         }
 
-        return new(definitionId, definitionVersion, contentHash, publishedAt);
+        return new(definitionId, definitionVersion, contentHash, publishedAt) { FormatVersion = formatVersion };
     }
 
     public static ValidatedArtifact ValidateArtifact(string definitionId, EtlArtifact artifact)
     {
         ArgumentNullException.ThrowIfNull(artifact);
         EnsureIdentity(definitionId, "definition id");
-        if (artifact.FormatVersion != EtlArtifact.CurrentFormatVersion ||
+        if (artifact.FormatVersion is not (EtlArtifact.CurrentFormatVersion or EtlArtifactV2Json.FormatVersion) ||
             artifact.DefinitionVersion <= 0 ||
             string.IsNullOrWhiteSpace(artifact.ArtifactId) ||
             artifact.ArtifactId.Length > 128 || artifact.DefinitionId.Length > 256 || artifact.ContentHash.Length != 64 ||
@@ -176,11 +218,11 @@ internal static class EtlDefinitionRecordCodec
             JsonMarshal.GetRawUtf8Value(artifact.Pipeline).Length > EtlArtifact.MaximumByteLength)
             throw new ArgumentException("The published ETL artifact exceeds the supported byte limit.", nameof(artifact));
 
-        EtlPipeline pipeline;
+        object pipeline;
         string canonicalPipeline;
         try
         {
-            pipeline = EtlArtifactJson.Read(artifact.Pipeline);
+            pipeline = ReadPipeline(artifact.FormatVersion, artifact.Pipeline);
             canonicalPipeline = WritePipeline(pipeline);
         }
         catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException)
@@ -215,7 +257,7 @@ internal static class EtlDefinitionRecordCodec
         var artifact = JsonSerializer.Deserialize<EtlArtifact>(row.ArtifactJson, ArtifactJsonOptions)
             ?? throw new InvalidDataException("The published ETL artifact row contains an empty artifact envelope.");
         var validated = ValidateArtifact(definitionId, artifact);
-        if (artifact.DefinitionVersion != row.DefinitionVersion ||
+        if (artifact.DefinitionVersion != row.DefinitionVersion || artifact.FormatVersion != row.FormatVersion ||
             !StringComparer.Ordinal.Equals(validated.PipelineHash, row.PipelineHash) ||
             !StringComparer.Ordinal.Equals(validated.ArtifactJson, row.ArtifactJson))
             throw new InvalidDataException("The published ETL artifact row does not match its version or pipeline hash.");
@@ -299,9 +341,10 @@ internal static class EtlDefinitionRecordCodec
 
     public sealed record ScopeIdentity(string Key, string? TenantId, string PersistencePartition);
     public sealed record DefinitionIdentity(string Key, string DefinitionId);
+    public sealed record DecodedDraft(object Pipeline, DateTimeOffset UpdatedAt);
     public sealed record ValidatedArtifact(
         EtlArtifact Artifact,
-        EtlPipeline Pipeline,
+        object Pipeline,
         string PipelineJson,
         string PipelineHash,
         string ArtifactJson,

@@ -35,13 +35,38 @@ internal static class EtlNativeBoundary
             throw Invalid();
         var artifact = JsonSerializer.Deserialize<EtlArtifact>(json, PinOptions) ?? throw Invalid();
         var selected = EtlPublishedSelection.Parse(selection);
-        if (artifact.FormatVersion != EtlArtifact.CurrentFormatVersion ||
-            artifact.DefinitionId != selected.DefinitionId || artifact.DefinitionVersion != selected.DefinitionVersion ||
-            artifact.ContentHash != selected.ContentHash || EtlArtifactJson.Hash(artifact.Pipeline) != selected.ContentHash ||
+        var pipelineHash = PipelineHash(artifact);
+        if (artifact.DefinitionId != selected.DefinitionId || artifact.DefinitionVersion != selected.DefinitionVersion ||
+            artifact.ContentHash != selected.ContentHash || pipelineHash != selected.ContentHash ||
             artifact.ArtifactId != EtlArtifactJson.CreateArtifactId(artifact.FormatVersion, artifact.DefinitionId,
                 artifact.DefinitionVersion, artifact.ContentHash))
             throw Invalid();
         return artifact;
+    }
+
+    private static string PipelineHash(EtlArtifact artifact) => artifact.FormatVersion switch
+    {
+        // Keep the existing v1 verification recipe byte-for-byte in terms of its canonical JSON hash.
+        EtlArtifact.CurrentFormatVersion => EtlArtifactJson.Hash(artifact.Pipeline),
+        EtlArtifactV2Json.FormatVersion => CanonicalV2Hash(artifact.Pipeline),
+        _ => throw Invalid()
+    };
+
+    private static string CanonicalV2Hash(JsonElement document)
+    {
+        try
+        {
+            var pipeline = EtlArtifactV2Json.Read(document);
+            var canonical = EtlArtifactV2Json.Write(pipeline);
+            if (!StringComparer.Ordinal.Equals(document.GetRawText(), canonical.GetRawText()))
+                throw Invalid();
+            return EtlArtifactJson.Hash(canonical);
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or JsonException or
+                                          NotSupportedException or NullReferenceException or OverflowException)
+        {
+            throw Invalid();
+        }
     }
 
     public static string RunId(EtlScope scope, string workflowId, string activityId) =>

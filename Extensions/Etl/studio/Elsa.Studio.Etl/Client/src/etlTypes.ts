@@ -76,6 +76,103 @@ export interface EtlPipeline {
   limits: EtlLimits;
 }
 
+/** Finite connector definition document persisted and published in artifact format v2. */
+export interface EtlPipelineV2 {
+  source: EtlSourceV2;
+  lookup: EtlCsvLookup | null;
+  routes: EtlRoutes;
+  mapping: EtlOutputField[];
+  filters: EtlFilter[];
+  limits: EtlConnectorLimits;
+  http: EtlHttpPolicy;
+}
+
+export type EtlSourceV2 = EtlCsvSource | EtlHttpJsonSource;
+
+export interface EtlCsvSource {
+  kind: "csv";
+  binding: string;
+  schema: EtlColumn[];
+}
+
+export interface EtlHttpJsonSource {
+  kind: "httpJson";
+  binding: string;
+  recordsPointer: string;
+  fields: EtlJsonField[];
+  pagination: EtlHttpPagination;
+}
+
+export interface EtlJsonField {
+  name: string;
+  pointer: string;
+  type: EtlColumnType;
+  required: boolean;
+}
+
+export type EtlHttpPagination =
+  | { kind: "singlePage" }
+  | { kind: "token"; continuationPointer: string; queryParameter: string }
+  | { kind: "nextLink"; continuationPointer: string };
+
+export interface EtlCsvLookup {
+  binding: string;
+  schema: EtlColumn[];
+  sourceKeyField: string;
+  lookupKeyField: string;
+}
+
+export interface EtlRoutes {
+  main: EtlDestination;
+  errors: EtlDestination;
+}
+
+export type EtlDestination = EtlJsonlDestination | EtlHttpDestination;
+
+export interface EtlJsonlDestination {
+  kind: "jsonl";
+  binding: string;
+}
+
+export interface EtlHttpDestination {
+  kind: "http";
+  binding: string;
+}
+
+export interface EtlConnectorLimits {
+  filePartitionCount: number;
+  maxPartitions: number;
+  maxRecordBytes: number;
+  maxFields: number;
+  maxBatchRecords: number;
+  maxBatchBytes: number | EtlJsonNumber;
+  maxOutstandingRecords: number | EtlJsonNumber;
+  maxOutstandingBytes: number | EtlJsonNumber;
+  maxLookupRecords: number | EtlJsonNumber;
+  maxLookupBytes: number | EtlJsonNumber;
+  maxOutputBatchBytes: number | EtlJsonNumber;
+  /** Omitted when the versioned artifact uses the server's default. */
+  maxRetainedOutputBytes?: number | EtlJsonNumber;
+  maxSnapshotBytes: number | EtlJsonNumber;
+  maxArtifactBytes: number;
+}
+
+export interface EtlHttpPolicy {
+  maxPageBytes: number | EtlJsonNumber;
+  maxPageRecords: number;
+  maxJsonDepth: number;
+  maxContinuationBytes: number;
+  maxPagesPerPartition: number;
+  maxRetainedInputBytes: number | EtlJsonNumber;
+  /** Omitted when the versioned artifact uses the server's default. */
+  maxRetainedMetadataBytes?: number | EtlJsonNumber;
+  maxAttempts: number;
+  deadlineSeconds: number;
+  requestTimeoutSeconds: number;
+  initialDelaySeconds: number;
+  maxDelaySeconds: number;
+}
+
 export interface EtlPage<T> {
   items: T[];
   nextCursor: string | null;
@@ -86,14 +183,14 @@ export interface EtlPageRequest {
   limit?: number;
 }
 
-export interface EtlCreateDefinitionRequest {
+export interface EtlCreateDefinitionRequest<TPipeline = EtlPipeline> {
   id: string;
-  pipeline: EtlPipeline;
+  pipeline: TPipeline;
 }
 
-export interface EtlUpdateDraftRequest {
+export interface EtlUpdateDraftRequest<TPipeline = EtlPipeline> {
   expectedRevision: number;
-  pipeline: EtlPipeline;
+  pipeline: TPipeline;
 }
 
 export interface EtlValidateDraftRequest {
@@ -112,6 +209,11 @@ export interface EtlBindingSummary {
   role: "Source" | "Lookup" | "MainOutput" | "ErrorOutput";
 }
 
+/** A current v2 connector alias without endpoint, storage, or credential details. */
+export interface EtlConnectorBindingSummary extends EtlBindingSummary {
+  kind: "csv" | "http" | "jsonl";
+}
+
 export interface EtlDefinitionSummaryView {
   definitionId: string;
   revision: number;
@@ -119,11 +221,11 @@ export interface EtlDefinitionSummaryView {
   updatedAt: string;
 }
 
-export interface EtlDraftView {
+export interface EtlDraftView<TPipeline = EtlPipeline> {
   definitionId: string;
   revision: number;
   lastPublishedVersion: number;
-  pipeline: EtlPipeline;
+  pipeline: TPipeline;
   updatedAt: string;
 }
 
@@ -135,10 +237,15 @@ export interface EtlPublishedVersionView {
   publishedAt: string | null;
 }
 
-export interface EtlPublishedArtifactView {
+export interface EtlPublishedArtifactView<TPipeline = EtlPipeline> {
   version: EtlPublishedVersionView;
-  pipeline: EtlPipeline;
+  pipeline: TPipeline;
 }
+
+export type EtlConnectorCreateDefinitionRequest = EtlCreateDefinitionRequest<EtlPipelineV2>;
+export type EtlConnectorUpdateDraftRequest = EtlUpdateDraftRequest<EtlPipelineV2>;
+export type EtlConnectorDraftView = EtlDraftView<EtlPipelineV2>;
+export type EtlConnectorPublishedArtifactView = EtlPublishedArtifactView<EtlPipelineV2>;
 
 export interface EtlDiagnostic {
   code: string;
@@ -220,9 +327,17 @@ export interface EtlRunInputIdentityView {
 
 export interface EtlRunBindingAliasesView {
   source: string;
-  lookup: string;
+  lookup: string | null;
   output: string;
   errors: string;
+}
+
+export interface EtlRunConnectorView {
+  sourceKind: string;
+  mainKind: string;
+  errorKind: string;
+  acceptedMainEffects: number;
+  acceptedErrorEffects: number;
 }
 
 export interface EtlRunDetailView extends EtlRunSummaryView {
@@ -230,6 +345,8 @@ export interface EtlRunDetailView extends EtlRunSummaryView {
   terminalResult: EtlRunTerminalResultView | null;
   sourceInput?: EtlRunInputIdentityView | null;
   lookupInput?: EtlRunInputIdentityView | null;
+  connector?: EtlRunConnectorView | null;
+  formatVersion?: number;
 }
 
 export interface EtlRunOwedBatchView {
@@ -247,6 +364,56 @@ export interface EtlRunPartitionView {
   claimFence: number | null;
   claimExpiresAt: string | null;
   owedBatch: EtlRunOwedBatchView | null;
+}
+
+export interface EtlRunConnectorPartitionView {
+  partitionOrdinal: number;
+  file: EtlRunFileProgressView | null;
+  http: EtlRunHttpProgressView | null;
+  isClaimed: boolean;
+  claimFence: number | null;
+  claimExpiresAt: string | null;
+  notBefore: string | null;
+  owedBatch: EtlRunConnectorOwedView | null;
+  acceptedMainEffects: number;
+  acceptedErrorEffects: number;
+}
+
+export interface EtlRunFileProgressView {
+  startOrdinal: number;
+  endOrdinalExclusive: number;
+  nextOrdinal: number;
+}
+
+export interface EtlRunHttpProgressView {
+  pageSequence: number;
+  nextItem: number;
+  pageRecordCount: number | null;
+  exhausted: boolean;
+  fetch: EtlRunRetryView | null;
+}
+
+export interface EtlRunRetryView {
+  phase: string;
+  attemptCount: number;
+  deadline: string;
+  notBefore: string | null;
+  lastStatusCode: number | null;
+}
+
+export interface EtlRunConnectorOwedView {
+  recordCount: number;
+  inputBytes: number;
+  outputRetained: boolean;
+  main: EtlRunEffectView | null;
+  errors: EtlRunEffectView | null;
+}
+
+export interface EtlRunEffectView {
+  kind: string;
+  recordCount: number;
+  state: string;
+  retry: EtlRunRetryView | null;
 }
 
 export interface EtlRunCancellationView {

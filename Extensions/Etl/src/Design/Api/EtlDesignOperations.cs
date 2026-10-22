@@ -4,6 +4,7 @@ using Elsa.Etl.Core.Runtime;
 using Elsa.Etl.Design.Api.Models;
 using Elsa.Etl.Design.Stores;
 using Microsoft.Extensions.DependencyInjection;
+using static Elsa.Etl.Design.Api.EtlDesignOperationSupport;
 
 namespace Elsa.Etl.Design.Api;
 
@@ -13,7 +14,7 @@ internal sealed class EtlDesignOperations(IServiceProvider services, EtlRequestS
     {
         cancellationToken.ThrowIfCancellationRequested();
         var scope = requestScope.Get();
-        var cursor = Cursor(request.Cursor, request.Limit, "bindings", scope);
+        var cursor = Cursor(cursors, request.Cursor, request.Limit, "bindings", scope);
         var rows = Required<IEtlBindingCatalog>().ListBindings(scope, cursor?.LastAlias, cursor?.LastRole, request.Limit + 1);
         var items = rows.Take(request.Limit).ToArray();
         var next = rows.Count > request.Limit ? cursors.Encode(State("bindings", scope, request.Limit) with
@@ -24,10 +25,12 @@ internal sealed class EtlDesignOperations(IServiceProvider services, EtlRequestS
     public async Task<EtlPage<EtlDefinitionSummaryView>> ListDefinitionsAsync(EtlPageRequest request, CancellationToken cancellationToken)
     {
         var scope = requestScope.Get();
-        var cursor = Cursor(request.Cursor, request.Limit, "definitions", scope);
+        var cursor = Cursor(cursors, request.Cursor, request.Limit, "definitions", scope);
         var rows = await Required<IEtlDefinitionCatalog>().ListDefinitionsAsync(scope, cursor?.LastId, request.Limit + 1, cancellationToken);
-        var items = rows.Take(request.Limit).Select(row => new EtlDefinitionSummaryView(row.DefinitionId, row.Revision, row.LastPublishedVersion, row.UpdatedAt)).ToArray();
-        var next = rows.Count > request.Limit ? cursors.Encode(State("definitions", scope, request.Limit) with { LastId = items[^1].DefinitionId }) : null;
+        var scanned = rows.Take(request.Limit).ToArray();
+        var items = scanned.Where(row => row.FormatVersion == EtlArtifact.CurrentFormatVersion)
+            .Select(row => new EtlDefinitionSummaryView(row.DefinitionId, row.Revision, row.LastPublishedVersion, row.UpdatedAt)).ToArray();
+        var next = rows.Count > request.Limit ? cursors.Encode(State("definitions", scope, request.Limit) with { LastId = scanned[^1].DefinitionId }) : null;
         return new(items, next);
     }
 
@@ -57,7 +60,7 @@ internal sealed class EtlDesignOperations(IServiceProvider services, EtlRequestS
         var draft = await FindDraftAsync(scope, request.Id, cancellationToken);
         Revision(request.ExpectedRevision);
         if (draft.Revision != request.ExpectedRevision) throw Conflict();
-        var version = NextVersion(draft);
+        var version = NextVersion(draft.LastPublishedVersion);
         var result = Required<IEtlArtifactCompiler>().Compile(draft.DefinitionId, version, draft.Pipeline);
         if (result.Artifact is not null && BindingDiagnostics(scope, draft.Pipeline.Bindings) is { Length: > 0 } diagnostics)
             return new(draft.Revision, version, null, diagnostics);
@@ -99,14 +102,14 @@ internal sealed class EtlDesignOperations(IServiceProvider services, EtlRequestS
     {
         var scope = requestScope.Get();
         ValidateId(request.Id);
-        var cursor = Cursor(request.Cursor, request.Limit, "versions", scope, request.Id);
-        var draft = await FindDraftAsync(scope, request.Id, cancellationToken);
-        var ceiling = cursor?.ThroughVersion ?? draft.LastPublishedVersion;
+        var cursor = Cursor(cursors, request.Cursor, request.Limit, "versions", scope, request.Id);
+        var ceiling = cursor?.ThroughVersion ?? await PublishedVersionCeilingAsync(scope, request.Id, cancellationToken);
         var rows = await Required<IEtlDefinitionCatalog>().ListVersionsAsync(scope, request.Id, cursor?.LastVersion ?? 0, ceiling, request.Limit + 1, cancellationToken);
-        var items = rows.Take(request.Limit).Select(row => new EtlPublishedVersionView(row.DefinitionId, row.DefinitionVersion,
+        var scanned = rows.Take(request.Limit).ToArray();
+        var items = scanned.Where(row => row.FormatVersion == EtlArtifact.CurrentFormatVersion).Select(row => new EtlPublishedVersionView(row.DefinitionId, row.DefinitionVersion,
             row.ContentHash, Selection(row.DefinitionId, row.DefinitionVersion, row.ContentHash).ToToken(), row.PublishedAt)).ToArray();
         var next = rows.Count > request.Limit ? cursors.Encode(State("versions", scope, request.Limit, request.Id) with
-        { LastVersion = items[^1].DefinitionVersion, ThroughVersion = ceiling }) : null;
+        { LastVersion = scanned[^1].DefinitionVersion, ThroughVersion = ceiling }) : null;
         return new(items, next);
     }
 
@@ -116,13 +119,50 @@ internal sealed class EtlDesignOperations(IServiceProvider services, EtlRequestS
         ValidateId(request.Id);
         if (request.Version <= 0) throw new ArgumentOutOfRangeException(nameof(request));
         var artifact = await Required<IEtlDefinitionStore>().FindPublishedAsync(scope, request.Id, request.Version, cancellationToken) ?? throw NotFound();
+        if (artifact.FormatVersion != EtlArtifact.CurrentFormatVersion) throw NotFound();
         return new(Version(artifact), EtlArtifactJson.Read(artifact.Pipeline));
     }
 
     private async Task<EtlDefinitionDraft> FindDraftAsync(EtlScope scope, string id, CancellationToken cancellationToken)
     {
         ValidateId(id);
-        return await Required<IEtlDefinitionStore>().FindDraftAsync(scope, id, cancellationToken) ?? throw NotFound();
+        try
+        {
+            return await Required<IEtlDefinitionStore>().FindDraftAsync(scope, id, cancellationToken) ?? throw NotFound();
+        }
+        catch (NotSupportedException)
+        {
+            throw NotFound();
+        }
+    }
+
+    private async Task<int> PublishedVersionCeilingAsync(EtlScope scope, string id, CancellationToken cancellationToken)
+    {
+        ValidateId(id);
+        try
+        {
+            if (await Required<IEtlDefinitionStore>().FindDraftAsync(scope, id, cancellationToken) is { } v1Draft)
+                return v1Draft.LastPublishedVersion;
+        }
+        catch (NotSupportedException)
+        {
+            // A v2 current draft can still have older v1 publications in the shared version history.
+        }
+
+        if (services.GetService<IEtlDefinitionStoreV2>() is { } v2Store)
+        {
+            try
+            {
+                if (await v2Store.FindDraftAsync(scope, id, cancellationToken) is { } v2Draft)
+                    return v2Draft.LastPublishedVersion;
+            }
+            catch (NotSupportedException)
+            {
+                // The provider may not support the additive format capability.
+            }
+        }
+
+        throw NotFound();
     }
 
     private static async Task<EtlPublicationView?> FindReplayAsync(IEtlDefinitionStore store, EtlScope scope, EtlPublishRequest request, CancellationToken cancellationToken)
@@ -133,25 +173,6 @@ internal sealed class EtlDesignOperations(IServiceProvider services, EtlRequestS
             EtlArtifactJson.CreateArtifactId(EtlArtifact.CurrentFormatVersion, request.Id, request.DefinitionVersion, request.ContentHash))
             throw Conflict();
         return new("replay", Version(existing));
-    }
-
-    private EtlCursorState? Cursor(string? token, int limit, string kind, EtlScope scope, string? resourceId = null)
-    {
-        if (limit is < 1 or > 200) throw new EtlApiException(400, "etl.page-limit-invalid");
-        if (token is null) return null;
-        EtlCursorState state;
-        try { state = cursors.Decode(token); }
-        catch (FormatException) { throw InvalidCursor(); }
-        if (state.Kind != kind || state.ScopeKey != EtlRuntimeIdentity.ScopeKey(scope) || state.ResourceId != resourceId || state.Limit != limit)
-            throw InvalidCursor();
-        var validBoundary = kind switch
-        {
-            "definitions" => state.LastId is not null && state.LastVersion == 0 && state.ThroughVersion == 0 && state.LastAlias is null && state.LastRole is null,
-            "versions" => state.LastId is null && state.LastVersion > 0 && state.ThroughVersion >= state.LastVersion && state.LastAlias is null && state.LastRole is null,
-            "bindings" => state.LastAlias is not null && state.LastRole is not null && state.LastId is null && state.LastVersion == 0 && state.ThroughVersion == 0,
-            _ => false
-        };
-        return validBoundary && state.LastOrdinal is null ? state : throw InvalidCursor();
     }
 
     private EtlDiagnostic[] BindingDiagnostics(EtlScope scope, EtlFileBindings bindings)
@@ -171,14 +192,7 @@ internal sealed class EtlDesignOperations(IServiceProvider services, EtlRequestS
     }
 
     private T Required<T>() where T : class => services.GetService<T>() ?? throw new EtlApiException(503, "etl.provider-unavailable");
-    private static EtlCursorState State(string kind, EtlScope scope, int limit, string? resource = null) =>
-        new(1, kind, EtlRuntimeIdentity.ScopeKey(scope), resource, limit, null, 0, 0, null, null);
-    private static void ValidateId(string id) => _ = Selection(id, 1, new string('0', 64));
-    private static EtlPublishedSelection Selection(string id, int version, string hash) => new(id, version, hash);
-    private static void Revision(long revision) { if (revision <= 0) throw new ArgumentOutOfRangeException(nameof(revision)); }
-    private static int NextVersion(EtlDefinitionDraft draft) => draft.LastPublishedVersion == int.MaxValue ? throw Conflict() : draft.LastPublishedVersion + 1;
-    private static EtlPublishedVersionView Version(EtlArtifact artifact) => new(artifact.DefinitionId, artifact.DefinitionVersion,
-        artifact.ContentHash, Selection(artifact.DefinitionId, artifact.DefinitionVersion, artifact.ContentHash).ToToken(), null);
+
     private static EtlDraftView View(EtlDefinitionDraft draft) => new(draft.DefinitionId, draft.Revision, draft.LastPublishedVersion, draft.Pipeline, draft.UpdatedAt);
     private static EtlDraftView Draft(EtlDefinitionWriteResult result) => result.Status switch
     {
@@ -186,7 +200,4 @@ internal sealed class EtlDesignOperations(IServiceProvider services, EtlRequestS
         EtlDefinitionWriteStatus.NotFound => throw NotFound(),
         _ => throw Conflict()
     };
-    private static EtlApiException Conflict() => new(409, "etl.definition-conflict");
-    private static EtlApiException NotFound() => new(404, "etl.definition-not-found");
-    private static EtlApiException InvalidCursor() => new(400, "etl.cursor-invalid");
 }

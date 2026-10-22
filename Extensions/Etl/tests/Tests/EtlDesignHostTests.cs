@@ -52,6 +52,46 @@ public sealed class EtlDesignHostTests
         }
     }
 
+    [Fact]
+    public async Task Normal_host_registration_publishes_and_reopens_connector_definitions()
+    {
+        await using var database = new TestDatabase();
+        var scope = new EtlScope("tenant-a", "partition-a");
+        var pipeline = EtlV2TestPipelines.Create();
+        EtlArtifact artifact;
+        using (var host = CreateHost(database.ConnectionString, EfMigratePolicy.AutoMigrate))
+        {
+            await host.StartAsync();
+            await using var services = host.Services.CreateAsyncScope();
+            var provider = services.ServiceProvider;
+            var store = provider.GetRequiredService<IEtlDefinitionStore>();
+            var connectorStore = provider.GetRequiredService<IEtlDefinitionStoreV2>();
+            Assert.Same(store, connectorStore);
+            var compiler = provider.GetRequiredService<IEtlArtifactCompilerV2>();
+            Assert.Same(provider.GetRequiredService<IEtlArtifactCompiler>(), compiler);
+            var created = await connectorStore.CreateDraftAsync(scope, "orders", pipeline);
+            Assert.Equal(EtlDefinitionWriteStatus.Created, created.Status);
+            artifact = Assert.IsType<EtlArtifact>(compiler.Compile("orders", 1, pipeline).Artifact);
+            Assert.Equal(EtlPublicationStatus.Published,
+                (await store.PublishAsync(scope, "orders", created.Draft!.Revision, artifact)).Status);
+            await host.StopAsync();
+        }
+        using (var host = CreateHost(database.ConnectionString, EfMigratePolicy.Validate))
+        {
+            await host.StartAsync();
+            await using var services = host.Services.CreateAsyncScope();
+            var provider = services.ServiceProvider;
+            var draft = Assert.IsType<EtlDefinitionDraftV2>(await provider.GetRequiredService<IEtlDefinitionStoreV2>().FindDraftAsync(scope, "orders"));
+            var reopened = Assert.IsType<EtlArtifact>(await provider.GetRequiredService<IEtlDefinitionStore>().FindPublishedAsync(scope, "orders", 1));
+            Assert.Equal(1, draft.LastPublishedVersion);
+            Assert.Equal(2, reopened.FormatVersion);
+            Assert.Equal(artifact.ArtifactId, reopened.ArtifactId);
+            Assert.Equal(artifact.ContentHash, reopened.ContentHash);
+            Assert.Equal(artifact.Pipeline.GetRawText(), reopened.Pipeline.GetRawText());
+            Assert.Equal(2, Assert.Single(await provider.GetRequiredService<IEtlDefinitionCatalog>().ListDefinitionsAsync(scope, null, 10)).FormatVersion);
+        }
+    }
+
     private static IHost CreateHost(string connectionString, EfMigratePolicy policy)
     {
         var builder = Host.CreateApplicationBuilder();
@@ -64,8 +104,6 @@ public sealed class EtlDesignHostTests
         builder.Services.Configure<EfMigrateOptions>(options => options.Policy = policy);
         return builder.Build();
     }
-
-
 
     private sealed class TestDatabase : IAsyncDisposable
     {

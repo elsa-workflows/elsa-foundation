@@ -1,6 +1,7 @@
 using System.Text;
 using System.Security.Cryptography;
 using Elsa.Etl.Runtime.Output;
+using Elsa.Etl.Core.Runtime;
 
 namespace Elsa.Etl.Tests;
 
@@ -8,6 +9,16 @@ public sealed class FileChunkStoreTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "elsa-etl-chunks-" + Guid.NewGuid().ToString("N"));
     private readonly FileChunkStore _store = new();
+
+    [Fact]
+    public async Task Connector_publication_key_matches_real_immutable_file_publication()
+    {
+        var effectId = Convert.ToHexStringLower(SHA256.HashData("connector-effect"u8));
+        var bytes = "{\"value\":1}\n"u8.ToArray();
+        var published = await _store.PublishAsync(_root, effectId, 1024, (stream, ct) => stream.WriteAsync(bytes, ct));
+        Assert.Equal(EtlRuntimeIdentity.ConnectorFileOutputKey(effectId), published.Key);
+        Assert.Equal(bytes, await File.ReadAllBytesAsync(Path.Combine(_root, published.Key)));
+    }
 
     [Fact]
     public async Task Publishes_complete_hashed_chunk_and_replays_without_overwriting()

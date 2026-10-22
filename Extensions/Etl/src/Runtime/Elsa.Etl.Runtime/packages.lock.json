@@ -79,7 +79,16 @@
           "Microsoft.Extensions.Primitives": "10.0.10"
         }
       },
+      "elsa.connections.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
       "elsa.etl.core": {
+        "type": "Project"
+      },
+      "elsa.primitives": {
         "type": "Project"
       },
       "elsa.tasks.core": {

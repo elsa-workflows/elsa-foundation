@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Etl.Runtime.Api;
 
-internal sealed class EtlRuntimeOperations(
+internal sealed partial class EtlRuntimeOperations(
     IServiceProvider services,
     EtlRequestScope requestScope,
     [FromKeyedServices(EtlRuntimeApi.OwnerId)] EtlCursorCodec cursors) : IEtlRuntimeOperations
@@ -55,40 +55,57 @@ internal sealed class EtlRuntimeOperations(
     {
         var scope = requestScope.Get();
         var run = await FindRunAsync(scope, request.Id, cancellationToken);
-        return Detail(run);
+        if (run.Invocation.Artifact.FormatVersion != EtlArtifactV2Json.FormatVersion)
+            return Detail(run);
+        var inspection = await Required<IEtlConnectorRuntimeInspector>().FindConnectorInspectionAsync(scope, request.Id, cancellationToken);
+        // Rejected admission retains a terminal base run without connector pins or partitions.
+        if (inspection is null)
+            return run.TerminalResult is not null ? Detail(run) : throw ProviderContractError();
+        if (inspection.Run.Run.Invocation.Scope != scope || inspection.Run.Run.Invocation.RunId != request.Id ||
+            inspection.Run.Run.Invocation.Artifact.FormatVersion != EtlArtifactV2Json.FormatVersion ||
+            inspection.AcceptedMainEffects < 0 || inspection.AcceptedErrorEffects < 0)
+            throw ProviderContractError();
+        return ConnectorDetail(inspection);
     }
 
     public async Task<EtlRunPage<EtlRunPartitionView>> ListPartitionsAsync(EtlRunPartitionsRequest request, CancellationToken cancellationToken)
     {
         var scope = requestScope.Get();
         var cursor = Cursor(request.Cursor, request.Limit, "partitions", scope, request.Id);
-        _ = await FindRunAsync(scope, request.Id, cancellationToken);
+        var run = await FindRunAsync(scope, request.Id, cancellationToken);
+        if (run.Invocation.Artifact.FormatVersion == EtlArtifactV2Json.FormatVersion)
+            throw new EtlApiException(409, "etl.connector-inspection-required");
         var store = Required<IEtlRuntimeStore>();
-        var maximumPageSize = StorePageSize(store);
-        var rows = new List<EtlPartitionView>(request.Limit + 1);
-        var afterPartitionOrdinal = cursor?.LastOrdinal ?? -1;
+        return await PartitionPageAsync(request, scope, "partitions", cursor, StorePageSize(store),
+            (after, take, token) => store.ListPartitionsAsync(scope, request.Id, after, take, token),
+            row => row.PartitionOrdinal, Partition, cancellationToken);
+    }
+
+    private async Task<EtlRunPage<TView>> PartitionPageAsync<TSource, TView>(EtlRunPartitionsRequest request,
+        EtlScope scope, string kind, EtlCursorState? cursor, int maximumPageSize,
+        Func<int, int, CancellationToken, ValueTask<IReadOnlyList<TSource>>> read,
+        Func<TSource, int> ordinal, Func<TSource, TView> project, CancellationToken cancellationToken)
+    {
+        if (maximumPageSize <= 0) throw ProviderContractError();
+        var rows = new List<TSource>(request.Limit + 1);
+        var after = cursor?.LastOrdinal ?? -1;
         while (rows.Count < request.Limit + 1)
         {
             var take = Math.Min(maximumPageSize, request.Limit + 1 - rows.Count);
-            var page = await store.ListPartitionsAsync(scope, request.Id, afterPartitionOrdinal, take, cancellationToken);
+            var page = await read(after, take, cancellationToken);
             ValidatePageSize(page.Count, take);
-            if (page.Count == 0)
-                break;
-
-            foreach (var partition in page)
+            foreach (var row in page)
             {
-                if (partition.PartitionOrdinal <= afterPartitionOrdinal)
-                    throw ProviderContractError();
-                rows.Add(partition);
-                afterPartitionOrdinal = partition.PartitionOrdinal;
+                var nextOrdinal = ordinal(row);
+                if (nextOrdinal <= after) throw ProviderContractError();
+                rows.Add(row);
+                after = nextOrdinal;
             }
-
-            if (page.Count < take)
-                break;
+            if (page.Count < take) break;
         }
-        var items = rows.Take(request.Limit).Select(Partition).ToArray();
+        var items = rows.Take(request.Limit).Select(project).ToArray();
         var next = rows.Count > request.Limit
-            ? cursors.Encode(State("partitions", scope, request.Limit, request.Id) with { LastOrdinal = items[^1].PartitionOrdinal })
+            ? cursors.Encode(State(kind, scope, request.Limit, request.Id) with { LastOrdinal = ordinal(rows[request.Limit - 1]) })
             : null;
         return new(items, next);
     }
@@ -134,7 +151,7 @@ internal sealed class EtlRuntimeOperations(
         {
             "runs" => state.LastId is not null && state.LastOrdinal is null && state.LastVersion == 0 &&
                 state.ThroughVersion == 0 && state.LastAlias is null && state.LastRole is null,
-            "partitions" => state.LastId is null && state.LastOrdinal is >= 0 && state.LastVersion == 0 &&
+            "partitions" or "connector-partitions" => state.LastId is null && state.LastOrdinal is >= 0 && state.LastVersion == 0 &&
                 state.ThroughVersion == 0 && state.LastAlias is null && state.LastRole is null,
             _ => false
         };
@@ -186,6 +203,7 @@ internal sealed class EtlRuntimeOperations(
         Diagnostic(run.TerminalResult?.Diagnostic),
         run.TerminalResult is { } terminal ? Terminal(terminal) : null)
     {
+        FormatVersion = run.Invocation.Artifact.FormatVersion,
         SourceInput = InputIdentity(run.Bindings?.Source, run.Prepared?.Source),
         LookupInput = InputIdentity(run.Bindings?.Lookup, run.Prepared?.Lookup)
     };

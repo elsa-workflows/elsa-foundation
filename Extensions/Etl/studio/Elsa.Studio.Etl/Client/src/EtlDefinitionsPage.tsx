@@ -1,28 +1,15 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import {
-  classifyEtlApiError,
-  createEtlDefinition,
-  EtlApiError,
-  getEtlDefinition,
-  getEtlVersion,
-  invalidateEtlApiCapabilityCache,
-  listEtlBindings,
-  listEtlDefinitions,
-  listEtlVersions,
-  publishEtlDefinition,
-  updateEtlDraft,
-  validateEtlDraft,
-  type EtlApiFailureKind
-} from "./etlApi";
-import { EtlPipelineEditor } from "./components/EtlPipelineEditor";
-import { createDefaultEtlPipeline, isValidEtlDefinitionId, sameEtlPipeline } from "./authoringHelpers";
+import { classifyEtlApiError, EtlApiError, invalidateEtlApiCapabilityCache, type EtlApiFailureKind } from "./etlApi";
+import { isValidEtlDefinitionId, sameEtlPipeline } from "./authoringHelpers";
+import { connectorAuthoringProfile, fileAuthoringProfile, type EtlAuthoringProfile } from "./authoringProfiles";
 import { appendUnique } from "./paging";
 import type {
   EtlBindingSummary,
   EtlDraftView,
   EtlDefinitionSummaryView,
   EtlPipeline,
+  EtlPipelineV2,
   EtlPublishedArtifactView,
   EtlPublishedVersionView,
   EtlValidationView
@@ -34,7 +21,20 @@ type MutationKind = "creating" | "loading-draft" | "saving" | "validating" | "pu
 type RequestFailure = { error: unknown; kind: EtlApiFailureKind };
 
 /** Authoring UI for finite ETL drafts and their immutable published artifacts. */
-export function EtlDefinitionsPage({ context, dialogs }: { context: StudioEndpointContext; dialogs: StudioDialogApi }) {
+type EtlDefinitionsPageProps = { context: StudioEndpointContext; dialogs: StudioDialogApi; profile?: "file" | "connector" };
+
+export function EtlDefinitionsPage({ context, dialogs, profile = "file" }: EtlDefinitionsPageProps) {
+  return profile === "connector"
+    ? <EtlDefinitionWorkspace key="connector" context={context} dialogs={dialogs} profile={connectorAuthoringProfile} />
+    : <EtlDefinitionWorkspace key="file" context={context} dialogs={dialogs} profile={fileAuthoringProfile} />;
+}
+
+function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, TBinding extends EtlBindingSummary>({
+  context, dialogs, profile
+}: { context: StudioEndpointContext; dialogs: StudioDialogApi; profile: EtlAuthoringProfile<TPipeline, TBinding> }) {
+  const { listEtlBindings, listEtlDefinitions, listEtlVersions, getEtlDefinition, createEtlDefinition,
+    updateEtlDraft, validateEtlDraft, publishEtlDefinition, getEtlVersion } = profile.api;
+  const PipelineEditor = profile.Editor;
   const pageId = useId();
   const currentContext = useRef(context);
   currentContext.current = context;
@@ -61,14 +61,14 @@ export function EtlDefinitionsPage({ context, dialogs }: { context: StudioEndpoi
   const [definitionsMoreLoading, setDefinitionsMoreLoading] = useState(false);
   const [definitionsFailure, setDefinitionsFailure] = useState<RequestFailure | null>(null);
   const [definitionsMoreFailure, setDefinitionsMoreFailure] = useState<RequestFailure | null>(null);
-  const [bindings, setBindings] = useState<EtlBindingSummary[]>([]);
+  const [bindings, setBindings] = useState<TBinding[]>([]);
   const [bindingsCursor, setBindingsCursor] = useState<string | null>(null);
   const [bindingsLoading, setBindingsLoading] = useState(true);
   const [bindingsMoreLoading, setBindingsMoreLoading] = useState(false);
   const [bindingsFailure, setBindingsFailure] = useState<RequestFailure | null>(null);
   const [bindingsMoreFailure, setBindingsMoreFailure] = useState<RequestFailure | null>(null);
-  const [draft, setDraft] = useState<EtlDraftView | null>(null);
-  const [pipeline, setPipeline] = useState<EtlPipeline | null>(null);
+  const [draft, setDraft] = useState<EtlDraftView<TPipeline> | null>(null);
+  const [pipeline, setPipeline] = useState<TPipeline | null>(null);
   const [draftLoadFailure, setDraftLoadFailure] = useState<{ definitionId: string; failure: RequestFailure } | null>(null);
   const [mutation, setMutation] = useState<MutationKind | null>(null);
   const [editorFailure, setEditorFailure] = useState<string | null>(null);
@@ -80,7 +80,7 @@ export function EtlDefinitionsPage({ context, dialogs }: { context: StudioEndpoi
   const [versionsMoreLoading, setVersionsMoreLoading] = useState(false);
   const [versionsFailure, setVersionsFailure] = useState<RequestFailure | null>(null);
   const [versionsMoreFailure, setVersionsMoreFailure] = useState<RequestFailure | null>(null);
-  const [artifact, setArtifact] = useState<EtlPublishedArtifactView | null>(null);
+  const [artifact, setArtifact] = useState<EtlPublishedArtifactView<TPipeline> | null>(null);
   const [artifactSelection, setArtifactSelection] = useState<string | null>(null);
   const [artifactLoading, setArtifactLoading] = useState(false);
   const [artifactFailure, setArtifactFailure] = useState<string | null>(null);
@@ -442,7 +442,7 @@ export function EtlDefinitionsPage({ context, dialogs }: { context: StudioEndpoi
       }))) return;
       if (!isCurrentMutation(requestContext, generation, request)) return;
 
-      const created = await createEtlDefinition(requestContext, { id, pipeline: createDefaultEtlPipeline() }, controller.signal);
+      const created = await createEtlDefinition(requestContext, { id, pipeline: profile.createDefault() }, controller.signal);
       if (!isCurrentMutation(requestContext, generation, request)) return;
       if (created.definitionId !== id) throw new Error("The server returned a different definition ID.");
       selectedDefinition.current = created.definitionId;
@@ -607,8 +607,8 @@ export function EtlDefinitionsPage({ context, dialogs }: { context: StudioEndpoi
     <header className="etl-toolbar">
       <div>
         <p className="etl-editor-eyebrow">Design</p>
-        <h1 id={`${pageId}-heading`}>ETL definitions</h1>
-        <p>Create a finite file pipeline, validate a saved draft, and publish an immutable version.</p>
+        <h1 id={`${pageId}-heading`}>{profile.title}</h1>
+        <p>{profile.description}</p>
       </div>
       <div className="etl-actions">
         <button type="button" className="etl-primary" disabled={!contextIsLoaded || mutation !== null} onClick={() => void createNewDefinition()}>
@@ -669,10 +669,12 @@ export function EtlDefinitionsPage({ context, dialogs }: { context: StudioEndpoi
         {validation && validation.revision === visibleDraft.revision ? <p role="status" aria-live="polite">
           Validation for revision {validation.revision}: version {validation.definitionVersion}{validation.contentHash ? <> · <code>{validation.contentHash}</code></> : " · no publishable artifact"}.
         </p> : null}
-        <EtlPipelineEditor
+        <PipelineEditor
           pipeline={visiblePipeline}
           onChange={next => { setPipeline(next); setValidation(null); setEditorNotice(null); setEditorFailure(null); }}
           bindings={visibleBindings}
+          bindingsLoading={bindingsLoading}
+          bindingsUnavailable={bindingsFailure !== null}
           readOnly={mutation !== null}
           diagnostics={validation?.revision === visibleDraft.revision ? validation.diagnostics : []}
         />
@@ -719,7 +721,7 @@ export function EtlDefinitionsPage({ context, dialogs }: { context: StudioEndpoi
         {artifact && selectedVersion && artifact.version.selection === selectedVersion.selection ? <section className="etl-editor-section" aria-label="Published ETL artifact">
           <h3>Published artifact · version {artifact.version.definitionVersion}</h3>
           <p>Exact selection: <code>{artifact.version.selection}</code></p>
-          <EtlPipelineEditor pipeline={artifact.pipeline} onChange={() => {}} bindings={visibleBindings} readOnly />
+          <PipelineEditor pipeline={artifact.pipeline} onChange={() => {}} bindings={visibleBindings} readOnly />
         </section> : null}
       </section> : null}
     </> : null}

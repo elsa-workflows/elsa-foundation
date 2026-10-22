@@ -17,7 +17,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Etl.Tests;
 
-public sealed class EtlRuntimeStoreTests
+public sealed partial class EtlRuntimeStoreTests
 {
     [Fact]
     public async Task Runtime_module_migrates_only_its_tables_and_registers_no_design_services()

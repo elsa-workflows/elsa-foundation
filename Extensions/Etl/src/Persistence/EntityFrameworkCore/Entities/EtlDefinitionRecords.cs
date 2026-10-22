@@ -10,6 +10,7 @@ internal sealed class EtlDefinitionDraftRecord
     public string DefinitionId { get; set; } = null!;
     public long Revision { get; set; }
     public int LastPublishedVersion { get; set; }
+    public int FormatVersion { get; set; } = 1;
     public string SchemaVersion { get; set; } = null!;
     public string PipelineJson { get; set; } = null!;
     public string PipelineHash { get; set; } = null!;
@@ -25,6 +26,7 @@ internal sealed class EtlPublishedArtifactRecord
     public string DefinitionKey { get; set; } = null!;
     public string DefinitionId { get; set; } = null!;
     public int DefinitionVersion { get; set; }
+    public int FormatVersion { get; set; } = 1;
     public string SchemaVersion { get; set; } = null!;
     public string ArtifactJson { get; set; } = null!;
     public string ArtifactEnvelopeHash { get; set; } = null!;

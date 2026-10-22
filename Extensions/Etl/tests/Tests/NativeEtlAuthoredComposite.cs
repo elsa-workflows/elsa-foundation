@@ -46,10 +46,13 @@ internal sealed record NativeEtlAuthoredComposite(ActivityNode Root,
 
     public static IReadOnlyCollection<(ActivityDefinition Definition, ActivityDefinitionVersion Version)> CreateSourceCatalog(
         IServiceProvider services,
-        IReadOnlyCollection<string> typeKeys)
+        IReadOnlyCollection<string> typeKeys,
+        string? sourceId = null)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(typeKeys);
+        var sourceIdentity = sourceId ?? AppContext.BaseDirectory;
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceIdentity);
         var keys = typeKeys.ToHashSet(StringComparer.Ordinal);
         var scanned = services.GetRequiredService<IClrAssemblyScanner>().Scan(AppContext.BaseDirectory)
             .Where(model => keys.Contains(model.ActivityTypeKey)).ToArray();
@@ -64,7 +67,7 @@ internal sealed record NativeEtlAuthoredComposite(ActivityNode Root,
             var descriptor = model.Descriptor is JsonElement element ? element : serializer.SerializeToElement(model.Descriptor);
             var version = ActivityDefinitionVersion.From(versions.Create(definition, model.Version, model.ProviderKey,
                 model.ProviderSchemaVersion, model.ConsumerKey, model.ConsumerSchemaVersion, descriptor,
-                "CLR", AppContext.BaseDirectory, model.Inputs, model.Outputs, model.DesignFacets, model.ExecutionType,
+                "CLR", sourceIdentity, model.Inputs, model.Outputs, model.DesignFacets, model.ExecutionType,
                 ActivityCatalogStableIds.VersionId(model.ActivityTypeKey, model.Version)));
             version.Definition = definition;
             return (Definition: definition, Version: version);

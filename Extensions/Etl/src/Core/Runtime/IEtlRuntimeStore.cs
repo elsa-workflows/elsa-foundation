@@ -44,7 +44,7 @@ public interface IEtlRuntimeStore
 }
 
 /// <summary>Persisted transition outcomes; a replay never repeats its accounting effect.</summary>
-public enum EtlStoreStatus { Applied, Replay, Conflict, NotFound, LeaseLost, BudgetExceeded, Terminal, Invalid }
+public enum EtlStoreStatus { Applied, Replay, Conflict, NotFound, LeaseLost, BudgetExceeded, Terminal, Invalid, PermanentBudgetExceeded }
 public enum EtlRunStatus { Preparing, Running, Succeeded, BusinessError, Faulted, Cancelled }
 public enum EtlTerminalOutcome { Succeeded, BusinessError, Faulted, Cancelled }
 public enum EtlOutputRoute { Main, Error }

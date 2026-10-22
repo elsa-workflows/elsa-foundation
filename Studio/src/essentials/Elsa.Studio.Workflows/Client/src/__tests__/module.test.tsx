@@ -3140,7 +3140,7 @@ describe("workflows module", () => {
     expect(container.textContent).toContain("Test Run");
     expect(container.textContent).toContain("2 activities");
     expect(container.textContent).toContain("1 incidents");
-    await click(rowByLabel(container, "Inspect workflow run wfexec-test · Completed · Current health unavailable"));
+    await click(rowByLabel(container, "Inspect workflow run wfexec-test · definition-1 · Completed · Current health unavailable"));
 
     expect(window.location.pathname).toBe("/workflows/instances/wfexec-test");
     expect(fetchMock).toHaveBeenCalledWith(
@@ -3172,16 +3172,21 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances");
 
     await waitForText(container, "wfexec-1");
-    const definitionCell = () => container.querySelector(".wf-identity-cell");
-    expect(definitionCell()?.querySelector("strong")?.textContent).toBe("definition-1");
-    expect(definitionCell()?.querySelector("small")?.textContent).toBe("version-1");
-    expect(definitionCell()?.getAttribute("title")).toBe("definition-1 (version-1)");
+    const expectRunIdentity = (name: string) => {
+      const row = container.querySelector(".wf-grid-row");
+      expect(row?.querySelector(".wf-run-inspect strong")?.textContent).toBe(name);
+      expect(row?.querySelector(".wf-run-inspect")?.getAttribute("aria-label")).toBe(`Inspect workflow run wfexec-1 · ${name}`);
+      expect(row?.getAttribute("aria-label")).toContain(`wfexec-1 · ${name} ·`);
+      for (const [label, value] of [["Execution ID", "wfexec-1"], ["Definition ID", "definition-1"], ["Definition version ID", "version-1"]]) {
+        expect(row?.querySelector(`.studio-copyable-identifier__value[aria-label="${label}: ${value}"]`)?.getAttribute("title")).toBe(value);
+        expect([...row?.querySelectorAll("button") ?? []].some(button => button.getAttribute("aria-label") === `Copy ${label}`)).toBe(true);
+      }
+    };
+    expectRunIdentity("definition-1");
 
     resolveDefinitions(response({ items: [definition({ id: "definition-1", name: "Order fulfillment" })] }));
     await waitForText(container, "Order fulfillment");
-    expect(definitionCell()?.querySelector("strong")?.textContent).toBe("Order fulfillment");
-    expect(definitionCell()?.querySelector("small")?.textContent).toBe("definition-1 · version-1");
-    expect(definitionCell()?.getAttribute("title")).toBe("Order fulfillment (definition-1 · version-1)");
+    expectRunIdentity("Order fulfillment");
 
     await unmount();
   });
@@ -3215,6 +3220,10 @@ describe("workflows module", () => {
         })] });
       }
 
+      if (url === "https://server.example/design/workflows/definitions/definition-1") {
+        return response({ definition: definition({ id: "definition-1", name: "Order fulfillment" }), draft: null, versions: [] });
+      }
+
       if (url.startsWith("https://server.example/design/workflows/definitions")) {
         return response({ items: [definition({ id: "definition-1", name: "Order fulfillment" })] });
       }
@@ -3225,6 +3234,7 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1");
 
     await waitForText(container, "Pinned Runtime executable");
+    await waitForText(container, "Review workflow definition");
     expect(container.textContent).toContain("Run");
     expect(container.textContent).toContain("Workflow Instance ID");
     expect(container.querySelector(".wf-page-header .wf-page-context")?.textContent).toContain("wfexec-1");
@@ -3232,7 +3242,7 @@ describe("workflows module", () => {
     expect(runInspector).not.toBeNull();
     expect(runInspector?.textContent).not.toContain("Workflow Instance ID");
     expect([...runInspector!.querySelectorAll("button")].filter(button => button.textContent?.includes("Explain"))).toHaveLength(0);
-    await click(buttonByText(container, "Designer"));
+    await click(buttonByText(container, "Review workflow definition"));
     expect(window.location.pathname).toBe("/workflows/definitions");
     expect(new URLSearchParams(window.location.search).get("definition")).toBe("definition-1");
     window.history.replaceState({}, "", "/workflows/instances/wfexec-1");
@@ -3293,7 +3303,8 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1", undefined, true);
 
     await waitForText(container, "Pinned Runtime executable");
-    await click(buttonByText(container, "Designer"));
+    await waitForText(container, "Review workflow definition");
+    await click(buttonByText(container, "Review workflow definition"));
     await waitForEditor(container);
 
     expect(window.location.pathname).toBe("/workflows/definitions");
@@ -3323,7 +3334,8 @@ describe("workflows module", () => {
 
     for (const tab of ["Activity", "Issues", "Details"] as const) {
       await openTab(tab);
-      await click(buttonByText(container, "Designer"));
+      await waitForText(container, "Review workflow definition");
+      await click(buttonByText(container, "Review workflow definition"));
       await waitForEditor(container);
       expect(window.location.pathname).toBe("/workflows/definitions");
       expect(container.querySelector(".wf-instance-detail-workbench")).toBeNull();

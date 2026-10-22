@@ -7,16 +7,29 @@ namespace Elsa.Etl.Tests.Support;
 
 internal enum EtlWorkerWritePause { None, SourceSnapshot, OutputChunk }
 internal enum EtlWorkerStoreGate { BeforeAcceptance, BeforeReservation, AfterAcceptanceCommit, AfterDeliveryClaim }
+internal enum EtlConnectorWorkerGate
+{
+    None,
+    BeforeCapture,
+    AfterReservation,
+    AfterMainAcknowledgement,
+    AfterErrorAcknowledgement,
+    BeforeAcceptance
+}
 
 internal sealed record EtlWorkerConfiguration(string Root, EtlScope Scope, List<EtlHostFileBindingOptions> Bindings,
     EtlWorkerWritePause WritePause = EtlWorkerWritePause.None,
-    EtlWorkerStoreGate StoreGate = EtlWorkerStoreGate.BeforeAcceptance);
+    EtlWorkerStoreGate StoreGate = EtlWorkerStoreGate.BeforeAcceptance,
+    List<EtlHostHttpBindingOptions>? HttpBindings = null,
+    EtlConnectorWorkerGate ConnectorGate = EtlConnectorWorkerGate.None);
 
 internal sealed record EtlWorkerAcceptance(EtlPartitionLease Lease, EtlBatchAcceptance Acceptance, int ProcessId);
 internal sealed record EtlWorkerCommittedAcceptance(EtlPartitionLease Lease, EtlBatchAcceptance Acceptance,
     EtlAcceptanceResult Result, int ProcessId);
 internal sealed record EtlWorkerDelivery(EtlDeliveryLease Lease, int ProcessId);
 internal sealed record EtlWorkerReservation(EtlPartitionLease Lease, EtlBatchDescriptor Batch, int ProcessId);
+internal sealed record EtlConnectorWorkerCheckpoint(EtlConnectorWorkerGate Gate,
+    EtlConnectorPartitionLease Lease, string? BatchId, EtlRetainedHttpPage? Page, int ProcessId);
 
 internal sealed record EtlWorkerWrite(string OutputRoot, string EffectIdentity, string Extension,
     int PrefixBytes, int WriteBytes, int ProcessId);
@@ -64,6 +77,12 @@ internal static class EtlWorkerProtocol
     {
         ValidateRole(role);
         return Path.Combine(JournalDirectory(root), $"{role}.reservation.json");
+    }
+
+    public static string ConnectorCheckpointPath(string root, string role)
+    {
+        ValidateRole(role);
+        return Path.Combine(JournalDirectory(root), $"{role}.connector-checkpoint.json");
     }
 
     public static string ReleasePath(string root, string role)
@@ -123,6 +142,10 @@ internal static class EtlWorkerProtocol
     public static Task WriteReservationAsync(string root, string role, EtlWorkerReservation reservation,
         CancellationToken cancellationToken = default) =>
         WriteJournalAsync(root, ReservationPath(root, role), reservation, cancellationToken);
+
+    public static Task WriteConnectorCheckpointAsync(string root, string role,
+        EtlConnectorWorkerCheckpoint checkpoint, CancellationToken cancellationToken = default) =>
+        WriteJournalAsync(root, ConnectorCheckpointPath(root, role), checkpoint, cancellationToken);
 
     public static Task WriteStagingAsync(string root, string role, EtlWorkerWrite write, CancellationToken cancellationToken) =>
         WriteAtomicallyAsync(WritePath(root, role), write, overwrite: false, cancellationToken);

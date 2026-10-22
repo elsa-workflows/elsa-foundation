@@ -55,6 +55,160 @@ describe("ETL published selection editor", () => {
     expect(onChange).toHaveBeenCalledWith(secondToken);
   });
 
+  it("selects an immutable connector pipeline version from the connector catalog", async () => {
+    const connectorToken = `etl1:orders:4:${"e".repeat(64)}`;
+    const context = endpointContext(url => {
+      if (url.endsWith("/capabilities")) return capabilities(true);
+      if (url.includes("/etl/definitions?")) return page([definition("file-orders", 2, 1)]);
+      if (url.includes("/etl/v2/definitions?")) return page([definition("orders", 3, 4)]);
+      if (url.includes("/etl/v2/definitions/orders/versions?")) return page([version(4, connectorToken)]);
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    const onChange = vi.fn();
+    const rendered = mount(context, { onChange });
+
+    await waitFor(() => Array.from(selectByLabel(rendered.container, "Published ETL definition").options).some(option => option.value === "file-orders"));
+    choose(selectByLabel(rendered.container, "Pipeline catalog"), "connector");
+    await waitFor(() => Array.from(selectByLabel(rendered.container, "Published ETL definition").options).some(option => option.value === "orders"));
+    choose(selectByLabel(rendered.container, "Published ETL definition"), "orders");
+
+    const versions = selectByLabel(rendered.container, "Published ETL version");
+    await waitFor(() => Array.from(versions.options).some(option => option.value === connectorToken));
+    choose(versions, connectorToken);
+    expect(onChange).toHaveBeenCalledWith(connectorToken);
+  });
+
+  it("reopens a saved connector selection by exact id, version, and hash despite overlapping definition ids", async () => {
+    const connectorToken = `etl1:orders:3:${"f".repeat(64)}`;
+    const fileToken = `etl1:orders:3:${"a".repeat(64)}`;
+    const context = endpointContext(url => {
+      if (url.endsWith("/capabilities")) return capabilities(true);
+      if (url.includes("/etl/definitions?")) return page([definition("orders", 5, 3)]);
+      if (url.includes("/etl/v2/definitions?")) return page([definition("orders", 8, 3)]);
+      if (url.includes("/etl/definitions/orders/versions?")) return page([version(3, fileToken)]);
+      if (url.includes("/etl/v2/definitions/orders/versions?")) return page([version(3, connectorToken)]);
+      throw new Error(`Unexpected GET ${url}`);
+    }, async url => {
+      if (url.endsWith("/etl/v2/definitions/orders/versions/3")) {
+        return new Response(JSON.stringify({ version: version(3, connectorToken), pipeline: {} }), { status: 200 });
+      }
+      throw new Error(`Unexpected response request ${url}`);
+    });
+    const rendered = mount(context, { value: connectorToken });
+
+    await waitFor(() => selectByLabel(rendered.container, "Pipeline catalog").value === "connector");
+    await waitFor(() => Array.from(selectByLabel(rendered.container, "Published ETL version").options).some(option => option.value === connectorToken));
+    expect(selectByLabel(rendered.container, "Published ETL definition").value).toBe("orders");
+    expect(selectByLabel(rendered.container, "Published ETL version").value).toBe(connectorToken);
+  });
+
+  it("returns to file pipelines when a saved selection changes away from the automatically detected connector version", async () => {
+    const connectorToken = `etl1:orders:3:${"f".repeat(64)}`;
+    const fileToken = `etl1:orders:3:${"a".repeat(64)}`;
+    const context = endpointContext(url => {
+      if (url.endsWith("/capabilities")) return capabilities(true);
+      if (url.includes("/etl/definitions?")) return page([definition("orders", 5, 3)]);
+      if (url.includes("/etl/v2/definitions?")) return page([definition("orders", 8, 3)]);
+      if (url.includes("/etl/definitions/orders/versions?")) return page([version(3, fileToken)]);
+      if (url.includes("/etl/v2/definitions/orders/versions?")) return page([version(3, connectorToken)]);
+      throw new Error(`Unexpected GET ${url}`);
+    }, async url => {
+      if (url.endsWith("/etl/v2/definitions/orders/versions/3")) {
+        return new Response(JSON.stringify({ version: version(3, connectorToken), pipeline: {} }), { status: 200 });
+      }
+      throw new Error(`Unexpected response request ${url}`);
+    });
+    const rendered = mount(context, { value: connectorToken });
+
+    await waitFor(() => selectByLabel(rendered.container, "Pipeline catalog").value === "connector");
+    renderEditor(rendered.root, context, { value: fileToken });
+
+    await waitFor(() => selectByLabel(rendered.container, "Pipeline catalog").value === "file");
+    await waitFor(() => selectByLabel(rendered.container, "Published ETL version").value === fileToken);
+  });
+
+  it("returns to file pipelines when an automatically detected selection moves to a file-only endpoint", async () => {
+    const connectorToken = `etl1:orders:3:${"f".repeat(64)}`;
+    const connectorContext = endpointContext(url => {
+      if (url.endsWith("/capabilities")) return capabilities(true);
+      if (url.includes("/etl/definitions?")) return page([definition("orders", 5, 3)]);
+      if (url.includes("/etl/v2/definitions?")) return page([definition("orders", 8, 3)]);
+      if (url.includes("/etl/v2/definitions/orders/versions?")) return page([version(3, connectorToken)]);
+      throw new Error(`Unexpected GET ${url}`);
+    }, async url => {
+      if (url.endsWith("/etl/v2/definitions/orders/versions/3")) {
+        return new Response(JSON.stringify({ version: version(3, connectorToken), pipeline: {} }), { status: 200 });
+      }
+      throw new Error(`Unexpected response request ${url}`);
+    });
+    const fileContext = endpointContext(url => {
+      if (url.endsWith("/capabilities")) return capabilities();
+      if (url.includes("/etl/definitions?")) return page([definition("orders", 5, 3)]);
+      if (url.includes("/etl/definitions/orders/versions?")) return page([]);
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    const rendered = mount(connectorContext, { value: connectorToken });
+    await waitFor(() => selectByLabel(rendered.container, "Pipeline catalog").value === "connector");
+
+    renderEditor(rendered.root, fileContext, { value: connectorToken });
+
+    await waitFor(() => selectByLabel(rendered.container, "Pipeline catalog").value === "file");
+    expect(selectByLabel(rendered.container, "Published ETL version").value).toBe(connectorToken);
+    expect(rendered.container.textContent).toContain("Saved immutable selection · orders v3");
+  });
+
+  it("returns to file pipelines when a manually selected connector catalog no longer matches the saved token", async () => {
+    const connectorToken = `etl1:orders:3:${"f".repeat(64)}`;
+    const fileToken = `etl1:orders:4:${"a".repeat(64)}`;
+    const context = endpointContext(url => {
+      if (url.endsWith("/capabilities")) return capabilities(true);
+      if (url.includes("/etl/definitions?")) return page([definition("orders", 5, 3)]);
+      if (url.includes("/etl/v2/definitions?")) return page([definition("orders", 8, 3)]);
+      if (url.includes("/etl/v2/definitions/orders/versions?")) return page([version(3, connectorToken)]);
+      throw new Error(`Unexpected GET ${url}`);
+    }, async url => {
+      if (url.endsWith("/etl/v2/definitions/orders/versions/3")) {
+        return new Response(JSON.stringify({ version: version(3, connectorToken), pipeline: {} }), { status: 200 });
+      }
+      throw new Error(`Unexpected response request ${url}`);
+    });
+    const rendered = mount(context, { value: `etl1:orders:3:${"b".repeat(64)}` });
+
+    await waitFor(() => Array.from(selectByLabel(rendered.container, "Published ETL definition").options).some(option => option.value === "orders"));
+    choose(selectByLabel(rendered.container, "Pipeline catalog"), "connector");
+    await waitFor(() => Array.from(selectByLabel(rendered.container, "Published ETL version").options).some(option => option.value === connectorToken));
+    renderEditor(rendered.root, context, { value: fileToken });
+
+    await waitFor(() => selectByLabel(rendered.container, "Pipeline catalog").value === "file");
+    expect(selectByLabel(rendered.container, "Published ETL version").value).toBe(fileToken);
+  });
+
+  it("redetects a connector token after the parent changes a manually selected file catalog value", async () => {
+    const connectorToken = `etl1:orders:3:${"f".repeat(64)}`;
+    const fileToken = `etl1:orders:3:${"a".repeat(64)}`;
+    const context = endpointContext(url => {
+      if (url.endsWith("/capabilities")) return capabilities(true);
+      if (url.includes("/etl/definitions?")) return page([definition("orders", 5, 3)]);
+      if (url.includes("/etl/v2/definitions?")) return page([definition("orders", 8, 3)]);
+      if (url.includes("/etl/definitions/orders/versions?")) return page([version(3, fileToken)]);
+      if (url.includes("/etl/v2/definitions/orders/versions?")) return page([version(3, connectorToken)]);
+      throw new Error(`Unexpected GET ${url}`);
+    }, async url => {
+      if (url.endsWith("/etl/v2/definitions/orders/versions/3")) {
+        return new Response(JSON.stringify({ version: version(3, connectorToken), pipeline: {} }), { status: 200 });
+      }
+      throw new Error(`Unexpected response request ${url}`);
+    });
+    const rendered = mount(context, { value: fileToken });
+
+    await waitFor(() => Array.from(selectByLabel(rendered.container, "Published ETL definition").options).some(option => option.value === "orders"));
+    choose(selectByLabel(rendered.container, "Pipeline catalog"), "file");
+    renderEditor(rendered.root, context, { value: connectorToken });
+
+    await waitFor(() => selectByLabel(rendered.container, "Pipeline catalog").value === "connector");
+    expect(selectByLabel(rendered.container, "Published ETL version").value).toBe(connectorToken);
+  });
+
   it("preserves an existing selection that is outside the currently listed page", async () => {
     const oldToken = `etl1:archived:9:${"f".repeat(64)}`;
     const context = endpointContext(url => {
@@ -136,6 +290,44 @@ describe("ETL published selection editor", () => {
     await waitFor(() => Array.from(selectByLabel(rendered.container, "Published ETL definition").options).some(option => option.value === "orders"));
   });
 
+  it("preserves the current token and reports an unavailable connector catalog when v2 is not advertised", async () => {
+    const savedToken = `etl1:archived:6:${"9".repeat(64)}`;
+    const context = endpointContext(url => {
+      if (url.endsWith("/capabilities")) return capabilities();
+      if (url.includes("/etl/definitions?")) return page([definition("orders", 1, 1)]);
+      if (url.includes("/etl/definitions/archived/versions?")) return page([]);
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    const rendered = mount(context, { value: savedToken });
+
+    await waitFor(() => rendered.container.textContent?.includes("Saved immutable selection · archived v6") === true);
+    choose(selectByLabel(rendered.container, "Pipeline catalog"), "connector");
+    await waitFor(() => rendered.container.textContent?.includes("The ETL API is unavailable for ETL definitions.") === true);
+    expect(selectByLabel(rendered.container, "Published ETL version").value).toBe(savedToken);
+    expect(rendered.container.textContent).toContain("Saved immutable selection · archived v6");
+  });
+
+  it("ignores an in-flight file-catalog response after switching to connector pipelines", async () => {
+    let resolveStale: ((value: unknown) => void) | undefined;
+    let staleSignal: AbortSignal | undefined;
+    const context = endpointContext((url, init) => {
+      if (url.endsWith("/capabilities")) return capabilities(true);
+      if (url.includes("/etl/definitions?")) {
+        staleSignal = init?.signal ?? undefined;
+        return new Promise(resolve => { resolveStale = resolve; });
+      }
+      if (url.includes("/etl/v2/definitions?")) return page([definition("connector-only", 1, 1)]);
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    const rendered = mount(context);
+    await waitFor(() => resolveStale !== undefined);
+    choose(selectByLabel(rendered.container, "Pipeline catalog"), "connector");
+    await waitFor(() => Array.from(selectByLabel(rendered.container, "Published ETL definition").options).some(option => option.value === "connector-only"));
+    resolveStale?.(page([definition("stale-file", 1, 1)]));
+    await waitFor(() => staleSignal?.aborted === true);
+    expect(Array.from(selectByLabel(rendered.container, "Published ETL definition").options).some(option => option.value === "stale-file")).toBe(false);
+  });
+
   it("distinguishes an unavailable provider from a recoverable request error", async () => {
     const unavailableContext = endpointContext(url => {
       if (url.endsWith("/capabilities")) return capabilities();
@@ -175,6 +367,15 @@ function mount(
   const root = createRoot(container);
   const rendered = { root, container };
   active = rendered;
+  renderEditor(root, endpointContext, options);
+  return rendered;
+}
+
+function renderEditor(
+  root: Root,
+  endpointContext: StudioEndpointContext,
+  options: { value?: unknown; disabled?: boolean; onChange?: (value: unknown) => void } = {}
+) {
   flushSync(() => root.render(
     <EtlPublishedSelectionEditor
       descriptor={{ name: "Selection", typeName: "string" } as StudioActivityInputDescriptor}
@@ -185,12 +386,14 @@ function mount(
       endpointContext={endpointContext}
     />
   ));
-  return rendered;
 }
 
 type GetHandler = (url: string, init?: RequestInit) => unknown | Promise<unknown>;
 
-function endpointContext(get: GetHandler): StudioEndpointContext {
+function endpointContext(
+  get: GetHandler,
+  requestResponse?: StudioHttpClient["requestResponse"]
+): StudioEndpointContext {
   clearEtlApiCapabilityCache();
   const client: StudioHttpClient = {
     getJson: async <T,>(url: string, init?: StudioRequestInit) => await get(url, init) as T,
@@ -198,14 +401,14 @@ function endpointContext(get: GetHandler): StudioEndpointContext {
     postJson: async <T,>() => ({} as T),
     putJson: async <T,>() => ({} as T),
     deleteJson: async <T,>() => ({} as T),
-    postForm: async <T,>() => ({} as T)
+    postForm: async <T,>() => ({} as T),
+    ...(requestResponse ? { requestResponse } : {})
   };
   return { baseUrl: "https://studio.example/studio", http: client };
 }
 
-function capabilities(): EtlApiCapabilityDocument {
-  return {
-    capabilities: [{
+function capabilities(includeConnector = false): EtlApiCapabilityDocument {
+  const capabilities = [{
       id: "elsa.api.etl-design",
       contractVersion: "1",
       links: [
@@ -218,8 +421,24 @@ function capabilities(): EtlApiCapabilityDocument {
         ["etl-versions", "etl/definitions/{id}/versions"],
         ["etl-version", "etl/definitions/{id}/versions/{version}"]
       ].map(([rel, href]) => ({ rel, href }))
-    }]
-  };
+    }];
+  if (includeConnector) {
+    capabilities.push({
+      id: "elsa.api.etl-design-v2",
+      contractVersion: "1",
+      links: [
+        ["etl-v2-bindings", "etl/v2/bindings"],
+        ["etl-v2-definitions", "etl/v2/definitions"],
+        ["etl-v2-definition", "etl/v2/definitions/{id}"],
+        ["etl-v2-draft", "etl/v2/definitions/{id}/draft"],
+        ["etl-v2-validation", "etl/v2/definitions/{id}/validate"],
+        ["etl-v2-publication", "etl/v2/definitions/{id}/publish"],
+        ["etl-v2-versions", "etl/v2/definitions/{id}/versions"],
+        ["etl-v2-version", "etl/v2/definitions/{id}/versions/{version}"]
+      ].map(([rel, href]) => ({ rel, href }))
+    });
+  }
+  return { capabilities };
 }
 
 function page<T>(items: T[], nextCursor: string | null = null) {

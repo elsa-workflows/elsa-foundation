@@ -1,5 +1,5 @@
 import { stringify } from "lossless-json";
-import type { EtlPipeline } from "./etlTypes";
+import type { EtlPipeline, EtlPipelineV2 } from "./etlTypes";
 
 /** Mirrors the finite, compiler-valid starter pipeline used by the ETL contract tests. */
 export function createDefaultEtlPipeline(): EtlPipeline {
@@ -34,7 +34,7 @@ export function createDefaultEtlPipeline(): EtlPipeline {
   };
 }
 
-export function sameEtlPipeline(left: EtlPipeline, right: EtlPipeline): boolean {
+export function sameEtlPipeline(left: EtlPipeline | EtlPipelineV2, right: EtlPipeline | EtlPipelineV2): boolean {
   return stringify(left) === stringify(right);
 }
 

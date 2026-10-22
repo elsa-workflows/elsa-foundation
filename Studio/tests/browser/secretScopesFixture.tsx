@@ -49,6 +49,47 @@ const initialEditorSecret: SecretMetadata = {
   expiresAt: null
 };
 
+const laterInventorySecret: SecretMetadata = {
+  id: "fixture-later-inventory-secret",
+  name: "knownlaterintegrationbillingcredentialsforregionalpartnernetwork",
+  displayName: "Known later credentials",
+  description: "Metadata for the known record beyond the initial result window.",
+  typeName: "text",
+  storeName: "encrypted",
+  scope: "Integration:Later",
+  tags: ["browser-fixture", "metadata-only"],
+  status: "Active",
+  currentVersion: 1,
+  createdAt: "2026-10-01T12:00:00Z",
+  updatedAt: "2026-10-17T12:00:00Z",
+  expiresAt: null
+};
+
+function inventoryResults(url: string): SecretMetadata[] {
+  const search = new URLSearchParams(url.split("?")[1] ?? "").get("search")?.trim() ?? "";
+  if (!search) {
+    return Array.from({ length: 100 }, (_, index) => ({
+      id: `fixture-inventory-${index + 1}`,
+      name: `inventory.secret.${index + 1}`,
+      displayName: `Inventory secret ${index + 1}`,
+      description: "Metadata for the bounded first result window.",
+      typeName: "text",
+      storeName: "encrypted",
+      scope: `Scope:${index + 1}`,
+      tags: ["browser-fixture", "metadata-only"],
+      status: "Active",
+      currentVersion: 1,
+      createdAt: "2026-10-01T12:00:00Z",
+      updatedAt: "2026-10-17T12:00:00Z",
+      expiresAt: null
+    }));
+  }
+
+  return search === laterInventorySecret.name || search === laterInventorySecret.displayName
+    ? [laterInventorySecret]
+    : [];
+}
+
 function Fixture() {
   const [unexpectedReadCount, setUnexpectedReadCount] = useState(0);
   const [createdMetadata, setCreatedMetadata] = useState<Pick<SecretMetadata, "name" | "displayName" | "typeName" | "storeName" | "scope" | "tags" | "status"> | null>(null);
@@ -56,6 +97,7 @@ function Fixture() {
   const editorSecret = useRef<SecretMetadata>({ ...initialEditorSecret });
   const updateRequestCount = useRef(0);
   const descriptorRequestCount = useRef(0);
+  const mutationRequestCount = useRef(0);
   const context = useMemo<StudioEndpointContext>(() => ({
     baseUrl: "http://fixture.example",
     http: {
@@ -79,13 +121,19 @@ function Fixture() {
           return { ...descriptors, scopes } as T;
         }
         if (url.startsWith("/secrets?")) {
-          const items = scenario.startsWith("editor") ? [editorSecret.current] : [];
-          return { items, totalCount: items.length } as T;
+          const items = scenario === "inventory"
+            ? inventoryResults(url)
+            : scenario.startsWith("editor") ? [editorSecret.current] : [];
+          const totalCount = scenario === "inventory" && !new URLSearchParams(url.split("?")[1] ?? "").get("search")?.trim()
+            ? 101
+            : items.length;
+          return { items, totalCount } as T;
         }
         setUnexpectedReadCount(count => count + 1);
         throw new Error(`Unexpected fixture GET ${url}`);
       },
       postJson: async <T,>(url: string, body: unknown) => {
+        mutationRequestCount.current += 1;
         if (url !== "/secrets") throw new Error(`Unexpected fixture POST ${url}`);
         if (scenario === "tall-error") {
           const details = Array.from({ length: 24 }, () => "The test service rejected this secret after validating its metadata and selected storage configuration.").join(" ");
@@ -118,6 +166,7 @@ function Fixture() {
         return metadata as T;
       },
       putJson: async <T,>(url: string, body: unknown) => {
+        mutationRequestCount.current += 1;
         if (url !== `/secrets/${encodeURIComponent(initialEditorSecret.name)}`) {
           throw new Error(`Unexpected fixture PUT ${url}`);
         }
@@ -145,8 +194,8 @@ function Fixture() {
         return editorSecret.current as T;
       },
       requestJson: async () => { throw new Error("No raw request expected in this fixture"); },
-      deleteJson: async () => { throw new Error("No delete expected in this fixture"); },
-      postForm: async () => { throw new Error("No form request expected in this fixture"); }
+      deleteJson: async () => { mutationRequestCount.current += 1; throw new Error("No delete expected in this fixture"); },
+      postForm: async () => { mutationRequestCount.current += 1; throw new Error("No form request expected in this fixture"); }
     }
   }), []);
 
@@ -154,6 +203,7 @@ function Fixture() {
     <ThemeProvider>
       <SecretsPage context={context} dialogs={{ confirm: async () => true, prompt: async () => null, alert: async () => undefined }} />
       <output data-testid="unexpected-secret-reads">{unexpectedReadCount}</output>
+      <output data-testid="secret-mutation-requests">{mutationRequestCount.current}</output>
       {createdMetadata ? <output data-testid="created-secret-metadata">{JSON.stringify(createdMetadata)}</output> : null}
       {updatedMetadata ? <output data-testid="updated-secret-metadata">{JSON.stringify(updatedMetadata)}</output> : null}
     </ThemeProvider>
