@@ -313,7 +313,7 @@ public sealed class RuntimeContainerScopeServiceTests
     [Fact]
     public async Task Scoped_variable_reader_inside_a_closed_scope_sees_the_graph_variables_not_the_callers()
     {
-        // Spec 265: below a closed boundary the root is the boundary's variable rows, read from the durable store
+        // Below a closed boundary the root is the boundary's variable rows, read from the durable store
         // because the reader seam carries no durable values of its own.
         var root = new VariableFrameFactory().CreateRoot(WorkflowExecutionId, "workflow", Values(("g", "caller")));
         await _workflows.SaveAsync(WorkflowState(root));

@@ -20,7 +20,7 @@ using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
 namespace Elsa.Activities.Behavioral;
 
 /// <summary>
-/// Spec 265: a node inside a closed-scope graph body reads the activity's own inputs, its variables and other body
+/// A node inside a closed-scope graph body reads the activity's own inputs, its variables and other body
 /// nodes' results, never the started workflow's. The boundaries here are built as placement leaves them: body
 /// references already point at placed identities and the boundary carries the closed-scope marker.
 /// </summary>
@@ -81,7 +81,7 @@ public sealed class GraphBodyScopeTests
     [Fact]
     public async Task A_caller_variable_is_not_visible_inside_the_body()
     {
-        // D-1: a body reference to the started workflow's root scope does not reach the caller.
+        // A body reference to the started workflow's root scope does not reach the caller.
         await using var harness = GraphBoundaryCompleteTests.NewHarness();
         var body = Echo("node-read-caller", Variable("total", VariableReference.WorkflowScopeId));
         var boundary = Boundary(body);
@@ -180,7 +180,7 @@ public sealed class GraphBodyScopeTests
     [Fact]
     public async Task A_body_node_captures_an_output_that_a_later_node_reads()
     {
-        // D-2: the capture writes the graph's own variable row, and the caller's variable of the same name is untouched.
+        // The capture writes the graph's own variable row, and the caller's variable of the same name is untouched.
         await using var harness = GraphBoundaryCompleteTests.NewHarness();
         var body = GraphBoundaryCompleteTests.Sequence(
             "node-body",
@@ -223,7 +223,7 @@ public sealed class GraphBodyScopeTests
     [InlineData("getRunningTotal() + 1")]
     public async Task Body_javascript_reads_graph_variables_by_name_not_the_callers(string script)
     {
-        // FR-003: the ambient variables surface below a closed scope is the graph's variables, named by their rows.
+        // The ambient variables surface below a closed scope is the graph's variables, named by their rows.
         await using var harness = ScriptingHarness();
         var body = Echo("node-read-total", new RuntimeInputBinding(
             nameof(EchoActivity.Value), new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline,

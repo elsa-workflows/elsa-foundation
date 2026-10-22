@@ -114,6 +114,18 @@ public sealed partial class GraphActivityProviderTests
         Assert.DoesNotContain(diagnostics, x => x.Code.StartsWith("activity.graph.body-", StringComparison.Ordinal));
     }
 
+    [Theory]
+    [InlineData("""{"referenceKey":5,"value":"not an argument value"}""")]
+    [InlineData("""{"referenceKey":"value","value":{"expressionType":7,"value":{}}}""")]
+    [InlineData("""{"referenceKey":"value","value":[1,2]}""")]
+    [InlineData("\"not an argument\"")]
+    public async Task A_malformed_body_argument_does_not_throw_out_of_validation(string argument)
+    {
+        var diagnostics = await ValidateBodyAsync(inputs: [JsonDocument.Parse(argument).RootElement.Clone()], outputs: []);
+
+        Assert.DoesNotContain(diagnostics, x => x.Code.StartsWith("activity.graph.body-", StringComparison.Ordinal));
+    }
+
     [Fact]
     public async Task Compilation_accepts_a_read_of_a_body_nodes_whole_result()
     {

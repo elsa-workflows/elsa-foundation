@@ -398,7 +398,7 @@ public sealed class ActivityTemplatePlacementTests
     [Fact]
     public async Task Closed_scope_body_references_follow_the_placement_and_the_boundary_is_marked()
     {
-        // Spec 265 FR-005: body node "format" reads body node "compute"'s result and a graph variable by their
+        // Body node "format" reads body node "compute"'s result and a graph variable by their
         // template-local identities; both must point at this placement's identities.
         var (placer, request) = ClosedScopeGraph(scopeModel: "closed");
 
@@ -411,6 +411,23 @@ public sealed class ActivityTemplatePlacementTests
         var result = format.InputBindings["condition"].ActivityResult!;
         Assert.Equal(compute.ExecutableNodeId, result.ProducerExecutableNodeId);
         Assert.Equal(compute.ExecutableNodeId, result.ProducerScopeId);
+        Assert.Equal(placement.Root.ExecutableNodeId, format.InputBindings["total"].Variable!.DeclaringScopeId);
+    }
+
+    [Theory]
+    [InlineData("""{"referenceKey":"total","declaringScopeId":null}""")]
+    [InlineData("""{"referenceKey":"total","declaringScopeId":""}""")]
+    [InlineData("\"total\"")]
+    public async Task A_closed_scope_variable_read_without_a_named_scope_reads_the_graph_variable(string reference)
+    {
+        // Studio writes a root-scope reference with a null scope; it is the graph's variable, as "workflow" is.
+        var (placer, request) = ClosedScopeGraph(
+            scopeModel: "closed",
+            formatInputs: $$$"""[{"referenceKey":"total","value":{"value":{{{reference}}},"expressionType":"Variable"}}]""");
+
+        var placement = await placer.PlaceAsync(request);
+
+        var format = placement.Root.DescendantsAndSelf().Single(x => x.InputBindings.ContainsKey("total"));
         Assert.Equal(placement.Root.ExecutableNodeId, format.InputBindings["total"].Variable!.DeclaringScopeId);
     }
 
@@ -450,7 +467,7 @@ public sealed class ActivityTemplatePlacementTests
     [Fact]
     public async Task The_result_linker_accepts_a_closed_scope_body_result_and_still_refuses_a_legacy_one()
     {
-        // #3027's failure: a body ActivityResult kept its template-local producer id, so the workflow publish refused it
+        // The original failure: a body ActivityResult kept its template-local producer id, so the workflow publish refused it
         // with VF-COER-001. A closed-scope body links; a template compiled before closed scopes fails as it did.
         var linker = new ActivityResultConversionPlanLinker(new ValueConversionPlanResolver());
         var (closedPlacer, closedRequest) = ClosedScopeGraph(scopeModel: "closed");
@@ -468,7 +485,7 @@ public sealed class ActivityTemplatePlacementTests
     [Fact]
     public async Task A_closed_scope_input_pick_reads_the_graph_input_and_a_capture_writes_the_graph_variable()
     {
-        // Spec 265: Studio picks a graph input as Input {referenceKey}; an authored output capture targets a graph
+        // Studio picks a graph input as Input {referenceKey}; an authored output capture targets a graph
         // variable. Both compile against this placement's graph.
         var (placer, request) = ClosedScopeGraph(
             scopeModel: "closed",

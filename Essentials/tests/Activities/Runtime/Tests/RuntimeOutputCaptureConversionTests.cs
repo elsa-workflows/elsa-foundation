@@ -120,7 +120,7 @@ public sealed class RuntimeOutputCaptureConversionTests
     [Fact]
     public async Task Project_rejects_a_transient_resource_captured_into_a_graph_variable()
     {
-        // Spec 265: a capture into a graph variable persists a durable row too, so a live resource is refused alike.
+        // A capture into a graph variable persists a durable row too, so a live resource is refused alike.
         var type = new ValueTypeDescriptor("String");
         var (node, transition, completion) = NewCaptureScenario(
             type,

@@ -185,10 +185,10 @@ public sealed class ImportedReusableRunsTests(ImportedApprovalFixture fixture) :
 }
 
 /// <summary>
-/// Spec 265 User Story 7: an imported Elsa 3 reusable whose body reads its own input converts, publishes and runs,
-/// reading the value its caller passed (lifts spec 246 D-8). Result reads and captures are converted (mapping tests)
+/// An imported Elsa 3 reusable whose body reads its own input converts, publishes and runs,
+/// reading the value its caller passed. Result reads and captures are converted (mapping tests)
 /// but not run here: any converted RunJavaScript, reusable or not, faults on its default arguments, and its Object
-/// result cannot feed a Boolean input without a conversion (see the spec 265 follow-up issues).
+/// result cannot feed a Boolean input without a conversion.
 /// </summary>
 public sealed class ImportedReusableValueReadTests
 {
@@ -212,7 +212,7 @@ public sealed class ImportedReusableValueReadTests
     [Fact]
     public async Task A_body_reads_the_value_its_caller_passed_not_the_callers_own_input()
     {
-        // D-1: the caller's own approve input is true, but it passes false to the activity.
+        // The caller's own approve input is true, but it passes false to the activity.
         await using var host = await Elsa3ImportHost.StartAsync();
         await host.ImportAsync("caller-passes-input", "reusable-reads-input", "caller-passes-input");
         var caller = await host.PublishWorkflowAsync("input-caller-v1");

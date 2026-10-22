@@ -174,6 +174,7 @@ internal static class GraphBodyReferenceValidator
         return false;
     }
 
+    // Nodes arrive only after the whole body deserialized as activity nodes, so every argument has this shape.
     private static IEnumerable<(ArgumentState Argument, int Index)> Arguments(JsonElement element, string propertyName)
     {
         if (!element.TryGetProperty(propertyName, out var array) || array.ValueKind != JsonValueKind.Array)

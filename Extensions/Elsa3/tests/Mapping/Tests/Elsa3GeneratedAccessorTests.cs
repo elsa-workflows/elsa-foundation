@@ -108,7 +108,7 @@ public sealed class Elsa3GeneratedAccessorTests
 
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition, isReusable: true);
 
-        // The accessor resolves to the input, which a closed-scope graph body reads as its own request (spec 265).
+        // The accessor resolves to the input, which a closed-scope graph body reads as its own request.
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         var binding = Assert.IsType<WorkflowRequestExpressionParameterBinding>(Assert.Single(ReadExpression(result).Parameters).Value);
         Assert.Equal("customInput", binding.MemberKey);

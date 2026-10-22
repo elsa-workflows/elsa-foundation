@@ -151,7 +151,7 @@ public sealed class CausalActivityResultResolverTests
     [Fact]
     public void Resolve_InsideAClosedScope_FindsTheBodyProducerWhateverItsRuntimeScope()
     {
-        // Spec 265: a placed body node opens its own execution scope, so its runtime scope never equals the declared
+        // A placed body node opens its own execution scope, so its runtime scope never equals the declared
         // one; producer and consumer sharing the nearest closed boundary is what identifies it.
         var boundary = ClosedBoundary("boundary-1");
         var producer = Completed("producer", ProducerNodeId, 2, "scope:producer-own") with { ParentActivityExecutionId = boundary.InvocationId };

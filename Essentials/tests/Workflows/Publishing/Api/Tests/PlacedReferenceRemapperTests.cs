@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
-/// <summary>Spec 265 FR-005: a closed-scope body's template-local references follow its placement.</summary>
+/// <summary>A closed-scope body's template-local references follow its placement.</summary>
 public sealed class PlacedReferenceRemapperTests
 {
     private const string GraphScope = "node-graph";

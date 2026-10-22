@@ -71,7 +71,7 @@ public sealed class Elsa3ReusableGuidanceTests
     [Fact]
     public async Task A_captured_output_converts_to_a_capture_into_the_reusables_own_variable()
     {
-        // Spec 265 D-2: a graph body captures into its own variables.
+        // A graph body captures into its own variables.
         var result = await ConvertReusableAsync(Activity("n", "Elsa.ReadLine", ("result", Captured("variable-total", "String"))));
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));

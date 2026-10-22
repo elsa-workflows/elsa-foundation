@@ -9,7 +9,7 @@ using static Elsa3.Mapping.Tests.Elsa3BuiltInConversionTests;
 namespace Elsa3.Mapping.Tests;
 
 /// <summary>
-/// Spec 265 (lifts spec 246 D-8): an Elsa 4 graph activity body is a closed scope, so its request inputs are the
+/// An Elsa 4 graph activity body is a closed scope, so its request inputs are the
 /// activity's own inputs and its root variables are the activity's own variables. A reusable body that reads them
 /// converts exactly as a workflow does.
 /// </summary>
@@ -61,7 +61,7 @@ public sealed class Elsa3ReusableValueReadTests
     public async Task A_reusable_body_reading_an_input_through_getVariable_stays_refused_as_an_undeclared_variable()
     {
         // getVariable reads declared variables only, as in every workflow; an input is reached through getInput or its
-        // generated accessor (spec 265 T057).
+        // generated accessor.
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), Definition("getVariable(\"message\")", reusable: true), isReusable: true);
 
         Assert.False(result.Succeeded);
