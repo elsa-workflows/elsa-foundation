@@ -11,9 +11,9 @@ One NuGet package per connector contains `IActivity` types. Foundation CLR recon
 3. **Field tiers** use `[ActivityInput(Tier = InputTier.Essential|Optional|Setting)]` on the activity descriptor contract.
 4. **Icons** use `[Activity(Icon = …)]` (lucide name, `asset:<package>/<path>`, `ext:<name>`).
 5. **Secrets** use `[ActivityInput(IsCredential = true)]` and `[RefusesSecretBinding]`. Runtime values resolve per activation, tenant-scoped and uncached, through `ISecretValueResolver`. This package does not wrap or cache that resolver.
-6. **Service connections** are #2729 (`Elsa.Connections`): `[ActivityConnection]`, `ConnectionReference`, `SensitiveValue`, `ConnectionUnavailable`, and the `http` type (api-key, basic, bearer). This SDK does not ship those types. Host named credentials (`Elsa:Credentials:<name>`, #2810) are also not this package.
-7. **Authenticated HTTP client.** `AddElsaIntegrationsRuntime` adds `IntegrationsHttpAuthHandler` to the named `Elsa.Activities.Http` `IHttpClientFactory` client (`HttpActivityConstants.HttpClientName`). `IntegrationsHttpAuthScope.Push` applies per-request headers for the duration of the scope. Logging stays that client's header-free `HttpActivityClientLogger` (spec 188 FR-019), owned by `ActivitiesHttpFeature`. Enable that feature (or copy its `RemoveAllLoggers` + `AddLogger<HttpActivityClientLogger>` registration) so outbound logs never carry headers.
-8. **Design/runtime split.** Connection-type descriptors and the connection catalog live on #2729. This package has no design-time connection schema for the runtime to load.
+6. **Service connections** are `Elsa.Connections`: `[ActivityConnection]`, `ConnectionReference`, `SensitiveValue`, `ConnectionUnavailable`, and the `http` type (api-key, basic, bearer). This SDK does not ship those types. Administration uses `ConnectionsPermissions` (`connections:manage`, `connections:bind-secret`, `connections:test`); this package adds no extra right. Host named credentials (`Elsa:Credentials:<name>`, #2810) are also not this package.
+7. **Authenticated HTTP client.** HTTP connectors take `IHttpClientFactory` and `IHttpConnectionApplicator` and call `ApplyConnectionAsync` on the outbound `HttpRequestMessage` before send. `AddElsaIntegrationsRuntime` registers the named `Elsa.Activities.Http` client (`HttpActivityConstants.HttpClientName`) and the unbound applicator when Connections is not composed. It does not add an auth handler on that client. `ConnectionsWorkflows` replaces the applicator and already owns the named client's redirect handler. Logging stays that client's header-free `HttpActivityClientLogger` (spec 188 FR-019), owned by `ActivitiesHttpFeature`. Enable that feature (or copy its `RemoveAllLoggers` + `AddLogger<HttpActivityClientLogger>` registration) so outbound logs never carry headers.
+8. **Design/runtime split.** Connection-type descriptors and the connection catalog live on Connections. This package has no design-time connection schema for the runtime to load.
 9. **Loading.** Activities only. This package registers no `IShellFeature`, hosted service, or EF context. Packages are intended to be collectible; collectible loading is unproven (ADR 0070/0071).
 10. **No shims.** Elsa 4 only. No Elsa 3 compatibility layer.
 
@@ -21,6 +21,7 @@ One NuGet package per connector contains `IActivity` types. Foundation CLR recon
 
 ```csharp
 services.AddElsaIntegrationsRuntime(); // plus the host's ISecretValueResolver
+// Compose AddConnectionsWorkflows when bound http connections must resolve.
 ```
 
 ```csharp
@@ -28,25 +29,25 @@ services.AddElsaIntegrationsRuntime(); // plus the host's ISecretValueResolver
 [Version("1.0.0")]
 public sealed class PingRemote : ConnectorActivity<string>
 {
-    public PingRemote(IHttpClientFactory httpClientFactory) : base(httpClientFactory) { }
+    public PingRemote(IHttpClientFactory httpClientFactory, IHttpConnectionApplicator connectionApplicator)
+        : base(httpClientFactory, connectionApplicator)
+    {
+    }
 
-    [ActivityInput(IsCredential = true)]
-    public string? Authorization { get; set; }
+    [ActivityInput(Key = nameof(Connection), DisplayName = "Connection", Tier = InputTier.Essential)]
+    [ActivityConnection(ConnectionType = "http")]
+    public ConnectionReference? Connection { get; set; }
 
     [ActivityInput(Tier = InputTier.Essential)]
     public string Url { get; set; } = "https://example.com/health";
 
     protected override async ValueTask<ActivityTransition<string>> ExecuteAsync(ActivityExecutionContext context)
     {
-        using (PushHttpAuth(request =>
-        {
-            if (!string.IsNullOrWhiteSpace(Authorization))
-                request.Headers.TryAddWithoutValidation("Authorization", Authorization);
-        }))
-        {
-            var body = await CreateHttpClient().GetStringAsync(Url, context.CancellationToken);
-            return ActivityTransition.Complete(body);
-        }
+        using var request = new HttpRequestMessage(HttpMethod.Get, Url);
+        await ApplyConnectionAsync(request, Connection, context, context.CancellationToken);
+        using var response = await CreateHttpClient().SendAsync(request, context.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(context.CancellationToken);
+        return ActivityTransition.Complete(body);
     }
 }
 ```

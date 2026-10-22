@@ -1,5 +1,5 @@
+using Elsa.Activities.Http.Connections;
 using Elsa.Activities.Http.Constants;
-using Elsa.Integrations.Sdk.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -13,21 +13,18 @@ namespace Elsa.Integrations.Sdk.DependencyInjection;
 public static class IntegrationsServiceCollectionExtensions
 {
     /// <summary>
-    /// Adds a delegating handler on the named <see cref="HttpActivityConstants.HttpClientName"/>
-    /// client so <see cref="Http.IntegrationsHttpAuthScope"/> can apply per-request auth. Outbound
+    /// Ensures the named <see cref="HttpActivityConstants.HttpClientName"/> client exists and
+    /// registers the unbound <see cref="IHttpConnectionApplicator"/> when Connections is not
+    /// composed. Does not add an auth <see cref="DelegatingHandler"/>; outbound credentials
+    /// attach at send time through <see cref="IHttpConnectionApplicator.ApplyAsync"/>. Outbound
     /// logging stays that client's header-free logger (spec 188 FR-019), owned by
     /// <c>ActivitiesHttpFeature</c>; this method does not replace it.
     /// </summary>
-    /// <remarks>
-    /// #2729 will own the <c>http</c> connection authenticator on this same named client. Rebase by
-    /// folding this handler into that pipeline rather than registering two.
-    /// </remarks>
     public static IHttpClientBuilder AddElsaIntegrationsRuntime(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.TryAddTransient<IntegrationsHttpAuthHandler>();
-        return services.AddHttpClient(HttpActivityConstants.HttpClientName)
-            .AddHttpMessageHandler<IntegrationsHttpAuthHandler>();
+        services.TryAddScoped<IHttpConnectionApplicator, UnboundHttpConnectionApplicator>();
+        return services.AddHttpClient(HttpActivityConstants.HttpClientName);
     }
 }

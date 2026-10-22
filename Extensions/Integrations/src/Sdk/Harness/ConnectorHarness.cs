@@ -1,3 +1,4 @@
+using Elsa.Activities.Http.Connections;
 using Elsa.Activities.Http.Constants;
 using Elsa.Activities.Http.Services;
 using Elsa.Integrations.Sdk.DependencyInjection;
@@ -10,8 +11,9 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Integrations.Sdk.Harness;
 
 /// <summary>
-/// In-memory host for connector tests: fake <see cref="ISecretValueResolver"/> and the named Elsa
-/// HTTP client with optional per-request auth on top of header-free outbound logging.
+/// In-memory host for connector tests: fake <see cref="ISecretValueResolver"/>, the named Elsa
+/// HTTP client, and the unbound <see cref="IHttpConnectionApplicator"/>. Compose
+/// <c>AddConnectionsWorkflows</c> in the test host when a real http connection must apply.
 /// </summary>
 public sealed class ConnectorHarness : IAsyncDisposable
 {
@@ -26,8 +28,9 @@ public sealed class ConnectorHarness : IAsyncDisposable
         Secrets = provider.GetRequiredService<ISecretValueResolver>() as InMemorySecretValueResolver
             ?? throw new InvalidOperationException("The harness requires InMemorySecretValueResolver.");
         Http = provider.GetRequiredService<RecordingHttpMessageHandler>();
-        HttpClient = provider.GetRequiredService<IHttpClientFactory>()
-            .CreateClient(HttpActivityConstants.HttpClientName);
+        HttpClientFactory = provider.GetRequiredService<IHttpClientFactory>();
+        HttpClient = HttpClientFactory.CreateClient(HttpActivityConstants.HttpClientName);
+        ConnectionApplicator = provider.GetRequiredService<IHttpConnectionApplicator>();
     }
 
     public string TenantId { get; }
@@ -36,7 +39,11 @@ public sealed class ConnectorHarness : IAsyncDisposable
 
     public RecordingHttpMessageHandler Http { get; }
 
+    public IHttpClientFactory HttpClientFactory { get; }
+
     public HttpClient HttpClient { get; }
+
+    public IHttpConnectionApplicator ConnectionApplicator { get; }
 
     public IServiceProvider Services => _provider;
 

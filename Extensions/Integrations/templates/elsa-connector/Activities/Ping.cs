@@ -1,3 +1,4 @@
+using Elsa.Activities.Http.Connections;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Integrations.Sdk;
@@ -8,26 +9,24 @@ namespace Company.Connector.Activities;
 [Version("1.0.0")]
 public sealed class Ping : ConnectorActivity<string>
 {
-    public Ping(IHttpClientFactory httpClientFactory) : base(httpClientFactory)
+    public Ping(IHttpClientFactory httpClientFactory, IHttpConnectionApplicator connectionApplicator)
+        : base(httpClientFactory, connectionApplicator)
     {
     }
 
-    [ActivityInput(IsCredential = true)]
-    public string? Authorization { get; set; }
+    [ActivityInput(Key = nameof(Connection), DisplayName = "Connection", Tier = InputTier.Essential)]
+    [ActivityConnection(ConnectionType = "http")]
+    public ConnectionReference? Connection { get; set; }
 
     [ActivityInput(Tier = InputTier.Essential)]
     public string Url { get; set; } = "https://example.com/health";
 
     protected override async ValueTask<ActivityTransition<string>> ExecuteAsync(ActivityExecutionContext context)
     {
-        using (PushHttpAuth(request =>
-        {
-            if (!string.IsNullOrWhiteSpace(Authorization))
-                request.Headers.TryAddWithoutValidation("Authorization", Authorization);
-        }))
-        {
-            var body = await CreateHttpClient().GetStringAsync(Url, context.CancellationToken);
-            return ActivityTransition.Complete(body);
-        }
+        using var request = new HttpRequestMessage(HttpMethod.Get, Url);
+        await ApplyConnectionAsync(request, Connection, context, context.CancellationToken);
+        using var response = await CreateHttpClient().SendAsync(request, context.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(context.CancellationToken);
+        return ActivityTransition.Complete(body);
     }
 }

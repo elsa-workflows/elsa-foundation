@@ -18,7 +18,7 @@ public sealed class ConnectorManifestTests
         Assert.Equal("plug", ping.Icon);
         Assert.False(ping.IsTrigger);
         Assert.Contains(ping.Inputs, input => input.Key == "Url" && input.Tier == "optional");
-        Assert.Contains(ping.Inputs, input => input.Key == "Authorization" && input.IsCredential && input.IsSensitive);
+        Assert.Contains(ping.Inputs, input => input.Key == "Connection" && input.DisplayName == "Connection" && !input.IsCredential);
 
         Assert.Equal("2.0.0", trigger.Version);
         Assert.True(trigger.IsTrigger);

@@ -1,3 +1,4 @@
+using Elsa.Activities.Http.Connections;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Integrations.Sdk;
@@ -8,28 +9,29 @@ namespace Elsa.Integrations.Tests.Support;
 [Version("1.2.3")]
 public sealed class SamplePingActivity : ConnectorActivity<string>
 {
-    public SamplePingActivity(IHttpClientFactory httpClientFactory) : base(httpClientFactory)
+    public SamplePingActivity(IHttpClientFactory httpClientFactory, IHttpConnectionApplicator connectionApplicator)
+        : base(httpClientFactory, connectionApplicator)
     {
     }
 
     [ActivityInput(Tier = InputTier.Optional, Description = "Absolute URL")]
     public string Url { get; set; } = "https://example.com/health";
 
-    [ActivityInput(IsCredential = true)]
-    public string? Authorization { get; set; }
+    [ActivityInput(Key = nameof(Connection), DisplayName = "Connection", Tier = InputTier.Essential)]
+    [ActivityConnection(ConnectionType = "http")]
+    public ConnectionReference? Connection { get; set; }
 
     protected override async ValueTask<ActivityTransition<string>> ExecuteAsync(ActivityExecutionContext context)
     {
-        using (PushHttpAuth(request =>
-        {
-            if (!string.IsNullOrWhiteSpace(Authorization))
-                request.Headers.TryAddWithoutValidation("Authorization", Authorization);
-        }))
-        {
-            var body = await CreateHttpClient().GetStringAsync(Url, context.CancellationToken);
-            return ActivityTransition.Complete(body);
-        }
+        using var request = new HttpRequestMessage(HttpMethod.Get, Url);
+        await ApplyConnectionAsync(request, Connection, context, context.CancellationToken);
+        using var response = await CreateHttpClient().SendAsync(request, context.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(context.CancellationToken);
+        return ActivityTransition.Complete(body);
     }
+
+    public ValueTask<ActivityTransition<string>> ExecuteForTestsAsync(ActivityExecutionContext context) =>
+        ExecuteAsync(context);
 }
 
 [Activity(Icon = "webhook")]
