@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-22
 
-**Status**: Approved
+**Status**: Implemented
 
 **Input**: [#3067](https://github.com/elsa-workflows/elsa-foundation/issues/3067), Studio UX epic #3057 / Elsa 4 Simplification #2559. Explain the selected incident and supported next step after investigation without inventing a recovery action.
 
@@ -109,3 +109,13 @@ The operator can still reach the affected activity/input and return to the origi
 - No backend, permission policy, runtime semantics, new module references, optional provider setup or production deployment is included.
 - Existing valid tests stay valid. Changed guidance/selection/availability behavior receives focused observable regression and red/green evidence, followed by normal-host and exact-head/resulting-main qualification.
 - A failed required base gate stops implementation until reconciled. Final3075's nine composed acceptance rows remain separate.
+
+## Implementation and acceptance mapping
+
+Root integrated the isolated implementation and reviewed its production, test, style and documentation diff. `IncidentNextStep` renders current-target guidance; `useOperatorActions` shares exact-source Retry eligibility with the canonical controls; the toolbar and dialog share the exact-definition read observation. Existing action payloads and server admission remain unchanged.
+
+- Next-step clarity and permitted handoff: focused selected-incident/authority/race/state tests, canonical operator-action tests and the complete affected Workflows suite.
+- Evidence and return context: existing Workbench integration coverage remains intact; normal-composition proof must independently exercise exact failed-input inspection and filtered/paged return. Selection alone does not establish resolved input values.
+- Readability and disclosure: both-theme browser cases at 390/1280/1440 CSS pixels, effective 200% zoom, keyboard dismissal/focus return and serious/critical axe checks.
+
+Worker evidence records 2,330 listed/executed Workflows tests passed, 227 final focused tests passed, seven browser cases passed, typecheck, lint (zero errors; 56 unrelated warnings), client budget and library build. Root independently verified a meaningful Scheduled-source guard mutation fails and the restored implementation passes. These implementation receipts do not replace independent candidate review, final local gates, normal-host/read-only/no-mutation proof, GitHub checks or resulting-main qualification. Those remain public issue/PR evidence required before acceptance. No deployment is claimed.

@@ -39,7 +39,7 @@ Independent test: exact activity/input and filtered/paged return work; new guida
 - [x] T013 Update relevant delivered examples in Studio/docs/ux/design-spec.md and Studio/docs/workflow-run-incidents.md; proactively review changed source/tests for repetition and remove only obsolete in-scope paths with evidence.
 - [x] T014 Run complete affected Workflows tests/typecheck, Studio lint and affected client/library builds from Studio/package.json; compare listed/executed counts and retain all failures/skips plus meaningful behavioral RED→GREEN proof outside the repository.
 - [x] T015 Report exact changed files/head under Studio/src/essentials/Elsa.Studio.Workflows/Client/src/, validation commands/results, assumptions, no-mutation/evidence boundaries and unresolved findings in the supplied execution-evidence handoff; run git diff --check on the scoped change and leave no unrelated files staged in the worker checkout.
-- [ ] T016 Root reviews the integrated diff/delegated evidence, resolves scope/QA concerns and finalizes specs/1001-studio-incident-handoff/spec.md as Implemented with terminal checklist cleanup and issue-acceptance mapping for the coherent candidate. Future review/CI/runtime proof remains public evidence rather than pre-checked source receipts.
+- [x] T016 Root reviews the integrated diff/delegated evidence, resolves scope/QA concerns and finalizes specs/1001-studio-incident-handoff/spec.md as Implemented with terminal checklist cleanup and issue-acceptance mapping for the coherent candidate. Future review/CI/runtime proof remains public evidence rather than pre-checked source receipts.
 
 ## Dependencies and execution
 
