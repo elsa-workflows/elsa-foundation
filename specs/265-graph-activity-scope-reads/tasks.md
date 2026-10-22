@@ -245,9 +245,9 @@ run (plan D-12).
   - `Extensions/Elsa3/src/Mapping/README.md` (:133-134);
   - `specs/246-publish-imported-reusables/contracts/diagnostic-codes.md` (:32);
   - spec 246 D-8 and its references (`spec.md` :88, :124, :277, :295, :344): mark them "lifted by spec 265".
-- [ ] T062 [P] Draft the D-13 issue: plain-workflow `Input` picks compile to a generic expression. Add a test that confirms today's behaviour, then show the draft to the owner before filing it as `needs-triage`. — draft in the PR description; owner to confirm before filing
+- [x] T062 [P] Draft the D-13 issue: plain-workflow `Input` picks compile to a generic expression. Add a test that confirms today's behaviour, then show the draft to the owner before filing it as `needs-triage`. — draft in the PR description; owner to confirm before filing
 - [x] T063 Confirm that no `EXTENSION_POINTS.md` or generated map changes are needed: there are no new contributors, replacement contracts or project references. Regenerate `dependency-map.json` only if project references changed, and check with `git diff --stat` (Windows CRLF note). — no extension point, contract or production project reference changes; the Behavioral test project gains an Elsa.Expressions reference (no checked-in dependency map)
-- [ ] T064 Run every test project from T003, plus the Studio checks, and compare with the baseline. Set the spec `Status: Implemented — via #<PR>` in this PR before merge. Commit, push, open the PR, and run the review gate (`elsa-auto-review-merge`).
+- [x] T064 Run every test project from T003, plus the Studio checks, and compare with the baseline. Set the spec `Status: Implemented — via #<PR>` in this PR before merge. Commit, push, open the PR, and run the review gate (`elsa-auto-review-merge`). — PR #3199; follow-ups #3195–#3198; the review gate has not run yet
 
 ## Dependencies
 
