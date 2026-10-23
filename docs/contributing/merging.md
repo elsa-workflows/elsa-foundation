@@ -31,13 +31,24 @@ CI runs in two tiers (spec 263). [`tools/ci/test-tiers.json`](../../tools/ci/tes
 - **Full tier, once the PR is not a draft.** The required check `Full tier` (workflow `CI full tier`) runs the integration-tier projects and every EF container suite with its required-provider mode, plus the Secrets EF composition proof. It runs when a PR is opened as ready, reopened, marked ready, and on every push while it is ready.
 - **The tier rule.** A test project that reaches Testcontainers, directly or through a referenced test project, is integration tier. So is one that launches a child host (a Workbench host, a child host process, a worker, a probe or the `dotnet-elsa` CLI) and takes 2 minutes or more. Every other project is PR tier. A new test project needs an entry in the manifest; `Generated maps fresh` fails until it has one. Check locally with `dotnet run --project tools/maps/Elsa.Maps.Generator -- test-tiers-check`.
 
-**The draft rule.** Open a PR as a draft while you work, and mark it ready when it is done and before you request review:
+**The draft rule.** A PR stays a draft until its own review is done.
 
-```bash
-gh pr ready <n>
-```
+1. Open it as a draft, and push and fix freely.
+2. Run the review loop, [Auto-Review Loop Then Merge](../skills/catalog.md#auto-review-loop-then-merge), on the draft until a round leaves no surviving findings.
+3. Only then mark it ready and request review:
 
-A draft runs only the PR tier, so work-in-progress commits do not spend the full tier's 20-odd minutes and job slots. A draft carries no `Full tier` check, so a PR just marked ready stays unmergeable until the full tier has run on its head. Pushing review fixes to a ready PR runs the full tier again each time.
+   ```bash
+   gh pr ready <n>
+   ```
+
+**Why review the draft.** Code Review is the independent final check of a PR its author is already confident in, not its first reviewer, and a draft push is the cheap place to find and fix problems:
+
+- **A draft push** runs only the PR tier, about 13 minutes and about 45 job-minutes.
+- **A push to a ready PR** also runs the full tier, about 23 minutes and about 115 job-minutes more, every time.
+
+So fix rounds belong on the draft. A finding from Code Review is still fixed on the ready PR, but the local rounds should leave few.
+
+A draft carries no `Full tier` check, so a PR just marked ready stays unmergeable until the full tier has run on its head.
 
 **The full tier early, on a draft.** Start `CI` by hand on the branch:
 
@@ -60,7 +71,7 @@ It runs both tiers, the EF container suites included, and reports in the Actions
 These steps restate [Issue Bus Lite][org-agents-review] for convenience; the org file governs.
 
 - An author never reviews, approves or merges its own PR, or one it committed to.
-- Request review by commenting `@elsa-workflows-bot review` on the PR. The one blocking reviewer is Code Review, posting as `elsa-workflows-review-bot[bot]`. Other review tools (CodeRabbit, Copilot, Greptile and Bugbot) and other reviews (spec and standards) are advisory. Code Review always takes them into account, but the decision is its own: only findings it adopts block.
+- Request review by commenting `@elsa-workflows-bot review` on the PR, once it is ready and its own review loop has converged on the draft ([the draft rule](#ci-tiers)). The one blocking reviewer is Code Review, posting as `elsa-workflows-review-bot[bot]`. Other review tools (CodeRabbit, Copilot, Greptile and Bugbot) and other reviews (spec and standards) are advisory. Code Review always takes them into account, but the decision is its own: only findings it adopts block.
 - Review is a loop. Fix actionable findings in new commits, without force-pushing, and reply `Fixed in <sha>` or `Won't fix: <reason>` on each thread; Code Review then reviews again. When a round leaves no actionable findings and every required check (`Build & test`, `Generated maps fresh` and `Full tier`) is green on the exact head commit, Code Review approves and merges by itself. New commits after an approval need a fresh approval.
 - After 6 rounds with blocking findings left, comment `blocked: review loop exhausted` and add `needs:decision`; that escalates to Sipke.
 - Owner exception: an explicit instruction from Sipke in an agent session counts for that one action only. Record it in the PR, for example `merged on Sipke's instruction`.

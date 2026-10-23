@@ -18,7 +18,7 @@ $ARGUMENTS
 
 ## Outline
 
-1. Read `docs/skills/catalog.md#auto-review-loop-then-merge` and `docs/skills/catalog.md#merge-gate`, plus `docs/contributing/merging.md#review-and-merge` for the merge rules and `docs/contributing/merging.md#ci-tiers` for the two CI tiers. A PR you drive stays a draft while you work; mark it ready with `gh pr ready <n>` before requesting review, so the required `Full tier` runs on its head.
+1. Read `docs/skills/catalog.md#auto-review-loop-then-merge` and `docs/skills/catalog.md#merge-gate`, plus `docs/contributing/merging.md#review-and-merge` for the merge rules and `docs/contributing/merging.md#ci-tiers` for the two CI tiers. A PR you drive stays a draft while you work and while you run steps 2–6; mark it ready with `gh pr ready <n>` only after the loop converges, then request review, so the required `Full tier` runs once, on the head Code Review sees. A draft push costs only the PR tier; every push to a ready PR also runs the full tier.
 2. Scope the diff first: use the PR base from `gh pr view --json number,url,baseRefName,headRefName,isDraft`, else the merge base with `main`. For a stacked PR, review only the commits this PR adds on top of its base, and state which base was used.
 3. Run independent reviewers over that diff, one per lens, without shared context: correctness, repo-standards conformance against `AGENTS.md` and both files under `.specify/memory/`, and spec/issue conformance where the branch names one.
 4. Verify each finding adversarially against the code before acting: discard any claim without a specific line and a concrete failure scenario, and mutation-test a guard before trusting it.
