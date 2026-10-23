@@ -1,6 +1,6 @@
 # Optional modules
 
-Optional modules add capabilities to an Elsa server, for example JavaScript and Liquid expressions, secrets, structured logs and OpenTelemetry diagnostics. They live in the `Extensions/` folder of the Foundation repository.
+Optional modules add capabilities to an Elsa server, for example the JavaScript and Liquid expression editors, structured logs, OpenTelemetry diagnostics, the dashboard and the Extension Builder. They live in the `Extensions/` folder of the Foundation repository. The JavaScript engine itself lives in `Essentials/src/Expressions`.
 
 A host only gets a module when its composition includes it: a module being in the repository does not mean every host enables it.
 
