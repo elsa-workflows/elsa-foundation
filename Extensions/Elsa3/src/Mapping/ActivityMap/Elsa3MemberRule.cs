@@ -15,6 +15,10 @@ namespace Elsa3.Mapping.ActivityMap;
 /// <param name="Projection">The exact projection a lost output maps to, when one exists.</param>
 /// <param name="BehaviourWarning">The <c>ELS3-BEHAVIOUR-*</c> code emitted when the member is bound (for a removed input: unless it equals the default).</param>
 /// <param name="WhenBound">For a default flip: emit the default only when this other Elsa 3 member is bound.</param>
+/// <param name="OnNull">
+/// For an R1 or R5 input: what a JSON <c>null</c> converts to, from what Elsa 3 ran the member with (spec 267). Unset on
+/// an R2 default flip or an R5 rule with an Elsa 3 default, whose default is emitted for a null as for an absent member.
+/// </param>
 public sealed record Elsa3MemberRule(
     string Elsa3Name,
     Elsa3MemberKind Kind,
@@ -24,7 +28,31 @@ public sealed record Elsa3MemberRule(
     Elsa3ValueContract? Contract = null,
     string? Projection = null,
     string? BehaviourWarning = null,
-    string? WhenBound = null);
+    string? WhenBound = null,
+    Elsa3NullConversion? OnNull = null);
+
+/// <summary>What a JSON <c>null</c> member converts to (spec 267).</summary>
+/// <param name="Rule">How it converts.</param>
+/// <param name="Value">For <see cref="Elsa3NullRule.Emit"/>: the literal Elsa 3 ran the member with.</param>
+/// <param name="Reason">For <see cref="Elsa3NullRule.Refuse"/>: what Elsa 3 did, which Elsa 4 cannot reproduce or represent.</param>
+/// <param name="WhenBound">For <see cref="Elsa3NullRule.Refuse"/>: refuse only when this other Elsa 3 member is bound, else a typed null.</param>
+public sealed record Elsa3NullConversion(Elsa3NullRule Rule, string? Value = null, string? Reason = null, string? WhenBound = null);
+
+/// <summary>How a JSON <c>null</c> member converts.</summary>
+public enum Elsa3NullRule
+{
+    /// <summary>Elsa 3 ran with a value Elsa 4's default equals: no binding.</summary>
+    NoBinding,
+
+    /// <summary>Elsa 3 ran with null, and the Elsa 4 input accepts null: a <c>Literal</c> holding null.</summary>
+    TypedNull,
+
+    /// <summary>Elsa 3 ran with a value Elsa 4's default differs from: that value, as a literal.</summary>
+    Emit,
+
+    /// <summary>Elsa 4 cannot reproduce or represent what Elsa 3 did: <c>ELS3-ACTIVITY-NULL-UNCONVERTIBLE</c>.</summary>
+    Refuse
+}
 
 /// <summary>The kind of an Elsa 3 member.</summary>
 public enum Elsa3MemberKind

@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-22
 
-**Status**: Draft
+**Status**: Implemented
 
 **Issue**: [#3200](https://github.com/elsa-workflows/elsa-foundation/issues/3200), part of epic
 [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052)
@@ -122,6 +122,30 @@ Publishing reports only its first error. The 6 that convert but do not publish s
 JSON `null` members in the corpus, by activity: HttpEndpoint (10 members, up to 30 times each), WriteLine.text (27),
 WriteHttpResponse.contentType (20), RunJavaScript.possibleOutcomes (17) and result (8), and a few on Dispatch,
 BulkDispatch, Switch, If and PublishEvent.
+
+## Measured after (JTest corpus, 2026-10-23, this branch on `main` at `9613cf4ad`)
+
+Same throwaway test as the baseline, deleted afterwards.
+
+| Step | Baseline | After |
+|---|---|---|
+| Converts | 8 | 8 (the same eight; the 28 that do not convert report the same diagnostics) |
+| Publishes | 2 | 3 (+ composition-bulk-dispatch-sub-workflow) |
+| Runs | 2 | 2 |
+
+Both #3200 definitions are past the `possibleOutcomes` error (SC-001). Their next blockers, outside this spec:
+
+| Definition | Next blocker | Issue |
+|---|---|---|
+| composition-bulk-dispatch-sub-workflow | Publishes. Started with no input, its FlowDecision reads the declared input `ShouldFault`, which Elsa 4 refuses to read when unsupplied; Elsa 3 read it as null | [#3288](https://github.com/elsa-workflows/elsa-foundation/issues/3288) |
+| performance-bigdata | Publish: the RunJavaScript's `arguments` expression declares `Object`, the input expects `JsonElement` | [#3287](https://github.com/elsa-workflows/elsa-foundation/issues/3287) |
+
+The other four converting definitions stop at the same first errors as in the baseline (#3201, #3202). No warning in the
+corpus comes from this spec (SC-005): it adds none.
+
+Found while testing: running any imported RunJavaScript is blocked today, by #3195 when the script reads nothing and by
+#3287 when it reads something. The integration test therefore proves the RunJavaScript case at publish, and the run on
+WriteLine, PublishEvent, Correlate and SetName nulls (SC-003).
 
 ## Clarifications
 

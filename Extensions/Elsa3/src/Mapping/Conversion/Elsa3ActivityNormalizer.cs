@@ -39,6 +39,7 @@ internal sealed class Elsa3ActivityNormalizer(
     private const string ParallelTypeKey = "Elsa.Activities.Parallel.Activities.Parallel";
 
     private static readonly JsonSerializerOptions Elsa3JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonElement JsonNull = JsonSerializer.SerializeToElement<object?>(null);
     private readonly IReadOnlyDictionary<Elsa3NodeRewriteKind, IElsa3NodeRewrite> _rewrites =
         rewrites.ToDictionary(rewrite => rewrite.Kind);
 
@@ -212,8 +213,10 @@ internal sealed class Elsa3ActivityNormalizer(
         var result = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
         var boundBy = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        foreach (var (propertyName, value) in properties)
+        foreach (var (propertyName, source) in properties)
         {
+            // Spec 267 (research R-5): a literal holding null converts as a JSON null does.
+            var value = Elsa3TypedValues.IsNullLiteral(source) ? JsonNull : source;
             if (entry is null)
             {
                 BindByName(context, propertyName, value, result, boundBy);
@@ -266,6 +269,19 @@ internal sealed class Elsa3ActivityNormalizer(
         Dictionary<string, JsonElement> result,
         Dictionary<string, string> boundBy)
     {
+        if (value.ValueKind == JsonValueKind.Null)
+        {
+            // Spec 267: a null output is captured by nothing, as in Elsa 3; a null input converts to what Elsa 3 ran it
+            // with. A rule without OnNull (an R2 or R5 default) falls through, and ApplyDefaults emits its default.
+            if (rule is { Kind: Elsa3MemberKind.Output, Rule: Elsa3MemberRuleKind.Carry })
+                return;
+            if (rule.OnNull is { } onNull)
+            {
+                ApplyNull(context, rule, onNull, propertyName, result, boundBy);
+                return;
+            }
+        }
+
         var bound = Elsa3TypedValues.IsBound(value);
         var captured = Elsa3TypedValues.IsCaptured(value);
         switch (rule.Rule)
@@ -351,15 +367,20 @@ internal sealed class Elsa3ActivityNormalizer(
             return;
         }
 
+        // Spec 267 (research R-10): a null member gets no binding. Elsa 3 skipped a null workflow-as-activity member, so
+        // the reusable ran with its own default, as the Elsa 4 contract's default applies now.
+        var isNull = value.ValueKind == JsonValueKind.Null;
         if (inputs.Length == 1)
         {
-            Add(context, inputs[0].ReferenceKey, propertyName, value, result, boundBy);
+            if (!isNull)
+                Add(context, inputs[0].ReferenceKey, propertyName, value, result, boundBy);
             return;
         }
 
         if (resolved.FindOutput(propertyName) is { } output)
         {
-            Add(context, output.ReferenceKey, propertyName, value, result, boundBy);
+            if (!isNull)
+                Add(context, output.ReferenceKey, propertyName, value, result, boundBy);
             return;
         }
 
@@ -371,6 +392,47 @@ internal sealed class Elsa3ActivityNormalizer(
             "Rename the property to an Elsa 4 member of the activity, or remove it.",
             propertyName);
     }
+
+    /// <summary>Spec 267: converts a JSON null input to what Elsa 3 ran it with, by the member's recorded conversion.</summary>
+    private static void ApplyNull(
+        Elsa3RewriteContext context,
+        Elsa3MemberRule rule,
+        Elsa3NullConversion onNull,
+        string propertyName,
+        Dictionary<string, JsonElement> result,
+        Dictionary<string, string> boundBy)
+    {
+        var key = rule.Elsa4Key!;
+        var alias = context.Node.Resolved!.FindInput(key)?.Type.Alias ?? "Object";
+        switch (onNull.Rule)
+        {
+            case Elsa3NullRule.NoBinding:
+                return;
+            case Elsa3NullRule.TypedNull:
+                Add(context, key, propertyName, Elsa3TypedValues.CreateNull(alias), result, boundBy);
+                return;
+            case Elsa3NullRule.Emit:
+                Add(context, key, propertyName, Elsa3TypedValues.CreateLiteral(alias, LiteralNode(onNull.Value ?? string.Empty)), result, boundBy);
+                return;
+            case Elsa3NullRule.Refuse when onNull.WhenBound is { } other && !IsBoundMember(context, other):
+                Add(context, key, propertyName, Elsa3TypedValues.CreateNull(alias), result, boundBy);
+                return;
+            case Elsa3NullRule.Refuse:
+                context.Error(NullUnconvertible,
+                    $"Member '{propertyName}' is null. {onNull.Reason}",
+                    $"Set a value for '{propertyName}' in the Elsa 3 workflow, or remove the activity.",
+                    propertyName);
+                return;
+        }
+    }
+
+    /// <summary>A JSON array or object stays JSON, so publication and graph conversion read it as a collection; anything else is text.</summary>
+    private static JsonNode? LiteralNode(string value) =>
+        value.TrimStart() is ['[' or '{', ..] ? JsonNode.Parse(value) : JsonValue.Create(value);
+
+    private static bool IsBoundMember(Elsa3RewriteContext context, string elsa3Name) =>
+        context.Activity.AdditionalProperties.Any(property =>
+            StringComparer.OrdinalIgnoreCase.Equals(property.Key, elsa3Name) && Elsa3TypedValues.IsBound(property.Value));
 
     private static void Add(
         Elsa3RewriteContext context,
@@ -445,7 +507,9 @@ internal sealed class Elsa3ActivityNormalizer(
                 continue;
             if (rule.Kind == Elsa3MemberKind.CustomProperty)
                 continue;
-            if (result.TryGetValue(rule.Elsa4Key, out var existing) && Elsa3TypedValues.IsBound(existing))
+            // A typed null is the conversion of a null member (spec 267); only the member pass writes one.
+            if (result.TryGetValue(rule.Elsa4Key, out var existing) &&
+                (Elsa3TypedValues.IsBound(existing) || Elsa3TypedValues.IsNullLiteral(existing)))
                 continue;
             if (rule.WhenBound is { } other &&
                 !properties.Any(property => StringComparer.OrdinalIgnoreCase.Equals(property.Key, other) && Elsa3TypedValues.IsBound(property.Value)))
@@ -878,15 +942,24 @@ internal sealed class Elsa3ActivityNormalizer(
     }
 
     /// <summary>
-    /// Whether the value is the literal the entry's R2 rule emits for the member. A blank default (WriteLine's empty
-    /// line) is bound although <see cref="Elsa3TypedValues.IsBound"/> counts a blank literal as unbound.
+    /// Whether the value is the literal the entry's R2 rule, or a null member's recorded conversion (spec 267), emits for
+    /// the member. A blank value (WriteLine's empty line, a cleared correlation id) is bound although
+    /// <see cref="Elsa3TypedValues.IsBound"/> counts a blank literal as unbound.
     /// </summary>
-    private static bool IsEmittedDefault(Elsa3ActivityMapEntry? entry, string elsa4Key, JsonElement value) =>
-        entry?.Members.FirstOrDefault(rule => rule is { Rule: Elsa3MemberRuleKind.DefaultFlip, Kind: Elsa3MemberKind.Input } &&
-                                              StringComparer.Ordinal.Equals(rule.Elsa4Key, elsa4Key))
-            is { Elsa3Default: { ValueKind: JsonValueKind.String } elsa3Default } &&
-        Elsa3TypedValues.TryGetLiteral(value, out var literal) &&
-        StringComparer.Ordinal.Equals(literal, elsa3Default.GetString());
+    private static bool IsEmittedDefault(Elsa3ActivityMapEntry? entry, string elsa4Key, JsonElement value)
+    {
+        var rule = entry?.Members.FirstOrDefault(member => member.Kind == Elsa3MemberKind.Input &&
+                                                           StringComparer.Ordinal.Equals(member.Elsa4Key, elsa4Key));
+        var emitted = rule switch
+        {
+            { OnNull: { Rule: Elsa3NullRule.Emit, Value: { } onNull } } => onNull,
+            { Rule: Elsa3MemberRuleKind.DefaultFlip, Elsa3Default: { ValueKind: JsonValueKind.String } elsa3Default } => elsa3Default.GetString(),
+            _ => null
+        };
+        return emitted is not null &&
+               Elsa3TypedValues.TryGetLiteral(value, out var literal) &&
+               StringComparer.Ordinal.Equals(literal, emitted);
+    }
 
     private Elsa3Activity? ReadChild(
         Elsa3ConversionPlan plan,

@@ -13,22 +13,22 @@ PR's bite-proof shows each new test red without the change.
 
 ## Phase 1: Setup
 
-- [ ] T001 Re-create the throwaway corpus measurement from the session scratchpad as
+- [x] T001 Re-create the throwaway corpus measurement from the session scratchpad as
   `Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/ThrowawayJTestCorpusMeasure.cs`, run it on this
   branch before any code change, and confirm the 8 / 2 / 2 baseline in spec.md still holds (never committed)
 
 ## Phase 2: Foundational (blocks every story)
 
-- [ ] T002 Add `NullUnconvertible = "ELS3-ACTIVITY-NULL-UNCONVERTIBLE"` with its summary to
+- [x] T002 Add `NullUnconvertible = "ELS3-ACTIVITY-NULL-UNCONVERTIBLE"` with its summary to
   `Extensions/Elsa3/src/Models/Elsa3ActivityDiagnosticCodes.cs` (contract: contracts/null-member-diagnostic.md)
-- [ ] T003 Add `Elsa3NullRule` (`NoBinding`, `TypedNull`, `Emit`, `Refuse`), the `Elsa3NullConversion(Rule, Value,
+- [x] T003 Add `Elsa3NullRule` (`NoBinding`, `TypedNull`, `Emit`, `Refuse`), the `Elsa3NullConversion(Rule, Value,
   Reason, WhenBound)` record and the optional trailing `OnNull` parameter of `Elsa3MemberRule` in
   `Extensions/Elsa3/src/Mapping/ActivityMap/Elsa3MemberRule.cs` (data-model.md)
-- [ ] T004 Add the null helpers (`NullUnbound`, `NullAsNull`, `NullEmits(value)`, `NullRefused(reason, whenBound)`)
+- [x] T004 Add the null helpers (`NullUnbound`, `NullAsNull`, `NullEmits(value)`, `NullRefused(reason, whenBound)`)
   to `Extensions/Elsa3/src/Mapping/ActivityMap/Elsa3BuiltInActivityMap.Rules.cs`
-- [ ] T005 Add `CreateNull(typeAlias)` and `IsNullLiteral(value)` to
+- [x] T005 Add `CreateNull(typeAlias)` and `IsNullLiteral(value)` to
   `Extensions/Elsa3/src/Mapping/Conversion/Elsa3TypedValues.cs` (research R-3)
-- [ ] T006 Set `OnNull` on every Carry and Narrowed-contract input in
+- [x] T006 Set `OnNull` on every Carry and Narrowed-contract input in
   `Extensions/Elsa3/src/Mapping/ActivityMap/Elsa3BuiltInActivityMap.Entries.cs`, row for row from the spec's
   per-member table (R-6, R-8, R-9)
 
@@ -39,21 +39,21 @@ PR's bite-proof shows each new test red without the change.
 **Independent test**: import, publish and run a workflow with RunJavaScript `possibleOutcomes: null`, `result: null`
 and WriteLine `text: null`.
 
-- [ ] T007 [US1] In `Extensions/Elsa3/src/Mapping/Conversion/Elsa3ActivityNormalizer.cs`, `ApplyRule`: rewrite a
+- [x] T007 [US1] In `Extensions/Elsa3/src/Mapping/Conversion/Elsa3ActivityNormalizer.cs`, `ApplyRule`: rewrite a
   deliberate literal null to JSON `null` (R-5); for an input rule with `OnNull`, apply it before the rule (no binding,
   typed null with the Elsa 4 input's alias, emitted literal, or refusal with `NullUnconvertible`, honouring
   `WhenBound`); a null Carry output gets no binding (R-10)
-- [ ] T008 [US1] In the same file, `BindByName`: a null member gets no binding (R-10); `ApplyDefaults`: leave a typed
+- [x] T008 [US1] In the same file, `BindByName`: a null member gets no binding (R-10); `ApplyDefaults`: leave a typed
   null alone (R-8); `IsEmittedDefault`: accept an `OnNull` emitted value (R-9)
-- [ ] T009 [US1] In `Extensions/Elsa3/src/Mapping/Mappings/Elsa3ActivityToState.cs`: map a literal holding null to
+- [x] T009 [US1] In `Extensions/Elsa3/src/Mapping/Mappings/Elsa3ActivityToState.cs`: map a literal holding null to
   `new ArgumentValue(null, "Literal")`, and drop any other value it cannot read, null included (D-3, D-4)
-- [ ] T010 [P] [US1] Fixture `Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/Fixtures/null-members.json`:
+- [x] T010 [P] [US1] Fixture `Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/Fixtures/null-members.json`:
   a flowchart with a RunJavaScript (`possibleOutcomes: null`, `result: null`) connected by `Done` to a WriteLine
   (`text: null`) and a SetName (`value: null`)
-- [ ] T011 [US1] `Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/NullMemberPublishTests.cs`:
+- [x] T011 [US1] `Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/NullMemberPublishTests.cs`:
   import, publish and run the fixture through `Elsa3ImportHost`; the run completes with no incident and runs the
   WriteLine after the RunJavaScript (SC-003)
-- [ ] T012 [P] [US1] `Extensions/Elsa3/tests/Mapping/Tests/Elsa3NullMemberTests.cs`: typed-null rows (one case per
+- [x] T012 [P] [US1] `Extensions/Elsa3/tests/Mapping/Tests/Elsa3NullMemberTests.cs`: typed-null rows (one case per
   row: the input is a `Literal` holding null), no-binding rows (no input), a null output (no output), a null member
   on a member resolved by name (no input), and the deliberate-null shape converting like JSON `null`
 
@@ -63,7 +63,7 @@ and WriteLine `text: null`.
 
 **Independent test**: convert each emit row with the member `null`.
 
-- [ ] T013 [US2] Extend `Extensions/Elsa3/tests/Mapping/Tests/Elsa3NullMemberTests.cs` with one case per emit row
+- [x] T013 [US2] Extend `Extensions/Elsa3/tests/Mapping/Tests/Elsa3NullMemberTests.cs` with one case per emit row
   (For.OuterBoundInclusive, Delay, Timer, WriteLine, Fault code/category/type, FlowSendHttpRequest
   ExpectedStatusCodes `[200]`, Correlate and SetName `""`), each asserting the literal and no warning diagnostic; plus a flowchart in which a
   FlowSendHttpRequest with `expectedStatusCodes: null` connects its `200` and `Unmatched status code` outcomes
@@ -74,25 +74,25 @@ and WriteLine `text: null`.
 
 **Independent test**: convert each refuse row with the member `null`.
 
-- [ ] T014 [US3] Extend `Extensions/Elsa3/tests/Mapping/Tests/Elsa3NullMemberTests.cs` with one case per refuse row:
+- [x] T014 [US3] Extend `Extensions/Elsa3/tests/Mapping/Tests/Elsa3NullMemberTests.cs` with one case per refuse row:
   the code once, the member in the path, no `ELS3-ACTIVITY-REQUIRED-INPUT-UNBOUND` for the same member; and
   SendHttpRequest ContentType null converting to a typed null when Content is unbound
 
 ## Phase 6: Polish & cross-cutting
 
-- [ ] T015 [P] `Extensions/Elsa3/tests/Mapping/Tests/Elsa3ActivityMapCoverageTests.cs`: every Carry and
+- [x] T015 [P] `Extensions/Elsa3/tests/Mapping/Tests/Elsa3ActivityMapCoverageTests.cs`: every Carry and
   Narrowed-contract input records `OnNull` or an emitted Elsa 3 default; against the real catalog, a `TypedNull`
   input is nullable and optional and a `NoBinding` input is optional (FR-008, R-7)
-- [ ] T016 [P] `Extensions/Elsa3/src/Mapping/README.md`: null members and the new code
-- [ ] T017 [P] `specs/236-elsa3-activity-map/member-map.md`: a "Null members (spec 267)" section with every mapped
+- [x] T016 [P] `Extensions/Elsa3/src/Mapping/README.md`: null members and the new code
+- [x] T017 [P] `specs/236-elsa3-activity-map/member-map.md`: a "Null members (spec 267)" section with every mapped
   member's null conversion (FR-009, SC-006)
-- [ ] T018 Run both test projects in full (`Extensions/Elsa3/tests/Mapping/Tests`,
+- [x] T018 Run both test projects in full (`Extensions/Elsa3/tests/Mapping/Tests`,
   `Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests`) and fix fallout in existing tests
-- [ ] T019 Bite-proof: revert T007–T009 locally, show the new tests red, restore, show them green (record for the PR)
-- [ ] T020 Re-run T001's measurement, record converts / publishes / runs and each definition's next blocker in
+- [x] T019 Bite-proof: revert T007–T009 locally, show the new tests red, restore, show them green (record for the PR)
+- [x] T020 Re-run T001's measurement, record converts / publishes / runs and each definition's next blocker in
   spec.md, then delete the throwaway test (SC-001, SC-002, SC-005)
-- [ ] T021 Update the per-definition table and "Where it stands" in epic #3052
-- [ ] T022 Check the diff outside `Extensions/Elsa3` and `specs/` is empty (SC-007); set spec Status to Implemented
+- [x] T021 Update the per-definition table and "Where it stands" in epic #3052
+- [x] T022 Check the diff outside `Extensions/Elsa3` and `specs/` is empty (SC-007); set spec Status to Implemented
 
 ## Dependencies
 

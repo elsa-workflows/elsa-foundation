@@ -107,6 +107,47 @@ public sealed class Elsa3ActivityMapCoverageTests
     }
 
     /// <summary>
+    /// Spec 267 FR-008: every carried or narrowed input records what a JSON <c>null</c> converts to, or carries the Elsa 3
+    /// default it emits for one (R2, or R5 with a default). A member with neither is a gap in the spec's table.
+    /// </summary>
+    [Fact]
+    public void Every_carried_or_narrowed_input_records_its_null_conversion()
+    {
+        var gaps = Map.Entries
+            .SelectMany(entry => entry.Members.Select(rule => (entry.Elsa3TypeName, Rule: rule)))
+            .Where(item => item.Rule is { Kind: Elsa3MemberKind.Input, Rule: Elsa3MemberRuleKind.Carry or Elsa3MemberRuleKind.NarrowedContract })
+            .Where(item => item.Rule.OnNull is null && item.Rule.Elsa3Default is null)
+            .Select(item => $"{item.Elsa3TypeName}.{item.Rule.Elsa3Name}");
+
+        Assert.Empty(gaps);
+    }
+
+    /// <summary>
+    /// Spec 267 research R-7: the Elsa 4 side of the null table holds in the real catalog. A typed null needs an input that
+    /// accepts null and is optional; no binding needs an optional input.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(CatalogEntries))]
+    public async Task Every_null_conversion_fits_the_real_catalog(string elsa3Type)
+    {
+        var entry = Map.Find(elsa3Type)!;
+        var typeKey = ((Elsa3ActivityTarget.CatalogActivity)entry.Target).ActivityTypeKey;
+        var catalog = RealActivityCatalog.Create();
+        var version = await catalog.GetVersion(catalog.VersionIdOf(typeKey));
+
+        foreach (var rule in entry.Members.Where(rule => rule.OnNull is not null))
+        {
+            var input = version.Inputs.Single(input => input.ReferenceKey == rule.Elsa4Key);
+            var name = $"'{elsa3Type}.{rule.Elsa3Name}'";
+            // A refusal that only applies when another member is bound converts to a typed null otherwise.
+            if (rule.OnNull is { Rule: Elsa3NullRule.TypedNull } or { Rule: Elsa3NullRule.Refuse, WhenBound: not null })
+                Assert.True(input.IsNullable && !input.IsRequired, $"{name} converts a null to a typed null, but '{typeKey}.{input.ReferenceKey}' does not accept one.");
+            if (rule.OnNull is { Rule: Elsa3NullRule.NoBinding })
+                Assert.False(input.IsRequired, $"{name} leaves a null unbound, but '{typeKey}.{input.ReferenceKey}' is required.");
+        }
+    }
+
+    /// <summary>
     /// Spec 248 D-3: an entry without a <c>canStartWorkflow</c> rule drops the flag, because Elsa 3 only uses it there to
     /// pick a flowchart's start. That is faithful only for non-triggers, so exactly the Elsa 3 triggers declare one.
     /// </summary>

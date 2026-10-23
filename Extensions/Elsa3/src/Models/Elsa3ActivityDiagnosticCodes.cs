@@ -34,6 +34,12 @@ public static class Elsa3ActivityDiagnosticCodes
     /// <summary>A variable's starting value cannot be converted to the variable's own type by Elsa 3's rule.</summary>
     public const string VariableValueUnconvertible = "ELS3-ACTIVITY-VARIABLE-VALUE-UNCONVERTIBLE";
 
+    /// <summary>
+    /// A member is null, and what Elsa 3 ran it with cannot be reproduced or represented in Elsa 4 (spec 267): Elsa 3
+    /// hung, faulted, dropped data or rejected the activity, or Elsa 4 cannot publish the null.
+    /// </summary>
+    public const string NullUnconvertible = "ELS3-ACTIVITY-NULL-UNCONVERTIBLE";
+
     /// <summary>A captured output has no Elsa 4 counterpart and no exact projection.</summary>
     public const string OutputNotRepresentable = "ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE";
 
