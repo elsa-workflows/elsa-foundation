@@ -58,7 +58,7 @@ RetryAfter records `RetryScheduled` with `NextRetryAt`, but the item is parked: 
 **The key difference:** an activity fault never reaches the drainer's fault arm, and
 a handler fault never reaches the incident strategy.
 
-> **Why read the observers, not the loop?** Reading the drain loop end to end tells you almost nothing about what a fault does to a workflow. Every collaborator that decides an outcome sits behind an interface the loop does not name: the activity fault is caught inside a step handler, the decision to end the workflow is made by an authored strategy applied by a drain observer, and a handler crash becomes an incident through a different drain observer. That separation is deliberate, so this page starts from the observers and the defaults.
+> **Why read the observers, not the loop?** Reading the drain loop end to end tells you almost nothing about what a fault does to a workflow. Every collaborator that decides an outcome sits behind an interface the loop does not name: the activity fault is caught inside a step handler, and a handler crash becomes an incident through a different drain observer. The workflow is ended by an authored strategy applied at quiescence, or by BlockingIncidentWorkflowFaultObserver when a non-terminal run still has an undecided blocking incident, a combined parent evaluation is not pending, and the remaining incidents are not all activation failures. That separation is deliberate, so this page starts from the observers and the defaults.
 
 ## Path A: an activity throws
 
@@ -76,7 +76,7 @@ not extra sequential catches:
 | durable-value listing, contract and input-snapshot checks | `InputMaterializationFailed` |
 | attempt claim, activation, execution-context construction | `ActivityConstructionFailed` |
 | the activity's own execution | `ActivityFaulted` |
-| activation-lease disposal failing on any of the above | `ActivityDisposalFailed` |
+| activation-lease disposal failing on any of the above, or after a successful execution. After success the completed result is discarded, the activity is recorded Faulted with a blocking incident, the handler still returns normally, and nothing is poisoned. | `ActivityDisposalFailed` |
 | the activity returning a fault transition rather than throwing | `ActivityReturnedFault` |
 
 `OperationCanceledException` is re-thrown from every arm when cancellation was requested; a genuine
