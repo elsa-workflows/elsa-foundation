@@ -10,7 +10,7 @@ When you publish a workflow that contains a *Write Line* activity, three differe
 2. **Publishing** reads that saved form and compiles it into a ready-to-run node with typed input bindings. It never creates a live *Write Line* object.
 3. **Runtime**, when the workflow runs, saves a snapshot of the inputs, picks the activation strategy that owns this kind of activity, creates one short-lived *Write Line* instance, runs it, and keeps only the immutable result.
 
-Design and Runtime never reference each other. Publishing sits **above** both and talks to each through its public contract only. That is the whole idea of this page: the public contracts are **seams**, and the code that joins two seams is a **bridge**.
+Runtime must not reference Design (§E2.2). Publishing sits **above** both and talks to each through its public contract only. That is the whole idea of this page: the public contracts are **seams**, and the code that joins two seams is a **bridge**.
 
 Most Elsa features are self-contained: a feature owns its contracts, its implementation, and its
 persistence, and never reaches into a neighbour. The **activities/workflows** domain is the exception.
@@ -51,7 +51,7 @@ flowchart LR
 The dependency arrows only ever point **into** the seams (down onto `.Core`). Neither seam points at
 the other. That invariant is the whole game (see [the rules behind this](#the-rules-behind-this)).
 
-> *Good to know:* the hard rule has one allow-listed exception today: `Elsa.Workflows.Runtime.JavaScript` references `Elsa.Workflows.Design.Core` while ownership of JavaScript function declarations is unsettled. It is held in an architecture guard test's allow-list.
+> *Good to know:* a deferred allow-list entry (`ArchitectureGuardTests.DeferredRuntimeDesignReferences`) remains, although `Elsa.Workflows.Runtime.JavaScript` no longer references `Elsa.Workflows.Design.Core`.
 
 ## The seam map
 
