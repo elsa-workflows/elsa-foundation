@@ -44,7 +44,7 @@ CI runs in two tiers (spec 263). [`tools/ci/test-tiers.json`](../../tools/ci/tes
 **Why review the draft.** Code Review is the independent final check of a PR its author is already confident in, not its first reviewer, and a draft push is the cheap place to find and fix problems:
 
 - **A draft push** runs only the PR tier, about 13 minutes and about 45 job-minutes, unless it changes the tier manifest or the tier tooling, which also runs the full tier.
-- **A push to a ready PR** that changes code also runs the full tier, about 23 minutes and about 115 job-minutes more, on every such push. A documentation-only PR takes the fast path in both tiers.
+- **A push to a ready PR** also runs the full tier, about 23 minutes and about 115 job-minutes more, on every push, even one that changes only documentation: the classifier looks at the PR's whole diff against `main`. Only a PR whose whole diff is documentation takes the fast path in both tiers.
 
 So fix rounds belong on the draft. A finding from Code Review is still fixed on the ready PR, but the local rounds should leave few.
 
