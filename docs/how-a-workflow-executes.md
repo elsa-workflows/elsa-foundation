@@ -21,7 +21,7 @@ flowchart LR
 
 Three ideas make this work:
 
-- **One writer per run.** Every command for a run goes through that run's mailbox, and the mailbox handles one command at a time. Two parts of the system never change the same run at once.
+- **Mailbox serialization.** Every command for a run goes through that run's mailbox, and the mailbox handles one command at a time. The ownership fence rejects stale durable checkpoint commits. Lease loss requests cancellation of the active handler; cancellation is cooperative.
 - **Small steps.** Each step (start the workflow, start an activity, run it, complete it…) is a separate work item handled by its own small class. A step does its work, then queues the next one.
 - **Nothing is saved directly.** A step describes what changed, plus what should happen next, in a **checkpoint**. One component, the committer, writes it.
 
@@ -113,7 +113,7 @@ For each command, the mailbox opens a fresh persistence scope and hands the comm
 
 The scheduler turns the command into a **work item** and adds it to the run's work queue. Adding is idempotent: queuing the same item twice has no extra effect. The queue lives in memory by default and in the database when persistence is on.
 
-Then the queue is **drained**. The drain first takes the run's ownership lease, which guarantees that only one node works on the run. After the loop it delivers any follow-up work and notifies observers. Observers are where fault outcomes are decided; see [runtime fault behavior](runtime-fault-behavior.md).
+Then the queue is **drained**. The drain first takes the run's ownership lease. Mailbox serialization keeps one command in flight per run; the lease's fencing token rejects stale durable checkpoint commits; if the lease is lost, the drain requests cancellation of the active handler. Cancellation is cooperative, so a handler that ignores its token can continue while another node owns the run. After the loop it delivers any follow-up work and notifies observers. Observers are where fault outcomes are decided; see [runtime fault behavior](runtime-fault-behavior.md).
 
 The loop itself, as pseudo-code:
 
@@ -196,7 +196,7 @@ Recovery goes through the mailbox like everything else, so the single-writer rul
 Every runtime default is registered in one method, `AddWorkflowRuntime()`. It uses `TryAdd`, so a feature that registers its own implementation first wins. Reading that method is the quickest way to learn the default for every runtime contract:
 
 ```csharp
-// pseudo-code illustrating the pattern
+// real, trimmed (RuntimeCoreServiceCollectionExtensions.cs)
 services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
 services.TryAddEnumerable(/* each scheduler work handler */);
 ```
@@ -253,7 +253,7 @@ All paths are relative to the repository root, under `Essentials/`.
 | Command kinds | `WorkflowExecutionCommandKind` | `src/Workflows/Runtime/Core/Models/WorkflowExecutionCommand.cs` |
 | Checkpoint model | `RuntimeCheckpointCommit` | `src/Workflows/Runtime/Core/Models/RuntimeCheckpointCommit.cs` |
 | Committer | `RuntimeCheckpointCommitter` | `src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimeCheckpointCommitter.cs` |
-| Commit stores | `IRuntimeCheckpointCommitStore`, `InMemoryRuntimeCheckpointCommitStore`, `EfRuntimeCheckpointCommitStore` | `src/Workflows/Runtime/Core/Contracts/IRuntimeCheckpointCommitStore.cs`, `.../Services/Checkpoints/`, `src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/` |
+| Commit stores | `IRuntimeCheckpointCommitStore`, `InMemoryRuntimeCheckpointCommitStore`, `EfRuntimeCheckpointCommitStore` | `src/Workflows/Runtime/Core/Contracts/IRuntimeCheckpointCommitStore.cs`, `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/`, `src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/` |
 | SQLite cost budgets | — | `tests/Activities/Http/IntegrationTests/CommandBudgets/ef-command-budgets.json` |
 | Bookmark model | `BookmarkState` | `src/Workflows/Runtime/Core/Models/BookmarkState.cs` |
 | Stimulus endpoint | `Endpoint` | `src/Workflows/Runtime/Api/Endpoints/Stimuli/Dispatch/Endpoint.cs` |
@@ -283,7 +283,7 @@ For readers who want the exact contracts behind each step above:
 | 5. Handler chain | `Start` → `WorkflowStartSchedulerWorkHandler` (enqueues a `Checkpoint` item carrying a post-commit intent to start the root); `Checkpoint` → `WorkflowCheckpointSchedulerWorkHandler`, after which `RuntimeSchedulerPostCommitIntentDispatcher` queues `StartActivity`; `StartActivity` → `WorkflowStartActivitySchedulerWorkHandler`, which runs `WorkflowIntrinsicExecutor.ExecuteAsync` when `ExecutableNode.IntrinsicKind` is set (`Set`, `Merge`, `Reduce`, `Return`, `Control`, `SetOutput`, `Finish`, …; no CLR type is activated); `InvokeActivity` → `WorkflowInvokeActivitySchedulerWorkHandler`, which calls `IActivityActivator.ActivateAsync` (`ActivityActivator` picks an `IActivityActivationStrategy` by descriptor kind) and then `activity.ExecuteAsync(context)`; on exception `ActivityFaultIncidentRecorder` commits an incident and the drain reports the item as completed; `CompleteActivity` → `WorkflowCompleteActivitySchedulerWorkHandler`, which enqueues the completion checkpoint and a second `CompleteActivity` item with payload kind `ParentCompletionEvaluation`, accepted only by `WorkflowParentActivityCompletionSchedulerWorkHandler`; that enqueues `ScheduleActivity`, handled by `WorkflowScheduleActivitySchedulerWorkHandler`. |
 | 6. Checkpoint | `RuntimeCheckpointCommit` = a named `RuntimeCheckpoint` + a `RuntimeCheckpointStateChangeSet` (execution, activity executions, bookmarks, durable values, incidents, liveness) + `RuntimePostCommitIntent` continuations. Committer order: `IRuntimeCheckpointCommitEnricher` set; lease stamped as `ExpectedFence`; `IRuntimeCheckpointPersistencePolicy` decides persist-now vs fold; intents folded into an outbox and the claimed item's deletion into the same change set; `IRuntimeCheckpointCommitStore.CommitAsync`. `InMemoryRuntimeCheckpointCommitStore` is the default from `AddWorkflowRuntime`; `EfRuntimeCheckpointCommitStore` is registered by `RuntimeEntityFrameworkCoreFeature` through `AddRuntimeEntityFrameworkCore` and writes a create-only checkpoint marker. |
 | 7. Bookmarks | `WorkflowCreateBookmarkSchedulerWorkHandler` commits a `BookmarkState` keyed by `(StimulusType, StimulusHash)`, marks the activity execution `BookmarkWaiting` and notifies `BookmarkLifecycleNotifier`. Resume: `IBookmarkResumeDispatcher` uses `IBookmarkStimulusLookup` and sends a `ResumeBookmark` envelope; `WorkflowResumeBookmarkSchedulerWorkHandler` re-reads the executable, activity execution and bookmark, then consumes the bookmark. |
-| 8. Recovery | `WorkflowsRuntimeResumptionFeature` registers `RuntimeResumptionPumpTask` as an `IRecurringTask` (depends on the `Tasks` feature); every `WorkflowsRuntimeEntityFrameworkCore` shell depends on it. Each tick calls `IRuntimeResumptionService.SweepAsync`: pending outbox delivery, `IWorkflowSchedulerWorkQueue.ListClaimableWorkflowExecutionIdsAsync` plus `IRuntimeRecoveryScanner.ScanPageAsync` candidates, then a `RunSchedulerWork` envelope per execution whose next item the pause gate allows. Scanner default `InMemoryRuntimeRecoveryScanner` (reads `IExecutionLivenessStateStore`); EF `EfRuntimeRecoveryScanner`. |
+| 8. Recovery | `WorkflowsRuntimeResumptionFeature` registers `RuntimeResumptionPumpTask` as an `IRecurringTask` (depends on the `Tasks` feature); every `WorkflowsRuntimeEntityFrameworkCore` shell depends on it. Each tick calls `IRuntimeResumptionService.SweepAsync`: pending outbox delivery, `IWorkflowSchedulerWorkQueue.ListClaimableWorkflowExecutionIdsAsync` plus `IRuntimeRecoveryScanner.ScanPageAsync` candidates, then a `RunSchedulerWork` envelope per execution whose next item the pause gate allows. Scanner default `InMemoryRuntimeRecoveryScanner` (reads `IExecutionLivenessStateStore`); with EF Core, the same scanner reads the EF liveness store. |
 | Defaults | `AddWorkflowRuntime()` registers the `InMemory*` stores, the handler set (`TryAddEnumerable`), drainer, committer, policies and the kill switches `RuntimeBurstCacheOptions` and `RuntimeInProcessHopFastPathOptions`. Called from `WorkflowsRuntimeApiFeature.ConfigureServices`. `ActivitiesRuntimeFeature` adds `InvokeActivity`, `CompleteActivity` parent evaluation, `NotifyParentActivity` and `ResumeBookmark`. |
 | Glossary models | `WorkflowDefinition` owns many drafts and versions; `WorkflowDefinitionVersion` is SemVer-numbered and may be promoted from a draft via `SourceDraftId`; activity execution identity is `ActivityExecution`; a scheduler work item has a `CommandKind`. |
 
