@@ -1,7 +1,7 @@
 {
   "$comment": "Spec 263 tier manifest. Every test project, its tier, the shard grouping, the slow-test allow-list and the quarantine list. Read by tools/ci/test_tiers.py, tools/ci/test_results.py and Elsa.Maps.Generator test-tiers-check. See docs/contributing/merging.md#ci-tiers.",
   "schema": 1,
-  "integrationLeavesPrTier": false,
+  "integrationLeavesPrTier": true,
   "shardTargetMinutes": 6,
   "slowTestSeconds": 10,
   "slowTestMode": "report",
@@ -762,8 +762,7 @@
           "Essentials/tests/Mediator/Tests/Elsa.Mediator.Tests.csproj",
           "Essentials/tests/Expressions/Api/Tests/Elsa.Expressions.Api.Tests.csproj",
           "Essentials/tests/Events/Tests/Elsa.Events.Tests.csproj",
-          "Essentials/tests/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj",
-          "Essentials/tests/Activities/Http/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj"
+          "Essentials/tests/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj"
         ]
       },
       {
@@ -796,9 +795,7 @@
           "Essentials/tests/Workbench/BackgroundActivities/Tests/Elsa.Workbench.BackgroundActivities.Tests.csproj",
           "Essentials/tests/Modularity/Planning/Tests/Elsa.Modularity.Planning.Tests.csproj",
           "Essentials/tests/Expressions/Tests/Elsa.Expressions.Tests.csproj",
-          "Essentials/tests/Activities/Design/Api/Tests/Elsa.Activities.Design.Api.Tests.csproj",
-          "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
-          "Essentials/tests/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj#cluster-rest"
+          "Essentials/tests/Activities/Design/Api/Tests/Elsa.Activities.Design.Api.Tests.csproj"
         ]
       },
       {
@@ -831,26 +828,7 @@
           "Essentials/tests/Workflows/Dashboard/Tests/Elsa.Workflows.Dashboard.Tests.csproj",
           "Essentials/tests/Samples/Compensation/Tests/Elsa.Samples.Compensation.Tests.csproj",
           "Essentials/tests/Http/Tests/Elsa.Http.Tests.csproj",
-          "Essentials/tests/Attention/Api/Tests/Elsa.Attention.Api.Tests.csproj",
-          "Essentials/tests/Cli/Tests/Elsa.Cli.Tests.csproj"
-        ]
-      },
-      {
-        "name": "workbench-native-hosting",
-        "units": [
-          "Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj#workbench-native-hosting"
-        ]
-      },
-      {
-        "name": "workbench-rest",
-        "units": [
-          "Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj#workbench-rest"
-        ]
-      },
-      {
-        "name": "cluster-foundation-host",
-        "units": [
-          "Essentials/tests/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj#cluster-foundation-host"
+          "Essentials/tests/Attention/Api/Tests/Elsa.Attention.Api.Tests.csproj"
         ]
       }
     ],

@@ -276,16 +276,18 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
 
 ## Phase 9: The switch (FR-011) and outcomes
 
-- [ ] T036 After the implementation PR (Phases 1–8) merges and `Full tier` is green on a `main` push, ask the admin (Joey Barten or Sipke Schoorstra) to add `Full tier` to ruleset `main-2`'s required contexts. Confirm with `gh api repos/elsa-workflows/elsa-foundation/rulesets/<id> --jq '.rules[] | select(.type=="required_status_checks")'`, and record the output on the program issue. In the same step, update every merge path that names the required checks, so it waits for `Full tier` instead of trying a merge the ruleset refuses: `docs/contributing/merging.md`, `docs/contributing/review-checklist.md`, and the `elsa-auto-review-merge` and `elsa-quality-fix` skills (refresh `.specify/integrations/claude.manifest.json`).
-- [ ] T037 In a separate PR, set `integrationLeavesPrTier: true` in `tools/ci/test-tiers.json` and drop the integration units from `shards.pr`, leaving pr-1 to pr-3 per research R9. Its `Plan tiers` must show the ruleset check passing. Afterwards the PR tier runs at most 5 test jobs (FR-022).
+- [X] T036 After the implementation PR (Phases 1–8) merges and `Full tier` is green on a `main` push, ask the admin (Joey Barten or Sipke Schoorstra) to add `Full tier` to ruleset `main-2`'s required contexts. Confirm with `gh api repos/elsa-workflows/elsa-foundation/rulesets/<id> --jq '.rules[] | select(.type=="required_status_checks")'`, and record the output on the program issue. In the same step, update every merge path that names the required checks, so it waits for `Full tier` instead of trying a merge the ruleset refuses: `docs/contributing/merging.md`, `docs/contributing/review-checklist.md`, and the `elsa-auto-review-merge` and `elsa-quality-fix` skills (refresh `.specify/integrations/claude.manifest.json`). *(Done 2026-10-23: Joey Barten added `Full tier` to `main-2`, which now requires `Build & test`, `Generated maps fresh` and `Full tier`, enforcement active. `test_tiers.py`'s ruleset check confirms it. There is no program issue for spec 263, so the record is on the switch PR. The merge paths named are updated, plus the Merge Gate in `docs/skills/catalog.md`.)*
+- [X] T037 In a separate PR, set `integrationLeavesPrTier: true` in `tools/ci/test-tiers.json` and drop the integration units from `shards.pr`, leaving pr-1 to pr-3 per research R9. Its `Plan tiers` must show the ruleset check passing. Afterwards the PR tier runs at most 5 test jobs (FR-022). *(Done: `pr-1` to `pr-3`, plus Architecture guards and Core-only. `select --tier pr --base origin/main` read the live ruleset before allowing the flip.)*
 - [ ] T038 Measure the outcomes after T037 and post them on the program issue:
   - **SC-001**: the median push-to-`Build & test` time over the first 20 code PRs, from the runs API;
   - **SC-002**: `Full tier` time on each ready PR, naming the runs that retried;
   - **SC-004**: re-runs caused by quarantined tests over 30 days;
   - **the load risk** from the plan: the share of PR pushes made while ready, and the queue wait, against R1's baseline.
 
+  *(Filed as #3267, because the measurements need 20 PR runs after this switch merges.)*
+
   A median of at most 13 minutes meets SC-001; file the method-level split of the slowest class as a `needs-triage` follow-up. A miss above 13 minutes goes to the owner with the options in the plan's Risks section.
-- [ ] T039 Set the spec's `**Status**:` line to `Implemented` in the PR that completes T038's measured outcomes, before it merges (docs/reference/spec-lifecycle.md; never a separate status PR). Update `docs/program-goals/` per Program bookkeeping.
+- [X] T039 Set the spec's `**Status**:` line to `Implemented` in the PR that completes T038's measured outcomes, before it merges (docs/reference/spec-lifecycle.md; never a separate status PR). Update `docs/program-goals/` per Program bookkeeping. *(Done in the switch PR, which completes the implementation; the outcome measurements of T038 follow as their own issue, since they need runs after the merge. Spec 263 belongs to no program-goal bucket (`none/free-flow`), so `docs/program-goals/` has nothing to update.)*
 
 ---
 

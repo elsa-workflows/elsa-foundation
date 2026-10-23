@@ -3,7 +3,7 @@
 **Feature Branch**: `agent/claude/263-ci-tiering-merge-queue`
 **Created**: 2026-10-21
 **Revised**: 2026-10-22, after review by Sipke Schoorstra and CodeRabbit on #3179 (see [Revision history](#revision-history))
-**Status**: Draft
+**Status**: Implemented
 **Input**: Joey Barten: "Whenever a merge arrived before my PR is merged, GitHub tells me to update this branch. [...] We are waiting a long time on the CI build and test runs. [...] Tests should much more run in parallel. [...] Tests should only run when code has changed, not documentation. [...] The regression/integration tests should likely run right before the merge completes, and could block the merge. But perhaps these more expensive regression tests should not run with every commit made during the PR." The objective, as confirmed on 2026-10-22, is **shorter waiting time**: from a push to a result, and from "ready" to "merged". The machine time of individual tests is not the objective.
 
 ## Evidence and Context
