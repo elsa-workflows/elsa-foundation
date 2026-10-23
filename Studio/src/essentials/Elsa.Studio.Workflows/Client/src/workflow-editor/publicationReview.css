@@ -275,10 +275,12 @@
   padding: 12px 20px;
 }
 
-.wf-publication-footer .wf-primary-action {
+.wf-publication-footer.wf-dialog-actions .wf-primary-action,
+.wf-publication-footer.wf-dialog-actions button[type="submit"] {
   border-color: color-mix(in srgb, var(--wf-accent) 44%, var(--wf-border));
   background: var(--wf-accent-soft);
-  color: var(--wf-accent);
+  /* --wf-accent on this wash is 4.46:1 in Classic light. Mix toward --wf-text so the label stays AA in light and dark. */
+  color: color-mix(in srgb, var(--wf-accent) 70%, var(--wf-text));
   font-weight: 700;
 }
 

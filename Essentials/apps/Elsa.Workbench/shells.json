@@ -153,6 +153,7 @@
           },
           "JavaScriptJintEngine": {},
           "JavaScriptWorkflowsDesign": {},
+          "Liquid": {},
           "Mediator": {},
           "MemoryCache": {},
           "ModularityApi": {},

@@ -2960,7 +2960,6 @@ Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateIdentity.TemplateId
 Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateOccurrenceOverlay
 Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateOccurrenceOverlay.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateOccurrenceOverlay!
 Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateOccurrenceOverlay.Equals(Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateOccurrenceOverlay? other) -> bool
-Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateOccurrenceOverlay.ExecutableActivityTemplateOccurrenceOverlay(string! schemaVersion, System.Text.Json.JsonElement inputBindings, Elsa.Workflows.Runtime.Core.Models.ExecutableActivityStructure? structure) -> void
 Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateOccurrenceOverlay.InputBindings.get -> System.Text.Json.JsonElement
 Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateOccurrenceOverlay.SchemaVersion.get -> string!
 Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateOccurrenceOverlay.Structure.get -> Elsa.Workflows.Runtime.Core.Models.ExecutableActivityStructure?
@@ -8882,3 +8881,14 @@ override Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility.GetHa
 override Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility.ToString() -> string!
 static Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility.operator !=(Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility? left, Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility.operator ==(Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility? left, Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility? right) -> bool
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionScopeValues
+Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateOccurrenceOverlay.ExecutableActivityTemplateOccurrenceOverlay(string! schemaVersion, System.Text.Json.JsonElement inputBindings, Elsa.Workflows.Runtime.Core.Models.ExecutableActivityStructure? structure, System.Text.Json.JsonElement? outputBindings = null) -> void
+Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateOccurrenceOverlay.OutputBindings.get -> System.Text.Json.JsonElement?
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.ActivityExecutionScope = "runtime.activityExecutionScope" -> string!
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.ActivityExecutionScopeClosed = "closed" -> string!
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.BoundaryVariableName = "runtime.boundaryVariableName" -> string!
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.CaptureTargetScopeId = "runtime.captureTargetScopeId" -> string!
+const Elsa.Workflows.Runtime.Core.Models.ActivityExecutionScopeValues.InputRole = "input" -> string!
+const Elsa.Workflows.Runtime.Core.Models.ActivityExecutionScopeValues.OutputRole = "output" -> string!
+const Elsa.Workflows.Runtime.Core.Models.ActivityExecutionScopeValues.VariableRole = "variable" -> string!
+static Elsa.Workflows.Runtime.Core.Models.ActivityExecutionScopeValues.Metadata(string! boundaryActivityExecutionId, string! role, string! referenceKey, string! storageDriverKey, string? inputName = null, string? variableName = null) -> System.Collections.Generic.Dictionary<string!, string!>!

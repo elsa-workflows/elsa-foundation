@@ -1,3 +1,5 @@
+import { afterEach, beforeEach, vi } from "vitest";
+
 /**
  * Node 22+ ships a global `localStorage` that is a non-functional stub unless
  * Node is started with `--localstorage-file`. Vitest's jsdom environment skips
@@ -8,6 +10,16 @@
  * `globalThis.localStorage` getter would emit a `--localstorage-file` warning,
  * so overwrite without inspecting the current value.
  */
+
+// Fake timers live on the Vitest worker, not in the per-file module cache.
+// `isolate` therefore does not reset them, and a file that forgets
+// `useRealTimers` leaves `vi.waitFor` advancing a leftover fake clock.
+beforeEach(() => {
+  vi.useRealTimers();
+});
+afterEach(() => {
+  vi.useRealTimers();
+});
 const dom = (globalThis as { jsdom?: { window: Window } }).jsdom;
 if (dom?.window) {
   for (const key of ["localStorage", "sessionStorage"] as const) {
