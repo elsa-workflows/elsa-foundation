@@ -19,7 +19,7 @@
 | `workflowDefinitionDraft` | Draft entity plus embedded layout records; validation results remain derived | Physical entity table | `id`, `tenantId`, `workflowDefinitionId`, `sourceVersionId`, `createdAt`, `lastModifiedAt` | Draft state/layout replace atomically; provenance write-once; current-draft order is deterministic. |
 | `workflowDefinitionVersionLayout` | Immutable version layout records | Physical entity table | `id`, `tenantId`, `workflowDefinitionVersionId` | At most one layout per version within scope; content immutable after insert. |
 | `activityDefinition` | `ActivityDefinition` | Physical entity table | `id`, `tenantId`, `activityTypeKey`, `category`, `displayName`, `description` | `activityTypeKey` unique within scope and write-once; descriptive fields may change. |
-| `activityDefinitionVersion` | `ActivityDefinitionVersion` logical descriptor, inputs, outputs, and facets; excludes navigation and EF source columns | Physical entity table | `id`, `tenantId`, `definitionId`, `semVerSortKey`, `descriptorType`, `sourceKind`, `sourceId`, `hash` | `(definitionId, semVerSortKey)` unique; content/provenance immutable except the tier-only catalog-field refresh introduced in #2740; hash mismatch is authoritative conflict. |
+| `activityDefinitionVersion` | `ActivityDefinitionVersion` logical descriptor, inputs, outputs, and facets; excludes navigation and EF source columns | Physical entity table | `id`, `tenantId`, `definitionId`, `semVerSortKey`, `descriptorType`, `sourceKind`, `sourceId`, `hash` | `(definitionId, semVerSortKey)` unique; content/provenance immutable except the tier-only catalog-field refresh introduced in #2740; only a hash difference that is not tier-only and not build-metadata-only is an authoritative conflict (spec 004 FR-013; `ActivityVersionReconciler.IsBuildMetadataOnlyDuplicate`, `IsInputTierOnlyChange`). |
 | `activityAvailabilitySettings` | Activity availability settings document | Dedicated document table | Envelope/scope fields only unless a measured query is added | Point-oriented mutable settings; no unproven query projection. |
 
 The exact provider column names result from `feature default -> host naming policy -> explicit storage-unit override -> provider normalization`. Resolved names and the comparison-key algorithm/version participate in the schema fingerprint.
@@ -117,7 +117,9 @@ Absent definition/version
   └─ Reconcile/add ─────> Definition + immutable version atomically
 Existing logical version
   ├─ Same normalized SemVer + same hash ─> idempotent existing outcome
-  └─ Same normalized SemVer + different hash ─> conflict; no write
+  ├─ Same normalized SemVer + build-metadata-only hash difference ─> skip (logged)
+  ├─ Same normalized SemVer + tier-only difference ─> in-place Hash/InputsSource refresh (#2740)
+  └─ Same normalized SemVer + any other hash difference ─> conflict; no write
 ```
 
 ## Validation Rules
