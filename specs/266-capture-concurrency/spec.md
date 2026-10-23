@@ -26,8 +26,11 @@ capture wins, silently, for workflow variables and, since spec 265, for graph ac
   `ValueFlow/ConcurrentWrite`: "Collect branch contributions and apply one explicit deterministic merge or reduction
   after the join". It does not see output captures. It decides concurrency from a fixed list of structure kinds it
   knows (Parallel, Flowchart, Sequence and a few others) and does not recognise BPMN.
-- That check runs when a workflow draft is validated. Graph activity drafts do not run it, and publication has no
-  backstop for it.
+- That check runs when a workflow draft is validated, and draft promotion re-runs the full draft validation. Graph
+  activity drafts and graph activity compilation do not run it. Workflow executable compilation has no backstop for
+  it, and source-module reconciliation materializes and publishes versions after only the credential-literal rule.
+- Today's Flowchart branch of the rule ignores outcome ports. Paths that leave different ports of a decision node
+  count as concurrent, so captures or Sets on the two outcomes of an If inside a Flowchart are refused today.
 - Container-scoped capture targets are refused at publication today. Only workflow-root and graph-variable captures
   exist.
 - Concurrency comes from Parallel branches, Flowchart forks (several outbound connections, `parallelFork` and
@@ -37,14 +40,24 @@ capture wins, silently, for workflow variables and, since spec 265, for graph ac
 
 ## Decisions
 
-Proposed defaults, to be confirmed by the owner before planning.
+Confirmed by the owner on 2026-10-23, after review of the code.
 
 | # | Decision | Why |
 |---|----------|-----|
-| D-1 | **One rule for every variable write.** A capture is a write. Captures and intrinsic writes (Set, Merge, Reduce) are checked together by the existing concurrent-write rule, so a capture and a Set that can run concurrently into one variable collide too. | ADR 0048 §5 and the existing `ValueFlow/ConcurrentWrite` rule say the same thing. Two rules would drift, and a capture racing a Set is the same defect. |
-| D-2 | **Each structure declares its own concurrency.** Which children of a structure can run at the same time, and which are mutually exclusive, is declared by that structure, not by a list kept in the validator. Every built-in structure declares it, BPMN included. A structure that declares nothing is treated as running its children one after another. | Structures are pluggable, and BPMN is missed today because the validator does not know it. The structure's author is the only one who knows its semantics. |
-| D-3 | **Refused where the author is, and again at publication.** The rule runs when a workflow draft or a graph activity draft is validated, and publication repeats it as a backstop, so a definition that skips draft validation (import, API) is still refused. | ADR 0048 §5 says "fail publication". Today the intrinsic rule is draft-only and graph activities have no check at all. |
-| D-4 | **Already published executables keep running.** Nothing is re-validated retroactively. A definition that breaks the rule is refused at its next publication. | Published executables are immutable and content-addressed (ADR 0038). |
+| D-1 | **One rule for every variable write, all writers reported at once.** A capture is a write. Captures and intrinsic writes (Set, Merge, Reduce) are checked together by the existing concurrent-write rule, so a capture and a Set that can run concurrently into one variable collide too. There is one finding per variable, keeping today's path and type, and it names every node that writes that variable concurrently, not only the first pair, so the author can fix them all in one pass. | ADR 0048 §5 and the existing `ValueFlow/ConcurrentWrite` rule say the same thing. Two rules would drift, and a capture racing a Set is the same defect. Reporting every writer avoids a fix-one, republish, find-the-next loop. |
+| D-2 | **Each structure declares how its children relate in time.** For any two of its children, a structure states whether one always runs before the other, whether they can run at the same time, whether they are mutually exclusive, or that it does not say. This is declared by the structure, not by a list kept in the validator. Every built-in structure declares it fully, BPMN included. A structure that declares nothing is treated as running its children one after another. In this spec only the concurrent-write rule uses the declaration; the ordering rules move to it later (#3282). | Structures are pluggable, and BPMN is missed today because the validator does not know it. The structure's author is the only one who knows its semantics. Describing the whole time relation now costs little, because each structure must describe its children's timing anyway to answer concurrency. It also avoids a second declaration for ordering later. |
+| D-2a | **Flowchart concurrency follows its ports.** Paths that leave one node through the same outcome port run concurrently (an implicit fork). All outbound paths of a node with the `parallelFork` or `inclusiveFork` policy count as concurrent. Paths that leave different ports of any other node are mutually exclusive, because an activity completes with exactly one outcome. Nodes on one path are ordered, and branches that start at different trigger entries stay exclusive as today. | It matches what the engine does: it schedules the outbound connections whose port matches the single completed outcome, or all of them under `parallelFork`. No built-in activity completes with more than one outcome; #3285 makes the runtime enforce that. |
+| D-3 | **Refused where the author is, and again at publication.** The rule runs in workflow draft validation (which draft promotion already re-runs), in graph activity draft validation, and in graph activity compilation. Workflow executable compilation also runs it as a backstop, so a version that never went through draft validation is still refused. That covers source-module reconciliation, which today runs only the credential-literal rule (#3283). The analysis lives in one place and serves all of these. | ADR 0048 §5 says "fail publication", and executable compilation is the one step every executable passes through. Today the intrinsic rule is workflow-draft-only, and graph activities have no check at all. |
+| D-4 | **Already published executables keep running.** Nothing is re-validated retroactively. A definition that breaks the rule is refused at its next publication, which includes recompiling an existing version. | Published executables are immutable and content-addressed (ADR 0038). |
+
+### Follow-ups filed while settling the decisions
+
+All four are sub-issues of epic #3052 and are out of scope here.
+
+- [#3282](https://github.com/elsa-workflows/elsa-foundation/issues/3282): the value-flow ordering rules and the expression picker take ordering from the structures' declarations (D-2), instead of hard-coded structure kinds.
+- [#3283](https://github.com/elsa-workflows/elsa-foundation/issues/3283): reconciled workflow versions pass the full draft validation gate.
+- [#3284](https://github.com/elsa-workflows/elsa-foundation/issues/3284): workflow executable compilation reports every error in one refusal.
+- [#3285](https://github.com/elsa-workflows/elsa-foundation/issues/3285): the runtime enforces one outcome per activity completion.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -180,21 +193,24 @@ variable from those slots are refused without any change to the validator.
 
 - **FR-001**: Validation MUST refuse two variable writes that can run concurrently and target the same variable
   (same declaring scope and reference key), where a write is an output capture or a Set, Merge or Reduce intrinsic.
-- **FR-002**: The finding MUST name both writing nodes, the variable and its scope, and say how to fix it: capture
-  into separate variables and combine them with one write after the join.
+- **FR-002**: There MUST be one finding per variable. It MUST name every node that writes that variable
+  concurrently, the variable and its scope, and say how to fix it: capture into separate variables and combine them
+  with one write after the join. Every violating variable MUST be reported in the same validation or publication
+  attempt.
 - **FR-003**: Writes that cannot run concurrently MUST NOT be refused: consecutive steps, a Flowchart path,
-  If arms, Switch cases, loop iterations, Flowchart decision outcomes that are mutually exclusive, and BPMN exclusive
-  gateway branches.
-- **FR-004**: The rule MUST apply to workflow drafts, to graph activity drafts, and again at publication of both,
-  so a definition that never went through draft validation is still refused.
+  If arms, Switch cases, loop iterations, Flowchart paths that leave different outcome ports of a node without a
+  fork policy, and BPMN exclusive gateway branches.
+- **FR-004**: The rule MUST apply to workflow draft validation, to graph activity draft validation, to graph
+  activity compilation, and to workflow executable compilation, so a version that never went through draft
+  validation is still refused.
 - **FR-005**: For a graph activity, the rule MUST cover captures into the activity's own variables from its body
   nodes.
-- **FR-006**: Each structure MUST be able to declare which of its child slots, and which of its children within a
-  slot, can run concurrently and which are mutually exclusive. A structure that declares nothing MUST be treated as
-  running its children one after another.
-- **FR-007**: Every built-in structure MUST declare its concurrency: Sequence, Flowchart (including fork and join
-  policies), If, Switch, Parallel, the loops (For, ForEach, While, Do), BPMN (parallel, inclusive, exclusive and
-  event-based gateways, implicit splits and multi-instance) and CompensationScope.
+- **FR-006**: Each structure MUST be able to declare, for any two of its children, whether one always runs before
+  the other, whether they can run concurrently, whether they are mutually exclusive, or that it does not say. A
+  structure that declares nothing MUST be treated as running its children one after another.
+- **FR-007**: Every built-in structure MUST declare that relation fully: Sequence, Flowchart (outcome ports and
+  fork policies, as in D-2a), If, Switch, Parallel, the loops (For, ForEach, While, Do), BPMN (parallel,
+  inclusive, exclusive and event-based gateways, implicit splits and multi-instance) and CompensationScope.
 - **FR-008**: The concurrent-write rule MUST take its concurrency knowledge only from the structures' declarations,
   not from a list of structure kinds of its own.
 - **FR-009**: Two output captures of one node into the same variable MUST be refused as a duplicate capture target.
