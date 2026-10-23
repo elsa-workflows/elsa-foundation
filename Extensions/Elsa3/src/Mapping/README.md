@@ -91,6 +91,20 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
 - **Defaults and required inputs.** A WriteLine without text gets `text = ""`, because Elsa 3 writes an empty line. An
   R2 default counts as bound even when it is blank. Any other required Elsa 4 input with no Elsa 3 value is
   `ELS3-ACTIVITY-REQUIRED-INPUT-UNBOUND`.
+- **Null members (spec 267).** Elsa 3's exporter writes `null` for every member the author never set. A null member
+  converts to what the Elsa 3 runtime ran the activity with, as each map rule records (`OnNull`):
+  - Elsa 3 ran with null and the Elsa 4 input accepts null: a `Literal` holding null (RunJavaScript's
+    `possibleOutcomes`, HttpEndpoint's `Policy`, …).
+  - Elsa 3 ran with a value Elsa 4's default equals: no binding (If's `Condition`, …).
+  - Elsa 3 ran with a value Elsa 4's default differs from: that value, as for an absent member (R2), plus
+    FlowSendHttpRequest's `[200]` and an empty string for Correlate and SetName, which Elsa 4 reads as clearing them.
+  - Elsa 4 cannot reproduce or represent what Elsa 3 did: `ELS3-ACTIVITY-NULL-UNCONVERTIBLE`, naming the member and why
+    (For's `step` ran as 0, ForEach's `items` and the header members faulted, a SendHttpRequest with content and a
+    null content type sent no body, a required member rejected the activity, a null SetVariable or SetOutput value
+    cannot be published: #3280).
+
+  A null output is captured by nothing, and a null member of an activity resolved by name gets no binding. An input
+  holding a literal null converts as a JSON null does. Nothing above reports a warning.
 - **`canStartWorkflow` on a non-trigger** (a WriteLine, SetVariable, …) only picks a flowchart's start node, as in Elsa 3
   when no trigger fired. It is dropped after that, without a diagnostic. HttpEndpoint and Event carry the flag; Cron and
   Timer require it.
