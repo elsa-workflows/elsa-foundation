@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/runtime-agent-provider-contract`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented — all tasks checked in 34423695f
 **Input**: Locked Runtime Execution Seam addendum decision: workflow executions use actor-style execution agents (`WorkflowExecutionId -> one active mailbox/agent`) while Elsa checkpoint state remains authoritative.
 
 ## Scenarios & Tests

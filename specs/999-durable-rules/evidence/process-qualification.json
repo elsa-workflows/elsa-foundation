@@ -1,0 +1,2424 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+  "publishStateCommit": "eb3e12531b0cbd594374df1e49df0fadef9a50f3",
+  "stage": "process",
+  "directProofPassed": true,
+  "processBoundaryProofPassed": true,
+  "processProofPassed": true,
+  "fullAcceptancePassed": false,
+  "commands": [
+    {
+      "command": [
+        "dotnet",
+        "--version"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/consumer",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/01-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "f57769402c5259afcb4827defd14477a9a204c0c51885d5e8c2e0f0ea3ac9074"
+    },
+    {
+      "command": [
+        "dotnet",
+        "restore",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/consumer/Rules.PackageProbe.csproj",
+        "--configfile",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/consumer/NuGet.Config"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/consumer",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/02-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "0a83e8eaffe8912ca0582d8fe0bd1f15004a95e6218da42a3be1db4c5965047e"
+    },
+    {
+      "command": [
+        "dotnet",
+        "restore",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/consumer/Rules.PackageProbe.csproj",
+        "--locked-mode",
+        "--configfile",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/consumer/NuGet.Config"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/consumer",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/03-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "0d2a0c87a6970b839d836553cdb2b94ff2c9e61f1f7bfadd883d4add1e72c895"
+    },
+    {
+      "command": [
+        "dotnet",
+        "publish",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/consumer/Rules.PackageProbe.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--output",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/consumer",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/04-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "685aab0a21557167bd63dfb6872f8d5fa9d5d4ba6554dad6ee329ceefc8bf197"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "receipt",
+        "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment-receipt-evidence.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/05-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "38c6e174a368db71e9e48042364fb9d8b526e254c0af7f694ee1c998abd0f645"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "direct",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/direct.db",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/direct.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/06-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "6e69f03c6fa9a67bfcb44885eff95c99ff4e9cb534c20cdf5f12661b6db1f3a7"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "incompatible",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/incompatible.db",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/incompatible.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/07-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "9dd8ed221aabf08fe31494a3550b2eca936946464b171cd38c0721d17fb2ce04"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "unavailable",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/unavailable.db",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/unavailable.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/08-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "4235082eed4e2c6b3bd8574567ad5df566182c00c3755616dfe9a5b8283fdacb"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "direct",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/restored.db",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/restored.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/09-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "b522c1f884880124a558bbf2b830ba74048b475eaa9e3a2dc36200749ae60b87"
+    },
+    {
+      "command": [
+        "dotnet",
+        "build",
+        "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source/Extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--no-dependencies",
+        "-p:CustomBeforeDirectoryBuildProps=/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/package-versions.props"
+      ],
+      "cwd": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/10-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "7181a3e3fba95b6c33d94b9ff5fa55baeaa8906a94a9021ae786a60db2308c4e"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "unavailable",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/alternate.db",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/alternate.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/11-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "b8d4fe9257be1c1695e0e81ef4042f730b1c7179d84fcb30a2fd94a8ec010a6e"
+    },
+    {
+      "command": [
+        "dotnet",
+        "build",
+        "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source/Extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--no-dependencies",
+        "-p:CustomBeforeDirectoryBuildProps=/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/package-versions.props"
+      ],
+      "cwd": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/12-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "2b7d21f56cda139e781d00aa0eb453aeb952cc2dee21e8b9386c06237be13df3"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "unavailable",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/control.db",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/control.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/13-command.log",
+      "exitCode": 1,
+      "expectedFailure": true,
+      "logSha256": "89765e12542081039d6d5229a0f61154066e7fe6c87bbb0c6177b40fea3d3160"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "direct",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/control-restored.db",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/control-restored.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/14-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "523454290741a1d811af018122764785ce9c55133167137b6f3c32f4dc890102"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-boundary",
+        "accepted",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/accepted-crash-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/accepted-crash-origin.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/accepted-crash-origin.log",
+      "pid": 3247,
+      "exitCode": -9,
+      "intentionalTermination": true,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-recover",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/accepted-crash-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/accepted-crash-successor.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/16-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "1c95efe9125d982dc1edb9e5f200c052dc712a96c2f2f8f1322f9976c2279ec2"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-boundary",
+        "consumed",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/consumed-crash-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/consumed-crash-origin.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/consumed-crash-origin.log",
+      "pid": 3447,
+      "exitCode": -9,
+      "intentionalTermination": true,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-recover",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/consumed-crash-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/consumed-crash-successor.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/18-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "c4aecd383ad9368ea7c899981d5470a6acfd2912391566fa742daed4506cf8de"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-boundary",
+        "accepted",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/accepted-delayed-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/accepted-delayed-origin.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/accepted-delayed-origin.log",
+      "pid": 3542,
+      "exitCode": 0,
+      "logSha256": "18026e54a48f5ff20ff2efdded94e9289d4abf84f863b5d5cc0d6657c59c4a8a"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-recover",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/accepted-delayed-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/accepted-delayed-successor.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/20-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "f527d41abd685d140f87e885a44137933e635ff5651e3979c6fbf60646c73bb7"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-boundary",
+        "consumed",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/consumed-delayed-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/consumed-delayed-origin.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/consumed-delayed-origin.log",
+      "pid": 3638,
+      "exitCode": 0,
+      "logSha256": "0a544ff5f81b3e63a16033d031ed95c7befb395676801830c17ee70a585f4a6e"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-recover",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/consumed-delayed-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/consumed-delayed-successor.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/22-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "62179ab296b41278443518fb003fc24093728bbcc264026376b889a35d28064b"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-boundary",
+        "accepted",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/accepted-cancel-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/accepted-cancel-origin.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/accepted-cancel-origin.log",
+      "pid": 3698,
+      "exitCode": 0,
+      "logSha256": "2b2f7ea1f77707a5e60b0b10e2feed5f85d844755cb9484569b21d148d48e46c"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-cancel",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/accepted-cancel-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/accepted-cancel-successor.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/24-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "c55c28976abd7c7a65331ff28972b0d7f9ed43026e4213b45b972aead1bc7453"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-stale-origin",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/live-successor/origin-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/live-successor/origin.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/live-successor/origin.log",
+      "pid": 3754,
+      "exitCode": 0,
+      "logSha256": "42540dfd170f905c1b2ea661d1a5b9abf3bb724303e561a3ebae49d841eb80a3"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-stale-successor",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/live-successor/origin-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/live-successor/successor-ready.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/live-successor/successor.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/live-successor/successor.log",
+      "pid": 3807,
+      "exitCode": 0,
+      "logSha256": "85b3d2903412531391ac2552e96bca3fabc0d7e55da4bc46b643bc925718c66d"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-boundary",
+        "accepted",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/cancellation-baseline-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/cancellation-baseline-origin.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/cancellation-baseline-origin.log",
+      "pid": 4006,
+      "exitCode": -9,
+      "intentionalTermination": true,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-control",
+        "cancellation",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/cancellation-baseline-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/cancellation-baseline.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/28-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "66bcec38aa8638f73cc5121282bbca5dcec9fe11aceb0548baec3cedf2910823"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-boundary",
+        "accepted",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/cancellation-removed-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/cancellation-removed-origin.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/cancellation-removed-origin.log",
+      "pid": 4050,
+      "exitCode": -9,
+      "intentionalTermination": true,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": [
+        "dotnet",
+        "build",
+        "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source/Extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--no-dependencies",
+        "-p:CustomBeforeDirectoryBuildProps=/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/package-versions.props"
+      ],
+      "cwd": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/30-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "9ee6a93bc4969c90fb1acd53261746df4028bc9d69797956c05cf13c057577ce"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-control",
+        "cancellation",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/cancellation-removed-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/cancellation-removed.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/31-command.log",
+      "exitCode": 1,
+      "expectedFailure": true,
+      "logSha256": "304d74da76b4ba6891f0539162a5ca5a01cc4817bfe402b4d6edcefd4fb6277a"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-boundary",
+        "accepted",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/cancellation-restored-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/cancellation-restored-origin.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/cancellation-restored-origin.log",
+      "pid": 4132,
+      "exitCode": -9,
+      "intentionalTermination": true,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-control",
+        "cancellation",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/cancellation-restored-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/cancellation-restored.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/33-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "d77f09cfc49258b948c38a1beafd5dde31a2df566b529d1cebe5e4532cbc8941"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-boundary",
+        "accepted",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/fence-baseline-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/fence-baseline-origin.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/fence-baseline-origin.log",
+      "pid": 4179,
+      "exitCode": -9,
+      "intentionalTermination": true,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-control",
+        "fence",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/fence-baseline-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/fence-baseline.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/35-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "ca915e26d9f51590c6d0b17db017baa6121ea0d571a64d1e31db512360ef1719"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-boundary",
+        "accepted",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/fence-removed-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/fence-removed-origin.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/fence-removed-origin.log",
+      "pid": 4279,
+      "exitCode": -9,
+      "intentionalTermination": true,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": [
+        "dotnet",
+        "build",
+        "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source/Extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--no-dependencies",
+        "-p:CustomBeforeDirectoryBuildProps=/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/package-versions.props"
+      ],
+      "cwd": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/37-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "e9dd5d2e6a0142742d536a5a7f684926e0edea9c128c88c1fb4fe0c641d02ba3"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-control",
+        "fence",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/fence-removed-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/fence-removed.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/38-command.log",
+      "exitCode": 1,
+      "expectedFailure": true,
+      "logSha256": "bd54bafb4a86cd68235f47170040213767e714040c38eb260a22290d8a5bdd5f"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-boundary",
+        "accepted",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/fence-restored-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/fence-restored-origin.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/fence-restored-origin.log",
+      "pid": 4677,
+      "exitCode": -9,
+      "intentionalTermination": true,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-control",
+        "fence",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/fence-restored-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/fence-restored.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/40-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "c23d2571d0c3700ae9a26c5fad8020e8ab0b185d0b712c7f05f63d3632137015"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-boundary",
+        "accepted",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/consumed-baseline-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/consumed-baseline-origin.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/consumed-baseline-origin.log",
+      "pid": 4942,
+      "exitCode": -9,
+      "intentionalTermination": true,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-control",
+        "consumed",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/consumed-baseline-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/consumed-baseline.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/42-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "8bfe69b98ad2dbc0ce9f8ba5458d1ac98a0137e0630fae99445d58745e249c4e"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-boundary",
+        "accepted",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/consumed-removed-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/consumed-removed-origin.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/consumed-removed-origin.log",
+      "pid": 5148,
+      "exitCode": -9,
+      "intentionalTermination": true,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": [
+        "dotnet",
+        "build",
+        "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source/Extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--no-dependencies",
+        "-p:CustomBeforeDirectoryBuildProps=/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/package-versions.props"
+      ],
+      "cwd": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/44-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "5a65a7504189532641b6ab43a410ea4e0b996f344d806f418bf65aea5d557c70"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-control",
+        "consumed",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/consumed-removed-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/consumed-removed.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/45-command.log",
+      "exitCode": 1,
+      "expectedFailure": true,
+      "logSha256": "40748b40e155b1dfdb903f5d28f40b511422d5af8bc39087633673d263814f1b"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-boundary",
+        "accepted",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/consumed-restored-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/consumed-restored-origin.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/consumed-restored-origin.log",
+      "pid": 5265,
+      "exitCode": -9,
+      "intentionalTermination": true,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment/Rules.PackageProbe.dll",
+        "process-control",
+        "consumed",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/consumed-restored-state.json",
+        "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/persistence-controls/consumed-restored.json"
+      ],
+      "cwd": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/deployment",
+      "log": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/47-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "a7f1b11c2d278497ed91ce17be13c22d2c2ba2b9dc1c890d173e2fb29c565793"
+    }
+  ],
+  "harness": {
+    "tools/rules/verify-packaged-rules.py": "69fc12e8a5e7a7efa7568b6dd82333f7bfdd592930410805a3e511d996d3140f",
+    "tools/rules/package_consumer.py": "060bbb8dc2e95dd26c471cd3f2e7bd9b8957b1429c26f002dccdd40f22dcdaba",
+    "tools/rules/package_process.py": "3078659a369cba732775a559b4cc6ff7d0e02cbc24d7daa29791e1e7f689f8e4",
+    "tools/rules/package_adversarial.py": "411ea8d9a7f5bfaf279339e5807d6532b86ee8a76a16aba19e23544365ffc832",
+    "tools/rules/PackageProbe/PersistenceControlProbe.cs": "3639099ede1dfa1d20533e4c34e7b75f456c0e79db35de9d1fdeed73d157f9e4",
+    "tools/rules/PackageProbe/ProcessProbe.cs": "0d1d523cc94f94d59bb04fbd4c9d4cfa877d02a7b775191d58b535c12335627a",
+    "tools/rules/PackageProbe/Program.cs": "61e2d856357eb47797b9666400dd2ea76712c54cb802841fef0e285fe7a7d8af",
+    "tools/rules/PackageProbe/StaleProcessProbe.cs": "6650165ef27ccddc241f44a5aaccd270e98e0f9567afaab95a239f5c9c471b52"
+  },
+  "reusedPackReceipt": {
+    "path": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/receipt.json",
+    "sha256": "1f532af730e2cd3e375d67f92644e9d1d2ea483e4391cb0e28b4c8d87a5ad0ef"
+  },
+  "lastPublishCommit": "9462cb743c08a515e9b8973c57110e3f44df0f7f",
+  "modules": [
+    "Elsa.Rules.Core",
+    "Elsa.Rules.Persistence.Core",
+    "Elsa.Rules.Runtime",
+    "Elsa.Rules.Persistence.EntityFrameworkCore"
+  ],
+  "pendingNativeModules": [
+    "Elsa.Rules.Workflows.Design",
+    "Elsa.Rules.Workflows.Runtime"
+  ],
+  "closure": [
+    {
+      "id": "Elsa.Rules.Core",
+      "path": "Extensions/Rules/src/Core/Elsa.Rules.Core.csproj",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules"
+    },
+    {
+      "id": "Elsa.Rules.Persistence.Core",
+      "path": "Extensions/Rules/src/Persistence/Core/Elsa.Rules.Persistence.Core.csproj",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules"
+    },
+    {
+      "id": "Elsa.Tasks.Core",
+      "path": "Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj",
+      "version": "4.0.14-preview"
+    },
+    {
+      "id": "Elsa.Rules.Runtime",
+      "path": "Extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules"
+    },
+    {
+      "id": "Elsa.Persistence.Schema",
+      "path": "Essentials/src/Persistence/Schema/Elsa.Persistence.Schema.csproj",
+      "version": "4.0.12-preview"
+    },
+    {
+      "id": "Elsa.Primitives",
+      "path": "Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj",
+      "version": "4.0.14-preview"
+    },
+    {
+      "id": "Elsa.Persistence.EntityFramework",
+      "path": "Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj",
+      "version": "4.0.32-preview"
+    },
+    {
+      "id": "Elsa.Rules.Persistence.EntityFrameworkCore",
+      "path": "Extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules"
+    }
+  ],
+  "packages": [
+    {
+      "id": "Elsa.Persistence.EntityFramework",
+      "version": "4.0.32-preview",
+      "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+      "fingerprint": "sha256:b758cfe4eaea58cf8ca4e5eba74e0d4a0456d1bdabd491dc416f1b4a0a74a215",
+      "archiveSha512": "hYJXRzBGwePdycGG6dkktsApb+HduafdS2ors2IhQ5yv4AfdqBkT6zydQFnMFca+QwqBxXj2tR8G9x9XgedXFQ==",
+      "path": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed/Elsa.Persistence.EntityFramework.4.0.32-preview.nupkg"
+    },
+    {
+      "id": "Elsa.Persistence.Schema",
+      "version": "4.0.12-preview",
+      "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+      "fingerprint": "sha256:134a1dea7a13f2113395548c38f81c34a89447602210402e4a58d63517b5c52e",
+      "archiveSha512": "RuBK4Vl9/b59/GX4s+7ntJwogbe/lBJILNorrXFz9V6YC69qBt0Cq79FGWDRFAiQHX69rANsSIU4HyXFAKRgEQ==",
+      "path": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed/Elsa.Persistence.Schema.4.0.12-preview.nupkg"
+    },
+    {
+      "id": "Elsa.Primitives",
+      "version": "4.0.14-preview",
+      "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+      "fingerprint": "sha256:b94d22e598c763c76493a386e5bc1c639515a38c2002b7111765758f8c50d682",
+      "archiveSha512": "mYjg0S7FZI9N6vLe72XkUJg4rup1SNwDH1sgqfWnv8ywyKnmS9czKwHzaPx2sLKIjR7COOsIqNnIO1r2o43l0g==",
+      "path": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed/Elsa.Primitives.4.0.14-preview.nupkg"
+    },
+    {
+      "id": "Elsa.Rules.Core",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+      "fingerprint": "sha256:721701daa7675c54bd688d1f019371330273a74e93b3c0eac6dfd14ab5206202",
+      "archiveSha512": "2uMPfqyq3+Yj1/eVIjxHhzYjKcjFz46CBDix8J/Rws4T1VG1dDGw29uKHxawFSlX2KtTv1rKQSz0SNZ3iYT4yA==",
+      "path": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed/Elsa.Rules.Core.4.0.0-branch-agent-codex-3181-durable-rules.nupkg"
+    },
+    {
+      "id": "Elsa.Rules.Persistence.Core",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+      "fingerprint": "sha256:3c2d9c7db66b9e28b59fca03596c37f48741ad361a5493061eccb1b561ec2bda",
+      "archiveSha512": "Z+t08G9J+4v5gQMZqYoLcFxXh+eqT7X0+/Qgbj3B3v9FAX/SqaKkYioPv/4WipqdcNRH+0fn+FU2JtO9OD2H4g==",
+      "path": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed/Elsa.Rules.Persistence.Core.4.0.0-branch-agent-codex-3181-durable-rules.nupkg"
+    },
+    {
+      "id": "Elsa.Rules.Persistence.EntityFrameworkCore",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+      "fingerprint": "sha256:4d900156f9797a8ee41ba9b9469cc767912a150f3856e6d05c7555829ad50ce9",
+      "archiveSha512": "D0FdlnT2GBs7VqecJ9PtVCFY1D2W50QUkPt08cMY2UIqaIvxGRJUq/FG7dZ7gjWhkkuNLlzFIg/sHCi127Wlhw==",
+      "path": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed/Elsa.Rules.Persistence.EntityFrameworkCore.4.0.0-branch-agent-codex-3181-durable-rules.nupkg"
+    },
+    {
+      "id": "Elsa.Rules.Runtime",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+      "fingerprint": "sha256:59c3c50cbde216d0fa394b6b75c708763e387126e4ca85e1a9ac20fdde166685",
+      "archiveSha512": "u3SdpnB/pfUiDTT2LEbvpXEhHw25h/luDq0K/Q+TdztqprXrnbSrwihI/cpaHIU01bEIC9CIZWhRwzxVqHO92w==",
+      "path": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed/Elsa.Rules.Runtime.4.0.0-branch-agent-codex-3181-durable-rules.nupkg"
+    },
+    {
+      "id": "Elsa.Tasks.Core",
+      "version": "4.0.14-preview",
+      "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+      "fingerprint": "sha256:1a59a5c06cb4b360bd8c3fefeb85356a64f4b2916293ad8e3d67b00ddc3b721c",
+      "archiveSha512": "Ptx3b7GZEyb3qarIO6CajyMzdG1EqM2/+3PtUWJdxdJip2m6nsxUdbc8VSyC4NrohsDSvmgi7i7vVNKxqGj12Q==",
+      "path": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed/Elsa.Tasks.Core.4.0.14-preview.nupkg"
+    }
+  ],
+  "packPassed": true,
+  "consumerTemplateSha256": "61e2d856357eb47797b9666400dd2ea76712c54cb802841fef0e285fe7a7d8af",
+  "consumerBuildSdkVersion": "10.0.300",
+  "restoredProjectLibraries": 0,
+  "resolvedPackages": {
+    "CShells/0.0.31": "0BzVoyFzBjhs6GeyFkOlsNC/0708/M0eS86d3nuQ/iSCUAcd/qcCbbVCE/0cY+1Awyu/awYkHIjIPRT1PQ8mgQ==",
+    "CShells.Abstractions/0.0.31": "se7fS2KnM3mFQjIDvB+KfvZNGdKbc68ITzlSde5V16ZGEeVZdHkRgkTlnJnFalXqkipiIr1oUQdXmqtEV6AE0g==",
+    "Elsa.Persistence.EntityFramework/4.0.32-preview": "hYJXRzBGwePdycGG6dkktsApb+HduafdS2ors2IhQ5yv4AfdqBkT6zydQFnMFca+QwqBxXj2tR8G9x9XgedXFQ==",
+    "Elsa.Persistence.Schema/4.0.12-preview": "RuBK4Vl9/b59/GX4s+7ntJwogbe/lBJILNorrXFz9V6YC69qBt0Cq79FGWDRFAiQHX69rANsSIU4HyXFAKRgEQ==",
+    "Elsa.Primitives/4.0.14-preview": "mYjg0S7FZI9N6vLe72XkUJg4rup1SNwDH1sgqfWnv8ywyKnmS9czKwHzaPx2sLKIjR7COOsIqNnIO1r2o43l0g==",
+    "Elsa.Rules.Core/4.0.0-branch-agent-codex-3181-durable-rules": "2uMPfqyq3+Yj1/eVIjxHhzYjKcjFz46CBDix8J/Rws4T1VG1dDGw29uKHxawFSlX2KtTv1rKQSz0SNZ3iYT4yA==",
+    "Elsa.Rules.Persistence.Core/4.0.0-branch-agent-codex-3181-durable-rules": "Z+t08G9J+4v5gQMZqYoLcFxXh+eqT7X0+/Qgbj3B3v9FAX/SqaKkYioPv/4WipqdcNRH+0fn+FU2JtO9OD2H4g==",
+    "Elsa.Rules.Persistence.EntityFrameworkCore/4.0.0-branch-agent-codex-3181-durable-rules": "D0FdlnT2GBs7VqecJ9PtVCFY1D2W50QUkPt08cMY2UIqaIvxGRJUq/FG7dZ7gjWhkkuNLlzFIg/sHCi127Wlhw==",
+    "Elsa.Rules.Runtime/4.0.0-branch-agent-codex-3181-durable-rules": "u3SdpnB/pfUiDTT2LEbvpXEhHw25h/luDq0K/Q+TdztqprXrnbSrwihI/cpaHIU01bEIC9CIZWhRwzxVqHO92w==",
+    "Elsa.Tasks.Core/4.0.14-preview": "Ptx3b7GZEyb3qarIO6CajyMzdG1EqM2/+3PtUWJdxdJip2m6nsxUdbc8VSyC4NrohsDSvmgi7i7vVNKxqGj12Q==",
+    "JetBrains.Annotations/2025.2.4": "TwbgxAkXxY+vNEhNVx/QXjJ4vqxmepOjsgRvvImQPbHkHMMb4W+ahL3laMsxXKtNT7iMy+E1B3xkqao2hf1n3A==",
+    "Microsoft.Data.Sqlite.Core/10.0.10": "TPCs0ldm7AWqcKmp6f/Xr+14sat7hx4rHfRlS4RgCURBH2thEWbAKEyX7cCWr63zVJVOJIJZTg2cBiUXa8ys6g==",
+    "Microsoft.EntityFrameworkCore/10.0.10": "a0V7zj/VbYP6dTdWpUgE/r2PuLKtUGe2aJ0lVKkn/wP9ZhaxUz2kQydVfvOjCv2SKxlrqdBfHhPD4Cvlf+4ffA==",
+    "Microsoft.EntityFrameworkCore.Abstractions/10.0.10": "bOzrFCl6uZCjaSh2bG1ToRQRdx+iXvxosCg9hFyG9OWeAzOFI4xev9OqKeWfKf/kAHyox2JnbcvLVf2ceA7sqA==",
+    "Microsoft.EntityFrameworkCore.Analyzers/10.0.10": "2gLDordUCGf3aNOOuqtTbP5mxhiP9nk6TnvGiE3RnqT891O+Zf/qKu1PIREubs1M16A0SImr4vULBfU5BTDs1Q==",
+    "Microsoft.EntityFrameworkCore.Relational/10.0.10": "wNonj40aZxia+GtuBiiD6ZqVh4h6y5Nje1bGdmzZ8/ui0QRsAN+S0SIrLHFCEGbG9cDbeaE40sh+Lr7o9rRs6g==",
+    "Microsoft.EntityFrameworkCore.Sqlite/10.0.10": "kzg9MuQNJvZQxAU+piSkEzc7/1tpW6n1nVSGGMObu2GgxLK8Nf+6fvZundaznTZ+O2KhfPZ8HFNCzMH3PWDUmA==",
+    "Microsoft.EntityFrameworkCore.Sqlite.Core/10.0.10": "YbVWMIouzwTKBiLms8boa7xeRT88wI14R1msv3XExFk9n0/sa8nU7MwDa1CKtfLGMJs7O7QWuS9/xhcQ72AD2A==",
+    "Microsoft.Extensions.DependencyModel/10.0.10": "rfZA1RjR021RPqSmIPovfz2aOd79TGqJ9BengbjnzIISOVwjLmuSDnhCMmiY/1c6iYvGolQ1iNGzkav0u11XEA==",
+    "Newtonsoft.Json/13.0.3": "HrC5BXdl00IP9zeV+0Z848QWPAoCr9P3bDEZguI+gkLcBKAOxix/tLEAAHC+UvDNPv4a2d18lOReHMOagPa+zQ==",
+    "Npgsql/10.0.0": "xZAYhPOU2rUIFpV48xsqhCx9vXs6Y+0jX2LCoSEfDFYMw9jtAOUk3iQsCnDLrFIv9NT3JGMihn7nnuZsPKqJmA==",
+    "Npgsql.EntityFrameworkCore.PostgreSQL/10.0.0": "E2+uSWxSB8LdsUVwPaqRWOcGOP92biry2JEwc0KJMdLJF+aZdczeIdEXVwEyv4nSVMQJH0o8tLhyAMiR6VF0lw==",
+    "NuGet.Common/7.9.0": "OWFEzHpwvgzSaHYmWzfbyTm6oBOy/BFSFEDk73zM9jiJaxdopYZ/DrqIQogaM3F+ZGTppBJffmzu5adetEI/YA==",
+    "NuGet.Configuration/7.9.0": "oY9XZp+TWjOmiGmU4R4JWBRY3F4TAVo7tqPr/z7MOsFcEpdYHMryjNSscoLBxUTR3WmFmYgO0Gvu4eRbz6pzOg==",
+    "NuGet.Frameworks/7.9.0": "w2adPmgUafmW9ON1MzDjuHmViN0vtiPV48Dz3OE6px8BiGSqrnWHOjwFEPOEPAZx20J1c7bxp90Hxo9l4xGWtw==",
+    "NuGet.Packaging/7.9.0": "Q2jxuud5kJLV0rUzsC02iC5ts8QsQu9UVyMvF8lULY3TwHL/W/PrnQ9bQFvMR7jJkzF1uilRPI1o+7VOtc2XMg==",
+    "NuGet.Versioning/7.9.0": "r4sZuVpVqwSBLe4qYDrnpScqdyctlRXg0HSF5OoCGkeBc8b+o8BBYHuI/u1RoWYX78PbieijU13TBt71/Xf3lw==",
+    "SQLitePCLRaw.bundle_e_sqlite3/2.1.11": "DC4nA7yWnf4UZdgJDF+9Mus4/cb0Y3Sfgi3gDnAoKNAIBwzkskNAbNbyu+u4atT0ruVlZNJfwZmwiEwE5oz9LQ==",
+    "SQLitePCLRaw.core/2.1.11": "PK0GLFkfhZzLQeR3PJf71FmhtHox+U3vcY6ZtswoMjrefkB9k6ErNJEnwXqc5KgXDSjige2XXrezqS39gkpQKA==",
+    "SQLitePCLRaw.lib.e_sqlite3/2.1.11": "Ev2ytaXiOlWZ4b3R67GZBsemTINslLD1DCJr2xiacpn4tbapu0Q4dHEzSvZSMnVWeE5nlObU3VZN2p81q3XOYQ==",
+    "SQLitePCLRaw.provider.e_sqlite3/2.1.11": "Y/0ZkR+r0Cg3DQFuCl1RBnv/tmxpIZRU3HUvelPw6MVaKHwYYR8YNvgs0vuNuXCMvlyJ+Fh88U1D4tah1tt6qw==",
+    "System.Security.Cryptography.Pkcs/8.0.1": "CoCRHFym33aUSf/NtWSVSZa99dkd0Hm7OCZUxORBjRB16LNhIEOf8THPqzIYlvKM0nNDAPTRBa1FxEECrgaxxA==",
+    "System.Security.Cryptography.ProtectedData/8.0.0": "+TUFINV2q2ifyXauQXRwy4CiBhqvDEDZeVJU7qfxya4aRYOKzVBpN+4acx25VcPB9ywUN6C0n8drWl110PhZEg=="
+  },
+  "identityRemovalControl": {
+    "originalSourceSha256": "6bb89ce0024a03020972583d7e1d16436101d357300e999695460f7fd987f9fd",
+    "originalDeployedAssetSha256": "0d72bfb1ec4643914fa9da042e8525bfd97734c144105103b38ea45bf80aa957",
+    "alternateAssetSha256": "3730527a306e607734e6d339919f67cc94cf4a24f0f47f4e13b4b8640de9bafc",
+    "removedGuardAssetSha256": "b3fa22c6f0e15c68d2f1ba4f0fcb3473df3e197623e17a8586ba774c819eb07d",
+    "intendedAssertionFailed": true,
+    "restoredSourceSha256": "6bb89ce0024a03020972583d7e1d16436101d357300e999695460f7fd987f9fd",
+    "restoredDeployedAssetSha256": "0d72bfb1ec4643914fa9da042e8525bfd97734c144105103b38ea45bf80aa957",
+    "restoredDirectPassed": true
+  },
+  "proofScope": "Four-module clean PackageReference direct execution and identity rejection; native/upgrade gates pending.",
+  "processRecovery": {
+    "topology": "independent-processes-on-one-machine",
+    "cases": [
+      {
+        "name": "accepted-crash",
+        "boundary": "accepted",
+        "action": "crash",
+        "database": "rules_f0c9c56bb852408db729c84b2632a887",
+        "passed": true,
+        "statePath": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/accepted-crash-state.json",
+        "boundaryState": {
+          "schemaVersion": 1,
+          "boundary": "accepted",
+          "invocationBase64": "eyJpbnZvY2F0aW9uU2NoZW1hVmVyc2lvbiI6MSwiaWRlbnRpdHkiOnsidGVuYW50IjpudWxsLCJwYXJ0aXRpb24iOiJwYWNrYWdlZC1ydWxlcy1wcm9iZSIsImludm9jYXRpb24iOiJwcm9jZXNzLWFjY2VwdGVkLTkwYzk1NDhlNWYzMjRlODI5OTIzNDVhMTg5OTJkZTgyIn0sImFydGlmYWN0Ijp7ImZvcm1hdFZlcnNpb24iOjEsImlkIjoicnVsZXM6MGYwMzA5ZDU4MTM2NzFhZTZhNDliMzE2NzM2NjUxNDI4NTRkM2U2MDFjZjAwMWJjZjBmNDdjMTM1ZDMzMDg0MSIsInNoYTI1NiI6IjBmMDMwOWQ1ODEzNjcxYWU2YTQ5YjMxNjczNjY1MTQyODU0ZDNlNjAxY2YwMDFiY2YwZjQ3YzEzNWQzMzA4NDEiLCJieXRlcyI6ImV5Sm1iM0p0WVhSV1pYSnphVzl1SWpveExDSnNZVzVuZFdGblpVbGtJam9pWld4ellTNXlkV3hsY3k1bWFXNXBkR1V0Y0c5emFYUnBkbVVpTENKc1lXNW5kV0ZuWlZabGNuTnBiMjRpT2pFc0luWnZZMkZpZFd4aGNua2lPbHNpWm1sdVlXd2lMQ0pxYjJsdVpXUWlMQ0pzWldaMElpd2libVYyWlhJdFpHVnlhWFpsWkNJc0luSnBaMmgwSWl3aWMyVmxaQ0lzSW5WdWNtVmhZMmhoWW14bElsMHNJbkoxYkdWeklqcGJleUpwWkNJNkltWnBibUZzSWl3aWNISmxiV2x6WlhNaU9sc2lhbTlwYm1Wa0lsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKbWFXNWhiQ0o5TEhzaWFXUWlPaUpxYjJsdUlpd2ljSEpsYldselpYTWlPbHNpYkdWbWRDSXNJbkpwWjJoMElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKcWIybHVaV1FpZlN4N0ltbGtJam9pYkdWbWRDSXNJbkJ5WlcxcGMyVnpJanBiSW5ObFpXUWlYU3dpWTI5dVkyeDFjMmx2YmlJNklteGxablFpZlN4N0ltbGtJam9pY21sbmFIUWlMQ0p3Y21WdGFYTmxjeUk2V3lKelpXVmtJbDBzSW1OdmJtTnNkWE5wYjI0aU9pSnlhV2RvZENKOUxIc2lhV1FpT2lKMWJuSmxZV05vWVdKc1pTSXNJbkJ5WlcxcGMyVnpJanBiSW5WdWNtVmhZMmhoWW14bElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKdVpYWmxjaTFrWlhKcGRtVmtJbjFkZlE9PSJ9LCJpbml0aWFsRmFjdHMiOlsic2VlZCJdLCJtYXhSb3VuZHMiOjcsImltcGxlbWVudGF0aW9uIjp7InBpblNjaGVtYVZlcnNpb24iOjEsImxhbmd1YWdlSWQiOiJlbHNhLnJ1bGVzLmZpbml0ZS1wb3NpdGl2ZSIsImxhbmd1YWdlVmVyc2lvbiI6MSwicmVjZWlwdFNjaGVtYVZlcnNpb24iOjEsInN0YXRlU2NoZW1hVmVyc2lvbiI6MSwicGFja2FnZXMiOlt7ImlkIjoiRWxzYS5SdWxlcy5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IjJ1TVBmcXlxM1x1MDAyQllqMS9lVklqeEhoellqS2NqRno0NkNCRGl4OEovUndzNFQxVkcxZERHdzI5dUtIeGF3RlNsWDJLdFR2MXJLUVN6MFNOWjNpWVQ0eUE9PSIsImFzc2V0cyI6W3sicGF0aCI6ImxpYi9uZXQxMC4wL0Vsc2EuUnVsZXMuQ29yZS5kbGwiLCJhc3NlbWJseSI6IkVsc2EuUnVsZXMuQ29yZSwgVmVyc2lvbj00LjAuMC4wLCBDdWx0dXJlPW5ldXRyYWwsIFB1YmxpY0tleVRva2VuPW51bGwiLCJzaGEyNTYiOiJiNjlmNmMzODg5NjdmMWEyNmMxZDM5YTNjOGQ0ZGZiOGM3MjMzNTI1MzhmMjFjNGJlYTM2MmU1M2NlNGI4MGExIn1dfSx7ImlkIjoiRWxzYS5SdWxlcy5QZXJzaXN0ZW5jZS5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IlpcdTAwMkJ0MDhHOUpcdTAwMkI0djVnUU1acVlvTGNGeFhoXHUwMDJCZXFUN1gwXHUwMDJCL1FnYmozQjN2OUZBWC9TcWFLa1lpb1B2LzRXaXBxZGNOUkhcdTAwMkIwZm5cdTAwMkJGVTJKdE85T0QySDRnPT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMmFhNDBiNDViMzlhMmQzMzNkYmVlYmNjZWE1YzRjOGQzMTBjMjliY2M0MTE5ZTgyMDNhN2M3NWU4MDhkOTY0NCJ9XX0seyJpZCI6IkVsc2EuUnVsZXMuUnVudGltZSIsInZlcnNpb24iOiI0LjAuMC1icmFuY2gtYWdlbnQtY29kZXgtMzE4MS1kdXJhYmxlLXJ1bGVzIiwiY29udGVudEhhc2giOiJ1M1NkcG5CL3BmVWlEVFQyTEVidnBYRWhIdzI1aC9sdURxMEsvUVx1MDAyQlRkenRxcHJYcm5iU3J3aWhJL2NwYUhJVTAxYkVJQzlDSVpXaFJ3enhWcUhPOTJ3PT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlJ1bnRpbWUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlJ1bnRpbWUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMGQ3MmJmYjFlYzQ2NDM5MTRmYTlkYTA0MmU4NTI1YmZkOTc3MzRjMTQ0MTA1MTAzYjM4ZWE0NWJmODBhYTk1NyJ9XX1dfSwibmF0aXZlRGVzdGluYXRpb24iOm51bGx9",
+          "invocationFingerprint": "3f221b913c1d379016ecaee85c944fcd2ccdd9196a686579947b68983a44cae3",
+          "receiptRecordBase64": "eyJyZWNlaXB0Ijp7ImlkZW50aXR5Ijp7InRlbmFudCI6bnVsbCwicGFydGl0aW9uIjoicGFja2FnZWQtcnVsZXMtcHJvYmUiLCJpbnZvY2F0aW9uIjoicHJvY2Vzcy1hY2NlcHRlZC05MGM5NTQ4ZTVmMzI0ZTgyOTkyMzQ1YTE4OTkyZGU4MiIsImZpbmdlcnByaW50IjoiM2YyMjFiOTEzYzFkMzc5MDE2ZWNhZWU4NWM5NDRmY2QyY2NkZDkxOTZhNjg2NTc5OTQ3YjY4OTgzYTQ0Y2FlMyIsIm9yZGluYWwiOjAsImlucHV0U3RhdGVTaGEyNTYiOiI4MGIwMTBkYzI2ZjI1NjhjOTM3NWEyOTllMzcwN2ViN2M0NWQwNDZhMTM5ODVmYTFmYWMwYzcyMmNhYWIwY2M0In0sImltcGxlbWVudGF0aW9uUGluSGFzaCI6ImM4ZDUzOGFmMzRjYjllYjE2MGIyNWE3MzllMTM4Mzg3ZWM4M2QzNzAyNmM1ODVlZjllMTYxODM2OTY4YzIxZWQiLCJhZGRlZEZhY3RzIjpbImxlZnQiLCJyaWdodCJdLCJmaXJpbmdzIjpbeyJydWxlSWQiOiJsZWZ0IiwiY29uY2x1c2lvbiI6ImxlZnQifSx7InJ1bGVJZCI6InJpZ2h0IiwiY29uY2x1c2lvbiI6InJpZ2h0In1dfSwic2VtYW50aWNSZWNlaXB0U2hhMjU2IjoiYWJlZGQ4YmI3OGRlNTE0OTQxZjliNzI5Y2QyZGRiZjdhMDdhNjRmZDAxZTQxNTgxNmRmYjdjNjFkYmMyY2JhMSJ9",
+          "receiptId": "6c2000629942ece6acd96f07528451991499658a45f40d96e9dea05de7f8bf0e",
+          "semanticReceiptSha256": "abedd8bb78de514941f9b729cd2ddbf7a07a64fd01e415816dfb7c61dbc2cba1",
+          "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+          "beforeFacts": [
+            "seed"
+          ],
+          "afterFacts": [
+            "seed"
+          ],
+          "modelRevision": 2,
+          "committedRounds": 0,
+          "pendingReceiptId": "6c2000629942ece6acd96f07528451991499658a45f40d96e9dea05de7f8bf0e",
+          "acceptedAttemptId": "836b7db3dec443e4bb4beea683a6b8fe",
+          "acceptedWorkerId": "rules-82b1ebf3cd18469e928a41dbcada4e8d",
+          "acceptedLeaseFence": 1,
+          "acceptedModelRevision": 2,
+          "tokenOwner": "rules-82b1ebf3cd18469e928a41dbcada4e8d",
+          "tokenFence": 1,
+          "tokenExpiresAtUtc": "2026-10-22T00:02:56.769929+00:00",
+          "tokenExpectedModelRevision": 1,
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_f0c9c56bb852408db729c84b2632a887",
+          "processId": 3247,
+          "machineName": "Sipkes-MacBook-Air",
+          "capturedUtc": "2026-10-22T00:02:54.001214+00:00"
+        },
+        "originalPid": 3247,
+        "successor": {
+          "command": "process-recover",
+          "passed": true,
+          "recoveredBoundary": "accepted",
+          "terminalBase64": "eyJ0ZXJtaW5hbElkIjoiNGUzNDcxYzE1N2UwMWI3MGMyOThkY2I3OGYxZjkxMzZlZDZlOGZlNTVkYWU3ZTYxZmI4NGRkZmJjNmQ2NTllYiIsImtpbmQiOiJTdWNjZWVkZWQiLCJjb21taXR0ZWRSb3VuZHMiOjQsInJlc3VsdFNjaGVtYVZlcnNpb24iOjEsImZhY3RzIjpbImZpbmFsIiwiam9pbmVkIiwibGVmdCIsInJpZ2h0Iiwic2VlZCJdLCJmYWN0c1NoYTI1NiI6IjVlOTcwZGQyMDYxODFjNDFkOTViNTM0ZjdiNzY0MzAzOTJlZjY1OWRiODUyMWM2NjBlMmY2NzIzN2VlYzRjY2MiLCJkaWFnbm9zdGljIjpudWxsfQ==",
+          "modelRevision": 9,
+          "processId": 3316,
+          "originalProcessId": 3247,
+          "machineName": "Sipkes-MacBook-Air",
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_f0c9c56bb852408db729c84b2632a887",
+          "invocationFingerprint": "3f221b913c1d379016ecaee85c944fcd2ccdd9196a686579947b68983a44cae3",
+          "status": "Succeeded",
+          "committedRounds": 4,
+          "finalFacts": [
+            "final",
+            "joined",
+            "left",
+            "right",
+            "seed"
+          ],
+          "roundHistory": [
+            {
+              "ordinal": 0,
+              "receiptId": "6c2000629942ece6acd96f07528451991499658a45f40d96e9dea05de7f8bf0e",
+              "semanticReceiptSha256": "abedd8bb78de514941f9b729cd2ddbf7a07a64fd01e415816dfb7c61dbc2cba1",
+              "acceptedAttemptId": "836b7db3dec443e4bb4beea683a6b8fe",
+              "acceptedWorkerId": "rules-82b1ebf3cd18469e928a41dbcada4e8d",
+              "acceptedLeaseFence": 1,
+              "acceptedModelRevision": 2,
+              "consumedModelRevision": 3
+            },
+            {
+              "ordinal": 1,
+              "receiptId": "c3280992cbd80ce2ec469b763a91beffab2147745ac4bb4cb214040cfff4a810",
+              "semanticReceiptSha256": "cfabfcba3d2d31e00b123036047874ef95b53fdccace9233d3a4a91c64999151",
+              "acceptedAttemptId": "2e997c9d6a6b4e2faa78e10dc23dcd07",
+              "acceptedWorkerId": "rules-c6b01bb9e11b487ba7a184023a0ad3f8",
+              "acceptedLeaseFence": 4,
+              "acceptedModelRevision": 4,
+              "consumedModelRevision": 5
+            },
+            {
+              "ordinal": 2,
+              "receiptId": "0462d98c04c1d90013a8cce18940567505b29df9f6551a008fd9a46ef1f46393",
+              "semanticReceiptSha256": "64fe3039a8d5be0eff55554f72f4d63d96ea4d8291cfb1ad80e7df8199dac890",
+              "acceptedAttemptId": "33764a8cbbd94cbaa24588cf04ff89dd",
+              "acceptedWorkerId": "rules-c6b01bb9e11b487ba7a184023a0ad3f8",
+              "acceptedLeaseFence": 6,
+              "acceptedModelRevision": 6,
+              "consumedModelRevision": 7
+            },
+            {
+              "ordinal": 3,
+              "receiptId": "6d8afa9974b8c5dc69251fabdd4a7e3349b7c9f27ec9789bf5454a5acfd7f9d2",
+              "semanticReceiptSha256": "d9a619521839826d5759315a3e89e747726b57d10fe87488aa3b5ea1f7c80cb5",
+              "acceptedAttemptId": "9d6b91cb19dc4be6b6cd8f0d6009a5a2",
+              "acceptedWorkerId": "rules-c6b01bb9e11b487ba7a184023a0ad3f8",
+              "acceptedLeaseFence": 8,
+              "acceptedModelRevision": 8,
+              "consumedModelRevision": 9
+            }
+          ],
+          "terminalId": "4e3471c157e01b70c298dcb78f1f9136ed6e8fe55dae7e61fb84ddfbc6d659eb",
+          "terminalStabilityVerified": true,
+          "designStorageUsed": false
+        }
+      },
+      {
+        "name": "consumed-crash",
+        "boundary": "consumed",
+        "action": "crash",
+        "database": "rules_6686502b0ac7451e914c8ddb3a325b91",
+        "passed": true,
+        "statePath": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/consumed-crash-state.json",
+        "boundaryState": {
+          "schemaVersion": 1,
+          "boundary": "consumed",
+          "invocationBase64": "eyJpbnZvY2F0aW9uU2NoZW1hVmVyc2lvbiI6MSwiaWRlbnRpdHkiOnsidGVuYW50IjpudWxsLCJwYXJ0aXRpb24iOiJwYWNrYWdlZC1ydWxlcy1wcm9iZSIsImludm9jYXRpb24iOiJwcm9jZXNzLWNvbnN1bWVkLWI2NzNmYTFjNDNmMjQ5ZTdiMmM1ZTYzNGZhNTZkODJiIn0sImFydGlmYWN0Ijp7ImZvcm1hdFZlcnNpb24iOjEsImlkIjoicnVsZXM6MGYwMzA5ZDU4MTM2NzFhZTZhNDliMzE2NzM2NjUxNDI4NTRkM2U2MDFjZjAwMWJjZjBmNDdjMTM1ZDMzMDg0MSIsInNoYTI1NiI6IjBmMDMwOWQ1ODEzNjcxYWU2YTQ5YjMxNjczNjY1MTQyODU0ZDNlNjAxY2YwMDFiY2YwZjQ3YzEzNWQzMzA4NDEiLCJieXRlcyI6ImV5Sm1iM0p0WVhSV1pYSnphVzl1SWpveExDSnNZVzVuZFdGblpVbGtJam9pWld4ellTNXlkV3hsY3k1bWFXNXBkR1V0Y0c5emFYUnBkbVVpTENKc1lXNW5kV0ZuWlZabGNuTnBiMjRpT2pFc0luWnZZMkZpZFd4aGNua2lPbHNpWm1sdVlXd2lMQ0pxYjJsdVpXUWlMQ0pzWldaMElpd2libVYyWlhJdFpHVnlhWFpsWkNJc0luSnBaMmgwSWl3aWMyVmxaQ0lzSW5WdWNtVmhZMmhoWW14bElsMHNJbkoxYkdWeklqcGJleUpwWkNJNkltWnBibUZzSWl3aWNISmxiV2x6WlhNaU9sc2lhbTlwYm1Wa0lsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKbWFXNWhiQ0o5TEhzaWFXUWlPaUpxYjJsdUlpd2ljSEpsYldselpYTWlPbHNpYkdWbWRDSXNJbkpwWjJoMElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKcWIybHVaV1FpZlN4N0ltbGtJam9pYkdWbWRDSXNJbkJ5WlcxcGMyVnpJanBiSW5ObFpXUWlYU3dpWTI5dVkyeDFjMmx2YmlJNklteGxablFpZlN4N0ltbGtJam9pY21sbmFIUWlMQ0p3Y21WdGFYTmxjeUk2V3lKelpXVmtJbDBzSW1OdmJtTnNkWE5wYjI0aU9pSnlhV2RvZENKOUxIc2lhV1FpT2lKMWJuSmxZV05vWVdKc1pTSXNJbkJ5WlcxcGMyVnpJanBiSW5WdWNtVmhZMmhoWW14bElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKdVpYWmxjaTFrWlhKcGRtVmtJbjFkZlE9PSJ9LCJpbml0aWFsRmFjdHMiOlsic2VlZCJdLCJtYXhSb3VuZHMiOjcsImltcGxlbWVudGF0aW9uIjp7InBpblNjaGVtYVZlcnNpb24iOjEsImxhbmd1YWdlSWQiOiJlbHNhLnJ1bGVzLmZpbml0ZS1wb3NpdGl2ZSIsImxhbmd1YWdlVmVyc2lvbiI6MSwicmVjZWlwdFNjaGVtYVZlcnNpb24iOjEsInN0YXRlU2NoZW1hVmVyc2lvbiI6MSwicGFja2FnZXMiOlt7ImlkIjoiRWxzYS5SdWxlcy5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IjJ1TVBmcXlxM1x1MDAyQllqMS9lVklqeEhoellqS2NqRno0NkNCRGl4OEovUndzNFQxVkcxZERHdzI5dUtIeGF3RlNsWDJLdFR2MXJLUVN6MFNOWjNpWVQ0eUE9PSIsImFzc2V0cyI6W3sicGF0aCI6ImxpYi9uZXQxMC4wL0Vsc2EuUnVsZXMuQ29yZS5kbGwiLCJhc3NlbWJseSI6IkVsc2EuUnVsZXMuQ29yZSwgVmVyc2lvbj00LjAuMC4wLCBDdWx0dXJlPW5ldXRyYWwsIFB1YmxpY0tleVRva2VuPW51bGwiLCJzaGEyNTYiOiJiNjlmNmMzODg5NjdmMWEyNmMxZDM5YTNjOGQ0ZGZiOGM3MjMzNTI1MzhmMjFjNGJlYTM2MmU1M2NlNGI4MGExIn1dfSx7ImlkIjoiRWxzYS5SdWxlcy5QZXJzaXN0ZW5jZS5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IlpcdTAwMkJ0MDhHOUpcdTAwMkI0djVnUU1acVlvTGNGeFhoXHUwMDJCZXFUN1gwXHUwMDJCL1FnYmozQjN2OUZBWC9TcWFLa1lpb1B2LzRXaXBxZGNOUkhcdTAwMkIwZm5cdTAwMkJGVTJKdE85T0QySDRnPT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMmFhNDBiNDViMzlhMmQzMzNkYmVlYmNjZWE1YzRjOGQzMTBjMjliY2M0MTE5ZTgyMDNhN2M3NWU4MDhkOTY0NCJ9XX0seyJpZCI6IkVsc2EuUnVsZXMuUnVudGltZSIsInZlcnNpb24iOiI0LjAuMC1icmFuY2gtYWdlbnQtY29kZXgtMzE4MS1kdXJhYmxlLXJ1bGVzIiwiY29udGVudEhhc2giOiJ1M1NkcG5CL3BmVWlEVFQyTEVidnBYRWhIdzI1aC9sdURxMEsvUVx1MDAyQlRkenRxcHJYcm5iU3J3aWhJL2NwYUhJVTAxYkVJQzlDSVpXaFJ3enhWcUhPOTJ3PT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlJ1bnRpbWUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlJ1bnRpbWUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMGQ3MmJmYjFlYzQ2NDM5MTRmYTlkYTA0MmU4NTI1YmZkOTc3MzRjMTQ0MTA1MTAzYjM4ZWE0NWJmODBhYTk1NyJ9XX1dfSwibmF0aXZlRGVzdGluYXRpb24iOm51bGx9",
+          "invocationFingerprint": "c2982398bf25049d9725221055e54ff29e381b915d8b860b6203cff548e0a687",
+          "receiptRecordBase64": "eyJyZWNlaXB0Ijp7ImlkZW50aXR5Ijp7InRlbmFudCI6bnVsbCwicGFydGl0aW9uIjoicGFja2FnZWQtcnVsZXMtcHJvYmUiLCJpbnZvY2F0aW9uIjoicHJvY2Vzcy1jb25zdW1lZC1iNjczZmExYzQzZjI0OWU3YjJjNWU2MzRmYTU2ZDgyYiIsImZpbmdlcnByaW50IjoiYzI5ODIzOThiZjI1MDQ5ZDk3MjUyMjEwNTVlNTRmZjI5ZTM4MWI5MTVkOGI4NjBiNjIwM2NmZjU0OGUwYTY4NyIsIm9yZGluYWwiOjAsImlucHV0U3RhdGVTaGEyNTYiOiI4MGIwMTBkYzI2ZjI1NjhjOTM3NWEyOTllMzcwN2ViN2M0NWQwNDZhMTM5ODVmYTFmYWMwYzcyMmNhYWIwY2M0In0sImltcGxlbWVudGF0aW9uUGluSGFzaCI6ImM4ZDUzOGFmMzRjYjllYjE2MGIyNWE3MzllMTM4Mzg3ZWM4M2QzNzAyNmM1ODVlZjllMTYxODM2OTY4YzIxZWQiLCJhZGRlZEZhY3RzIjpbImxlZnQiLCJyaWdodCJdLCJmaXJpbmdzIjpbeyJydWxlSWQiOiJsZWZ0IiwiY29uY2x1c2lvbiI6ImxlZnQifSx7InJ1bGVJZCI6InJpZ2h0IiwiY29uY2x1c2lvbiI6InJpZ2h0In1dfSwic2VtYW50aWNSZWNlaXB0U2hhMjU2IjoiOWY2ODA2NzU4MGZhYWM3MTVlYjAwZGFiZjEwODBkZTNlMTRjYjZkYzE1NmE2OWZlODdiNDQ5NTQ5ZWRjNjQ0YyJ9",
+          "receiptId": "0d3f883b3fd07eda237d160ad5c1476d66a480c5c3f957c44d619aa45ca0b222",
+          "semanticReceiptSha256": "9f68067580faac715eb00dabf1080de3e14cb6dc156a69fe87b449549edc644c",
+          "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+          "beforeFacts": [
+            "seed"
+          ],
+          "afterFacts": [
+            "left",
+            "right",
+            "seed"
+          ],
+          "modelRevision": 3,
+          "committedRounds": 1,
+          "acceptedAttemptId": "2494d7b46b9845c7b60fee5ebe2c4489",
+          "acceptedWorkerId": "rules-eac0bbd573b54f11b627f51a119a0b93",
+          "acceptedLeaseFence": 1,
+          "acceptedModelRevision": 2,
+          "consumedModelRevision": 3,
+          "tokenOwner": "rules-eac0bbd573b54f11b627f51a119a0b93",
+          "tokenFence": 1,
+          "tokenExpiresAtUtc": "2026-10-22T00:03:02.140098+00:00",
+          "tokenExpectedModelRevision": 2,
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_6686502b0ac7451e914c8ddb3a325b91",
+          "processId": 3447,
+          "machineName": "Sipkes-MacBook-Air",
+          "capturedUtc": "2026-10-22T00:02:59.480068+00:00"
+        },
+        "originalPid": 3447,
+        "successor": {
+          "command": "process-recover",
+          "passed": true,
+          "recoveredBoundary": "consumed",
+          "terminalBase64": "eyJ0ZXJtaW5hbElkIjoiYzI2MDBkOGUyZDUwMmNiOWMyOGY1Y2MyNzI3NjA1MmJlNTc0YTBiNjU0YmJmMDQ5OGQyMDc2YTlkYmE5ODg3OSIsImtpbmQiOiJTdWNjZWVkZWQiLCJjb21taXR0ZWRSb3VuZHMiOjQsInJlc3VsdFNjaGVtYVZlcnNpb24iOjEsImZhY3RzIjpbImZpbmFsIiwiam9pbmVkIiwibGVmdCIsInJpZ2h0Iiwic2VlZCJdLCJmYWN0c1NoYTI1NiI6IjVlOTcwZGQyMDYxODFjNDFkOTViNTM0ZjdiNzY0MzAzOTJlZjY1OWRiODUyMWM2NjBlMmY2NzIzN2VlYzRjY2MiLCJkaWFnbm9zdGljIjpudWxsfQ==",
+          "modelRevision": 9,
+          "processId": 3465,
+          "originalProcessId": 3447,
+          "machineName": "Sipkes-MacBook-Air",
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_6686502b0ac7451e914c8ddb3a325b91",
+          "invocationFingerprint": "c2982398bf25049d9725221055e54ff29e381b915d8b860b6203cff548e0a687",
+          "status": "Succeeded",
+          "committedRounds": 4,
+          "finalFacts": [
+            "final",
+            "joined",
+            "left",
+            "right",
+            "seed"
+          ],
+          "roundHistory": [
+            {
+              "ordinal": 0,
+              "receiptId": "0d3f883b3fd07eda237d160ad5c1476d66a480c5c3f957c44d619aa45ca0b222",
+              "semanticReceiptSha256": "9f68067580faac715eb00dabf1080de3e14cb6dc156a69fe87b449549edc644c",
+              "acceptedAttemptId": "2494d7b46b9845c7b60fee5ebe2c4489",
+              "acceptedWorkerId": "rules-eac0bbd573b54f11b627f51a119a0b93",
+              "acceptedLeaseFence": 1,
+              "acceptedModelRevision": 2,
+              "consumedModelRevision": 3
+            },
+            {
+              "ordinal": 1,
+              "receiptId": "984de8f3d11bdd8710022da9a22427f0832a800c0f831ea44411d45e8fc2e8cf",
+              "semanticReceiptSha256": "f5ec7a9da5238e9910fc6b83292f469260b428f11be112c87d66b9a1d33a7005",
+              "acceptedAttemptId": "defa2ddd8028475f8ecbf56524a70266",
+              "acceptedWorkerId": "rules-8d1eee254dde40db8e1bd1d8ded5ce85",
+              "acceptedLeaseFence": 2,
+              "acceptedModelRevision": 4,
+              "consumedModelRevision": 5
+            },
+            {
+              "ordinal": 2,
+              "receiptId": "86a4d3b5662ba8e8bf98919b5a310ed0d03dade68ca3867b26e121092bab3976",
+              "semanticReceiptSha256": "8ccda8e9a2eb80d9c1466bb80402a94e9b04e2e98033100ec4539b11b64be9f6",
+              "acceptedAttemptId": "22ba6546aa1b49f4b8d053743bff75f3",
+              "acceptedWorkerId": "rules-8d1eee254dde40db8e1bd1d8ded5ce85",
+              "acceptedLeaseFence": 4,
+              "acceptedModelRevision": 6,
+              "consumedModelRevision": 7
+            },
+            {
+              "ordinal": 3,
+              "receiptId": "2732f5c8f7464ea39c70de5c96e74efc94d3657a3d7a68636c515fa5cdbd2de6",
+              "semanticReceiptSha256": "d0b8c0eb5670d486cf262c7800d2bc39e01945f1b24062273ca2fa5b17eb85d1",
+              "acceptedAttemptId": "c23d4a6a659b4f48aca69efd6b55cf8f",
+              "acceptedWorkerId": "rules-8d1eee254dde40db8e1bd1d8ded5ce85",
+              "acceptedLeaseFence": 6,
+              "acceptedModelRevision": 8,
+              "consumedModelRevision": 9
+            }
+          ],
+          "terminalId": "c2600d8e2d502cb9c28f5cc27276052be574a0b654bbf0498d2076a9dba98879",
+          "terminalStabilityVerified": true,
+          "designStorageUsed": false
+        }
+      },
+      {
+        "name": "accepted-delayed",
+        "boundary": "accepted",
+        "action": "delayed",
+        "database": "rules_a3e47bf043624e5d9b4ff916798054cd",
+        "passed": true,
+        "statePath": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/accepted-delayed-state.json",
+        "boundaryState": {
+          "schemaVersion": 1,
+          "boundary": "accepted",
+          "invocationBase64": "eyJpbnZvY2F0aW9uU2NoZW1hVmVyc2lvbiI6MSwiaWRlbnRpdHkiOnsidGVuYW50IjpudWxsLCJwYXJ0aXRpb24iOiJwYWNrYWdlZC1ydWxlcy1wcm9iZSIsImludm9jYXRpb24iOiJwcm9jZXNzLWFjY2VwdGVkLWVhZmNlNTZmYTRhMjQ4NDdhNmE3ZDU4MGIwZTI0NDA2In0sImFydGlmYWN0Ijp7ImZvcm1hdFZlcnNpb24iOjEsImlkIjoicnVsZXM6MGYwMzA5ZDU4MTM2NzFhZTZhNDliMzE2NzM2NjUxNDI4NTRkM2U2MDFjZjAwMWJjZjBmNDdjMTM1ZDMzMDg0MSIsInNoYTI1NiI6IjBmMDMwOWQ1ODEzNjcxYWU2YTQ5YjMxNjczNjY1MTQyODU0ZDNlNjAxY2YwMDFiY2YwZjQ3YzEzNWQzMzA4NDEiLCJieXRlcyI6ImV5Sm1iM0p0WVhSV1pYSnphVzl1SWpveExDSnNZVzVuZFdGblpVbGtJam9pWld4ellTNXlkV3hsY3k1bWFXNXBkR1V0Y0c5emFYUnBkbVVpTENKc1lXNW5kV0ZuWlZabGNuTnBiMjRpT2pFc0luWnZZMkZpZFd4aGNua2lPbHNpWm1sdVlXd2lMQ0pxYjJsdVpXUWlMQ0pzWldaMElpd2libVYyWlhJdFpHVnlhWFpsWkNJc0luSnBaMmgwSWl3aWMyVmxaQ0lzSW5WdWNtVmhZMmhoWW14bElsMHNJbkoxYkdWeklqcGJleUpwWkNJNkltWnBibUZzSWl3aWNISmxiV2x6WlhNaU9sc2lhbTlwYm1Wa0lsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKbWFXNWhiQ0o5TEhzaWFXUWlPaUpxYjJsdUlpd2ljSEpsYldselpYTWlPbHNpYkdWbWRDSXNJbkpwWjJoMElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKcWIybHVaV1FpZlN4N0ltbGtJam9pYkdWbWRDSXNJbkJ5WlcxcGMyVnpJanBiSW5ObFpXUWlYU3dpWTI5dVkyeDFjMmx2YmlJNklteGxablFpZlN4N0ltbGtJam9pY21sbmFIUWlMQ0p3Y21WdGFYTmxjeUk2V3lKelpXVmtJbDBzSW1OdmJtTnNkWE5wYjI0aU9pSnlhV2RvZENKOUxIc2lhV1FpT2lKMWJuSmxZV05vWVdKc1pTSXNJbkJ5WlcxcGMyVnpJanBiSW5WdWNtVmhZMmhoWW14bElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKdVpYWmxjaTFrWlhKcGRtVmtJbjFkZlE9PSJ9LCJpbml0aWFsRmFjdHMiOlsic2VlZCJdLCJtYXhSb3VuZHMiOjcsImltcGxlbWVudGF0aW9uIjp7InBpblNjaGVtYVZlcnNpb24iOjEsImxhbmd1YWdlSWQiOiJlbHNhLnJ1bGVzLmZpbml0ZS1wb3NpdGl2ZSIsImxhbmd1YWdlVmVyc2lvbiI6MSwicmVjZWlwdFNjaGVtYVZlcnNpb24iOjEsInN0YXRlU2NoZW1hVmVyc2lvbiI6MSwicGFja2FnZXMiOlt7ImlkIjoiRWxzYS5SdWxlcy5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IjJ1TVBmcXlxM1x1MDAyQllqMS9lVklqeEhoellqS2NqRno0NkNCRGl4OEovUndzNFQxVkcxZERHdzI5dUtIeGF3RlNsWDJLdFR2MXJLUVN6MFNOWjNpWVQ0eUE9PSIsImFzc2V0cyI6W3sicGF0aCI6ImxpYi9uZXQxMC4wL0Vsc2EuUnVsZXMuQ29yZS5kbGwiLCJhc3NlbWJseSI6IkVsc2EuUnVsZXMuQ29yZSwgVmVyc2lvbj00LjAuMC4wLCBDdWx0dXJlPW5ldXRyYWwsIFB1YmxpY0tleVRva2VuPW51bGwiLCJzaGEyNTYiOiJiNjlmNmMzODg5NjdmMWEyNmMxZDM5YTNjOGQ0ZGZiOGM3MjMzNTI1MzhmMjFjNGJlYTM2MmU1M2NlNGI4MGExIn1dfSx7ImlkIjoiRWxzYS5SdWxlcy5QZXJzaXN0ZW5jZS5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IlpcdTAwMkJ0MDhHOUpcdTAwMkI0djVnUU1acVlvTGNGeFhoXHUwMDJCZXFUN1gwXHUwMDJCL1FnYmozQjN2OUZBWC9TcWFLa1lpb1B2LzRXaXBxZGNOUkhcdTAwMkIwZm5cdTAwMkJGVTJKdE85T0QySDRnPT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMmFhNDBiNDViMzlhMmQzMzNkYmVlYmNjZWE1YzRjOGQzMTBjMjliY2M0MTE5ZTgyMDNhN2M3NWU4MDhkOTY0NCJ9XX0seyJpZCI6IkVsc2EuUnVsZXMuUnVudGltZSIsInZlcnNpb24iOiI0LjAuMC1icmFuY2gtYWdlbnQtY29kZXgtMzE4MS1kdXJhYmxlLXJ1bGVzIiwiY29udGVudEhhc2giOiJ1M1NkcG5CL3BmVWlEVFQyTEVidnBYRWhIdzI1aC9sdURxMEsvUVx1MDAyQlRkenRxcHJYcm5iU3J3aWhJL2NwYUhJVTAxYkVJQzlDSVpXaFJ3enhWcUhPOTJ3PT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlJ1bnRpbWUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlJ1bnRpbWUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMGQ3MmJmYjFlYzQ2NDM5MTRmYTlkYTA0MmU4NTI1YmZkOTc3MzRjMTQ0MTA1MTAzYjM4ZWE0NWJmODBhYTk1NyJ9XX1dfSwibmF0aXZlRGVzdGluYXRpb24iOm51bGx9",
+          "invocationFingerprint": "86e7c1f605837694ddd1f8d45fa1d80ba1f2cbc4a78f3720d85547311a7019d2",
+          "receiptRecordBase64": "eyJyZWNlaXB0Ijp7ImlkZW50aXR5Ijp7InRlbmFudCI6bnVsbCwicGFydGl0aW9uIjoicGFja2FnZWQtcnVsZXMtcHJvYmUiLCJpbnZvY2F0aW9uIjoicHJvY2Vzcy1hY2NlcHRlZC1lYWZjZTU2ZmE0YTI0ODQ3YTZhN2Q1ODBiMGUyNDQwNiIsImZpbmdlcnByaW50IjoiODZlN2MxZjYwNTgzNzY5NGRkZDFmOGQ0NWZhMWQ4MGJhMWYyY2JjNGE3OGYzNzIwZDg1NTQ3MzExYTcwMTlkMiIsIm9yZGluYWwiOjAsImlucHV0U3RhdGVTaGEyNTYiOiI4MGIwMTBkYzI2ZjI1NjhjOTM3NWEyOTllMzcwN2ViN2M0NWQwNDZhMTM5ODVmYTFmYWMwYzcyMmNhYWIwY2M0In0sImltcGxlbWVudGF0aW9uUGluSGFzaCI6ImM4ZDUzOGFmMzRjYjllYjE2MGIyNWE3MzllMTM4Mzg3ZWM4M2QzNzAyNmM1ODVlZjllMTYxODM2OTY4YzIxZWQiLCJhZGRlZEZhY3RzIjpbImxlZnQiLCJyaWdodCJdLCJmaXJpbmdzIjpbeyJydWxlSWQiOiJsZWZ0IiwiY29uY2x1c2lvbiI6ImxlZnQifSx7InJ1bGVJZCI6InJpZ2h0IiwiY29uY2x1c2lvbiI6InJpZ2h0In1dfSwic2VtYW50aWNSZWNlaXB0U2hhMjU2IjoiZGI3NmZlNWYzNzEwMjI1MmI0YTIxNDk2Mjg3Y2E2YjgxYjUyOTE1M2RiOWIwNjkwYmZkZjUwM2ZjYTM1NGY3YSJ9",
+          "receiptId": "2972222289c2c18447ff9be764ebdaad5a05eefb588671cd438d5a74cd4f3eb0",
+          "semanticReceiptSha256": "db76fe5f37102252b4a21496287ca6b81b529153db9b0690bfdf503fca354f7a",
+          "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+          "beforeFacts": [
+            "seed"
+          ],
+          "afterFacts": [
+            "seed"
+          ],
+          "modelRevision": 2,
+          "committedRounds": 0,
+          "pendingReceiptId": "2972222289c2c18447ff9be764ebdaad5a05eefb588671cd438d5a74cd4f3eb0",
+          "acceptedAttemptId": "27aaed2ed6a546159100d90a9604bcd0",
+          "acceptedWorkerId": "rules-4a0d7b760d9c47319582ca5f40ca9d2a",
+          "acceptedLeaseFence": 1,
+          "acceptedModelRevision": 2,
+          "tokenOwner": "rules-4a0d7b760d9c47319582ca5f40ca9d2a",
+          "tokenFence": 1,
+          "tokenExpiresAtUtc": "2026-10-22T00:03:08.089605+00:00",
+          "tokenExpectedModelRevision": 1,
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_a3e47bf043624e5d9b4ff916798054cd",
+          "processId": 3542,
+          "machineName": "Sipkes-MacBook-Air",
+          "capturedUtc": "2026-10-22T00:03:05.305556+00:00"
+        },
+        "originalPid": 3542,
+        "successor": {
+          "command": "process-recover",
+          "passed": true,
+          "recoveredBoundary": "accepted",
+          "terminalBase64": "eyJ0ZXJtaW5hbElkIjoiYjAwZWQwNDY0MDQ1NGRiMDcxYjQ2NjNkZjA2NmYzMzdmYTg0YWY3NDMwODRhNzg3Y2ZjOTBiOGI2OTZiNWFmNCIsImtpbmQiOiJTdWNjZWVkZWQiLCJjb21taXR0ZWRSb3VuZHMiOjQsInJlc3VsdFNjaGVtYVZlcnNpb24iOjEsImZhY3RzIjpbImZpbmFsIiwiam9pbmVkIiwibGVmdCIsInJpZ2h0Iiwic2VlZCJdLCJmYWN0c1NoYTI1NiI6IjVlOTcwZGQyMDYxODFjNDFkOTViNTM0ZjdiNzY0MzAzOTJlZjY1OWRiODUyMWM2NjBlMmY2NzIzN2VlYzRjY2MiLCJkaWFnbm9zdGljIjpudWxsfQ==",
+          "modelRevision": 9,
+          "processId": 3612,
+          "originalProcessId": 3542,
+          "machineName": "Sipkes-MacBook-Air",
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_a3e47bf043624e5d9b4ff916798054cd",
+          "invocationFingerprint": "86e7c1f605837694ddd1f8d45fa1d80ba1f2cbc4a78f3720d85547311a7019d2",
+          "status": "Succeeded",
+          "committedRounds": 4,
+          "finalFacts": [
+            "final",
+            "joined",
+            "left",
+            "right",
+            "seed"
+          ],
+          "roundHistory": [
+            {
+              "ordinal": 0,
+              "receiptId": "2972222289c2c18447ff9be764ebdaad5a05eefb588671cd438d5a74cd4f3eb0",
+              "semanticReceiptSha256": "db76fe5f37102252b4a21496287ca6b81b529153db9b0690bfdf503fca354f7a",
+              "acceptedAttemptId": "27aaed2ed6a546159100d90a9604bcd0",
+              "acceptedWorkerId": "rules-4a0d7b760d9c47319582ca5f40ca9d2a",
+              "acceptedLeaseFence": 1,
+              "acceptedModelRevision": 2,
+              "consumedModelRevision": 3
+            },
+            {
+              "ordinal": 1,
+              "receiptId": "2d77de8fbca9a2af688ab20e5e93733b27aee77963dc1615ff1d8f404db858db",
+              "semanticReceiptSha256": "bddfbe1a9c199e18b730d607faa146111f54578099c6fab70a66bf11ab1fe4c6",
+              "acceptedAttemptId": "aa4f388e95a341a987b13531dc305f04",
+              "acceptedWorkerId": "rules-cff503b71e2f4611b9d51aa96d3c0b15",
+              "acceptedLeaseFence": 4,
+              "acceptedModelRevision": 4,
+              "consumedModelRevision": 5
+            },
+            {
+              "ordinal": 2,
+              "receiptId": "2c196349e8bd468eb75003d1260dbb521cef2491972c0355f7c261ecd81a59bf",
+              "semanticReceiptSha256": "8a4a1b85047bd764631dc6536953f85fa5e6e1f047511e65540ed937e12c736a",
+              "acceptedAttemptId": "5c0023c1b9a74aca9b150271a465ddec",
+              "acceptedWorkerId": "rules-cff503b71e2f4611b9d51aa96d3c0b15",
+              "acceptedLeaseFence": 6,
+              "acceptedModelRevision": 6,
+              "consumedModelRevision": 7
+            },
+            {
+              "ordinal": 3,
+              "receiptId": "7f500ed3be09eceee9e2bc6b32cace516a3ee5269e1afdd35393a97793bde4be",
+              "semanticReceiptSha256": "aea9438e39e7addbf0f7c13ab0c45acf418988a524f72de6399e6412f60f8d6a",
+              "acceptedAttemptId": "5cb5292f549d453abf4644f9e9e75db0",
+              "acceptedWorkerId": "rules-cff503b71e2f4611b9d51aa96d3c0b15",
+              "acceptedLeaseFence": 8,
+              "acceptedModelRevision": 8,
+              "consumedModelRevision": 9
+            }
+          ],
+          "terminalId": "b00ed04640454db071b4663df066f337fa84af743084a787cfc90b8b696b5af4",
+          "terminalStabilityVerified": true,
+          "designStorageUsed": false
+        },
+        "originalAfterRelease": {
+          "command": "process-boundary",
+          "passed": true,
+          "boundary": "accepted",
+          "processId": 3542,
+          "machineName": "Sipkes-MacBook-Air",
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_a3e47bf043624e5d9b4ff916798054cd",
+          "invocationFingerprint": "86e7c1f605837694ddd1f8d45fa1d80ba1f2cbc4a78f3720d85547311a7019d2",
+          "boundaryReceiptId": "2972222289c2c18447ff9be764ebdaad5a05eefb588671cd438d5a74cd4f3eb0",
+          "boundaryAttemptId": "27aaed2ed6a546159100d90a9604bcd0",
+          "boundaryWorkerId": "rules-4a0d7b760d9c47319582ca5f40ca9d2a",
+          "boundaryLeaseFence": 1,
+          "originalCallbackDisposition": "Terminal",
+          "terminalBase64": "eyJ0ZXJtaW5hbElkIjoiYjAwZWQwNDY0MDQ1NGRiMDcxYjQ2NjNkZjA2NmYzMzdmYTg0YWY3NDMwODRhNzg3Y2ZjOTBiOGI2OTZiNWFmNCIsImtpbmQiOiJTdWNjZWVkZWQiLCJjb21taXR0ZWRSb3VuZHMiOjQsInJlc3VsdFNjaGVtYVZlcnNpb24iOjEsImZhY3RzIjpbImZpbmFsIiwiam9pbmVkIiwibGVmdCIsInJpZ2h0Iiwic2VlZCJdLCJmYWN0c1NoYTI1NiI6IjVlOTcwZGQyMDYxODFjNDFkOTViNTM0ZjdiNzY0MzAzOTJlZjY1OWRiODUyMWM2NjBlMmY2NzIzN2VlYzRjY2MiLCJkaWFnbm9zdGljIjpudWxsfQ==",
+          "modelRevision": 9,
+          "finalStatus": "Succeeded",
+          "finalModelRevision": 9,
+          "finalCommittedRounds": 4,
+          "finalFacts": [
+            "final",
+            "joined",
+            "left",
+            "right",
+            "seed"
+          ]
+        }
+      },
+      {
+        "name": "consumed-delayed",
+        "boundary": "consumed",
+        "action": "delayed",
+        "database": "rules_3fcc0c6c10ad4de38679176e6aa4a16d",
+        "passed": true,
+        "statePath": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/consumed-delayed-state.json",
+        "boundaryState": {
+          "schemaVersion": 1,
+          "boundary": "consumed",
+          "invocationBase64": "eyJpbnZvY2F0aW9uU2NoZW1hVmVyc2lvbiI6MSwiaWRlbnRpdHkiOnsidGVuYW50IjpudWxsLCJwYXJ0aXRpb24iOiJwYWNrYWdlZC1ydWxlcy1wcm9iZSIsImludm9jYXRpb24iOiJwcm9jZXNzLWNvbnN1bWVkLTc5ZmQ1NGIwOGM4NDQzNzlhNGUzOTZkNDYxYzQwZGY3In0sImFydGlmYWN0Ijp7ImZvcm1hdFZlcnNpb24iOjEsImlkIjoicnVsZXM6MGYwMzA5ZDU4MTM2NzFhZTZhNDliMzE2NzM2NjUxNDI4NTRkM2U2MDFjZjAwMWJjZjBmNDdjMTM1ZDMzMDg0MSIsInNoYTI1NiI6IjBmMDMwOWQ1ODEzNjcxYWU2YTQ5YjMxNjczNjY1MTQyODU0ZDNlNjAxY2YwMDFiY2YwZjQ3YzEzNWQzMzA4NDEiLCJieXRlcyI6ImV5Sm1iM0p0WVhSV1pYSnphVzl1SWpveExDSnNZVzVuZFdGblpVbGtJam9pWld4ellTNXlkV3hsY3k1bWFXNXBkR1V0Y0c5emFYUnBkbVVpTENKc1lXNW5kV0ZuWlZabGNuTnBiMjRpT2pFc0luWnZZMkZpZFd4aGNua2lPbHNpWm1sdVlXd2lMQ0pxYjJsdVpXUWlMQ0pzWldaMElpd2libVYyWlhJdFpHVnlhWFpsWkNJc0luSnBaMmgwSWl3aWMyVmxaQ0lzSW5WdWNtVmhZMmhoWW14bElsMHNJbkoxYkdWeklqcGJleUpwWkNJNkltWnBibUZzSWl3aWNISmxiV2x6WlhNaU9sc2lhbTlwYm1Wa0lsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKbWFXNWhiQ0o5TEhzaWFXUWlPaUpxYjJsdUlpd2ljSEpsYldselpYTWlPbHNpYkdWbWRDSXNJbkpwWjJoMElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKcWIybHVaV1FpZlN4N0ltbGtJam9pYkdWbWRDSXNJbkJ5WlcxcGMyVnpJanBiSW5ObFpXUWlYU3dpWTI5dVkyeDFjMmx2YmlJNklteGxablFpZlN4N0ltbGtJam9pY21sbmFIUWlMQ0p3Y21WdGFYTmxjeUk2V3lKelpXVmtJbDBzSW1OdmJtTnNkWE5wYjI0aU9pSnlhV2RvZENKOUxIc2lhV1FpT2lKMWJuSmxZV05vWVdKc1pTSXNJbkJ5WlcxcGMyVnpJanBiSW5WdWNtVmhZMmhoWW14bElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKdVpYWmxjaTFrWlhKcGRtVmtJbjFkZlE9PSJ9LCJpbml0aWFsRmFjdHMiOlsic2VlZCJdLCJtYXhSb3VuZHMiOjcsImltcGxlbWVudGF0aW9uIjp7InBpblNjaGVtYVZlcnNpb24iOjEsImxhbmd1YWdlSWQiOiJlbHNhLnJ1bGVzLmZpbml0ZS1wb3NpdGl2ZSIsImxhbmd1YWdlVmVyc2lvbiI6MSwicmVjZWlwdFNjaGVtYVZlcnNpb24iOjEsInN0YXRlU2NoZW1hVmVyc2lvbiI6MSwicGFja2FnZXMiOlt7ImlkIjoiRWxzYS5SdWxlcy5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IjJ1TVBmcXlxM1x1MDAyQllqMS9lVklqeEhoellqS2NqRno0NkNCRGl4OEovUndzNFQxVkcxZERHdzI5dUtIeGF3RlNsWDJLdFR2MXJLUVN6MFNOWjNpWVQ0eUE9PSIsImFzc2V0cyI6W3sicGF0aCI6ImxpYi9uZXQxMC4wL0Vsc2EuUnVsZXMuQ29yZS5kbGwiLCJhc3NlbWJseSI6IkVsc2EuUnVsZXMuQ29yZSwgVmVyc2lvbj00LjAuMC4wLCBDdWx0dXJlPW5ldXRyYWwsIFB1YmxpY0tleVRva2VuPW51bGwiLCJzaGEyNTYiOiJiNjlmNmMzODg5NjdmMWEyNmMxZDM5YTNjOGQ0ZGZiOGM3MjMzNTI1MzhmMjFjNGJlYTM2MmU1M2NlNGI4MGExIn1dfSx7ImlkIjoiRWxzYS5SdWxlcy5QZXJzaXN0ZW5jZS5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IlpcdTAwMkJ0MDhHOUpcdTAwMkI0djVnUU1acVlvTGNGeFhoXHUwMDJCZXFUN1gwXHUwMDJCL1FnYmozQjN2OUZBWC9TcWFLa1lpb1B2LzRXaXBxZGNOUkhcdTAwMkIwZm5cdTAwMkJGVTJKdE85T0QySDRnPT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMmFhNDBiNDViMzlhMmQzMzNkYmVlYmNjZWE1YzRjOGQzMTBjMjliY2M0MTE5ZTgyMDNhN2M3NWU4MDhkOTY0NCJ9XX0seyJpZCI6IkVsc2EuUnVsZXMuUnVudGltZSIsInZlcnNpb24iOiI0LjAuMC1icmFuY2gtYWdlbnQtY29kZXgtMzE4MS1kdXJhYmxlLXJ1bGVzIiwiY29udGVudEhhc2giOiJ1M1NkcG5CL3BmVWlEVFQyTEVidnBYRWhIdzI1aC9sdURxMEsvUVx1MDAyQlRkenRxcHJYcm5iU3J3aWhJL2NwYUhJVTAxYkVJQzlDSVpXaFJ3enhWcUhPOTJ3PT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlJ1bnRpbWUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlJ1bnRpbWUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMGQ3MmJmYjFlYzQ2NDM5MTRmYTlkYTA0MmU4NTI1YmZkOTc3MzRjMTQ0MTA1MTAzYjM4ZWE0NWJmODBhYTk1NyJ9XX1dfSwibmF0aXZlRGVzdGluYXRpb24iOm51bGx9",
+          "invocationFingerprint": "d1c0a26d0ec3a604144d35b8711bc6fce9e78430d311ffafd1e09adde7b29ea8",
+          "receiptRecordBase64": "eyJyZWNlaXB0Ijp7ImlkZW50aXR5Ijp7InRlbmFudCI6bnVsbCwicGFydGl0aW9uIjoicGFja2FnZWQtcnVsZXMtcHJvYmUiLCJpbnZvY2F0aW9uIjoicHJvY2Vzcy1jb25zdW1lZC03OWZkNTRiMDhjODQ0Mzc5YTRlMzk2ZDQ2MWM0MGRmNyIsImZpbmdlcnByaW50IjoiZDFjMGEyNmQwZWMzYTYwNDE0NGQzNWI4NzExYmM2ZmNlOWU3ODQzMGQzMTFmZmFmZDFlMDlhZGRlN2IyOWVhOCIsIm9yZGluYWwiOjAsImlucHV0U3RhdGVTaGEyNTYiOiI4MGIwMTBkYzI2ZjI1NjhjOTM3NWEyOTllMzcwN2ViN2M0NWQwNDZhMTM5ODVmYTFmYWMwYzcyMmNhYWIwY2M0In0sImltcGxlbWVudGF0aW9uUGluSGFzaCI6ImM4ZDUzOGFmMzRjYjllYjE2MGIyNWE3MzllMTM4Mzg3ZWM4M2QzNzAyNmM1ODVlZjllMTYxODM2OTY4YzIxZWQiLCJhZGRlZEZhY3RzIjpbImxlZnQiLCJyaWdodCJdLCJmaXJpbmdzIjpbeyJydWxlSWQiOiJsZWZ0IiwiY29uY2x1c2lvbiI6ImxlZnQifSx7InJ1bGVJZCI6InJpZ2h0IiwiY29uY2x1c2lvbiI6InJpZ2h0In1dfSwic2VtYW50aWNSZWNlaXB0U2hhMjU2IjoiMWJkOTVlYTQwYjIyMjFmNmJlNjBhM2E4NjAwZmZiZTQyMjIxOTA3MmEzNGExMzkzYjRiZDQ3ZDM5N2U0ODk0NCJ9",
+          "receiptId": "18f22d7eba058d50b9a87463fb23eb60e3ef607336641957441281ff29a4fdb8",
+          "semanticReceiptSha256": "1bd95ea40b2221f6be60a3a8600ffbe422219072a34a1393b4bd47d397e48944",
+          "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+          "beforeFacts": [
+            "seed"
+          ],
+          "afterFacts": [
+            "left",
+            "right",
+            "seed"
+          ],
+          "modelRevision": 3,
+          "committedRounds": 1,
+          "acceptedAttemptId": "a03d59d21b954b839041a47914255476",
+          "acceptedWorkerId": "rules-2abaea6d89604103b5605da74f8dd4bc",
+          "acceptedLeaseFence": 1,
+          "acceptedModelRevision": 2,
+          "consumedModelRevision": 3,
+          "tokenOwner": "rules-2abaea6d89604103b5605da74f8dd4bc",
+          "tokenFence": 1,
+          "tokenExpiresAtUtc": "2026-10-22T00:03:13.673501+00:00",
+          "tokenExpectedModelRevision": 2,
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_3fcc0c6c10ad4de38679176e6aa4a16d",
+          "processId": 3638,
+          "machineName": "Sipkes-MacBook-Air",
+          "capturedUtc": "2026-10-22T00:03:10.978586+00:00"
+        },
+        "originalPid": 3638,
+        "successor": {
+          "command": "process-recover",
+          "passed": true,
+          "recoveredBoundary": "consumed",
+          "terminalBase64": "eyJ0ZXJtaW5hbElkIjoiM2E3YjViMWRiOTJiOGUwMGUwY2NmYTYyMGYwNjI4OThkNmFlYWRkOGFiYWIxYmY0Y2ZmOGIzODEwZTJkMzBmOSIsImtpbmQiOiJTdWNjZWVkZWQiLCJjb21taXR0ZWRSb3VuZHMiOjQsInJlc3VsdFNjaGVtYVZlcnNpb24iOjEsImZhY3RzIjpbImZpbmFsIiwiam9pbmVkIiwibGVmdCIsInJpZ2h0Iiwic2VlZCJdLCJmYWN0c1NoYTI1NiI6IjVlOTcwZGQyMDYxODFjNDFkOTViNTM0ZjdiNzY0MzAzOTJlZjY1OWRiODUyMWM2NjBlMmY2NzIzN2VlYzRjY2MiLCJkaWFnbm9zdGljIjpudWxsfQ==",
+          "modelRevision": 9,
+          "processId": 3652,
+          "originalProcessId": 3638,
+          "machineName": "Sipkes-MacBook-Air",
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_3fcc0c6c10ad4de38679176e6aa4a16d",
+          "invocationFingerprint": "d1c0a26d0ec3a604144d35b8711bc6fce9e78430d311ffafd1e09adde7b29ea8",
+          "status": "Succeeded",
+          "committedRounds": 4,
+          "finalFacts": [
+            "final",
+            "joined",
+            "left",
+            "right",
+            "seed"
+          ],
+          "roundHistory": [
+            {
+              "ordinal": 0,
+              "receiptId": "18f22d7eba058d50b9a87463fb23eb60e3ef607336641957441281ff29a4fdb8",
+              "semanticReceiptSha256": "1bd95ea40b2221f6be60a3a8600ffbe422219072a34a1393b4bd47d397e48944",
+              "acceptedAttemptId": "a03d59d21b954b839041a47914255476",
+              "acceptedWorkerId": "rules-2abaea6d89604103b5605da74f8dd4bc",
+              "acceptedLeaseFence": 1,
+              "acceptedModelRevision": 2,
+              "consumedModelRevision": 3
+            },
+            {
+              "ordinal": 1,
+              "receiptId": "10d436dc37ad2dc49220e017d66a1262c04d5d63adf953240779409d097076a4",
+              "semanticReceiptSha256": "a3804c9ec4c5f0cdf7c1544d320d15c206f888bcf64fdff2f31d933c0d2e94a4",
+              "acceptedAttemptId": "d2066451651247e7b84f9fcf866d83d3",
+              "acceptedWorkerId": "rules-6826e7bdf3c542dea9f63ca16c7aea9c",
+              "acceptedLeaseFence": 2,
+              "acceptedModelRevision": 4,
+              "consumedModelRevision": 5
+            },
+            {
+              "ordinal": 2,
+              "receiptId": "ecb83825da00f747caaffc27b5f906633e4d057039b0271fea555b80757f26ed",
+              "semanticReceiptSha256": "4c1bee37bf7cdc7aff241add0935d38237de64bbca9682dc6ea5383d2d0bf6b4",
+              "acceptedAttemptId": "684a071dddf34fef8d1252257ea4dfd9",
+              "acceptedWorkerId": "rules-6826e7bdf3c542dea9f63ca16c7aea9c",
+              "acceptedLeaseFence": 4,
+              "acceptedModelRevision": 6,
+              "consumedModelRevision": 7
+            },
+            {
+              "ordinal": 3,
+              "receiptId": "eba28e81968dbd69f1a76ed80da1e57c8845b25a5f276c4d7741289738cf6a95",
+              "semanticReceiptSha256": "55f504ed3ad662b193e0da7dfa4f1bff2567e579de66feedb0fc6fbcc4ea8b81",
+              "acceptedAttemptId": "b172c8ea731e4df3a1cd0fa9175b756e",
+              "acceptedWorkerId": "rules-6826e7bdf3c542dea9f63ca16c7aea9c",
+              "acceptedLeaseFence": 6,
+              "acceptedModelRevision": 8,
+              "consumedModelRevision": 9
+            }
+          ],
+          "terminalId": "3a7b5b1db92b8e00e0ccfa620f062898d6aeadd8abab1bf4cff8b3810e2d30f9",
+          "terminalStabilityVerified": true,
+          "designStorageUsed": false
+        },
+        "originalAfterRelease": {
+          "command": "process-boundary",
+          "passed": true,
+          "boundary": "consumed",
+          "processId": 3638,
+          "machineName": "Sipkes-MacBook-Air",
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_3fcc0c6c10ad4de38679176e6aa4a16d",
+          "invocationFingerprint": "d1c0a26d0ec3a604144d35b8711bc6fce9e78430d311ffafd1e09adde7b29ea8",
+          "boundaryReceiptId": "18f22d7eba058d50b9a87463fb23eb60e3ef607336641957441281ff29a4fdb8",
+          "boundaryAttemptId": "a03d59d21b954b839041a47914255476",
+          "boundaryWorkerId": "rules-2abaea6d89604103b5605da74f8dd4bc",
+          "boundaryLeaseFence": 1,
+          "originalCallbackDisposition": "LeaseLost",
+          "terminalBase64": "eyJ0ZXJtaW5hbElkIjoiM2E3YjViMWRiOTJiOGUwMGUwY2NmYTYyMGYwNjI4OThkNmFlYWRkOGFiYWIxYmY0Y2ZmOGIzODEwZTJkMzBmOSIsImtpbmQiOiJTdWNjZWVkZWQiLCJjb21taXR0ZWRSb3VuZHMiOjQsInJlc3VsdFNjaGVtYVZlcnNpb24iOjEsImZhY3RzIjpbImZpbmFsIiwiam9pbmVkIiwibGVmdCIsInJpZ2h0Iiwic2VlZCJdLCJmYWN0c1NoYTI1NiI6IjVlOTcwZGQyMDYxODFjNDFkOTViNTM0ZjdiNzY0MzAzOTJlZjY1OWRiODUyMWM2NjBlMmY2NzIzN2VlYzRjY2MiLCJkaWFnbm9zdGljIjpudWxsfQ==",
+          "modelRevision": 9,
+          "finalStatus": "Succeeded",
+          "finalModelRevision": 9,
+          "finalCommittedRounds": 4,
+          "finalFacts": [
+            "final",
+            "joined",
+            "left",
+            "right",
+            "seed"
+          ]
+        }
+      },
+      {
+        "name": "accepted-cancel",
+        "boundary": "accepted",
+        "action": "cancel",
+        "database": "rules_7cf4de63e03e4633a71621639c81d90b",
+        "passed": true,
+        "statePath": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73/processes/accepted-cancel-state.json",
+        "boundaryState": {
+          "schemaVersion": 1,
+          "boundary": "accepted",
+          "invocationBase64": "eyJpbnZvY2F0aW9uU2NoZW1hVmVyc2lvbiI6MSwiaWRlbnRpdHkiOnsidGVuYW50IjpudWxsLCJwYXJ0aXRpb24iOiJwYWNrYWdlZC1ydWxlcy1wcm9iZSIsImludm9jYXRpb24iOiJwcm9jZXNzLWFjY2VwdGVkLWM0M2UzZjc0MzRiODQxYjI4NmUzOGIzM2U0YzgxMDI1In0sImFydGlmYWN0Ijp7ImZvcm1hdFZlcnNpb24iOjEsImlkIjoicnVsZXM6MGYwMzA5ZDU4MTM2NzFhZTZhNDliMzE2NzM2NjUxNDI4NTRkM2U2MDFjZjAwMWJjZjBmNDdjMTM1ZDMzMDg0MSIsInNoYTI1NiI6IjBmMDMwOWQ1ODEzNjcxYWU2YTQ5YjMxNjczNjY1MTQyODU0ZDNlNjAxY2YwMDFiY2YwZjQ3YzEzNWQzMzA4NDEiLCJieXRlcyI6ImV5Sm1iM0p0WVhSV1pYSnphVzl1SWpveExDSnNZVzVuZFdGblpVbGtJam9pWld4ellTNXlkV3hsY3k1bWFXNXBkR1V0Y0c5emFYUnBkbVVpTENKc1lXNW5kV0ZuWlZabGNuTnBiMjRpT2pFc0luWnZZMkZpZFd4aGNua2lPbHNpWm1sdVlXd2lMQ0pxYjJsdVpXUWlMQ0pzWldaMElpd2libVYyWlhJdFpHVnlhWFpsWkNJc0luSnBaMmgwSWl3aWMyVmxaQ0lzSW5WdWNtVmhZMmhoWW14bElsMHNJbkoxYkdWeklqcGJleUpwWkNJNkltWnBibUZzSWl3aWNISmxiV2x6WlhNaU9sc2lhbTlwYm1Wa0lsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKbWFXNWhiQ0o5TEhzaWFXUWlPaUpxYjJsdUlpd2ljSEpsYldselpYTWlPbHNpYkdWbWRDSXNJbkpwWjJoMElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKcWIybHVaV1FpZlN4N0ltbGtJam9pYkdWbWRDSXNJbkJ5WlcxcGMyVnpJanBiSW5ObFpXUWlYU3dpWTI5dVkyeDFjMmx2YmlJNklteGxablFpZlN4N0ltbGtJam9pY21sbmFIUWlMQ0p3Y21WdGFYTmxjeUk2V3lKelpXVmtJbDBzSW1OdmJtTnNkWE5wYjI0aU9pSnlhV2RvZENKOUxIc2lhV1FpT2lKMWJuSmxZV05vWVdKc1pTSXNJbkJ5WlcxcGMyVnpJanBiSW5WdWNtVmhZMmhoWW14bElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKdVpYWmxjaTFrWlhKcGRtVmtJbjFkZlE9PSJ9LCJpbml0aWFsRmFjdHMiOlsic2VlZCJdLCJtYXhSb3VuZHMiOjcsImltcGxlbWVudGF0aW9uIjp7InBpblNjaGVtYVZlcnNpb24iOjEsImxhbmd1YWdlSWQiOiJlbHNhLnJ1bGVzLmZpbml0ZS1wb3NpdGl2ZSIsImxhbmd1YWdlVmVyc2lvbiI6MSwicmVjZWlwdFNjaGVtYVZlcnNpb24iOjEsInN0YXRlU2NoZW1hVmVyc2lvbiI6MSwicGFja2FnZXMiOlt7ImlkIjoiRWxzYS5SdWxlcy5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IjJ1TVBmcXlxM1x1MDAyQllqMS9lVklqeEhoellqS2NqRno0NkNCRGl4OEovUndzNFQxVkcxZERHdzI5dUtIeGF3RlNsWDJLdFR2MXJLUVN6MFNOWjNpWVQ0eUE9PSIsImFzc2V0cyI6W3sicGF0aCI6ImxpYi9uZXQxMC4wL0Vsc2EuUnVsZXMuQ29yZS5kbGwiLCJhc3NlbWJseSI6IkVsc2EuUnVsZXMuQ29yZSwgVmVyc2lvbj00LjAuMC4wLCBDdWx0dXJlPW5ldXRyYWwsIFB1YmxpY0tleVRva2VuPW51bGwiLCJzaGEyNTYiOiJiNjlmNmMzODg5NjdmMWEyNmMxZDM5YTNjOGQ0ZGZiOGM3MjMzNTI1MzhmMjFjNGJlYTM2MmU1M2NlNGI4MGExIn1dfSx7ImlkIjoiRWxzYS5SdWxlcy5QZXJzaXN0ZW5jZS5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IlpcdTAwMkJ0MDhHOUpcdTAwMkI0djVnUU1acVlvTGNGeFhoXHUwMDJCZXFUN1gwXHUwMDJCL1FnYmozQjN2OUZBWC9TcWFLa1lpb1B2LzRXaXBxZGNOUkhcdTAwMkIwZm5cdTAwMkJGVTJKdE85T0QySDRnPT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMmFhNDBiNDViMzlhMmQzMzNkYmVlYmNjZWE1YzRjOGQzMTBjMjliY2M0MTE5ZTgyMDNhN2M3NWU4MDhkOTY0NCJ9XX0seyJpZCI6IkVsc2EuUnVsZXMuUnVudGltZSIsInZlcnNpb24iOiI0LjAuMC1icmFuY2gtYWdlbnQtY29kZXgtMzE4MS1kdXJhYmxlLXJ1bGVzIiwiY29udGVudEhhc2giOiJ1M1NkcG5CL3BmVWlEVFQyTEVidnBYRWhIdzI1aC9sdURxMEsvUVx1MDAyQlRkenRxcHJYcm5iU3J3aWhJL2NwYUhJVTAxYkVJQzlDSVpXaFJ3enhWcUhPOTJ3PT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlJ1bnRpbWUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlJ1bnRpbWUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMGQ3MmJmYjFlYzQ2NDM5MTRmYTlkYTA0MmU4NTI1YmZkOTc3MzRjMTQ0MTA1MTAzYjM4ZWE0NWJmODBhYTk1NyJ9XX1dfSwibmF0aXZlRGVzdGluYXRpb24iOm51bGx9",
+          "invocationFingerprint": "d5f5cd2d0be0322204f3fba2fcaac73c9a9c61556e373e46591dcd64e6eae3f9",
+          "receiptRecordBase64": "eyJyZWNlaXB0Ijp7ImlkZW50aXR5Ijp7InRlbmFudCI6bnVsbCwicGFydGl0aW9uIjoicGFja2FnZWQtcnVsZXMtcHJvYmUiLCJpbnZvY2F0aW9uIjoicHJvY2Vzcy1hY2NlcHRlZC1jNDNlM2Y3NDM0Yjg0MWIyODZlMzhiMzNlNGM4MTAyNSIsImZpbmdlcnByaW50IjoiZDVmNWNkMmQwYmUwMzIyMjA0ZjNmYmEyZmNhYWM3M2M5YTljNjE1NTZlMzczZTQ2NTkxZGNkNjRlNmVhZTNmOSIsIm9yZGluYWwiOjAsImlucHV0U3RhdGVTaGEyNTYiOiI4MGIwMTBkYzI2ZjI1NjhjOTM3NWEyOTllMzcwN2ViN2M0NWQwNDZhMTM5ODVmYTFmYWMwYzcyMmNhYWIwY2M0In0sImltcGxlbWVudGF0aW9uUGluSGFzaCI6ImM4ZDUzOGFmMzRjYjllYjE2MGIyNWE3MzllMTM4Mzg3ZWM4M2QzNzAyNmM1ODVlZjllMTYxODM2OTY4YzIxZWQiLCJhZGRlZEZhY3RzIjpbImxlZnQiLCJyaWdodCJdLCJmaXJpbmdzIjpbeyJydWxlSWQiOiJsZWZ0IiwiY29uY2x1c2lvbiI6ImxlZnQifSx7InJ1bGVJZCI6InJpZ2h0IiwiY29uY2x1c2lvbiI6InJpZ2h0In1dfSwic2VtYW50aWNSZWNlaXB0U2hhMjU2IjoiZTNiMDM4NjY5YWY4Mjg0Y2VlY2YwNjhhNjFkZjY1M2Y5ODBmMjM2NWVjZTYyOTcwNzZlYmEyYWU2MTg0MGZlZCJ9",
+          "receiptId": "9343b3bd47c6bd6d780e6991e7db3e0e65548099c0a22f8e94010e18b1cd3dee",
+          "semanticReceiptSha256": "e3b038669af8284ceecf068a61df653f980f2365ece6297076eba2ae61840fed",
+          "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+          "beforeFacts": [
+            "seed"
+          ],
+          "afterFacts": [
+            "seed"
+          ],
+          "modelRevision": 2,
+          "committedRounds": 0,
+          "pendingReceiptId": "9343b3bd47c6bd6d780e6991e7db3e0e65548099c0a22f8e94010e18b1cd3dee",
+          "acceptedAttemptId": "83b0718c83e74123b0a5a97de0f57c25",
+          "acceptedWorkerId": "rules-6ea17e3eca0a405a953fbee852f99421",
+          "acceptedLeaseFence": 1,
+          "acceptedModelRevision": 2,
+          "tokenOwner": "rules-6ea17e3eca0a405a953fbee852f99421",
+          "tokenFence": 1,
+          "tokenExpiresAtUtc": "2026-10-22T00:03:19.189946+00:00",
+          "tokenExpectedModelRevision": 1,
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_7cf4de63e03e4633a71621639c81d90b",
+          "processId": 3698,
+          "machineName": "Sipkes-MacBook-Air",
+          "capturedUtc": "2026-10-22T00:03:16.432538+00:00"
+        },
+        "originalPid": 3698,
+        "successor": {
+          "command": "process-cancel",
+          "passed": true,
+          "terminalBase64": "eyJ0ZXJtaW5hbElkIjoiZWEzNmE3ODg4YTMzYTRjYzUzZjkzODI3YmQzYjk0MmI3NTI4NTY0NmM1YTQ4NmVlNTRiN2UyZDJkMDkwYjgwNSIsImtpbmQiOiJDYW5jZWxsZWQiLCJjb21taXR0ZWRSb3VuZHMiOjAsInJlc3VsdFNjaGVtYVZlcnNpb24iOjEsImZhY3RzIjpbInNlZWQiXSwiZmFjdHNTaGEyNTYiOiI4MGIwMTBkYzI2ZjI1NjhjOTM3NWEyOTllMzcwN2ViN2M0NWQwNDZhMTM5ODVmYTFmYWMwYzcyMmNhYWIwY2M0IiwiZGlhZ25vc3RpYyI6bnVsbH0=",
+          "modelRevision": 3,
+          "processId": 3713,
+          "machineName": "Sipkes-MacBook-Air",
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_7cf4de63e03e4633a71621639c81d90b",
+          "acceptedRun": {
+            "invocationFingerprint": "d5f5cd2d0be0322204f3fba2fcaac73c9a9c61556e373e46591dcd64e6eae3f9",
+            "changedFingerprint": "Conflict",
+            "exactCancellation": "Cancelled",
+            "exactReplay": "Replay",
+            "status": "Cancelled",
+            "committedRounds": 0,
+            "committedFacts": [
+              "seed"
+            ]
+          },
+          "cancellationBeforeAdmission": {
+            "invocationId": "cancel-before-admission-d3f0b9f733704993aa0613f0fade8773",
+            "cancellation": "Cancelled",
+            "admission": "AlreadyCancelled",
+            "changedFingerprint": "Conflict",
+            "status": "Cancelled",
+            "committedFacts": [],
+            "receiptCount": 0
+          },
+          "workerSuppressed": true
+        },
+        "originalAfterRelease": {
+          "command": "process-boundary",
+          "passed": true,
+          "boundary": "accepted",
+          "processId": 3698,
+          "machineName": "Sipkes-MacBook-Air",
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_7cf4de63e03e4633a71621639c81d90b",
+          "invocationFingerprint": "d5f5cd2d0be0322204f3fba2fcaac73c9a9c61556e373e46591dcd64e6eae3f9",
+          "boundaryReceiptId": "9343b3bd47c6bd6d780e6991e7db3e0e65548099c0a22f8e94010e18b1cd3dee",
+          "boundaryAttemptId": "83b0718c83e74123b0a5a97de0f57c25",
+          "boundaryWorkerId": "rules-6ea17e3eca0a405a953fbee852f99421",
+          "boundaryLeaseFence": 1,
+          "originalCallbackDisposition": "Terminal",
+          "terminalBase64": "eyJ0ZXJtaW5hbElkIjoiZWEzNmE3ODg4YTMzYTRjYzUzZjkzODI3YmQzYjk0MmI3NTI4NTY0NmM1YTQ4NmVlNTRiN2UyZDJkMDkwYjgwNSIsImtpbmQiOiJDYW5jZWxsZWQiLCJjb21taXR0ZWRSb3VuZHMiOjAsInJlc3VsdFNjaGVtYVZlcnNpb24iOjEsImZhY3RzIjpbInNlZWQiXSwiZmFjdHNTaGEyNTYiOiI4MGIwMTBkYzI2ZjI1NjhjOTM3NWEyOTllMzcwN2ViN2M0NWQwNDZhMTM5ODVmYTFmYWMwYzcyMmNhYWIwY2M0IiwiZGlhZ25vc3RpYyI6bnVsbH0=",
+          "modelRevision": 3,
+          "finalStatus": "Cancelled",
+          "finalModelRevision": 3,
+          "finalCommittedRounds": 0,
+          "finalFacts": [
+            "seed"
+          ]
+        }
+      }
+    ],
+    "designStorage": "absent: consumer has no design package or project reference",
+    "resolvedDesignLibraries": [],
+    "qualificationScope": "Five real-worker boundary/recovery/cancellation cases; live-successor and removal-control proofs are recorded separately.",
+    "removalControlsComplete": true,
+    "qualified": true,
+    "containerId": "fa1927f3ab1aebe9fb9d23bbe6116c0454f26b43762a0cc9dcd8a605bb302107",
+    "containerImage": "sha256:ed134ce8cc303c24d12c4bc6f5a2a43dc7ee7bbde8f67d9f60be5cc03206eab0",
+    "serverVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+    "cleanupAttempted": true,
+    "ownedContainerRemoved": true
+  },
+  "liveSuccessorProof": {
+    "passed": true,
+    "database": "rules_cce8c40883484983ba3f297a6f5cbea6",
+    "topology": "independent-processes-on-one-machine",
+    "originMarker": {
+      "schemaVersion": 1,
+      "invocationBase64": "eyJpbnZvY2F0aW9uU2NoZW1hVmVyc2lvbiI6MSwiaWRlbnRpdHkiOnsidGVuYW50IjpudWxsLCJwYXJ0aXRpb24iOiJwYWNrYWdlZC1ydWxlcy1wcm9iZSIsImludm9jYXRpb24iOiJzdGFsZS1wcm9jZXNzLW9yaWdpbi05NDViMDE3YTY0MjE0YmRhYmNlNmJjMGU1ZGViYWFmMiJ9LCJhcnRpZmFjdCI6eyJmb3JtYXRWZXJzaW9uIjoxLCJpZCI6InJ1bGVzOjBmMDMwOWQ1ODEzNjcxYWU2YTQ5YjMxNjczNjY1MTQyODU0ZDNlNjAxY2YwMDFiY2YwZjQ3YzEzNWQzMzA4NDEiLCJzaGEyNTYiOiIwZjAzMDlkNTgxMzY3MWFlNmE0OWIzMTY3MzY2NTE0Mjg1NGQzZTYwMWNmMDAxYmNmMGY0N2MxMzVkMzMwODQxIiwiYnl0ZXMiOiJleUptYjNKdFlYUldaWEp6YVc5dUlqb3hMQ0pzWVc1bmRXRm5aVWxrSWpvaVpXeHpZUzV5ZFd4bGN5NW1hVzVwZEdVdGNHOXphWFJwZG1VaUxDSnNZVzVuZFdGblpWWmxjbk5wYjI0aU9qRXNJblp2WTJGaWRXeGhjbmtpT2xzaVptbHVZV3dpTENKcWIybHVaV1FpTENKc1pXWjBJaXdpYm1WMlpYSXRaR1Z5YVhabFpDSXNJbkpwWjJoMElpd2ljMlZsWkNJc0luVnVjbVZoWTJoaFlteGxJbDBzSW5KMWJHVnpJanBiZXlKcFpDSTZJbVpwYm1Gc0lpd2ljSEpsYldselpYTWlPbHNpYW05cGJtVmtJbDBzSW1OdmJtTnNkWE5wYjI0aU9pSm1hVzVoYkNKOUxIc2lhV1FpT2lKcWIybHVJaXdpY0hKbGJXbHpaWE1pT2xzaWJHVm1kQ0lzSW5KcFoyaDBJbDBzSW1OdmJtTnNkWE5wYjI0aU9pSnFiMmx1WldRaWZTeDdJbWxrSWpvaWJHVm1kQ0lzSW5CeVpXMXBjMlZ6SWpwYkluTmxaV1FpWFN3aVkyOXVZMngxYzJsdmJpSTZJbXhsWm5RaWZTeDdJbWxrSWpvaWNtbG5hSFFpTENKd2NtVnRhWE5sY3lJNld5SnpaV1ZrSWwwc0ltTnZibU5zZFhOcGIyNGlPaUp5YVdkb2RDSjlMSHNpYVdRaU9pSjFibkpsWVdOb1lXSnNaU0lzSW5CeVpXMXBjMlZ6SWpwYkluVnVjbVZoWTJoaFlteGxJbDBzSW1OdmJtTnNkWE5wYjI0aU9pSnVaWFpsY2kxa1pYSnBkbVZrSW4xZGZRPT0ifSwiaW5pdGlhbEZhY3RzIjpbInNlZWQiXSwibWF4Um91bmRzIjo3LCJpbXBsZW1lbnRhdGlvbiI6eyJwaW5TY2hlbWFWZXJzaW9uIjoxLCJsYW5ndWFnZUlkIjoiZWxzYS5ydWxlcy5maW5pdGUtcG9zaXRpdmUiLCJsYW5ndWFnZVZlcnNpb24iOjEsInJlY2VpcHRTY2hlbWFWZXJzaW9uIjoxLCJzdGF0ZVNjaGVtYVZlcnNpb24iOjEsInBhY2thZ2VzIjpbeyJpZCI6IkVsc2EuUnVsZXMuQ29yZSIsInZlcnNpb24iOiI0LjAuMC1icmFuY2gtYWdlbnQtY29kZXgtMzE4MS1kdXJhYmxlLXJ1bGVzIiwiY29udGVudEhhc2giOiIydU1QZnF5cTNcdTAwMkJZajEvZVZJanhIaHpZaktjakZ6NDZDQkRpeDhKL1J3czRUMVZHMWRER3cyOXVLSHhhd0ZTbFgyS3RUdjFyS1FTejBTTlozaVlUNHlBPT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLkNvcmUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLkNvcmUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiYjY5ZjZjMzg4OTY3ZjFhMjZjMWQzOWEzYzhkNGRmYjhjNzIzMzUyNTM4ZjIxYzRiZWEzNjJlNTNjZTRiODBhMSJ9XX0seyJpZCI6IkVsc2EuUnVsZXMuUGVyc2lzdGVuY2UuQ29yZSIsInZlcnNpb24iOiI0LjAuMC1icmFuY2gtYWdlbnQtY29kZXgtMzE4MS1kdXJhYmxlLXJ1bGVzIiwiY29udGVudEhhc2giOiJaXHUwMDJCdDA4RzlKXHUwMDJCNHY1Z1FNWnFZb0xjRnhYaFx1MDAyQmVxVDdYMFx1MDAyQi9RZ2JqM0IzdjlGQVgvU3FhS2tZaW9Qdi80V2lwcWRjTlJIXHUwMDJCMGZuXHUwMDJCRlUySnRPOU9EMkg0Zz09IiwiYXNzZXRzIjpbeyJwYXRoIjoibGliL25ldDEwLjAvRWxzYS5SdWxlcy5QZXJzaXN0ZW5jZS5Db3JlLmRsbCIsImFzc2VtYmx5IjoiRWxzYS5SdWxlcy5QZXJzaXN0ZW5jZS5Db3JlLCBWZXJzaW9uPTQuMC4wLjAsIEN1bHR1cmU9bmV1dHJhbCwgUHVibGljS2V5VG9rZW49bnVsbCIsInNoYTI1NiI6IjJhYTQwYjQ1YjM5YTJkMzMzZGJlZWJjY2VhNWM0YzhkMzEwYzI5YmNjNDExOWU4MjAzYTdjNzVlODA4ZDk2NDQifV19LHsiaWQiOiJFbHNhLlJ1bGVzLlJ1bnRpbWUiLCJ2ZXJzaW9uIjoiNC4wLjAtYnJhbmNoLWFnZW50LWNvZGV4LTMxODEtZHVyYWJsZS1ydWxlcyIsImNvbnRlbnRIYXNoIjoidTNTZHBuQi9wZlVpRFRUMkxFYnZwWEVoSHcyNWgvbHVEcTBLL1FcdTAwMkJUZHp0cXByWHJuYlNyd2loSS9jcGFISVUwMWJFSUM5Q0laV2hSd3p4VnFITzkydz09IiwiYXNzZXRzIjpbeyJwYXRoIjoibGliL25ldDEwLjAvRWxzYS5SdWxlcy5SdW50aW1lLmRsbCIsImFzc2VtYmx5IjoiRWxzYS5SdWxlcy5SdW50aW1lLCBWZXJzaW9uPTQuMC4wLjAsIEN1bHR1cmU9bmV1dHJhbCwgUHVibGljS2V5VG9rZW49bnVsbCIsInNoYTI1NiI6IjBkNzJiZmIxZWM0NjQzOTE0ZmE5ZGEwNDJlODUyNWJmZDk3NzM0YzE0NDEwNTEwM2IzOGVhNDViZjgwYWE5NTcifV19XX0sIm5hdGl2ZURlc3RpbmF0aW9uIjpudWxsfQ==",
+      "invocationFingerprint": "cf2de2f9a54f994caab14dd72eb2546f9d5dda5d00b97ea5c4868e36c876a630",
+      "receiptRecordBase64": "eyJyZWNlaXB0Ijp7ImlkZW50aXR5Ijp7InRlbmFudCI6bnVsbCwicGFydGl0aW9uIjoicGFja2FnZWQtcnVsZXMtcHJvYmUiLCJpbnZvY2F0aW9uIjoic3RhbGUtcHJvY2Vzcy1vcmlnaW4tOTQ1YjAxN2E2NDIxNGJkYWJjZTZiYzBlNWRlYmFhZjIiLCJmaW5nZXJwcmludCI6ImNmMmRlMmY5YTU0Zjk5NGNhYWIxNGRkNzJlYjI1NDZmOWQ1ZGRhNWQwMGI5N2VhNWM0ODY4ZTM2Yzg3NmE2MzAiLCJvcmRpbmFsIjowLCJpbnB1dFN0YXRlU2hhMjU2IjoiODBiMDEwZGMyNmYyNTY4YzkzNzVhMjk5ZTM3MDdlYjdjNDVkMDQ2YTEzOTg1ZmExZmFjMGM3MjJjYWFiMGNjNCJ9LCJpbXBsZW1lbnRhdGlvblBpbkhhc2giOiJjOGQ1MzhhZjM0Y2I5ZWIxNjBiMjVhNzM5ZTEzODM4N2VjODNkMzcwMjZjNTg1ZWY5ZTE2MTgzNjk2OGMyMWVkIiwiYWRkZWRGYWN0cyI6WyJsZWZ0IiwicmlnaHQiXSwiZmlyaW5ncyI6W3sicnVsZUlkIjoibGVmdCIsImNvbmNsdXNpb24iOiJsZWZ0In0seyJydWxlSWQiOiJyaWdodCIsImNvbmNsdXNpb24iOiJyaWdodCJ9XX0sInNlbWFudGljUmVjZWlwdFNoYTI1NiI6ImZlMDJjYmQ1ZmJhZjQ4MjQ0Mzg5NTFiM2NlNzExYWQ5OTM4Nzg2NDczNzFmODJjOWM1MDU4ODAwMWQ4ZTY0NWMifQ==",
+      "receiptId": "259ffd2132717de306221dd447f2bff69a891bc224ee054a77f2447bc7a7d77e",
+      "semanticReceiptSha256": "fe02cbd5fbaf4824438951b3ce711ad993878647371f82c9c50588001d8e645c",
+      "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+      "tokenOwner": "rules-e373708b4a30418b94587dee9199e2ef",
+      "tokenFence": 1,
+      "tokenExpiresAtUtc": "2026-10-22T00:03:22.623305+00:00",
+      "tokenExpectedModelRevision": 1,
+      "attemptId": "3154dbf3fab54d9b80177d981bf991d5",
+      "attemptWorkerId": "rules-e373708b4a30418b94587dee9199e2ef",
+      "attemptLeaseFence": 1,
+      "durableSnapshot": "{\n  \"view\": {\n    \"identity\": {\n      \"scope\": {\n        \"persistencePartition\": \"packaged-rules-probe\"\n      },\n      \"invocationId\": \"stale-process-origin-945b017a64214bdabce6bc0e5debaaf2\"\n    },\n    \"fingerprint\": {\n      \"sha256\": \"cf2de2f9a54f994caab14dd72eb2546f9d5dda5d00b97ea5c4868e36c876a630\"\n    },\n    \"artifactId\": \"rules:0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841\",\n    \"artifactSha256\": \"0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841\",\n    \"implementationPinHash\": \"c8d538af34cb9eb160b25a739e138387ec83d37026c585ef9e161836968c21ed\",\n    \"status\": 0,\n    \"modelRevision\": 1,\n    \"committedRounds\": 0,\n    \"committedFactCount\": 1\n  },\n  \"facts\": [\n    \"seed\"\n  ],\n  \"rounds\": []\n}",
+      "durableSnapshotSha256": "7b3ef64bf113516a0a4872b5193f4aa150c34ed0fd477b8552c1cf07daa82bbc",
+      "databaseEngine": "PostgreSQL",
+      "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+      "databaseName": "rules_cce8c40883484983ba3f297a6f5cbea6",
+      "processId": 3754,
+      "machineName": "Sipkes-MacBook-Air",
+      "capturedUtc": "2026-10-22T00:03:19.816468+00:00"
+    },
+    "successorMarker": {
+      "schemaVersion": 1,
+      "invocationFingerprint": "cf2de2f9a54f994caab14dd72eb2546f9d5dda5d00b97ea5c4868e36c876a630",
+      "tokenOwner": "rules-05fb4b850f1b4ab2b521a05716577a4a",
+      "tokenFence": 2,
+      "tokenExpiresAtUtc": "2026-10-22T00:03:25.641311+00:00",
+      "tokenExpectedModelRevision": 1,
+      "roundOrdinal": 0,
+      "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+      "durableSnapshot": "{\n  \"view\": {\n    \"identity\": {\n      \"scope\": {\n        \"persistencePartition\": \"packaged-rules-probe\"\n      },\n      \"invocationId\": \"stale-process-origin-945b017a64214bdabce6bc0e5debaaf2\"\n    },\n    \"fingerprint\": {\n      \"sha256\": \"cf2de2f9a54f994caab14dd72eb2546f9d5dda5d00b97ea5c4868e36c876a630\"\n    },\n    \"artifactId\": \"rules:0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841\",\n    \"artifactSha256\": \"0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841\",\n    \"implementationPinHash\": \"c8d538af34cb9eb160b25a739e138387ec83d37026c585ef9e161836968c21ed\",\n    \"status\": 0,\n    \"modelRevision\": 1,\n    \"committedRounds\": 0,\n    \"committedFactCount\": 1\n  },\n  \"facts\": [\n    \"seed\"\n  ],\n  \"rounds\": []\n}",
+      "durableSnapshotSha256": "7b3ef64bf113516a0a4872b5193f4aa150c34ed0fd477b8552c1cf07daa82bbc",
+      "databaseEngine": "PostgreSQL",
+      "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+      "databaseName": "rules_cce8c40883484983ba3f297a6f5cbea6",
+      "processId": 3807,
+      "machineName": "Sipkes-MacBook-Air",
+      "capturedUtc": "2026-10-22T00:03:22.870406+00:00"
+    },
+    "original": {
+      "command": "process-stale-origin",
+      "passed": true,
+      "processId": 3754,
+      "machineName": "Sipkes-MacBook-Air",
+      "databaseEngine": "PostgreSQL",
+      "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+      "databaseName": "rules_cce8c40883484983ba3f297a6f5cbea6",
+      "invocationFingerprint": "cf2de2f9a54f994caab14dd72eb2546f9d5dda5d00b97ea5c4868e36c876a630",
+      "owner": "rules-e373708b4a30418b94587dee9199e2ef",
+      "fence": 1,
+      "attemptId": "3154dbf3fab54d9b80177d981bf991d5",
+      "receiptId": "259ffd2132717de306221dd447f2bff69a891bc224ee054a77f2447bc7a7d77e",
+      "semanticReceiptSha256": "fe02cbd5fbaf4824438951b3ce711ad993878647371f82c9c50588001d8e645c",
+      "staleAcceptDisposition": "LeaseLost",
+      "staleAcceptHasNoPayload": true,
+      "staleReadDisposition": "LeaseLost",
+      "staleReadHasNoPayload": true,
+      "staleReleaseDisposition": "LeaseLost",
+      "durableSnapshotBefore": "{\n  \"view\": {\n    \"identity\": {\n      \"scope\": {\n        \"persistencePartition\": \"packaged-rules-probe\"\n      },\n      \"invocationId\": \"stale-process-origin-945b017a64214bdabce6bc0e5debaaf2\"\n    },\n    \"fingerprint\": {\n      \"sha256\": \"cf2de2f9a54f994caab14dd72eb2546f9d5dda5d00b97ea5c4868e36c876a630\"\n    },\n    \"artifactId\": \"rules:0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841\",\n    \"artifactSha256\": \"0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841\",\n    \"implementationPinHash\": \"c8d538af34cb9eb160b25a739e138387ec83d37026c585ef9e161836968c21ed\",\n    \"status\": 0,\n    \"modelRevision\": 1,\n    \"committedRounds\": 0,\n    \"committedFactCount\": 1\n  },\n  \"facts\": [\n    \"seed\"\n  ],\n  \"rounds\": []\n}",
+      "durableSnapshotAfter": "{\n  \"view\": {\n    \"identity\": {\n      \"scope\": {\n        \"persistencePartition\": \"packaged-rules-probe\"\n      },\n      \"invocationId\": \"stale-process-origin-945b017a64214bdabce6bc0e5debaaf2\"\n    },\n    \"fingerprint\": {\n      \"sha256\": \"cf2de2f9a54f994caab14dd72eb2546f9d5dda5d00b97ea5c4868e36c876a630\"\n    },\n    \"artifactId\": \"rules:0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841\",\n    \"artifactSha256\": \"0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841\",\n    \"implementationPinHash\": \"c8d538af34cb9eb160b25a739e138387ec83d37026c585ef9e161836968c21ed\",\n    \"status\": 0,\n    \"modelRevision\": 1,\n    \"committedRounds\": 0,\n    \"committedFactCount\": 1\n  },\n  \"facts\": [\n    \"seed\"\n  ],\n  \"rounds\": []\n}",
+      "durableSnapshotSha256": "7b3ef64bf113516a0a4872b5193f4aa150c34ed0fd477b8552c1cf07daa82bbc",
+      "durableStateUnchanged": true
+    },
+    "successor": {
+      "command": "process-stale-successor",
+      "passed": true,
+      "processId": 3807,
+      "originalProcessId": 3754,
+      "machineName": "Sipkes-MacBook-Air",
+      "databaseEngine": "PostgreSQL",
+      "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+      "databaseName": "rules_cce8c40883484983ba3f297a6f5cbea6",
+      "invocationFingerprint": "cf2de2f9a54f994caab14dd72eb2546f9d5dda5d00b97ea5c4868e36c876a630",
+      "successorOwner": "rules-05fb4b850f1b4ab2b521a05716577a4a",
+      "successorFence": 2,
+      "originalLeaseExpiresAtUtc": "2026-10-22T00:03:25.641311+00:00",
+      "latestLeaseExpiresAtUtc": "2026-10-22T00:03:25.641311+00:00",
+      "leaseRenewalCount": 0,
+      "firstAttemptId": "720aec409b4548ef9a57a413d8b1e07b",
+      "firstReceiptId": "259ffd2132717de306221dd447f2bff69a891bc224ee054a77f2447bc7a7d77e",
+      "firstSemanticReceiptSha256": "fe02cbd5fbaf4824438951b3ce711ad993878647371f82c9c50588001d8e645c",
+      "terminalBase64": "eyJ0ZXJtaW5hbElkIjoiYjZhNGFkMDY4ZGJlY2MxY2U3NTA4MmEwNTQ5MjEyMTgxNjM5OWQ5ZWI1NTEzMDAzNWQ2M2I3MTA4YjYyZDZmNiIsImtpbmQiOiJTdWNjZWVkZWQiLCJjb21taXR0ZWRSb3VuZHMiOjQsInJlc3VsdFNjaGVtYVZlcnNpb24iOjEsImZhY3RzIjpbImZpbmFsIiwiam9pbmVkIiwibGVmdCIsInJpZ2h0Iiwic2VlZCJdLCJmYWN0c1NoYTI1NiI6IjVlOTcwZGQyMDYxODFjNDFkOTViNTM0ZjdiNzY0MzAzOTJlZjY1OWRiODUyMWM2NjBlMmY2NzIzN2VlYzRjY2MiLCJkaWFnbm9zdGljIjpudWxsfQ==",
+      "terminalId": "b6a4ad068dbecc1ce75082a05492121816399d9eb55130035d63b7108b62d6f6",
+      "modelRevision": 9,
+      "status": "Succeeded",
+      "committedRounds": 4,
+      "finalFacts": [
+        "final",
+        "joined",
+        "left",
+        "right",
+        "seed"
+      ],
+      "durableSnapshotBeforeEvaluation": "{\n  \"view\": {\n    \"identity\": {\n      \"scope\": {\n        \"persistencePartition\": \"packaged-rules-probe\"\n      },\n      \"invocationId\": \"stale-process-origin-945b017a64214bdabce6bc0e5debaaf2\"\n    },\n    \"fingerprint\": {\n      \"sha256\": \"cf2de2f9a54f994caab14dd72eb2546f9d5dda5d00b97ea5c4868e36c876a630\"\n    },\n    \"artifactId\": \"rules:0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841\",\n    \"artifactSha256\": \"0f0309d5813671ae6a49b31673665142854d3e601cf001bcf0f47c135d330841\",\n    \"implementationPinHash\": \"c8d538af34cb9eb160b25a739e138387ec83d37026c585ef9e161836968c21ed\",\n    \"status\": 0,\n    \"modelRevision\": 1,\n    \"committedRounds\": 0,\n    \"committedFactCount\": 1\n  },\n  \"facts\": [\n    \"seed\"\n  ],\n  \"rounds\": []\n}",
+      "finalRoundHistory": [
+        {
+          "ordinal": 0,
+          "receiptId": "259ffd2132717de306221dd447f2bff69a891bc224ee054a77f2447bc7a7d77e",
+          "semanticReceiptSha256": "fe02cbd5fbaf4824438951b3ce711ad993878647371f82c9c50588001d8e645c",
+          "acceptedAttemptId": "720aec409b4548ef9a57a413d8b1e07b",
+          "acceptedWorkerId": "rules-05fb4b850f1b4ab2b521a05716577a4a",
+          "acceptedLeaseFence": 2,
+          "acceptedModelRevision": 2,
+          "consumedModelRevision": 3
+        },
+        {
+          "ordinal": 1,
+          "receiptId": "c5ddbb0051170dcb3e9ac8318cfb0a290a29d11866484ecb32bc7a0be4a98bfc",
+          "semanticReceiptSha256": "6330e177d07d993875d171f1d561f781c6ce01a4d53ca1b5caeb13d46613a1ee",
+          "acceptedAttemptId": "54737a3fc32f44c6b700a7e3d5004b1c",
+          "acceptedWorkerId": "rules-05fb4b850f1b4ab2b521a05716577a4a",
+          "acceptedLeaseFence": 4,
+          "acceptedModelRevision": 4,
+          "consumedModelRevision": 5
+        },
+        {
+          "ordinal": 2,
+          "receiptId": "15eafca407bd78e04bf57591921deb00b77f0f300d7d7b389e714b845337b355",
+          "semanticReceiptSha256": "19487e27750d470075e181c1957f0c4f5ad877c7d30cc772be8005967c1f7aba",
+          "acceptedAttemptId": "7274c5df9974471395d35fc81c33f22c",
+          "acceptedWorkerId": "rules-05fb4b850f1b4ab2b521a05716577a4a",
+          "acceptedLeaseFence": 6,
+          "acceptedModelRevision": 6,
+          "consumedModelRevision": 7
+        },
+        {
+          "ordinal": 3,
+          "receiptId": "e81a4d59a958fe00c7e83fd4d611ffd894ce342699f452d4a8736e26a80034d9",
+          "semanticReceiptSha256": "a3c7c4680958790a7e47642803ea9530b1456028c2eaff066162701bbdc6ec22",
+          "acceptedAttemptId": "76ed6d806ee241ca8b9fb7fb439e861c",
+          "acceptedWorkerId": "rules-05fb4b850f1b4ab2b521a05716577a4a",
+          "acceptedLeaseFence": 8,
+          "acceptedModelRevision": 8,
+          "consumedModelRevision": 9
+        }
+      ],
+      "terminalStabilityVerified": true,
+      "designStorageUsed": false
+    }
+  },
+  "persistenceRemovalControls": [
+    {
+      "kind": "cancellation",
+      "passed": true,
+      "sourcePath": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source/Extensions/Rules/src/Persistence/EntityFrameworkCore/EfRuleRunStore.cs",
+      "originalSourceSha256": "703a4562b3664f7e571ad75dad7a0fda7d0989fc7289d92f560c1d1357db9a78",
+      "originalAssetSha256": "af4b31d1884591f22a0c7bfdabe2a18db41cb15f015ae27b617df35475c4f5d9",
+      "baseline": {
+        "database": "rules_cf62465fe876470abb0c18a9ec6e4215",
+        "originMarker": {
+          "schemaVersion": 1,
+          "boundary": "accepted",
+          "invocationBase64": "eyJpbnZvY2F0aW9uU2NoZW1hVmVyc2lvbiI6MSwiaWRlbnRpdHkiOnsidGVuYW50IjpudWxsLCJwYXJ0aXRpb24iOiJwYWNrYWdlZC1ydWxlcy1wcm9iZSIsImludm9jYXRpb24iOiJwcm9jZXNzLWFjY2VwdGVkLTNiYTFlNTcwMjMzMjQ5ZTViZDVjNWU5ZDk1ZWZhMjEyIn0sImFydGlmYWN0Ijp7ImZvcm1hdFZlcnNpb24iOjEsImlkIjoicnVsZXM6MGYwMzA5ZDU4MTM2NzFhZTZhNDliMzE2NzM2NjUxNDI4NTRkM2U2MDFjZjAwMWJjZjBmNDdjMTM1ZDMzMDg0MSIsInNoYTI1NiI6IjBmMDMwOWQ1ODEzNjcxYWU2YTQ5YjMxNjczNjY1MTQyODU0ZDNlNjAxY2YwMDFiY2YwZjQ3YzEzNWQzMzA4NDEiLCJieXRlcyI6ImV5Sm1iM0p0WVhSV1pYSnphVzl1SWpveExDSnNZVzVuZFdGblpVbGtJam9pWld4ellTNXlkV3hsY3k1bWFXNXBkR1V0Y0c5emFYUnBkbVVpTENKc1lXNW5kV0ZuWlZabGNuTnBiMjRpT2pFc0luWnZZMkZpZFd4aGNua2lPbHNpWm1sdVlXd2lMQ0pxYjJsdVpXUWlMQ0pzWldaMElpd2libVYyWlhJdFpHVnlhWFpsWkNJc0luSnBaMmgwSWl3aWMyVmxaQ0lzSW5WdWNtVmhZMmhoWW14bElsMHNJbkoxYkdWeklqcGJleUpwWkNJNkltWnBibUZzSWl3aWNISmxiV2x6WlhNaU9sc2lhbTlwYm1Wa0lsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKbWFXNWhiQ0o5TEhzaWFXUWlPaUpxYjJsdUlpd2ljSEpsYldselpYTWlPbHNpYkdWbWRDSXNJbkpwWjJoMElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKcWIybHVaV1FpZlN4N0ltbGtJam9pYkdWbWRDSXNJbkJ5WlcxcGMyVnpJanBiSW5ObFpXUWlYU3dpWTI5dVkyeDFjMmx2YmlJNklteGxablFpZlN4N0ltbGtJam9pY21sbmFIUWlMQ0p3Y21WdGFYTmxjeUk2V3lKelpXVmtJbDBzSW1OdmJtTnNkWE5wYjI0aU9pSnlhV2RvZENKOUxIc2lhV1FpT2lKMWJuSmxZV05vWVdKc1pTSXNJbkJ5WlcxcGMyVnpJanBiSW5WdWNtVmhZMmhoWW14bElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKdVpYWmxjaTFrWlhKcGRtVmtJbjFkZlE9PSJ9LCJpbml0aWFsRmFjdHMiOlsic2VlZCJdLCJtYXhSb3VuZHMiOjcsImltcGxlbWVudGF0aW9uIjp7InBpblNjaGVtYVZlcnNpb24iOjEsImxhbmd1YWdlSWQiOiJlbHNhLnJ1bGVzLmZpbml0ZS1wb3NpdGl2ZSIsImxhbmd1YWdlVmVyc2lvbiI6MSwicmVjZWlwdFNjaGVtYVZlcnNpb24iOjEsInN0YXRlU2NoZW1hVmVyc2lvbiI6MSwicGFja2FnZXMiOlt7ImlkIjoiRWxzYS5SdWxlcy5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IjJ1TVBmcXlxM1x1MDAyQllqMS9lVklqeEhoellqS2NqRno0NkNCRGl4OEovUndzNFQxVkcxZERHdzI5dUtIeGF3RlNsWDJLdFR2MXJLUVN6MFNOWjNpWVQ0eUE9PSIsImFzc2V0cyI6W3sicGF0aCI6ImxpYi9uZXQxMC4wL0Vsc2EuUnVsZXMuQ29yZS5kbGwiLCJhc3NlbWJseSI6IkVsc2EuUnVsZXMuQ29yZSwgVmVyc2lvbj00LjAuMC4wLCBDdWx0dXJlPW5ldXRyYWwsIFB1YmxpY0tleVRva2VuPW51bGwiLCJzaGEyNTYiOiJiNjlmNmMzODg5NjdmMWEyNmMxZDM5YTNjOGQ0ZGZiOGM3MjMzNTI1MzhmMjFjNGJlYTM2MmU1M2NlNGI4MGExIn1dfSx7ImlkIjoiRWxzYS5SdWxlcy5QZXJzaXN0ZW5jZS5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IlpcdTAwMkJ0MDhHOUpcdTAwMkI0djVnUU1acVlvTGNGeFhoXHUwMDJCZXFUN1gwXHUwMDJCL1FnYmozQjN2OUZBWC9TcWFLa1lpb1B2LzRXaXBxZGNOUkhcdTAwMkIwZm5cdTAwMkJGVTJKdE85T0QySDRnPT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMmFhNDBiNDViMzlhMmQzMzNkYmVlYmNjZWE1YzRjOGQzMTBjMjliY2M0MTE5ZTgyMDNhN2M3NWU4MDhkOTY0NCJ9XX0seyJpZCI6IkVsc2EuUnVsZXMuUnVudGltZSIsInZlcnNpb24iOiI0LjAuMC1icmFuY2gtYWdlbnQtY29kZXgtMzE4MS1kdXJhYmxlLXJ1bGVzIiwiY29udGVudEhhc2giOiJ1M1NkcG5CL3BmVWlEVFQyTEVidnBYRWhIdzI1aC9sdURxMEsvUVx1MDAyQlRkenRxcHJYcm5iU3J3aWhJL2NwYUhJVTAxYkVJQzlDSVpXaFJ3enhWcUhPOTJ3PT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlJ1bnRpbWUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlJ1bnRpbWUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMGQ3MmJmYjFlYzQ2NDM5MTRmYTlkYTA0MmU4NTI1YmZkOTc3MzRjMTQ0MTA1MTAzYjM4ZWE0NWJmODBhYTk1NyJ9XX1dfSwibmF0aXZlRGVzdGluYXRpb24iOm51bGx9",
+          "invocationFingerprint": "72e154484a9a872cda8afd79b6ee1eb2457a12c181e06d8fee44a9ccdadaaa48",
+          "receiptRecordBase64": "eyJyZWNlaXB0Ijp7ImlkZW50aXR5Ijp7InRlbmFudCI6bnVsbCwicGFydGl0aW9uIjoicGFja2FnZWQtcnVsZXMtcHJvYmUiLCJpbnZvY2F0aW9uIjoicHJvY2Vzcy1hY2NlcHRlZC0zYmExZTU3MDIzMzI0OWU1YmQ1YzVlOWQ5NWVmYTIxMiIsImZpbmdlcnByaW50IjoiNzJlMTU0NDg0YTlhODcyY2RhOGFmZDc5YjZlZTFlYjI0NTdhMTJjMTgxZTA2ZDhmZWU0NGE5Y2NkYWRhYWE0OCIsIm9yZGluYWwiOjAsImlucHV0U3RhdGVTaGEyNTYiOiI4MGIwMTBkYzI2ZjI1NjhjOTM3NWEyOTllMzcwN2ViN2M0NWQwNDZhMTM5ODVmYTFmYWMwYzcyMmNhYWIwY2M0In0sImltcGxlbWVudGF0aW9uUGluSGFzaCI6ImM4ZDUzOGFmMzRjYjllYjE2MGIyNWE3MzllMTM4Mzg3ZWM4M2QzNzAyNmM1ODVlZjllMTYxODM2OTY4YzIxZWQiLCJhZGRlZEZhY3RzIjpbImxlZnQiLCJyaWdodCJdLCJmaXJpbmdzIjpbeyJydWxlSWQiOiJsZWZ0IiwiY29uY2x1c2lvbiI6ImxlZnQifSx7InJ1bGVJZCI6InJpZ2h0IiwiY29uY2x1c2lvbiI6InJpZ2h0In1dfSwic2VtYW50aWNSZWNlaXB0U2hhMjU2IjoiZjQ3MTBlZDIwNjFlN2NhOTUyMGRkNjU0YmI0NWExZGYyZGRkNjgzN2NiMmYyMzRmNTVhYjBiZTIwZTY1ZWVjNyJ9",
+          "receiptId": "15ff33da5b7ec111c30aecc4885d1d40257a5eeb252962e4c393da57ce01043b",
+          "semanticReceiptSha256": "f4710ed2061e7ca9520dd654bb45a1df2ddd6837cb2f234f55ab0be20e65eec7",
+          "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+          "beforeFacts": [
+            "seed"
+          ],
+          "afterFacts": [
+            "seed"
+          ],
+          "modelRevision": 2,
+          "committedRounds": 0,
+          "pendingReceiptId": "15ff33da5b7ec111c30aecc4885d1d40257a5eeb252962e4c393da57ce01043b",
+          "acceptedAttemptId": "e7c22ec64e2d4ab1a8cdd7b456280bc2",
+          "acceptedWorkerId": "rules-33223bd013064b9e8a99b123f6182c6a",
+          "acceptedLeaseFence": 1,
+          "acceptedModelRevision": 2,
+          "tokenOwner": "rules-33223bd013064b9e8a99b123f6182c6a",
+          "tokenFence": 1,
+          "tokenExpiresAtUtc": "2026-10-22T00:03:28.63797+00:00",
+          "tokenExpectedModelRevision": 1,
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_cf62465fe876470abb0c18a9ec6e4215",
+          "processId": 4006,
+          "machineName": "Sipkes-MacBook-Air",
+          "capturedUtc": "2026-10-22T00:03:25.876516+00:00"
+        },
+        "result": {
+          "command": "process-control",
+          "passed": true,
+          "kind": "cancellation",
+          "processId": 4025,
+          "originalProcessId": 4006,
+          "machineName": "Sipkes-MacBook-Air",
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_cf62465fe876470abb0c18a9ec6e4215",
+          "invocationFingerprint": "72e154484a9a872cda8afd79b6ee1eb2457a12c181e06d8fee44a9ccdadaaa48",
+          "boundaryReceiptId": "15ff33da5b7ec111c30aecc4885d1d40257a5eeb252962e4c393da57ce01043b",
+          "outcome": {
+            "changedCancellation": "Conflict",
+            "exactCancellation": "Cancelled",
+            "exactReplay": "Replay",
+            "modelRevision": 3,
+            "terminalId": "33e16300f71dcbb4ef90c70dfe9193af9a35d1ef7462b4cc886416e09cd39ace",
+            "committedFacts": [
+              "seed"
+            ],
+            "retainedReceiptId": "15ff33da5b7ec111c30aecc4885d1d40257a5eeb252962e4c393da57ce01043b",
+            "retainedAcceptedAttemptId": "e7c22ec64e2d4ab1a8cdd7b456280bc2"
+          }
+        }
+      },
+      "changedSourceSha256": "601cdd05c967b4c7ca84304a19c2556dce98a1c40e70d8dde319603a2d77a04a",
+      "changedAssetSha256": "c7e79f9b715d7843c1d2e8871246eb96f5d8df40e28c4f8bcf4590f893dda603",
+      "removed": {
+        "database": "rules_03c7a566f6e0480cbe5177a074d8ecef",
+        "originMarker": {
+          "schemaVersion": 1,
+          "boundary": "accepted",
+          "invocationBase64": "eyJpbnZvY2F0aW9uU2NoZW1hVmVyc2lvbiI6MSwiaWRlbnRpdHkiOnsidGVuYW50IjpudWxsLCJwYXJ0aXRpb24iOiJwYWNrYWdlZC1ydWxlcy1wcm9iZSIsImludm9jYXRpb24iOiJwcm9jZXNzLWFjY2VwdGVkLWEzY2ZkOWJmODQwODRjNGQ4MWM0MmJiNjM4MDY1ZWRhIn0sImFydGlmYWN0Ijp7ImZvcm1hdFZlcnNpb24iOjEsImlkIjoicnVsZXM6MGYwMzA5ZDU4MTM2NzFhZTZhNDliMzE2NzM2NjUxNDI4NTRkM2U2MDFjZjAwMWJjZjBmNDdjMTM1ZDMzMDg0MSIsInNoYTI1NiI6IjBmMDMwOWQ1ODEzNjcxYWU2YTQ5YjMxNjczNjY1MTQyODU0ZDNlNjAxY2YwMDFiY2YwZjQ3YzEzNWQzMzA4NDEiLCJieXRlcyI6ImV5Sm1iM0p0WVhSV1pYSnphVzl1SWpveExDSnNZVzVuZFdGblpVbGtJam9pWld4ellTNXlkV3hsY3k1bWFXNXBkR1V0Y0c5emFYUnBkbVVpTENKc1lXNW5kV0ZuWlZabGNuTnBiMjRpT2pFc0luWnZZMkZpZFd4aGNua2lPbHNpWm1sdVlXd2lMQ0pxYjJsdVpXUWlMQ0pzWldaMElpd2libVYyWlhJdFpHVnlhWFpsWkNJc0luSnBaMmgwSWl3aWMyVmxaQ0lzSW5WdWNtVmhZMmhoWW14bElsMHNJbkoxYkdWeklqcGJleUpwWkNJNkltWnBibUZzSWl3aWNISmxiV2x6WlhNaU9sc2lhbTlwYm1Wa0lsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKbWFXNWhiQ0o5TEhzaWFXUWlPaUpxYjJsdUlpd2ljSEpsYldselpYTWlPbHNpYkdWbWRDSXNJbkpwWjJoMElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKcWIybHVaV1FpZlN4N0ltbGtJam9pYkdWbWRDSXNJbkJ5WlcxcGMyVnpJanBiSW5ObFpXUWlYU3dpWTI5dVkyeDFjMmx2YmlJNklteGxablFpZlN4N0ltbGtJam9pY21sbmFIUWlMQ0p3Y21WdGFYTmxjeUk2V3lKelpXVmtJbDBzSW1OdmJtTnNkWE5wYjI0aU9pSnlhV2RvZENKOUxIc2lhV1FpT2lKMWJuSmxZV05vWVdKc1pTSXNJbkJ5WlcxcGMyVnpJanBiSW5WdWNtVmhZMmhoWW14bElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKdVpYWmxjaTFrWlhKcGRtVmtJbjFkZlE9PSJ9LCJpbml0aWFsRmFjdHMiOlsic2VlZCJdLCJtYXhSb3VuZHMiOjcsImltcGxlbWVudGF0aW9uIjp7InBpblNjaGVtYVZlcnNpb24iOjEsImxhbmd1YWdlSWQiOiJlbHNhLnJ1bGVzLmZpbml0ZS1wb3NpdGl2ZSIsImxhbmd1YWdlVmVyc2lvbiI6MSwicmVjZWlwdFNjaGVtYVZlcnNpb24iOjEsInN0YXRlU2NoZW1hVmVyc2lvbiI6MSwicGFja2FnZXMiOlt7ImlkIjoiRWxzYS5SdWxlcy5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IjJ1TVBmcXlxM1x1MDAyQllqMS9lVklqeEhoellqS2NqRno0NkNCRGl4OEovUndzNFQxVkcxZERHdzI5dUtIeGF3RlNsWDJLdFR2MXJLUVN6MFNOWjNpWVQ0eUE9PSIsImFzc2V0cyI6W3sicGF0aCI6ImxpYi9uZXQxMC4wL0Vsc2EuUnVsZXMuQ29yZS5kbGwiLCJhc3NlbWJseSI6IkVsc2EuUnVsZXMuQ29yZSwgVmVyc2lvbj00LjAuMC4wLCBDdWx0dXJlPW5ldXRyYWwsIFB1YmxpY0tleVRva2VuPW51bGwiLCJzaGEyNTYiOiJiNjlmNmMzODg5NjdmMWEyNmMxZDM5YTNjOGQ0ZGZiOGM3MjMzNTI1MzhmMjFjNGJlYTM2MmU1M2NlNGI4MGExIn1dfSx7ImlkIjoiRWxzYS5SdWxlcy5QZXJzaXN0ZW5jZS5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IlpcdTAwMkJ0MDhHOUpcdTAwMkI0djVnUU1acVlvTGNGeFhoXHUwMDJCZXFUN1gwXHUwMDJCL1FnYmozQjN2OUZBWC9TcWFLa1lpb1B2LzRXaXBxZGNOUkhcdTAwMkIwZm5cdTAwMkJGVTJKdE85T0QySDRnPT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMmFhNDBiNDViMzlhMmQzMzNkYmVlYmNjZWE1YzRjOGQzMTBjMjliY2M0MTE5ZTgyMDNhN2M3NWU4MDhkOTY0NCJ9XX0seyJpZCI6IkVsc2EuUnVsZXMuUnVudGltZSIsInZlcnNpb24iOiI0LjAuMC1icmFuY2gtYWdlbnQtY29kZXgtMzE4MS1kdXJhYmxlLXJ1bGVzIiwiY29udGVudEhhc2giOiJ1M1NkcG5CL3BmVWlEVFQyTEVidnBYRWhIdzI1aC9sdURxMEsvUVx1MDAyQlRkenRxcHJYcm5iU3J3aWhJL2NwYUhJVTAxYkVJQzlDSVpXaFJ3enhWcUhPOTJ3PT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlJ1bnRpbWUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlJ1bnRpbWUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMGQ3MmJmYjFlYzQ2NDM5MTRmYTlkYTA0MmU4NTI1YmZkOTc3MzRjMTQ0MTA1MTAzYjM4ZWE0NWJmODBhYTk1NyJ9XX1dfSwibmF0aXZlRGVzdGluYXRpb24iOm51bGx9",
+          "invocationFingerprint": "d1d7d08023baacd243a65868b8462397643c5ed1af1a7a889f7413c748a4e8b9",
+          "receiptRecordBase64": "eyJyZWNlaXB0Ijp7ImlkZW50aXR5Ijp7InRlbmFudCI6bnVsbCwicGFydGl0aW9uIjoicGFja2FnZWQtcnVsZXMtcHJvYmUiLCJpbnZvY2F0aW9uIjoicHJvY2Vzcy1hY2NlcHRlZC1hM2NmZDliZjg0MDg0YzRkODFjNDJiYjYzODA2NWVkYSIsImZpbmdlcnByaW50IjoiZDFkN2QwODAyM2JhYWNkMjQzYTY1ODY4Yjg0NjIzOTc2NDNjNWVkMWFmMWE3YTg4OWY3NDEzYzc0OGE0ZThiOSIsIm9yZGluYWwiOjAsImlucHV0U3RhdGVTaGEyNTYiOiI4MGIwMTBkYzI2ZjI1NjhjOTM3NWEyOTllMzcwN2ViN2M0NWQwNDZhMTM5ODVmYTFmYWMwYzcyMmNhYWIwY2M0In0sImltcGxlbWVudGF0aW9uUGluSGFzaCI6ImM4ZDUzOGFmMzRjYjllYjE2MGIyNWE3MzllMTM4Mzg3ZWM4M2QzNzAyNmM1ODVlZjllMTYxODM2OTY4YzIxZWQiLCJhZGRlZEZhY3RzIjpbImxlZnQiLCJyaWdodCJdLCJmaXJpbmdzIjpbeyJydWxlSWQiOiJsZWZ0IiwiY29uY2x1c2lvbiI6ImxlZnQifSx7InJ1bGVJZCI6InJpZ2h0IiwiY29uY2x1c2lvbiI6InJpZ2h0In1dfSwic2VtYW50aWNSZWNlaXB0U2hhMjU2IjoiZGNhNWM5NjI0NTFiOTUwMDA0YWUxMmZjNDQ1ZmMyMDc4ODYzNTMyN2VlODg0YjI5NDY1Yjc5N2FkOGRkMzk4ZSJ9",
+          "receiptId": "7a993a5ea0b32f32992ce536c59b24e5f89c7b773a758a233bfc377f1aa4dd13",
+          "semanticReceiptSha256": "dca5c962451b950004ae12fc445fc20788635327ee884b29465b797ad8dd398e",
+          "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+          "beforeFacts": [
+            "seed"
+          ],
+          "afterFacts": [
+            "seed"
+          ],
+          "modelRevision": 2,
+          "committedRounds": 0,
+          "pendingReceiptId": "7a993a5ea0b32f32992ce536c59b24e5f89c7b773a758a233bfc377f1aa4dd13",
+          "acceptedAttemptId": "0d14813bf0404d4baef62f7424b9784a",
+          "acceptedWorkerId": "rules-46fccd5877114b499e552f851355bc0f",
+          "acceptedLeaseFence": 1,
+          "acceptedModelRevision": 2,
+          "tokenOwner": "rules-46fccd5877114b499e552f851355bc0f",
+          "tokenFence": 1,
+          "tokenExpiresAtUtc": "2026-10-22T00:03:31.669387+00:00",
+          "tokenExpectedModelRevision": 1,
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_03c7a566f6e0480cbe5177a074d8ecef",
+          "processId": 4050,
+          "machineName": "Sipkes-MacBook-Air",
+          "capturedUtc": "2026-10-22T00:03:28.906693+00:00"
+        },
+        "result": {
+          "command": "process-control",
+          "passed": false,
+          "error": "Control: changed-fingerprint cancellation did not remain Conflict without mutation."
+        }
+      },
+      "intendedAssertionFailed": true,
+      "restoredSourceSha256": "703a4562b3664f7e571ad75dad7a0fda7d0989fc7289d92f560c1d1357db9a78",
+      "restoredAssetSha256": "af4b31d1884591f22a0c7bfdabe2a18db41cb15f015ae27b617df35475c4f5d9",
+      "restored": {
+        "database": "rules_c69b08da3db0443ab16b0224940a8af2",
+        "originMarker": {
+          "schemaVersion": 1,
+          "boundary": "accepted",
+          "invocationBase64": "eyJpbnZvY2F0aW9uU2NoZW1hVmVyc2lvbiI6MSwiaWRlbnRpdHkiOnsidGVuYW50IjpudWxsLCJwYXJ0aXRpb24iOiJwYWNrYWdlZC1ydWxlcy1wcm9iZSIsImludm9jYXRpb24iOiJwcm9jZXNzLWFjY2VwdGVkLTA3NTFhNTg3NDhhYzRmN2Y4MzQwOThlMzg1YjJlOGE0In0sImFydGlmYWN0Ijp7ImZvcm1hdFZlcnNpb24iOjEsImlkIjoicnVsZXM6MGYwMzA5ZDU4MTM2NzFhZTZhNDliMzE2NzM2NjUxNDI4NTRkM2U2MDFjZjAwMWJjZjBmNDdjMTM1ZDMzMDg0MSIsInNoYTI1NiI6IjBmMDMwOWQ1ODEzNjcxYWU2YTQ5YjMxNjczNjY1MTQyODU0ZDNlNjAxY2YwMDFiY2YwZjQ3YzEzNWQzMzA4NDEiLCJieXRlcyI6ImV5Sm1iM0p0WVhSV1pYSnphVzl1SWpveExDSnNZVzVuZFdGblpVbGtJam9pWld4ellTNXlkV3hsY3k1bWFXNXBkR1V0Y0c5emFYUnBkbVVpTENKc1lXNW5kV0ZuWlZabGNuTnBiMjRpT2pFc0luWnZZMkZpZFd4aGNua2lPbHNpWm1sdVlXd2lMQ0pxYjJsdVpXUWlMQ0pzWldaMElpd2libVYyWlhJdFpHVnlhWFpsWkNJc0luSnBaMmgwSWl3aWMyVmxaQ0lzSW5WdWNtVmhZMmhoWW14bElsMHNJbkoxYkdWeklqcGJleUpwWkNJNkltWnBibUZzSWl3aWNISmxiV2x6WlhNaU9sc2lhbTlwYm1Wa0lsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKbWFXNWhiQ0o5TEhzaWFXUWlPaUpxYjJsdUlpd2ljSEpsYldselpYTWlPbHNpYkdWbWRDSXNJbkpwWjJoMElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKcWIybHVaV1FpZlN4N0ltbGtJam9pYkdWbWRDSXNJbkJ5WlcxcGMyVnpJanBiSW5ObFpXUWlYU3dpWTI5dVkyeDFjMmx2YmlJNklteGxablFpZlN4N0ltbGtJam9pY21sbmFIUWlMQ0p3Y21WdGFYTmxjeUk2V3lKelpXVmtJbDBzSW1OdmJtTnNkWE5wYjI0aU9pSnlhV2RvZENKOUxIc2lhV1FpT2lKMWJuSmxZV05vWVdKc1pTSXNJbkJ5WlcxcGMyVnpJanBiSW5WdWNtVmhZMmhoWW14bElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKdVpYWmxjaTFrWlhKcGRtVmtJbjFkZlE9PSJ9LCJpbml0aWFsRmFjdHMiOlsic2VlZCJdLCJtYXhSb3VuZHMiOjcsImltcGxlbWVudGF0aW9uIjp7InBpblNjaGVtYVZlcnNpb24iOjEsImxhbmd1YWdlSWQiOiJlbHNhLnJ1bGVzLmZpbml0ZS1wb3NpdGl2ZSIsImxhbmd1YWdlVmVyc2lvbiI6MSwicmVjZWlwdFNjaGVtYVZlcnNpb24iOjEsInN0YXRlU2NoZW1hVmVyc2lvbiI6MSwicGFja2FnZXMiOlt7ImlkIjoiRWxzYS5SdWxlcy5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IjJ1TVBmcXlxM1x1MDAyQllqMS9lVklqeEhoellqS2NqRno0NkNCRGl4OEovUndzNFQxVkcxZERHdzI5dUtIeGF3RlNsWDJLdFR2MXJLUVN6MFNOWjNpWVQ0eUE9PSIsImFzc2V0cyI6W3sicGF0aCI6ImxpYi9uZXQxMC4wL0Vsc2EuUnVsZXMuQ29yZS5kbGwiLCJhc3NlbWJseSI6IkVsc2EuUnVsZXMuQ29yZSwgVmVyc2lvbj00LjAuMC4wLCBDdWx0dXJlPW5ldXRyYWwsIFB1YmxpY0tleVRva2VuPW51bGwiLCJzaGEyNTYiOiJiNjlmNmMzODg5NjdmMWEyNmMxZDM5YTNjOGQ0ZGZiOGM3MjMzNTI1MzhmMjFjNGJlYTM2MmU1M2NlNGI4MGExIn1dfSx7ImlkIjoiRWxzYS5SdWxlcy5QZXJzaXN0ZW5jZS5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IlpcdTAwMkJ0MDhHOUpcdTAwMkI0djVnUU1acVlvTGNGeFhoXHUwMDJCZXFUN1gwXHUwMDJCL1FnYmozQjN2OUZBWC9TcWFLa1lpb1B2LzRXaXBxZGNOUkhcdTAwMkIwZm5cdTAwMkJGVTJKdE85T0QySDRnPT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMmFhNDBiNDViMzlhMmQzMzNkYmVlYmNjZWE1YzRjOGQzMTBjMjliY2M0MTE5ZTgyMDNhN2M3NWU4MDhkOTY0NCJ9XX0seyJpZCI6IkVsc2EuUnVsZXMuUnVudGltZSIsInZlcnNpb24iOiI0LjAuMC1icmFuY2gtYWdlbnQtY29kZXgtMzE4MS1kdXJhYmxlLXJ1bGVzIiwiY29udGVudEhhc2giOiJ1M1NkcG5CL3BmVWlEVFQyTEVidnBYRWhIdzI1aC9sdURxMEsvUVx1MDAyQlRkenRxcHJYcm5iU3J3aWhJL2NwYUhJVTAxYkVJQzlDSVpXaFJ3enhWcUhPOTJ3PT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlJ1bnRpbWUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlJ1bnRpbWUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMGQ3MmJmYjFlYzQ2NDM5MTRmYTlkYTA0MmU4NTI1YmZkOTc3MzRjMTQ0MTA1MTAzYjM4ZWE0NWJmODBhYTk1NyJ9XX1dfSwibmF0aXZlRGVzdGluYXRpb24iOm51bGx9",
+          "invocationFingerprint": "aee2e9af71447b56037773280e5e853cae25a9a5e7c03425c403cac800b6daed",
+          "receiptRecordBase64": "eyJyZWNlaXB0Ijp7ImlkZW50aXR5Ijp7InRlbmFudCI6bnVsbCwicGFydGl0aW9uIjoicGFja2FnZWQtcnVsZXMtcHJvYmUiLCJpbnZvY2F0aW9uIjoicHJvY2Vzcy1hY2NlcHRlZC0wNzUxYTU4NzQ4YWM0ZjdmODM0MDk4ZTM4NWIyZThhNCIsImZpbmdlcnByaW50IjoiYWVlMmU5YWY3MTQ0N2I1NjAzNzc3MzI4MGU1ZTg1M2NhZTI1YTlhNWU3YzAzNDI1YzQwM2NhYzgwMGI2ZGFlZCIsIm9yZGluYWwiOjAsImlucHV0U3RhdGVTaGEyNTYiOiI4MGIwMTBkYzI2ZjI1NjhjOTM3NWEyOTllMzcwN2ViN2M0NWQwNDZhMTM5ODVmYTFmYWMwYzcyMmNhYWIwY2M0In0sImltcGxlbWVudGF0aW9uUGluSGFzaCI6ImM4ZDUzOGFmMzRjYjllYjE2MGIyNWE3MzllMTM4Mzg3ZWM4M2QzNzAyNmM1ODVlZjllMTYxODM2OTY4YzIxZWQiLCJhZGRlZEZhY3RzIjpbImxlZnQiLCJyaWdodCJdLCJmaXJpbmdzIjpbeyJydWxlSWQiOiJsZWZ0IiwiY29uY2x1c2lvbiI6ImxlZnQifSx7InJ1bGVJZCI6InJpZ2h0IiwiY29uY2x1c2lvbiI6InJpZ2h0In1dfSwic2VtYW50aWNSZWNlaXB0U2hhMjU2IjoiMWViY2Y0Mzg4NWQwNmNmMmM5YjA2NDU1ZGMzZTRlNTQ0ZTIxZjQ4NDI2YTkyYmM2YjUxNjVkNmY0MTYzNzVhNCJ9",
+          "receiptId": "355d4226b04c35361622e77d58e817fd8c93589c33ec1941ba7cd070ceadaf13",
+          "semanticReceiptSha256": "1ebcf43885d06cf2c9b06455dc3e4e544e21f48426a92bc6b5165d6f416375a4",
+          "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+          "beforeFacts": [
+            "seed"
+          ],
+          "afterFacts": [
+            "seed"
+          ],
+          "modelRevision": 2,
+          "committedRounds": 0,
+          "pendingReceiptId": "355d4226b04c35361622e77d58e817fd8c93589c33ec1941ba7cd070ceadaf13",
+          "acceptedAttemptId": "e897ce137ad740a78c0116b9fcf3d0df",
+          "acceptedWorkerId": "rules-2c09101331fd445896736713a448be60",
+          "acceptedLeaseFence": 1,
+          "acceptedModelRevision": 2,
+          "tokenOwner": "rules-2c09101331fd445896736713a448be60",
+          "tokenFence": 1,
+          "tokenExpiresAtUtc": "2026-10-22T00:03:36.459296+00:00",
+          "tokenExpectedModelRevision": 1,
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_c69b08da3db0443ab16b0224940a8af2",
+          "processId": 4132,
+          "machineName": "Sipkes-MacBook-Air",
+          "capturedUtc": "2026-10-22T00:03:33.754683+00:00"
+        },
+        "result": {
+          "command": "process-control",
+          "passed": true,
+          "kind": "cancellation",
+          "processId": 4164,
+          "originalProcessId": 4132,
+          "machineName": "Sipkes-MacBook-Air",
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_c69b08da3db0443ab16b0224940a8af2",
+          "invocationFingerprint": "aee2e9af71447b56037773280e5e853cae25a9a5e7c03425c403cac800b6daed",
+          "boundaryReceiptId": "355d4226b04c35361622e77d58e817fd8c93589c33ec1941ba7cd070ceadaf13",
+          "outcome": {
+            "changedCancellation": "Conflict",
+            "exactCancellation": "Cancelled",
+            "exactReplay": "Replay",
+            "modelRevision": 3,
+            "terminalId": "2367fc69645877e9f60e194abc6fd9ceaf3769ce5b6d19d6183a87a590ee179f",
+            "committedFacts": [
+              "seed"
+            ],
+            "retainedReceiptId": "355d4226b04c35361622e77d58e817fd8c93589c33ec1941ba7cd070ceadaf13",
+            "retainedAcceptedAttemptId": "e897ce137ad740a78c0116b9fcf3d0df"
+          }
+        }
+      }
+    },
+    {
+      "kind": "fence",
+      "passed": true,
+      "sourcePath": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source/Extensions/Rules/src/Persistence/EntityFrameworkCore/EfRuleRunStore.Leases.cs",
+      "originalSourceSha256": "aa11b95d69f0c13f0dd1f6b2fb6d9c404f63c0f5f558534a9bc5008586548fa3",
+      "originalAssetSha256": "af4b31d1884591f22a0c7bfdabe2a18db41cb15f015ae27b617df35475c4f5d9",
+      "baseline": {
+        "database": "rules_b4675d1afb40452ba00b9eb8c4ea905c",
+        "originMarker": {
+          "schemaVersion": 1,
+          "boundary": "accepted",
+          "invocationBase64": "eyJpbnZvY2F0aW9uU2NoZW1hVmVyc2lvbiI6MSwiaWRlbnRpdHkiOnsidGVuYW50IjpudWxsLCJwYXJ0aXRpb24iOiJwYWNrYWdlZC1ydWxlcy1wcm9iZSIsImludm9jYXRpb24iOiJwcm9jZXNzLWFjY2VwdGVkLWUzNzY4MmYyMzA5NzQ5YTc4NWIxNWVhMGNkZWNiMTg1In0sImFydGlmYWN0Ijp7ImZvcm1hdFZlcnNpb24iOjEsImlkIjoicnVsZXM6MGYwMzA5ZDU4MTM2NzFhZTZhNDliMzE2NzM2NjUxNDI4NTRkM2U2MDFjZjAwMWJjZjBmNDdjMTM1ZDMzMDg0MSIsInNoYTI1NiI6IjBmMDMwOWQ1ODEzNjcxYWU2YTQ5YjMxNjczNjY1MTQyODU0ZDNlNjAxY2YwMDFiY2YwZjQ3YzEzNWQzMzA4NDEiLCJieXRlcyI6ImV5Sm1iM0p0WVhSV1pYSnphVzl1SWpveExDSnNZVzVuZFdGblpVbGtJam9pWld4ellTNXlkV3hsY3k1bWFXNXBkR1V0Y0c5emFYUnBkbVVpTENKc1lXNW5kV0ZuWlZabGNuTnBiMjRpT2pFc0luWnZZMkZpZFd4aGNua2lPbHNpWm1sdVlXd2lMQ0pxYjJsdVpXUWlMQ0pzWldaMElpd2libVYyWlhJdFpHVnlhWFpsWkNJc0luSnBaMmgwSWl3aWMyVmxaQ0lzSW5WdWNtVmhZMmhoWW14bElsMHNJbkoxYkdWeklqcGJleUpwWkNJNkltWnBibUZzSWl3aWNISmxiV2x6WlhNaU9sc2lhbTlwYm1Wa0lsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKbWFXNWhiQ0o5TEhzaWFXUWlPaUpxYjJsdUlpd2ljSEpsYldselpYTWlPbHNpYkdWbWRDSXNJbkpwWjJoMElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKcWIybHVaV1FpZlN4N0ltbGtJam9pYkdWbWRDSXNJbkJ5WlcxcGMyVnpJanBiSW5ObFpXUWlYU3dpWTI5dVkyeDFjMmx2YmlJNklteGxablFpZlN4N0ltbGtJam9pY21sbmFIUWlMQ0p3Y21WdGFYTmxjeUk2V3lKelpXVmtJbDBzSW1OdmJtTnNkWE5wYjI0aU9pSnlhV2RvZENKOUxIc2lhV1FpT2lKMWJuSmxZV05vWVdKc1pTSXNJbkJ5WlcxcGMyVnpJanBiSW5WdWNtVmhZMmhoWW14bElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKdVpYWmxjaTFrWlhKcGRtVmtJbjFkZlE9PSJ9LCJpbml0aWFsRmFjdHMiOlsic2VlZCJdLCJtYXhSb3VuZHMiOjcsImltcGxlbWVudGF0aW9uIjp7InBpblNjaGVtYVZlcnNpb24iOjEsImxhbmd1YWdlSWQiOiJlbHNhLnJ1bGVzLmZpbml0ZS1wb3NpdGl2ZSIsImxhbmd1YWdlVmVyc2lvbiI6MSwicmVjZWlwdFNjaGVtYVZlcnNpb24iOjEsInN0YXRlU2NoZW1hVmVyc2lvbiI6MSwicGFja2FnZXMiOlt7ImlkIjoiRWxzYS5SdWxlcy5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IjJ1TVBmcXlxM1x1MDAyQllqMS9lVklqeEhoellqS2NqRno0NkNCRGl4OEovUndzNFQxVkcxZERHdzI5dUtIeGF3RlNsWDJLdFR2MXJLUVN6MFNOWjNpWVQ0eUE9PSIsImFzc2V0cyI6W3sicGF0aCI6ImxpYi9uZXQxMC4wL0Vsc2EuUnVsZXMuQ29yZS5kbGwiLCJhc3NlbWJseSI6IkVsc2EuUnVsZXMuQ29yZSwgVmVyc2lvbj00LjAuMC4wLCBDdWx0dXJlPW5ldXRyYWwsIFB1YmxpY0tleVRva2VuPW51bGwiLCJzaGEyNTYiOiJiNjlmNmMzODg5NjdmMWEyNmMxZDM5YTNjOGQ0ZGZiOGM3MjMzNTI1MzhmMjFjNGJlYTM2MmU1M2NlNGI4MGExIn1dfSx7ImlkIjoiRWxzYS5SdWxlcy5QZXJzaXN0ZW5jZS5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IlpcdTAwMkJ0MDhHOUpcdTAwMkI0djVnUU1acVlvTGNGeFhoXHUwMDJCZXFUN1gwXHUwMDJCL1FnYmozQjN2OUZBWC9TcWFLa1lpb1B2LzRXaXBxZGNOUkhcdTAwMkIwZm5cdTAwMkJGVTJKdE85T0QySDRnPT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMmFhNDBiNDViMzlhMmQzMzNkYmVlYmNjZWE1YzRjOGQzMTBjMjliY2M0MTE5ZTgyMDNhN2M3NWU4MDhkOTY0NCJ9XX0seyJpZCI6IkVsc2EuUnVsZXMuUnVudGltZSIsInZlcnNpb24iOiI0LjAuMC1icmFuY2gtYWdlbnQtY29kZXgtMzE4MS1kdXJhYmxlLXJ1bGVzIiwiY29udGVudEhhc2giOiJ1M1NkcG5CL3BmVWlEVFQyTEVidnBYRWhIdzI1aC9sdURxMEsvUVx1MDAyQlRkenRxcHJYcm5iU3J3aWhJL2NwYUhJVTAxYkVJQzlDSVpXaFJ3enhWcUhPOTJ3PT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlJ1bnRpbWUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlJ1bnRpbWUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMGQ3MmJmYjFlYzQ2NDM5MTRmYTlkYTA0MmU4NTI1YmZkOTc3MzRjMTQ0MTA1MTAzYjM4ZWE0NWJmODBhYTk1NyJ9XX1dfSwibmF0aXZlRGVzdGluYXRpb24iOm51bGx9",
+          "invocationFingerprint": "5e7eeda8c56dd9135279f7e1e557c356bd1248d1ee136aa03d064cd24f918fd4",
+          "receiptRecordBase64": "eyJyZWNlaXB0Ijp7ImlkZW50aXR5Ijp7InRlbmFudCI6bnVsbCwicGFydGl0aW9uIjoicGFja2FnZWQtcnVsZXMtcHJvYmUiLCJpbnZvY2F0aW9uIjoicHJvY2Vzcy1hY2NlcHRlZC1lMzc2ODJmMjMwOTc0OWE3ODViMTVlYTBjZGVjYjE4NSIsImZpbmdlcnByaW50IjoiNWU3ZWVkYThjNTZkZDkxMzUyNzlmN2UxZTU1N2MzNTZiZDEyNDhkMWVlMTM2YWEwM2QwNjRjZDI0ZjkxOGZkNCIsIm9yZGluYWwiOjAsImlucHV0U3RhdGVTaGEyNTYiOiI4MGIwMTBkYzI2ZjI1NjhjOTM3NWEyOTllMzcwN2ViN2M0NWQwNDZhMTM5ODVmYTFmYWMwYzcyMmNhYWIwY2M0In0sImltcGxlbWVudGF0aW9uUGluSGFzaCI6ImM4ZDUzOGFmMzRjYjllYjE2MGIyNWE3MzllMTM4Mzg3ZWM4M2QzNzAyNmM1ODVlZjllMTYxODM2OTY4YzIxZWQiLCJhZGRlZEZhY3RzIjpbImxlZnQiLCJyaWdodCJdLCJmaXJpbmdzIjpbeyJydWxlSWQiOiJsZWZ0IiwiY29uY2x1c2lvbiI6ImxlZnQifSx7InJ1bGVJZCI6InJpZ2h0IiwiY29uY2x1c2lvbiI6InJpZ2h0In1dfSwic2VtYW50aWNSZWNlaXB0U2hhMjU2IjoiZWJlYjI2YWMxZjAwNDU1MmM5MjAxOGRkODhmZGY1ZjczNzlhNjNiMjE4Zjg2OGU4ZmY5M2FkMTQwMWI3YzIzNyJ9",
+          "receiptId": "2cf83a0b7aa8e98fcfa941dd82c5f621ea51d60face5ebae4ff5ba6aaa92b13c",
+          "semanticReceiptSha256": "ebeb26ac1f004552c92018dd88fdf5f7379a63b218f868e8ff93ad1401b7c237",
+          "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+          "beforeFacts": [
+            "seed"
+          ],
+          "afterFacts": [
+            "seed"
+          ],
+          "modelRevision": 2,
+          "committedRounds": 0,
+          "pendingReceiptId": "2cf83a0b7aa8e98fcfa941dd82c5f621ea51d60face5ebae4ff5ba6aaa92b13c",
+          "acceptedAttemptId": "b288f2db3ebe40e7a09e799921d42513",
+          "acceptedWorkerId": "rules-1e3f13209f9f44a19d42d0bef91a500a",
+          "acceptedLeaseFence": 1,
+          "acceptedModelRevision": 2,
+          "tokenOwner": "rules-1e3f13209f9f44a19d42d0bef91a500a",
+          "tokenFence": 1,
+          "tokenExpiresAtUtc": "2026-10-22T00:03:39.712244+00:00",
+          "tokenExpectedModelRevision": 1,
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_b4675d1afb40452ba00b9eb8c4ea905c",
+          "processId": 4179,
+          "machineName": "Sipkes-MacBook-Air",
+          "capturedUtc": "2026-10-22T00:03:37.073089+00:00"
+        },
+        "result": {
+          "command": "process-control",
+          "passed": true,
+          "kind": "fence",
+          "processId": 4198,
+          "originalProcessId": 4179,
+          "machineName": "Sipkes-MacBook-Air",
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_b4675d1afb40452ba00b9eb8c4ea905c",
+          "invocationFingerprint": "5e7eeda8c56dd9135279f7e1e557c356bd1248d1ee136aa03d064cd24f918fd4",
+          "boundaryReceiptId": "2cf83a0b7aa8e98fcfa941dd82c5f621ea51d60face5ebae4ff5ba6aaa92b13c",
+          "outcome": {
+            "oldFence": 1,
+            "firstReclaimedFence": 2,
+            "successorFence": 3,
+            "staleConsume": "LeaseLost",
+            "pendingReceiptId": "2cf83a0b7aa8e98fcfa941dd82c5f621ea51d60face5ebae4ff5ba6aaa92b13c",
+            "modelRevision": 2
+          }
+        }
+      },
+      "changedSourceSha256": "791b8e4f27cb8c8982a66eb2e8b8d1b873771fa8200e809daba32c270e81eff8",
+      "changedAssetSha256": "ec99fc08bc6d6c105ea359412133801cc0cca204c8fd45b89b718c79bac47b87",
+      "removed": {
+        "database": "rules_00582824bb9f45f58cdda88cb6cd1ef3",
+        "originMarker": {
+          "schemaVersion": 1,
+          "boundary": "accepted",
+          "invocationBase64": "eyJpbnZvY2F0aW9uU2NoZW1hVmVyc2lvbiI6MSwiaWRlbnRpdHkiOnsidGVuYW50IjpudWxsLCJwYXJ0aXRpb24iOiJwYWNrYWdlZC1ydWxlcy1wcm9iZSIsImludm9jYXRpb24iOiJwcm9jZXNzLWFjY2VwdGVkLTM0ZWQyZjY4YTQ2ZTQyOTRiMDc3OTE1YWEzY2JlNThhIn0sImFydGlmYWN0Ijp7ImZvcm1hdFZlcnNpb24iOjEsImlkIjoicnVsZXM6MGYwMzA5ZDU4MTM2NzFhZTZhNDliMzE2NzM2NjUxNDI4NTRkM2U2MDFjZjAwMWJjZjBmNDdjMTM1ZDMzMDg0MSIsInNoYTI1NiI6IjBmMDMwOWQ1ODEzNjcxYWU2YTQ5YjMxNjczNjY1MTQyODU0ZDNlNjAxY2YwMDFiY2YwZjQ3YzEzNWQzMzA4NDEiLCJieXRlcyI6ImV5Sm1iM0p0WVhSV1pYSnphVzl1SWpveExDSnNZVzVuZFdGblpVbGtJam9pWld4ellTNXlkV3hsY3k1bWFXNXBkR1V0Y0c5emFYUnBkbVVpTENKc1lXNW5kV0ZuWlZabGNuTnBiMjRpT2pFc0luWnZZMkZpZFd4aGNua2lPbHNpWm1sdVlXd2lMQ0pxYjJsdVpXUWlMQ0pzWldaMElpd2libVYyWlhJdFpHVnlhWFpsWkNJc0luSnBaMmgwSWl3aWMyVmxaQ0lzSW5WdWNtVmhZMmhoWW14bElsMHNJbkoxYkdWeklqcGJleUpwWkNJNkltWnBibUZzSWl3aWNISmxiV2x6WlhNaU9sc2lhbTlwYm1Wa0lsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKbWFXNWhiQ0o5TEhzaWFXUWlPaUpxYjJsdUlpd2ljSEpsYldselpYTWlPbHNpYkdWbWRDSXNJbkpwWjJoMElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKcWIybHVaV1FpZlN4N0ltbGtJam9pYkdWbWRDSXNJbkJ5WlcxcGMyVnpJanBiSW5ObFpXUWlYU3dpWTI5dVkyeDFjMmx2YmlJNklteGxablFpZlN4N0ltbGtJam9pY21sbmFIUWlMQ0p3Y21WdGFYTmxjeUk2V3lKelpXVmtJbDBzSW1OdmJtTnNkWE5wYjI0aU9pSnlhV2RvZENKOUxIc2lhV1FpT2lKMWJuSmxZV05vWVdKc1pTSXNJbkJ5WlcxcGMyVnpJanBiSW5WdWNtVmhZMmhoWW14bElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKdVpYWmxjaTFrWlhKcGRtVmtJbjFkZlE9PSJ9LCJpbml0aWFsRmFjdHMiOlsic2VlZCJdLCJtYXhSb3VuZHMiOjcsImltcGxlbWVudGF0aW9uIjp7InBpblNjaGVtYVZlcnNpb24iOjEsImxhbmd1YWdlSWQiOiJlbHNhLnJ1bGVzLmZpbml0ZS1wb3NpdGl2ZSIsImxhbmd1YWdlVmVyc2lvbiI6MSwicmVjZWlwdFNjaGVtYVZlcnNpb24iOjEsInN0YXRlU2NoZW1hVmVyc2lvbiI6MSwicGFja2FnZXMiOlt7ImlkIjoiRWxzYS5SdWxlcy5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IjJ1TVBmcXlxM1x1MDAyQllqMS9lVklqeEhoellqS2NqRno0NkNCRGl4OEovUndzNFQxVkcxZERHdzI5dUtIeGF3RlNsWDJLdFR2MXJLUVN6MFNOWjNpWVQ0eUE9PSIsImFzc2V0cyI6W3sicGF0aCI6ImxpYi9uZXQxMC4wL0Vsc2EuUnVsZXMuQ29yZS5kbGwiLCJhc3NlbWJseSI6IkVsc2EuUnVsZXMuQ29yZSwgVmVyc2lvbj00LjAuMC4wLCBDdWx0dXJlPW5ldXRyYWwsIFB1YmxpY0tleVRva2VuPW51bGwiLCJzaGEyNTYiOiJiNjlmNmMzODg5NjdmMWEyNmMxZDM5YTNjOGQ0ZGZiOGM3MjMzNTI1MzhmMjFjNGJlYTM2MmU1M2NlNGI4MGExIn1dfSx7ImlkIjoiRWxzYS5SdWxlcy5QZXJzaXN0ZW5jZS5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IlpcdTAwMkJ0MDhHOUpcdTAwMkI0djVnUU1acVlvTGNGeFhoXHUwMDJCZXFUN1gwXHUwMDJCL1FnYmozQjN2OUZBWC9TcWFLa1lpb1B2LzRXaXBxZGNOUkhcdTAwMkIwZm5cdTAwMkJGVTJKdE85T0QySDRnPT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMmFhNDBiNDViMzlhMmQzMzNkYmVlYmNjZWE1YzRjOGQzMTBjMjliY2M0MTE5ZTgyMDNhN2M3NWU4MDhkOTY0NCJ9XX0seyJpZCI6IkVsc2EuUnVsZXMuUnVudGltZSIsInZlcnNpb24iOiI0LjAuMC1icmFuY2gtYWdlbnQtY29kZXgtMzE4MS1kdXJhYmxlLXJ1bGVzIiwiY29udGVudEhhc2giOiJ1M1NkcG5CL3BmVWlEVFQyTEVidnBYRWhIdzI1aC9sdURxMEsvUVx1MDAyQlRkenRxcHJYcm5iU3J3aWhJL2NwYUhJVTAxYkVJQzlDSVpXaFJ3enhWcUhPOTJ3PT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlJ1bnRpbWUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlJ1bnRpbWUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMGQ3MmJmYjFlYzQ2NDM5MTRmYTlkYTA0MmU4NTI1YmZkOTc3MzRjMTQ0MTA1MTAzYjM4ZWE0NWJmODBhYTk1NyJ9XX1dfSwibmF0aXZlRGVzdGluYXRpb24iOm51bGx9",
+          "invocationFingerprint": "f035bf8d0aee7a19b58ace02661362247feb3d6c22068d3b63ab743ec7ebd43f",
+          "receiptRecordBase64": "eyJyZWNlaXB0Ijp7ImlkZW50aXR5Ijp7InRlbmFudCI6bnVsbCwicGFydGl0aW9uIjoicGFja2FnZWQtcnVsZXMtcHJvYmUiLCJpbnZvY2F0aW9uIjoicHJvY2Vzcy1hY2NlcHRlZC0zNGVkMmY2OGE0NmU0Mjk0YjA3NzkxNWFhM2NiZTU4YSIsImZpbmdlcnByaW50IjoiZjAzNWJmOGQwYWVlN2ExOWI1OGFjZTAyNjYxMzYyMjQ3ZmViM2Q2YzIyMDY4ZDNiNjNhYjc0M2VjN2ViZDQzZiIsIm9yZGluYWwiOjAsImlucHV0U3RhdGVTaGEyNTYiOiI4MGIwMTBkYzI2ZjI1NjhjOTM3NWEyOTllMzcwN2ViN2M0NWQwNDZhMTM5ODVmYTFmYWMwYzcyMmNhYWIwY2M0In0sImltcGxlbWVudGF0aW9uUGluSGFzaCI6ImM4ZDUzOGFmMzRjYjllYjE2MGIyNWE3MzllMTM4Mzg3ZWM4M2QzNzAyNmM1ODVlZjllMTYxODM2OTY4YzIxZWQiLCJhZGRlZEZhY3RzIjpbImxlZnQiLCJyaWdodCJdLCJmaXJpbmdzIjpbeyJydWxlSWQiOiJsZWZ0IiwiY29uY2x1c2lvbiI6ImxlZnQifSx7InJ1bGVJZCI6InJpZ2h0IiwiY29uY2x1c2lvbiI6InJpZ2h0In1dfSwic2VtYW50aWNSZWNlaXB0U2hhMjU2IjoiZjYyMTE5MDI1YzcyY2YyZmVmYjI4YzYxNmMzZGExZGRiZWJlODg5NGNiZDNhMzYxOTJhZmFkM2U3YjEyZWQ5YiJ9",
+          "receiptId": "82abb48d2a77ae693b073382869a8c8ca7bf7eacca005f0731ed18c2c8d0584f",
+          "semanticReceiptSha256": "f62119025c72cf2fefb28c616c3da1ddbebe8894cbd3a36192afad3e7b12ed9b",
+          "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+          "beforeFacts": [
+            "seed"
+          ],
+          "afterFacts": [
+            "seed"
+          ],
+          "modelRevision": 2,
+          "committedRounds": 0,
+          "pendingReceiptId": "82abb48d2a77ae693b073382869a8c8ca7bf7eacca005f0731ed18c2c8d0584f",
+          "acceptedAttemptId": "00dc89380d6f45ce88a91fd3041e0854",
+          "acceptedWorkerId": "rules-3bf61675be214ec4ae7ace09ef1eb2a3",
+          "acceptedLeaseFence": 1,
+          "acceptedModelRevision": 2,
+          "tokenOwner": "rules-3bf61675be214ec4ae7ace09ef1eb2a3",
+          "tokenFence": 1,
+          "tokenExpiresAtUtc": "2026-10-22T00:03:47.317126+00:00",
+          "tokenExpectedModelRevision": 1,
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_00582824bb9f45f58cdda88cb6cd1ef3",
+          "processId": 4279,
+          "machineName": "Sipkes-MacBook-Air",
+          "capturedUtc": "2026-10-22T00:03:44.528913+00:00"
+        },
+        "result": {
+          "command": "process-control",
+          "passed": false,
+          "error": "Control: stale same-owner token was not rejected by the work fence."
+        }
+      },
+      "intendedAssertionFailed": true,
+      "restoredSourceSha256": "aa11b95d69f0c13f0dd1f6b2fb6d9c404f63c0f5f558534a9bc5008586548fa3",
+      "restoredAssetSha256": "af4b31d1884591f22a0c7bfdabe2a18db41cb15f015ae27b617df35475c4f5d9",
+      "restored": {
+        "database": "rules_018bc5cc667f46f391ec9f1249a7713a",
+        "originMarker": {
+          "schemaVersion": 1,
+          "boundary": "accepted",
+          "invocationBase64": "eyJpbnZvY2F0aW9uU2NoZW1hVmVyc2lvbiI6MSwiaWRlbnRpdHkiOnsidGVuYW50IjpudWxsLCJwYXJ0aXRpb24iOiJwYWNrYWdlZC1ydWxlcy1wcm9iZSIsImludm9jYXRpb24iOiJwcm9jZXNzLWFjY2VwdGVkLTE2ZjI3MzVhMzExODQ0ODlhNjMyYTJhZTQ5NzdkNjc2In0sImFydGlmYWN0Ijp7ImZvcm1hdFZlcnNpb24iOjEsImlkIjoicnVsZXM6MGYwMzA5ZDU4MTM2NzFhZTZhNDliMzE2NzM2NjUxNDI4NTRkM2U2MDFjZjAwMWJjZjBmNDdjMTM1ZDMzMDg0MSIsInNoYTI1NiI6IjBmMDMwOWQ1ODEzNjcxYWU2YTQ5YjMxNjczNjY1MTQyODU0ZDNlNjAxY2YwMDFiY2YwZjQ3YzEzNWQzMzA4NDEiLCJieXRlcyI6ImV5Sm1iM0p0WVhSV1pYSnphVzl1SWpveExDSnNZVzVuZFdGblpVbGtJam9pWld4ellTNXlkV3hsY3k1bWFXNXBkR1V0Y0c5emFYUnBkbVVpTENKc1lXNW5kV0ZuWlZabGNuTnBiMjRpT2pFc0luWnZZMkZpZFd4aGNua2lPbHNpWm1sdVlXd2lMQ0pxYjJsdVpXUWlMQ0pzWldaMElpd2libVYyWlhJdFpHVnlhWFpsWkNJc0luSnBaMmgwSWl3aWMyVmxaQ0lzSW5WdWNtVmhZMmhoWW14bElsMHNJbkoxYkdWeklqcGJleUpwWkNJNkltWnBibUZzSWl3aWNISmxiV2x6WlhNaU9sc2lhbTlwYm1Wa0lsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKbWFXNWhiQ0o5TEhzaWFXUWlPaUpxYjJsdUlpd2ljSEpsYldselpYTWlPbHNpYkdWbWRDSXNJbkpwWjJoMElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKcWIybHVaV1FpZlN4N0ltbGtJam9pYkdWbWRDSXNJbkJ5WlcxcGMyVnpJanBiSW5ObFpXUWlYU3dpWTI5dVkyeDFjMmx2YmlJNklteGxablFpZlN4N0ltbGtJam9pY21sbmFIUWlMQ0p3Y21WdGFYTmxjeUk2V3lKelpXVmtJbDBzSW1OdmJtTnNkWE5wYjI0aU9pSnlhV2RvZENKOUxIc2lhV1FpT2lKMWJuSmxZV05vWVdKc1pTSXNJbkJ5WlcxcGMyVnpJanBiSW5WdWNtVmhZMmhoWW14bElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKdVpYWmxjaTFrWlhKcGRtVmtJbjFkZlE9PSJ9LCJpbml0aWFsRmFjdHMiOlsic2VlZCJdLCJtYXhSb3VuZHMiOjcsImltcGxlbWVudGF0aW9uIjp7InBpblNjaGVtYVZlcnNpb24iOjEsImxhbmd1YWdlSWQiOiJlbHNhLnJ1bGVzLmZpbml0ZS1wb3NpdGl2ZSIsImxhbmd1YWdlVmVyc2lvbiI6MSwicmVjZWlwdFNjaGVtYVZlcnNpb24iOjEsInN0YXRlU2NoZW1hVmVyc2lvbiI6MSwicGFja2FnZXMiOlt7ImlkIjoiRWxzYS5SdWxlcy5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IjJ1TVBmcXlxM1x1MDAyQllqMS9lVklqeEhoellqS2NqRno0NkNCRGl4OEovUndzNFQxVkcxZERHdzI5dUtIeGF3RlNsWDJLdFR2MXJLUVN6MFNOWjNpWVQ0eUE9PSIsImFzc2V0cyI6W3sicGF0aCI6ImxpYi9uZXQxMC4wL0Vsc2EuUnVsZXMuQ29yZS5kbGwiLCJhc3NlbWJseSI6IkVsc2EuUnVsZXMuQ29yZSwgVmVyc2lvbj00LjAuMC4wLCBDdWx0dXJlPW5ldXRyYWwsIFB1YmxpY0tleVRva2VuPW51bGwiLCJzaGEyNTYiOiJiNjlmNmMzODg5NjdmMWEyNmMxZDM5YTNjOGQ0ZGZiOGM3MjMzNTI1MzhmMjFjNGJlYTM2MmU1M2NlNGI4MGExIn1dfSx7ImlkIjoiRWxzYS5SdWxlcy5QZXJzaXN0ZW5jZS5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IlpcdTAwMkJ0MDhHOUpcdTAwMkI0djVnUU1acVlvTGNGeFhoXHUwMDJCZXFUN1gwXHUwMDJCL1FnYmozQjN2OUZBWC9TcWFLa1lpb1B2LzRXaXBxZGNOUkhcdTAwMkIwZm5cdTAwMkJGVTJKdE85T0QySDRnPT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMmFhNDBiNDViMzlhMmQzMzNkYmVlYmNjZWE1YzRjOGQzMTBjMjliY2M0MTE5ZTgyMDNhN2M3NWU4MDhkOTY0NCJ9XX0seyJpZCI6IkVsc2EuUnVsZXMuUnVudGltZSIsInZlcnNpb24iOiI0LjAuMC1icmFuY2gtYWdlbnQtY29kZXgtMzE4MS1kdXJhYmxlLXJ1bGVzIiwiY29udGVudEhhc2giOiJ1M1NkcG5CL3BmVWlEVFQyTEVidnBYRWhIdzI1aC9sdURxMEsvUVx1MDAyQlRkenRxcHJYcm5iU3J3aWhJL2NwYUhJVTAxYkVJQzlDSVpXaFJ3enhWcUhPOTJ3PT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlJ1bnRpbWUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlJ1bnRpbWUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMGQ3MmJmYjFlYzQ2NDM5MTRmYTlkYTA0MmU4NTI1YmZkOTc3MzRjMTQ0MTA1MTAzYjM4ZWE0NWJmODBhYTk1NyJ9XX1dfSwibmF0aXZlRGVzdGluYXRpb24iOm51bGx9",
+          "invocationFingerprint": "bb19bb7c2e7242c6dbf2a7f9dac6496c420565d074b97d117a546e6130efe74d",
+          "receiptRecordBase64": "eyJyZWNlaXB0Ijp7ImlkZW50aXR5Ijp7InRlbmFudCI6bnVsbCwicGFydGl0aW9uIjoicGFja2FnZWQtcnVsZXMtcHJvYmUiLCJpbnZvY2F0aW9uIjoicHJvY2Vzcy1hY2NlcHRlZC0xNmYyNzM1YTMxMTg0NDg5YTYzMmEyYWU0OTc3ZDY3NiIsImZpbmdlcnByaW50IjoiYmIxOWJiN2MyZTcyNDJjNmRiZjJhN2Y5ZGFjNjQ5NmM0MjA1NjVkMDc0Yjk3ZDExN2E1NDZlNjEzMGVmZTc0ZCIsIm9yZGluYWwiOjAsImlucHV0U3RhdGVTaGEyNTYiOiI4MGIwMTBkYzI2ZjI1NjhjOTM3NWEyOTllMzcwN2ViN2M0NWQwNDZhMTM5ODVmYTFmYWMwYzcyMmNhYWIwY2M0In0sImltcGxlbWVudGF0aW9uUGluSGFzaCI6ImM4ZDUzOGFmMzRjYjllYjE2MGIyNWE3MzllMTM4Mzg3ZWM4M2QzNzAyNmM1ODVlZjllMTYxODM2OTY4YzIxZWQiLCJhZGRlZEZhY3RzIjpbImxlZnQiLCJyaWdodCJdLCJmaXJpbmdzIjpbeyJydWxlSWQiOiJsZWZ0IiwiY29uY2x1c2lvbiI6ImxlZnQifSx7InJ1bGVJZCI6InJpZ2h0IiwiY29uY2x1c2lvbiI6InJpZ2h0In1dfSwic2VtYW50aWNSZWNlaXB0U2hhMjU2IjoiNWVlYzhmMjVjNmVlMWJkOTdjMzMzZjhiZGFmNjNkMWE4ZTIzZGE1YmI2NjFmMmYyYTYxNGQwZmVmM2QzNmQ1ZiJ9",
+          "receiptId": "1a122bb629101007900238f0e953324d66326185d68a6c56c92ded29c8a480e8",
+          "semanticReceiptSha256": "5eec8f25c6ee1bd97c333f8bdaf63d1a8e23da5bb661f2f2a614d0fef3d36d5f",
+          "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+          "beforeFacts": [
+            "seed"
+          ],
+          "afterFacts": [
+            "seed"
+          ],
+          "modelRevision": 2,
+          "committedRounds": 0,
+          "pendingReceiptId": "1a122bb629101007900238f0e953324d66326185d68a6c56c92ded29c8a480e8",
+          "acceptedAttemptId": "98c2aee487424f0caafed5d2291070a5",
+          "acceptedWorkerId": "rules-ad57abb2299a40e4ac751030e0329dec",
+          "acceptedLeaseFence": 1,
+          "acceptedModelRevision": 2,
+          "tokenOwner": "rules-ad57abb2299a40e4ac751030e0329dec",
+          "tokenFence": 1,
+          "tokenExpiresAtUtc": "2026-10-22T00:03:55.194351+00:00",
+          "tokenExpectedModelRevision": 1,
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_018bc5cc667f46f391ec9f1249a7713a",
+          "processId": 4677,
+          "machineName": "Sipkes-MacBook-Air",
+          "capturedUtc": "2026-10-22T00:03:52.526219+00:00"
+        },
+        "result": {
+          "command": "process-control",
+          "passed": true,
+          "kind": "fence",
+          "processId": 4774,
+          "originalProcessId": 4677,
+          "machineName": "Sipkes-MacBook-Air",
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_018bc5cc667f46f391ec9f1249a7713a",
+          "invocationFingerprint": "bb19bb7c2e7242c6dbf2a7f9dac6496c420565d074b97d117a546e6130efe74d",
+          "boundaryReceiptId": "1a122bb629101007900238f0e953324d66326185d68a6c56c92ded29c8a480e8",
+          "outcome": {
+            "oldFence": 1,
+            "firstReclaimedFence": 2,
+            "successorFence": 3,
+            "staleConsume": "LeaseLost",
+            "pendingReceiptId": "1a122bb629101007900238f0e953324d66326185d68a6c56c92ded29c8a480e8",
+            "modelRevision": 2
+          }
+        }
+      }
+    },
+    {
+      "kind": "consumed",
+      "passed": true,
+      "sourcePath": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source/Extensions/Rules/src/Persistence/EntityFrameworkCore/EfRuleRunStore.Rounds.cs",
+      "originalSourceSha256": "bc8a9093396002b20dd955d5754906c106b03282564430095e569ef46b3522c6",
+      "originalAssetSha256": "af4b31d1884591f22a0c7bfdabe2a18db41cb15f015ae27b617df35475c4f5d9",
+      "baseline": {
+        "database": "rules_6302a3f9e06d42f9ba7fccc5edf12194",
+        "originMarker": {
+          "schemaVersion": 1,
+          "boundary": "accepted",
+          "invocationBase64": "eyJpbnZvY2F0aW9uU2NoZW1hVmVyc2lvbiI6MSwiaWRlbnRpdHkiOnsidGVuYW50IjpudWxsLCJwYXJ0aXRpb24iOiJwYWNrYWdlZC1ydWxlcy1wcm9iZSIsImludm9jYXRpb24iOiJwcm9jZXNzLWFjY2VwdGVkLTU3ZTRmNzc4NTJiMjQ1NzY4NGFmZmUxMWM4YjY1ZTdlIn0sImFydGlmYWN0Ijp7ImZvcm1hdFZlcnNpb24iOjEsImlkIjoicnVsZXM6MGYwMzA5ZDU4MTM2NzFhZTZhNDliMzE2NzM2NjUxNDI4NTRkM2U2MDFjZjAwMWJjZjBmNDdjMTM1ZDMzMDg0MSIsInNoYTI1NiI6IjBmMDMwOWQ1ODEzNjcxYWU2YTQ5YjMxNjczNjY1MTQyODU0ZDNlNjAxY2YwMDFiY2YwZjQ3YzEzNWQzMzA4NDEiLCJieXRlcyI6ImV5Sm1iM0p0WVhSV1pYSnphVzl1SWpveExDSnNZVzVuZFdGblpVbGtJam9pWld4ellTNXlkV3hsY3k1bWFXNXBkR1V0Y0c5emFYUnBkbVVpTENKc1lXNW5kV0ZuWlZabGNuTnBiMjRpT2pFc0luWnZZMkZpZFd4aGNua2lPbHNpWm1sdVlXd2lMQ0pxYjJsdVpXUWlMQ0pzWldaMElpd2libVYyWlhJdFpHVnlhWFpsWkNJc0luSnBaMmgwSWl3aWMyVmxaQ0lzSW5WdWNtVmhZMmhoWW14bElsMHNJbkoxYkdWeklqcGJleUpwWkNJNkltWnBibUZzSWl3aWNISmxiV2x6WlhNaU9sc2lhbTlwYm1Wa0lsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKbWFXNWhiQ0o5TEhzaWFXUWlPaUpxYjJsdUlpd2ljSEpsYldselpYTWlPbHNpYkdWbWRDSXNJbkpwWjJoMElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKcWIybHVaV1FpZlN4N0ltbGtJam9pYkdWbWRDSXNJbkJ5WlcxcGMyVnpJanBiSW5ObFpXUWlYU3dpWTI5dVkyeDFjMmx2YmlJNklteGxablFpZlN4N0ltbGtJam9pY21sbmFIUWlMQ0p3Y21WdGFYTmxjeUk2V3lKelpXVmtJbDBzSW1OdmJtTnNkWE5wYjI0aU9pSnlhV2RvZENKOUxIc2lhV1FpT2lKMWJuSmxZV05vWVdKc1pTSXNJbkJ5WlcxcGMyVnpJanBiSW5WdWNtVmhZMmhoWW14bElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKdVpYWmxjaTFrWlhKcGRtVmtJbjFkZlE9PSJ9LCJpbml0aWFsRmFjdHMiOlsic2VlZCJdLCJtYXhSb3VuZHMiOjcsImltcGxlbWVudGF0aW9uIjp7InBpblNjaGVtYVZlcnNpb24iOjEsImxhbmd1YWdlSWQiOiJlbHNhLnJ1bGVzLmZpbml0ZS1wb3NpdGl2ZSIsImxhbmd1YWdlVmVyc2lvbiI6MSwicmVjZWlwdFNjaGVtYVZlcnNpb24iOjEsInN0YXRlU2NoZW1hVmVyc2lvbiI6MSwicGFja2FnZXMiOlt7ImlkIjoiRWxzYS5SdWxlcy5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IjJ1TVBmcXlxM1x1MDAyQllqMS9lVklqeEhoellqS2NqRno0NkNCRGl4OEovUndzNFQxVkcxZERHdzI5dUtIeGF3RlNsWDJLdFR2MXJLUVN6MFNOWjNpWVQ0eUE9PSIsImFzc2V0cyI6W3sicGF0aCI6ImxpYi9uZXQxMC4wL0Vsc2EuUnVsZXMuQ29yZS5kbGwiLCJhc3NlbWJseSI6IkVsc2EuUnVsZXMuQ29yZSwgVmVyc2lvbj00LjAuMC4wLCBDdWx0dXJlPW5ldXRyYWwsIFB1YmxpY0tleVRva2VuPW51bGwiLCJzaGEyNTYiOiJiNjlmNmMzODg5NjdmMWEyNmMxZDM5YTNjOGQ0ZGZiOGM3MjMzNTI1MzhmMjFjNGJlYTM2MmU1M2NlNGI4MGExIn1dfSx7ImlkIjoiRWxzYS5SdWxlcy5QZXJzaXN0ZW5jZS5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IlpcdTAwMkJ0MDhHOUpcdTAwMkI0djVnUU1acVlvTGNGeFhoXHUwMDJCZXFUN1gwXHUwMDJCL1FnYmozQjN2OUZBWC9TcWFLa1lpb1B2LzRXaXBxZGNOUkhcdTAwMkIwZm5cdTAwMkJGVTJKdE85T0QySDRnPT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMmFhNDBiNDViMzlhMmQzMzNkYmVlYmNjZWE1YzRjOGQzMTBjMjliY2M0MTE5ZTgyMDNhN2M3NWU4MDhkOTY0NCJ9XX0seyJpZCI6IkVsc2EuUnVsZXMuUnVudGltZSIsInZlcnNpb24iOiI0LjAuMC1icmFuY2gtYWdlbnQtY29kZXgtMzE4MS1kdXJhYmxlLXJ1bGVzIiwiY29udGVudEhhc2giOiJ1M1NkcG5CL3BmVWlEVFQyTEVidnBYRWhIdzI1aC9sdURxMEsvUVx1MDAyQlRkenRxcHJYcm5iU3J3aWhJL2NwYUhJVTAxYkVJQzlDSVpXaFJ3enhWcUhPOTJ3PT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlJ1bnRpbWUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlJ1bnRpbWUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMGQ3MmJmYjFlYzQ2NDM5MTRmYTlkYTA0MmU4NTI1YmZkOTc3MzRjMTQ0MTA1MTAzYjM4ZWE0NWJmODBhYTk1NyJ9XX1dfSwibmF0aXZlRGVzdGluYXRpb24iOm51bGx9",
+          "invocationFingerprint": "e68e0fc2104bb3cd5a3aacffc915558c358b596916d0c0ef7a0418553aef6247",
+          "receiptRecordBase64": "eyJyZWNlaXB0Ijp7ImlkZW50aXR5Ijp7InRlbmFudCI6bnVsbCwicGFydGl0aW9uIjoicGFja2FnZWQtcnVsZXMtcHJvYmUiLCJpbnZvY2F0aW9uIjoicHJvY2Vzcy1hY2NlcHRlZC01N2U0Zjc3ODUyYjI0NTc2ODRhZmZlMTFjOGI2NWU3ZSIsImZpbmdlcnByaW50IjoiZTY4ZTBmYzIxMDRiYjNjZDVhM2FhY2ZmYzkxNTU1OGMzNThiNTk2OTE2ZDBjMGVmN2EwNDE4NTUzYWVmNjI0NyIsIm9yZGluYWwiOjAsImlucHV0U3RhdGVTaGEyNTYiOiI4MGIwMTBkYzI2ZjI1NjhjOTM3NWEyOTllMzcwN2ViN2M0NWQwNDZhMTM5ODVmYTFmYWMwYzcyMmNhYWIwY2M0In0sImltcGxlbWVudGF0aW9uUGluSGFzaCI6ImM4ZDUzOGFmMzRjYjllYjE2MGIyNWE3MzllMTM4Mzg3ZWM4M2QzNzAyNmM1ODVlZjllMTYxODM2OTY4YzIxZWQiLCJhZGRlZEZhY3RzIjpbImxlZnQiLCJyaWdodCJdLCJmaXJpbmdzIjpbeyJydWxlSWQiOiJsZWZ0IiwiY29uY2x1c2lvbiI6ImxlZnQifSx7InJ1bGVJZCI6InJpZ2h0IiwiY29uY2x1c2lvbiI6InJpZ2h0In1dfSwic2VtYW50aWNSZWNlaXB0U2hhMjU2IjoiODZjMmVkZDI1ZWQ1NDZjOGYwMmYyNzYwZmUwZGEzMzQzYTIzZTBhYzU5MjBkZDJmYzgyN2IyMWNiYTI5MDM4ZCJ9",
+          "receiptId": "bf47db781d8d21143b496f6b7d25f050ed94aa213b046dc4472e52fc439d5427",
+          "semanticReceiptSha256": "86c2edd25ed546c8f02f2760fe0da3343a23e0ac5920dd2fc827b21cba29038d",
+          "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+          "beforeFacts": [
+            "seed"
+          ],
+          "afterFacts": [
+            "seed"
+          ],
+          "modelRevision": 2,
+          "committedRounds": 0,
+          "pendingReceiptId": "bf47db781d8d21143b496f6b7d25f050ed94aa213b046dc4472e52fc439d5427",
+          "acceptedAttemptId": "e8b2042164dd480985f9abdc5840c763",
+          "acceptedWorkerId": "rules-751995fd6e0f4b48ac377276213261a1",
+          "acceptedLeaseFence": 1,
+          "acceptedModelRevision": 2,
+          "tokenOwner": "rules-751995fd6e0f4b48ac377276213261a1",
+          "tokenFence": 1,
+          "tokenExpiresAtUtc": "2026-10-22T00:04:03.074914+00:00",
+          "tokenExpectedModelRevision": 1,
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_6302a3f9e06d42f9ba7fccc5edf12194",
+          "processId": 4942,
+          "machineName": "Sipkes-MacBook-Air",
+          "capturedUtc": "2026-10-22T00:04:00.286012+00:00"
+        },
+        "result": {
+          "command": "process-control",
+          "passed": true,
+          "kind": "consumed",
+          "processId": 5029,
+          "originalProcessId": 4942,
+          "machineName": "Sipkes-MacBook-Air",
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_6302a3f9e06d42f9ba7fccc5edf12194",
+          "invocationFingerprint": "e68e0fc2104bb3cd5a3aacffc915558c358b596916d0c0ef7a0418553aef6247",
+          "boundaryReceiptId": "bf47db781d8d21143b496f6b7d25f050ed94aa213b046dc4472e52fc439d5427",
+          "outcome": {
+            "firstConsumption": "Consumed",
+            "exactReplay": "Replay",
+            "transitionId": "3e3fe68422d1a57a8ec44cbc4611a8453f193973b37fccce6670ece909dbac94",
+            "receiptId": "bf47db781d8d21143b496f6b7d25f050ed94aa213b046dc4472e52fc439d5427",
+            "nextRoundId": "46d000b34b9b985c95495a452862260276ab6dca3857b5d75fdd0cc54293a39a",
+            "modelRevision": 3,
+            "consumedModelRevision": 3,
+            "committedFacts": [
+              "left",
+              "right",
+              "seed"
+            ],
+            "committedRounds": 1
+          }
+        }
+      },
+      "changedSourceSha256": "103b6ee3de0e00e61212fc0186909c1aeb4c3b180a2cd3a256086c9b22e4ae3a",
+      "changedAssetSha256": "ed3787c359802926118d253b5a9b7f516d27060876c2cab6476341fbb685adcc",
+      "removed": {
+        "database": "rules_b0955196c3714838b7a00f10a1f8c2a1",
+        "originMarker": {
+          "schemaVersion": 1,
+          "boundary": "accepted",
+          "invocationBase64": "eyJpbnZvY2F0aW9uU2NoZW1hVmVyc2lvbiI6MSwiaWRlbnRpdHkiOnsidGVuYW50IjpudWxsLCJwYXJ0aXRpb24iOiJwYWNrYWdlZC1ydWxlcy1wcm9iZSIsImludm9jYXRpb24iOiJwcm9jZXNzLWFjY2VwdGVkLWFhMzQ0MGJiMjk1YzQ4NGY4OGMzMzRiYWE0Y2UwMDE2In0sImFydGlmYWN0Ijp7ImZvcm1hdFZlcnNpb24iOjEsImlkIjoicnVsZXM6MGYwMzA5ZDU4MTM2NzFhZTZhNDliMzE2NzM2NjUxNDI4NTRkM2U2MDFjZjAwMWJjZjBmNDdjMTM1ZDMzMDg0MSIsInNoYTI1NiI6IjBmMDMwOWQ1ODEzNjcxYWU2YTQ5YjMxNjczNjY1MTQyODU0ZDNlNjAxY2YwMDFiY2YwZjQ3YzEzNWQzMzA4NDEiLCJieXRlcyI6ImV5Sm1iM0p0WVhSV1pYSnphVzl1SWpveExDSnNZVzVuZFdGblpVbGtJam9pWld4ellTNXlkV3hsY3k1bWFXNXBkR1V0Y0c5emFYUnBkbVVpTENKc1lXNW5kV0ZuWlZabGNuTnBiMjRpT2pFc0luWnZZMkZpZFd4aGNua2lPbHNpWm1sdVlXd2lMQ0pxYjJsdVpXUWlMQ0pzWldaMElpd2libVYyWlhJdFpHVnlhWFpsWkNJc0luSnBaMmgwSWl3aWMyVmxaQ0lzSW5WdWNtVmhZMmhoWW14bElsMHNJbkoxYkdWeklqcGJleUpwWkNJNkltWnBibUZzSWl3aWNISmxiV2x6WlhNaU9sc2lhbTlwYm1Wa0lsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKbWFXNWhiQ0o5TEhzaWFXUWlPaUpxYjJsdUlpd2ljSEpsYldselpYTWlPbHNpYkdWbWRDSXNJbkpwWjJoMElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKcWIybHVaV1FpZlN4N0ltbGtJam9pYkdWbWRDSXNJbkJ5WlcxcGMyVnpJanBiSW5ObFpXUWlYU3dpWTI5dVkyeDFjMmx2YmlJNklteGxablFpZlN4N0ltbGtJam9pY21sbmFIUWlMQ0p3Y21WdGFYTmxjeUk2V3lKelpXVmtJbDBzSW1OdmJtTnNkWE5wYjI0aU9pSnlhV2RvZENKOUxIc2lhV1FpT2lKMWJuSmxZV05vWVdKc1pTSXNJbkJ5WlcxcGMyVnpJanBiSW5WdWNtVmhZMmhoWW14bElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKdVpYWmxjaTFrWlhKcGRtVmtJbjFkZlE9PSJ9LCJpbml0aWFsRmFjdHMiOlsic2VlZCJdLCJtYXhSb3VuZHMiOjcsImltcGxlbWVudGF0aW9uIjp7InBpblNjaGVtYVZlcnNpb24iOjEsImxhbmd1YWdlSWQiOiJlbHNhLnJ1bGVzLmZpbml0ZS1wb3NpdGl2ZSIsImxhbmd1YWdlVmVyc2lvbiI6MSwicmVjZWlwdFNjaGVtYVZlcnNpb24iOjEsInN0YXRlU2NoZW1hVmVyc2lvbiI6MSwicGFja2FnZXMiOlt7ImlkIjoiRWxzYS5SdWxlcy5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IjJ1TVBmcXlxM1x1MDAyQllqMS9lVklqeEhoellqS2NqRno0NkNCRGl4OEovUndzNFQxVkcxZERHdzI5dUtIeGF3RlNsWDJLdFR2MXJLUVN6MFNOWjNpWVQ0eUE9PSIsImFzc2V0cyI6W3sicGF0aCI6ImxpYi9uZXQxMC4wL0Vsc2EuUnVsZXMuQ29yZS5kbGwiLCJhc3NlbWJseSI6IkVsc2EuUnVsZXMuQ29yZSwgVmVyc2lvbj00LjAuMC4wLCBDdWx0dXJlPW5ldXRyYWwsIFB1YmxpY0tleVRva2VuPW51bGwiLCJzaGEyNTYiOiJiNjlmNmMzODg5NjdmMWEyNmMxZDM5YTNjOGQ0ZGZiOGM3MjMzNTI1MzhmMjFjNGJlYTM2MmU1M2NlNGI4MGExIn1dfSx7ImlkIjoiRWxzYS5SdWxlcy5QZXJzaXN0ZW5jZS5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IlpcdTAwMkJ0MDhHOUpcdTAwMkI0djVnUU1acVlvTGNGeFhoXHUwMDJCZXFUN1gwXHUwMDJCL1FnYmozQjN2OUZBWC9TcWFLa1lpb1B2LzRXaXBxZGNOUkhcdTAwMkIwZm5cdTAwMkJGVTJKdE85T0QySDRnPT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMmFhNDBiNDViMzlhMmQzMzNkYmVlYmNjZWE1YzRjOGQzMTBjMjliY2M0MTE5ZTgyMDNhN2M3NWU4MDhkOTY0NCJ9XX0seyJpZCI6IkVsc2EuUnVsZXMuUnVudGltZSIsInZlcnNpb24iOiI0LjAuMC1icmFuY2gtYWdlbnQtY29kZXgtMzE4MS1kdXJhYmxlLXJ1bGVzIiwiY29udGVudEhhc2giOiJ1M1NkcG5CL3BmVWlEVFQyTEVidnBYRWhIdzI1aC9sdURxMEsvUVx1MDAyQlRkenRxcHJYcm5iU3J3aWhJL2NwYUhJVTAxYkVJQzlDSVpXaFJ3enhWcUhPOTJ3PT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlJ1bnRpbWUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlJ1bnRpbWUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMGQ3MmJmYjFlYzQ2NDM5MTRmYTlkYTA0MmU4NTI1YmZkOTc3MzRjMTQ0MTA1MTAzYjM4ZWE0NWJmODBhYTk1NyJ9XX1dfSwibmF0aXZlRGVzdGluYXRpb24iOm51bGx9",
+          "invocationFingerprint": "a4e29e1bcc9d58fbab00f3ad51e5bf062c78105bd85a25777a09f6783ef9beaa",
+          "receiptRecordBase64": "eyJyZWNlaXB0Ijp7ImlkZW50aXR5Ijp7InRlbmFudCI6bnVsbCwicGFydGl0aW9uIjoicGFja2FnZWQtcnVsZXMtcHJvYmUiLCJpbnZvY2F0aW9uIjoicHJvY2Vzcy1hY2NlcHRlZC1hYTM0NDBiYjI5NWM0ODRmODhjMzM0YmFhNGNlMDAxNiIsImZpbmdlcnByaW50IjoiYTRlMjllMWJjYzlkNThmYmFiMDBmM2FkNTFlNWJmMDYyYzc4MTA1YmQ4NWEyNTc3N2EwOWY2NzgzZWY5YmVhYSIsIm9yZGluYWwiOjAsImlucHV0U3RhdGVTaGEyNTYiOiI4MGIwMTBkYzI2ZjI1NjhjOTM3NWEyOTllMzcwN2ViN2M0NWQwNDZhMTM5ODVmYTFmYWMwYzcyMmNhYWIwY2M0In0sImltcGxlbWVudGF0aW9uUGluSGFzaCI6ImM4ZDUzOGFmMzRjYjllYjE2MGIyNWE3MzllMTM4Mzg3ZWM4M2QzNzAyNmM1ODVlZjllMTYxODM2OTY4YzIxZWQiLCJhZGRlZEZhY3RzIjpbImxlZnQiLCJyaWdodCJdLCJmaXJpbmdzIjpbeyJydWxlSWQiOiJsZWZ0IiwiY29uY2x1c2lvbiI6ImxlZnQifSx7InJ1bGVJZCI6InJpZ2h0IiwiY29uY2x1c2lvbiI6InJpZ2h0In1dfSwic2VtYW50aWNSZWNlaXB0U2hhMjU2IjoiNzYzYWU4OGU5ZGEwYzVjOTFiZDM4MTg0Y2ViMjE0NzMxOTE4NjJhMzc2ZGZjNmM5M2I2YWQzMGZhM2M3ZWNlNyJ9",
+          "receiptId": "6e480a09a5a89ce136e783c6a21d78c3d3ee8e60e3141f52d06ad96c06304acd",
+          "semanticReceiptSha256": "763ae88e9da0c5c91bd38184ceb21473191862a376dfc6c93b6ad30fa3c7ece7",
+          "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+          "beforeFacts": [
+            "seed"
+          ],
+          "afterFacts": [
+            "seed"
+          ],
+          "modelRevision": 2,
+          "committedRounds": 0,
+          "pendingReceiptId": "6e480a09a5a89ce136e783c6a21d78c3d3ee8e60e3141f52d06ad96c06304acd",
+          "acceptedAttemptId": "ef226b775c3a4a2dbb89aa618ca259d0",
+          "acceptedWorkerId": "rules-54a26d14f59e418ab686c22458bb2dc4",
+          "acceptedLeaseFence": 1,
+          "acceptedModelRevision": 2,
+          "tokenOwner": "rules-54a26d14f59e418ab686c22458bb2dc4",
+          "tokenFence": 1,
+          "tokenExpiresAtUtc": "2026-10-22T00:04:08.187859+00:00",
+          "tokenExpectedModelRevision": 1,
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_b0955196c3714838b7a00f10a1f8c2a1",
+          "processId": 5148,
+          "machineName": "Sipkes-MacBook-Air",
+          "capturedUtc": "2026-10-22T00:04:05.492647+00:00"
+        },
+        "result": {
+          "command": "process-control",
+          "passed": false,
+          "error": "Control: exact consumption replay did not preserve its consumed revision and confirmation."
+        }
+      },
+      "intendedAssertionFailed": true,
+      "restoredSourceSha256": "bc8a9093396002b20dd955d5754906c106b03282564430095e569ef46b3522c6",
+      "restoredAssetSha256": "af4b31d1884591f22a0c7bfdabe2a18db41cb15f015ae27b617df35475c4f5d9",
+      "restored": {
+        "database": "rules_68955038c5f24d069535d8f0ba40d066",
+        "originMarker": {
+          "schemaVersion": 1,
+          "boundary": "accepted",
+          "invocationBase64": "eyJpbnZvY2F0aW9uU2NoZW1hVmVyc2lvbiI6MSwiaWRlbnRpdHkiOnsidGVuYW50IjpudWxsLCJwYXJ0aXRpb24iOiJwYWNrYWdlZC1ydWxlcy1wcm9iZSIsImludm9jYXRpb24iOiJwcm9jZXNzLWFjY2VwdGVkLTVjZDI3MWJmM2FiOTQ5NDlhY2ZmNTdiZGNjMDQ1NWE4In0sImFydGlmYWN0Ijp7ImZvcm1hdFZlcnNpb24iOjEsImlkIjoicnVsZXM6MGYwMzA5ZDU4MTM2NzFhZTZhNDliMzE2NzM2NjUxNDI4NTRkM2U2MDFjZjAwMWJjZjBmNDdjMTM1ZDMzMDg0MSIsInNoYTI1NiI6IjBmMDMwOWQ1ODEzNjcxYWU2YTQ5YjMxNjczNjY1MTQyODU0ZDNlNjAxY2YwMDFiY2YwZjQ3YzEzNWQzMzA4NDEiLCJieXRlcyI6ImV5Sm1iM0p0WVhSV1pYSnphVzl1SWpveExDSnNZVzVuZFdGblpVbGtJam9pWld4ellTNXlkV3hsY3k1bWFXNXBkR1V0Y0c5emFYUnBkbVVpTENKc1lXNW5kV0ZuWlZabGNuTnBiMjRpT2pFc0luWnZZMkZpZFd4aGNua2lPbHNpWm1sdVlXd2lMQ0pxYjJsdVpXUWlMQ0pzWldaMElpd2libVYyWlhJdFpHVnlhWFpsWkNJc0luSnBaMmgwSWl3aWMyVmxaQ0lzSW5WdWNtVmhZMmhoWW14bElsMHNJbkoxYkdWeklqcGJleUpwWkNJNkltWnBibUZzSWl3aWNISmxiV2x6WlhNaU9sc2lhbTlwYm1Wa0lsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKbWFXNWhiQ0o5TEhzaWFXUWlPaUpxYjJsdUlpd2ljSEpsYldselpYTWlPbHNpYkdWbWRDSXNJbkpwWjJoMElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKcWIybHVaV1FpZlN4N0ltbGtJam9pYkdWbWRDSXNJbkJ5WlcxcGMyVnpJanBiSW5ObFpXUWlYU3dpWTI5dVkyeDFjMmx2YmlJNklteGxablFpZlN4N0ltbGtJam9pY21sbmFIUWlMQ0p3Y21WdGFYTmxjeUk2V3lKelpXVmtJbDBzSW1OdmJtTnNkWE5wYjI0aU9pSnlhV2RvZENKOUxIc2lhV1FpT2lKMWJuSmxZV05vWVdKc1pTSXNJbkJ5WlcxcGMyVnpJanBiSW5WdWNtVmhZMmhoWW14bElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKdVpYWmxjaTFrWlhKcGRtVmtJbjFkZlE9PSJ9LCJpbml0aWFsRmFjdHMiOlsic2VlZCJdLCJtYXhSb3VuZHMiOjcsImltcGxlbWVudGF0aW9uIjp7InBpblNjaGVtYVZlcnNpb24iOjEsImxhbmd1YWdlSWQiOiJlbHNhLnJ1bGVzLmZpbml0ZS1wb3NpdGl2ZSIsImxhbmd1YWdlVmVyc2lvbiI6MSwicmVjZWlwdFNjaGVtYVZlcnNpb24iOjEsInN0YXRlU2NoZW1hVmVyc2lvbiI6MSwicGFja2FnZXMiOlt7ImlkIjoiRWxzYS5SdWxlcy5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IjJ1TVBmcXlxM1x1MDAyQllqMS9lVklqeEhoellqS2NqRno0NkNCRGl4OEovUndzNFQxVkcxZERHdzI5dUtIeGF3RlNsWDJLdFR2MXJLUVN6MFNOWjNpWVQ0eUE9PSIsImFzc2V0cyI6W3sicGF0aCI6ImxpYi9uZXQxMC4wL0Vsc2EuUnVsZXMuQ29yZS5kbGwiLCJhc3NlbWJseSI6IkVsc2EuUnVsZXMuQ29yZSwgVmVyc2lvbj00LjAuMC4wLCBDdWx0dXJlPW5ldXRyYWwsIFB1YmxpY0tleVRva2VuPW51bGwiLCJzaGEyNTYiOiJiNjlmNmMzODg5NjdmMWEyNmMxZDM5YTNjOGQ0ZGZiOGM3MjMzNTI1MzhmMjFjNGJlYTM2MmU1M2NlNGI4MGExIn1dfSx7ImlkIjoiRWxzYS5SdWxlcy5QZXJzaXN0ZW5jZS5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IlpcdTAwMkJ0MDhHOUpcdTAwMkI0djVnUU1acVlvTGNGeFhoXHUwMDJCZXFUN1gwXHUwMDJCL1FnYmozQjN2OUZBWC9TcWFLa1lpb1B2LzRXaXBxZGNOUkhcdTAwMkIwZm5cdTAwMkJGVTJKdE85T0QySDRnPT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMmFhNDBiNDViMzlhMmQzMzNkYmVlYmNjZWE1YzRjOGQzMTBjMjliY2M0MTE5ZTgyMDNhN2M3NWU4MDhkOTY0NCJ9XX0seyJpZCI6IkVsc2EuUnVsZXMuUnVudGltZSIsInZlcnNpb24iOiI0LjAuMC1icmFuY2gtYWdlbnQtY29kZXgtMzE4MS1kdXJhYmxlLXJ1bGVzIiwiY29udGVudEhhc2giOiJ1M1NkcG5CL3BmVWlEVFQyTEVidnBYRWhIdzI1aC9sdURxMEsvUVx1MDAyQlRkenRxcHJYcm5iU3J3aWhJL2NwYUhJVTAxYkVJQzlDSVpXaFJ3enhWcUhPOTJ3PT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlJ1bnRpbWUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlJ1bnRpbWUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMGQ3MmJmYjFlYzQ2NDM5MTRmYTlkYTA0MmU4NTI1YmZkOTc3MzRjMTQ0MTA1MTAzYjM4ZWE0NWJmODBhYTk1NyJ9XX1dfSwibmF0aXZlRGVzdGluYXRpb24iOm51bGx9",
+          "invocationFingerprint": "036e40d262815f404552a5f461db05dd81ed3495e6991225dee16b31f392759a",
+          "receiptRecordBase64": "eyJyZWNlaXB0Ijp7ImlkZW50aXR5Ijp7InRlbmFudCI6bnVsbCwicGFydGl0aW9uIjoicGFja2FnZWQtcnVsZXMtcHJvYmUiLCJpbnZvY2F0aW9uIjoicHJvY2Vzcy1hY2NlcHRlZC01Y2QyNzFiZjNhYjk0OTQ5YWNmZjU3YmRjYzA0NTVhOCIsImZpbmdlcnByaW50IjoiMDM2ZTQwZDI2MjgxNWY0MDQ1NTJhNWY0NjFkYjA1ZGQ4MWVkMzQ5NWU2OTkxMjI1ZGVlMTZiMzFmMzkyNzU5YSIsIm9yZGluYWwiOjAsImlucHV0U3RhdGVTaGEyNTYiOiI4MGIwMTBkYzI2ZjI1NjhjOTM3NWEyOTllMzcwN2ViN2M0NWQwNDZhMTM5ODVmYTFmYWMwYzcyMmNhYWIwY2M0In0sImltcGxlbWVudGF0aW9uUGluSGFzaCI6ImM4ZDUzOGFmMzRjYjllYjE2MGIyNWE3MzllMTM4Mzg3ZWM4M2QzNzAyNmM1ODVlZjllMTYxODM2OTY4YzIxZWQiLCJhZGRlZEZhY3RzIjpbImxlZnQiLCJyaWdodCJdLCJmaXJpbmdzIjpbeyJydWxlSWQiOiJsZWZ0IiwiY29uY2x1c2lvbiI6ImxlZnQifSx7InJ1bGVJZCI6InJpZ2h0IiwiY29uY2x1c2lvbiI6InJpZ2h0In1dfSwic2VtYW50aWNSZWNlaXB0U2hhMjU2IjoiMTZiNTJkYTk2MThkNWUwZDRmZjY1NWMxYjhhNzNmMzhhN2U2ODVmZTZhYmZiYmU4MGE0MTE0MzcwNjViZDExMCJ9",
+          "receiptId": "57649251577a6dde7b05e9d4bd10e36dde64578b3b89ddfa7c3e3c160de66823",
+          "semanticReceiptSha256": "16b52da9618d5e0d4ff655c1b8a73f38a7e685fe6abfbbe80a411437065bd110",
+          "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+          "beforeFacts": [
+            "seed"
+          ],
+          "afterFacts": [
+            "seed"
+          ],
+          "modelRevision": 2,
+          "committedRounds": 0,
+          "pendingReceiptId": "57649251577a6dde7b05e9d4bd10e36dde64578b3b89ddfa7c3e3c160de66823",
+          "acceptedAttemptId": "051888da7c4a41a7a39ca456f11ad313",
+          "acceptedWorkerId": "rules-ea3666e744bf4d298ec50a6f04ed0e86",
+          "acceptedLeaseFence": 1,
+          "acceptedModelRevision": 2,
+          "tokenOwner": "rules-ea3666e744bf4d298ec50a6f04ed0e86",
+          "tokenFence": 1,
+          "tokenExpiresAtUtc": "2026-10-22T00:04:13.065341+00:00",
+          "tokenExpectedModelRevision": 1,
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_68955038c5f24d069535d8f0ba40d066",
+          "processId": 5265,
+          "machineName": "Sipkes-MacBook-Air",
+          "capturedUtc": "2026-10-22T00:04:10.417591+00:00"
+        },
+        "result": {
+          "command": "process-control",
+          "passed": true,
+          "kind": "consumed",
+          "processId": 5314,
+          "originalProcessId": 5265,
+          "machineName": "Sipkes-MacBook-Air",
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_68955038c5f24d069535d8f0ba40d066",
+          "invocationFingerprint": "036e40d262815f404552a5f461db05dd81ed3495e6991225dee16b31f392759a",
+          "boundaryReceiptId": "57649251577a6dde7b05e9d4bd10e36dde64578b3b89ddfa7c3e3c160de66823",
+          "outcome": {
+            "firstConsumption": "Consumed",
+            "exactReplay": "Replay",
+            "transitionId": "409b497d87d121f848c458ffcc41b1494df4c543dd3fa8ebc11e142ccd70e4da",
+            "receiptId": "57649251577a6dde7b05e9d4bd10e36dde64578b3b89ddfa7c3e3c160de66823",
+            "nextRoundId": "3767e6e192dbb16eed95a9b53ea3458dc84a74a6a14124d4f188fd72a8c2a672",
+            "modelRevision": 3,
+            "consumedModelRevision": 3,
+            "committedFacts": [
+              "left",
+              "right",
+              "seed"
+            ],
+            "committedRounds": 1
+          }
+        }
+      }
+    }
+  ],
+  "harnessUnchanged": true,
+  "retainedRunDirectory": "/private/tmp/3181-process-controls-final/run-a9c82057b9784aa7821de7b3c8c1ec73",
+  "rawReceiptSha256": "f46dcab97b24ab045d6eeace4d1327b3cce12047cafa815134d3f6fdd3bbdf59",
+  "rawArtifacts": {
+    "processes/accepted-cancel-origin.json": {
+      "sha256": "28e2b322f15f1ad9773f591cfb1c8e1cef868e9cfcc148bbe5905d478ad7681f",
+      "size": 1287
+    },
+    "processes/accepted-cancel-origin.log": {
+      "sha256": "2b2f7ea1f77707a5e60b0b10e2feed5f85d844755cb9484569b21d148d48e46c",
+      "size": 149
+    },
+    "processes/accepted-cancel-state.json": {
+      "sha256": "cc4a536f2cfa3ece935793bb509418d235550e66af07433ae3138e38f6a5fe11",
+      "size": 5566
+    },
+    "processes/accepted-cancel-state.json.release": {
+      "sha256": "3933e3274b63dc01fd286d6d939a626867c83a4603fc4347e0f8b8856f1b98fd",
+      "size": 8
+    },
+    "processes/accepted-cancel-successor.json": {
+      "sha256": "f9d471e33c848ce6e8e24e7cb2a3bfbe0038bbe92e9b8cb0a06cf02a4926a83a",
+      "size": 1411
+    },
+    "processes/accepted-crash-origin.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    "processes/accepted-crash-state.json": {
+      "sha256": "4ce43b35e624e39c48cb0e55efced232f25f592273bdfd8be5bbd807db5f58ce",
+      "size": 5566
+    },
+    "processes/accepted-crash-successor.json": {
+      "sha256": "b03390a1b52cddff71ce5a8454ea7d9f18f687d12e54521623783881b1846daf",
+      "size": 3064
+    },
+    "processes/accepted-delayed-origin.json": {
+      "sha256": "dc00beebedfccaa6927aa884dc898ae6ff19827e90e2b6b01f2df0f600930a90",
+      "size": 1383
+    },
+    "processes/accepted-delayed-origin.log": {
+      "sha256": "18026e54a48f5ff20ff2efdded94e9289d4abf84f863b5d5cc0d6657c59c4a8a",
+      "size": 150
+    },
+    "processes/accepted-delayed-state.json": {
+      "sha256": "69acca5c0583b45034af6db459456bc3d1c42c2851d75c6add066aa2ceda0ea0",
+      "size": 5566
+    },
+    "processes/accepted-delayed-state.json.release": {
+      "sha256": "3933e3274b63dc01fd286d6d939a626867c83a4603fc4347e0f8b8856f1b98fd",
+      "size": 8
+    },
+    "processes/accepted-delayed-successor.json": {
+      "sha256": "a89e6f6066f594b7b362a29afec580475488e9584ddb6e76e75011967709b128",
+      "size": 3064
+    },
+    "processes/consumed-crash-origin.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    "processes/consumed-crash-state.json": {
+      "sha256": "3bf5f491ba0a0251b336349581bb0f0b70188d03939bbc0e2b005c4a2c965ecb",
+      "size": 5531
+    },
+    "processes/consumed-crash-successor.json": {
+      "sha256": "44f1a3d460cca7d1a46b0b99a5801dad7bd18792a44f4a5700fc0ff137f56a34",
+      "size": 3064
+    },
+    "processes/consumed-delayed-origin.json": {
+      "sha256": "175e2ab9a2a1cdce72d03405625e6ba65a81d17fabfc4a9bf5e6de34a3a5e5b8",
+      "size": 1384
+    },
+    "processes/consumed-delayed-origin.log": {
+      "sha256": "0a544ff5f81b3e63a16033d031ed95c7befb395676801830c17ee70a585f4a6e",
+      "size": 150
+    },
+    "processes/consumed-delayed-state.json": {
+      "sha256": "a7fe13e6b9e5470968d0cafd97d0add1c00d4343451e6d6fe287ad289d6dc51e",
+      "size": 5531
+    },
+    "processes/consumed-delayed-state.json.release": {
+      "sha256": "3933e3274b63dc01fd286d6d939a626867c83a4603fc4347e0f8b8856f1b98fd",
+      "size": 8
+    },
+    "processes/consumed-delayed-successor.json": {
+      "sha256": "031d476a69770b61b9dddd9d08c47ff15bed3f326a8ea2e508ac4ebfc445713a",
+      "size": 3064
+    },
+    "live-successor/origin-state.json": {
+      "sha256": "29f62ac821814bd7e75b017fcf828905885e82b65a7e9e61472b2d9fa35ca178",
+      "size": 6417
+    },
+    "live-successor/origin-state.json.origin-release": {
+      "sha256": "3933e3274b63dc01fd286d6d939a626867c83a4603fc4347e0f8b8856f1b98fd",
+      "size": 8
+    },
+    "live-successor/origin.json": {
+      "sha256": "f3dab72cfdeed0e6affe40cd987508fb411723b4f2b3824b3499925770bc5019",
+      "size": 3112
+    },
+    "live-successor/origin.log": {
+      "sha256": "42540dfd170f905c1b2ea661d1a5b9abf3bb724303e561a3ebae49d841eb80a3",
+      "size": 142
+    },
+    "live-successor/successor-ready.json": {
+      "sha256": "13f2cb1f91d69b4aa1e0892080f04bd557d178819550f5e9a99f91e89b657212",
+      "size": 1873
+    },
+    "live-successor/successor-ready.json.successor-release": {
+      "sha256": "3933e3274b63dc01fd286d6d939a626867c83a4603fc4347e0f8b8856f1b98fd",
+      "size": 8
+    },
+    "live-successor/successor.json": {
+      "sha256": "725afad61471d85ebeed6b9143bd5968b6f6bc490c6368195ca17062997650c3",
+      "size": 4556
+    },
+    "live-successor/successor.log": {
+      "sha256": "85b3d2903412531391ac2552e96bca3fabc0d7e55da4bc46b643bc925718c66d",
+      "size": 148
+    },
+    "persistence-controls/cancellation-baseline-origin.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    "persistence-controls/cancellation-baseline-state.json": {
+      "sha256": "ae43f2f979e997d0c39cb48bf74b2718219ece8471f85dfd489a86ec798813fa",
+      "size": 5565
+    },
+    "persistence-controls/cancellation-baseline.json": {
+      "sha256": "dff1fcfbc221b4f83585b832d5ab6812ae1a67dd942cd23fc17f00c0942a9b06",
+      "size": 1047
+    },
+    "persistence-controls/cancellation-removed-origin.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    "persistence-controls/cancellation-removed-state.json": {
+      "sha256": "c8b9fdf38a61cacef92da3452717311626f7a9262237a82bdbc284df2ae4ac1a",
+      "size": 5566
+    },
+    "persistence-controls/cancellation-removed.json": {
+      "sha256": "551090e299251377e989c10c6c4ba9136ff01e3b1b4667504b5a21dc0895e70c",
+      "size": 152
+    },
+    "persistence-controls/cancellation-restored-origin.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    "persistence-controls/cancellation-restored-state.json": {
+      "sha256": "f679a7820edfa1380fedc078619b25d99b819a1f56455ec2971e7f731d0591ea",
+      "size": 5566
+    },
+    "persistence-controls/cancellation-restored.json": {
+      "sha256": "8e946683b536cf8d7111e522f566e1053130592d753f4b9b24d1d4822a0ccf18",
+      "size": 1047
+    },
+    "persistence-controls/consumed-baseline-origin.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    "persistence-controls/consumed-baseline-state.json": {
+      "sha256": "a684d532396179011fe1b548167139d5e889dd838485a702d78d2fdcca0bd7e4",
+      "size": 5566
+    },
+    "persistence-controls/consumed-baseline.json": {
+      "sha256": "de306b2f2d4fd0e60a79680d10aa053f30c343fca51be4d9ca850c07ffc6b8e1",
+      "size": 1101
+    },
+    "persistence-controls/consumed-removed-origin.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    "persistence-controls/consumed-removed-state.json": {
+      "sha256": "5ff2525cb9120973a99ddbfee582c8221b7907f43ca1c1c7d9d5005b606188e3",
+      "size": 5566
+    },
+    "persistence-controls/consumed-removed.json": {
+      "sha256": "3282e821d4d8a37583a57a9180e996f8c805af7537402152c86b91b6a22d1c1a",
+      "size": 159
+    },
+    "persistence-controls/consumed-restored-origin.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    "persistence-controls/consumed-restored-state.json": {
+      "sha256": "9c2152be763bf1709f4dc290156d73034103d0cf28f75997118c195b5dbc2b80",
+      "size": 5566
+    },
+    "persistence-controls/consumed-restored.json": {
+      "sha256": "635fe804977ed7aab0d98d61db4b37c550b7d9e7e17ef9daea44cf8a698d6bdd",
+      "size": 1101
+    },
+    "persistence-controls/fence-baseline-origin.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    "persistence-controls/fence-baseline-state.json": {
+      "sha256": "2ebe772da22cbb04fc3488f455344945119fe2819f2f85f516c0ed325c25dc97",
+      "size": 5566
+    },
+    "persistence-controls/fence-baseline.json": {
+      "sha256": "755ee23a35b3b069e4190480ba238bf0aa13975d6edb68c287f115b34090aa4c",
+      "size": 841
+    },
+    "persistence-controls/fence-removed-origin.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    "persistence-controls/fence-removed-state.json": {
+      "sha256": "c0423714b91f3957aaccd3f08f0e3409ca96a82871554dcff8fed4e7e2b4e8a8",
+      "size": 5566
+    },
+    "persistence-controls/fence-removed.json": {
+      "sha256": "1a3da4b0cc3c17c1abfb8e87d85cd5fbeba82d7ab99f013c09ac0a0019eb198c",
+      "size": 136
+    },
+    "persistence-controls/fence-restored-origin.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    "persistence-controls/fence-restored-state.json": {
+      "sha256": "7985c375bf901819a30a9da8e286907d791cfc89916315a4e3571cf9d656a4fb",
+      "size": 5566
+    },
+    "persistence-controls/fence-restored.json": {
+      "sha256": "73b59b21cb02d849ef99633aa003f6d70ba633f9caa19712ad197e0b6f74f356",
+      "size": 841
+    }
+  },
+  "launchTimeoutCleanupControl": {
+    "launchTimeoutPropagated": true,
+    "cleanupOfExactOwnedNameAttempted": true,
+    "qualificationRemainsFalse": true,
+    "realDockerUsed": false
+  }
+}

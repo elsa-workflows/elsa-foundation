@@ -1,0 +1,162 @@
+{
+  "candidateSha": "9d6fd212da419ef1d4efd978dc91c138d7776b4e",
+  "scope": "Bounded correctness qualification; no query-saving, latency, or historical-cause claim",
+  "completedUtc": "2026-10-07T20:57:28.9354810+00:00",
+  "build": {
+    "recordSha256": "f2d507d23c6634dcf61805291dff3801f0aaf15a4944636a0dd0441988ce35d2",
+    "logSha256": "77c5afafc4c5559babfc4b84bbda11cc5ab9430808798f9a0bbe854da253db61",
+    "workbenchDllSha256": "098268f4de465cc18e0c68d1ec87cf54307fab382e0e77b2c373ad6445c71a1f",
+    "managedOutputFileCount": 355,
+    "warnings": 96,
+    "errors": 0,
+    "sourceClean": true
+  },
+  "configuration": {
+    "cadence": "Coalesced",
+    "maxSegmentCheckpoints": 50,
+    "coalesceDurableValueReads": true,
+    "bundleSha256": "3e29485d21cb64145389ec415d73f3277617369f0895d25f06d14021219309ef",
+    "postgresVersion": "16.15",
+    "postgresImage": "sha256:ef738a34a8651d11b2bace81c55c7e2187f786b484add6c83070884340074368",
+    "postgresImageId": "sha256:ef738a34a8651d11b2bace81c55c7e2187f786b484add6c83070884340074368"
+  },
+  "fixtureHashes": {
+    "e2e-tests/durability/_DurabilityCommon.ps1": "4f897ac422defe7dfd1ad4f37de0296fe94a6e848ce0f718e2c08c49c4f757d6",
+    "e2e-tests/http/Capture-RuntimeDbPaging2392Reference.ps1": "dd5dcde585b8d9fe5c7a4b4b0ca364eafb0a88058f8111ac60d23186995e3df7",
+    "e2e-tests/_ServerLifecycle.ps1": "2b0e30734d369fc8b685bc360ce023a63ec33dde830da45722308dd21c472994",
+    "e2e-tests/_ElsaCommon.ps1": "16905ef3c7503c33308d596290601c2b94cd8e829220a08ab857d0680f6d469f",
+    "e2e-tests/http/Capture-RuntimeDbRest2386Control.ps1": "2c916c6a79bf8e8645b2bb5171a1c148e1442ba72a675d30bb213ca2287f3ddd"
+  },
+  "scriptHashes": {
+    "runScriptSha256": "e5f7947196ecab34b5c7f4fca23c480e295475db1c5ece199e8f49c41cea3997",
+    "requestScriptSha256": "4136c37a742f397ecb96df634a4b15f7b7a4050640a95b7e1e2c4392d98ff864",
+    "prepareScriptSha256": "446d9937afc1565007be479a0dc3c980883e83a32ed4e75fbd938743e0eb062b",
+    "boundariesScriptSha256": "6fcb2615f0fddd7dc5260a5688b0500d5f98a92f1a7aa172b37807c899a7ee56",
+    "serverLifecycleSha256": "2b0e30734d369fc8b685bc360ce023a63ec33dde830da45722308dd21c472994"
+  },
+  "primary": [
+    {
+      "id": "coalesced-http",
+      "workflowExecutionId": "14AfHq6ePCo",
+      "httpStatus": 200,
+      "responseBodyMatchedExactly": true,
+      "status": "Completed",
+      "incidentCount": 0,
+      "checkpointCadence": "Coalesced",
+      "maxSegmentCheckpoints": 50
+    },
+    {
+      "id": "post-restart-http",
+      "workflowExecutionId": "14AfO2YhWfE",
+      "httpStatus": 200,
+      "responseBodyMatchedExactly": true,
+      "status": "Completed",
+      "incidentCount": 0,
+      "checkpointCadence": "Coalesced",
+      "maxSegmentCheckpoints": 50
+    }
+  ],
+  "rest": {
+    "directReason": "direct run remained nonterminal with status 'Running' during bounded status reads",
+    "directExecutionId": "14AfI2gEIBv",
+    "companionObserved": {
+      "status": "Completed",
+      "incidentCount": 0,
+      "checkpointCadence": "Coalesced",
+      "maxSegmentCheckpoints": 50,
+      "inspectionGranularity": "boundary-level"
+    },
+    "companionExecutionId": "14AfIhtLAZz",
+    "companionHttpStatus": 200,
+    "companionOutput": "Alice Smith",
+    "directHttpStatus": 200,
+    "directIncidentCount": 1,
+    "companionOnlyShortcutUsed": false
+  },
+  "concurrency": {
+    "attempts": 60,
+    "batches": 15,
+    "maxInflight": 4,
+    "http200ExactBodies": 60,
+    "uniqueRequestTraceIds": 60,
+    "uniqueExecutionIds": 60,
+    "completedZeroIncidentDetails": 60,
+    "traceSource": "request traceparent; response headers absent",
+    "independentSqliteJoinReviews": 2,
+    "mappingObservationCounts": [
+      44,
+      48,
+      60
+    ],
+    "extraRequestAttempts": 0,
+    "captureTimeSpanCount18Attempts": [
+      57,
+      58,
+      59,
+      60
+    ],
+    "finalSpanCountForThoseAttempts": 59,
+    "executionIdentityChanged": false,
+    "historical2388CauseResolved": false
+  },
+  "malformed": {
+    "httpStatus": 202,
+    "workflowExecutionId": "14AfMJupwza",
+    "status": "Running",
+    "incidentCount": 1,
+    "failureType": "SchedulerWorkPoisoned",
+    "outcome": "Observed failed-workflow negative control; not a successful workflow"
+  },
+  "durableBoundaries": {
+    "processStarts": 2,
+    "actualRestarts": 1,
+    "sameDatabaseAndConfiguration": true,
+    "bookmarkWorkflowExecutionId": "14AfMVMwsgA",
+    "savedValueResumed": true,
+    "setWaitEchoEachOnce": true,
+    "blockingIncidentPreserved": true,
+    "activeDrainProcessKillExercised": false,
+    "separateRecoveryProof": "integration-verification.json recoveryVerification"
+  },
+  "providerEvidence": {
+    "sourceSha": "312d86713532315b7281357ea367735a7e514e4f",
+    "productionAndProviderTestSourceEqualToLiveCandidate": true,
+    "jobUrl": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/37682838995/job/113003743368",
+    "passed": 185,
+    "failed": 0,
+    "skipped": 0,
+    "logSha256": "ec891e968d3e49002c73aa89d0830cb36959514151bb0b5d7cc3453929664a96"
+  },
+  "cleanup": {
+    "hostRootRemoved": true,
+    "containerRemoved": true,
+    "secretFilesRemoved": true,
+    "completedUtc": "2026-10-07T20:57:30.9301170+00:00",
+    "ownedResourceAbsenceIndependentlyVerified": true
+  },
+  "evidenceHashes": {
+    "metadata.json": "c81bd39b89346bbc8c9e79acacaadfc3c2de3e14613c5ad1ed023f966ab2573f",
+    "c4-trace-attribution.json": "160170ae9166d4eb33f3a3537c2ba81ce169627c59fa61757a7a0f4f8127c4b9",
+    "elsa-diagnostics-r1306.db": "6d26238db867b76bb134f678d2a15ddb97a8fda3bc193ea7d1b651e77e1cf63b",
+    "coalesced-http-detail.json": "025a9541e452c5c0cfe4abe75b4c6c0cdc9741dbb66b28e09f88e820a8f8ad94",
+    "rest-companion-detail.json": "ec4a9da68993f9cfc561a0a79ffca30f940c022fe6dd681d0eb5f94e9916a66a",
+    "bookmark-resumed-same-candidate-restart.json": "8bd831e42a1c55f1b363e8b7a3f77593f76c81119e434ff10b0cd2c5154f6843"
+  },
+  "privateArchive": {
+    "name": "1306-live-final-9d6fd212d.tar.gz",
+    "sha256": "49e521e50bd75407d196cfa5d9aeac9a617241455511ec6c0090c5f865200b9e",
+    "bytes": 3311196,
+    "rawEvidencePublished": false
+  },
+  "remainingDeliveryGates": [
+    "Final PR head hosted checks and review",
+    "Normal merge and resulting-main verification"
+  ],
+  "limitations": [
+    "No primary HTTP/REST SQL-saving or latency measurement",
+    "Historical2388 attribution unresolved",
+    "Live restart at committed bookmark; active interruption uses separate SQLite snapshot proof",
+    "Capture-time span counts may precede final export settlement",
+    "No actual Copilot review or Greptile result claimed"
+  ]
+}

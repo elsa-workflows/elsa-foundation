@@ -1,0 +1,189 @@
+using System.Security.Cryptography;
+using System.Text;
+using Elsa.Http.Core;
+using Elsa.Http.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Http.Contracts;
+using Elsa.Workflows.Runtime.Http.Exceptions;
+using Elsa.Workflows.Runtime.Http.Models;
+using Microsoft.Extensions.Logging;
+
+namespace Elsa.Workflows.Runtime.Http.Services;
+
+/// <summary>
+/// Default <see cref="IHttpEndpointRoutesResolver"/> (extended for mid-flow resume). It unions
+/// two sources of endpoint-relative route templates into the per-shell route table:
+/// <list type="number">
+/// <item>every HTTP-endpoint <b>trigger binding</b> in the durable trigger index (start-capable endpoints), and</item>
+/// <item>every waiting, non-expired HTTP-endpoint <b>bookmark</b> (mid-flow endpoints a running instance is
+/// suspended on).</item>
+/// </list>
+/// Both sources carry the route template on the same <see cref="HttpEndpointRouting.TemplateMetadataKey"/>
+/// metadata key. Entries are deduped by ordinal template plus normalized method, so a template published as a start
+/// trigger and also awaited by a suspended instance produces one route for that method while distinct methods retain
+/// their own authorization disposition. Bindings/bookmarks of another stimulus type, or HTTP entries without a
+/// template metadata value, are ignored. Missing method metadata deliberately remains a compatibility wildcard.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Templates are stored <b>endpoint-relative</b> (exactly as authored/normalized, e.g. <c>orders/{id}</c>) —
+/// never base-path-prefixed. The endpoints base path is a middleware concern
+/// (<c>HttpEndpointMiddleware</c> strips it with segment-bounded matching before consulting the route table),
+/// so prefixing here would both duplicate that concern and couple two independently configurable options.
+/// </para>
+/// <para>
+/// <b>Bookmark expiry.</b> Waiting bookmarks are read through the expiry-aware
+/// <see cref="IGlobalBookmarkStimulusLookup.FindWaitingByTypeAsync"/> so an expired bookmark's template does not
+/// contribute a route — the lookup layer owns expiry filtering (the raw index scan is deliberately unfiltered).
+/// A bookmark whose route was already refreshed away but is not yet consumed simply 404s at dispatch,
+/// which is acceptable and self-heals on the next refresh.
+/// </para>
+/// <para>
+/// <b>Conflicts degrade here, they don't brick (issue #592 item 2).</b> Publish-time
+/// <c>(template, method)</c> uniqueness across <em>trigger bindings</em> is enforced pre-write by
+/// <c>HttpEndpointRoutingUniquenessValidator</c> on the indexer's validation seam, so a healthy store never
+/// contains a cross-definition trigger collision. If one nonetheless appears (written out-of-band, or persisted
+/// before the validator existed), this resolver only <em>warns</em> and resolves the routes anyway — it also runs
+/// at shell startup (<c>UpdateRouteTableStartupTask</c>) and on HTTP-affecting publishes, so throwing would turn
+/// one poisoned entry into a host-wide publish outage and a boot failure. The middleware's request-time 409
+/// ambiguity guard is the serving backstop for the conflicting endpoint itself. The uniqueness check is
+/// <b>trigger-binding-only</b>: a waiting mid-flow bookmark that shares a <c>(template, method)</c> with a
+/// published trigger is legal (it is instance-scoped, not a competing definition), so bookmarks are
+/// deliberately exempt from the collision warning.
+/// </para>
+/// <para>
+/// <b>Fingerprint (#2190).</b> The route set is a function of the stimulus identities of the active HTTP-endpoint
+/// bindings and the waiting, unexpired HTTP-endpoint bookmarks, since an HTTP stimulus hash is the hash of its
+/// <c>(template, method)</c>. <see cref="ResolveRouteSetAsync"/> fingerprints the identities of the rows it projected;
+/// <see cref="ResolveRouteFingerprintAsync"/> fingerprints the identities the stores project in the database, reading no
+/// binding or bookmark content. The two agree exactly when the table holds what the durable index would give now.
+/// Authorization options are not part of an identity, so a change to them alone does not move the fingerprint: it
+/// reaches the inventory metadata on other nodes with the next change to the route set, while enforcement, which reads
+/// the durable claimants on every request, is never stale.
+/// </para>
+/// </remarks>
+public sealed class HttpEndpointRoutesResolver(
+    IWorkflowTriggerBindingStore bindingStore,
+    IGlobalBookmarkStimulusLookup bookmarkStimulusLookup,
+    ILogger<HttpEndpointRoutesResolver> logger) : IHttpEndpointRoutesResolver
+{
+    public async ValueTask<IReadOnlyCollection<HttpRouteData>> ResolveRoutesAsync(CancellationToken cancellationToken = default) =>
+        (await ResolveRouteSetAsync(cancellationToken)).Routes;
+
+    public async ValueTask<HttpEndpointRouteSet> ResolveRouteSetAsync(CancellationToken cancellationToken = default)
+    {
+        // Distinct route-method entries: one endpoint publishes one binding per method (all sharing a template),
+        // a suspended instance holds one bookmark per method (all sharing a template), two workflows may
+        // legitimately register the same template, and a start trigger and a mid-flow bookmark may share one
+        // template. Ordinal template+method dedup keeps each method's security disposition accurate; the ambiguity
+        // guard runs at request time, not here.
+        var candidates = new Dictionary<RouteCandidateKey, RouteCandidate>();
+
+        // (1) Trigger bindings. Two bindings that share a (template, method) hash are legitimate when they belong
+        // to one definition (republish remnants / a duplicate node); a cross-definition collision is warned about
+        // (never thrown — see the class remarks). This uniqueness check applies to trigger bindings only.
+        var claimantsByHash = new Dictionary<string, string>(StringComparer.Ordinal);
+        var bindings = await bindingStore.ListAllByStimulusTypeAsync(HttpEndpointRouting.StimulusType, cancellationToken);
+        foreach (var binding in bindings)
+        {
+            if (claimantsByHash.TryGetValue(binding.StimulusHash, out var owner))
+            {
+                if (!StringComparer.Ordinal.Equals(owner, binding.DefinitionId))
+                    logger.LogWarning(
+                        "The HTTP endpoint '{Endpoint}' is claimed by more than one workflow definition. The publish-time uniqueness validator normally prevents this; requests to this endpoint will be rejected with 409 by the ambiguity guard until one claimant is unpublished.",
+                        EndpointRoutingConflictException.DescribeEndpoint(binding));
+            }
+            else
+            {
+                claimantsByHash[binding.StimulusHash] = binding.DefinitionId;
+            }
+
+            AddTemplate(binding.Metadata, candidates);
+        }
+
+        // (2) Union in the templates of every waiting, non-expired HttpEndpoint bookmark (mid-flow suspensions).
+        // The lookup returns full BookmarkState snapshots incl. Metadata, from which the durable template is read.
+        // Bookmarks are instance-scoped and are NOT run through the cross-definition uniqueness check.
+        var waiting = await bookmarkStimulusLookup.FindWaitingByTypeAsync(
+            new GlobalBookmarkStimulusTypeLookupRequest(HttpEndpointRouting.StimulusType, DateTimeOffset.UtcNow),
+            cancellationToken);
+        foreach (var bookmark in waiting.Matches)
+            AddTemplate(bookmark.Metadata, candidates);
+
+        return new HttpEndpointRouteSet(
+            candidates.Values.Select(candidate => candidate.ToRouteData()).ToArray(),
+            Fingerprint(bindings.Select(binding => binding.StimulusHash).Concat(waiting.Matches.Select(bookmark => bookmark.StimulusHash))));
+    }
+
+    public async ValueTask<string> ResolveRouteFingerprintAsync(CancellationToken cancellationToken = default)
+    {
+        var bindingHashes = await bindingStore.ListActiveStimulusHashesAsync(HttpEndpointRouting.StimulusType, cancellationToken);
+        var bookmarkHashes = await bookmarkStimulusLookup.FindWaitingStimulusHashesByTypeAsync(
+            new GlobalBookmarkStimulusTypeLookupRequest(HttpEndpointRouting.StimulusType, DateTimeOffset.UtcNow),
+            cancellationToken);
+        return Fingerprint(bindingHashes.Concat(bookmarkHashes));
+    }
+
+    // Order-insensitive and length-framed, so neither the order the stores return identities in nor an identity that
+    // contains the separator can make two different sets fingerprint alike.
+    private static string Fingerprint(IEnumerable<string> stimulusHashes)
+    {
+        var framed = new StringBuilder();
+        foreach (var stimulusHash in StimulusHashes.DistinctOrdinal(stimulusHashes).Order(StringComparer.Ordinal))
+            framed.Append(stimulusHash.Length).Append(':').Append(stimulusHash);
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(framed.ToString())));
+    }
+
+    private static void AddTemplate(IReadOnlyDictionary<string, string> metadata, IDictionary<RouteCandidateKey, RouteCandidate> candidates)
+    {
+        if (!metadata.TryGetValue(HttpEndpointRouting.TemplateMetadataKey, out var template) || string.IsNullOrWhiteSpace(template))
+            return;
+
+        var method = metadata.TryGetValue(HttpEndpointRouting.MethodMetadataKey, out var methodValue) && !string.IsNullOrWhiteSpace(methodValue)
+            ? methodValue.Trim().ToUpperInvariant()
+            : null;
+        var key = new RouteCandidateKey(template, method);
+        if (!candidates.TryGetValue(key, out var candidate))
+        {
+            candidate = new RouteCandidate(template, method);
+            candidates.Add(key, candidate);
+        }
+
+        candidate.Add(metadata);
+    }
+
+    private sealed class RouteCandidate(string template, string? method)
+    {
+        private readonly HashSet<string> _policies = new(StringComparer.Ordinal);
+        private bool _authorize;
+
+        public void Add(IReadOnlyDictionary<string, string> metadata)
+        {
+            var authorize = metadata.TryGetValue(HttpEndpointRouting.AuthorizeMetadataKey, out var authorizeValue) &&
+                            bool.TryParse(authorizeValue, out var parsedAuthorize) && parsedAuthorize;
+            _authorize |= authorize;
+            if (authorize && metadata.TryGetValue(HttpEndpointRouting.PolicyMetadataKey, out var policy) && !string.IsNullOrWhiteSpace(policy))
+                _policies.Add(policy.Trim());
+        }
+
+        public HttpRouteData ToRouteData()
+        {
+            var disposition = _authorize
+                ? _policies.Count == 0
+                    ? HttpRouteSecurityDispositionMetadata.AuthenticatedPrincipal("Elsa.Http")
+                    : HttpRouteSecurityDispositionMetadata.NamedPolicies(_policies, "Elsa.Http")
+                : HttpRouteSecurityDispositionMetadata.Public(
+                    "workflow-authored",
+                    "Workflow-authored HTTP endpoint does not require authorization.");
+
+            return new HttpRouteData(template)
+            {
+                Methods = method is null ? [] : [method],
+                Metadata = [disposition]
+            };
+        }
+    }
+
+    private readonly record struct RouteCandidateKey(string Template, string? Method);
+}

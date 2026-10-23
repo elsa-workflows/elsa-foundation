@@ -1,0 +1,190 @@
+using System.Security.Cryptography;
+using System.Text;
+using Elsa.Attention.Core;
+using Elsa.Cluster.Core.Contracts;
+using Elsa.Cluster.Core.Models;
+using Elsa.Modularity.Api.Authorization;
+using Elsa.Modularity.Core.Contracts;
+using Elsa.Modularity.Core.Models;
+
+namespace Elsa.Modularity.Api.Attention;
+
+/// <summary>
+/// Turns the feature catalog's problems into Attention items: a manifest that could not be read (critical), a missing
+/// or disabled dependency (warning), a dormant feature with its reason and the finalization gate's status (info), a
+/// schema family whose writes this host refuses because it cannot read its finalized version (critical), and a schema
+/// family whose completion was withdrawn because a row below it turned up after it was recorded (critical). Everything
+/// comes from items Attention already has a shape for, so its public API does not change.
+/// </summary>
+public sealed class ModularityAttentionContributor(
+    IFeatureManagementService featureManagementService,
+    TimeProvider? timeProvider = null,
+    ISchemaDormancyCheck? dormancy = null) : IAttentionContributor
+{
+    private const int MaximumItems = 5;
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+
+    public AttentionContributorDescriptor Descriptor { get; } = new(
+        "modularity",
+        "Module management",
+        ModuleManagementPermissionKeys.Read);
+
+    public async ValueTask<AttentionContribution> EvaluateAsync(
+        AttentionContributorContext context,
+        CancellationToken cancellationToken = default)
+    {
+        context.Budget.ConsumeDownstreamCall();
+        var catalog = await featureManagementService.GetCatalogAsync(cancellationToken);
+        var byId = catalog.Features.ToDictionary(feature => feature.Id, StringComparer.OrdinalIgnoreCase);
+        var observedAt = _timeProvider.GetUtcNow();
+        // What this host has observed, from memory: no record is read for it.
+        var families = dormancy?.Observe() ?? [];
+
+        var conditions = catalog.Features
+            .Select(feature => Evaluate(feature, byId, observedAt))
+            .Concat(catalog.Features.Select(feature => EvaluateDormancy(feature, observedAt)))
+            .Concat(families.Where(family => family.WritesRefused).Select(family => WritesRefused(family, observedAt)))
+            .Concat(families.Where(family => family.Withdrawal is not null).Select(family => CompletionWithdrawn(family, observedAt)))
+            .Where(condition => condition is not null)
+            .Select(condition => condition!)
+            .OrderBy(item => item.Severity)
+            .ThenBy(item => item.Title, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var items = conditions.Take(MaximumItems).ToArray();
+
+        return AttentionContribution.Ready(items, conditions.Length, conditions.Length > items.Length);
+    }
+
+    private static AttentionItem? Evaluate(
+        FeatureCatalogItem feature,
+        IReadOnlyDictionary<string, FeatureCatalogItem> catalog,
+        DateTimeOffset observedAt)
+    {
+        var hasReadError = !string.IsNullOrWhiteSpace(feature.ReadError);
+        var dependencyIssues = feature.Enabled
+            ? feature.Dependencies
+                .Where(dependency => !dependency.Optional)
+                .Select(dependency => (Dependency: dependency, Found: catalog.GetValueOrDefault(dependency.Id)))
+                .Where(result => result.Found is null || !result.Found.Enabled)
+                .ToArray()
+            : [];
+
+        if (!hasReadError && dependencyIssues.Length == 0)
+            return null;
+
+        var severity = hasReadError ? AttentionSeverity.Critical : AttentionSeverity.Warning;
+        var issueKeys = new List<string>();
+        if (hasReadError)
+            issueKeys.Add("manifest-read-error");
+        issueKeys.AddRange(dependencyIssues.Select(issue =>
+            $"dependency:{issue.Dependency.Id}:{(issue.Found is null ? "missing" : "disabled")}"));
+
+        var summary = BuildSummary(hasReadError, dependencyIssues);
+        return new(
+            $"feature:{feature.Id}",
+            HashGeneration(feature.Id, issueKeys),
+            severity,
+            hasReadError ? $"Module metadata failed for {feature.DisplayName}" : $"Module dependencies are unavailable for {feature.DisplayName}",
+            summary,
+            observedAt,
+            observedAt,
+            issueKeys.Count,
+            new("/modules", "Inspect modules"),
+            [new("module", feature.Id)],
+            AttentionSensitivity.Metadata);
+    }
+
+    /// <summary>
+    /// One informational item for an enabled feature the catalog reports dormant: it names
+    /// the feature and every unmet requirement's reason, which carries the finalization gate's status. It disappears once
+    /// the catalog reports the feature available.
+    /// </summary>
+    private static AttentionItem? EvaluateDormancy(FeatureCatalogItem feature, DateTimeOffset observedAt)
+    {
+        if (!feature.Enabled || feature.Availability is not { IsDormant: true } availability)
+            return null;
+
+        var issueKeys = availability.Reasons.Select(reason => $"dormant:{reason.Family}:{reason.Version}:{reason.Kind}").ToArray();
+        return new(
+            $"feature-dormant:{feature.Id}",
+            HashGeneration(feature.Id, issueKeys),
+            AttentionSeverity.Info,
+            $"{feature.DisplayName} is dormant",
+            string.Join(" ", availability.Reasons.Select(reason => reason.Reason)),
+            observedAt,
+            observedAt,
+            availability.Reasons.Count,
+            new("/modules", "Inspect modules"),
+            [new("module", feature.Id), .. availability.Reasons.Select(reason => new AttentionCorrelation("schema-family", reason.Family)).Distinct()],
+            AttentionSensitivity.Metadata);
+    }
+
+    /// <summary>
+    /// One critical item for a schema family whose finalized version this host cannot read, so every write to it is refused.
+    /// That is not dormancy: this host has to be replaced by one that reads it.
+    /// </summary>
+    private static AttentionItem WritesRefused(SchemaFamilyObservation family, DateTimeOffset observedAt) =>
+        new(
+            $"schema-family-writes-refused:{family.Family}",
+            HashGeneration(family.Family, [$"writes-refused:{family.FinalizedVersion}"]),
+            AttentionSeverity.Critical,
+            $"Writes to schema family {family.Family} are refused",
+            $"Schema family '{family.Family}'{(family.Module is null ? "" : $" of EF module '{family.Module}'")} is finalized at " +
+            $"'{family.FinalizedVersion}', and this host reads only [{string.Join(", ", family.ReadableVersions)}], so it refuses every " +
+            "write to the family rather than rewrite rows it cannot read. Run a version that reads the finalized one, or restore a " +
+            "database backup taken before it was finalized.",
+            observedAt,
+            observedAt,
+            1,
+            new("/modules", "Inspect modules"),
+            [new("schema-family", family.Family)],
+            AttentionSensitivity.Metadata);
+
+    /// <summary>
+    /// One critical item for a schema family whose completion the backfill's audit withdrew: a row below
+    /// the completion version was written after it was recorded, by a writer that had not observed the finalization. It
+    /// names the family, the tables and the counts, from the withdrawal the record carries, so every host reports it, and
+    /// it disappears once a new verification pass records the completion again.
+    /// </summary>
+    private static AttentionItem CompletionWithdrawn(SchemaFamilyObservation family, DateTimeOffset observedAt)
+    {
+        var withdrawal = family.Withdrawal!;
+        return new(
+            $"schema-family-completion-withdrawn:{family.Family}",
+            HashGeneration(family.Family, [$"completion-withdrawn:{withdrawal.Version}:{withdrawal.At:O}"]),
+            AttentionSeverity.Critical,
+            $"Schema family {family.Family} is no longer complete",
+            $"Schema family '{family.Family}'{(family.Module is null ? "" : $" of EF module '{family.Module}'")} was complete at " +
+            $"'{withdrawal.Version}', and {withdrawal.WithdrawnBy} withdrew that at {withdrawal.At:u}: {withdrawal.Reason} Features that need " +
+            "every record of the family at a version stay dormant until the post-finalization backfill proves it again.",
+            withdrawal.At,
+            observedAt,
+            1,
+            new("/modules", "Inspect modules"),
+            [new("schema-family", family.Family)],
+            AttentionSensitivity.Metadata);
+    }
+
+    private static string BuildSummary(
+        bool hasReadError,
+        IReadOnlyCollection<(FeatureDependency Dependency, FeatureCatalogItem? Found)> dependencyIssues)
+    {
+        var parts = new List<string>();
+        if (hasReadError)
+            parts.Add("The module manifest could not be read");
+        if (dependencyIssues.Count > 0)
+        {
+            var missing = dependencyIssues
+                .Select(issue => $"{issue.Dependency.Id} ({(issue.Found is null ? "missing" : "disabled")})");
+            parts.Add($"Required dependencies: {string.Join(", ", missing)}");
+        }
+
+        return string.Join(". ", parts) + ".";
+    }
+
+    private static string HashGeneration(string featureId, IEnumerable<string> issueKeys)
+    {
+        var canonical = featureId + "\n" + string.Join("\n", issueKeys.Order(StringComparer.Ordinal));
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)))[..16];
+    }
+}

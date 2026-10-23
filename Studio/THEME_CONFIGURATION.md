@@ -1,0 +1,276 @@
+# Theme Configuration Guide
+
+This document describes how to configure custom themes and theme defaults for Elsa Studio.
+
+## Configuration Options
+
+Themes are configured through the standard ASP.NET Core Configuration API under the `Themes`
+section. Because the app uses the Configuration API, the same settings can be supplied from any
+registered source — `appsettings.json`, environment variables, command-line arguments, user
+secrets, etc. — with the usual precedence (later providers override earlier ones).
+
+### appsettings.json
+
+Add a `Themes` section to your `appsettings.json`:
+
+```json
+{
+  "Themes": {
+    "ThemesDirectory": null,
+    "ThemesMode": "AddToBuiltIns",
+    "DefaultThemeId": null
+  }
+}
+```
+
+### Environment Variables
+
+The same keys are available as environment variables using the standard double-underscore (`__`)
+separator. These override values from `appsettings.json`:
+
+- `Themes__ThemesDirectory` - Path to custom themes
+- `Themes__ThemesMode` - How to combine with built-ins
+- `Themes__DefaultThemeId` - Default theme ID
+
+## Configuration Properties
+
+### ThemesDirectory
+
+**Type:** `string` (nullable)  
+**Default:** `null` (use built-in themes only)
+
+Path to a directory or file containing custom themes. Supports:
+- **Relative paths**: resolved from the application's content root
+- **Absolute paths**: used as-is
+- **Single JSON file**: e.g., `/themes/themes.json`
+- **Directory**: e.g., `/themes/` loads all `.json` files
+
+### ThemesMode
+
+**Type:** `string`  
+**Default:** `"AddToBuiltIns"`  
+**Values:**
+- `"BuiltInsOnly"` - Use built-in themes (8 built-in themes)
+- `"DirectoryOnly"` - Use only themes from the directory
+- `"AddToBuiltIns"` - Merge directory themes with built-ins (default)
+
+### DefaultThemeId
+
+**Type:** `string` (nullable)  
+**Default:** `null` (first theme in list — Classic)
+
+The theme ID to select on first load. Must match an available theme ID (either built-in or custom). An ID that no longer exists, such as a retired built-in theme, falls back to the first theme in the list.
+
+The eight signature themes offer all four modes (Light, Dark, Dim and High contrast):
+- `"classic"` - The Elsa 3 Studio look: sky-blue primary, pale tinted sidebar, hairline cards (the default)
+- `"meridian"` - Crisp, neutral precision with an indigo accent
+- `"drift"` - Soft, rounded floating surfaces with a jade accent
+- `"schematic"` - Engineering workbench: squared corners, blueprint neutrals, signal orange
+- `"atelier"` - Warm editorial calm: paper neutrals, serif titles, plum accent
+- `"elsa-cloud"` - The Elsa Cloud console look: near-black surfaces, hot-pink accent, mono eyebrow labels
+- `"signal"` - Instrument panel: hairline borders, tight corners, mono legends, one phosphor-lime accent
+- `"dusk"` - Dim-first violet slate with an amber highlight, for long low-light sessions
+
+These eight are the only built-in themes. Their IDs are reserved: a custom or directory theme
+that reuses one (`"classic"`, `"meridian"`, …) is rejected on save and skipped on load, with a
+warning, so the built-in wins. Retired IDs — most recently `"black-glass"`, `"stone"`,
+`"blueprint"` and `"brass-instrument"` — are treated like any unknown ID: a configured or persisted
+default falls back to Classic, a user who had one selected lands on the default theme, and a
+hidden-theme entry for one is dropped. Custom themes duplicated from them earlier keep working
+with their own palette.
+
+## Examples
+
+### Use Only Custom Themes
+
+```json
+{
+  "Themes": {
+    "ThemesDirectory": "custom-themes",
+    "ThemesMode": "DirectoryOnly",
+    "DefaultThemeId": "my-custom-theme"
+  }
+}
+```
+
+With directory structure:
+```
+custom-themes/
+  ├── my-custom-theme.json
+  └── another-theme.json
+```
+
+### Add Custom Themes to Built-Ins
+
+```json
+{
+  "Themes": {
+    "ThemesDirectory": "custom-themes.json",
+    "ThemesMode": "AddToBuiltIns",
+    "DefaultThemeId": null
+  }
+}
+```
+
+### Use Environment Variables
+
+```bash
+export Themes__ThemesDirectory="/opt/themes"
+export Themes__ThemesMode="AddToBuiltIns"
+export Themes__DefaultThemeId="my-theme"
+```
+
+Or in Docker Compose:
+
+```yaml
+environment:
+  Themes__ThemesDirectory: /app/themes
+  Themes__ThemesMode: AddToBuiltIns
+  Themes__DefaultThemeId: dark-mode
+```
+
+## Theme File Format
+
+Custom themes must be JSON files containing a `themes` array with theme definitions:
+
+```json
+{
+  "themes": [
+    {
+      "id": "my-theme",
+      "name": "My Custom Theme",
+      "description": "A custom theme for the studio",
+      "source": "custom",
+      "version": 1,
+      "enabled": true,
+      "published": true,
+      "modes": {
+        "light": {
+          "primary": "#0ea5e9",
+          "primaryForeground": "#ffffff",
+          "secondary": "#e2e8f0",
+          "secondaryForeground": "#0f172a",
+          "accent": "#0369a1",
+          "accentForeground": "#ffffff",
+          "success": "#2e7d32",
+          "successForeground": "#ffffff",
+          "warning": "#ed6c02",
+          "warningForeground": "#ffffff",
+          "danger": "#d32f2f",
+          "dangerForeground": "#ffffff",
+          "background": "#ffffff",
+          "foreground": "#0f172a",
+          "card": "#f8fafc",
+          "cardForeground": "#0f172a",
+          "muted": "#f1f5f9",
+          "mutedForeground": "#475569",
+          "border": "#cbd5e1",
+          "input": "#ffffff",
+          "sidebar": "#f8fafc",
+          "sidebarForeground": "#0f172a",
+          "sidebarActive": "#e0f2fe",
+          "sidebarActiveForeground": "#0c4a6e",
+          "ring": "#0284c7",
+          "chartColors": ["#0ea5e9", "#6366f1", "#2e7d32", "#ed6c02", "#d32f2f"]
+        },
+        "dark": {
+          "primary": "#0ea5e9",
+          "primaryForeground": "#082f49",
+          "secondary": "#334155",
+          "secondaryForeground": "#f8fafc",
+          "accent": "#38bdf8",
+          "accentForeground": "#082f49",
+          "success": "#22c55e",
+          "successForeground": "#052e16",
+          "warning": "#f59e0b",
+          "warningForeground": "#451a03",
+          "danger": "#f87171",
+          "dangerForeground": "#450a0a",
+          "background": "#0f172a",
+          "foreground": "#f8fafc",
+          "card": "#182234",
+          "cardForeground": "#f8fafc",
+          "muted": "#1e293b",
+          "mutedForeground": "#cbd5e1",
+          "border": "#475569",
+          "input": "#1e293b",
+          "sidebar": "#0f172a",
+          "sidebarForeground": "#f8fafc",
+          "sidebarActive": "#1e3a5f",
+          "sidebarActiveForeground": "#e0f2fe",
+          "ring": "#38bdf8",
+          "chartColors": ["#38bdf8", "#818cf8", "#22c55e", "#f59e0b", "#f87171"]
+        }
+      }
+    }
+  ]
+}
+```
+
+### Optional modes, typography and shape
+
+Beyond the required `light` and `dark` palettes, a theme may add:
+
+- `modes.dim` and `modes.highContrast` — the same token set as `light`/`dark`. Users pick a mode
+  from the theme picker; a theme only offers the modes it defines. When a user prefers a mode the
+  current theme lacks, Studio falls back within the same luminance family (Dim and High contrast
+  fall back to Dark).
+- `supportedModes` — optionally narrows the offered modes, e.g. `["light"]` for a light-only
+  theme. Allowed values: `light`, `dark`, `dim`, `high-contrast`; each must have a palette.
+- `typography` — `sans`, `mono` and `display` font stacks (comma-separated family names only).
+  Faces must be installed on the viewer's machine or bundled with Studio; the bundled families are
+  Geist, Geist Mono, Manrope, DM Mono, IBM Plex Sans/Mono, Instrument Sans/Serif and JetBrains Mono.
+- `shape` — `radiusSm`, `radius`, `radiusMd`, `radiusLg`, `radiusXl` as `px` or `rem` lengths.
+- `layout` — `classic` (default), `floating`, `workbench` or `editorial`: how the shell and the
+  workflow designer are arranged. The signature themes use Drift `floating`, Schematic `workbench`
+  and Atelier `editorial`; Classic, Meridian, Elsa Cloud, Signal and Dusk use `classic`. Any theme may choose any layout.
+
+```json
+{
+  "supportedModes": ["light", "dark", "dim", "high-contrast"],
+  "typography": { "sans": "\"Manrope Variable\", system-ui, sans-serif", "mono": "\"DM Mono\", monospace" },
+  "shape": { "radiusSm": "6px", "radius": "10px", "radiusMd": "12px", "radiusLg": "16px", "radiusXl": "20px" },
+  "layout": "floating",
+  "modes": { "light": { }, "dark": { }, "dim": { }, "highContrast": { } }
+}
+```
+
+The easiest start is to duplicate one of the signature themes in the Theme Builder, which copies
+all four modes, the typography, the shape and the layout.
+
+For detailed color format specifications (hex, oklch, rgb, hsl), see the Theme Builder UI in the application, or refer to the theme validation in `ElsaThemeStoreApi.cs`.
+
+## How It Works
+
+1. **Startup**: The `ThemeConfigurationService` is registered and initialized
+2. **Configuration Load**: Binds the `Themes` section via the Configuration API (appsettings.json, ENV vars, etc.)
+3. **Custom Themes Load**: Loads custom themes from the configured directory (if set)
+4. **API Response**: When `/api/_elsa/theme-store` is called:
+   - Custom themes from directory are loaded
+   - Merged with persisted store (from `studio-theme-store.json`)
+   - Configured default theme ID is included in response
+5. **Frontend**: Frontend merges API response with built-in themes from `presets.ts`
+
+## Backward Compatibility
+
+- **No configuration**: Built-in themes only (existing behavior)
+- **Persisted store**: Studio-saved custom themes still work via `studio-theme-store.json`
+- **Built-in themes**: Always available, cannot be deleted (only hidden)
+
+## Troubleshooting
+
+### Themes Not Loading
+
+1. Check logs for warnings about the configured path
+2. Verify file exists and is readable: `ls -la /path/to/themes`
+3. Validate JSON format: `jq . /path/to/themes.json`
+
+### Default Theme Not Applied
+
+1. Verify theme ID matches an available theme exactly (case-sensitive)
+2. Check both environment variables and `appsettings.json`
+3. Environment variables take precedence over the config file (standard Configuration API ordering)
+
+### Persisted Themes Still There
+
+Themes saved in the UI (studio-theme-store.json) are still available alongside directory themes. To replace them, use `ThemesMode: "DirectoryOnly"`.

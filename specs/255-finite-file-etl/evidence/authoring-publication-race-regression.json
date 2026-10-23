@@ -1,0 +1,33 @@
+{
+  "source": "Extensions/Etl/src/Design/Api/EtlDesignOperations.cs",
+  "originalSha256": "3e84fddfd48cabf87846961defd91500a73e04b7105b35c0b253de26c4c40ba3",
+  "mutation": "Remove immutable-version replay recheck before stale-draft conflict",
+  "command": [
+    "dotnet",
+    "test",
+    "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+    "--no-restore",
+    "--filter",
+    "FullyQualifiedName~Identical_publish_replays_when_another_request_commits_between_immutable_and_draft_reads",
+    "--logger",
+    "console;verbosity=normal"
+  ],
+  "mutatedSha256": "96d521be6c7ef84c6ab883e4b70ffeaa53828b4525e046ad6c1a1ca59149334e",
+  "exitCode": 1,
+  "restoredSha256": "3e84fddfd48cabf87846961defd91500a73e04b7105b35c0b253de26c4c40ba3",
+  "positiveBeforeMutation": {
+    "passed": 338,
+    "failed": 0,
+    "skipped": 0
+  },
+  "restoredFullEtl": {
+    "passed": 338,
+    "failed": 0,
+    "skipped": 0
+  },
+  "architecture": {
+    "passed": 581,
+    "failed": 0,
+    "skipped": 0
+  }
+}

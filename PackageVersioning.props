@@ -6,7 +6,7 @@
     PackageRanges.targets, imported right after this file, holds the dependency-range bounding and the nuspec
     range verification (spec 150 FR-007); this file holds version selection and the checks on it.
 
-    It versions the projects under src/, where every package the pipeline publishes lives (FR-005), and leaves every
+    It versions backend projects under Essentials/src, Essentials/apps and Extensions/<capability>/src, where every package the pipeline publishes lives (FR-005), and leaves every
     other project - a test fixture pinning its assembly version, a sample package - exactly as its own properties and
     the SDK's defaults have it. A version comes from one of two places.
 
@@ -37,7 +37,7 @@
     ElsaVerifyPackageVersion fails the build or the pack when something did. One exception stands: without computed
     input, a Version that arrived from outside every build file - a global /p:Version - becomes the package version, so
     a local pack can still name one.
-    packages.yml passes none (spec 150 FR-005), and tests/essentials/Versioning/Publisher/Tests/PackagesWorkflowTests.cs
+    packages.yml passes none (spec 150 FR-005), and Essentials/tests/Versioning/Publisher/Tests/PackagesWorkflowTests.cs
     holds it to that. Every other pack-time effect this file and PackageRanges.targets add - bounded ranges, the nuspec
     range check, the input fingerprint - is gated on computed input alone (ElsaVersionComputationCommit set), so a pack
     with only a global /p:Version produces the ranges and package contents packing always has.
@@ -46,20 +46,24 @@
     (FR-002a): an item whose Include or Update it cannot resolve statically is taken to name every file. So every
     item included below spells a path it can resolve - $(MSBuildProjectDirectory)/ and literals only, no other
     $(...) and no @(...) - and the targets otherwise shape item lists through task outputs and metadata updates.
-    tests/essentials/Versioning/Calculator/Tests/RootBuildFileTests.cs holds that line.
+    Essentials/tests/Versioning/Calculator/Tests/RootBuildFileTests.cs holds that line.
 
-    tests/essentials/Architecture/PackageVersionBuildCheckTests.cs proves the version choice and its checks, and
+    Essentials/tests/Architecture/Tests/PackageVersionBuildCheckTests.cs proves the version choice and its checks, and
     PackageVersioningPackTests.cs beside it proves the packs: bounded ranges, the fingerprint and the source commit.
   -->
   <PropertyGroup>
-    <_ElsaSourceDirectory>$([MSBuild]::EnsureTrailingSlash('$(MSBuildThisFileDirectory)src'))</_ElsaSourceDirectory>
+    <_ElsaRepositoryRoot>$([System.String]::Copy('$(MSBuildThisFileDirectory)').Replace('\', '/'))</_ElsaRepositoryRoot>
+    <_ElsaProjectPath>$([System.String]::Copy('$(MSBuildProjectFullPath)').Replace('\', '/'))</_ElsaProjectPath>
+    <_ElsaProjectRelativePath Condition="$(_ElsaProjectPath.StartsWith('$(_ElsaRepositoryRoot)'))">$([System.String]::Copy('$(_ElsaProjectPath)').Substring($(_ElsaRepositoryRoot.Length)))</_ElsaProjectRelativePath>
+    <_ElsaIsBackendProject Condition="$(_ElsaProjectRelativePath.StartsWith('Essentials/src/')) or $(_ElsaProjectRelativePath.StartsWith('Essentials/apps/'))">true</_ElsaIsBackendProject>
+    <_ElsaIsBackendProject Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('$(_ElsaProjectRelativePath)', '^Extensions/[^/]+/src/')) and !$(_ElsaProjectRelativePath.Contains('/studio/'))">true</_ElsaIsBackendProject>
     <_ElsaLineVersion>$(ElsaVersion)</_ElsaLineVersion>
     <_ElsaLineVersion Condition="'$(ElsaVersionLine)' == 'A'">$(ElsaContractsVersion)</_ElsaLineVersion>
     <_ElsaAssemblyVersion>$([System.Version]::Parse('$(_ElsaLineVersion)').Major).0.0.0</_ElsaAssemblyVersion>
   </PropertyGroup>
 
   <!-- _ElsaPackageVersion is set exactly for the projects this file versions; every target below keys on it. -->
-  <PropertyGroup Condition="$(MSBuildProjectFullPath.StartsWith('$(_ElsaSourceDirectory)')) or '$(ElsaComputedPackageVersion)' != ''">
+  <PropertyGroup Condition="'$(_ElsaIsBackendProject)' == 'true' or '$(ElsaComputedPackageVersion)' != ''">
     <_ElsaPackageVersion>$(_ElsaLineVersion).0-dev</_ElsaPackageVersion>
     <_ElsaPackageVersion Condition="'$(Version)' != ''">$(Version)</_ElsaPackageVersion>
     <_ElsaPackageVersion Condition="'$(ElsaComputedPackageVersion)' != ''">$(ElsaComputedPackageVersion)</_ElsaPackageVersion>
@@ -117,7 +121,7 @@
 
     <Error Code="ELSAPV005"
            Condition="'$(ElsaComputedPackageVersion)' == '' or '$(ElsaInputFingerprint)' == ''"
-           Text="$(MSBuildProjectName) is packable, but the computed versions for $(ElsaVersionComputationCommit) give it no version and input fingerprint. The dependency map committed at that commit does not list it as packable under this project name; regenerate the map (dotnet run --project tools/maps/Elsa.Maps.Generator -- all) and compute again." />
+           Text="$(MSBuildProjectName) is packable, but the computed versions for $(ElsaVersionComputationCommit) give it no version and input fingerprint. The dependency map for that commit, which the calculator derives from its tree (spec 259), does not list it as packable under this project name; check that the project sits under a backend root (Essentials/src, Essentials/apps, or Extensions/&lt;capability&gt;/src) and that its IsPackable and PackageId say what you mean, then compute again." />
 
   </Target>
 

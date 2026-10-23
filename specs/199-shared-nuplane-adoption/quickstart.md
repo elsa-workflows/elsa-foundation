@@ -1,0 +1,18 @@
+# Validation Guide
+
+## Stable adoption checkpoint — 2026-10-11
+
+Foundation PR #2530 merged released Nuplane `0.0.11` and CShells `0.0.30` at `9f09cf8dc78efc611fd99cd90ab1fa70efe709ff`. Root and independent review accepted exact-head CI, fresh-cache stable consumer/actual-host/demo qualification and Ubuntu/Windows backend proof. Resulting-main CI, Maps, Packages and Docker publication passed. See the [release acceptance record](../../docs/reports/modular-hosting-release-plan.md#foundation-stable-adoption-checkpoint--2026-10-11). Pruning and settled-readiness remain separate.
+
+## Historical preparation and final-qualification procedure
+
+The preview pins and isolation instructions below describe the original preparation. Current committed stable pins supersede that overlay. These commands are guidance; accepted results are recorded above and in the linked release record.
+
+1. Read [research](research.md) and [contracts](contracts/host-integration.md). The upstream exception-observability prerequisite is delivered; the historical preview procedure follows.
+2. Keep this canonical branch's `.159`/`.94` pins and locks unchanged. Create an owned disposable qualification worktree/copy for candidate source. In that copy only, use a coherent centrally managed preview overlay for the complete CShells `.171` family including `CShells.Nuplane`, and Nuplane `.99`; regenerate reached locks there. `.172` has archive verification only; use `.171` for runtime qualification unless a later package receives its own runtime proof. Record source/archive/cache/loaded-DLL identity and each command exit. Do not use project-local `VersionOverride` or conditional version paths, and do not copy preview pins/locks to the canonical branch.
+3. Through the normal build-slot wrapper, build/test only touched projects in the qualification copy. Focus Modularity tests on both legacy profiles, actual `IOptionsMonitor` configuration Reload tokens, existing Workbench regression assertions, cold Begin freshness, real host composition identity and autoload ordering. Run the relevant Cluster/EF refusal proof against rebuilt owned hosts when the environment is ready. Check host load before diagnosing timing failures.
+4. Preserve each existing assertion and public test objective when repairing fixtures. Ordinary refresh/reload exceptions must be exercised through the real Nuplane dispatcher/logger, without a test catch shim; verify Error with original exception/correlation, dispatcher Warning/isolation and later-observer execution. Caller cancellation remains a distinct direct-observer test with no failure log.
+5. For final adoption, consume the published stable Nuplane `0.0.11` and full CShells `0.0.30` families. Verify their exact archive identities, then update central pins, reached locks, the Docker reference graph and maps together. Run affected architecture tests and `dotnet run --project tools/maps/Elsa.Maps.Generator -- check`.
+6. Rebuild and run owned real Foundation.Host and Workbench with fresh databases; prove package install/update/removal, Foundation reload-on and Workbench reload-off/opt-in, refusal retention, later eligible recovery and cold build freshness. Run relevant `e2e-tests/` suites against those rebuilt hosts.
+7. Run `bash tools/demo/rehearse.sh` for frozen Acts1/2 acceptance. Inspect its prerequisites and owned temporary resources before execution; preserve command output and failures. This supplements actual-host and backend E2E proof.
+8. Require root/independent source review, appropriate causal mutations, exact-head CI/maps/architecture and resulting-main checks. Copilot is unavailable and Greptile optional under D15. Do not call preparation stable adoption or close #2314 before every final gate is proven.

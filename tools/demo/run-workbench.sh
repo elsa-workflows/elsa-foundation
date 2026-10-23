@@ -80,7 +80,7 @@ if [[ -n "$management_key_env" ]]; then
 fi
 
 built="$demo_workbench_build"
-[[ -f "$built/Elsa.Workbench.dll" ]] || demo_fail "Build the Workbench first: bash tools/demo/prepack.sh (or dotnet build -c Release src/apps/Elsa.Workbench)."
+[[ -f "$built/Elsa.Workbench.dll" ]] || demo_fail "Build the Workbench first: bash tools/demo/prepack.sh (or dotnet build -c Release Essentials/apps/Elsa.Workbench)."
 
 running="$(demo_host_pid "$name")"
 [[ -z "$running" ]] || demo_fail "Host $name is already running (process $running). Stop it (kill $running) before starting it again."

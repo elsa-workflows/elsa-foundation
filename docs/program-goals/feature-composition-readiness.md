@@ -1,6 +1,8 @@
 # Runtime Composition & Configuration
 
-Status: active.
+> **Parked until 2026-11-21** by [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus). No new child work until it is reactivated.
+
+Status: Parked until 2026-11-21 (ADR 0080 D0).
 
 Area: feature composition / shared persistence / developer and operator configuration.
 
@@ -100,7 +102,7 @@ Existing [connection-guard #1902](https://github.com/elsa-workflows/elsa-foundat
 - [#2292](https://github.com/elsa-workflows/elsa-foundation/issues/2292) delivered the bounded explicit intended-environment inspection implementation. Its publication gates and delivery closure are tracked on the issue and Project 51. Implementation [PR #2296](https://github.com/elsa-workflows/elsa-foundation/pull/2296) merged normally as `6de16bc7d4fa6be41e97706e519bace4df971f57`, with a tree identical to reviewed `f529a5029`. All 46 Spec189 tasks now have executed evidence in the [final delivery audit](../../specs/189-explicit-environment-inputs/implementation-evidence.md#final-delivery-audit-t046): the final local actor class passed33, including the public parent-alias journey; original6de CI failed in the separately tracked SQLite native-handle incident and its Docker run was cancelled; stale95d Docker refused source drift. Descendant integration main `4ec6b7610bd547aaf77446f20414a0c744d91dba` passed CI, Maps, Solution filters, Packages, Code Quality and Docker with verified source/package identity. Fresh hosted CLI1,074, Planning118, migrations495, architecture634, native database acceptance15 and Workbench37 passed with zero failed/skipped in those assemblies. The EF assembly passed700 with one existing stress skip in both full/core-only jobs; no causal SQLite repair is claimed. Final Copilot had no findings, root/independent review passed and all handled threads have replies. Historical failures, mutation controls, source identities and proof limits remain preserved. This is intended-input inspection, not candidate-active attestation. Builder study #2064 still needs six real participants; Authoring API scope and portable unknown-setting export await owner decisions, and no dependency-satisfied Ready successor was found at that earlier queue checkpoint; the current successor is recorded below.
 - Keep the supported Runtime/Design/Publishing primary target and two-store diagnostics override as the bounded persistence baseline; other layouts require separate evidence.
 - Use the Feature Composition Explorer before generator implementation; leave unknown, disputed, or inferred activations/settings pending review.
-- Before using generated maps as strong evidence, establish freshness with `dotnet run --project tools/maps/Elsa.Maps.Generator -- check`. If it is red or you cannot run it, refresh the relevant map first and review generated findings before continuing. See the [maps index](../maps/README.md#freshness).
+- Before using generated maps as strong evidence, generate them from the commit you are reasoning about (`dotnet run --project tools/maps/Elsa.Maps.Generator -- all`) or read the `generated-maps` branch, whose commits name the main commit they describe, and review the generated findings before continuing. See the [maps index](../maps/README.md#freshness).
 
 ## Drift / Review Notes
 

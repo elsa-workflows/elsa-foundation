@@ -1,0 +1,11 @@
+{
+  "allSevenAttemptsRetained": true,
+  "sourceClean": true,
+  "configurationHashesVerified": true,
+  "protocolDefaultsVerified": true,
+  "loadChecksVerified": true,
+  "allCounterReceiptsVerified": true,
+  "protectedEnvPermissionsVerified": true,
+  "publishedFilesScannedForProtectedValuesAndConnectionStrings": true,
+  "allServerStdoutAndStderrLogsScannedForProtectedValuesAndConnectionStrings": true
+}

@@ -32,6 +32,9 @@ string[] repairOptions = ["--ref", "--reason", "--actor", "--package-id", "--ver
 try
 {
     var command = args.FirstOrDefault();
+    if (command == "recover-exact20")
+        return await RunExact20RecoveryAsync(args.Skip(1).ToArray());
+
     var options = Options(args.Skip(1).ToArray(), command switch
     {
         "plan" => planOptions,
@@ -146,3 +149,73 @@ static ForcedAdvance? Forced(string ids, string reason) =>
     ids.Length == 0 && reason.Length == 0 ? null
     : ids.Length == 0 || reason.Length == 0 ? throw new ArgumentException("--force-advance and --force-reason go together: the computation records why each named package advances.")
     : ForcedAdvance.Parse(ids, reason);
+
+static async Task<int> RunExact20RecoveryAsync(string[] arguments)
+{
+    const string usage = "Usage: recover-exact20 [--execute true --confirm <incident confirmation> --approval-comment-id <positive id>]";
+    var options = Options(arguments, ["--execute", "--confirm", "--approval-comment-id", "--summary"]);
+    var execute = (options.GetValueOrDefault("--execute") ?? "false") switch
+    {
+        "true" => true,
+        "false" => false,
+        var value => throw new ArgumentException($"--execute must be true or false, not '{value}'. {usage}")
+    };
+    if (!execute && (options.ContainsKey("--confirm") || options.ContainsKey("--approval-comment-id")))
+        throw new ArgumentException($"--confirm and --approval-comment-id require --execute true. {usage}");
+
+    long? approvalCommentId = null;
+    if (options.GetValueOrDefault("--approval-comment-id") is { Length: > 0 } idText)
+    {
+        if (!long.TryParse(idText, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var parsed) || parsed <= 0)
+            throw new ArgumentException("--approval-comment-id must be a positive integer.");
+        approvalCommentId = parsed;
+    }
+
+    var repository = Directory.GetCurrentDirectory();
+    var environment = Exact20Environment();
+    var runOptions = new Exact20RunOptions(
+        repository,
+        execute,
+        options.GetValueOrDefault("--confirm"),
+        approvalCommentId,
+        environment,
+        options.GetValueOrDefault("--summary") ?? environment.GetValueOrDefault("GITHUB_STEP_SUMMARY"));
+
+    // This validates the true manual-main-run context before the process reads FEEDZ_API_KEY.
+    if (execute)
+        Exact20RecoveryCommand.ValidateExecutionInvocationForCli(runOptions);
+
+    var githubToken = Environment.GetEnvironmentVariable("GH_TOKEN") is { Length: > 0 } token
+        ? token
+        : throw new InvalidOperationException("GH_TOKEN must be provided for the fixed GitHub GET requests.");
+    using var githubHttp = Exact20GitHub.CreateHttpClient();
+    using var feedHttp = new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromMinutes(2) };
+    var git = new Exact20LocalGit(repository);
+    var serviceIndex = new Uri(Exact20RecoveryPins.FeedIndex);
+    var readFeed = new NuGetFeed(feedHttp, serviceIndex, string.Empty, requireFeedzResourceHost: true, suppressResponseBodies: true);
+    var command = new Exact20RecoveryCommand(
+        Exact20RecoveryPins.Incident,
+        new Exact20GitHub(githubHttp, githubToken),
+        new Exact20Feed(readFeed, () =>
+        {
+            var key = Environment.GetEnvironmentVariable(Exact20RecoveryPins.FeedKeyName);
+            if (string.IsNullOrEmpty(key))
+                throw new InvalidOperationException("FEEDZ_API_KEY is required only after the complete exact20 execution preflight succeeds.");
+            return new NuGetFeed(feedHttp, serviceIndex, key, requireFeedzResourceHost: true, suppressResponseBodies: true);
+        }),
+        new GitPublishState(repository),
+        git,
+        Console.Out);
+    var report = await command.RunAsync(runOptions);
+    return report.Succeeded ? 0 : 1;
+}
+
+static IReadOnlyDictionary<string, string?> Exact20Environment()
+{
+    string[] names = [
+        "GITHUB_ACTIONS", "GITHUB_EVENT_NAME", "GITHUB_REF", "GITHUB_WORKFLOW", "GITHUB_JOB",
+        "GITHUB_WORKFLOW_REF", "GITHUB_WORKFLOW_SHA", "GITHUB_REPOSITORY", "GITHUB_RUN_ATTEMPT",
+        "GITHUB_RUN_ID", "GITHUB_SHA", "GITHUB_EVENT_PATH", "GITHUB_STEP_SUMMARY"
+    ];
+    return names.ToDictionary(name => name, Environment.GetEnvironmentVariable, StringComparer.Ordinal);
+}

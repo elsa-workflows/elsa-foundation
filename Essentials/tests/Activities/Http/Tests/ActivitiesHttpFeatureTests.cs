@@ -1,0 +1,162 @@
+using CShells;
+using CShells.Features;
+using Elsa.Activities.Http.Activities;
+using Elsa.Activities.Http.Constants;
+using Elsa.Activities.Http.Middleware;
+using Elsa.Activities.Testing;
+using Elsa.Http.Core.Contracts;
+using Elsa.Http.Core.Options;
+using Elsa.Activities.Http.Options;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Http.Contracts;
+using Elsa.Workflows.Runtime.Http.Tasks;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Xunit;
+
+namespace Elsa.Activities.Http.Tests;
+
+/// <summary>
+/// Feature-registration coverage for <see cref="ActivitiesHttpFeature"/>. The HTTP
+/// activities are transiently activated from their compiled CLR contracts, so the feature registers no per-type
+/// activity instances; it does own the outbound transport (the named client), contributes the
+/// <see cref="HttpEndpoint"/> start-trigger's stimulus provider on the W7 seam, and registers the inbound
+/// request middleware.
+/// </summary>
+public sealed class ActivitiesHttpFeatureTests
+{
+    [Fact]
+    public void ConfigureServices_AppliesTheFeatureRequestSettingsToEndpointMiddlewareOptions()
+    {
+        var services = new ServiceCollection();
+
+        new ActivitiesHttpFeature { BasePath = "/workflows", SyncRequestTimeout = TimeSpan.FromSeconds(5) }.ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        Assert.Equal("/workflows", provider.GetRequiredService<IOptions<HttpEndpointOptions>>().Value.BasePath);
+        Assert.Equal(TimeSpan.FromSeconds(5), provider.GetRequiredService<IOptions<HttpEndpointOptions>>().Value.SyncRequestTimeout);
+        Assert.Equal("/workflows", provider.GetRequiredService<IOptions<HttpRoutePublicationOptions>>().Value.BasePath);
+    }
+
+    [Fact]
+    public void ConfiguredClient_UsesTheWellKnownClientName()
+    {
+        var services = new ServiceCollection();
+        new ActivitiesHttpFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        var client = provider.GetRequiredService<IHttpClientFactory>().CreateClient(HttpActivityConstants.HttpClientName);
+
+        // The activity disables the ambient client timeout and enforces its own via a linked token source.
+        Assert.Equal(System.Threading.Timeout.InfiniteTimeSpan, client.Timeout);
+    }
+
+    [Fact]
+    public async Task MountsTheEndpointMiddleware_ThroughTheCShellsMiddlewareSeam()
+    {
+        // Enabling the feature is all a host needs — the feature itself is the
+        // IMiddlewareShellFeature that mounts HttpEndpointMiddleware into the shell pipeline. Proven
+        // behaviorally: a request under the endpoints base path is answered by the mounted middleware
+        // (404: no matching trigger) instead of reaching the terminal sentinel.
+        var feature = new ActivitiesHttpFeature();
+        var services = new ServiceCollection();
+        feature.ConfigureServices(services);
+        services.AddScoped<IStimulusRouter, RecordingStimulusRouter>();
+        // The middleware's route-table/matcher/binding-store dependencies are contributed in production by the
+        // features ActivitiesHttpFeature.DependsOn ("Http" provides IRouteTable/IRouteMatcher; "WorkflowsRuntime-
+        // Triggers" provides IWorkflowTriggerBindingStore). This bare container stands in for that platform
+        // guarantee: the endpoint template is seeded so a request under the base path resolves and reaches
+        // dispatch, where the no-start router yields 404 (proving the mounted middleware, not the sentinel,
+        // answered).
+        services.AddSingleton<IRouteTable>(new FakeRouteTable("orders/webhook"));
+        services.AddSingleton<IRouteMatcher, TestRouteMatcher>();
+        services.AddSingleton<IWorkflowTriggerBindingStore, Elsa.Workflows.Runtime.Services.Triggers.InMemoryWorkflowTriggerBindingStore>();
+        services.AddSingleton<ITestRunTargetStore, UnusedTestRunTargetStore>();
+        services.AddSingleton<IWorkflowTestScopeStore, UnusedTestScopeStore>();
+        services.AddSingleton<ITestRunTargetDispatcher, UnusedTestRunTargetDispatcher>();
+        services.AddSingleton<IWorkflowExecutionPartitionAccessor>(new TestPartitionAccessor());
+        services.AddSingleton(TimeProvider.System);
+        // The middleware also resolves waiting-bookmark options for resume-only matches via the
+        // cross-execution lookup — contributed in production by WorkflowsRuntimeTriggers (in ActivitiesHttp's
+        // DependsOn closure); the bare container stands in for that guarantee with an empty bookmark store.
+        services.AddSingleton<IBookmarkStimulusIndex, Elsa.Workflows.Runtime.Services.Bookmarks.InMemoryBookmarkStateStore>();
+        services.AddSingleton<IGlobalBookmarkStimulusLookup, Elsa.Workflows.Runtime.Services.Bookmarks.GlobalBookmarkStimulusLookup>();
+        // CShells guarantees an IMiddlewareFactory in every shell container; this bare container stands in for one.
+        services.AddSingleton<Microsoft.AspNetCore.Http.IMiddlewareFactory, Microsoft.AspNetCore.Http.MiddlewareFactory>();
+        var provider = services.BuildServiceProvider();
+        await using var _ = provider;
+
+        var app = new Microsoft.AspNetCore.Builder.ApplicationBuilder(provider);
+        ((CShells.AspNetCore.Features.IMiddlewareShellFeature)feature).UseMiddleware(app, environment: null);
+        var sentinelReached = false;
+        app.Run(_ =>
+        {
+            sentinelReached = true;
+            return Task.CompletedTask;
+        });
+        var pipeline = app.Build();
+
+        await using var scope = provider.CreateAsyncScope();
+        var context = new Microsoft.AspNetCore.Http.DefaultHttpContext { RequestServices = scope.ServiceProvider };
+        context.Request.Path = "/workflows/http/orders/webhook";
+        context.Request.Method = "GET";
+        await pipeline(context);
+
+        Assert.False(sentinelReached);
+        Assert.Equal(Microsoft.AspNetCore.Http.StatusCodes.Status404NotFound, context.Response.StatusCode);
+    }
+
+    [Fact]
+    public void DeclaresExpectedShellFeatureMetadata()
+    {
+        var attribute = Assert.Single(
+            typeof(ActivitiesHttpFeature).GetCustomAttributes(typeof(ShellFeatureAttribute), inherit: false)
+                .Cast<ShellFeatureAttribute>());
+
+        Assert.Equal("ActivitiesHttp", attribute.Name);
+    }
+
+    [Fact]
+    public void DependsOn_IncludesWorkflowsRuntimeHttp_SoTheRouteTablePopulatorsAlwaysCompose()
+    {
+        // Contract pin for B2: enabling ActivitiesHttp alone (DependsOn only "Http") left the route table
+        // unpopulated — WorkflowsRuntimeHttp contributes the populators (UpdateRouteTableStartupTask,
+        // RouteTableTriggerIndexObserver, IHttpEndpointRoutesResolver). The DependsOn closure must include it.
+        var attribute = Assert.Single(
+            typeof(ActivitiesHttpFeature).GetCustomAttributes(typeof(ShellFeatureAttribute), inherit: false)
+                .Cast<ShellFeatureAttribute>());
+
+        Assert.Contains("WorkflowsRuntimeHttp", attribute.DependsOn.Cast<object>().Select(d => d.ToString()));
+    }
+
+    private sealed class UnusedTestRunTargetStore : ITestRunTargetStore
+    {
+        public ValueTask<TestRunTarget> SaveAsync(TestRunTarget target, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<TestRunTarget?> FindAsync(string testRunId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<TestRunTargetAdmission> BeginDispatchAsync(string testRunId, string stimulusDigest, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<TestRunTarget?> CompleteDispatchAsync(string testRunId, TestRunTargetDispatchResult result, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<TestRunTarget?> MarkStoppedAsync(string testRunId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<TestRunTarget?> RemoveAsync(string testRunId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class UnusedTestScopeStore : IWorkflowTestScopeStore
+    {
+        public ValueTask<WorkflowTestScopeRecord> CreateAsync(WorkflowTestScope scope, DateTimeOffset createdAt, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<WorkflowTestScopeRecord?> FindAsync(string scopeId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<WorkflowTestScopeCloseResult> CloseAsync(WorkflowTestScopeCloseRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<WorkflowTestScopeRecord> CompleteAsync(string scopeId, DateTimeOffset completedAt, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<WorkflowTestScopePage> QueryAsync(WorkflowTestScopePageQuery query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class UnusedTestRunTargetDispatcher : ITestRunTargetDispatcher
+    {
+        public ValueTask<TestRunTargetDispatchResult> DispatchAsync(string testRunId, System.Text.Json.JsonElement? stimulusInput, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class TestPartitionAccessor : IWorkflowExecutionPartitionAccessor
+    {
+        public WorkflowExecutionPartition Current { get; } = new("test-partition");
+    }
+}

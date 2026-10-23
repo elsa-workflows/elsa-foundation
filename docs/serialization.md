@@ -1,15 +1,24 @@
 # Serialization rule
 
-> All **domain-payload** JSON serialization and deserialization goes through `IPayloadSerializer`
-> (`Elsa.Serialization.Core`). Do not hand-roll `System.Text.Json.JsonSerializer` / `JsonDocument`
-> for data that another component reads.
->
-> **Knowledge role:** focused reference. Link here from gates, specs, and skills instead of
-> restating the rule.
+**The rule:** any JSON that another component will read (a *domain payload*) is written and read through `IPayloadSerializer`, from `Elsa.Serialization.Core`. Do not hand-roll `System.Text.Json.JsonSerializer` or `JsonDocument` for such data.
 
-## Why
+```csharp
+// Do: inject the shared serializer
+public sealed class MyStore(IPayloadSerializer serializer)
+{
+    string Save(MyState state) => serializer.Serialize(state);
+    MyState Load(string json) => serializer.Deserialize<MyState>(json);
+}
 
-`IPayloadSerializer` ([`JsonPayloadSerializer`](../src/essentials/Serialization/SystemText/Services/JsonPayloadSerializer.cs))
+// Don't: raw defaults use different naming and converters, so the round trip silently breaks
+var json = JsonSerializer.Serialize(state);
+```
+
+Link to this page from gates, specs and skills instead of restating the rule.
+
+## Why it matters
+
+`IPayloadSerializer` ([`JsonPayloadSerializer`](../Essentials/src/Serialization/SystemText/Services/JsonPayloadSerializer.cs))
 is the single, configured contract for domain payloads: it applies the agreed naming policy
 (camelCase, case-insensitive on read) and the registry of converters contributed at startup. When one
 component serializes with it and another deserializes with raw `JsonSerializer` defaults, the round-trip
@@ -29,7 +38,9 @@ Anything persisted or handed across a component boundary as JSON:
 Inject `IPayloadSerializer` and use `Serialize` / `SerializeToElement` / `Deserialize<T>` rather than
 touching `JsonSerializer` directly.
 
-**Type identity is alias-based, everywhere.** A workflow Variable/Input/Output persists its type as a
+## Types are stored by alias
+
+Type identity is alias-based, everywhere. A workflow Variable/Input/Output persists its type as a
 `TypeReference { Alias, CollectionKind }` (plain data, serialized natively); the compiled-Type path
 (`TypeJsonConverter`) is alias-only too; and a CLR activity's construction descriptor is a
 `ClrActivityDescriptor { TypeAlias }`. Every alias resolves to a CLR type via `IWellKnownTypeRegistry`
@@ -38,7 +49,7 @@ under the shared `TypeAliasConvention` (a reserved bare alias for BCL primitives
 `TypeInformation` (namespace/assembly/version) has been removed, so a package bump never breaks
 resolution or construction.
 
-## Sanctioned exceptions
+## Approved exceptions
 
 These deliberately do **not** use `IPayloadSerializer`, because the JSON never crosses a domain
 boundary or the use needs options the payload serializer can't provide:
@@ -59,11 +70,11 @@ boundary or the use needs options the payload serializer can't provide:
   startup-contributed converter registry of `IPayloadSerializer` would itself be an unstamped format
   change — the exact class of drift the module exists to eliminate.
 - **The reconciliation content hasher**
-  ([`DefaultActivityDefinitionHasher`](../src/essentials/Activities/Design/Persistence/Core/Services/DefaultActivityDefinitionHasher.cs))
+  ([`DefaultActivityDefinitionHasher`](../Essentials/src/Activities/Design/Persistence/Core/Services/DefaultActivityDefinitionHasher.cs))
   — it needs a canonical, sorted-key serialization that `IPayloadSerializer` does not produce, and only
   the SHA-256 of that JSON is ever persisted (the JSON itself is never read back).
 
-## Schema evolution (Runtime EF Core module)
+## Changing the format of saved runtime state
 
 Runtime state (bookmarks, executables, execution/scheduler/operational/control-plane/incident/durable-value
 state, checkpoint commits, the post-commit outbox, the durable scheduler work queue, workflow trigger
@@ -71,7 +82,7 @@ bindings) must be able to evolve without silently breaking already-suspended wor
 
 - **EF Core migrations are the mechanism.** Each module owns its own migrations set and its own
   `__EFMigrationsHistory_*` table, applied or validated on shell activation according to the module's
-  `EfMigratePolicy`. See [`src/essentials/Persistence/EntityFramework/README.md`](../src/essentials/Persistence/EntityFramework/README.md)
+  `EfMigratePolicy`. See [`Essentials/src/Persistence/EntityFramework/README.md`](../Essentials/src/Persistence/EntityFramework/README.md)
   for the shared policy.
 - **Loud enforcement on read.** A pending model change, a missing migration, or a provider mismatch fails
   shell activation rather than serving a partially readable store.
@@ -90,24 +101,23 @@ bindings) must be able to evolve without silently breaking already-suspended wor
   below a gap included, is `EfSchemaVersionSkewException`; an upcaster that fails on a readable row, or returns other
   columns than it received, is corruption. A write stamps the current version on content it writes in the current format, so a
   row moves forward the next time it is written; a read never rewrites anything. A chain with a gap, a duplicate, a
-  branch or a cycle, or one that does not end at the current version, fails the build
-  (`EfSchemaFamilyChainDeclarationGuardTests`) and the module's registration at startup. The two design contexts whose
+  branch or a cycle, or one that does not end at the current version, fails the module's registration at startup
+  (the build-time check is pending #2606). The two design contexts whose
   content EF deserializes in value converters read their current version alone and declare no chain.
 - **A family declares which of its columns are content.** Beside `[EfSchemaFamily]`, `[EfSchemaContent(family,
   typeof(Entity), columns...)]` names the columns a read upcasts before it deserializes them and a write that changes
   them restamps; `[EfSchemaIntegrity(family, typeof(Entity), column, reason)]` names a document column compared as the
   bytes it was stored with, never upcast, and records why. Every document column of a stamped table is one or the other
-  (`EfSchemaContentDeclarationTests`, against every module's model on every provider), and the guards read the
-  declaration: every read of a content column goes through the chain or deserializes nothing
-  (`EfSchemaFamilyContentReadGuardTests`), and every write that changes one, bulk updates included, restamps the row
-  (`EfSchemaFamilyRestampGuardTests`). A column that restates
+  (`EfSchemaContentDeclarationTests`, against every module's model on every provider). Every read of a content column
+  goes through the chain or deserializes nothing, and every write that changes one, bulk updates included, restamps
+  the row; both hold by review until #2606 restores compiled checks. A column that restates
   part of a row's content and is compared with it, such as a bookmark's payload or a checkpoint marker's id sets, is
   content, so both sides of the comparison are in one format.
 - **A golden-fixture gate freezes the wire format for the Distributed leaf only.** The
   `Elsa.Workflows.Runtime.Distributed.Tests` suite re-serializes a canonical instance of the placement and
   transport payloads and compares each semantically against a committed `Fixtures/v1/*.json` expectation,
   so a field add/rename/remove/retype on those two payloads cannot land without an explicit, versioned
-  decision (see [`GoldenFixtureTestSupport`](../tests/essentials/Workflows/Runtime/Distributed/Tests/GoldenFixtureTestSupport.cs)).
+  decision (see [`GoldenFixtureTestSupport`](../Essentials/tests/Workflows/Runtime/Distributed/Tests/GoldenFixtureTestSupport.cs)).
   The rest of the Runtime EF Core module (bookmarks, executables, execution/scheduler/operational/
   control-plane/incident/durable-value state, checkpoint commits, the post-commit outbox, the durable
   scheduler work queue, workflow trigger bindings) has no such fixture today; its state-record shapes are
@@ -136,20 +146,24 @@ From 4.0 on, a change to what a family stores is a new version of that family ([
 4. Commit the upcaster's fixture pair under `Fixtures/SchemaUpcasters/<family>/<from>-to-<to>/` in the module's
    test project - one row per table, `<table>.source.json` and `<table>.expected.json`, each a JSON object of the row's
    content columns, the table named by its entity type - record it in
-   `tests/essentials/Architecture/Baselines/schema-upcaster-fixtures.sha256`, and prove the
+   `Essentials/tests/Architecture/Tests/Baselines/schema-upcaster-fixtures.sha256`, and prove the
    upcast, the old-format round trip and the store's read of the source fixture (FR-022) with a test class deriving
    directly from `EfSchemaUpcasterProof<TUpcaster, TValue>(family, store)`, compiled in from
    `EfSchemaUpcasterFixtureSupport.cs`. The base class holds all three proofs; the module supplies only the store's
-   half, as `SyntheticOrders.cs` does for the synthetic family. The build fails for an upcaster without a pair or
-   without such a class, for a committed pair no such class proves, and for a recorded fixture that is edited or
-   deleted.
+   half, as `SyntheticOrders.cs` does for the synthetic family. Every upcaster needs a pair and such a class, every
+   committed pair needs a class that proves it, and a recorded fixture is never edited or deleted; these hold by
+   review until #2606 restores a compiled check.
 5. When the upcaster reaches a column the stores edit in place, as Identity's coordinators edit a user's registries,
    the write upgrades the whole row first, upcasting every content column and restamping it, so a stamped row is never
-   partly in an older format (FR-014); `EfSchemaFamilyRestampGuardTests` fails an in-place content write that does
-   not restamp its row, directly or through a helper that does, and fails a restamp that does not assign every
-   declared content column of its row from upcast values (#2144).
+   partly in an older format (FR-014). An in-place content write restamps its row, directly or through a helper that
+   does, and a restamp assigns every declared content column of its row from upcast values (#2144); both hold by
+   review until #2606 restores a compiled check.
 
-## Cross-execution stimulus routing (W7, E3-1 / E3-5)
+## Related runtime formats
+
+The sections below are not about the serializer rule itself. They document persisted runtime formats that must evolve under the same rules, and are kept here until they move to the runtime docs.
+
+### Stimulus routing indexes
 
 The trigger + stimulus-routing feature (`WorkflowsRuntimeTriggersFeature`) adds one new persisted document
 kind and two cross-cutting (across-execution / across-artifact) indexes. Both route through the same bridge
@@ -165,7 +179,7 @@ serializer and versioning as every other runtime kind.
   republish. Writing an unroutable published trigger (a trigger node whose stimulus
   cannot be derived) **fails the publish** rather than persisting a trigger that can never fire.
 - **New `by-stimulus` index on the existing `bookmarkState` kind.** Added additively so a single stimulus
-  can resume *waiting instances across executions* (E3-5 fan-in), not only within one `workflowExecutionId`.
+  can resume *waiting instances across executions* (fan-in), not only within one `workflowExecutionId`.
   No version bump or upcaster is needed: the state record shape is unchanged; only a new index was declared.
 - **New `by-parent-activity-execution` index on the existing `activityExecutionState` kind (#514 / #413 item 3).**
   Added additively so a composite (e.g. a `Parallel` fork/join) can read only the activity-execution states
@@ -199,6 +213,13 @@ start sends a new key. And a recurring-trigger occurrence starts its workflow at
 occurrence fires. The recurring-trigger pump relies on that: it fires each occurrence at least once, again after a
 crash or a failed start (#2198), and the repeats converge on the first start.
 
+A start that runtime admission sheds at capacity is the exception to "dispatched means started". It writes nothing
+and leaves its key unconsumed, so the router reports it `Shed`, never `Started`, and a retry under the same key is a
+fresh start (#2548). Each caller retries it instead of acknowledging it: the HTTP endpoint middleware and
+`POST runtime/workflows/stimuli` answer `429` with `Retry-After` when every matched start was shed and nothing
+resumed, the recurring-trigger pump releases the occurrence with backoff, and a `PublishEvent` delivery fails as
+transient so the outbox redelivers it.
+
 The keyed start identity is a frozen, persisted format with two versions, side by side. Its ids are
 `wfexec:start:{version}:{digest}`, `command:start:{version}:{digest}` and `envelope:start:{version}:{digest}`; the
 digest is the lowercase hex SHA-256 of the values `"elsa.workflow-start"`, the version and the start key (each
@@ -223,11 +244,11 @@ A redelivery is recognized only by deriving the same id again, so any change to 
 key, silently starts every redelivered occurrence a second time. Change one by adding a new version beside `v1` and
 `v2`, never by editing either; `KeyedWorkflowStartIdentityTests` pins the literals of both and of the occurrence key.
 
-### Published executables are durable (DS-2, W17)
+### Published executables are saved durably
 
 A published workflow compiles to a `WorkflowExecutable` artifact that persists through the same Runtime
 EF Core module as every other runtime state, written by
-[`EfWorkflowExecutableStore`](../src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs)
+[`EfWorkflowExecutableStore`](../Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs)
 over the `IWorkflowExecutableStore` seam. Its payload carries the compiled workflow-scope variable
 declarations (`workflowVariables`, #972), the pinned activity contract, and the explicit input-nullability
 data required by typed value flow. The
@@ -239,3 +260,9 @@ index in the same publish flow, so a published artifact **and** its start-trigge
 fresh service provider. There is intentionally **no**
 Publishing-owned executable store or manifest — a second store writing the same kind under different options
 would be a wire-level format divergence, exactly the hazard the single owning module exists to prevent.
+
+## Background
+
+Programme codes previously in headings: the stimulus routing indexes were roadmap unit **W7** (findings **E3-1** and **E3-5**, the cross-execution fan-in); durable published executables were **DS-2** / **W17**.
+
+Related: [Recovering after a crash](runtime-durable-resumption.md) · [Elsa glossary](glossary/elsa.md)

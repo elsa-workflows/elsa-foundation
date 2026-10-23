@@ -1,0 +1,407 @@
+import { describeActivationSource, type Publication, type PublicationIntent, type PublicationPolicy, type PublicationPreflight, type PublicationSlot } from "../api/publishing";
+import type { PromotionPreflightAssessment } from "../api/workflowDesign";
+import type { ActivityCatalogItem, ActivityNode, WorkflowDefinitionDetails, WorkflowDefinitionState, WorkflowDefinitionVersionDetails, WorkflowDraft } from "../workflowTypes";
+import { getChildSlots, readStructureDesignFacet, type ActivityCatalogLookup, type ChildSlot } from "../workflowAdapter";
+
+export type PublicationReviewPhase = "review" | "publishing" | "validationBlocked" | "savedFailure" | "partialFailure" | "success";
+export type PublicationProgressStep = "saving" | "promoting" | "preflight" | "publishing";
+export type PublicationVersionSelection =
+  | { mode: "automatic" }
+  | { mode: "exact"; requestedVersion: string };
+
+export interface PublicationChangeCount {
+  added: number;
+  changed: number;
+  removed: number;
+}
+
+export interface PublicationChangeSummary {
+  activities: PublicationChangeCount;
+  inputs: PublicationChangeCount;
+  outputs: PublicationChangeCount;
+  triggers: PublicationChangeCount;
+}
+
+export interface PublicationReviewState {
+  phase: PublicationReviewPhase;
+  progressStep?: PublicationProgressStep;
+  draftSnapshot: WorkflowDraft;
+  currentVersion: string;
+  proposedVersion: string;
+  unsavedChangesIncluded: true;
+  executableStatus: "ready" | "blocked";
+  /** Validation errors: each blocks publication. */
+  validationErrors: string[];
+  /** Validation warnings (spec 261 FR-515): listed for the author, never blocking. */
+  validationWarnings: string[];
+  changes: PublicationChangeSummary;
+  policy: PublicationPolicy;
+  slots: PublicationSlot[];
+  /** Set when the host cannot provide publication slots; occupancy and baselines are then unknown. */
+  slotsUnavailableReason?: string;
+  slotVersions: Record<string, WorkflowDefinitionVersionDetails>;
+  catalog: ActivityCatalogItem[];
+  triggerActivityVersionIds: string[];
+  intent: PublicationIntent;
+  preflight?: PublicationPreflight;
+  versionPreflight?: PromotionPreflightAssessment;
+  versionSelection: PublicationVersionSelection;
+  versionPreflightSupported: boolean;
+  exactVersionSupported: boolean;
+  reviewPending?: boolean;
+  reviewFailed?: boolean;
+  promotedVersionId?: string;
+  savedDraft?: WorkflowDraft;
+  failureMessage?: string;
+  published?: Publication;
+}
+
+export function createPublicationReview(input: {
+  draft: WorkflowDraft;
+  details: WorkflowDefinitionDetails | null;
+  slotVersions: Record<string, WorkflowDefinitionVersionDetails>;
+  policy: PublicationPolicy | null;
+  slots: PublicationSlot[];
+  slotsUnavailableReason?: string;
+  catalog: ActivityCatalogItem[];
+}): PublicationReviewState {
+  const policy = input.policy ?? {
+    defaultAction: "replace",
+    defaultSlotName: "default",
+    source: "host"
+  };
+  const activeSlot = input.slots.find(slot => slot.slotName === policy.defaultSlotName);
+  const currentVersion = publicationVersionLabel(activeSlot?.publication, input.slotVersions[policy.defaultSlotName])
+    ?? input.details?.definition.latestVersion
+    ?? "None";
+  const draftSnapshot = structuredClone(input.draft);
+  const { errors: validationErrors, warnings: validationWarnings } = splitPublicationValidations(draftSnapshot.validationErrors);
+  if (!draftSnapshot.state.rootActivity) validationErrors.unshift("Workflow has no root activity.");
+  const triggerActivityVersionIds = input.catalog
+    .filter(activity => activity.executionType.toLowerCase() === "trigger")
+    .map(activity => activity.activityVersionId);
+  const initialSlotName = policy.defaultAction === "replace" ? policy.defaultSlotName : "";
+
+  return {
+    phase: validationErrors.length ? "validationBlocked" : "review",
+    draftSnapshot,
+    currentVersion,
+    proposedVersion: "Assigned automatically by version policy",
+    unsavedChangesIncluded: true,
+    executableStatus: validationErrors.length ? "blocked" : "ready",
+    validationErrors,
+    validationWarnings,
+    changes: summarizePublicationChanges(
+      input.slotVersions[initialSlotName]?.state ?? null,
+      draftSnapshot.state,
+      new Set(triggerActivityVersionIds),
+      input.catalog),
+    policy,
+    slots: input.slots,
+    slotsUnavailableReason: input.slotsUnavailableReason,
+    slotVersions: input.slotVersions,
+    catalog: input.catalog,
+    triggerActivityVersionIds,
+    versionSelection: { mode: "automatic" },
+    versionPreflightSupported: false,
+    exactVersionSupported: false,
+    intent: policy.defaultAction === "requireExplicitSlot"
+      ? { action: "sideBySide", slotName: "" }
+      : { action: "replace", slotName: policy.defaultSlotName }
+  };
+}
+
+/** A validation entry as the draft and the validations endpoint report it; only its message and severity matter here. */
+export interface PublicationValidationEntry {
+  message?: string | null;
+  severity?: string | null;
+}
+
+/** Whether a validation's severity is a warning, which does not block publication. A missing severity is an error. */
+export function isWarningSeverity(severity: string | null | undefined): boolean {
+  return typeof severity === "string" && severity.trim().toLowerCase() === "warning";
+}
+
+/**
+ * Splits validation entries into the errors that block publication and the warnings that are only listed (spec 261
+ * FR-515). An entry without a severity is an error, as the backend's default is; entries without a message are dropped.
+ */
+export function splitPublicationValidations(entries: readonly PublicationValidationEntry[] | null | undefined): { errors: string[]; warnings: string[] } {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  for (const entry of entries ?? []) {
+    const message = entry?.message?.trim();
+    if (!message) continue;
+    (isWarningSeverity(entry.severity) ? warnings : errors).push(message);
+  }
+  return { errors, warnings };
+}
+
+/**
+ * Adds the warnings the server's draft validations report to a review, once each. The server's errors are left to the
+ * paths that already enforce them (the draft and the promotion), so a warning never changes whether publication can go on.
+ */
+export function withPublicationWarnings(review: PublicationReviewState, entries: readonly PublicationValidationEntry[] | null | undefined): PublicationReviewState {
+  const { warnings } = splitPublicationValidations(entries);
+  const added = warnings.filter((message, index) => !review.validationWarnings.includes(message) && warnings.indexOf(message) === index);
+  return added.length ? { ...review, validationWarnings: [...review.validationWarnings, ...added] } : review;
+}
+
+/**
+ * The label the review shows for a publication's version: the fetched design version's human-readable
+ * label when Studio has it, falling back to the publication's version id otherwise. Kept as the single
+ * precedence rule so the baseline and every other review surface that names a current version agree.
+ */
+function publicationVersionLabel(
+  publication: Publication | null | undefined,
+  versionDetail: WorkflowDefinitionVersionDetails | undefined
+): string | undefined {
+  return versionDetail?.version ?? publication?.versionId;
+}
+
+/**
+ * What occupies a Publication channel, as far as Studio can know. A channel is occupied exactly when its
+ * Runtime activation slot has an active activation; only a publishing-sourced one has a design version.
+ */
+export type PublicationChannelOccupancy =
+  | { kind: "unknown" }
+  | { kind: "empty"; slot?: PublicationSlot }
+  | { kind: "publication"; slot: PublicationSlot }
+  | { kind: "foreign"; slot: PublicationSlot };
+
+export function publicationChannelOccupancy(review: PublicationReviewState, slotName: string): PublicationChannelOccupancy {
+  if (review.slotsUnavailableReason) return { kind: "unknown" };
+  const slot = review.slots.find(candidate => candidate.slotName === slotName.trim());
+  if (!slot?.activeActivationId) return { kind: "empty", slot };
+  return slot.publication ? { kind: "publication", slot } : { kind: "foreign", slot };
+}
+
+export function publicationIntentForChannel(
+  review: PublicationReviewState,
+  slotName: string
+): PublicationIntent {
+  const normalizedSlot = slotName.trim();
+  const occupancy = publicationChannelOccupancy(review, normalizedSlot).kind;
+  const occupied = occupancy === "publication" || occupancy === "foreign";
+  return publicationIntentFor(
+    review,
+    occupied || normalizedSlot === review.policy.defaultSlotName ? "replace" : "sideBySide",
+    normalizedSlot);
+}
+
+export function publicationBaselineFor(review: PublicationReviewState, slotName: string) {
+  const normalizedSlot = slotName.trim();
+  const occupancy = publicationChannelOccupancy(review, normalizedSlot);
+  // Never describe a channel Studio cannot see, or one served by another source, as having no publication.
+  if (occupancy.kind === "unknown") return `${normalizedSlot || "unnamed"} · current publication unknown`;
+  if (occupancy.kind === "foreign") {
+    return `${normalizedSlot} · occupied by ${describeActivationSource(occupancy.slot)} · not a Studio design version`;
+  }
+  const version = publicationVersionLabel(occupancy.slot?.publication, review.slotVersions[normalizedSlot]);
+  if (version) return `${normalizedSlot} · ${version}`;
+  return occupancy.slot
+    ? `${normalizedSlot} · no active publication`
+    : `New channel · ${normalizedSlot || "unnamed"} · no previous publication`;
+}
+
+export function summarizePublicationChanges(
+  before: WorkflowDefinitionState | null,
+  after: WorkflowDefinitionState,
+  triggerActivityVersionIds: ReadonlySet<string> = new Set(),
+  catalog: ActivityCatalogLookup = undefined
+): PublicationChangeSummary {
+  const beforeActivities = collectActivities(before?.rootActivity, catalog);
+  const afterActivities = collectActivities(after.rootActivity, catalog);
+  return {
+    activities: compareCollections(beforeActivities, afterActivities, activity => activityFingerprint(activity, catalog)),
+    inputs: compareCollections(before?.inputs ?? [], after.inputs ?? []),
+    outputs: compareCollections(before?.outputs ?? [], after.outputs ?? []),
+    triggers: compareCollections(
+      beforeActivities.filter(activity => isTriggerActivity(activity, triggerActivityVersionIds)),
+      afterActivities.filter(activity => isTriggerActivity(activity, triggerActivityVersionIds)),
+      activity => activityFingerprint(activity, catalog))
+  };
+}
+
+export function publicationIntentFor(
+  review: PublicationReviewState,
+  action: "replace" | "sideBySide",
+  slotName: string
+): PublicationIntent {
+  const normalizedSlot = slotName.trim();
+  const current = review.slots.find(slot => slot.slotName === normalizedSlot)?.publication;
+  return {
+    action,
+    slotName: normalizedSlot || (action === "replace" ? review.policy.defaultSlotName : ""),
+    ...(current?.publicationId ? { expectedPublicationId: current.publicationId } : {})
+  };
+}
+
+export function publicationPreflightMatchesIntent(
+  preflight: PublicationReviewState["preflight"],
+  intent: PublicationIntent
+): preflight is PublicationPreflight {
+  return Boolean(preflight
+    && preflight.slotName === intent.slotName);
+}
+
+/**
+ * Why an authoritative preflight blocks activation, in machine-checkable form. `canActivate` is false
+ * for exactly one of three reasons: the target slot is foreign-owned, it has trigger conflicts, or
+ * both. An older host without elsa-foundation#1659's `targetSlotOwner` field can still block for an
+ * unreported reason ("unknown"). Null means the preflight does not block at all.
+ */
+export type PublicationBlockCause = "owner" | "conflicts" | "both" | "unknown";
+
+function blockCauseFromPreflight(preflight: PublicationPreflight): PublicationBlockCause {
+  const owner = Boolean(preflight.targetSlotOwner);
+  const hasConflicts = preflight.conflicts.length > 0;
+  if (owner && hasConflicts) return "both";
+  if (owner) return "owner";
+  if (hasConflicts) return "conflicts";
+  return "unknown";
+}
+
+/** The cause a blocking preflight reports, or null when the preflight does not block activation. */
+export function publicationBlockCause(preflight: PublicationPreflight): PublicationBlockCause | null {
+  if (preflight.canActivate) return null;
+  return blockCauseFromPreflight(preflight);
+}
+
+/** Why an authoritative preflight blocks activation, in the author's words. See `publicationBlockCause`. */
+export function publicationBlockedMessage(preflight: PublicationPreflight): string {
+  switch (blockCauseFromPreflight(preflight)) {
+    case "both": {
+      const owner = preflight.targetSlotOwner!;
+      return `Server preflight blocks this target: the channel is owned by ${describeActivationSource(owner)}, `
+        + "which is an operator action to take over, and it has trigger conflicts. Resolve the listed conflicts "
+        + "and publish side by side into another channel, or review another target.";
+    }
+    case "owner": {
+      const owner = preflight.targetSlotOwner!;
+      return `Server preflight blocks this target: the channel is owned by ${describeActivationSource(owner)}. `
+        + "Taking over a slot another source owns is an operator action, so publish side by side into another "
+        + "channel instead.";
+    }
+    case "conflicts":
+      return "Server preflight blocks this target. Resolve the listed conflicts or review another target.";
+    default:
+      return "Server preflight blocked this target without naming a cause. Review another target.";
+  }
+}
+
+/** Null when the channel's current state is not a Studio design version Studio can compare with. */
+export function publicationChangesFor(review: PublicationReviewState, slotName: string): PublicationChangeSummary | null {
+  const occupancy = publicationChannelOccupancy(review, slotName).kind;
+  if (occupancy === "unknown" || occupancy === "foreign") return null;
+  return summarizePublicationChanges(
+    review.slotVersions[slotName]?.state ?? null,
+    review.draftSnapshot.state,
+    new Set(review.triggerActivityVersionIds),
+    review.catalog);
+}
+
+function collectActivities(root: ActivityNode | null | undefined, catalog: ActivityCatalogLookup) {
+  const activities: ActivityNode[] = [];
+  const visited = new Set<object>();
+  const visit = (activity: ActivityNode) => {
+    if (visited.has(activity)) return;
+    visited.add(activity);
+    activities.push(activity);
+    for (const slot of publicationChildSlots(activity, catalog)) {
+      for (const child of slot.activities) visit(child);
+    }
+  };
+  if (root) visit(root);
+  return activities;
+}
+
+function compareCollections<T>(
+  before: T[],
+  after: T[],
+  serialize: (value: T) => string = stableJson
+): PublicationChangeCount {
+  const beforeByKey = indexValues(before, serialize);
+  const afterByKey = indexValues(after, serialize);
+  let added = 0;
+  let changed = 0;
+  let removed = 0;
+  for (const [key, value] of afterByKey) {
+    const previous = beforeByKey.get(key);
+    if (previous == null) added += 1;
+    else if (previous !== value) changed += 1;
+  }
+  for (const key of beforeByKey.keys()) if (!afterByKey.has(key)) removed += 1;
+  return { added, changed, removed };
+}
+
+function indexValues<T>(values: T[], serialize: (value: T) => string) {
+  return new Map(values.map((value, index) => [valueKey(value, index), serialize(value)]));
+}
+
+function isTriggerActivity(value: unknown, triggerActivityVersionIds: ReadonlySet<string>) {
+  return Boolean(value && typeof value === "object"
+    && "activityVersionId" in value
+    && typeof value.activityVersionId === "string"
+    && triggerActivityVersionIds.has(value.activityVersionId));
+}
+
+function activityFingerprint(activity: ActivityNode, catalog: ActivityCatalogLookup) {
+  const ownedState = structuredClone(activity);
+  for (const slot of publicationChildSlots(activity, catalog)) clearChildSlot(ownedState, slot);
+  return stableJson(ownedState);
+}
+
+function publicationChildSlots(activity: ActivityNode, catalog: ActivityCatalogLookup): ChildSlot[] {
+  const structure = activity.structure;
+  if (!structure) return [];
+  const catalogItem = resolveCatalogItem(activity, catalog);
+  const facet = readStructureDesignFacet(catalogItem);
+  if (facet?.kind === structure.kind) return getChildSlots(activity, catalogItem);
+
+  // Flowchart and Sequence used `activities` before structure facets became part of the catalog.
+  // Preserve that explicit legacy child contract without scanning arbitrary payload properties for
+  // objects that merely happen to look like activities.
+  if (!Array.isArray(structure.payload.activities)) return [];
+  return getChildSlots(activity).filter(slot => slot.property === "activities");
+}
+
+function resolveCatalogItem(activity: ActivityNode, catalog: ActivityCatalogLookup) {
+  if (!catalog) return undefined;
+  if (catalog instanceof Map) return catalog.get(activity.activityVersionId);
+  if (Array.isArray(catalog)) return catalog.find(item => item.activityVersionId === activity.activityVersionId);
+  return catalog.activityVersionId === activity.activityVersionId ? catalog : undefined;
+}
+
+function clearChildSlot(activity: ActivityNode, slot: ChildSlot) {
+  const payload = activity.structure?.payload;
+  if (!payload) return;
+  const emptyValue = slot.cardinality === "many" ? [] : null;
+  if (!slot.collectionProperty || !slot.childProperty || slot.collectionIndex === undefined) {
+    payload[slot.property] = emptyValue;
+    return;
+  }
+
+  const collection = payload[slot.collectionProperty];
+  const item = Array.isArray(collection) ? collection[slot.collectionIndex] : null;
+  if (item && typeof item === "object") (item as Record<string, unknown>)[slot.childProperty] = emptyValue;
+}
+
+function valueKey(value: unknown, index: number) {
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    for (const key of ["nodeId", "id", "name"]) {
+      if (typeof record[key] === "string" && record[key]) return `${key}:${record[key]}`;
+    }
+  }
+  return `index:${index}`;
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (!value || typeof value !== "object") return JSON.stringify(value);
+  return `{${Object.entries(value)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, child]) => `${JSON.stringify(key)}:${stableJson(child)}`)
+    .join(",")}}`;
+}

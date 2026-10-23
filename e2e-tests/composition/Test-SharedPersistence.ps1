@@ -6,7 +6,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$project = Join-Path $PSScriptRoot '../../tests/essentials/Persistence/EntityFrameworkCore/SharedResources/Tests/Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests.csproj'
+$project = Join-Path $PSScriptRoot '../../Essentials/tests/Persistence/EntityFrameworkCore/SharedResources/Tests/Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests.csproj'
 $previous = [Environment]::GetEnvironmentVariable('ELSA_SHARED_PERSISTENCE_REQUIRE_POSTGRESQL', 'Process')
 
 try {

@@ -1,0 +1,41 @@
+using Elsa.Api.AspNetCore;
+using Elsa.Foundation.Identity.Authorization;
+using Elsa.Workflows.Design.Persistence.Core.Models;
+using Elsa.Workflows.Design.Api.Authorization;
+using Elsa.Workflows.Design.Api.Models;
+using Elsa.Workflows.Design.Api.Projections;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Validations.Core;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using NativeEndpoints;
+
+namespace Elsa.Workflows.Design.Api.Endpoints.Versions.Add;
+
+[Post("versions/ingest")]
+[RequirePermission(WorkflowDesignPermissions.Manage)]
+public sealed class Endpoint(
+    IAddWorkflowDefinitionVersionCommand addCommand,
+    IWorkflowDefinitionVersionStore versionStore,
+    ICredentialLiteralValidator credentialLiterals) : ApiEndpoint<AddVersion, WorkflowDefinitionVersionDetailsView>
+{
+    public override void Configure(ApiEndpointOptions options)
+    {
+        options.Operation = "VersionsAdd";
+        options.Accepts = ["application/json"];
+    }
+
+    public override async Task<WorkflowDefinitionVersionDetailsView> HandleAsync(AddVersion command, CancellationToken cancellationToken)
+    {
+        var state = command.State.ToState();
+        await credentialLiterals.AdmitAsync(state, cancellationToken);
+        var operationKey = DesignOperationKey.CreateOrGenerate(command.OperationKey);
+        var result = await addCommand.Execute(
+            operationKey,
+            command.DefinitionId,
+            state,
+            cancellationToken);
+        var addedVersion = await versionStore.GetWithDefinitionAsync(result.VersionId, cancellationToken);
+        return addedVersion.ToDetailsView();
+    }
+}

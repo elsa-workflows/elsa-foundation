@@ -101,7 +101,7 @@ if [[ -n "$management_key_env" ]]; then
   [[ -n "$management_key" ]] || demo_fail "--management-key-env $management_key_env: that environment variable is not set."
 fi
 
-source_dir="$demo_root/src/apps/Elsa.Foundation.Host"
+source_dir="$demo_root/Essentials/apps/Elsa.Foundation.Host"
 built="$source_dir/bin/Release/net10.0"
 [[ -f "$built/Elsa.Foundation.Host.dll" ]] || demo_fail "Build the host first: bash tools/demo/pack.sh 1 (or dotnet build -c Release $source_dir)."
 if [[ -n "$cluster_host_id" && ! -f "$built/Elsa.Cluster.EntityFrameworkCore.dll" ]]; then

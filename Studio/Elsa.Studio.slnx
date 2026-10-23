@@ -1,0 +1,34 @@
+<Solution>
+  <Folder Name="/solution/">
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="NuGet.config" />
+    <File Path="package.json" />
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/essentials/Elsa.Studio.Api/Elsa.Studio.Api.csproj" />
+    <Project Path="../Extensions/ConsoleStream/studio/Elsa.Studio.ConsoleStream/Elsa.Studio.ConsoleStream.csproj" />
+    <Project Path="src/essentials/Elsa.Studio.Core/Elsa.Studio.Core.csproj" />
+    <Project Path="../Extensions/Diagnostics.OpenTelemetry/studio/Elsa.Studio.Diagnostics.OpenTelemetry/Elsa.Studio.Diagnostics.OpenTelemetry.csproj" />
+    <Project Path="../Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Elsa.Studio.Diagnostics.StructuredLogs.csproj" />
+    <Project Path="src/essentials/Elsa.Studio.Dashboard/Elsa.Studio.Dashboard.csproj" />
+    <Project Path="../Extensions/Attention/studio/Elsa.Studio.Attention/Elsa.Studio.Attention.csproj" />
+    <Project Path="../Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Elsa.Studio.ExpressionEditors.JavaScript.csproj" />
+    <Project Path="../Extensions/ExpressionEditors.Liquid/studio/Elsa.Studio.ExpressionEditors.Liquid/Elsa.Studio.ExpressionEditors.Liquid.csproj" />
+    <Project Path="../Extensions/ExtensionBuilder/studio/Elsa.Studio.ExtensionBuilder/Elsa.Studio.ExtensionBuilder.csproj" />
+    <Project Path="../Extensions/FeatureManagement/studio/Elsa.Studio.FeatureManagement/Elsa.Studio.FeatureManagement.csproj" />
+    <Project Path="../Extensions/Samples.WeatherForecast/studio/Elsa.Studio.Samples.WeatherForecast/Elsa.Studio.Samples.WeatherForecast.csproj" />
+    <Project Path="../Extensions/Secrets/studio/Elsa.Studio.Secrets/Elsa.Studio.Secrets.csproj" />
+    <Project Path="../Extensions/Connections/studio/Elsa.Studio.Connections/Elsa.Studio.Connections.csproj" />
+    <Project Path="../Extensions/Etl/studio/Elsa.Studio.Etl/Elsa.Studio.Etl.csproj" />
+    <Project Path="../Extensions/Weaver/studio/Elsa.Studio.Weaver.Core/Elsa.Studio.Weaver.Core.csproj" />
+    <Project Path="../Extensions/Weaver/studio/Elsa.Studio.Weaver.Workflows/Elsa.Studio.Weaver.Workflows.csproj" />
+    <Project Path="src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj" />
+    <Project Path="src/essentials/Elsa.Studio.Workflows/Elsa.Studio.Workflows.csproj" />
+    <Project Path="../Extensions/Workflows.Dashboard/studio/Elsa.Studio.Workflows.Dashboard/Elsa.Studio.Workflows.Dashboard.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Elsa.Studio.Tests/Elsa.Studio.Tests.csproj" />
+  </Folder>
+</Solution>

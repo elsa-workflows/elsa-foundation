@@ -1,0 +1,491 @@
+using System.Collections.Concurrent;
+using System.Collections.ObjectModel;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Threading;
+using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
+
+namespace Elsa.Workflows.Runtime.Core.Models;
+
+/// <summary>
+/// Runtime-owned node inside a workflow executable.
+/// </summary>
+public sealed class ExecutableNode
+{
+    [JsonConstructor]
+    internal ExecutableNode(
+        string executableNodeId,
+        string authoredActivityId,
+        string activityType,
+        string activityTypeVersion,
+        string descriptorType,
+        JsonElement descriptorPayload,
+        IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
+        IReadOnlyDictionary<string, string> metadata,
+        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null,
+        ExecutableActivityStructure? structure = null,
+        ActivityContract? activityContract = null,
+        WorkflowIntrinsicKind? intrinsicKind = null,
+        RuntimeVariableReference? intrinsicVariable = null,
+        IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null,
+        string? descriptorSchemaVersion = null,
+        ActivityExecutionPlacement executionPlacement = ActivityExecutionPlacement.Inline)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(executableNodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(authoredActivityId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(activityType);
+        ArgumentException.ThrowIfNullOrWhiteSpace(activityTypeVersion);
+        ArgumentException.ThrowIfNullOrWhiteSpace(descriptorType);
+        ArgumentNullException.ThrowIfNull(inputBindings);
+        ArgumentNullException.ThrowIfNull(metadata);
+        if (!Enum.IsDefined(executionPlacement))
+            throw new ArgumentOutOfRangeException(nameof(executionPlacement), executionPlacement, "Activity execution placement is not defined.");
+
+        var inputBindingSnapshot = inputBindings.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        var outputCaptureSnapshot = (outputCaptures ?? new Dictionary<string, RuntimeOutputCapture>())
+            .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+
+        if (intrinsicKind is not null && !Enum.IsDefined(intrinsicKind.Value))
+            throw new ArgumentOutOfRangeException(nameof(intrinsicKind), intrinsicKind, "Workflow intrinsic kind is not defined.");
+        if (intrinsicKind is not null && activityContract is not null)
+            throw new ArgumentException("An executable node cannot be both a CLR activity and an engine intrinsic.", nameof(intrinsicKind));
+        if (intrinsicKind is WorkflowIntrinsicKind.Set or WorkflowIntrinsicKind.Merge or WorkflowIntrinsicKind.Reduce)
+        {
+            if (intrinsicVariable is null)
+                throw new ArgumentException($"Workflow intrinsic '{intrinsicKind}' requires a variable target.", nameof(intrinsicVariable));
+            if (!inputBindingSnapshot.ContainsKey(WorkflowIntrinsicInputKeys.Value))
+                throw new ArgumentException($"Workflow intrinsic '{intrinsicKind}' requires a '{WorkflowIntrinsicInputKeys.Value}' input binding.", nameof(inputBindings));
+        }
+        else if (intrinsicKind is WorkflowIntrinsicKind.Return &&
+                 !inputBindingSnapshot.ContainsKey(WorkflowIntrinsicInputKeys.Value))
+        {
+            throw new ArgumentException($"Workflow intrinsic '{intrinsicKind}' requires a '{WorkflowIntrinsicInputKeys.Value}' input binding.", nameof(inputBindings));
+        }
+        else if (intrinsicKind is WorkflowIntrinsicKind.Control &&
+                 !inputBindingSnapshot.ContainsKey(WorkflowIntrinsicInputKeys.Outcome))
+        {
+            throw new ArgumentException($"Workflow intrinsic '{intrinsicKind}' requires an '{WorkflowIntrinsicInputKeys.Outcome}' input binding.", nameof(inputBindings));
+        }
+        else if (intrinsicKind is WorkflowIntrinsicKind.SetCorrelationId or WorkflowIntrinsicKind.SetInstanceName &&
+                 !inputBindingSnapshot.ContainsKey(WorkflowIntrinsicInputKeys.Value))
+        {
+            throw new ArgumentException($"Workflow intrinsic '{intrinsicKind}' requires a '{WorkflowIntrinsicInputKeys.Value}' input binding.", nameof(inputBindings));
+        }
+        else if (intrinsicKind is WorkflowIntrinsicKind.SetOutput &&
+                 (!inputBindingSnapshot.ContainsKey(WorkflowIntrinsicInputKeys.Name) ||
+                  !inputBindingSnapshot.ContainsKey(WorkflowIntrinsicInputKeys.Value)))
+        {
+            throw new ArgumentException($"Workflow intrinsic '{intrinsicKind}' requires '{WorkflowIntrinsicInputKeys.Name}' and '{WorkflowIntrinsicInputKeys.Value}' input bindings.", nameof(inputBindings));
+        }
+        else if (intrinsicKind is WorkflowIntrinsicKind.Finish &&
+                 !inputBindingSnapshot.ContainsKey(WorkflowIntrinsicInputKeys.Outcome))
+        {
+            throw new ArgumentException($"Workflow intrinsic '{intrinsicKind}' requires an '{WorkflowIntrinsicInputKeys.Outcome}' input binding.", nameof(inputBindings));
+        }
+        else if (intrinsicVariable is not null)
+        {
+            throw new ArgumentException("Only variable-writing intrinsics can carry a variable target.", nameof(intrinsicVariable));
+        }
+
+        foreach (var (inputName, binding) in inputBindingSnapshot)
+        {
+            if (!StringComparer.Ordinal.Equals(inputName, binding.InputName))
+                throw new ArgumentException($"Input binding dictionary key '{inputName}' must match binding input name '{binding.InputName}'.", nameof(inputBindings));
+        }
+
+        foreach (var (outputName, capture) in outputCaptureSnapshot)
+        {
+            if (!StringComparer.Ordinal.Equals(outputName, capture.OutputName))
+                throw new ArgumentException($"Output capture dictionary key '{outputName}' must match capture output name '{capture.OutputName}'.", nameof(outputCaptures));
+        }
+
+        ExecutableNodeId = executableNodeId;
+        AuthoredActivityId = authoredActivityId;
+        ActivityType = activityType;
+        ActivityTypeVersion = activityTypeVersion;
+        DescriptorType = descriptorType;
+        DescriptorSchemaVersion = string.IsNullOrWhiteSpace(descriptorSchemaVersion)
+            ? RuntimeActivityDescriptor.InitialSchemaVersion
+            : descriptorSchemaVersion;
+        DescriptorPayload = descriptorPayload.Clone();
+        Descriptor = new RuntimeActivityDescriptor(DescriptorType, DescriptorSchemaVersion, DescriptorPayload);
+        InputBindings = new ReadOnlyDictionary<string, RuntimeInputBinding>(inputBindingSnapshot);
+        OutputCaptures = new ReadOnlyDictionary<string, RuntimeOutputCapture>(outputCaptureSnapshot);
+        Metadata = RuntimeModelMetadata.Snapshot(metadata);
+        ChildSlots = Array.AsReadOnly((childSlots ?? []).ToArray());
+        Structure = structure;
+        ActivityContract = activityContract;
+        IntrinsicKind = intrinsicKind;
+        IntrinsicVariable = intrinsicVariable;
+        ExecutionPlacement = executionPlacement;
+    }
+
+    public ExecutableNode(
+        string executableNodeId,
+        string authoredActivityId,
+        string activityType,
+        string activityTypeVersion,
+        string descriptorType,
+        JsonElement descriptorPayload,
+        IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
+        IReadOnlyDictionary<string, string> metadata,
+        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null,
+        ExecutableActivityStructure? structure = null,
+        ActivityContract? activityContract = null,
+        WorkflowIntrinsicKind? intrinsicKind = null,
+        RuntimeVariableReference? intrinsicVariable = null,
+        IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null,
+        string? descriptorSchemaVersion = null)
+        : this(
+            executableNodeId,
+            authoredActivityId,
+            activityType,
+            activityTypeVersion,
+            descriptorType,
+            descriptorPayload,
+            inputBindings,
+            metadata,
+            childSlots,
+            structure,
+            activityContract,
+            intrinsicKind,
+            intrinsicVariable,
+            outputCaptures,
+            descriptorSchemaVersion,
+            ActivityExecutionPlacement.Inline)
+    {
+    }
+
+    public ExecutableNode(
+        string executableNodeId,
+        string authoredActivityId,
+        string activityType,
+        string activityTypeVersion,
+        string descriptorType,
+        JsonElement descriptorPayload,
+        IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
+        IReadOnlyDictionary<string, string> metadata,
+        ActivityExecutionPlacement executionPlacement,
+        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null,
+        ExecutableActivityStructure? structure = null,
+        ActivityContract? activityContract = null,
+        WorkflowIntrinsicKind? intrinsicKind = null,
+        RuntimeVariableReference? intrinsicVariable = null,
+        IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null,
+        string? descriptorSchemaVersion = null)
+        : this(
+            executableNodeId,
+            authoredActivityId,
+            activityType,
+            activityTypeVersion,
+            descriptorType,
+            descriptorPayload,
+            inputBindings,
+            metadata,
+            childSlots,
+            structure,
+            activityContract,
+            intrinsicKind,
+            intrinsicVariable,
+            outputCaptures,
+            descriptorSchemaVersion,
+            executionPlacement)
+    {
+    }
+
+    public ExecutableNode(
+        string executableNodeId,
+        string authoredActivityId,
+        string activityType,
+        string activityTypeVersion,
+        RuntimeActivityDescriptor descriptor,
+        IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
+        IReadOnlyDictionary<string, string> metadata,
+        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null,
+        ExecutableActivityStructure? structure = null,
+        ActivityContract? activityContract = null,
+        WorkflowIntrinsicKind? intrinsicKind = null,
+        RuntimeVariableReference? intrinsicVariable = null)
+        : this(
+            executableNodeId,
+            authoredActivityId,
+            activityType,
+            activityTypeVersion,
+            descriptor.ConsumerKey,
+            descriptor.Payload,
+            inputBindings,
+            metadata,
+            childSlots,
+            structure,
+            activityContract,
+            intrinsicKind,
+            intrinsicVariable,
+            outputCaptures: null,
+            descriptorSchemaVersion: descriptor.SchemaVersion,
+            executionPlacement: ActivityExecutionPlacement.Inline)
+    {
+    }
+
+    public ExecutableNode(
+        string executableNodeId,
+        string authoredActivityId,
+        string activityType,
+        string activityTypeVersion,
+        RuntimeActivityDescriptor descriptor,
+        IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
+        IReadOnlyDictionary<string, string> metadata,
+        ActivityExecutionPlacement executionPlacement,
+        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null,
+        ExecutableActivityStructure? structure = null,
+        ActivityContract? activityContract = null,
+        WorkflowIntrinsicKind? intrinsicKind = null,
+        RuntimeVariableReference? intrinsicVariable = null)
+        : this(
+            executableNodeId,
+            authoredActivityId,
+            activityType,
+            activityTypeVersion,
+            descriptor.ConsumerKey,
+            descriptor.Payload,
+            inputBindings,
+            metadata,
+            childSlots,
+            structure,
+            activityContract,
+            intrinsicKind,
+            intrinsicVariable,
+            outputCaptures: null,
+            descriptorSchemaVersion: descriptor.SchemaVersion,
+            executionPlacement: executionPlacement)
+    {
+    }
+
+    public ExecutableNode(
+        string executableNodeId,
+        string authoredActivityId,
+        string activityType,
+        string activityTypeVersion,
+        RuntimeActivityDescriptor descriptor,
+        IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
+        IReadOnlyDictionary<string, RuntimeOutputCapture> outputCaptures,
+        IReadOnlyDictionary<string, string> metadata,
+        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null,
+        ExecutableActivityStructure? structure = null,
+        ActivityContract? activityContract = null,
+        WorkflowIntrinsicKind? intrinsicKind = null,
+        RuntimeVariableReference? intrinsicVariable = null)
+        : this(
+            executableNodeId,
+            authoredActivityId,
+            activityType,
+            activityTypeVersion,
+            descriptor.ConsumerKey,
+            descriptor.Payload,
+            inputBindings,
+            metadata,
+            childSlots,
+            structure,
+            activityContract,
+            intrinsicKind,
+            intrinsicVariable,
+            outputCaptures,
+            descriptor.SchemaVersion,
+            ActivityExecutionPlacement.Inline)
+    {
+    }
+
+    public ExecutableNode(
+        string executableNodeId,
+        string authoredActivityId,
+        string activityType,
+        string activityTypeVersion,
+        RuntimeActivityDescriptor descriptor,
+        IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
+        IReadOnlyDictionary<string, RuntimeOutputCapture> outputCaptures,
+        IReadOnlyDictionary<string, string> metadata,
+        ActivityExecutionPlacement executionPlacement,
+        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null,
+        ExecutableActivityStructure? structure = null,
+        ActivityContract? activityContract = null,
+        WorkflowIntrinsicKind? intrinsicKind = null,
+        RuntimeVariableReference? intrinsicVariable = null)
+        : this(
+            executableNodeId,
+            authoredActivityId,
+            activityType,
+            activityTypeVersion,
+            descriptor.ConsumerKey,
+            descriptor.Payload,
+            inputBindings,
+            metadata,
+            childSlots,
+            structure,
+            activityContract,
+            intrinsicKind,
+            intrinsicVariable,
+            outputCaptures,
+            descriptor.SchemaVersion,
+            executionPlacement)
+    {
+    }
+
+    public string ExecutableNodeId { get; }
+    public string AuthoredActivityId { get; }
+    public string ActivityType { get; }
+    public string ActivityTypeVersion { get; }
+    [JsonIgnore]
+    public RuntimeActivityDescriptor Descriptor { get; }
+    public string DescriptorType { get; }
+    public string DescriptorSchemaVersion { get; }
+    public JsonElement DescriptorPayload { get; }
+    public IReadOnlyDictionary<string, RuntimeInputBinding> InputBindings { get; }
+    public IReadOnlyDictionary<string, RuntimeOutputCapture> OutputCaptures { get; }
+    public IReadOnlyDictionary<string, string> Metadata { get; }
+    public IReadOnlyCollection<ExecutableChildSlot> ChildSlots { get; }
+    public ExecutableActivityStructure? Structure { get; }
+    public ActivityContract? ActivityContract { get; }
+    public WorkflowIntrinsicKind? IntrinsicKind { get; }
+    public RuntimeVariableReference? IntrinsicVariable { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public ActivityExecutionPlacement ExecutionPlacement { get; }
+
+    /// <summary>
+    /// This node and every node below it, in document order: each node before its children, and child slots and
+    /// the activities inside them left to right as authored.
+    /// </summary>
+    /// <remarks>
+    /// The one walk over an executable graph. Order is observable to its callers — <see cref="WorkflowExecutable.Nodes"/>
+    /// exposes it, and compilation reports the first offending node it meets — so it is fixed here rather than left to
+    /// each caller's own stack loop, where a missing reversal silently yields siblings right to left.
+    /// </remarks>
+    public IEnumerable<ExecutableNode> DescendantsAndSelf()
+    {
+        var pending = new Stack<ExecutableNode>();
+        pending.Push(this);
+        while (pending.TryPop(out var node))
+        {
+            yield return node;
+            // A stack pops the last push first, so children go in reversed to come out left to right.
+            foreach (var child in node.ChildSlots.SelectMany(slot => slot.Activities).Reverse())
+                pending.Push(child);
+        }
+    }
+
+    // In-memory-only routing-structure memo. Private, so it is invisible to System.Text.Json —
+    // it never touches the persisted executable schema or the content hash (it is
+    // recomputed on materialization). Keyed by structure type because a node reconstructs exactly one
+    // routing structure kind (FlowchartGraph / BpmnGraph / SequenceNavigator).
+    private ConcurrentDictionary<Type, object>? _routingStructures;
+
+    /// <summary>
+    /// Returns a routing structure derived once from this node's immutable graph content
+    /// (the connections / sequence flows / ordered children carried in <see cref="Structure"/>), computed on
+    /// first access by <paramref name="factory"/> and cached on this materialized instance only.
+    /// </summary>
+    /// <remarks>
+    /// The routing relation the runtime walks per child-completion (which successor(s) an outcome routes to) is
+    /// fully determined at publish time, but the composite engines used to rebuild it — deserializing
+    /// <see cref="Structure"/> and re-indexing — on every completion hop. This memo makes the reconstruction a
+    /// once-per-materialized-executable cost: because the burst cache serves the same
+    /// <see cref="ExecutableNode"/> instance for every hop in a drain, the structure builds once per composite per
+    /// burst and every later hop is a dictionary lookup. It is derived by the exact same code path the walk uses
+    /// (<paramref name="factory"/> is the composite's own <c>From</c>), so the table cannot diverge from the walk.
+    ///
+    /// The memo carries no runtime state — it is a pure function of this immutable node — so it is not serialized,
+    /// not part of the content hash, and correct to recompute whenever a fresh executable instance is materialized
+    /// (the burst-absent path simply recomputes per hop, byte-identical, only without the reuse).
+    /// </remarks>
+    public T GetOrAddRoutingStructure<T>(Func<ExecutableNode, T> factory) where T : class
+    {
+        ArgumentNullException.ThrowIfNull(factory);
+
+        var structures = LazyInitializer.EnsureInitialized(
+            ref _routingStructures,
+            static () => new ConcurrentDictionary<Type, object>());
+
+        return (T)structures.GetOrAdd(typeof(T), _ =>
+        {
+            RoutingStructureMaterializationDiagnostics.OnMaterialized();
+            return factory(this);
+        });
+    }
+}
+
+public enum WorkflowIntrinsicKind
+{
+    Set,
+    Merge,
+    Reduce,
+    Return,
+    Control,
+    SetCorrelationId,
+    SetInstanceName,
+    SetOutput,
+    Finish
+}
+
+public static class WorkflowIntrinsicInputKeys
+{
+    public const string Value = "value";
+    public const string Outcome = "outcome";
+    public const string Name = "name";
+}
+
+/// <summary>
+/// Per-kind replay-safety for engine intrinsics — the intrinsic analogue of a CLR activity's
+/// <c>ActivityContract.SideEffectProfile</c>, used to decide whether an intrinsic node may execute as a
+/// fused hop inside a burst.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The classification is a pure function of <see cref="ExecutableNode.IntrinsicKind"/>, which is already pinned into
+/// the executable, so it needs no synthetic <c>ActivityContract</c> and changes no artifact hash. It is deliberately
+/// <b>not</b> host-configurable: unlike an activity author's <c>[ActivitySideEffectProfile]</c> declaration, the nine
+/// intrinsic kinds are engine-owned and their effects are known here.
+/// </para>
+/// <para>
+/// <b>Fusable — in-workflow value and routing only.</b> <see cref="WorkflowIntrinsicKind.Set"/>,
+/// <see cref="WorkflowIntrinsicKind.Merge"/> and <see cref="WorkflowIntrinsicKind.Reduce"/> write a variable frame;
+/// <see cref="WorkflowIntrinsicKind.Return"/> and <see cref="WorkflowIntrinsicKind.Control"/> set the invocation's
+/// result and outcome; <see cref="WorkflowIntrinsicKind.SetOutput"/> writes a workflow output as a durable value whose
+/// state id is a pure function of the output name (<c>durable-{OutputValueIdPrefix}{name}</c>), so a replayed write
+/// lands on the same id with the same value and the checkpoint fold's last-writer-per-state-id collapses it. All six
+/// are deterministic functions of state the segment replay reproduces, so re-running one inside a coalesced segment is
+/// indistinguishable from running it once.
+/// </para>
+/// <para>
+/// <b>Not fusable.</b> <see cref="WorkflowIntrinsicKind.SetCorrelationId"/> and
+/// <see cref="WorkflowIntrinsicKind.SetInstanceName"/> mutate externally queryable workflow identity (correlation is a
+/// message-correlation key, so a transiently missing value is observable). <see cref="WorkflowIntrinsicKind.Finish"/>
+/// terminates the run and commits the unconditionally mandatory <c>WorkflowCompleted</c> boundary.
+/// </para>
+/// <para>
+/// <b>On <see cref="WorkflowIntrinsicKind.SetOutput"/>, which an earlier revision held back.</b> The stated reason was
+/// that a workflow output is "published for the caller" and so belongs on the mandatory-checkpoint side. That conflated two
+/// independent dials. <em>When</em> an output becomes durable is decided by the checkpoint persistence policy, and
+/// <c>IntrinsicCompleted</c> is not in <c>CoalescingRuntimeCheckpointPersistencePolicy.MandatoryFlushCheckpointNames</c>,
+/// so in every persistence mode a <c>SetOutput</c> already deferred and folded into the next commit, with or without
+/// fusion. Fusion decides only <em>how many dispatches</em> the node costs. Excluding it therefore protected nothing
+/// about output visibility and bought only hops. Under Durable that next commit comes when the next activity is
+/// scheduled or the pass ends, the earliest any mode makes an output durable; that is unchanged here.
+/// </para>
+/// </remarks>
+public static class WorkflowIntrinsicFusion
+{
+    /// <summary>Whether an intrinsic of this kind may run as a fused hop inside a burst.</summary>
+    public static bool IsFusable(WorkflowIntrinsicKind kind) => kind switch
+    {
+        WorkflowIntrinsicKind.Set
+            or WorkflowIntrinsicKind.Merge
+            or WorkflowIntrinsicKind.Reduce
+            or WorkflowIntrinsicKind.Return
+            or WorkflowIntrinsicKind.Control
+            or WorkflowIntrinsicKind.SetOutput => true,
+        WorkflowIntrinsicKind.SetCorrelationId
+            or WorkflowIntrinsicKind.SetInstanceName
+            or WorkflowIntrinsicKind.Finish => false,
+        // A new kind is not fusable until it is classified here: the fail-safe direction is the durable one.
+        _ => false
+    };
+}

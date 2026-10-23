@@ -1,0 +1,42 @@
+{
+  "name": "elsa-foundation-studio",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "packageManager": "pnpm@11.9.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "check:bundle:workflows": "pnpm --filter @elsa-workflows/studio-workflows build",
+    "test": "pnpm -r test",
+    "test:browser": "playwright test",
+    "test:browser:expression-matrix": "playwright test --config tests/browser/playwright.expression-matrix.config.ts",
+    "test:browser:performance": "playwright test --config tests/browser/playwright.performance.config.ts",
+    "test:live": "playwright test --config tests/live/playwright.live.config.ts",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "cd .. && eslint --ext .js,.mjs,.cjs,.ts,.tsx --config Studio/eslint.config.js Studio \"Extensions/*/studio/*/Client/**/*.{js,mjs,cjs,ts,tsx}\" && cd Studio && pnpm lint:css && pnpm lint:layout",
+    "lint:css": "stylelint --config .stylelintrc.json \"src/essentials/*/Client/src/**/*.css\" \"../Extensions/*/studio/*/Client/src/**/*.css\" && stylelint --config .stylelintrc.disclosure.json \"src/apps/Elsa.Studio.Web/Client/src/app/ui/disclosure/**/*.css\"",
+    "lint:layout": "node scripts/check-module-layout.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@playwright/test": "^1.61.1",
+    "@vitejs/plugin-react": "^5.0.0",
+    "axe-core": "^4.12.1",
+    "eslint": "^9.39.4",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^15.15.0",
+    "jsdom": "^25.0.1",
+    "stylelint": "^17.4.0",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.62.1",
+    "vite": "^7.1.0",
+    "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.101.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  }
+}

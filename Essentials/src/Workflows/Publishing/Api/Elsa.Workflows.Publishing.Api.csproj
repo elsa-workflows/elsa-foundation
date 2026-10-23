@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The bridge feature. It depends DOWN on stable Design and Runtime contracts and connects them:
+      - the Design seam:  Elsa.Activities.Design.Core / .Persistence.Core (read the catalog row)
+      - the Runtime seam: Elsa.Activities.Runtime.Core               (compile pinned activity contracts)
+    It references NEITHER the Runtime impl (Elsa.Activities.Runtime) NOR any *.Api feature, which is
+    exactly why §E2.2 (Runtime must not depend on Design) is preserved — the bridge is a third party.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The nested stable Core project owns its generated obj/bin files. Do not let the parent
+         SDK glob compile those generated assembly attributes into the implementation assembly. -->
+    <!-- Public HTTP contracts are compiled by the stable Api.Core seam and reached here through
+         the existing namespaces. The implementation assembly retains only owner-local adapters. -->
+    <ProjectReference Include="..\..\..\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
+    <ProjectReference Include="..\..\..\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
+    <ProjectReference Include="..\..\..\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
+    <ProjectReference Include="..\..\..\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\..\Events\Core\Elsa.Events.Core.csproj" />
+    <ProjectReference Include="..\..\..\Mediator\Core\Elsa.Mediator.Core.csproj" />
+    <ProjectReference Include="..\..\..\Locking\Core\Elsa.Locking.Core.csproj" />
+    <ProjectReference Include="..\..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
+    <ProjectReference Include="..\..\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
+    <ProjectReference Include="..\..\Design\Validations\Elsa.Workflows.Design.Validations\Elsa.Workflows.Design.Validations.csproj" />
+    <ProjectReference Include="..\..\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\Runtime\Elsa.Workflows.Runtime\Elsa.Workflows.Runtime.csproj" />
+    <ProjectReference Include="..\Core\Elsa.Workflows.Publishing.Core.csproj" />
+    <ProjectReference Include="..\Elsa.Workflows.Publishing\Elsa.Workflows.Publishing.csproj" />
+    <ProjectReference Include="..\..\..\Expressions\Core\Elsa.Expressions.Core.csproj" />
+    <ProjectReference Include="..\..\Design\Core\Elsa.Workflows.Design.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NativeEndpoints" />
+  </ItemGroup>
+
+</Project>

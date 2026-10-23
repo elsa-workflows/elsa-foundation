@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-16
 
-**Status**: Draft
+**Status**: Implemented — all tasks checked in 693765870
 
 **Input**: GitHub issue #681, “Retry, dead-letter, and redrive failed dispatch delivery”
 

@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Extension Builder backend (spec 075): an optional, root-hosted subsystem that lets a trusted caller author a
+    Git-backed .NET repository, build it into a NuGet package and promote the package into a Nuplane feed. It was
+    removed by #1635 and restored as an optional extension by #2294; no host composes it unless asked to.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Nuplane.Admin" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Minimal-API endpoint mapping (IEndpointRouteBuilder, Results, HttpContext, IFormFile, [FromServices]). -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\Essentials\src\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
+    <!-- ShareWithShells: the build queue and storage the root build worker drains must be the instances a shell-resolved request reaches. -->
+    <ProjectReference Include="..\..\..\..\Essentials\src\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
+    <ProjectReference Include="..\..\..\..\Essentials\src\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Essentials\src\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />
+    <ProjectReference Include="..\..\..\..\Essentials\src\Git\Elsa.Git.csproj" />
+    <ProjectReference Include="..\..\..\..\Essentials\src\Modularity\Core\Elsa.Modularity.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      The Extension Builder subsystem is a large, host-private surface (~80 interlocking internal types) whose
+      contracts are not meant for consumption outside this module, so its tests reach them through a grant to this
+      domain's test assembly (§2.23.3, checked by ArchitectureGuardTests.InternalsVisibleTo_grants_stay_within_the_granting_domain).
+    -->
+    <InternalsVisibleTo Include="Elsa.ExtensionBuilder.Api.Tests" />
+  </ItemGroup>
+
+</Project>

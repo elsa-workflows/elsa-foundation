@@ -1,0 +1,192 @@
+using Elsa.Workflows.Design.Core.Models;
+using Elsa3.Activities.Design.Import.Contracts;
+using Elsa3.Activities.Design.Import.Models;
+using Elsa3.Activities.Design.Import.Services;
+using Xunit;
+
+namespace Elsa3.Mapping.Tests;
+
+public sealed class ReusableActivityCollectionApplyTests
+{
+    [Fact]
+    public async Task A_caller_flowchart_routes_by_the_outcomes_of_a_reusable_flowchart()
+    {
+        // Spec 239 R-3, T034: the reusable's graph keeps its connections, and the caller's connections on the reusable's
+        // Elsa 3 outcomes ('succeed', 'fail') arrive under the contract names its graph activity completes with.
+        var sub = Elsa3FlowchartDiagnosticsTests.Flowchart("sub-root",
+            Elsa3BuiltInConversionTests.Activity("decide", "Elsa.FlowDecision", ("condition", Elsa3BuiltInConversionTests.Expression("JavaScript", "true", "Boolean"))),
+            Elsa3BuiltInConversionTests.Activity("ok", "Elsa.Complete", ("outcomes", Elsa3BuiltInConversionTests.Literal("succeed"))),
+            Elsa3BuiltInConversionTests.Activity("ko", "Elsa.Complete", ("outcomes", Elsa3BuiltInConversionTests.Literal("fail"))));
+        sub.Connections = [Elsa3FlowchartDiagnosticsTests.Connect("decide", "True", "ok"), Elsa3FlowchartDiagnosticsTests.Connect("decide", "False", "ko")];
+        var call = ReusableActivityImportFixtures.Reference("call", targetVersionId: "sub-v1");
+        var caller = Elsa3FlowchartDiagnosticsTests.Flowchart("caller-root", call, Elsa3FlowchartDiagnosticsTests.Write("handled"), Elsa3FlowchartDiagnosticsTests.Write("failed"));
+        caller.Connections = [Elsa3FlowchartDiagnosticsTests.Connect(call.Id, "succeed", "handled"), Elsa3FlowchartDiagnosticsTests.Connect(call.Id, "fail", "failed")];
+        var collection = ReusableActivityImportFixtures.Collection(
+            WithOutcomes(ReusableActivityImportFixtures.Workflow("sub", "sub-v1", 1, true, sub), "succeed", "fail"),
+            ReusableActivityImportFixtures.Workflow("caller", "caller-v1", 1, false, caller));
+        var analyzer = new ReusableActivityCollectionAnalyzer();
+        var plan = await analyzer.AnalyzeAsync(collection);
+        var command = new ReusableActivityImportFixtures.CapturingCommand();
+        var importer = new ReusableActivityCollectionImporter(
+            analyzer, ReusableActivityImportFixtures.Materializer(Support.RealActivityCatalog.Create()), command, ReusableActivityImportFixtures.Validator());
+
+        await importer.ApplyAsync(new(plan.PlanId, collection, ["sub-v1", "caller-v1"]));
+
+        var mutation = Assert.IsType<ReusableActivityImportMutation>(command.Mutation);
+        var callerRoot = mutation.Workflows.Single(x => x.Version.Id == "caller-v1").Version.State.RootActivity!;
+        Assert.Equal(["call:succeed->handled", "call:fail->failed"], Support.Elsa3FlowchartFixtures.Connections(callerRoot));
+        var subGraph = Assert.Single(mutation.Activities).Version.GraphManifest.GetRawText();
+        Assert.Contains("\"decide\"", subGraph, StringComparison.Ordinal);
+        Assert.Contains("\"True\"", subGraph, StringComparison.Ordinal);
+    }
+
+    private static Elsa3.Models.Elsa3WorkflowDefinition WithOutcomes(Elsa3.Models.Elsa3WorkflowDefinition definition, params string[] outcomes)
+    {
+        definition.Outcomes = outcomes;
+        return definition;
+    }
+
+    [Fact]
+    public async Task Apply_materializes_dependency_closed_exact_rewrites_and_original_identity_wrappers()
+    {
+        var collection = ValidCollection();
+        var analyzer = new ReusableActivityCollectionAnalyzer();
+        var plan = await analyzer.AnalyzeAsync(collection);
+        var command = new ReusableActivityImportFixtures.CapturingCommand();
+        var importer = new ReusableActivityCollectionImporter(analyzer, ReusableActivityImportFixtures.Materializer(), command, ReusableActivityImportFixtures.Validator());
+
+        var result = await importer.ApplyAsync(new(plan.PlanId, collection, ["a-v1", "b-v1", "consumer-v1"]));
+
+        Assert.False(result.NoOp);
+        var mutation = Assert.IsType<ReusableActivityImportMutation>(command.Mutation);
+        Assert.Equal(2, mutation.Activities.Count);
+        Assert.Equal(3, mutation.Workflows.Count);
+        var aItem = plan.Items.Single(x => x.SourceVersionId == "a-v1");
+        var bItem = plan.Items.Single(x => x.SourceVersionId == "b-v1");
+        var aWrapper = mutation.Workflows.Single(x => x.Version.Id == "a-v1");
+        Assert.Equal("a", aWrapper.Definition.Id);
+        Assert.Equal(aItem.ActivityDefinitionVersionId, aWrapper.Version.State.RootActivity!.ActivityVersionId);
+        var bGraph = mutation.Activities.Single(x => x.Version.Id == bItem.ActivityDefinitionVersionId);
+        Assert.Contains(aItem.ActivityDefinitionVersionId!, bGraph.Version.GraphManifest.GetRawText(), StringComparison.Ordinal);
+        var consumer = mutation.Workflows.Single(x => x.Version.Id == "consumer-v1");
+        Assert.Equal(bItem.ActivityDefinitionVersionId, consumer.Version.State.RootActivity!.ActivityVersionId);
+        Assert.All(mutation.Activities, x => Assert.Equal("elsa.activity-graph", ReusableActivityImportDrafts.Draft(x.Version, null).State.Provider.ProviderKey));
+        Assert.All(mutation.Activities, x => Assert.Null(x.AuthoringState.HeadVersionId));
+    }
+
+    [Fact]
+    public async Task Apply_rejects_non_closed_selection_before_materialization_or_commit()
+    {
+        var collection = ValidCollection();
+        var analyzer = new ReusableActivityCollectionAnalyzer();
+        var plan = await analyzer.AnalyzeAsync(collection);
+        var materializer = new CapturingMaterializer();
+        var command = new ReusableActivityImportFixtures.CapturingCommand();
+        var importer = new ReusableActivityCollectionImporter(analyzer, materializer, command, ReusableActivityImportFixtures.Validator());
+
+        var exception = await Assert.ThrowsAsync<ReusableActivityImportValidationException>(async () =>
+            await importer.ApplyAsync(new(plan.PlanId, collection, ["b-v1"])));
+
+        Assert.Contains(exception.Diagnostics, x => x.Code == ReusableActivityImportDiagnosticCodes.SelectionNotClosed);
+        Assert.False(materializer.Called);
+        Assert.Null(command.Mutation);
+    }
+
+    [Fact]
+    public async Task Apply_rejects_an_empty_selection_before_materialization_or_commit()
+    {
+        var collection = ValidCollection();
+        var analyzer = new ReusableActivityCollectionAnalyzer();
+        var plan = await analyzer.AnalyzeAsync(collection);
+        var materializer = new CapturingMaterializer();
+        var command = new ReusableActivityImportFixtures.CapturingCommand();
+        var importer = new ReusableActivityCollectionImporter(analyzer, materializer, command, ReusableActivityImportFixtures.Validator());
+
+        var exception = await Assert.ThrowsAsync<ReusableActivityImportValidationException>(async () =>
+            await importer.ApplyAsync(new(plan.PlanId, collection, [])));
+
+        Assert.Equal(ReusableActivityImportDiagnosticCodes.SelectionInvalid, Assert.Single(exception.Diagnostics).Code);
+        Assert.False(materializer.Called);
+        Assert.Null(command.Mutation);
+    }
+
+    [Fact]
+    public async Task Apply_can_commit_a_valid_selection_when_unrelated_collection_members_are_invalid()
+    {
+        var valid = ReusableActivityImportFixtures.Workflow("valid", "valid-v1", 1, true, ReusableActivityImportFixtures.Leaf("valid-root"));
+        var duplicateOne = ReusableActivityImportFixtures.Workflow("duplicate-one", "duplicate-v1", 1, true, ReusableActivityImportFixtures.Leaf("one"));
+        var duplicateTwo = ReusableActivityImportFixtures.Workflow("duplicate-two", "duplicate-v1", 1, true, ReusableActivityImportFixtures.Leaf("two"));
+        var collection = ReusableActivityImportFixtures.Collection(valid, duplicateOne, duplicateTwo);
+        var analyzer = new ReusableActivityCollectionAnalyzer();
+        var plan = await analyzer.AnalyzeAsync(collection);
+        var command = new ReusableActivityImportFixtures.CapturingCommand();
+        var importer = new ReusableActivityCollectionImporter(analyzer, ReusableActivityImportFixtures.Materializer(), command, ReusableActivityImportFixtures.Validator());
+
+        var result = await importer.ApplyAsync(new(plan.PlanId, collection, ["valid-v1"]));
+
+        Assert.Equal(["valid-v1"], result.AppliedSourceVersionIds);
+        Assert.Single(command.Mutation!.Activities);
+        Assert.Single(command.Mutation.Workflows);
+    }
+
+    [Fact]
+    public async Task Apply_does_not_report_or_retain_a_partial_result_when_atomic_command_fails()
+    {
+        var collection = ValidCollection();
+        var analyzer = new ReusableActivityCollectionAnalyzer();
+        var plan = await analyzer.AnalyzeAsync(collection);
+        var command = new FailingCommand();
+        var importer = new ReusableActivityCollectionImporter(analyzer, ReusableActivityImportFixtures.Materializer(), command, ReusableActivityImportFixtures.Validator());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await importer.ApplyAsync(new(plan.PlanId, collection, ["a-v1", "b-v1"])));
+
+        Assert.True(command.Called);
+        Assert.False(command.Committed);
+    }
+
+    [Fact]
+    public async Task Changed_collection_cannot_apply_an_observed_plan_id()
+    {
+        var collection = ValidCollection();
+        var analyzer = new ReusableActivityCollectionAnalyzer();
+        var plan = await analyzer.AnalyzeAsync(collection);
+        collection.Definitions[0].Name = "changed after review";
+        var importer = new ReusableActivityCollectionImporter(analyzer, new CapturingMaterializer(), new ReusableActivityImportFixtures.CapturingCommand(), ReusableActivityImportFixtures.Validator());
+
+        var exception = await Assert.ThrowsAsync<ReusableActivityImportValidationException>(async () =>
+            await importer.ApplyAsync(new(plan.PlanId, collection, ["a-v1"])));
+
+        Assert.Equal(ReusableActivityImportDiagnosticCodes.PlanChanged, Assert.Single(exception.Diagnostics).Code);
+    }
+
+    private static ReusableActivityImportCollection ValidCollection()
+    {
+        var input = new Elsa3.Models.Elsa3WorkflowArgumentDefinition { Name = "message", Type = typeof(string).FullName! };
+        var a = ReusableActivityImportFixtures.Workflow("a", "a-v1", 1, true, ReusableActivityImportFixtures.Leaf("a-root"), input);
+        var b = ReusableActivityImportFixtures.Workflow("b", "b-v1", 1, true, ReusableActivityImportFixtures.Reference("b-to-a", targetVersionId: "a-v1"));
+        var consumer = ReusableActivityImportFixtures.Workflow("consumer", "consumer-v1", 1, false, ReusableActivityImportFixtures.Reference("consumer-to-b", targetVersionId: "b-v1"));
+        return ReusableActivityImportFixtures.Collection(a, b, consumer);
+    }
+
+    private sealed class FailingCommand : IReusableActivityImportCommand
+    {
+        public bool Called { get; private set; }
+        public bool Committed { get; private set; }
+        public ValueTask<ReusableActivityImportCommitResult> CommitAsync(ReusableActivityImportMutation mutation, CancellationToken cancellationToken = default)
+        {
+            Called = true;
+            throw new InvalidOperationException("atomic failpoint");
+        }
+    }
+
+    private sealed class CapturingMaterializer : IReusableActivityImportMaterializer
+    {
+        public bool Called { get; private set; }
+        public ValueTask<ReusableActivityImportMutation> MaterializeAsync(ReusableActivityImportCollection collection, ReusableActivityImportPlan plan, IReadOnlyList<ReusableActivityImportItem> selection, CancellationToken cancellationToken = default)
+        {
+            Called = true;
+            return ValueTask.FromResult(new ReusableActivityImportMutation(plan.PlanId, plan.CollectionId, selection.Select(x => x.SourceVersionId).ToArray(), [], []));
+        }
+    }
+}

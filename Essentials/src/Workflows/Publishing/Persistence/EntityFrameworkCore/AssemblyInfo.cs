@@ -1,0 +1,32 @@
+using Elsa.Persistence.EntityFramework;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
+using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities;
+
+// The single, discoverable declaration of this module. EfModuleCatalog.Discover reads this,
+// and EfModuleBinding.For derives the registration class's binding from it (#1872).
+[assembly: EfModule(
+    "Workflows.Publishing",
+    typeof(PublishingSnapshotReviewDbContext),
+    HistoryModule = PublishingSnapshotReviewEfModule.HistoryModuleName,
+    Sqlite = typeof(PublishingSnapshotReviewSqliteDbContext),
+    SqlServer = typeof(PublishingSnapshotReviewSqlServerDbContext),
+    PostgreSql = typeof(PublishingSnapshotReviewPostgreSqlDbContext),
+    MySql = typeof(PublishingSnapshotReviewMySqlDbContext),
+    DisplayName = "Publishing")]
+
+// Mirrors the [EfModule] name above into elsa-package.json's extensions.efModules (#1881);
+// EfModuleDescriptorTests guards that the two never drift apart.
+[assembly: ManifestExtension("efModules", "Workflows.Publishing")]
+
+// The schema families this module owns, each at the version its skew check reads. A host's
+// readability report is derived from these alone; every family the stores check must be declared
+// here, at the version they read; that holds by review until #2606 restores a compiled check. Each names the tables
+// whose rows it stamps, so the finalization gate holds every write to its own family's write version.
+[assembly: EfSchemaFamily(PublishingLedgerEfModule.SchemaFamily, "Workflows.Publishing", PublishingLedgerEfModule.ContentSchemaVersion, Entities = [typeof(PublicationRecordEntity), typeof(ActivityPublicationReceiptEntity), typeof(ActivityDraftTestRunEntity)])]
+[assembly: EfSchemaFamily(PublishingPolicyProjectionEfModule.SchemaFamily, "Workflows.Publishing", PublishingPolicyProjectionEfModule.SchemaVersion, Entities = [typeof(PublicationPolicyEntity), typeof(PublicationProjectionIntentEntity)])]
+[assembly: EfSchemaFamily(PublishingSnapshotReviewEfModule.SchemaFamily, "Workflows.Publishing", PublishingSnapshotReviewEfModule.SchemaVersion, Entities = [typeof(PublicationSnapshotReviewEntity)])]
+
+// Content and integrity columns: see Essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns".
+[assembly: EfSchemaContent(PublishingLedgerEfModule.SchemaFamily, typeof(ActivityPublicationReceiptEntity), nameof(ActivityPublicationReceiptEntity.Content))]
+[assembly: EfSchemaContent(PublishingLedgerEfModule.SchemaFamily, typeof(ActivityDraftTestRunEntity), nameof(ActivityDraftTestRunEntity.Content))]

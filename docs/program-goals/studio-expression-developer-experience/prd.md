@@ -19,7 +19,7 @@ The opportunity is to turn the existing investment into a dependable product sur
 - **Host operator**: composes language modules, permissions and policy and needs degraded states to describe the actual deployment.
 - **Support and release engineer**: needs reproducible current-head evidence that Studio and Foundation work together.
 
-Canonical terms remain in the Studio [`CONTEXT.md`](https://github.com/elsa-workflows/elsa-foundation-studio/blob/main/CONTEXT.md); this PRD does not redefine them.
+Canonical terms remain in the Studio [`CONTEXT.md`](../../../Studio/CONTEXT.md); this PRD does not redefine them.
 
 ## Primary journeys
 
@@ -47,7 +47,7 @@ The author can use completion, hover, signatures, explicit formatting, keyboard 
 
 1. Normally composed Studio and Foundation hosts must prove the persisted workflow journey through the real syntax picker, inspector, capability links and providers.
 2. Every installed supported text Expression Type must resolve editor and tooling readiness explicitly; reference and structured Expression Types keep their specialized editors.
-3. JavaScript grammar and advertised APIs must remain within the configured runtime surface. Local language help and authorized workflow help must coexist.
+3. JavaScript grammar and advertised APIs must remain within the configured runtime surface. Since #3010 that surface includes strict statement bodies (explicit `return` and final completion values) as well as expressions, so editor grammar and help must accept both. Local language help and authorized workflow help must coexist.
 4. Liquid completion must distinguish value, filter and tag positions and use the runtime's effective binding-pure filter/tag metadata.
 5. Metadata-only assistance must never evaluate authored source, retrieve runtime values or call runtime services.
 6. Diagnostics may be definitive only when known metadata proves a mistake; dynamic unknowns remain non-definitive.
@@ -62,6 +62,7 @@ The author can use completion, hover, signatures, explicit formatting, keyboard 
 - Apply WCAG 2.2 AA interaction expectations to the scoped editor journeys through automated accessibility checks plus the named keyboard scenarios. Actual current-head Chrome/Safari VoiceOver verification is removed from acceptance by the [2026-10-06 owner decision](decision-log.md#2026-10-06--remove-native-voiceover-verification-from-delivery-acceptance), recorded as skipped and never passed. No current-head native screen-reader or product-wide formal WCAG conformance is claimed.
 - Keep normal-host integration proof current to the exact reviewed Studio and Foundation heads.
 - Use focused affected-suite validation first and serialize heavy builds on the shared machine.
+- Elsa 4 is unreleased and has no existing data, so compatibility with earlier Elsa 4 behaviour or stored data is not a cost ([owner rule, 23 October](decision-log.md#2026-10-23--compatibility-is-not-a-cost-native-strict-converted-elsa-3-keeps-its-rules)). Contracts may change when that makes the product better.
 
 ## Product principles
 
@@ -74,7 +75,7 @@ The author can use completion, hover, signatures, explicit formatting, keyboard 
 ## Constraints
 
 - Retain CodeMirror behind the existing engine-neutral contract.
-- Retain Studio ADRs [0002](https://github.com/elsa-workflows/elsa-foundation-studio/blob/main/docs/adr/0002-keep-expression-specific-support-in-expression-modules.md) and [0006](https://github.com/elsa-workflows/elsa-foundation-studio/blob/main/docs/adr/0006-keep-code-editing-as-internal-studio-infrastructure.md).
+- Retain Studio ADRs [0002](../../../Studio/docs/adr/0002-keep-expression-specific-support-in-expression-modules.md) and [0006](../../../Studio/docs/adr/0006-keep-code-editing-as-internal-studio-infrastructure.md).
 - Reconcile and extend Studio spec 094 and Foundation spec 143 instead of creating competing baselines.
 - The deeper JavaScript language-service choice requires a bounded spike before adoption.
 
@@ -96,6 +97,13 @@ The author can use completion, hover, signatures, explicit formatting, keyboard 
 
 The program succeeds only when all four executable demonstrations pass on reviewed heads and the affected repository gates are green.
 
+## Related work on main
+
+- [#3010](https://github.com/elsa-workflows/elsa-foundation/pull/3010) (merged 19 October) lets JavaScript bindings use statement bodies, so JavaScript grammar and diagnostics follow [ADR 0083](../../adr/0083-javascript-binding-grammar-is-pinned-at-publish.md).
+- The Elsa 3 converter specs [247](../../../specs/247-elsa3-js-host-functions/spec.md) (JavaScript host functions) and [262](../../../specs/262-elsa3-undefined-strict/spec.md) (undefined results and strict mode) are implemented. Converted Elsa 3 definitions are authored and edited in the same editor, so its help must respect the [native versus converted rule](decision-log.md#2026-10-23--compatibility-is-not-a-cost-native-strict-converted-elsa-3-keeps-its-rules).
+
 ## Open product decisions
 
-None for milestone 1. The only deferred technical decision is whether a deeper JavaScript language service earns adoption; its spike must prove worker isolation, runtime-specific declarations, bundle/loading cost, cancellation, accessibility and fallback before it can affect milestone 3.
+- **How scripts read variables** ([#3204](https://github.com/elsa-workflows/elsa-foundation/issues/3204)): declared parameters or ambient `variables`, and whether `get<Name>()` stays. This gates the rebuild of milestones 2 and 3; see the [decision log](decision-log.md#2026-10-23--gate-milestones-2-and-3-on-the-3204-read-model-adr).
+
+None other for milestone 1. The only deferred technical decision is whether a deeper JavaScript language service earns adoption; its spike must prove worker isolation, runtime-specific declarations, bundle/loading cost, cancellation, accessibility and fallback before it can affect milestone 3.

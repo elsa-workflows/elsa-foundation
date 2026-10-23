@@ -86,7 +86,7 @@ Validation should distinguish: an unresolved plan; a known invalid binding/layou
 |---|---|
 | #1902 connection-guard gaps | Still open. Reuse its scope and legacy cases; this report does not duplicate or fix its scanner/provider-parser/shared-context coverage. |
 | #1895 OpenIddict provider module | Still open. Keep the host/vendor exception explicit; do not implicitly convert it while adding defaults. |
-| #1900 Secrets migration policy | Open issue, historical body: current code uses shared `EfMigrateOptions` and rejects the retired per-feature `MigratePolicy`. Do not recreate the old defect or preserve the obsolete workaround as accepted configuration. The issue's closure remains with its owner. |
+| #1900 Secrets migration policy | Open issue, historical body: current code uses shared `EfMigrateOptions`, and the retired per-feature `MigratePolicy` property is deleted (#2566). Do not recreate the old defect or preserve the obsolete workaround as accepted configuration. The issue's closure remains with its owner. |
 | Resource precedence, explicit-value presence, environment/CLI layering, effective runtime/tooling path | #1966 owns discovery; implementation remains blocked. |
 | Exact enrolled feature list, configuration schema, material unknowns | #1967 must reconcile both spikes and review the supported matrix before unblocking #1968. |
 | Real shared-resource workflow and migration proof | #1968: rebuilt host, PostgreSQL, design/publish/execute/restart and tooling agreement. Existing helper tests do not prove this new mode. |

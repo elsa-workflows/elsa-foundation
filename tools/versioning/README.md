@@ -11,7 +11,7 @@ pushing and the recording, and the Packages workflow runs it ([Publishing](#publ
 dotnet run --project tools/versioning/Elsa.Versioning.Calculator -- \
   --record-ref origin/publish-state [--commit HEAD] [--output computation.json] \
   [--pack-properties package-versions.props --branch main] \
-  [--force-advance Elsa.Tasks,Elsa.Http --force-reason "<why>"]
+  [--force-advance Elsa.Tasks,Elsa.Http --force-reason "<why>"] [--dataset auto|committed|derived]
 
 dotnet run --project tools/versioning/Elsa.Versioning.Calculator -- \
   --record published-versions.json [--commit <revision>] [--repo <dir>] [--output <file>]
@@ -22,24 +22,32 @@ dotnet run --project tools/versioning/Elsa.Versioning.Calculator -- \
 standard output unless `--output` names a file. `--pack-properties` also writes the MSBuild file that packs the
 computation from the branch `--branch` names ([Packing](#packing)); the two go together. `--force-advance` and
 `--force-reason` advance named packages whose inputs did not change ([Force-advance](#force-advance)); they go
-together too.
+together too. `--dataset` picks where each commit's dependency map comes from ([What it reads](#what-it-reads)); the
+default, `auto`, is what publishing uses.
 
 | Exit | Meaning |
 |---|---|
 | 0 | Computed. |
 | 1 | A publish gate refused: monotonicity (FR-012), or forward-only (FR-021), which includes a latest publish missing from the repository. Nothing may be published. |
-| 2 | Invalid input: usage, an unreadable record, a stale or unknown-schema dependency map, a record entry whose commit is missing, an import it cannot resolve, a force-advance naming no package, a package twice, a package the commit lacks, or no reason. |
+| 2 | Invalid input: usage, an unreadable record, a stale, unknown-schema or underivable dependency map, a `--dataset` source the commit cannot serve, a record entry whose commit is missing, an import it cannot resolve, a force-advance naming no package, a package twice, a package the commit lacks, or no reason. |
 
 ## What it reads
 
 Only git objects: the commit being built, the commit each record entry names, and the
-[dependency map](../../docs/maps/dependency-map.json) committed in each of them, which is its sole source of
-package ids, version lines, project paths, ownership and the packages each nuspec lists. It reads schema version 2
+[dependency map](../../docs/maps/README.md#dependency-map-dataset) for each of them, which is its sole source of
+package ids, version lines, project paths, ownership and the packages each nuspec lists. A commit from before
+[spec 259](../../specs/259-derived-dependency-map/spec.md) carries the map committed at `docs/maps/dependency-map.json`,
+and the calculator reads that copy as it is, so the inputs recorded for those publishes never move. Any other commit
+has the map derived from its own tree by the scan the maps generator runs (`tools/maps/Elsa.Maps.Projects`): its project
+files, `Directory.Build.props` files, `VersionLines.props`, `Directory.Packages.props` and lock files. A tree the scan
+cannot read is refused, naming the commit and the file. `--dataset committed` or `derived` forces one source for every
+commit, to compare them; the default, `auto`, chooses as above. It reads schema version 2
 of the map and refuses any other, version 1 included: that one records no pinned-transitive edges, so it cannot say
 which packages a pin reaches, and a record entry naming a commit that carries it stops the computation rather than
 comparing against an empty set. It never reads the working tree, a clock, the
 environment or a feed, and it can run only the read-only git commands `cat-file`, `ls-tree`, `merge-base` and
-`rev-parse`, so the same commit and record revision give byte-identical output on any machine (FR-009, SC-008).
+`rev-parse` (blobs through one `cat-file --batch` per computation), so the same commit and record revision give
+byte-identical output on any machine (FR-009, SC-008).
 A shallow clone lacks the commits it compares; fetch full history.
 
 Each line's `major.minor` comes from `ElsaVersion` (Line B) and `ElsaContractsVersion` (Line A) in
@@ -74,13 +82,13 @@ or commit is refused. `PublishedVersions.Serialize()` is the one serialization.
   "packages": [
     {
       "package_id": "Elsa.Tasks",
-      "path": "src/essentials/Tasks/Elsa.Tasks.csproj",
+      "path": "src/essentials/Tasks/Elsa.Tasks/Elsa.Tasks.csproj",
       "line": "B",
       "version": "4.0.8",
       "affected": true,
       "last_published": { "version": "4.0.7-preview", "commit": "<sha>" },
       "fingerprint": "sha256:<hex>",
-      "reasons": ["src/essentials/Tasks/Scheduler.cs (changed)"]
+      "reasons": ["src/essentials/Tasks/Elsa.Tasks/Scheduler.cs (changed)"]
     }
   ]
 }
@@ -133,11 +141,11 @@ dotnet pack Elsa.Server.pack.slnf -c Release --no-build -p:CustomBeforeDirectory
 
 The Docker Images workflow builds the Workbench image through the same file, so the image's Elsa assemblies and its
 `deps.json` carry the versions the feed does (#2084). Its restore reads the file too: `deps.json` takes a project
-reference's version from the restore, not the build. A pull request plans its own file, at branch-scoped versions,
-exactly as above. A push to main does not plan again - planning twice for the same commit would race the Packages
-workflow's own plan and write-back to `publish-state` (spec 150 FR-020) - it instead takes the file the Packages
-run for that commit already produced, from that run's `elsa-foundation-nuget-packages` artifact, so its Elsa package
-versions are exactly what Packages computed (and, on a publish, exactly what it wrote to the feed).
+reference's version from the restore, not the build. Images are built only for main (#2751), and the image build
+does not plan again - planning twice for the same commit would race the Packages workflow's own plan and write-back
+to `publish-state` (spec 150 FR-020) - it instead takes the file the Packages run for that commit already produced,
+from that run's `elsa-foundation-nuget-packages` artifact, so its Elsa package versions are exactly what Packages
+computed (and, on a publish, exactly what it wrote to the feed).
 
 The file sets `ElsaVersionComputationCommit`, and for each packable project, selected by project name,
 `ElsaComputedPackageVersion` and `ElsaInputFingerprint`. [`PackageVersioning.props`](../../PackageVersioning.props) at
@@ -241,7 +249,9 @@ it pushed, so `publish-state` exists and the next push to `main` publishes the r
 
 The workflow serializes every run from `main`, from its plan to its write-back, on the concurrency group
 `publish-state`, and never cancels one in progress (FR-020); anything else that writes `publish-state` joins that
-group. A GitHub Release publishes nothing until the 4.0 release cut (#2085): its job fails and says so.
+group. Except for the exact metadata-only contributor checkpoint accepted in #2426 and guarded in #2478, every
+GitHub Release fails until the 4.0 release cut (#2085). The checkpoint uses a reserved prerelease tag and creates no
+package artifact or feed write; the release path does not pack or publish it.
 
 To rehearse against a scratch feed, run `plan`, pack as the workflow does, and `publish` with `--feed` at the scratch
 feed and `--remote` at a scratch repository, which then holds the record.
@@ -287,7 +297,7 @@ reason and `--actor` (`github.actor`). It joins the `publish-state` concurrency 
 `tests/essentials/Versioning/Calculator/Tests` builds synthetic histories in throwaway repositories — moves, renames,
 deletions, re-adds, reverts, a rewritten `main`, partial publishes, pins reached only transitively, force-advances —
 and runs in CI's fast test job, as do the label and pack-properties tests beside them.
-`tests/essentials/Architecture/PackageVersionBuildCheckTests.cs` and `PackageVersioningPackTests.cs` prove the MSBuild
+`tests/essentials/Architecture/Tests/PackageVersionBuildCheckTests.cs` and `PackageVersioningPackTests.cs` prove the MSBuild
 side against real builds and packs, and `PinnedTransitivePackTests.cs` that pack writes exactly the pinned-transitive
 packages restore lists; `NuGetLockFileTests.cs` beside them holds the dependency map, which reads them from the committed
 lock files, to that list.
@@ -305,3 +315,10 @@ the colliding version, refusing to lower an entry, resetting `last_publish_commi
 one that is not, and the end-to-end acceptance — a repair followed by a publish that succeeds at one past the feed's
 version. `PublishRepairWorkflowTests` holds `publish-repair.yml` to running from `main` only and joining the
 `publish-state` concurrency group without cancelling a run in progress (FR-020).
+
+## Merge245 incident recovery
+
+The manual, default read-only exact20 recovery path for consolidation M4 is documented in
+[the recovery runbook](recovery/README.md). It uses original pinned artifacts and the shared
+`publish-state` workflow lock; installing the mechanism does not authorize publication or restart
+the normal publishers. This incident path does not change the normal computation/repair rules above.

@@ -9,20 +9,21 @@ merged months ago — 42 carry no status line at all, and the remainder use roug
 status strings. Nothing was ever wrong with any single spec; there was simply no rule saying when a
 spec stops being live, so none of them ever did.
 
-See also: [Spec status map](../maps/spec-status-map.md) (generated), and
+See also: [Spec status map](https://github.com/elsa-workflows/elsa-foundation/blob/generated-maps/docs/maps/spec-status-map.md) (generated, published on the `generated-maps` branch; see the [maps index](../maps/README.md)), and
 [the simplification review](../reports/simplification-review-2026-07.md) §D2 for the finding that
 prompted this.
 
 ## Numbering
 
-**One lane, monotonically increasing.** The next spec takes the highest existing number plus one,
-across the whole `specs/` tree — not per topic, not per program-goal bucket.
+**One lane, monotonically increasing.** The next spec takes the highest number ever used plus one,
+not per topic or per program-goal bucket. That means the highest across the `specs/` tree, any archive
+that finished specs have moved to, and open pull requests that add a `specs/` folder.
 
-The tree currently contains **27 duplicate numbers** (`015-*` ×3, `090-*` ×3, `092-*` ×3, `095-*` ×3
-and 23 more) because a runtime lane and a groundwork lane allocated numbers concurrently. Those
-collisions are **not** to be repaired: renumbering would rewrite 884 spec-path links across 61
-markdown files plus 14 references from C#, for a cosmetic result. They are grandfathered. The rule
-above prevents new ones.
+The tree once held 27 duplicate numbers because a runtime lane and a groundwork lane allocated
+numbers concurrently. Issue #2567 (ADR 0080 D6) gave the later folder of each collision a new number
+(203 to 233; 201 and 202 are taken by open PR #2530) and repointed its path links; every spec number is now unique. Prose that cites a
+renumbered spec by its old bare number (for example "spec 123") was not rewritten, so check the
+folder name when such a citation looks wrong.
 
 When two work units start at once, allocate both numbers up front rather than letting each pick.
 
@@ -49,6 +50,10 @@ spec sitting in a non-terminal status after its work has merged as a bug in the 
 that merges the implementation is the PR that sets `**Status**: Implemented`. The PR that lands a
 replacement sets the old spec to `Superseded` and names the successor.
 
+Set the terminal status before that PR merges, in its own diff: the status becomes true the moment
+the PR merges. Do not leave `In progress` until after the merge, and never open a separate PR only
+to change a status line.
+
 This is the whole policy. Everything else here is vocabulary in service of it.
 
 Where a spec's outcome was a decision not to build — a refuted hypothesis, a kill verdict — use
@@ -61,7 +66,7 @@ A spec in a non-terminal status keeps its path. A spec with a terminal status (`
 MAY be moved to `specs/archive/<same folder name>` by a consolidation PR that cites the git evidence
 for the status and repoints every inbound link. Never move a spec whose files are read by tests or
 linked from a project file: find those with `grep -rn "specs/" tests/ tools/ --include=*.cs` and
-`grep -rn "specs/" --include=*.csproj .`. The current exceptions are `092-domain-owned-apis`,
+`grep -rn "specs/" --include=*.csproj .`. The current exceptions are `220-domain-owned-apis`,
 `094-harden-groundwork-stores`, `139-groundwork-diagnostics-persistence`, and `141-runtime-alterations`.
 
 Once a spec reaches a terminal status its `checklists/` folder and `requirements.md` are process
@@ -72,7 +77,8 @@ residue and are not kept; `spec.md`, `plan.md`, `tasks.md`, `research.md`, `data
 
 - [`specs/README.md`](../../specs/README.md) is the hand-maintained entry point: what the tree is,
   how to read a spec, and where the generated index lives.
-- [`docs/maps/spec-status-map.md`](../maps/spec-status-map.md) is the generated index. It reads the
+- [`docs/maps/spec-status-map.md`](https://github.com/elsa-workflows/elsa-foundation/blob/generated-maps/docs/maps/spec-status-map.md) is the generated index, published on the
+  `generated-maps` branch or generated locally with `-- all`. It reads the
   `**Status**:` line, so the vocabulary above is what makes it useful — a map over 105 identical
   `Draft` values cannot tell anyone anything.
 

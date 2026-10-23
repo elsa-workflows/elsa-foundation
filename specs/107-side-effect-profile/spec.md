@@ -1,10 +1,14 @@
 # Feature Specification: Author-Declared Side-Effect Profile Gates the Pre-Activation Claim Boundary
 
+The [artifact identity correction](artifact-identity-correction.md) records #2515: include the
+pinned profile in the normal compiler's structured behavioral hash. Foundation export
+backwards compatibility is not required, as confirmed by the owner on 8 October 2026.
+
 **Feature Branch**: `worktree-agent-a42c393bebf532809`
 
 **Created**: 2026-07-20
 
-**Status**: Draft
+**Status**: Implemented — all tasks checked in f5ef31c2f
 
 **Input**: WU-marker of the runtime engine-performance effort under the [Runtime Execution Seam](../../docs/program-goals/runtime-execution-seam.md) bucket. Implements [ADR 0032](../../docs/adr/0032-runtime-checkpoint-cadence-is-policy-driven-per-workflow.md) decisions R1 + R2 (ratified 2026-07-20). Adds an author-declared `SideEffectProfile` to the pinned activity contract and makes the pre-activation attempt-claim checkpoint's mandatory immediate flush conditional on that profile, so a hot loop of pure activities can drop below one durable commit per activity under a coalescing cadence.
 

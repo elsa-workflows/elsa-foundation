@@ -1,0 +1,233 @@
+import { describe, expect, it } from "vitest";
+import {
+  appendConsoleEntries,
+  createConsoleConnectionOptions,
+  createConsoleExportContent,
+  createConsoleExportFilename,
+  createConsoleFilter,
+  createConsoleEntryFromLine,
+  formatConsoleSourceLabel,
+  getConsoleStreamName,
+  parseAnsiSegments,
+  isConsoleStreamEndpointNotFoundError,
+  isRecoverableConsoleStreamError,
+  register,
+  type ConsoleEntry
+} from "../module";
+import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
+
+describe("console stream module", () => {
+  it("registers navigation, route, and bottom panel contributions", () => {
+    const navigation: unknown[] = [];
+    const routes: unknown[] = [];
+    const panels: unknown[] = [];
+    const api = {
+      host: { http: { getJson: async () => ({}) } },
+      backend: { http: { getJson: async () => ({}) } },
+      navigation: { add: (item: unknown) => navigation.push(item) },
+      routes: { add: (route: unknown) => routes.push(route) },
+      panels: { add: (panel: unknown) => panels.push(panel) }
+    } as ElsaStudioModuleApi;
+
+    register(api);
+
+    expect(navigation).toHaveLength(1);
+    expect(navigation[0]).toMatchObject({
+      id: "console",
+      label: "Console",
+      path: "/diagnostics/console",
+      activePathPrefix: "/diagnostics/console",
+      parentId: "diagnostics",
+      order: 840
+    });
+    expect(routes).toHaveLength(1);
+    expect(routes[0]).toMatchObject({
+      id: "console",
+      label: "Console",
+      path: "/diagnostics/console"
+    });
+    expect(panels).toHaveLength(1);
+    expect(panels[0]).toMatchObject({
+      id: "console-stream",
+      title: "Console",
+      order: 1000
+    });
+  });
+
+  it("normalizes console stream names", () => {
+    expect(getConsoleStreamName(0)).toBe("stdout");
+    expect(getConsoleStreamName("stdout")).toBe("stdout");
+    expect(getConsoleStreamName(1)).toBe("stderr");
+    expect(getConsoleStreamName("stderr")).toBe("stderr");
+    expect(getConsoleStreamName("Stderr")).toBe("stderr");
+  });
+
+  it("creates entries from streamed lines", () => {
+    const entry = createConsoleEntryFromLine({
+      id: "line-1",
+      receivedAt: "2026-06-15T00:00:00.000Z",
+      sequence: 5,
+      stream: 1,
+      text: "failed",
+      source: {
+        id: "pod-source",
+        displayName: "Elsa.Server",
+        serviceName: "elsa-server",
+        podName: "elsa-server-7d9f",
+        containerName: "server",
+        namespace: "prod"
+      }
+    });
+
+    expect(entry).toEqual({
+      id: "line-1",
+      timestamp: "2026-06-15T00:00:00.000Z",
+      sequence: 5,
+      stream: "stderr",
+      text: "failed",
+      sourceId: "pod-source",
+      sourceLabel: "prod / elsa-server-7d9f / server"
+    });
+  });
+
+  it("creates entries from PascalCase server DTOs", () => {
+    const entry = createConsoleEntryFromLine({
+      Id: "line-2",
+      ReceivedAt: "2026-06-15T00:00:00.000Z",
+      Sequence: 6,
+      Stream: "Stderr",
+      Text: "server failed",
+      Source: {
+        Id: "server-source",
+        DisplayName: "Elsa.Server",
+        MachineName: "machine",
+        ProcessId: 456
+      }
+    });
+
+    expect(entry).toEqual({
+      id: "line-2",
+      timestamp: "2026-06-15T00:00:00.000Z",
+      sequence: 6,
+      stream: "stderr",
+      text: "server failed",
+      sourceId: "server-source",
+      sourceLabel: "Elsa.Server · machine:456"
+    });
+  });
+
+  it("trims appended entries to the maximum console size", () => {
+    const current = Array.from({ length: 1_999 }, (_, index) => entry(index));
+    const appended = appendConsoleEntries(current, [entry(1_999), entry(2_000)]);
+
+    expect(appended).toHaveLength(2_000);
+    expect(appended[0].id).toBe("line-1");
+    expect(appended.at(-1)?.id).toBe("line-2000");
+  });
+
+  it("parses ANSI color and reset segments", () => {
+    expect(parseAnsiSegments("plain")).toEqual([{ text: "plain", className: "" }]);
+    expect(parseAnsiSegments("\x1b[31mred\x1b[0m normal")).toEqual([
+      { text: "red", className: "console-stream-ansi-fg-red" },
+      { text: " normal", className: "" }
+    ]);
+  });
+
+  it("treats stream timeout errors as recoverable", () => {
+    expect(isRecoverableConsoleStreamError(new Error("Server timeout elapsed without receiving a message from the server."))).toBe(true);
+    expect(isRecoverableConsoleStreamError(new Error("Something else"))).toBe(false);
+  });
+
+  it("detects missing console stream endpoints", () => {
+    expect(isConsoleStreamEndpointNotFoundError(new Error("Status code '404'"))).toBe(true);
+    expect(isConsoleStreamEndpointNotFoundError(new Error("Status code '500'"))).toBe(false);
+  });
+
+  it("formats process and pod source labels", () => {
+    expect(formatConsoleSourceLabel({
+      id: "machine:123",
+      displayName: "Elsa.Server",
+      machineName: "machine",
+      processId: 123
+    })).toBe("Elsa.Server · machine:123");
+
+    expect(formatConsoleSourceLabel({
+      id: "pod-source",
+      podName: "elsa-server-7d9f",
+      containerName: "server",
+      namespace: "prod"
+    })).toBe("prod / elsa-server-7d9f / server");
+  });
+
+  it("omits sourceId when all sources are selected", () => {
+    expect(createConsoleFilter(null)).toEqual({ limit: 2000 });
+    expect(createConsoleFilter("source-1")).toEqual({ limit: 2000, sourceId: "source-1" });
+  });
+
+  it("passes endpoint headers to SignalR connection options", () => {
+    expect(createConsoleConnectionOptions({ baseUrl: "https://server.example", headers: { "X-Elsa-Module-Management-Key": "secret" }, http: { getJson: async () => ({}) } }).headers)
+      .toEqual({ "x-elsa-module-management-key": "secret" });
+    expect(createConsoleConnectionOptions({ baseUrl: "https://server.example", http: { getJson: async () => ({}) } }).headers)
+      .toBeUndefined();
+  });
+
+  it("attaches the shell's access-token factory to the hub connection when authenticated", async () => {
+    const accessTokenFactory = async () => "bearer-token-1";
+    const options = createConsoleConnectionOptions({
+      baseUrl: "https://server.example",
+      headers: { "X-Elsa-Module-Management-Key": "secret" },
+      http: { getJson: async () => ({}) },
+      accessTokenFactory
+    });
+
+    expect(options.accessTokenFactory).toBe(accessTokenFactory);
+    await expect(options.accessTokenFactory?.()).resolves.toBe("bearer-token-1");
+    // Headers still ride along so endpoint-auth composes with the bearer token.
+    expect(options.headers).toEqual({ "x-elsa-module-management-key": "secret" });
+  });
+
+  it("does not synthesize an accessTokenFactory from the management-key header", () => {
+    // Regression guard for #215 finding 2: the shell decides the hub credential. A management-key header
+    // with no shell-supplied factory (e.g. the cross-origin backend context) must NOT be reverse-engineered
+    // into an access_token, or the shell secret would leak to the backend/proxy as a query parameter.
+    const options = createConsoleConnectionOptions({
+      baseUrl: "https://server.example",
+      headers: { "X-Elsa-Module-Management-Key": "secret" },
+      http: { getJson: async () => ({}) }
+    });
+
+    expect(options.accessTokenFactory).toBeUndefined();
+    // The header still rides along so header-capable transports can present it.
+    expect(options.headers).toEqual({ "x-elsa-module-management-key": "secret" });
+  });
+
+  it("omits accessTokenFactory on the anonymous context", () => {
+    expect(createConsoleConnectionOptions({ baseUrl: "https://server.example", http: { getJson: async () => ({}) } }).accessTokenFactory)
+      .toBeUndefined();
+  });
+
+  it("exports visible console entries as plain text", () => {
+    const entries = [
+      { ...entry(1), stream: "stdout" as const, text: "\x1b[32mready\x1b[0m", sourceLabel: "Elsa Studio · machine:123" },
+      { ...entry(2), stream: "stderr" as const, text: "failed", sourceId: "server" }
+    ];
+
+    expect(createConsoleExportContent(entries)).toBe([
+      `${entries[0].timestamp} stdout Elsa Studio · machine:123 ready`,
+      `${entries[1].timestamp} stderr server failed`
+    ].join("\n"));
+    expect(createConsoleExportFilename(new Date("2026-06-22T01:02:03.456Z"))).toBe("console-log-2026-06-22T01-02-03Z.log");
+  });
+});
+
+function entry(sequence: number): ConsoleEntry {
+  return {
+    id: `line-${sequence}`,
+    timestamp: new Date(sequence).toISOString(),
+    sequence,
+    stream: "stdout",
+    text: `line ${sequence}`,
+    sourceId: null,
+    sourceLabel: null
+  };
+}

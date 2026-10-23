@@ -2,12 +2,14 @@
 
 ## Status
 
-Active (Phase 3).
+Active. Reactivated on 14 October 2026 as a named owner exception to
+[ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus).
 
 ## Area
 
-Executable BPMN 2.0 support in the Workflows Runtime: the `BpmnProcess` container engine, BPMN
-XML/BPMNDI interchange, and the runtime seams the engine consumes.
+Executable BPMN 2.0 support: the `BpmnProcess` composite activity, BPMN XML and BPMNDI interchange, the runtime
+seams the engine consumes, and the shared `valence-works/bpmn` library that holds the BPMN semantics for both
+Elsa 3 and Elsa 4.
 
 ## Steward(s)
 
@@ -15,70 +17,52 @@ Sipke plus the active BPMN control-room session and its worker agents.
 
 ## Purpose
 
-Give Elsa a first-class executable BPMN engine — authored or imported BPMN 2.0 processes run on the
-Workflows Runtime with engine-owned token semantics — while every runtime capability the engine
-needs (subtree cancellation, fault absorption, live-child reads, scoped-variable reads) lands as a
-general, spoof-proof runtime seam rather than a BPMN-private side channel.
+Make Elsa's BPMN support competitive with a Camunda 7-class engine. BPMN stays an Elsa composite activity next
+to Flowchart, not a replacement for it. Models authored elsewhere import and run with the same meaning, or are
+refused. The platform capabilities BPMN needs, such as job workers, user tasks, message correlation and FEEL,
+are built as general Elsa modules that Flowchart can use too.
+
+## Decisions (13 October 2026)
+
+1. **One semantics core.** Elsa 4 moves onto `Bpmn.Semantics`, the package Elsa 3 already ships on, and its
+   own token engine is deleted (ADR 0063).
+2. **FEEL plus Zeebe mapping.** FEEL becomes an Elsa expression provider. `zeebe:` task definitions, IO
+   mappings and timers map into Elsa bindings. Simple Camunda 7 JUEL is translated; the rest is refused.
+3. **Camunda 7-class throughput on a single node.** An explicit target is set together with Runtime
+   Efficiency, and no partitioned execution is designed for now.
+4. **Refuse rather than degrade.** An imported model whose meaning would change does not publish.
 
 ## In scope
 
-- The BPMN runtime module (`src/essentials/Activities/Bpmn/`): token engine, gateways, events, boundary
-  events, multi-instance, cycles, and the Phase 3 constructs (compensation, transactions/cancel
-  events, escalation, event subprocesses, call activity, executable collaborations).
-- BPMN 2.0 XML + BPMNDI interchange (`src/essentials/Activities/Bpmn/Interchange/`).
-- Runtime seams motivated by the engine but designed provider-neutral (specs 112, 115, 119, 123).
+- The BPMN runtime module (`Essentials/src/Activities/Bpmn/`) and its interchange adapter.
+- Upstream changes to `valence-works/bpmn` that the engine needs, and the package bumps that consume them.
+- Studio BPMN authoring and run views (`Studio/`).
+- Designs for the platform modules BPMN depends on: job workers and external tasks, user tasks and forms,
+  message correlation with buffering, and connectors.
 
 ## Out of scope
 
-- Studio authoring UX (separate repository `elsa-foundation-studio`; pulled in only on request).
-- Non-BPMN consumers of the runtime seams (they are welcome, but their work belongs to their own
-  buckets).
+- An operator console. That belongs to Valence Control.
+- Zeebe wire-protocol compatibility, CMMN and analytics.
 
 ## Active objectives
 
-- **Phase 3 construct list COMPLETE (2026-07-23)**: specs 123 (scoped-variable read seam +
-  collection-mode multi-instance, PR #965), 124 (compensation, PR #966), 125 (transactions/cancel
-  events, PR #970), 126 (runtime seam C, PR #974), 127 (escalation, PR #975), and 128 (event subprocesses tier 1,
-  PR #992; error trigger stated-cut pending issue #989) 132 (#989 fix, PR #996), 133 (call activity, PR #999; #998 filed), and 134 (tier-2 event
-  subprocesses, PR #1000) 135 (message send surface, PR #1002), and 136
-  (collaboration/pool import, PR #1003) are merged. Every construct on the Phase 3 scope list has
-  shipped. Follow-up #998 (seam-A dispatch-cancel reach) is delivered via PR #1035. Receive-side
-  authored Event correlation stamping (#1001, spec 137) is delivered; BPMN-specific correlation
-  authoring remains a separate stated cut. Remaining open follow-ups: the CancelLiveWork-through-seam-A
-  carry, outputs→variables BPMN wiring (leaf capture landed in #995), and two chips (call-activity E2E
-  script; ReplaceChildren metadata preservation).
-- Carried follow-ups from Phase 2: terminate/fault teardown through seam A (`CancelLiveWork` is
-  logical-only today), error-code matching for error boundaries, non-interrupting timer repetition,
-  `completionCondition`, MI output aggregation, `standardLoopCharacteristics`, unbounded-loop
-  guardrails.
+- [#2735](https://github.com/elsa-workflows/elsa-foundation/issues/2735): switch to `Bpmn.Semantics`, in three
+  PRs. First, a parity diff that upstreams anything only Elsa 4 has. Then the switch, with the work binder and
+  a guard test. Then ADR 0063 marked Accepted.
+- [#2736](https://github.com/elsa-workflows/elsa-foundation/issues/2736): refuse to import or publish BPMN whose
+  meaning changed on import.
+- Library follow-ups: [valence-works/bpmn#27](https://github.com/valence-works/bpmn/issues/27) (cycles that
+  never wait). [valence-works/bpmn#26](https://github.com/valence-works/bpmn/issues/26) shipped in 0.3.0.
 
 ## Linked surfaces
 
-- Program record and progress table: [docs/plans/bpmn-phase2-events-tier.md](../plans/bpmn-phase2-events-tier.md)
-  (Phases 1–2 complete as of 2026-07-22; carries the per-unit PR table and seam facts).
-- Shipped specs: `specs/108`, `112`, `115-runtime-handled-child-fault`, `116`–`122`; in flight:
-  `specs/123-runtime-scoped-variable-read`.
-- Runtime seam documentation: the runtime `EXTENSION_POINTS.md` entries for
-  `RequestChildSubtreeCancellation`, `RequestChildFaultAbsorption`, `GetLiveChildActivities`, and
-  the trigger-metadata read seam.
-
-## Current roadmap notes
-
-Phase 3 runs the proven per-slice loop (spec first, worker in isolated worktree, independent
-verification, merge-commit after CI green). Recommended order starts small (spec 123 warm-up) and
-takes compensation as the first large construct; compensation's reverse-order log is a prerequisite
-for transactions/cancel events.
-
-## Drift / review notes
-
-Registered 2026-07-22 after the Phase 3 control-room drift check: three phases of durable
-multi-session work had been coordinating solely through the plan document, which met the registry's
-own threshold for a named bucket. The plan document remains the detailed program record; this file
-is the registry-level surface.
+- Gap analysis and roadmap: https://claude.ai/artifact/7mh6yzenWfMvt8smFCnHL6
+- Earlier program record: [docs/plans/bpmn-phase2-events-tier.md](../plans/bpmn-phase2-events-tier.md)
+  (Phases 1 to 3).
+- [ADR 0063](../adr/0063-bpmn-moves-to-a-host-agnostic-library.md) and the `valence-works/bpmn` repository.
 
 ## Removal or completion conditions
 
-Complete when the Phase 3 scope list has shipped or been explicitly dropped, remaining follow-ups
-are either shipped or filed as ordinary report findings, and the program record marks the program
-closed. If the BPMN module later moves to a dedicated workspace repository, this bucket transfers
-or closes in favor of that repository's planning surface.
+Complete when Elsa 4 runs on the shared semantics core, imported models are refused instead of silently
+degraded, and the platform-module designs are either built or explicitly dropped.

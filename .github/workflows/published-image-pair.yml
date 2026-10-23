@@ -1,0 +1,43 @@
+name: Published Studio and Workbench pair
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/published-image-pair.yml
+      - docker/compose/docker-compose.images.yml
+      - docker/compose/README.md
+      - docs/contributing/published-image-pair.md
+      - tools/contributor-pair-proof/**
+
+permissions:
+  contents: read
+
+jobs:
+  published-image-pair:
+    name: Exercise pinned published images in a real browser
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out the reviewed workflow and harness
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tools/contributor-pair-proof/package-lock.json
+
+      - name: Install the locked browser harness
+        working-directory: tools/contributor-pair-proof
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Install Chromium
+        working-directory: tools/contributor-pair-proof
+        run: ./node_modules/.bin/playwright install --with-deps chromium
+
+      - name: Run the published image pair journey
+        run: node tools/contributor-pair-proof/run.mjs

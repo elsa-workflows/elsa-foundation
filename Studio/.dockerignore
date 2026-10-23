@@ -1,0 +1,46 @@
+# Build output
+**/bin/
+**/obj/
+artifacts/
+
+# Node / frontend tooling (frontend assets are generated before the Docker build and
+# copied from the build context under each project's wwwroot)
+**/node_modules/
+**/dist/
+**/build/
+**/coverage/
+.pnpm-store/
+
+# Local dev-only visual harness for the studio client
+src/apps/Elsa.Studio.Web/Client/harness/
+
+# Git / VCS
+.git/
+.gitignore
+**/.gitignore
+
+# IDE / editor
+.idea/
+.vscode/
+.vs/
+*.user
+*.suo
+
+# OS / logs
+.DS_Store
+*.log
+
+# Environment / secrets
+.env*
+
+# Docs and specs are not needed in the build context
+docs/
+specs/
+.specify/
+.github/
+.agents/
+.claude/
+
+# The Dockerfile itself
+**/Dockerfile
+.dockerignore

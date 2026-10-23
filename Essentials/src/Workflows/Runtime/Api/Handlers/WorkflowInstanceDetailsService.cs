@@ -1,0 +1,88 @@
+using Elsa.Workflows.Runtime.Api.Coalescing;
+using Elsa.Workflows.Runtime.Api.Contracts;
+using Elsa.Workflows.Runtime.Api.Models;
+using Elsa.Workflows.Runtime.Api.Requests;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Values;
+
+namespace Elsa.Workflows.Runtime.Api.Handlers;
+
+public sealed class WorkflowInstanceDetailsService(
+    IWorkflowExecutionStateStore workflowExecutionStateStore,
+    IActivityExecutionInspectionStore activityExecutionInspectionStore,
+    IIncidentStateStore incidentStateStore,
+    IDurableValueStateStore durableValueStateStore,
+    IRuntimePayloadCapturePolicy payloadCapturePolicy,
+    IActivityInspectionContextAsync authorization,
+    RuntimePersistenceModeInspector persistenceModeInspector,
+    IWorkflowRuntimeOperatorAccess? operatorAccess = null) : IWorkflowInstanceDetailsService
+{
+    public async Task<WorkflowInstanceDetailsView?> GetAsync(GetWorkflowInstance request, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.WorkflowExecutionId);
+
+        var state = await workflowExecutionStateStore.FindAsync(request.WorkflowExecutionId, cancellationToken);
+        if (state is null || !await authorization.CanInspectStructureAsync(state, cancellationToken))
+            return null;
+
+        var canInspectSensitiveValues = await authorization.CanInspectSensitiveValuesAsync(state, cancellationToken);
+
+        var activityPage = await activityExecutionInspectionStore.ListSummariesPageAsync(
+            new ActivityExecutionInspectionSummaryPageQuery(
+                request.WorkflowExecutionId,
+                request.ActivityPageSize,
+                request.ActivityContinuationToken),
+            cancellationToken);
+        var activities = activityPage.Items
+            .Select(ActivityExecutionInspectionSummaryView.From)
+            .ToArray();
+        var incidentStates = await incidentStateStore.ListAsync(request.WorkflowExecutionId, cancellationToken);
+        var incidents = incidentStates
+            .OrderBy(incident => incident.CreatedAt)
+            .ThenBy(incident => incident.IncidentId, StringComparer.Ordinal)
+            .Select(incident => IncidentStateView.From(incident, canInspectSensitiveValues))
+            .ToArray();
+
+        // Workflow outputs (#254 Seam R1): read-only projection of the instance's SetOutput-assigned durable
+        // values, with every payload routed through the configured capture policy (declined payloads surface
+        // as named redacted markers, never silently absent).
+        var outputProjections = RuntimeWorkflowOutputStateProjection
+            .Project(await durableValueStateStore.ListAllDurableValueStatesAsync(request.WorkflowExecutionId, cancellationToken), payloadCapturePolicy)
+            .ToArray();
+        var outputs = outputProjections.ToDictionary(
+            output => output.Name,
+            output => canInspectSensitiveValues
+                ? new WorkflowOutputView(output.Value, output.IsRedacted, output.RedactionReason, output.CapturedAt)
+                : WorkflowOutputView.Redacted(output.CapturedAt),
+            StringComparer.Ordinal);
+
+        // Persistence mode + inspection granularity: prefer the mode the run recorded at start so an instance reports
+        // the mode it actually ran under, falling back to the host default for a run that recorded none.
+        var persistenceMode = persistenceModeInspector.Resolve(state);
+
+        return new WorkflowInstanceDetailsView(
+            WorkflowInstanceSummaryView.From(state, activityPage.TotalCount, incidents.Length, canInspectSensitiveValues,
+                IncidentHealthCounts.From(incidentStates)),
+            activities,
+            incidents,
+            outputs,
+            persistenceMode.PersistenceMode,
+            persistenceMode.InspectionGranularity,
+            activityPage.NextContinuationToken,
+            // Spec 260 FR-416: a display hint for Studio. Without an operator-access service the run reads as not
+            // manageable (fail closed).
+            new WorkflowInstancePermissionsView(
+                operatorAccess is not null && await operatorAccess.CanManageAsync(state, cancellationToken),
+                canInspectSensitiveValues));
+    }
+}
+
+/// <summary>
+/// The workflow-instance detail read operation the runtime endpoints dispatch to. A null view means the workflow
+/// execution is missing or the caller may not inspect it.
+/// </summary>
+public interface IWorkflowInstanceDetailsService
+{
+    Task<WorkflowInstanceDetailsView?> GetAsync(GetWorkflowInstance request, CancellationToken cancellationToken);
+}

@@ -1,0 +1,47 @@
+# Runtime Throughput
+
+> **Merged into [Runtime Efficiency](runtime-efficiency.md)** by [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus). The constraint against a default cadence flip is lifted (ADR 0080 D2).
+
+- **Status:** Merged into [Runtime Efficiency](runtime-efficiency.md) (2026-10-10).
+- **Area:** Workflow runtime / concurrent execution correctness / bounded throughput evidence.
+- **Stewards:** Sipke plus the runtime throughput control room.
+- **Program:** [#2531](https://github.com/elsa-workflows/elsa-foundation/issues/2531).
+
+## Purpose
+
+[Runtime Database Access](runtime-db-access.md) reduced per-execution database commands and measured latency, but it never measured throughput. Its only concurrent control used four clients. This program proves the reference workflow stays correct under concurrent load, removes request-path work that does not belong there, and measures one bounded throughput baseline with bottleneck attribution. The [findings comment](https://github.com/elsa-workflows/elsa-foundation/issues/2382#issuecomment-6077532251) records the starting evidence and the ranked options.
+
+## Owner decision and ADR 0073 D7 boundary
+
+On 9 October 2026 Sipke approved both tracks and a **scoped ADR 0073 D7 exception for Track B only**. The exception covers one one-off throughput ramp with the bounds below. It does not reinstate benchmark infrastructure, CI timing gates, budgets, SLAs or a general benchmark service. Outside Track B, D7 stands: Track A work proves correctness and command counts and records no elapsed time.
+
+## Objectives
+
+| Track | Issue | Outcome |
+|---|---|---|
+| A1: concurrency correctness (**diagnosed**, closed 10 October 2026) | [#2532](https://github.com/elsa-workflows/elsa-foundation/issues/2532) | `RuntimeDbPaging2392Reference` at 16 and 32 clients returns HTTP 200 `Alice Smith` for every request. Every execution settles with zero incidents. No timers. A 429 is admission backpressure, not a failure: the client retries it per `Retry-After`, and the run is judged by lost work, never by shed count (owner decision, 9 October 2026; #2548). Result at `1bef1fe`: 7 of 8 pass. SQLite Immediate/32 loses no acknowledged work but exceeds the 60s client timeout. The owner closed A1 as diagnosed, and the latency goes to Track B as [#2553](https://github.com/elsa-workflows/elsa-foundation/issues/2553). |
+| A2: request-path telemetry writes | [#2533](https://github.com/elsa-workflows/elsa-foundation/issues/2533) | Explain the `elsa_otel_*` writes attributed to the request trace (48/134 Coalesced commands), then remove them from that path or document how to disable them. |
+| Lease contention fix (**done**) | [#2538](https://github.com/elsa-workflows/elsa-foundation/issues/2538), [spec 200](../../specs/200-root-write-lease-rows/spec.md) | Done in #2539: one record per lease, keeping GC safety. A1 lease errors fell from 204 to 0. The follow-up [#2548](https://github.com/elsa-workflows/elsa-foundation/issues/2548) (#2549) stopped admission-shed starts being reported as started. |
+| B: bounded throughput ramp (**done**, 10 October 2026) | [#2534](https://github.com/elsa-workflows/elsa-foundation/issues/2534) | Release build, ramp of 1–64 clients, Immediate/Coalesced × persisted diagnostics on/off. Records the plateau and the saturating resource. One-off report. It covers SQLite Immediate ([#2553](https://github.com/elsa-workflows/elsa-foundation/issues/2553)). Published as [baseline.md](../reports/runtime-throughput/baseline.md) (#2557). Of the seven series, only series 1 names a saturating resource. The rest are **unattributed** under the protocol's attribution rule: no counter reached its limit. Finding those resources moves to the follow-ups below. |
+
+## Follow-ups from Track B
+
+Each follow-up is a separate unit. None introduces a gate, budget or SLA.
+
+| Priority | Issue | Finding |
+|---|---|---|
+| 1 | [#2601](https://github.com/elsa-workflows/elsa-foundation/issues/2601) (**fixed**, #2611) | **Correctness.** Http16 at 4 clients on PostgreSQL with Coalesced cadence records HTTP 500 responses and, in the same steps, instances left `Running` with no incident. Cause: the resumption sweep's terminal purge deleted scheduler work that the drain which committed `WorkflowCompleted` still tracked. That drain's quiescence flush then re-applied stale `Running` state. The sweep now skips executions with a live ownership lease, and a failed post-commit reconciliation ends the coalesced segment. |
+| 2 | [#2613](https://github.com/elsa-workflows/elsa-foundation/issues/2613) | **Persisted diagnostics cost.** With diagnostics on, Coalesced throughput at 1 client is about half of what it is with diagnostics off (4.05 against 8.48 executions/s), and the plateau falls from 16 clients or more to 8. A2 found the OpenTelemetry writes off the critical path, but this gap appears with no concurrency at all. The structured-logs store is the untested suspect. |
+| 3 | [#2553](https://github.com/elsa-workflows/elsa-foundation/issues/2553) | **Immediate cadence cost per request.** At 1 client: PostgreSQL 1.3–1.9 executions/s against 8.5 with Coalesced; SQLite 0.88 executions/s, plateauing at 2 clients. Measure commits and fsyncs per run before choosing an optimization. |
+| 4 | [#2614](https://github.com/elsa-workflows/elsa-foundation/issues/2614) | **Admission controller.** It sheds at 16 and 32 clients while CPU stays below 51% and the connection pool is no more than 26% used. Check whether its adaptive limit is tighter than the resources warrant. |
+
+## Boundaries
+
+- No durability weakening, default cadence flip (lifted by ADR 0080 D2), generic cache or inspection redesign (#1237 keeps inspection decoupling).
+- Rejected candidates #1239 and #2407 stay rejected unless new evidence addresses their failed guards.
+- Optimizations chosen from Track B evidence become separate, separately reviewed units.
+- Manual package publication, releases and deployment remain out of scope.
+
+## Completion
+
+A1 passes or is diagnosed. A2 has a recorded decision with evidence. B publishes a pinned report naming the plateau and the saturating resource for each variant, with failed windows retained. A resource with no counter at its limit is reported as unattributed, as the [protocol's attribution rule](../reports/runtime-throughput/throughput-ramp-protocol.md#attribution-rule) requires, and its attribution becomes a follow-up. Any follow-up optimization is listed here or in its own bucket.

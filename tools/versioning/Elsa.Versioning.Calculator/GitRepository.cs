@@ -87,6 +87,13 @@ public sealed partial class GitRepository
         return result.ExitCode == 0 ? result.Output : null;
     }
 
+    /// <summary>
+    /// One long-lived <c>git cat-file --batch</c> for reading many blobs: a process per blob costs more than the read
+    /// once a computation derives a dependency map from hundreds of project and lock files (spec 259).
+    /// </summary>
+    internal BlobBatch OpenBlobBatch() =>
+        ReadOnlyCommands.Contains("cat-file") ? new BlobBatch(Directory) : throw new InvalidOperationException("git cat-file is not a read-only command the calculator may run.");
+
     private static byte[] Require(GitResult result, string what) =>
         result.ExitCode == 0 ? result.Output : throw new InvalidOperationException($"git {what} failed: {result.Error}");
 

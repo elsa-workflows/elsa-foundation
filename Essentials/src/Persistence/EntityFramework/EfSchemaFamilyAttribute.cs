@@ -1,0 +1,104 @@
+using Elsa.Persistence.Schema;
+
+namespace Elsa.Persistence.EntityFramework;
+
+/// <summary>
+/// The one declaration of a schema family: the tables whose rows stamp one persisted-schema version,
+/// the EF module that owns them, and the version this build stamps and reads. <see cref="EfSchemaFamilyCatalog.Discover"/>
+/// is the one place that reads it, and a host's readability report is derived from it alone.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Assembly-level and constant-argument-only, as <see cref="EfModuleAttribute"/> is, so it is read as
+/// metadata without composing a shell or a container. It sits in the owning module's assembly, and <see cref="Module"/>
+/// names an <see cref="EfModuleAttribute"/> that same assembly declares - or, for a family shared by no single module
+/// (see below), it sits in an assembly with no <see cref="EfModuleAttribute"/> of its own, and <see cref="Module"/> is
+/// <see langword="null"/>.
+/// </para>
+/// <para>
+/// <see cref="Upcasters"/> is the family's ordered chain: the build reads its
+/// <see cref="CurrentVersion"/> and every predecessor the chain reaches without a gap, which is what
+/// <see cref="EfSchemaFamilyDescriptor.ReadableVersions"/> reports and what every store's read accepts.
+/// </para>
+/// <para>
+/// A family owned by shared mapping code that several EF modules' contexts call into - <c>modelBuilder.MapXyz(...)</c>
+/// from a package with no <see cref="EfModuleAttribute"/> of its own, one version defined once - has no single owning
+/// module to name. The two-argument constructor declares exactly that: <see cref="Module"/> reads
+/// <see langword="null"/>, and <see cref="EfSchemaFamilyCatalog"/> accepts it only in an assembly that declares no
+/// <see cref="EfModuleAttribute"/> at all, so a module's own family still names its module explicitly.
+/// </para>
+/// </remarks>
+[AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true, Inherited = false)]
+public sealed class EfSchemaFamilyAttribute : Attribute
+{
+    public EfSchemaFamilyAttribute(string name, string module, string currentVersion)
+    {
+        Name = name;
+        Module = module;
+        CurrentVersion = currentVersion;
+    }
+
+    /// <summary>Declares <paramref name="name"/> shared: owned by no single EF module. <see cref="Module"/> reads
+    /// <see langword="null"/>.</summary>
+    public EfSchemaFamilyAttribute(string name, string currentVersion)
+    {
+        Name = name;
+        Module = null;
+        CurrentVersion = currentVersion;
+    }
+
+    /// <summary>The family's identity, as its skew check names it: the module class's <c>SchemaFamily</c> constant.</summary>
+    public string Name { get; }
+
+    /// <summary>
+    /// The canonical <see cref="EfModuleAttribute.Name"/> of the EF module that owns the family, or
+    /// <see langword="null"/> for a family the two-argument constructor declared shared: owned by no single EF module.
+    /// </summary>
+    public string? Module { get; }
+
+    /// <summary>
+    /// The version this build stamps on the family's rows: the same constant its stores stamp, and the last version of
+    /// the chain.
+    /// </summary>
+    public string CurrentVersion { get; }
+
+    /// <summary>
+    /// The family's upcasters in chain order, oldest first: each a concrete <see cref="IEfSchemaUpcaster"/> carrying
+    /// <see cref="EfSchemaUpcasterAttribute"/>, each starting at the version the one before it produces, the last one
+    /// producing <see cref="CurrentVersion"/>. Empty for a family that has only ever had one version.
+    /// </summary>
+    /// <remarks>
+    /// A chain with a gap, a duplicate version, a branch or a cycle, or one that does not end at the current version,
+    /// fails the family's registration at startup; a build-time check is pending #2606.
+    /// A read never bridges a gap: a row stamped below one is skew.
+    /// </remarks>
+    public Type[] Upcasters { get; set; } = [];
+
+    /// <summary>
+    /// The entity types whose rows stamp this family, for an EF module that owns more than one family. A module that
+    /// owns one family leaves it empty: every stamped table of its context belongs to that family. The finalization
+    /// gate's write check (<c>EfSchemaWriteGateInterceptor</c>) reads it to know which family's write version a row
+    /// must carry, and <c>ModuleFinalizationGateTests</c> fails the build when a stamped table of
+    /// a module maps to no family, or to more than one.
+    /// </summary>
+    public Type[] Entities { get; set; } = [];
+
+    /// <summary>
+    /// The entity types of the family whose rows are content-addressed: their identity is derived
+    /// from their stored content, so rewriting one would change or forge it, as with a workflow executable or an
+    /// executable activity template. The post-finalization backfill never rewrites them, and a family
+    /// that holds any below a version is never recorded complete at it. Each is marked
+    /// <see cref="EfSchemaContentAddressedAttribute"/> with its reason too, and <c>EfSchemaContentAddressedDeclarationTests</c>
+    /// fails the build when a first-party stamped table is named here but not marked, or marked but not named here.
+    /// </summary>
+    public Type[] ContentAddressed { get; set; } = [];
+
+    /// <summary>
+    /// The family's rewriter: a concrete <see cref="SchemaBackfill.IEfSchemaRowRewriter"/> in this
+    /// assembly, beside the family's store code, that reads one row through the family's read path and writes it back
+    /// through its write path. Unlike an upcaster it is constructed in the shell with the shell's services, since the
+    /// post-finalization backfill runs there. A family that has only ever had one version needs none; one whose chain is
+    /// longer names one, or its backfill reports that it cannot upgrade the rows below the finalized version.
+    /// </summary>
+    public Type? Rewriter { get; set; }
+}

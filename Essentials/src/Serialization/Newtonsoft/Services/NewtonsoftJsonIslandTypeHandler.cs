@@ -1,0 +1,25 @@
+using Elsa.Serialization.Core;
+using Newtonsoft.Json.Linq;
+
+namespace Elsa.Serialization.Newtonsoft.Services;
+
+internal sealed class NewtonsoftJsonIslandTypeHandler : IJsonIslandTypeHandler
+{
+    public bool CanHandle(Type type) => type == typeof(JObject) || type == typeof(JArray);
+
+    public object Read(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return new JObject();
+
+        var token = JToken.Parse(json);
+        return token;
+    }
+
+    public string Write(object value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+
+        return value.ToString() ?? throw new InvalidOperationException("Newtonsoft JSON island values must serialize to a non-null string.");
+    }
+}

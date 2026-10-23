@@ -1,36 +1,55 @@
 # Bookmark expiration
 
-> **Audience:** activity authors, workflow engineers, and runtime integrators.
-> **Purpose:** explain what `BookmarkState.ExpiresAt` controls, what it deliberately does not control,
-> and how to model time-bounded waits without confusing handle validity with workflow behavior.
-> **Knowledge role:** worked reference. Canonical short definitions live in the
-> [Elsa glossary](glossary/elsa.md); runtime extension-point contracts live in
-> [`Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](../src/essentials/Workflows/Runtime/EXTENSION_POINTS.md).
+**Who this is for:** activity authors, workflow engineers and runtime integrators.
 
-## Contract
+## An example
 
-A bookmark is a durable resume handle. Its nullable `ExpiresAt` value controls whether runtime may
-match a stimulus to that handle:
+You email an approver a signed link to approve a request. The link should only work for 24 hours. So the bookmark behind that link gets an expiry time 24 hours from now.
 
-- `ExpiresAt = null`: the bookmark remains matchable indefinitely.
-- `ExpiresAt > evaluatedAt`: the bookmark is still matchable.
-- `ExpiresAt <= evaluatedAt`: the bookmark is expired and stimulus lookup ignores it.
+- At hour 10 the approver clicks: the bookmark still matches, and the workflow resumes.
+- At hour 30 the approver clicks: the bookmark is ignored, and nothing resumes.
+- At hour 24, **nothing happens on its own.** The workflow is not woken up, not timed out and not cancelled. If you want "escalate after 24 hours", you need a timer for that (see [Modelling a workflow timeout](#modelling-a-workflow-timeout)).
 
-Equality is expired. The cutoff is evaluated when a stimulus is matched; it is not an event scheduled
-for future delivery.
+That is the whole idea: **`ExpiresAt` limits how long a bookmark can be matched. It does not make anything happen when the time passes.**
 
-By itself, expiration does **not**:
+## The rule
+
+A bookmark is a saved resume handle. Its optional `ExpiresAt` value decides whether the runtime may match a stimulus to it, checked at the moment a stimulus is matched (`evaluatedAt`):
+
+| `ExpiresAt` | Matchable? |
+|---|---|
+| empty (`null`) | Yes, for ever |
+| later than `evaluatedAt` | Yes |
+| equal to or earlier than `evaluatedAt` | No: the lookup ignores it (equal counts as expired) |
+
+The cut-off is checked when a stimulus arrives; it is not an event scheduled for later.
+
+On its own, expiration does **not**:
 
 - resume the workflow;
-- select a timeout or expiry outcome;
-- cancel the waiting activity, a branch, or the workflow;
-- delete the bookmark from persistence; or
-- notify the workflow that the cutoff was reached.
+- choose a timeout or expiry outcome;
+- cancel the waiting activity, a branch or the workflow;
+- delete the bookmark; or
+- tell the workflow the cut-off was reached.
 
-The default per-execution and cross-execution lookup services apply the cutoff. Raw bookmark-store
-queries deliberately retain and return expired records, and bookmark persistence has no expiry index
-or expiry pump. A finite expiration on an otherwise unhandled, lone bookmark can therefore leave its
-activity suspended with no remaining admissible stimulus.
+> *Good to know:* the default per-run and cross-run lookup services apply the cut-off. Raw bookmark-store queries deliberately still return expired records, and there is no expiry index or expiry pump. So a finite expiry on a lone, otherwise unhandled bookmark can leave its activity suspended with nothing left that can resume it.
+
+## Modelling a workflow timeout
+
+A business timeout is active control flow, not bookmark metadata:
+
+1. Register the external wait, usually with `ExpiresAt = null`. If late delivery must be rejected,
+   give it the same business cutoff while retaining the remaining steps below.
+2. Schedule a durable `Delay` for the cutoff.
+3. Use a race or interrupting construct that chooses exactly one continuation.
+4. When one side wins, durably cancel, consume, or otherwise invalidate the losing wait and its
+   external capability.
+5. Route the winning result to the authored approval, rejection, escalation, compensation, or
+   cancellation outcome.
+
+> *Good to know:* an ordinary fork followed by an ordinary merge is not enough unless that construct guarantees a
+> single winner and losing-branch clean-up. Without those, a late external stimulus can still
+> continue the other branch or leave an orphaned bookmark.
 
 ## Why the field exists
 
@@ -66,23 +85,6 @@ Some common scenarios should not use finite bookmark expiration:
 | Retention or garbage collection | Use an explicit retention/cleanup policy. `ExpiresAt` does not delete records. |
 | Administrative or business cancellation | Send an explicit cancellation command and persist the resulting lifecycle transition. |
 
-## Modeling a workflow timeout
-
-A business timeout is active control flow, not bookmark metadata:
-
-1. Register the external wait, usually with `ExpiresAt = null`. If late delivery must be rejected,
-   give it the same business cutoff while retaining the remaining steps below.
-2. Schedule a durable `Delay` for the cutoff.
-3. Use a race or interrupting construct that chooses exactly one continuation.
-4. When one side wins, durably cancel, consume, or otherwise invalidate the losing wait and its
-   external capability.
-5. Route the winning result to the authored approval, rejection, escalation, compensation, or
-   cancellation outcome.
-
-An ordinary fork followed by an ordinary merge is not sufficient unless that construct guarantees a
-single winner and losing-branch cleanup. Without those semantics, a late external stimulus can still
-continue the other branch or leave an orphaned bookmark.
-
 ## Durable timers
 
 A durable timer and its bookmark are complementary:
@@ -95,16 +97,18 @@ timer's due time makes it expired exactly when dispatch evaluates it, producing 
 resumption. See [Durable timers and the `Delay` activity](runtime-durable-timers.md) for the complete
 suspend/resume cycle.
 
-## Runtime evidence
+## Where this lives in the code
 
-- [`BookmarkStimulusLookup`](../src/essentials/Workflows/Runtime/Services/Bookmarks/BookmarkStimulusLookup.cs) applies
+- [`BookmarkStimulusLookup`](../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Bookmarks/BookmarkStimulusLookup.cs) applies
   the per-execution cutoff.
-- [`GlobalBookmarkStimulusLookup`](../src/essentials/Workflows/Runtime/Services/Bookmarks/GlobalBookmarkStimulusLookup.cs)
+- [`GlobalBookmarkStimulusLookup`](../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Bookmarks/GlobalBookmarkStimulusLookup.cs)
   applies the same cutoff to cross-execution and type-scoped lookup.
-- [`BookmarkResumeDispatcher`](../src/essentials/Workflows/Runtime/Services/Bookmarks/BookmarkResumeDispatcher.cs)
+- [`BookmarkResumeDispatcher`](../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Bookmarks/BookmarkResumeDispatcher.cs)
   evaluates lookup against the runtime clock and treats an expired bookmark as not found.
-- [`RuntimeDbContext`](../src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeDbContext.cs)
+- [`RuntimeDbContext`](../Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeDbContext.cs)
   declares bookmark indexes by workflow execution and stimulus identity, not by expiration.
-- [`RuntimeBookmarkStimulusResumeDispatchTests`](../tests/essentials/Workflows/Runtime/Tests/RuntimeBookmarkStimulusResumeDispatchTests.cs)
-  and [`GlobalBookmarkStimulusLookupTests`](../tests/essentials/Workflows/Runtime/Tests/GlobalBookmarkStimulusLookupTests.cs)
+- [`RuntimeBookmarkStimulusResumeDispatchTests`](../Essentials/tests/Workflows/Runtime/Tests/RuntimeBookmarkStimulusResumeDispatchTests.cs)
+  and [`GlobalBookmarkStimulusLookupTests`](../Essentials/tests/Workflows/Runtime/Tests/GlobalBookmarkStimulusLookupTests.cs)
   pin the non-expired matching rule.
+
+Related: [Elsa glossary](glossary/elsa.md) · [Runtime extension points](../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) · [Durable timers](runtime-durable-timers.md)

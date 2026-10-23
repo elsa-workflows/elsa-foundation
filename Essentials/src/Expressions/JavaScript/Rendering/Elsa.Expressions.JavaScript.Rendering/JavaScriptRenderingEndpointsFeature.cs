@@ -1,0 +1,31 @@
+using CShells.Features;
+using Elsa.Api.AspNetCore;
+using CShells.AspNetCore.Features;
+using Elsa.Foundation.Identity.Extensions;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+
+namespace Elsa.Expressions.JavaScript.Rendering;
+
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Expressions")]
+[ManifestFeatureCategory("JavaScript")]
+[ManifestFeatureCategory("API")]
+[ShellFeature(
+      name: "JavaScriptRenderingEndpoints",
+      DisplayName = "JavaScript rendering endpoints",
+      Description = "Exposes JavaScript rendering endpoints for design-time declaration document generation."
+   )]
+public class JavaScriptRenderingEndpointsFeature : IWebShellFeature
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddElsaEndpoints();
+        services.AddPermissionContributor<JavaScriptRenderingPermissionContributor>();
+    }
+
+    public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
+        JavaScriptRenderingApi.MapJavaScriptRenderingApi(endpoints);
+}

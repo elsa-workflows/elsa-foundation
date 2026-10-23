@@ -26,8 +26,11 @@ cannot downgrade it, and an input that refuses secret bindings cannot be declare
 whether a binding on a credential input is acceptable. It is enforced in the application layer only, at the seven
 definition entry points, through four integration points: Design API admission before the design commands
 (promote included), the version reconciler (per item), the input-binding compiler, and the git exporter (per
-version). Every caller of a state-writing design command, and the exporter, goes through one shared helper,
-`WorkflowStateAdmission`. No persistence project gains a rule or a reference.
+version). Every caller of a state-writing design command, and the exporter, takes the rule's contract,
+`ICredentialLiteralValidator`, and a caller that refuses a whole request admits through one shared helper,
+`WorkflowStateAdmission`. As built in slice 6's review, the rule also runs at an eighth entry point, the Elsa 3
+collection import, through a fifth integration point, `ReusableActivityCollectionImporter`, which judges every activity
+node it maps (spec FR-008 note). No persistence project gains a rule or a reference.
 An input whose policy requires encryption accepts only a secret reference; anything else that requires encryption
 is withheld at the producer and refused at the checkpoint-commit backstop. Values resolved during an activation are
 masked in fault, incident and log text without changing the fault's classification. A canary test proves all of it
@@ -74,9 +77,10 @@ Framework constitution v4.0.0:
   acceptance predicate in `Elsa.Workflows.Design.Core`). Two new implementations also sit in Layer 1 projects, under §2.1's
   thin-utility allowance: `WorkflowDraftStateHash` (a BCL-only SHA-256 helper in
   `Elsa.Workflows.Design.Persistence.Core`) and `WorkflowStateAdmission` (in `Elsa.Workflows.Design.Validations.Core`).
-  `WorkflowStateAdmission` stays mechanical: it wraps `ICredentialLiteralValidator`, throwing from `AdmitAsync` and
-  returning the findings from `FindRefusalsAsync`, with no rule logic of its own (the rule lives in the predicate and
-  the validator). The bridge is Layer 3 and references only
+  `WorkflowStateAdmission` stays mechanical: it throws the findings of `ICredentialLiteralValidator` from `AdmitAsync`,
+  with no rule logic of its own (the rule lives in the predicate and the validator). As built in slice 6 both are static
+  classes, `WorkflowStateAdmission` an extension over the validator contract like `DraftValidationGate`: the
+  architecture suite's `.Core` shape ratchet admits no new class with injected dependencies in a `.Core` project. The bridge is Layer 3 and references only
   `Elsa.Secrets.Core` and `Elsa.Workflows.Runtime.Core`. Every new `ProjectReference` from a production library
   targets a `.Core` project. Two kinds of reference are the allowed exceptions: the Workbench app host's reference to
   the bridge (`Elsa.Secrets.Workflows`, host composition), and test-project references, which target implementation
@@ -92,9 +96,9 @@ Framework constitution v4.0.0:
   `IRuntimeSecretMask` are declared as replacement contracts in their XML
   documentation and registered once; each feature registration test asserts a single implementation.
   `CredentialLiteralValidator` is additionally registered as an `IDraftValidator` contribution (§2.6.1), for
-  reporting only. `WorkflowStateAdmission` is a `public sealed` helper, not a replacement contract, so a host cannot
+  reporting only. `WorkflowStateAdmission` is a static helper, not a replacement contract, so a host cannot
   swap the admission out; it sits in `Elsa.Workflows.Design.Validations.Core` next to the existing
-  `DraftValidationGate`.
+  `DraftValidationGate`. A second `ICredentialLiteralValidator` fails shell activation (slice 6).
 - **§2.6.4 design/runtime split**: the design-time rule (credential literal) and the runtime contract (secret
   resolution) are separate contracts with no shared runtime concern.
 - **§2.7 adapter**: the bridge adapts Secrets to the runtime contract. No sync-contributor exception (§2.6.5) is used.
@@ -113,6 +117,13 @@ Framework constitution v4.0.0:
   contribution seam; folding it into either domain creates a forbidden dependency).
 - **§2.17**: the `"Secret"` expression-type literal is duplicated in the compiler and the predicate rather than
   creating a Publishing or Design dependency on Secrets; a test pins equality.
+- **§2.17, deliberately not applied (slice 6 review)**: `CredentialInputBinding.IsAccepted` is a domain decision in a
+  `.Core` project (`Elsa.Workflows.Design.Core`) with two production consumers, the design-time validator and the
+  publish compiler, which §2.17 would normally leave duplicated in each. It stays as one shared definition because its
+  whole point is that save and publish never disagree about a binding: two copies could drift, and a binding one
+  accepts and the other refuses is exactly the defect the rule exists to prevent. The same holds, for the same reason,
+  for `SecretReferencePayload` (slice 6 review round 3), the one definition of a well-formed secret reference payload,
+  which the predicate applies at save and the publish compiler reads every secret reference through.
 - **§2.21.1 golden rule**: no test objective is removed. Extracting `IsBound` from `RequiredInputOutputValidator` is a
   refactor under its existing tests. Test hosts that construct the Design API callers, the reconciler or the
   exporter are rewired to compose the validator; their objectives are unchanged.
@@ -213,7 +224,7 @@ Existing projects changed (paths verified at `057adc44f`):
   `HttpEndpoint` and `HttpEndpointTriggerStimulusProvider`, `BpmnProcess` and `BpmnStartTriggerNodeInputs`, and
   `Inline`, `WriteHttpResponse`, `BpmnDecision` and `Fault`.
 - `src/essentials/Activities/Http/Activities/SendHttpRequest.cs` (credential input `Authorization`, research R17) and,
-  only if T106 finds the header value in logs, `src/essentials/Activities/Http/ActivitiesHttpFeature.cs`.
+  only if T106 finds the header value in logs, `src/essentials/Activities/Http/ActivitiesHttpFeature.cs` (as built, after slice 11's review it replaces the factory's default logging handlers on the named client with one logger that writes no header, because the default handlers keep raw header values in their structured state; it adds no `RedactLoggedHeaders`).
 - `src/essentials/Activities/Design/Core/Models/InputDefinition.cs`,
   `src/essentials/Activities/Design/Reconciliation/Clr/Services/ClrAssemblyScanner.cs` (flags; refuses an unbindable
   credential declaration), `src/essentials/Activities/Design/Api/Handlers/AddDefinitionCommandHandler.cs` and
@@ -265,7 +276,7 @@ refreshes maps (`dotnet run --project tools/maps/Elsa.Maps.Generator -c Release 
 |---|---|---|---|
 | `src/essentials/Secrets/Workflows/Elsa.Secrets.Workflows.csproj` (new) | references `Elsa.Secrets.Core` and `Elsa.Workflows.Runtime.Core`, nothing else | both `.Core` | 4 |
 | `src/apps/Elsa.Workbench/Elsa.Workbench.csproj` | adds `Elsa.Secrets.Workflows` (host composition) | app host | 4 |
-| `tests/essentials/Secrets/Workflows/Tests/Elsa.Secrets.Workflows.Tests.csproj` (new) | slice 4: the bridge, `Elsa.Secrets`, `Elsa.Secrets.Core`, `Elsa.Workflows.Runtime`, `Elsa.Activities.Runtime`, `Elsa.Workflows.Publishing`, the runtime EF persistence project, test support. Slice 9 adds `Elsa.Workflows.Design.Api`, `Elsa.Workflows.Design.Validations`, the design EF persistence project, `Elsa.Workflows.Design.Reconciliation.Git`, `Elsa.Workflows.Runtime.Api` and `Elsa.Workflows.ExecutionEvidence`. Slice 11 adds `Elsa.Activities.Http`. The exact set is confirmed against the composed features when each slice is built | test project | 4, 9, 11 |
+| `tests/essentials/Secrets/Workflows/Tests/Elsa.Secrets.Workflows.Tests.csproj` (new) | slice 4: the bridge, `Elsa.Secrets`, `Elsa.Secrets.Core`, `Elsa.Workflows.Runtime`, `Elsa.Activities.Runtime`, `Elsa.Workflows.Publishing`, the runtime EF persistence project, test support. Slice 9 adds `Elsa.Workflows.Design.Api`, `Elsa.Workflows.Design.Validations`, the design EF persistence project, `Elsa.Workflows.Design.Reconciliation.Git`, `Elsa.Workflows.Runtime.Api` and `Elsa.Workflows.ExecutionEvidence`. Slice 11 adds `Elsa.Activities.Http`, and `Elsa.Http` and `Elsa.Workflows.Runtime.Http`, because a shell composes the `Http` and `WorkflowsRuntimeHttp` features `ActivitiesHttp` depends on only from their assemblies. The exact set is confirmed against the composed features when each slice is built | test project | 4, 9, 11 |
 | `tests/essentials/Activities/Design/Tests/ClrFixture/Elsa.Activities.Design.Tests.ClrFixture.csproj` | adds `Elsa.Workflows.Runtime.Core`, for the fixture with a credential input on an `IRuntimeActivityCheckpointParticipant` (found in slice 5) | test fixture | 5 |
 | `src/essentials/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation.csproj` | adds `Elsa.Workflows.Design.Validations.Core` (the reconciler admits each item) | `.Core` contract | 6 |
 | `src/essentials/Workflows/Design/Reconciliation/Git/Elsa.Workflows.Design.Reconciliation.Git.csproj` | adds `Elsa.Workflows.Design.Validations.Core` explicitly (the exporter admits each version), although it would also arrive transitively through the reconciliation project | `.Core` contract | 6 |
@@ -319,4 +330,4 @@ reviewer can challenge them:
 |---|---|---|
 | New `Elsa.Secrets.Workflows` project | keeps Secrets types and failure classification out of the runtime contract (R1) | a direct Runtime to `Elsa.Secrets.Core` reference is viable and is the named fallback; it was not chosen because it moves Secrets vocabulary into the runtime |
 | A new `ValuePresence.Withheld` | the persisted snapshot needs a value-free shape that every consumer must handle explicitly (R3) | reusing external references conflates runtime payload storage with secrets and has no tenant parameter |
-| Four application-layer integration points for one rule, one shared admission helper, and a coverage guard that asserts every state-writing caller takes the helper | business rules stay out of persistence (R7), and promote must not depend on the promotion command's optional publisher | a guarded writer inside the EF commands is a single choke point but puts the rule in persistence; decorators over the command contracts conflict with the design backend's exclusive ownership of those contracts; the in-lock promotion gate runs only when `IInlineEventPublisher` is composed |
+| Four application-layer integration points for one rule (five as built in slice 6's review, the Elsa 3 collection importer being the fifth), one shared admission helper, and a coverage guard that asserts every state-writing caller takes the helper | business rules stay out of persistence (R7), and promote must not depend on the promotion command's optional publisher | a guarded writer inside the EF commands is a single choke point but puts the rule in persistence; decorators over the command contracts conflict with the design backend's exclusive ownership of those contracts; the in-lock promotion gate runs only when `IInlineEventPublisher` is composed |

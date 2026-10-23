@@ -1,6 +1,6 @@
 # Studio Expression Developer Experience
 
-- **Status:** Active; approved for end-to-end implementation on 2026-10-02.
+- **Status:** Active; owner authorization, 23 October 2026 ([ADR 0080 D0 amendment](../adr/0080-elsa-4-simplification-decisions.md#d0--focus)). First approved for end-to-end implementation on 2026-10-02.
 - **Area:** Foundation Studio activity-input code authoring and Foundation expression tooling.
 - **Stewards:** Sipke as product owner; the incoming program-lead session as delivery owner.
 - **Program issue:** [Foundation #2310](https://github.com/elsa-workflows/elsa-foundation/issues/2310).
@@ -34,7 +34,7 @@ The incoming lead progressively elaborates these milestones into one cross-repos
 - [Assessment and staged delivery plan](../reports/studio-expression-editing/assessment.md).
 - [Independent source-audit findings](../reports/studio-expression-editing/source-audit.md).
 - [Fresh-session implementation handoff](../reports/studio-expression-editing/implementation-handoff.md).
-- [Studio spec 094](https://github.com/elsa-workflows/elsa-foundation-studio/tree/main/specs/094-expression-code-intelligence).
+- [Studio spec 094](../../Studio/specs/094-expression-code-intelligence/spec.md).
 - [Foundation spec 143](../../specs/143-expression-code-intelligence/spec.md).
 - [Existing host-discovery fix, Studio #546](https://github.com/elsa-workflows/elsa-foundation-studio/pull/546).
 
@@ -55,3 +55,20 @@ The requirements-interrogation gate passes for milestone 1. The product outcome,
 The owner requests end-to-end delivery of all four milestones and explicitly removes only actual current-head Chrome+VoiceOver and Safari+VoiceOver observation from acceptance. Both remain **SKIPPED BY OWNER DECISION — NEVER PASSED**; native screen-reader behavior is a delivery limitation, not a passing result. See the [canonical decision](studio-expression-developer-experience/decision-log.md#2026-10-06--remove-native-voiceover-verification-from-delivery-acceptance).
 
 Resume the existing Foundation/Studio specs, tasks and PR stack, preserving historical exact-head proof and avoiding competing implementations. Resolve stack integration and reverify affected heads; keep all other technical, review, keyboard, automated accessibility and runtime gates. Keep PRs draft until required gates and the owner's explicit final acceptance; then merge in dependency order, verify required green post-merge main and synchronize public completion records. No package publication or deployment is included. The program issue holds live evidence and ownership; earlier bootstrap checkpoints above remain historical.
+
+## Restart checkpoint — 2026-10-23
+
+The owner restarted the program on 23 October 2026 under the [ADR 0080 D0 amendment](../adr/0080-elsa-4-simplification-decisions.md#d0--focus).
+Studio now lives in this repository under `Studio/`, and Foundation source under `Essentials/src/`; the program's
+records point there.
+
+- **First units.** This plan (#2367) merges with current `main`. The expression-tooling permission-hash fix from
+  #2373 (commit `f81be4be`) ships on its own as a small PR on `main`, because the authoring context it protects
+  is broken on `main` today.
+- **Gate for milestones 2 and 3.** #2378 (JavaScript tooling) and #2380 (Liquid help) are rebuilt on current
+  `main` only after the [#3204](https://github.com/elsa-workflows/elsa-foundation/issues/3204) ADR decides how
+  scripts read variables: declared parameters or ambient variables, and whether `get<Name>()` stays. See the
+  [decision log](studio-expression-developer-experience/decision-log.md#2026-10-23--gate-milestones-2-and-3-on-the-3204-read-model-adr).
+- **Milestone 1.** The rest of #2373 is rebased separately onto the new layout; it is not part of this restart.
+- The 6 October delivery-scope checkpoint above is historical. Its PR stack and evidence predate the move into
+  `Essentials/` and `Studio/`, and its heads must be reverified before any gate is claimed.

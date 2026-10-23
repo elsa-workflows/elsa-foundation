@@ -1,0 +1,50 @@
+using Elsa.Api.AspNetCore;
+using Elsa.Foundation.Identity.Authorization;
+using Elsa.Mediator.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Models;
+using Elsa.Workflows.Design.Api.Authorization;
+using Elsa.Workflows.Design.Api.Models;
+using Elsa.Workflows.Design.Api.Projections;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Validations.Core;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using NativeEndpoints;
+
+namespace Elsa.Workflows.Design.Api.Endpoints.Definitions.Submit;
+
+[Post("definitions/submit")]
+[RequirePermission(WorkflowDesignPermissions.Manage)]
+public sealed class Endpoint(
+    ISubmitWorkflowDefinitionCommand submitCommand,
+    IWorkflowDefinitionVersionStore versionStore,
+    ICredentialLiteralValidator credentialLiterals) : ApiEndpoint<SubmitDefinition, SubmittedWorkflowDefinitionView>
+{
+    public override void Configure(ApiEndpointOptions options)
+    {
+        options.Operation = "DefinitionsSubmit";
+        options.Accepts = ["application/json"];
+    }
+
+    public override async Task<SubmittedWorkflowDefinitionView> HandleAsync(SubmitDefinition command, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(command.State);
+
+        var state = command.State.ToState();
+        await credentialLiterals.AdmitAsync(state, cancellationToken);
+        var submitted = await submitCommand.Execute(
+            DesignOperationKey.CreateOrGenerate(command.OperationKey),
+            command.Name,
+            command.Description,
+            state,
+            cancellationToken);
+
+        var version = await versionStore.GetWithDefinitionAsync(submitted.VersionId, cancellationToken);
+        var versionView = version.ToDetailsView();
+
+        return new SubmittedWorkflowDefinitionView(
+            versionView.Definition,
+            submitted.DraftId,
+            versionView);
+    }
+}

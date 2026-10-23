@@ -1,0 +1,799 @@
+using System.Text.Json;
+using System.Threading.Channels;
+using Elsa.Events.Core.Contracts;
+using Elsa.Tasks.Testing;
+using Elsa.Workflows.Design.Persistence.Core.Models;
+using Elsa.Primitives.Contracts;
+using Elsa.Primitives.Enums;
+using Elsa.Primitives.Versioning;
+using Elsa.Serialization.Core;
+using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Exceptions;
+using Elsa.Workflows.Design.Persistence.Core.Filters;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Commands;
+using Elsa.Workflows.Design.Core.Reconciliation;
+using Elsa.Workflows.Design.Reconciliation.Options;
+using Elsa.Workflows.Design.Reconciliation.Services;
+using Elsa.Workflows.Design.Tests.Infrastructure;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
+using Xunit;
+using Elsa.Testing;
+
+namespace Elsa.Workflows.Design.Tests.Unit.Reconciliation;
+
+/// <summary>
+/// Branch coverage for <see cref="WorkflowsVersionReconciler"/>. Cases: fresh definition +
+/// first version → both adds called; existing definition with new version number → only
+/// version-add called; existing (DefId, Version) → duplicate-handling kicks in
+/// (Skip default + Throw override).
+/// </summary>
+public sealed class WorkflowsVersionReconcilerTests
+{
+    [Fact]
+    public async Task Fresh_definition_calls_both_add_definition_and_add_version()
+    {
+        var incoming = BuildIncomingVersion(definitionId: "wf-new", version: "1.0.0");
+        var sender = new CapturingSender { ToContribute = [incoming] };
+        var defs = new StubDefinitionStore();
+        var versions = new StubVersionStore();
+        var addDef = new SpyMaterializeDefinitionCommand();
+        var addVer = new SpyMaterializeVersionCommand();
+
+        var reconciler = NewReconciler(sender, defs, versions, addDef, addVer, DuplicateHandling.Skip);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        Assert.Single(addDef.Added);
+        Assert.Equal("wf-new", addDef.Added[0].Id);
+        // Materialized from a source ⇒ the source owns lifecycle metadata (DeletedAt reconciliation).
+        Assert.True(addDef.Added[0].IsSourceOwned);
+        Assert.Single(addVer.Added);
+        Assert.Equal("wf-new", addVer.Added[0].DefinitionId);
+        Assert.Equal("1.0.0", addVer.Added[0].Version);
+    }
+
+    [Fact]
+    public async Task Existing_definition_new_version_calls_add_version_only()
+    {
+        // Incoming metadata matches the persisted definition, so only the new version is added.
+        var incoming = BuildIncomingVersion(definitionId: "wf-existing", version: "2.0.0", name: "Existing");
+        var existingDef = new WorkflowDefinition { Id = "wf-existing", Name = "Existing" };
+
+        var defs = new StubDefinitionStore().With(existingDef);
+        var versions = new StubVersionStore(); // No existing versions.
+        var addDef = new SpyMaterializeDefinitionCommand();
+        var addVer = new SpyMaterializeVersionCommand();
+        var saveDef = new SpySaveDefinitionCommand();
+
+        var reconciler = NewReconciler(
+            new CapturingSender { ToContribute = [incoming] },
+            defs, versions, addDef, addVer, DuplicateHandling.Skip, saveDef);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        Assert.Empty(addDef.Added);
+        Assert.Empty(saveDef.Saved);
+        Assert.Single(addVer.Added);
+        Assert.Equal("2.0.0", addVer.Added[0].Version);
+    }
+
+    [Fact]
+    public async Task Duplicate_version_with_Skip_handling_does_not_add()
+    {
+        var incoming = BuildIncomingVersion(definitionId: "wf-dup", version: "1.0.0");
+        var existingDef = new WorkflowDefinition { Id = "wf-dup", Name = "Dup" };
+        var existingVersion = new WorkflowDefinitionVersion("wf-dup", "1.0.0");
+
+        var defs = new StubDefinitionStore().With(existingDef);
+        var versions = new StubVersionStore().With(existingVersion);
+        var addDef = new SpyMaterializeDefinitionCommand();
+        var addVer = new SpyMaterializeVersionCommand();
+
+        var reconciler = NewReconciler(
+            new CapturingSender { ToContribute = [incoming] },
+            defs, versions, addDef, addVer, DuplicateHandling.Skip);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        Assert.Empty(addDef.Added);
+        Assert.Empty(addVer.Added);
+    }
+
+    [Fact]
+    public async Task Changed_metadata_on_existing_definition_saves_updated_name_and_description()
+    {
+        // Same (definitionId, version) as the persisted one — a rename with no version change.
+        var incoming = BuildIncomingVersion(definitionId: "wf-rename", version: "1.0.0", name: "New Name", description: "New description");
+        var existingDef = new WorkflowDefinition { Id = "wf-rename", Name = "Old Name", Description = "Old description" };
+        var existingVersion = new WorkflowDefinitionVersion("wf-rename", "1.0.0");
+
+        var defs = new StubDefinitionStore().With(existingDef);
+        var versions = new StubVersionStore().With(existingVersion);
+        var addDef = new SpyMaterializeDefinitionCommand();
+        var addVer = new SpyMaterializeVersionCommand();
+        var saveDef = new SpySaveDefinitionCommand();
+
+        var reconciler = NewReconciler(
+            new CapturingSender { ToContribute = [incoming] },
+            defs, versions, addDef, addVer, DuplicateHandling.Skip, saveDef);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        Assert.Empty(addDef.Added);
+        var saved = Assert.Single(saveDef.Saved);
+        Assert.Equal("wf-rename", saved.Id);
+        Assert.Equal("New Name", saved.Name);
+        Assert.Equal("New description", saved.Description);
+        // Retention authority: a metadata-only change never touches versions.
+        Assert.Empty(addVer.Added);
+    }
+
+    [Fact]
+    public async Task Unchanged_metadata_on_existing_definition_writes_nothing()
+    {
+        // Incoming metadata is byte-for-byte the persisted metadata.
+        var incoming = BuildIncomingVersion(definitionId: "wf-same", version: "1.0.0", name: "Same", description: "Same description");
+        var existingDef = new WorkflowDefinition { Id = "wf-same", Name = "Same", Description = "Same description" };
+        var existingVersion = new WorkflowDefinitionVersion("wf-same", "1.0.0");
+
+        var defs = new StubDefinitionStore().With(existingDef);
+        var versions = new StubVersionStore().With(existingVersion);
+        var addDef = new SpyMaterializeDefinitionCommand();
+        var addVer = new SpyMaterializeVersionCommand();
+        var saveDef = new SpySaveDefinitionCommand();
+
+        var reconciler = NewReconciler(
+            new CapturingSender { ToContribute = [incoming] },
+            defs, versions, addDef, addVer, DuplicateHandling.Skip, saveDef);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        // Idempotent: no add and no save when nothing changed.
+        Assert.Empty(addDef.Added);
+        Assert.Empty(saveDef.Saved);
+        Assert.Empty(addVer.Added);
+    }
+
+    [Fact]
+    public async Task Metadata_update_does_not_add_or_alter_versions()
+    {
+        // A rename arriving with a brand-new version number: the definition metadata updates, and the
+        // version is added exactly once — the metadata path itself adds/alters no versions.
+        var incoming = BuildIncomingVersion(definitionId: "wf-both", version: "2.0.0", name: "Renamed");
+        var existingDef = new WorkflowDefinition { Id = "wf-both", Name = "Original" };
+        var existingVersion = new WorkflowDefinitionVersion("wf-both", "1.0.0");
+
+        var defs = new StubDefinitionStore().With(existingDef);
+        var versions = new StubVersionStore().With(existingVersion);
+        var addDef = new SpyMaterializeDefinitionCommand();
+        var addVer = new SpyMaterializeVersionCommand();
+        var saveDef = new SpySaveDefinitionCommand();
+
+        var reconciler = NewReconciler(
+            new CapturingSender { ToContribute = [incoming] },
+            defs, versions, addDef, addVer, DuplicateHandling.Skip, saveDef);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        Assert.Single(saveDef.Saved);
+        Assert.Equal("Renamed", saveDef.Saved[0].Name);
+        // The pre-existing 1.0.0 is untouched; only the genuinely-new 2.0.0 is added.
+        var added = Assert.Single(addVer.Added);
+        Assert.Equal("2.0.0", added.Version);
+    }
+
+    [Fact]
+    public async Task Older_incoming_entry_does_not_change_definition_metadata()
+    {
+        // A stale/older version entry (persisted 2.0.0, incoming 1.0.0) with a rename must NOT
+        // overwrite current metadata — the metadata apply is gated behind the outdated-version skip.
+        var incoming = BuildIncomingVersion(definitionId: "wf-stale", version: "1.0.0", name: "Stale Name", description: "Stale");
+        var existingDef = new WorkflowDefinition { Id = "wf-stale", Name = "Current Name", Description = "Current" };
+        var newerVersion = new WorkflowDefinitionVersion("wf-stale", "2.0.0");
+
+        var defs = new StubDefinitionStore().With(existingDef);
+        var versions = new StubVersionStore().With(newerVersion);
+        var addDef = new SpyMaterializeDefinitionCommand();
+        var addVer = new SpyMaterializeVersionCommand();
+        var saveDef = new SpySaveDefinitionCommand();
+
+        var reconciler = NewReconciler(
+            new CapturingSender { ToContribute = [incoming] },
+            defs, versions, addDef, addVer, DuplicateHandling.Skip, saveDef);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        // Outdated entry touches nothing: no metadata save, no version add.
+        Assert.Empty(saveDef.Saved);
+        Assert.Empty(addDef.Added);
+        Assert.Empty(addVer.Added);
+    }
+
+    [Fact]
+    public async Task Incoming_deleted_soft_deletes_definition_without_deleting_versions()
+    {
+        // The definition.json marks a source-owned definition deleted → DeletedAt set; no version row removed.
+        var incoming = BuildIncomingVersion(definitionId: "wf-del", version: "1.0.0", name: "Same", deleted: true);
+        var existingDef = new WorkflowDefinition { Id = "wf-del", Name = "Same", IsSourceOwned = true }; // live
+        var existingVersion = new WorkflowDefinitionVersion("wf-del", "1.0.0");
+
+        var defs = new StubDefinitionStore().With(existingDef);
+        var versions = new StubVersionStore().With(existingVersion);
+        var addVer = new SpyMaterializeVersionCommand();
+        var saveDef = new SpySaveDefinitionCommand();
+
+        var reconciler = NewReconciler(
+            new CapturingSender { ToContribute = [incoming] },
+            defs, versions, new SpyMaterializeDefinitionCommand(), addVer, DuplicateHandling.Skip, saveDef);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        var saved = Assert.Single(saveDef.Saved);
+        Assert.NotNull(saved.DeletedAt);
+        Assert.Empty(addVer.Added); // retention authority: no version added or deleted
+    }
+
+    [Fact]
+    public async Task Incoming_live_undeletes_soft_deleted_definition()
+    {
+        // definition.json is latest-wins: a source reporting a source-owned definition live clears DeletedAt.
+        var incoming = BuildIncomingVersion(definitionId: "wf-undel", version: "1.0.0", name: "Same", deleted: false);
+        var existingDef = new WorkflowDefinition { Id = "wf-undel", Name = "Same", DeletedAt = DateTimeOffset.UtcNow.AddDays(-1), IsSourceOwned = true };
+        var existingVersion = new WorkflowDefinitionVersion("wf-undel", "1.0.0");
+
+        var defs = new StubDefinitionStore().With(existingDef);
+        var versions = new StubVersionStore().With(existingVersion);
+        var saveDef = new SpySaveDefinitionCommand();
+
+        var reconciler = NewReconciler(
+            new CapturingSender { ToContribute = [incoming] },
+            defs, versions, new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(), DuplicateHandling.Skip, saveDef);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        var saved = Assert.Single(saveDef.Saved);
+        Assert.Null(saved.DeletedAt);
+    }
+
+    [Fact]
+    public async Task Incoming_deleted_does_not_soft_delete_non_source_owned_definition()
+    {
+        // Guard: a source reporting a catalog-authored (non-source-owned) definition as deleted must NOT
+        // flip DeletedAt — latest-wins soft-delete is scoped to definitions the source materialized itself.
+        var incoming = BuildIncomingVersion(definitionId: "wf-studio", version: "1.0.0", name: "Same", deleted: true);
+        var existingDef = new WorkflowDefinition { Id = "wf-studio", Name = "Same" }; // Studio-authored, live
+        var existingVersion = new WorkflowDefinitionVersion("wf-studio", "1.0.0");
+
+        var defs = new StubDefinitionStore().With(existingDef);
+        var versions = new StubVersionStore().With(existingVersion);
+        var saveDef = new SpySaveDefinitionCommand();
+        var logger = new RecordingLogger<WorkflowsVersionReconciler>();
+
+        var reconciler = NewReconciler(
+            new CapturingSender { ToContribute = [incoming] },
+            defs, versions, new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(),
+            DuplicateHandling.Skip, saveDef, logger);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        // Nothing else changed, so the ignored delete intent results in no write at all.
+        Assert.Empty(saveDef.Saved);
+        Assert.Null(existingDef.DeletedAt);
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("not source-owned"));
+    }
+
+    [Fact]
+    public async Task Incoming_live_does_not_undelete_non_source_owned_definition()
+    {
+        // Guard, other direction: a source may not resurrect a catalog-authored soft-deleted definition.
+        var deletedAt = DateTimeOffset.UtcNow.AddDays(-1);
+        var incoming = BuildIncomingVersion(definitionId: "wf-studio-del", version: "1.0.0", name: "Same", deleted: false);
+        var existingDef = new WorkflowDefinition { Id = "wf-studio-del", Name = "Same", DeletedAt = deletedAt };
+        var existingVersion = new WorkflowDefinitionVersion("wf-studio-del", "1.0.0");
+
+        var defs = new StubDefinitionStore().With(existingDef);
+        var versions = new StubVersionStore().With(existingVersion);
+        var saveDef = new SpySaveDefinitionCommand();
+
+        var reconciler = NewReconciler(
+            new CapturingSender { ToContribute = [incoming] },
+            defs, versions, new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(),
+            DuplicateHandling.Skip, saveDef);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        Assert.Empty(saveDef.Saved);
+        Assert.Equal(deletedAt, existingDef.DeletedAt);
+    }
+
+    [Fact]
+    public async Task Rename_still_applies_when_delete_intent_is_ignored_on_non_source_owned_definition()
+    {
+        // The ownership guard scopes only DeletedAt: name/description stay latest-wins for every source.
+        var incoming = BuildIncomingVersion(definitionId: "wf-studio-ren", version: "1.0.0", name: "New Name", deleted: true);
+        var existingDef = new WorkflowDefinition { Id = "wf-studio-ren", Name = "Old Name" };
+        var existingVersion = new WorkflowDefinitionVersion("wf-studio-ren", "1.0.0");
+
+        var defs = new StubDefinitionStore().With(existingDef);
+        var versions = new StubVersionStore().With(existingVersion);
+        var saveDef = new SpySaveDefinitionCommand();
+
+        var reconciler = NewReconciler(
+            new CapturingSender { ToContribute = [incoming] },
+            defs, versions, new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(),
+            DuplicateHandling.Skip, saveDef);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        var saved = Assert.Single(saveDef.Saved);
+        Assert.Equal("New Name", saved.Name);
+        Assert.Null(saved.DeletedAt);
+    }
+
+    [Fact]
+    public async Task Same_id_version_different_content_logs_warning()
+    {
+        // Same (id, version) with different canonical state is a broken source — surfaced as
+        // a warning now (a throw arrives once the version persists a hash). Under Skip, no throw, no add.
+        var incomingState = new WorkflowDefinitionState([], null, [], [], null);
+        var storedState = new WorkflowDefinitionState([], null, [], [], null);
+        var incoming = BuildIncomingVersion(definitionId: "wf-diff", version: "1.0.0", name: "Same", state: incomingState);
+        var existingDef = new WorkflowDefinition { Id = "wf-diff", Name = "Same" };
+        var existingVersion = new WorkflowDefinitionVersion("wf-diff", "1.0.0") { State = storedState };
+
+        var defs = new StubDefinitionStore().With(existingDef);
+        var versions = new StubVersionStore().With(existingVersion);
+        var logger = new RecordingLogger<WorkflowsVersionReconciler>();
+        var serializer = new FakePayloadSerializer().With(incomingState, "A").With(storedState, "B");
+
+        var reconciler = NewReconciler(
+            new CapturingSender { ToContribute = [incoming] },
+            defs, versions, new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(),
+            DuplicateHandling.Skip, logger: logger, serializer: serializer);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("different content"));
+    }
+
+    [Fact]
+    public async Task Duplicate_version_with_Throw_handling_throws()
+    {
+        var incoming = BuildIncomingVersion(definitionId: "wf-dup", version: "1.0.0");
+        var existingDef = new WorkflowDefinition { Id = "wf-dup", Name = "Dup" };
+        var existingVersion = new WorkflowDefinitionVersion("wf-dup", "1.0.0");
+
+        var defs = new StubDefinitionStore().With(existingDef);
+        var versions = new StubVersionStore().With(existingVersion);
+
+        var reconciler = NewReconciler(
+            new CapturingSender { ToContribute = [incoming] },
+            defs, versions,
+            new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(),
+            DuplicateHandling.Throw);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => reconciler.Reconcile(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Successful_pass_publishes_the_reconciled_event_carrying_the_claims()
+    {
+        var incoming = BuildIncomingVersion(definitionId: "wf-new", version: "1.0.0");
+        var claim = NewClaim("wf-new", "1.0.0");
+        var sender = new CapturingSender { ToContribute = [incoming], ToContributeClaims = [claim] };
+
+        var reconciler = NewReconciler(
+            sender, new StubDefinitionStore(), new StubVersionStore(),
+            new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(), DuplicateHandling.Skip);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        var reconciled = Assert.Single(sender.Published.OfType<WorkflowVersionsReconciled>());
+        var carried = Assert.Single(reconciled.Claims);
+        Assert.Equal(claim, carried);
+        // Ordering: the completion event is published after the contribution event, i.e. after the pass.
+        Assert.Equal(sender.Published.Count - 1, sender.Published.IndexOf(reconciled));
+    }
+
+    [Fact]
+    public async Task Outdated_entry_contributes_no_claim_to_the_reconciled_event()
+    {
+        // Regression (#1161): the catalog already holds 2.0.0 while the source still offers 1.0.0. The
+        // pass skips 1.0.0 as outdated, so its claim must not travel — publish-on-reconcile would
+        // otherwise republish the older, still-persisted 1.0.0 row and move the active slot backward.
+        var incoming = BuildIncomingVersion(definitionId: "wf-stale", version: "1.0.0", name: "Same");
+        var claim = NewClaim("wf-stale", "1.0.0");
+        var sender = new CapturingSender { ToContribute = [incoming], ToContributeClaims = [claim] };
+        var defs = new StubDefinitionStore().With(new WorkflowDefinition { Id = "wf-stale", Name = "Same" });
+        var versions = new StubVersionStore().With(new WorkflowDefinitionVersion("wf-stale", "2.0.0"));
+
+        var reconciler = NewReconciler(
+            sender, defs, versions,
+            new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(), DuplicateHandling.Skip);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        var reconciled = Assert.Single(sender.Published.OfType<WorkflowVersionsReconciled>());
+        Assert.Empty(reconciled.Claims);
+    }
+
+    [Fact]
+    public async Task Already_present_current_version_still_contributes_its_claim()
+    {
+        // The other side of the filter: an unchanged source re-offering the version already in the catalog
+        // is authoritative, not outdated. Its claim must keep travelling or a restart would stop
+        // republishing — idempotency lives in the publish handler's already-published pre-check.
+        var incoming = BuildIncomingVersion(definitionId: "wf-same", version: "1.0.0", name: "Same");
+        var claim = NewClaim("wf-same", "1.0.0");
+        var sender = new CapturingSender { ToContribute = [incoming], ToContributeClaims = [claim] };
+        var defs = new StubDefinitionStore().With(new WorkflowDefinition { Id = "wf-same", Name = "Same" });
+        var versions = new StubVersionStore().With(new WorkflowDefinitionVersion("wf-same", "1.0.0"));
+
+        var reconciler = NewReconciler(
+            sender, defs, versions,
+            new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(), DuplicateHandling.Skip);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        var reconciled = Assert.Single(sender.Published.OfType<WorkflowVersionsReconciled>());
+        Assert.Equal(claim, Assert.Single(reconciled.Claims));
+    }
+
+    [Fact]
+    public async Task Only_the_reconciled_definitions_claim_survives_a_mixed_pass()
+    {
+        // One source contributes a stale entry for one definition and a fresh one for another: the filter
+        // is per (definition, version), not all-or-nothing for the pass.
+        var stale = BuildIncomingVersion(definitionId: "wf-stale", version: "1.0.0", name: "Same");
+        var fresh = BuildIncomingVersion(definitionId: "wf-fresh", version: "1.0.0");
+        var staleClaim = NewClaim("wf-stale", "1.0.0");
+        var freshClaim = NewClaim("wf-fresh", "1.0.0");
+        var sender = new CapturingSender { ToContribute = [stale, fresh], ToContributeClaims = [staleClaim, freshClaim] };
+        var defs = new StubDefinitionStore().With(new WorkflowDefinition { Id = "wf-stale", Name = "Same" });
+        var versions = new StubVersionStore().With(new WorkflowDefinitionVersion("wf-stale", "2.0.0"));
+
+        var reconciler = NewReconciler(
+            sender, defs, versions,
+            new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(), DuplicateHandling.Skip);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        var reconciled = Assert.Single(sender.Published.OfType<WorkflowVersionsReconciled>());
+        Assert.Equal(freshClaim, Assert.Single(reconciled.Claims));
+    }
+
+    [Fact]
+    public async Task Failed_pass_does_not_publish_the_reconciled_event()
+    {
+        // Duplicate + Throw aborts the per-version loop — the completion notification must not fire
+        // for a failed pass (a subscriber would otherwise publish partially reconciled state).
+        var incoming = BuildIncomingVersion(definitionId: "wf-dup", version: "1.0.0");
+        var sender = new CapturingSender { ToContribute = [incoming] };
+        var defs = new StubDefinitionStore().With(new WorkflowDefinition { Id = "wf-dup", Name = "Dup" });
+        var versions = new StubVersionStore().With(new WorkflowDefinitionVersion("wf-dup", "1.0.0"));
+
+        var reconciler = NewReconciler(
+            sender, defs, versions,
+            new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(), DuplicateHandling.Throw);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => reconciler.Reconcile(CancellationToken.None));
+        Assert.Empty(sender.Published.OfType<WorkflowVersionsReconciled>());
+    }
+
+    [Theory]
+    [InlineData(DesignPersistenceFailureKind.Concurrency, WorkflowsVersionReconciler.MaxMetadataConvergenceAttempts)]
+    [InlineData(DesignPersistenceFailureKind.Provider, 1)]
+    [InlineData(DesignPersistenceFailureKind.Serialization, 1)]
+    public async Task Metadata_write_failure_is_retried_only_while_it_is_a_lost_race_and_then_rethrown_unchanged(
+        DesignPersistenceFailureKind failureKind, int expectedAttempts)
+    {
+        // Every re-read still finds the old name, so a lost race is written again under a new key until the
+        // attempts run out. No other failure is retried. Either way the pass fails with the write's own exception.
+        var incoming = BuildIncomingVersion(definitionId: "wf-contended", version: "1.0.0", name: "New Name");
+        var defs = new StubDefinitionStore().With(new WorkflowDefinition { Id = "wf-contended", Name = "Old Name" });
+        var versions = new StubVersionStore().With(new WorkflowDefinitionVersion("wf-contended", "1.0.0"));
+        var saveDef = new FailingSaveDefinitionCommand(failureKind);
+        var clock = new SteppedClock();
+
+        var reconciler = NewReconciler(
+            new CapturingSender { ToContribute = [incoming] },
+            defs, versions, new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(),
+            DuplicateHandling.Skip, saveDef, timeProvider: clock);
+
+        var exception = await Assert.ThrowsAsync<DesignPersistenceException>(() => clock.RunAsync(reconciler.Reconcile(CancellationToken.None)));
+        Assert.Same(saveDef.LastFailure, exception);
+        Assert.Equal(expectedAttempts, saveDef.Keys.Distinct().Count());
+        // Each retry waited on the injected clock, not on wall time.
+        Assert.Equal(expectedAttempts - 1, clock.TimersStepped);
+    }
+
+    [Fact]
+    public async Task A_refused_item_is_left_out_of_the_pass_with_a_value_free_warning_while_the_others_are_reconciled()
+    {
+        // One refused item for a new definition, one for an existing definition whose metadata the
+        // item would change, and one valid item. The pass completes; nothing at all is written for either refused item.
+        var refusedNew = BuildIncomingVersion("wf-refused-new", "1.0.0", state: CredentialLiteralTestSupport.CredentialBoundAs("Literal"));
+        var refusedExisting = BuildIncomingVersion("wf-refused-existing", "2.0.0", name: "Renamed", state: CredentialLiteralTestSupport.CredentialBoundAs("Literal"));
+        var valid = BuildIncomingVersion("wf-valid", "1.0.0", state: CredentialLiteralTestSupport.CredentialBoundAs("Secret"));
+        var sender = new CapturingSender
+        {
+            ToContribute = [refusedNew, refusedExisting, valid],
+            ToContributeClaims = [NewClaim("wf-refused-new", "1.0.0"), NewClaim("wf-refused-existing", "2.0.0"), NewClaim("wf-valid", "1.0.0")]
+        };
+        var defs = new StubDefinitionStore().With(new WorkflowDefinition { Id = "wf-refused-existing", Name = "Original" });
+        var addDef = new SpyMaterializeDefinitionCommand();
+        var addVer = new SpyMaterializeVersionCommand();
+        var saveDef = new SpySaveDefinitionCommand();
+        var log = new RecordingLogger<WorkflowsVersionReconciler>();
+        var reconciler = NewReconciler(sender, defs, new StubVersionStore(), addDef, addVer, DuplicateHandling.Skip, saveDef, log);
+
+        Assert.Null(await Record.ExceptionAsync(() => reconciler.Reconcile(CancellationToken.None)));
+
+        Assert.Equal(["wf-valid"], addDef.Added.Select(definition => definition.Id));
+        Assert.Equal(["wf-valid"], addVer.Added.Select(version => version.DefinitionId));
+        Assert.Empty(saveDef.Saved);
+        var completed = Assert.Single(sender.Published.OfType<WorkflowVersionsReconciled>());
+        Assert.Equal(["wf-valid"], completed.Claims.Select(claim => claim.DefinitionId));
+        var warnings = log.Warnings.ToArray();
+        Assert.Equal(2, warnings.Length);
+        Assert.All(warnings, warning =>
+        {
+            Assert.Contains("Inputs/CredentialLiteral", warning.Message, StringComparison.Ordinal);
+            Assert.Contains($"'{CredentialLiteralTestSupport.NodeId}'", warning.Message, StringComparison.Ordinal);
+            Assert.Contains($"'{CredentialLiteralTestSupport.CredentialName}'", warning.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain(CredentialLiteralTestSupport.Literal, warning.Message, StringComparison.Ordinal);
+        });
+        Assert.Contains(warnings, warning => warning.Message.Contains("'wf-refused-new' v1.0.0", StringComparison.Ordinal));
+        Assert.Contains(warnings, warning => warning.Message.Contains("'wf-refused-existing' v2.0.0", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task The_reconcile_startup_task_completes_when_an_item_is_refused()
+    {
+        var refused = BuildIncomingVersion("wf-refused", "1.0.0", state: CredentialLiteralTestSupport.CredentialBoundAs("Literal"));
+        var sender = new CapturingSender { ToContribute = [refused] };
+        var reconciler = NewReconciler(
+            sender, new StubDefinitionStore(), new StubVersionStore(),
+            new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(), DuplicateHandling.Skip);
+        var executor = TaskServices.Executor(new InMemoryDistributedLockProvider());
+
+        Assert.Null(await Record.ExceptionAsync(() =>
+            executor.ExecuteTaskAsync(new WorkflowsVersionReconcilerStartupTask(reconciler), CancellationToken.None)));
+        Assert.Single(sender.Published.OfType<WorkflowVersionsReconciled>());
+    }
+
+    private static WorkflowVersionSourceClaim NewClaim(string definitionId, string version, string sourceId = "src-1") =>
+        new(definitionId, version, SemVer.ToSortKey(version), sourceId, "Json", PublishRequested: true, Deleted: false);
+
+    private static WorkflowsVersionReconciler NewReconciler(
+        IInlineEventPublisher sender,
+        IWorkflowDefinitionStore defs,
+        IWorkflowDefinitionVersionStore versions,
+        IMaterializeWorkflowDefinitionCommand addDef,
+        IMaterializeWorkflowDefinitionVersionCommand addVer,
+        DuplicateHandling duplicateHandling,
+        ISaveWorkflowDefinitionCommand? saveDef = null,
+        ILogger<WorkflowsVersionReconciler>? logger = null,
+        IPayloadSerializer? serializer = null,
+        TimeProvider? timeProvider = null)
+    {
+        var options = Microsoft.Extensions.Options.Options.Create(new WorkflowVersionReconcilerOptions { DuplicateHandling = duplicateHandling });
+        return new WorkflowsVersionReconciler(
+            logger ?? NullLogger<WorkflowsVersionReconciler>.Instance,
+            sender,
+            options,
+            defs,
+            versions,
+            addDef,
+            addVer,
+            saveDef ?? new SpySaveDefinitionCommand(),
+            serializer ?? new FakePayloadSerializer(),
+            CredentialLiteralTestSupport.Validator(CredentialLiteralTestSupport.Catalog()),
+            timeProvider);
+    }
+
+    private static IWorkflowDefinitionVersion BuildIncomingVersion(
+        string definitionId, string version, string name = "Stub", string? description = null,
+        bool deleted = false, WorkflowDefinitionState? state = null) => new StubIncomingVersion
+    {
+        Id = string.Empty,
+        Version = version,
+        DefinitionId = definitionId,
+        DefinitionFacade = new StubIncomingDefinition { Id = definitionId, Name = name, Description = description, DeletedAt = deleted ? DateTimeOffset.UtcNow : null },
+        State = state ?? new WorkflowDefinitionState([], null, [], [], null),
+    };
+
+    private sealed class StubIncomingDefinition : IWorkflowDefinition
+    {
+        public string Id { get; init; } = default!;
+        public string Name { get; init; } = default!;
+        public string? Description { get; init; }
+        public DateTimeOffset CreatedAt => DateTimeOffset.UtcNow;
+        public DateTimeOffset LastModifiedAt => DateTimeOffset.UtcNow;
+        public DateTimeOffset? DeletedAt { get; init; }
+        public IWorkflowDefinition ShallowClone() => this;
+    }
+
+    private sealed class StubIncomingVersion : IWorkflowDefinitionVersion
+    {
+        public string Id { get; init; } = default!;
+        public string Version { get; init; } = default!;
+        public string DefinitionId { get; init; } = default!;
+        public StubIncomingDefinition DefinitionFacade { get; init; } = default!;
+        public IWorkflowDefinition Definition => DefinitionFacade;
+        public WorkflowDefinitionState State { get; init; } = default!;
+        public string? StateSource => null;
+        public DateTimeOffset? SourceCreatedAt => null;
+        public DateTimeOffset CreatedAt => DateTimeOffset.UtcNow;
+        public DateTimeOffset LastModifiedAt => DateTimeOffset.UtcNow;
+    }
+
+    /// <summary>
+    /// Minimal <see cref="IPayloadSerializer"/> for the reconciler's content-mismatch tripwire: only
+    /// <see cref="Serialize(object)"/> is exercised. A reference-keyed map lets a test assign a canonical
+    /// string per state instance (so identical content ⇒ equal string, differing content ⇒ different
+    /// string) without constructing domain state; unmapped payloads fall back to real JSON.
+    /// </summary>
+    private sealed class FakePayloadSerializer : IPayloadSerializer
+    {
+        private readonly Dictionary<object, string> _map = new(ReferenceEqualityComparer.Instance);
+        public FakePayloadSerializer With(object payload, string canonical) { _map[payload] = canonical; return this; }
+        public string Serialize(object payload) => _map.TryGetValue(payload, out var s) ? s : JsonSerializer.Serialize(payload);
+        public JsonElement SerializeToElement(object payload) => throw new NotSupportedException();
+        public object Deserialize(string serializedData) => throw new NotSupportedException();
+        public object Deserialize(string serializedData, Type type) => throw new NotSupportedException();
+        public object Deserialize(JsonElement serializedData) => throw new NotSupportedException();
+        public T Deserialize<T>(string serializedData) => throw new NotSupportedException();
+        public T Deserialize<T>(JsonElement serializedData) => throw new NotSupportedException();
+        public JsonSerializerOptions GetOptions() => throw new NotSupportedException();
+    }
+
+    private sealed class CapturingSender : IInlineEventPublisher
+    {
+        public List<IWorkflowDefinitionVersion> ToContribute { get; init; } = new();
+        public List<WorkflowVersionSourceClaim> ToContributeClaims { get; init; } = new();
+        public List<IEvent> Published { get; } = new();
+
+        public Task Publish(IEvent @event, CancellationToken cancellationToken = default)
+        {
+            Published.Add(@event);
+            if (@event is WorkflowVersionsReconciling rec)
+            {
+                foreach (var v in ToContribute)
+                    rec.Versions.Add(v);
+                foreach (var c in ToContributeClaims)
+                    rec.Claims.Add(c);
+            }
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class StubDefinitionStore : IWorkflowDefinitionStore
+    {
+        private readonly List<WorkflowDefinition> _items = new();
+        public StubDefinitionStore With(WorkflowDefinition item) { _items.Add(item); return this; }
+
+        public Task<WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default)
+            => Task.FromResult(_items.FirstOrDefault(x => x.Id == id));
+
+        public Task<WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default)
+            => Task.FromResult(_items.First(x => x.Id == id));
+
+        public Task<IReadOnlyList<WorkflowDefinition>> ListAsync(WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<WorkflowDefinition>>(_items);
+    }
+
+    private sealed class StubVersionStore : IWorkflowDefinitionVersionStore
+    {
+        private readonly List<WorkflowDefinitionVersion> _items = new();
+        public StubVersionStore With(WorkflowDefinitionVersion item) { _items.Add(item); return this; }
+
+        public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default)
+            => Task.FromResult(_items.Where(x => x.DefinitionId == definitionId).OrderByDescending(x => x.SemVerSortKey, StringComparer.Ordinal).FirstOrDefault());
+
+        public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default)
+            => Task.FromResult(_items.Any(x => x.DefinitionId == definitionId && x.SemVerSortKey == semVerSortKey));
+
+        public Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<WorkflowDefinitionVersion>>(_items.Where(x => x.DefinitionId == definitionId).ToList());
+
+        private const string Unused = "Not exercised by reconciler tests.";
+        public Task<WorkflowDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
+        public Task<WorkflowDefinitionVersion?> FindByIdAsync(string versionId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
+        public Task<WorkflowDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
+    }
+
+    private sealed class SpyMaterializeDefinitionCommand : IMaterializeWorkflowDefinitionCommand
+    {
+        public List<WorkflowDefinition> Added { get; } = new();
+
+        public Task<string> Execute(
+            DesignOperationKey operationKey,
+            WorkflowDefinition definition,
+            CancellationToken cancellationToken = default)
+        {
+            Added.Add(definition);
+            return Task.FromResult(definition.Id);
+        }
+    }
+
+    private sealed class SpyMaterializeVersionCommand : IMaterializeWorkflowDefinitionVersionCommand
+    {
+        public List<WorkflowDefinitionVersion> Added { get; } = new();
+
+        public Task<WorkflowDefinitionVersionAdded> Execute(
+            DesignOperationKey operationKey,
+            WorkflowDefinitionVersion version,
+            CancellationToken cancellationToken = default)
+        {
+            Added.Add(version);
+            return Task.FromResult(
+                new WorkflowDefinitionVersionAdded(
+                    version.DefinitionId,
+                    version.Id,
+                    version.Version));
+        }
+    }
+
+    private sealed class SpySaveDefinitionCommand : ISaveWorkflowDefinitionCommand
+    {
+        public List<WorkflowDefinition> Saved { get; } = new();
+        public Task Execute(
+            DesignOperationKey operationKey,
+            WorkflowDefinition definition,
+            CancellationToken cancellationToken = default)
+        {
+            Saved.Add(definition);
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>Fails every write with the given kind of failure, committing nothing.</summary>
+    private sealed class FailingSaveDefinitionCommand(DesignPersistenceFailureKind failureKind) : ISaveWorkflowDefinitionCommand
+    {
+        public List<DesignOperationKey> Keys { get; } = new();
+        public DesignPersistenceException? LastFailure { get; private set; }
+
+        public Task Execute(
+            DesignOperationKey operationKey,
+            WorkflowDefinition definition,
+            CancellationToken cancellationToken = default)
+        {
+            Keys.Add(operationKey);
+            LastFailure = new DesignPersistenceException(
+                DesignPersistenceDomain.Workflow, failureKind, EfSaveWorkflowDefinitionCommand.OperationKind, null,
+                new InvalidOperationException("The write failed."));
+            throw LastFailure;
+        }
+    }
+
+    /// <summary>
+    /// A <see cref="FakeTimeProvider"/> stepped past each timer the code under test waits on, so a backoff costs no
+    /// wall time. <see cref="RunAsync"/> advances the clock by each timer's due time until the work ends.
+    /// </summary>
+    private sealed class SteppedClock : FakeTimeProvider
+    {
+        private readonly Channel<TimeSpan> _dueTimes = Channel.CreateUnbounded<TimeSpan>();
+
+        public int TimersStepped { get; private set; }
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = base.CreateTimer(callback, state, dueTime, period);
+            _dueTimes.Writer.TryWrite(dueTime);
+            return timer;
+        }
+
+        public async Task RunAsync(Task work)
+        {
+            while (true)
+            {
+                var nextTimer = _dueTimes.Reader.ReadAsync().AsTask();
+                if (await Task.WhenAny(work, nextTimer) == work)
+                {
+                    await work;
+                    return;
+                }
+
+                Advance(await nextTimer);
+                TimersStepped++;
+            }
+        }
+    }
+
+    private sealed class SequentialIdGenerator : IIdentityGenerator
+    {
+        private int _i;
+        public string Generate() => $"gen-{Interlocked.Increment(ref _i)}";
+    }
+}

@@ -37,12 +37,12 @@ registers their default implementations:
 
 | Contract | Plane | Role |
 |---|---|---|
-| `ITokenService` | protocol | Issue / refresh / validate / revoke access tokens. The seam behind which "how tokens are minted" is swappable. |
+| `ITokenService` | protocol | Issue / refresh / validate / revoke access tokens, and revoke all of a subject's tokens at sign-out. The seam behind which "how tokens are minted" is swappable. |
 | `IAuthSessionService` | protocol | Project the current `ClaimsPrincipal` into an `AuthSession` (status, subject, roles, permissions, freshness). |
 | `IAuthenticationProviderModule` / `IAuthenticationProviderResolver` | protocol | Each auth provider (local, OIDC, …) describes itself (id, kind, challenge metadata) so the API can enumerate providers. |
 | `IPrincipalFactory` | seam | Turn an external principal into a provisioned, normalized Elsa principal. |
 | `IClaimsNormalizer` / `IClaimMappingRule` | IAM | Map raw provider claims (roles, group memberships) into Elsa `elsa.identity.role` / `elsa.identity.permission` claims. |
-| `IPermissionCatalog` / `IPermissionEvaluator` / `IPermissionAuthorizationService` | IAM | The permission model: catalog, implication expansion, and canonical policy or request-internal evaluation. |
+| `IPermissionCatalog` / `IPermissionEvaluator` / `IPermissionAuthorizationService` | IAM | The permission model: catalog, `{resource}:{verb}` matching, and canonical policy or request-internal evaluation. |
 | `IUserStore` / `IRoleStore` / `IExternalIdentityStore` / `ITenantMembershipStore` | IAM | User/role/link/tenant persistence. |
 
 Because these contracts are provider-agnostic, first-party routes use `RequirePermission(...)`,
@@ -63,9 +63,15 @@ the OpenIddict validation scheme for validated bearer requests. OpenIddict's tok
 identity type (`openiddict`) is deliberately not trusted as an endpoint identity. Custom adapters
 call `AddNormalizedAuthenticationType(...)` only after implementing the same strip-map-mark rule.
 
-Permission keys are compared as Unicode NFC plus invariant uppercase using ordinal equality.
-Implications expand from grants toward requests and terminate safely on cycles. An explicit `*`
-grant satisfies an ordinary request, while requesting `*` itself requires that explicit grant.
+Permissions are named `{resource}:{verb}`, Elsa 3.9's shape: `:` separates the resource from the verb, `/`
+separates a parent resource from a child (`workflows/runtime`), and `-` joins words inside one segment
+(`execution-evidence`). Permissions are compared as Unicode NFC plus invariant uppercase using ordinal equality.
+A grant's trailing `*` resource segment covers the named resource and every resource beneath it
+(`identity/*:read`), a `*` verb covers every verb, and a bare `*` grant is the superuser, while requesting `*` itself
+requires that explicit grant. `manage` satisfies `read` on the same resource; the catalog carries no other
+implication. A grant that matches no registered permission authorizes nothing, and a host that stores roles warns
+about each such role grant at startup. The full rules, the Elsa 4 vocabulary and the Elsa 3.9 mapping are in
+[Elsa 3.9 to Elsa 4 permission mapping](elsa3-permission-mapping.md).
 For a member, resource denial vetoes resource grant and the general evaluator; the evaluator runs
 only after every resource source abstains. Exceptions, timeouts, and HTTP request cancellation
 propagate as operational failures rather than becoming `403`.
@@ -199,7 +205,7 @@ Enable these feature sets per shell. All scenarios also require `FoundationIdent
 Local users and roles, the backend login page, a seeded dev admin (`admin` / `Password123!`, sourced from the
 `SeedAdmin*` settings in `shells.json` under `IsDevelopmentOrDemo` only — no credential constants in code),
 cookie sign-in, and first-party JWT issuance. This is exactly what the
-checked-in `src/apps/Elsa.Workbench/shells.json` enables. **`FoundationIdentityOidc` is also enabled in
+checked-in `Essentials/apps/Elsa.Workbench/shells.json` enables. **`FoundationIdentityOidc` is also enabled in
 the default shell but is inert until you configure an `Authority`/`ClientId`** — with no provider
 configured, its interactive OpenID Connect handler is not even registered, and bearer validation
 stays the default so unauthenticated API calls return `401`.
@@ -226,7 +232,7 @@ The OIDC module registers a `JwtBearer` scheme (for API bearer validation agains
 a `ClientId` is present — an interactive `OpenIdConnect` scheme (for the browser redirect flow).
 See §8 for per-IdP recipes.
 
-External claims still need mapping into Elsa permissions. For a fixed-host API bearer layout, opt in through `NormalizeBearerClaims`, independent `Audience`, `ProviderId` and `TenantId`. The host supplies a matching ordinary persistence scope and explicit IAM mapping backend; the adapter validates the token, filters internal claims and loads current rules before normalization. It does not provision a local user. Without opt-in, the legacy external path remains unchanged. Interactive login/provisioning still requires its own bridge. See the [owning OIDC README](../../src/essentials/Foundation/Identity/Oidc/README.md) and [canonical contract](../../specs/190-worker-oidc-normalization/contracts/bearer-normalization.md); implementation proof is tracked separately under #2308.
+External claims still need mapping into Elsa permissions. For a fixed-host API bearer layout, opt in through `NormalizeBearerClaims`, independent `Audience`, `ProviderId` and `TenantId`. The host supplies a matching ordinary persistence scope and explicit IAM mapping backend; the adapter validates the token, filters internal claims and loads current rules before normalization. It does not provision a local user. Without opt-in, the legacy external path remains unchanged. Interactive login/provisioning still requires its own bridge. See the [owning OIDC README](../../Essentials/src/Foundation/Identity/Oidc/README.md) and [canonical contract](../../specs/190-worker-oidc-normalization/contracts/bearer-normalization.md); implementation proof is tracked separately under #2308.
 
 ### (c) Custom token issuer
 
@@ -275,12 +281,12 @@ The `/_elsa/identity/*` surface (`FoundationIdentityApi`):
 | Route | Method | Purpose | Auth |
 |---|---|---|---|
 | `_elsa/identity/bootstrap` | GET | Ownership mode + enumerated providers (id, kind, display name, challenge metadata). | anonymous |
-| `_elsa/identity/capabilities` | GET | Provider/capability discovery. | requires `identity.providers.read` |
+| `_elsa/identity/capabilities` | GET | Provider/capability discovery. | requires `identity/providers:read` |
 | `_elsa/identity/challenge/{provider}` | GET | Redirect into the provider's challenge (backend login page for local; IdP redirect for OIDC). | anonymous |
 | `_elsa/identity/session` | GET | The current `AuthSession` (status/subject/roles/permissions/freshness) for the caller. | anonymous (reports "anonymous" when no session) |
 | `_elsa/identity/token` | GET | **Cookie→bearer exchange.** Mints a JWT for the cookie principal; bare `401` when anonymous. | interactive schemes only |
 | `_elsa/identity/refresh` | POST | Token-based refresh (`ITokenService.RefreshAsync`) for first-party/API clients. | anonymous (validates the refresh token) |
-| `_elsa/identity/logout/{provider}` | POST | Clears the session / provider sign-out. | anonymous |
+| `_elsa/identity/logout/{provider}` | POST | Ends the provider's own session, authenticated under the provider's scheme (for the first-party provider, the identity cookie): revokes every live token issued to that session's normalized subject (all of them, not only those from the cookie exchange), so an old refresh token gets `401`, then invalidates and signs out that session. A bearer beside that session is ignored, so it never decides whose tokens are revoked. With no provider session (bearer-only), logout signs out the bearer's own subject: it revokes that subject's live tokens and rotates its security stamp when the subject resolves to a tenant-bound Identity user; a subject that is no Identity user is only revoked, and the answer is still `204`. If revocation fails, including a store that declines one entry, it answers `503` and leaves the session intact, so the sign-out can be retried. | anonymous |
 | `_elsa/identity/login` | GET / POST | The backend-served login page (GET) and credential post (POST) — from the ASP.NET Core Identity EF Core feature. | anonymous |
 
 The Studio cookie-refresh loop **re-probes `GET /_elsa/identity/session`** and, on a live cookie,

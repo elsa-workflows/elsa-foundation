@@ -2,10 +2,16 @@
 
 **Feature Branch**: `146-javascript-binding-grammar`
 **Created**: 2026-08-05
-**Status**: Draft
+**Status**: Superseded before implementation (2026-10-19)
+
+> Historical proposal only. The owner now requires expressions and statement bodies in the same
+> JavaScript field. [Issue #3009](https://github.com/elsa-workflows/elsa-foundation/issues/3009)
+> and revised [ADR 0083](../../docs/adr/0083-javascript-binding-grammar-is-pinned-at-publish.md)
+> replace this host-selected design with deterministic expression-first parsing. The host setting,
+> grammar options and publication stamping specified below are not implemented requirements.
 **Input**: Let a host admit Elsa 3 style JavaScript binding expressions, evaluated with Elsa 3's own Script semantics and selected by deployment configuration, without letting deployment configuration change the behavior of an already-published executable.
 
-Decision of record: [ADR 0062](../../docs/adr/0062-javascript-binding-grammar-is-pinned-at-publish.md).
+Decision of record: [ADR 0083](../../docs/adr/0083-javascript-binding-grammar-is-pinned-at-publish.md).
 Constrained by [ADR 0038](../../docs/adr/0038-artifact-hash-is-purely-behavioral-and-executables-are-content-addressed.md).
 
 ## User Scenarios & Testing *(mandatory)*
@@ -224,7 +230,7 @@ active grammar is reported.
 
 - Changing `RunJavaScript` or the script evaluator, which already accept statement bodies.
 - Foundation's `Elsa3ExpressionRewriter` — its inability to parse `return`-bearing sources and its
-  missing coverage are tracked as follow-up in ADR 0062 and specified separately.
+  missing coverage are tracked as follow-up in ADR 0083 and specified separately.
 - A general expression-dialect framework for other languages.
 - Studio editor UX for the grammar indicator.
 - Retro-stamping or migrating already-published executables.
@@ -234,7 +240,7 @@ active grammar is reported.
 - Should Foundation's Elsa 3 importer stamp `script` on imported bindings, or lower toward
   `expression` where it safely can? Stamping migrates every source unchanged; lowering avoids pinning
   imported workflows to the legacy dialect indefinitely, but cannot restructure a completion-value
-  body. ADR 0062 does not settle this.
+  body. ADR 0083 does not settle this.
 - Does `script` evaluate strict or non-strict? Elsa 3 is non-strict, so full fidelity implies
   dropping `"use strict"` for this grammar, which is a real reduction in the sandbox story. Strict
   keeps the sandbox intact but leaves sloppy-mode Elsa 3 expressions failing.

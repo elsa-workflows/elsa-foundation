@@ -1,0 +1,1117 @@
+{
+  "schema_version": 1,
+  "source_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9",
+  "artifact_id": 11719153513,
+  "run_id": 38185385882,
+  "workflow_id": 307637788,
+  "repository_id": 1232994340,
+  "artifact_sha256": "6848547ea1ee218ba234e3d294f43cf5fd42396620fe0125a22d0bb074eab211",
+  "state_commit": "bbe803c40c996e8a89c934631ec9930cf90251b2",
+  "state_sha256": "71a16003e7ca0fab53ced8807016e04e383b6db4ed9184394b7973822c077c8b",
+  "packages": [
+    {
+      "package_id": "Elsa.Activities.Bpmn",
+      "version": "4.0.8-preview",
+      "sha256": "5b84264a1b01f26376322d1f01410b9018e13f1ad44297d8b23e39876a71c06f",
+      "recover": false,
+      "expected_state_version": "4.0.8-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Activities.Bpmn.Interchange",
+      "version": "4.0.8-preview",
+      "sha256": "e73842c3f3ebe874624a52c353117573e2caa0e93f1a7945a444cf02f1d38c34",
+      "recover": false,
+      "expected_state_version": "4.0.8-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Activities.ControlFlow",
+      "version": "4.0.7-preview",
+      "sha256": "13e17c5a550f23c347320749753bff29a382244897fe2968d69c3a324985ebad",
+      "recover": false,
+      "expected_state_version": "4.0.7-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Activities.Design.Api",
+      "version": "4.0.10-preview",
+      "sha256": "d013b6591d7b3420019b0ab07db409770637f3acf15c6fc589938257b5b13eac",
+      "recover": false,
+      "expected_state_version": "4.0.10-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Activities.Design.Core",
+      "version": "4.0.6-preview",
+      "sha256": "562f43896cabc93a6a176e05e9bb4c29ce67887f4938871bd8f56deb2f1117c9",
+      "recover": false,
+      "expected_state_version": "4.0.6-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Activities.Design.Persistence.Core",
+      "version": "4.0.6-preview",
+      "sha256": "db4cc78480b32f62ce070a38d6991a78e8c2ba750345cc2b6d3749f1c1cd98c9",
+      "recover": false,
+      "expected_state_version": "4.0.6-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
+      "version": "4.0.15-preview",
+      "sha256": "26c9c81a3d8cfe44784d0f2118a0d787f9873eec04778a624163f2cad0bb8687",
+      "recover": false,
+      "expected_state_version": "4.0.15-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Activities.Design.Reconciliation",
+      "version": "4.0.8-preview",
+      "sha256": "2d9c1ee7020751ea8d2ba0cdf19c8db4db32faa51fccceb2b779ed6e9e4af521",
+      "recover": false,
+      "expected_state_version": "4.0.8-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Activities.Design.Reconciliation.Clr",
+      "version": "4.0.7-preview",
+      "sha256": "50c53ddb8e3022c1d2b582c0279748c4e4a4157a1363d03b89b8985501feba88",
+      "recover": false,
+      "expected_state_version": "4.0.7-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Activities.Design.Reconciliation.Json",
+      "version": "4.0.7-preview",
+      "sha256": "372af2e4072f19b999841abf59864d91c3d8d3e83626c1dffef4da45813b39e7",
+      "recover": false,
+      "expected_state_version": "4.0.7-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Activities.DispatchWorkflow.Design",
+      "version": "4.0.7-preview",
+      "sha256": "cfb7f6e91421f8338fb31e76be1bb4fb05daa7c65810c10df2f6379a519a4409",
+      "recover": false,
+      "expected_state_version": "4.0.7-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Activities.DispatchWorkflow.Runtime",
+      "version": "4.0.7-preview",
+      "sha256": "dffb21d2334c100a82104f5e0c4a8b9c1fe377d9280d2c170b4ee129afa6689f",
+      "recover": false,
+      "expected_state_version": "4.0.7-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Activities.Flowchart",
+      "version": "4.0.7-preview",
+      "sha256": "3efdf9c23a0128541ecf0a445b412b336e03e8ab62a412300b1f879a31cadb20",
+      "recover": false,
+      "expected_state_version": "4.0.7-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Activities.Graph.Design",
+      "version": "4.0.6-preview",
+      "sha256": "444c963fce18eaa7f72012157c5cd11a409b65245935e18aac63152d35e50280",
+      "recover": false,
+      "expected_state_version": "4.0.6-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Activities.Graph.Runtime",
+      "version": "4.0.6-preview",
+      "sha256": "6305e6a80d31b0d378b6460d70682ff86efe8240d2f59dbfec68857ae95ce5d0",
+      "recover": false,
+      "expected_state_version": "4.0.6-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Activities.Http",
+      "version": "4.0.10-preview",
+      "sha256": "2c58652c8ee04c8604452102146f065f1843addffa9d88667984c19702230a39",
+      "recover": false,
+      "expected_state_version": "4.0.10-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Activities.Primitives",
+      "version": "4.0.11-preview",
+      "sha256": "8070ef09ff607326a148353dcd3ca0bc639fc749a9d2475c9ab9fe7042588566",
+      "recover": false,
+      "expected_state_version": "4.0.11-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Activities.Runtime",
+      "version": "4.0.16-preview",
+      "sha256": "1f0caf30a2cf78da284567b687c1934a4c122304c897ad919a966814dadda118",
+      "recover": false,
+      "expected_state_version": "4.0.16-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Activities.Runtime.Core",
+      "version": "4.0.10-preview",
+      "sha256": "b40d15e954ece5b0ccab8e769b75a506e6a345eacbc510f25650e882f486c2d5",
+      "recover": false,
+      "expected_state_version": "4.0.10-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Activities.Scheduling",
+      "version": "4.0.8-preview",
+      "sha256": "d60da32149cc1fa745aafb472c3a2917b1264a07f9ad6821e2d9fad212917ca3",
+      "recover": false,
+      "expected_state_version": "4.0.8-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Activities.Scripting",
+      "version": "4.0.6-preview",
+      "sha256": "fc377e8d163b7280145313fdbaf66a5780892cd0669c06e834ce2b33be59fe7d",
+      "recover": false,
+      "expected_state_version": "4.0.6-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Activities.Sequence",
+      "version": "4.0.6-preview",
+      "sha256": "05752d75590fd291d88f5ea02f6c14a1b036f1024f7672771d69725e0a694fbb",
+      "recover": false,
+      "expected_state_version": "4.0.6-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Agent.Anthropic",
+      "version": "4.0.6-preview",
+      "sha256": "7be49966960d679eb6abb862fbc88aafbd7c076f81c82450260bfd789b81e8a0",
+      "recover": false,
+      "expected_state_version": "4.0.6-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Agent.Api",
+      "version": "4.0.8-preview",
+      "sha256": "276a6cfc275068737f239c1d8e7dd3ce01ba317840c7333dae92821596227fcb",
+      "recover": false,
+      "expected_state_version": "4.0.8-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Agent.Core",
+      "version": "4.0.6-preview",
+      "sha256": "b78a1a4fb16627d9dfad109186146d3df5491a2bf93974e1059fe9406a778b21",
+      "recover": false,
+      "expected_state_version": "4.0.6-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Agent.GitHubCopilot",
+      "version": "4.0.6-preview",
+      "sha256": "d054f015ccdbac403730742ffc70f76e78b5090289f28bd1357322e6146582b6",
+      "recover": false,
+      "expected_state_version": "4.0.6-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Agent.Workflows",
+      "version": "4.0.6-preview",
+      "sha256": "2f0fd2ec807ca2b1b4d68152066b2ae33cb2907a0551c2c8d7c6fb016a5d7db0",
+      "recover": false,
+      "expected_state_version": "4.0.6-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Api.AspNetCore",
+      "version": "4.0.8-preview",
+      "sha256": "34f6cc55c2edd728968f115e7a4def3dc17c10033af9aabbb9826b94950c9688",
+      "recover": false,
+      "expected_state_version": "4.0.8-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Api.Capabilities",
+      "version": "4.0.9-preview",
+      "sha256": "e3818445a473b20ff1af2b3340c46317f7d78a3d9235a369bf6724b17d356095",
+      "recover": false,
+      "expected_state_version": "4.0.9-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Attention.Api",
+      "version": "4.0.8-preview",
+      "sha256": "6294a00b0650a19d6735841c37117f666076ce87925dbd7556e8e1fa51203446",
+      "recover": false,
+      "expected_state_version": "4.0.8-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Attention.Core",
+      "version": "4.0.7-preview",
+      "sha256": "0c6a3695e49621207b30eed13b05b09f765fd63c0996639f1af42890b6b2507c",
+      "recover": false,
+      "expected_state_version": "4.0.7-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Caching.Core",
+      "version": "4.0.7-preview",
+      "sha256": "11f265c9a90bc1bbe19c376f2c44019e37d651a595d5d177c1b7cb463e0f2b9f",
+      "recover": false,
+      "expected_state_version": "4.0.7-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Caching.Memory",
+      "version": "4.0.6-preview",
+      "sha256": "456a57935e4c0aab253c9f8abd49610386ebdeb669fd33668e449b470a08787e",
+      "recover": false,
+      "expected_state_version": "4.0.6-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Cluster.Core",
+      "version": "4.0.10-preview",
+      "sha256": "1cb02417196c03841f673226fe6cc59e267cd74e148f13c0ed1281c541da2546",
+      "recover": false,
+      "expected_state_version": "4.0.10-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Cluster.EntityFrameworkCore",
+      "version": "4.0.16-preview",
+      "sha256": "a5dfbb4aefce2c2d3766628a06f6bf69ed40fa6685ac916812234be5e0dc156a",
+      "recover": false,
+      "expected_state_version": "4.0.16-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Cluster.InProcess",
+      "version": "4.0.7-preview",
+      "sha256": "62eb271edf4be66e8b04f76c2ff6162ed4e6b77e63dd1103733341fd6b2ef268",
+      "recover": false,
+      "expected_state_version": "4.0.7-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Cluster.Readability",
+      "version": "4.0.17-preview",
+      "sha256": "20dd4342cb9c706d2693f3f9ef1d64836f547b46621c5a127d5f2929e37bb10b",
+      "recover": false,
+      "expected_state_version": "4.0.17-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Diagnostics.ConsoleLogStreaming",
+      "version": "4.0.5-preview",
+      "sha256": "67487f49f11e4bbda1f55d3ff56ef96ef4f3de869a6c73db6da689e5893779e3",
+      "recover": false,
+      "expected_state_version": "4.0.5-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Diagnostics.OpenTelemetry",
+      "version": "4.0.8-preview",
+      "sha256": "be87de4a678361b3639fd612ef5d6f0bc06f89a653916871207d0c8726956bad",
+      "recover": false,
+      "expected_state_version": "4.0.8-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Diagnostics.OpenTelemetry.Core",
+      "version": "4.0.6-preview",
+      "sha256": "2598d425e8f81065fbef40eb7281c396a76ae08c027ff54629134cf2bb5ba6e6",
+      "recover": false,
+      "expected_state_version": "4.0.6-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore",
+      "version": "4.0.17-preview",
+      "sha256": "d4d504a51d3577ed438fc90f68454b13e1ea83fd93f5da05b31ec4073c8cf323",
+      "recover": false,
+      "expected_state_version": "4.0.17-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Diagnostics.Persistence",
+      "version": "4.0.9-preview",
+      "sha256": "8029c842257394c51b1e84423a7c4ad0f4bc48f949de2393512ba8a1db5eefed",
+      "recover": false,
+      "expected_state_version": "4.0.9-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Diagnostics.StructuredLogs",
+      "version": "4.0.8-preview",
+      "sha256": "ce6f8c78298339f161a664fb97935281f729590d4878814c628bd6427211c8a0",
+      "recover": false,
+      "expected_state_version": "4.0.8-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Diagnostics.StructuredLogs.Core",
+      "version": "4.0.6-preview",
+      "sha256": "7a68b32213fc2bfb59d5850d224cd7a600cc0c477df04fd849a4cebce3f71b13",
+      "recover": false,
+      "expected_state_version": "4.0.6-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore",
+      "version": "4.0.16-preview",
+      "sha256": "6a004912573c3315fbace2b9f48ec6c3303de6658c8dbb2b638187d9e913e326",
+      "recover": false,
+      "expected_state_version": "4.0.16-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Events",
+      "version": "4.0.8-preview",
+      "sha256": "efd335d4455f043884844873a8231b0172382af890e3006870ab1c6fec2ca0b1",
+      "recover": false,
+      "expected_state_version": "4.0.8-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Events.Core",
+      "version": "4.0.7-preview",
+      "sha256": "7449a86804864eb8256f0a15d8d131cf056cc53aef7f6f4d7863fe7b24fe7a98",
+      "recover": false,
+      "expected_state_version": "4.0.7-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Events.Strategies",
+      "version": "4.0.5-preview",
+      "sha256": "ab22d7a5086b4d25ebf9058cee9c95f11d24e640ee8267d4afa47166371530d5",
+      "recover": false,
+      "expected_state_version": "4.0.5-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Expressions",
+      "version": "4.0.8-preview",
+      "sha256": "0c310c6cf2ebba7e56be4a21248909e67614393b352369b1d3cb7a6e77baf478",
+      "recover": false,
+      "expected_state_version": "4.0.8-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Expressions.Api",
+      "version": "4.0.7-preview",
+      "sha256": "4be649cacc0125439a030bda932f2deeaf9895f72d13b5e117173b1081b587db",
+      "recover": false,
+      "expected_state_version": "4.0.7-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Expressions.Core",
+      "version": "4.0.7-preview",
+      "sha256": "0a555859f722f2c871719354916da0600624d2aac170e23d8c959f05bb31c841",
+      "recover": false,
+      "expected_state_version": "4.0.7-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Expressions.JavaScript",
+      "version": "4.0.7-preview",
+      "sha256": "62ee944db09123d8ebdd9ba9a0cbda99db755c29310f8646dd93c0ea99ba5c0c",
+      "recover": false,
+      "expected_state_version": "4.0.7-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Expressions.JavaScript.Core",
+      "version": "4.0.5-preview",
+      "sha256": "10b02462bb9db8b53699cd57ff4b632ac359ea6d67bfddfd000226516f6acaee",
+      "recover": false,
+      "expected_state_version": "4.0.5-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Expressions.JavaScript.Jint",
+      "version": "4.0.6-preview",
+      "sha256": "82b315668cad3014ee879a1854ff14f2b16dd98ee6fcb773a2fd41392d4929ce",
+      "recover": false,
+      "expected_state_version": "4.0.6-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Expressions.JavaScript.Rendering",
+      "version": "4.0.8-preview",
+      "sha256": "a4c267384bb25783cf3a0e68d18765dd863eff893646c3457b850d18a7d94562",
+      "recover": false,
+      "expected_state_version": "4.0.8-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Expressions.JavaScript.Rendering.Core",
+      "version": "4.0.5-preview",
+      "sha256": "e032a65cee3a7fd09ceab0836cf80126793220918b06ff193e1ebab2c7c60f56",
+      "recover": false,
+      "expected_state_version": "4.0.5-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Expressions.Liquid",
+      "version": "4.0.6-preview",
+      "sha256": "fa9ecdf728d0ca4f453d4e120352a9f4905726f26f18b653f05c2c2a7d9a389b",
+      "recover": false,
+      "expected_state_version": "4.0.6-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.ExtensionBuilder.Api",
+      "version": "4.0.5-preview",
+      "sha256": "375a3d1c127013fb0c530b76e7ff1c4d2140d73a714030a2be1ca5a52b11f253",
+      "recover": false,
+      "expected_state_version": "4.0.5-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Foundation.DataProtection.EntityFrameworkCore",
+      "version": "4.0.4-preview",
+      "sha256": "e4bec89c2d5039fd31e197495fe45bd6098576c5970d3b7c7e64b8a9a02ba71e",
+      "recover": false,
+      "expected_state_version": "4.0.4-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Foundation.Identity",
+      "version": "4.0.9-preview",
+      "sha256": "b2d793853793491e28e2ee470012e1eb74ad148fdb9f0e8991d90ed044b98dc2",
+      "recover": false,
+      "expected_state_version": "4.0.9-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Foundation.Identity.Api",
+      "version": "4.0.8-preview",
+      "sha256": "4cbbc362b385aa2fd39a95e84ea508eba59e3b34d2ea9a0d16afd9a707c1f1cd",
+      "recover": false,
+      "expected_state_version": "4.0.8-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Foundation.Identity.AspNetCoreIdentity",
+      "version": "4.0.9-preview",
+      "sha256": "32c5b33d9449ab132a65be2d1896cc4d17d282a52d99be86a3679e642fdc2d69",
+      "recover": false,
+      "expected_state_version": "4.0.9-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore",
+      "version": "4.0.12-preview",
+      "sha256": "f5873e87d3a7cdbaa9748ee38f21dbed0e70589f71b3103e56b44b109333304b",
+      "recover": false,
+      "expected_state_version": "4.0.12-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Foundation.Identity.Core",
+      "version": "4.0.5-preview",
+      "sha256": "03dcf50e4a4d35c05d0756d06ea9dea369d1e33f9e2efcce085d8403ea0d5a38",
+      "recover": false,
+      "expected_state_version": "4.0.5-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Foundation.Identity.Oidc",
+      "version": "4.0.9-preview",
+      "sha256": "d81be06d07cd5f5538a31b942ada8c8e98e1fae740e6ed9e5ce20752c902cbaf",
+      "recover": false,
+      "expected_state_version": "4.0.9-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Foundation.Identity.OpenIddict",
+      "version": "4.0.8-preview",
+      "sha256": "580865d6a578d3769b68a3d8cb76e3009463173dde921b0534f15a0c14bf49bc",
+      "recover": false,
+      "expected_state_version": "4.0.8-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Foundation.Identity.OpenIddict.Behavior",
+      "version": "4.0.9-preview",
+      "sha256": "f23a6f0a17e5f1acc572920a83a4464bd8477c76e4a7fce70d2494a2e751cba1",
+      "recover": false,
+      "expected_state_version": "4.0.9-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore",
+      "version": "4.0.15-preview",
+      "sha256": "8061e787c609726c7b73b39aba3ef528c77129842414c01ae831049aaa6c74cd",
+      "recover": false,
+      "expected_state_version": "4.0.15-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Git",
+      "version": "4.0.6-preview",
+      "sha256": "fed29ec907b8643da456e8b470e1892afb5d0ee8d74349a80dbb9c21f81a84a1",
+      "recover": false,
+      "expected_state_version": "4.0.6-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Http",
+      "version": "4.0.8-preview",
+      "sha256": "201e92ca4d00f89fd0a4ece548b49b91b1e19fc0fc816bb89b2af9afaaf19d6e",
+      "recover": false,
+      "expected_state_version": "4.0.8-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Http.Core",
+      "version": "4.0.5-preview",
+      "sha256": "1c064e92b2f4bef27d78a97d6d1bed70c2353c530a9b3d1131578fb76b62bd77",
+      "recover": false,
+      "expected_state_version": "4.0.5-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Http.JavaScript",
+      "version": "4.0.6-preview",
+      "sha256": "4c5c23117e8047769acc3238030099ddcb51f629a258a4d023d16250c83c1f07",
+      "recover": false,
+      "expected_state_version": "4.0.6-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Locking.Core",
+      "version": "4.0.7-preview",
+      "sha256": "33f9ad11b190652f0073cf09276acd6986c03aa25a947d8f05b6d6df1add4676",
+      "recover": false,
+      "expected_state_version": "4.0.7-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Locking.Database",
+      "version": "4.0.3-preview",
+      "sha256": "186d275dcaf53956373526efdecb574ff8ac2049d5009ef47d9d8e6d121bbce3",
+      "recover": false,
+      "expected_state_version": "4.0.3-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Locking.FileSystem",
+      "version": "4.0.6-preview",
+      "sha256": "4a960c5cb1106b4ab5e7a95d622000c1a7c3a9255a65c1df48982f2c61d91e82",
+      "recover": false,
+      "expected_state_version": "4.0.6-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Mediator",
+      "version": "4.0.7-preview",
+      "sha256": "25d79b32e542d41e5fbe53b49815bcd5e8b573a1716bc6d41bb0e5ae34cd558c",
+      "recover": false,
+      "expected_state_version": "4.0.7-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Mediator.Core",
+      "version": "4.0.7-preview",
+      "sha256": "38fe2915c3679e5c074b0e9d018bd472984eb62a548bb1b53bad1eebf3f99f58",
+      "recover": false,
+      "expected_state_version": "4.0.7-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Modularity.Api",
+      "version": "4.0.10-preview",
+      "sha256": "6c0dac4ec02cf5b5ab7086eb76811166420d6eeeba861c6d4ea341fcff5ea2e5",
+      "recover": false,
+      "expected_state_version": "4.0.10-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Modularity.Core",
+      "version": "4.0.6-preview",
+      "sha256": "1816f747ce5f737b3b31679472fd813a93f8ab27f1114a78ef42939785b8d8a7",
+      "recover": false,
+      "expected_state_version": "4.0.6-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Modularity.EntityFramework",
+      "version": "4.0.9-preview",
+      "sha256": "339deb9685bad272b23501a123332e18ade42405c8900eb8e021830f0ea85851",
+      "recover": false,
+      "expected_state_version": "4.0.9-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Modularity.Nuplane",
+      "version": "4.0.7-preview",
+      "sha256": "a2b78054f20d8106b9e410474520ffb0c917446decf1ca934a64d3919a710abf",
+      "recover": false,
+      "expected_state_version": "4.0.7-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Modularity.Planning",
+      "version": "4.0.8-preview",
+      "sha256": "f85d9a198d06e982a8ad9ff6691e7a3eae9a32483f933dd7afbfc30a45f392e3",
+      "recover": false,
+      "expected_state_version": "4.0.8-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Persistence.EntityFramework",
+      "version": "4.0.28-preview",
+      "sha256": "fcf70b86c46b9e8dfbeff7c2835e0aa0d0bb09aaa7c66fb669d894412e62481a",
+      "recover": false,
+      "expected_state_version": "4.0.28-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Persistence.Schema",
+      "version": "4.0.10-preview",
+      "sha256": "d0eb94654cd433092b48c6c8504441362d983dca3f4b1efe96f4ae885b31192e",
+      "recover": false,
+      "expected_state_version": "4.0.10-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Pipelines.Core",
+      "version": "4.0.7-preview",
+      "sha256": "01c424e14384b7bc22ff66469c0a8ab333dc839fbe0b03a41ecbadcda9610d07",
+      "recover": false,
+      "expected_state_version": "4.0.7-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Primitives",
+      "version": "4.0.7-preview",
+      "sha256": "68d5025c2575ada2311f4df0c4c7e0db97566784dcbe4ca23a1588a818694a02",
+      "recover": false,
+      "expected_state_version": "4.0.7-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Primitives.Hosting",
+      "version": "4.0.6-preview",
+      "sha256": "d10f7b80be9133ac453d12202ec59c3a3ddfcaa588f7053846af629c06f67e02",
+      "recover": false,
+      "expected_state_version": "4.0.6-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Secrets",
+      "version": "4.0.9-preview",
+      "sha256": "621c624385935fcc8ef3e61058b332b605b540628cc419f12b2cff4f1be92b88",
+      "recover": false,
+      "expected_state_version": "4.0.9-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Secrets.Api",
+      "version": "4.0.8-preview",
+      "sha256": "9917ce999fc2c2655caa9998a86cd3e8b408807411994c7443ef9b746a4e5878",
+      "recover": false,
+      "expected_state_version": "4.0.8-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Secrets.Core",
+      "version": "4.0.5-preview",
+      "sha256": "39bba25c34895819eb154dfd91c8c2da7568e293fe92c04463dbac6561307f2f",
+      "recover": false,
+      "expected_state_version": "4.0.5-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Secrets.Nuplane",
+      "version": "4.0.6-preview",
+      "sha256": "4fa93b717d4e723737aeae9bfe57b1c787b7ab988c25fa23c4e097d3b1758e16",
+      "recover": false,
+      "expected_state_version": "4.0.6-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Secrets.Persistence.EntityFrameworkCore",
+      "version": "4.0.16-preview",
+      "sha256": "f1618cd2539bf401d251a3b4a70b3c6eab636a244fad4ff2fe9651f2aecb5d0b",
+      "recover": false,
+      "expected_state_version": "4.0.16-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Secrets.Workflows",
+      "version": "4.0.3-preview",
+      "sha256": "cad905ce10f93a9bf55eddde4be53f1fc3a477cbd1c3557c3fb6a4e1ab63c3f2",
+      "recover": false,
+      "expected_state_version": "4.0.3-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Serialization.Core",
+      "version": "4.0.7-preview",
+      "sha256": "4db9305cd6732d320cd9df2953944e37c29468bd25fc3212320705baef462966",
+      "recover": false,
+      "expected_state_version": "4.0.7-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Serialization.Newtonsoft",
+      "version": "4.0.6-preview",
+      "sha256": "61068ef524be1b25054e4047c25cb9bf710beaf69e6a659854c69898adc67b7d",
+      "recover": false,
+      "expected_state_version": "4.0.6-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Serialization.SystemText",
+      "version": "4.0.6-preview",
+      "sha256": "d84b13f864329fcf0704f7c0a8d366e177b8126752cd15177f24e2c74bf6d9e6",
+      "recover": false,
+      "expected_state_version": "4.0.6-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Studio.Preferences.Api",
+      "version": "4.0.8-preview",
+      "sha256": "c0c53f97b5464a2ed7ef14d33d2ebe6b60a6d66dd6a9ff839e0e8abc5e642117",
+      "recover": false,
+      "expected_state_version": "4.0.8-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Studio.Preferences.Core",
+      "version": "4.0.5-preview",
+      "sha256": "0a820672430fb28b50e0a1ab4b9901edbe3bf32e9f46bf5dd06120f37133eaa1",
+      "recover": false,
+      "expected_state_version": "4.0.5-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Studio.Preferences.Persistence.EntityFrameworkCore",
+      "version": "4.0.14-preview",
+      "sha256": "54eaa55985a5b2592213a3795af16101379d7813ffaa8bd31f95cb3f5d4c3e42",
+      "recover": false,
+      "expected_state_version": "4.0.14-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Tasks",
+      "version": "4.0.7-preview",
+      "sha256": "cc2e4162190d9e88cd54072e9a1dcfb998363d1c34a42baffb82e410058aef4e",
+      "recover": false,
+      "expected_state_version": "4.0.7-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Tasks.Core",
+      "version": "4.0.7-preview",
+      "sha256": "fa4fe44792a2dc09b2ef893c7960ca8950ed8cde6a92e54a7bf7bda4c6265e8f",
+      "recover": false,
+      "expected_state_version": "4.0.7-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Tasks.Schedules",
+      "version": "4.0.5-preview",
+      "sha256": "423dac9a5c1e4b814e5bbfe15d4820e1bb5c42cecdecdb0c10cb0105d72bdb7f",
+      "recover": false,
+      "expected_state_version": "4.0.5-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Workflows.Dashboard",
+      "version": "4.0.8-preview",
+      "sha256": "1df0d8acfc09445402a47ff64385df099510ce75099d89f987fd0e070f268831",
+      "recover": false,
+      "expected_state_version": "4.0.8-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore",
+      "version": "4.0.10-preview",
+      "sha256": "f47c0f4f901741e939213c153ec6875b0e333cc29340ceb8fed652cef54f1fd0",
+      "recover": true,
+      "expected_state_version": "4.0.9-preview",
+      "expected_state_commit": "9f09cf8dc78efc611fd99cd90ab1fa70efe709ff"
+    },
+    {
+      "package_id": "Elsa.Workflows.Design.Api",
+      "version": "4.0.10-preview",
+      "sha256": "79d077cfec57d8e498e74b8b58e01a72ad1d10861e28b209642f7f8e1b5331e2",
+      "recover": false,
+      "expected_state_version": "4.0.10-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Workflows.Design.CodeGeneration",
+      "version": "4.0.5-preview",
+      "sha256": "37caf64d5b08523bd50a66a578a95cbf084392b1a7e76445e0306ba27d25638e",
+      "recover": false,
+      "expected_state_version": "4.0.5-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Workflows.Design.Core",
+      "version": "4.0.7-preview",
+      "sha256": "5dbc4be2ea0ecd25a2267ee7db3776e8ba6be115c7149b9bed29131dd7cfd5b3",
+      "recover": false,
+      "expected_state_version": "4.0.7-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Workflows.Design.JavaScript",
+      "version": "4.0.6-preview",
+      "sha256": "4913d6ea1f24472ed4d06bb5c0796b9403ffa55fb8257facc7cc5b8c3f341272",
+      "recover": false,
+      "expected_state_version": "4.0.6-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Workflows.Design.Persistence.Core",
+      "version": "4.0.7-preview",
+      "sha256": "f0b08fb387261bc08d776e0f470f02f68601596712eae520feb063d5e105e702",
+      "recover": false,
+      "expected_state_version": "4.0.7-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore",
+      "version": "4.0.18-preview",
+      "sha256": "0fde1030871250f6c1655884fe01752b1eb2e9fff21bd9e40f085be464e4bc57",
+      "recover": false,
+      "expected_state_version": "4.0.18-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Workflows.Design.Reconciliation",
+      "version": "4.0.11-preview",
+      "sha256": "f0cccde2e26bc98877fe801e6d09c1deaafb4f7488bc7bb83f9e220cf19a4e58",
+      "recover": false,
+      "expected_state_version": "4.0.11-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Workflows.Design.Reconciliation.Git",
+      "version": "4.0.9-preview",
+      "sha256": "c047db7df94b9f4c4f710f298882eff1fa025213609fa8483353f91e34422f56",
+      "recover": false,
+      "expected_state_version": "4.0.9-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Workflows.Design.Reconciliation.Json",
+      "version": "4.0.8-preview",
+      "sha256": "8cb8f89f8a3756676f86aae0852e7190108ffa3447385fe15a2b256774939598",
+      "recover": false,
+      "expected_state_version": "4.0.8-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Workflows.Design.Validations",
+      "version": "4.0.9-preview",
+      "sha256": "67257847ceec6c22c3de5909f77665629e441100b3c9be026421267ac10980e8",
+      "recover": false,
+      "expected_state_version": "4.0.9-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Workflows.Design.Validations.Core",
+      "version": "4.0.6-preview",
+      "sha256": "097008c2a886ab5e5913845d76c0749ed59f3e7e22f43f9ca7eb5920f2469448",
+      "recover": false,
+      "expected_state_version": "4.0.6-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Workflows.ExecutionEvidence",
+      "version": "4.0.9-preview",
+      "sha256": "cf4551af087e538c5c3e5cc7981cd37a7af0a0f0ce64a6c36ad2804df3ab78e9",
+      "recover": false,
+      "expected_state_version": "4.0.9-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Workflows.Publishing",
+      "version": "4.0.16-preview",
+      "sha256": "7c70fc8c43f74b0cbe9ba826d4f1d8c1a7cf835eb204d2505192450b16af0a8b",
+      "recover": true,
+      "expected_state_version": "4.0.15-preview",
+      "expected_state_commit": "9f09cf8dc78efc611fd99cd90ab1fa70efe709ff"
+    },
+    {
+      "package_id": "Elsa.Workflows.Publishing.Api",
+      "version": "4.0.11-preview",
+      "sha256": "b84642ae1ad5473752731cb14d72459853f2690c64c3321e0a6ced32dcd1f205",
+      "recover": true,
+      "expected_state_version": "4.0.10-preview",
+      "expected_state_commit": "9f09cf8dc78efc611fd99cd90ab1fa70efe709ff"
+    },
+    {
+      "package_id": "Elsa.Workflows.Publishing.Core",
+      "version": "4.0.9-preview",
+      "sha256": "5e5b17f6401e967f95b6dfb10dccb92867df26b3542379543693c88ec06ea105",
+      "recover": false,
+      "expected_state_version": "4.0.9-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore",
+      "version": "4.0.15-preview",
+      "sha256": "d72f1c4c7f6704b394b9056081ebb443acf6126abd4993ea99693b5f6f07917d",
+      "recover": true,
+      "expected_state_version": "4.0.14-preview",
+      "expected_state_commit": "9f09cf8dc78efc611fd99cd90ab1fa70efe709ff"
+    },
+    {
+      "package_id": "Elsa.Workflows.Runtime",
+      "version": "4.0.37-preview",
+      "sha256": "696e45fcd182f5f75a724f993ace36e08e7a5c890a0819da3b4239fd26d5e0d3",
+      "recover": false,
+      "expected_state_version": "4.0.37-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Workflows.Runtime.Api",
+      "version": "4.0.18-preview",
+      "sha256": "56508b2875846cc479ed2c8323b2b00b818439844776ebf91676c301fde11aea",
+      "recover": true,
+      "expected_state_version": "4.0.17-preview",
+      "expected_state_commit": "9f09cf8dc78efc611fd99cd90ab1fa70efe709ff"
+    },
+    {
+      "package_id": "Elsa.Workflows.Runtime.Core",
+      "version": "4.0.27-preview",
+      "sha256": "76d9cd3661d4a57fc5bb3e026eba7a5fe93b0a91cad318211d5e9180090462a5",
+      "recover": false,
+      "expected_state_version": "4.0.27-preview",
+      "expected_state_commit": "24533cfe6fcdd000f518d1855a525cfe6b37d6f9"
+    },
+    {
+      "package_id": "Elsa.Workflows.Runtime.Distributed",
+      "version": "4.0.10-preview",
+      "sha256": "c76c5b107c64993461e5a06f48c0040c055bca345a57b26edad6d4a2988ac07f",
+      "recover": true,
+      "expected_state_version": "4.0.9-preview",
+      "expected_state_commit": "9f09cf8dc78efc611fd99cd90ab1fa70efe709ff"
+    },
+    {
+      "package_id": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore",
+      "version": "4.0.17-preview",
+      "sha256": "5090ee583e432c5e2c1b824fbf56da62bdfb107a726f5c7f097b41500247dbf7",
+      "recover": true,
+      "expected_state_version": "4.0.16-preview",
+      "expected_state_commit": "9f09cf8dc78efc611fd99cd90ab1fa70efe709ff"
+    },
+    {
+      "package_id": "Elsa.Workflows.Runtime.Http",
+      "version": "4.0.7-preview",
+      "sha256": "2b7db852912293e5be6d94551869273bb53720be501f4006eb9a652b88f0e0a0",
+      "recover": true,
+      "expected_state_version": "4.0.6-preview",
+      "expected_state_commit": "9f09cf8dc78efc611fd99cd90ab1fa70efe709ff"
+    },
+    {
+      "package_id": "Elsa.Workflows.Runtime.JavaScript",
+      "version": "4.0.8-preview",
+      "sha256": "e5fe000cbccc21743b2a155765904f3b5070f0061ca2d4b9b6aabb9a65409fae",
+      "recover": true,
+      "expected_state_version": "4.0.7-preview",
+      "expected_state_commit": "9f09cf8dc78efc611fd99cd90ab1fa70efe709ff"
+    },
+    {
+      "package_id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+      "version": "4.0.30-preview",
+      "sha256": "e3f58718e80c7ebb9e854f9c8084c88f6ca2d6425acece87d86c2d83fd988731",
+      "recover": true,
+      "expected_state_version": "4.0.29-preview",
+      "expected_state_commit": "9f09cf8dc78efc611fd99cd90ab1fa70efe709ff"
+    },
+    {
+      "package_id": "Elsa.Workflows.Runtime.Reconciliation",
+      "version": "4.0.10-preview",
+      "sha256": "4f8c8d808caf1a394d50cc71f42b43ad5cca0d22c7310106269c3c0f99e26514",
+      "recover": true,
+      "expected_state_version": "4.0.9-preview",
+      "expected_state_commit": "9f09cf8dc78efc611fd99cd90ab1fa70efe709ff"
+    },
+    {
+      "package_id": "Elsa.Workflows.Runtime.Reconciliation.Core",
+      "version": "4.0.5-preview",
+      "sha256": "4eaa60b1588fd442a9832473fea14ba902f38c92b6ab97420553d678f2c022f2",
+      "recover": true,
+      "expected_state_version": "4.0.4-preview",
+      "expected_state_commit": "a88e37629c87c4c3f400b7a9d5750219848fda29"
+    },
+    {
+      "package_id": "Elsa.Workflows.Runtime.ReferenceGarbageCollection",
+      "version": "4.0.7-preview",
+      "sha256": "f08b0690b3c50fedb862aa131b7ed57826220dbaa82268b0c72b34fa5b2ddc81",
+      "recover": true,
+      "expected_state_version": "4.0.6-preview",
+      "expected_state_commit": "9f09cf8dc78efc611fd99cd90ab1fa70efe709ff"
+    },
+    {
+      "package_id": "Elsa.Workflows.Runtime.Resumption",
+      "version": "4.0.9-preview",
+      "sha256": "0af638fa0fba654a2fe1b2ca19ea5fce2ffd8860d58db69cf820dd60dca0820b",
+      "recover": true,
+      "expected_state_version": "4.0.8-preview",
+      "expected_state_commit": "9f09cf8dc78efc611fd99cd90ab1fa70efe709ff"
+    },
+    {
+      "package_id": "Elsa.Workflows.Runtime.Scheduling",
+      "version": "4.0.10-preview",
+      "sha256": "8516796bf67c41d7d0343a91a12ff313e2a3b9ccf447b9ad009d1cdb9e84a679",
+      "recover": true,
+      "expected_state_version": "4.0.9-preview",
+      "expected_state_commit": "9f09cf8dc78efc611fd99cd90ab1fa70efe709ff"
+    },
+    {
+      "package_id": "Elsa3.Activities.Design.Import",
+      "version": "4.0.11-preview",
+      "sha256": "525befabcf202a917cceb329aee534e59e53cc8e01b721efb2a99ec25011ce4c",
+      "recover": true,
+      "expected_state_version": "4.0.10-preview",
+      "expected_state_commit": "9f09cf8dc78efc611fd99cd90ab1fa70efe709ff"
+    },
+    {
+      "package_id": "Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore",
+      "version": "4.0.18-preview",
+      "sha256": "cce76c81c434bede55536c97ce3771c9025526b450c4b52d6734ea067d764f53",
+      "recover": true,
+      "expected_state_version": "4.0.17-preview",
+      "expected_state_commit": "9f09cf8dc78efc611fd99cd90ab1fa70efe709ff"
+    },
+    {
+      "package_id": "Elsa3.Mapping",
+      "version": "4.0.10-preview",
+      "sha256": "adc615f96aec60f3c4bbcc7b85d6caf45fc125abfbf03f11d5a824deede3a339",
+      "recover": true,
+      "expected_state_version": "4.0.9-preview",
+      "expected_state_commit": "9f09cf8dc78efc611fd99cd90ab1fa70efe709ff"
+    },
+    {
+      "package_id": "Elsa3.Models",
+      "version": "4.0.5-preview",
+      "sha256": "d18689ab6861ca264385052a9b2d85e742544cc358242575a43b3e37157083d0",
+      "recover": true,
+      "expected_state_version": "4.0.4-preview",
+      "expected_state_commit": "a88e37629c87c4c3f400b7a9d5750219848fda29"
+    },
+    {
+      "package_id": "dotnet-elsa",
+      "version": "4.0.15-preview",
+      "sha256": "c579f59f48211fe6fb66ffe927d80957a54e3d74a7848a2ccdcfd0720821c4fd",
+      "recover": true,
+      "expected_state_version": "4.0.14-preview",
+      "expected_state_commit": "9f09cf8dc78efc611fd99cd90ab1fa70efe709ff"
+    }
+  ]
+}

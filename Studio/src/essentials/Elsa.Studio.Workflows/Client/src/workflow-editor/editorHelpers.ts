@@ -1,0 +1,693 @@
+import type { Node } from "@xyflow/react";
+import { createHttpStarterState } from "./httpWorkflowStarter";
+import type { StudioActivityDescriptor } from "@elsa-workflows/studio-sdk";
+import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, ActivityPresentationRecord, WorkflowDefinitionSummary, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowExecutableReference, WorkflowExecutableRunResponse, WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
+import type { ChildSlot } from "../workflowAdapter";
+import { createActivityNode, flowchartEdges, getActivityDesignerSupport, getActivityDisplay, getChildSlots, resolveScope } from "../workflowAdapter";
+import { shortTypeName } from "../workflowFormatting";
+import { groupByCategory } from "../categoryGrouping";
+import { workflowSidePanelMaximizedStorageKey } from "./constants";
+import type { ActivityPaletteGroup, CreateWorkflowDraft, CreateWorkflowKind, WorkflowEditorError, WorkflowErrorInput, WorkflowGraphConnection, WorkflowMetadataSuggestion, WorkflowSidePanel } from "./editorTypes";
+import { resolveActivityLabel } from "../activityPresentation";
+
+export { dispatchAiAction, findAiAction, getTotalPages, pageItems } from "./editorListHelpers";
+
+function readStringField(source: Record<string, unknown>, key: string): string | undefined {
+  const value = source[key];
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+// Lifts the diagnosable parts of a caught request failure (StudioHttpError-shaped: numeric `status`
+// plus the raw ProblemDetails `payload`) into a structured banner error. The ProblemDetails `detail`,
+// `traceId`, `status`, and any structured `code` are preserved so the banner can show a correlatable
+// trace id and keep the existing structured-code path working, even when the message is a generic fallback.
+export function describeWorkflowError(error: unknown, fallbackMessage: string): WorkflowEditorError {
+  // Only trust a message off an Error or a plain string; never stringify an object into "[object Object]".
+  const rawMessage = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  const result: WorkflowEditorError = { message: rawMessage.trim() || fallbackMessage };
+
+  const status = typeof error === "object" && error && "status" in error
+    ? (error as { status?: unknown }).status
+    : undefined;
+  if (typeof status === "number") result.status = status;
+
+  const payload = readWorkflowErrorPayload(error);
+  if (payload && typeof payload === "object") {
+    const problem = payload as Record<string, unknown>;
+    result.detail = readStringField(problem, "detail");
+    result.traceId = readStringField(problem, "traceId") ?? readStringField(problem, "traceID");
+    result.code = readStringField(problem, "code") ?? readStringField(problem, "errorCode");
+    if (result.status === undefined) {
+      const problemStatus = problem.status;
+      if (typeof problemStatus === "number") result.status = problemStatus;
+    }
+  }
+  const diagnostics = extractExpressionValidationDiagnosticMessages(error);
+  if (diagnostics.length) {
+    result.detail = [result.detail, ...diagnostics]
+      .filter((value): value is string => !!value)
+      .join("\n");
+  }
+
+  return result;
+}
+
+export function extractExpressionValidationDiagnosticMessages(error: unknown): string[] {
+  const payload = readWorkflowErrorPayload(error);
+  if (!payload || typeof payload !== "object") return [];
+  const diagnostics = (payload as { diagnostics?: unknown }).diagnostics;
+  if (!Array.isArray(diagnostics)) return [];
+
+  return Array.from(new Set(diagnostics.flatMap(entry => {
+    if (!entry || typeof entry !== "object") return [];
+    const diagnostic = entry as Record<string, unknown>;
+    const message = readStringField(diagnostic, "message");
+    if (!message) return [];
+    const code = readStringField(diagnostic, "code");
+    const path = readStringField(diagnostic, "authoredPath");
+    const range = diagnostic.range && typeof diagnostic.range === "object"
+      ? diagnostic.range as Record<string, unknown>
+      : null;
+    const start = range?.start && typeof range.start === "object"
+      ? range.start as Record<string, unknown>
+      : null;
+    const line = typeof start?.line === "number" ? start.line + 1 : null;
+    const character = typeof start?.character === "number" ? start.character + 1 : null;
+    const location = [
+      path,
+      line !== null && character !== null ? `line ${line}, column ${character}` : null
+    ].filter(Boolean).join(" · ");
+    return [`${code ? `[${code}] ` : ""}${location ? `${location}: ` : ""}${message}`];
+  })));
+}
+
+export function readWorkflowErrorPayload(error: unknown): unknown {
+  if (!error || typeof error !== "object") return null;
+  const candidate = error as { payload?: unknown; response?: { data?: unknown }; message?: unknown };
+  if (candidate.payload != null) return candidate.payload;
+  if (candidate.response?.data != null) return candidate.response.data;
+  if (typeof candidate.message === "string") {
+    try { return JSON.parse(candidate.message); } catch { return null; }
+  }
+  return null;
+}
+
+// Normalizes the `string | WorkflowEditorError` accepted by `setError` into either a structured banner
+// error or `null` (empty string clears the banner). Keeps every existing string call site working.
+export function normalizeWorkflowError(value: WorkflowErrorInput): WorkflowEditorError | null {
+  if (typeof value === "string") {
+    const message = value.trim();
+    return message ? { message } : null;
+  }
+  return value.message.trim() ? value : null;
+}
+
+// Weaver is asked to return a fenced ```json {"name","description"} block; parse defensively and fall
+// back to a bare object or "Name:"/"Description:" lines so a slightly off-format reply still applies.
+export function parseWorkflowMetadataSuggestion(text: string): WorkflowMetadataSuggestion | null {
+  if (!text) return null;
+  const candidates: string[] = [];
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) candidates.push(fenced[1]);
+  const brace = text.match(/\{[\s\S]*?\}/);
+  if (brace) candidates.push(brace[0]);
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate.trim()) as Record<string, unknown>;
+      const suggestion = pickSuggestion(parsed.name, parsed.description);
+      if (suggestion) return suggestion;
+    } catch {
+      // Not valid JSON — try the next candidate.
+    }
+  }
+  const nameLine = text.match(/name\s*[:-]\s*(.+)/i)?.[1];
+  const descLine = text.match(/description\s*[:-]\s*(.+)/i)?.[1];
+  return pickSuggestion(nameLine, descLine);
+}
+
+function pickSuggestion(name: unknown, description: unknown): WorkflowMetadataSuggestion | null {
+  const cleanName = typeof name === "string" ? unquote(name) : undefined;
+  const cleanDescription = typeof description === "string" ? unquote(description) : undefined;
+  return cleanName || cleanDescription ? { name: cleanName || undefined, description: cleanDescription || undefined } : null;
+}
+
+function unquote(value: string) {
+  // Strip a trailing comma first (e.g. a lifted JSON line `"Order Approval",`), then a surrounding
+  // quote pair. Stripping each end independently avoids leaving a dangling quote when both are present.
+  return value.trim().replace(/,$/, "").trim().replace(/^["']/, "").replace(/["']$/, "").trim();
+}
+
+export function getCreateRootActivity(selectedVersionId: string | null, activities: ActivityCatalogItem[]) {
+  const available = activities.filter(activity => activity.available !== false && activity.authoringTemplate);
+  if (selectedVersionId) return available.find(activity => activity.activityVersionId === selectedVersionId);
+  return findCompositionActivity(available, "flowchart")
+    ?? findCompositionActivity(available, "sequence")
+    ?? findCompositionActivity(available, "bpmn");
+}
+
+export function getCreateInitialState(draft: CreateWorkflowDraft, activities: ActivityCatalogItem[]) {
+  if (draft.starter === "http") return createHttpStarterState(activities);
+  const activity = getCreateRootActivity(draft.rootActivityVersionId, activities);
+  if (!activity?.authoringTemplate) return null;
+
+  const rootActivity = createActivityNode(activity, createNodeId(activity));
+  return {
+    rootActivity: {
+      ...rootActivity,
+      inputs: toAuthoredArguments(activity.authoringTemplate.inputs) as unknown as ActivityNode["inputs"],
+      outputs: toAuthoredArguments(activity.authoringTemplate.outputs) as unknown as ActivityNode["outputs"]
+    }
+  };
+}
+
+function toAuthoredArguments(value: unknown) {
+  if (!Array.isArray(value)) return structuredClone(value ?? {});
+  return Object.fromEntries(value.flatMap(item => {
+    if (!item || typeof item !== "object") return [];
+    const argument = item as { referenceKey?: unknown; value?: unknown };
+    return typeof argument.referenceKey === "string"
+      ? [[argument.referenceKey, structuredClone(argument.value)]]
+      : [];
+  }));
+}
+
+export function findCompositionActivity(activities: ActivityCatalogItem[], kind: CreateWorkflowKind) {
+  return activities.find(activity => getCompositionKind(activity) === kind);
+}
+
+export function getCompositionKind(activity: ActivityCatalogItem | undefined) {
+  if (!activity) {
+    return null;
+  }
+
+  if (isFlowchartActivity(activity)) {
+    return "flowchart";
+  }
+
+  if (isSequenceActivity(activity)) {
+    return "sequence";
+  }
+
+  if (isBpmnActivity(activity)) {
+    return "bpmn";
+  }
+
+  return null;
+}
+
+export function groupActivityPalette(activities: ActivityCatalogItem[]): ActivityPaletteGroup[] {
+  return groupByCategory(activities, activity => activity.category).map(group => ({
+    category: group.category,
+    activities: group.items.sort((left, right) => getActivityDisplay(left).localeCompare(getActivityDisplay(right)))
+  }));
+}
+
+function isFlowchartActivity(activity: ActivityCatalogItem) {
+  const displayName = getActivityDisplay(activity);
+  return displayName === "Flowchart" || activity.activityTypeKey.endsWith(".Flowchart");
+}
+
+function isSequenceActivity(activity: ActivityCatalogItem) {
+  const displayName = getActivityDisplay(activity);
+  return displayName === "Sequence" || activity.activityTypeKey.endsWith(".Sequence");
+}
+
+function isBpmnActivity(activity: ActivityCatalogItem) {
+  const displayName = getActivityDisplay(activity);
+  return displayName === "BPMN Process" || activity.activityTypeKey.endsWith(".BpmnProcess");
+}
+
+export function isActivityBrowsable(activity: ActivityCatalogItem) {
+  return (activity as { isBrowsable?: unknown }).isBrowsable !== false && (activity as { browsable?: unknown }).browsable !== false;
+}
+
+export function formatExecutableRoot(executable: WorkflowExecutableSummary) {
+  const rootName = formatActivityTypeName(executable.rootActivityType);
+  return rootName || executable.rootActivityType;
+}
+
+export function executableBelongsToDefinition(executable: WorkflowExecutableSummary, definitionId: string) {
+  return executable.definitionId === definitionId || executable.sourceId === definitionId;
+}
+
+export function compareExecutablesByPublishedDate(left: WorkflowExecutableSummary, right: WorkflowExecutableSummary) {
+  return getExecutablePublishedTime(right) - getExecutablePublishedTime(left);
+}
+
+// ADR 0040's equivalence signal: artifacts are content-addressed over behavior only, so a draft test run
+// resolving to the same artifact id as a published executable of this definition proves the draft is
+// behaviorally identical to that published version — no diffing needed. Requiring `publishedAt` keeps the
+// claim honest when the executables list ever includes rows whose newest reference is the test run itself.
+export function findPublishedEquivalent(
+  testRunArtifactId: string | null | undefined,
+  executables: WorkflowExecutableSummary[],
+  definitionId: string
+) {
+  if (!testRunArtifactId) return null;
+  return executables.find(executable =>
+    executable.artifactId === testRunArtifactId
+    && executableBelongsToDefinition(executable, definitionId)
+    && !!executable.publishedAt
+  ) ?? null;
+}
+
+function getExecutablePublishedTime(executable: WorkflowExecutableSummary) {
+  const value = executable.publishedAt ?? executable.createdAt;
+  const time = value ? new Date(value).getTime() : 0;
+  return Number.isNaN(time) ? 0 : time;
+}
+
+export function formatExecutableSourceKind(sourceKind?: string | null) {
+  const normalized = sourceKind?.trim().toLowerCase() ?? "";
+
+  if (!normalized || normalized === "definition" || normalized === "workflowdefinition") {
+    return "Definition";
+  }
+
+  if (normalized === "definitionversion" || normalized === "workflowdefinitionversion") {
+    return "Definition version";
+  }
+
+  return sourceKind!
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, letter => letter.toUpperCase());
+}
+
+export function readExecutableRunWorkflowExecutionId(response: WorkflowExecutableRunResponse | null | undefined) {
+  const workflowExecutionId = response?.workflowExecutionId ?? response?.runId ?? response?.executionId;
+  return typeof workflowExecutionId === "string" && workflowExecutionId.trim() ? workflowExecutionId : null;
+}
+
+// Surfaces the reference-gate refusal behind a failed executable run (ADR 0040): the backend answers
+// 409 with { error } distinguishing an expired test-run reference from a retired one. The backend
+// sentence is shown verbatim, followed by the recovery hint matching the structured reason.
+export function formatExecutableRunError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const payload = (typeof error === "object" && error && "payload" in error ? (error as { payload?: unknown }).payload : null)
+    ?? tryParseJson(message);
+  const backendError = payload && typeof payload === "object" && typeof (payload as { error?: unknown }).error === "string"
+    ? (payload as { error: string }).error
+    : null;
+  if (!backendError) return message;
+
+  if (/no live .* reference/i.test(backendError)) {
+    return /expired/i.test(backendError)
+      ? `${backendError} Start a new test run from the definition editor to mint a fresh reference.`
+      : `${backendError} Restore the executable or republish its definition to run it.`;
+  }
+
+  return backendError;
+}
+
+function tryParseJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+// Display label for a Source Reference scope ("Published" | "TestRun" on the wire).
+export function formatReferenceScope(scope: string | null | undefined) {
+  const normalized = scope?.trim().toLowerCase() ?? "";
+  if (normalized === "published") return "Published";
+  if (normalized === "testrun" || normalized === "test-run") return "Test run";
+  return scope?.trim() || "Unknown";
+}
+
+export type ExecutableReferenceStatus = "live" | "retired" | "expired";
+
+export function getExecutableReferenceStatus(reference: WorkflowExecutableReference, now: Date = new Date()): ExecutableReferenceStatus {
+  if (reference.deletedAt) return "retired";
+  if (reference.expiresAt && new Date(reference.expiresAt).getTime() <= now.getTime()) return "expired";
+  return "live";
+}
+
+// How the inspected artifact relates to its source definition in this environment: absent when the
+// definition did not travel with it, current/behind by source version, or behaviorally equivalent when
+// the exact current-draft test-run signal resolves to this artifact.
+export type ExecutableSourceDrift =
+  | { kind: "absent" }
+  | { kind: "current" }
+  | { kind: "equivalent" }
+  | { kind: "behind"; referenceVersion: string | null; latestVersion: string | null };
+
+export function computeExecutableSourceDrift(
+  reference: WorkflowExecutableReference,
+  definition: WorkflowDefinitionSummary | null,
+  hasDraftEquivalence = false
+): ExecutableSourceDrift {
+  if (!definition) return { kind: "absent" };
+  if (hasDraftEquivalence) return { kind: "equivalent" };
+  if (!definition.latestVersionId || definition.latestVersionId === reference.definitionVersionId) return { kind: "current" };
+  return {
+    kind: "behind",
+    referenceVersion: reference.sourceVersion ?? reference.artifactVersion ?? null,
+    latestVersion: definition.latestVersion ?? null
+  };
+}
+
+export async function copyTextToClipboard(value: string) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(value);
+      return;
+    } catch {
+      // Sandboxed and permission-restricted browsers can expose the Clipboard API but reject writes.
+      // Fall through to the selection-based copy path so explicit user gestures still work.
+    }
+  }
+
+  const textArea = document.createElement("textarea");
+  textArea.value = value;
+  textArea.setAttribute("readonly", "");
+  textArea.style.position = "fixed";
+  textArea.style.opacity = "0";
+  document.body.appendChild(textArea);
+  textArea.select();
+  const copied = document.execCommand("copy");
+  textArea.remove();
+
+  if (!copied) {
+    throw new Error("Clipboard copy failed.");
+  }
+}
+
+function formatActivityTypeName(typeName: string) {
+  return typeName.split(".").filter(Boolean).at(-1) ?? typeName;
+}
+
+export function indexActivityDescriptors(descriptors: StudioActivityDescriptor[]) {
+  const index = new Map<string, StudioActivityDescriptor>();
+
+  for (const descriptor of descriptors) {
+    addDescriptorIndex(index, descriptor.typeName, descriptor);
+    addDescriptorIndex(index, descriptor.name, descriptor);
+    addDescriptorIndex(index, descriptor.displayName, descriptor);
+    const shortName = descriptor.typeName.split(".").filter(Boolean).at(-1);
+    addDescriptorIndex(index, shortName, descriptor);
+  }
+
+  return index;
+}
+
+// The descriptor of the exact catalog version a node is pinned to comes first: the catalog lists every version of an
+// activity, and the type-keyed index keeps only the first one it meets, so a node pinned to a newer version was
+// inspected with an older version's inputs (an input that version added was not shown at all).
+export function resolveActivityDescriptor(
+  activity: ActivityNode,
+  catalogByVersion: Map<string, ActivityCatalogItem>,
+  descriptorsByType: Map<string, StudioActivityDescriptor>,
+  descriptorsByVersion?: Map<string, StudioActivityDescriptor>
+) {
+  const exact = descriptorsByVersion?.get(activity.activityVersionId);
+  if (exact) return exact;
+  const catalogItem = catalogByVersion.get(activity.activityVersionId);
+  return descriptorsByType.get(normalizeDescriptorKey(catalogItem?.activityTypeKey)) ??
+    descriptorsByType.get(normalizeDescriptorKey(shortTypeName(catalogItem?.activityTypeKey))) ??
+    descriptorsByType.get(normalizeDescriptorKey(catalogItem?.displayName)) ??
+    descriptorsByType.get(normalizeDescriptorKey(activity.activityVersionId)) ??
+    null;
+}
+
+function addDescriptorIndex(index: Map<string, StudioActivityDescriptor>, key: string | null | undefined, descriptor: StudioActivityDescriptor) {
+  const normalized = normalizeDescriptorKey(key);
+  if (normalized && !index.has(normalized)) index.set(normalized, descriptor);
+}
+
+function normalizeDescriptorKey(key: string | null | undefined) {
+  return key?.trim().toLowerCase() ?? "";
+}
+
+export function readStoredNumber(key: string, fallback: number, min: number, max: number) {
+  const storage = getLocalStorage();
+  if (!storage) return fallback;
+
+  const storedValue = storage.getItem(key);
+  if (storedValue == null) return fallback;
+
+  const value = Number(storedValue);
+  return Number.isFinite(value) ? clamp(value, min, max) : fallback;
+}
+
+export function readStoredBoolean(key: string, fallback: boolean) {
+  const storage = getLocalStorage();
+  if (!storage) return fallback;
+
+  const value = storage.getItem(key);
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return fallback;
+}
+
+export function readStoredMaximizedSide(key = workflowSidePanelMaximizedStorageKey): WorkflowSidePanel | null {
+  const storage = getLocalStorage();
+  if (!storage) return null;
+
+  const value = storage.getItem(key);
+  return value === "palette" || value === "inspector" ? value : null;
+}
+
+function getLocalStorage(): Pick<Storage, "getItem" | "setItem" | "removeItem"> | null {
+  if (typeof window === "undefined") return null;
+
+  const storage = window.localStorage as Partial<Storage> | undefined;
+  return storage &&
+    typeof storage.getItem === "function" &&
+    typeof storage.setItem === "function" &&
+    typeof storage.removeItem === "function"
+    ? storage as Pick<Storage, "getItem" | "setItem" | "removeItem">
+    : null;
+}
+
+export function writeStoredValue(key: string, value: string | null) {
+  const storage = getLocalStorage();
+  if (!storage) return;
+
+  if (value == null) {
+    storage.removeItem(key);
+  } else {
+    storage.setItem(key, value);
+  }
+}
+
+export function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+export function formatRunKind(runKind?: string | null) {
+  switch (normalizeRunKind(runKind)) {
+    case "testrun":
+      return "Test Run";
+    case "publishedrun":
+      return "Published Run";
+    case "backgroundweaverrun":
+      return "Background Weaver Run";
+    default:
+      return "Unknown / legacy";
+  }
+}
+
+function normalizeRunKind(runKind?: string | null) {
+  return (runKind ?? "").replace(/[\s_-]+/g, "").toLowerCase();
+}
+
+export function getVisibleWorkflowGraphNodeIds(definitionVersion: WorkflowDefinitionVersionDetails, activityCatalog: ActivityCatalogItem[]) {
+  const root = definitionVersion.state.rootActivity;
+  if (!root) return new Set<string>();
+
+  const rootCatalogItem = activityCatalog.find(activity => activity.activityVersionId === root.activityVersionId);
+  if (getActivityDesignerSupport(root, rootCatalogItem) === "unsupported") return new Set([root.nodeId]);
+
+  const scope = resolveScope(root, [], activityCatalog);
+  return new Set(scope?.slot.activities.map(activity => activity.nodeId) ?? [root.nodeId]);
+}
+
+export function activityNodeKey(activity: ActivityExecutionStateSummary) {
+  return activity.authoredActivityId || activity.executableNodeId;
+}
+
+export function createNodeId(activity: ActivityCatalogItem) {
+  const base = getActivityDisplay(activity).replace(/[^a-z0-9]+/gi, "").toLowerCase() || "activity";
+  return `${base}-${crypto.randomUUID().slice(0, 8)}`;
+}
+
+export function rightOf(node: Node) {
+  return { x: node.position.x + 280, y: node.position.y };
+}
+
+export function insertSequenceNodeAfter<T extends Record<string, unknown>>(nodes: Node<T>[], sourceNodeId: string, node: Node<T>) {
+  const sourceIndex = nodes.findIndex(candidate => candidate.id === sourceNodeId);
+  if (sourceIndex < 0) return [...nodes, node];
+
+  const source = nodes[sourceIndex];
+  const position = rightOf(source);
+  // Sequence persistence sorts activities by x-position, so make room before inserting; otherwise a
+  // middle insertion would tie with its successor and be saved after that successor.
+  const horizontalSpacing = position.x - source.position.x;
+  const shiftedNodes = nodes.map((candidate, index) => index > sourceIndex
+    ? { ...candidate, position: { ...candidate.position, x: candidate.position.x + horizontalSpacing } }
+    : candidate);
+  const insertedNode = { ...node, position };
+  return [
+    ...shiftedNodes.slice(0, sourceIndex + 1),
+    insertedNode,
+    ...shiftedNodes.slice(sourceIndex + 1)
+  ];
+}
+
+export function midpointBetween(source: Node, target: Node) {
+  return {
+    x: Math.round((source.position.x + target.position.x) / 2),
+    y: Math.round((source.position.y + target.position.y) / 2)
+  };
+}
+
+export function getDraftSignature(draft: WorkflowDraft) {
+  return JSON.stringify({
+    state: draft.state,
+    layout: draft.layout,
+    activityPresentation: draft.activityPresentation
+  });
+}
+
+export function getDraftRevision(draft: WorkflowDraft) {
+  return hashString(getDraftSignature(draft));
+}
+
+// Resolves a child activity's friendly name from the catalog, falling back to a short type name and
+// finally the version id so the inspector never renders an empty label.
+function resolveChildActivityName(child: ActivityNode, catalogByVersion?: Map<string, ActivityCatalogItem>): string {
+  const catalogItem = catalogByVersion?.get(child.activityVersionId);
+  if (catalogItem) return getActivityDisplay(catalogItem);
+  return shortTypeName(child.activityVersionId) ?? child.activityVersionId;
+}
+
+// Human-readable summary of what an embedded slot currently holds, honouring the slot's cardinality.
+// Single slots describe the one child (or invite the author to pick one when empty); many slots keep a
+// pluralized count. Used by the inspector's embedded-slot chips.
+export function describeSlotContents(slot: ChildSlot, catalogByVersion?: Map<string, ActivityCatalogItem>): string {
+  if (slot.cardinality === "single") {
+    const child = slot.activities[0];
+    return child ? resolveChildActivityName(child, catalogByVersion) : "Empty — click to choose";
+  }
+
+  const count = slot.activities.length;
+  return `${count} activit${count === 1 ? "y" : "ies"}`;
+}
+
+export function collectWorkflowContextActivities(
+  activity: ActivityNode | null | undefined,
+  catalogByVersion: Map<string, ActivityCatalogItem>,
+  result: Array<{ id: string; type: string; displayName?: string; description?: string }> = [],
+  presentationByNodeId: Map<string, ActivityPresentationRecord> = new Map()
+) {
+  if (!activity) return result;
+
+  const catalogItem = catalogByVersion.get(activity.activityVersionId);
+  const presentation = presentationByNodeId.get(activity.nodeId);
+  result.push({
+    id: activity.nodeId,
+    type: catalogItem?.activityTypeKey ?? activity.activityVersionId,
+    displayName: resolveActivityLabel(
+      presentation,
+      catalogItem,
+      catalogItem?.activityTypeKey ?? activity.activityVersionId),
+    description: presentation?.description?.trim() || undefined
+  });
+
+  for (const slot of getChildSlots(activity, catalogByVersion)) {
+    for (const child of slot.activities) {
+      collectWorkflowContextActivities(
+        child,
+        catalogByVersion,
+        result,
+        presentationByNodeId);
+    }
+  }
+
+  return result;
+}
+
+export function collectWorkflowContextConnections(
+  activity: ActivityNode | null | undefined,
+  catalogByVersion?: Map<string, ActivityCatalogItem>,
+  result: WorkflowGraphConnection[] = []
+) {
+  if (!activity) return result;
+
+  // flowchartEdges decodes the flowchart structure payload into source/target edges; reuse it so the
+  // agent sees the same wiring the designer renders.
+  for (const edge of flowchartEdges(activity)) {
+    result.push({ source: edge.source, target: edge.target, sourcePort: edge.sourceHandle ?? undefined, targetPort: edge.targetHandle ?? undefined });
+  }
+
+  for (const slot of getChildSlots(activity, catalogByVersion)) {
+    for (const child of slot.activities) collectWorkflowContextConnections(child, catalogByVersion, result);
+  }
+
+  return result;
+}
+
+export function cloneWorkflowDraftForUndo(draft: WorkflowDraft) {
+  return typeof structuredClone === "function"
+    ? structuredClone(draft)
+    : JSON.parse(JSON.stringify(draft)) as WorkflowDraft;
+}
+
+export function createDraftSnapshotId(draft: WorkflowDraft) {
+  // Test Run snapshot identity describes executable behavior. Presentation and canvas layout still
+  // participate in autosave/undo through getDraftSignature, but must not mint a different behavioral
+  // snapshot for an otherwise identical workflow.
+  return `${draft.id}-${hashString(JSON.stringify(draft.state))}`;
+}
+
+function hashString(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+export function isRejectedTestRun(testRun: WorkflowTestRunView) {
+  return testRun.status.toLowerCase() === "rejected";
+}
+
+export function formatWorkflowVersionLoadError(error: string) {
+  try {
+    const payload = JSON.parse(error) as { error?: unknown };
+    if (typeof payload.error === "string") return payload.error;
+  } catch {
+    // Fall through to the original message when the server did not return the standard error shape.
+  }
+
+  return error;
+}
+
+export function formatWorkflowRunLoadError(error: unknown, workflowExecutionId: string) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (isNotFoundError(error, message)) return `Run ${workflowExecutionId} was not found.`;
+  return message;
+}
+
+function isNotFoundError(error: unknown, message: string) {
+  const responseStatus = typeof error === "object" && error
+    ? (error as { response?: { status?: unknown }; status?: unknown }).response?.status
+      ?? (error as { response?: { status?: unknown }; status?: unknown }).status
+    : undefined;
+  if (responseStatus === 404 || /\b404\b/.test(message)) return true;
+
+  try {
+    const payload = JSON.parse(message) as { error?: unknown; title?: unknown; detail?: unknown };
+    return [payload.error, payload.title, payload.detail]
+      .some(value => typeof value === "string" && /not found/i.test(value));
+  } catch {
+    return /not found/i.test(message);
+  }
+}

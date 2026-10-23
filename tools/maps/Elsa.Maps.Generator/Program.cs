@@ -1,14 +1,20 @@
 using Elsa.Maps.Generator;
 
 // Replaces the paired PowerShell/bash generators under tools/maps. The scripts remain as thin shims so
-// every documented invocation in AGENTS.md, docs/maps/README.md and the spec tasks.md files keeps working.
+// every documented invocation in docs/contributing/generated-maps.md, docs/maps/README.md and the spec tasks.md files keeps working.
 //
 // Usage: dotnet run --project tools/maps/Elsa.Maps.Generator -- <layer> [<layer> ...]
 //   dependency-map | maps | domain | extension-points | architecture-reference | feature-dependency | all | check
 //   solution-filters | solution-filters-check | solution-filters-self-test
-//   solution-filter-roots <filter-path>
-//   ef-suites-select <event> [<base-sha> <head-sha>] | ef-suites-self-test
-//   project-facts-self-test | feature-facts-self-test
+//   solution-filter-roots <filter-path> | solution-filter <filter-path>
+//   ef-suites-select | ef-suites-self-test
+//   test-tiers-check | test-tiers-self-test | test-tiers-rebalance <trx-dir> [--write]
+//   project-facts-self-test | feature-facts-self-test | repo-layout-self-test | project-graph-self-test
+//   publish <out-dir> --source-commit <sha> --repo-url <url> | publish-self-test
+//
+// No map is committed. The documentation maps and dependency-map.json are generated locally with "all" and published
+// by CI with "publish" (specs 257 and 259); the versioning calculator derives the dependency map from each commit's tree.
+// "check" checks the one committed generated output left, the solution filters.
 
 // "dependency-map" first: it is the dataset every project-graph map is a projection of (spec 149). Then "maps":
 // the v2 findings report reads summary lines out of the v1 maps, so they must exist first.
@@ -44,9 +50,34 @@ try
         return 0;
     }
 
+    if (layers.Length == 2 && string.Equals(layers[0], "solution-filter", StringComparison.Ordinal))
+    {
+        Console.WriteLine($"Generated solution filter: {SolutionFilterGenerator.Write(repo, layers[1])}");
+        return 0;
+    }
+
     if (layers.SequenceEqual(["ef-suites-self-test"], StringComparer.Ordinal))
     {
         EfSuiteSelectorContractTests.Run();
+        return 0;
+    }
+
+    if (layers.SequenceEqual(["test-tiers-check"], StringComparer.Ordinal))
+        return TestTierCheck.Run(repo);
+
+    if (layers.Length is 2 or 3 && string.Equals(layers[0], "test-tiers-rebalance", StringComparison.Ordinal))
+    {
+        if (layers.Length == 3 && layers[2] != "--write")
+        {
+            Console.Error.WriteLine("Usage: test-tiers-rebalance <trx-dir> [--write]");
+            return 2;
+        }
+        return TestTierRebalance.Run(repo, layers[1], write: layers.Length == 3);
+    }
+
+    if (layers.SequenceEqual(["test-tiers-self-test"], StringComparer.Ordinal))
+    {
+        TestTierCheckContractTests.Run();
         return 0;
     }
 
@@ -62,17 +93,46 @@ try
         return 0;
     }
 
-    if ((layers.Length is 2 or 4) && string.Equals(layers[0], "ef-suites-select", StringComparison.Ordinal))
+    if (layers.SequenceEqual(["project-graph-self-test"], StringComparer.Ordinal))
     {
-        Console.WriteLine(EfSuiteSelector.Select(repo, layers[1],
-            layers.Length == 4 ? layers[2] : null,
-            layers.Length == 4 ? layers[3] : null).ToJson());
+        ProjectGraphContractTests.Run();
         return 0;
     }
 
-    // Freshness check: regenerates into a scratch directory and compares the bytes with what is
-    // committed. Writes nothing into the repository, so it is safe to run in CI while generation
-    // itself stays manually initiated.
+    if (layers.SequenceEqual(["repo-layout-self-test"], StringComparer.Ordinal))
+    {
+        RepoLayoutContractTests.Run();
+        return 0;
+    }
+
+    if (layers.SequenceEqual(["publish-self-test"], StringComparer.Ordinal))
+    {
+        MapSetPublisherContractTests.Run();
+        return 0;
+    }
+
+    if (layers.Length > 0 && string.Equals(layers[0], "publish", StringComparison.Ordinal))
+    {
+        if (layers.Length != 6 || layers[2] != "--source-commit" || layers[4] != "--repo-url")
+        {
+            Console.Error.WriteLine("Usage: publish <out-dir> --source-commit <sha> --repo-url <url>");
+            return 2;
+        }
+
+        Console.WriteLine($"Published maps for {layers[3]} into {layers[1]}:");
+        foreach (var path in MapSetPublisher.Publish(repo, layers[1], layers[3], layers[5]))
+            Console.WriteLine($" - {path}");
+        return 0;
+    }
+
+    if (layers.SequenceEqual(["ef-suites-select"], StringComparer.Ordinal))
+    {
+        Console.WriteLine(EfSuiteSelector.Select(repo).ToJson());
+        return 0;
+    }
+
+    // Freshness check of the committed generated output, the solution filters: regenerates them into a scratch
+    // directory and compares the bytes with what is committed. Writes nothing into the repository.
     if (layers.Contains("check", StringComparer.Ordinal))
     {
         if (layers.Length > 1)
@@ -85,7 +145,7 @@ try
     // writing part of the maps and then throwing.
     var requested = layers.Contains("all", StringComparer.Ordinal) ? knownLayers : layers;
     if (requested.FirstOrDefault(layer => !knownLayers.Contains(layer, StringComparer.Ordinal)) is { } unknown)
-        throw new ArgumentException($"Unknown generator command '{unknown}'. Known map layers: {string.Join(", ", knownLayers)}, all, check, solution-filters, solution-filters-check, solution-filters-self-test, solution-filter-roots <filter-path>, ef-suites-select <event> [<base-sha> <head-sha>], ef-suites-self-test, project-facts-self-test, feature-facts-self-test.");
+        throw new ArgumentException($"Unknown generator command '{unknown}'. Known map layers: {string.Join(", ", knownLayers)}, all, check, solution-filters, solution-filters-check, solution-filters-self-test, solution-filter-roots <filter-path>, solution-filter <filter-path>, ef-suites-select, ef-suites-self-test, test-tiers-check, test-tiers-self-test, test-tiers-rebalance <trx-dir> [--write], project-facts-self-test, feature-facts-self-test, repo-layout-self-test, project-graph-self-test, publish <out-dir> --source-commit <sha> --repo-url <url>, publish-self-test.");
 
     var projects = ProjectGraph.Read(repo);
     var written = new List<string>();

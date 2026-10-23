@@ -1,0 +1,115 @@
+{
+  "passed": true,
+  "SchemaVersion": 1,
+  "StartedAt": "2026-10-22T05:43:11.403451+00:00",
+  "CompletedAt": "2026-10-22T05:44:24.403887+00:00",
+  "WorkbenchAssembly": "Elsa.Workbench.dll",
+  "WorkbenchAssemblySha256": "230d32b574cf56151e19a0b224370f1b2e4862f3ab0ab31a691eb29233f90cb2",
+  "DeploymentReceiptFile": "elsa.rules.deployment-receipt.json",
+  "DeploymentReceiptSha256": "6520f8f45024feca141856a8eed3b68ad933c91af9dd30ffd5791516bb8ac861",
+  "RestartVerification": {
+    "PreviousProcessId": 49346,
+    "ReconnectedProcessId": 51439,
+    "WorkbenchAssemblyPath": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/workbench-package-host/deployment/Elsa.Workbench.dll",
+    "SequenceStatus": "Completed",
+    "SequenceNativeResult": {
+      "Kind": "Succeeded",
+      "CommittedRounds": 2,
+      "ResultSchemaVersion": 1,
+      "ResultFacts": [
+        "derived",
+        "seed"
+      ],
+      "DiagnosticCode": null,
+      "FinalFactsSha256": "0432e7409a4f5287b577250b34ffa58eba7925a79b43f2e1a2e540ea7e0b9b2f",
+      "IsRedacted": false,
+      "OutputType": null
+    },
+    "FlowchartStatus": "Completed",
+    "FlowchartNativeResult": {
+      "Kind": "Succeeded",
+      "CommittedRounds": 2,
+      "ResultSchemaVersion": 1,
+      "ResultFacts": [
+        "derived",
+        "seed"
+      ],
+      "DiagnosticCode": null,
+      "FinalFactsSha256": "0432e7409a4f5287b577250b34ffa58eba7925a79b43f2e1a2e540ea7e0b9b2f",
+      "IsRedacted": false,
+      "OutputType": null
+    }
+  },
+  "Runs": [
+    {
+      "Scenario": "SequenceSucceeded",
+      "WorkflowExecutionId": "14YVdjyjNRM",
+      "ArtifactId": "artifact-9cfdc06d2c25",
+      "Status": "Completed",
+      "RulesActivityStatus": "Completed",
+      "FollowingActivityStatus": "Completed",
+      "NativeResult": {
+        "Kind": "Succeeded",
+        "CommittedRounds": 2,
+        "ResultSchemaVersion": 1,
+        "ResultFacts": [
+          "derived",
+          "seed"
+        ],
+        "DiagnosticCode": null,
+        "FinalFactsSha256": "0432e7409a4f5287b577250b34ffa58eba7925a79b43f2e1a2e540ea7e0b9b2f",
+        "IsRedacted": false,
+        "OutputType": null
+      }
+    },
+    {
+      "Scenario": "FlowchartSucceeded",
+      "WorkflowExecutionId": "14YVe9SgewF",
+      "ArtifactId": "artifact-a536b8e90f65",
+      "Status": "Completed",
+      "RulesActivityStatus": "Completed",
+      "FollowingActivityStatus": "Completed",
+      "NativeResult": {
+        "Kind": "Succeeded",
+        "CommittedRounds": 2,
+        "ResultSchemaVersion": 1,
+        "ResultFacts": [
+          "derived",
+          "seed"
+        ],
+        "DiagnosticCode": null,
+        "FinalFactsSha256": "0432e7409a4f5287b577250b34ffa58eba7925a79b43f2e1a2e540ea7e0b9b2f",
+        "IsRedacted": false,
+        "OutputType": null
+      }
+    },
+    {
+      "Scenario": "RoundBudgetFault",
+      "WorkflowExecutionId": "14YVeqy3xRj",
+      "ArtifactId": "artifact-357818d6038b",
+      "Status": "Faulted",
+      "RulesActivityStatus": "Faulted",
+      "RulesIncidentCount": 1,
+      "FollowingActivityCount": 0,
+      "ExactRulesDiagnosticAvailableFromRest": false
+    },
+    {
+      "Scenario": "SemanticRefusal",
+      "WorkflowExecutionId": "14YVfYgk7OA",
+      "ArtifactId": "artifact-2fe12ea54ccf",
+      "Status": "Completed",
+      "RulesActivityStatus": "Completed",
+      "FollowingActivityStatus": "Completed",
+      "NativeResult": {
+        "Kind": "Refused",
+        "CommittedRounds": 0,
+        "ResultSchemaVersion": 1,
+        "ResultFacts": [],
+        "DiagnosticCode": "rules.invalid-finite-model",
+        "FinalFactsSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "IsRedacted": false,
+        "OutputType": null
+      }
+    }
+  ]
+}

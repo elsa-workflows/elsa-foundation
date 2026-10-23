@@ -1,0 +1,513 @@
+using Elsa.Workflows.Runtime.Contracts;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Recovery;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Elsa.Workflows.Runtime.Services.Coalescing;
+
+/// <summary>
+/// Coalescing-aware overlay for <see cref="IWorkflowExecutionStateStore"/>. When an active coalescing session owns the
+/// target workflow execution, reads and writes go to the session's in-memory overlay; otherwise it is a byte-for-byte
+/// pass-through to the durable inner store (the default path is completely unaffected).
+/// </summary>
+public sealed class CoalescingWorkflowExecutionStateStore(
+    CoalescingInner<IWorkflowExecutionStateStore> inner,
+    IRuntimeCoalescingSessionAccessor sessionAccessor) : IWorkflowExecutionStateStore
+{
+    private readonly IWorkflowExecutionStateStore _inner = inner.Value;
+
+    public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) =>
+        _inner.SaveAsync(state, cancellationToken);
+
+    public async ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    {
+        if (sessionAccessor.Current is { } session && session.AppliesTo(workflowExecutionId) &&
+            session.TryGetWorkflowExecution(workflowExecutionId, out var overlay))
+            return overlay;
+
+        return await _inner.FindAsync(workflowExecutionId, cancellationToken);
+    }
+
+    public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) =>
+        _inner.ListAsync(cancellationToken);
+
+    public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(
+        WorkflowExecutionStatePageQuery query,
+        CancellationToken cancellationToken = default) =>
+        _inner.QueryPageAsync(query, cancellationToken);
+
+    public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) =>
+        _inner.ListPinnedExecutableArtifactIdsAsync(cancellationToken);
+
+    public ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+        _inner.DeleteAsync(workflowExecutionId, cancellationToken);
+}
+
+/// <summary>Coalescing-aware overlay for <see cref="IActivityExecutionStateStore"/>. See <see cref="CoalescingWorkflowExecutionStateStore"/>.</summary>
+public sealed class CoalescingActivityExecutionStateStore(
+    CoalescingInner<IActivityExecutionStateStore> inner,
+    IRuntimeCoalescingSessionAccessor sessionAccessor) : IActivityExecutionStateStore
+{
+    private readonly IActivityExecutionStateStore _inner = inner.Value;
+
+    public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default) =>
+        _inner.SaveAsync(state, cancellationToken);
+
+    public async ValueTask<ActivityExecutionState?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default)
+    {
+        if (sessionAccessor.Current is { } session && session.AppliesTo(workflowExecutionId) &&
+            session.TryGetActivity(activityExecutionId, out var overlay, out _))
+            return overlay;
+
+        return await _inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
+    }
+
+    public async ValueTask<long> CountAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    {
+        if (sessionAccessor.Current is not { } session || !session.AppliesTo(workflowExecutionId))
+            return await _inner.CountAsync(workflowExecutionId, cancellationToken);
+
+        var count = await _inner.CountAsync(workflowExecutionId, cancellationToken);
+        foreach (var id in session.GetActivityTombstones())
+        {
+            if (await _inner.FindAsync(workflowExecutionId, id, cancellationToken) is not null)
+                count--;
+        }
+
+        foreach (var state in session.GetActivityUpserts())
+        {
+            if (await _inner.FindAsync(workflowExecutionId, state.Execution.ActivityExecutionId, cancellationToken) is null)
+                count++;
+        }
+
+        return count;
+    }
+
+    public async ValueTask<RuntimeStorePage<ActivityExecutionState>> ListPageAsync(
+        ActivityExecutionStatePageQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        if (sessionAccessor.Current is not { } session || !session.AppliesTo(query.WorkflowExecutionId))
+            return await _inner.ListPageAsync(query, cancellationToken);
+
+        return await CoalescingRuntimeStorePageMerger.MergeAsync(
+            query,
+            $"coalesced-activity-state:workflow:{query.WorkflowExecutionId}",
+            (limit, continuation) => _inner.ListPageAsync(
+                new ActivityExecutionStatePageQuery(query.WorkflowExecutionId, limit, continuation), cancellationToken),
+            state => state.Execution.ActivityExecutionId,
+            after => session.GetActivityUpserts()
+                .Where(state => after is null || StringComparer.Ordinal.Compare(state.Execution.ActivityExecutionId, after) > 0)
+                .OrderBy(state => state.Execution.ActivityExecutionId, StringComparer.Ordinal)
+                .FirstOrDefault(),
+            id => session.TryGetActivity(id, out _, out _),
+            cancellationToken);
+    }
+
+    public async ValueTask<RuntimeStorePage<ActivityExecutionState>> ListByParentPageAsync(
+        ActivityExecutionStateParentPageQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        if (sessionAccessor.Current is not { } session || !session.AppliesTo(query.WorkflowExecutionId))
+            return await _inner.ListByParentPageAsync(query, cancellationToken);
+
+        return await CoalescingRuntimeStorePageMerger.MergeAsync(
+            query,
+            $"coalesced-activity-state:parent:{query.WorkflowExecutionId}:{query.ParentActivityExecutionId}",
+            (limit, continuation) => _inner.ListByParentPageAsync(
+                new ActivityExecutionStateParentPageQuery(
+                    query.WorkflowExecutionId,
+                    query.ParentActivityExecutionId,
+                    limit,
+                    continuation), cancellationToken),
+            state => state.Execution.ActivityExecutionId,
+            after => session.GetActivityUpserts()
+                .Where(state => StringComparer.Ordinal.Equals(state.ParentActivityExecutionId, query.ParentActivityExecutionId))
+                .Where(state => after is null || StringComparer.Ordinal.Compare(state.Execution.ActivityExecutionId, after) > 0)
+                .OrderBy(state => state.Execution.ActivityExecutionId, StringComparer.Ordinal)
+                .FirstOrDefault(),
+            id => session.TryGetActivity(id, out _, out _),
+            cancellationToken);
+    }
+}
+
+/// <summary>Coalescing-aware overlay for <see cref="IDurableValueStateStore"/>. See <see cref="CoalescingWorkflowExecutionStateStore"/>.</summary>
+public sealed class CoalescingDurableValueStateStore : IDurableValueStateStore
+{
+    private readonly IDurableValueStateStore _inner;
+    private readonly IRuntimeCoalescingSessionAccessor _sessionAccessor;
+    private readonly IServiceProvider? _serviceProvider;
+
+    public CoalescingDurableValueStateStore(
+        CoalescingInner<IDurableValueStateStore> inner,
+        IRuntimeCoalescingSessionAccessor sessionAccessor)
+        : this(inner, sessionAccessor, null)
+    {
+    }
+
+    public CoalescingDurableValueStateStore(
+        CoalescingInner<IDurableValueStateStore> inner,
+        IRuntimeCoalescingSessionAccessor sessionAccessor,
+        RuntimeCoalescingDurableValuePageReuseRegistration? pageReuseRegistration)
+        : this(inner, sessionAccessor, pageReuseRegistration, null)
+    {
+    }
+
+    public CoalescingDurableValueStateStore(
+        CoalescingInner<IDurableValueStateStore> inner,
+        IRuntimeCoalescingSessionAccessor sessionAccessor,
+        RuntimeCoalescingDurableValuePageReuseRegistration? pageReuseRegistration,
+        IServiceProvider? serviceProvider)
+    {
+        _inner = inner.Value;
+        _sessionAccessor = sessionAccessor;
+        PageReuseRegistration = pageReuseRegistration;
+        _serviceProvider = serviceProvider;
+    }
+
+    internal RuntimeCoalescingDurableValuePageReuseRegistration? PageReuseRegistration { get; }
+
+    public async ValueTask<DurableValueState> SaveAsync(DurableValueState state, CancellationToken cancellationToken = default)
+    {
+        var session = _sessionAccessor.Current;
+        return await WriteWithMemoFenceAsync(
+            session,
+            () => _inner.SaveAsync(state, cancellationToken));
+    }
+
+    public async ValueTask<bool> DeleteAsync(string workflowExecutionId, string durableValueId, CancellationToken cancellationToken = default)
+    {
+        var session = _sessionAccessor.Current;
+        return await WriteWithMemoFenceAsync(
+            session,
+            () => _inner.DeleteAsync(workflowExecutionId, durableValueId, cancellationToken));
+    }
+
+    public async ValueTask<DurableValueState?> FindAsync(string workflowExecutionId, string durableValueId, CancellationToken cancellationToken = default)
+    {
+        if (_sessionAccessor.Current is { } session && session.AppliesTo(workflowExecutionId) &&
+            session.TryGetDurableValue(durableValueId, out var overlay, out _))
+            return overlay;
+
+        return await _inner.FindAsync(workflowExecutionId, durableValueId, cancellationToken);
+    }
+
+    public async ValueTask<RuntimeStorePage<DurableValueState>> ListPageAsync(
+        DurableValueStatePageQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        if (_sessionAccessor.Current is not { } session || !session.AppliesTo(query.WorkflowExecutionId))
+            return await _inner.ListPageAsync(query, cancellationToken);
+
+        var hasPageReuse = TryGetPageReuseContext(session, query.WorkflowExecutionId, out var pageReuse);
+
+        return await CoalescingRuntimeStorePageMerger.MergeAsync(
+            query,
+            $"coalesced-durable-value:{query.WorkflowExecutionId}",
+            async (limit, continuation) =>
+            {
+                var innerQuery = new DurableValueStatePageQuery(query.WorkflowExecutionId, limit, continuation);
+                if (!hasPageReuse)
+                    return await _inner.ListPageAsync(innerQuery, cancellationToken);
+
+                bool ValidateCurrentOwnerAndContext()
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (!ReferenceEquals(_sessionAccessor.Current, session) ||
+                        !session.AppliesTo(innerQuery.WorkflowExecutionId) ||
+                        !session.CoalesceDurableValueReads ||
+                        !ReferenceEquals(session.DurableValuePageMemo, pageReuse.Memo) ||
+                        PageReuseRegistration?.IsEligible != true)
+                        return false;
+
+                    var current = pageReuse.Accessor.Current;
+                    if (!Equals(current, pageReuse.AccessContext))
+                        return false;
+
+                    // A cache hit must still perform the same ordinary-scope authorization check as the provider.
+                    _ = current.RequireScope();
+                    return ReferenceEquals(
+                        _serviceProvider!.GetService<IRuntimeRecoveryContinuationCodec>(),
+                        pageReuse.ContinuationCodec);
+                }
+
+                return await pageReuse.Memo.GetOrLoadAsync(
+                    innerQuery,
+                    pageReuse.AccessContext,
+                    pageReuse.ContinuationCodec,
+                    () => _inner.ListPageAsync(innerQuery, cancellationToken),
+                    ValidateCurrentOwnerAndContext);
+            },
+            state => state.DurableValueId,
+            after => session.GetDurableValueUpserts()
+                .Where(state => after is null || StringComparer.Ordinal.Compare(state.DurableValueId, after) > 0)
+                .OrderBy(state => state.DurableValueId, StringComparer.Ordinal)
+                .FirstOrDefault(),
+            id => session.TryGetDurableValue(id, out _, out _),
+            cancellationToken);
+    }
+
+    private bool TryGetPageReuseContext(
+        RuntimeCoalescingSession session,
+        string workflowExecutionId,
+        out PageReuseContext pageReuse)
+    {
+        pageReuse = default;
+        var memo = session.DurableValuePageMemo;
+        var registration = PageReuseRegistration;
+        var serviceProvider = _serviceProvider;
+        if (!session.CoalesceDurableValueReads || memo is null || registration?.IsEligible != true || serviceProvider is null ||
+            !ReferenceEquals(_sessionAccessor.Current, session) || !session.AppliesTo(workflowExecutionId))
+            return false;
+
+        // Resolve only after the captured first-party composition is eligible. For the registered scoped EF inner store,
+        // this is the same provider/scope that constructed the inner store; singleton HMAC resolution is reference-stable.
+        var accessor = serviceProvider.GetService<IPersistenceAccessContextAccessor>();
+        var codec = serviceProvider.GetService<IRuntimeRecoveryContinuationCodec>();
+        if (accessor is null || codec is not HmacRuntimeRecoveryContinuationCodec)
+            return false;
+
+        var accessContext = accessor.Current;
+        if (accessContext.Scope is null || accessContext.AccessPolicy != PersistenceAccessPolicy.Ordinary || accessContext.AcrossScopes)
+            return false;
+
+        pageReuse = new PageReuseContext(memo, accessor, accessContext, codec);
+        return true;
+    }
+
+    private static async ValueTask<TResult> WriteWithMemoFenceAsync<TResult>(
+        RuntimeCoalescingSession? session,
+        Func<ValueTask<TResult>> writeAsync)
+    {
+        if (session?.DurableValuePageMemo is not { } memo)
+            return await writeAsync();
+
+        using var write = memo.BeginWrite();
+        var result = await writeAsync();
+        write.Succeed();
+        return result;
+    }
+
+    private readonly record struct PageReuseContext(
+        RuntimeCoalescingDurableValuePageMemo Memo,
+        IPersistenceAccessContextAccessor Accessor,
+        PersistenceAccessContext AccessContext,
+        IRuntimeRecoveryContinuationCodec ContinuationCodec);
+}
+
+internal static class CoalescingRuntimeStorePageMerger
+{
+    public static async ValueTask<RuntimeStorePage<T>> MergeAsync<T>(
+        RuntimeStorePageRequest request,
+        string binding,
+        Func<int, string?, ValueTask<RuntimeStorePage<T>>> readInnerPage,
+        Func<T, string> identity,
+        Func<string?, T?> nextOverlay,
+        Func<string, bool> suppressesInner,
+        CancellationToken cancellationToken)
+        where T : class
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var cursor = CoalescingRuntimeStoreContinuation.Decode(request.ContinuationToken, binding, nameof(request));
+        var lastIdentity = cursor?.LastIdentity;
+        var inner = new InnerCursor<T>(cursor?.InnerContinuation, cursor?.InnerExhausted ?? false);
+        var items = new List<T>(request.Limit);
+
+        while (items.Count < request.Limit)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var overlay = nextOverlay(lastIdentity);
+            var read = await ReadNextInnerAsync(
+                readInnerPage,
+                identity,
+                suppressesInner,
+                lastIdentity,
+                inner,
+                request.Limit,
+                cancellationToken);
+            var candidate = read.Candidate;
+            inner = candidate?.Before ?? read.Cursor;
+            if (overlay is null && candidate is null)
+                break;
+
+            if (candidate is null || overlay is not null && StringComparer.Ordinal.Compare(identity(overlay), identity(candidate.Item)) <= 0)
+            {
+                var overlayIdentity = identity(overlay!);
+                if (candidate is not null && StringComparer.Ordinal.Equals(overlayIdentity, identity(candidate.Item)))
+                    inner = candidate.After;
+                items.Add(overlay!);
+                lastIdentity = overlayIdentity;
+                continue;
+            }
+
+            items.Add(candidate.Item);
+            lastIdentity = identity(candidate.Item);
+            inner = candidate.After;
+        }
+
+        var hasNext = false;
+        if (items.Count > 0)
+        {
+            if (nextOverlay(lastIdentity) is not null)
+                hasNext = true;
+            else
+            {
+                var read = await ReadNextInnerAsync(
+                    readInnerPage,
+                    identity,
+                    suppressesInner,
+                    lastIdentity,
+                    inner,
+                    request.Limit,
+                    cancellationToken);
+                var candidate = read.Candidate;
+                inner = candidate?.Before ?? read.Cursor;
+                if (candidate is not null)
+                {
+                    hasNext = true;
+                }
+            }
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        var next = hasNext
+            ? CoalescingRuntimeStoreContinuation.Encode(binding, new(lastIdentity!, inner.TokenContinuation, inner.TokenExhausted))
+            : null;
+        return new RuntimeStorePage<T>(request, items, next);
+    }
+
+    private static async ValueTask<InnerReadResult<T>> ReadNextInnerAsync<T>(
+        Func<int, string?, ValueTask<RuntimeStorePage<T>>> readInnerPage,
+        Func<T, string> identity,
+        Func<string, bool> suppressesInner,
+        string? lastIdentity,
+        InnerCursor<T> current,
+        int pageLimit,
+        CancellationToken cancellationToken)
+        where T : class
+    {
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (current.BufferedItems is { } bufferedItems)
+            {
+                if (current.BufferIndex >= bufferedItems.Count)
+                {
+                    current = current.AdvancePastBuffer();
+                    continue;
+                }
+
+                var item = bufferedItems[current.BufferIndex];
+                var after = current.AdvanceBufferedItem();
+                var itemIdentity = identity(item);
+                if (lastIdentity is not null && StringComparer.Ordinal.Compare(itemIdentity, lastIdentity) <= 0 || suppressesInner(itemIdentity))
+                {
+                    current = after;
+                    continue;
+                }
+
+                return new(new(item, current, after), current);
+            }
+
+            if (current.Exhausted)
+                return new(null, current);
+
+            var page = await readInnerPage(pageLimit, current.Continuation);
+            if (page.Items.Count == 0)
+            {
+                return new(null, current with { Exhausted = true });
+            }
+
+            current = current with
+            {
+                BufferedItems = page.Items,
+                BufferIndex = 0,
+                BufferContinuationBefore = current.Continuation,
+                BufferContinuationAfter = page.NextContinuationToken,
+                BufferExhaustedAfter = page.NextContinuationToken is null
+            };
+        }
+    }
+
+    private sealed record InnerCursor<T>(
+        string? Continuation,
+        bool Exhausted,
+        IReadOnlyList<T>? BufferedItems = null,
+        int BufferIndex = 0,
+        string? BufferContinuationBefore = null,
+        string? BufferContinuationAfter = null,
+        bool BufferExhaustedAfter = false)
+        where T : class
+    {
+        public string? TokenContinuation => BufferedItems is null ? Continuation : BufferContinuationBefore;
+        public bool TokenExhausted => BufferedItems is null && Exhausted;
+
+        public InnerCursor<T> AdvanceBufferedItem() =>
+            BufferedItems is null
+                ? this
+                : BufferIndex + 1 < BufferedItems.Count
+                    ? this with { BufferIndex = BufferIndex + 1 }
+                    : AdvancePastBuffer();
+
+        public InnerCursor<T> AdvancePastBuffer() => new(BufferContinuationAfter, BufferExhaustedAfter);
+    }
+
+    private sealed record InnerReadResult<T>(InnerCandidate<T>? Candidate, InnerCursor<T> Cursor) where T : class;
+    private sealed record InnerCandidate<T>(T Item, InnerCursor<T> Before, InnerCursor<T> After) where T : class;
+}
+
+/// <summary>
+/// Coalescing-aware overlay for <see cref="IActivityExecutionInspectionStore"/>. <see cref="FindAsync"/> serves the
+/// projection the session last recorded for an activity execution, so a later checkpoint in the segment merges onto it
+/// exactly as it would have merged onto a committed one. Building from the durable baseline instead would drop what the
+/// recorded projection holds, such as the outcome a completion carried, when the activity's later checkpoint folds
+/// into the same commit. An activity the session has recorded nothing for is read from the durable store, so each
+/// activity's durable row is read at most once per drain.
+/// </summary>
+public sealed class CoalescingActivityExecutionInspectionStore(
+    CoalescingInner<IActivityExecutionInspectionStore> inner,
+    IRuntimeCoalescingSessionAccessor sessionAccessor) : IActivityExecutionInspectionStore
+{
+    private readonly IActivityExecutionInspectionStore _inner = inner.Value;
+
+    public async ValueTask<ActivityExecutionInspectionProjection?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default)
+    {
+        if (sessionAccessor.Current is { } session && session.AppliesTo(workflowExecutionId) &&
+            session.TryGetInspection(activityExecutionId, out var recorded))
+            return recorded;
+
+        return await _inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
+    }
+
+    public ValueTask<ActivityExecutionInspectionSummaryPage> ListSummariesPageAsync(
+        ActivityExecutionInspectionSummaryPageQuery query,
+        CancellationToken cancellationToken = default) =>
+        _inner.ListSummariesPageAsync(query, cancellationToken);
+}
+
+/// <summary>Coalescing-aware overlay for <see cref="ISchedulerStateStore"/>. See <see cref="CoalescingWorkflowExecutionStateStore"/>.</summary>
+public sealed class CoalescingSchedulerStateStore(
+    CoalescingInner<ISchedulerStateStore> inner,
+    IRuntimeCoalescingSessionAccessor sessionAccessor) : ISchedulerStateStore
+{
+    private readonly ISchedulerStateStore _inner = inner.Value;
+
+    public ValueTask<SchedulerState> SaveAsync(SchedulerState state, CancellationToken cancellationToken = default) =>
+        _inner.SaveAsync(state, cancellationToken);
+
+    public async ValueTask<SchedulerState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    {
+        if (sessionAccessor.Current is { } session && session.AppliesTo(workflowExecutionId) &&
+            session.TryGetScheduler(workflowExecutionId, out var overlay))
+            return overlay;
+
+        return await _inner.FindAsync(workflowExecutionId, cancellationToken);
+    }
+
+    public ValueTask<IReadOnlyCollection<SchedulerState>> ListAsync(CancellationToken cancellationToken = default) =>
+        _inner.ListAsync(cancellationToken);
+}

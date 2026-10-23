@@ -1,129 +1,54 @@
+using System.Text.Json;
+
 namespace Elsa.Maps.Generator;
 
-/// <summary>Small deterministic impact cases; CI runs them before trusting a PR selection.</summary>
+/// <summary>Inventory cases for the nightly EF container matrix; CI runs them before trusting the matrix.</summary>
 public static class EfSuiteSelectorContractTests
 {
+    /// <summary>Checks inventory rejection cases and verifies that the real manifest's suites and requirements reach the matrix.</summary>
     public static void Run()
     {
-        var projects = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["src/Shared/Shared.csproj"] = [],
-            ["src/Publishing/Publishing.csproj"] = ["src/Shared/Shared.csproj"],
-            ["src/Runtime/Runtime.csproj"] = ["src/Shared/Shared.csproj"],
-            ["src/Unrelated/Unrelated.csproj"] = [],
-            ["tests/Publishing/Publishing.Tests.csproj"] = ["src/Publishing/Publishing.csproj"],
-            ["tests/Runtime/Helper/Helper.csproj"] = ["src/Runtime/Runtime.csproj"],
-            ["tests/Runtime/Runtime.Tests.csproj"] = ["tests/Runtime/Helper/Helper.csproj"]
-        };
         EfSuite[] suites =
         [
             new("publishing", "tests/Publishing/Publishing.Tests.csproj", ""),
             new("runtime", "tests/Runtime/Runtime.Tests.csproj", "ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX")
         ];
-
-        Assert(EfSuiteSelector.SelectPaths(suites, projects, ["docs/report.md"]), "none");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects, ["specs/123-idea/spec.md"]), "none");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects,
-            [".specify/feature.json", "specs/176-composition-file-bridge/spec.md", "docs/maps/spec-status-map.md"]), "none");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects, [".specify/other.json"]), "full", "publishing", "runtime");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects, [".specify/scripts/bash/common.sh"]), "full", "publishing", "runtime");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects, ["src/Publishing/Publish.cs"]), "selected", "publishing");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects, ["tests/Publishing/Case.cs"]), "selected", "publishing");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects, ["tests/Publishing/Publishing.Tests.csproj"]), "selected", "publishing");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects, ["src/Shared/State.cs"]), "selected", "publishing", "runtime");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects, ["src/Runtime/Run.cs"]), "selected", "runtime");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects, ["tests/Runtime/Helper/Case.cs"]), "selected", "runtime");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects, ["src/Unrelated/Other.cs"]), "none");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects, ["src/New/Other.cs"]), "full", "publishing", "runtime");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects, ["src/New/New.csproj"]), "full", "publishing", "runtime");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects, ["Directory.Packages.props"]), "full", "publishing", "runtime");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects, [".github/workflows/ci.yml"]), "full", "publishing", "runtime");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects, ["tools/ci/ef-suites.json"]), "full", "publishing", "runtime");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects, ["src/essentials/Persistence/EntityFrameworkCore/Shared.cs"]), "full", "publishing", "runtime");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects, ["src/essentials/Modularity/Core/FeatureCatalog.cs"]), "full", "publishing", "runtime");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects, ["src/essentials/Modularity/Api/ModularityApi.cs"]), "full", "publishing", "runtime");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects, ["src/essentials/Modularity/EntityFramework/ActivationGuard.cs"]), "full", "publishing", "runtime");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects, ["src/essentials/Modularity/Nuplane/FeatureManagementService.cs"]), "full", "publishing", "runtime");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects, ["src/essentials/Modularity/Unknown/Unowned.cs"]), "full", "publishing", "runtime");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects, ["docs/report.md", "src/Publishing/Publish.cs"]), "selected", "publishing");
-        string[] generatedFilters = ["Elsa.Server.Workflows.Runtime.slnf"];
-        Assert(EfSuiteSelector.SelectPaths(suites, projects,
-            ["Elsa.Server.Workflows.Runtime.slnf", "src/Runtime/Run.cs"],
-            generatedSolutionFilters: generatedFilters), "selected", "runtime");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects,
-            ["Elsa.Server.Workflows.Runtime.slnf"],
-            generatedSolutionFilters: generatedFilters), "none");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects,
-            ["Elsa.Server.Unlisted.slnf"],
-            generatedSolutionFilters: generatedFilters), "full", "publishing", "runtime");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects,
-            ["Elsa.Server.Workflows.Runtime.slnf"]), "full", "publishing", "runtime");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects,
-            ["Elsa.Server.slnx"],
-            generatedSolutionFilters: generatedFilters), "full", "publishing", "runtime");
-        Assert(EfSuiteSelector.SelectPaths(suites, new Dictionary<string, IReadOnlyList<string>>(),
-            ["Elsa.Server.Workflows.Runtime.slnf"],
-            generatedSolutionFilters: generatedFilters), "full", "publishing", "runtime");
-        Assert(EfSuiteSelector.SelectPaths(suites,
-            new Dictionary<string, IReadOnlyList<string>>(projects)
-            {
-                ["src/Runtime/Runtime.csproj"] = ["src/Missing/Missing.csproj"]
-            },
-            ["Elsa.Server.Workflows.Runtime.slnf"],
-            generatedSolutionFilters: generatedFilters), "full", "publishing", "runtime");
-        Assert(EfSuiteSelector.SelectPaths(suites, projects, ["tests/Shared/Guard.cs"],
-            new Dictionary<string, IReadOnlyList<string>>
-            {
-                ["tests/Shared/Guard.cs"] = ["tests/Publishing/Publishing.Tests.csproj"]
-            }), "selected", "publishing");
-
-        const string separateSecrets = "tests/essentials/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj";
+        string[] solutionProjects = ["src/Shared/Shared.csproj", .. suites.Select(suite => suite.Project)];
+        const string separateSecrets = "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj";
         var roots = suites.Select(suite => suite.Project).Append(separateSecrets).ToArray();
-        EfSuiteSelector.ValidateCoverage(suites, roots, suites.Select(suite => suite.Project).ToArray(), projects.Keys.ToArray());
+        var testProjects = suites.Select(suite => suite.Project).ToArray();
+
+        EfSuiteSelector.ValidateCoverage(suites, roots, testProjects, solutionProjects);
+        // A Testcontainers root the manifest does not name would run in neither the fast lane nor the matrix.
         ExpectInvalid(() => EfSuiteSelector.ValidateCoverage(suites,
             roots.Append("tests/New/New.Tests.csproj").ToArray(),
-            suites.Select(suite => suite.Project).Append("tests/New/New.Tests.csproj").ToArray(),
-            projects.Keys.Append("tests/New/New.Tests.csproj").ToArray()));
+            testProjects.Append("tests/New/New.Tests.csproj").ToArray(),
+            solutionProjects.Append("tests/New/New.Tests.csproj").ToArray()));
+        // A manifest entry that is no longer a Testcontainers root is obsolete.
+        ExpectInvalid(() => EfSuiteSelector.ValidateCoverage(suites, roots[1..], testProjects, solutionProjects));
+        // A test project outside the solution is invisible to the root scan.
         ExpectInvalid(() => EfSuiteSelector.ValidateCoverage(suites, roots,
-            suites.Select(suite => suite.Project).Append("tests/New/New.Tests.csproj").ToArray(),
-            projects.Keys.ToArray()));
+            testProjects.Append("tests/New/New.Tests.csproj").ToArray(), solutionProjects));
+        // The Secrets PostgreSQL host proof runs in its own job and must not also be a matrix leg.
+        ExpectInvalid(() => EfSuiteSelector.ValidateCoverage(
+            [.. suites, new EfSuite("secrets-postgresql", separateSecrets, "")], roots, testProjects, solutionProjects));
 
+        // The manifest is the inventory: every suite in it becomes a leg, with its required-provider mode, and there is
+        // no count to keep in step here.
         var repo = RepoContext.Discover();
-        var full = EfSuiteSelector.Select(repo, "workflow_dispatch", null, null);
-        // The manifest is the inventory: a suite added to it is selected, with no count to keep in step here.
-        var manifestSuites = System.Text.Json.JsonDocument.Parse(File.ReadAllText(repo.Absolute("tools/ci/ef-suites.json")))
-            .RootElement.GetProperty("suites").GetArrayLength();
-        if (full.Mode != "full" || full.Suites.Count != manifestSuites)
-            throw new InvalidOperationException($"Manual dispatch must select all {manifestSuites} EF suites of the manifest.");
-        if (EfSuiteSelector.Select(repo, "push", null, null).Suites.Count != manifestSuites ||
-            EfSuiteSelector.Select(repo, "pull_request", "missing", "missing").Mode != "full")
-            throw new InvalidOperationException("Main and an unavailable PR diff must fail closed to the full matrix.");
-
-        var actualProjects = SolutionFilterGenerator.GetProjectReferences(repo);
-        if (!SolutionFilterGenerator.GetOutputPaths(repo).Contains("Elsa.Server.Workflows.Runtime.slnf", StringComparer.Ordinal))
-            throw new InvalidOperationException("The generated Runtime filter must be manifest-owned.");
-        var cliAcceptance = new EfSuite("cli-acceptance",
-            "tests/essentials/Persistence/EntityFrameworkCore/CliAcceptance/ProviderTests/Elsa.Persistence.EntityFrameworkCore.CliAcceptance.ProviderTests.csproj", "");
-        Assert(EfSuiteSelector.SelectPaths([cliAcceptance], actualProjects,
-            ["src/essentials/Modularity/Planning/Bridge/CompositionImporter.cs"]), "selected", "cli-acceptance");
-        Assert(EfSuiteSelector.SelectPaths([cliAcceptance], actualProjects,
-            ["src/essentials/Modularity/Planning/Elsa.Modularity.Planning.csproj"]), "selected", "cli-acceptance");
-        Assert(EfSuiteSelector.SelectPaths([cliAcceptance], actualProjects,
-            ["tests/essentials/Modularity/Planning/Tests/CompositionImportTests.cs"]), "none");
-        Assert(EfSuiteSelector.SelectPaths([cliAcceptance], actualProjects,
-            ["src/essentials/Cli/Program.cs"]), "selected", "cli-acceptance");
+        var manifest = JsonDocument.Parse(File.ReadAllText(repo.Absolute("tools/ci/test-tiers.json")))
+            .RootElement.GetProperty("containerSuites").EnumerateArray()
+            .ToDictionary(suite => suite.GetProperty("suite").GetString()!, suite => suite.GetProperty("require").GetString()!);
+        var include = JsonDocument.Parse(EfSuiteSelector.Select(repo).ToJson()).RootElement
+            .GetProperty("matrix").GetProperty("include").EnumerateArray()
+            .ToDictionary(leg => leg.GetProperty("suite").GetString()!, leg => leg.GetProperty("require").GetString()!);
+        if (include.Count != manifest.Count || manifest.Any(suite => !include.TryGetValue(suite.Key, out var require) || require != suite.Value))
+            throw new InvalidOperationException(
+                $"The EF matrix must carry all {manifest.Count} manifest suites with their required-provider modes; got {include.Count}.");
         Console.WriteLine("EF suite selector contract cases passed.");
     }
 
-    private static void Assert(EfSuiteSelection selection, string mode, params string[] expectedSuites)
-    {
-        var actual = selection.Suites.Select(suite => suite.Suite).Order(StringComparer.Ordinal).ToArray();
-        var expected = expectedSuites.Order(StringComparer.Ordinal).ToArray();
-        if (selection.Mode != mode || !actual.SequenceEqual(expected, StringComparer.Ordinal))
-            throw new InvalidOperationException(
-                $"Expected {mode}: {string.Join(", ", expected)}; got {selection.Mode}: {string.Join(", ", actual)}.");
-    }
-
+    /// <summary>Fails the contract test unless the supplied action throws an InvalidOperationException.</summary>
     private static void ExpectInvalid(Action action)
     {
         try

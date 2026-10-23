@@ -1,0 +1,31 @@
+using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore;
+using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Persistence.EntityFramework;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
+
+// The single, discoverable declaration of this module. EfModuleCatalog.Discover reads this,
+// and EfModuleBinding.For derives the registration class's binding from it (#1872).
+[assembly: EfModule(
+    "Diagnostics.StructuredLogs",
+    typeof(StructuredLogsDbContext),
+    HistoryModule = StructuredLogsEfModule.HistoryModuleName,
+    Sqlite = typeof(StructuredLogsSqliteDbContext),
+    SqlServer = typeof(StructuredLogsSqlServerDbContext),
+    PostgreSql = typeof(StructuredLogsPostgreSqlDbContext),
+    MySql = typeof(StructuredLogsMySqlDbContext),
+    DisplayName = "Structured Logs")]
+
+// Mirrors the [EfModule] name above into elsa-package.json's extensions.efModules
+// (#1881); EfModuleDescriptorTests guards that the two never drift apart.
+[assembly: ManifestExtension("efModules", "Diagnostics.StructuredLogs")]
+
+// The schema family this module owns, at the version its skew check reads. A host's readability
+// report is derived from it alone; every family the stores check must be declared here, at the
+// version they read; that holds by review until #2606 restores a compiled check.
+[assembly: EfSchemaFamily(StructuredLogsEfModule.SchemaFamily, "Diagnostics.StructuredLogs", StructuredLogsEfModule.SchemaVersion)]
+
+// Content and integrity columns: see Essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns".
+// An append operation's outcome embeds the payload of each record it appended. Those payloads are fields of the
+// outcome document, upcast with it by the outcome's upcaster, not a column of their own (#2140).
+[assembly: EfSchemaContent(StructuredLogsEfModule.SchemaFamily, typeof(StructuredLogRecord), nameof(StructuredLogRecord.PayloadJson))]
+[assembly: EfSchemaContent(StructuredLogsEfModule.SchemaFamily, typeof(StructuredLogAppendOperation), nameof(StructuredLogAppendOperation.OutcomeJson))]

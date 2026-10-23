@@ -1,0 +1,38 @@
+{
+  "series": 6,
+  "provider": "PostgreSQL + SQLite diagnostics",
+  "fixture": "Http16",
+  "cadence": "Coalesced",
+  "persistedDiagnostics": "Off",
+  "candidateSha": "2ea800cd5c17232cbfd50e0115344bab0ec79056",
+  "captureExitCode": 0,
+  "containerId": "1051dfd7a0a5a0ba622c2f7c7be525d93e5873d7a623e7b0767f528dd3246557",
+  "containerName": "track-b-2534-s6-fdc112bd5b",
+  "databaseName": "track_b_fdc112bd5b",
+  "postgresImage": "postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d",
+  "postgresSelectOneBeforeHost": true,
+  "postgresVersion": "16.15 (Debian 16.15-1.pgdg13+2)",
+  "configSha256": {
+    "appsettings.json": "2d678f0de2d0769a9df14a908a84f81a60695220c7a13270fb93b7a2f78731c1",
+    "appsettings.Development.json": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+    "shells.json": "396973b46c99ff1486db5d6a42e218a7b014eebacff362d8e4f6ba888d49ffd1"
+  },
+  "persistedDiagnosticsFeatureNamesPresent": [],
+  "hostPid": 13736,
+  "scriptStopReason": "InvalidStepAtClients4",
+  "capturedLevels": [
+    1,
+    2,
+    4
+  ],
+  "artifactSha256": "7afa78d6a058253db1fc96bdb362c92533c395e592a867a4c9a95e401f5fe498",
+  "readbackExitCode": 0,
+  "readback": {
+    "cadenceMismatches": 0,
+    "fixtureExportSha256": "9752e237e8800a74b62d4a7b1ec2e6550fdfa58f0cc3a910aa20c1f69ca32311",
+    "count": 1706,
+    "detailReadCount": 1706
+  },
+  "hostControllerExitCode": 0,
+  "containerStopExitCode": 0
+}

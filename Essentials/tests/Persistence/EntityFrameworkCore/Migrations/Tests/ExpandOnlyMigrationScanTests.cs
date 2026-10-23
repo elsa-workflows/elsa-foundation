@@ -1,0 +1,260 @@
+using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.Tests;
+using Elsa.Secrets.Persistence.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Xunit;
+
+namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
+
+/// <summary>
+/// The scan cannot pass by examining nothing (elsa-workflows/elsa-foundation#2104, B8).
+/// Everything here runs <see cref="ExpandOnlyMigrationScanner"/> over the real, first-party module
+/// set <see cref="ModuleContextCatalog"/> already carries, not a synthetic stand-in.
+/// </summary>
+public sealed class ExpandOnlyMigrationScanTests
+{
+    /// <summary>
+    /// #1976 has not happened:
+    /// no baseline is frozen and no freeze manifest exists, and this guard does not apply to a
+    /// real database before then. This is that state, proven rather than assumed, over
+    /// <see cref="ExpandOnlyMigrationScanner.Scan(IReadOnlyList{Assembly}, IReadOnlyList{string}, string)"/>
+    /// itself — the overload that owns loading the manifest, not a caller that loads it first and hands
+    /// <c>Scan</c> an already-failed-or-not decision — so what this proves is that the real scan itself refuses
+    /// to guess and never quietly reports success over zero migrations, not merely that the reader does.
+    /// </summary>
+    [Fact]
+    public void The_real_scan_over_every_first_party_module_fails_naming_the_path_when_the_freeze_manifest_is_missing()
+    {
+        var failure = Assert.Throws<FreezeManifestMissingException>(() =>
+            ExpandOnlyMigrationScanner.Scan(ModuleContextCatalog.Modules, ModuleContextCatalog.Providers, FreezeManifestReader.ExpectedPath));
+
+        Assert.Contains(FreezeManifestReader.ExpectedPath, failure.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The "no baseline recorded" fallback is what makes the guard switch on automatically: the moment
+    /// #1976 freezes a module and provider context's migrations at the time as its baseline, every migration
+    /// recorded there stops being scanned, and only what ships afterwards is checked. This proves the whole
+    /// pipeline end to end over every real module today, as if #1976 had just landed: every current migration,
+    /// for every module and provider, is recorded as baseline, and the scan finds nothing left to classify and
+    /// nothing to fail — the exact state #1976's freeze is meant to leave behind.
+    /// </summary>
+    [Fact]
+    public void Every_first_party_module_passes_once_every_migration_it_has_today_is_recorded_as_its_baseline()
+    {
+        var manifest = FreezeEveryCurrentMigrationAsBaseline();
+
+        var report = ExpandOnlyMigrationScanner.Scan(ModuleContextCatalog.Modules, ModuleContextCatalog.Providers, manifest);
+
+        Assert.True(report.Passed, string.Join("\n", report.Failures));
+        Assert.Equal(15, report.Modules);
+        Assert.Equal(0, report.PostFreezeMigrations);
+        Assert.Equal(0, report.OperationsClassified);
+        Assert.True(report.BaselineMigrations > 0);
+        Assert.True(report.ProviderContextsExamined > 0);
+    }
+
+    /// <summary>
+    /// A supported provider context the manifest never mentions at all fails, distinctly from an entry
+    /// that is merely empty.
+    /// </summary>
+    [Fact]
+    public void A_supported_provider_context_missing_from_the_manifest_entirely_fails()
+    {
+        var manifest = FreezeEveryCurrentMigrationAsBaseline();
+        var withoutOneEntry = new FreezeManifest(
+            manifest.Baselines.Where(entry => entry.Key != ("Secrets", "Sqlite")).ToDictionary(entry => entry.Key, entry => entry.Value));
+
+        var report = ExpandOnlyMigrationScanner.Scan(ModuleContextCatalog.Modules, ModuleContextCatalog.Providers, withoutOneEntry);
+
+        Assert.False(report.Passed);
+        Assert.Contains(report.Failures, failure => failure.Contains("Secrets/Sqlite", StringComparison.Ordinal) && failure.Contains("no baseline entry", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The independent floor: a baseline id that names no migration the context actually has — a typo, a
+    /// rename, or a deletion — fails naming that id, rather than silently dropping out of the subtraction and
+    /// leaving the migration it used to name mis-counted as baseline.
+    /// </summary>
+    [Fact]
+    public void A_stale_baseline_migration_id_fails_naming_it()
+    {
+        var manifest = FreezeEveryCurrentMigrationAsBaseline();
+        var staleId = manifest.BaselineOf("Secrets", "Sqlite")[0] + "_typo";
+        var withStaleEntry = new FreezeManifest(manifest.Baselines.ToDictionary(
+            entry => entry.Key,
+            entry => entry.Key == ("Secrets", "Sqlite") ? (IReadOnlyList<string>)[.. entry.Value, staleId] : entry.Value));
+
+        var report = ExpandOnlyMigrationScanner.Scan(ModuleContextCatalog.Modules, ModuleContextCatalog.Providers, withStaleEntry);
+
+        Assert.False(report.Passed);
+        Assert.Contains(report.Failures, failure =>
+            failure.Contains("Secrets/Sqlite", StringComparison.Ordinal) &&
+            failure.Contains(staleId, StringComparison.Ordinal) &&
+            failure.Contains("does not exist in this context", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The floor (<see cref="ExpandOnlyMigrationScanner.MigrationTypesDeclaredFor"/> minus the manifest's
+    /// baseline count) is only a floor at all if the manifest's baseline count means "how many distinct
+    /// migrations are baselined". A baseline id repeated in the manifest inflates that count without excluding
+    /// any more migrations from postFreeze, so it must fail, naming the repeated id, rather than being read as
+    /// one extra baselined migration that quietly widens the floor.
+    /// </summary>
+    [Fact]
+    public void A_duplicate_baseline_migration_id_fails_naming_it()
+    {
+        var manifest = FreezeEveryCurrentMigrationAsBaseline();
+        var duplicatedId = manifest.BaselineOf("Secrets", "Sqlite")[0];
+        var withDuplicateEntry = new FreezeManifest(manifest.Baselines.ToDictionary(
+            entry => entry.Key,
+            entry => entry.Key == ("Secrets", "Sqlite") ? (IReadOnlyList<string>)[.. entry.Value, duplicatedId] : entry.Value));
+
+        var report = ExpandOnlyMigrationScanner.Scan(ModuleContextCatalog.Modules, ModuleContextCatalog.Providers, withDuplicateEntry);
+
+        Assert.False(report.Passed);
+        Assert.Contains(report.Failures, failure =>
+            failure.Contains("Secrets/Sqlite", StringComparison.Ordinal) &&
+            failure.Contains(duplicatedId, StringComparison.Ordinal) &&
+            failure.Contains("more than once", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Today's answer to "Secrets already has incremental migrations such as SchemaVersionStamp — do they pass
+    /// the guard, or does the spec say why not?" The baseline for Secrets is the historical chain
+    /// it already keeps. Scanned as post-freeze — the fallback a manifest entry with no ids recorded
+    /// yet produces, exactly the shape #1976 leaves behind for a module or provider it has not reached —
+    /// Secrets' pre-guard chain genuinely violates expand-only on every provider but SQLite:
+    /// <c>SchemaVersionStamp</c> adds a non-nullable, defaulted column (a default does not give "unset" for an
+    /// older host's write) on all four, and <c>WidenLookupKeys</c> and <c>OrdinalCollation</c> retype existing
+    /// columns — OrdinalCollation's SQL Server migration also rebuilds the primary key — on SQL Server,
+    /// PostgreSQL and MySQL. That baseline definition is what makes this expected rather than a defect this guard
+    /// needs to work around: #1976 folds this whole chain into Secrets' baseline, at which point none of it is
+    /// scanned again, proved clean in that exact shape by the test above.
+    /// </summary>
+    [Fact]
+    public void Secrets_kept_chain_scanned_as_post_freeze_today_shows_why_1976_must_fold_it_into_the_baseline()
+    {
+        var descriptor = Assert.Single(EfModuleCatalog.Discover(ModuleContextCatalog.Modules), d => d.Name == "Secrets");
+        var manifest = new FreezeManifest(ModuleContextCatalog.Providers
+            .Where(provider => descriptor.ProviderContext(provider) is not null)
+            .ToDictionary(provider => ("Secrets", provider), IReadOnlyList<string> (_) => []));
+
+        var report = ExpandOnlyMigrationScanner.Scan([typeof(SecretsDbContext).Assembly], ModuleContextCatalog.Providers, manifest);
+
+        Assert.NotEmpty(report.Failures);
+        // Every failure here is a genuine content violation, never the structural "no baseline
+        // entry at all" — this manifest gave every supported provider context an entry, just an empty one.
+        Assert.DoesNotContain(report.Failures, failure => failure.Contains("no baseline entry", StringComparison.Ordinal));
+        Assert.All(report.Failures, failure => Assert.Contains("violates expand-only", failure, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Contracting opt-outs through the real scan, over a module whose migrations split one change across two versions of
+    /// its family: the scan learns from the migration before each one which tables a stamped family covered, so it tells
+    /// the contracting opt-out, which must name the family and version, from one that removes from an unstamped table,
+    /// which must not; and the scan's output shows the version the contracting one waits for.
+    /// </summary>
+    [Fact]
+    public void The_scan_tells_a_contracting_opt_out_from_any_other_and_shows_the_version_it_waits_for()
+    {
+        // Two of the engines the module declares: each engine's context is one more EF internal service provider in this
+        // process, which EF refuses past twenty, and the scan's reading of the opt-outs does not depend on the engine.
+        string[] providers = ["Sqlite", "PostgreSql"];
+        var manifest = new FreezeManifest(providers
+            .ToDictionary(provider => (ContractingModule.Name, provider), IReadOnlyList<string> (_) => [ContractingModule.Initial]));
+
+        var report = ExpandOnlyMigrationScanner.Scan([typeof(ContractingDbContext).Assembly], providers, manifest);
+
+        Assert.True(report.Passed, string.Join("\n", report.Failures));
+        Assert.Equal((1, 2, 0, 6), (report.Modules, report.ProviderContextsExamined, report.ProviderContextsSkipped, report.PostFreezeMigrations));
+        Assert.Equal(2, report.OptOutsHonoured.Count(line =>
+            line.Contains(ContractingModule.Contract, StringComparison.Ordinal) &&
+            line.EndsWith($"(applies once '{ContractingModule.Family}' is finalized at '{ContractingModule.CurrentVersion}')", StringComparison.Ordinal)));
+        Assert.Equal(2, report.OptOutsHonoured.Count(line =>
+            line.Contains(ContractingModule.DropObsolete, StringComparison.Ordinal) && !line.Contains("applies once", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void FreezeManifestReader_parses_baseline_ids_per_module_and_provider()
+    {
+        var path = Path.Join(Path.GetTempPath(), $"expand-only-guard-{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, """{"Secrets":{"Sqlite":["20260910210210_Initial"]}}""");
+        try
+        {
+            var manifest = FreezeManifestReader.Load(path);
+
+            Assert.Equal(["20260910210210_Initial"], manifest.BaselineOf("Secrets", "Sqlite"));
+            Assert.True(manifest.HasEntry("Secrets", "Sqlite"));
+            Assert.False(manifest.HasEntry("Secrets", "SqlServer"));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    /// <summary>
+    /// A migration whose opt-out is what let it pass records that opt-out as honoured — the only case
+    /// <see cref="ExpandOnlyMigrationScanReport.OptOutsHonoured"/> exists to report.
+    /// </summary>
+    [Fact]
+    public void An_opt_out_that_made_its_migration_pass_is_recorded_as_honoured()
+    {
+        var optOut = new ExpandOnlyMigrationOptOutAttribute("Reason.", "#2104", "DropColumn elsa_example.Legacy");
+        var result = new ExpandOnlyMigrationResult(
+            Violations: ["DropColumn elsa_example.Legacy"], UnlistedViolations: [], StaleOptOutEntries: [], HasOptOut: true);
+
+        Assert.True(result.Passed);
+        Assert.True(ExpandOnlyMigrationScanner.ShouldRecordOptOutHonoured(optOut, result));
+    }
+
+    /// <summary>
+    /// A migration that carries an opt-out but still fails — an unlisted violation, here — must not be recorded
+    /// as honoured: the opt-out did not make it pass, so it belongs in the report's failures only.
+    /// </summary>
+    [Fact]
+    public void An_opt_out_whose_migration_still_fails_is_not_recorded_as_honoured()
+    {
+        var optOut = new ExpandOnlyMigrationOptOutAttribute("Reason.", "#2104", "DropColumn elsa_example.Legacy");
+        var result = new ExpandOnlyMigrationResult(
+            Violations: ["DropColumn elsa_example.Legacy", "RenameColumn elsa_example.OldName"],
+            UnlistedViolations: ["RenameColumn elsa_example.OldName"], StaleOptOutEntries: [], HasOptOut: true);
+
+        Assert.False(result.Passed);
+        Assert.False(ExpandOnlyMigrationScanner.ShouldRecordOptOutHonoured(optOut, result));
+    }
+
+    /// <summary>A migration with no opt-out at all is never recorded, whether or not it happens to pass.</summary>
+    [Fact]
+    public void A_migration_with_no_opt_out_is_never_recorded_as_honoured()
+    {
+        var result = new ExpandOnlyMigrationResult(Violations: [], UnlistedViolations: [], StaleOptOutEntries: [], HasOptOut: false);
+
+        Assert.True(result.Passed);
+        Assert.False(ExpandOnlyMigrationScanner.ShouldRecordOptOutHonoured(optOut: null, result));
+    }
+
+    /// <summary>
+    /// Builds a manifest that records every migration every real module and provider context has today as that
+    /// context's baseline, through <see cref="ExpandOnlyMigrationScanner.EnumerateModuleProviderContexts"/> —
+    /// the same seam <see cref="ExpandOnlyMigrationScanner.Scan"/> iterates through, so this can never drift
+    /// from what the scan itself examines.
+    /// </summary>
+    private static FreezeManifest FreezeEveryCurrentMigrationAsBaseline()
+    {
+        var entries = new Dictionary<(string, string), IReadOnlyList<string>>();
+        foreach (var (descriptor, provider, contextType) in ExpandOnlyMigrationScanner.EnumerateModuleProviderContexts(ModuleContextCatalog.Modules, ModuleContextCatalog.Providers))
+        {
+            if (contextType is null)
+                continue;
+            using var context = ModuleContextCatalog.Create(contextType, ModuleContextCatalog.PlaceholderConnection(provider));
+            var assembly = context.GetService<IMigrationsAssembly>();
+            entries[(descriptor.Name, provider)] = assembly.Migrations.Keys.ToArray();
+        }
+
+        return new FreezeManifest(entries);
+    }
+}

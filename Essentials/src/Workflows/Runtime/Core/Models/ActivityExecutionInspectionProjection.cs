@@ -1,0 +1,271 @@
+namespace Elsa.Workflows.Runtime.Core.Models;
+
+/// <summary>
+/// Runtime-owned read model for committed inspection evidence for one concrete activity execution.
+/// </summary>
+public sealed record ActivityExecutionInspectionProjection(
+    string ActivityExecutionId,
+    string WorkflowExecutionId,
+    string ExecutableNodeId,
+    string AuthoredActivityId,
+    string ActivityType,
+    string ActivityTypeVersion,
+    ActivityExecutionStatus Status,
+    string? SubStatus,
+    long ExecutionSequence,
+    DateTimeOffset ScheduledAt,
+    DateTimeOffset? StartedAt,
+    DateTimeOffset? CompletedAt,
+    string? FirstCheckpointId,
+    string? LastCheckpointId,
+    DateTimeOffset? LastCommittedAt,
+    ActivitySchedulingProvenance Provenance,
+    IReadOnlyCollection<string> OutcomeNames,
+    IReadOnlyCollection<ActivityExecutionBookmarkSummary> Bookmarks,
+    IReadOnlyCollection<ActivityExecutionIncidentSummary> Incidents,
+    IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> ValueSnapshots,
+    IReadOnlyDictionary<string, string> Metadata,
+    string? ExecutionScopeId = null,
+    ActivityExecutionAttemptLineage? Attempt = null,
+    string? SupersededByActivityExecutionId = null,
+    DateTimeOffset? SupersededAt = null)
+{
+    /// <summary>The hierarchy scope containing this projection when its own execution scope is nested.</summary>
+    public string? EnclosingExecutionScopeId { get; init; }
+
+    public static ActivityExecutionInspectionProjection FromState(
+        ActivityExecutionState state,
+        string checkpointId,
+        DateTimeOffset committedAt,
+        IReadOnlyCollection<string>? outcomeNames = null,
+        IReadOnlyCollection<ActivityExecutionBookmarkSummary>? bookmarks = null,
+        IReadOnlyCollection<ActivityExecutionIncidentSummary>? incidents = null,
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot>? valueSnapshots = null,
+        IReadOnlyDictionary<string, string>? metadata = null)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentException.ThrowIfNullOrWhiteSpace(checkpointId);
+
+        var mergedMetadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        foreach (var item in metadata ?? new Dictionary<string, string>())
+            mergedMetadata[item.Key] = item.Value;
+
+        return new ActivityExecutionInspectionProjection(
+            ActivityExecutionId: state.Execution.ActivityExecutionId,
+            WorkflowExecutionId: state.Execution.WorkflowExecutionId,
+            ExecutableNodeId: state.Execution.ExecutableNodeId,
+            AuthoredActivityId: state.Execution.AuthoredActivityId,
+            ActivityType: state.Execution.ActivityType,
+            ActivityTypeVersion: state.Execution.ActivityTypeVersion,
+            Status: state.Status,
+            SubStatus: state.SubStatus,
+            ExecutionSequence: state.ExecutionSequence,
+            ScheduledAt: state.ScheduledAt,
+            StartedAt: state.StartedAt,
+            CompletedAt: state.CompletedAt,
+            FirstCheckpointId: checkpointId,
+            LastCheckpointId: checkpointId,
+            LastCommittedAt: committedAt,
+            Provenance: state.Provenance,
+            ExecutionScopeId: state.ExecutionScopeId ?? state.Provenance.ExecutionScopeId,
+            Attempt: state.Attempt ?? state.Provenance.Attempt,
+            SupersededByActivityExecutionId: state.SupersededByActivityExecutionId,
+            SupersededAt: state.SupersededAt,
+            OutcomeNames: outcomeNames ?? [],
+            Bookmarks: bookmarks ?? [],
+            Incidents: incidents ?? [],
+            ValueSnapshots: MergeValueSnapshots(state.Execution.ActivityExecutionId, [], valueSnapshots),
+            Metadata: RuntimeModelMetadata.Snapshot(mergedMetadata))
+        {
+            EnclosingExecutionScopeId = state.EnclosingExecutionScopeId
+        };
+    }
+
+    public ActivityExecutionInspectionProjection Merge(
+        ActivityExecutionState state,
+        string checkpointId,
+        DateTimeOffset committedAt,
+        IReadOnlyCollection<string>? outcomeNames = null,
+        IReadOnlyCollection<ActivityExecutionBookmarkSummary>? bookmarks = null,
+        IReadOnlyCollection<ActivityExecutionIncidentSummary>? incidents = null,
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot>? valueSnapshots = null,
+        IReadOnlyDictionary<string, string>? metadata = null)
+    {
+        var mergedMetadata = Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        foreach (var item in state.Metadata)
+            mergedMetadata[item.Key] = item.Value;
+        foreach (var item in metadata ?? new Dictionary<string, string>())
+            mergedMetadata[item.Key] = item.Value;
+
+        return this with
+        {
+            Status = state.Status,
+            SubStatus = state.SubStatus,
+            ExecutionSequence = state.ExecutionSequence,
+            ScheduledAt = state.ScheduledAt,
+            StartedAt = state.StartedAt,
+            CompletedAt = state.CompletedAt,
+            LastCheckpointId = checkpointId,
+            LastCommittedAt = committedAt,
+            Provenance = state.Provenance,
+            ExecutionScopeId = state.ExecutionScopeId ?? state.Provenance.ExecutionScopeId,
+            Attempt = state.Attempt ?? state.Provenance.Attempt,
+            SupersededByActivityExecutionId = state.SupersededByActivityExecutionId,
+            SupersededAt = state.SupersededAt,
+            EnclosingExecutionScopeId = state.EnclosingExecutionScopeId,
+            OutcomeNames = outcomeNames ?? OutcomeNames,
+            Bookmarks = MergeBy(Bookmarks, bookmarks, item => item.Identity.BookmarkId),
+            Incidents = MergeBy(Incidents, incidents, item => item.IncidentId),
+            ValueSnapshots = MergeValueSnapshots(ActivityExecutionId, ValueSnapshots, valueSnapshots),
+            Metadata = RuntimeModelMetadata.Snapshot(mergedMetadata)
+        };
+    }
+
+    private static IReadOnlyCollection<T> MergeBy<T>(
+        IReadOnlyCollection<T> existing,
+        IReadOnlyCollection<T>? additions,
+        Func<T, string> keySelector)
+    {
+        if (additions is null || additions.Count == 0)
+            return existing;
+
+        var result = existing.ToDictionary(keySelector, StringComparer.Ordinal);
+        foreach (var item in additions)
+            result[keySelector(item)] = item;
+        return result.Values.ToArray();
+    }
+
+    private static IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> MergeValueSnapshots(
+        string activityExecutionId,
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> existing,
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot>? additions)
+    {
+        if (additions is null || additions.Count == 0)
+            return AssignEvidenceIds(activityExecutionId, existing);
+
+        var result = existing.ToList();
+        var evaluationIds = existing
+            .Where(snapshot => !string.IsNullOrWhiteSpace(snapshot.EvaluationId))
+            .Select(snapshot => snapshot.EvaluationId!)
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var addition in additions)
+        {
+            if (string.IsNullOrWhiteSpace(addition.EvaluationId))
+            {
+                result.Add(addition);
+                continue;
+            }
+
+            if (!evaluationIds.Add(addition.EvaluationId))
+                continue;
+
+            if (addition.Subject != ActivityExecutionInspectionValueSubject.ActivityInput || string.IsNullOrWhiteSpace(addition.InputKey))
+            {
+                result.Add(addition);
+                continue;
+            }
+
+            var nextSequence = result
+                .Where(snapshot =>
+                    snapshot.Subject == ActivityExecutionInspectionValueSubject.ActivityInput &&
+                    StringComparer.Ordinal.Equals(snapshot.InputKey, addition.InputKey))
+                .Select(snapshot => snapshot.Sequence ?? 0)
+                .DefaultIfEmpty(0)
+                .Max() + 1;
+            result.Add(addition with { Sequence = nextSequence });
+        }
+
+        return AssignEvidenceIds(activityExecutionId, result);
+    }
+
+    private static IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> AssignEvidenceIds(
+        string activityExecutionId,
+        IEnumerable<ActivityExecutionInspectionValueSnapshot> snapshots) =>
+        snapshots
+            .Select((snapshot, index) => string.IsNullOrWhiteSpace(snapshot.EvidenceId)
+                ? snapshot with { EvidenceId = ActivityExecutionValueEvidenceIdentity.Create(activityExecutionId, snapshot, index) }
+                : snapshot)
+            .ToArray();
+}
+
+public static class ActivityExecutionValueEvidenceIdentity
+{
+    public static string Create(
+        string activityExecutionId,
+        ActivityExecutionInspectionValueSnapshot snapshot,
+        int ordinal)
+    {
+        var material = string.Join(
+            '\u001f',
+            activityExecutionId,
+            ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            snapshot.Subject.ToString(),
+            snapshot.InputKey ?? string.Empty,
+            snapshot.Name,
+            snapshot.EvaluationId ?? string.Empty,
+            snapshot.Phase ?? string.Empty,
+            snapshot.Sequence?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty,
+            snapshot.CapturedAt.ToString("O", System.Globalization.CultureInfo.InvariantCulture));
+        return $"value-{Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(material)))}";
+    }
+}
+
+/// <summary>
+/// Lightweight runtime-owned summary for workflow-instance activity execution inspection lists.
+/// </summary>
+public sealed record ActivityExecutionInspectionSummaryProjection(
+    string ActivityExecutionId,
+    string WorkflowExecutionId,
+    string ExecutableNodeId,
+    string AuthoredActivityId,
+    string ActivityType,
+    string ActivityTypeVersion,
+    ActivityExecutionStatus Status,
+    string? SubStatus,
+    long ExecutionSequence,
+    DateTimeOffset ScheduledAt,
+    DateTimeOffset? StartedAt,
+    DateTimeOffset? CompletedAt,
+    string? FirstCheckpointId,
+    string? LastCheckpointId,
+    DateTimeOffset? LastCommittedAt,
+    ActivitySchedulingProvenance Provenance,
+    IReadOnlyCollection<string> OutcomeNames,
+    int BookmarkCount,
+    int IncidentCount,
+    int ValueSnapshotCount,
+    IReadOnlyDictionary<string, string> Metadata,
+    string? ExecutionScopeId = null,
+    ActivityExecutionAttemptLineage? Attempt = null)
+{
+    public static ActivityExecutionInspectionSummaryProjection FromProjection(ActivityExecutionInspectionProjection projection)
+    {
+        ArgumentNullException.ThrowIfNull(projection);
+
+        return new ActivityExecutionInspectionSummaryProjection(
+            projection.ActivityExecutionId,
+            projection.WorkflowExecutionId,
+            projection.ExecutableNodeId,
+            projection.AuthoredActivityId,
+            projection.ActivityType,
+            projection.ActivityTypeVersion,
+            projection.Status,
+            projection.SubStatus,
+            projection.ExecutionSequence,
+            projection.ScheduledAt,
+            projection.StartedAt,
+            projection.CompletedAt,
+            projection.FirstCheckpointId,
+            projection.LastCheckpointId,
+            projection.LastCommittedAt,
+            projection.Provenance,
+            projection.OutcomeNames,
+            projection.Bookmarks.Count,
+            projection.Incidents.Count,
+            projection.ValueSnapshots.Count,
+            projection.Metadata,
+            projection.ExecutionScopeId,
+            projection.Attempt);
+    }
+}

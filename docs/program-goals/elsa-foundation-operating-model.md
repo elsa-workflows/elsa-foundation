@@ -1,6 +1,8 @@
 # Elsa Foundation Operating Model
 
-Status: active.
+> **Parked until 2026-11-21** by [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus). No new child work until it is reactivated.
+
+Status: Parked until 2026-11-21 (ADR 0080 D0).
 
 Area: repository operating model / AI workspace.
 
@@ -10,7 +12,7 @@ Steward(s): Joey plus active architects/agents.
 
 Turn `elsa-foundation` into the transitional Elsa foundation workspace: an AI-provider-neutral, navigable, amendable workspace that carries the main Elsa domain core libraries, foundation implementations, Speckit specs, maps, glossary, skills, reports, and architecture knowledge needed to guide the modular refactor.
 
-This goal does not mean every session must repeat the full program overview. Use the drift guard in [AGENTS.md](../../AGENTS.md#program-goals-and-drift-guard) only when a trigger is present.
+This goal does not mean every session must repeat the full program overview. Use the [drift guard](../contributing/program-goals-and-drift-guard.md) only when a trigger is present.
 
 ## In Scope
 
@@ -28,7 +30,7 @@ This goal does not mean every session must repeat the full program overview. Use
 - Using `AGENTS.md` as a mutable roadmap or goal registry.
 - Treating provisional reports as ratified constitution gates.
 - Implementing the CShells Appsettings Generator before feature/dependency/settings conventions are approved.
-- Treating `src/apps/Elsa.Server` as canonical shell composition policy.
+- Treating `Essentials/apps/Elsa.Server` as canonical shell composition policy.
 
 ## Active Objectives
 

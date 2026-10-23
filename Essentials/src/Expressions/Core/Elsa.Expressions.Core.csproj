@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Expressions" />
+    <InternalsVisibleTo Include="Elsa.Expressions.Tests" />
+  </ItemGroup>
+
+</Project>

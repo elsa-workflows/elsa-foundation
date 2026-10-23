@@ -1,14 +1,17 @@
 <#
 .SYNOPSIS
-    Runs the approved, four-node #2392 Coalesced HTTP reference against an already-running Workbench.
+    Runs the approved, four-node #2392 HTTP reference against an already-running Workbench.
 .DESCRIPTION
     This is a scoped fixture, not a host/database harness. It reuses _ElsaCommon.ps1 for authoring and inspection,
     starts the workflow through its synchronous HttpEndpoint, verifies its response and terminal instance state,
-    and prints the published intrinsic classification and effective per-run cadence. Run only against the task-owned
+    and prints the published intrinsic classification and the run's persistence mode. Run only against the task-owned
     disposable PostgreSQL 16 Workbench described in specs/193-bounded-coalesced-pagination/quickstart.md.
 
     The SetVariable node is the compiler intrinsic `elsa.intrinsic.set@1` (IntrinsicKind=Set, fusable); it is not the
     historical custom CLR transform. Treat output as a representative, non-equivalent reference.
+    ExpectedPersistenceMode checks the run's reported mode; configure the task-owned host separately.
+    AuthoredPersistenceMode submits strategyOptions.persistenceMode with the draft before publishing. With neither, the
+    fixture expects the host default, Balanced.
 #>
 [CmdletBinding()]
 param(
@@ -16,9 +19,20 @@ param(
     [string] $BaseUrl = "http://localhost:5095",
     [string] $Username = "admin",
     [string] $Password = "Password123!",
-    [string] $TraceParent = ""
+    [string] $TraceParent = "",
+    [ValidateSet("Balanced", "Durable")][string] $ExpectedPersistenceMode = "Balanced",
+    [ValidateSet("Durable", "Balanced")][string] $AuthoredPersistenceMode,
+    [string] $WorkflowName = "RuntimeDbPaging2392Reference",
+    [string] $RoutePath = "runtime-db-paging-2392/transform",
+    [switch] $SetupOnly
 )
+$authoredModeWasBound = $PSBoundParameters.ContainsKey("AuthoredPersistenceMode")
 . "$PSScriptRoot/../_ElsaCommon.ps1"
+
+$strategyOptions = $null
+if ($authoredModeWasBound) {
+    $strategyOptions = @{ persistenceMode = $AuthoredPersistenceMode }
+}
 
 if ([string]::IsNullOrWhiteSpace($TraceParent)) {
     $traceBytes = New-Object byte[] 24
@@ -33,14 +47,17 @@ if ($TraceParent -notmatch '^00-(?!0{32})[0-9a-fA-F]{32}-(?!0{16})[0-9a-fA-F]{16
 }
 $TraceParent = $TraceParent.ToLowerInvariant()
 
-$workflowName = "RuntimeDbPaging2392Reference"
-$path = "runtime-db-paging-2392/transform"
+$workflowName = $WorkflowName
+$path = $RoutePath
 $payload = '{"firstName":"Alice","lastName":"Smith"}'
 
-Write-Host "== #2392 Coalesced HTTP reference (non-equivalent) == -> $BaseUrl" -ForegroundColor Cyan
+Write-Host "== #2392 $ExpectedPersistenceMode HTTP reference (non-equivalent) == -> $BaseUrl" -ForegroundColor Cyan
 Write-Host ("[scriptHead] {0}" -f (git -C (Join-Path $PSScriptRoot '../..') rev-parse HEAD).Trim())
 Write-Host ("[hostCandidateInput] {0} (operator supplied; verify against the independent host build record)" -f $HostCandidateSha.ToLowerInvariant())
 Write-Host ("[traceparent] {0}" -f $TraceParent)
+$authoredModeText = if (-not $authoredModeWasBound) { "<host default>" } else { $AuthoredPersistenceMode }
+Write-Host ("[authored]   persistenceMode={0}" -f $authoredModeText)
+Write-Host ("[expected]   persistenceMode={0}" -f $ExpectedPersistenceMode)
 
 $ctx = Connect-Elsa -BaseUrl $BaseUrl -Username $Username -Password $Password
 $sequence = Invoke-Step "resolve Sequence" { Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Sequence.Activities.Sequence' }
@@ -74,8 +91,8 @@ $variables = @(
 
 $definition = Invoke-Step "submit reference workflow" {
     Submit-Workflow -Ctx $ctx -Name $workflowName `
-        -Description "Task #2392 current-head Coalesced reference; non-equivalent to historical custom transform." `
-        -RootActivity $root -Variables $variables
+        -Description "Task #2392 current-head $ExpectedPersistenceMode HTTP reference; non-equivalent to historical custom transform." `
+        -RootActivity $root -Variables $variables -StrategyOptions $strategyOptions
 }
 $publication = Invoke-Step "publish reference workflow" {
     Publish-WorkflowVersion -Ctx $ctx -VersionId $definition.version.id
@@ -83,7 +100,7 @@ $publication = Invoke-Step "publish reference workflow" {
 Write-Host ("[published]  version={0} artifact={1}" -f $definition.version.id, $publication.artifactId)
 
 # Inspect the exact published executable rather than inferring profile/fusion information from the authoring node.
-$export = Invoke-Step "read published executable export (workflow-publishing.read)" {
+$export = Invoke-Step "read published executable export (workflows/publishing:read)" {
     Invoke-RestMethod "$BaseUrl/publishing/workflows/$($definition.version.id)/executable-export" -WebSession $ctx.Session
 }
 function Find-SetIntrinsic($value) {
@@ -126,9 +143,27 @@ Write-Host ("[executable] {0}" -f ($publishedSet | ConvertTo-Json -Compress -Dep
 Write-Host '[wire]       intrinsicKind="Set"; activityContract may be omitted or null (JsonPayloadSerializer uses WhenWritingNull; compiler in-memory ActivityContract is separately null).'
 Write-Host "[fusion]     WorkflowIntrinsicFusion.IsFusable(Set)=true (source verified at this candidate)."
 
+# The management trigger index refresh is bounded to the same one interval for both setup-only and diagnostic flows.
+Start-Sleep -Seconds 1 # Give the published trigger table one refresh interval.
+
+if ($SetupOnly) {
+    return [pscustomobject]@{
+        DefinitionId       = [string]$definition.definition.id
+        VersionId          = [string]$definition.version.id
+        ArtifactId         = [string]$publication.artifactId
+        SourceReferenceId  = [string]$publication.sourceReferenceId
+        WorkflowName       = $workflowName
+        RoutePath          = $path
+        ExpectedPersistenceMode = $ExpectedPersistenceMode
+        AuthoredPersistenceMode = if ($authoredModeWasBound) { $AuthoredPersistenceMode } else { $null }
+        CandidateSourceSha = $HostCandidateSha.ToLowerInvariant()
+        Context            = $ctx
+        ExecutableExport   = $export
+    }
+}
+
 # Content-addressed artifacts can be shared across authored source definitions. Filter on this run's unique source
 # definition and reject ambiguity instead of selecting an unrelated older instance.
-Start-Sleep -Seconds 1 # Give the published trigger table one refresh interval.
 # PowerShell persists explicit request headers on a reused WebSession. Keep the trigger's traceparent
 # on a separate authenticated session so instance inspection cannot join the trigger trace.
 $triggerSession = [Microsoft.PowerShell.Commands.WebRequestSession]::new()
@@ -153,7 +188,7 @@ if ($executionIds.Count -ne 1) {
 $executionId = $executionIds[0]
 Write-Host ("[instance]   workflowExecutionId={0}" -f $executionId)
 
-$detail = Invoke-Step "read per-run instance detail (workflow-runtime.read)" {
+$detail = Invoke-Step "read per-run instance detail (workflows/runtime:read)" {
     Wait-WorkflowInstance -Ctx $ctx -ExecutionId $executionId -TimeoutSeconds 30
 }
 if ($detail.instance.status -notin @("Completed", "Finished")) {
@@ -165,11 +200,11 @@ function Get-DetailValue($detailValue, [string] $name) {
     if ($null -eq $value) { $value = $detailValue.instance.$name }
     return $value
 }
-$cadence = Get-DetailValue $detail "checkpointCadence"
-$maxSegment = Get-DetailValue $detail "maxSegmentCheckpoints"
+$persistenceMode = Get-DetailValue $detail "persistenceMode"
 $inspection = Get-DetailValue $detail "inspectionGranularity"
 Write-Host ("[terminal]   status={0}" -f $detail.instance.status)
-Write-Host ("[effective]  checkpointCadence={0}; maxSegmentCheckpoints={1}; inspectionGranularity={2}" -f $cadence, $maxSegment, $inspection)
-if ("$cadence" -ne "Coalesced" -or [int]$maxSegment -ne 50 -or -not $inspection) {
-    throw "Expected effective checkpointCadence=Coalesced and maxSegmentCheckpoints=50, with inspectionGranularity present; got cadence='$cadence', maxSegmentCheckpoints='$maxSegment', inspectionGranularity='$inspection'."
+Write-Host ("[effective]  persistenceMode={0}; inspectionGranularity={1}" -f $persistenceMode, $inspection)
+$expectedInspection = if ($ExpectedPersistenceMode -eq "Durable") { "activity-level" } else { "boundary-level" }
+if ("$persistenceMode" -ne $ExpectedPersistenceMode -or "$inspection" -ne $expectedInspection) {
+    throw "Expected persistenceMode=$ExpectedPersistenceMode and inspectionGranularity=$expectedInspection; got persistenceMode='$persistenceMode', inspectionGranularity='$inspection'."
 }

@@ -1,10 +1,11 @@
 using System.Text;
+using Elsa.Maps.Projects;
 
 namespace Elsa.Versioning.Calculator;
 
 /// <summary>
-/// One commit as change detection sees it: its tree, the dependency map committed in it, and from those, the
-/// package-affecting inputs of any package at that commit.
+/// One commit as change detection sees it: its tree, the dependency map for it, and from those, the package-affecting
+/// inputs of any package at that commit.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -12,6 +13,12 @@ namespace Elsa.Versioning.Calculator;
 /// dependency map at each of the two commits" (spec 150 FR-002) and a package that moved is found at its old path in
 /// the old commit and its new path in the new one. Nothing is keyed on a path across commits except the inputs'
 /// own keys, whose difference is exactly what a move is.
+/// </para>
+/// <para>
+/// The dependency map is the copy committed in the commit when it has one, and otherwise derived from the commit's tree
+/// by the scan the maps generator runs (<see cref="DependencyMapJson"/>, spec 259). Commits from before the map stopped
+/// being committed keep their committed bytes, so the inputs recorded for their publishes never move; every later
+/// commit is derived. <see cref="DatasetSource"/> can force either source, to compare them.
 /// </para>
 /// <para>A package's inputs are:</para>
 /// <list type="bullet">
@@ -41,16 +48,20 @@ internal sealed class CommitSnapshot
     private readonly Dictionary<string, PackageInputs> inputs = new(StringComparer.Ordinal);
     private readonly Lazy<CentralPackages> central;
 
-    public CommitSnapshot(ObjectCache cache, string commit)
+    public CommitSnapshot(ObjectCache cache, string commit, DatasetSource source = DatasetSource.Auto)
     {
         objects = cache;
         Commit = commit;
         tree = objects.Git.ListTree(commit).ToDictionary(entry => entry.Path, StringComparer.Ordinal);
 
-        Map = tree.TryGetValue(DependencyMapDataset.RelativePath, out var mapEntry)
-            ? DependencyMapDataset.Parse(Encoding.UTF8.GetString(objects.Read(mapEntry.ObjectId)), $"{DependencyMapDataset.RelativePath} at {commit}")
-            : throw new InvalidOperationException(
-                $"Commit {commit} has no {DependencyMapDataset.RelativePath}; the calculator resolves ownership from the dependency map committed with each commit it compares.");
+        var committed = tree.GetValueOrDefault(DependencyMapDataset.RelativePath);
+        MapDerived = source == DatasetSource.Derived || (source == DatasetSource.Auto && committed is null);
+        Map = MapDerived
+            ? DependencyMapDataset.Parse(Derive(), $"the dependency map derived at {commit}")
+            : committed is not null
+                ? DependencyMapDataset.Parse(Encoding.UTF8.GetString(objects.Read(committed.ObjectId)), $"{DependencyMapDataset.RelativePath} at {commit}")
+                : throw new InvalidOperationException(
+                    $"Commit {commit} has no {DependencyMapDataset.RelativePath}; use --dataset auto or derived.");
 
         var projectDirectories = Map.Nodes.GroupBy(node => node.Directory, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
         foreach (var entry in tree.Values)
@@ -74,13 +85,59 @@ internal sealed class CommitSnapshot
 
     public DependencyMapDataset Map { get; }
 
+    /// <summary>True when <see cref="Map"/> was derived from the tree rather than read from a committed copy.</summary>
+    public bool MapDerived { get; }
+
+    /// <summary>The dataset the maps generator would write for this commit's tree; fails as the generator would.</summary>
+    private string Derive()
+    {
+        try
+        {
+            return DependencyMapJson.Serialize(new CommitTree(objects, Commit, tree));
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or System.Xml.XmlException or System.Text.Json.JsonException)
+        {
+            throw new InvalidOperationException($"Cannot derive the dependency map at {Commit}: {exception.Message}", exception);
+        }
+    }
+
     /// <summary>The content of a file in this commit, or null when the commit has no such file.</summary>
     public byte[]? ReadFile(string path) => tree.TryGetValue(path, out var entry) ? objects.Read(entry.ObjectId) : null;
 
-    /// <summary>Every <c>.csproj</c> under <c>src/</c> or <c>tests/</c>: the projects the dependency map must describe.</summary>
-    public IEnumerable<string> ProjectFiles() =>
-        tree.Keys.Where(path => (path.StartsWith("src/", StringComparison.Ordinal) || path.StartsWith("tests/", StringComparison.Ordinal)) &&
-                                path.EndsWith(".csproj", StringComparison.Ordinal));
+    /// <summary>The backend projects in this commit: the projects the dependency map must describe.</summary>
+    /// <remarks>
+    /// Published history before the product split used repository-level <c>src/</c> and <c>tests/</c> roots. Newer
+    /// commits use <c>Essentials/{src,apps,tests}</c> and <c>Extensions/&lt;capability&gt;/{src,tests}</c>. Choosing
+    /// by the commit's own tree lets a record compare across the cutover without reinterpreting historical paths.
+    /// A mixed tree fails closed: leaving a project at an old root after the cutover would otherwise escape the new
+    /// map's inventory and silently contribute no package inputs.
+    /// </remarks>
+    public IEnumerable<string> ProjectFiles()
+    {
+        var consolidatedLayout = tree.Keys.Any(path => path.StartsWith("Essentials/", StringComparison.Ordinal) ||
+                                                       path.StartsWith("Extensions/", StringComparison.Ordinal));
+        if (consolidatedLayout && tree.Keys.Any(IsLegacyProjectPath))
+            throw new InvalidOperationException(
+                $"Commit {Commit} has projects under legacy src/ or tests/ roots beside Essentials/ or Extensions/. Every backend project must use the consolidated layout.");
+
+        return tree.Keys.Where(path => path.EndsWith(".csproj", StringComparison.Ordinal) &&
+            (consolidatedLayout ? IsConsolidatedProjectPath(path) : IsLegacyProjectPath(path)));
+    }
+
+    private static bool IsLegacyProjectPath(string path) =>
+        path.EndsWith(".csproj", StringComparison.Ordinal) &&
+        (path.StartsWith("src/", StringComparison.Ordinal) || path.StartsWith("tests/", StringComparison.Ordinal));
+
+    private static bool IsConsolidatedProjectPath(string path)
+    {
+        if (path.StartsWith("Essentials/src/", StringComparison.Ordinal) ||
+            path.StartsWith("Essentials/apps/", StringComparison.Ordinal) ||
+            path.StartsWith("Essentials/tests/", StringComparison.Ordinal))
+            return true;
+
+        var segments = path.Split('/');
+        return segments.Length >= 4 && segments[0] == "Extensions" && segments[2] is "src" or "tests";
+    }
 
     /// <summary>The MSBuild facts of a file in this commit, or null when the commit has no such file.</summary>
     public MsBuildFile? BuildFile(string path) => tree.TryGetValue(path, out var entry) ? objects.Parse(entry.ObjectId) : null;
@@ -230,16 +287,26 @@ internal sealed class CommitSnapshot
     }
 }
 
-/// <summary>Blobs and their parsed MSBuild facts, shared across commits: an unchanged file is read once.</summary>
-internal sealed class ObjectCache(GitRepository git)
+/// <summary>
+/// Blobs and their parsed MSBuild facts, shared across commits: an unchanged file is read once, through one
+/// <c>git cat-file --batch</c> that disposing closes. A read after that opens another.
+/// </summary>
+internal sealed class ObjectCache(GitRepository git) : IDisposable
 {
     private readonly Dictionary<string, byte[]> blobs = new(StringComparer.Ordinal);
     private readonly Dictionary<string, MsBuildFile> parsed = new(StringComparer.Ordinal);
+    private BlobBatch? batch;
 
     public GitRepository Git { get; } = git;
 
     public byte[] Read(string objectId) =>
-        blobs.TryGetValue(objectId, out var content) ? content : blobs[objectId] = Git.ReadBlob(objectId);
+        blobs.TryGetValue(objectId, out var content) ? content : blobs[objectId] = (batch ??= Git.OpenBlobBatch()).Read(objectId);
+
+    public void Dispose()
+    {
+        batch?.Dispose();
+        batch = null;
+    }
 
     public MsBuildFile Parse(string objectId) =>
         parsed.TryGetValue(objectId, out var file) ? file : parsed[objectId] = MsBuildFile.Parse(Read(objectId));

@@ -1,0 +1,8 @@
+diff --git a/src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs b/src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs
+--- a/src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs
++++ b/src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs
+@@ -195,3 +195 @@
+-                // Flush all participant rows first, then add the immutable marker as the final write in this
+-                // transaction. The marker is the durable commit proof, so it must never precede a participant failure.
+-                await context.SaveChangesAsync(writeCancellationToken);
++                // Trial: flush the staged participant rows and immutable marker in one save inside this transaction.

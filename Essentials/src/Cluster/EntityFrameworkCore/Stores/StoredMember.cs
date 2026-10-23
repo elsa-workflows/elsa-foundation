@@ -1,0 +1,114 @@
+using Elsa.Cluster.Core.Models;
+using Elsa.Cluster.EntityFrameworkCore.Entities;
+using Elsa.Persistence.EntityFramework;
+
+namespace Elsa.Cluster.EntityFrameworkCore.Stores;
+
+/// <summary>
+/// One membership row as this build reads it: the envelope every provider version writes (host id, incarnation, whether
+/// it is its host id's current incarnation, heartbeat time and expiry period), and what this build could interpret of
+/// the rest.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A row stamped with a schema version outside the family's readable set, a status this build does not know, or a report
+/// it cannot upcast or parse is <em>uninterpretable</em>. Its report is
+/// <see cref="MemberReport.Unknown"/>, which counts as reading nothing, and nothing but its envelope is trusted: it is
+/// judged <see cref="MemberStatus.Active"/> and live until its own heartbeat and expiry pass, whatever status it claims.
+/// That is the conservative direction: such an entry blocks every readability answer while it may still be alive, and
+/// never leaves early because of a word this build cannot be sure it reads the same way.
+/// </para>
+/// <para>
+/// A row whose envelope cannot even form an identity (a blank or over-long host id, a blank incarnation) fails the
+/// whole read instead: nothing can be said about it, and leaving it out would give the partial view a fresh read must
+/// never return.
+/// </para>
+/// </remarks>
+public sealed record StoredMember(
+    ClusterMemberIdentity Identity,
+    bool IsCurrent,
+    MemberStatus Status,
+    DateTimeOffset HeartbeatAt,
+    TimeSpan ExpiryPeriod,
+    MemberReport Report,
+    long ReportRevision,
+    bool IsInterpretable)
+{
+    public static StoredMember From(ClusterMemberEntity row)
+    {
+        var identity = new ClusterMemberIdentity(row.HostId, new MemberIncarnation(row.Incarnation));
+        var heartbeatAt = new DateTimeOffset(row.HeartbeatAtUtcTicks, TimeSpan.Zero);
+        var expiryPeriod = TimeSpan.FromTicks(row.ExpiryPeriodTicks);
+        var interpreted = Interpret(row);
+        return new StoredMember(
+            identity,
+            row.CurrentHostId is not null,
+            interpreted?.Status ?? MemberStatus.Active,
+            heartbeatAt,
+            expiryPeriod,
+            interpreted?.Report ?? MemberReport.Unknown,
+            row.ReportRevision,
+            interpreted is not null);
+    }
+
+    /// <summary>Whether the row says, in terms this build reads, that the member left.</summary>
+    public bool HasLeft => IsInterpretable && Status == MemberStatus.Left;
+
+    /// <summary><see cref="HasLeft"/> for a row read for writing, which needs no identity formed to answer.</summary>
+    public static bool SaysLeft(ClusterMemberEntity row) => Interpret(row)?.Status == MemberStatus.Left;
+
+    /// <summary>Whether a reader whose clock shows <paramref name="now"/> judges this member live.</summary>
+    public bool IsLive(DateTimeOffset now, TimeSpan skewAllowance) =>
+        MemberLiveness.IsLive(Status, HeartbeatAt, ExpiryPeriod, skewAllowance, now);
+
+    /// <summary>
+    /// The member as a reader whose clock shows <paramref name="now"/> judges it: live or not, displaced or not, with the
+    /// report this build could interpret. The one judgement the provider's own fleet view and <c>persistence status</c>
+    /// share, so neither can count a member the other would not. The provider adds the conditions it observes.
+    /// </summary>
+    public FleetMember ToFleetMember(DateTimeOffset now, TimeSpan skewAllowance) => new(
+        Identity,
+        Status,
+        HeartbeatAt,
+        ExpiryPeriod,
+        IsLive(now, skewAllowance),
+        IsDisplaced: !IsCurrent,
+        Report,
+        ReportRevision,
+        []);
+
+    private static (MemberStatus Status, MemberReport Report)? Interpret(ClusterMemberEntity row)
+    {
+        if (!EfSchemaVersion.IsReadable(ClusterMembershipEfModule.Chain, row.SchemaVersion))
+            return null;
+        if (!Enum.TryParse<MemberStatus>(row.Status, ignoreCase: false, out var status) || !Enum.IsDefined(status) || int.TryParse(row.Status, out _))
+            return null;
+
+        return ReadReport(row, ClusterMembershipEfModule.Chain) is { } report ? (status, report) : null;
+    }
+
+    /// <summary>
+    /// The row's report, upcast through <paramref name="chain"/> from the row's stamp to the current version before it is
+    /// parsed, or <see langword="null"/> when this build cannot interpret it. The stamp is readable by
+    /// the time this runs. Membership has only ever had one version, so its tests drive this over a chain of their own.
+    /// </summary>
+    public static MemberReport? ReadReport(ClusterMemberEntity row, EfSchemaChain chain)
+    {
+        string report;
+        try
+        {
+            report = chain.Upcast<ClusterMemberEntity>(row.SchemaVersion, (nameof(row.ReportJson), row.ReportJson))[nameof(row.ReportJson)]!;
+        }
+        catch (InvalidDataException)
+        {
+            // For a membership report, the rule that a fresh read never returns part of the fleet takes precedence over
+            // the usual corruption rule. That rule reports a readable row whose upcaster fails as corrupt, which would
+            // fail the whole membership read. A membership read must stay alive and never give a partial view, so the
+            // entry is uninterpretable instead: it is counted, reads as MemberReport.Unknown, and so conservatively
+            // counts as reading nothing.
+            return null;
+        }
+
+        return MemberReportJson.Read(report);
+    }
+}

@@ -1,0 +1,13 @@
+# Pace console-stream live releases to structurally dampen the long-polling feedback loop
+
+The console-stream feature captures process stdout and streams it over a SignalR hub. When the SignalR client falls back to long polling and the host logs a line per HTTP request at Information (CShells' `ShellMiddleware` "Resolved shell ..." line, `UseHttpLogging`, Serilog request logging), each poll request produces a captured stdout line whose hub push immediately completes the next pending poll — a self-sustaining request storm paced only by round-trip time (PR #215 measured 1000+ requests within seconds).
+
+PR #215 addressed this with two situational defenses: making the WebSocket transport authenticate (so polling fallback rarely happens) and an `appsettings.json` filter silencing `CShells.AspNetCore.Middleware.ShellMiddleware`. Both are fragile in template scenarios: any consumer host that adds per-request Information logging, replaces `appsettings.json`, or sits behind a WebSocket-blocking proxy recreates the storm.
+
+The upstream `ConsoleLogStreaming.*` packages (1.0.0-preview.13) expose no batching or debounce option, but `ConsoleLogStreamingHost.ConfigureProvider` is a supported seam for substituting the `IConsoleLogProvider`. Both hub paths — the `StreamAsync` server-streaming method the Studio client uses and the pushed `SubscribeAsync` subscription — consume `IConsoleLogProvider.SubscribeAsync`, so decorating the provider covers every streaming path.
+
+`AddConsoleStreamStudioHost` therefore wraps the default in-memory provider in `PacedConsoleLogProvider`: live subscription items are released in batches at most once per 100 ms. A batch is the run of items synchronously available from the inner subscription; the release gate applies only when the buffer was drained and a new item arrives asynchronously. This caps any log-line/poll feedback loop at ~10 poll round-trips per second regardless of host logging configuration, while a genuine flood (which keeps the buffer non-empty and has no request feedback) is never throttled and bursts drain together with at most 100 ms added latency.
+
+Regression coverage lives in `PacedConsoleLogProviderTests` (fake-clock gate semantics) and `ConsoleStreamLongPollingStormTests`, whose in-process harness forces the long-polling transport against a host that writes a stdout line per request: the paced host stays at ~18 hub requests over 2 s where the same harness without pacing measures >100 requests per second.
+
+Contributing a native release-interval option upstream (github.com/valence-works/console-log-streaming) would let the damper move into the package; until then the app-side decorator is the defense that does not depend on logging filters staying in place.

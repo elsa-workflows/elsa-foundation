@@ -174,6 +174,20 @@ Time, randomness, and other nondeterministic data enter an expression as explici
 or through a separately specified deterministic runtime capability. Merely marking an expression
 read-only is not enough if its evaluator can reach mutable ambient state.
 
+**Amendment (issue #2717): workflow-instance metadata as a declared parameter.** An expression parameter
+binding may also read metadata of the running workflow instance: its correlation ID or its instance ID
+(`{"kind":"WorkflowInstance","member":"correlationId"|"instanceId"}`). This is a fifth canonical parameter
+kind beside literal, workflow request, variable and activity result; it is not an ambient accessor, because an
+expression sees the value only through the parameter it declares, and the binding-pure-v1 profile is unchanged.
+The value comes from committed runtime state, never live memory: the instance ID is the workflow execution ID,
+and the correlation ID is the latest committed identity durable value, which the workflow-started checkpoint
+seeds from the start request and a `SetCorrelationId` intrinsic replaces. An instance without a correlation ID
+binds JSON null. Like every input read, a change is seen by inputs materialized after it commits; snapshots
+already pinned are not re-evaluated, and a re-materialized snapshot (replay, a `While` pass) reads the same
+committed value. A runtime build that predates this kind cannot read an executable that uses it; before GA this
+is accepted, not mitigated. The Elsa 3 converter lowers `getCorrelationId()` and `getWorkflowInstanceId()` to it
+(spec 247).
+
 ### 6. Separate activity contracts, activations, and invocations
 
 An activity contract is immutable versioned metadata. A published executable pins the activity type
@@ -291,7 +305,7 @@ objectives remain requirements for the migration.
 | --- | --- | --- |
 | [Spec 006](../../specs/006-activity-construction-seam/spec.md), activity construction seam | Descriptor opacity, constructor registry, and DI activation | `InputArgument`/`OutputArgument` construction, wrapper binding, and workflow-value bags applied during construction |
 | [Spec 011](../../specs/011-runtime-value-binding-contract/spec.md), runtime value binding | Typed compiled bindings, deterministic resolution, and no history reads | Universal reference sources and concrete producer-execution identity in the executable; result lookup becomes structural and causal |
-| [Spec 015](../../specs/015-workflow-execution-slice/spec.md), workflow execution slice | Runtime invocation orchestration | The requirement that activity properties use `InputArgument<T>` |
+| [Spec 207](../../specs/207-workflow-execution-slice/spec.md), workflow execution slice | Runtime invocation orchestration | The requirement that activity properties use `InputArgument<T>` |
 | [Spec 029](../../specs/029-runtime-activity-invocation-boundary/spec.md), invocation boundary | Materialization before invocation and Design-free execution | `RuntimeMaterializedActivityInput.Argument` and seeding values into execution-local memory |
 | [Specs 060](../../specs/060-runtime-activity-output-capture/spec.md) and [061](../../specs/061-runtime-activity-input-resolution/spec.md), output capture and input resolution | Durable availability, same-scope consumption, and deterministic failure | Independently writable output slots and execution-local memory references |
 | [Spec 081](../../specs/081-typed-argument-model/spec.md), typed argument model | Alias-based `TypeReference`, collection shape, and shared type representation | Semantic unification of inputs, outputs, and variables; runtime `Variable<T>` is no longer memory-backed, and compiled metadata cannot fall back to assembly-qualified CLR names |

@@ -15,7 +15,7 @@ Infer the repo from `git remote -v` - `gh` does this automatically when run insi
 
 ## Claiming a unit before working on it
 
-See "Concurrent work claims" in [AGENTS.md](../../AGENTS.md) for when this applies.
+Claims follow [Issue Bus Lite][org-agents-claim]. See "Concurrent work claims" in [AGENTS.md](../../AGENTS.md#concurrent-work-claims) and [Claims](../contributing/repository-hygiene.md#claims) for the steps.
 
 - **Check for an existing claim**: `gh issue view <number> --comments`, then list the PRs whose branch names the issue:
 
@@ -26,19 +26,18 @@ See "Concurrent work claims" in [AGENTS.md](../../AGENTS.md) for when this appli
 
   An open PR whose branch names the issue is a claim even when no comment exists, and it is usually the fresher signal of the two. A branch name that collides with the one you were about to create is also evidence: stop and inspect before forcing it.
 
-- **Post a claim**: `gh issue comment <number> --body "Claiming <scope>, worktree <name>."`
-- **Release it**: comment again when the work ships or is dropped.
+- **Post a claim**: `gh issue comment <number> --body "claim: <worker> starting"`. Posting as your agent's app needs no prefix. Only when you post through the owner's account does your role tag come first: `--body "[Claude] claim: claude starting"`.
+- **Re-read and settle it**: `gh issue view <number> --comments`. If the earliest unabandoned claim is not yours, comment `claim-abandoned` and stop. If it is yours: `gh issue edit <number> --add-assignee @me --remove-label ready-for-agent`.
+- **Give it up**: comment `blocked: <reason>`, then `gh issue edit <number> --add-label blocked --remove-assignee @me` (use `needs:decision` instead of `blocked` when a decision is missing).
 
 ## Keeping an issue current
 
-An issue in a program is the record of progress, so comment at each transition rather than only at the end. See "Program bookkeeping" in [AGENTS.md](../../AGENTS.md).
+An issue in a program is the record of progress, so comment at each transition rather than only at the end. See [Program bookkeeping](../contributing/merging.md#program-bookkeeping).
 
-- Implementation started: branch name and the scope being taken.
-- PR opened: the link.
+- Implementation started: the claim comment.
+- PR opened: `pr: <url>`, then request review on the PR with `@elsa-workflows-bot review`.
 - Each review round: what was raised and how it resolved.
 - Merged or closed: the outcome, and the gate evidence if it is not already on the PR.
-
-Keep the program's project board Status and any labels in sync in the same pass. Each program has its own board, so resolve it with `gh project list --owner <owner>` rather than assuming a fixed number.
 
 ## Pull requests as a triage surface
 
@@ -59,3 +58,5 @@ Create a GitHub issue.
 ## When a skill says "fetch the relevant ticket"
 
 Run `gh issue view <number> --comments`.
+
+[org-agents-claim]: https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#claim

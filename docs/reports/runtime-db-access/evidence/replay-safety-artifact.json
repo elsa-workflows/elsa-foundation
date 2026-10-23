@@ -1,0 +1,62 @@
+{
+  "evidenceKind": "Inspection of a retained published artifact; no new execution or replay test",
+  "capturedUnder": "T09 / issue2399 / PR2486",
+  "captureSource": "81b7e94dee8dac452ac94e922c71b9496e324c14",
+  "auditSource": "c2dc3ac28c19e1c288697b885607a542b5def500",
+  "runtimeSourceComparison": "git diff --quiet 81b7e94dee8dac452ac94e922c71b9496e324c14 c2dc3ac28c19e1c288697b885607a542b5def500 -- src: passed",
+  "rawExportFile": "coalesced-50-default-export.json",
+  "rawExportSha256": "18cb5f3a4438a17b134015dc86592111728eb799cbaddb2f889018513314abf3",
+  "privateArchiveSha256": "e8a7851737940ca778991b94ca2c35e8e8f461af87e68fe63d2a42e2a8dd51e2",
+  "artifactHash": "sha256:edbd809ad0d4aa77620451b0939b4b2e85975df0c7b89a3654d1bb7188acf4d3",
+  "activityTypeKey": "Elsa.Activities.Http.Activities.WriteHttpResponse",
+  "schemaFingerprint": "sha256:feda9096ab92317ae329746bfc9b46ce408f6c153842fd84aa692229215a8651",
+  "profile": "External",
+  "profileRepresentation": "omitted, the pinned contract default",
+  "responseBindings": {
+    "Body": {
+      "source": "Expression",
+      "effectiveStorage": "Inline",
+      "literalPresence": null,
+      "literalValue": null,
+      "expression": {
+        "capabilityProfile": "binding-pure-v1",
+        "expression": "getVariable('referenceText')",
+        "language": "JavaScript",
+        "metadata": {},
+        "options": {},
+        "parameterConversionPlans": {},
+        "parameters": {},
+        "resultType": {
+          "id": "String",
+          "kind": "alias"
+        }
+      }
+    },
+    "ContentType": {
+      "source": "Literal",
+      "effectiveStorage": "Inline",
+      "literalPresence": "Present",
+      "literalValue": "text/plain",
+      "expression": null
+    },
+    "Headers": {
+      "source": "Literal",
+      "effectiveStorage": "Inline",
+      "literalPresence": "Absent",
+      "literalValue": null,
+      "expression": null
+    },
+    "StatusCode": {
+      "source": "Literal",
+      "effectiveStorage": "Inline",
+      "literalPresence": "Present",
+      "literalValue": 200,
+      "expression": null
+    }
+  },
+  "limits": [
+    "This export does not prove crash replay or changed-profile behavior.",
+    "The audit does not claim a class-level annotation is implemented or accepted.",
+    "Host evaluator implementation remains source-confirmed composition, not runtime object-identity evidence."
+  ]
+}

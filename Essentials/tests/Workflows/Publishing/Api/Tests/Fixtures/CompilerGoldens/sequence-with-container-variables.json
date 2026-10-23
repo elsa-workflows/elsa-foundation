@@ -1,0 +1,196 @@
+{
+  "compatibilityMetadata": [],
+  "createdAt": "2026-06-24T12:00:00\u002B00:00",
+  "dependencies": [],
+  "identity": {
+    "artifactHash": "sha256:8dafbfa0210f0b041483862a0b4a18088ff0418960e26d1342d7144cae5d7f4d",
+    "artifactId": "artifact-8dafbfa0210f",
+    "artifactVersion": "1.0.0",
+    "definitionId": "definition-1",
+    "definitionVersionId": "version-1"
+  },
+  "inputContract": {
+    "inputs": [],
+    "version": 1
+  },
+  "resumeTargets": [],
+  "rootActivity": {
+    "activityType": "Elsa.Activities.Sequence.Activities.Sequence",
+    "activityTypeVersion": "1.0.0",
+    "authoredActivityId": "sequence",
+    "childSlots": [
+      {
+        "activities": [
+          {
+            "activityType": "Test.WriteLine",
+            "activityTypeVersion": "1.0.0",
+            "authoredActivityId": "write-one",
+            "childSlots": [],
+            "descriptor": {
+              "consumerKey": "elsa.clr-activity",
+              "payload": {
+                "TypeAlias": "Elsa.Workflows.Publishing.Api.Tests.TestWriteLineActivity"
+              },
+              "schemaVersion": "1"
+            },
+            "executableNodeId": "write-one",
+            "inputBindings": [
+              {
+                "expression": null,
+                "inputName": "Text",
+                "key": "Text",
+                "literalValue": "one",
+                "metadata": [
+                  {
+                    "Key": "referenceKey",
+                    "Value": "Text"
+                  }
+                ],
+                "source": "Literal"
+              }
+            ],
+            "metadata": [
+              {
+                "Key": "authoredNodeId",
+                "Value": "write-one"
+              },
+              {
+                "Key": "executionType",
+                "Value": "Action"
+              }
+            ],
+            "structure": null
+          }
+        ],
+        "name": "Sequence.Activities"
+      }
+    ],
+    "descriptor": {
+      "consumerKey": "elsa.clr-activity",
+      "payload": {
+        "TypeAlias": "Elsa.Activities.Sequence.Activities.Sequence"
+      },
+      "schemaVersion": "1"
+    },
+    "executableNodeId": "sequence",
+    "inputBindings": [],
+    "metadata": [
+      {
+        "Key": "authoredNodeId",
+        "Value": "sequence"
+      },
+      {
+        "Key": "executionType",
+        "Value": "Action"
+      },
+      {
+        "Key": "runtime.acceptsRescheduledFaultedChild",
+        "Value": "true"
+      }
+    ],
+    "structure": {
+      "kind": "elsa.sequence.structure",
+      "payload": {
+        "activities": [
+          "write-one"
+        ],
+        "variables": [
+          {
+            "initialBinding": {
+              "activityResult": null,
+              "conversionPlan": {
+                "fingerprint": "sha256:8a808515a2d6c2c5dbfec984a78d50793bf8b384e2599e28ab2dd92cb030c3cb",
+                "limits": {
+                  "maxCollectionItems": 10000,
+                  "maxDepth": 64,
+                  "maxPayloadBytes": 1048576
+                },
+                "mode": "Auto",
+                "operation": "Identity",
+                "options": {},
+                "profile": null,
+                "schemaVersion": 1,
+                "sourceRepresentation": "TextValue",
+                "sourceType": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "targetType": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                }
+              },
+              "effectivePolicy": {
+                "isSensitive": false,
+                "lifecycle": 1,
+                "metadata": {},
+                "redactionMode": null,
+                "requiresEncryption": false,
+                "retentionPolicy": null,
+                "storage": 1
+              },
+              "expression": null,
+              "inputKey": "var-counter",
+              "inputName": "var-counter",
+              "literal": {
+                "externalReference": null,
+                "inlineValue": "0",
+                "policy": {
+                  "isSensitive": false,
+                  "lifecycle": 1,
+                  "metadata": {},
+                  "redactionMode": null,
+                  "requiresEncryption": false,
+                  "retentionPolicy": null,
+                  "storage": 1
+                },
+                "presence": 2,
+                "type": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                }
+              },
+              "literalValue": "0",
+              "metadata": {
+                "referenceKey": "var-counter"
+              },
+              "source": 0,
+              "targetType": {
+                "alias": "String",
+                "collectionKind": "Single",
+                "schema": null,
+                "schemaVersion": null
+              },
+              "variable": null,
+              "workflowRequest": null
+            },
+            "name": "Counter",
+            "policy": {
+              "isSensitive": false,
+              "lifecycle": 1,
+              "metadata": {},
+              "redactionMode": null,
+              "requiresEncryption": false,
+              "retentionPolicy": null,
+              "storage": 1
+            },
+            "type": {
+              "alias": "String",
+              "collectionKind": "Single",
+              "schema": null,
+              "schemaVersion": null
+            },
+            "variableKey": "var-counter"
+          }
+        ]
+      },
+      "schemaVersion": "1.0.0"
+    }
+  }
+}

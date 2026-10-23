@@ -1,0 +1,72 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+  </ItemGroup>
+
+  <!-- Self-hosts a real ASP.NET Core request pipeline over TestServer so the inbound HttpEndpoint middleware,
+       the stimulus router, the workflow start dispatcher, and the in-process agent are exercised end to end. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\src\Activities\Http\Elsa.Activities.Http.csproj" />
+    <!-- Elsa.Workflows.Runtime.Http provides the REAL route resolver, route-table startup task, and publish-time
+         index observer that keep the route table in step with the trigger index (exercised end to end here). The
+         IRouteTable/IRouteMatcher implementations are internal to Elsa.Http and composed via its HttpFeature's
+         reflective service loader, unsuitable for a focused fixture; production-equivalent doubles stand in for
+         just those two services (see RouteTableTestDoubles.cs). IRouteTable/IRouteMatcher/HttpRouteData contracts
+         come transitively via Elsa.Http.Core. -->
+    <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Http\Elsa.Workflows.Runtime.Http.csproj" />
+    <!-- The real HttpRequestBodyParser (spec 089 C, T005) so a JSON body's ParsedContent is exercised end to end. -->
+    <ProjectReference Include="..\..\..\..\src\Http\Elsa.Http\Elsa.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
+    <!-- The Sequence composite so spec 089 D scenario 2 can sequence two HttpEndpoints in one workflow. -->
+    <ProjectReference Include="..\..\..\..\src\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
+    <!-- The Flowchart composite so spec 238 can publish a Flowchart with two start-trigger HttpEndpoints. -->
+    <ProjectReference Include="..\..\..\..\src\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Events\Elsa.Events\Elsa.Events.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Expressions\Elsa.Expressions\Elsa.Expressions.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Primitives\Primitives\Elsa.Primitives.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\Testing\Elsa.Activities.Testing.csproj" />
+    <!-- The EF command budgets' reference workflows: a Parallel fork/join and JavaScript-bound values. -->
+    <ProjectReference Include="..\..\..\..\src\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Expressions\JavaScript\Elsa.Expressions.JavaScript\Elsa.Expressions.JavaScript.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../Fixtures/ResponseReplayHost/ResponseReplayObservation.Core.cs" Link="ResponseReplayObservation.Core.cs" />
+    <!-- Counts the runtime's EF commands for the command budgets. -->
+    <Compile Include="../../../Persistence/EntityFramework/Tests/CommandCaptureInterceptor.cs" Link="CommandCaptureInterceptor.cs" />
+    <None Include="../Fixtures/ResponseReplayHost/Fixtures/current-format-external-closure.json" Link="Fixtures/ResponseReplayHost/Fixtures/current-format-external-closure.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../Fixtures/ResponseReplayHost/Fixtures/current-format-external-manifest.json" Link="Fixtures/ResponseReplayHost/Fixtures/current-format-external-manifest.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../Fixtures/ResponseReplayHost/Fixtures/http-sync-default-external-closure.json" Link="Fixtures/ResponseReplayHost/Fixtures/http-sync-default-external-closure.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../Fixtures/ResponseReplayHost/Fixtures/http-sync-default-external-manifest.json" Link="Fixtures/ResponseReplayHost/Fixtures/http-sync-default-external-manifest.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="CommandBudgets/ef-command-budgets.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Fixtures/ResponseReplayHost/ResponseReplayHost.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>

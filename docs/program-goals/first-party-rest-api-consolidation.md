@@ -1,6 +1,8 @@
 # First-party REST API Consolidation
 
-Status: active.
+> **Parked until 2026-11-21** by [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus). No new child work until it is reactivated.
+
+Status: Parked until 2026-11-21 (ADR 0080 D0).
 
 Area: first-party REST endpoint authoring, shared authorization, dynamic route publication, and
 FastEndpoints-to-Minimal-API migration.
@@ -146,8 +148,8 @@ and routing gates are complete. Later module waves receive separate issues rathe
 - [Spike issue #1329](https://github.com/elsa-workflows/elsa-foundation/issues/1329)
 - [Spike report](../reports/endpoint-framework-authorization-spike-2026-08.md)
 - [Remaining migration waves](../reports/first-party-rest-api-migration-waves-2026-08.md)
-- [Foundation authorization contracts](../../src/essentials/Foundation/Identity/Core/Authorization/AuthorizationContracts.cs)
-- [Current endpoint security guard](../../tests/essentials/Architecture/EndpointSecurityTests.cs)
+- [Foundation authorization contracts](../../Essentials/src/Foundation/Identity/Core/Authorization/AuthorizationContracts.cs)
+- [Current endpoint security guard](../../Essentials/tests/Architecture/Tests/EndpointSecurityTests.cs)
 - [Feature Composition Readiness](feature-composition-readiness.md)
 - [Diagnostics Observability Readiness](diagnostics-observability-readiness.md)
 - [EF Core Persistence](ef-core-persistence.md)

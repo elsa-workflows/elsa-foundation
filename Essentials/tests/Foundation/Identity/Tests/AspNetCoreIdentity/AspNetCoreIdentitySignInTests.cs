@@ -1,0 +1,158 @@
+using Elsa.Foundation.Identity.AspNetCoreIdentity;
+using Elsa.Foundation.Identity.Authorization;
+using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.Core.Iam;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Seeding;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Seeding;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Services;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+
+namespace Elsa.Foundation.Identity.Tests.AspNetCoreIdentity;
+
+/// <summary>
+/// Password sign-in and seeding behaviour over the EF Core-backed substrate. Shared fixture builds the container;
+/// <see cref="CreateUserAsync"/> removes repeated user-creation arrange blocks.
+/// </summary>
+public sealed class AspNetCoreIdentitySignInTests : IAsyncLifetime
+{
+    private readonly AspNetCoreIdentityFixture _fixture = new();
+
+    [Fact]
+    public async Task PasswordSignIn_Succeeds_With_Valid_Credentials()
+    {
+        await CreateUserAsync("dave", "S3cret!pass", tenantId: AspNetCoreIdentityDefaults.DefaultTenantId);
+
+        await using var scope = _fixture.CreateScope();
+        var signIn = scope.ServiceProvider.GetRequiredService<IIdentitySignInService>();
+
+        var outcome = await signIn.PasswordSignInAsync("dave", "S3cret!pass", tenantId: null);
+
+        Assert.True(outcome.Succeeded);
+        Assert.Equal("authenticated", outcome.Session!.Status);
+        Assert.Equal(AspNetCoreIdentityDefaults.DefaultTenantId, outcome.Session.TenantId);
+    }
+
+    [Fact]
+    public async Task PasswordSignIn_Fails_With_Bad_Password()
+    {
+        await CreateUserAsync("erin", "GoodPass!1", tenantId: AspNetCoreIdentityDefaults.DefaultTenantId);
+
+        await using var scope = _fixture.CreateScope();
+        var signIn = scope.ServiceProvider.GetRequiredService<IIdentitySignInService>();
+
+        var outcome = await signIn.PasswordSignInAsync("erin", "wrong-password", tenantId: null);
+
+        Assert.False(outcome.Succeeded);
+        Assert.Null(outcome.Session);
+    }
+
+    [Fact]
+    public async Task PasswordSignIn_Fails_For_Unknown_User()
+    {
+        await using var scope = _fixture.CreateScope();
+        var signIn = scope.ServiceProvider.GetRequiredService<IIdentitySignInService>();
+
+        // An unknown username still returns the same generic Failure. (The service also runs a dummy password
+        // verification on this path — see AspNetCoreIdentitySignInService — to equalize timing and close the
+        // username-enumeration timing oracle; a timing assertion would be inherently flaky, so this asserts the
+        // observable contract: unknown user → Failure, indistinguishable from a wrong password.)
+        var outcome = await signIn.PasswordSignInAsync("nobody", "whatever", tenantId: null);
+
+        Assert.False(outcome.Succeeded);
+    }
+
+    [Fact]
+    public async Task PasswordSignIn_Fails_For_A_Disabled_User_Until_It_Is_Enabled_Again()
+    {
+        var user = await CreateUserAsync("gwen", "S3cret!pass", tenantId: AspNetCoreIdentityDefaults.DefaultTenantId);
+
+        await SetStatusAsync(user, UserStatus.Disabled);
+        var disabled = await PasswordSignInAsync("gwen", "S3cret!pass");
+        await SetStatusAsync(user, UserStatus.Active);
+        var enabled = await PasswordSignInAsync("gwen", "S3cret!pass");
+
+        Assert.False(disabled.Succeeded);
+        Assert.Null(disabled.Session);
+        Assert.True(enabled.Succeeded);
+    }
+
+    [Fact]
+    public async Task ReconstructedCookiePrincipal_UsesTrustedRuntimeTypeAndMarker()
+    {
+        await CreateUserAsync("cookie-user", "S3cret!pass", tenantId: AspNetCoreIdentityDefaults.DefaultTenantId);
+
+        await using var scope = _fixture.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AspNetCoreIdentityUser>>();
+        var user = await userManager.FindByNameAsync("cookie-user");
+        var principal = await scope.ServiceProvider
+            .GetRequiredService<IUserClaimsPrincipalFactory<AspNetCoreIdentityUser>>()
+            .CreateAsync(user!);
+        var identity = Assert.Single(principal.Identities);
+
+        Assert.Equal(AspNetCoreIdentityDefaults.CookieScheme, identity.AuthenticationType);
+        Assert.Equal("v1", Assert.Single(identity.FindAll(IdentityClaimTypes.Normalized)).Value);
+        Assert.True(scope.ServiceProvider.GetRequiredService<NormalizedPrincipalValidator>()
+            .TryGetNormalizedPrincipal(principal, out _));
+
+        var options = scope.ServiceProvider.GetRequiredService<IOptions<FoundationIdentityOptions>>().Value;
+        Assert.Contains(AspNetCoreIdentityDefaults.CookieScheme, options.NormalizedAuthenticationTypes);
+    }
+
+    [Fact]
+    public async Task Seeder_Creates_Admin_That_Can_Sign_In_With_Admin_Permissions()
+    {
+        // The seed account is supplied from configuration; feed the seeder explicit options (the fixture host
+        // runs with dev/demo off and registers none of its own).
+        var seedOptions = TestAdmin.SeedOptions();
+        seedOptions.IsDevelopmentSeed = false;
+        var seeder = ActivatorUtilities.CreateInstance<EfCoreIdentitySeeder>(_fixture.Services, Options.Create(seedOptions));
+        await seeder.StartAsync(CancellationToken.None);
+
+        await using var scope = _fixture.CreateScope();
+        var signIn = scope.ServiceProvider.GetRequiredService<IIdentitySignInService>();
+
+        var outcome = await signIn.PasswordSignInAsync(TestAdmin.UserName, TestAdmin.Password, tenantId: null);
+
+        Assert.True(outcome.Succeeded);
+        // The admin role is granted every catalog permission; a representative one should be projected.
+        Assert.Contains("identity/users:manage", outcome.Session!.Permissions);
+    }
+
+    private async Task<SignInOutcome> PasswordSignInAsync(string username, string password)
+    {
+        await using var scope = _fixture.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<IIdentitySignInService>().PasswordSignInAsync(username, password, tenantId: null);
+    }
+
+    private async Task SetStatusAsync(AspNetCoreIdentityUser user, UserStatus status)
+    {
+        await using var scope = _fixture.CreateScope();
+        Assert.True(await scope.ServiceProvider.GetRequiredService<IUserStore>().SetStatusAsync(user.TenantId, user.Id, status));
+    }
+
+    private async Task<AspNetCoreIdentityUser> CreateUserAsync(string username, string password, string tenantId)
+    {
+        await using var scope = _fixture.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AspNetCoreIdentityUser>>();
+
+        var user = new AspNetCoreIdentityUser
+        {
+            Id = Guid.NewGuid().ToString("n"),
+            UserName = username,
+            Email = $"{username}@example.com",
+            TenantId = tenantId
+        };
+
+        var result = await userManager.CreateAsync(user, password);
+        Assert.True(result.Succeeded, string.Join("; ", result.Errors.Select(e => e.Description)));
+        return user;
+    }
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    // xUnit v2 calls IAsyncLifetime.DisposeAsync on a test class; it never calls IAsyncDisposable.DisposeAsync.
+    public async Task DisposeAsync() => await _fixture.DisposeAsync();
+}

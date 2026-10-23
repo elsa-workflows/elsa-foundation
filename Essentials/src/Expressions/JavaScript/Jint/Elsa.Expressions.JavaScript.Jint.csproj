@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Jint" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+	  <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Elsa.Expressions.JavaScript\Services\JavaScriptBindingSyntax.cs" Link="Shared\JavaScriptBindingSyntax.cs" />
+    <ProjectReference Include="..\Core\Elsa.Expressions.JavaScript.Core.csproj" />
+  </ItemGroup>
+
+</Project>

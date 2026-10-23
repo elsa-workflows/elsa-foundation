@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Relational EF Core persistence for durable finite-positive Rules runs.</Description>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Core/Elsa.Rules.Persistence.Core.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj" />
+  </ItemGroup>
+</Project>

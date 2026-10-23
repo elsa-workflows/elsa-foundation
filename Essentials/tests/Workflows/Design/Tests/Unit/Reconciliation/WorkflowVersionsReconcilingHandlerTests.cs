@@ -1,0 +1,199 @@
+using Elsa.Primitives.Contracts;
+using Elsa.Primitives.Versioning;
+using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Services;
+using Elsa.Workflows.Design.Reconciliation.Contracts;
+using Elsa.Workflows.Design.Core.Reconciliation;
+using Elsa.Workflows.Design.Reconciliation.Handlers;
+using Elsa.Workflows.Design.Reconciliation.Models;
+using Elsa.Workflows.Design.Reconciliation.Services;
+using Xunit;
+
+namespace Elsa.Workflows.Design.Tests.Unit.Reconciliation;
+
+/// <summary>
+/// Branch coverage for the universal reconciliation handler. Cases:
+/// no sources, single source with multiple entries, multi-source aggregation, source with
+/// no entries.
+/// </summary>
+public sealed class WorkflowVersionsReconcilingHandlerTests
+{
+    [Fact]
+    public async Task Empty_sources_collection_contributes_nothing()
+    {
+        var handler = NewHandler();
+        var evt = new WorkflowVersionsReconciling();
+
+        await handler.Handle(evt, CancellationToken.None);
+
+        Assert.Empty(evt.Versions);
+    }
+
+    [Fact]
+    public async Task Source_with_no_entries_contributes_nothing()
+    {
+        var source = new StubSource("Test", "test-1", entries: []);
+        var handler = NewHandler(source);
+        var evt = new WorkflowVersionsReconciling();
+
+        await handler.Handle(evt, CancellationToken.None);
+
+        Assert.Empty(evt.Versions);
+    }
+
+    [Fact]
+    public async Task Single_source_contributes_one_version_per_entry()
+    {
+        var entries = new[]
+        {
+            Entry("wf-a", "Workflow A", version: "1.0.0"),
+            Entry("wf-b", "Workflow B", version: "2.0.0"),
+        };
+        var source = new StubSource("Json", "test-source", entries);
+        var handler = NewHandler(source);
+        var evt = new WorkflowVersionsReconciling();
+
+        await handler.Handle(evt, CancellationToken.None);
+
+        var versions = evt.Versions.ToList();
+        Assert.Equal(2, versions.Count);
+        Assert.Equal("wf-a", versions[0].Definition.Id);
+        Assert.Equal("Workflow A", versions[0].Definition.Name);
+        Assert.Equal("1.0.0", versions[0].Version);
+        Assert.Equal("wf-b", versions[1].Definition.Id);
+        Assert.Equal("2.0.0", versions[1].Version);
+    }
+
+    [Fact]
+    public async Task Entry_without_DefinitionId_gets_a_freshly_minted_id()
+    {
+        var source = new StubSource("Json", "test", [Entry(null, "Anon", version: "1.0.0")]);
+        var handler = NewHandler(source);
+        var evt = new WorkflowVersionsReconciling();
+
+        await handler.Handle(evt, CancellationToken.None);
+
+        var contributed = Assert.Single(evt.Versions);
+        Assert.False(string.IsNullOrWhiteSpace(contributed.Definition.Id));
+        Assert.NotEqual(contributed.Id, contributed.Definition.Id);
+    }
+
+    [Fact]
+    public async Task Every_node_contributes_a_version_under_the_id_its_definition_and_sort_key_derive()
+    {
+        // Each node generates its own ids, but the version id must agree, or two nodes' materialization requests for
+        // the same version conflict and the second node's start fails (#2189). Build metadata does not change the sort key.
+        var entry = Entry("wf-a", "Workflow A", version: "1.0.0+build.7");
+        var first = new WorkflowVersionsReconciling();
+        var second = new WorkflowVersionsReconciling();
+
+        await NewHandler("node-1", new StubSource("Json", "a", [entry])).Handle(first, CancellationToken.None);
+        await NewHandler("node-2", new StubSource("Json", "a", [entry])).Handle(second, CancellationToken.None);
+
+        var expected = WorkflowReconciliationVersionIds.For("wf-a", SemVer.ToSortKey("1.0.0"));
+        Assert.Equal(expected, Assert.Single(first.Versions).Id);
+        Assert.Equal(expected, Assert.Single(second.Versions).Id);
+    }
+
+    [Fact]
+    public async Task Multiple_sources_aggregate_their_entries()
+    {
+        var sourceA = new StubSource("Json", "a", [Entry("wf-a", "Workflow A", version: "1.0.0")]);
+        var sourceB = new StubSource("Workflow", "b", [Entry("wf-b", "Workflow B", version: "1.0.0")]);
+        var handler = NewHandler(sourceA, sourceB);
+        var evt = new WorkflowVersionsReconciling();
+
+        await handler.Handle(evt, CancellationToken.None);
+
+        Assert.Equal(2, evt.Versions.Count);
+        Assert.Contains(evt.Versions, v => v.Definition.Id == "wf-a");
+        Assert.Contains(evt.Versions, v => v.Definition.Id == "wf-b");
+    }
+
+    [Fact]
+    public async Task Claims_carry_source_identity_and_publish_request_per_entry()
+    {
+        // Provenance is not persisted on design entities: the claim beside each version is the only
+        // carrier of (SourceId, PublishRequested) into the post-pass publish step.
+        var sourceA = new StubSource("Json", "a", [Entry("wf-a", "Workflow A", version: "1.0.0")], requestsPublication: true);
+        var sourceB = new StubSource("git", "b", [Entry("wf-b", "Workflow B", version: "2.0.0")]);
+        var handler = NewHandler(sourceA, sourceB);
+        var evt = new WorkflowVersionsReconciling();
+
+        await handler.Handle(evt, CancellationToken.None);
+
+        Assert.Equal(evt.Versions.Count, evt.Claims.Count);
+        var claimA = Assert.Single(evt.Claims, c => c.DefinitionId == "wf-a");
+        Assert.Equal("a", claimA.SourceId);
+        Assert.Equal("Json", claimA.SourceKind);
+        Assert.Equal("1.0.0", claimA.Version);
+        Assert.True(claimA.PublishRequested);
+        Assert.False(claimA.Deleted);
+        var claimB = Assert.Single(evt.Claims, c => c.DefinitionId == "wf-b");
+        Assert.Equal("b", claimB.SourceId);
+        Assert.False(claimB.PublishRequested);
+    }
+
+    [Fact]
+    public async Task Claim_records_the_factory_generated_id_when_the_entry_omits_DefinitionId()
+    {
+        var source = new StubSource("Json", "test", [Entry(null, "Anon", version: "1.0.0")], requestsPublication: true);
+        var handler = NewHandler(source);
+        var evt = new WorkflowVersionsReconciling();
+
+        await handler.Handle(evt, CancellationToken.None);
+
+        var version = Assert.Single(evt.Versions);
+        var claim = Assert.Single(evt.Claims);
+        // The claim must point at the definition the pass will actually materialize — the generated id.
+        Assert.Equal(version.Definition.Id, claim.DefinitionId);
+    }
+
+    [Fact]
+    public async Task Claim_preserves_the_entry_deletion_marker()
+    {
+        var deleted = Entry("wf-del", "Deleted", version: "1.0.0") with { Deleted = true };
+        var handler = NewHandler(new StubSource("Json", "test", [deleted], requestsPublication: true));
+        var evt = new WorkflowVersionsReconciling();
+
+        await handler.Handle(evt, CancellationToken.None);
+
+        var claim = Assert.Single(evt.Claims);
+        Assert.True(claim.Deleted);
+    }
+
+    private static WorkflowVersionsReconcilingHandler NewHandler(params IWorkflowReconciliationSource[] sources) => NewHandler("gen", sources);
+
+    private static WorkflowVersionsReconcilingHandler NewHandler(string idPrefix, params IWorkflowReconciliationSource[] sources)
+    {
+        var idGenerator = new SequentialIdGenerator(idPrefix);
+        return new WorkflowVersionsReconcilingHandler(
+            new WorkflowDefinitionFactory(idGenerator),
+            new WorkflowDefinitionVersionFactory(idGenerator),
+            sources);
+    }
+
+    private static WorkflowVersionReconciliationModel Entry(string? definitionId, string name, string version) => new(
+        DefinitionId: definitionId,
+        Name: name,
+        Description: null,
+        Version: version,
+        State: new WorkflowDefinitionState([], null, [], [], null)
+    );
+
+    private sealed class StubSource(string kind, string id, IEnumerable<WorkflowVersionReconciliationModel> entries, bool requestsPublication = false) : IWorkflowReconciliationSource
+    {
+        public string SourceKind { get; } = kind;
+        public string SourceId { get; } = id;
+        public bool RequestsPublication { get; } = requestsPublication;
+        private readonly IEnumerable<WorkflowVersionReconciliationModel> _entries = entries;
+        public ValueTask<IEnumerable<WorkflowVersionReconciliationModel>> Read(CancellationToken cancellationToken)
+            => ValueTask.FromResult(_entries);
+    }
+
+    private sealed class SequentialIdGenerator(string prefix) : IIdentityGenerator
+    {
+        private int _i;
+        public string Generate() => $"{prefix}-{Interlocked.Increment(ref _i)}";
+    }
+}

@@ -1,0 +1,158 @@
+using CShells.Features;
+using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Events.Core.Extensions;
+using Elsa.Mediator.Core.Extensions;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
+using Elsa.Tasks.Core;
+using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Services;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Core.Reconciliation;
+using Elsa.Workflows.Publishing.Handlers;
+using Elsa.Workflows.Publishing.Services;
+using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Workflows.Publishing.Core.Events;
+using Elsa.Workflows.Publishing.Core.Services;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Extensions;
+using Elsa.Workflows.Runtime.Services.Executables;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+
+namespace Elsa.Workflows.Publishing;
+
+/// <summary>
+/// The endpoint-free publishing ENGINE feature. It owns the auth-free workflow-publish + compile
+/// logic (the executable compiler and its collaborators, the publication activator/stores, and the
+/// workflow-publish orchestration handler) so a runtime node can compose the publish capability
+/// without mounting any HTTP endpoints. Authorization is a transport concern and lives in the
+/// <c>WorkflowsPublishingApi</c> feature, not here.
+/// </summary>
+/// <remarks>
+/// The Api feature obtains the engine by <c>DependsOn</c> composition, not
+/// inheritance: it is its own <c>IWebShellFeature</c> and declares
+/// <c>DependsOn WorkflowsPublishing</c>.
+/// </remarks>
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Workflows")]
+[ManifestFeatureCategory("Publishing")]
+[ShellFeature(
+    name: "WorkflowsPublishing",
+    DisplayName = "Workflows Publishing",
+    Description = "Endpoint-free engine that compiles designed workflow definitions into canonical executables.",
+    DependsOn = new object[] { "WorkflowsRuntimeTriggers", "Events" }
+)]
+public class WorkflowsPublishingFeature : IShellFeature
+{
+    public virtual void ConfigureServices(IServiceCollection services)
+    {
+        var assembly = GetType().Assembly;
+
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityContractStorageDriverProvider, RuntimeActivityContractStorageDriverProvider>());
+        services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
+        services.TryAddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
+        services.TryAddScoped<IWorkflowExecutableSourceReferenceReader>(serviceProvider =>
+            serviceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>());
+        services.TryAddScoped<IExecutableActivityTemplateReader>(serviceProvider =>
+            serviceProvider.GetRequiredService<IExecutableActivityTemplateStore>());
+        // Only claim registrations that this feature actually added, for the reason given at the policy and
+        // projection-intent stores below.
+        PublishingPersistenceFamilyBackend.TryAddInMemory<IPublicationRecordStore, InMemoryPublicationRecordStore>(
+            services,
+            PublishingPersistenceFamilyBackend.PublicationRecords,
+            PublishingPersistenceFamilyBackend.PublicationRecordContracts);
+        var hadPolicyStore = services.Any(service => service.ServiceType == typeof(IPublicationPolicyStore));
+        var hadProjectionIntentStore = services.Any(service => service.ServiceType == typeof(IPublicationProjectionIntentStore));
+        services.TryAddSingleton<IPublicationPolicyStore, InMemoryPublicationPolicyStore>();
+        services.TryAddSingleton<IPublicationProjectionIntentStore, InMemoryPublicationProjectionIntentStore>();
+        // Only claim registrations that this feature actually added. A host-provided policy or intent
+        // descriptor must remain foreign so durable-provider registration can fail closed rather than
+        // silently treating custom behavior as the in-memory backend.
+        if (!hadPolicyStore && !hadProjectionIntentStore && PublicationPolicyProjectionStoreBackend.Find(services) is null)
+        {
+            PublicationPolicyProjectionStoreBackend.Register(
+                services,
+                new PublicationPolicyProjectionStoreBackend(
+                    PublicationPolicyProjectionStoreBackend.InMemory,
+                    [
+                        services.Last(service => service.ServiceType == typeof(IPublicationPolicyStore)),
+                        services.Last(service => service.ServiceType == typeof(IPublicationProjectionIntentStore))
+                    ]));
+        }
+        // Deterministic policies hold no request or persistence state and remain safe singletons.
+        services.TryAddSingleton<IPublicationPolicyResolver, PublicationPolicyResolver>();
+        services.TryAddSingleton<IPublicationPreflightService, PublicationPreflightService>();
+        // Runtime owns activation authority, lifecycle coordination, and serving projections. The runtime core
+        // feature normally supplies these services; keep provider-neutral fallbacks here for engine-only
+        // compositions that do not mount the complete runtime feature.
+        services.AddWorkflowActivationDefaults();
+        // Publishing operations consume provider-overridable stores. Durable providers register those stores as
+        // scoped services, so their aggregators must share the request scope instead of capturing it globally.
+        services.TryAddScoped<IPublicationActivator, PublicationActivator>();
+        // A process that stopped after a slot transition leaves the journal behind the slot; shell start brings it
+        // back into line on every node (#2223).
+        services.TryAddScoped<OccupiedActivationSlots>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, CompleteInterruptedPublicationsStartupTask>());
+        services.TryAddScoped<WorkflowPublicationPreflightReader>();
+        services.TryAddScoped<PublicationSnapshotReviewService>();
+        if (!services.Any(service => service.ServiceType == typeof(IPublicationSnapshotReviewStore)))
+        {
+            services.AddSingleton<IPublicationSnapshotReviewStore, InMemoryPublicationSnapshotReviewStore>();
+            PublicationSnapshotReviewStoreBackend.Register(
+                services,
+                new PublicationSnapshotReviewStoreBackend(
+                    PublicationSnapshotReviewStoreBackend.InMemory,
+                    services.Last(service => service.ServiceType == typeof(IPublicationSnapshotReviewStore))));
+        }
+        PublishingPersistenceFamilyBackend.TryAddInMemory<IActivityPublicationReceiptStore, InMemoryActivityPublicationReceiptStore>(
+            services,
+            PublishingPersistenceFamilyBackend.ActivityPublicationReceipts,
+            PublishingPersistenceFamilyBackend.ActivityPublicationReceiptContracts);
+        // Fallback layout store for in-memory compositions; a design-persistence provider overrides this with its
+        // own registration so the publish flow copies the real layout sidecar onto the source reference.
+        services.TryAddScoped<IWorkflowDefinitionVersionLayoutStore, EmptyWorkflowDefinitionVersionLayoutStore>();
+        services.TryAddScoped<IActivityStructureService, DefaultActivityStructureService>();
+        // Permanent definition deletion must not strand a live publication: the guard is contributed into the
+        // design-persistence delete commands and vetoes while a slot is active or a Published reference is live.
+        // It is also the publication check permanent deletion requires, so a host that does not compose this
+        // feature refuses the operation outright instead of deleting unverified (#1283).
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDefinitionPermanentDeletionGuard, PublishedWorkflowDeletionGuard>());
+        // Design.Api registers a null-object so NativeEndpoints can resolve the lookup on a design-only
+        // host. Replace it here so a composed Publishing host actually distinguishes Retracted/Retired.
+        services.Replace(ServiceDescriptor.Scoped<IWorkflowDefinitionPublicationStateLookup, WorkflowDefinitionPublicationStateLookup>());
+        // #418: WorkflowExecutableCompiler decomposition collaborators. Registered at the compiler's own
+        // scoped lifetime so each is independently resolvable, replaceable, and unit-testable.
+        services.TryAddSingleton<IValueConversionProfileRegistry>(BuiltInValueConversionProfileRegistry.Instance);
+        services.TryAddScoped<ValueConversionPlanResolver>();
+        services.TryAddScoped<ActivityResultConversionPlanLinker>();
+        services.TryAddScoped<RuntimeInputBindingCompiler>();
+        services.TryAddScoped<RuntimeOutputCaptureCompiler>();
+        services.TryAddScoped<Elsa.Workflows.Publishing.Services.WorkflowExecutableHasher>();
+        services.TryAddScoped<ActivityTreeProjector>();
+        services.TryAddScoped<WorkflowExecutableAuthoredInputsSidecar>();
+        services.TryAddScoped<ExecutableNodeCompiler>();
+        // Spec 261 FR-513: the side-effect profile the compiler would compile, for design-time validators.
+        services.TryAddScoped<IActivitySideEffectProfileReader, ActivitySideEffectProfileReader>();
+        services.TryAddScoped<WorkflowExecutablePlacementSidecarContext>();
+        services.TryAddSingleton<IActivityTemplateProviderCompilerRegistry, ActivityTemplateProviderCompilerRegistry>();
+        services.TryAddSingleton<IActivityTemplateDependencyDiscovererRegistry, ActivityTemplateDependencyDiscovererRegistry>();
+        services.TryAddSingleton<IActivityPlacementHasher, Sha256ActivityPlacementHasher>();
+        services.TryAddScoped<ActivityTemplatePlacer>();
+        services.TryAddScoped<IActivityTemplateCompiler, ActivityTemplateCompiler>();
+        services.TryAddSingleton<IActivityTemplateAdmissionPolicy, AcceptAllActivityTemplateAdmissionPolicy>();
+        services.TryAddScoped<IExecutableNodeMetadataEnricher, ExecutableNodeMetadataEnricher>();
+        // The export producer is destination-agnostic. It reads the executable closure and provenance, while
+        // transport features contribute one or more IWorkflowArtifactExportTarget implementations.
+        services.TryAddScoped<IWorkflowArtifactClosureFactory, WorkflowArtifactClosureFactory>();
+        services.AddEventHandler<ExecutableCompilationCollecting, CollectExecutableCompilation>();
+        services.AddEventHandler<ExecutableNodeMetadataCollecting, CollectExecutableNodeMetadata>();
+        // Publish-on-reconcile: independent subscriber on the Design-side reconcile completion
+        // event. Only acts on claims whose source opted in (PublishOnReconcile); never throws.
+        services.AddEventHandler<WorkflowVersionsReconciled, PublishReconciledWorkflowVersions>();
+        services.TryAddScoped<IWorkflowExecutableCompiler, WorkflowExecutableCompiler>();
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddRequestHandlersFrom(assembly);
+    }
+}

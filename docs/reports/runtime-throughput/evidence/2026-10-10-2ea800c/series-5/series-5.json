@@ -1,0 +1,983 @@
+{
+  "schema": "elsa.runtime-throughput-ramp/1",
+  "issue": "https://github.com/elsa-workflows/elsa-foundation/issues/2534",
+  "authority": "Scoped ADR 0073 D7 exception, Program #2531 (owner decision 2026-10-09). One-off evidence; not a gate.",
+  "capturedAtUtc": "2026-10-10T03:19:16.7581510Z",
+  "scriptHead": "2ea800cd5c17232cbfd50e0115344bab0ec79056",
+  "candidateSha": "2ea800cd5c17232cbfd50e0115344bab0ec79056",
+  "baseUrl": "http://127.0.0.1:54537",
+  "fixture": "Http16",
+  "cadence": "Coalesced",
+  "persistedDiagnosticsLabel": "On",
+  "definitionId": "14EPqOtfNxr",
+  "versionId": "14EPqOy028G",
+  "route": "runtime-throughput-2534/http16-cef96b2678/transform",
+  "clientMachine": {
+    "processorCount": 8,
+    "os": "Unix 7.0.0.1017",
+    "pwsh": "7.6.6"
+  },
+  "protocol": {
+    "levels": [
+      1,
+      2,
+      4,
+      8,
+      16,
+      32,
+      64
+    ],
+    "warmupSeconds": 15,
+    "windowSeconds": 60,
+    "plateauThreshold": 0.05,
+    "sampleIntervalSeconds": 5,
+    "settleTimeoutSeconds": 300,
+    "throughputDefinition": "Successful (HTTP 200 + exact body) requests completed inside the measured window / window seconds.",
+    "population": "All attempts retained; no retry or replacement. Any failure or unsettled instance invalidates the step and stops the series."
+  },
+  "samplersAvailable": {
+    "hostProcess": true,
+    "postgres": true,
+    "dotnetCounters": true,
+    "hostLog": true
+  },
+  "stopReason": "InvalidStepAtClients4",
+  "peakValidStep": {
+    "clients": 2,
+    "successfulExecutionsPerSecond": 2.483
+  },
+  "steps": [
+    {
+      "clients": 1,
+      "warmupAttempts": 38,
+      "measuredAttempts": 137,
+      "completedInWindow": 136,
+      "succeededInWindow": 136,
+      "failedAttemptsIncludingWarmup": 0,
+      "statusHistogram": [
+        {
+          "status": "200",
+          "count": 175
+        }
+      ],
+      "successfulExecutionsPerSecond": 2.267,
+      "gainVersusPreviousLevel": null,
+      "exploratoryLatencyMilliseconds": {
+        "p50": 448.20180000000255,
+        "p95": 735.734199999999,
+        "note": "Closed-loop latency of successful in-window requests; exploratory, not an objective."
+      },
+      "hostCpuUtilizationOfAllCores": 0.084,
+      "sqliteBusyOrConcurrencyLogLinesAdded": 0,
+      "dotnetCountersFile": "series-5.counters.c1.json",
+      "samples": [
+        {
+          "offsetSeconds": 0.0,
+          "load": {
+            "oneMinute": 1.49,
+            "fiveMinute": 2.25
+          },
+          "hostCpuSeconds": 49.6,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 4
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 5.1,
+          "load": {
+            "oneMinute": 1.77,
+            "fiveMinute": 2.3
+          },
+          "hostCpuSeconds": 54.81,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 3
+              },
+              {
+                "key": "IO:WALSync:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 10.2,
+          "load": {
+            "oneMinute": 1.79,
+            "fiveMinute": 2.29
+          },
+          "hostCpuSeconds": 58.73,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 3
+              },
+              {
+                "key": "IO:WALSync:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 15.3,
+          "load": {
+            "oneMinute": 1.97,
+            "fiveMinute": 2.32
+          },
+          "hostCpuSeconds": 63.23,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 3
+              },
+              {
+                "key": "IO:WALSync:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 20.3,
+          "load": {
+            "oneMinute": 2.13,
+            "fiveMinute": 2.35
+          },
+          "hostCpuSeconds": 66.37,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 4
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 25.4,
+          "load": {
+            "oneMinute": 2.36,
+            "fiveMinute": 2.39
+          },
+          "hostCpuSeconds": 69.8,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 3
+              },
+              {
+                "key": "IO:WALSync:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 30.5,
+          "load": {
+            "oneMinute": 2.41,
+            "fiveMinute": 2.4
+          },
+          "hostCpuSeconds": 72.74,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 3
+              },
+              {
+                "key": "IO:WALSync:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 35.6,
+          "load": {
+            "oneMinute": 2.38,
+            "fiveMinute": 2.4
+          },
+          "hostCpuSeconds": 75.9,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 3
+              },
+              {
+                "key": "IO:WALSync:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 40.6,
+          "load": {
+            "oneMinute": 2.35,
+            "fiveMinute": 2.39
+          },
+          "hostCpuSeconds": 79.17,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 3
+              },
+              {
+                "key": "IO:WALSync:active",
+                "count": 1
+              },
+              {
+                "key": "LWLock:WALWrite:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 45.7,
+          "load": {
+            "oneMinute": 2.48,
+            "fiveMinute": 2.42
+          },
+          "hostCpuSeconds": 82.03,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 4
+              },
+              {
+                "key": "CPU/none:-:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 50.8,
+          "load": {
+            "oneMinute": 2.44,
+            "fiveMinute": 2.41
+          },
+          "hostCpuSeconds": 84.78,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 4
+              },
+              {
+                "key": "IO:WALSync:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 55.9,
+          "load": {
+            "oneMinute": 2.76,
+            "fiveMinute": 2.48
+          },
+          "hostCpuSeconds": 87.79,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 4
+              },
+              {
+                "key": "IO:WALSync:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        }
+      ],
+      "settlement": {
+        "expectedInstanceCount": 175,
+        "instanceCount": 175,
+        "notCompletedCount": 0,
+        "incidentInstanceCount": 0,
+        "settled": true
+      },
+      "validForSuccessfulThroughput": true
+    },
+    {
+      "clients": 2,
+      "warmupAttempts": 45,
+      "measuredAttempts": 151,
+      "completedInWindow": 149,
+      "succeededInWindow": 149,
+      "failedAttemptsIncludingWarmup": 0,
+      "statusHistogram": [
+        {
+          "status": "200",
+          "count": 196
+        }
+      ],
+      "successfulExecutionsPerSecond": 2.483,
+      "gainVersusPreviousLevel": 0.0956,
+      "exploratoryLatencyMilliseconds": {
+        "p50": 792.4311999999991,
+        "p95": 1370.4511999999959,
+        "note": "Closed-loop latency of successful in-window requests; exploratory, not an objective."
+      },
+      "hostCpuUtilizationOfAllCores": 0.088,
+      "sqliteBusyOrConcurrencyLogLinesAdded": 0,
+      "dotnetCountersFile": "series-5.counters.c2.json",
+      "samples": [
+        {
+          "offsetSeconds": 0.0,
+          "load": {
+            "oneMinute": 2.77,
+            "fiveMinute": 2.5
+          },
+          "hostCpuSeconds": 103.09,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 6
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 5.1,
+          "load": {
+            "oneMinute": 2.79,
+            "fiveMinute": 2.51
+          },
+          "hostCpuSeconds": 106.85,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 6
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 10.2,
+          "load": {
+            "oneMinute": 2.89,
+            "fiveMinute": 2.53
+          },
+          "hostCpuSeconds": 110.86,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 5
+              },
+              {
+                "key": "CPU/none:-:active",
+                "count": 1
+              },
+              {
+                "key": "IO:WALSync:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 15.3,
+          "load": {
+            "oneMinute": 2.9,
+            "fiveMinute": 2.54
+          },
+          "hostCpuSeconds": 114.71,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 6
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 20.4,
+          "load": {
+            "oneMinute": 2.83,
+            "fiveMinute": 2.53
+          },
+          "hostCpuSeconds": 118.42,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 4
+              },
+              {
+                "key": "IO:WALSync:active",
+                "count": 1
+              },
+              {
+                "key": "LWLock:WALWrite:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 25.4,
+          "load": {
+            "oneMinute": 3.0,
+            "fiveMinute": 2.57
+          },
+          "hostCpuSeconds": 121.96,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 6
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 30.5,
+          "load": {
+            "oneMinute": 3.08,
+            "fiveMinute": 2.59
+          },
+          "hostCpuSeconds": 125.52,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 4
+              },
+              {
+                "key": "IO:WALSync:active",
+                "count": 1
+              },
+              {
+                "key": "LWLock:WALWrite:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 35.6,
+          "load": {
+            "oneMinute": 3.15,
+            "fiveMinute": 2.62
+          },
+          "hostCpuSeconds": 129.46,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 5
+              },
+              {
+                "key": "IO:WALSync:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 40.7,
+          "load": {
+            "oneMinute": 3.3,
+            "fiveMinute": 2.66
+          },
+          "hostCpuSeconds": 132.25,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 4
+              },
+              {
+                "key": "IO:WALSync:active",
+                "count": 1
+              },
+              {
+                "key": "LWLock:WALWrite:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 45.7,
+          "load": {
+            "oneMinute": 3.36,
+            "fiveMinute": 2.68
+          },
+          "hostCpuSeconds": 135.69,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 5
+              },
+              {
+                "key": "IO:WALWrite:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 50.8,
+          "load": {
+            "oneMinute": 3.41,
+            "fiveMinute": 2.7
+          },
+          "hostCpuSeconds": 139.63,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 4
+              },
+              {
+                "key": "IO:WALSync:active",
+                "count": 1
+              },
+              {
+                "key": "LWLock:WALWrite:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 55.9,
+          "load": {
+            "oneMinute": 3.38,
+            "fiveMinute": 2.71
+          },
+          "hostCpuSeconds": 143.1399999,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 4
+              },
+              {
+                "key": "IO:WALSync:active",
+                "count": 1
+              },
+              {
+                "key": "LWLock:WALWrite:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 61.0,
+          "load": {
+            "oneMinute": 3.35,
+            "fiveMinute": 2.71
+          },
+          "hostCpuSeconds": 146.43,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 4
+              },
+              {
+                "key": "IO:WALSync:active",
+                "count": 1
+              },
+              {
+                "key": "LWLock:WALWrite:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        }
+      ],
+      "settlement": {
+        "expectedInstanceCount": 371,
+        "instanceCount": 371,
+        "notCompletedCount": 0,
+        "incidentInstanceCount": 0,
+        "settled": true
+      },
+      "validForSuccessfulThroughput": true
+    },
+    {
+      "clients": 4,
+      "warmupAttempts": 54,
+      "measuredAttempts": 220,
+      "completedInWindow": 216,
+      "succeededInWindow": 214,
+      "failedAttemptsIncludingWarmup": 2,
+      "statusHistogram": [
+        {
+          "status": "200",
+          "count": 272
+        },
+        {
+          "status": "500",
+          "count": 2
+        }
+      ],
+      "successfulExecutionsPerSecond": 3.567,
+      "gainVersusPreviousLevel": 0.4362,
+      "exploratoryLatencyMilliseconds": {
+        "p50": 1099.778699999999,
+        "p95": 1815.9275000000002,
+        "note": "Closed-loop latency of successful in-window requests; exploratory, not an objective."
+      },
+      "hostCpuUtilizationOfAllCores": 0.02,
+      "sqliteBusyOrConcurrencyLogLinesAdded": 0,
+      "dotnetCountersFile": "series-5.counters.c4.json",
+      "samples": [
+        {
+          "offsetSeconds": 0.0,
+          "load": {
+            "oneMinute": 3.5,
+            "fiveMinute": 2.78
+          },
+          "hostCpuSeconds": 161.65,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 7
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 5.1,
+          "load": {
+            "oneMinute": 3.38,
+            "fiveMinute": 2.76
+          },
+          "hostCpuSeconds": 166.34,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 7
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 10.2,
+          "load": {
+            "oneMinute": 3.43,
+            "fiveMinute": 2.78
+          },
+          "hostCpuSeconds": 171.99,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 6
+              },
+              {
+                "key": "Client:ClientRead:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 15.3,
+          "load": {
+            "oneMinute": 3.47,
+            "fiveMinute": 2.8
+          },
+          "hostCpuSeconds": 176.19,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 4
+              },
+              {
+                "key": "CPU/none:-:active",
+                "count": 1
+              },
+              {
+                "key": "IO:WALSync:active",
+                "count": 1
+              },
+              {
+                "key": "LWLock:WALWrite:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 20.4,
+          "load": {
+            "oneMinute": 3.52,
+            "fiveMinute": 2.82
+          },
+          "hostCpuSeconds": 181.85,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 6
+              },
+              {
+                "key": "CPU/none:-:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 25.5,
+          "load": {
+            "oneMinute": 3.64,
+            "fiveMinute": 2.86
+          },
+          "hostCpuSeconds": 186.37,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 6
+              },
+              {
+                "key": "IO:WALSync:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 30.5,
+          "load": {
+            "oneMinute": 3.58,
+            "fiveMinute": 2.86
+          },
+          "hostCpuSeconds": 190.38,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 3
+              },
+              {
+                "key": "LWLock:WALWrite:active",
+                "count": 3
+              },
+              {
+                "key": "IO:WALSync:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 35.6,
+          "load": {
+            "oneMinute": 3.62,
+            "fiveMinute": 2.88
+          },
+          "hostCpuSeconds": 195.43,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 5
+              },
+              {
+                "key": "LWLock:WALWrite:active",
+                "count": 2
+              },
+              {
+                "key": "IO:WALSync:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 40.7,
+          "load": {
+            "oneMinute": 3.65,
+            "fiveMinute": 2.9
+          },
+          "hostCpuSeconds": 200.63,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 6
+              },
+              {
+                "key": "IO:WALSync:active",
+                "count": 1
+              },
+              {
+                "key": "LWLock:WALWrite:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 45.8,
+          "load": {
+            "oneMinute": 3.92,
+            "fiveMinute": 2.97
+          },
+          "hostCpuSeconds": 204.72,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 4
+              },
+              {
+                "key": "LWLock:WALWrite:active",
+                "count": 3
+              },
+              {
+                "key": "IO:WALSync:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 50.8,
+          "load": {
+            "oneMinute": 3.76,
+            "fiveMinute": 2.95
+          },
+          "hostCpuSeconds": 209.62,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 5
+              },
+              {
+                "key": "LWLock:WALWrite:active",
+                "count": 2
+              },
+              {
+                "key": "IO:WALSync:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 55.9,
+          "load": {
+            "oneMinute": 3.78,
+            "fiveMinute": 2.97
+          },
+          "hostCpuSeconds": 214.07,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 8
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        },
+        {
+          "offsetSeconds": 61.0,
+          "load": {
+            "oneMinute": 3.72,
+            "fiveMinute": 2.97
+          },
+          "hostCpuSeconds": 218.4,
+          "postgres": {
+            "waits": [
+              {
+                "key": "Client:ClientRead:idle",
+                "count": 5
+              },
+              {
+                "key": "LWLock:WALWrite:active",
+                "count": 2
+              },
+              {
+                "key": "IO:WALSync:active",
+                "count": 1
+              }
+            ],
+            "ungrantedLocks": 0
+          }
+        }
+      ],
+      "settlement": {
+        "expectedInstanceCount": 645,
+        "instanceCount": 645,
+        "notCompletedCount": 2,
+        "incidentInstanceCount": 0,
+        "settled": false
+      },
+      "validForSuccessfulThroughput": false
+    }
+  ]
+}

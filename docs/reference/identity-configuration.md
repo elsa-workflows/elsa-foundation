@@ -23,7 +23,7 @@ unauthenticated API call is rejected with `401`. A host-chosen `DefaultScheme` a
 
 ## Development / demo defaults
 
-The checked-in `src/apps/Elsa.Workbench/shells.json` enables the stack with `IsDevelopmentOrDemo: true`, which is
+The checked-in `Essentials/apps/Elsa.Workbench/shells.json` enables the stack with `IsDevelopmentOrDemo: true`, which is
 intended **only** for local development and demos:
 
 ```jsonc
@@ -48,6 +48,11 @@ Under `IsDevelopmentOrDemo`:
   username `admin`, password `Password123!` (logged prominently at startup). There are no credential
   constants in code; the values come entirely from configuration. The administrator role is granted the
   all-access permission (`*`), so it can reach every `ConfigurePermissions()`-secured endpoint.
+
+Permissions are named `{resource}:{verb}`, as in Elsa 3.9 (`identity/users:manage`, `workflows/runtime:read`), and a
+trailing `*` grants a whole subtree (`workflows/*:read`). At startup the host logs one warning for each role grant that
+matches no registered permission, naming the role and the grant; such a grant authorizes nothing. See
+[Elsa 3.9 to Elsa 4 permission mapping](elsa3-permission-mapping.md) for the rules and the Elsa 3.9 names.
 - **The sign-in cookie relaxes to `SameAsRequest`** so a plain-HTTP `localhost` host can establish a session.
 
 ## Configuration surface (production)
@@ -136,6 +141,10 @@ process, while a recurring task belongs to a shell's Tasks feature, would run on
 host that does not. Each prune call runs under `Prune:Timeout`, so a call that hangs is cancelled and cannot hold the node's later
 prunes.
 
+The development and demo store (`IsDevelopmentOrDemo`) is EF Core's in-memory one, which cannot delete in bulk, so OpenIddict's
+prune cannot run on it. There the service logs one Information line at start and does not prune; the store is discarded when the
+host stops, so nothing builds up.
+
 Generate a signing key:
 
 ```bash
@@ -217,7 +226,7 @@ deployment still read each other's payloads when they share a key ring, wherever
   every user signs in again, and a form open across the upgrade is posted again. Changing `ApplicationName` later has
   the same effect.
 
-`src/essentials/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md` is the reference; Docker deployments
+`Essentials/src/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md` is the reference; Docker deployments
 are covered in [Docker: Data Protection keys](../docker.md#data-protection-keys).
 
 ### No API kill-switch
@@ -260,7 +269,7 @@ same-origin as the server for the session cookie to flow. Cross-origin setups re
     ```bash
     dotnet ef database update \
       --context OpenIddictIdentityPostgreSqlDbContext \
-      --project src/apps/Elsa.Workbench \
+      --project Essentials/apps/Elsa.Workbench \
       -- --connectionString "<connection string>"
     ```
 

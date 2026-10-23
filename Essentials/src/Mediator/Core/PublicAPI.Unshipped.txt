@@ -1,0 +1,34 @@
+#nullable enable
+Elsa.Mediator.Core.Contracts.ICommand
+Elsa.Mediator.Core.Contracts.ICommand<T>
+Elsa.Mediator.Core.Contracts.ICommandHandler
+Elsa.Mediator.Core.Contracts.ICommandHandler<TCommand, TResult>
+Elsa.Mediator.Core.Contracts.ICommandHandler<TCommand, TResult>.Handle(TCommand command, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<TResult>!
+Elsa.Mediator.Core.Contracts.ICommandHandler<TCommand>
+Elsa.Mediator.Core.Contracts.ICommandSender
+Elsa.Mediator.Core.Contracts.ICommandSender.Send(Elsa.Mediator.Core.Contracts.ICommand! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Elsa.Mediator.Core.Contracts.ICommandSender.Send<T>(Elsa.Mediator.Core.Contracts.ICommand<T>! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<T>!
+Elsa.Mediator.Core.Contracts.IRequest
+Elsa.Mediator.Core.Contracts.IRequest<T>
+Elsa.Mediator.Core.Contracts.IRequestHandler
+Elsa.Mediator.Core.Contracts.IRequestHandler<TRequest, TResponse>
+Elsa.Mediator.Core.Contracts.IRequestHandler<TRequest, TResponse>.Handle(TRequest request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<TResponse>!
+Elsa.Mediator.Core.Contracts.IRequestSender
+Elsa.Mediator.Core.Contracts.IRequestSender.Send<T>(Elsa.Mediator.Core.Contracts.IRequest<T>! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<T>!
+Elsa.Mediator.Core.Extensions.ServiceCollectionExtensions
+Elsa.Mediator.Core.Models.Unit
+Elsa.Mediator.Core.Models.Unit.Unit() -> void
+Elsa.Mediator.Core.Models.Unit.Unit(Elsa.Mediator.Core.Models.Unit! original) -> void
+override Elsa.Mediator.Core.Models.Unit.Equals(object? obj) -> bool
+override Elsa.Mediator.Core.Models.Unit.GetHashCode() -> int
+override Elsa.Mediator.Core.Models.Unit.ToString() -> string!
+static Elsa.Mediator.Core.Extensions.ServiceCollectionExtensions.AddCommandHandlersFrom(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Reflection.Assembly! assembly) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Mediator.Core.Extensions.ServiceCollectionExtensions.AddRequestHandler<THandler, TRequest, TResponse>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Mediator.Core.Extensions.ServiceCollectionExtensions.AddRequestHandlersFrom(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Reflection.Assembly! assembly) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Mediator.Core.Models.Unit.operator !=(Elsa.Mediator.Core.Models.Unit? left, Elsa.Mediator.Core.Models.Unit? right) -> bool
+static Elsa.Mediator.Core.Models.Unit.operator ==(Elsa.Mediator.Core.Models.Unit? left, Elsa.Mediator.Core.Models.Unit? right) -> bool
+static readonly Elsa.Mediator.Core.Models.Unit.Instance -> Elsa.Mediator.Core.Models.Unit!
+virtual Elsa.Mediator.Core.Models.Unit.<Clone>$() -> Elsa.Mediator.Core.Models.Unit!
+virtual Elsa.Mediator.Core.Models.Unit.EqualityContract.get -> System.Type!
+virtual Elsa.Mediator.Core.Models.Unit.Equals(Elsa.Mediator.Core.Models.Unit? other) -> bool
+virtual Elsa.Mediator.Core.Models.Unit.PrintMembers(System.Text.StringBuilder! builder) -> bool

@@ -1,0 +1,430 @@
+{
+  "schema": "2412-integrated-correctness/v1",
+  "status": "accepted-by-program-lead",
+  "preparedDate": "2026-10-09",
+  "source": {
+    "head": "7357b91e012c56cb34f1259ef7a60ef56e144afe",
+    "previousResultingMainHead": "9d8a4b7ed96de043924a85a51764dc8d6f956951",
+    "deltaScope": "The production/test delta 9d8a4b7 to7357b91 is the five-file Design API correction; runtime, HTTP and process-loss proof surfaces are unchanged. Five separate modular-hosting documents also changed.",
+    "sourceManifestSha256": "d793456a906b6e87a9cffff7deeae68cd3dd53f25a533ef65ab889ddc699a715",
+    "buildReceiptSha256": "b628b4698d9932f7e921e0f4cf3adad19168a9916e7e1d5946250ec16b749b50",
+    "buildClosureSha256": "d2be60bf27d44f4b4098f4d2b7281aecc9581606f279de9782c359de600fc342",
+    "buildClosureFileCount": 520,
+    "buildClosureBytes": 324193370,
+    "workbenchDllSha256": "b85e5ffa51614aacadc0c1398a703db32f136e510fd398c6d64e9f9c0245fbbb",
+    "sourceConserved": true,
+    "configSha256": {
+      "appsettings.json": "a6b11656c87136d01541667af1438da5230402a7ed3395a9cf2952570cda41ab",
+      "appsettings.Development.json": "f7e53cd45186cf539f15b2bbbf1fcf7ef1801803049c84e40d22f4849a4af1a9",
+      "shells.json": "cc338d16e232bd022f0fd30ea4271a878f6d75f3d0fe89685a9a9689dda21d6a"
+    }
+  },
+  "gates": {
+    "mainCi": {
+      "runId": 37856735788,
+      "status": "success",
+      "logSha256": "211a172f78048d10f1a927e866756a1f0583f09fb3a66299bd1339395471e9f0",
+      "url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/37856735788"
+    },
+    "maps": {
+      "runId": 37856735125,
+      "status": "success",
+      "url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/37856735125"
+    },
+    "quality": {
+      "runId": 37856734716,
+      "status": "success",
+      "url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/37856734716"
+    },
+    "docker": {
+      "runId": 37856928358,
+      "status": "success",
+      "url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/37856928358"
+    },
+    "packages": {
+      "runId": 37856735178,
+      "status": "success",
+      "url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/37856735178"
+    },
+    "filters": {
+      "runId": 37856735180,
+      "status": "success",
+      "url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/37856735180"
+    },
+    "selectedAffectedSuites": [
+      {
+        "suite": "Runtime",
+        "passed": 2130,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "RuntimeEF",
+        "passed": 923,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "DesignApi",
+        "passed": 145,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "PublisherApi",
+        "passed": 723,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "HttpActivity",
+        "passed": 204,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "HttpIntegration",
+        "passed": 43,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "Resumption",
+        "passed": 21,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "NativeRuntimeProviders",
+        "passed": 185,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "Architecture",
+        "passed": 635,
+        "failed": 0,
+        "skipped": 0
+      }
+    ]
+  },
+  "livePostgreSqlMatrix": {
+    "resultSha256": "9673cadef8bed39a8cf411761d23f6a9bb316a66c46ef7512f1d98635453fa42",
+    "captureCasesTotal": 18,
+    "captureCasesPerMode": 9,
+    "persistedExecutionRowsPerMode": 10,
+    "configurationEqualExceptCadence": true,
+    "schemaAndMigrationsEqual": true,
+    "provider": {
+      "runtimeAndDesign": "PostgreSQL",
+      "version": "16.15",
+      "imageDigest": "sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d",
+      "platform": "linux/amd64",
+      "schemaTableCount": 75,
+      "migrationHistoryTableCount": 4,
+      "schemaQueriesReadOnly": true,
+      "ancillaryAndDiagnostics": "SQLite by source configuration",
+      "ancillaryAuditPassed": true,
+      "ancillaryForbiddenTables": [],
+      "ancillaryMigrationHistoryModules": [
+        "ElsaDistributedCommandTransport",
+        "ElsaDistributedExecutionPlacement",
+        "ElsaIdentityIam",
+        "ElsaIdentityProviderConfiguration",
+        "ElsaSecrets",
+        "ElsaStudioPreferences"
+      ]
+    },
+    "runs": [
+      {
+        "mode": "Immediate",
+        "passed": true,
+        "checkpointCadence": "Immediate",
+        "maxSegmentCheckpoints": null,
+        "inspectionGranularity": "activity-level",
+        "receiptSha256": "bbf65b75e04922786b572680d7c1190dee0efd261fb5f02adb3f2fbf2e3af40d",
+        "providerAuditSha256": "917b27a9680f06218529156ce03507aad143a58aa0273b5edbc96e375e9457b4",
+        "schemaSha256": "5d940d01cdad29370168e8e9941c3f49d96f765719d185bf575ee6f5570e89e7",
+        "databaseRestartForReadOnlyAudit": true,
+        "workflowRerun": false,
+        "cleanupPreserved": true,
+        "cases": [
+          {
+            "case": "primaryHttp",
+            "status": "Completed",
+            "incidents": 0,
+            "responseStatus": 200,
+            "bodyMatched": true,
+            "cadence": "Immediate",
+            "maxSegmentCheckpoints": null,
+            "inspectionGranularity": "activity-level",
+            "identityJoinPassed": true
+          },
+          {
+            "case": "validRest",
+            "status": "Completed",
+            "incidents": 0,
+            "responseStatus": 200,
+            "outputMatched": true,
+            "cadence": "Immediate",
+            "maxSegmentCheckpoints": null,
+            "inspectionGranularity": "activity-level",
+            "identityJoinPassed": true
+          },
+          {
+            "case": "workflowFlow",
+            "status": "Completed",
+            "incidents": 0,
+            "cadence": "Immediate",
+            "maxSegmentCheckpoints": null,
+            "inspectionGranularity": "activity-level",
+            "identityJoinPassed": true
+          },
+          {
+            "case": "setOutput",
+            "status": "Completed",
+            "incidents": 0,
+            "outputPersisted": true,
+            "cadence": "Immediate",
+            "maxSegmentCheckpoints": null,
+            "inspectionGranularity": "activity-level",
+            "identityJoinPassed": true
+          },
+          {
+            "case": "httpWorkflow",
+            "status": "Completed",
+            "incidents": 0,
+            "triggerStatus": 202,
+            "executionLinked": true,
+            "cadence": "Immediate",
+            "maxSegmentCheckpoints": null,
+            "inspectionGranularity": "activity-level",
+            "identityJoinPassed": true
+          },
+          {
+            "case": "valueCapture",
+            "status": "Completed",
+            "incidents": 0,
+            "writerAndHttpEvidenceMatched": true,
+            "cadence": "Immediate",
+            "maxSegmentCheckpoints": null,
+            "inspectionGranularity": "activity-level",
+            "identityJoinPassed": true
+          },
+          {
+            "case": "childWorkflowInput-parent",
+            "status": "Completed",
+            "incidents": 0,
+            "cadence": "Immediate",
+            "maxSegmentCheckpoints": null,
+            "inspectionGranularity": "activity-level",
+            "identityJoinPassed": true
+          },
+          {
+            "case": "childWorkflowInput-child",
+            "status": "Completed",
+            "incidents": 0,
+            "parentLinkAndEchoMatched": true,
+            "cadence": "Immediate",
+            "maxSegmentCheckpoints": null,
+            "inspectionGranularity": "activity-level",
+            "identityJoinPassed": true
+          },
+          {
+            "case": "faultActivity",
+            "status": "Faulted",
+            "incidents": 1,
+            "beforeRan": true,
+            "afterRan": false,
+            "resolution": "FaultWorkflow",
+            "cadence": "Immediate",
+            "maxSegmentCheckpoints": null,
+            "inspectionGranularity": "activity-level",
+            "identityJoinPassed": true
+          },
+          {
+            "case": "faultingInput",
+            "admissionStatus": 202,
+            "status": "Running",
+            "incidents": 1,
+            "failureType": "SchedulerWorkPoisoned",
+            "blockingIncident": true,
+            "downstreamResponseAbsent": true,
+            "identityAndTransportObserved": true,
+            "cadence": "Immediate",
+            "maxSegmentCheckpoints": null,
+            "inspectionGranularity": "activity-level",
+            "identityJoinPassed": true
+          }
+        ]
+      },
+      {
+        "mode": "Coalesced50",
+        "passed": true,
+        "checkpointCadence": "Coalesced",
+        "maxSegmentCheckpoints": 50,
+        "inspectionGranularity": "boundary-level",
+        "receiptSha256": "24e6eceed39e3fbec1d93affd80723a10d77e0a01af6eea2f5705a6ede09dace",
+        "providerAuditSha256": "86dca25e93d88b62c844ed34495eafcae55f2d2a05703c8f67e35f522a0e1523",
+        "schemaSha256": "29ac2992e599ba4dd18439475c74537c7791ac53435b5f2be080020dc51f4a86",
+        "databaseRestartForReadOnlyAudit": true,
+        "workflowRerun": false,
+        "cleanupPreserved": true,
+        "cases": [
+          {
+            "case": "primaryHttp",
+            "status": "Completed",
+            "incidents": 0,
+            "responseStatus": 200,
+            "bodyMatched": true,
+            "cadence": "Coalesced",
+            "maxSegmentCheckpoints": 50,
+            "inspectionGranularity": "boundary-level",
+            "identityJoinPassed": true
+          },
+          {
+            "case": "validRest",
+            "status": "Completed",
+            "incidents": 0,
+            "responseStatus": 200,
+            "outputMatched": true,
+            "cadence": "Coalesced",
+            "maxSegmentCheckpoints": 50,
+            "inspectionGranularity": "boundary-level",
+            "identityJoinPassed": true
+          },
+          {
+            "case": "workflowFlow",
+            "status": "Completed",
+            "incidents": 0,
+            "cadence": "Coalesced",
+            "maxSegmentCheckpoints": 50,
+            "inspectionGranularity": "boundary-level",
+            "identityJoinPassed": true
+          },
+          {
+            "case": "setOutput",
+            "status": "Completed",
+            "incidents": 0,
+            "outputPersisted": true,
+            "cadence": "Coalesced",
+            "maxSegmentCheckpoints": 50,
+            "inspectionGranularity": "boundary-level",
+            "identityJoinPassed": true
+          },
+          {
+            "case": "httpWorkflow",
+            "status": "Completed",
+            "incidents": 0,
+            "triggerStatus": 202,
+            "executionLinked": true,
+            "cadence": "Coalesced",
+            "maxSegmentCheckpoints": 50,
+            "inspectionGranularity": "boundary-level",
+            "identityJoinPassed": true
+          },
+          {
+            "case": "valueCapture",
+            "status": "Completed",
+            "incidents": 0,
+            "writerAndHttpEvidenceMatched": true,
+            "cadence": "Coalesced",
+            "maxSegmentCheckpoints": 50,
+            "inspectionGranularity": "boundary-level",
+            "identityJoinPassed": true
+          },
+          {
+            "case": "childWorkflowInput-parent",
+            "status": "Completed",
+            "incidents": 0,
+            "cadence": "Coalesced",
+            "maxSegmentCheckpoints": 50,
+            "inspectionGranularity": "boundary-level",
+            "identityJoinPassed": true
+          },
+          {
+            "case": "childWorkflowInput-child",
+            "status": "Completed",
+            "incidents": 0,
+            "parentLinkAndEchoMatched": true,
+            "cadence": "Coalesced",
+            "maxSegmentCheckpoints": 50,
+            "inspectionGranularity": "boundary-level",
+            "identityJoinPassed": true
+          },
+          {
+            "case": "faultActivity",
+            "status": "Faulted",
+            "incidents": 1,
+            "beforeRan": true,
+            "afterRan": false,
+            "resolution": "FaultWorkflow",
+            "cadence": "Coalesced",
+            "maxSegmentCheckpoints": 50,
+            "inspectionGranularity": "boundary-level",
+            "identityJoinPassed": true
+          },
+          {
+            "case": "faultingInput",
+            "admissionStatus": 202,
+            "status": "Running",
+            "incidents": 1,
+            "failureType": "SchedulerWorkPoisoned",
+            "blockingIncident": true,
+            "downstreamResponseAbsent": true,
+            "identityAndTransportObserved": true,
+            "cadence": "Coalesced",
+            "maxSegmentCheckpoints": 50,
+            "inspectionGranularity": "boundary-level",
+            "identityJoinPassed": true
+          }
+        ]
+      }
+    ],
+    "cardinality": "Nine semantic scenarios per mode; parent/child produces two execution rows, so each cases array has ten execution outcomes."
+  },
+  "adoptedPriorProofScope": [
+    {
+      "test": "ResponseReplaySafetyProcessTests.ReplaySafeResponseCompletion_IsRecoveredAfterHardProcessLossWithoutResendingRequest",
+      "provider": "SQLite",
+      "scope": "hard process loss/restart at fused inline completion; no transport exactly-once claim"
+    },
+    {
+      "test": "ResponseReplaySafetyProcessTests.ExternalBodyReference_IsReadAgainAfterHardProcessLossAndRestart",
+      "provider": "SQLite",
+      "scope": "external body reread after restart with fusion disabled"
+    },
+    {
+      "test": "CoalescingDurableValuePageMemoTests.Every_request_and_access_component_and_codec_reference_is_part_of_the_key",
+      "provider": "in-process/EF",
+      "scope": "memo key partitioning"
+    },
+    {
+      "test": "CoalescingDurableValuePageReuseTests.Nested_child_owns_an_independent_memo_and_parent_cannot_reactivate",
+      "provider": "in-process/EF",
+      "scope": "nested ownership"
+    },
+    {
+      "test": "Active_and_failed_writes_fence_hits_and_late_fills_and_failure_is_permanent",
+      "provider": "in-process/EF",
+      "scope": "fencing and permanent failure"
+    },
+    {
+      "test": "EfDurableValuePageReuseTests.Persisted_interruption_snapshot_recovers_memo_populated_coalesced_execution",
+      "provider": "EF/SQLite",
+      "scope": "persisted snapshot recovery and stale-fence rejection"
+    }
+  ],
+  "limits": [
+    "The faulting-input 202 is an observed malformed-input negative-control result with durable SchedulerWorkPoisoned state; it does not establish a universal HTTP policy.",
+    "The historical unexpected valid-input 202 remains causally unresolved and is not claimed fixed by this acceptance.",
+    "Provider scope is mixed by source configuration: PostgreSQL covers runtime/design persisted state; ancillary and diagnostics SQLite audits passed separately.",
+    "No timing, query-saving, comparative gain, or exactly-once transport claim is made.",
+    "Raw database rows, ContentJson, request logs, credentials, connection strings and private host paths are excluded."
+  ],
+  "evidenceReview": {
+    "rootReviewScript": "review-final-main-evidence-v1.py",
+    "rootReviewPassed": true,
+    "rootReviewResultSha256": "9673cadef8bed39a8cf411761d23f6a9bb316a66c46ef7512f1d98635453fa42"
+  }
+}

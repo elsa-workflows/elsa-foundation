@@ -1,29 +1,25 @@
 # Running Elsa.Workbench in Docker
 
-The workbench is a development and demo host, not the shipped Elsa product. This guide covers its container image (`src/apps/Elsa.Workbench`) and the
-`docker/compose/` reference stack that runs **PostgreSQL + Elsa.Workbench + Elsa Studio** with
-Postgres-backed persistence.
-
-- Image: `src/apps/Elsa.Workbench/Dockerfile` (multi-stage, `net10.0`, non-root, port 8080)
-- Reference stack: `docker/compose/docker-compose.yml`
-- Curated demo composition: `docker/compose/elsa-workbench.shells.json`
-
-The repo default `src/apps/Elsa.Workbench/shells.json` (SQLite) is intentionally left untouched; the
-compose stack mounts its own curated `shells.json` instead.
+**What this covers:** the Workbench container image and the `docker/compose/` reference stack, which runs **PostgreSQL + Elsa.Workbench + Elsa Studio** with everything saved in PostgreSQL. The Workbench is a development and demo host, not the shipped Elsa product.
 
 > Just want to run the prebuilt images from Docker Hub with plain `docker run` (no checkout, no
 > build)? See the [Docker Hub quickstart](docker-hub-quickstart.md), which also covers supplying a
 > custom `shells.json` and how Studio feature toggles are persisted.
 
----
+| File | What it is |
+|---|---|
+| `Essentials/apps/Elsa.Workbench/Dockerfile` | The image: multi-stage, `net10.0`, non-root, port 8080 |
+| `docker/compose/docker-compose.yml` | The reference stack |
+| `docker/compose/elsa-workbench.shells.json` | The curated demo composition the stack mounts |
 
-## Quickstart (full reference stack)
+The repo default `Essentials/apps/Elsa.Workbench/shells.json` (SQLite) is intentionally left untouched; the compose stack mounts its own `shells.json` instead.
+
+## Run the reference stack
 
 From `docker/compose/`:
 
 ```bash
-# Build the Studio image once from the sibling repo (see "Elsa Studio" below), then:
-docker compose --profile studio up --build
+docker compose --profile studio up --build   # builds the Workbench and Studio images from this repo
 ```
 
 | Service      | URL                     | Notes                                   |
@@ -53,21 +49,68 @@ Tear down (including volumes):
 docker compose --profile studio down -v
 ```
 
----
+## Connecting Elsa Studio
 
-## Building the image standalone
+Studio is built from this repository's `Studio/` folder, with the repository root as build context. `docker compose --profile studio up --build` does that for you. To build it on its own, from `docker/compose/`:
 
-The build context **must be the repository root** — the project references span the whole `src/`
+```bash
+docker build -f ../../Studio/src/apps/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local ../..
+```
+
+Studio wiring (see `docker-compose.yml`):
+
+- **`Studio__BackendBaseUrl` must be a host-reachable URL** (`http://localhost:13000`), **not** the
+  compose service name. Studio is a Blazor WebAssembly app: the browser downloads the client and
+  calls the backend directly, using the value surfaced at `GET /studio-runtime.js`. A compose
+  service name like `http://elsa-workbench:8080` is not resolvable from the browser.
+- **`Studio__BackendModuleManagementApiKey` must equal the server's `Elsa__ModuleManagement__ApiKey`.**
+  This is the Elsa host management key, and it stays server-side in the Studio container — it is
+  never published to the browser. Browser-facing host-control reads (module management, Extension
+  Builder) go through the Studio management bridge, which attaches the key when calling the
+  backend (see ADR 0037).
+- The server's CORS policy must allow the Studio published origin (`Cors__AllowedOrigins__0`).
+
+## Troubleshooting
+
+- **`/health/ready` returns `503 shell_activation_failed`, and the log shows "SeedAdminUserName is configured
+  but SeedAdminPassword is not"** — the container runs in `Production` without the seed password. Set
+  `CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword`.
+  Setting it in a mounted `shells.json` has no effect, because `shells.Production.json` blanks it.
+- **`/health/ready` returns `503 shell_activation_failed`, and the log shows "No signing key is configured for
+  the OpenIddict identity module"** (or "must be a base64-encoded PKCS#8 RSA private key") — set
+  `CShells__Shells__default__Features__FoundationIdentityOpenIddict__SigningKey` to a valid key (see
+  [Environment variables](#environment-variables)).
+- **`/` returns 500 with `FeatureNotFoundException: WorkflowsRuntimeResumption`** — the host is
+  missing the `Elsa.Workflows.Runtime.Resumption` project reference that every durable
+  persistence provider depends on. It is wired in `Elsa.Workbench.csproj` / `Program.cs`; rebuild the
+  image if you see this.
+- **`Npgsql … Failed to connect to 127.0.0.1:5432`** — the feature fell back to its default
+  connection string, meaning `ConnectionString` did not bind. Ensure it is a **top-level** property
+  on the feature section (not nested under `Options`).
+- **Studio shows connection/timeout errors to the backend** — `Studio__BackendBaseUrl` is not
+  reachable from the browser, or the server's CORS policy does not allow the Studio origin.
+
+## Reference
+
+### Building the image on its own
+
+The build context **must be the repository root** — the project references span the whole source
 tree and the build needs repo-root `Directory.Packages.props`, the `.slnx`, and a NuGet config.
 
 ```bash
-docker build -f src/apps/Elsa.Workbench/Dockerfile -t elsa-workbench:local .
+docker build -f Essentials/apps/Elsa.Workbench/Dockerfile -t elsa-workbench:local .
 docker run --rm -p 13000:8080 \
   -e CShells__Shells__default__Features__WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey=elsa-docker-demo-recovery-continuation-key \
   -e 'CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword=Password123!' \
   -e "CShells__Shells__default__Features__FoundationIdentityOpenIddict__SigningKey=$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | openssl pkcs8 -topk8 -nocrypt -outform DER | base64)" \
   elsa-workbench:local
 ```
+
+With no `ASPNETCORE_ENVIRONMENT` the container runs as `Production`, which needs the recovery continuation
+signing key and the two identity secrets (see [Environment variables](#environment-variables)).
+
+
+### Building with release package versions
 
 That is a source build, as `docker compose up --build` is: the image records its Elsa packages at their
 line's dev version, and Nuplane does not check a feed package's Elsa dependencies against the ones it shares.
@@ -76,27 +119,27 @@ that commit - `.github/workflows/docker.yml`'s `versions` job downloads that run
 artifact rather than planning again, so a queued image build never races Packages' own plan and write-back to
 `publish-state` (spec 150 FR-020, #2084). It refuses to build if main has moved past that commit, since the
 builder can only build the branch's current tip. The images refuse a feed package that needs a newer shared Elsa
-package than they carry ([Foundation host feeds](foundation-host-feeds.md#why-a-declared-dependency-can-go-missing)).
+package than they carry ([Foundation host feeds](host-feeds/pinning-and-closures.md#why-a-declared-dependency-can-go-missing)).
 To build one locally, compute the versions and pass them as the `ELSA_PACKAGE_VERSIONS` build arg, gzipped and
-base64-encoded as `.github/workflows/docker.yml`'s pull-request path does:
+base64-encoded as `.github/workflows/docker.yml`'s `versions` job encodes the file it downloads:
 
 ```bash
 dotnet run --project tools/versioning/Elsa.Versioning.Publisher -- \
   plan --ref refs/heads/main --commit HEAD --output /tmp/elsa-versions
-docker build -f src/apps/Elsa.Workbench/Dockerfile -t elsa-workbench:local \
+docker build -f Essentials/apps/Elsa.Workbench/Dockerfile -t elsa-workbench:local \
   --build-arg ELSA_PACKAGE_VERSIONS="$(gzip -9n < /tmp/elsa-versions/package-versions.props | base64 | tr -d '\n')" .
 ```
 
-With no `ASPNETCORE_ENVIRONMENT` the container runs as `Production`, which needs the recovery continuation
-signing key and the two identity secrets above (see [Environment variables](#environment-variables)).
 
-The image:
+### What is in the image
 
-- builds on `mcr.microsoft.com/dotnet/sdk:10.0`, runs on `mcr.microsoft.com/dotnet/aspnet:10.0`;
-- runs as the base image's non-root `$APP_UID`;
-- listens on `8080` (`ASPNETCORE_URLS=http://+:8080`);
-- has an HTTP `HEALTHCHECK` against `/` (curl is installed for this purpose only);
-- pre-creates writable `/app/packages`, `/app/.nuplane`, `/app/.elsa`.
+| Property | Value |
+|---|---|
+| Build / run base | `mcr.microsoft.com/dotnet/sdk:10.0` / `mcr.microsoft.com/dotnet/aspnet:10.0` |
+| User | the base image's non-root `$APP_UID` |
+| Port | `8080` (`ASPNETCORE_URLS=http://+:8080`) |
+| Health check | HTTP `HEALTHCHECK` against `/` (curl is installed for this only) |
+| Writable folders | `/app/packages`, `/app/.nuplane`, `/app/.elsa` (and `/app/data`, see Mounts) |
 
 ### NuGet restore in a clean container
 
@@ -109,16 +152,14 @@ source, so restore is fully self-contained and needs no user-level
 Elsa.Platform) map narrowly to their feedz.io feeds; everything else
 maps to nuget.org. All feeds are public (no auth).
 
----
-
-## Configuration surface
+### Configuration
 
 Configuration layers, lowest to highest precedence: `appsettings.json` → `shells.json` (baked in, or
 mounted) → `shells.{Environment}.json` → environment variables. The image ships `shells.Production.json`,
 so in `Production` that overlay wins over anything in a mounted `shells.json`; only environment variables
 can override it. Standard .NET double-underscore (`__`) env keys override any config path.
 
-### Environment variables
+#### Environment variables
 
 | Variable | Purpose | Compose value |
 |---|---|---|
@@ -128,6 +169,7 @@ can override it. Standard .NET double-underscore (`__`) env keys override any co
 | `Cors__AllowedOrigins__0`, `__1`, … | Browser origins allowed by the `ElsaStudio` CORS policy. The Studio container's **published host origin** must be listed. | `http://localhost:14000` |
 | `CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentity__AllowedReturnUrlOrigins__0`, `__1`, … | Origins the development login provider may redirect back to after sign-in. Add the Studio origin when Studio is hosted separately from the backend. | `http://localhost:14000` |
 | `CShells__Shells__default__Features__WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey` | HMAC key for durable recovery continuations: at least 32 UTF-8 bytes, identical on every node. Required whenever durable runtime persistence is composed; without it the default shell fails activation. | `elsa-docker-demo-recovery-continuation-key` |
+| `CShells__Shells__default__Features__Secrets__EncryptionKey` | Key the Secrets module encrypts stored secret values with. `shells.Production.json` blanks the development value committed in `shells.json`, so a Production container must supply it. Without it the shell still activates, but an encrypted secret cannot be stored. Use the same value on every node, and read [Secrets master-key rotation](secrets-key-rotation.md) before changing it. | `elsa-docker-demo-secrets-encryption-key` |
 | `CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword` | Password for the `admin` account that `shells.Production.json` seeds. The overlay blanks it, and a seed username without a password fails default shell activation (`/health/ready` returns `503 shell_activation_failed`). | `Password123!` |
 | `CShells__Shells__default__Features__FoundationIdentityOpenIddict__SigningKey` | Base64 PKCS#8 RSA private key that signs access tokens; whitespace in the value is ignored. The overlay turns off OpenIddict development mode, so without a usable key the default shell fails activation (`/health/ready` returns `503 shell_activation_failed`). See [identity configuration](reference/identity-configuration.md#foundationidentityopeniddict). | a demo key committed in the compose files |
 | `ConnectionStrings__Elsa` | The relational connection every EF module falls back to **except** OpenTelemetry and the Elsa 3 import lane, which look for `ConnectionStrings__ElsaOpenTelemetry` and `ConnectionStrings__ElsaElsa3Import` unless the feature names a connection — see [Demo persistence composition](#demo-persistence-composition). Supplies the shared fallback without editing `appsettings.json` or the mounted `shells.json`; a feature that names its own `ConnectionString` still wins over it. | `Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa` |
@@ -139,7 +181,7 @@ can override it. Standard .NET double-underscore (`__`) env keys override any co
 `Cors:AllowedOrigins` defaults (in `appsettings.json`) are localhost dev values for running the
 server outside Docker; the compose file adds the Studio container origin.
 
-### Mounts
+#### Mounts
 
 | Container path | Purpose |
 |---|---|
@@ -222,9 +264,7 @@ on an empty volume exits as it starts, with `EfPendingMigrationsException: EF mo
 migrations`, until the table exists: run `dotnet elsa persistence apply --host "<host directory>" --modules
 DataProtection.Keys --provider Sqlite --connection-env ELSA_EF_CONNECTION` against that file first, or set the policy.
 
----
-
-## Demo persistence composition
+### Demo persistence composition
 
 `docker/compose/elsa-workbench.shells.json` swaps the repo default (SQLite) for PostgreSQL:
 
@@ -295,53 +335,3 @@ DataProtection.Keys --provider Sqlite --connection-env ELSA_EF_CONNECTION` again
 persistence feature declares `DependsOn "WorkflowsRuntimeDistributed"`; CShells auto-enables those dependencies. Their
 assemblies are referenced by the host so the features are discoverable in a clean deployment (see the note in
 `Elsa.Workbench.csproj`).
-
----
-
-## Elsa Studio
-
-The Studio image is **not** built from this repository. Build it from the sibling repo
-`elsa-foundation-studio` (main), whose Dockerfile also uses its repo root as build context:
-
-```bash
-cd ../elsa-foundation-studio
-git checkout main
-docker build -f src/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
-```
-
-Then start the stack with the `studio` profile (`docker compose --profile studio up`).
-
-Studio wiring (see `docker-compose.yml`):
-
-- **`Studio__BackendBaseUrl` must be a host-reachable URL** (`http://localhost:13000`), **not** the
-  compose service name. Studio is a Blazor WebAssembly app: the browser downloads the client and
-  calls the backend directly, using the value surfaced at `GET /studio-runtime.js`. A compose
-  service name like `http://elsa-workbench:8080` is not resolvable from the browser.
-- **`Studio__BackendModuleManagementApiKey` must equal the server's `Elsa__ModuleManagement__ApiKey`.**
-  This is the Elsa host management key, and it stays server-side in the Studio container — it is
-  never published to the browser. Browser-facing host-control reads (module management, Extension
-  Builder) go through the Studio management bridge, which attaches the key when calling the
-  backend (see ADR 0037).
-- The server's CORS policy must allow the Studio published origin (`Cors__AllowedOrigins__0`).
-
----
-
-## Troubleshooting
-
-- **`/health/ready` returns `503 shell_activation_failed`, and the log shows "SeedAdminUserName is configured
-  but SeedAdminPassword is not"** — the container runs in `Production` without the seed password. Set
-  `CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword`.
-  Setting it in a mounted `shells.json` has no effect, because `shells.Production.json` blanks it.
-- **`/health/ready` returns `503 shell_activation_failed`, and the log shows "No signing key is configured for
-  the OpenIddict identity module"** (or "must be a base64-encoded PKCS#8 RSA private key") — set
-  `CShells__Shells__default__Features__FoundationIdentityOpenIddict__SigningKey` to a valid key (see
-  [Environment variables](#environment-variables)).
-- **`/` returns 500 with `FeatureNotFoundException: WorkflowsRuntimeResumption`** — the host is
-  missing the `Elsa.Workflows.Runtime.Resumption` project reference that every durable
-  persistence provider depends on. It is wired in `Elsa.Workbench.csproj` / `Program.cs`; rebuild the
-  image if you see this.
-- **`Npgsql … Failed to connect to 127.0.0.1:5432`** — the feature fell back to its default
-  connection string, meaning `ConnectionString` did not bind. Ensure it is a **top-level** property
-  on the feature section (not nested under `Options`).
-- **Studio shows connection/timeout errors to the backend** — `Studio__BackendBaseUrl` is not
-  reachable from the browser, or the server's CORS policy does not allow the Studio origin.

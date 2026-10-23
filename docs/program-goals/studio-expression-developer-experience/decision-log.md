@@ -69,3 +69,69 @@
 **Consequences:** This amends the earlier no-publication boundary for preview artifacts only. Stable releases, deployments, manual publisher bootstrap/forceadvance and Azure provisioning are not being performed. Final explicit owner acceptance still precedes Ready and dependency-ordered merging; required resulting-main gates and public completion records remain mandatory. Native VoiceOver stays skipped by owner decision and never passed.
 
 **Revisit:** A separately scoped registry migration or stable release/deployment requires its own approval and verification.
+
+## 2026-10-23 — Restart the program and ship the permission-hash fix first
+
+**Decision:** The owner restarts Program #2310. The plan (#2367) merges with current `main`, and the
+expression-tooling permission-hash fix from #2373 (commit `f81be4be`) ships on its own as a small PR on `main`.
+The rest of #2373 and milestones 2 and 3 are restarted separately.
+
+**Rationale:** The program's decisions are the part that cannot be rebuilt from code, so they are preserved first.
+On `main`, the permission hash includes per-token claims such as `jti`, `iat`, `exp` and `oi_tkn_id`, so it changes
+on every Studio request and the authoring context never stays valid. That is a real defect that does not need to
+wait for the rest of the stack.
+
+**Consequences:** The program is active again under the 23 October amendment to
+[ADR 0080 D0](../../adr/0080-elsa-4-simplification-decisions.md#d0--focus). #2373, #2378 and #2380 stay open as
+the source for later rebuilds; their history predates the move into `Essentials/` and `Studio/`.
+
+**Revisit:** When milestone 1 is rebased onto the new layout.
+
+## 2026-10-23 — Compatibility is not a cost; native strict, converted Elsa 3 keeps its rules
+
+**Decision:** Elsa 4 is unreleased and has no existing data, so compatibility with earlier Elsa 4 behaviour or
+stored data is not weighed as a cost in this program. Native Elsa 4 definitions stay strict. Converted Elsa 3
+definitions keep Elsa 3's null and undefined behaviour: a `null` sent to a non-nullable input uses the type's default
+([#3172](https://github.com/elsa-workflows/elsa-foundation/issues/3172)), and an `undefined` value in a JavaScript
+object stays as a `null` key ([#3170](https://github.com/elsa-workflows/elsa-foundation/issues/3170)).
+
+**Rationale:** Owner decisions of 23 October. Strict typing is the safer contract for Elsa 4 authors, while
+imported Elsa 3 workflows must keep working without failing at run time.
+
+**Consequences:** Editor help and diagnostics describe the strict native rules by default and must not claim that a
+converted definition is wrong for relying on the Elsa 3 rule. Contracts in this program may change freely before
+general availability.
+
+**Revisit:** At general availability, when compatibility starts to matter.
+
+## 2026-10-23 — Statement bodies and the Elsa 3 converter are part of the runtime surface
+
+**Decision:** [#3010](https://github.com/elsa-workflows/elsa-foundation/pull/3010) has merged: JavaScript bindings
+accept strict statement bodies (explicit `return` and final completion values) as well as expressions, as
+[ADR 0083](../../adr/0083-javascript-binding-grammar-is-pinned-at-publish.md) records. The Elsa 3 converter specs
+[247](../../../specs/247-elsa3-js-host-functions/spec.md) and [262](../../../specs/262-elsa3-undefined-strict/spec.md)
+are implemented. The program's JavaScript grammar, help and diagnostics follow that surface.
+
+**Rationale:** The editor must describe what the runtime executes. The earlier plan assumed expression-only
+bindings, and spec 143 FR-024 listed statement-only capabilities as absent.
+
+**Consequences:** "Statement-only capabilities stay absent" no longer applies to statement bodies. Milestone 2's
+JavaScript conformance work in #2378 must be rebuilt against this surface instead of rebased as it is.
+
+**Revisit:** If the runtime adds a setting that limits scripts to expressions (#3204 US1).
+
+## 2026-10-23 — Gate milestones 2 and 3 on the #3204 read-model ADR
+
+**Decision:** Milestones 2 and 3 (#2378 JavaScript tooling and #2380 Liquid help) are not rebuilt until the ADR
+requested by [#3204](https://github.com/elsa-workflows/elsa-foundation/issues/3204) is accepted. It decides how
+scripts read variables: declared parameters (`args.X`) or ambient variables (`variables.X`, `getVariable()`), and
+whether the runtime keeps the generated `get<Name>()` accessors.
+
+**Rationale:** #2378 preserves generated-getter naming and builds completion around the ambient model. If the ADR
+picks declared parameters or drops `get<Name>()`, that work would advertise accessors the runtime no longer
+offers.
+
+**Consequences:** The gate is met only when the ADR is accepted. Until then, milestone work is limited to
+milestone 1 and fixes such as the permission hash that do not depend on the read model.
+
+**Revisit:** When the #3204 ADR is accepted.

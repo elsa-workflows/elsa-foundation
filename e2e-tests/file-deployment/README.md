@@ -8,12 +8,13 @@ activation, which includes the reconcile pass and publish-on-reconcile); `GET /`
 | Script | What it exercises |
 |---|---|
 | `Test-FileBasedDeployment.ps1` | Authors a definition file (pinned `definitionId`, resolved `actver_*` id), restarts the server with `JsonWorkflowReconciliation` composed (`SourceId` + `FolderPath` + `PublishOnReconcile=true`), waits on `/health/ready`, asserts the definition is imported, the publication slot holds an Active publication, and the artifact executes to completion; then restarts with unchanged files and asserts no republish and no duplicate definition (SC-002). |
+| `Test-JsonSourceComposition.ps1` | Configures a primary JSON catalog and an independent `AdditionalSources` entry, waits on `/health/ready`, and checks both pinned definitions imported through one shared startup reconcile pass (#1158). |
 
 ## Composition mechanism
 
 Unlike other suites, this one needs a feature the stock `shells.json` does not enable (deliberately:
 `JsonWorkflowReconciliation` requires a `SourceId` and a path and fails registration on empty options).
-The suite composes it **via environment variables** — they layer above `shells.json`, and setting the
+`Test-FileBasedDeployment.ps1` composes it **via environment variables** — they layer above `shells.json`, and setting the
 section enables the feature. It does so on a server process the suite owns (`../_ServerLifecycle.ps1`:
 the already-built `Elsa.Workbench.dll` is launched directly from a temporary content root, on a free loopback
 port unless `-BaseUrl` names one):
@@ -26,12 +27,15 @@ CShells__Shells__default__Features__JsonWorkflowReconciliation__Options__Publish
 
 No repo file is edited, and the variables are set for the owned server only, not left in your shell.
 
+`Test-JsonSourceComposition.ps1` instead adds the two source configurations to `shells.json` in its temporary
+content root. It uses the same owned-server lifecycle and leaves the repository configuration untouched.
+
 ## Caveats
 
 - The suite starts, restarts and stops its own server, and only that process. It never stops a server you
   started, so it can run while yours is up. If you pass `-BaseUrl` and that port is held by another process,
   the suite fails with the port and the pid in the message instead of stopping it (issue #2329).
-- Requires a built Workbench (`dotnet build src/apps/Elsa.Workbench/Elsa.Workbench.csproj`); the EF modules
+- Requires a built Workbench (`dotnet build Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj`); the EF modules
   migrate on shell activation. See [`../README.md`](../README.md).
 - Definition ids/names are timestamped per run. They land in the SQLite files of the temporary content root,
   which is removed after a passing run and kept, with the server logs, after a failing one.

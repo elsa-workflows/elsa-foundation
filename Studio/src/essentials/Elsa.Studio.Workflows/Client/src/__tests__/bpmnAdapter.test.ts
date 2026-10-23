@@ -1,0 +1,569 @@
+import { describe, expect, it } from "vitest";
+import type { Edge, Node } from "@xyflow/react";
+import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
+import {
+  getActivityDesignerSupport,
+  getChildSlots,
+  planSlotNavigation,
+  readStructureDesignFacet,
+  resolveScope,
+  slotCrumbLabel
+} from "../workflowAdapter";
+import {
+  buildBpmnCanvas,
+  createBpmnBoundNode,
+  collectOwnedNodeIds,
+  collectRemovedGraphNodeIds,
+  createBpmnShapeNode,
+  syncBpmnCanvasToScope,
+  updateBpmnElement,
+  type BpmnNodeData
+} from "../bpmn/bpmnAdapter";
+import { bpmnShapePalette, bpmnStructureKind } from "../bpmn/bpmnTypes";
+
+function catalogItem(overrides: Partial<ActivityCatalogItem> = {}): ActivityCatalogItem {
+  return {
+    activityVersionId: "writeline@1",
+    activityTypeKey: "Elsa.WriteLine",
+    version: "1.0.0",
+    category: "Console",
+    displayName: "Write Line",
+    executionType: "activity",
+    inputs: [],
+    outputs: [],
+    ...overrides
+  };
+}
+
+function activityNode(nodeId: string): ActivityNode {
+  return { nodeId, activityVersionId: "writeline@1", inputs: [], outputs: [] };
+}
+
+function bpmnOwner(elements: unknown[], sequenceFlows: unknown[], activities: ActivityNode[] = []): ActivityNode {
+  return {
+    nodeId: "node-bpmn",
+    activityVersionId: "bpmn@1",
+    inputs: [],
+    outputs: [],
+    structure: {
+      kind: bpmnStructureKind,
+      schemaVersion: "1.0.0",
+      payload: { elements, sequenceFlows, activities }
+    }
+  };
+}
+
+// A container activity a subProcess element can bind: its own BPMN process, one level down.
+function nestedBpmnActivity(nodeId: string): ActivityNode {
+  return {
+    nodeId,
+    activityVersionId: "bpmn@1",
+    inputs: [],
+    outputs: [],
+    structure: {
+      kind: bpmnStructureKind,
+      schemaVersion: "1.0.0",
+      payload: {
+        elements: [
+          { elementId: "inner-start", elementType: "startEvent" },
+          { elementId: "inner-task", elementType: "task", childNodeId: "node-inner" }
+        ],
+        sequenceFlows: [{ flowId: "inner-flow", sourceRef: "inner-start", targetRef: "inner-task" }],
+        activities: [activityNode("node-inner")]
+      }
+    }
+  };
+}
+
+const catalog = [
+  catalogItem(),
+  catalogItem({ activityVersionId: "bpmn@1", activityTypeKey: "Elsa.BpmnProcess", displayName: "BPMN Process" })
+];
+
+const diamondElements = [
+  { elementId: "start", elementType: "startEvent" },
+  { elementId: "task-a", elementType: "task", childNodeId: "node-a" },
+  { elementId: "end", elementType: "endEvent" }
+];
+const diamondFlows = [
+  { flowId: "flow-1", sourceRef: "start", targetRef: "task-a" },
+  { flowId: "flow-2", sourceRef: "task-a", targetRef: "end", conditionOutcome: "Done", extra: "kept" }
+];
+
+describe("bpmn designer mode plumbing", () => {
+  it("resolves the bpmn designer support from the structure kind", () => {
+    expect(getActivityDesignerSupport(bpmnOwner([], []))).toBe("bpmn");
+  });
+
+  it("projects a bpmn child slot with bpmn mode from the generic activities fallback", () => {
+    const owner = bpmnOwner(diamondElements, diamondFlows, [activityNode("node-a")]);
+    const slots = getChildSlots(owner);
+    expect(slots).toHaveLength(1);
+    expect(slots[0].mode).toBe("bpmn");
+    expect(slots[0].activities.map(activity => activity.nodeId)).toEqual(["node-a"]);
+  });
+
+  it("accepts a bpmn structure design facet", () => {
+    const facetItem = catalogItem({
+      activityTypeKey: "Elsa.BpmnProcess",
+      displayName: "BPMN Process",
+      designFacets: [
+        {
+          kind: bpmnStructureKind,
+          schemaVersion: "1.0.0",
+          payload: {
+            mode: "bpmn",
+            supportsScopedVariables: true,
+            slots: [{ name: "Bpmn.Activities", property: "activities", displayName: "Activities", cardinality: "many" }],
+            initialPayload: { activities: [], elements: [], sequenceFlows: [] }
+          }
+        }
+      ]
+    });
+
+    const facet = readStructureDesignFacet(facetItem);
+    expect(facet?.kind).toBe(bpmnStructureKind);
+    expect(facet?.payload.mode).toBe("bpmn");
+    expect(getActivityDesignerSupport(null, facetItem)).toBe("bpmn");
+  });
+
+  it("clears a default-flow reference when its sequence flow is deleted", () => {
+    const owner = bpmnOwner(
+      [
+        { elementId: "gateway", elementType: "exclusiveGateway", defaultFlowId: "flow-default" },
+        { elementId: "end", elementType: "endEvent" }
+      ],
+      [{ flowId: "flow-default", sourceRef: "gateway", targetRef: "end", isDefault: true }]
+    );
+    const nodes = [
+      { id: "gateway", position: { x: 0, y: 0 }, data: { element: { elementId: "gateway", elementType: "exclusiveGateway" }, label: "" } },
+      { id: "end", position: { x: 200, y: 0 }, data: { element: { elementId: "end", elementType: "endEvent" }, label: "" } }
+    ] as unknown as Node<BpmnNodeData>[];
+
+    // The default edge is gone from the canvas; the gateway must not keep naming it.
+    const next = syncBpmnCanvasToScope({ owner, slot: getChildSlots(owner)[0] }, nodes, []);
+    const payload = next.structure?.payload as { elements: Array<{ elementId: string; defaultFlowId?: string | null }>; sequenceFlows: unknown[] };
+
+    expect(payload.sequenceFlows).toEqual([]);
+    expect(payload.elements.find(element => element.elementId === "gateway")?.defaultFlowId).toBeNull();
+  });
+
+  it("keeps a default-flow reference whose sequence flow survives", () => {
+    const owner = bpmnOwner(
+      [
+        { elementId: "gateway", elementType: "exclusiveGateway", defaultFlowId: "flow-default" },
+        { elementId: "end", elementType: "endEvent" }
+      ],
+      [{ flowId: "flow-default", sourceRef: "gateway", targetRef: "end", isDefault: true }]
+    );
+    const nodes = [
+      { id: "gateway", position: { x: 0, y: 0 }, data: { element: { elementId: "gateway", elementType: "exclusiveGateway" }, label: "" } },
+      { id: "end", position: { x: 200, y: 0 }, data: { element: { elementId: "end", elementType: "endEvent" }, label: "" } }
+    ] as unknown as Node<BpmnNodeData>[];
+    const edges = [{ id: "flow-default", source: "gateway", target: "end" }] as Edge[];
+
+    const next = syncBpmnCanvasToScope({ owner, slot: getChildSlots(owner)[0] }, nodes, edges);
+    const payload = next.structure?.payload as { elements: Array<{ elementId: string; defaultFlowId?: string | null }> };
+
+    expect(payload.elements.find(element => element.elementId === "gateway")?.defaultFlowId).toBe("flow-default");
+  });
+
+
+  it("expands a deleted bound subprocess to its nested BPMN element ids", () => {
+    // A subprocess element bound to an activity whose own structure is a BPMN scope: the nested
+    // element's layout is keyed by its elementId, which the activity walk alone never reaches.
+    const nested: ActivityNode = {
+      nodeId: "subprocess-activity",
+      activityVersionId: "bpmn@1",
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: bpmnStructureKind,
+        schemaVersion: "1.0.0",
+        payload: {
+          elements: [{ elementId: "nested-task-element", elementType: "task", childNodeId: "nested-activity" }],
+          sequenceFlows: [],
+          activities: [{ nodeId: "nested-activity", activityVersionId: "writeline@1", inputs: [], outputs: [] }]
+        }
+      }
+    };
+    const deleted = [{
+      id: "subprocess-element",
+      position: { x: 0, y: 0 },
+      data: {
+        element: { elementId: "subprocess-element", elementType: "subProcess", childNodeId: "subprocess-activity" },
+        label: "",
+        boundActivity: { nodeId: "subprocess-activity", activityVersionId: "bpmn@1", label: "", icon: "flowchart" }
+      }
+    }] as unknown as Node<BpmnNodeData>[];
+
+    const removed = collectRemovedGraphNodeIds(deleted, [nested], undefined);
+
+    expect([...removed].sort()).toEqual([
+      "nested-activity",
+      "nested-task-element",
+      "subprocess-activity"
+    ]);
+  });
+
+  it("falls back to the canvas node id when no slot activity matches", () => {
+    const deleted = [{
+      id: "start",
+      position: { x: 0, y: 0 },
+      data: { element: { elementId: "start", elementType: "startEvent" }, label: "" }
+    }] as unknown as Node<BpmnNodeData>[];
+
+    expect([...collectRemovedGraphNodeIds(deleted, [], undefined)]).toEqual(["start"]);
+  });
+
+  // Removals that start from an activity rather than a canvas node — a single-cardinality slot being
+  // overwritten, a slot activity being replaced — need the same expansion, or the nested elements'
+  // side-table records outlive the activity that owned them.
+  it("collectOwnedNodeIds expands an activity to its nested activities and BPMN element ids", () => {
+    const owner: ActivityNode = {
+      nodeId: "subprocess-activity",
+      activityVersionId: "bpmn@1",
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: bpmnStructureKind,
+        schemaVersion: "1.0.0",
+        payload: {
+          elements: [{ elementId: "nested-task-element", elementType: "task", childNodeId: "nested-activity" }],
+          sequenceFlows: [],
+          activities: [{ nodeId: "nested-activity", activityVersionId: "writeline@1", inputs: [], outputs: [] }]
+        }
+      }
+    };
+
+    expect([...collectOwnedNodeIds(owner, undefined)].sort()).toEqual([
+      "nested-activity",
+      "nested-task-element",
+      "subprocess-activity"
+    ]);
+  });
+
+  it("collectOwnedNodeIds accumulates into a caller's set so several removals share one pass", () => {
+    const leaf: ActivityNode = {
+      nodeId: "leaf",
+      activityVersionId: "writeline@1",
+      inputs: [],
+      outputs: [],
+      structure: null
+    } as unknown as ActivityNode;
+    const result = new Set(["already-there"]);
+
+    expect(collectOwnedNodeIds(leaf, undefined, result)).toBe(result);
+    expect([...result].sort()).toEqual(["already-there", "leaf"]);
+  });
+
+});
+
+describe("buildBpmnCanvas", () => {
+  it("maps elements to bpmnElement nodes and flows to edges with condition labels", () => {
+    const owner = bpmnOwner(diamondElements, diamondFlows, [activityNode("node-a")]);
+    const scope = { owner, slot: getChildSlots(owner)[0] };
+    const canvas = buildBpmnCanvas(scope, [catalogItem()], [{ nodeId: "task-a", x: 400, y: 80 }]);
+
+    expect(canvas.nodes.map(node => node.id)).toEqual(["start", "task-a", "end"]);
+    expect(canvas.nodes.every(node => node.type === "bpmnElement")).toBe(true);
+    expect(canvas.nodes[1].position).toEqual({ x: 400, y: 80 });
+    expect(canvas.nodes[1].data.boundActivity?.label).toBe("Write Line");
+    expect(canvas.edges.map(edge => edge.id)).toEqual(["flow-1", "flow-2"]);
+    expect(canvas.edges[1].label).toBe("Done");
+  });
+
+  it("uses frozen per-activity wording before the live catalog while preserving BPMN element names", () => {
+    const owner = bpmnOwner([
+      { elementId: "frozen-task", elementType: "task", childNodeId: "node-frozen" },
+      { elementId: "named-task", elementType: "task", name: "BPMN task name", childNodeId: "node-named" }
+    ], [], [activityNode("node-frozen"), activityNode("node-named")]);
+    const scope = { owner, slot: getChildSlots(owner)[0] };
+
+    const canvas = buildBpmnCanvas(scope, [catalogItem()], [], [
+      { nodeId: "node-frozen", displayName: "Frozen activity wording" }
+    ]);
+
+    expect(canvas.nodes[0].data.boundActivity?.label).toBe("Frozen activity wording");
+    expect(canvas.nodes[0].data.label).toBe("Frozen activity wording");
+    expect(canvas.nodes[1].data.boundActivity?.label).toBe("Write Line");
+    expect(canvas.nodes[1].data.label).toBe("BPMN task name");
+  });
+
+  it("carries the bound activity's child slots so a subprocess offers slot entry", () => {
+    const owner = bpmnOwner(
+      [...diamondElements, { elementId: "sub-1", elementType: "subProcess", childNodeId: "node-sub" }],
+      diamondFlows,
+      [activityNode("node-a"), nestedBpmnActivity("node-sub")]
+    );
+    const canvas = buildBpmnCanvas({ owner, slot: getChildSlots(owner, catalog)[0] }, catalog, []);
+    const subprocess = canvas.nodes.find(node => node.id === "sub-1")!;
+
+    expect(subprocess.data.childSlots.map(slot => slot.mode)).toEqual(["bpmn"]);
+    expect(subprocess.data.boundActivity?.nodeId).toBe("node-sub");
+  });
+
+  it("leaves child slots empty for events, gateways, unbound tasks, and leaf-bound tasks", () => {
+    const owner = bpmnOwner(
+      [...diamondElements, { elementId: "gw-1", elementType: "parallelGateway" }, { elementId: "task-b", elementType: "task" }],
+      diamondFlows,
+      [activityNode("node-a")]
+    );
+    const canvas = buildBpmnCanvas({ owner, slot: getChildSlots(owner, catalog)[0] }, catalog, []);
+
+    // start + end events, the gateway, the unbound task, and task-a bound to a leaf activity.
+    expect(canvas.nodes.every(node => node.data.childSlots.length === 0)).toBe(true);
+  });
+});
+
+describe("syncBpmnCanvasToScope", () => {
+  function canvasFor(owner: ActivityNode) {
+    const scope = { owner, slot: getChildSlots(owner)[0] };
+    return { scope, ...buildBpmnCanvas(scope, [catalogItem()], []) };
+  }
+
+  it("round-trips an unchanged canvas", () => {
+    const owner = bpmnOwner(diamondElements, diamondFlows, [activityNode("node-a")]);
+    const { scope, nodes, edges } = canvasFor(owner);
+
+    const next = syncBpmnCanvasToScope(scope, nodes, edges);
+    expect(next.structure?.payload.elements).toEqual(diamondElements);
+    // Unknown authored props on flows survive the round-trip.
+    expect((next.structure?.payload.sequenceFlows as Record<string, unknown>[])[1].extra).toBe("kept");
+    expect((next.structure?.payload.activities as ActivityNode[]).map(activity => activity.nodeId)).toEqual(["node-a"]);
+  });
+
+  it("adds a stamped shape node as a new element", () => {
+    const owner = bpmnOwner(diamondElements, diamondFlows, [activityNode("node-a")]);
+    const { scope, nodes, edges } = canvasFor(owner);
+    const gateway = bpmnShapePalette.find(shape => shape.key === "parallelGateway")!;
+    const shapeNode = createBpmnShapeNode(gateway, { x: 10, y: 10 });
+
+    const next = syncBpmnCanvasToScope(scope, [...nodes, shapeNode], edges);
+    const elements = next.structure?.payload.elements as Record<string, unknown>[];
+    expect(elements).toHaveLength(4);
+    expect(elements[3].elementType).toBe("parallelGateway");
+  });
+
+  it("adds a bound task node as element plus slot activity", () => {
+    const owner = bpmnOwner(diamondElements, diamondFlows, [activityNode("node-a")]);
+    const { scope, nodes, edges } = canvasFor(owner);
+    const boundActivity = activityNode("node-b");
+    const boundNode = createBpmnBoundNode(catalogItem(), boundActivity, { x: 20, y: 20 });
+
+    const next = syncBpmnCanvasToScope(scope, [...nodes, boundNode], edges, [boundActivity]);
+    const elements = next.structure?.payload.elements as Record<string, unknown>[];
+    expect(elements[3].elementType).toBe("task");
+    expect(elements[3].childNodeId).toBe("node-b");
+    expect((next.structure?.payload.activities as ActivityNode[]).map(activity => activity.nodeId)).toEqual(["node-a", "node-b"]);
+  });
+
+  it("deleting an element drops its flows and its orphaned bound activity", () => {
+    const owner = bpmnOwner(diamondElements, diamondFlows, [activityNode("node-a")]);
+    const { scope, nodes, edges } = canvasFor(owner);
+    const remainingNodes = nodes.filter(node => node.id !== "task-a");
+    const remainingEdges = edges.filter(edge => edge.source !== "task-a" && edge.target !== "task-a");
+
+    const next = syncBpmnCanvasToScope(scope, remainingNodes, remainingEdges);
+    const elements = next.structure?.payload.elements as Record<string, unknown>[];
+    expect(elements.map(element => element.elementId)).toEqual(["start", "end"]);
+    expect(next.structure?.payload.sequenceFlows).toEqual([]);
+    expect(next.structure?.payload.activities).toEqual([]);
+  });
+
+  it("a new edge becomes a sequence flow", () => {
+    const owner = bpmnOwner(diamondElements, diamondFlows, [activityNode("node-a")]);
+    const { scope, nodes, edges } = canvasFor(owner);
+    const newEdge: Edge = { id: "flow-new", source: "start", target: "end", type: "workflow" };
+
+    const next = syncBpmnCanvasToScope(scope, nodes, [...edges, newEdge]);
+    const flows = next.structure?.payload.sequenceFlows as Record<string, unknown>[];
+    expect(flows.map(flow => flow.flowId)).toEqual(["flow-1", "flow-2", "flow-new"]);
+    expect(flows[2]).toMatchObject({ sourceRef: "start", targetRef: "end", isDefault: false });
+  });
+});
+
+describe("updateBpmnElement", () => {
+  it("patches one element immutably", () => {
+    const owner = bpmnOwner(diamondElements, diamondFlows);
+    const next = updateBpmnElement(owner, "task-a", { name: "Approve order" });
+    const elements = next.structure?.payload.elements as Record<string, unknown>[];
+    expect(elements[1].name).toBe("Approve order");
+    expect(elements[1].elementId).toBe("task-a");
+    expect((owner.structure?.payload.elements as Record<string, unknown>[])[1].name).toBeUndefined();
+  });
+});
+
+// A BPMN canvas node is keyed by its ELEMENT id while slot entry addresses ACTIVITY node ids, so the
+// two are easy to confuse and the wrong one fails silently: resolveScope yields null and the host
+// clears the canvas rather than raising. These pin the translation at the element boundary.
+describe("bpmn subprocess slot navigation routing", () => {
+  const subProcessElement = { elementId: "sub-1", elementType: "subProcess", childNodeId: "node-sub" };
+  const root = bpmnOwner([...diamondElements, subProcessElement], diamondFlows, [
+    activityNode("node-a"),
+    nestedBpmnActivity("node-sub")
+  ]);
+  const rootScope = resolveScope(root, [], catalog)!;
+
+  function planFrom(ownerNodeId: string) {
+    const bound = rootScope.slot.activities.find(activity => activity.nodeId === "node-sub")!;
+    const slot = getChildSlots(bound, catalog)[0];
+    return planSlotNavigation([], rootScope.owner, ownerNodeId, slot, slotCrumbLabel("Review", slot), catalog);
+  }
+
+  it("descends into the nested BPMN process when routed through the bound activity node id", () => {
+    const plan = planFrom("node-sub")!;
+    expect(plan.frames).toEqual([{ ownerNodeId: "node-sub", slotId: "elsa.bpmn.structure:activities", label: "Review / Activities" }]);
+
+    const nested = resolveScope(root, plan.frames, catalog)!;
+    expect(nested.owner.nodeId).toBe("node-sub");
+    expect(nested.slot.mode).toBe("bpmn");
+
+    // The nested scope is an ordinary BPMN scope, so the same canvas construction applies at depth.
+    const nestedCanvas = buildBpmnCanvas(nested, catalog, []);
+    expect(nestedCanvas.nodes.map(node => node.id)).toEqual(["inner-start", "inner-task"]);
+    expect(nestedCanvas.edges.map(edge => edge.id)).toEqual(["inner-flow"]);
+  });
+
+  it("resolves to nothing when routed through the element id instead", () => {
+    const plan = planFrom("sub-1")!;
+    expect(plan.frames[0].ownerNodeId).toBe("sub-1");
+    // No slot of the BPMN owner holds a child called "sub-1" — that is an element, not an activity.
+    expect(resolveScope(root, plan.frames, catalog)).toBeNull();
+  });
+
+  it("descends into a flowchart-backed subprocess as a flowchart scope", () => {
+    const flowchartActivity: ActivityNode = {
+      nodeId: "node-fc",
+      activityVersionId: "flowchart@1",
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: "elsa.flowchart.structure",
+        schemaVersion: "1.0.0",
+        payload: { activities: [activityNode("node-fc-child")], connections: [] }
+      }
+    };
+    const owner = bpmnOwner(
+      [{ elementId: "sub-fc", elementType: "subProcess", childNodeId: "node-fc" }],
+      [],
+      [flowchartActivity]
+    );
+    const scope = resolveScope(owner, [], catalog)!;
+    const slot = getChildSlots(flowchartActivity, catalog)[0];
+    const plan = planSlotNavigation([], scope.owner, "node-fc", slot, slotCrumbLabel("Review", slot), catalog)!;
+
+    const nested = resolveScope(owner, plan.frames, catalog)!;
+    expect(nested.owner.nodeId).toBe("node-fc");
+    expect(nested.slot.mode).toBe("flowchart");
+  });
+});
+
+describe("bpmn canvas node factories", () => {
+  it("stamps a terminate end event with its event definition", () => {
+    const terminate = bpmnShapePalette.find(shape => shape.key === "terminateEndEvent")!;
+    const node: Node<BpmnNodeData> = createBpmnShapeNode(terminate, { x: 0, y: 0 });
+    expect(node.data.element.elementType).toBe("endEvent");
+    expect(node.data.element.eventDefinitions).toEqual([{ type: "terminate" }]);
+  });
+
+  it("binds container catalog items as subProcess elements", () => {
+    const container = catalogItem({
+      activityTypeKey: "Elsa.BpmnProcess",
+      displayName: "BPMN Process",
+      containerStructure: { mode: "bpmn" }
+    });
+    const node = createBpmnBoundNode(container, activityNode("node-inner"), { x: 0, y: 0 });
+    expect(node.data.element.elementType).toBe("subProcess");
+  });
+});
+
+describe("bpmn flow editing helpers", async () => {
+  const { updateBpmnFlow, updateBpmnDefaultFlow } = await import("../bpmn/bpmnAdapter");
+
+  it("updateBpmnFlow patches condition outcome without touching endpoints", () => {
+    const owner = {
+      nodeId: "node-bpmn",
+      activityVersionId: "bpmn@1",
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: "elsa.bpmn.structure",
+        schemaVersion: "1.0.0",
+        payload: {
+          elements: [{ elementId: "gw", elementType: "exclusiveGateway" }, { elementId: "end", elementType: "endEvent" }],
+          sequenceFlows: [{ flowId: "flow-1", sourceRef: "gw", targetRef: "end" }],
+          activities: []
+        }
+      }
+    };
+    const next = updateBpmnFlow(owner, "flow-1", { conditionOutcome: "Approved", sourceRef: "hacked" });
+    const flows = next.structure?.payload.sequenceFlows as Record<string, unknown>[];
+    expect(flows[0].conditionOutcome).toBe("Approved");
+    expect(flows[0].sourceRef).toBe("gw");
+  });
+
+  it("updateBpmnDefaultFlow marks one default, clears siblings and its condition, and stamps defaultFlowId", () => {
+    const owner = {
+      nodeId: "node-bpmn",
+      activityVersionId: "bpmn@1",
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: "elsa.bpmn.structure",
+        schemaVersion: "1.0.0",
+        payload: {
+          elements: [{ elementId: "gw", elementType: "exclusiveGateway" }, { elementId: "a", elementType: "endEvent" }, { elementId: "b", elementType: "endEvent" }],
+          sequenceFlows: [
+            { flowId: "flow-a", sourceRef: "gw", targetRef: "a", isDefault: true },
+            { flowId: "flow-b", sourceRef: "gw", targetRef: "b", conditionOutcome: "B" }
+          ],
+          activities: []
+        }
+      }
+    };
+    const next = updateBpmnDefaultFlow(owner, "gw", "flow-b");
+    const flows = next.structure?.payload.sequenceFlows as Record<string, unknown>[];
+    expect(flows[0].isDefault).toBe(false);
+    expect(flows[1].isDefault).toBe(true);
+    expect(flows[1].conditionOutcome).toBeNull();
+    const elements = next.structure?.payload.elements as Record<string, unknown>[];
+    expect(elements[0].defaultFlowId).toBe("flow-b");
+
+    const cleared = updateBpmnDefaultFlow(next, "gw", null);
+    const clearedFlows = cleared.structure?.payload.sequenceFlows as Record<string, unknown>[];
+    expect(clearedFlows.every(flow => flow.isDefault !== true)).toBe(true);
+  });
+});
+
+describe("bpmn interchange layout bridges", async () => {
+  const { layoutFromBpmnDiagram, withDiagramFromLayout } = await import("../api/bpmnInterchange");
+
+  const node = {
+    nodeId: "node-bpmn",
+    activityVersionId: "bpmn@1",
+    inputs: [],
+    outputs: [],
+    structure: {
+      kind: "elsa.bpmn.structure",
+      schemaVersion: "1.0.0",
+      payload: {
+        elements: [{ elementId: "start", elementType: "startEvent" }, { elementId: "end", elementType: "endEvent" }],
+        sequenceFlows: [],
+        activities: [],
+        diagram: { shapes: { start: { x: 120, y: 200, width: 36, height: 36 } }, edges: {} }
+      }
+    }
+  };
+
+  it("layoutFromBpmnDiagram maps DI shapes to layout records keyed by elementId", () => {
+    expect(layoutFromBpmnDiagram(node)).toEqual([{ nodeId: "start", x: 120, y: 200 }]);
+  });
+
+  it("withDiagramFromLayout stamps canvas positions into DI shapes, preserving sizes", () => {
+    const next = withDiagramFromLayout(node, [{ nodeId: "start", x: 300, y: 50 }, { nodeId: "end", x: 500, y: 50 }]);
+    const shapes = (next.structure?.payload.diagram as { shapes: Record<string, Record<string, unknown>> }).shapes;
+    expect(shapes.start).toMatchObject({ x: 300, y: 50, width: 36, height: 36 });
+    expect(shapes.end).toMatchObject({ x: 500, y: 50 });
+  });
+});

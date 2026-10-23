@@ -1,0 +1,58 @@
+name: Stale
+
+# Closes untriaged issues and inactive pull requests nobody picked up.
+# Policy and thresholds: docs/contributing/repository-hygiene.md
+#
+# Runs in debug-only mode (logs what it would do, changes nothing) until the repository variable
+# HYGIENE_ENFORCE is 'true'. Apply the keep-open label to exempt an issue or pull request.
+
+on:
+  schedule:
+    - cron: '23 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: stale
+  cancel-in-progress: false
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/stale@v9
+        with:
+          debug-only: ${{ vars.HYGIENE_ENFORCE != 'true' }}
+          operations-per-run: 200
+          stale-issue-label: stale
+          stale-pr-label: stale
+
+          # Issues: only intake states go stale; planned and structural work does not.
+          any-of-issue-labels: needs-triage,needs-info
+          exempt-issue-labels: type:program,type:epic,security,bug,keep-open
+          days-before-issue-stale: 30
+          days-before-issue-close: 14
+          close-issue-reason: not_planned
+          stale-issue-message: >
+            No activity for 30 days while waiting for triage or information. This closes as not
+            planned in 14 days unless someone comments or a maintainer triages it. Reopening is
+            always fine. Policy: docs/contributing/repository-hygiene.md
+          close-issue-message: >
+            Closed as not planned after 44 days without triage or activity. Reopen with context if
+            it is still relevant.
+
+          # Pull requests: any open PR without activity, drafts included.
+          days-before-pr-stale: 21
+          days-before-pr-close: 7
+          exempt-pr-labels: keep-open
+          delete-branch: true
+          stale-pr-message: >
+            No activity for 21 days. This closes in 7 days unless it is updated or labelled
+            keep-open. The branch is deleted on close; use Restore branch on this PR to pick it up again.
+          close-pr-message: >
+            Closed after 28 days without activity. Restore the branch and reopen to continue.

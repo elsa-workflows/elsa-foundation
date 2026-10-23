@@ -2,7 +2,7 @@
 
 Read-only audit performed on 2026-10-02 against Foundation Studio commit `69acb2ab6a517249cc3442adbcf93ff185c987b9`. The root investigator reviewed the findings alongside source and computer-use evidence. This is an investigation result, not an automated-test pass.
 
-Tracked source roots are `src/apps`, `src/essentials` and `src/extensions`; pre-existing untracked `src/Elsa.Studio.*` output directories were excluded. The source already implements:
+Tracked source roots are `src/apps`, `src/essentials` and `src/extensions`; pre-existing untracked `src/Elsa.Studio.*` output directories were excluded. Since the Foundation/Studio consolidation (#2501), this source is in this repository under `Studio/src/`. The source already implements:
 
 - CodeMirror 6 with JavaScript/Liquid language packages, lazy grammar loading, highlighting, completion, lint, commands, history and editor state.
 - Automatic and explicit completion, pointer/keyboard hover and signature help, with optional Foundation `expressions.tooling.v1` context/catalog/completion/hover/validation relations.

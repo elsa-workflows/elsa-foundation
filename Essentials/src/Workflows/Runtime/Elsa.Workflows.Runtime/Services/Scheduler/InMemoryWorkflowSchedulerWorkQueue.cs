@@ -1,0 +1,491 @@
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
+
+namespace Elsa.Workflows.Runtime.Services.Scheduler;
+
+[RuntimeDefaultRegistration]
+public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQueue, IWorkflowSchedulerWorkClaimInspection, IWorkflowSchedulerWorkVisibilityReader
+{
+    private readonly object _syncRoot = new();
+    private readonly HashSet<string> _deletedWorkflowExecutionIds = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Queue<RuntimeSchedulerWorkItem>> _queuesByWorkflowExecutionId = new(StringComparer.Ordinal);
+    private readonly Dictionary<SchedulerWorkItemKey, RuntimeSchedulerWorkItem> _workItemsByScopedId = new();
+    private readonly Dictionary<SchedulerWorkItemKey, ClaimState> _claimsByScopedId = new();
+    private long _nextInsertionOrdinal;
+
+    internal void DeleteForWorkflowExecution(string workflowExecutionId)
+    {
+        lock (_syncRoot)
+        {
+            _deletedWorkflowExecutionIds.Add(workflowExecutionId);
+            _queuesByWorkflowExecutionId.Remove(workflowExecutionId);
+            foreach (var key in _workItemsByScopedId.Keys
+                         .Where(key => StringComparer.Ordinal.Equals(key.WorkflowExecutionId, workflowExecutionId))
+                         .ToArray())
+                _workItemsByScopedId.Remove(key);
+            foreach (var key in _claimsByScopedId.Keys
+                         .Where(key => StringComparer.Ordinal.Equals(key.WorkflowExecutionId, workflowExecutionId))
+                         .ToArray())
+                _claimsByScopedId.Remove(key);
+        }
+    }
+
+    public bool SupportsClaimTransitions => true;
+
+    public bool SupportsTargetedDeletion => true;
+
+    public bool SupportsClaimableBacklogDiscovery => true;
+
+    public ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(workItem);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            // A retained post-commit continuation may settle after manual history deletion. Acknowledge its
+            // idempotent delivery without recreating scheduler work for the fenced execution.
+            if (_deletedWorkflowExecutionIds.Contains(workItem.WorkflowExecutionId))
+                return ValueTask.FromResult(workItem);
+            var scopedWorkItemKey = new SchedulerWorkItemKey(workItem.WorkflowExecutionId, workItem.WorkItemId);
+            if (_workItemsByScopedId.TryGetValue(scopedWorkItemKey, out var existing))
+                return new ValueTask<RuntimeSchedulerWorkItem>(existing);
+
+            if (!_queuesByWorkflowExecutionId.TryGetValue(workItem.WorkflowExecutionId, out var queue))
+            {
+                queue = new Queue<RuntimeSchedulerWorkItem>();
+                _queuesByWorkflowExecutionId.Add(workItem.WorkflowExecutionId, queue);
+            }
+
+            var insertionOrdinal = checked(_nextInsertionOrdinal + 1);
+            queue.Enqueue(workItem);
+            _workItemsByScopedId.Add(scopedWorkItemKey, workItem);
+            _claimsByScopedId.Add(scopedWorkItemKey, new ClaimState(insertionOrdinal));
+            _nextInsertionOrdinal = insertionOrdinal;
+
+            return new ValueTask<RuntimeSchedulerWorkItem>(workItem);
+        }
+    }
+
+    public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+            return ValueTask.FromResult(ListPage(
+                query,
+                $"scheduler-work:workflow:{query.WorkflowExecutionId}",
+                OrderKey,
+                item => item));
+    }
+
+    public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkVisibility>> ListWithVisibilityAsync(
+        RuntimeSchedulerWorkQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+            return ValueTask.FromResult(ListPage(
+                query,
+                $"scheduler-work-visibility:workflow:{query.WorkflowExecutionId}",
+                InsertionOrderKey,
+                item => new RuntimeSchedulerWorkVisibility(
+                    item,
+                    _claimsByScopedId[new SchedulerWorkItemKey(item.WorkflowExecutionId, item.WorkItemId)].VisibleAfter)));
+    }
+
+    private RuntimeStorePage<TResult> ListPage<TResult>(
+        RuntimeSchedulerWorkQuery query,
+        string queryBinding,
+        Func<RuntimeSchedulerWorkItem, string> orderKey,
+        Func<RuntimeSchedulerWorkItem, TResult> project)
+    {
+        if (!_queuesByWorkflowExecutionId.TryGetValue(query.WorkflowExecutionId, out var queue))
+            return new RuntimeStorePage<TResult>(query, []);
+
+        var lastOrderKey = InMemoryRuntimeStoreContinuation.Decode(
+            query.ContinuationToken,
+            queryBinding,
+            nameof(query));
+        var remaining = queue
+            .Select(item => (Item: item, OrderKey: orderKey(item)))
+            .Where(entry =>
+                lastOrderKey is null ||
+                StringComparer.Ordinal.Compare(entry.OrderKey, lastOrderKey) > 0)
+            .OrderBy(entry => entry.OrderKey, StringComparer.Ordinal)
+            .Take(query.Limit + 1)
+            .ToArray();
+        var page = remaining.Take(query.Limit).ToArray();
+        var nextContinuation = remaining.Length > page.Length
+            ? InMemoryRuntimeStoreContinuation.Encode(queryBinding, page[^1].OrderKey)
+            : null;
+
+        return new RuntimeStorePage<TResult>(
+            query,
+            page.Select(entry => project(entry.Item)).ToArray(),
+            nextContinuation);
+    }
+
+    public ValueTask<RuntimeSchedulerWorkItem?> DequeueAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            if (!_queuesByWorkflowExecutionId.TryGetValue(workflowExecutionId, out var queue) || queue.Count == 0)
+                return new ValueTask<RuntimeSchedulerWorkItem?>((RuntimeSchedulerWorkItem?)null);
+
+            var workItem = queue.Dequeue();
+            var key = new SchedulerWorkItemKey(workItem.WorkflowExecutionId, workItem.WorkItemId);
+            _workItemsByScopedId.Remove(key);
+            _claimsByScopedId.Remove(key);
+
+            if (queue.Count == 0)
+                _queuesByWorkflowExecutionId.Remove(workflowExecutionId);
+
+            return new ValueTask<RuntimeSchedulerWorkItem?>(workItem);
+        }
+    }
+
+    public ValueTask<bool> DeleteAsync(string workflowExecutionId, string workItemId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(workItemId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            var key = new SchedulerWorkItemKey(workflowExecutionId, workItemId);
+            if (!_workItemsByScopedId.Remove(key))
+                return new ValueTask<bool>(false);
+            _claimsByScopedId.Remove(key);
+            if (!_queuesByWorkflowExecutionId.TryGetValue(workflowExecutionId, out var queue))
+                return new ValueTask<bool>(false);
+
+            var retained = queue.Where(item => !StringComparer.Ordinal.Equals(item.WorkItemId, workItemId)).ToArray();
+            if (retained.Length == 0)
+                _queuesByWorkflowExecutionId.Remove(workflowExecutionId);
+            else
+                _queuesByWorkflowExecutionId[workflowExecutionId] = new Queue<RuntimeSchedulerWorkItem>(retained);
+            return new ValueTask<bool>(true);
+        }
+    }
+
+    public ValueTask<IReadOnlyCollection<string>> ListPendingWorkflowExecutionIdsAsync(int limit, CancellationToken cancellationToken = default)
+    {
+        RuntimeStorePageRequest.ValidateLimit(limit, nameof(limit));
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            var executionIds = _queuesByWorkflowExecutionId.Keys
+                .Order(StringComparer.Ordinal)
+                .Take(limit)
+                .ToArray();
+
+            return new ValueTask<IReadOnlyCollection<string>>(executionIds);
+        }
+    }
+
+    public ValueTask<IReadOnlyCollection<string>> ListClaimableWorkflowExecutionIdsAsync(
+        RuntimeSchedulerClaimableBacklogQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            // The head decides, through the same predicate ClaimAsync applies, so discovery never lists an execution
+            // a claim would refuse and never hides one a claim would serve.
+            var executionIds = _queuesByWorkflowExecutionId
+                .Where(entry => query.AfterWorkflowExecutionId is null ||
+                                StringComparer.Ordinal.Compare(entry.Key, query.AfterWorkflowExecutionId) > 0)
+                .Where(entry => entry.Value.TryPeek(out var head) &&
+                                !IsHidden(_claimsByScopedId[new SchedulerWorkItemKey(head.WorkflowExecutionId, head.WorkItemId)], query.Now))
+                .Select(entry => entry.Key)
+                .Order(StringComparer.Ordinal)
+                .Take(query.Limit)
+                .ToArray();
+
+            return new ValueTask<IReadOnlyCollection<string>>(executionIds);
+        }
+    }
+
+    public ValueTask<IReadOnlyDictionary<string, RuntimeSchedulerWorkItem>> ListNextWorkItemsAsync(
+        IReadOnlyCollection<string> workflowExecutionIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(workflowExecutionIds);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            var heads = new Dictionary<string, RuntimeSchedulerWorkItem>(StringComparer.Ordinal);
+            foreach (var workflowExecutionId in workflowExecutionIds)
+            {
+                if (_queuesByWorkflowExecutionId.TryGetValue(workflowExecutionId, out var queue) && queue.TryPeek(out var head))
+                    heads[workflowExecutionId] = head;
+            }
+
+            return new ValueTask<IReadOnlyDictionary<string, RuntimeSchedulerWorkItem>>(heads);
+        }
+    }
+
+    public ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkClaim>> ListActiveClaimsAsync(
+        string workflowExecutionId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_syncRoot)
+        {
+            var claims = _claimsByScopedId
+                .Where(entry => StringComparer.Ordinal.Equals(entry.Key.WorkflowExecutionId, workflowExecutionId))
+                .Where(entry => entry.Value.ClaimedAt is not null && entry.Value.VisibleAfter is { } visibleAfter && visibleAfter > now)
+                .Select(entry => NewClaim(_workItemsByScopedId[entry.Key], entry.Value))
+                .OrderBy(claim => claim.Item.RecordedAt)
+                .ThenBy(claim => claim.Item.WorkItemId, StringComparer.Ordinal)
+                .ToArray();
+            return new ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkClaim>>(claims);
+        }
+    }
+
+    // Keyset continuation order key: mirrors the queue ordering (RecordedAt, Sequence, hashed WorkItemId)
+    // as one ordinal-sortable string, so a continuation resumes strictly after the last returned row even
+    // when the queue mutates between pages; the hashed-id segment makes the key unique per item, so no
+    // separate tie-break is needed.
+    private static string OrderKey(RuntimeSchedulerWorkItem item) =>
+        $"{item.RecordedAt.UtcTicks:D19}.{item.Sequence ?? long.MaxValue:D20}.{StableHash(item.WorkItemId)}";
+
+    private string InsertionOrderKey(RuntimeSchedulerWorkItem item) =>
+        _claimsByScopedId[new SchedulerWorkItemKey(item.WorkflowExecutionId, item.WorkItemId)]
+            .InsertionOrdinal.ToString("D20", CultureInfo.InvariantCulture);
+
+    private static string StableHash(string value) =>
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+
+    /// <summary>
+    /// Returns the FIFO-earliest queued item whose id is not in <paramref name="skipWorkItemIds"/>, without claiming
+    /// it — true insertion order, the same order <see cref="ClaimAsync"/> serves the head. Not part of
+    /// <see cref="IWorkflowSchedulerWorkQueue"/>: it exists for the coalescing session's single-writer inline fused
+    /// pump, which reads past the drain loop's live head claim and removes dispatched items with
+    /// <see cref="DeleteAsync"/>. The strict-FIFO claim contract for concurrent drainers is unaffected.
+    /// </summary>
+    public ValueTask<RuntimeSchedulerWorkItem?> PeekFirstAvailableAsync(
+        string workflowExecutionId,
+        IReadOnlySet<string> skipWorkItemIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentNullException.ThrowIfNull(skipWorkItemIds);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            if (!_queuesByWorkflowExecutionId.TryGetValue(workflowExecutionId, out var queue))
+                return new ValueTask<RuntimeSchedulerWorkItem?>((RuntimeSchedulerWorkItem?)null);
+
+            foreach (var item in queue)
+            {
+                if (!skipWorkItemIds.Contains(item.WorkItemId))
+                    return new ValueTask<RuntimeSchedulerWorkItem?>(item);
+            }
+
+            return new ValueTask<RuntimeSchedulerWorkItem?>((RuntimeSchedulerWorkItem?)null);
+        }
+    }
+
+    public ValueTask<RuntimeSchedulerWorkClaim?> ClaimAsync(
+        RuntimeSchedulerWorkClaimRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            if (!_queuesByWorkflowExecutionId.TryGetValue(request.WorkflowExecutionId, out var queue) || queue.Count == 0)
+                return new ValueTask<RuntimeSchedulerWorkClaim?>((RuntimeSchedulerWorkClaim?)null);
+
+            var item = queue.Peek();
+            var key = new SchedulerWorkItemKey(item.WorkflowExecutionId, item.WorkItemId);
+            var state = _claimsByScopedId[key];
+            if (IsHidden(state, request.Now))
+                return new ValueTask<RuntimeSchedulerWorkClaim?>((RuntimeSchedulerWorkClaim?)null);
+
+            state.OwnerId = request.OwnerId;
+            state.FencingToken = checked(state.FencingToken + 1);
+            state.Revision = checked(state.Revision + 1);
+            state.ClaimedAt = request.Now;
+            state.VisibleAfter = request.Now.Add(request.VisibilityTimeout);
+
+            return new ValueTask<RuntimeSchedulerWorkClaim?>(
+                NewClaim(item, state));
+        }
+    }
+
+    public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> RenewClaimAsync(
+        RuntimeSchedulerWorkClaim claim,
+        DateTimeOffset now,
+        TimeSpan visibilityTimeout,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        if (visibilityTimeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(visibilityTimeout), "Scheduler work visibility timeout must be greater than zero.");
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            if (!TryGetCurrentState(claim, out var state))
+                return new ValueTask<RuntimeSchedulerWorkClaimTransitionResult>(RuntimeSchedulerWorkClaimTransitionResult.Stale);
+
+            state.Revision = checked(state.Revision + 1);
+            state.VisibleAfter = now.Add(visibilityTimeout);
+            return new ValueTask<RuntimeSchedulerWorkClaimTransitionResult>(
+                RuntimeSchedulerWorkClaimTransitionResult.Applied(NewClaim(claim.Item, state)));
+        }
+    }
+
+    public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> CompleteClaimAsync(
+        RuntimeSchedulerWorkClaim claim,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            var key = KeyOf(claim);
+            if (!_workItemsByScopedId.ContainsKey(key))
+                return new ValueTask<RuntimeSchedulerWorkClaimTransitionResult>(RuntimeSchedulerWorkClaimTransitionResult.AlreadyApplied);
+            if (!TryGetCurrentState(claim, out _))
+                return new ValueTask<RuntimeSchedulerWorkClaimTransitionResult>(RuntimeSchedulerWorkClaimTransitionResult.Stale);
+            if (!_queuesByWorkflowExecutionId.TryGetValue(claim.Item.WorkflowExecutionId, out var queue) ||
+                queue.Count == 0 ||
+                !StringComparer.Ordinal.Equals(queue.Peek().WorkItemId, claim.Item.WorkItemId))
+            {
+                return new ValueTask<RuntimeSchedulerWorkClaimTransitionResult>(RuntimeSchedulerWorkClaimTransitionResult.Stale);
+            }
+
+            queue.Dequeue();
+            _workItemsByScopedId.Remove(key);
+            _claimsByScopedId.Remove(key);
+            if (queue.Count == 0)
+                _queuesByWorkflowExecutionId.Remove(claim.Item.WorkflowExecutionId);
+
+            return new ValueTask<RuntimeSchedulerWorkClaimTransitionResult>(
+                RuntimeSchedulerWorkClaimTransitionResult.Applied());
+        }
+    }
+
+    public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> ReleaseClaimAsync(
+        RuntimeSchedulerWorkClaim claim,
+        DateTimeOffset visibleAt,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            var key = KeyOf(claim);
+            if (!_workItemsByScopedId.ContainsKey(key))
+                return new ValueTask<RuntimeSchedulerWorkClaimTransitionResult>(RuntimeSchedulerWorkClaimTransitionResult.AlreadyApplied);
+            if (!TryGetCurrentState(claim, out var state))
+                return new ValueTask<RuntimeSchedulerWorkClaimTransitionResult>(RuntimeSchedulerWorkClaimTransitionResult.Stale);
+
+            state.OwnerId = null;
+            state.ClaimedAt = null;
+            state.VisibleAfter = visibleAt;
+            state.Revision = checked(state.Revision + 1);
+            return new ValueTask<RuntimeSchedulerWorkClaimTransitionResult>(
+                RuntimeSchedulerWorkClaimTransitionResult.Applied());
+        }
+    }
+
+    public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> ConsumeClaimedAsync(
+        ConsumedSchedulerWorkItem consumed,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(consumed);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            var key = new SchedulerWorkItemKey(consumed.WorkflowExecutionId, consumed.WorkItemId);
+            // Fence on owner + fencing token only (renewal-stable): a renewal advances the revision but keeps these, so a
+            // renewed claim still consumes its item, while a successor reclaim (token advanced) or a completed/absent item
+            // is claim-lost.
+            if (!_claimsByScopedId.TryGetValue(key, out var state) ||
+                !consumed.IsFencedBy(state.OwnerId, state.FencingToken))
+            {
+                return new ValueTask<RuntimeSchedulerWorkClaimTransitionResult>(RuntimeSchedulerWorkClaimTransitionResult.Stale);
+            }
+
+            _workItemsByScopedId.Remove(key);
+            _claimsByScopedId.Remove(key);
+            if (_queuesByWorkflowExecutionId.TryGetValue(consumed.WorkflowExecutionId, out var queue))
+            {
+                var retained = queue.Where(item => !StringComparer.Ordinal.Equals(item.WorkItemId, consumed.WorkItemId)).ToArray();
+                if (retained.Length == 0)
+                    _queuesByWorkflowExecutionId.Remove(consumed.WorkflowExecutionId);
+                else
+                    _queuesByWorkflowExecutionId[consumed.WorkflowExecutionId] = new Queue<RuntimeSchedulerWorkItem>(retained);
+            }
+
+            return new ValueTask<RuntimeSchedulerWorkClaimTransitionResult>(RuntimeSchedulerWorkClaimTransitionResult.Applied());
+        }
+    }
+
+    private bool TryGetCurrentState(RuntimeSchedulerWorkClaim claim, out ClaimState state)
+    {
+        if (_claimsByScopedId.TryGetValue(KeyOf(claim), out state!) &&
+            state.Revision == claim.Revision &&
+            state.FencingToken == claim.FencingToken &&
+            StringComparer.Ordinal.Equals(state.OwnerId, claim.OwnerId))
+        {
+            return true;
+        }
+
+        state = null!;
+        return false;
+    }
+
+    // A live claim or a release with future visibility (backoff) hides the item until its deadline passes.
+    private static bool IsHidden(ClaimState state, DateTimeOffset now) =>
+        state.VisibleAfter is { } visibleAfter && visibleAfter > now;
+
+    private static RuntimeSchedulerWorkClaim NewClaim(RuntimeSchedulerWorkItem item, ClaimState state) =>
+        new(
+            item,
+            state.OwnerId!,
+            state.FencingToken,
+            state.Revision,
+            state.ClaimedAt!.Value,
+            state.VisibleAfter!.Value);
+
+    private static SchedulerWorkItemKey KeyOf(RuntimeSchedulerWorkClaim claim) =>
+        new(claim.Item.WorkflowExecutionId, claim.Item.WorkItemId);
+
+    private readonly record struct SchedulerWorkItemKey(string WorkflowExecutionId, string WorkItemId);
+
+    private sealed class ClaimState(long insertionOrdinal)
+    {
+        public long InsertionOrdinal { get; } = insertionOrdinal;
+        public string? OwnerId { get; set; }
+        public long FencingToken { get; set; }
+        public long Revision { get; set; } = 1;
+        public DateTimeOffset? ClaimedAt { get; set; }
+        public DateTimeOffset? VisibleAfter { get; set; }
+    }
+}

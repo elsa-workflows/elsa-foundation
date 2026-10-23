@@ -9,7 +9,7 @@
 
 **Feature Branch**: `003-single-update-command`
 **Created**: 2026-06-02
-**Status**: Draft
+**Status**: Implemented — all tasks checked in f590e4ce2
 **Input**: User description (Unit 2 — design-domain roadmap): "Replace Unit C's granular Draft-mutation commands with ONE coarse `IUpdate` command that, under the existing per-Draft distributed lock, loads existing Draft state → diffs incoming vs stored → emits one event per detected difference (re-homing the granular Design.Core event types as the events `IUpdate` emits, keeping event-sourcing open for Unit H) → persists. Keep the lifecycle commands. Adjust `DraftMutationPipeline` to the single-command shape. Per-diff events publish on the Unit 1 unified `IEvent` / `IEventHandler<T>` / `IEventPublisher` substrate. The `DraftValidating` (Sequential gate) / `DraftValidated` (Background outcome) validation pair stays."
 
 ---

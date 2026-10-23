@@ -27,10 +27,10 @@ Readiness](workspace-launch-readiness.md): a launchable workspace must also *sta
 1. **Instrument (this unit — spec 129).** Opt-in `Elsa.Boot` phase-timing diagnostic + deterministic schema
    op-count baseline + measurement recipe + baseline report. Measurement only. Gates units 2–5.
 2. **ReadyToRun publish (spec 134 — DELIVERED).** R2R added to the container publish path
-   (`src/apps/Elsa.Server/Dockerfile`, per-RID via `TARGETARCH`, framework-dependent, Dockerfile-scoped so dev
+   (`Essentials/apps/Elsa.Server/Dockerfile`, per-RID via `TARGETARCH`, framework-dependent, Dockerfile-scoped so dev
    builds are untouched) to cut the JIT-bound host-build + Kestrel-startup share. TieredPGO left at its default-on
    value (R2R composes with tiered compilation); InvariantGlobalization rejected (host does auth + culture-
-   sensitive work). Measured honestly in `specs/134-container-readytorun-publish/research.md` — the deterministic
+   sensitive work). Measured honestly in `specs/232-container-readytorun-publish/research.md` — the deterministic
    signal is publish size + a clean per-RID crossgen pass; walls were not benchmarked (fleet load). See the
    recommendation there.
 3. **Schema batch / skip-if-current.** Reduce the current 963-operation fresh-DB admission and skip it entirely on an
@@ -51,7 +51,7 @@ Readiness](workspace-launch-readiness.md): a launchable workspace must also *sta
    shell state), so no CShells edit and no synthetic request are needed. Supports "all configured shells"
    (default/`*`) and named-shell config shapes; a many-shell host pays every activation at boot only when it opts
    in (the documented trade). Demo default remains OFF; flipping it is a separate decision. See
-   `specs/132-eager-shell-activation/`.
+   `specs/230-eager-shell-activation/`.
 5. **Warmups.** Targeted first-use warmups (JIT/route-table/serializer/connection) for whatever residual
    first-request cost remains after units 2–4.
 
@@ -90,18 +90,18 @@ These items preserve the former queue and do not authorize measurement or timing
 ## Linked surfaces
 
 - Spec: `specs/129-cold-start-phase-instrument/` (unit 1)
-- Spec: `specs/132-eager-shell-activation/` (unit 4)
+- Spec: `specs/230-eager-shell-activation/` (unit 4)
 - Spec: `specs/133-schema-admission-skip-and-batch/` (unit 3 skip-if-current; batching proposal for Groundwork)
 - Report: `docs/reports/cold-start-readiness-2026-07.md`
 - Upstream proposal: `docs/reports/cshells-initializer-observer-proposal.md`
-- Eager activation: `src/apps/Elsa.Server/Boot/EagerShellActivation*.cs`
+- Eager activation: `Essentials/apps/Elsa.Server/Boot/EagerShellActivation*.cs`
 - Charter/precedent: `docs/reports/runtime-http-performance-2026-07.md`
-- Instrument: `src/apps/Elsa.Server/Boot/`, `src/apps/Elsa.Server/Program.cs`
+- Instrument: `Essentials/apps/Elsa.Server/Boot/`, `Essentials/apps/Elsa.Server/Program.cs`
 - Recipe: `tools/performance/measure-cold-start.sh`
-- Deterministic guard: `tests/essentials/Persistence/Groundwork/Tests/ColdStartSchemaOperationCountTests.cs`
-- Skip-if-current guard: `tests/essentials/Persistence/Groundwork/Tests/GroundworkAdmissionSkipStampTests.cs`
-- Skip-if-current impl: `src/essentials/Persistence/Groundwork/Sqlite/SqliteGroundworkAdmissionStampStore.cs`,
-  `src/essentials/Persistence/Groundwork/Unified/Composition/GroundworkAdmissionSkipStamp.cs`
+- Deterministic guard: `Essentials/tests/Persistence/Groundwork/Tests/ColdStartSchemaOperationCountTests.cs`
+- Skip-if-current guard: `Essentials/tests/Persistence/Groundwork/Tests/GroundworkAdmissionSkipStampTests.cs`
+- Skip-if-current impl: `Essentials/src/Persistence/Groundwork/Sqlite/SqliteGroundworkAdmissionStampStore.cs`,
+  `Essentials/src/Persistence/Groundwork/Unified/Composition/GroundworkAdmissionSkipStamp.cs`
 
 ## Removal or completion conditions
 

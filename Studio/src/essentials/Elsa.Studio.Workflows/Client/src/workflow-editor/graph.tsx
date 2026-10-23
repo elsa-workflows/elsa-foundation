@@ -1,0 +1,304 @@
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { BaseEdge, EdgeLabelRenderer, Handle, Position, getBezierPath, getSmoothStepPath, type EdgeProps, type NodeProps } from "@xyflow/react";
+import { useStudioThemeLayout, type StudioThemeLayout } from "@elsa-workflows/studio-sdk";
+import { AlertTriangle, Flag, Plus, Trash2 } from "lucide-react";
+import type { ActivityCatalogItem } from "../workflowTypes";
+import { renderActivityIcon } from "../activityIconView";
+import { getActivityDisplay, type WorkflowNodeData } from "../workflowAdapter";
+import { getAvailabilityStateLabel } from "../activityAvailability";
+import { truncate } from "../workflowFormatting";
+import { groupActivityPalette, isActivityBrowsable } from "./editorHelpers";
+import { WorkflowEdgeActionsContext, WorkflowNodeAvailabilityContext } from "./contexts";
+import { NodeSlotBadges } from "./NodeSlotBadges";
+import { WorkflowNodeContextToolbar } from "./WorkflowNodeContextToolbar";
+import { WorkflowNodeRuntimeBadges } from "./WorkflowNodeRuntimeBadges";
+import { BpmnElementNode } from "../bpmn/BpmnElementNode";
+import { httpEndpointResponseBadge } from "../httpEndpointResponseMode";
+import type { WorkflowEdge } from "./editorTypes";
+import { resolveNodeActivityVisual } from "./workflowNodeVisual";
+
+export const nodeTypes = { workflowActivity: WorkflowActivityNode, bpmnElement: BpmnElementNode };
+export const edgeTypes = { workflow: WorkflowFlowEdge };
+
+export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
+  const nodeData = data as WorkflowNodeData;
+  const { icon, fallback, tone } = resolveNodeActivityVisual(nodeData);
+  const runtime = nodeData.runtime;
+  const showFlowPorts = !nodeData.suppressFlowPorts;
+  const sourcePorts = showFlowPorts
+    ? nodeData.sourcePorts.length > 0 ? nodeData.sourcePorts : [{ name: "Done", displayName: "Done" }]
+    : [];
+  const subtitle = formatNodeSubtitle(nodeData);
+  const httpResponseBadge = httpEndpointResponseBadge(nodeData.httpEndpointResponseMode ?? null);
+  const availabilityLookup = React.useContext(WorkflowNodeAvailabilityContext);
+  const availability = availabilityLookup?.({ activityVersionId: nodeData.activityVersionId, activityTypeKey: nodeData.activityTypeKey }) ?? null;
+  return (
+    <div
+      className={["wf-node", selected ? "selected" : "", runtime ? "wf-node-runtime" : "", runtime?.hasBlockingIncident ? "faulted" : "", availability ? "wf-node-unavailable" : "", nodeData.ghost ? "wf-node-ghost" : "", nodeData.isStartNode ? "wf-node-start" : ""].filter(Boolean).join(" ")}
+      data-start-node={nodeData.isStartNode ? "true" : undefined}
+      data-trigger-enabled={nodeData.canStartWorkflow ? "true" : undefined}
+      data-icon={icon}
+      data-tone={tone}
+      data-runtime-node-id={nodeData.runtimeNodeId ?? id}
+      title={[nodeData.label, nodeData.description].filter(Boolean).join(" — ")}
+      aria-description={nodeData.description}
+    >
+      {showFlowPorts && nodeData.acceptsInbound ? <Handle type="target" position={Position.Left} /> : null}
+      {nodeData.isStartNode ? (
+        <span className="wf-node-start-badge" title="Execution starts here">
+          <Flag size={11} aria-hidden="true" /> Start
+        </span>
+      ) : null}
+      <WorkflowNodeContextToolbar nodeId={id} data={nodeData} selected={!!selected} />
+      {availability ? (
+        <span className="wf-node-availability" title={`No longer available for new use · ${getAvailabilityStateLabel(availability.state)}`}>
+          <AlertTriangle size={13} />
+        </span>
+      ) : null}
+      <div className="wf-node-content">
+        <span className="wf-node-icon" aria-hidden="true">{renderActivityIcon(icon, fallback)}</span>
+        <span className="wf-node-copy">
+          <strong title={nodeData.label}>{nodeData.label}</strong>
+          {nodeData.ghost ? <small className="wf-node-ghost-note">Not available in this environment</small> : subtitle.text ? <small title={subtitle.title}>{subtitle.text}</small> : null}
+          {httpResponseBadge ? (
+            <span
+              className="wf-node-http-response-badge"
+              data-mode={nodeData.httpEndpointResponseMode?.toLowerCase()}
+              title={httpResponseBadge}
+              aria-label={`HTTP endpoint behavior: ${httpResponseBadge}`}
+            >
+              {httpResponseBadge}
+            </span>
+          ) : null}
+        </span>
+      </div>
+      <NodeSlotBadges
+        ownerNodeId={id}
+        ownerLabel={nodeData.label}
+        slots={nodeData.childSlots}
+        onEnterSlot={nodeData.onEnterSlot}
+      />
+      <WorkflowNodeRuntimeBadges data={nodeData} />
+      {sourcePorts.map((port, index) => {
+        const top = `${((index + 1) / (sourcePorts.length + 1)) * 100}%`;
+        return (
+          <React.Fragment key={port.name}>
+            <span className="wf-node-port-label" style={{ top }}>{port.displayName}</span>
+            <Handle type="source" position={Position.Right} id={port.name} style={{ top }} />
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * The node subtitle. Prefers a per-instance summary of the primary authored input (what this node
+ * actually does) over the static `category · kind`, which duplicates the palette grouping and never
+ * varies between instances. Falls back to the bare kind when nothing is authored yet. The full summary
+ * and the type metadata are preserved in `title` so a hover still surfaces them.
+ */
+function formatNodeSubtitle(nodeData: WorkflowNodeData): { text: string; title?: string } {
+  const summary = nodeData.summary?.trim();
+  const typeMeta = [nodeData.category?.trim(), nodeData.executionType?.trim()]
+    .filter((part): part is string => !!part)
+    .join(" · ");
+  if (summary) {
+    return { text: truncate(summary, 40), title: [summary, typeMeta].filter(Boolean).join(" — ") };
+  }
+  return { text: nodeData.executionType?.trim() ?? "", title: typeMeta || undefined };
+}
+
+/** Floating and editorial layouts draw soft curves; classic and workbench keep squared wiring. */
+const curvedEdgeLayouts: readonly StudioThemeLayout[] = ["floating", "editorial"];
+
+export function WorkflowFlowEdge(props: EdgeProps<WorkflowEdge>) {
+  const {
+    id,
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
+    markerEnd,
+    style,
+    label,
+    labelStyle
+  } = props;
+  const actions = React.useContext(WorkflowEdgeActionsContext);
+  const [hovered, setHovered] = useState(false);
+  const getPath = curvedEdgeLayouts.includes(useStudioThemeLayout()) ? getBezierPath : getSmoothStepPath;
+  const [path, labelX, labelY] = getPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
+  const isHighlighted = actions?.highlightedEdgeId === id;
+
+  return (
+    <>
+      <BaseEdge
+        id={id}
+        path={path}
+        markerEnd={markerEnd}
+        style={{
+          ...style,
+          strokeWidth: isHighlighted ? 2.5 : style?.strokeWidth
+        }}
+        label={label}
+        labelX={labelX}
+        labelY={labelY}
+        labelStyle={labelStyle}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      />
+      {actions ? (
+        <EdgeLabelRenderer>
+          <div
+            className={["wf-edge-actions", hovered ? "visible" : "", isHighlighted ? "highlighted" : ""].filter(Boolean).join(" ")}
+            style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
+          >
+            <button
+              type="button"
+              aria-label="Insert activity into connection"
+              title="Insert activity"
+              onClick={event => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                const keyboardActivation = event.detail === 0;
+                actions.requestInsertActivity(
+                  id,
+                  keyboardActivation ? rect.left + rect.width / 2 : event.clientX,
+                  keyboardActivation ? rect.top + rect.height / 2 : event.clientY
+                );
+              }}
+            >
+              <Plus size={12} />
+            </button>
+            <button type="button" className="wf-edge-delete" aria-label="Delete connection" title="Delete connection" onClick={() => actions.deleteEdge(id)}>
+              <Trash2 size={12} />
+            </button>
+          </div>
+        </EdgeLabelRenderer>
+      ) : null}
+    </>
+  );
+}
+
+export function ConnectMenu({ clientX, clientY, activities, onPick, onClose }: { clientX: number; clientY: number; activities: ActivityCatalogItem[]; onPick(activity: ActivityCatalogItem): void; onClose(): void }) {
+  const [search, setSearch] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  const restoreFocusOnCloseRef = useRef(true);
+  const listboxId = React.useId();
+
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    const browsable = activities.filter(isActivityBrowsable);
+    if (!term) return browsable;
+    return browsable.filter(activity =>
+      getActivityDisplay(activity).toLowerCase().includes(term) ||
+      activity.activityTypeKey.toLowerCase().includes(term) ||
+      (activity.category ?? "").toLowerCase().includes(term) ||
+      (activity.description ?? "").toLowerCase().includes(term));
+  }, [activities, search]);
+
+  const groups = useMemo(() => groupActivityPalette(filtered), [filtered]);
+  const flatActivities = useMemo(() => groups.flatMap(group => group.activities), [groups]);
+
+  useEffect(() => {
+    const returnFocus = returnFocusRef.current;
+    requestAnimationFrame(() => inputRef.current?.focus());
+    return () => {
+      if (!restoreFocusOnCloseRef.current) return;
+      requestAnimationFrame(() => {
+        if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
+      });
+    };
+  }, []);
+
+  useEffect(() => {
+    const onMouseDown = (event: MouseEvent) => {
+      if (!containerRef.current?.contains(event.target as globalThis.Node)) onClose();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    document.addEventListener("mousedown", onMouseDown, true);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown, true);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [onClose]);
+
+  const onInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveIndex(index => Math.min(index + 1, flatActivities.length - 1));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveIndex(index => Math.max(index - 1, 0));
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      const activity = flatActivities[activeIndex];
+      if (activity) pick(activity);
+    }
+  };
+
+  const pick = (activity: ActivityCatalogItem) => {
+    restoreFocusOnCloseRef.current = false;
+    onPick(activity);
+  };
+
+  const left = Math.max(8, Math.min(clientX + 4, window.innerWidth - 328));
+  const top = Math.max(8, Math.min(clientY + 4, window.innerHeight - 360));
+  let itemIndex = -1;
+
+  return (
+    <div ref={containerRef} className="wf-connect-menu" style={{ left, top }} onMouseDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}>
+      <input
+        ref={inputRef}
+        type="search"
+        value={search}
+        placeholder="Search activities..."
+        aria-label="Search activities"
+        aria-controls={listboxId}
+        aria-activedescendant={flatActivities[activeIndex] ? `${listboxId}-option-${flatActivities[activeIndex].activityVersionId}` : undefined}
+        onChange={event => {
+          setSearch(event.target.value);
+          setActiveIndex(0);
+        }}
+        onKeyDown={onInputKeyDown}
+      />
+      <div id={listboxId} className="wf-connect-menu-list" role="listbox" aria-label="Activity picker">
+        {groups.length === 0 ? <p>No matching activities.</p> : groups.map(group => (
+          <section key={group.category}>
+            <h4>{group.category}</h4>
+            {group.activities.map(activity => {
+              itemIndex += 1;
+              const currentIndex = itemIndex;
+              const active = currentIndex === activeIndex;
+              return (
+                <button
+                  type="button"
+                  role="option"
+                  id={`${listboxId}-option-${activity.activityVersionId}`}
+                  aria-selected={active}
+                  className={active ? "active" : ""}
+                  key={activity.activityVersionId}
+                  onMouseEnter={() => setActiveIndex(currentIndex)}
+                  onClick={() => pick(activity)}
+                >
+                  <strong>{getActivityDisplay(activity)}</strong>
+                  <small>{activity.category || activity.activityTypeKey}</small>
+                </button>
+              );
+            })}
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}

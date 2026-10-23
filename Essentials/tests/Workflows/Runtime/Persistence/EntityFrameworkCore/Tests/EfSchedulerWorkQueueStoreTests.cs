@@ -1,0 +1,467 @@
+using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.Tests;
+using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Services.Recovery;
+using Elsa.Workflows.Runtime.Services.Scheduler;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Xunit;
+using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.SchedulerWorkItems;
+
+namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
+
+public sealed partial class EfSchedulerWorkQueueStoreTests
+{
+    [Fact]
+    public async Task Enqueue_is_existing_wins_scoped_and_survives_restart()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var original = Work("wf-1", "work-1", 1);
+        var replacement = Work("wf-1", "work-1", 2);
+
+        Assert.Equal(original.WorkItemId, (await fixture.Store.EnqueueAsync(original)).WorkItemId);
+        Assert.Equal(original.Sequence, (await fixture.Store.EnqueueAsync(replacement)).Sequence);
+        Assert.Single((await fixture.Store.ListAsync(new RuntimeSchedulerWorkQuery("wf-1"))).Items);
+
+        await using var restarted = database.Open("tenant-a");
+        Assert.Equal(original.Sequence, (await restarted.Store.ListAsync(new RuntimeSchedulerWorkQuery("wf-1"))).Items.Single().Sequence);
+        await using var otherScope = database.Open("tenant-b");
+        Assert.Empty((await otherScope.Store.ListAsync(new RuntimeSchedulerWorkQuery("wf-1"))).Items);
+    }
+
+    [Fact]
+    public async Task Enqueue_batches_existing_root_and_ownership_guard_into_one_command()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using (var seed = database.Open("tenant-a"))
+            await BackgroundActivityWorkTestSupport.SeedLiveExecutionAsync(
+                seed.Context,
+                new FixedAccessor("tenant-a"),
+                "wf-root-guard",
+                "tenant-a");
+
+        var capture = new CommandCaptureInterceptor();
+        await using var fixture = database.Open("tenant-a", capture);
+        await fixture.Store.EnqueueAsync(Work("wf-root-guard", "work-1", 1));
+
+        Assert.Equal(4, capture.Commands.Count);
+        var guard = Assert.Single(capture.Commands, command =>
+            command.Contains(RuntimeWorkflowExecutionEfModule.TableName, StringComparison.OrdinalIgnoreCase) &&
+            command.Contains(RuntimeOperationalStateEfModule.ExecutionLivenessTableName, StringComparison.OrdinalIgnoreCase));
+        Assert.True(guard.Contains("LEFT JOIN", StringComparison.OrdinalIgnoreCase), guard);
+        Assert.Single((await fixture.Store.ListAsync(new RuntimeSchedulerWorkQuery("wf-root-guard"))).Items);
+    }
+
+    [Fact]
+    public async Task Enqueue_honors_same_root_ownership_tombstone_in_batched_guard()
+    {
+        const string workflowExecutionId = "wf-root-tombstone";
+        await using var database = await TestDatabase.CreateAsync();
+        await using (var seed = database.Open("tenant-a"))
+        {
+            await BackgroundActivityWorkTestSupport.SeedLiveExecutionAsync(
+                seed.Context,
+                new FixedAccessor("tenant-a"),
+                workflowExecutionId,
+                "tenant-a");
+            var tombstone = new ExecutionLivenessState(
+                RuntimeExecutionOwnershipStateId.For(workflowExecutionId),
+                workflowExecutionId,
+                null,
+                null,
+                null,
+                null,
+                metadata: new Dictionary<string, string>
+                {
+                    [RuntimeMetadataKeys.WorkflowExecutionDeletionTombstone] = "true"
+                });
+            await seed.Liveness.SaveAsync(tombstone);
+        }
+
+        var capture = new CommandCaptureInterceptor();
+        await using var fixture = database.Open("tenant-a", capture);
+        var work = Work(workflowExecutionId, "late-work", 1);
+        Assert.Same(work, await fixture.Store.EnqueueAsync(work));
+
+        Assert.Equal(2, capture.Commands.Count);
+        var guard = Assert.Single(capture.Commands, command =>
+            command.Contains(RuntimeWorkflowExecutionEfModule.TableName, StringComparison.OrdinalIgnoreCase) &&
+            command.Contains(RuntimeOperationalStateEfModule.ExecutionLivenessTableName, StringComparison.OrdinalIgnoreCase));
+        Assert.True(guard.Contains("LEFT JOIN", StringComparison.OrdinalIgnoreCase), guard);
+        Assert.Empty(await fixture.Context.SchedulerWorkItems.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task List_is_bounded_stable_and_restartable()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        foreach (var sequence in new[] { 3L, 1L, 2L })
+            await fixture.Store.EnqueueAsync(Work("wf-page", $"work-{sequence}", sequence));
+
+        var first = await fixture.Store.ListAsync(new RuntimeSchedulerWorkQuery("wf-page", 2));
+        Assert.Equal(new long?[] { 1L, 2L }, first.Items.Select(item => item.Sequence));
+        Assert.NotNull(first.NextContinuationToken);
+
+        await using var restarted = database.Open("tenant-a");
+        var second = await restarted.Store.ListAsync(new RuntimeSchedulerWorkQuery("wf-page", 2, first.NextContinuationToken));
+        Assert.Equal(new long?[] { 3L }, second.Items.Select(item => item.Sequence));
+        Assert.Null(second.NextContinuationToken);
+    }
+
+    [Fact]
+    public async Task List_with_visibility_matches_scoped_pages_in_one_query_per_page()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var capture = new CommandCaptureInterceptor();
+        await using var fixture = database.Open("tenant-a", capture);
+        foreach (var sequence in new[] { 3L, 1L, 2L })
+            await fixture.Store.EnqueueAsync(Work("wf-visible-page", $"work-{sequence}", sequence));
+        await using (var otherScope = database.Open("tenant-b"))
+            await otherScope.Store.EnqueueAsync(Work("wf-visible-page", "other-tenant", 0));
+
+        var query = new RuntimeSchedulerWorkQuery("wf-visible-page", limit: 2);
+        var commandCount = capture.Commands.Count;
+        var ordinary = await fixture.Store.ListAsync(query);
+        Assert.Equal(commandCount + 1, capture.Commands.Count);
+        commandCount = capture.Commands.Count;
+        var snapshot = await fixture.Store.ListWithVisibilityAsync(query);
+        Assert.Equal(commandCount + 1, capture.Commands.Count);
+
+        Assert.Equal(new long?[] { 1L, 2L }, ordinary.Items.Select(item => item.Sequence));
+        Assert.Equal(ordinary.Items.Select(item => item.WorkItemId), snapshot.Items.Select(entry => entry.Item.WorkItemId));
+        Assert.Equal(ordinary.NextContinuationToken, snapshot.NextContinuationToken);
+        Assert.All(snapshot.Items, entry => Assert.Null(entry.VisibleAfter));
+
+        var nextQuery = new RuntimeSchedulerWorkQuery("wf-visible-page", limit: 2, continuationToken: snapshot.NextContinuationToken);
+        commandCount = capture.Commands.Count;
+        var ordinaryNext = await fixture.Store.ListAsync(nextQuery);
+        Assert.Equal(commandCount + 1, capture.Commands.Count);
+        commandCount = capture.Commands.Count;
+        var snapshotNext = await fixture.Store.ListWithVisibilityAsync(nextQuery);
+        Assert.Equal(commandCount + 1, capture.Commands.Count);
+        Assert.Equal(ordinaryNext.Items.Select(item => item.WorkItemId), snapshotNext.Items.Select(entry => entry.Item.WorkItemId));
+        Assert.Equal(ordinaryNext.NextContinuationToken, snapshotNext.NextContinuationToken);
+        Assert.Equal(["work-3"], snapshotNext.Items.Select(entry => entry.Item.WorkItemId));
+    }
+
+    [Fact]
+    public async Task List_with_visibility_preserves_expired_claim_and_released_retry_deadlines()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Store.EnqueueAsync(Work("wf-visible-claim", "work-1", 1));
+        var claimedAt = new DateTimeOffset(2020, 1, 2, 3, 4, 5, TimeSpan.Zero);
+        var claim = await fixture.Store.ClaimAsync(new RuntimeSchedulerWorkClaimRequest(
+            "wf-visible-claim", "owner-1", claimedAt, TimeSpan.FromMinutes(1)));
+        Assert.NotNull(claim);
+
+        var claimDeadline = claimedAt.AddMinutes(1);
+        Assert.True(claimDeadline < DateTimeOffset.UtcNow);
+        var expiredSnapshot = await fixture.Store.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery("wf-visible-claim"));
+        Assert.Equal(claimDeadline, Assert.Single(expiredSnapshot.Items).VisibleAfter);
+
+        var retryDeadline = new DateTimeOffset(2099, 1, 2, 3, 9, 5, TimeSpan.Zero);
+        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Succeeded,
+            (await fixture.Store.ReleaseClaimAsync(claim!, retryDeadline)).Status);
+        var releasedSnapshot = await fixture.Store.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery("wf-visible-claim"));
+        Assert.Equal(retryDeadline, Assert.Single(releasedSnapshot.Items).VisibleAfter);
+    }
+
+    [Fact]
+    public async Task List_uses_utf8_stable_hash_for_equal_time_and_sequence_ties()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Store.EnqueueAsync(Work("wf-tie", "work-0", 7));
+        await fixture.Store.EnqueueAsync(Work("wf-tie", "work-2", 7));
+
+        // These IDs intentionally sort in opposite orders under the old UTF-16 hash and the
+        // queue's UTF-8 stable hash. The latter is the provider-neutral tie-break contract.
+        var items = (await fixture.Store.ListAsync(new RuntimeSchedulerWorkQuery("wf-tie"))).Items;
+        Assert.Equal(new[] { "work-2", "work-0" }, items.Select(item => item.WorkItemId));
+    }
+
+    [Fact]
+    public async Task Pending_workflow_discovery_is_scoped_and_bounded()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Store.EnqueueAsync(Work("wf-b", "work-b", 1));
+        await fixture.Store.EnqueueAsync(Work("wf-a", "work-a", 1));
+        await using var otherScope = database.Open("tenant-b");
+        await otherScope.Store.EnqueueAsync(Work("wf-z", "work-z", 1));
+
+        Assert.Equal(new[] { "wf-a" }, (await fixture.Store.ListPendingWorkflowExecutionIdsAsync(1)).ToArray());
+        Assert.Equal(new[] { "wf-a", "wf-b" }, (await fixture.Store.ListPendingWorkflowExecutionIdsAsync(10)).ToArray());
+    }
+
+    [Fact]
+    public async Task Claims_are_fifo_fenced_renewable_and_recover_after_release()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var now = new DateTimeOffset(2030, 1, 2, 3, 4, 5, TimeSpan.Zero);
+        await fixture.Store.EnqueueAsync(Work("wf-claims", "work-1", 1));
+        await fixture.Store.EnqueueAsync(Work("wf-claims", "work-2", 2));
+
+        var first = await fixture.Store.ClaimAsync(new RuntimeSchedulerWorkClaimRequest("wf-claims", "owner-a", now, TimeSpan.FromMinutes(1)));
+        Assert.NotNull(first);
+        Assert.Null(await fixture.Store.ClaimAsync(new RuntimeSchedulerWorkClaimRequest("wf-claims", "owner-b", now, TimeSpan.FromMinutes(1))));
+        var renewed = await fixture.Store.RenewClaimAsync(first!, now, TimeSpan.FromMinutes(2));
+        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Succeeded, renewed.Status);
+        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Stale, (await fixture.Store.ReleaseClaimAsync(first!, now)).Status);
+        var current = renewed.Claim;
+        Assert.NotNull(current);
+        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Succeeded, (await fixture.Store.ReleaseClaimAsync(current!, current!.VisibleAfter)).Status);
+
+        var recovered = await fixture.Store.ClaimAsync(new RuntimeSchedulerWorkClaimRequest("wf-claims", "owner-b", current!.VisibleAfter, TimeSpan.FromMinutes(1)));
+        Assert.NotNull(recovered);
+        Assert.True(recovered!.FencingToken > first!.FencingToken);
+        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Stale, (await fixture.Store.CompleteClaimAsync(current)).Status);
+        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Succeeded, (await fixture.Store.CompleteClaimAsync(recovered)).Status);
+        Assert.Equal("work-2", (await fixture.Store.DequeueAsync("wf-claims"))!.WorkItemId);
+    }
+
+    [Fact]
+    public async Task Consume_fences_on_owner_and_token_but_allows_renewal_replay()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var now = new DateTimeOffset(2030, 1, 2, 3, 4, 5, TimeSpan.Zero);
+        var item = Work("wf-consume", "work-1", 1);
+        await fixture.Store.EnqueueAsync(item);
+        var claim = await fixture.Store.ClaimAsync(new RuntimeSchedulerWorkClaimRequest("wf-consume", "owner-a", now, TimeSpan.FromMinutes(1)));
+        Assert.NotNull(claim);
+        var renewed = (await fixture.Store.RenewClaimAsync(claim!, now, TimeSpan.FromMinutes(2))).Claim;
+        Assert.NotNull(renewed);
+
+        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Succeeded,
+            (await fixture.Store.ConsumeClaimedAsync(new ConsumedSchedulerWorkItem("wf-consume", "work-1", "owner-a", renewed!.FencingToken))).Status);
+        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Stale,
+            (await fixture.Store.ConsumeClaimedAsync(new ConsumedSchedulerWorkItem("wf-consume", "work-1", "owner-a", renewed.FencingToken))).Status);
+    }
+
+    [Fact]
+    public async Task Active_claim_inspection_and_transaction_rollback_are_durable()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var now = new DateTimeOffset(2030, 1, 2, 3, 4, 5, TimeSpan.Zero);
+        await fixture.Store.EnqueueAsync(Work("wf-active", "work-1", 1));
+        var claim = await fixture.Store.ClaimAsync(new RuntimeSchedulerWorkClaimRequest("wf-active", "owner-a", now, TimeSpan.FromMinutes(1)));
+        Assert.NotNull(claim);
+        Assert.Equal("owner-a", Assert.Single(await fixture.Store.ListActiveClaimsAsync("wf-active", now)).OwnerId);
+        Assert.Empty(await fixture.Store.ListActiveClaimsAsync("wf-active", now.AddMinutes(2)));
+
+        await using (var transaction = await fixture.Context.Database.BeginTransactionAsync())
+        {
+            await fixture.Store.EnqueueAsync(Work("wf-rollback", "work-1", 1));
+            await transaction.RollbackAsync();
+        }
+        await using var restarted = database.Open("tenant-a");
+        Assert.Empty((await restarted.Store.ListAsync(new RuntimeSchedulerWorkQuery("wf-rollback"))).Items);
+        Assert.NotNull(claim);
+    }
+
+    [Fact]
+    public async Task Active_claim_inspection_reads_all_rows_in_bounded_pages()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        const int claimCount = RuntimeStorePageRequest.MaximumLimit + 1;
+        var now = new DateTimeOffset(2030, 1, 2, 3, 4, 5, TimeSpan.Zero);
+
+        for (var index = 0; index < claimCount; index++)
+            await fixture.Store.EnqueueAsync(Work("wf-active-page", $"work-{index:D4}", index));
+
+        var rows = await fixture.Context.SchedulerWorkItems.ToArrayAsync();
+        foreach (var row in rows)
+        {
+            row.ClaimOwnerId = EfRelationalIdentity.Encode("owner-page");
+            row.ClaimToken = 1;
+            row.ClaimedAtUtcTicks = now.UtcTicks;
+            row.ClaimedAtOffsetMinutes = 0;
+            row.VisibleAfterUtcTicks = now.AddMinutes(1).UtcTicks;
+            row.VisibleAfterOffsetMinutes = 0;
+            row.Revision = 2;
+        }
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        var claims = await fixture.Store.ListActiveClaimsAsync("wf-active-page", now);
+        Assert.Equal(claimCount, claims.Count);
+        Assert.All(claims, claim => Assert.Equal("owner-page", claim.OwnerId));
+        Assert.Equal("work-0000", claims.First().Item.WorkItemId);
+        Assert.Equal($"work-{claimCount - 1:D4}", claims.Last().Item.WorkItemId);
+    }
+
+    [Fact]
+    public async Task Failed_queue_mutations_do_not_flush_into_a_later_sibling_save()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var now = new DateTimeOffset(2030, 1, 2, 3, 4, 5, TimeSpan.Zero);
+
+        await using (var failedEnqueue = database.Open("tenant-a", new FailOnceSaveChangesInterceptor()))
+        {
+            await Assert.ThrowsAsync<DbUpdateException>(() => failedEnqueue.Store.EnqueueAsync(Work("wf-failed-enqueue", "work-1", 1)).AsTask());
+            await SaveSiblingStateAsync(failedEnqueue, "workflow-sibling-enqueue");
+        }
+
+        await using (var afterEnqueue = database.Open("tenant-a"))
+        {
+            Assert.Empty((await afterEnqueue.Store.ListAsync(new RuntimeSchedulerWorkQuery("wf-failed-enqueue"))).Items);
+            Assert.True(await afterEnqueue.Context.SchedulerStates.AnyAsync(row => row.WorkflowExecutionId == EfRelationalIdentity.Encode("workflow-sibling-enqueue")));
+        }
+
+        await using (var seed = database.Open("tenant-a"))
+            await seed.Store.EnqueueAsync(Work("wf-failed-update", "work-1", 1));
+
+        await using (var failedUpdate = database.Open("tenant-a", new FailOnceSaveChangesInterceptor()))
+        {
+            await Assert.ThrowsAsync<DbUpdateException>(() => failedUpdate.Store.ClaimAsync(new RuntimeSchedulerWorkClaimRequest("wf-failed-update", "owner-a", now, TimeSpan.FromMinutes(1))).AsTask());
+            await SaveSiblingStateAsync(failedUpdate, "workflow-sibling-update");
+        }
+
+        await using var afterUpdate = database.Open("tenant-a");
+        var row = await afterUpdate.Context.SchedulerWorkItems.SingleAsync(entity => entity.WorkflowExecutionId == EfRelationalIdentity.Encode("wf-failed-update"));
+        Assert.Null(row.ClaimOwnerId);
+        Assert.Equal(0, row.ClaimToken);
+        Assert.Equal(1, row.Revision);
+        Assert.True(await afterUpdate.Context.SchedulerStates.AnyAsync(entity => entity.WorkflowExecutionId == EfRelationalIdentity.Encode("workflow-sibling-update")));
+    }
+
+    [Fact]
+    public async Task Projection_drift_fails_closed_on_visible_row()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var item = Work("wf-drift", "work-1", 1);
+        await fixture.Store.EnqueueAsync(item);
+        var row = await fixture.Context.SchedulerWorkItems.SingleAsync();
+        row.WorkOrderKey = "drift";
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Store.ListAsync(new RuntimeSchedulerWorkQuery("wf-drift")).AsTask());
+    }
+
+    [Fact]
+    public async Task Registration_is_load_order_safe_and_opt_in()
+    {
+        foreach (var queueFirst in new[] { true, false })
+        {
+            var services = new ServiceCollection();
+            services.AddSingleton<IWorkflowSchedulerWorkQueue, Elsa.Workflows.Runtime.Services.Scheduler.InMemoryWorkflowSchedulerWorkQueue>();
+            services.AddSingleton<IPersistenceAccessContextAccessor>(new FixedAccessor("tenant-a"));
+            var connection = $"Data Source=file:ef-r22-registration-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
+            var options = new RuntimeSchedulerWorkQueueEntityFrameworkCoreOptions
+            {
+                Provider = "Sqlite",
+                ConnectionString = connection,
+                RecoveryContinuationSigningKey = new string('k', 32)
+            };
+            if (queueFirst)
+                services.AddRuntimeSchedulerWorkQueueEntityFrameworkCore(options);
+            else
+            {
+                services.AddRuntimeSchedulerWorkQueueEntityFrameworkCore(options);
+                services.AddRuntimeSchedulerWorkQueueEntityFrameworkCore(options);
+            }
+
+            Assert.Equal(SchedulerWorkQueueStoreBackend.EntityFramework, SchedulerWorkQueueStoreBackend.Find(services)!.Name);
+            await using var provider = services.BuildServiceProvider();
+            await using var scope = provider.CreateAsyncScope();
+            var context = scope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
+            await context.Database.EnsureCreatedAsync();
+            Assert.IsType<EfSchedulerWorkQueueStore>(scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>());
+            Assert.IsType<EfSchedulerWorkQueueStore>(scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkClaimInspection>());
+        }
+    }
+
+    private sealed class TestDatabase(SqliteConnection keeper, string connectionString) : IAsyncDisposable
+    {
+        public static async Task<TestDatabase> CreateAsync()
+        {
+            var connectionString = $"Data Source=file:ef-r22-queue-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
+            var keeper = new SqliteConnection(connectionString);
+            await keeper.OpenAsync();
+            await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(keeper).Options);
+            await context.Database.EnsureCreatedAsync();
+            return new TestDatabase(keeper, connectionString);
+        }
+
+        public TestFixture Open(string scope, IInterceptor? interceptor = null) => new(connectionString, scope, interceptor);
+        public ValueTask DisposeAsync() => keeper.DisposeAsync();
+    }
+
+    private sealed class TestFixture : IAsyncDisposable
+    {
+        private readonly SqliteConnection connection;
+        public RuntimeSqliteDbContext Context { get; }
+        public EfSchedulerWorkQueueStore Store { get; }
+        public EfExecutionLivenessStateStore Liveness { get; }
+
+        public TestFixture(string connectionString, string scope, IInterceptor? interceptor)
+        {
+            connection = new SqliteConnection(connectionString);
+            connection.Open();
+            var options = new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection);
+            if (interceptor is not null)
+                options.AddInterceptors(interceptor);
+            Context = new RuntimeSqliteDbContext(options.Options);
+            var accessor = new FixedAccessor(scope);
+            var codec = new HmacRuntimeRecoveryContinuationCodec(Options.Create(
+                new RuntimeRecoveryContinuationOptions { SigningKey = new string('k', 32) }));
+            Store = new EfSchedulerWorkQueueStore(Context, accessor, codec);
+            Liveness = new EfExecutionLivenessStateStore(Context, accessor, codec);
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await Context.DisposeAsync();
+            await connection.DisposeAsync();
+        }
+    }
+
+    private static async Task SaveSiblingStateAsync(TestFixture fixture, string workflowExecutionId)
+    {
+        fixture.Context.SchedulerStates.Add(new SchedulerStateEntity
+        {
+            Id = $"sibling-{workflowExecutionId}",
+            ScopeKey = EfRelationalIdentity.Encode("tenant-a"),
+            ScopeKeyHash = EfRelationalIdentity.Hash("tenant-a"),
+            WorkflowExecutionId = EfRelationalIdentity.Encode(workflowExecutionId),
+            WorkflowExecutionIdHash = EfRelationalIdentity.Hash(workflowExecutionId),
+            WorkflowExecutionIdOrderKey = Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(workflowExecutionId, RuntimeOperationalStateEfModule.IdentityMaximumLength)),
+            Collection = "schedulerState",
+            ContentJson = "{}",
+            SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion,
+            Revision = 1
+        });
+        await fixture.Context.SaveChangesAsync();
+    }
+
+    private sealed class FailOnceSaveChangesInterceptor : SaveChangesInterceptor
+    {
+        private int shouldFail = 1;
+
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default) =>
+            Interlocked.Exchange(ref shouldFail, 0) == 1
+                ? ValueTask.FromException<InterceptionResult<int>>(new DbUpdateException("Injected queue save failure."))
+                : base.SavingChangesAsync(eventData, result, cancellationToken);
+    }
+}

@@ -1,0 +1,862 @@
+using System.Text.Json.Serialization;
+using System.Globalization;
+using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Exceptions;
+
+namespace Elsa.Workflows.Runtime.Core.Models;
+
+/// <summary>
+/// Creates provider-portable projection values for stable post-commit outbox identities.
+/// </summary>
+public static class RuntimePostCommitOutboxIdentity
+{
+    public const int MaximumLength = 450;
+    public const int MaximumProjectionLength = 256;
+    private const string ProjectionDigestPrefix = "outbox:projection:sha256:v1:";
+
+    /// <summary>Preserves the durable logical identity format used by existing replay markers and providers.</summary>
+    public static string CreateLogicalValue(string commitId, string intentId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(commitId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(intentId);
+        return $"{commitId}:{intentId}";
+    }
+
+    /// <summary>Returns a bounded physical projection without changing the durable logical identity.</summary>
+    public static string CreateProjectionValue(string outboxItemId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(outboxItemId);
+        return outboxItemId.Length <= MaximumProjectionLength
+            ? outboxItemId
+            : $"{ProjectionDigestPrefix}{RuntimeIdentityDigest.Compute("elsa.outbox.projection", "v1", outboxItemId)}";
+    }
+}
+
+/// <summary>
+/// Durable delivery state for a post-commit intent. Intent payloads are delivered only after checkpoint commit.
+/// </summary>
+public sealed class RuntimePostCommitOutboxItem
+{
+    public RuntimePostCommitOutboxItem(
+        string outboxItemId,
+        RuntimePostCommitIntent intent,
+        RuntimePostCommitOutboxStatus status,
+        DateTimeOffset recordedAt,
+        DateTimeOffset? availableAt,
+        RuntimePostCommitRetryPolicy? retryPolicy = null,
+        int deliveryAttemptCount = 0,
+        string? deliveringOwnerId = null,
+        DateTimeOffset? deliveryStartedAt = null,
+        DateTimeOffset? deliveredAt = null,
+        string? lastFailureMessage = null,
+        IReadOnlyDictionary<string, string>? metadata = null,
+        long deliveryFencingToken = 0,
+        DateTimeOffset? deliveryVisibleAfter = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(outboxItemId);
+        ArgumentNullException.ThrowIfNull(intent);
+
+        if (deliveryAttemptCount < 0)
+            throw new ArgumentOutOfRangeException(nameof(deliveryAttemptCount), "Delivery attempt count cannot be negative.");
+        if (deliveryFencingToken < 0)
+            throw new ArgumentOutOfRangeException(nameof(deliveryFencingToken), "Delivery fencing token cannot be negative.");
+
+        Validate(status, deliveringOwnerId, deliveryStartedAt, deliveredAt, deliveryFencingToken, deliveryVisibleAfter);
+
+        OutboxItemId = outboxItemId;
+        Intent = intent;
+        Status = status;
+        RecordedAt = recordedAt;
+        AvailableAt = availableAt;
+        RetryPolicy = retryPolicy ?? RuntimePostCommitRetryPolicy.None;
+        DeliveryAttemptCount = deliveryAttemptCount;
+        DeliveringOwnerId = deliveringOwnerId;
+        DeliveryStartedAt = deliveryStartedAt;
+        DeliveredAt = deliveredAt;
+        LastFailureMessage = lastFailureMessage;
+        Metadata = RuntimeModelMetadata.Snapshot(metadata);
+        DeliveryFencingToken = deliveryFencingToken;
+        DeliveryVisibleAfter = deliveryVisibleAfter;
+    }
+
+    public string OutboxItemId { get; }
+    public RuntimePostCommitIntent Intent { get; }
+    public RuntimePostCommitOutboxStatus Status { get; }
+    public DateTimeOffset RecordedAt { get; }
+    public DateTimeOffset? AvailableAt { get; }
+    public RuntimePostCommitRetryPolicy RetryPolicy { get; }
+    public int DeliveryAttemptCount { get; }
+    public string? DeliveringOwnerId { get; }
+    public DateTimeOffset? DeliveryStartedAt { get; }
+    public DateTimeOffset? DeliveredAt { get; }
+    public string? LastFailureMessage { get; }
+    public IReadOnlyDictionary<string, string> Metadata { get; }
+    public long DeliveryFencingToken { get; }
+    public DateTimeOffset? DeliveryVisibleAfter { get; }
+
+    public bool IsTerminal => Status is RuntimePostCommitOutboxStatus.Delivered
+        or RuntimePostCommitOutboxStatus.FailedFinal
+        or RuntimePostCommitOutboxStatus.Cancelled;
+
+    /// <summary>Whether <paramref name="other"/> is the same item in the same delivery state, field for field.</summary>
+    public bool IsEquivalentTo(RuntimePostCommitOutboxItem? other) =>
+        other is not null &&
+        StringComparer.Ordinal.Equals(OutboxItemId, other.OutboxItemId) &&
+        Intent.IsEquivalentTo(other.Intent) &&
+        Status == other.Status &&
+        RecordedAt == other.RecordedAt &&
+        AvailableAt == other.AvailableAt &&
+        RetryPolicy.IsEquivalentTo(other.RetryPolicy) &&
+        DeliveryAttemptCount == other.DeliveryAttemptCount &&
+        StringComparer.Ordinal.Equals(DeliveringOwnerId, other.DeliveringOwnerId) &&
+        DeliveryStartedAt == other.DeliveryStartedAt &&
+        DeliveredAt == other.DeliveredAt &&
+        StringComparer.Ordinal.Equals(LastFailureMessage, other.LastFailureMessage) &&
+        RuntimeModelMetadata.AreEqual(Metadata, other.Metadata) &&
+        DeliveryFencingToken == other.DeliveryFencingToken &&
+        DeliveryVisibleAfter == other.DeliveryVisibleAfter;
+
+    /// <summary>
+    /// Exact-replay idempotency for saving a pending item whose identity already exists: the save is a replay only when both
+    /// items are pending and equivalent in every field. Anything else is a conflict, never a silent overwrite.
+    /// </summary>
+    /// <remarks>
+    /// This answers "is this the same pending item again?". It fits a checkpoint outbox, whose item identity includes the
+    /// commit identity, so a legitimate repeat is an exact replay. It is deliberately not the rule for re-asserting a
+    /// responsibility that other writers may already be delivering; use <see cref="CarriesResponsibilityFor"/> for that.
+    /// </remarks>
+    public bool IsEquivalentPendingItem(RuntimePostCommitOutboxItem? other) =>
+        Status == RuntimePostCommitOutboxStatus.Pending &&
+        other is { Status: RuntimePostCommitOutboxStatus.Pending } &&
+        IsEquivalentTo(other);
+
+    /// <summary>
+    /// Whether this item already carries the logical responsibility <paramref name="intent"/> describes, whatever its
+    /// delivery progress. A writer re-asserting that responsibility must then keep this item exactly as it is: writing it
+    /// back as pending would regress a claimed or delivered item and could deliver the same work twice.
+    /// </summary>
+    /// <remarks>
+    /// This answers "is this the same responsibility?", not "is this the same pending item?". Test-scope cleanup needs it:
+    /// concurrent and repeated cleanups must converge, and between two cleaners the cancellation item may
+    /// already have been claimed, delivered, or retried. Do not replace it with <see cref="IsEquivalentPendingItem"/>.
+    /// </remarks>
+    public bool CarriesResponsibilityFor(RuntimePostCommitIntent intent)
+    {
+        ArgumentNullException.ThrowIfNull(intent);
+        return Intent.IsEquivalentTo(intent);
+    }
+
+    private static void Validate(
+        RuntimePostCommitOutboxStatus status,
+        string? deliveringOwnerId,
+        DateTimeOffset? deliveryStartedAt,
+        DateTimeOffset? deliveredAt,
+        long deliveryFencingToken,
+        DateTimeOffset? deliveryVisibleAfter)
+    {
+        if (status == RuntimePostCommitOutboxStatus.Delivering)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(deliveringOwnerId);
+
+            if (deliveryStartedAt is null)
+                throw new ArgumentException("A delivering outbox item requires a delivery start time.", nameof(deliveryStartedAt));
+
+            // Token zero with no visibility is accepted only as the legacy v1 Delivering representation. Every v2
+            // claim created through the claim contract carries both a positive token and visibility deadline.
+            if ((deliveryFencingToken > 0) != (deliveryVisibleAfter is not null))
+                throw new ArgumentException("A claimed outbox item requires both a positive fencing token and visibility deadline.", nameof(deliveryFencingToken));
+            if (deliveryVisibleAfter is { } visibleAfter && visibleAfter <= deliveryStartedAt)
+                throw new ArgumentOutOfRangeException(nameof(deliveryVisibleAfter), "Delivery visibility must follow the claim time.");
+        }
+        else
+        {
+            if (deliveringOwnerId is not null)
+                throw new ArgumentException("Only delivering outbox items can carry active delivery ownership.", nameof(deliveringOwnerId));
+
+            if (deliveryStartedAt is not null)
+                throw new ArgumentException("Only delivering outbox items can carry a delivery start time.", nameof(deliveryStartedAt));
+
+            if (deliveryVisibleAfter is not null)
+                throw new ArgumentException("Only delivering outbox items can carry a delivery visibility deadline.", nameof(deliveryVisibleAfter));
+        }
+
+        if (status == RuntimePostCommitOutboxStatus.Delivered && deliveredAt is null)
+            throw new ArgumentException("A delivered outbox item requires a delivered time.", nameof(deliveredAt));
+
+        if (status != RuntimePostCommitOutboxStatus.Delivered && deliveredAt is not null)
+            throw new ArgumentException("Only delivered outbox items can carry a delivered time.", nameof(deliveredAt));
+    }
+}
+
+public sealed class RuntimePostCommitOutboxClaimRequest
+{
+    public RuntimePostCommitOutboxClaimRequest(
+        string ownerId,
+        DateTimeOffset now,
+        TimeSpan visibilityTimeout,
+        int limit,
+        string? workflowExecutionId = null,
+        string? intentKind = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
+        if (visibilityTimeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(visibilityTimeout), "Outbox claim visibility timeout must be greater than zero.");
+        if (limit <= 0)
+            throw new ArgumentOutOfRangeException(nameof(limit), "Outbox claim limit must be greater than zero.");
+        ValidateOptional(workflowExecutionId, nameof(workflowExecutionId));
+        if (intentKind is not null)
+            RuntimePostCommitIntent.ValidateKind(intentKind, nameof(intentKind));
+
+        OwnerId = ownerId;
+        Now = now;
+        VisibilityTimeout = visibilityTimeout;
+        Limit = limit;
+        WorkflowExecutionId = workflowExecutionId;
+        IntentKind = intentKind;
+    }
+
+    public string OwnerId { get; }
+    public DateTimeOffset Now { get; }
+    public TimeSpan VisibilityTimeout { get; }
+    public int Limit { get; }
+    public string? WorkflowExecutionId { get; }
+    public string? IntentKind { get; }
+
+    private static void ValidateOptional(string? value, string parameterName)
+    {
+        if (value is not null && string.IsNullOrWhiteSpace(value))
+            throw new ArgumentException("Outbox claim filters cannot be blank.", parameterName);
+    }
+}
+
+public sealed class RuntimePostCommitOutboxClaim
+{
+    public RuntimePostCommitOutboxClaim(
+        RuntimePostCommitOutboxItem item,
+        string ownerId,
+        long fencingToken,
+        DateTimeOffset claimedAt,
+        DateTimeOffset visibleAfter)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
+        if (fencingToken <= 0)
+            throw new ArgumentOutOfRangeException(nameof(fencingToken), "Outbox claim fencing token must be positive.");
+        if (visibleAfter <= claimedAt)
+            throw new ArgumentOutOfRangeException(nameof(visibleAfter), "Outbox claim visibility must follow the claim time.");
+
+        Item = item;
+        OwnerId = ownerId;
+        FencingToken = fencingToken;
+        ClaimedAt = claimedAt;
+        VisibleAfter = visibleAfter;
+    }
+
+    public string OutboxItemId => Item.OutboxItemId;
+    public RuntimePostCommitOutboxItem Item { get; }
+    public string OwnerId { get; }
+    public long FencingToken { get; }
+    public DateTimeOffset ClaimedAt { get; }
+    public DateTimeOffset VisibleAfter { get; }
+}
+
+/// <summary>One fenced outbox completion plus its optional atomic dispatch lifecycle projection.</summary>
+public sealed class RuntimePostCommitOutboxClaimCompletion
+{
+    public RuntimePostCommitOutboxClaimCompletion(
+        RuntimePostCommitOutboxClaim claim,
+        RuntimePostCommitOutboxDeliveryResult deliveryResult,
+        WorkflowDispatchRecord? workflowDispatch = null,
+        RuntimePostCommitOutboxItem? followUpOutboxItem = null)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        ArgumentNullException.ThrowIfNull(deliveryResult);
+        if (!StringComparer.Ordinal.Equals(claim.OutboxItemId, deliveryResult.OutboxItemId))
+            throw new ArgumentException("The outbox delivery result must identify the claimed item.", nameof(deliveryResult));
+        if (workflowDispatch is not null)
+        {
+            var becomesFinal = deliveryResult.Status == RuntimePostCommitOutboxStatus.FailedFinal ||
+                deliveryResult.Status == RuntimePostCommitOutboxStatus.FailedRetryable &&
+                claim.Item.RetryPolicy.IsExhaustedAfterAttempt(
+                    RuntimePostCommitRetryPolicy.SaturatingIncrement(claim.Item.DeliveryAttemptCount));
+            if (!becomesFinal ||
+                workflowDispatch.Status != WorkflowDispatchStatus.DispatchFailed)
+            {
+                throw new ArgumentException("An outbox claim failure projection requires a failed delivery result and DispatchFailed status.", nameof(workflowDispatch));
+            }
+
+            var identity = new WorkflowDispatchIdentity(
+                workflowDispatch.ParentWorkflowExecutionId,
+                workflowDispatch.ParentActivityExecutionId);
+            var authorized = StringComparer.Ordinal.Equals(claim.Item.Intent.Kind, WorkflowDispatchLifecycle.StartChildIntentKind) &&
+                StringComparer.Ordinal.Equals(claim.Item.Intent.WorkflowExecutionId, workflowDispatch.ParentWorkflowExecutionId) &&
+                StringComparer.Ordinal.Equals(claim.Item.Intent.ActivityExecutionId, workflowDispatch.ParentActivityExecutionId) &&
+                StringComparer.Ordinal.Equals(claim.Item.Intent.IntentId, identity.StartIntentId) &&
+                StringComparer.Ordinal.Equals(claim.Item.Intent.IdempotencyKey, identity.StartIdempotencyKey) &&
+                claim.Item.Intent.Metadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var dispatchId) &&
+                StringComparer.Ordinal.Equals(dispatchId, workflowDispatch.DispatchId) &&
+                StringComparer.Ordinal.Equals(workflowDispatch.DispatchId, identity.DispatchId) &&
+                WorkflowDispatchLifecycle.ReadSafeDiagnosticCode(workflowDispatch) is not null &&
+                WorkflowDispatchLifecycle.ReadSafeDiagnosticCategory(workflowDispatch) is not null;
+            if (!authorized)
+                throw new ArgumentException("The claimed outbox intent does not authorize this workflow-dispatch failure projection.", nameof(workflowDispatch));
+        }
+        if (followUpOutboxItem is not null)
+        {
+            if (workflowDispatch is null || workflowDispatch.Mode != WorkflowDispatchMode.WaitForCompletion)
+                throw new ArgumentException("A failure follow-up is valid only for a waited workflow dispatch.", nameof(followUpOutboxItem));
+            var identity = new WorkflowDispatchIdentity(
+                workflowDispatch.ParentWorkflowExecutionId,
+                workflowDispatch.ParentActivityExecutionId);
+            var generation = WorkflowDispatchLifecycle.ReadDeliveryGeneration(workflowDispatch);
+            var authorized = followUpOutboxItem.Status == RuntimePostCommitOutboxStatus.Pending &&
+                StringComparer.Ordinal.Equals(followUpOutboxItem.Intent.Kind, WorkflowDispatchLifecycle.ResumeParentIntentKind) &&
+                followUpOutboxItem.DeliveryAttemptCount == 0 &&
+                followUpOutboxItem.DeliveringOwnerId is null &&
+                followUpOutboxItem.DeliveryStartedAt is null &&
+                followUpOutboxItem.DeliveredAt is null &&
+                followUpOutboxItem.LastFailureMessage is null &&
+                followUpOutboxItem.RetryPolicy.RetryUntilAcknowledged &&
+                StringComparer.Ordinal.Equals(followUpOutboxItem.OutboxItemId, identity.WaitFailureResumeOutboxItemId(generation)) &&
+                StringComparer.Ordinal.Equals(followUpOutboxItem.Intent.IntentId, identity.ParentResumeIntentId) &&
+                StringComparer.Ordinal.Equals(followUpOutboxItem.Intent.IdempotencyKey, identity.ParentResumeIdempotencyKey) &&
+                StringComparer.Ordinal.Equals(followUpOutboxItem.Intent.WorkflowExecutionId, workflowDispatch.ParentWorkflowExecutionId) &&
+                StringComparer.Ordinal.Equals(followUpOutboxItem.Intent.ActivityExecutionId, workflowDispatch.ParentActivityExecutionId) &&
+                followUpOutboxItem.Intent.RecordedAt == deliveryResult.RecordedAt &&
+                followUpOutboxItem.RecordedAt == deliveryResult.RecordedAt &&
+                followUpOutboxItem.AvailableAt == deliveryResult.RecordedAt &&
+                followUpOutboxItem.Intent.Metadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var followUpDispatchId) &&
+                StringComparer.Ordinal.Equals(followUpDispatchId, workflowDispatch.DispatchId) &&
+                followUpOutboxItem.Intent.Metadata.TryGetValue(RuntimeMetadataKeys.ChildWorkflowExecutionId, out var childWorkflowExecutionId) &&
+                StringComparer.Ordinal.Equals(childWorkflowExecutionId, workflowDispatch.ChildWorkflowExecutionId);
+            if (!authorized)
+                throw new ArgumentException("The failure follow-up does not match the waited dispatch and deterministic parent-resume identity.", nameof(followUpOutboxItem));
+        }
+
+        Claim = claim;
+        DeliveryResult = deliveryResult;
+        WorkflowDispatch = workflowDispatch;
+        FollowUpOutboxItem = followUpOutboxItem;
+    }
+
+    public RuntimePostCommitOutboxClaim Claim { get; }
+    public RuntimePostCommitOutboxDeliveryResult DeliveryResult { get; }
+    public WorkflowDispatchRecord? WorkflowDispatch { get; }
+    public RuntimePostCommitOutboxItem? FollowUpOutboxItem { get; }
+}
+
+/// <summary>Which outcome a <see cref="RuntimePostCommitOutboxClaimCompletion"/> actually persisted.</summary>
+public enum RuntimePostCommitOutboxClaimCompletionOutcome
+{
+    /// <summary>The delivery result was persisted as presented, with the dispatch projection and follow-up it carried.</summary>
+    Persisted,
+
+    /// <summary>
+    /// A final child-start failure found durable evidence that the child exists
+    /// (<see cref="WorkflowDispatchLifecycle.ResolveSuccessfulChildDelivery"/>), so the start was persisted as delivered and
+    /// the dispatch projection and follow-up it carried were discarded.
+    /// </summary>
+    DeliveredOnChildEvidence,
+
+    /// <summary>
+    /// Another deliverer owns this item — it is <see cref="RuntimePostCommitOutboxStatus.Delivering"/> under a different
+    /// owner, or it carries a positive fencing token the claim-less caller does not hold. The retained fence remains
+    /// foreign after its owner completes the item, so this outcome also applies when that completion made the item
+    /// terminal. NOTHING was written: status, owner, fencing token, attempt count, failure message and availability are
+    /// all untouched.
+    ///
+    /// <para>Contention is legitimate rather than exceptional. A live drain skips the durable claim round-trip while the
+    /// resumption sweep claims across every execution with no filter, so the two can hold the same item; this outcome is
+    /// how the losing deliverer reports that without failing its caller. A superseded nonterminal item remains a crash
+    /// backstop — claim expiry and the resumption sweep still redeliver it idempotently. An item already completed by its
+    /// fenced owner stays terminal.</para>
+    /// </summary>
+    SupersededByOtherOwner
+}
+
+/// <summary>
+/// What one <see cref="RuntimePostCommitOutboxClaimCompletion"/> persists, decided by
+/// <see cref="RuntimePostCommitOutboxClaimTransitions.ResolveCompletion"/>: the completed claimed item, the dispatch record and
+/// follow-up item to write, if any, and the outcome to report.
+/// </summary>
+public sealed record RuntimePostCommitOutboxClaimCompletionResolution(
+    RuntimePostCommitOutboxItem OutboxItem,
+    WorkflowDispatchRecord? WorkflowDispatch,
+    RuntimePostCommitOutboxItem? FollowUpOutboxItem,
+    RuntimePostCommitOutboxClaimCompletionOutcome Outcome);
+
+/// <summary>Provider-neutral DispatchWorkflow final-failure projection produced before fenced completion.</summary>
+public sealed class PostCommitFailureProjection
+{
+    public PostCommitFailureProjection(
+        WorkflowDispatchRecord workflowDispatch,
+        RuntimePostCommitOutboxItem? followUpOutboxItem = null)
+    {
+        ArgumentNullException.ThrowIfNull(workflowDispatch);
+        if (workflowDispatch.Status != WorkflowDispatchStatus.DispatchFailed)
+            throw new ArgumentException("A delivery-failure projection requires DispatchFailed lifecycle state.", nameof(workflowDispatch));
+        if (followUpOutboxItem is not null && workflowDispatch.Mode != WorkflowDispatchMode.WaitForCompletion)
+            throw new ArgumentException("Only a waited dispatch can carry a delivery-failure follow-up.", nameof(followUpOutboxItem));
+
+        WorkflowDispatch = workflowDispatch;
+        FollowUpOutboxItem = followUpOutboxItem;
+    }
+
+    public WorkflowDispatchRecord WorkflowDispatch { get; }
+    public RuntimePostCommitOutboxItem? FollowUpOutboxItem { get; }
+}
+
+/// <summary>Shared claim and completion transitions for in-memory and durable outbox stores.</summary>
+public static class RuntimePostCommitOutboxClaimTransitions
+{
+    public const string FirstDeliveryAttemptedAtMetadataKey = "runtime.delivery.firstAttemptedAt";
+
+    public static DateTimeOffset ClaimableAt(RuntimePostCommitOutboxItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        return item.Status == RuntimePostCommitOutboxStatus.Delivering
+            ? item.DeliveryVisibleAfter ?? DateTimeOffset.MaxValue
+            : item.AvailableAt ?? DateTimeOffset.MinValue;
+    }
+
+    public static DateTimeOffset? ReadFirstDeliveryAttemptedAt(RuntimePostCommitOutboxItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        return item.Metadata.TryGetValue(FirstDeliveryAttemptedAtMetadataKey, out var value) &&
+               DateTimeOffset.TryParseExact(value, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var attemptedAt)
+            ? attemptedAt
+            : null;
+    }
+
+    public static bool CanClaim(RuntimePostCommitOutboxItem item, RuntimePostCommitOutboxClaimRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (request.WorkflowExecutionId is not null &&
+            !StringComparer.Ordinal.Equals(item.Intent.WorkflowExecutionId, request.WorkflowExecutionId))
+            return false;
+        if (request.IntentKind is not null && !StringComparer.Ordinal.Equals(item.Intent.Kind, request.IntentKind))
+            return false;
+        if (item.Status == RuntimePostCommitOutboxStatus.Delivering)
+            return item.DeliveryVisibleAfter is { } visibleAfter && visibleAfter <= request.Now;
+        if (item.AvailableAt is { } availableAt && availableAt > request.Now)
+            return false;
+        if (item.Status == RuntimePostCommitOutboxStatus.Pending)
+            return true;
+        return item.Status == RuntimePostCommitOutboxStatus.FailedRetryable &&
+               !item.RetryPolicy.IsExhaustedAfterAttempt(item.DeliveryAttemptCount);
+    }
+
+    public static RuntimePostCommitOutboxClaim Claim(
+        RuntimePostCommitOutboxItem item,
+        RuntimePostCommitOutboxClaimRequest request)
+    {
+        if (!CanClaim(item, request))
+            throw new InvalidOperationException($"Post-commit outbox item '{item.OutboxItemId}' is not claimable.");
+
+        var token = checked(item.DeliveryFencingToken + 1);
+        var visibleAfter = request.Now.Add(request.VisibilityTimeout);
+        var metadata = item.Metadata.ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal);
+        metadata.TryAdd(FirstDeliveryAttemptedAtMetadataKey, request.Now.ToString("O", CultureInfo.InvariantCulture));
+        var claimedItem = Copy(
+            item,
+            RuntimePostCommitOutboxStatus.Delivering,
+            item.AvailableAt,
+            item.DeliveryAttemptCount,
+            request.OwnerId,
+            request.Now,
+            deliveredAt: null,
+            item.LastFailureMessage,
+            token,
+            visibleAfter,
+            metadata);
+        return new RuntimePostCommitOutboxClaim(claimedItem, request.OwnerId, token, request.Now, visibleAfter);
+    }
+
+    /// <summary>
+    /// Extends <paramref name="claim"/>'s visibility to <paramref name="now"/> plus <paramref name="visibilityTimeout"/>
+    /// when it still holds <paramref name="current"/>, and returns the renewed claim; <see langword="null"/> when it does
+    /// not. "Holds" is exactly what completion checks: the item is delivering under the claim's owner and fence.
+    /// </summary>
+    /// <remarks>
+    /// The visibility deadline is deliberately not part of the check. A claim that lapsed but that nobody re-claimed still
+    /// carries the current fence, and renewing it is safe because a concurrent re-claim advances the fence and every store
+    /// applies this transition as a compare-and-set.
+    /// </remarks>
+    public static RuntimePostCommitOutboxClaim? Renew(
+        RuntimePostCommitOutboxItem current,
+        RuntimePostCommitOutboxClaim claim,
+        DateTimeOffset now,
+        TimeSpan visibilityTimeout)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+        ArgumentNullException.ThrowIfNull(claim);
+        if (visibilityTimeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(visibilityTimeout), "Outbox claim visibility timeout must be greater than zero.");
+        if (!StringComparer.Ordinal.Equals(current.OutboxItemId, claim.OutboxItemId))
+            throw new InvalidOperationException($"Post-commit outbox renewal identity does not match claim '{claim.OutboxItemId}'.");
+        if (!IsHeldBy(current, claim))
+            return null;
+
+        // A clock read behind the claim time must still yield a deadline after it.
+        var visibleAfter = (now > claim.ClaimedAt ? now : claim.ClaimedAt).Add(visibilityTimeout);
+        var renewedItem = Copy(
+            current,
+            RuntimePostCommitOutboxStatus.Delivering,
+            current.AvailableAt,
+            current.DeliveryAttemptCount,
+            current.DeliveringOwnerId,
+            current.DeliveryStartedAt,
+            deliveredAt: null,
+            current.LastFailureMessage,
+            current.DeliveryFencingToken,
+            visibleAfter,
+            current.Metadata);
+        return new RuntimePostCommitOutboxClaim(renewedItem, claim.OwnerId, claim.FencingToken, claim.ClaimedAt, visibleAfter);
+    }
+
+    private static bool IsHeldBy(RuntimePostCommitOutboxItem current, RuntimePostCommitOutboxClaim claim) =>
+        current.Status == RuntimePostCommitOutboxStatus.Delivering &&
+        StringComparer.Ordinal.Equals(current.DeliveringOwnerId, claim.OwnerId) &&
+        current.DeliveryFencingToken == claim.FencingToken;
+
+    public static RuntimePostCommitOutboxItem Complete(
+        RuntimePostCommitOutboxItem current,
+        RuntimePostCommitOutboxClaim claim,
+        RuntimePostCommitOutboxDeliveryResult result)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+        ArgumentNullException.ThrowIfNull(claim);
+        ArgumentNullException.ThrowIfNull(result);
+
+        if (!StringComparer.Ordinal.Equals(current.OutboxItemId, claim.OutboxItemId) ||
+            !StringComparer.Ordinal.Equals(result.OutboxItemId, claim.OutboxItemId))
+        {
+            throw new InvalidOperationException($"Post-commit outbox completion identity does not match claim '{claim.OutboxItemId}'.");
+        }
+
+        if (!IsHeldBy(current, claim))
+        {
+            throw new RuntimePostCommitOutboxStaleClaimException(
+                claim.OutboxItemId,
+                claim.OwnerId,
+                claim.FencingToken,
+                current.DeliveringOwnerId,
+                current.DeliveryFencingToken,
+                current.Status);
+        }
+
+        var attemptCount = RuntimePostCommitRetryPolicy.SaturatingIncrement(current.DeliveryAttemptCount);
+        var status = result.Status == RuntimePostCommitOutboxStatus.FailedRetryable &&
+                     current.RetryPolicy.IsExhaustedAfterAttempt(attemptCount)
+            ? RuntimePostCommitOutboxStatus.FailedFinal
+            : result.Status;
+        DateTimeOffset? availableAt = status == RuntimePostCommitOutboxStatus.FailedRetryable
+            ? result.RecordedAt.Add(current.RetryPolicy.Delay ?? TimeSpan.Zero)
+            : null;
+        return Copy(
+            current,
+            status,
+            availableAt,
+            attemptCount,
+            deliveringOwnerId: null,
+            deliveryStartedAt: null,
+            deliveredAt: status == RuntimePostCommitOutboxStatus.Delivered ? result.RecordedAt : null,
+            result.FailureMessage,
+            current.DeliveryFencingToken,
+            deliveryVisibleAfter: null,
+            current.Metadata);
+    }
+
+    /// <summary>
+    /// Decides what completing <paramref name="completion"/> persists. Every claim-completion store, and a coalescing session
+    /// that owns the claim, calls this inside its own atomic boundary with the claimed item it holds and, when the completion
+    /// projects a dispatch failure, the dispatch it holds and the child execution state it reads. Durable evidence that the
+    /// child exists outranks a final start failure (<see cref="WorkflowDispatchLifecycle.ResolveSuccessfulChildDelivery"/>):
+    /// the start is persisted as delivered, and the projection and its follow-up are discarded.
+    /// </summary>
+    public static RuntimePostCommitOutboxClaimCompletionResolution ResolveCompletion(
+        RuntimePostCommitOutboxClaimCompletion completion,
+        RuntimePostCommitOutboxItem current,
+        WorkflowDispatchRecord? currentDispatch,
+        WorkflowExecutionState? childExecution)
+    {
+        ArgumentNullException.ThrowIfNull(completion);
+        ArgumentNullException.ThrowIfNull(current);
+
+        // Validate the claim and its fence before lifecycle precedence. A stale claimant cannot turn a newer generation into
+        // an acknowledgement merely because the deterministic child is now visible.
+        var completed = Complete(current, completion.Claim, completion.DeliveryResult);
+        if (completion.WorkflowDispatch is not { } projectedDispatch)
+            return new(completed, null, null, RuntimePostCommitOutboxClaimCompletionOutcome.Persisted);
+        if (currentDispatch is null || !StringComparer.Ordinal.Equals(currentDispatch.DispatchId, projectedDispatch.DispatchId))
+            throw new InvalidOperationException($"Workflow dispatch '{projectedDispatch.DispatchId}' is required to complete its claimed start.");
+
+        if (WorkflowDispatchLifecycle.ResolveSuccessfulChildDelivery(
+                currentDispatch,
+                childExecution,
+                completion.DeliveryResult.RecordedAt) is { } childEvidence)
+        {
+            var delivered = Complete(
+                current,
+                completion.Claim,
+                new RuntimePostCommitOutboxDeliveryResult(
+                    completion.Claim.OutboxItemId,
+                    RuntimePostCommitOutboxStatus.Delivered,
+                    completion.DeliveryResult.RecordedAt));
+            return new(delivered, childEvidence, null, RuntimePostCommitOutboxClaimCompletionOutcome.DeliveredOnChildEvidence);
+        }
+
+        WorkflowDispatchLifecycle.ValidateTransition(currentDispatch, projectedDispatch);
+        if (completed.Status != RuntimePostCommitOutboxStatus.FailedFinal ||
+            projectedDispatch.Status != WorkflowDispatchStatus.DispatchFailed)
+        {
+            throw new InvalidOperationException(
+                "An atomic workflow-dispatch projection is valid only for a final outbox failure and DispatchFailed lifecycle state.");
+        }
+        if (completion.FollowUpOutboxItem is { } followUp &&
+            StringComparer.Ordinal.Equals(followUp.OutboxItemId, completion.Claim.OutboxItemId))
+        {
+            throw new InvalidOperationException("A post-commit follow-up cannot replace the claimed outbox item.");
+        }
+
+        return new(completed, projectedDispatch, completion.FollowUpOutboxItem, RuntimePostCommitOutboxClaimCompletionOutcome.Persisted);
+    }
+
+    /// <summary>Reopens the same terminal delivery responsibility while advancing its fence.</summary>
+    public static RuntimePostCommitOutboxItem RedriveFailedFinal(
+        RuntimePostCommitOutboxItem item,
+        DateTimeOffset availableAt)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        if (availableAt == default)
+            throw new ArgumentOutOfRangeException(nameof(availableAt), "A post-commit redrive requires a recorded availability time.");
+        if (item.Status != RuntimePostCommitOutboxStatus.FailedFinal)
+            throw new InvalidOperationException($"Post-commit outbox item '{item.OutboxItemId}' is not a failed-final dead letter.");
+
+        var metadata = item.Metadata
+            .Where(entry => !StringComparer.Ordinal.Equals(entry.Key, FirstDeliveryAttemptedAtMetadataKey))
+            .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal);
+        return Copy(
+            item,
+            RuntimePostCommitOutboxStatus.Pending,
+            availableAt,
+            deliveryAttemptCount: 0,
+            deliveringOwnerId: null,
+            deliveryStartedAt: null,
+            deliveredAt: null,
+            lastFailureMessage: null,
+            deliveryFencingToken: checked(item.DeliveryFencingToken + 1),
+            deliveryVisibleAfter: null,
+            metadata);
+    }
+
+    private static RuntimePostCommitOutboxItem Copy(
+        RuntimePostCommitOutboxItem item,
+        RuntimePostCommitOutboxStatus status,
+        DateTimeOffset? availableAt,
+        int deliveryAttemptCount,
+        string? deliveringOwnerId,
+        DateTimeOffset? deliveryStartedAt,
+        DateTimeOffset? deliveredAt,
+        string? lastFailureMessage,
+        long deliveryFencingToken,
+        DateTimeOffset? deliveryVisibleAfter,
+        IReadOnlyDictionary<string, string> metadata) =>
+        new(
+            item.OutboxItemId,
+            item.Intent,
+            status,
+            item.RecordedAt,
+            availableAt,
+            item.RetryPolicy,
+            deliveryAttemptCount,
+            deliveringOwnerId,
+            deliveryStartedAt,
+            deliveredAt,
+            lastFailureMessage,
+            metadata,
+            deliveryFencingToken,
+            deliveryVisibleAfter);
+}
+
+public sealed class RuntimePostCommitRetryPolicy
+{
+    public RuntimePostCommitRetryPolicy(
+        int maxAttempts,
+        TimeSpan? delay,
+        IReadOnlyDictionary<string, string>? metadata = null)
+        : this(maxAttempts, delay, retryUntilAcknowledged: false, metadata)
+    {
+    }
+
+    [JsonConstructor]
+    public RuntimePostCommitRetryPolicy(
+        int maxAttempts,
+        TimeSpan? delay,
+        bool retryUntilAcknowledged,
+        IReadOnlyDictionary<string, string>? metadata = null)
+    {
+        if (maxAttempts < 0)
+            throw new ArgumentOutOfRangeException(nameof(maxAttempts), "Maximum delivery attempts cannot be negative.");
+
+        if (retryUntilAcknowledged && maxAttempts != 0)
+            throw new ArgumentException("A retry-until-acknowledged policy cannot carry a finite maximum attempt count.", nameof(maxAttempts));
+
+        if (!retryUntilAcknowledged && maxAttempts == 0 && delay is not null)
+            throw new ArgumentException("A retry policy with no attempts cannot carry a retry delay.", nameof(delay));
+
+        if ((maxAttempts > 0 || retryUntilAcknowledged) && delay is null)
+            throw new ArgumentException("A retry policy with attempts requires a retry delay.", nameof(delay));
+
+        if (delay <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(delay), "Retry delay must be greater than zero.");
+
+        MaxAttempts = maxAttempts;
+        Delay = delay;
+        RetryUntilAcknowledged = retryUntilAcknowledged;
+        Metadata = RuntimeModelMetadata.Snapshot(metadata);
+    }
+
+    public static RuntimePostCommitRetryPolicy None { get; } = new(0, null);
+
+    public static RuntimePostCommitRetryPolicy UntilAcknowledged(
+        TimeSpan delay,
+        IReadOnlyDictionary<string, string>? metadata = null) =>
+        new(0, delay, retryUntilAcknowledged: true, metadata: metadata);
+
+    public int MaxAttempts { get; }
+    public TimeSpan? Delay { get; }
+    public bool RetryUntilAcknowledged { get; }
+    public IReadOnlyDictionary<string, string> Metadata { get; }
+
+    public bool IsExhaustedAfterAttempt(int attemptCount)
+    {
+        if (attemptCount < 0)
+            throw new ArgumentOutOfRangeException(nameof(attemptCount));
+
+        return !RetryUntilAcknowledged && attemptCount >= MaxAttempts;
+    }
+
+    public bool IsEquivalentTo(RuntimePostCommitRetryPolicy? other) =>
+        other is not null &&
+        MaxAttempts == other.MaxAttempts &&
+        Delay == other.Delay &&
+        RetryUntilAcknowledged == other.RetryUntilAcknowledged &&
+        Metadata.Count == other.Metadata.Count &&
+        Metadata.All(pair => other.Metadata.TryGetValue(pair.Key, out var value) && StringComparer.Ordinal.Equals(pair.Value, value));
+
+    public static int SaturatingIncrement(int attemptCount)
+    {
+        if (attemptCount < 0)
+            throw new ArgumentOutOfRangeException(nameof(attemptCount));
+
+        return attemptCount == int.MaxValue ? int.MaxValue : attemptCount + 1;
+    }
+}
+
+public sealed class RuntimePostCommitOutboxQuery
+{
+    public RuntimePostCommitOutboxQuery(
+        DateTimeOffset now,
+        int limit,
+        string? workflowExecutionId = null,
+        string? intentKind = null)
+    {
+        if (limit <= 0)
+            throw new ArgumentOutOfRangeException(nameof(limit), "Outbox query limit must be greater than zero.");
+
+        if (workflowExecutionId is not null && string.IsNullOrWhiteSpace(workflowExecutionId))
+            throw new ArgumentException("Outbox workflow execution filter cannot be blank.", nameof(workflowExecutionId));
+
+        if (intentKind is not null)
+            RuntimePostCommitIntent.ValidateKind(intentKind, nameof(intentKind));
+
+        Now = now;
+        Limit = limit;
+        WorkflowExecutionId = workflowExecutionId;
+        IntentKind = intentKind;
+    }
+
+    public DateTimeOffset Now { get; }
+    public int Limit { get; }
+    public string? WorkflowExecutionId { get; }
+    public string? IntentKind { get; }
+}
+
+/// <summary>
+/// Selects the items <see cref="Contracts.IRuntimePostCommitOutboxClaimStore.ListClaimedAsync"/> returns: one workflow
+/// execution's items of one intent kind whose delivery a deliverer took on and has not settled. That is an item claimed
+/// for delivery (<see cref="RuntimePostCommitOutboxStatus.Delivering"/>) or one whose attempt failed and waits for a retry
+/// (<see cref="RuntimePostCommitOutboxStatus.FailedRetryable"/>). Both filters are required, so the read stays within one
+/// execution.
+/// </summary>
+public sealed class RuntimePostCommitOutboxClaimedQuery
+{
+    public RuntimePostCommitOutboxClaimedQuery(string workflowExecutionId, string intentKind, int limit)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        RuntimePostCommitIntent.ValidateKind(intentKind, nameof(intentKind));
+        if (limit <= 0)
+            throw new ArgumentOutOfRangeException(nameof(limit), "Outbox query limit must be greater than zero.");
+
+        WorkflowExecutionId = workflowExecutionId;
+        IntentKind = intentKind;
+        Limit = limit;
+    }
+
+    public string WorkflowExecutionId { get; }
+    public string IntentKind { get; }
+    public int Limit { get; }
+
+    /// <summary>Whether <paramref name="item"/> is one this query lists.</summary>
+    public bool Matches(RuntimePostCommitOutboxItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        return item.Status is RuntimePostCommitOutboxStatus.Delivering or RuntimePostCommitOutboxStatus.FailedRetryable &&
+               StringComparer.Ordinal.Equals(item.Intent.WorkflowExecutionId, WorkflowExecutionId) &&
+               StringComparer.Ordinal.Equals(item.Intent.Kind, IntentKind);
+    }
+}
+
+public sealed class RuntimePostCommitOutboxDeliveryResult
+{
+    public RuntimePostCommitOutboxDeliveryResult(
+        string outboxItemId,
+        RuntimePostCommitOutboxStatus status,
+        DateTimeOffset recordedAt,
+        string? failureMessage = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(outboxItemId);
+
+        if (status is RuntimePostCommitOutboxStatus.Pending or RuntimePostCommitOutboxStatus.Delivering)
+            throw new ArgumentException("Outbox delivery results must record a completed delivery outcome.", nameof(status));
+
+        if (status is RuntimePostCommitOutboxStatus.FailedRetryable or RuntimePostCommitOutboxStatus.FailedFinal)
+            ArgumentException.ThrowIfNullOrWhiteSpace(failureMessage);
+
+        if (status is not (RuntimePostCommitOutboxStatus.FailedRetryable or RuntimePostCommitOutboxStatus.FailedFinal) && failureMessage is not null)
+            throw new ArgumentException("Only failed outbox delivery results can carry a failure message.", nameof(failureMessage));
+
+        OutboxItemId = outboxItemId;
+        Status = status;
+        RecordedAt = recordedAt;
+        FailureMessage = failureMessage;
+    }
+
+    public string OutboxItemId { get; }
+    public RuntimePostCommitOutboxStatus Status { get; }
+    public DateTimeOffset RecordedAt { get; }
+    public string? FailureMessage { get; }
+}
+
+public enum RuntimePostCommitOutboxStatus
+{
+    Pending,
+    Delivering,
+    Delivered,
+    FailedRetryable,
+    FailedFinal,
+    Cancelled
+}

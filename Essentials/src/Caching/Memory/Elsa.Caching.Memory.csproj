@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+  </PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="CShells.Abstractions" />
+		<PackageReference Include="Microsoft.Extensions.Caching.Memory" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\Core\Elsa.Caching.Core.csproj" />
+	</ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Caching.Tests" />
+  </ItemGroup>
+
+</Project>

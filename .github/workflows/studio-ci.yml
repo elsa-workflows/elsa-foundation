@@ -1,0 +1,201 @@
+name: Studio CI
+
+# Active root-level validation for Studio after its source was imported beneath Studio/
+# and its extension UIs beneath Extensions/*/studio/. The preserved nested .github copy
+# is source history only; this workflow owns validation in the consolidated repository.
+#
+# Pull requests run it only when they change Studio, a Studio extension, the Weaver extension the Studio solution
+# references, shared build configuration, or this workflow and its tooling (spec 263, FR-026). None of its checks is a
+# required status check, so the path filter cannot leave a required check waiting. Every push to main runs it in full.
+# That a backend change can still break the Studio API clients is tracked separately (#3177).
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Studio/**'
+      - 'Extensions/*/studio/**'
+      - 'Extensions/Weaver/**'
+      - 'global.json'
+      - 'NuGet.config'
+      - 'Directory.Packages.props'
+      - 'Directory.Build.props'
+      - '.editorconfig'
+      - '.github/workflows/studio-ci.yml'
+      - 'tools/ci/verify-studio-assets.py'
+      - 'tools/ci/verify_studio_nuget_packages.py'
+      - 'tools/ci/studio*'
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: studio-ci-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-test:
+    name: Studio frontend lint, typecheck & unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: Studio/package.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: Studio/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: Studio
+
+      - name: Lint
+        run: pnpm lint
+        working-directory: Studio
+
+      - name: Typecheck
+        run: pnpm typecheck
+        working-directory: Studio
+
+      - name: Unit tests
+        # Run one workspace at a time so these tests stay deterministic under the hosted runner.
+        run: pnpm --recursive --workspace-concurrency=1 test
+        working-directory: Studio
+
+      - name: Unit tests (Workflows, shuffled)
+        working-directory: Studio/src/essentials/Elsa.Studio.Workflows/Client
+        env:
+          SHUFFLE_SEEDS: '1 11 29'
+        run: |
+          for seed in $SHUFFLE_SEEDS; do
+            echo "::group::Shuffle seed $seed"
+            if ! pnpm exec vitest run --sequence.shuffle --sequence.seed="$seed"; then
+              echo "::endgroup::"
+              echo "::error::Order-dependent test failure on shuffle seed $seed. Reproduce locally with: pnpm --filter @elsa-workflows/studio-workflows exec vitest run --sequence.shuffle --sequence.seed=$seed"
+              exit 1
+            fi
+            echo "::endgroup::"
+          done
+
+      - name: Check Workflows bundle budget
+        run: pnpm check:bundle:workflows
+        working-directory: Studio
+
+  browser-tests:
+    name: Studio browser tests (Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: Studio/package.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: Studio/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: Studio
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: Studio
+
+      - name: Run browser tests
+        run: pnpm test:browser
+        working-directory: Studio
+
+  dotnet-build-and-test:
+    name: Studio .NET build & test
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: Studio/package.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: Studio/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: Studio
+
+      - name: Build Studio host and RCL frontend assets
+        run: pnpm build
+        working-directory: Studio
+
+      - name: Verify generated Studio host and RCL assets
+        run: python3 ../tools/ci/verify-studio-assets.py --root ..
+        working-directory: Studio
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-studio-nuget-${{ hashFiles('Studio/Directory.Packages.props', 'Extensions/**/studio/**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-studio-nuget-
+
+      - name: Restore
+        run: dotnet restore Elsa.Studio.slnx --locked-mode -p:WarningsNotAsErrors=NU1603
+        working-directory: Studio
+
+      - name: Build
+        run: dotnet build Elsa.Studio.slnx -c Release --no-restore -p:WarningsNotAsErrors=NU1603
+        working-directory: Studio
+
+      - name: Test
+        run: dotnet test Elsa.Studio.slnx -c Release --no-build -p:WarningsNotAsErrors=NU1603
+        working-directory: Studio
+
+      - name: Pack Studio NuGet projects without publishing
+        run: >-
+          dotnet pack Elsa.Studio.slnx -c Release --no-build
+          -p:WarningsNotAsErrors=NU1603
+          "-p:PackageOutputPath=$RUNNER_TEMP/studio-nuget"
+        working-directory: Studio
+
+      - name: Verify complete Studio NuGet artifact
+        run: |
+          python3 tools/ci/verify_studio_nuget_packages.py --self-test
+          python3 tools/ci/verify_studio_nuget_packages.py --packages "$RUNNER_TEMP/studio-nuget"
+
+      - name: Build standalone Studio image without publishing
+        run: docker build --file Studio/src/apps/Elsa.Studio.Web/Dockerfile --tag "elsa-studio:ci-${{ github.sha }}" .

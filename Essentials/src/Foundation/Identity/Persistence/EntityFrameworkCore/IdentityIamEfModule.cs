@@ -1,0 +1,37 @@
+using Elsa.Persistence.EntityFramework;
+
+namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
+
+/// <summary>Schema ownership for opt-in EF persistence of tenant-local Identity IAM records.</summary>
+public static class IdentityIamEfModule
+{
+    public const string HistoryModuleName = "ElsaIdentityIam";
+    public const string ApplicationTableName = "identity_applications";
+    public const string CredentialTableName = "identity_credentials";
+    public const string UserTableName = "identity_users";
+    public const string RoleTableName = "identity_roles";
+    public const string ClaimMappingTableName = "identity_claim_mappings";
+    public const string ExternalIdentityTableName = "identity_external_logins";
+    public const string UserClaimTableName = "identity_user_claims";
+    public const string RoleClaimTableName = "identity_role_claims";
+    public const string UserRoleTableName = "identity_user_roles";
+    public const string UserTokenTableName = "identity_user_tokens";
+    public const string TenantMembershipTableName = "identity_tenant_memberships";
+    public const string UserNameReservationTableName = "identity_user_name_reservations";
+    public const string EmailReservationTableName = "identity_email_reservations";
+    public const string RoleNameReservationTableName = "identity_role_name_reservations";
+    public const string MutationReceiptTableName = "identity_mutation_receipts";
+
+    /// <summary>The persisted-schema version every Identity IAM row is stamped with, and checked against when read.</summary>
+    public const string SchemaVersion = "1.0.0";
+
+    /// <summary>The schema family this module's rows belong to, checked against when a row is read.</summary>
+    public const string SchemaFamily = "IdentityIam";
+    /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
+    /// upcasts through.</summary>
+    public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(IdentityIamEfModule).Assembly, SchemaFamily);
+    public const string DefaultConnectionName = EfConnectionDefaults.ConnectionName;
+    public const string DefaultSqliteConnectionString = EfConnectionDefaults.SqliteConnectionString;
+
+    public static string HistoryTableName => EfMigrationsHistory.TableName(HistoryModuleName);
+}

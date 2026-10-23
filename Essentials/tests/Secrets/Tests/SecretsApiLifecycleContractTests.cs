@@ -1,0 +1,227 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+using Elsa.Secrets.Tests.Support;
+using Xunit;
+using Xunit.Abstractions;
+
+namespace Elsa.Secrets.Tests;
+
+public sealed class SecretsApiLifecycleContractTests(ITestOutputHelper output)
+{
+    private static readonly IReadOnlySet<string> LifecycleEndpoints = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "POST /secrets",
+        "PUT /secrets/{param}",
+        "POST /secrets/{param}/rotate",
+        "POST /secrets/{param}/revoke",
+        "DELETE /secrets/{param}",
+        "POST /secrets/{param}/test"
+    };
+
+    [Fact]
+    public async Task Create_supports_encrypted_and_configuration_inputs_but_returns_metadata_only()
+    {
+        await using var host = await SecretsCanaryHost.StartMigratedAsync(output);
+        const string valueMarker = "lifecycle-value-marker";
+        const string configurationMarker = "lifecycle:configuration:marker";
+
+        using var encrypted = await host.Client.SendAsync(JsonRequest(
+            HttpMethod.Post,
+            "/secrets",
+            "write",
+            JsonSerializer.Serialize(new { name = "  Lifecycle.Encrypted  ", value = valueMarker, metadata = new { provider = valueMarker }})));
+        Assert.Equal(HttpStatusCode.Created, encrypted.StatusCode);
+        await AssertSafeAsync(encrypted, valueMarker);
+        using var encryptedDocument = JsonDocument.Parse(await encrypted.Content.ReadAsStringAsync());
+        Assert.Equal("lifecycle.encrypted", encryptedDocument.RootElement.GetProperty("name").GetString());
+
+        using var configuration = await host.Client.SendAsync(JsonRequest(
+            HttpMethod.Post,
+            "/secrets",
+            "write",
+            JsonSerializer.Serialize(new { name = "lifecycle.configuration", storeName = "configuration", configurationKey = configurationMarker })));
+        Assert.Equal(HttpStatusCode.Created, configuration.StatusCode);
+        await AssertSafeAsync(configuration, configurationMarker);
+    }
+
+    [Fact]
+    public async Task Update_uses_route_name_as_authority_and_changes_metadata_only()
+    {
+        await using var host = await SecretsCanaryHost.StartMigratedAsync(output);
+        const string routeName = "lifecycle-route-authority";
+
+        using (var create = await host.Client.SendAsync(JsonRequest(
+                   HttpMethod.Post,
+                   "/secrets",
+                   "write",
+                   JsonSerializer.Serialize(new { name = routeName, displayName = "Original", value = "never-returned" }))))
+            Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+
+        using var update = await host.Client.SendAsync(JsonRequest(
+            HttpMethod.Put,
+            $"/secrets/{routeName}",
+            "write",
+            JsonSerializer.Serialize(new { name = "different-body-name", displayName = "Updated", description = "safe description" })));
+        Assert.Equal(HttpStatusCode.OK, update.StatusCode);
+        await AssertSafeAsync(update, "never-returned");
+        using var updatedDocument = JsonDocument.Parse(await update.Content.ReadAsStringAsync());
+        Assert.Equal(routeName, updatedDocument.RootElement.GetProperty("name").GetString());
+        Assert.Equal("Updated", updatedDocument.RootElement.GetProperty("displayName").GetString());
+
+        using var read = await host.Client.SendAsync(Request(HttpMethod.Get, $"/secrets/{routeName}", "read"));
+        using var readDocument = JsonDocument.Parse(await read.Content.ReadAsStringAsync());
+        Assert.Equal("Updated", readDocument.RootElement.GetProperty("displayName").GetString());
+    }
+
+    [Fact]
+    public async Task Duplicate_create_is_rejected_without_overwriting_existing_metadata()
+    {
+        await using var host = await SecretsCanaryHost.StartMigratedAsync(output);
+        const string name = "lifecycle-duplicate";
+
+        using (var create = await host.Client.SendAsync(JsonRequest(
+                   HttpMethod.Post,
+                   "/secrets",
+                   "write",
+                   JsonSerializer.Serialize(new { name, displayName = "Original", value = "original-value" }))))
+            Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+
+        using var duplicate = await host.Client.SendAsync(JsonRequest(
+            HttpMethod.Post,
+            "/secrets",
+            "write",
+            JsonSerializer.Serialize(new { name, displayName = "Overwritten", value = "duplicate-marker" })));
+        Assert.True((int)duplicate.StatusCode >= 400);
+        await AssertSafeAsync(duplicate, "duplicate-marker");
+
+        using var read = await host.Client.SendAsync(Request(HttpMethod.Get, $"/secrets/{name}", "read"));
+        using var document = JsonDocument.Parse(await read.Content.ReadAsStringAsync());
+        Assert.Equal("Original", document.RootElement.GetProperty("displayName").GetString());
+    }
+
+    [Fact]
+    public async Task Create_takes_a_name_a_deleted_secret_freed_but_not_one_a_revoked_secret_holds()
+    {
+        await using var host = await SecretsCanaryHost.StartMigratedAsync(output);
+        const string name = "lifecycle-recreated";
+
+        string originalId;
+        using (var create = await host.Client.SendAsync(JsonRequest(
+                   HttpMethod.Post,
+                   "/secrets",
+                   "write",
+                   JsonSerializer.Serialize(new { name, displayName = "Original", value = "original-value" }))))
+        {
+            Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+            using var document = JsonDocument.Parse(await create.Content.ReadAsStringAsync());
+            originalId = document.RootElement.GetProperty("id").GetString()!;
+        }
+
+        using (var delete = await host.Client.SendAsync(Request(HttpMethod.Delete, $"/secrets/{name}", "delete")))
+            Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
+
+        using var recreate = await host.Client.SendAsync(JsonRequest(
+            HttpMethod.Post,
+            "/secrets",
+            "write",
+            JsonSerializer.Serialize(new { name, displayName = "Recreated", value = "recreated-value" })));
+        Assert.Equal(HttpStatusCode.Created, recreate.StatusCode);
+
+        using var read = await host.Client.SendAsync(Request(HttpMethod.Get, $"/secrets/{name}", "read"));
+        using (var document = JsonDocument.Parse(await read.Content.ReadAsStringAsync()))
+        {
+            Assert.Equal("Recreated", document.RootElement.GetProperty("displayName").GetString());
+            Assert.NotEqual(originalId, document.RootElement.GetProperty("id").GetString());
+            Assert.Equal(1, document.RootElement.GetProperty("currentVersion").GetInt32());
+        }
+
+        using var overRevoked = await host.Client.SendAsync(JsonRequest(
+            HttpMethod.Post,
+            "/secrets",
+            "write",
+            JsonSerializer.Serialize(new { name = "revoked.secret", value = "replacement-marker" })));
+        Assert.True((int)overRevoked.StatusCode >= 400);
+        await AssertSafeAsync(overRevoked, "replacement-marker");
+    }
+
+    [Fact]
+    public async Task Rotate_revoke_delete_and_test_preserve_lifecycle_semantics()
+    {
+        await using var host = await SecretsCanaryHost.StartMigratedAsync(output);
+        const string name = "lifecycle-transitions";
+
+        using (var create = await host.Client.SendAsync(JsonRequest(
+                   HttpMethod.Post,
+                   "/secrets",
+                   "write",
+                   JsonSerializer.Serialize(new { name, value = "first-value" }))))
+            Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+
+        using var rotate = await host.Client.SendAsync(JsonRequest(
+            HttpMethod.Post,
+            $"/secrets/{name}/rotate",
+            "update-value",
+            "{\"value\":\"second-value\"}"));
+        Assert.Equal(HttpStatusCode.OK, rotate.StatusCode);
+        using var rotatedDocument = JsonDocument.Parse(await rotate.Content.ReadAsStringAsync());
+        Assert.Equal(2, rotatedDocument.RootElement.GetProperty("currentVersion").GetInt32());
+        await AssertSafeAsync(rotate, "second-value");
+
+        using var revoke = await host.Client.SendAsync(Request(HttpMethod.Post, $"/secrets/{name}/revoke", "delete"));
+        Assert.Equal(HttpStatusCode.OK, revoke.StatusCode);
+        using var revokedDocument = JsonDocument.Parse(await revoke.Content.ReadAsStringAsync());
+        Assert.Equal("revoked", revokedDocument.RootElement.GetProperty("status").GetString());
+
+        using var test = await host.Client.SendAsync(Request(HttpMethod.Post, $"/secrets/{name}/test", "test"));
+        Assert.Equal(HttpStatusCode.OK, test.StatusCode);
+        using var testDocument = JsonDocument.Parse(await test.Content.ReadAsStringAsync());
+        Assert.False(testDocument.RootElement.GetProperty("succeeded").GetBoolean());
+        Assert.Equal("inactive", testDocument.RootElement.GetProperty("code").GetString());
+
+        using var delete = await host.Client.SendAsync(Request(HttpMethod.Delete, $"/secrets/{name}", "delete"));
+        Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
+        using var repeatedDelete = await host.Client.SendAsync(Request(HttpMethod.Delete, $"/secrets/{name}", "delete"));
+        Assert.Equal(HttpStatusCode.NotFound, repeatedDelete.StatusCode);
+    }
+
+    [Fact]
+    public async Task Malformed_or_empty_lifecycle_bodies_fail_without_mutation()
+    {
+        await using var host = await SecretsCanaryHost.StartMigratedAsync(output);
+        const string name = "lifecycle-malformed";
+
+        using var malformed = await host.Client.SendAsync(JsonRequest(HttpMethod.Post, "/secrets", "write", "{not-json"));
+        Assert.Equal(HttpStatusCode.BadRequest, malformed.StatusCode);
+
+        using var empty = await host.Client.SendAsync(JsonRequest(HttpMethod.Post, "/secrets", "write", ""));
+        Assert.Equal(HttpStatusCode.BadRequest, empty.StatusCode);
+
+        using var missing = await host.Client.SendAsync(Request(HttpMethod.Get, $"/secrets/{name}", "read"));
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+    }
+
+    private static HttpRequestMessage Request(HttpMethod method, string path, string? identity)
+    {
+        var request = new HttpRequestMessage(method, path);
+        if (identity is not null)
+            request.Headers.TryAddWithoutValidation(SecretsCanaryHost.IdentityHeader, identity);
+        return request;
+    }
+
+    private static HttpRequestMessage JsonRequest(HttpMethod method, string path, string? identity, string body)
+    {
+        var request = Request(method, path, identity);
+        request.Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+        return request;
+    }
+
+    private static async Task AssertSafeAsync(HttpResponseMessage response, string marker)
+    {
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain(marker, body, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            response.Headers.Concat(response.Content.Headers).SelectMany(header => header.Value),
+            value => value.Contains(marker, StringComparison.Ordinal));
+    }
+}

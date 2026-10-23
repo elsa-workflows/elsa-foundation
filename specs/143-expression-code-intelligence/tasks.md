@@ -46,14 +46,14 @@ Tasks T001-T025 describe the implemented baseline. Program #2310 adds T026-T031;
 
 ## Program #2310 continuation: User Story 4 — Real composed APIs
 
-- [ ] T026 [US4] Add a real-host persisted-draft authoring integration test covering capability discovery, context, completion, hover and validation for JavaScript and Liquid under `tests/essentials/Workflows/Design/Api/Tests/` and the matching host fixture.
-- [ ] T027 [US4] Add architecture-only independent-provider composition and missing-provider capability-advertisement cases under `tests/essentials/Architecture/` after T026 establishes the real-host path; unavailable, unauthorized, incompatible, stale and cancellation behavior stays in the owning provider/API suites.
+- [ ] T026 [US4] Add a real-host persisted-draft authoring integration test covering capability discovery, context, completion, hover and validation for JavaScript and Liquid under `Essentials/tests/Workflows/Design/Api/Tests/` and the matching host fixture.
+- [ ] T027 [US4] Add architecture-only independent-provider composition and missing-provider capability-advertisement cases under `Essentials/tests/Architecture/` after T026 establishes the real-host path; unavailable, unauthorized, incompatible, stale and cancellation behavior stays in the owning provider/API suites.
 
 ## Program #2310 continuation: User Story 2 — Runtime-owned language assistance
 
-- [ ] T028 [US2] Align Foundation JavaScript tooling globals, signatures and diagnostics with the runtime expression profile in `src/essentials/Expressions/JavaScript/` and provider contract tests after T026 passes; Studio spec 094 T030 owns local parser grammar.
-- [ ] T029 [P] [US2] Extract the effective binding-pure Liquid filter/tag profile and consume it from both runtime evaluation and `LiquidExpressionToolingProvider` in `src/essentials/Expressions/Liquid/` with parity tests after T026 passes.
-- [ ] T030 [US2] Add Liquid cursor-context completion plus known-shape signature/diagnostic conformance in `src/essentials/Expressions/Liquid/Services/LiquidExpressionToolingProvider.cs` and provider contract tests after T029.
+- [ ] T028 [US2] Align Foundation JavaScript tooling globals, signatures and diagnostics with the runtime expression profile in `Essentials/src/Expressions/JavaScript/` and provider contract tests after T026 passes; Studio spec 094 T030 owns local parser grammar.
+- [ ] T029 [P] [US2] Extract the effective binding-pure Liquid filter/tag profile and consume it from both runtime evaluation and `LiquidExpressionToolingProvider` in `Essentials/src/Expressions/Liquid/` with parity tests after T026 passes.
+- [ ] T030 [US2] Add Liquid cursor-context completion plus known-shape signature/diagnostic conformance in `Essentials/src/Expressions/Liquid/Services/LiquidExpressionToolingProvider.cs` and provider contract tests after T029.
 - [ ] T031 [US2] Record exact-head focused, affected-suite, architecture, maps and real producer-consumer evidence in `specs/143-expression-code-intelligence/verification.md`.
 
 ## Dependencies
@@ -61,4 +61,5 @@ Tasks T001-T025 describe the implemented baseline. Program #2310 adds T026-T031;
 - T026 is the first executable implementation leaf and owns the end-to-end real-host cases.
 - T027 follows T026 and remains architecture-only so it does not duplicate the real-host harness.
 - T028-T029 remain Not Ready until T026 passes; T030 depends on T029.
+- T028-T030 also wait for the ADR requested by #3204 (declared or ambient variable reads, and the future of `get<Name>()`); see the Program #2310 decision log entry of 2026-10-23.
 - T031 closes the Foundation contribution only after T027-T030 and the coordinated Studio consumer checks pass.

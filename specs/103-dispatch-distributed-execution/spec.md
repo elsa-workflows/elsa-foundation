@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-16
 
-**Status**: Draft
+**Status**: Implemented — all tasks checked in bf7ea0c5b
 
 **Input**: GitHub issue #683, "Execute dispatched workflows across distributed nodes", including its complete current body and zero comments, under parent #674.
 

@@ -1,0 +1,696 @@
+{
+  "capture": {
+    "archiveSha256": "2f8edcce315bd379002b4ac1c2db4fcdddd8ba126d7202e038341de8804f1c12",
+    "archiveFileCount": 125,
+    "failures": [],
+    "stage": "collector_validated",
+    "rootAcceptance": "accepted-bounded-coalesced-before-capture",
+    "httpInvocationCount": 1,
+    "restInvocationCount": 1,
+    "retries": 0,
+    "rawFinalStatus": "passed_source_candidate",
+    "rawHarnessClaim": "source candidate only; not live proof or performance evidence"
+  },
+  "identity": {
+    "runNonce": "9b296ca7f869ff818da8db99e81bb383",
+    "primaryExecutionHmac": "7eeb0dca06b9c3e8ec0bc9587856a358ae66a4985d6612570d4f62c41a6765e5",
+    "httpTraceHmac": "20335c72dd314487e40108e26881c610d604b37064a8e0177919ab6291b3fec2",
+    "restRequestBoundaryTraceHmac": "a80bc58084c3e69c1d7d35b40448c799c21ca5fb7a1c791f4200684f0324bf9d",
+    "snapshotSha256": "a76fc9928ab54e023f16f161e416ef310c393148f6fa0bd9bf6cbd72621c1226",
+    "settledMarkerSnapshotSha256": "a76fc9928ab54e023f16f161e416ef310c393148f6fa0bd9bf6cbd72621c1226",
+    "snapshotEligible": true,
+    "snapshotValidation": "passed",
+    "markerSequence": 981,
+    "markerMatchesSnapshotHash": true,
+    "markerMatchesPrimaryExecution": true,
+    "snapshotPrimarySettled": true,
+    "executionStatus": "Completed",
+    "executionTerminal": true,
+    "queueCount": 0,
+    "outboxItemCount": 0,
+    "requestDrainReceiptSha256": "726ff28df0cc04cd8f4b58e8a142af7c3816a685b185b862525904e2429c1965",
+    "primaryHttpStatus": 200,
+    "primaryBodyAndOutputMatched": true,
+    "restStatus": "Completed",
+    "restOutputMatched": true,
+    "zeroIncidents": true
+  },
+  "collector": {
+    "rawRecords": 1067,
+    "commandCallbacks": 840,
+    "saveChangesCallbacks": 108,
+    "transactionCallbacks": 96,
+    "selfCheckPassed": true,
+    "t04CaptureComplete": true,
+    "markerObserved": true,
+    "evidenceCutoffReached": true,
+    "finalRequestTailsConserved": true,
+    "allBoundaryTailsConserved": true,
+    "observerFaults": 0,
+    "sourceHookObserverFaults": 0,
+    "overflowed": false
+  },
+  "commandReconciliation": {
+    "starts": 420,
+    "terminals": 420,
+    "pairs": 420,
+    "duplicateStartKeys": 0,
+    "duplicateTerminalKeys": 0,
+    "unmatchedKeys": 0,
+    "metadataMismatches": 0,
+    "failedTerminals": 0,
+    "requestScopes": [
+      [
+        "HTTP",
+        "descendant_tail",
+        40
+      ],
+      [
+        "HTTP",
+        "method_stop",
+        218
+      ],
+      [
+        "HTTP",
+        "unbounded_outside_source",
+        19
+      ],
+      [
+        "REST",
+        "descendant_tail",
+        16
+      ],
+      [
+        "REST",
+        "method_stop",
+        69
+      ],
+      [
+        "REST",
+        "unbounded_outside_source",
+        16
+      ]
+    ],
+    "providerContextCounts": [
+      [
+        "HTTP",
+        "descendant_tail",
+        "Microsoft.Data.Sqlite.SqliteCommand",
+        "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.OpenTelemetrySqliteDbContext",
+        40
+      ],
+      [
+        "HTTP",
+        "method_stop",
+        "Microsoft.Data.Sqlite.SqliteCommand",
+        "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.OpenTelemetrySqliteDbContext",
+        40
+      ],
+      [
+        "HTTP",
+        "method_stop",
+        "Npgsql.NpgsqlCommand",
+        "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+        178
+      ],
+      [
+        "HTTP",
+        "unbounded_outside_source",
+        "Microsoft.Data.Sqlite.SqliteCommand",
+        "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ExecutionPlacementSqliteDbContext",
+        2
+      ],
+      [
+        "HTTP",
+        "unbounded_outside_source",
+        "Npgsql.NpgsqlCommand",
+        "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+        17
+      ],
+      [
+        "REST",
+        "descendant_tail",
+        "Microsoft.Data.Sqlite.SqliteCommand",
+        "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.OpenTelemetrySqliteDbContext",
+        16
+      ],
+      [
+        "REST",
+        "method_stop",
+        "Npgsql.NpgsqlCommand",
+        "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+        69
+      ],
+      [
+        "REST",
+        "unbounded_outside_source",
+        "Microsoft.Data.Sqlite.SqliteCommand",
+        "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.IdentityIamSqliteDbContext",
+        1
+      ],
+      [
+        "REST",
+        "unbounded_outside_source",
+        "Microsoft.Data.Sqlite.SqliteCommand",
+        "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ExecutionPlacementSqliteDbContext",
+        2
+      ],
+      [
+        "REST",
+        "unbounded_outside_source",
+        "Npgsql.NpgsqlCommand",
+        "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+        13
+      ],
+      [
+        "resumption_sweep:boundary-3",
+        "sweep_method",
+        "Npgsql.NpgsqlCommand",
+        "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+        6
+      ],
+      [
+        "resumption_sweep:boundary-4",
+        "sweep_method",
+        "Npgsql.NpgsqlCommand",
+        "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+        6
+      ],
+      [
+        "resumption_sweep:boundary-5",
+        "sweep_method",
+        "Npgsql.NpgsqlCommand",
+        "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+        6
+      ],
+      [
+        "resumption_sweep:boundary-6",
+        "sweep_method",
+        "Npgsql.NpgsqlCommand",
+        "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+        6
+      ],
+      [
+        "resumption_sweep:boundary-7",
+        "sweep_method",
+        "Npgsql.NpgsqlCommand",
+        "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+        6
+      ],
+      [
+        "resumption_sweep:boundary-8",
+        "sweep_method",
+        "Npgsql.NpgsqlCommand",
+        "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+        6
+      ],
+      [
+        "resumption_sweep:boundary-9",
+        "sweep_method",
+        "Npgsql.NpgsqlCommand",
+        "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+        6
+      ]
+    ]
+  },
+  "saveChangesReconciliation": {
+    "starts": 54,
+    "terminals": 54,
+    "pairs": 54,
+    "duplicateStartKeys": 0,
+    "duplicateTerminalKeys": 0,
+    "unmatchedKeys": 0,
+    "metadataMismatches": 0,
+    "requestScopes": [
+      [
+        "HTTP",
+        "descendant_tail",
+        10
+      ],
+      [
+        "HTTP",
+        "method_stop",
+        27
+      ],
+      [
+        "HTTP",
+        "unbounded_outside_source",
+        4
+      ],
+      [
+        "REST",
+        "descendant_tail",
+        4
+      ],
+      [
+        "REST",
+        "method_stop",
+        5
+      ],
+      [
+        "REST",
+        "unbounded_outside_source",
+        4
+      ]
+    ]
+  },
+  "transactionGenerationReconciliation": {
+    "rawCallbacks": 96,
+    "starts": 16,
+    "terminals": 16,
+    "pairs": 16,
+    "duplicateStartKeys": 0,
+    "duplicateTerminalKeys": 0,
+    "unmatchedKeys": 0,
+    "metadataMismatches": 0,
+    "requestScopes": [
+      [
+        "HTTP",
+        "descendant_tail",
+        5
+      ],
+      [
+        "HTTP",
+        "method_stop",
+        8
+      ],
+      [
+        "REST",
+        "descendant_tail",
+        2
+      ],
+      [
+        "REST",
+        "method_stop",
+        1
+      ]
+    ]
+  },
+  "sweeps": [
+    {
+      "boundaryId": "boundary-3",
+      "startSequence": 967,
+      "endSequence": 980,
+      "startedAfterSettlement": false,
+      "methodOutcome": "completed",
+      "commandPairs": 6,
+      "saveChangesPairs": 0,
+      "transactionGenerations": 0,
+      "allOutstandingAtFinalizationZero": true,
+      "tailConserved": true,
+      "commandShapes": [
+        {
+          "leadingVerb": "SELECT",
+          "tableTokens": [
+            "elsa_runtime_execution_liveness_state"
+          ],
+          "provider": "Npgsql.NpgsqlCommand",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "count": 4,
+          "activityLineage": "exact_activity_object_ancestry",
+          "executionOwnership": "unknown_not_awaited"
+        },
+        {
+          "leadingVerb": "SELECT",
+          "tableTokens": [
+            "elsa_runtime_post_commit_outbox"
+          ],
+          "provider": "Npgsql.NpgsqlCommand",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "count": 1,
+          "activityLineage": "exact_activity_object_ancestry",
+          "executionOwnership": "unknown_not_awaited"
+        },
+        {
+          "leadingVerb": "SELECT",
+          "tableTokens": [
+            "elsa_runtime_scheduler_work_item"
+          ],
+          "provider": "Npgsql.NpgsqlCommand",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "count": 1,
+          "activityLineage": "exact_activity_object_ancestry",
+          "executionOwnership": "unknown_not_awaited"
+        }
+      ]
+    },
+    {
+      "boundaryId": "boundary-4",
+      "startSequence": 982,
+      "endSequence": 995,
+      "startedAfterSettlement": true,
+      "methodOutcome": "completed",
+      "commandPairs": 6,
+      "saveChangesPairs": 0,
+      "transactionGenerations": 0,
+      "allOutstandingAtFinalizationZero": true,
+      "tailConserved": true,
+      "commandShapes": [
+        {
+          "leadingVerb": "SELECT",
+          "tableTokens": [
+            "elsa_runtime_execution_liveness_state"
+          ],
+          "provider": "Npgsql.NpgsqlCommand",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "count": 4,
+          "activityLineage": "exact_activity_object_ancestry",
+          "executionOwnership": "unknown_not_awaited"
+        },
+        {
+          "leadingVerb": "SELECT",
+          "tableTokens": [
+            "elsa_runtime_post_commit_outbox"
+          ],
+          "provider": "Npgsql.NpgsqlCommand",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "count": 1,
+          "activityLineage": "exact_activity_object_ancestry",
+          "executionOwnership": "unknown_not_awaited"
+        },
+        {
+          "leadingVerb": "SELECT",
+          "tableTokens": [
+            "elsa_runtime_scheduler_work_item"
+          ],
+          "provider": "Npgsql.NpgsqlCommand",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "count": 1,
+          "activityLineage": "exact_activity_object_ancestry",
+          "executionOwnership": "unknown_not_awaited"
+        }
+      ]
+    },
+    {
+      "boundaryId": "boundary-5",
+      "startSequence": 996,
+      "endSequence": 1009,
+      "startedAfterSettlement": true,
+      "methodOutcome": "completed",
+      "commandPairs": 6,
+      "saveChangesPairs": 0,
+      "transactionGenerations": 0,
+      "allOutstandingAtFinalizationZero": true,
+      "tailConserved": true,
+      "commandShapes": [
+        {
+          "leadingVerb": "SELECT",
+          "tableTokens": [
+            "elsa_runtime_execution_liveness_state"
+          ],
+          "provider": "Npgsql.NpgsqlCommand",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "count": 4,
+          "activityLineage": "exact_activity_object_ancestry",
+          "executionOwnership": "unknown_not_awaited"
+        },
+        {
+          "leadingVerb": "SELECT",
+          "tableTokens": [
+            "elsa_runtime_post_commit_outbox"
+          ],
+          "provider": "Npgsql.NpgsqlCommand",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "count": 1,
+          "activityLineage": "exact_activity_object_ancestry",
+          "executionOwnership": "unknown_not_awaited"
+        },
+        {
+          "leadingVerb": "SELECT",
+          "tableTokens": [
+            "elsa_runtime_scheduler_work_item"
+          ],
+          "provider": "Npgsql.NpgsqlCommand",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "count": 1,
+          "activityLineage": "exact_activity_object_ancestry",
+          "executionOwnership": "unknown_not_awaited"
+        }
+      ]
+    },
+    {
+      "boundaryId": "boundary-6",
+      "startSequence": 1010,
+      "endSequence": 1023,
+      "startedAfterSettlement": true,
+      "methodOutcome": "completed",
+      "commandPairs": 6,
+      "saveChangesPairs": 0,
+      "transactionGenerations": 0,
+      "allOutstandingAtFinalizationZero": true,
+      "tailConserved": true,
+      "commandShapes": [
+        {
+          "leadingVerb": "SELECT",
+          "tableTokens": [
+            "elsa_runtime_execution_liveness_state"
+          ],
+          "provider": "Npgsql.NpgsqlCommand",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "count": 4,
+          "activityLineage": "exact_activity_object_ancestry",
+          "executionOwnership": "unknown_not_awaited"
+        },
+        {
+          "leadingVerb": "SELECT",
+          "tableTokens": [
+            "elsa_runtime_post_commit_outbox"
+          ],
+          "provider": "Npgsql.NpgsqlCommand",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "count": 1,
+          "activityLineage": "exact_activity_object_ancestry",
+          "executionOwnership": "unknown_not_awaited"
+        },
+        {
+          "leadingVerb": "SELECT",
+          "tableTokens": [
+            "elsa_runtime_scheduler_work_item"
+          ],
+          "provider": "Npgsql.NpgsqlCommand",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "count": 1,
+          "activityLineage": "exact_activity_object_ancestry",
+          "executionOwnership": "unknown_not_awaited"
+        }
+      ]
+    },
+    {
+      "boundaryId": "boundary-7",
+      "startSequence": 1024,
+      "endSequence": 1037,
+      "startedAfterSettlement": true,
+      "methodOutcome": "completed",
+      "commandPairs": 6,
+      "saveChangesPairs": 0,
+      "transactionGenerations": 0,
+      "allOutstandingAtFinalizationZero": true,
+      "tailConserved": true,
+      "commandShapes": [
+        {
+          "leadingVerb": "SELECT",
+          "tableTokens": [
+            "elsa_runtime_execution_liveness_state"
+          ],
+          "provider": "Npgsql.NpgsqlCommand",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "count": 4,
+          "activityLineage": "exact_activity_object_ancestry",
+          "executionOwnership": "unknown_not_awaited"
+        },
+        {
+          "leadingVerb": "SELECT",
+          "tableTokens": [
+            "elsa_runtime_post_commit_outbox"
+          ],
+          "provider": "Npgsql.NpgsqlCommand",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "count": 1,
+          "activityLineage": "exact_activity_object_ancestry",
+          "executionOwnership": "unknown_not_awaited"
+        },
+        {
+          "leadingVerb": "SELECT",
+          "tableTokens": [
+            "elsa_runtime_scheduler_work_item"
+          ],
+          "provider": "Npgsql.NpgsqlCommand",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "count": 1,
+          "activityLineage": "exact_activity_object_ancestry",
+          "executionOwnership": "unknown_not_awaited"
+        }
+      ]
+    },
+    {
+      "boundaryId": "boundary-8",
+      "startSequence": 1038,
+      "endSequence": 1051,
+      "startedAfterSettlement": true,
+      "methodOutcome": "completed",
+      "commandPairs": 6,
+      "saveChangesPairs": 0,
+      "transactionGenerations": 0,
+      "allOutstandingAtFinalizationZero": true,
+      "tailConserved": true,
+      "commandShapes": [
+        {
+          "leadingVerb": "SELECT",
+          "tableTokens": [
+            "elsa_runtime_execution_liveness_state"
+          ],
+          "provider": "Npgsql.NpgsqlCommand",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "count": 4,
+          "activityLineage": "exact_activity_object_ancestry",
+          "executionOwnership": "unknown_not_awaited"
+        },
+        {
+          "leadingVerb": "SELECT",
+          "tableTokens": [
+            "elsa_runtime_post_commit_outbox"
+          ],
+          "provider": "Npgsql.NpgsqlCommand",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "count": 1,
+          "activityLineage": "exact_activity_object_ancestry",
+          "executionOwnership": "unknown_not_awaited"
+        },
+        {
+          "leadingVerb": "SELECT",
+          "tableTokens": [
+            "elsa_runtime_scheduler_work_item"
+          ],
+          "provider": "Npgsql.NpgsqlCommand",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "count": 1,
+          "activityLineage": "exact_activity_object_ancestry",
+          "executionOwnership": "unknown_not_awaited"
+        }
+      ]
+    },
+    {
+      "boundaryId": "boundary-9",
+      "startSequence": 1052,
+      "endSequence": 1065,
+      "startedAfterSettlement": true,
+      "methodOutcome": "completed",
+      "commandPairs": 6,
+      "saveChangesPairs": 0,
+      "transactionGenerations": 0,
+      "allOutstandingAtFinalizationZero": true,
+      "tailConserved": true,
+      "commandShapes": [
+        {
+          "leadingVerb": "SELECT",
+          "tableTokens": [
+            "elsa_runtime_execution_liveness_state"
+          ],
+          "provider": "Npgsql.NpgsqlCommand",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "count": 4,
+          "activityLineage": "exact_activity_object_ancestry",
+          "executionOwnership": "unknown_not_awaited"
+        },
+        {
+          "leadingVerb": "SELECT",
+          "tableTokens": [
+            "elsa_runtime_post_commit_outbox"
+          ],
+          "provider": "Npgsql.NpgsqlCommand",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "count": 1,
+          "activityLineage": "exact_activity_object_ancestry",
+          "executionOwnership": "unknown_not_awaited"
+        },
+        {
+          "leadingVerb": "SELECT",
+          "tableTokens": [
+            "elsa_runtime_scheduler_work_item"
+          ],
+          "provider": "Npgsql.NpgsqlCommand",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "count": 1,
+          "activityLineage": "exact_activity_object_ancestry",
+          "executionOwnership": "unknown_not_awaited"
+        }
+      ]
+    }
+  ],
+  "interpretationLimits": [
+    "Exact boundary and Activity ancestry identify correlated EF command callbacks, not exclusive execution ownership; executionOwnership is unknown_not_awaited.",
+    "SQL table-token tuples are command-shape metadata, not returned-row identities, row counts or proof that rows belong to the primary execution.",
+    "SourceBoundaryId-null request-trace commands remain unattributed.",
+    "Accepted by root for the bounded Coalesced before-capture scope only. This does not close T02/T04 or establish timing, exact caller/participant attribution, row ownership, or final integrated correctness."
+  ],
+  "evidenceSha256": {
+    "probe.jsonl": "5be673111f244f731e2b68aeccac58f2992825d428a4adfa9ec13e0defbb162d",
+    "final-receipt.json": "f2c998b455a321cddbfda9e97e39bf4223daef4ed3b19528351731e3d9f6a8ba",
+    "primary-control.json": "c32cc7f7ef907081830d58a4df378348cb47de97c8cd96796bb586d4c61df3c4",
+    "primary-evidence.json": "a8661bbc64fc53c330d46199a5ce2cd1fd115ea293369f375b56314e434ba179",
+    "rest-evidence.json": "42877a0da17856f98b701046ae739c5bf926c35ff7e9588029737f7a437d193a",
+    "request-drain.json": "726ff28df0cc04cd8f4b58e8a142af7c3816a685b185b862525904e2429c1965",
+    "settled.marker": "a5c2642459154132674f02c5bd59f3645603d63049e09892f40e8a7c09d7eccc",
+    "snapshot.json": "a76fc9928ab54e023f16f161e416ef310c393148f6fa0bd9bf6cbd72621c1226",
+    "snapshot-supervisor.json": "db34b89239a9fbd8315c681d0d0c75bea83275621f66f795dd49278c3dff41ae",
+    "live-context.json": "ebb18a59d8ee8c8b5949e81d0279b7e2e8db1b94a905a412466fbe9cc1ba1762",
+    "stage-collector.json": "ce9f99377d6bb8fdbe5d7979c0eeac52e84ccf64e8b69d5a3a0fa4b2d216347b"
+  },
+  "schema": "runtime-db-azure-settled-accounting/v1",
+  "rootAcceptance": {
+    "status": "ACCEPTED_BOUNDED_COALESCED_BEFORE_CAPTURE",
+    "acceptedAtUtc": "2026-10-06T22:21:22.386660+00:00",
+    "scope": "one HTTP and one valid REST control; primary settlement snapshot; observed command lifecycles and six post-settlement resumption sweeps",
+    "rootArtifactChecksSha256": "f89a8aaec0bc11ffedd436310c25502d0b5c1c5c5f370c4e21c71950a59834a6",
+    "independentLedgerSha256": "3a12d58c0596fd7b420d3ab826d6663a0dd20cb3c64ca6231f38dcf71c47d989",
+    "rootReviewedWorkerPresentationCorrection": "Worker MD sweep table printed one liveness SELECT; raw rows, worker JSON and paragraph show four. Canonical report uses four. Original worker files preserved.",
+    "remaining": [
+      "Immediate settled control",
+      "exact repository caller and checkpoint participant attribution",
+      "row identity mapping beyond primary snapshot",
+      "comparative low-logging timing",
+      "final integrated correctness"
+    ],
+    "priorTwelveCaptures": "failed and excluded, unchanged"
+  },
+  "rootArtifactChecks": {
+    "recordedAtUtc": "2026-10-06T22:17:41.233567+00:00",
+    "finalReceiptSha256": "f2c998b455a321cddbfda9e97e39bf4223daef4ed3b19528351731e3d9f6a8ba",
+    "probeSha256": "5be673111f244f731e2b68aeccac58f2992825d428a4adfa9ec13e0defbb162d",
+    "snapshotSha256": "a76fc9928ab54e023f16f161e416ef310c393148f6fa0bd9bf6cbd72621c1226",
+    "guardReceiptSha256": "102e969e708034678044962a77f58501548fbfabcbd2099a9483db0e4b64276c",
+    "stageCollectorSha256": "ce9f99377d6bb8fdbe5d7979c0eeac52e84ccf64e8b69d5a3a0fa4b2d216347b",
+    "fullEvidenceCutoffSeconds": 90,
+    "postSettlementSweepPairs": 6,
+    "binaryPinsUnchanged": 589,
+    "exactDescriptorChange": "helper.harnessSourceSha256.run_capture.py only",
+    "httpTraceCommands": 277,
+    "restTraceCommands": 101,
+    "historicalFailedCapturesRemainExcluded": 12,
+    "noTimingOrProductRepairClaim": true,
+    "exclusiveOwnershipProven": false,
+    "primarySnapshotOnly": true,
+    "cleanup": {
+      "ownedProcessGroupsAbsent": 24,
+      "ownedContainerAbsent": true,
+      "forcedHostKill": false
+    }
+  },
+  "source": {
+    "baselineCommit": "e6faa5689814c33353009b13f5b9e44d0e9982a4",
+    "diagnosticRevision": "b3f55bef32576011d39b93d664949a0cb705fb3b",
+    "diagnosticOverlaySha256": "eb6d628f8baff10cac49ebe06aa20c37efa4392b96660a983ed306dcca9d217e",
+    "fixtureRevision": "6f3a07e24df4d2baf73dec7e52f501db55e755d9"
+  },
+  "window": {
+    "startedAtUtc": "2026-10-06T22:12:22.547Z",
+    "evidenceSeconds": 90,
+    "terminalOnlyCloseSeconds": 2,
+    "innerHarnessSeconds": 95.827486,
+    "guardSeconds": 95.92153,
+    "timingMeasurement": false,
+    "primaryCadence": "Coalesced",
+    "maxSegmentCheckpoints": 50,
+    "inspectionGranularity": "boundary-level"
+  }
+}

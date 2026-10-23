@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/runtime-scheduler-drain-contract`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented — all tasks checked in e83f44793
 **Input**: Runtime Execution Seam next slice after scheduler work queue.
 
 ## Scenarios & Tests

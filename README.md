@@ -4,13 +4,29 @@
 
 `elsa-foundation` is the transitional Elsa 4 foundation workspace.
 
-It contains the main Elsa domain core libraries, default foundation implementations, the Speckit specification flow, and the architecture knowledge needed to navigate and verify the refactor from `elsa-core`.
+It contains the Elsa backend and Studio in three product roots:
+
+- `Essentials/`: backend libraries, tests and host applications.
+- `Extensions/<capability>/`: optional backend implementations, tests and Studio components where present.
+- `Studio/`: the Studio shell, shared UI, tests and frontend tooling.
+
+Shared engineering documentation, tools and workflows remain at the root. Public Elsa 4 documentation source lives in `website/docs/` and syncs to GitBook. Server and Studio retain independent builds and package identities.
 
 These repositories develop the Elsa 4 preview. Elsa 3 uses the separate [elsa-core](https://github.com/elsa-workflows/elsa-core) and [elsa-studio](https://github.com/elsa-workflows/elsa-studio) repositories.
 
 - **Try Elsa 4:** [run Workbench and Studio from published Docker images](docker/compose/README.md#quick-start--published-images-no-clone-or-build).
 - **Contribute to the server:** follow the [Elsa Foundation contribution guide](CONTRIBUTING.md).
-- **Contribute to Studio:** follow the [Elsa Foundation Studio contribution guide](https://github.com/elsa-workflows/elsa-foundation-studio/blob/main/CONTRIBUTING.md).
+- **Contribute to Studio:** follow the [Elsa Foundation Studio contribution guide](Studio/CONTRIBUTING.md).
+
+## Screenshots
+
+Elsa Studio running against Workbench from the [published Docker images](docker/compose/README.md#quick-start--published-images-no-clone-or-build). Captured with Studio rev `7cb2f2c2`; Write Line `4.0.5-preview`, Flowchart `4.0.3-preview`; the preview UI may change.
+
+| Designer | Completed run |
+| --- | --- |
+| <img src="website/docs/assets/elsa4/elsa4-04-designer_studio-7cb2f2c2_act-4.0.5-preview.png" alt="Studio designer with one Write Line activity" width="420"> | <img src="website/docs/assets/elsa4/elsa4-07-run-timeline_studio-7cb2f2c2_act-4.0.5-preview.png" alt="Completed run 14J7GJS3fOg with execution timeline" width="420"> |
+
+See [Your first workflow](website/docs/essentials/first-workflow.md) for the full walkthrough.
 
 ## Philosophy
 
@@ -22,7 +38,7 @@ Modules should stay opt-in. A shell composes only the capabilities it needs, and
 
 ## Start here
 
-- The process entry point is [`src/apps/Elsa.Workbench/Program.cs`](src/apps/Elsa.Workbench/Program.cs); which features it composes is decided by [`src/apps/Elsa.Workbench/shells.json`](src/apps/Elsa.Workbench/shells.json).
+- The process entry point is [`Essentials/apps/Elsa.Workbench/Program.cs`](Essentials/apps/Elsa.Workbench/Program.cs); which features it composes is decided by [`Essentials/apps/Elsa.Workbench/shells.json`](Essentials/apps/Elsa.Workbench/shells.json).
 - [How a workflow executes](docs/how-a-workflow-executes.md) traces one request from that entry point to a durable checkpoint, file by file.
 - [AGENTS.md](AGENTS.md) is the provider-neutral entrypoint for AI agents and engineers.
 - [docs/README.md](docs/README.md) routes to glossary, skills, maps, reports, and architecture orientation.
@@ -47,7 +63,7 @@ For faster inner-loop work, open or build one of the committed
 [developer solution filters](docs/reference/developer-solution-filters.md). The full solution remains
 the completion gate.
 
-For a tested macOS backend run from source, including readiness and a completed sample workflow, follow the
+To build and run the backend from source, check readiness, and execute a sample workflow, follow the
 [backend source quickstart](docs/contributing/backend-source-quickstart.md).
 
 ## Supported management APIs
@@ -56,22 +72,18 @@ Management-client APIs are owned by their Elsa domains and can be composed direc
 `Elsa.Workbench` is a reference composition, not the implementation home of a server-wide management facade.
 
 The canonical areas are Workflow Design, Activity Design, Expressions, Publishing, Runtime, and
-[API Capabilities](src/essentials/Api/Capabilities/README.md). An authenticated client loads one shell-relative
+[API Capabilities](Essentials/src/Api/Capabilities/README.md). An authenticated client loads one shell-relative
 `GET /capabilities` document, then follows the advertised domain links. Omitted domain features advertise no
 capability and expose no routes; endpoint-level action permissions remain authoritative.
 
-See the [domain-owned API specification](specs/092-domain-owned-apis/spec.md),
-[OpenAPI contract](specs/092-domain-owned-apis/contracts/management-api.openapi.yaml), and
-[validation quickstart](specs/092-domain-owned-apis/quickstart.md) for composition and compatibility details.
+See the [domain-owned API specification](specs/220-domain-owned-apis/spec.md),
+[OpenAPI contract](specs/220-domain-owned-apis/contracts/management-api.openapi.yaml), and
+[validation quickstart](specs/220-domain-owned-apis/quickstart.md) for composition and compatibility details.
 
 ## Run with Docker
 
-Fastest way to try the stack — pull the published images and run them, no clone or build:
-
-```bash
-curl -O https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/main/docker/compose/docker-compose.images.yml
-docker compose -f docker-compose.images.yml up
-```
+The fastest way to try the stack is to [run the published images with Docker Compose](docker/compose/README.md#with-docker-compose),
+without cloning or building the repositories. That guide includes macOS/Linux and Windows PowerShell commands.
 
 This starts **Elsa.Workbench** (`http://localhost:13000`) and **Elsa Studio**
 (`http://localhost:14000`) from the Docker Hub images `elsaworkflows/elsa-workbench` and

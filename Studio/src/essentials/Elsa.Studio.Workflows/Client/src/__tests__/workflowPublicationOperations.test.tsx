@@ -1,0 +1,1196 @@
+import React from "react";
+import { flushSync } from "react-dom";
+import { createRoot } from "react-dom/client";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { clearApiCapabilityCache } from "../api/capabilities";
+import { activationSlotReadsUnavailableReason, type Publication, type PublicationIntent, type PublicationPolicy, type PublicationPreflight } from "../api/publishing";
+import type { WorkflowActivationSlot } from "../api/runtime";
+import type { PromotionPreflightAssessment } from "../api/workflowDesign";
+import type { WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
+import { publicationBaselineFor, publicationChangesFor, publicationIntentForChannel } from "../workflow-editor/publicationReview";
+import { useWorkflowOperations } from "../workflow-editor/useWorkflowOperations";
+import { activationSlot, foreignSlotOwner, importedActivationSlot, publicationPreflight, publicationRecord } from "./fixtures/publicationSlots";
+
+type Operations = ReturnType<typeof useWorkflowOperations>;
+
+let mounted: { root: ReturnType<typeof createRoot>; container: HTMLDivElement } | null = null;
+
+afterEach(() => {
+  clearApiCapabilityCache();
+  if (!mounted) return;
+  flushSync(() => mounted!.root.unmount());
+  mounted.container.remove();
+  mounted = null;
+});
+
+describe("workflow publication operations", () => {
+  it("obtains authoritative snapshot preflight before rendering a mutation-free review", async () => {
+    const fixture = renderOperations();
+
+    await prepare(fixture);
+
+    expect(fixture.postJson.mock.calls.map(([url]) => url)).toEqual(["/publishing/workflows/preflight"]);
+    expect(fixture.mutationOrder).toEqual(["snapshot-preflight"]);
+    expect(fixture.saveDraft).not.toHaveBeenCalled();
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "review",
+      preflight: {
+        preflightToken: "preflight-token-1",
+        candidateHash: "candidate-hash-1",
+        resolvedAction: "replace",
+        slotName: "default",
+        policySource: "request",
+        canActivate: true
+      }
+    });
+  });
+
+  it("fails closed when authoritative review data cannot be loaded", async () => {
+    const fixture = renderOperations({ failPolicyLoad: true });
+
+    await fixture.current().preparePublication();
+    await flushUpdates();
+
+    expect(fixture.current().publicationReview).toBeNull();
+    expect(fixture.saveDraft).not.toHaveBeenCalled();
+    expect(fixture.postJson).not.toHaveBeenCalled();
+    expect(fixture.setAutosavePaused).toHaveBeenNthCalledWith(1, true);
+    expect(fixture.setAutosavePaused).toHaveBeenLastCalledWith(false);
+    expect(fixture.setError.mock.calls.at(-1)?.[0]).toContain("Could not prepare a trustworthy publication review");
+  });
+
+  it("joins Runtime activation slots to their publication records before building the review", async () => {
+    const fixture = renderOperations();
+
+    await prepare(fixture);
+
+    expect(fixture.getJson.mock.calls.map(([url]) => url)).toEqual(expect.arrayContaining([
+      "/runtime/workflows/activation-slots/definition-1",
+      "/publishing/publications/publication-1",
+      "/design/workflows/versions/version-1"
+    ]));
+    expect(fixture.current().publicationReview).toMatchObject({
+      slots: [{
+        slotName: "default",
+        activeActivationId: "publication-1",
+        sourceKind: "publishing",
+        publication: { publicationId: "publication-1", versionId: "version-1" }
+      }],
+      slotVersions: { default: { id: "version-1" } },
+      intent: { action: "replace", slotName: "default", expectedPublicationId: "publication-1" }
+    });
+  });
+
+  it("keeps a slot occupied by another activation source in the review without a design version", async () => {
+    const fixture = renderOperations({
+      slots: [publishedSlot(), importedActivationSlot()]
+    });
+
+    await prepare(fixture);
+    const review = fixture.current().publicationReview!;
+
+    expect(fixture.getJson.mock.calls.map(([url]) => url)).not.toContain("/publishing/publications/activation-imported");
+    expect(review.slots.find(slot => slot.slotName === "imported")).toMatchObject({ activeActivationId: "activation-imported", publication: null });
+    expect(review.slotVersions).not.toHaveProperty("imported");
+    expect(publicationIntentForChannel(review, "imported")).toEqual({ action: "replace", slotName: "imported" });
+    expect(publicationBaselineFor(review, "imported")).toBe("imported · occupied by artifact-reconciliation (orders-bundle) · not a Studio design version");
+    expect(publicationChangesFor(review, "imported")).toBeNull();
+  });
+
+  it("fails closed when the publication record behind a publishing-sourced slot cannot be read", async () => {
+    const fixture = renderOperations({ publications: [] });
+
+    await fixture.current().preparePublication();
+    await flushUpdates();
+
+    expect(fixture.current().publicationReview).toBeNull();
+    expect(fixture.postJson).not.toHaveBeenCalled();
+    expect(fixture.getJson.mock.calls.map(([url]) => url)).not.toContain("/design/workflows/versions/version-1");
+    expect(fixture.setAutosavePaused).toHaveBeenLastCalledWith(false);
+    expect(fixture.setError.mock.calls.at(-1)?.[0]).toContain("Could not prepare a trustworthy publication review");
+    expect(fixture.setError.mock.calls.at(-1)?.[0]).toContain(
+      "Publication slot 'default' is occupied by publication 'publication-1', but its publication record could not be read");
+  });
+
+  it("opens an honest unavailable review, never the legacy slot route, when Runtime slot reads are not advertised", async () => {
+    const fixture = renderOperations({ legacySlotContract: true });
+
+    await prepare(fixture);
+    const review = fixture.current().publicationReview!;
+
+    expect(fixture.getJson.mock.calls.map(([url]) => url).filter(url => url.includes("slots") || url.includes("/publications/"))).toEqual([]);
+    expect(review).toMatchObject({
+      phase: "review",
+      slots: [],
+      slotsUnavailableReason: activationSlotReadsUnavailableReason,
+      intent: { action: "replace", slotName: "default" },
+      preflight: { preflightToken: "preflight-token-1" }
+    });
+    expect(review.intent).not.toHaveProperty("expectedPublicationId");
+    expect(publicationBaselineFor(review, "default")).toBe("default · current publication unknown");
+    expect(publicationChangesFor(review, "default")).toBeNull();
+  });
+
+  it("leaves all workflow state unchanged when authoritative snapshot preflight fails", async () => {
+    const fixture = renderOperations({ failSnapshotPreflight: true });
+
+    await fixture.current().preparePublication();
+    await flushUpdates();
+
+    expect(fixture.current().publicationReview).toBeNull();
+    expect(fixture.saveDraft).not.toHaveBeenCalled();
+    expect(fixture.postJson.mock.calls.map(([url]) => url)).toEqual(["/publishing/workflows/preflight"]);
+    expect(fixture.postJson.mock.calls.some(([url]) => url.endsWith("/promote") || url.endsWith("/publish"))).toBe(false);
+    expect(fixture.setAutosavePaused).toHaveBeenLastCalledWith(false);
+    expect(fixture.setError.mock.calls.at(-1)?.[0]).toContain("No version was promoted or published");
+  });
+
+  it("cancels an authoritative review without any save, promote, or publish mutation", async () => {
+    const fixture = renderOperations();
+
+    await prepare(fixture);
+    flushSync(() => fixture.current().cancelPublication());
+
+    expect(fixture.saveDraft).not.toHaveBeenCalled();
+    expect(fixture.postJson.mock.calls.map(([url]) => url)).toEqual(["/publishing/workflows/preflight"]);
+    expect(fixture.mutationOrder).toEqual(["snapshot-preflight"]);
+    expect(fixture.setAutosavePaused.mock.calls).toEqual([[true], [false]]);
+    expect(fixture.current().publicationReview).toBeNull();
+    expect(fixture.setStatus).toHaveBeenLastCalledWith("Publication cancelled; no changes were saved, promoted, or published.");
+  });
+
+  it("publishes the immutable authoritative review through save, promote, and token-bound publish", async () => {
+    const source = draft();
+    const fixture = renderOperations({ draft: source });
+    await prepare(fixture);
+    source.state.inputs = [{ name: "not-reviewed" }];
+
+    await publish(fixture);
+
+    expect(fixture.saveDraft).toHaveBeenCalledTimes(1);
+    expect(fixture.saveDraft.mock.calls[0][0].state.inputs).toBeUndefined();
+    expect(fixture.postJson.mock.calls.map(([url]) => url)).toEqual([
+      "/publishing/workflows/preflight",
+      "/design/workflows/drafts/draft-1/promote",
+      "/publishing/workflows/version-2/publish"
+    ]);
+    expect(fixture.mutationOrder).toEqual(["snapshot-preflight", "save", "promote", "publish"]);
+    expect(fixture.postJson).toHaveBeenLastCalledWith(
+      "/publishing/workflows/version-2/publish",
+      expect.objectContaining({
+        action: "replace",
+        slotName: "default",
+        expectedPublicationId: "publication-1",
+        preflightToken: "preflight-token-1"
+      }));
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "success",
+      promotedVersionId: "version-2",
+      proposedVersion: "2.0.0",
+      published: { artifactId: "artifact-2", sourceReferenceId: "reference-2" }
+    });
+  });
+
+  it("quick publishes after a read-only preflight without exposing review state", async () => {
+    const fixture = renderOperations();
+
+    await fixture.current().preparePublication("publish");
+    await flushUpdates();
+
+    expect(fixture.mutationOrder).toEqual(["snapshot-preflight", "save", "promote", "publish"]);
+    expect(fixture.postJson).toHaveBeenLastCalledWith(
+      "/publishing/workflows/version-2/publish",
+      expect.objectContaining({
+        action: "replace",
+        slotName: "default",
+        expectedPublicationId: "publication-1",
+        preflightToken: "preflight-token-1"
+      }));
+    expect(fixture.current().publicationReview).toBeNull();
+    expect(fixture.reviewStates.every(review => review === null)).toBe(true);
+    expect(fixture.reload).toHaveBeenCalledTimes(1);
+  });
+
+  // Spec 261 FR-515: the server's validation warnings are listed in the review, and never block publication.
+  it("lists the server's validation warnings in the review and keeps it publishable", async () => {
+    const fixture = renderOperations({
+      draftValidations: [
+        { code: "CompensationScope/ReplaySafeStep", message: "\"Charge card\" is marked safe to repeat.", nodeId: "scope", member: "steps/0", severity: "Warning" }
+      ]
+    });
+
+    await prepare(fixture);
+
+    expect(fixture.getJson).toHaveBeenCalledWith("/design/workflows/drafts/draft-1/validations", expect.anything());
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "review",
+      validationErrors: [],
+      validationWarnings: ["\"Charge card\" is marked safe to repeat."]
+    });
+
+    await publish(fixture);
+
+    expect(fixture.mutationOrder).toEqual(["snapshot-preflight", "save", "promote", "publish"]);
+    expect(fixture.current().publicationReview?.phase).toBe("success");
+  });
+
+  it("publishes a saved draft whose only validations are warnings", async () => {
+    const fixture = renderOperations({ savedValidations: [{ message: "Connection 'crm' is not available.", severity: "Warning" }] });
+    await prepare(fixture);
+
+    await publish(fixture);
+
+    expect(fixture.mutationOrder).toEqual(["snapshot-preflight", "save", "promote", "publish"]);
+    expect(fixture.current().publicationReview?.phase).toBe("success");
+  });
+
+  it("opens the review without warnings when the validations read fails", async () => {
+    const fixture = renderOperations({ draftValidations: "fail" });
+
+    await prepare(fixture);
+
+    expect(fixture.current().publicationReview).toMatchObject({ phase: "review", validationWarnings: [] });
+  });
+
+  it("prevents duplicate quick publication preparation in the same tick", async () => {
+    const fixture = renderOperations();
+
+    const first = fixture.current().preparePublication("publish");
+    const second = fixture.current().preparePublication("publish");
+    await Promise.all([first, second]);
+    await flushUpdates();
+
+    expect(fixture.flushPendingSave).toHaveBeenCalledTimes(1);
+    expect(fixture.postJson.mock.calls.filter(([url]) => url === "/publishing/workflows/preflight")).toHaveLength(1);
+    expect(fixture.saveDraft).toHaveBeenCalledTimes(1);
+    expect(fixture.postJson.mock.calls.filter(([url]) => url.endsWith("/promote"))).toHaveLength(1);
+    expect(fixture.postJson.mock.calls.filter(([url]) => url.endsWith("/publish"))).toHaveLength(1);
+    expect(fixture.current().publicationReview).toBeNull();
+  });
+
+  it("waits for a pending editor save before quick publication preflight", async () => {
+    const flush = deferred<void>();
+    const fixture = renderOperations({ flushPendingSave: () => flush.promise });
+
+    const preparing = fixture.current().preparePublication("publish");
+    await flushUpdates();
+
+    expect(fixture.flushPendingSave).toHaveBeenCalledTimes(1);
+    expect(fixture.mutationOrder).toEqual([]);
+    expect(fixture.saveDraft).not.toHaveBeenCalled();
+    expect(fixture.current().publicationReview).toBeNull();
+
+    flush.resolve();
+    await preparing;
+    await flushUpdates();
+
+    expect(fixture.mutationOrder).toEqual(["snapshot-preflight", "save", "promote", "publish"]);
+    expect(fixture.current().publicationReview).toBeNull();
+  });
+
+  it("cleans up autosave and operation state when the preflight save flush fails", async () => {
+    const fixture = renderOperations({
+      flushPendingSave: async () => { throw new Error("pending save failed"); }
+    });
+
+    await expect(fixture.current().preparePublication("publish")).resolves.toBeUndefined();
+    await flushUpdates();
+
+    expect(fixture.mutationOrder).toEqual([]);
+    expect(fixture.saveDraft).not.toHaveBeenCalled();
+    expect(fixture.current().publicationReview).toBeNull();
+    expect(fixture.setAutosavePaused).toHaveBeenNthCalledWith(1, true);
+    expect(fixture.setAutosavePaused).toHaveBeenLastCalledWith(false);
+    expect(fixture.setOperation).toHaveBeenLastCalledWith("idle");
+    expect(fixture.setError.mock.calls.at(-1)?.[0]).toContain("pending save failed");
+  });
+
+  it("shows local validation errors in review without quick publication mutations", async () => {
+    const invalid = draft();
+    invalid.validationErrors = [{ message: "A start activity is required." }];
+    const fixture = renderOperations({ draft: invalid });
+
+    await fixture.current().preparePublication("publish");
+    await flushUpdates();
+
+    expect(fixture.saveDraft).not.toHaveBeenCalled();
+    expect(fixture.postJson).not.toHaveBeenCalled();
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "validationBlocked",
+      validationErrors: ["A start activity is required."]
+    });
+  });
+
+  it("shows an authoritative activation conflict in review without quick publication mutations", async () => {
+    const fixture = renderOperations({
+      snapshotPreflightOverrides: {
+        canActivate: false,
+        conflicts: [{ key: "http:orders", cardinality: "exclusive", publicationId: "publication-9", slotName: "default" }]
+      }
+    });
+
+    await fixture.current().preparePublication("publish");
+    await flushUpdates();
+
+    expect(fixture.mutationOrder).toEqual(["snapshot-preflight"]);
+    expect(fixture.saveDraft).not.toHaveBeenCalled();
+    expect(fixture.postJson.mock.calls.some(([url]) => url.endsWith("/promote") || url.endsWith("/publish"))).toBe(false);
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "review",
+      preflight: { canActivate: false, conflicts: [{ key: "http:orders" }] }
+    });
+  });
+
+  it("shows review when policy requires the author to choose an explicit slot", async () => {
+    const fixture = renderOperations({
+      publicationPolicy: { defaultAction: "requireExplicitSlot", defaultSlotName: "default", source: "workflow" }
+    });
+
+    await fixture.current().preparePublication("publish");
+    await flushUpdates();
+
+    expect(fixture.saveDraft).not.toHaveBeenCalled();
+    expect(fixture.postJson).not.toHaveBeenCalled();
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "review",
+      intent: { action: "sideBySide", slotName: "" },
+      policy: { defaultAction: "requireExplicitSlot" }
+    });
+  });
+
+  it("shows review when current activation slots cannot be read", async () => {
+    const fixture = renderOperations({ legacySlotContract: true });
+
+    await fixture.current().preparePublication("publish");
+    await flushUpdates();
+
+    expect(fixture.saveDraft).not.toHaveBeenCalled();
+    expect(fixture.postJson.mock.calls.some(([url]) => url.endsWith("/promote") || url.endsWith("/publish"))).toBe(false);
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "review",
+      slots: [],
+      slotsUnavailableReason: activationSlotReadsUnavailableReason
+    });
+  });
+
+  it("shows review when the automatic version policy is not ready", async () => {
+    const fixture = renderOperations({
+      exactVersionSupport: true,
+      versionPreflightOverrides: { isReady: false, issues: [{ code: "version-conflict", message: "No available version." }] }
+    });
+
+    await fixture.current().preparePublication("publish");
+    await flushUpdates();
+
+    expect(fixture.saveDraft).not.toHaveBeenCalled();
+    expect(fixture.postJson.mock.calls.some(([url]) => url.endsWith("/promote") || url.endsWith("/publish"))).toBe(false);
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "review",
+      versionPreflight: { isReady: false, issues: [{ message: "No available version." }] }
+    });
+  });
+
+  it("retains a promoted version for review and retry when quick publication fails", async () => {
+    const fixture = renderOperations({ failPublishAttempts: 1 });
+
+    await fixture.current().preparePublication("publish");
+    await flushUpdates();
+
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "partialFailure",
+      promotedVersionId: "version-2"
+    });
+    expect(fixture.current().publicationReview?.failureMessage).toContain("The promoted version was retained");
+
+    const intent = fixture.current().publicationReview!.intent;
+    await fixture.current().confirmPublication(intent);
+    await flushUpdates();
+
+    expect(fixture.saveDraft).toHaveBeenCalledTimes(1);
+    expect(fixture.postJson.mock.calls.filter(([url]) => url.endsWith("/promote"))).toHaveLength(1);
+    expect(fixture.postJson.mock.calls.filter(([url]) => url.endsWith("/publish"))).toHaveLength(2);
+    expect(fixture.current().publicationReview?.phase).toBe("success");
+  });
+
+  it("keeps edits made during quick publication and resumes autosave without replacing the draft", async () => {
+    const publishResponse = deferred<Publication>();
+    const fixture = renderOperations({ publishResponse: publishResponse.promise });
+    const preparing = fixture.current().preparePublication("publish");
+    await flushUpdates();
+
+    expect(fixture.mutationOrder).toContain("publish");
+    expect(fixture.reload).not.toHaveBeenCalled();
+
+    const newerDraft = draft();
+    newerDraft.state.rootActivity!.nodeId = "root-with-newer-edits";
+    fixture.rerenderDraft(newerDraft);
+    publishResponse.resolve(publishedResult());
+    await preparing;
+    await flushUpdates();
+
+    expect(fixture.reload).toHaveBeenCalledTimes(1);
+    const reloadOptions = fixture.reload.mock.calls[0][0]!;
+    expect(reloadOptions.shouldLoadDraft()).toBe(false);
+    expect(fixture.currentDraft()).toBe(newerDraft);
+    expect(fixture.currentDraft()?.state.rootActivity?.nodeId).toBe("root-with-newer-edits");
+    expect(fixture.setStatus).toHaveBeenLastCalledWith("Published to default; newer edits remain in your draft.");
+    expect(fixture.setAutosavePaused).toHaveBeenLastCalledWith(false);
+    expect(fixture.current().publicationReview).toBeNull();
+  });
+
+  it("rechecks the draft guard when edits arrive while publication metadata is reloading", async () => {
+    const publishResponse = deferred<Publication>();
+    const reloadWait = deferred<void>();
+    const fixture = renderOperations({ publishResponse: publishResponse.promise, reloadWait: reloadWait.promise });
+    const preparing = fixture.current().preparePublication("publish");
+    await flushUpdates();
+
+    publishResponse.resolve(publishedResult());
+    await flushUpdates();
+
+    expect(fixture.reload).toHaveBeenCalledTimes(1);
+    const reloadOptions = fixture.reload.mock.calls[0][0]!;
+    expect(reloadOptions.shouldLoadDraft()).toBe(true);
+
+    const newerDraft = draft();
+    newerDraft.state.rootActivity!.nodeId = "root-with-newer-edits";
+    fixture.rerenderDraft(newerDraft);
+    expect(reloadOptions.shouldLoadDraft()).toBe(false);
+
+    reloadWait.resolve();
+    await preparing;
+    await flushUpdates();
+
+    expect(fixture.currentDraft()).toBe(newerDraft);
+    expect(fixture.currentDraft()?.state.rootActivity?.nodeId).toBe("root-with-newer-edits");
+    expect(fixture.setStatus).toHaveBeenLastCalledWith("Published to default; newer edits remain in your draft.");
+    expect(fixture.setAutosavePaused).toHaveBeenLastCalledWith(false);
+  });
+
+  it("blocks local validation before any mutation", async () => {
+    const invalid = draft();
+    invalid.validationErrors = [{ message: "A start activity is required." }];
+    const fixture = renderOperations({ draft: invalid });
+    await prepare(fixture);
+
+    await publish(fixture);
+
+    expect(fixture.saveDraft).not.toHaveBeenCalled();
+    expect(fixture.postJson).not.toHaveBeenCalled();
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "validationBlocked",
+      validationErrors: ["A start activity is required."]
+    });
+  });
+
+  it("stops after save when the captured snapshot fails authoritative validation", async () => {
+    const fixture = renderOperations({ savedValidationErrors: ["Trigger route is invalid."] });
+    await prepare(fixture);
+
+    await publish(fixture);
+
+    expect(fixture.saveDraft).toHaveBeenCalledTimes(1);
+    expect(fixture.postJson.mock.calls.map(([url]) => url)).toEqual(["/publishing/workflows/preflight"]);
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "savedFailure",
+      validationErrors: ["Trigger route is invalid."],
+      failureMessage: expect.stringContaining("draft was saved")
+    });
+    expect(fixture.current().publicationReview?.savedDraft).toBeDefined();
+    flushSync(() => fixture.current().cancelPublication());
+    expect(fixture.setStatus).toHaveBeenLastCalledWith("Publication review closed; the draft was saved, but no version was promoted or published.");
+  });
+
+  it("retries promotion of the already-saved snapshot without saving a second time", async () => {
+    const fixture = renderOperations({ failPromoteAttempts: 1 });
+    await prepare(fixture);
+
+    await publish(fixture);
+
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "savedFailure",
+      savedDraft: { id: "draft-1" },
+      failureMessage: expect.stringContaining("promotion failed")
+    });
+
+    await publish(fixture);
+
+    expect(fixture.saveDraft).toHaveBeenCalledTimes(1);
+    expect(fixture.postJson.mock.calls.filter(([url]) => url.endsWith("/promote"))).toHaveLength(2);
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "success",
+      promotedVersionId: "version-2",
+      proposedVersion: "2.0.0"
+    });
+  });
+
+  it("blocks the reserved default side-by-side slot before any mutation", async () => {
+    const fixture = renderOperations();
+    await prepare(fixture);
+
+    await fixture.current().confirmPublication({ action: "sideBySide", slotName: " default " });
+    await flushUpdates();
+
+    expect(fixture.saveDraft).not.toHaveBeenCalled();
+    expect(fixture.postJson.mock.calls.map(([url]) => url)).toEqual(["/publishing/workflows/preflight"]);
+    expect(fixture.setError).toHaveBeenLastCalledWith("The default slot is reserved for replacement publication. Choose another named slot.");
+  });
+
+  it("names the foreign owner, and not a conflict list, when the target channel is owned elsewhere", async () => {
+    const fixture = renderOperations({
+      snapshotPreflightOverrides: { canActivate: false, targetSlotOwner: foreignSlotOwner() }
+    });
+    await prepare(fixture);
+    const intent: PublicationIntent = { action: "replace", slotName: "default", expectedPublicationId: "publication-1" };
+
+    await fixture.current().confirmPublication(intent);
+    await flushUpdates();
+
+    const message = fixture.setError.mock.calls.at(-1)?.[0] as string;
+    expect(message).toContain("artifact-reconciliation (mounted-artifacts)");
+    expect(message).not.toContain("conflict");
+  });
+
+  it("keeps the conflicts-only blocked message when the target has no foreign owner", async () => {
+    const fixture = renderOperations({
+      snapshotPreflightOverrides: {
+        canActivate: false,
+        conflicts: [{ key: "http:orders", cardinality: "exclusive", publicationId: "publication-9", slotName: "default" }]
+      }
+    });
+    await prepare(fixture);
+    const intent: PublicationIntent = { action: "replace", slotName: "default", expectedPublicationId: "publication-1" };
+
+    await fixture.current().confirmPublication(intent);
+    await flushUpdates();
+
+    expect(fixture.setError).toHaveBeenLastCalledWith(
+      "Server preflight blocks this target. Resolve the listed conflicts or review another target.");
+  });
+
+  it("names both causes when the target is foreign-owned and has trigger conflicts", async () => {
+    const fixture = renderOperations({
+      snapshotPreflightOverrides: {
+        canActivate: false,
+        targetSlotOwner: foreignSlotOwner(),
+        conflicts: [{ key: "http:orders", cardinality: "exclusive", publicationId: "publication-9", slotName: "default" }]
+      }
+    });
+    await prepare(fixture);
+    const intent: PublicationIntent = { action: "replace", slotName: "default", expectedPublicationId: "publication-1" };
+
+    await fixture.current().confirmPublication(intent);
+    await flushUpdates();
+
+    const message = fixture.setError.mock.calls.at(-1)?.[0] as string;
+    expect(message).toContain("artifact-reconciliation (mounted-artifacts)");
+    expect(message).toContain("conflict");
+  });
+
+  it("names no cause when an older host blocks with empty conflicts and no owner", async () => {
+    const fixture = renderOperations({
+      // targetSlotOwner: undefined deletes the key from the fixture, matching a host predating
+      // elsa-foundation#1659 whose payload never carries the field at all.
+      snapshotPreflightOverrides: { canActivate: false, targetSlotOwner: undefined }
+    });
+    await prepare(fixture);
+    const intent: PublicationIntent = { action: "replace", slotName: "default", expectedPublicationId: "publication-1" };
+
+    await fixture.current().confirmPublication(intent);
+    await flushUpdates();
+
+    expect(fixture.setError).toHaveBeenLastCalledWith(
+      "Server preflight blocked this target without naming a cause. Review another target.");
+  });
+
+  it("reviews a changed target authoritatively before allowing its first mutation", async () => {
+    const fixture = renderOperations();
+    await prepare(fixture);
+    const intent: PublicationIntent = { action: "sideBySide", slotName: "blue" };
+
+    await fixture.current().confirmPublication(intent);
+    await flushUpdates();
+
+    expect(fixture.saveDraft).not.toHaveBeenCalled();
+    expect(fixture.mutationOrder).toEqual(["snapshot-preflight", "snapshot-preflight"]);
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "review",
+      intent,
+      preflight: {
+        preflightToken: "preflight-token-2",
+        resolvedAction: "sideBySide",
+        slotName: "blue"
+      }
+    });
+
+    await fixture.current().confirmPublication(intent);
+    await flushUpdates();
+
+    expect(fixture.mutationOrder).toEqual(["snapshot-preflight", "snapshot-preflight", "save", "promote", "publish"]);
+    expect(fixture.postJson).toHaveBeenLastCalledWith(
+      "/publishing/workflows/version-2/publish",
+      expect.objectContaining({ action: "sideBySide", slotName: "blue", preflightToken: "preflight-token-2" }));
+  });
+
+  it("retains and identifies the promoted version when publishing fails", async () => {
+    const fixture = renderOperations({ failPublish: true });
+    await prepare(fixture);
+
+    await publish(fixture);
+
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "partialFailure",
+      promotedVersionId: "version-2"
+    });
+    expect(fixture.current().publicationReview?.failureMessage).toContain("The promoted version was retained");
+    expect(fixture.current().publicationReview?.failureMessage).toContain("retry Publish");
+  });
+
+  it("surfaces expression diagnostics when a promoted version is rejected at publication", async () => {
+    const fixture = renderOperations({
+      publishValidationDiagnostics: [{
+        code: "JS1001",
+        severity: "Error",
+        message: "Unexpected token.",
+        documentRevision: "revision-1",
+        authoredPath: "activities.write-line.inputs.text",
+        range: { start: { line: 1, character: 3 }, end: { line: 1, character: 4 } }
+      }]
+    });
+    await prepare(fixture);
+
+    await publish(fixture);
+
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "partialFailure",
+      promotedVersionId: "version-2",
+      executableStatus: "blocked",
+      validationErrors: [
+        "[JS1001] activities.write-line.inputs.text · line 2, column 4: Unexpected token."
+      ],
+      failureMessage: expect.stringContaining("expression validation error")
+    });
+  });
+
+  it("retries a retained promoted version without saving or promoting again", async () => {
+    const fixture = renderOperations({ failPublishAttempts: 1 });
+    await prepare(fixture);
+    await publish(fixture);
+
+    await publish(fixture);
+
+    expect(fixture.saveDraft).toHaveBeenCalledTimes(1);
+    expect(fixture.postJson.mock.calls.filter(([url]) => url.endsWith("/promote"))).toHaveLength(1);
+    expect(fixture.postJson.mock.calls.filter(([url]) => url.endsWith("/preflight"))).toHaveLength(1);
+    expect(fixture.postJson.mock.calls.filter(([url]) => url.endsWith("/publish"))).toHaveLength(2);
+    expect(fixture.current().publicationReview?.phase).toBe("success");
+  });
+
+  it("requires a fresh authoritative review when the publish token is stale", async () => {
+    const fixture = renderOperations({ stalePublishAttempts: 1 });
+    await prepare(fixture);
+
+    await publish(fixture);
+
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "partialFailure",
+      promotedVersionId: "version-2",
+      preflight: undefined,
+      failureMessage: expect.stringContaining("review the target again")
+    });
+
+    await publish(fixture);
+
+    expect(fixture.saveDraft).toHaveBeenCalledTimes(1);
+    expect(fixture.postJson.mock.calls.filter(([url]) => url === "/publishing/workflows/preflight")).toHaveLength(2);
+    expect(fixture.postJson.mock.calls.filter(([url]) => url.endsWith("/publish"))).toHaveLength(1);
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "review",
+      preflight: { preflightToken: "preflight-token-2" }
+    });
+
+    await publish(fixture);
+    expect(fixture.current().publicationReview?.phase).toBe("success");
+    expect(fixture.saveDraft).toHaveBeenCalledTimes(1);
+    expect(fixture.postJson.mock.calls.filter(([url]) => url.endsWith("/promote"))).toHaveLength(1);
+  });
+
+  it("preflights and promotes an exact version only when Foundation advertises both relations", async () => {
+    const fixture = renderOperations({ exactVersionSupport: true });
+    await prepare(fixture);
+    const currentReview = fixture.current().publicationReview!;
+    const intent: PublicationIntent = {
+      action: "replace",
+      slotName: "default",
+      expectedPublicationId: "publication-1"
+    };
+
+    expect(currentReview).toMatchObject({
+      exactVersionSupported: true,
+      versionPreflight: {
+        assignmentMode: "automatic",
+        resolvedVersion: "2.0.0",
+        isReady: true
+      }
+    });
+
+    await fixture.current().reviewPublication(
+      currentReview,
+      intent,
+      { mode: "exact", requestedVersion: " 2.1.0-rc.1 " });
+    await flushUpdates();
+
+    expect(fixture.current().publicationReview).toMatchObject({
+      versionSelection: { mode: "exact", requestedVersion: " 2.1.0-rc.1 " },
+      versionPreflight: {
+        assignmentMode: "exact",
+        resolvedVersion: "2.1.0-rc.1",
+        isReady: true
+      }
+    });
+
+    await fixture.current().confirmPublication(intent, { mode: "exact", requestedVersion: "2.1.0-rc.1" });
+    await flushUpdates();
+
+    expect(fixture.postJson).toHaveBeenCalledWith(
+      "/design/workflows/drafts/draft-1/promotion-preflight",
+      { requestedVersion: "2.1.0-rc.1" });
+    expect(fixture.postJson).toHaveBeenCalledWith(
+      "/design/workflows/drafts/draft-1/promote",
+      { requestedVersion: "2.1.0-rc.1" });
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "success",
+      proposedVersion: "2.1.0-rc.1"
+    });
+  });
+
+  it("keeps only the latest authoritative review when version responses arrive out of order", async () => {
+    const fixture = renderOperations({ exactVersionSupport: true, delayExactVersion: "2.1.0" });
+    await prepare(fixture);
+    const currentReview = fixture.current().publicationReview!;
+    const intent: PublicationIntent = {
+      action: "replace",
+      slotName: "default",
+      expectedPublicationId: "publication-1"
+    };
+
+    const older = fixture.current().reviewPublication(
+      currentReview,
+      intent,
+      { mode: "exact", requestedVersion: "2.1.0" });
+    const newer = fixture.current().reviewPublication(
+      currentReview,
+      intent,
+      { mode: "exact", requestedVersion: "2.2.0" });
+    await Promise.all([older, newer]);
+    await flushUpdates();
+
+    expect(fixture.current().publicationReview).toMatchObject({
+      versionSelection: { mode: "exact", requestedVersion: "2.2.0" },
+      versionPreflight: {
+        requestedVersion: "2.2.0",
+        resolvedVersion: "2.2.0"
+      }
+    });
+  });
+
+  it("accepts the server-resolved action when a new channel becomes occupied during review", async () => {
+    const fixture = renderOperations({ resolveSideBySideAsReplace: true });
+    await prepare(fixture);
+    const intent: PublicationIntent = { action: "sideBySide", slotName: "blue" };
+
+    await fixture.current().reviewPublication(
+      fixture.current().publicationReview!,
+      intent,
+      { mode: "automatic" });
+    await flushUpdates();
+
+    expect(fixture.current().publicationReview?.preflight).toMatchObject({
+      resolvedAction: "replace",
+      slotName: "blue"
+    });
+
+    await fixture.current().confirmPublication(intent);
+    await flushUpdates();
+
+    expect(fixture.postJson.mock.calls.filter(([url]) => url === "/publishing/workflows/preflight")).toHaveLength(2);
+    expect(fixture.postJson).toHaveBeenLastCalledWith(
+      "/publishing/workflows/version-2/publish",
+      expect.objectContaining({ action: "replace", slotName: "blue" }));
+    expect(fixture.current().publicationReview?.phase).toBe("success");
+  });
+
+  it("records an authoritative review failure without immediately treating it as unreviewed", async () => {
+    const fixture = renderOperations({ exactVersionSupport: true });
+    await prepare(fixture);
+    const currentReview = fixture.current().publicationReview!;
+    fixture.failNextVersionPreflight();
+
+    await fixture.current().reviewPublication(
+      currentReview,
+      currentReview.intent,
+      { mode: "exact", requestedVersion: "2.1.0" });
+    await flushUpdates();
+
+    expect(fixture.current().publicationReview).toMatchObject({
+      reviewFailed: true,
+      reviewPending: false,
+      versionSelection: { mode: "exact", requestedVersion: "2.1.0" },
+      preflight: undefined,
+      versionPreflight: undefined,
+      failureMessage: expect.stringContaining("Authoritative review failed")
+    });
+  });
+
+  it("allows only one publication mutation pipeline at a time", async () => {
+    const fixture = renderOperations({ saveDelayMs: 20 });
+    await prepare(fixture);
+    const intent: PublicationIntent = {
+      action: "replace",
+      slotName: "default",
+      expectedPublicationId: "publication-1"
+    };
+
+    await Promise.all([
+      fixture.current().confirmPublication(intent),
+      fixture.current().confirmPublication(intent)
+    ]);
+    await flushUpdates();
+
+    expect(fixture.saveDraft).toHaveBeenCalledTimes(1);
+    expect(fixture.postJson.mock.calls.filter(([url]) => url.endsWith("/promote"))).toHaveLength(1);
+    expect(fixture.postJson.mock.calls.filter(([url]) => url.endsWith("/publish"))).toHaveLength(1);
+  });
+});
+
+async function prepare(fixture: ReturnType<typeof renderOperations>) {
+  await fixture.current().preparePublication();
+  await flushUpdates();
+  expect(fixture.current().publicationReview).not.toBeNull();
+}
+
+async function publish(fixture: ReturnType<typeof renderOperations>) {
+  const intent: PublicationIntent = { action: "replace", slotName: "default", expectedPublicationId: "publication-1" };
+  await fixture.current().confirmPublication(intent);
+  await flushUpdates();
+}
+
+async function flushUpdates() {
+  await new Promise(resolve => setTimeout(resolve, 0));
+  flushSync(() => undefined);
+}
+
+function renderOperations(options: {
+  draft?: WorkflowDraft;
+  failPublish?: boolean;
+  failPublishAttempts?: number;
+  publishResponse?: Promise<Publication>;
+  reloadWait?: Promise<void>;
+  failPromoteAttempts?: number;
+  failSnapshotPreflight?: boolean;
+  stalePublishAttempts?: number;
+  publishValidationDiagnostics?: unknown[];
+  savedValidationErrors?: string[];
+  /** Spec 261: entries with a severity the saved draft carries. */
+  savedValidations?: Array<{ message: string; severity?: string }>;
+  /** Spec 261: what `GET design/workflows/drafts/{draftId}/validations` returns, or "fail" to make it throw. */
+  draftValidations?: Array<{ code: string; message: string; nodeId?: string; member?: string; severity?: string }> | "fail";
+  failPolicyLoad?: boolean;
+  exactVersionSupport?: boolean;
+  versionPreflightOverrides?: Partial<PromotionPreflightAssessment>;
+  delayExactVersion?: string;
+  saveDelayMs?: number;
+  flushPendingSave?: () => Promise<void>;
+  resolveSideBySideAsReplace?: boolean;
+  publicationPolicy?: PublicationPolicy;
+  slots?: WorkflowActivationSlot[];
+  publications?: Publication[];
+  legacySlotContract?: boolean;
+  snapshotPreflightOverrides?: Partial<PublicationPreflight>;
+} = {}) {
+  let sourceDraft = options.draft ?? draft();
+  const slots = options.slots ?? [publishedSlot()];
+  const publications = options.publications ?? [publishedRecord()];
+  const mutationOrder: string[] = [];
+  let publishAttempts = 0;
+  let promoteAttempts = 0;
+  let snapshotPreflightAttempts = 0;
+  let failNextVersionPreflight = false;
+  const getJson = vi.fn(async (url: string, _options?: unknown) => {
+    if (url === "/capabilities") return capabilitiesFor(options.exactVersionSupport ?? false, options.legacySlotContract ?? false, options.draftValidations !== undefined);
+    if (url === "/design/workflows/drafts/draft-1/validations") {
+      if (options.draftValidations === "fail") throw new Error("validations unavailable");
+      return { draftId: "draft-1", errors: options.draftValidations ?? [] };
+    }
+    if (url === "/publishing/workflows/definition-1/policy") {
+      if (options.failPolicyLoad) throw new Error("policy unavailable");
+      return options.publicationPolicy ?? { defaultAction: "replace", defaultSlotName: "default", source: "host" };
+    }
+    if (url === "/runtime/workflows/activation-slots/definition-1") return { items: slots };
+    if (url.startsWith("/publishing/publications/")) {
+      const publicationId = decodeURIComponent(url.slice("/publishing/publications/".length));
+      const record = publications.find(candidate => candidate.publicationId === publicationId);
+      if (!record) throw Object.assign(new Error(`Publication '${publicationId}' was not found.`), { status: 404 });
+      return record;
+    }
+    if (url === "/design/workflows/versions/version-1") return { id: "version-1", version: "1.0.0", definition: details().definition, state: sourceDraft.state, layout: [] };
+    throw new Error(`Unexpected GET ${url}`);
+  });
+  const postJson = vi.fn(async (url: string, body?: Record<string, unknown>) => {
+    if (url === "/design/workflows/drafts/draft-1/promotion-preflight") {
+      mutationOrder.push("version-preflight");
+      if (failNextVersionPreflight) {
+        failNextVersionPreflight = false;
+        throw new Error("version preflight unavailable");
+      }
+      const requestedVersion = typeof body?.requestedVersion === "string" ? body.requestedVersion.trim() : null;
+      if (requestedVersion === options.delayExactVersion) {
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      return {
+        isReady: true,
+        assignmentMode: requestedVersion ? "exact" : "automatic",
+        requestedVersion,
+        resolvedVersion: requestedVersion ?? "2.0.0",
+        latestVersion: "1.0.0",
+        issues: [],
+        ...options.versionPreflightOverrides
+      };
+    }
+    if (url === "/publishing/workflows/preflight") {
+      mutationOrder.push("snapshot-preflight");
+      snapshotPreflightAttempts += 1;
+      if (options.failSnapshotPreflight) throw new Error("snapshot preflight unavailable");
+      return publicationPreflight({
+        preflightToken: `preflight-token-${snapshotPreflightAttempts}`,
+        slotName: (body?.slotName as string | undefined) ?? "default",
+        resolvedAction: options.resolveSideBySideAsReplace && body?.action === "sideBySide"
+          ? "replace"
+          : (body?.action as "replace" | "sideBySide" | undefined) ?? "replace",
+        policySource: "request",
+        policyRevision: 1,
+        ...options.snapshotPreflightOverrides
+      });
+    }
+    if (url === "/design/workflows/drafts/draft-1/promote") {
+      mutationOrder.push("promote");
+      promoteAttempts += 1;
+      if (promoteAttempts <= (options.failPromoteAttempts ?? 0)) throw new Error("promotion unavailable");
+      return {
+        id: "version-2",
+        version: typeof body?.requestedVersion === "string" ? body.requestedVersion.trim() : "2.0.0"
+      };
+    }
+    if (url === "/publishing/workflows/version-2/preflight") {
+      mutationOrder.push("preflight");
+      return {
+        definitionId: "definition-1",
+        versionId: "version-2",
+        slotName: "default",
+        resolvedAction: "replace",
+        policySource: "request",
+        canActivate: true,
+        triggers: [],
+        conflicts: []
+      };
+    }
+    if (url === "/publishing/workflows/version-2/publish") {
+      mutationOrder.push("publish");
+      publishAttempts += 1;
+      if (publishAttempts <= (options.stalePublishAttempts ?? 0)) throw Object.assign(new Error("preflight token stale"), { status: 409 });
+      if (options.publishValidationDiagnostics) {
+        throw Object.assign(new Error("Expression validation rejected publication."), {
+          status: 422,
+          payload: {
+            status: 422,
+            errorCode: "expression-validation-errors",
+            validationState: "errors",
+            diagnostics: options.publishValidationDiagnostics
+          }
+        });
+      }
+      if (options.failPublish || publishAttempts <= (options.failPublishAttempts ?? 0)) throw new Error("activation timed out");
+      if (options.publishResponse) return await options.publishResponse;
+      return publishedResult();
+    }
+    throw new Error(`Unexpected POST ${url}`);
+  });
+  const context = {
+    baseUrl: `test://publication-${Math.random()}`,
+    http: { getJson, postJson }
+  } as unknown as StudioEndpointContext;
+  const saveDraft = vi.fn(async (snapshot: WorkflowDraft) => {
+    mutationOrder.push("save");
+    if (options.saveDelayMs) await new Promise(resolve => setTimeout(resolve, options.saveDelayMs));
+    const saved = structuredClone(snapshot);
+    saved.validationErrors = [...(options.savedValidationErrors ?? []).map(message => ({ message })), ...(options.savedValidations ?? [])];
+    return saved;
+  });
+  const flushPendingSave = vi.fn(options.flushPendingSave ?? (async () => undefined));
+  const callbacks = {
+    reload: vi.fn(async (_options?: { shouldLoadDraft(): boolean }) => {
+      if (options.reloadWait) await options.reloadWait;
+    }),
+    startTestRun: vi.fn(),
+    clearTestRun: vi.fn(),
+    setPublishedArtifact: vi.fn(),
+    setOperation: vi.fn(),
+    setStatus: vi.fn(),
+    setError: vi.fn(),
+    setActiveRightPanelId: vi.fn(),
+    setInspectorCollapsed: vi.fn(),
+    setAutosavePaused: vi.fn()
+  };
+  let current: Operations | null = null;
+  const reviewStates: Operations["publicationReview"][] = [];
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  mounted = { root, container };
+  const renderHarness = () => flushSync(() => root.render(<Harness onRender={value => { current = value; reviewStates.push(value.publicationReview); }} params={{
+      context,
+      draft: sourceDraft,
+      details: details(),
+      catalog: [],
+      busy: false,
+      saveDraft,
+      flushPendingSave,
+      ...callbacks
+    }} />));
+  renderHarness();
+  return {
+    current: () => current!,
+    currentDraft: () => sourceDraft,
+    rerenderDraft: (nextDraft: WorkflowDraft) => { sourceDraft = nextDraft; renderHarness(); },
+    reviewStates,
+    saveDraft,
+    flushPendingSave,
+    getJson,
+    postJson,
+    mutationOrder,
+    failNextVersionPreflight: () => { failNextVersionPreflight = true; },
+    ...callbacks
+  };
+}
+
+function Harness({ params, onRender }: {
+  params: Parameters<typeof useWorkflowOperations>[0];
+  onRender(value: Operations): void;
+}) {
+  onRender(useWorkflowOperations(params));
+  return null;
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+function draft(): WorkflowDraft {
+  return {
+    id: "draft-1",
+    definitionId: "definition-1",
+    sourceVersionId: "version-1",
+    state: { rootActivity: { nodeId: "root", activityVersionId: "root-v1", inputs: [], outputs: [] } },
+    layout: [],
+    validationErrors: []
+  };
+}
+
+function publishedResult(): Publication {
+  return {
+    publicationId: "publication-2",
+    definitionId: "definition-1",
+    versionId: "version-2",
+    artifactId: "artifact-2",
+    slotName: "default",
+    sourceReferenceId: "reference-2",
+    status: "active"
+  };
+}
+
+function details(): WorkflowDefinitionDetails {
+  return {
+    definition: {
+      id: "definition-1",
+      name: "Orders",
+      createdAt: "2026-07-01T00:00:00Z",
+      lastModifiedAt: "2026-07-01T00:00:00Z",
+      latestVersion: "1.0.0",
+      versionCount: 1
+    },
+    draft: draft(),
+    versions: [{ id: "version-1", version: "1.0.0", createdAt: "2026-07-01T00:00:00Z" }]
+  };
+}
+
+// The default slot is occupied by publication-1, which published design version-1.
+function publishedSlot() {
+  return activationSlot("default", { activeActivationId: "publication-1", sourceKind: "publishing" });
+}
+
+function publishedRecord() {
+  return publicationRecord("default", {
+    publicationId: "publication-1",
+    versionId: "version-1",
+    artifactId: "artifact-1",
+    sourceReferenceId: "reference-1"
+  });
+}
+
+// The current backend contract: slot reads are Runtime-owned and joined through `publication-record`.
+// The legacy contract predates elsa-foundation#1498 and advertises only the removed Publishing relation.
+function capabilitiesFor(exactVersionSupport: boolean, legacySlotContract: boolean, draftValidations = false) {
+  return {
+    capabilities: [
+    {
+      id: "elsa.api.workflow-design",
+      contractVersion: "1",
+      links: [
+        { rel: "workflow-drafts", href: "design/workflows/drafts/{draftId}", templated: true },
+        ...(draftValidations ? [{ rel: "workflow-draft-validations", href: "design/workflows/drafts/{draftId}/validations", templated: true }] : []),
+        { rel: "workflow-versions", href: "design/workflows/versions/{versionId}", templated: true },
+        ...(exactVersionSupport ? [
+          {
+            rel: "workflow-draft-promote-version-preflight",
+            href: "design/workflows/drafts/{draftId}/promotion-preflight",
+            templated: true
+          },
+          {
+            rel: "workflow-draft-promote-exact-version",
+            href: "design/workflows/drafts/{draftId}/promote",
+            templated: true
+          }
+        ] : [])
+      ]
+    },
+    {
+      id: "elsa.api.publishing",
+      contractVersion: "1",
+      links: [
+        { rel: "publication-policy", href: "publishing/workflows/{definitionId}/policy", templated: true },
+        legacySlotContract
+          ? { rel: "publication-slots", href: "publishing/workflows/{definitionId}/slots", templated: true }
+          : { rel: "publication-record", href: "publishing/publications/{publicationId}", templated: true },
+        { rel: "publication-snapshot-preflight", href: "publishing/workflows/preflight" },
+        { rel: "publication-preflight", href: "publishing/workflows/{versionId}/preflight", templated: true },
+        { rel: "workflow-publish", href: "publishing/workflows/{versionId}/publish", templated: true }
+      ]
+    },
+    {
+      id: "elsa.api.runtime",
+      contractVersion: "1",
+      links: legacySlotContract ? [] : [
+        { rel: "workflow-activation-slots", href: "runtime/workflows/activation-slots/{definitionId}", templated: true },
+        { rel: "workflow-activation-slot", href: "runtime/workflows/activation-slots/{definitionId}/{slotName}", templated: true }
+      ]
+    }
+    ]
+  };
+}

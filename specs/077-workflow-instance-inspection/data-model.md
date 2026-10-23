@@ -35,7 +35,7 @@ Validation:
 
 ## Activity Execution Record
 
-Represents one runtime activity execution summary row for the selected instance. Detailed per-execution evidence is owned by [Activity Execution Inspection](../079-activity-execution-inspection/spec.md).
+Represents one runtime activity execution summary row for the selected instance. Detailed per-execution evidence is owned by [Activity Execution Inspection](../215-activity-execution-inspection/spec.md).
 
 Fields:
 - `activityExecutionId`, `workflowExecutionId`.

@@ -1,0 +1,171 @@
+using System.Text.Json;
+using Elsa.Activities.Http.Models;
+using Elsa.Activities.Runtime.Core;
+using Elsa.Activities.Runtime.Core.Attributes;
+using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Http.Core;
+using Elsa.Http.Core.Contracts;
+
+namespace Elsa.Activities.Http.Activities;
+
+/// <summary>
+/// Receives an HTTP start trigger or suspends with typed HTTP trigger registrations for a mid-flow request.
+/// Workflow data is hydrated into plain properties and each attempt returns one closed transition.
+/// </summary>
+[RefusesSecretBinding(nameof(Path), SecretBindingRefusalReason.FixedAtPublish)]
+[RefusesSecretBinding(nameof(SupportedMethods), SecretBindingRefusalReason.FixedAtPublish)]
+[RefusesSecretBinding(nameof(CanStartWorkflow), SecretBindingRefusalReason.FixedAtPublish)]
+[RefusesSecretBinding(nameof(Authorize), SecretBindingRefusalReason.FixedAtPublish)]
+[RefusesSecretBinding(nameof(Policy), SecretBindingRefusalReason.FixedAtPublish)]
+[RefusesSecretBinding(nameof(RequestTimeout), SecretBindingRefusalReason.FixedAtPublish)]
+[RefusesSecretBinding(nameof(RequestSizeLimit), SecretBindingRefusalReason.FixedAtPublish)]
+[RefusesSecretBinding(nameof(ResponseMode), SecretBindingRefusalReason.FixedAtPublish)]
+[Activity(Icon = "Webhook")]
+[TriggerActivity]
+[Version("1.1.0")]
+public sealed class HttpEndpoint :
+    StatefulTriggerActivity<HttpEndpointResult, HttpEndpointState, HttpRequestModel>
+{
+    public const string ActivityType = "Elsa.HttpEndpoint";
+    public const string ResumeTargetId = "resume-target:http-endpoint";
+    private const string NonRoutingMethodPlaceholder = "*";
+    private static readonly string[] DefaultMethods = ["GET"];
+    private readonly IHttpRequestBodyParser _bodyParser;
+
+    public HttpEndpoint(IHttpRequestBodyParser bodyParser)
+    {
+        _bodyParser = bodyParser;
+    }
+
+    /// <summary>The endpoint-relative route template.</summary>
+    [ActivityInput(Key = nameof(Path), Category = "Simple", Order = 10, Tier = InputTier.Essential)]
+    [Required]
+    public string Path { get; set; } = string.Empty;
+
+    /// <summary>The accepted HTTP methods; defaults to GET.</summary>
+    [ActivityInput(
+        Key = nameof(SupportedMethods),
+        Category = "Simple",
+        Order = 20,
+        UIHint = ActivityInputUIHints.CheckList,
+        Options = ["GET", "POST", "PUT", "HEAD", "DELETE"],
+        Tier = InputTier.Essential)]
+    public ICollection<string>? SupportedMethods { get; set; }
+
+    /// <summary>Whether this node may start a workflow.</summary>
+    [ActivityInput(Key = nameof(CanStartWorkflow), Category = "Simple", Order = 0, Tier = InputTier.Setting)]
+    public bool CanStartWorkflow { get; set; }
+
+    [ActivityInput(Key = nameof(Authorize), Category = "Advanced", Order = 100, Tier = InputTier.Setting)]
+    public bool Authorize { get; set; }
+
+    [ActivityInput(Key = nameof(Policy), Category = "Advanced", Order = 110, Tier = InputTier.Setting)]
+    public string? Policy { get; set; }
+
+    [ActivityInput(Key = nameof(RequestTimeout), Category = "Advanced", Order = 120, Tier = InputTier.Optional)]
+    public TimeSpan? RequestTimeout { get; set; }
+
+    [ActivityInput(Key = nameof(RequestSizeLimit), Category = "Advanced", Order = 130, Tier = InputTier.Optional)]
+    public long? RequestSizeLimit { get; set; }
+
+    [ActivityInput(
+        Key = nameof(ResponseMode),
+        DisplayName = "Response mode",
+        Description = "Choose whether to wait for the workflow response or accept the request and run the workflow in the background.",
+        Category = "Simple",
+        Order = 30,
+        UIHint = ActivityInputUIHints.Dropdown,
+        DefaultValue = "Sync",
+        Tier = InputTier.Essential)]
+    [ActivityInputOption("Wait for workflow response", ResponseMode.Sync)]
+    [ActivityInputOption("Accept and run in background", ResponseMode.Async)]
+    public ResponseMode ResponseMode { get; set; } = ResponseMode.Sync;
+
+    protected override ValueTask<ActivityTransition<HttpEndpointResult, HttpEndpointState>> ExecuteAsync(
+        ActivityStartContext<HttpRequestModel> context)
+    {
+        if (ShouldComplete(context))
+        {
+            var request = context.TryGetTrigger(out var trigger)
+                ? NormalizeRequest(trigger) ?? BuildAuthoredRouteModel(Path)
+                : BuildAuthoredRouteModel(Path);
+            return ValueTask.FromResult(Complete(BuildResult(request)));
+        }
+
+        var registrations = HttpEndpointStimulus
+            .Describe(Path, EffectiveMethods(), ReadOptions())
+            .Select(descriptor => new ActivityTriggerRegistration<HttpRequestModel>(
+                ResumeTargetId,
+                descriptor.StimulusType,
+                descriptor.StimulusHash,
+                metadata: descriptor.Metadata))
+            .ToArray();
+        return ValueTask.FromResult(Suspend(new HttpEndpointState(Path), registrations));
+    }
+
+    [ResumeTarget(ResumeTargetId)]
+    protected override ValueTask<ActivityTransition<HttpEndpointResult, HttpEndpointState>> ResumeAsync(
+        ActivityResumeContext<HttpEndpointState, HttpRequestModel> context)
+    {
+        var request = NormalizeRequest(context.Trigger) ?? BuildAuthoredRouteModel(context.State.Path);
+        return ValueTask.FromResult(Complete(BuildResult(request)));
+    }
+
+    private bool ShouldComplete(ActivityStartContext<HttpRequestModel> context)
+    {
+        if (!context.IsDirectInvocation)
+            return context.IsTriggerDelivery;
+
+        return CanStartWorkflow;
+    }
+
+    private HttpEndpointResult BuildResult(HttpRequestModel request)
+    {
+        return new HttpEndpointResult(request, request.RouteData, DeriveParsedContent(request));
+    }
+
+    private JsonElement? DeriveParsedContent(HttpRequestModel request)
+    {
+        if (string.IsNullOrEmpty(request.Body))
+            return null;
+
+        return _bodyParser.Parse(GetContentType(request.Headers), request.Body);
+    }
+
+    private string[] EffectiveMethods() =>
+        SupportedMethods is { Count: > 0 } authored ? authored.ToArray() : DefaultMethods;
+
+    private HttpEndpointStimulusOptions ReadOptions() =>
+        new(Authorize, Policy, RequestTimeout, RequestSizeLimit, ResponseMode);
+
+    private static HttpRequestModel? NormalizeRequest(HttpRequestModel? request)
+    {
+        if (request is not { Path: not null, Method: not null })
+            return null;
+
+        return request;
+    }
+
+    private static string? GetContentType(IReadOnlyDictionary<string, IReadOnlyList<string>> headers)
+    {
+        if (headers is null)
+            return null;
+
+        foreach (var (key, values) in headers)
+        {
+            if (string.Equals(key, "Content-Type", StringComparison.OrdinalIgnoreCase))
+                return values is { Count: > 0 } ? values[0] : null;
+        }
+
+        return null;
+    }
+
+    private static HttpRequestModel BuildAuthoredRouteModel(string path) =>
+        new(
+            HttpEndpointStimulus.NormalizeTemplate(path),
+            NonRoutingMethodPlaceholder,
+            new Dictionary<string, string[]>(),
+            new Dictionary<string, string[]>(),
+            Body: null,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
+}

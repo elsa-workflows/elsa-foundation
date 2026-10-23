@@ -63,11 +63,11 @@ public static class ProjectFactsContractTests
             // target adds. Private.Pin is reached only through a PrivateAssets="all" reference, which keeps it out of the
             // nuspec, so it is left out; made public, the same reference brings it in.
             AssertPinnedTransitive(repo, "PinnedTransitive", "Transitive.A 1.0.0, Transitive.B 2.0.0");
-            WriteProject(root, "src/PinnedTransitive", PinnedTransitiveProject.Replace(" PrivateAssets=\"all\"", string.Empty, StringComparison.Ordinal));
+            WriteProject(root, "Essentials/src/PinnedTransitive", PinnedTransitiveProject.Replace(" PrivateAssets=\"all\"", string.Empty, StringComparison.Ordinal));
             AssertPinnedTransitive(repo, "PinnedTransitive", "Private.Pin 6.0.0, Transitive.A 1.0.0, Transitive.B 2.0.0");
-            WriteProject(root, "src/PinnedTransitive", PinnedTransitiveProject.Replace("DefaultIsPackable.csproj\" />", "DefaultIsPackable.csproj\"><PrivateAssets>All</PrivateAssets></ProjectReference>", StringComparison.Ordinal));
+            WriteProject(root, "Essentials/src/PinnedTransitive", PinnedTransitiveProject.Replace("DefaultIsPackable.csproj\" />", "DefaultIsPackable.csproj\"><PrivateAssets>All</PrivateAssets></ProjectReference>", StringComparison.Ordinal));
             AssertPinnedTransitive(repo, "PinnedTransitive", "Transitive.A 1.0.0");
-            WriteProject(root, "src/PinnedTransitive", PinnedTransitiveProject);
+            WriteProject(root, "Essentials/src/PinnedTransitive", PinnedTransitiveProject);
 
             // A lock file the tree has moved past is refused rather than read, since a stale list would leave a package's
             // nuspec change undetected: a pin, a reference or the project's references changed without it.
@@ -79,12 +79,12 @@ public static class ProjectFactsContractTests
             WriteCentralPackages(root, ("Unpinned.Dependency", "1.0.0"));
             AssertRefused(repo, "PinnedTransitive", "leaves Unpinned.Dependency unpinned");
             WriteCentralPackages(root);
-            WriteProject(root, "src/PinnedTransitive", PinnedTransitiveProject.Replace("</ItemGroup>", "<PackageReference Include=\"Transitive.B\" /></ItemGroup>", StringComparison.Ordinal));
+            WriteProject(root, "Essentials/src/PinnedTransitive", PinnedTransitiveProject.Replace("</ItemGroup>", "<PackageReference Include=\"Transitive.B\" /></ItemGroup>", StringComparison.Ordinal));
             AssertRefused(repo, "PinnedTransitive", "before it referenced Transitive.B");
-            WriteProject(root, "src/PinnedTransitive", PinnedTransitiveProject.Replace("<ProjectReference Include=\"..\\DefaultIsPackable\\DefaultIsPackable.csproj\" />", string.Empty, StringComparison.Ordinal));
+            WriteProject(root, "Essentials/src/PinnedTransitive", PinnedTransitiveProject.Replace("<ProjectReference Include=\"..\\DefaultIsPackable\\DefaultIsPackable.csproj\" />", string.Empty, StringComparison.Ordinal));
             AssertRefused(repo, "PinnedTransitive", "other projects");
-            WriteProject(root, "src/PinnedTransitive", PinnedTransitiveProject);
-            File.WriteAllText(Path.Join(root, "src/PinnedTransitive/packages.lock.json"), PinnedTransitiveLockFile.Replace("\"version\": 2", "\"version\": 1", StringComparison.Ordinal));
+            WriteProject(root, "Essentials/src/PinnedTransitive", PinnedTransitiveProject);
+            File.WriteAllText(Path.Join(root, "Essentials/src/PinnedTransitive/packages.lock.json"), PinnedTransitiveLockFile.Replace("\"version\": 2", "\"version\": 1", StringComparison.Ordinal));
             AssertRefused(repo, "PinnedTransitive", "not a version 2 lock file");
 
             Console.WriteLine("Project facts contract cases passed.");
@@ -108,37 +108,37 @@ public static class ProjectFactsContractTests
         File.WriteAllText(Path.Join(root, "VersionLines.props"),
             "<Project><PropertyGroup><ElsaVersionLineAMembers>;Fixture.LineA.Core;</ElsaVersionLineAMembers></PropertyGroup></Project>");
 
-        WriteProject(root, "src/ProjectFileOverridesInheritedFalse",
+        WriteProject(root, "Essentials/src/ProjectFileOverridesInheritedFalse",
             "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><IsPackable>true</IsPackable></PropertyGroup></Project>");
-        File.WriteAllText(Path.Join(root, "src/ProjectFileOverridesInheritedFalse/Directory.Build.props"),
+        File.WriteAllText(Path.Join(root, "Essentials/src/ProjectFileOverridesInheritedFalse/Directory.Build.props"),
             "<Project><PropertyGroup><IsPackable>false</IsPackable></PropertyGroup></Project>");
 
-        WriteProject(root, "src/DirectoryBuildPropsOverridesDefault", "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
-        File.WriteAllText(Path.Join(root, "src/DirectoryBuildPropsOverridesDefault/Directory.Build.props"),
+        WriteProject(root, "Essentials/src/DirectoryBuildPropsOverridesDefault", "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
+        File.WriteAllText(Path.Join(root, "Essentials/src/DirectoryBuildPropsOverridesDefault/Directory.Build.props"),
             "<Project><PropertyGroup><IsPackable>false</IsPackable></PropertyGroup></Project>");
 
-        WriteProject(root, "src/WebSdkDefaultsToFalse", "<Project Sdk=\"Microsoft.NET.Sdk.Web\"></Project>");
+        WriteProject(root, "Essentials/src/WebSdkDefaultsToFalse", "<Project Sdk=\"Microsoft.NET.Sdk.Web\"></Project>");
 
-        WriteProject(root, "src/TestProjectFlagIsFalse",
+        WriteProject(root, "Essentials/src/TestProjectFlagIsFalse",
             "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><IsTestProject>true</IsTestProject></PropertyGroup></Project>");
 
-        WriteProject(root, "src/TestSdkReferenceIsFalse",
+        WriteProject(root, "Essentials/src/TestSdkReferenceIsFalse",
             "<Project Sdk=\"Microsoft.NET.Sdk\"><ItemGroup><PackageReference Include=\"Microsoft.NET.Test.Sdk\" /></ItemGroup></Project>");
 
-        WriteProject(root, "src/DefaultIsPackable", "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
+        WriteProject(root, "Essentials/src/DefaultIsPackable", "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
 
-        WriteProject(root, "src/PackageIdWins",
+        WriteProject(root, "Essentials/src/PackageIdWins",
             "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><PackageId>Custom.Package.Id</PackageId><AssemblyName>Ignored.Assembly.Name</AssemblyName></PropertyGroup></Project>");
-        WriteProject(root, "src/AssemblyNameWins",
+        WriteProject(root, "Essentials/src/AssemblyNameWins",
             "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><AssemblyName>Custom.Assembly.Name</AssemblyName></PropertyGroup></Project>");
-        WriteProject(root, "src/ProjectNameWins", "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
+        WriteProject(root, "Essentials/src/ProjectNameWins", "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
 
-        WriteProject(root, "src/Fixture.LineA.Core", "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
-        WriteProject(root, "src/Fixture.LineA", "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
+        WriteProject(root, "Essentials/src/Fixture.LineA.Core", "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
+        WriteProject(root, "Essentials/src/Fixture.LineA", "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
 
         WriteCentralPackages(root);
-        WriteProject(root, "src/PinnedTransitive", PinnedTransitiveProject);
-        File.WriteAllText(Path.Join(root, "src/PinnedTransitive/packages.lock.json"), PinnedTransitiveLockFile);
+        WriteProject(root, "Essentials/src/PinnedTransitive", PinnedTransitiveProject);
+        File.WriteAllText(Path.Join(root, "Essentials/src/PinnedTransitive/packages.lock.json"), PinnedTransitiveLockFile);
     }
 
     /// <summary>

@@ -1,0 +1,122 @@
+using YamlDotNet.Serialization;
+
+namespace Elsa.Versioning.Publisher.Tests;
+
+/// <summary>
+/// <c>.github/workflows/packages.yml</c> stays a thin shell over the publisher, and keeps its workflow-level
+/// requirements: no global <c>/p:Version</c>, no <c>--skip-duplicate</c>, serialized runs from main that
+/// are never cancelled in progress, and pushes from main alone.
+/// </summary>
+public sealed class PackagesWorkflowTests
+{
+    private static readonly Dictionary<object, object> Workflow = new DeserializerBuilder().Build()
+        .Deserialize<Dictionary<object, object>>(File.ReadAllText(Path.Join(RepositoryRoot(), ".github", "workflows", "packages.yml")));
+
+    private static IReadOnlyDictionary<string, Dictionary<object, object>> Jobs =>
+        Map(Workflow, "jobs").ToDictionary(job => (string)job.Key, job => (Dictionary<object, object>)job.Value);
+
+    /// <summary>Every step's script, by job.</summary>
+    private static IEnumerable<(string Job, string Script)> Scripts =>
+        Jobs.SelectMany(job => ((List<object>)job.Value["steps"]).Cast<Dictionary<object, object>>()
+            .Where(step => step.ContainsKey("run"))
+            .Select(step => (job.Key, (string)step["run"])));
+
+    /// <summary>Versions come from the computation, and a duplicate is settled, never skipped.</summary>
+    [Theory]
+    [InlineData("p:Version")]
+    [InlineData("p:PackageVersion")]
+    [InlineData("--skip-duplicate")]
+    public void No_step_injects_a_version_or_skips_a_duplicate(string forbidden) =>
+        Assert.DoesNotContain(Scripts, script => script.Script.Contains(forbidden, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>The publisher pushes, over the NuGet protocol; no step pushes on its own, and nothing reaches nuget.org before #2085.</summary>
+    [Fact]
+    public void Only_the_publisher_pushes_and_nothing_reaches_nuget_org()
+    {
+        Assert.DoesNotContain(Scripts, script => script.Script.Contains("nuget push", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain("nuget.org", new SerializerBuilder().Build().Serialize(Workflow), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(Scripts, script => script.Job == "publish" && script.Script.Contains("Elsa.Versioning.Publisher", StringComparison.Ordinal) &&
+                                           script.Script.Contains(" publish ", StringComparison.Ordinal));
+    }
+
+    /// <summary>Every run from main shares one group, the one the repair workflow joins, and none is cancelled in progress.</summary>
+    [Fact]
+    public void Runs_from_main_are_serialized_and_never_cancelled_in_progress()
+    {
+        var concurrency = Map(Workflow, "concurrency");
+
+        Assert.Contains("github.ref == 'refs/heads/main' && 'publish-state'", (string)concurrency["group"], StringComparison.Ordinal);
+        Assert.Equal("false", concurrency["cancel-in-progress"]);
+        Assert.All(Jobs.Values, job => Assert.False(job.ContainsKey("concurrency")));
+    }
+
+    /// <summary>
+    /// Only the publish job holds the feed's key or may write to the repository, and it runs only for
+    /// a build of main that planned a publish or the bootstrap.
+    /// </summary>
+    [Fact]
+    public void Only_the_publish_job_holds_the_key_or_write_access_and_only_for_main()
+    {
+        var serializer = new SerializerBuilder().Build();
+        Assert.Equal(["publish"], Jobs.Where(job => serializer.Serialize(job.Value).Contains("secrets.", StringComparison.Ordinal)).Select(job => job.Key));
+        Assert.Equal(["publish"], Jobs.Where(job => job.Value.TryGetValue("permissions", out var permissions) &&
+                                                   ((Dictionary<object, object>)permissions)["contents"] is "write").Select(job => job.Key));
+        Assert.Equal("read", Map(Workflow, "permissions")["contents"]);
+
+        var condition = (string)Jobs["publish"]["if"];
+        Assert.Contains("github.ref == 'refs/heads/main'", condition, StringComparison.Ordinal);
+        Assert.Contains("needs.pack.outputs.mode == 'publish' || needs.pack.outputs.mode == 'bootstrap'", condition, StringComparison.Ordinal);
+    }
+
+    /// <summary>The pack job builds exactly what the plan names, through the plan's own files.</summary>
+    [Fact]
+    public void The_pack_job_packs_through_the_plans_files()
+    {
+        var pack = string.Join("\n", Scripts.Where(script => script.Job == "pack").Select(script => script.Script));
+
+        Assert.Contains(" plan ", pack, StringComparison.Ordinal);
+        Assert.Contains($"/{PlanFiles.PackFilter}", pack, StringComparison.Ordinal);
+        Assert.Contains($"-p:CustomBeforeDirectoryBuildProps=\"$RUNNER_TEMP/versions/{PlanFiles.PackProperties}\"", pack, StringComparison.Ordinal);
+        Assert.Contains($"-p:PackageOutputPath=\"$RUNNER_TEMP/versions/{PlanFiles.Packages}\"", pack, StringComparison.Ordinal);
+    }
+
+    /// <summary>The bootstrap is the owner's manual act: a boolean dispatch input, off unless set.</summary>
+    [Fact]
+    public void The_bootstrap_is_a_manual_boolean_input_that_defaults_to_off()
+    {
+        var bootstrap = Map(Map(Map(Map(Workflow, "on"), "workflow_dispatch"), "inputs"), "bootstrap");
+
+        Assert.Equal(("boolean", "false"), (bootstrap["type"], bootstrap["default"]));
+    }
+
+    /// <summary>Release events run the checkpoint guard; other releases fail there, while package build and publish remain excluded.</summary>
+    [Fact]
+    public void Release_events_are_guarded_without_entering_package_build_or_publish()
+    {
+        Assert.Equal("${{ github.event_name == 'release' }}", Jobs["release"]["if"]);
+        Assert.Equal("${{ github.event_name != 'release' }}", Jobs["pack"]["if"]);
+        Assert.Equal("pack", Jobs["publish"]["needs"]);
+        Assert.Contains("github.event_name == 'push' || github.event_name == 'workflow_dispatch'",
+            (string)Jobs["publish"]["if"], StringComparison.Ordinal);
+
+        var steps = ((List<object>)Jobs["release"]["steps"]).Cast<Dictionary<object, object>>().ToList();
+        var guardStep = steps.Single(step => step.TryGetValue("name", out var name) &&
+            (string)name == "Allow only metadata-only contributor checkpoints");
+        Assert.Equal("python3 tools/contributor-checkpoints/workflow_guards.py release", (string)guardStep["run"]);
+        var environment = Map(guardStep, "env");
+        Assert.Equal("${{ github.event.action }}", (string)environment["RELEASE_ACTION"]);
+        Assert.Equal("${{ github.event.release.prerelease }}", (string)environment["RELEASE_PRERELEASE"]);
+        Assert.Equal("${{ github.event.release.tag_name }}", (string)environment["RELEASE_TAG_NAME"]);
+    }
+
+    private static Dictionary<object, object> Map(Dictionary<object, object> parent, string key) => (Dictionary<object, object>)parent[key];
+
+    private static string RepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Join(directory.FullName, "Elsa.Server.slnx")))
+            directory = directory.Parent;
+
+        return directory?.FullName ?? throw new InvalidOperationException("Could not locate the repository root.");
+    }
+}

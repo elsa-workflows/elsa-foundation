@@ -1,0 +1,307 @@
+using System.Collections.Concurrent;
+using System.Text.Json;
+using Elsa.Activities.Testing;
+using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+
+namespace Elsa.Activities.Runtime.Tests;
+
+/// <summary>
+/// Seam C: a still-running structural child raises a coded, durable notification to its own
+/// committed parent; the parent — iff it implements <see cref="IRuntimeActivityChildNotificationHandler"/> —
+/// receives it and may respond with any continuation (including a seam-A subtree cancellation), while the child
+/// keeps running.
+/// </summary>
+public sealed class ChildParentNotificationExecutionTests
+{
+    [Fact]
+    public async Task InvokeStagedNotification_DeliveredWithCodePayloadAndChildIdentity()
+    {
+        var recorder = new ParentNotificationRecorder();
+        await using var harness = NewHarness(
+            new ParentNotificationDirective { InvokeCodes = ["escalate-1"], Payload = JsonSerializer.SerializeToElement(new { level = 3 }) },
+            new ParentNotificationConsumerDirective(),
+            recorder);
+
+        var run = await harness.RunAsync(NewGraph());
+
+        run.AssertWorkflowCompleted();
+        run.AssertCompleted("node-consumer");
+        var notification = Assert.Single(recorder.Notifications);
+        Assert.Equal("escalate-1", notification.Code);
+        Assert.Equal("actexec-child", notification.NotifyingChildActivityExecutionId);
+        Assert.Equal("node-child", notification.NotifyingChildExecutableNodeId);
+        Assert.Contains("\"level\":3", notification.Payload);
+    }
+
+    [Fact]
+    public async Task MultipleNotifications_DeliveredInStagingOrderWithDistinctDerivedIds()
+    {
+        var recorder = new ParentNotificationRecorder();
+        await using var harness = NewHarness(
+            new ParentNotificationDirective { InvokeCodes = ["first", "second"] },
+            new ParentNotificationConsumerDirective(),
+            recorder);
+
+        var run = await harness.RunAsync(NewGraph());
+
+        run.AssertWorkflowCompleted();
+        // Both delivered (no id collision — distinct ordinal-suffixed derived ids) and in staging order.
+        Assert.Equal(["first", "second"], recorder.Notifications.Select(notification => notification.Code));
+    }
+
+    [Fact]
+    public async Task CompletionStagedNotification_DeliveredFromChildCompletionEvaluation()
+    {
+        var recorder = new ParentNotificationRecorder();
+        await using var harness = NewHarness(
+            new ParentNotificationDirective { CompletionCode = "done-signal" },
+            new ParentNotificationConsumerDirective(),
+            recorder);
+
+        var run = await harness.RunAsync(NewGraph());
+
+        run.AssertWorkflowCompleted();
+        var notification = Assert.Single(recorder.Notifications);
+        Assert.Equal("done-signal", notification.Code);
+        Assert.Equal("actexec-child", notification.NotifyingChildActivityExecutionId);
+    }
+
+    [Fact]
+    public async Task NonImplementingParent_SilentlyAcksTheNotification()
+    {
+        var recorder = new ParentNotificationRecorder();
+        await using var harness = WorkflowExecutionHarness.Create()
+            .ConfigureServices(services =>
+            {
+                services.AddSingleton(new ParentNotificationDirective { InvokeCodes = ["ignored"] });
+                services.AddSingleton(recorder);
+            })
+            .Build("actexec-consumer", "actexec-child", "actexec-leaf");
+
+        var run = await harness.RunAsync(StructuralExecutionTestSupport.NewExecutable(
+            StructuralExecutionTestSupport.NewStructuralNode("node-consumer", typeof(NonNotificationConsumingParentActivity),
+                StructuralExecutionTestSupport.NewStructuralNode("node-child", typeof(NotifyingStructuralChildActivity),
+                    WorkflowExecutionHarness.NewProbeNode("node-leaf")))));
+
+        run.AssertWorkflowCompleted();
+        run.AssertCompleted("node-consumer");
+        Assert.Empty(recorder.Notifications);
+        Assert.Empty(await ListIncidentsAsync(harness));
+    }
+
+    [Fact]
+    public async Task RootActivityStaging_FaultsTheEvaluation()
+    {
+        var recorder = new ParentNotificationRecorder();
+        await using var harness = NewHarness(
+            new ParentNotificationDirective { InvokeCodes = ["escalate"] },
+            new ParentNotificationConsumerDirective(),
+            recorder,
+            "actexec-root", "actexec-child");
+
+        var run = await harness.RunAsync(
+            StructuralExecutionTestSupport.NewExecutable(
+                StructuralExecutionTestSupport.NewStructuralNode("node-root", typeof(RootNotifyingStructuralActivity),
+                    WorkflowExecutionHarness.NewProbeNode("node-child"))),
+            allowPendingWorkOnTerminalCompletion: true);
+
+        var root = run.State("node-root");
+        Assert.Equal(ActivityExecutionStatus.Faulted, root.Status);
+        Assert.Contains("root activity has no parent", root.Fault!.Message, StringComparison.Ordinal);
+        Assert.Empty(recorder.Notifications);
+    }
+
+    [Fact]
+    public async Task FaultContinuationWithStagedNotification_PreservesChildFaultAndRefusesLegacyNotificationConsumer()
+    {
+        var recorder = new ParentNotificationRecorder();
+        await using var harness = NewHarness(
+            new ParentNotificationDirective { InvokeCodes = ["escalate"], FaultInsteadOfDefer = true },
+            new ParentNotificationConsumerDirective(),
+            recorder);
+
+        var run = await harness.RunAsync(NewGraph(), allowPendingWorkOnTerminalCompletion: true);
+
+        var child = run.State("node-child");
+        Assert.Equal(ActivityExecutionStatus.Faulted, child.Status);
+        Assert.Equal("test.notify.fault", child.Fault!.Code);
+        Assert.Equal("fault with staged notification", child.Fault.Message);
+        var parent = run.State("node-consumer");
+        Assert.Equal(ActivityExecutionStatus.Faulted, parent.Status);
+        Assert.Equal("runtime.parent-outcome.handler-required", parent.Fault!.Code);
+        Assert.Empty(recorder.Notifications);
+
+        var incidents = await harness.Services.GetRequiredService<IIncidentStateStore>()
+            .ListAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+        var childIncident = Assert.Single(incidents, incident => incident.ActivityExecutionId == child.Execution.ActivityExecutionId);
+        Assert.Equal(IncidentStatus.Blocking, childIncident.Status);
+        Assert.Equal(IncidentResolutionActionKinds.FaultWorkflow, childIncident.ResolutionOutcome?.ActionKind);
+        Assert.Contains(childIncident.IncidentId, child.IncidentIds);
+        Assert.Equal(WorkflowExecutionStatus.Faulted, run.WorkflowState?.Status);
+    }
+
+    [Fact]
+    public async Task ParentNotRunning_AcksLaterNotifications()
+    {
+        var recorder = new ParentNotificationRecorder();
+        await using var harness = NewHarness(
+            new ParentNotificationDirective { InvokeCodes = ["first", "second"] },
+            new ParentNotificationConsumerDirective { CompleteOnNotify = true },
+            recorder);
+
+        var run = await harness.RunAsync(NewGraph(), allowPendingWorkOnTerminalCompletion: true);
+
+        run.AssertWorkflowCompleted();
+        // The parent completes on the first notification; the second reaches a non-Running parent and is acked away.
+        var notification = Assert.Single(recorder.Notifications);
+        Assert.Equal("first", notification.Code);
+    }
+
+    [Fact]
+    public async Task SeamACancellationFromNotificationEvaluation_TearsDownNotifyingChild()
+    {
+        var recorder = new ParentNotificationRecorder();
+        await using var harness = NewHarness(
+            new ParentNotificationDirective { InvokeCodes = ["interrupt"] },
+            new ParentNotificationConsumerDirective { CancelNotifyingChildOnNotify = true, CompleteOnNotify = true },
+            recorder);
+
+        var run = await harness.RunAsync(NewGraph(), allowPendingWorkOnTerminalCompletion: true);
+
+        run.AssertWorkflowCompleted();
+        run.AssertCompleted("node-consumer");
+        Assert.Single(recorder.Notifications);
+        var child = run.State("node-child");
+        Assert.Equal(ActivityExecutionStatus.Cancelled, child.Status);
+        Assert.Equal("ParentCancelled", child.SubStatus);
+    }
+
+    [Fact]
+    public async Task NotificationEvaluation_ClaimsAndCompletesTheTargetParentUnderTheNotificationReason()
+    {
+        await using var harness = NewHarness(
+            new ParentNotificationDirective { InvokeCodes = ["complete"] },
+            new ParentNotificationConsumerDirective { CompleteOnNotify = true },
+            new ParentNotificationRecorder());
+
+        var run = await harness.RunAsync(NewGraph(), allowPendingWorkOnTerminalCompletion: true);
+
+        run.AssertWorkflowCompleted();
+        AssertConsumerClaimedAndCompletedBy(harness, run, RuntimeNotifyParentCommandPayload.NotifyParentReason);
+        AssertConsumerCompletionCheckpointMetadata(harness, run, RuntimeNotifyParentCommandPayload.NotifyParentReason, new Dictionary<string, string>
+        {
+            [RuntimeMetadataKeys.NotifyingChildActivityExecutionId] = "actexec-child",
+            [RuntimeMetadataKeys.ParentNotificationCode] = "complete"
+        });
+    }
+
+    [Fact]
+    public async Task ChildCompletionEvaluation_ClaimsAndCompletesTheTargetParentUnderTheEvaluationReason()
+    {
+        await using var harness = NewHarness(new ParentNotificationDirective(), new ParentNotificationConsumerDirective(), new ParentNotificationRecorder());
+
+        var run = await harness.RunAsync(NewGraph());
+
+        run.AssertWorkflowCompleted();
+        AssertConsumerClaimedAndCompletedBy(harness, run, RuntimeCompleteActivityCommandPayload.ParentCompletionEvaluationReason);
+        AssertConsumerCompletionCheckpointMetadata(harness, run, RuntimeCompleteActivityCommandPayload.ParentCompletionEvaluationReason, new Dictionary<string, string>());
+    }
+
+    // The claim checkpoint and the completed parent's metadata are persisted, so they must address the parent the
+    // evaluating command targets (never the child that raised it) and carry that command's reason.
+    private static void AssertConsumerClaimedAndCompletedBy(WorkflowExecutionHarness harness, WorkflowExecutionRun run, string reason)
+    {
+        var consumer = run.AssertCompleted("node-consumer");
+        Assert.Equal(reason, consumer.Metadata[RuntimeMetadataKeys.InvokeReason]);
+        var evaluatingWorkItemId = consumer.Metadata[RuntimeMetadataKeys.InvokeSchedulerWorkItemId];
+        var claim = Assert.Single(
+            harness.Services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits(),
+            record => record.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityAttemptClaimed &&
+                      record.Commit.Checkpoint.Metadata[RuntimeMetadataKeys.SchedulerWorkItemId] == evaluatingWorkItemId).Commit.Checkpoint;
+        Assert.Equal(reason, claim.Metadata[RuntimeMetadataKeys.CheckpointReason]);
+        Assert.Equal("actexec-consumer", claim.Metadata[RuntimeMetadataKeys.ActivityExecutionId]);
+        Assert.Equal("node-consumer", claim.Metadata[RuntimeMetadataKeys.ExecutableNodeId]);
+        Assert.Equal(["actexec-consumer"], claim.ActivityExecutionIds);
+        Assert.Equal(run.WorkflowState!.PinnedExecutable.ArtifactHash, claim.Metadata[RuntimeMetadataKeys.ExecutableArtifactHash]);
+    }
+
+    // Both evaluations share one builder for the completed parent's checkpoint metadata; only the notification
+    // evaluation adds keys of its own. A key the builder silently dropped would leave every other assertion green. The
+    // checkpoint is read as the committer received it, because a persistence mode may fold it into a later commit.
+    private static void AssertConsumerCompletionCheckpointMetadata(
+        WorkflowExecutionHarness harness,
+        WorkflowExecutionRun run,
+        string reason,
+        IReadOnlyDictionary<string, string> evaluationMetadata)
+    {
+        var consumer = run.AssertCompleted("node-consumer");
+        var evaluatingWorkItemId = consumer.Metadata[RuntimeMetadataKeys.InvokeSchedulerWorkItemId];
+        var checkpoint = Assert.Single(
+            harness.Services.GetRequiredService<CommittedCheckpointRecorder>().Checkpoints,
+            candidate => candidate.CheckpointId == $"checkpoint:{evaluatingWorkItemId}:parent-activity-completed:actexec-consumer");
+        var pinned = run.WorkflowState!.PinnedExecutable;
+        var expected = new Dictionary<string, string>(evaluationMetadata)
+        {
+            [RuntimeMetadataKeys.SchedulerWorkItemId] = evaluatingWorkItemId,
+            [RuntimeMetadataKeys.CommandId] = checkpoint.Metadata[RuntimeMetadataKeys.CommandId],
+            [RuntimeMetadataKeys.CheckpointReason] = reason,
+            [RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory,
+            [RuntimeMetadataKeys.ActivityExecutionId] = "actexec-consumer",
+            [RuntimeMetadataKeys.ExecutableNodeId] = "node-consumer",
+            [RuntimeMetadataKeys.ExecutableArtifactId] = pinned.ArtifactId,
+            [RuntimeMetadataKeys.ExecutableArtifactVersion] = pinned.ArtifactVersion,
+            [RuntimeMetadataKeys.ExecutableArtifactHash] = pinned.ArtifactHash
+        };
+        Assert.Equal<IReadOnlyDictionary<string, string>>(expected, checkpoint.Metadata);
+    }
+
+    private static WorkflowExecutionHarness NewHarness(
+        ParentNotificationDirective childDirective,
+        ParentNotificationConsumerDirective consumerDirective,
+        ParentNotificationRecorder recorder,
+        params string[] activityExecutionIds)
+    {
+        var ids = activityExecutionIds.Length > 0
+            ? activityExecutionIds
+            : ["actexec-consumer", "actexec-child", "actexec-leaf"];
+        return WorkflowExecutionHarness.Create()
+            .ConfigureServices(services =>
+            {
+                services.AddSingleton(childDirective);
+                services.AddSingleton(consumerDirective);
+                services.AddSingleton(recorder);
+                services.AddSingleton<CommittedCheckpointRecorder>();
+                services.AddSingleton<IRuntimeCheckpointCommitEnricher>(serviceProvider => serviceProvider.GetRequiredService<CommittedCheckpointRecorder>());
+            })
+            .Build(ids);
+    }
+
+    // Records every checkpoint the committer is asked to commit, after the other enrichers have run.
+    private sealed class CommittedCheckpointRecorder : IRuntimeCheckpointCommitEnricher
+    {
+        public int Order => int.MaxValue;
+
+        public ConcurrentQueue<RuntimeCheckpoint> Checkpoints { get; } = new();
+
+        public ValueTask<RuntimeCheckpointCommit> EnrichAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken = default)
+        {
+            Checkpoints.Enqueue(commit.Checkpoint);
+            return ValueTask.FromResult(commit);
+        }
+    }
+
+    private static WorkflowExecutable NewGraph() =>
+        StructuralExecutionTestSupport.NewExecutable(
+            StructuralExecutionTestSupport.NewStructuralNode("node-consumer", typeof(NotificationConsumingParentActivity),
+                StructuralExecutionTestSupport.NewStructuralNode("node-child", typeof(NotifyingStructuralChildActivity),
+                    WorkflowExecutionHarness.NewProbeNode("node-leaf"))));
+
+    private static async Task<IReadOnlyCollection<IncidentState>> ListIncidentsAsync(WorkflowExecutionHarness harness) =>
+        await harness.Services.GetRequiredService<IIncidentStateStore>()
+            .ListAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+}

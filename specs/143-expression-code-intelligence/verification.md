@@ -1,5 +1,9 @@
 # Expression Code Intelligence Foundation — Verification
 
+## Restart note — 2026-10-23
+
+The owner restarted Program #2310 on 2026-10-23. The planning branch was merged with current `main`, where the spec-status map is no longer committed (spec 257 publishes generated maps on the `generated-maps` branch). Source paths now live under `Essentials/` and `Studio/`. The snapshot below is historical and does not describe the current head.
+
 ## Current integration snapshot — 2026-10-06
 
 The existing Foundation expression stack is being synchronized with main `2a0d1f10fb91bf6928203430d938d99d183c5cda`. The root planning branch changes no production, test, SDK or workflow file relative to that main. Its generated spec-status map retains the reopened expression work (25 completed tasks and 6 open tasks) and the two new draft specs. Root and independent diff review pass; authoritative combined-head Maps and CI remain pending. Historical baseline results below do not establish acceptance of this synchronized stack or a new Studio/Foundation pair.

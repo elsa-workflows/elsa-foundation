@@ -55,7 +55,7 @@ done
 if [[ "$act3" -eq 1 ]]; then
   act3_started=$SECONDS
   echo "== Act 3: building Elsa.Workbench (Release)"
-  demo_quiet "Building Elsa.Workbench" dotnet build src/apps/Elsa.Workbench/Elsa.Workbench.csproj -c Release -nologo -v q -p:RestoreLockedMode=true
+  demo_quiet "Building Elsa.Workbench" dotnet build Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj -c Release -nologo -v q -p:RestoreLockedMode=true
   # DemoVersion selects the release, as for the Notes project, and the Notes release the activity depends on with it.
   for release in 1 2; do
     echo "== Act 3: packing Elsa.Samples.Nuplane.Notes.Activities, release $release, into ${demo_staging#"$demo_root"/}/$release"

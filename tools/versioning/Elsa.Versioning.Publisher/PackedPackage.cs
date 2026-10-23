@@ -18,18 +18,30 @@ public sealed record PackedPackage(string Path, string PackageId, string Version
     public static PackedPackage Read(string path)
     {
         using var archive = ZipFile.OpenRead(path);
-        var metadata = Metadata(archive, path);
+        return Read(archive, path);
+    }
+
+    /// <summary>Reads the package identity and dependencies from bytes already captured by a bounded recovery read.</summary>
+    internal static PackedPackage Read(Stream package, string source)
+    {
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        return Read(archive, source);
+    }
+
+    private static PackedPackage Read(ZipArchive archive, string source)
+    {
+        var metadata = Metadata(archive, source);
 
         string Required(string name) =>
             metadata.Elements().SingleOrDefault(element => element.Name.LocalName == name)?.Value.Trim() is { Length: > 0 } value
                 ? value
-                : throw new InvalidOperationException($"{path}'s nuspec has no {name}.");
+                : throw new InvalidOperationException($"{source}'s nuspec has no {name}.");
 
         return new PackedPackage(
-            path,
+            source,
             Required("id"),
             Required("version"),
-            ReadFingerprint(archive, path),
+            ReadFingerprint(archive, source),
             metadata.Descendants()
                 .Where(element => element.Name.LocalName == "dependency")
                 .Select(element => (string?)element.Attribute("id"))

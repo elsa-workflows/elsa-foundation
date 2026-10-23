@@ -1,0 +1,51 @@
+{
+  "passed": true,
+  "scope": "synthetic metric collection transport and redaction only; no Elsa requests",
+  "probePid": 3861,
+  "collectorExitCode": 0,
+  "collectorReceipt": {
+    "schema": "elsa.dotnet-counters-privacy/1",
+    "realTool": "/home/elsarunner/.dotnet/tools/dotnet-counters",
+    "realChildPid": 3886,
+    "realToolExitCode": 0,
+    "wrapperExitCode": 0,
+    "completeJson": true,
+    "eventCount": 141,
+    "fifoDrainComplete": true,
+    "fifoCreateExitCode": 0,
+    "fifoRemoveExitCode": 0,
+    "redactionCounts": {
+      "npgsqlPoolLabels": 10,
+      "protectedValues": 0,
+      "stdoutProtectedValues": 0,
+      "stderrProtectedValues": 0
+    },
+    "wrapperError": null
+  },
+  "eventCount": 141,
+  "npgsqlEventCount": 10,
+  "counterSha256": "baeecac9c4f35306f0616d5df20f267467ec7a87ea92856181344b285543e3ee",
+  "sampleNpgsqlEvents": [
+    {
+      "timestamp": "2026-10-10T02:21:26.2195471+00:00",
+      "provider": "Npgsql",
+      "name": "db.client.connection.max",
+      "tags": "db.client.connection.pool.name=<npgsql-pool-95b8e9e70da6fcf1>,state=used",
+      "counterType": "Metric",
+      "meterTags": "",
+      "instrumentTags": "",
+      "value": 100
+    },
+    {
+      "timestamp": "2026-10-10T02:21:26.2197784+00:00",
+      "provider": "Npgsql",
+      "name": "db.client.connection.count",
+      "tags": "db.client.connection.pool.name=<npgsql-pool-95b8e9e70da6fcf1>,state=used",
+      "counterType": "Metric",
+      "meterTags": "",
+      "instrumentTags": "",
+      "value": 42
+    }
+  ],
+  "probeStopped": true
+}

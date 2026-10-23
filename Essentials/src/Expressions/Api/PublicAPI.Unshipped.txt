@@ -1,0 +1,7 @@
+#nullable enable
+Elsa.Expressions.Api.ExpressionsApiFeature
+Elsa.Expressions.Api.ExpressionsApiFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Expressions.Api.ExpressionsApiFeature.ExpressionsApiFeature() -> void
+Elsa.Expressions.Api.ExpressionsApiFeature.MapEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, Microsoft.Extensions.Hosting.IHostEnvironment? environment) -> void
+NativeEndpoints.Generated.ElsaExpressionsApiEndpoints
+static NativeEndpoints.Generated.ElsaExpressionsApiEndpoints.Map(this NativeEndpoints.EndpointGroup! group, string? routePrefix = null) -> NativeEndpoints.EndpointGroup!

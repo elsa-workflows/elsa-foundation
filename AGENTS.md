@@ -1,12 +1,20 @@
 # Elsa Foundation Agent Entrypoint
 
-This file is the AI-provider-neutral front door for AI agents and engineers working in `elsa-foundation`.
+This file is the AI-provider-neutral front door for AI agents and engineers working in `elsa-foundation`. It routes; the detail lives in [docs/contributing/](docs/contributing/).
+
+## Agent protocol
+
+The org-wide [AGENTS.md][org-agents] is the protocol for finding, claiming, branching, opening PRs, review and merge ([Issue Bus Lite][org-agents-ibl]). If this file or a doc it links conflicts with the org file, the org file wins, unless the repo note names an explicit owner exception. Everything below is a repo-specific note, such as structure, builds and the build-slot wrapper, generated maps, the constitution and the evidence a PR must carry here.
 
 ## Repository intent
 
 `elsa-foundation` is the transitional Elsa foundation workspace. It contains the main Elsa domain core libraries, default foundation implementations, Speckit specs, and architecture knowledge needed to guide the Elsa modular refactor.
 
 The repo still supports feature development, but the operating model is shaped so feature-workspace assets can later move to a dedicated `elsa-workspace` repository.
+
+## Current focus
+
+[ADR 0080](docs/adr/0080-elsa-4-simplification-decisions.md) sets the current direction: risk-based tests, internal-by-default types, Balanced persistence by default, pre-GA cleanup, plain-language renames and a smaller meta footprint. The owner's 11 October amendment makes Foundation/Studio consolidation the first priority and reactivates Foundation-owned GitBook documentation in parallel; see [program goals](docs/program-goals/README.md). Work that contradicts an ADR 0080 decision needs the owner's explicit go-ahead.
 
 ## Source-of-truth layers
 
@@ -17,9 +25,11 @@ Use the narrowest source that answers the task.
 | Quality gates, invariants, allowed exceptions, ratification | `.specify/memory/constitution-framework.md` and `.specify/memory/constitution.md` |
 | Domain and architecture terms | `docs/glossary/` |
 | Task workflows and skill descriptions | `docs/skills/catalog.md` |
+| Agent protocol: finding, claiming, branches, PRs, review and merge | [org AGENTS.md][org-agents] |
+| Repo contributor notes: claim detail, PR gate evidence, generated maps, task paths, review checklist | `docs/contributing/` |
 | Personal workflow/model preferences | `.agent-prefs/` for local selections; `docs/reference/` for committed catalogs/templates |
 | Shared backlog, program-goal bucket registry, stewardship, active objectives, roadmap notes | `docs/program-goals/` |
-| Repo navigation, extension points, dependency/test maps | `docs/maps/` and `EXTENSION_POINTS.md` |
+| Repo navigation, extension points, dependency/test maps | [docs/maps/README.md](docs/maps/README.md) (the generated maps are published on the [`generated-maps` branch](https://github.com/elsa-workflows/elsa-foundation/tree/generated-maps/docs/maps)) and `EXTENSION_POINTS.md` |
 | Current gaps, draft decisions, draft history, inventory findings | `docs/reports/` |
 | Feature/work-unit specifications | `specs/` ([lifecycle and numbering](docs/reference/spec-lifecycle.md)) |
 | AI-provider-specific adapters | `.claude/`, `.specify/integrations/`, and provider shim files |
@@ -28,47 +38,21 @@ Do not duplicate concept explanations in new docs. Link to the canonical glossar
 
 ## Program goals and drift guard
 
-`docs/program-goals/` is the shared backlog and planner for durable work in this workspace. Program goals are mid-term buckets of related short-term objectives, not mandatory doctrine for every session.
-
-Use a named program-goal bucket when work forms part of a mid-term coordination surface. Use `none/free-flow` when the user is exploring, developing, researching, or planning without a named bucket. Free-flow work can still produce reports, specs, docs, maps, or code; it just should not pretend to belong to a bucket.
-
-Reports such as `docs/reports/unfinished-work.md` are inventories of findings and concerns, not the active queue. When a report finding becomes planned durable work, add or move it to the relevant program-goal bucket before implementation, or explicitly mark the state as `none/free-flow` for work that should remain outside a bucket.
-
-Use a lightweight drift guard instead of a mandatory zoom-out at every session start. Trigger a program-goal check when one of these is true:
-
-- The user asks "what next", asks whether the work is drifting, or asks to revisit priorities.
-- The same session or handoff chain is moving into a third consecutive plan/work unit under the same topic.
-- Recent work is repeatedly deepening one local area while other tracked work is waiting.
-- A proposed task would create a new durable tracking item, move work between buckets, split a bucket, or retire a bucket.
-- A fresh session resumes from context that already says drift, priority, or roadmap alignment is in question.
-
-When triggered, keep the check concise:
-
-- Which program-goal state applies: a named bucket, `none/free-flow`, or temporarily `unknown/not-assessed`?
-- If it is planned durable work, which bucket owns it, or why should it remain `none/free-flow`?
-- Is this still the highest-value next step, or are we staying in a local area because it is nearby?
-- Does the work preserve the source-of-truth layers above?
-- Should the result be a gate, glossary term, reference explanation, report finding, generated map, skill workflow, spec, or code change?
-
-For ordinary fresh sessions with a clear task, do not announce a zoom-out check. Apply the guard quietly unless a trigger is present. If the check suggests drift, surface it briefly so the user can continue knowingly, redirect, or update the relevant program-goal bucket.
+`docs/program-goals/` is the shared backlog and planner for durable work. Use a named program-goal bucket when work belongs to one, and `none/free-flow` when the user is exploring, developing, researching or planning without one. Reports such as `docs/reports/unfinished-work.md` are inventories of findings, not the active queue. Apply the drift guard quietly unless one of its triggers is present; the triggers and questions are in [Program goals and drift guard](docs/contributing/program-goals-and-drift-guard.md).
 
 ## Concurrent work claims
 
-Several agent sessions run against this repository at once, in separate worktrees. Two sessions that pick the same unit will not see each other in git: a branch does not exist anywhere shared until it is pushed, so a clean check at session start proves nothing about what another session began a minute later.
+Claim, branch and hand off as [Issue Bus Lite][org-agents-ibl] says: comment `claim: <worker> starting`, re-read, and if the earliest unabandoned claim is yours, assign yourself and remove `ready-for-agent`. Claude sessions post as `elsa-workflows-claude[bot]` and Codex sessions as `elsa-workflows-codex[bot]`, with no role prefix, so a Claude claim is `claim: claude starting`. Only when you post through the owner's account does your role tag come first, for example `[Claude] claim: claude starting`. Branch `agent/<worker>/<issue>-<slug>`. Several sessions run here at once in separate worktrees, so re-check the issue and its open PRs before committing. Repo detail: [Claims](docs/contributing/repository-hygiene.md#claims); commands: [Issue tracker](docs/agents/issue-tracker.md).
 
-Claim the unit on its issue before writing code when one of these is true:
+## Branch and issue hygiene
 
-- The task names an issue or PR number.
-- The task is one slice of a unit that was split into slices, whether or not the other slices are assigned.
-- The user says another session is working on a related slice. Ask what else that session owns before starting.
+Follow [Repository hygiene](docs/contributing/repository-hygiene.md). In short:
 
-The claim is one comment naming the worktree and the exact scope being taken. Before posting it, read the issue's comments and the open PRs that reference it. If another session already claimed that scope, stop and tell the user rather than building a second copy. See [Issue tracker](docs/agents/issue-tracker.md) for the commands.
-
-Release the claim when the session ends: comment when the work ships, and comment when it is abandoned, so the next session does not read a stale claim as live work.
-
-Re-check for competing work before committing, not only at session start. That check is the backstop that catches a session which started after you did.
-
-A claim is advisory. It narrows the window rather than closing it, and two sessions starting within the same minute still race. When a unit is split into slices, prefer giving one session the whole stack, or naming an owner per slice in the issue, over relying on claims alone.
+- Push a branch only when opening its PR (draft is fine) in the same session; otherwise keep the work local.
+- Never restore a branch deleted on merge; its work is in `main`. Restore a swept branch from its `archive/` tag only when a maintainer asks to resume that work, and open its PR in the same session.
+- File new issues as `needs-triage` only. The one exception is the [UX QA routine](docs/skills/catalog.md#ux-qa-routine), which files reproduced defects as `ready-for-agent`. Put checkpoints, receipts and evidence on the PR or the issue being worked, never in a new issue.
+- Respect the program and issue limits in [Repository hygiene](docs/contributing/repository-hygiene.md#issues): active programs are exactly the Active rows of the [program-goal registry](docs/program-goals/README.md#registry), each authorized by an owner amendment in [ADR 0080 D0](docs/adr/0080-elsa-4-simplification-decisions.md#d0--focus), and there are at most 20 `ready-for-agent` issues. Each authorization applies only to its named scope. At the cap, extend the existing parent instead of filing more.
+- Before closing an issue as not planned, run `git log origin/main -E --grep '(^|[^[:alnum:]_./-])#<number>([^0-9]|$)'`. If its work landed, close it as completed and name the commit or PR.
 
 ## Builds on a shared machine
 
@@ -81,186 +65,44 @@ Parallel sessions on one machine compete for the same CPU. Four concurrent solut
 
 ## Program bookkeeping
 
-When work belongs to a program, the GitHub issue is the public, legible record of progress. The program's project board Status alone is not enough.
-
-- Comment on the issue at every state transition: implementation started (with branch name and scope), PR opened (with link), each review round and its outcome, and merged or closed.
-- Keep the program's project board Status and any labels in sync at the same time.
-- Throttle concurrent agent sessions on one program to two or three.
-- Merge only on a green gate. Run the build, the affected suites, the architecture guard, the generated-maps check, and a diff review; add a revert or mutation bite-proof where a behavioral change is claimed. Post that evidence as a PR comment, because that comment is the notification of record. Do not self-merge a peer session's PR without it.
+Comment on the program issue at every state transition. Every PR carries this repo's gate evidence as a PR comment; that evidence is required for review, not permission to merge. Merging follows [Issue Bus Lite][org-agents-review]: request review with `@elsa-workflows-bot review`, Code Review (`elsa-workflows-review-bot[bot]`) approves and merges, and an author never merges its own PR. See [Program bookkeeping](docs/contributing/merging.md#program-bookkeeping) and [PR evidence](docs/contributing/merging.md#pr-evidence).
 
 ## Post-merge gates
 
-A green PR is not the end of the gate. `CI` runs on every push to `main` as well as on pull requests, because a required check can be bypassed and because a change that passes on a branch can still break main in combination with what landed beside it. `Maps` also runs on both. The former `HTTP workflow performance` gate was retired with all performance measurement by owner decision (#1668, ADR 0073); no performance workflow remains to run or to report as passed.
-
-When `CI` fails against `main`, and when `Integration (nightly)` fails on its schedule, it files or updates a GitHub issue titled `main is red: <gate>`. Those issues are machine-filed, deduplicated by title, and never auto-closed:
-
-- Treat one as a live report that main is failing that gate right now, not as stale noise.
-- Fix forward or revert; nothing can be blocked after the fact, since the commit has landed.
-- Close it by hand once the gate is green and the cause is understood. A later green run leaves it open on purpose.
-
-Check for one before starting work that assumes a healthy main; it explains a local failure you would otherwise spend the session chasing.
+`CI` also runs on every push to `main` and nightly. Before starting work that assumes a healthy main, check for an open `main is red: CI` issue first; see [Post-merge gates](docs/contributing/merging.md#post-merge-gates).
 
 ## Refresh generated maps
 
-Windows / PowerShell:
-
-```powershell
-tools/maps/generate-maps.ps1
-tools/maps/generate-domain-map.ps1
-tools/maps/generate-extension-point-map.ps1
-tools/maps/generate-architecture-reference-map.ps1
-tools/maps/generate-feature-dependency-map.ps1
-```
-
-macOS / Linux / Bash:
-
-```bash
-bash tools/maps/generate-maps.sh
-bash tools/maps/generate-domain-map.sh
-bash tools/maps/generate-extension-point-map.sh
-bash tools/maps/generate-architecture-reference-map.sh
-bash tools/maps/generate-feature-dependency-map.sh
-```
-
-All ten paths above are thin shims over one .NET tool, `tools/maps/Elsa.Maps.Generator`. Either shell
-works and both produce identical output, because there is now a single implementation. To refresh
-everything in one go:
-
-```bash
-dotnet run --project tools/maps/Elsa.Maps.Generator -- all
-```
-
-The tool needs the .NET SDK. If it is unavailable, ask the user to install it before refreshing maps.
-It needs no restore of the tree: the dependency map reads the packages NuGet pins for each packable project
-transitively from the `packages.lock.json` committed beside it, and refuses a lock file older than the project's pins
-or references. After a dependency change, update the lock files first; see
-[NuGet lock files](docs/reference/nuget-lock-files.md).
-
-**After regenerating, stage every changed map file by explicit path, `docs/maps/manifest.json`
-included.** The manifest holds no per-commit provenance, so a run that changed no map leaves it
-byte-identical and there is nothing to stage. When it does change, the change is real and the
-freshness check compares it like any other generated file, so leaving it out makes the gate go red.
-This reverses the earlier "never stage the manifest" rule, which existed because the manifest used
-to carry `git_head` and an input fingerprint that differed per commit: that is what made PR #1247 go
-`CONFLICTING` the moment #1248 squash-merged, while #1243, which left the manifest untouched, stayed
-mergeable through both merges. Those fields are gone (#1278), so the conflict surface is gone with
-them.
-
-Generated maps are committed snapshots and are never refreshed automatically. CI does not
-regenerate them; it only runs `dotnet run --project tools/maps/Elsa.Maps.Generator -- check`.
-That check regenerates every map into a scratch directory and compares the bytes with what is
-committed, `manifest.json` included. It deliberately does **not** gate on any fingerprint over the
-inputs: that would move on every source edit and would oblige every code PR to regenerate and commit
-thirteen map files even though most source edits change no map at all. So a red check means a
-committed map genuinely stopped describing the tree, and is worth acting on rather than restamping
-past. Refreshing stays a deliberate, human-initiated act. The check runs on every pull request and
-on every push to `main` (`.github/workflows/maps.yml`), so main going stale is reported against main
-instead of against whoever opens the next PR. A red run on `main` cannot block anything after the
-fact; treat it as a request to open a refresh PR. Before relying on any map for navigation or
-verification, run `-- check`: green means every committed map still describes the tree, and it is
-the only authoritative freshness answer. `docs/maps/manifest.json` summarizes what the maps cover
-but does not report staleness. If the check is red, or you cannot run it, report that the snapshot
-may be stale and ask the user to invoke or authorize the narrowest relevant map refresh. After an
-explicitly authorized refresh, review any generated findings report before continuing. Maps v2
-scripts are split so the user can refresh only the layer they need.
+The documentation maps are not committed to `main`. Generate them locally with `dotnet run --project tools/maps/Elsa.Maps.Generator -- all` (same paths, git-ignored), or read the set CI publishes after each merge: browse <https://github.com/elsa-workflows/elsa-foundation/tree/generated-maps/docs/maps>, fetch raw files from `https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/generated-maps/docs/maps/<file>`, or run `git fetch origin generated-maps` and `git show origin/generated-maps:docs/maps/<file>`. The dependency-map dataset, `docs/maps/dependency-map.json`, is not committed either: the versioning calculator derives it from each commit's own tree (spec 259), and it is published with the maps. `-- check` guards the committed solution filters; commit them only when they change. See [Generated maps](docs/contributing/generated-maps.md).
 
 ## Personal operating preferences
 
-Personal workflow choices are local implementation details, not shared repo facts.
-
-- Keep committed preference catalogs/templates in `docs/reference/`.
-- Keep committed operating-model options in [docs/reference/git-operating-models.md](docs/reference/git-operating-models.md).
-- Keep per-user selections in `.agent-prefs/`; only `.agent-prefs/.gitkeep` is committed.
-- If `.agent-prefs/` has no preference files other than `.gitkeep`, use [Initialize Agent Preferences](docs/skills/catalog.md#initialize-agent-preferences) to run a quick setup before substantial planning, pushing, opening PRs, changing remotes, or starting a multi-session workflow.
-- If `.agent-prefs/git-operating-model.md` exists, follow it for Git workflow.
-- If `.agent-prefs/session-execution-model.md` exists, follow it for control-room vs fresh-agent/thread workflow.
-- If a user states a stable personal workflow preference, use [Create Agent Preference](docs/skills/catalog.md#create-agent-preference) to decide whether to record it locally under `.agent-prefs/` or propose a committed preference catalog/template.
-- If no personal Git preference exists, read the committed Git operating-model catalog and ask the user which model they prefer before pushing, opening PRs, or changing remotes.
-- After completing an approved work unit that changes files, make a local commit with a useful message describing the work unless the user explicitly asks to leave the changes uncommitted or the work is intentionally paused for review.
-- Treat the current session as a lightweight control room when the user prefers fresh-agent execution: before substantial planning, ask whether to plan/execute here or prepare a reviewed handoff prompt and start a fresh agent/thread; after worker execution, summarize the result, ensure completed file-changing work is committed locally, and ask whether to continue here or prepare the next handoff.
-- Do not commit personal preference files from `.agent-prefs/`.
+Maintainers publish organization-repository branches and contributors use fork PRs; per-user selections live in ignored `.agent-prefs/`. See [Agent preferences](docs/contributing/agent-preferences.md).
 
 ## Task paths
 
-### Feature development
-
-1. Read the relevant spec under `specs/`, if one exists.
-2. Read [docs/skills/catalog.md](docs/skills/catalog.md#speckit-flow-guide) for the Speckit flow.
-3. Follow specification -> plan -> tasks -> implementation, reviewing each artifact before the next step. When using an AI integration, use `speckit-specify` -> `speckit-plan` -> `speckit-tasks` -> `speckit-implement`. Otherwise, create and review the same artifacts manually using [the contributor guide](CONTRIBUTING.md#plan-feature-work). The specification, constitution, testing, and review gates apply to both paths.
-4. Keep work on a feature/work-unit branch unless the user explicitly asks otherwise.
-5. Use the constitution as a gate during planning; use glossary/docs for learning context.
-
-### Architecture development
-
-1. Start from the user intent and the relevant constitution section.
-2. Use [Critical Constitution Review](docs/skills/catalog.md#critical-constitution-review) or [Work Unit Planner](docs/skills/catalog.md#work-unit-planner).
-3. Record uncertain or unratified decisions in [docs/reports/unfinished-work.md](docs/reports/unfinished-work.md) or a linked work unit.
-4. Keep development flows amendable; do not freeze a process before the architecture work proves it.
-
-### Codebase verification
-
-1. Use [Verify Codebase Against Constitution](docs/skills/catalog.md#verify-codebase-against-constitution).
-2. Check project references, extension-point catalogs, tests, stubs, and external packages.
-3. Produce a report before proposing code changes.
-
-### Backend e2e tests
-
-`e2e-tests/` holds backend, REST-driven end-to-end tests (PowerShell) that exercise a from-source
-`Elsa.Workbench` through the real HTTP + persistence + runtime path — the black-box complement to the in-process
-C# tests under `tests/`. See [e2e-tests/README.md](e2e-tests/README.md) for the runner, per-suite categorization,
-and setup gotchas (fresh-DB-on-rebuild; opt-in `scheduling`/`DispatchWorkflow` features).
-
-1. When you change design, publishing, runtime, activity, or stimulus/scheduling behavior, run the relevant
-   `e2e-tests/` suite against a rebuilt server before considering the change done — it catches integration
-   regressions unit tests miss.
-2. Treat a failing e2e test as a **signal, not a verdict**: it is either a real regression or a **stale test**
-   (the codebase moved — a contract/shape changed, a tracked bug was fixed, or a feature was renamed). Rebuild on
-   current `main` with a fresh DB, re-run, and reconcile before "fixing" either side. `KNOWN ISSUE #NNNN` trackers
-   pass green by design and auto-flip to strict once the bug is fixed.
-3. On Windows use `powershell -NoProfile -ExecutionPolicy Bypass -File <script>` (no `pwsh`).
-4. An e2e script must never stop a process it did not start. Give the server location once, as `-BaseUrl`; a
-   script that restarts a server owns it through `e2e-tests/_ServerLifecycle.ps1` and fails, naming the port and
-   pid, when the port is held by anything else. See "Running these tests" in the README.
-
-### Glossary lookup
-
-1. Read [docs/glossary/root.md](docs/glossary/root.md) for framework terms.
-2. Read [docs/glossary/elsa.md](docs/glossary/elsa.md) for Elsa-specific terms.
-3. Read worked references such as [docs/seams.md](docs/seams.md) or [docs/serialization.md](docs/serialization.md) only when the term needs deeper context.
-
-### Feature composition
-
-1. Use [Feature Composition Explorer](docs/skills/catalog.md#feature-composition-explorer) to decide which features belong in a shell.
-2. Use [CShells Appsettings Generator](docs/skills/catalog.md#cshells-appsettings-generator) to generate a runnable composition file.
-3. Use dependency maps to include required dependencies and external package compatibility signals.
-
-### Architecture tour
-
-Read [docs/architecture-tour.md](docs/architecture-tour.md) for a concise orientation before diving into constitutions or specs.
+| Task | Entry point |
+|---|---|
+| Feature development | [Speckit flow](docs/skills/catalog.md#speckit-flow-guide) and [task path](docs/contributing/task-paths.md#feature-development) |
+| Architecture development | [Critical Constitution Review](docs/skills/catalog.md#critical-constitution-review) or [Work Unit Planner](docs/skills/catalog.md#work-unit-planner) |
+| Codebase verification | [Verify Codebase Against Constitution](docs/skills/catalog.md#verify-codebase-against-constitution) |
+| Backend e2e tests | [Backend e2e tests](docs/contributing/task-paths.md#backend-e2e-tests) and [e2e-tests/README.md](e2e-tests/README.md) |
+| Constitution review of a change | [Review checklist](docs/contributing/review-checklist.md) |
+| Glossary lookup | [docs/glossary/root.md](docs/glossary/root.md) and [docs/glossary/elsa.md](docs/glossary/elsa.md) |
+| Feature composition | [Feature Composition Explorer](docs/skills/catalog.md#feature-composition-explorer) |
+| Architecture tour | [docs/architecture-tour.md](docs/architecture-tour.md) |
 
 ## Constitution boundary
 
-Both constitutions are ratified at the document level (v4.0.0, 2026-08-08), but individual sections
-that carry their own `Status:` line — framework §2.24, Elsa §E2.9 — remain draft/provisional and are
-explicitly excluded from that ratification. Warn users when a section's draft/provisional status
-matters to their task. If they want to focus on unratified material, route that through
-[Constitution Readiness](docs/program-goals/constitution-readiness.md) and use
-[Critical Constitution Review](docs/skills/catalog.md#critical-constitution-review) or
-[Work Unit Planner](docs/skills/catalog.md#work-unit-planner). Draft history belongs in
-[docs/reports/archive/constitution-draft-history.md](docs/reports/archive/constitution-draft-history.md); current
-gaps belong in [docs/reports/knowledge-inventory.md](docs/reports/knowledge-inventory.md) and
-[docs/reports/unfinished-work.md](docs/reports/unfinished-work.md).
+Both constitutions are ratified at the document level (2026-08-08; now framework v6.1.0 and Elsa v6.0.3, after #2578, #2591 and spec 257); sections marked draft or provisional, framework §2.24 and Elsa §E2.8 activity versioning, Model X and §E2.9, are excluded from that ratification. Warn users when a section's draft or provisional status matters to their task, and route unratified material through [Constitution Readiness](docs/program-goals/constitution-readiness.md). Draft history: [docs/reports/archive/constitution-draft-history.md](docs/reports/archive/constitution-draft-history.md); current gaps: [docs/reports/knowledge-inventory.md](docs/reports/knowledge-inventory.md) and [docs/reports/unfinished-work.md](docs/reports/unfinished-work.md).
 
-New work should move toward this rule:
+New work moves toward this rule: constitution for gates and governance, glossary for meanings, skills for executable workflows, maps and catalogs for navigation and generated facts, reports for current findings and unfinished work.
 
-- Constitution: gates and governance.
-- Glossary: meanings.
-- Skills: executable workflows.
-- Maps/catalogs: navigation and generated facts.
-- Reports: current findings and unfinished work.
+[org-agents]: https://github.com/elsa-workflows/.github/blob/main/AGENTS.md
+[org-agents-ibl]: https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#issue-bus-lite
+[org-agents-review]: https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#review-and-merge-rules
 
 <!-- SPECKIT START -->
-For additional context about technologies, project structure, shell commands, contracts, and
-validation scenarios for the active work unit, read
-`specs/195-authoring-api-boundary/plan.md`.
+For the active work unit's design and validation, read
+`specs/993-studio-diagnostics-index/plan.md`.
 <!-- SPECKIT END -->

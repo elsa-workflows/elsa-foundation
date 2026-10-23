@@ -1,0 +1,79 @@
+name: Exact20 recovery
+
+# Incident-specific recovery for #2653 / #2505. A reviewed source merge only installs
+# this manual path. Publication and state writeback require separate owner approval.
+# Never enable Packages/Docker or replay the original 138-package run to recover20.
+on:
+  workflow_dispatch:
+    inputs:
+      execute:
+        description: 'Publish the pinned 20 packages and record confirmed successes. Requires separate owner approval. Default is GET-only preflight.'
+        type: boolean
+        default: false
+      approval_comment_id:
+        description: 'Public owner-approval receipt comment on issue #2505, bound to this workflow commit and manifest. Required for execution.'
+        type: string
+        default: ''
+      confirmation:
+        description: 'For approved execution: RECOVER-EXACT20-24533cfe6fcdd000f518d1855a525cfe6b37d6f9'
+        type: string
+        default: ''
+
+# Held for the whole run, including fresh preflight and final state readback. This is
+# the SAME group as Packages and Publish repair; a local CLI is not a substitute.
+concurrency:
+  group: publish-state
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  preflight:
+    name: Read-only exact20 preflight
+    if: ${{ github.ref == 'refs/heads/main' && !inputs.execute }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+      - name: Build the publisher
+        run: dotnet build tools/versioning/Elsa.Versioning.Publisher -c Release -p:RestoreLockedMode=true
+      - name: Verify original artifact, feed, state and holds without writing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: dotnet run --project tools/versioning/Elsa.Versioning.Publisher -c Release --no-build -- recover-exact20
+
+  recover:
+    name: Approved exact20 recovery
+    if: ${{ github.ref == 'refs/heads/main' && inputs.execute }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      actions: read
+      issues: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+      - name: Build the publisher
+        run: dotnet build tools/versioning/Elsa.Versioning.Publisher -c Release -p:RestoreLockedMode=true
+      - name: Fresh preflight, exact20 recovery and confirmed-row writeback
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FEEDZ_API_KEY: ${{ secrets.FEEDZ_API_KEY }}
+          RECOVERY_CONFIRMATION: ${{ inputs.confirmation }}
+          APPROVAL_COMMENT_ID: ${{ inputs.approval_comment_id }}
+        run: >-
+          dotnet run --project tools/versioning/Elsa.Versioning.Publisher -c Release --no-build --
+          recover-exact20 --execute true --confirm "$RECOVERY_CONFIRMATION" --approval-comment-id "$APPROVAL_COMMENT_ID"

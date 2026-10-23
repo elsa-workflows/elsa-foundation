@@ -1,0 +1,313 @@
+using System.Net;
+using System.Text;
+using System.Text.Json;
+using Elsa.Mediator.Core.Contracts;
+using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Publishing.Api.Tests.Support;
+using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Core.Requests;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Options;
+using Elsa.Workflows.Runtime.Services.Triggers;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
+using Xunit;
+using static Elsa.Workflows.Publishing.Api.Tests.Support.CodedProblemAssertions;
+
+namespace Elsa.Workflows.Publishing.Api.Tests;
+
+/// <summary>
+/// #1659 over HTTP: both workflow preflight routes report the owner of the target activation slot when it is not
+/// publishing, folding it into <c>canActivate</c> while <c>conflicts</c> stays trigger-only, and publish refuses such a
+/// slot before it writes anything.
+/// </summary>
+/// <remarks>
+/// The failure that looks like success is a green preflight for a slot publish can never take: a slot live under an
+/// imported artifact answered <c>canActivate: true</c>, and the publish that followed wrote an executable, a source
+/// reference and a failed publication record before activation refused it. The publishable-slot theory pins the other
+/// direction, so an owner check that over-reports cannot pass either.
+/// </remarks>
+public sealed class PublicationSlotOwnerEndpointTests : IAsyncLifetime
+{
+    private const string VersionId = "version-route";
+    private const string VersionPreflightRoute = $"/publishing/workflows/{VersionId}/preflight";
+    private const string SnapshotPreflightRoute = "/publishing/workflows/preflight";
+    private const string PublishRoute = $"/publishing/workflows/{VersionId}/publish";
+
+    // The scenario host's capture compiler answers every compile with this definition, so every route resolves its slot.
+    private const string DefinitionId = "capture-definition";
+    private static readonly DateTimeOffset Now = new(2026, 8, 17, 12, 0, 0, TimeSpan.Zero);
+    private static readonly WorkflowActivationSource ImportOwner = WorkflowActivationSource.ArtifactReconciliation("mounted-artifacts");
+
+    private readonly TriggerConflictSupport.StubTriggerExtractor _triggers = new();
+    private readonly ActivationChannelOptions _channels = new();
+    private RecordingCompiler _compiler = null!;
+    private PublishingMinimalApiScenarioHost _host = null!;
+    private IWorkflowActivationAuthority _authority = null!;
+
+    public enum SlotState
+    {
+        Empty,
+        Publishing,
+        Vacated
+    }
+
+    public async Task InitializeAsync()
+    {
+        _compiler = new RecordingCompiler();
+        _host = await PublishingMinimalApiScenarioHost.StartAsync(
+            requestSenderFactory: services => new PublishHandlerSender(services.GetRequiredService<IHttpContextAccessor>()),
+            compiler: _compiler,
+            configureServices: services =>
+            {
+                services.AddSingleton<IOptions<ActivationChannelOptions>>(Options.Create(_channels));
+                services.RemoveAll<IWorkflowTriggerBindingExtractor>();
+                services.AddSingleton<IWorkflowTriggerBindingExtractor>(_triggers);
+                // Normally contributed by the runtime triggers feature, which this host does not mount. Without it the
+                // coordinator refuses to run at all, so a publish that got past the gate could never reach the authority.
+                services.TryAddScoped<IWorkflowTriggerIndexer, WorkflowTriggerIndexer>();
+                services.AddSingleton<IWorkflowDefinitionVersionStore>(new FakeVersionStore(
+                    new WorkflowDefinitionVersion(DefinitionId, "1.0.0")
+                    {
+                        Id = VersionId,
+                        Definition = new WorkflowDefinition { Id = DefinitionId, Name = "Capture" },
+                        State = WorkflowDefinitionState.Empty
+                    }));
+                services.AddSingleton<IExpressionDraftSemanticValidator, ValidExpressions>();
+            });
+        _authority = _host.Services.GetRequiredService<IWorkflowActivationAuthority>();
+    }
+
+    public async Task DisposeAsync() => await _host.DisposeAsync();
+
+    [Theory]
+    [InlineData(VersionPreflightRoute)]
+    [InlineData(SnapshotPreflightRoute)]
+    [InlineData(PublishRoute)]
+    public async Task An_undeclared_channel_is_rejected_before_publication_writes(string route)
+    {
+        _channels.AllowAdHocChannels = false;
+        _channels.Channels = [new() { Name = "canary" }];
+
+        using var response = await PostAsync(route, PreflightBody(route));
+        var raw = await response.Content.ReadAsStringAsync();
+
+        AssertCodedProblem(response, raw, HttpStatusCode.BadRequest, "channel_not_declared");
+        Assert.Contains("default", raw, StringComparison.Ordinal);
+        await AssertNoPublicationWritesAsync();
+        Assert.Empty(await _authority.ListByDefinitionAsync(DefinitionId));
+    }
+
+    [Theory]
+    [InlineData(VersionPreflightRoute)]
+    [InlineData(SnapshotPreflightRoute)]
+    public async Task A_declared_channel_can_be_previewed_when_ad_hoc_channels_are_disabled(string route)
+    {
+        _channels.AllowAdHocChannels = false;
+        _channels.Channels = [new() { Name = "default", DisplayName = "Production" }];
+
+        var preflight = await PreflightAsync(route);
+
+        Assert.True(preflight.GetProperty("canActivate").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData(VersionPreflightRoute, "tenant-a")]
+    [InlineData(VersionPreflightRoute, "tenant-b")]
+    [InlineData(SnapshotPreflightRoute, "tenant-a")]
+    [InlineData(SnapshotPreflightRoute, "tenant-b")]
+    public async Task Preflight_compiles_in_the_authenticated_tenant_scope_without_publication_writes(
+        string route,
+        string tenantId)
+    {
+        using var response = await PostAsync(route, PreflightBody(route), tenantId);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(tenantId, Assert.Single(_compiler.Requests).TenantId);
+        await AssertNoPublicationWritesAsync();
+    }
+
+    [Theory]
+    [InlineData(VersionPreflightRoute)]
+    [InlineData(SnapshotPreflightRoute)]
+    public async Task A_slot_owned_by_an_imported_artifact_is_reported_and_blocks_activation(string route)
+    {
+        await ActivateAsync("default", "import:artifact-1", ImportOwner);
+
+        var preflight = await PreflightAsync(route);
+
+        Assert.False(preflight.GetProperty("canActivate").GetBoolean());
+        Assert.Equal(0, preflight.GetProperty("conflicts").GetArrayLength());
+        AssertImportOwner(preflight);
+    }
+
+    [Theory]
+    [InlineData(VersionPreflightRoute, SlotState.Empty)]
+    [InlineData(VersionPreflightRoute, SlotState.Publishing)]
+    [InlineData(VersionPreflightRoute, SlotState.Vacated)]
+    [InlineData(SnapshotPreflightRoute, SlotState.Empty)]
+    [InlineData(SnapshotPreflightRoute, SlotState.Publishing)]
+    [InlineData(SnapshotPreflightRoute, SlotState.Vacated)]
+    public async Task A_slot_publishing_may_take_reports_no_owner_and_keeps_its_verdict(string route, SlotState state)
+    {
+        await ArrangeDefaultSlotAsync(state);
+
+        var preflight = await PreflightAsync(route);
+
+        Assert.True(preflight.GetProperty("canActivate").GetBoolean());
+        // Present and explicitly null, so a client can tell "no owner" apart from a server that predates the field.
+        Assert.Equal(JsonValueKind.Null, preflight.GetProperty("targetSlotOwner").ValueKind);
+    }
+
+    [Theory]
+    [InlineData(VersionPreflightRoute, true)]
+    [InlineData(VersionPreflightRoute, false)]
+    [InlineData(SnapshotPreflightRoute, true)]
+    [InlineData(SnapshotPreflightRoute, false)]
+    public async Task A_trigger_conflict_is_reported_beside_the_owner_without_being_mistaken_for_one(string route, bool foreignOwned)
+    {
+        if (foreignOwned)
+            await ActivateAsync("default", "import:artifact-1", ImportOwner);
+        await ClaimExclusiveTriggerInAnotherSlotAsync("blue", "publication-blue");
+        _triggers.DisplayDescriptor = "GET /orders";
+
+        var preflight = await PreflightAsync(route);
+
+        Assert.False(preflight.GetProperty("canActivate").GetBoolean());
+        var conflict = Assert.Single(preflight.GetProperty("conflicts").EnumerateArray().ToArray());
+        Assert.Equal("publication-blue", conflict.GetProperty("publicationId").GetString());
+        Assert.Equal("blue", conflict.GetProperty("slotName").GetString());
+        Assert.Equal("http:get:/orders", conflict.GetProperty("key").GetString());
+        Assert.Equal("GET /orders", conflict.GetProperty("descriptor").GetString());
+        if (foreignOwned)
+            AssertImportOwner(preflight);
+        else
+            Assert.Equal(JsonValueKind.Null, preflight.GetProperty("targetSlotOwner").ValueKind);
+    }
+
+    [Fact]
+    public async Task Publish_to_a_slot_owned_by_an_imported_artifact_keeps_its_409_but_writes_nothing()
+    {
+        await ActivateAsync("default", "import:artifact-1", ImportOwner);
+
+        using var response = await PostAsync(PublishRoute, "{}");
+        var raw = await response.Content.ReadAsStringAsync();
+
+        // The conflict problem a refused activation already produced, now reached before the first write.
+        AssertCodedProblem(response, raw, HttpStatusCode.Conflict, "slot_owner_conflict");
+        using var problem = JsonDocument.Parse(raw);
+        Assert.Contains(ImportOwner.Describe(), problem.RootElement.GetProperty("detail").GetString(), StringComparison.Ordinal);
+        await AssertNoPublicationWritesAsync();
+    }
+
+    private async Task AssertNoPublicationWritesAsync()
+    {
+        Assert.Empty(await _host.Services.GetRequiredService<IWorkflowExecutableStore>().ListAllAsync());
+        Assert.Empty(await _host.Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().ListAllAsync());
+        Assert.Empty(await _host.Services.GetRequiredService<IPublicationRecordStore>()
+            .ListBySlotAsync(WorkflowActivationSlotIdentity.Create(DefinitionId, "default")));
+    }
+
+    private static void AssertImportOwner(JsonElement preflight)
+    {
+        var owner = preflight.GetProperty("targetSlotOwner");
+        Assert.Equal(WorkflowActivationSource.ArtifactReconciliationKind, owner.GetProperty("sourceKind").GetString());
+        Assert.Equal(ImportOwner.SourceId, owner.GetProperty("sourceId").GetString());
+    }
+
+    private async Task ArrangeDefaultSlotAsync(SlotState state)
+    {
+        switch (state)
+        {
+            case SlotState.Publishing:
+                await ActivateAsync("default", "publication-current", WorkflowActivationSource.Publishing);
+                break;
+            case SlotState.Vacated:
+                // Withdrawn by its own foreign owner: deactivation clears the source along with the activation.
+                var imported = await ActivateAsync("default", "import:artifact-1", ImportOwner);
+                var vacated = await _authority.TryDeactivateAsync(DefinitionId, "default", ImportOwner, imported.Revision, Now);
+                Assert.True(vacated.Succeeded, vacated.Diagnostic);
+                Assert.Null(vacated.Slot.Source);
+                break;
+        }
+    }
+
+    private async Task<WorkflowActivationSlot> ActivateAsync(string slotName, string activationId, WorkflowActivationSource source)
+    {
+        var current = await _authority.FindAsync(DefinitionId, slotName);
+        var transition = await _authority.TryActivateAsync(new WorkflowActivationSlotRequest(
+            DefinitionId, slotName, activationId, source, current?.Revision ?? 0, Now));
+        Assert.True(transition.Succeeded, transition.Diagnostic);
+        return transition.Slot;
+    }
+
+    /// <summary>Makes another live slot hold an Exclusive claim that the candidate then claims too.</summary>
+    private Task ClaimExclusiveTriggerInAnotherSlotAsync(string slotName, string activationId) =>
+        TriggerConflictSupport.ClaimExclusiveTriggerInAnotherSlotAsync(
+            _authority, _host.Services.GetRequiredService<IWorkflowTriggerBindingStore>(), _triggers,
+            DefinitionId, slotName, activationId, Now);
+
+    private async Task<JsonElement> PreflightAsync(string route)
+    {
+        using var response = await PostAsync(route, PreflightBody(route));
+        var raw = await response.Content.ReadAsStringAsync();
+        Assert.True(response.StatusCode == HttpStatusCode.OK, $"{(int)response.StatusCode}: {raw}");
+        using var document = JsonDocument.Parse(raw);
+        return document.RootElement.Clone();
+    }
+
+    private static string PreflightBody(string route) => route == SnapshotPreflightRoute
+        ? $$"""{"definitionId":"{{DefinitionId}}","state":{},"layout":[]}"""
+        : "{}";
+
+    private async Task<HttpResponseMessage> PostAsync(string route, string body, string tenantId = "capture-tenant")
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, route)
+        {
+            Content = new StringContent(body, Encoding.UTF8, "application/json")
+        };
+        request.Headers.TryAddWithoutValidation(PublishingCompatibilityCases.IdentityHeader, "trusted-success");
+        request.Headers.TryAddWithoutValidation(PublishingCompatibilityCases.TenantHeader, tenantId);
+        return await _host.Client.SendAsync(request);
+    }
+
+    private sealed class RecordingCompiler : IWorkflowExecutableCompiler
+    {
+        private readonly CaptureWorkflowExecutableCompiler _inner = new();
+
+        public List<WorkflowExecutableCompileRequest> Requests { get; } = [];
+
+        public ValueTask<WorkflowExecutable> CompileAsync(
+            WorkflowExecutableCompileRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            Requests.Add(request);
+            return _inner.CompileAsync(request, cancellationToken);
+        }
+    }
+
+    /// <summary>Hands the publish request to the real handler, as the mediator would; the capture sender would answer it.</summary>
+    private sealed class PublishHandlerSender(IHttpContextAccessor accessor) : IRequestSender
+    {
+        public async Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull =>
+            (T)(object)await accessor.HttpContext!.RequestServices
+                .GetRequiredService<IRequestHandler<PublishWorkflow, PublishedWorkflowView>>()
+                .Handle((PublishWorkflow)(object)request, cancellationToken);
+    }
+
+    private sealed class ValidExpressions : IExpressionDraftSemanticValidator
+    {
+        public ValueTask<ExpressionDraftValidationResult> ValidateAsync(
+            WorkflowDefinitionState state,
+            string documentScope,
+            CancellationToken cancellationToken) =>
+            ValueTask.FromResult(new ExpressionDraftValidationResult(ExpressionDraftValidationState.Valid, []));
+    }
+}

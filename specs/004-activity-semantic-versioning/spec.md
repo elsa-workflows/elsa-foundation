@@ -2,7 +2,7 @@
 
 **Feature Branch**: `004-activity-semantic-versioning` *(spec authored on `main`; no feature branch cut — consistent with units 001–003)*
 **Created**: 2026-06-03
-**Status**: Draft
+**Status**: Implemented — all tasks checked in b5adc5c30
 **Input**: Unit 3 of the Elsa entity-design refactor. Replace the `int` activity version with an author-controlled **string semantic version** across the activity-definition-version model (Unit B catalog). CLR activities in assemblies carry a `Version` attribute that an assembly-reading reconciliation source reads when seeding the catalog. Prerequisite for Unit 4 (workflow-as-activity). Works against constitution v3.0.0 (draft).
 
 ## Clarifications
@@ -154,7 +154,7 @@ If an author changes an activity's content but forgets to bump its version attri
 
 **Reconciliation & lookup semantics**
 
-- **FR-013**: The reconciler's lookup by `(DefinitionId, Version)` MUST operate on the string version. Exact-version equality MUST follow the accepted format's equality rule (FR-011) — i.e. precedence-equality where the format admits non-byte-equal equivalents. The Model X find-or-create / append / hash-mismatch flow (`ActivityVersionReconciler`) is otherwise unchanged: absent → create; present + hash differs → throw `ActivityVersionHashMismatchException`; present + hash matches → skip-or-throw per option.
+- **FR-013**: The reconciler's lookup by `(DefinitionId, Version)` MUST operate on the string version. Exact-version equality MUST follow the accepted format's equality rule (FR-011) — i.e. precedence-equality where the format admits non-byte-equal equivalents. The Model X find-or-create / append / hash-mismatch flow (`ActivityVersionReconciler`) is otherwise unchanged: absent → create; present + the only content difference is input `tier` → the one pre-GA exception, a compare-and-swap refresh of `Hash` and `InputsSource` in place (see [Content authority](../../docs/glossary/elsa.md)); present + any other hash difference → throw `ActivityVersionHashMismatchException`; present + hash matches → skip-or-throw per option.
 - **FR-014**: Exactly one `ActivityDefinitionVersion` record MUST exist per `(DefinitionId, semver)` — record-level identity is preserved (each semver is its own uniquely-locatable row), as in Unit B.
 
 **Runtime version axis & package extraction**
@@ -171,7 +171,7 @@ If an author changes an activity's content but forgets to bump its version attri
 
 ### Key Entities
 
-- **`ActivityDefinitionVersion`** — the catalog version row. Its `Version` becomes an author-controlled semver **string** (was `int`), immutable. One row per `(DefinitionId, semver)`. Carries the immutable `ReconcilliationHash` (Model X) used to detect a mis-versioned source.
+- **`ActivityDefinitionVersion`** — the catalog version row. Its `Version` becomes an author-controlled semver **string** (was `int`), immutable except for the pre-GA tier-only refresh of `Hash` and `InputsSource`. One row per `(DefinitionId, semver)`. Carries the `ReconcilliationHash` (Model X) used to detect a mis-versioned source.
 - **Assembly version** — the **source of truth** for an activity's version. An un-annotated activity inherits its declaring assembly's version (resolved to SemVer 2.0.0 per FR-020).
 - **`Version` attribute** — new **optional** metadata annotation on a CLR activity type carrying an author-supplied semver string that **overrides** the assembly version. Read by the assembly reconciliation source. Working home: the new `Elsa.Activities.Runtime.Core` (FR-009).
 - **`Elsa.Activities.Runtime.Core`** *(working direction, FR-009/FR-020)* — a new zero-dep package extracted from `Elsa.Workflows.Runtime.Core`, housing `IActivity`, `ActivityBase`, `IActivityExecutionContext`, and the `Version` attribute. Referenced by author assemblies and the design-time scanner. Subject to plan-stage constitution validation.

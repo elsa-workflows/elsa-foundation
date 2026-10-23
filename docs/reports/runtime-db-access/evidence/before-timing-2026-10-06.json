@@ -1,0 +1,1187 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Compact evidence summary for the private Program 2382 T02 timing report candidate.",
+  "input": {
+    "file": "t02-baseline-timing-seven-cases-2026-10-06.json",
+    "sha256": "4a650da3297885ae3403b5984dde71f3c60e60339c8cd049db68426d537770b8",
+    "sizeBytes": 521727
+  },
+  "packet": {
+    "schemaVersion": 1,
+    "captureKind": "finite-seven-case-before-window-packet",
+    "sourceBoundary": "5d28 baseline only; runtime-equivalent b3 source; before T06 production pagination fix",
+    "reviewStatus": "root and independent QA reviewed all seven; six bounded baseline windows with qualifiers, one failed correctness control"
+  },
+  "sourceIdentity": {
+    "buildCandidateSha": "5d28bd0cd3d76004988a01b0f0abd7af3af313d6",
+    "runtimeEquivalentHostHead": "b3f55bef32576011d39b93d664949a0cb705fb3b",
+    "fixtureHead": "87698620370ca2b7e9e682b1693c4f3296ec3741",
+    "fixtureScriptSha256": "67830a5b25eb5de645c2c5a7e5b03badd5e9a6ab8b29db1af1b22c44b286bed6",
+    "dllSha256": "05c8eb6ac3aac744cb4878678d90dfd27dce9b37d139422ec1dba0f0a38bb08d",
+    "postgresVersion": "16.15",
+    "postgresImageId": "sha256:ef738a34a8651d11b2bace81c55c7e2187f786b484add6c83070884340074368"
+  },
+  "hostEnvironment": {
+    "osDescription": "Darwin 25.6.0 Darwin Kernel Version 25.6.0: Sat Jul 11 15:27:02 PDT 2026; root:xnu-12377.161.13~4/RELEASE_ARM64_T8112",
+    "architecture": "Arm64",
+    "logicalProcessorCount": 8,
+    "postgresVersion": "16.15",
+    "postgresImageId": "sha256:ef738a34a8651d11b2bace81c55c7e2187f786b484add6c83070884340074368"
+  },
+  "recordedLoggingConfiguration": {
+    "consoleStreamingEnabled": true,
+    "persistedDiagnosticsEnabled": true,
+    "transaction": "Warning",
+    "efCore": "Warning",
+    "command": "Warning"
+  },
+  "warningsAndLimits": [
+    "Each window retained three startup warnings and four startup EF Command errors; cause unresolved.",
+    "Runtime logging options were not introspected. The packet records configuration hashes and no low-level EF logs; persisted diagnostics are enabled.",
+    "The Coalesced C4 DbContext second-operation exception trace aligns with a candidate DI lifetime issue, but does not establish exact caller or causality.",
+    "Single window per configuration; no after measurement, no causal cadence/transport attribution, and no latency-derived network roundtrip claim.",
+    "The older noisy 392 ms protocol-only capture is excluded."
+  ],
+  "cases": [
+    {
+      "case": "Http4Sequential",
+      "cadence": "Coalesced",
+      "captureAlias": "timing-2386-before-http4sequential-coalesced-69b5f65d4c10",
+      "classification": "qualified-successful-control",
+      "caseScriptExitCode": 0,
+      "fixtureKind": "http",
+      "preflight": {
+        "index": 0,
+        "clientIndex": 1,
+        "phase": "preflight",
+        "statusCode": 200,
+        "elapsedMilliseconds": 1925.1608,
+        "outputMatched": true,
+        "errorType": null
+      },
+      "warmupCount": 25,
+      "measuredCount": 60,
+      "measuredStatusCounts": {
+        "200": 60
+      },
+      "measuredStatistics": {
+        "population": "All measured attempts, including HTTP failures; no sample replacement or retry.",
+        "count": 60,
+        "medianMilliseconds": 130.4095,
+        "p95NearestRankMilliseconds": 237.7586,
+        "minMilliseconds": 97.4864,
+        "maxMilliseconds": 364.0199,
+        "meanMilliseconds": 147.16117500000001,
+        "sampleStandardDeviationMilliseconds": 49.483437737789636
+      },
+      "verification": {
+        "endpoint": "GET /runtime/workflows/instances/page?definitionId=...&take=100",
+        "expectedInstanceCount": 86,
+        "instanceCount": 86,
+        "nonemptyExecutionIdCount": 86,
+        "uniqueExecutionIdCount": 86,
+        "duplicateExecutionIds": false,
+        "allExecutionIdsPresentAndUnique": true,
+        "allSummariesTerminalAndIncidentFree": true,
+        "nonterminalOrIncidentSummaryCount": 0,
+        "readbackCount": 86,
+        "allDetailsTerminalAndIncidentFree": true,
+        "readbackBudgetSeconds": 300,
+        "effectiveSettingsMatched": true,
+        "allHttpRunsVerified": true
+      },
+      "readbackStatusCounts": {
+        "Completed": 86
+      },
+      "readbackIncidentCounts": {
+        "0": 86
+      },
+      "readbackStatusByIncidentCount": [
+        {"status":"Completed","incidentCount":0,"count":86}
+      ],
+      "loadGate": {
+        "passed": true,
+        "criteria": "1m and 5m load averages below logical processor count in two consecutive observations.",
+        "observations": [
+          {"load1m":6.08,"load5m":5.49,"bothBelowProcessorCount":true},
+          {"load1m":6.62,"load5m":5.71,"bothBelowProcessorCount":true}
+        ],
+        "startLoadAverage1m5m15m": [
+          6.62,
+          5.71,
+          8.63
+        ],
+        "endLoadAverage1m5m15m": [
+          6.43,
+          5.7,
+          8.59
+        ]
+      },
+      "measuredWindowUtc": {
+        "measuredBatchStart": "2026-10-06T05:13:50.9016780Z",
+        "measuredBatchEnd": "2026-10-06T05:13:59.7524640Z"
+      },
+      "protocol": {
+        "timingBoundary": "Monotonic Stopwatch starts before HttpClient.SendAsync and stops after complete response body read.",
+        "setupPreflightRequests": 1,
+        "warmups": 25,
+        "measuredSamples": 60,
+        "concurrentClients": 1,
+        "expectedTotalInstancesIncludingPreflight": 86,
+        "retriesOrReplacementSamples": 0,
+        "failedSamplesRetained": true,
+        "loadGateElapsedSeconds": 30.195,
+        "postWarmupSettlementElapsedSeconds": 30.427
+      },
+      "configurationHashes": {
+        "appsettings.Development.json": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "shells.json": "72e74050c3287263e429da8bb035be1be9bbf39dbb3182810cb635822c52bdd8",
+        "appsettings.json": "48f5a96873fa977ed43cb91736cfdaf548c6a84b6bd83e663a708dccfaa33c9b"
+      },
+      "sampleArtifactSha256": "94edd5906ca8803ce825b858f04f448ac502f179ce9cbf34eb96ded4b500015f",
+      "qaArtifactSha256": "e16f4637c66988284b27cb089cafcc0a1ef4b82cddd6f04f7c3dda1eb748b5e7",
+      "measuredAttempts": [
+        {"index":1,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":237.7586,"outputMatched":true,"errorType":null},
+        {"index":2,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":302.8184,"outputMatched":true,"errorType":null},
+        {"index":3,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":300.6321,"outputMatched":true,"errorType":null},
+        {"index":4,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":195.349,"outputMatched":true,"errorType":null},
+        {"index":5,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":164.5623,"outputMatched":true,"errorType":null},
+        {"index":6,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":181.5838,"outputMatched":true,"errorType":null},
+        {"index":7,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":127.8548,"outputMatched":true,"errorType":null},
+        {"index":8,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":161.0383,"outputMatched":true,"errorType":null},
+        {"index":9,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":138.1188,"outputMatched":true,"errorType":null},
+        {"index":10,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":130.1014,"outputMatched":true,"errorType":null},
+        {"index":11,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":134.6652,"outputMatched":true,"errorType":null},
+        {"index":12,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":136.8386,"outputMatched":true,"errorType":null},
+        {"index":13,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":112.1802,"outputMatched":true,"errorType":null},
+        {"index":14,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":107.2238,"outputMatched":true,"errorType":null},
+        {"index":15,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":130.7176,"outputMatched":true,"errorType":null},
+        {"index":16,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":113.5435,"outputMatched":true,"errorType":null},
+        {"index":17,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":153.0068,"outputMatched":true,"errorType":null},
+        {"index":18,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":126.9646,"outputMatched":true,"errorType":null},
+        {"index":19,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":121.6871,"outputMatched":true,"errorType":null},
+        {"index":20,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":111.8568,"outputMatched":true,"errorType":null},
+        {"index":21,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":97.4864,"outputMatched":true,"errorType":null},
+        {"index":22,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":116.2562,"outputMatched":true,"errorType":null},
+        {"index":23,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":108.6117,"outputMatched":true,"errorType":null},
+        {"index":24,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":120.8516,"outputMatched":true,"errorType":null},
+        {"index":25,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":98.7311,"outputMatched":true,"errorType":null},
+        {"index":26,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":113.463,"outputMatched":true,"errorType":null},
+        {"index":27,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":122.3396,"outputMatched":true,"errorType":null},
+        {"index":28,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":166.6478,"outputMatched":true,"errorType":null},
+        {"index":29,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":176.0695,"outputMatched":true,"errorType":null},
+        {"index":30,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":146.0198,"outputMatched":true,"errorType":null},
+        {"index":31,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":124.2169,"outputMatched":true,"errorType":null},
+        {"index":32,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":135.9616,"outputMatched":true,"errorType":null},
+        {"index":33,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":142.622,"outputMatched":true,"errorType":null},
+        {"index":34,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":124.6918,"outputMatched":true,"errorType":null},
+        {"index":35,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":211.1507,"outputMatched":true,"errorType":null},
+        {"index":36,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":145.7567,"outputMatched":true,"errorType":null},
+        {"index":37,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":119.392,"outputMatched":true,"errorType":null},
+        {"index":38,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":121.1615,"outputMatched":true,"errorType":null},
+        {"index":39,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":173.2248,"outputMatched":true,"errorType":null},
+        {"index":40,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":112.5677,"outputMatched":true,"errorType":null},
+        {"index":41,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":127.107,"outputMatched":true,"errorType":null},
+        {"index":42,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":118.0531,"outputMatched":true,"errorType":null},
+        {"index":43,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":115.3961,"outputMatched":true,"errorType":null},
+        {"index":44,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":116.2588,"outputMatched":true,"errorType":null},
+        {"index":45,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":126.1055,"outputMatched":true,"errorType":null},
+        {"index":46,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":122.8294,"outputMatched":true,"errorType":null},
+        {"index":47,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":110.3468,"outputMatched":true,"errorType":null},
+        {"index":48,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":364.0199,"outputMatched":true,"errorType":null},
+        {"index":49,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":149.1615,"outputMatched":true,"errorType":null},
+        {"index":50,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":165.7027,"outputMatched":true,"errorType":null},
+        {"index":51,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":134.903,"outputMatched":true,"errorType":null},
+        {"index":52,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":140.7245,"outputMatched":true,"errorType":null},
+        {"index":53,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":139.6728,"outputMatched":true,"errorType":null},
+        {"index":54,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":121.8442,"outputMatched":true,"errorType":null},
+        {"index":55,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":129.7086,"outputMatched":true,"errorType":null},
+        {"index":56,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":175.1038,"outputMatched":true,"errorType":null},
+        {"index":57,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":139.1197,"outputMatched":true,"errorType":null},
+        {"index":58,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":121.8571,"outputMatched":true,"errorType":null},
+        {"index":59,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":158.8227,"outputMatched":true,"errorType":null},
+        {"index":60,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":187.2092,"outputMatched":true,"errorType":null}
+      ]
+    },
+    {
+      "case": "Http4Sequential",
+      "cadence": "Immediate",
+      "captureAlias": "timing-2386-before-http4sequential-immediate-080f74162ea6",
+      "classification": "qualified-successful-control",
+      "caseScriptExitCode": 0,
+      "fixtureKind": "http",
+      "preflight": {
+        "index": 0,
+        "clientIndex": 1,
+        "phase": "preflight",
+        "statusCode": 200,
+        "elapsedMilliseconds": 2140.0989,
+        "outputMatched": true,
+        "errorType": null
+      },
+      "warmupCount": 25,
+      "measuredCount": 60,
+      "measuredStatusCounts": {
+        "200": 60
+      },
+      "measuredStatistics": {
+        "population": "All measured attempts, including HTTP failures; no sample replacement or retry.",
+        "count": 60,
+        "medianMilliseconds": 437.5354,
+        "p95NearestRankMilliseconds": 760.9183,
+        "minMilliseconds": 324.4115,
+        "maxMilliseconds": 1325.9308,
+        "meanMilliseconds": 501.24674499999986,
+        "sampleStandardDeviationMilliseconds": 187.15233751186327
+      },
+      "verification": {
+        "endpoint": "GET /runtime/workflows/instances/page?definitionId=...&take=100",
+        "expectedInstanceCount": 86,
+        "instanceCount": 86,
+        "nonemptyExecutionIdCount": 86,
+        "uniqueExecutionIdCount": 86,
+        "duplicateExecutionIds": false,
+        "allExecutionIdsPresentAndUnique": true,
+        "allSummariesTerminalAndIncidentFree": true,
+        "nonterminalOrIncidentSummaryCount": 0,
+        "readbackCount": 86,
+        "allDetailsTerminalAndIncidentFree": true,
+        "readbackBudgetSeconds": 300,
+        "effectiveSettingsMatched": true,
+        "allHttpRunsVerified": true
+      },
+      "readbackStatusCounts": {
+        "Completed": 86
+      },
+      "readbackIncidentCounts": {
+        "0": 86
+      },
+      "readbackStatusByIncidentCount": [
+        {"status":"Completed","incidentCount":0,"count":86}
+      ],
+      "loadGate": {
+        "passed": true,
+        "criteria": "1m and 5m load averages below logical processor count in two consecutive observations.",
+        "observations": [
+          {"load1m":6.54,"load5m":5.41,"bothBelowProcessorCount":true},
+          {"load1m":5.99,"load5m":5.37,"bothBelowProcessorCount":true}
+        ],
+        "startLoadAverage1m5m15m": [
+          5.99,
+          5.37,
+          7.4
+        ],
+        "endLoadAverage1m5m15m": [
+          6.25,
+          5.54,
+          7.39
+        ]
+      },
+      "measuredWindowUtc": {
+        "measuredBatchStart": "2026-10-06T05:20:01.3574880Z",
+        "measuredBatchEnd": "2026-10-06T05:20:31.4530210Z"
+      },
+      "protocol": {
+        "timingBoundary": "Monotonic Stopwatch starts before HttpClient.SendAsync and stops after complete response body read.",
+        "setupPreflightRequests": 1,
+        "warmups": 25,
+        "measuredSamples": 60,
+        "concurrentClients": 1,
+        "expectedTotalInstancesIncludingPreflight": 86,
+        "retriesOrReplacementSamples": 0,
+        "failedSamplesRetained": true,
+        "loadGateElapsedSeconds": 30.217,
+        "postWarmupSettlementElapsedSeconds": 30.518
+      },
+      "configurationHashes": {
+        "appsettings.json": "fb63948c832328c56eea5f9c224733722d0fcb52f8becd4815e47642913fe39f",
+        "shells.json": "f8231ebfbc4d0e17abb360ce82c4b7b313ac5b6e806122c9924c6ca3af015ee1",
+        "appsettings.Development.json": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2"
+      },
+      "sampleArtifactSha256": "d13d1750f16e213f7c2c9a9ae5c3acbd0cee80c938127424c18424f4a4b928a0",
+      "qaArtifactSha256": "651811268940288c62bfb53bbfabd974024dba222a0f3f2b3006232477387e48",
+      "measuredAttempts": [
+        {"index":1,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":563.014,"outputMatched":true,"errorType":null},
+        {"index":2,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":408.9704,"outputMatched":true,"errorType":null},
+        {"index":3,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":418.0675,"outputMatched":true,"errorType":null},
+        {"index":4,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":579.5513,"outputMatched":true,"errorType":null},
+        {"index":5,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":464.6831,"outputMatched":true,"errorType":null},
+        {"index":6,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1210.7852,"outputMatched":true,"errorType":null},
+        {"index":7,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1325.9308,"outputMatched":true,"errorType":null},
+        {"index":8,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":899.9479,"outputMatched":true,"errorType":null},
+        {"index":9,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":760.9183,"outputMatched":true,"errorType":null},
+        {"index":10,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":561.9484,"outputMatched":true,"errorType":null},
+        {"index":11,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":526.6237,"outputMatched":true,"errorType":null},
+        {"index":12,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":465.2497,"outputMatched":true,"errorType":null},
+        {"index":13,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":537.7015,"outputMatched":true,"errorType":null},
+        {"index":14,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":612.0078,"outputMatched":true,"errorType":null},
+        {"index":15,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":575.3295,"outputMatched":true,"errorType":null},
+        {"index":16,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":521.1305,"outputMatched":true,"errorType":null},
+        {"index":17,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":387.752,"outputMatched":true,"errorType":null},
+        {"index":18,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":368.527,"outputMatched":true,"errorType":null},
+        {"index":19,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":492.6259,"outputMatched":true,"errorType":null},
+        {"index":20,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":365.4511,"outputMatched":true,"errorType":null},
+        {"index":21,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":575.7535,"outputMatched":true,"errorType":null},
+        {"index":22,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":735.3922,"outputMatched":true,"errorType":null},
+        {"index":23,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":626.6646,"outputMatched":true,"errorType":null},
+        {"index":24,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":530.6931,"outputMatched":true,"errorType":null},
+        {"index":25,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":414.3278,"outputMatched":true,"errorType":null},
+        {"index":26,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":403.747,"outputMatched":true,"errorType":null},
+        {"index":27,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":412.6718,"outputMatched":true,"errorType":null},
+        {"index":28,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":441.5362,"outputMatched":true,"errorType":null},
+        {"index":29,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":374.7205,"outputMatched":true,"errorType":null},
+        {"index":30,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":392.7559,"outputMatched":true,"errorType":null},
+        {"index":31,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":520.5385,"outputMatched":true,"errorType":null},
+        {"index":32,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":396.7245,"outputMatched":true,"errorType":null},
+        {"index":33,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":359.4797,"outputMatched":true,"errorType":null},
+        {"index":34,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":403.7285,"outputMatched":true,"errorType":null},
+        {"index":35,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":427.197,"outputMatched":true,"errorType":null},
+        {"index":36,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":397.6269,"outputMatched":true,"errorType":null},
+        {"index":37,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":344.7555,"outputMatched":true,"errorType":null},
+        {"index":38,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":324.4115,"outputMatched":true,"errorType":null},
+        {"index":39,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":409.5387,"outputMatched":true,"errorType":null},
+        {"index":40,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":352.5155,"outputMatched":true,"errorType":null},
+        {"index":41,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":470.2038,"outputMatched":true,"errorType":null},
+        {"index":42,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":425.5873,"outputMatched":true,"errorType":null},
+        {"index":43,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":404.9917,"outputMatched":true,"errorType":null},
+        {"index":44,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":404.6409,"outputMatched":true,"errorType":null},
+        {"index":45,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":334.4353,"outputMatched":true,"errorType":null},
+        {"index":46,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":368.084,"outputMatched":true,"errorType":null},
+        {"index":47,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":472.8125,"outputMatched":true,"errorType":null},
+        {"index":48,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":737.8084,"outputMatched":true,"errorType":null},
+        {"index":49,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":551.459,"outputMatched":true,"errorType":null},
+        {"index":50,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":671.8655,"outputMatched":true,"errorType":null},
+        {"index":51,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":540.0049,"outputMatched":true,"errorType":null},
+        {"index":52,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":441.9838,"outputMatched":true,"errorType":null},
+        {"index":53,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":362.4962,"outputMatched":true,"errorType":null},
+        {"index":54,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":366.3462,"outputMatched":true,"errorType":null},
+        {"index":55,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":358.0572,"outputMatched":true,"errorType":null},
+        {"index":56,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":336.549,"outputMatched":true,"errorType":null},
+        {"index":57,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":374.0654,"outputMatched":true,"errorType":null},
+        {"index":58,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":433.5346,"outputMatched":true,"errorType":null},
+        {"index":59,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":587.1834,"outputMatched":true,"errorType":null},
+        {"index":60,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":541.7011,"outputMatched":true,"errorType":null}
+      ]
+    },
+    {
+      "case": "Http16Sequential",
+      "cadence": "Coalesced",
+      "captureAlias": "timing-2386-before-http16sequential-coalesced-b7daf0d0189d",
+      "classification": "qualified-successful-control",
+      "caseScriptExitCode": 0,
+      "fixtureKind": "http",
+      "preflight": {
+        "index": 0,
+        "clientIndex": 1,
+        "phase": "preflight",
+        "statusCode": 200,
+        "elapsedMilliseconds": 3047.6589,
+        "outputMatched": true,
+        "errorType": null
+      },
+      "warmupCount": 25,
+      "measuredCount": 60,
+      "measuredStatusCounts": {
+        "200": 60
+      },
+      "measuredStatistics": {
+        "population": "All measured attempts, including HTTP failures; no sample replacement or retry.",
+        "count": 60,
+        "medianMilliseconds": 495.76660000000004,
+        "p95NearestRankMilliseconds": 663.6608,
+        "minMilliseconds": 469.3865,
+        "maxMilliseconds": 738.9338,
+        "meanMilliseconds": 519.602035,
+        "sampleStandardDeviationMilliseconds": 60.53157206992522
+      },
+      "verification": {
+        "endpoint": "GET /runtime/workflows/instances/page?definitionId=...&take=100",
+        "expectedInstanceCount": 86,
+        "instanceCount": 86,
+        "nonemptyExecutionIdCount": 86,
+        "uniqueExecutionIdCount": 86,
+        "duplicateExecutionIds": false,
+        "allExecutionIdsPresentAndUnique": true,
+        "allSummariesTerminalAndIncidentFree": true,
+        "nonterminalOrIncidentSummaryCount": 0,
+        "readbackCount": 86,
+        "allDetailsTerminalAndIncidentFree": true,
+        "readbackBudgetSeconds": 300,
+        "effectiveSettingsMatched": true,
+        "allHttpRunsVerified": true
+      },
+      "readbackStatusCounts": {
+        "Completed": 86
+      },
+      "readbackIncidentCounts": {
+        "0": 86
+      },
+      "readbackStatusByIncidentCount": [
+        {"status":"Completed","incidentCount":0,"count":86}
+      ],
+      "loadGate": {
+        "passed": true,
+        "criteria": "1m and 5m load averages below logical processor count in two consecutive observations.",
+        "observations": [
+          {"load1m":9.65,"load5m":6.52,"bothBelowProcessorCount":false},
+          {"load1m":7.53,"load5m":6.3,"bothBelowProcessorCount":true},
+          {"load1m":5.41,"load5m":5.92,"bothBelowProcessorCount":true}
+        ],
+        "startLoadAverage1m5m15m": [
+          5.41,
+          5.92,
+          7.27
+        ],
+        "endLoadAverage1m5m15m": [
+          5.35,
+          5.87,
+          7.21
+        ]
+      },
+      "measuredWindowUtc": {
+        "measuredBatchStart": "2026-10-06T05:22:56.0915140Z",
+        "measuredBatchEnd": "2026-10-06T05:23:27.2849800Z"
+      },
+      "protocol": {
+        "timingBoundary": "Monotonic Stopwatch starts before HttpClient.SendAsync and stops after complete response body read.",
+        "setupPreflightRequests": 1,
+        "warmups": 25,
+        "measuredSamples": 60,
+        "concurrentClients": 1,
+        "expectedTotalInstancesIncludingPreflight": 86,
+        "retriesOrReplacementSamples": 0,
+        "failedSamplesRetained": true,
+        "loadGateElapsedSeconds": 60.23,
+        "postWarmupSettlementElapsedSeconds": 60.572
+      },
+      "configurationHashes": {
+        "appsettings.Development.json": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "appsettings.json": "fb63948c832328c56eea5f9c224733722d0fcb52f8becd4815e47642913fe39f",
+        "shells.json": "256c92653124dcc30bdc2e6eda00b2a52732c3eb2fa7a44c241f4a89599211d2"
+      },
+      "sampleArtifactSha256": "615c6017ea7505211eb27bb95350bc3fb629693c83860c16d2869b52ac32380a",
+      "qaArtifactSha256": "0b48b5837f5b103919c3c0125466f70c931221f9898cab217798b779948737ae",
+      "measuredAttempts": [
+        {"index":1,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":580.098,"outputMatched":true,"errorType":null},
+        {"index":2,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":539.7776,"outputMatched":true,"errorType":null},
+        {"index":3,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":553.5809,"outputMatched":true,"errorType":null},
+        {"index":4,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":534.124,"outputMatched":true,"errorType":null},
+        {"index":5,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":506.8078,"outputMatched":true,"errorType":null},
+        {"index":6,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":506.2998,"outputMatched":true,"errorType":null},
+        {"index":7,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":485.4851,"outputMatched":true,"errorType":null},
+        {"index":8,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":502.4762,"outputMatched":true,"errorType":null},
+        {"index":9,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":511.0359,"outputMatched":true,"errorType":null},
+        {"index":10,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":636.056,"outputMatched":true,"errorType":null},
+        {"index":11,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":499.6727,"outputMatched":true,"errorType":null},
+        {"index":12,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":486.2624,"outputMatched":true,"errorType":null},
+        {"index":13,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":486.513,"outputMatched":true,"errorType":null},
+        {"index":14,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":491.6052,"outputMatched":true,"errorType":null},
+        {"index":15,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":498.1074,"outputMatched":true,"errorType":null},
+        {"index":16,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":479.5368,"outputMatched":true,"errorType":null},
+        {"index":17,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":483.7676,"outputMatched":true,"errorType":null},
+        {"index":18,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":475.8489,"outputMatched":true,"errorType":null},
+        {"index":19,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":492.7732,"outputMatched":true,"errorType":null},
+        {"index":20,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":475.7016,"outputMatched":true,"errorType":null},
+        {"index":21,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":475.1373,"outputMatched":true,"errorType":null},
+        {"index":22,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":495.372,"outputMatched":true,"errorType":null},
+        {"index":23,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":480.0958,"outputMatched":true,"errorType":null},
+        {"index":24,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":481.5652,"outputMatched":true,"errorType":null},
+        {"index":25,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":507.7687,"outputMatched":true,"errorType":null},
+        {"index":26,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":601.8805,"outputMatched":true,"errorType":null},
+        {"index":27,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":527.3957,"outputMatched":true,"errorType":null},
+        {"index":28,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":469.3865,"outputMatched":true,"errorType":null},
+        {"index":29,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":513.0807,"outputMatched":true,"errorType":null},
+        {"index":30,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":617.6908,"outputMatched":true,"errorType":null},
+        {"index":31,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":543.8802,"outputMatched":true,"errorType":null},
+        {"index":32,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":488.8429,"outputMatched":true,"errorType":null},
+        {"index":33,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":664.3542,"outputMatched":true,"errorType":null},
+        {"index":34,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":738.9338,"outputMatched":true,"errorType":null},
+        {"index":35,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":683.8562,"outputMatched":true,"errorType":null},
+        {"index":36,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":644.2453,"outputMatched":true,"errorType":null},
+        {"index":37,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":497.6598,"outputMatched":true,"errorType":null},
+        {"index":38,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":484.0698,"outputMatched":true,"errorType":null},
+        {"index":39,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":480.3225,"outputMatched":true,"errorType":null},
+        {"index":40,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":472.21,"outputMatched":true,"errorType":null},
+        {"index":41,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":516.7297,"outputMatched":true,"errorType":null},
+        {"index":42,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":481.9191,"outputMatched":true,"errorType":null},
+        {"index":43,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":481.9333,"outputMatched":true,"errorType":null},
+        {"index":44,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":504.0874,"outputMatched":true,"errorType":null},
+        {"index":45,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":491.557,"outputMatched":true,"errorType":null},
+        {"index":46,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":475.7439,"outputMatched":true,"errorType":null},
+        {"index":47,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":487.0412,"outputMatched":true,"errorType":null},
+        {"index":48,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":494.4638,"outputMatched":true,"errorType":null},
+        {"index":49,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":528.5074,"outputMatched":true,"errorType":null},
+        {"index":50,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":663.6608,"outputMatched":true,"errorType":null},
+        {"index":51,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":485.2039,"outputMatched":true,"errorType":null},
+        {"index":52,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":477.4563,"outputMatched":true,"errorType":null},
+        {"index":53,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":496.1612,"outputMatched":true,"errorType":null},
+        {"index":54,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":504.5756,"outputMatched":true,"errorType":null},
+        {"index":55,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":480.4212,"outputMatched":true,"errorType":null},
+        {"index":56,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":477.5292,"outputMatched":true,"errorType":null},
+        {"index":57,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":496.6522,"outputMatched":true,"errorType":null},
+        {"index":58,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":568.6042,"outputMatched":true,"errorType":null},
+        {"index":59,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":485.4131,"outputMatched":true,"errorType":null},
+        {"index":60,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":485.1836,"outputMatched":true,"errorType":null}
+      ]
+    },
+    {
+      "case": "Http16Sequential",
+      "cadence": "Immediate",
+      "captureAlias": "timing-2386-before-http16sequential-immediate-10ad73320f15",
+      "classification": "qualified-successful-control",
+      "caseScriptExitCode": 0,
+      "fixtureKind": "http",
+      "preflight": {
+        "index": 0,
+        "clientIndex": 1,
+        "phase": "preflight",
+        "statusCode": 200,
+        "elapsedMilliseconds": 3549.0081,
+        "outputMatched": true,
+        "errorType": null
+      },
+      "warmupCount": 25,
+      "measuredCount": 60,
+      "measuredStatusCounts": {
+        "200": 60
+      },
+      "measuredStatistics": {
+        "population": "All measured attempts, including HTTP failures; no sample replacement or retry.",
+        "count": 60,
+        "medianMilliseconds": 1839.2673,
+        "p95NearestRankMilliseconds": 3116.8751,
+        "minMilliseconds": 1250.2527,
+        "maxMilliseconds": 4318.6492,
+        "meanMilliseconds": 1991.9069916666667,
+        "sampleStandardDeviationMilliseconds": 610.4428286771074
+      },
+      "verification": {
+        "endpoint": "GET /runtime/workflows/instances/page?definitionId=...&take=100",
+        "expectedInstanceCount": 86,
+        "instanceCount": 86,
+        "nonemptyExecutionIdCount": 86,
+        "uniqueExecutionIdCount": 86,
+        "duplicateExecutionIds": false,
+        "allExecutionIdsPresentAndUnique": true,
+        "allSummariesTerminalAndIncidentFree": true,
+        "nonterminalOrIncidentSummaryCount": 0,
+        "readbackCount": 86,
+        "allDetailsTerminalAndIncidentFree": true,
+        "readbackBudgetSeconds": 300,
+        "effectiveSettingsMatched": true,
+        "allHttpRunsVerified": true
+      },
+      "readbackStatusCounts": {
+        "Completed": 86
+      },
+      "readbackIncidentCounts": {
+        "0": 86
+      },
+      "readbackStatusByIncidentCount": [
+        {"status":"Completed","incidentCount":0,"count":86}
+      ],
+      "loadGate": {
+        "passed": true,
+        "criteria": "1m and 5m load averages below logical processor count in two consecutive observations.",
+        "observations": [
+          {"load1m":5.66,"load5m":5.91,"bothBelowProcessorCount":true},
+          {"load1m":4.27,"load5m":5.53,"bothBelowProcessorCount":true}
+        ],
+        "startLoadAverage1m5m15m": [
+          4.27,
+          5.53,
+          6.9
+        ],
+        "endLoadAverage1m5m15m": [
+          6.28,
+          6.24,
+          7.02
+        ]
+      },
+      "measuredWindowUtc": {
+        "measuredBatchStart": "2026-10-06T05:25:31.4363600Z",
+        "measuredBatchEnd": "2026-10-06T05:27:30.9803430Z"
+      },
+      "protocol": {
+        "timingBoundary": "Monotonic Stopwatch starts before HttpClient.SendAsync and stops after complete response body read.",
+        "setupPreflightRequests": 1,
+        "warmups": 25,
+        "measuredSamples": 60,
+        "concurrentClients": 1,
+        "expectedTotalInstancesIncludingPreflight": 86,
+        "retriesOrReplacementSamples": 0,
+        "failedSamplesRetained": true,
+        "loadGateElapsedSeconds": 30.117,
+        "postWarmupSettlementElapsedSeconds": 30.368
+      },
+      "configurationHashes": {
+        "appsettings.Development.json": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "shells.json": "ae6d435e3ffc0056256cdd9d03b7ad33d2da88875630db6ee09923ff4749d6d2",
+        "appsettings.json": "fb63948c832328c56eea5f9c224733722d0fcb52f8becd4815e47642913fe39f"
+      },
+      "sampleArtifactSha256": "f17856b45a7200f283799a6a8baf37409d4e3e295087d27baf89b23475bfe027",
+      "qaArtifactSha256": "c42e997e765f914150b0191b05e0f55d051667b6a0d2ab4018e78ebfbe7e7f79",
+      "measuredAttempts": [
+        {"index":1,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1917.934,"outputMatched":true,"errorType":null},
+        {"index":2,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1325.9786,"outputMatched":true,"errorType":null},
+        {"index":3,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1565.4898,"outputMatched":true,"errorType":null},
+        {"index":4,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":2303.2152,"outputMatched":true,"errorType":null},
+        {"index":5,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":2978.9671,"outputMatched":true,"errorType":null},
+        {"index":6,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1800.2193,"outputMatched":true,"errorType":null},
+        {"index":7,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1857.8416,"outputMatched":true,"errorType":null},
+        {"index":8,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":2033.8576,"outputMatched":true,"errorType":null},
+        {"index":9,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":3121.1867,"outputMatched":true,"errorType":null},
+        {"index":10,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":3116.8751,"outputMatched":true,"errorType":null},
+        {"index":11,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":2114.7769,"outputMatched":true,"errorType":null},
+        {"index":12,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":2321.9579,"outputMatched":true,"errorType":null},
+        {"index":13,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":2065.9113,"outputMatched":true,"errorType":null},
+        {"index":14,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":4318.6492,"outputMatched":true,"errorType":null},
+        {"index":15,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":2589.6367,"outputMatched":true,"errorType":null},
+        {"index":16,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":2621.4971,"outputMatched":true,"errorType":null},
+        {"index":17,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1918.3232,"outputMatched":true,"errorType":null},
+        {"index":18,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1870.2773,"outputMatched":true,"errorType":null},
+        {"index":19,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":2153.3242,"outputMatched":true,"errorType":null},
+        {"index":20,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":2432.2462,"outputMatched":true,"errorType":null},
+        {"index":21,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1854.6755,"outputMatched":true,"errorType":null},
+        {"index":22,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":2710.3168,"outputMatched":true,"errorType":null},
+        {"index":23,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":3607.263,"outputMatched":true,"errorType":null},
+        {"index":24,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":2397.5336,"outputMatched":true,"errorType":null},
+        {"index":25,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1959.2404,"outputMatched":true,"errorType":null},
+        {"index":26,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1660.8936,"outputMatched":true,"errorType":null},
+        {"index":27,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1335.3203,"outputMatched":true,"errorType":null},
+        {"index":28,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1624.6629,"outputMatched":true,"errorType":null},
+        {"index":29,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1382.6597,"outputMatched":true,"errorType":null},
+        {"index":30,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1507.6459,"outputMatched":true,"errorType":null},
+        {"index":31,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1577.0384,"outputMatched":true,"errorType":null},
+        {"index":32,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1611.9265,"outputMatched":true,"errorType":null},
+        {"index":33,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1403.1731,"outputMatched":true,"errorType":null},
+        {"index":34,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":2172.8792,"outputMatched":true,"errorType":null},
+        {"index":35,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":2267.6182,"outputMatched":true,"errorType":null},
+        {"index":36,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1634.2632,"outputMatched":true,"errorType":null},
+        {"index":37,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1423.4215,"outputMatched":true,"errorType":null},
+        {"index":38,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1820.0204,"outputMatched":true,"errorType":null},
+        {"index":39,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1513.8961,"outputMatched":true,"errorType":null},
+        {"index":40,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1319.6038,"outputMatched":true,"errorType":null},
+        {"index":41,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1654.4701,"outputMatched":true,"errorType":null},
+        {"index":42,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1522.5664,"outputMatched":true,"errorType":null},
+        {"index":43,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1742.3338,"outputMatched":true,"errorType":null},
+        {"index":44,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1333.9163,"outputMatched":true,"errorType":null},
+        {"index":45,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1549.9425,"outputMatched":true,"errorType":null},
+        {"index":46,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1573.8117,"outputMatched":true,"errorType":null},
+        {"index":47,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":2289.293,"outputMatched":true,"errorType":null},
+        {"index":48,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":2421.1343,"outputMatched":true,"errorType":null},
+        {"index":49,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1795.345,"outputMatched":true,"errorType":null},
+        {"index":50,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":2781.2662,"outputMatched":true,"errorType":null},
+        {"index":51,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":2609.5385,"outputMatched":true,"errorType":null},
+        {"index":52,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1823.8591,"outputMatched":true,"errorType":null},
+        {"index":53,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1696.6775,"outputMatched":true,"errorType":null},
+        {"index":54,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1528.8095,"outputMatched":true,"errorType":null},
+        {"index":55,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1473.6641,"outputMatched":true,"errorType":null},
+        {"index":56,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1250.2527,"outputMatched":true,"errorType":null},
+        {"index":57,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1302.9678,"outputMatched":true,"errorType":null},
+        {"index":58,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":2053.928,"outputMatched":true,"errorType":null},
+        {"index":59,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":2438.7557,"outputMatched":true,"errorType":null},
+        {"index":60,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1459.6702,"outputMatched":true,"errorType":null}
+      ]
+    },
+    {
+      "case": "Http4Concurrency4",
+      "cadence": "Coalesced",
+      "captureAlias": "timing-2386-before-http4concurrency4-coalesced-4b48d4cb3726",
+      "classification": "failed-correctness-control",
+      "caseScriptExitCode": 1,
+      "fixtureKind": "http",
+      "preflight": {
+        "index": 0,
+        "clientIndex": 1,
+        "phase": "preflight",
+        "statusCode": 200,
+        "elapsedMilliseconds": 1379.3831,
+        "outputMatched": true,
+        "errorType": null
+      },
+      "warmupCount": 25,
+      "measuredCount": 60,
+      "measuredStatusCounts": {
+        "500": 10,
+        "200": 41,
+        "202": 9
+      },
+      "measuredStatistics": {
+        "population": "All measured attempts, including HTTP failures; no sample replacement or retry.",
+        "count": 60,
+        "medianMilliseconds": 237.4527,
+        "p95NearestRankMilliseconds": 374.599,
+        "minMilliseconds": 14.7902,
+        "maxMilliseconds": 412.4664,
+        "meanMilliseconds": 218.48288999999994,
+        "sampleStandardDeviationMilliseconds": 100.79651855958677
+      },
+      "verification": {
+        "endpoint": "GET /runtime/workflows/instances/page?definitionId=...&take=100",
+        "expectedInstanceCount": 86,
+        "instanceCount": 76,
+        "nonemptyExecutionIdCount": 76,
+        "uniqueExecutionIdCount": 76,
+        "duplicateExecutionIds": false,
+        "allExecutionIdsPresentAndUnique": false,
+        "allSummariesTerminalAndIncidentFree": false,
+        "nonterminalOrIncidentSummaryCount": 12,
+        "readbackCount": 76,
+        "allDetailsTerminalAndIncidentFree": false,
+        "readbackBudgetSeconds": 300,
+        "effectiveSettingsMatched": false,
+        "allHttpRunsVerified": false
+      },
+      "readbackStatusCounts": {
+        "Completed": 67,
+        "Faulted": 9
+      },
+      "readbackIncidentCounts": {
+        "0": 64,
+        "1": 11,
+        "2": 1
+      },
+      "readbackStatusByIncidentCount": [
+        {"status":"Completed","incidentCount":0,"count":64},
+        {"status":"Completed","incidentCount":1,"count":3},
+        {"status":"Faulted","incidentCount":1,"count":8},
+        {"status":"Faulted","incidentCount":2,"count":1}
+      ],
+      "loadGate": {
+        "passed": true,
+        "criteria": "1m and 5m load averages below logical processor count in two consecutive observations.",
+        "observations": [
+          {"load1m":3.79,"load5m":5.31,"bothBelowProcessorCount":true},
+          {"load1m":3.92,"load5m":5.18,"bothBelowProcessorCount":true}
+        ],
+        "startLoadAverage1m5m15m": [
+          3.92,
+          5.18,
+          6.48
+        ],
+        "endLoadAverage1m5m15m": [
+          5.29,
+          5.44,
+          6.57
+        ]
+      },
+      "measuredWindowUtc": {
+        "measuredBatchStart": "2026-10-06T05:29:35.4357680Z",
+        "measuredBatchEnd": "2026-10-06T05:29:39.2200180Z"
+      },
+      "protocol": {
+        "timingBoundary": "Monotonic Stopwatch starts before HttpClient.SendAsync and stops after complete response body read.",
+        "setupPreflightRequests": 1,
+        "warmups": 25,
+        "measuredSamples": 60,
+        "concurrentClients": 4,
+        "expectedTotalInstancesIncludingPreflight": 86,
+        "retriesOrReplacementSamples": 0,
+        "failedSamplesRetained": true,
+        "loadGateElapsedSeconds": 30.194,
+        "postWarmupSettlementElapsedSeconds": 30.383
+      },
+      "configurationHashes": {
+        "appsettings.Development.json": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "appsettings.json": "48f5a96873fa977ed43cb91736cfdaf548c6a84b6bd83e663a708dccfaa33c9b",
+        "shells.json": "72e74050c3287263e429da8bb035be1be9bbf39dbb3182810cb635822c52bdd8"
+      },
+      "sampleArtifactSha256": "dd8b35e2343f2752a6f7884785b36c0947372a78a43008493d064dbed647fb1e",
+      "qaArtifactSha256": "cc9e3d13d2f91cc02c66acd08beda31e75159f14c819e1ee532ce06c537c8938",
+      "measuredAttempts": [
+        {"index":1,"clientIndex":1,"phase":"measured","statusCode":500,"elapsedMilliseconds":38.5597,"outputMatched":false,"errorType":null},
+        {"index":2,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":249.3433,"outputMatched":true,"errorType":null},
+        {"index":3,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":232.1974,"outputMatched":true,"errorType":null},
+        {"index":4,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":268.3939,"outputMatched":true,"errorType":null},
+        {"index":5,"clientIndex":1,"phase":"measured","statusCode":202,"elapsedMilliseconds":242.7589,"outputMatched":false,"errorType":null},
+        {"index":6,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":223.6916,"outputMatched":true,"errorType":null},
+        {"index":7,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":250.9145,"outputMatched":true,"errorType":null},
+        {"index":8,"clientIndex":1,"phase":"measured","statusCode":500,"elapsedMilliseconds":32.2305,"outputMatched":false,"errorType":null},
+        {"index":9,"clientIndex":1,"phase":"measured","statusCode":500,"elapsedMilliseconds":24.6445,"outputMatched":false,"errorType":null},
+        {"index":10,"clientIndex":1,"phase":"measured","statusCode":500,"elapsedMilliseconds":44.0099,"outputMatched":false,"errorType":null},
+        {"index":11,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":248.178,"outputMatched":true,"errorType":null},
+        {"index":12,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":233.1469,"outputMatched":true,"errorType":null},
+        {"index":13,"clientIndex":1,"phase":"measured","statusCode":202,"elapsedMilliseconds":326.672,"outputMatched":false,"errorType":null},
+        {"index":14,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":302.061,"outputMatched":true,"errorType":null},
+        {"index":15,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":272.8764,"outputMatched":true,"errorType":null},
+        {"index":16,"clientIndex":2,"phase":"measured","statusCode":200,"elapsedMilliseconds":261.2835,"outputMatched":true,"errorType":null},
+        {"index":17,"clientIndex":2,"phase":"measured","statusCode":202,"elapsedMilliseconds":304.6662,"outputMatched":false,"errorType":null},
+        {"index":18,"clientIndex":2,"phase":"measured","statusCode":200,"elapsedMilliseconds":265.0543,"outputMatched":true,"errorType":null},
+        {"index":19,"clientIndex":2,"phase":"measured","statusCode":200,"elapsedMilliseconds":278.6431,"outputMatched":true,"errorType":null},
+        {"index":20,"clientIndex":2,"phase":"measured","statusCode":200,"elapsedMilliseconds":217.4621,"outputMatched":true,"errorType":null},
+        {"index":21,"clientIndex":2,"phase":"measured","statusCode":500,"elapsedMilliseconds":19.5257,"outputMatched":false,"errorType":null},
+        {"index":22,"clientIndex":2,"phase":"measured","statusCode":200,"elapsedMilliseconds":377.8356,"outputMatched":true,"errorType":null},
+        {"index":23,"clientIndex":2,"phase":"measured","statusCode":500,"elapsedMilliseconds":20.5683,"outputMatched":false,"errorType":null},
+        {"index":24,"clientIndex":2,"phase":"measured","statusCode":200,"elapsedMilliseconds":245.556,"outputMatched":true,"errorType":null},
+        {"index":25,"clientIndex":2,"phase":"measured","statusCode":200,"elapsedMilliseconds":219.4984,"outputMatched":true,"errorType":null},
+        {"index":26,"clientIndex":2,"phase":"measured","statusCode":200,"elapsedMilliseconds":239.634,"outputMatched":true,"errorType":null},
+        {"index":27,"clientIndex":2,"phase":"measured","statusCode":202,"elapsedMilliseconds":412.4664,"outputMatched":false,"errorType":null},
+        {"index":28,"clientIndex":2,"phase":"measured","statusCode":200,"elapsedMilliseconds":233.834,"outputMatched":true,"errorType":null},
+        {"index":29,"clientIndex":2,"phase":"measured","statusCode":500,"elapsedMilliseconds":14.7902,"outputMatched":false,"errorType":null},
+        {"index":30,"clientIndex":2,"phase":"measured","statusCode":200,"elapsedMilliseconds":184.0118,"outputMatched":true,"errorType":null},
+        {"index":31,"clientIndex":3,"phase":"measured","statusCode":202,"elapsedMilliseconds":374.599,"outputMatched":false,"errorType":null},
+        {"index":32,"clientIndex":3,"phase":"measured","statusCode":200,"elapsedMilliseconds":237.3873,"outputMatched":true,"errorType":null},
+        {"index":33,"clientIndex":3,"phase":"measured","statusCode":200,"elapsedMilliseconds":295.3626,"outputMatched":true,"errorType":null},
+        {"index":34,"clientIndex":3,"phase":"measured","statusCode":200,"elapsedMilliseconds":219.3632,"outputMatched":true,"errorType":null},
+        {"index":35,"clientIndex":3,"phase":"measured","statusCode":200,"elapsedMilliseconds":237.5181,"outputMatched":true,"errorType":null},
+        {"index":36,"clientIndex":3,"phase":"measured","statusCode":200,"elapsedMilliseconds":281.0829,"outputMatched":true,"errorType":null},
+        {"index":37,"clientIndex":3,"phase":"measured","statusCode":202,"elapsedMilliseconds":315.637,"outputMatched":false,"errorType":null},
+        {"index":38,"clientIndex":3,"phase":"measured","statusCode":200,"elapsedMilliseconds":248.9729,"outputMatched":true,"errorType":null},
+        {"index":39,"clientIndex":3,"phase":"measured","statusCode":202,"elapsedMilliseconds":376.845,"outputMatched":false,"errorType":null},
+        {"index":40,"clientIndex":3,"phase":"measured","statusCode":200,"elapsedMilliseconds":302.7255,"outputMatched":true,"errorType":null},
+        {"index":41,"clientIndex":3,"phase":"measured","statusCode":200,"elapsedMilliseconds":224.9903,"outputMatched":true,"errorType":null},
+        {"index":42,"clientIndex":3,"phase":"measured","statusCode":202,"elapsedMilliseconds":161.023,"outputMatched":false,"errorType":null},
+        {"index":43,"clientIndex":3,"phase":"measured","statusCode":200,"elapsedMilliseconds":132.7537,"outputMatched":true,"errorType":null},
+        {"index":44,"clientIndex":3,"phase":"measured","statusCode":200,"elapsedMilliseconds":217.5592,"outputMatched":true,"errorType":null},
+        {"index":45,"clientIndex":3,"phase":"measured","statusCode":200,"elapsedMilliseconds":149.7809,"outputMatched":true,"errorType":null},
+        {"index":46,"clientIndex":4,"phase":"measured","statusCode":200,"elapsedMilliseconds":253.7224,"outputMatched":true,"errorType":null},
+        {"index":47,"clientIndex":4,"phase":"measured","statusCode":200,"elapsedMilliseconds":231.9644,"outputMatched":true,"errorType":null},
+        {"index":48,"clientIndex":4,"phase":"measured","statusCode":500,"elapsedMilliseconds":24.601,"outputMatched":false,"errorType":null},
+        {"index":49,"clientIndex":4,"phase":"measured","statusCode":200,"elapsedMilliseconds":267.5109,"outputMatched":true,"errorType":null},
+        {"index":50,"clientIndex":4,"phase":"measured","statusCode":200,"elapsedMilliseconds":297.9244,"outputMatched":true,"errorType":null},
+        {"index":51,"clientIndex":4,"phase":"measured","statusCode":500,"elapsedMilliseconds":17.6848,"outputMatched":false,"errorType":null},
+        {"index":52,"clientIndex":4,"phase":"measured","statusCode":500,"elapsedMilliseconds":19.6538,"outputMatched":false,"errorType":null},
+        {"index":53,"clientIndex":4,"phase":"measured","statusCode":200,"elapsedMilliseconds":231.9226,"outputMatched":true,"errorType":null},
+        {"index":54,"clientIndex":4,"phase":"measured","statusCode":200,"elapsedMilliseconds":271.2932,"outputMatched":true,"errorType":null},
+        {"index":55,"clientIndex":4,"phase":"measured","statusCode":202,"elapsedMilliseconds":199.0812,"outputMatched":false,"errorType":null},
+        {"index":56,"clientIndex":4,"phase":"measured","statusCode":200,"elapsedMilliseconds":209.8152,"outputMatched":true,"errorType":null},
+        {"index":57,"clientIndex":4,"phase":"measured","statusCode":200,"elapsedMilliseconds":227.7962,"outputMatched":true,"errorType":null},
+        {"index":58,"clientIndex":4,"phase":"measured","statusCode":200,"elapsedMilliseconds":280.9884,"outputMatched":true,"errorType":null},
+        {"index":59,"clientIndex":4,"phase":"measured","statusCode":200,"elapsedMilliseconds":304.7767,"outputMatched":true,"errorType":null},
+        {"index":60,"clientIndex":4,"phase":"measured","statusCode":200,"elapsedMilliseconds":210.1295,"outputMatched":true,"errorType":null}
+      ]
+    },
+    {
+      "case": "Http4Concurrency4",
+      "cadence": "Immediate",
+      "captureAlias": "timing-2386-before-http4concurrency4-immediate-14aac720bda4",
+      "classification": "qualified-successful-control",
+      "caseScriptExitCode": 0,
+      "fixtureKind": "http",
+      "preflight": {
+        "index": 0,
+        "clientIndex": 1,
+        "phase": "preflight",
+        "statusCode": 200,
+        "elapsedMilliseconds": 2523.9084,
+        "outputMatched": true,
+        "errorType": null
+      },
+      "warmupCount": 25,
+      "measuredCount": 60,
+      "measuredStatusCounts": {
+        "200": 60
+      },
+      "measuredStatistics": {
+        "population": "All measured attempts, including HTTP failures; no sample replacement or retry.",
+        "count": 60,
+        "medianMilliseconds": 751.2487,
+        "p95NearestRankMilliseconds": 1024.5282,
+        "minMilliseconds": 637.6747,
+        "maxMilliseconds": 1206.9428,
+        "meanMilliseconds": 791.6968750000004,
+        "sampleStandardDeviationMilliseconds": 127.81493428486338
+      },
+      "verification": {
+        "endpoint": "GET /runtime/workflows/instances/page?definitionId=...&take=100",
+        "expectedInstanceCount": 86,
+        "instanceCount": 86,
+        "nonemptyExecutionIdCount": 86,
+        "uniqueExecutionIdCount": 86,
+        "duplicateExecutionIds": false,
+        "allExecutionIdsPresentAndUnique": true,
+        "allSummariesTerminalAndIncidentFree": true,
+        "nonterminalOrIncidentSummaryCount": 0,
+        "readbackCount": 86,
+        "allDetailsTerminalAndIncidentFree": true,
+        "readbackBudgetSeconds": 300,
+        "effectiveSettingsMatched": true,
+        "allHttpRunsVerified": true
+      },
+      "readbackStatusCounts": {
+        "Completed": 86
+      },
+      "readbackIncidentCounts": {
+        "0": 86
+      },
+      "readbackStatusByIncidentCount": [
+        {"status":"Completed","incidentCount":0,"count":86}
+      ],
+      "loadGate": {
+        "passed": true,
+        "criteria": "1m and 5m load averages below logical processor count in two consecutive observations.",
+        "observations": [
+          {"load1m":6.46,"load5m":5.42,"bothBelowProcessorCount":true},
+          {"load1m":6.73,"load5m":5.58,"bothBelowProcessorCount":true}
+        ],
+        "startLoadAverage1m5m15m": [
+          6.73,
+          5.58,
+          6.4
+        ],
+        "endLoadAverage1m5m15m": [
+          8.27,
+          5.95,
+          6.52
+        ]
+      },
+      "measuredWindowUtc": {
+        "measuredBatchStart": "2026-10-06T05:32:11.2978310Z",
+        "measuredBatchEnd": "2026-10-06T05:32:23.2349540Z"
+      },
+      "protocol": {
+        "timingBoundary": "Monotonic Stopwatch starts before HttpClient.SendAsync and stops after complete response body read.",
+        "setupPreflightRequests": 1,
+        "warmups": 25,
+        "measuredSamples": 60,
+        "concurrentClients": 4,
+        "expectedTotalInstancesIncludingPreflight": 86,
+        "retriesOrReplacementSamples": 0,
+        "failedSamplesRetained": true,
+        "loadGateElapsedSeconds": 30.233,
+        "postWarmupSettlementElapsedSeconds": 30.543
+      },
+      "configurationHashes": {
+        "shells.json": "f8231ebfbc4d0e17abb360ce82c4b7b313ac5b6e806122c9924c6ca3af015ee1",
+        "appsettings.Development.json": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "appsettings.json": "fb63948c832328c56eea5f9c224733722d0fcb52f8becd4815e47642913fe39f"
+      },
+      "sampleArtifactSha256": "c54b77ba96e4f3bec7b915faf06670900caa0c9f7f389e24db12b36d5f4319ac",
+      "qaArtifactSha256": "d79e3916e24fadbca4ef64d25463c135df3d29a93c3b1b26a18e06545d82985a",
+      "measuredAttempts": [
+        {"index":1,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1004.0633,"outputMatched":true,"errorType":null},
+        {"index":2,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":822.1607,"outputMatched":true,"errorType":null},
+        {"index":3,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":792.0835,"outputMatched":true,"errorType":null},
+        {"index":4,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":672.9413,"outputMatched":true,"errorType":null},
+        {"index":5,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":677.3047,"outputMatched":true,"errorType":null},
+        {"index":6,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":907.8698,"outputMatched":true,"errorType":null},
+        {"index":7,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":672.7454,"outputMatched":true,"errorType":null},
+        {"index":8,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":733.7312,"outputMatched":true,"errorType":null},
+        {"index":9,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":790.6245,"outputMatched":true,"errorType":null},
+        {"index":10,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":932.8452,"outputMatched":true,"errorType":null},
+        {"index":11,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":667.4062,"outputMatched":true,"errorType":null},
+        {"index":12,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":724.2188,"outputMatched":true,"errorType":null},
+        {"index":13,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":1024.5282,"outputMatched":true,"errorType":null},
+        {"index":14,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":750.6684,"outputMatched":true,"errorType":null},
+        {"index":15,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":667.1156,"outputMatched":true,"errorType":null},
+        {"index":16,"clientIndex":2,"phase":"measured","statusCode":200,"elapsedMilliseconds":1112.9205,"outputMatched":true,"errorType":null},
+        {"index":17,"clientIndex":2,"phase":"measured","statusCode":200,"elapsedMilliseconds":819.275,"outputMatched":true,"errorType":null},
+        {"index":18,"clientIndex":2,"phase":"measured","statusCode":200,"elapsedMilliseconds":748.8412,"outputMatched":true,"errorType":null},
+        {"index":19,"clientIndex":2,"phase":"measured","statusCode":200,"elapsedMilliseconds":675.3053,"outputMatched":true,"errorType":null},
+        {"index":20,"clientIndex":2,"phase":"measured","statusCode":200,"elapsedMilliseconds":694.7301,"outputMatched":true,"errorType":null},
+        {"index":21,"clientIndex":2,"phase":"measured","statusCode":200,"elapsedMilliseconds":902.6993,"outputMatched":true,"errorType":null},
+        {"index":22,"clientIndex":2,"phase":"measured","statusCode":200,"elapsedMilliseconds":670.7123,"outputMatched":true,"errorType":null},
+        {"index":23,"clientIndex":2,"phase":"measured","statusCode":200,"elapsedMilliseconds":730.6462,"outputMatched":true,"errorType":null},
+        {"index":24,"clientIndex":2,"phase":"measured","statusCode":200,"elapsedMilliseconds":794.7455,"outputMatched":true,"errorType":null},
+        {"index":25,"clientIndex":2,"phase":"measured","statusCode":200,"elapsedMilliseconds":910.0279,"outputMatched":true,"errorType":null},
+        {"index":26,"clientIndex":2,"phase":"measured","statusCode":200,"elapsedMilliseconds":637.6747,"outputMatched":true,"errorType":null},
+        {"index":27,"clientIndex":2,"phase":"measured","statusCode":200,"elapsedMilliseconds":745.6897,"outputMatched":true,"errorType":null},
+        {"index":28,"clientIndex":2,"phase":"measured","statusCode":200,"elapsedMilliseconds":981.0091,"outputMatched":true,"errorType":null},
+        {"index":29,"clientIndex":2,"phase":"measured","statusCode":200,"elapsedMilliseconds":739.5749,"outputMatched":true,"errorType":null},
+        {"index":30,"clientIndex":2,"phase":"measured","statusCode":200,"elapsedMilliseconds":667.8427,"outputMatched":true,"errorType":null},
+        {"index":31,"clientIndex":3,"phase":"measured","statusCode":200,"elapsedMilliseconds":1206.9428,"outputMatched":true,"errorType":null},
+        {"index":32,"clientIndex":3,"phase":"measured","statusCode":200,"elapsedMilliseconds":812.1995,"outputMatched":true,"errorType":null},
+        {"index":33,"clientIndex":3,"phase":"measured","statusCode":200,"elapsedMilliseconds":751.829,"outputMatched":true,"errorType":null},
+        {"index":34,"clientIndex":3,"phase":"measured","statusCode":200,"elapsedMilliseconds":669.3162,"outputMatched":true,"errorType":null},
+        {"index":35,"clientIndex":3,"phase":"measured","statusCode":200,"elapsedMilliseconds":798.1672,"outputMatched":true,"errorType":null},
+        {"index":36,"clientIndex":3,"phase":"measured","statusCode":200,"elapsedMilliseconds":815.9713,"outputMatched":true,"errorType":null},
+        {"index":37,"clientIndex":3,"phase":"measured","statusCode":200,"elapsedMilliseconds":668.1257,"outputMatched":true,"errorType":null},
+        {"index":38,"clientIndex":3,"phase":"measured","statusCode":200,"elapsedMilliseconds":708.0365,"outputMatched":true,"errorType":null},
+        {"index":39,"clientIndex":3,"phase":"measured","statusCode":200,"elapsedMilliseconds":814.9612,"outputMatched":true,"errorType":null},
+        {"index":40,"clientIndex":3,"phase":"measured","statusCode":200,"elapsedMilliseconds":890.6754,"outputMatched":true,"errorType":null},
+        {"index":41,"clientIndex":3,"phase":"measured","statusCode":200,"elapsedMilliseconds":660.8084,"outputMatched":true,"errorType":null},
+        {"index":42,"clientIndex":3,"phase":"measured","statusCode":200,"elapsedMilliseconds":892.0074,"outputMatched":true,"errorType":null},
+        {"index":43,"clientIndex":3,"phase":"measured","statusCode":200,"elapsedMilliseconds":853.3545,"outputMatched":true,"errorType":null},
+        {"index":44,"clientIndex":3,"phase":"measured","statusCode":200,"elapsedMilliseconds":715.0885,"outputMatched":true,"errorType":null},
+        {"index":45,"clientIndex":3,"phase":"measured","statusCode":200,"elapsedMilliseconds":669.5638,"outputMatched":true,"errorType":null},
+        {"index":46,"clientIndex":4,"phase":"measured","statusCode":200,"elapsedMilliseconds":1127.7974,"outputMatched":true,"errorType":null},
+        {"index":47,"clientIndex":4,"phase":"measured","statusCode":200,"elapsedMilliseconds":821.8197,"outputMatched":true,"errorType":null},
+        {"index":48,"clientIndex":4,"phase":"measured","statusCode":200,"elapsedMilliseconds":788.2053,"outputMatched":true,"errorType":null},
+        {"index":49,"clientIndex":4,"phase":"measured","statusCode":200,"elapsedMilliseconds":673.3999,"outputMatched":true,"errorType":null},
+        {"index":50,"clientIndex":4,"phase":"measured","statusCode":200,"elapsedMilliseconds":703.5507,"outputMatched":true,"errorType":null},
+        {"index":51,"clientIndex":4,"phase":"measured","statusCode":200,"elapsedMilliseconds":870.1961,"outputMatched":true,"errorType":null},
+        {"index":52,"clientIndex":4,"phase":"measured","statusCode":200,"elapsedMilliseconds":679.847,"outputMatched":true,"errorType":null},
+        {"index":53,"clientIndex":4,"phase":"measured","statusCode":200,"elapsedMilliseconds":743.3661,"outputMatched":true,"errorType":null},
+        {"index":54,"clientIndex":4,"phase":"measured","statusCode":200,"elapsedMilliseconds":770.267,"outputMatched":true,"errorType":null},
+        {"index":55,"clientIndex":4,"phase":"measured","statusCode":200,"elapsedMilliseconds":918.247,"outputMatched":true,"errorType":null},
+        {"index":56,"clientIndex":4,"phase":"measured","statusCode":200,"elapsedMilliseconds":652.8325,"outputMatched":true,"errorType":null},
+        {"index":57,"clientIndex":4,"phase":"measured","statusCode":200,"elapsedMilliseconds":855.8621,"outputMatched":true,"errorType":null},
+        {"index":58,"clientIndex":4,"phase":"measured","statusCode":200,"elapsedMilliseconds":883.7565,"outputMatched":true,"errorType":null},
+        {"index":59,"clientIndex":4,"phase":"measured","statusCode":200,"elapsedMilliseconds":732.1566,"outputMatched":true,"errorType":null},
+        {"index":60,"clientIndex":4,"phase":"measured","statusCode":200,"elapsedMilliseconds":681.46,"outputMatched":true,"errorType":null}
+      ]
+    },
+    {
+      "case": "RestCompanionCoalesced",
+      "cadence": "Coalesced",
+      "captureAlias": "timing-2386-before-restcompanioncoalesced-coalesced-5ede91b06c33",
+      "classification": "qualified-successful-control",
+      "caseScriptExitCode": 0,
+      "fixtureKind": "rest",
+      "preflight": {
+        "index": 0,
+        "clientIndex": 1,
+        "phase": "preflight",
+        "statusCode": 200,
+        "elapsedMilliseconds": 1139.1027,
+        "admissionMatched": true,
+        "workflowExecutionId": "147wQCVvcOA",
+        "errorType": null
+      },
+      "warmupCount": 25,
+      "measuredCount": 60,
+      "measuredStatusCounts": {
+        "200": 60
+      },
+      "measuredStatistics": {
+        "population": "All measured attempts, including HTTP failures; no sample replacement or retry.",
+        "count": 60,
+        "medianMilliseconds": 70.62125,
+        "p95NearestRankMilliseconds": 109.392,
+        "minMilliseconds": 48.482,
+        "maxMilliseconds": 263.5435,
+        "meanMilliseconds": 75.89369666666668,
+        "sampleStandardDeviationMilliseconds": 29.942173269724858
+      },
+      "verification": {
+        "expectedInstanceCount": 86,
+        "admissionInstanceIdCount": 86,
+        "uniqueExecutionIdCount": 86,
+        "duplicateExecutionIds": false,
+        "terminalCompletedAliceSmithIncidentFreeCount": 86,
+        "readbackCount": 86,
+        "admittedIdsWithoutReadback": 0,
+        "readbackBudgetSeconds": 300,
+        "allRunsVerified": true,
+        "effectiveSettingsMatched": true
+      },
+      "readbackStatusCounts": {
+        "Completed": 86
+      },
+      "readbackIncidentCounts": {
+        "0": 86
+      },
+      "readbackStatusByIncidentCount": [
+        {"status":"Completed","incidentCount":0,"count":86}
+      ],
+      "loadGate": {
+        "passed": true,
+        "criteria": "1m and 5m load averages below logical processor count in two consecutive observations.",
+        "observations": [
+          {"load1m":6.44,"load5m":5.76,"bothBelowProcessorCount":true},
+          {"load1m":5.03,"load5m":5.49,"bothBelowProcessorCount":true}
+        ],
+        "startLoadAverage1m5m15m": [
+          5.03,
+          5.49,
+          6.3
+        ],
+        "endLoadAverage1m5m15m": [
+          5.43,
+          5.56,
+          6.32
+        ]
+      },
+      "measuredWindowUtc": {
+        "measuredBatchStart": "2026-10-06T05:33:35.6297740Z",
+        "measuredBatchEnd": "2026-10-06T05:33:40.2075260Z"
+      },
+      "protocol": {
+        "timingBoundary": "Monotonic Stopwatch starts before HttpClient.SendAsync and stops after complete response body read.",
+        "setupPreflightRequests": 1,
+        "warmups": 25,
+        "measuredSamples": 60,
+        "concurrentClients": 1,
+        "expectedTotalInstancesIncludingPreflight": 86,
+        "retriesOrReplacementSamples": 0,
+        "failedSamplesRetained": true,
+        "loadGateElapsedSeconds": 30.231,
+        "postWarmupSettlementElapsedSeconds": 30.516
+      },
+      "configurationHashes": {
+        "appsettings.json": "48f5a96873fa977ed43cb91736cfdaf548c6a84b6bd83e663a708dccfaa33c9b",
+        "shells.json": "56de4d2de243f39b4d666fd211ebb045cbefffb2e5f060cd373aabe144486e0b",
+        "appsettings.Development.json": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2"
+      },
+      "sampleArtifactSha256": "bc2a5f1c172acad2f14c5635806203520be0d0f420bf72d0a7a57808beef206e",
+      "qaArtifactSha256": "7c0655c98a9b0869662d364f4c6d4c8dcdcca1464e26cd32bca6fcdf62657311",
+      "measuredAttempts": [
+        {"index":1,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":139.0786,"admissionMatched":true,"workflowExecutionId":"147wSkliAtN","errorType":null},
+        {"index":2,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":107.7602,"admissionMatched":true,"workflowExecutionId":"147wSlP7pbs","errorType":null},
+        {"index":3,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":75.7931,"admissionMatched":true,"workflowExecutionId":"147wSltLd2g","errorType":null},
+        {"index":4,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":74.8674,"admissionMatched":true,"workflowExecutionId":"147wSmEsuNr","errorType":null},
+        {"index":5,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":65.1526,"admissionMatched":true,"workflowExecutionId":"147wSmaNPxf","errorType":null},
+        {"index":6,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":69.1055,"admissionMatched":true,"workflowExecutionId":"147wSmsoZ6e","errorType":null},
+        {"index":7,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":70.8306,"admissionMatched":true,"workflowExecutionId":"147wSnCc1IC","errorType":null},
+        {"index":8,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":81.3372,"admissionMatched":true,"workflowExecutionId":"147wSnWrj0d","errorType":null},
+        {"index":9,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":85.0902,"admissionMatched":true,"workflowExecutionId":"147wSnu0obd","errorType":null},
+        {"index":10,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":75.3822,"admissionMatched":true,"workflowExecutionId":"147wSoI87wL","errorType":null},
+        {"index":11,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":74.4495,"admissionMatched":true,"workflowExecutionId":"147wSods1GN","errorType":null},
+        {"index":12,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":126.5554,"admissionMatched":true,"workflowExecutionId":"147wSoyeNYH","errorType":null},
+        {"index":13,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":109.392,"admissionMatched":true,"workflowExecutionId":"147wSpZIRpY","errorType":null},
+        {"index":14,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":74.3537,"admissionMatched":true,"workflowExecutionId":"147wSq4F97X","errorType":null},
+        {"index":15,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":61.1592,"admissionMatched":true,"workflowExecutionId":"147wSqPSO3Y","errorType":null},
+        {"index":16,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":76.1129,"admissionMatched":true,"workflowExecutionId":"147wSqgbHT1","errorType":null},
+        {"index":17,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":88.4832,"admissionMatched":true,"workflowExecutionId":"147wSr39S1u","errorType":null},
+        {"index":18,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":73.499,"admissionMatched":true,"workflowExecutionId":"147wSrRpIcr","errorType":null},
+        {"index":19,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":60.2041,"admissionMatched":true,"workflowExecutionId":"147wSrmk8Rs","errorType":null},
+        {"index":20,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":71.2268,"admissionMatched":true,"workflowExecutionId":"147wSs4kXAp","errorType":null},
+        {"index":21,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":63.4575,"admissionMatched":true,"workflowExecutionId":"147wSsOqHAc","errorType":null},
+        {"index":22,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":56.3858,"admissionMatched":true,"workflowExecutionId":"147wSsgqfAH","errorType":null},
+        {"index":23,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":263.5435,"admissionMatched":true,"workflowExecutionId":"147wSsx5ntz","errorType":null},
+        {"index":24,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":96.5133,"admissionMatched":true,"workflowExecutionId":"147wSuAgxkY","errorType":null},
+        {"index":25,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":66.5027,"admissionMatched":true,"workflowExecutionId":"147wSubkAAm","errorType":null},
+        {"index":26,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":61.5609,"admissionMatched":true,"workflowExecutionId":"147wSuuY3Rz","errorType":null},
+        {"index":27,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":67.6327,"admissionMatched":true,"workflowExecutionId":"147wSvC9dNX","errorType":null},
+        {"index":28,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":74.9374,"admissionMatched":true,"workflowExecutionId":"147wSvVarQ0","errorType":null},
+        {"index":29,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":74.5345,"admissionMatched":true,"workflowExecutionId":"147wSvrEvFl","errorType":null},
+        {"index":30,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":71.8195,"admissionMatched":true,"workflowExecutionId":"147wSwCl19R","errorType":null},
+        {"index":31,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":64.3482,"admissionMatched":true,"workflowExecutionId":"147wSwWUUSe","errorType":null},
+        {"index":32,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":59.1235,"admissionMatched":true,"workflowExecutionId":"147wSwpFF0G","errorType":null},
+        {"index":33,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":55.6177,"admissionMatched":true,"workflowExecutionId":"147wSx5iwdy","errorType":null},
+        {"index":34,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":51.5627,"admissionMatched":true,"workflowExecutionId":"147wSxLcry7","errorType":null},
+        {"index":35,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":48.482,"admissionMatched":true,"workflowExecutionId":"147wSxagque","errorType":null},
+        {"index":36,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":66.0567,"admissionMatched":true,"workflowExecutionId":"147wSxoaXRJ","errorType":null},
+        {"index":37,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":57.4896,"admissionMatched":true,"workflowExecutionId":"147wSy7FqBJ","errorType":null},
+        {"index":38,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":81.6992,"admissionMatched":true,"workflowExecutionId":"147wSyNqnxd","errorType":null},
+        {"index":39,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":78.6484,"admissionMatched":true,"workflowExecutionId":"147wSykioP5","errorType":null},
+        {"index":40,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":70.4119,"admissionMatched":true,"workflowExecutionId":"147wSz7QWuN","errorType":null},
+        {"index":41,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":65.7707,"admissionMatched":true,"workflowExecutionId":"147wSzRQcb3","errorType":null},
+        {"index":42,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":65.4714,"admissionMatched":true,"workflowExecutionId":"147wSzk14gY","errorType":null},
+        {"index":43,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":62.8125,"admissionMatched":true,"workflowExecutionId":"147wT02xzH8","errorType":null},
+        {"index":44,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":108.6015,"admissionMatched":true,"workflowExecutionId":"147wT0KgGAW","errorType":null},
+        {"index":45,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":50.653,"admissionMatched":true,"workflowExecutionId":"147wT0pjlue","errorType":null},
+        {"index":46,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":56.4365,"admissionMatched":true,"workflowExecutionId":"147wT13rRBn","errorType":null},
+        {"index":47,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":55.9433,"admissionMatched":true,"workflowExecutionId":"147wT1JwIjR","errorType":null},
+        {"index":48,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":73.1495,"admissionMatched":true,"workflowExecutionId":"147wT1ZyK04","errorType":null},
+        {"index":49,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":69.7487,"admissionMatched":true,"workflowExecutionId":"147wT1utZ7h","errorType":null},
+        {"index":50,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":76.056,"admissionMatched":true,"workflowExecutionId":"147wT2Eog20","errorType":null},
+        {"index":51,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":66.8377,"admissionMatched":true,"workflowExecutionId":"147wT2ajprI","errorType":null},
+        {"index":52,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":58.9015,"admissionMatched":true,"workflowExecutionId":"147wT2tScsQ","errorType":null},
+        {"index":53,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":74.1482,"admissionMatched":true,"workflowExecutionId":"147wT3AUkTU","errorType":null},
+        {"index":54,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":73.3192,"admissionMatched":true,"workflowExecutionId":"147wT3Vbh6j","errorType":null},
+        {"index":55,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":67.7307,"admissionMatched":true,"workflowExecutionId":"147wT3qUQrr","errorType":null},
+        {"index":56,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":64.55,"admissionMatched":true,"workflowExecutionId":"147wT49oCW5","errorType":null},
+        {"index":57,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":71.8584,"admissionMatched":true,"workflowExecutionId":"147wT4RprUN","errorType":null},
+        {"index":58,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":77.4835,"admissionMatched":true,"workflowExecutionId":"147wT4n1GU8","errorType":null},
+        {"index":59,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":69.7608,"admissionMatched":true,"workflowExecutionId":"147wT58rO3r","errorType":null},
+        {"index":60,"clientIndex":1,"phase":"measured","statusCode":200,"elapsedMilliseconds":54.2276,"admissionMatched":true,"workflowExecutionId":"147wT5SDHPH","errorType":null}
+      ]
+    }
+  ],
+  "limitations": [
+    "six root-verified successful controls and one failed correctness control; failures retained, no retries/replacements",
+    "single window per configuration; no after result or causal cadence/transport subtraction",
+    "Coalesced concurrency41/60 correct,10x500/9x202,76of86readbacks; invalid as successful latency baseline",
+    "Immediate concurrency end1mload8.27above8cores; within-batch load unavailable",
+    "runtime logging options not introspected; configuration copies/hash and absence of low-level EF logs retained",
+    "three startup warnings/four startup EF errors each window unresolved",
+    "old high-load protocol-only and zero-measurement load-guard-stop windows retained separately"
+  ],
+  "publicationDerivation": {
+    "sourceCandidateSummarySha256": "7b9fce9c27b559ff0978694a7f68a2ed0b9a2984b2d4acccedb07ea7eabab412",
+    "addedFields": "Exact per-case sample/QA source hashes and all 60 measured attempt records copied from accepted aggregate; no retry, filtering or replacement.",
+    "statistics": "Public measuredAttempts permit recomputation of all descriptive distributions, including failed C4 attempts."
+  }
+}

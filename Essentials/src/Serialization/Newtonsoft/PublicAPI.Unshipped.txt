@@ -1,0 +1,4 @@
+#nullable enable
+Elsa.Serialization.Newtonsoft.NewtonsoftSerializationFeature
+Elsa.Serialization.Newtonsoft.NewtonsoftSerializationFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Serialization.Newtonsoft.NewtonsoftSerializationFeature.NewtonsoftSerializationFeature() -> void

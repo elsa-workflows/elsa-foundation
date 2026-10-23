@@ -1,0 +1,588 @@
+# Elsa.Persistence.EntityFramework
+
+Shared **policy** surface for first-party EF Core persistence: history-table naming,
+provider guard, and migrate/validate apply modes. It began as the ADR 0072 Secrets pilot
+and now serves the accepted ADR 0073 migration program.
+
+It is **not** a second storage library, not a mandatory Elsa `DbContext` base, and not a place to
+accumulate entity configuration. Module-owned derived contexts remain first-class
+(framework §2.9).
+
+## Status
+
+Accepted [ADR 0073](../../../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md)
+makes EF Core the only first-party persistence implementation family. It supersedes ADR 0042's
+single-storage-library policy, ADR 0065's proposed target/lane topology, and ADR 0072's bounded
+EF lane while preserving each record's distinct history. The Secrets implementation remains opt-in
+until its migration slice proves four-provider parity and performs the explicit default flip.
+
+## Supported providers
+
+First-party EF Core persistence supports four relational engines, and only these four:
+
+| Provider | Configuration value | Host package |
+|---|---|---|
+| SQLite | `Sqlite` | `Microsoft.EntityFrameworkCore.Sqlite` |
+| SQL Server | `SqlServer` | `Microsoft.EntityFrameworkCore.SqlServer` |
+| PostgreSQL | `PostgreSql` | `Npgsql.EntityFrameworkCore.PostgreSQL` |
+| MySQL | `MySql` | `MySql.EntityFrameworkCore` |
+
+**Oracle is not supported.** There is no Oracle provider context, no Oracle migrations, and no Oracle
+error-code mapping; a module configured with `Oracle` is refused as it registers, by the same message
+that lists the four above, and that refusal is pinned by
+[`EfRelationalProviderBindingTests`](../../../../Essentials/tests/Persistence/EntityFramework/Tests/EfRelationalProviderBindingTests.cs).
+This is a decision, not a gap awaiting a contribution: accepted
+[ADR 0075](../../../../docs/adr/0075-oracle-is-not-a-supported-ef-core-engine.md) records why, and names
+the condition under which it is revisited. The short form is that every engine here has a container leg
+running in CI, Elsa 3's Oracle lane never had one, and shipping a fifth engine weaker than the other
+four would be a worse deal for Oracle users than saying plainly that it is unsupported.
+
+### Coming from Elsa 3 on Oracle
+
+Elsa 3 ships `Elsa.Persistence.EFCore.Oracle`. Elsa 4 has no equivalent, but it also never connects to
+an Elsa 3 database, so the route does not need one:
+
+1. Export your workflow definitions from Elsa 3 as JSON.
+2. Install Elsa 4 fresh against one of the four supported engines above.
+3. Import the definitions through
+   [`Elsa3.Activities.Design.Import`](../../../../Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/EXTENSION_POINTS.md), which
+   reads that JSON through `IActivityCollectionJsonSource` and applies a reviewed, dependency-closed
+   mutation.
+
+This is a fresh installation plus a definition import, not a data migration: Elsa 3 runtime and instance
+history does not come across. That follows from
+[ADR 0073](../../../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md) D5's pre-GA
+clean break rather than from anything Oracle-specific.
+
+**Where this does not help.** If your organization's database policy forbids introducing PostgreSQL, SQL
+Server or MySQL, there is no route. Oracle being unsupported is a hard no for that deployment rather than
+an inconvenience, and no configuration or workaround changes it. Say so on
+[#1803](https://github.com/elsa-workflows/elsa-foundation/issues/1803): a named adopter willing to run the
+Oracle container leg is the first of the three conditions ADR 0075 requires to reopen the question.
+
+## What this package owns
+
+| Helper | Role |
+|---|---|
+| `EfMigrationsHistory.TableName(module)` | `__EFMigrationsHistory_<Module>` so two modules in one database do not share history |
+| `EfProviderGuard.Ensure` | Refuse apply when `Database.ProviderName` does not match the derived context |
+| `EfMigratePolicy` | `AutoMigrate` vs `Validate` (fail if pending), chosen by the operator through `EfMigrateOptions` |
+| `EfDatabaseMigrator.ApplyAsync` | Guard, then `MigrateAsync` (EF 9+ takes the database lock; on SQLite through `EfSqliteMigrationLock`) or fail closed |
+| `EfRelationalProviderBinding` | Invoke host-supplied `UseSqlite` / `UseSqlServer` / `UseNpgsql` / `UseMySQL` without this package referencing those engines; `Select` matches a provider name to what a module registers for that dialect |
+| `EfOrdinalCollation` | The one binary collation per provider, applied **per column** to the string columns a module compares or orders, so SQL comparison and ordering agree with `StringComparer.Ordinal` |
+| `EfSchema` | Resolve and validate the optional database schema a module's tables and history table live in |
+| `EfSchemaMigrationsAssembly` | Put migrations scaffolded without a schema into the configured one, so one migration set applies anywhere |
+| `EfConnectionDefaults.ResolveConnectionString` | Explicit connection string, then a named `ConnectionStrings` entry (refused when missing or blank), then the module's default entry, then the SQLite file |
+| `EfModuleBinding` | A module's owner name, history table, migrations assembly and connection defaults; selects its per-dialect registration and binds its context |
+| `[EfModule]` / `EfModuleCatalog.Discover` / `Find` | The single, discoverable declaration of a module's canonical name, base context, per-provider derived contexts, frozen history name, dependencies and post-migration actions (ADR 0076 D2); `Discover` enumerates every declaration across a set of assemblies, first-party and third-party alike, and refuses — rather than carrying forward — a case-insensitive name collision, or a `HistoryModule` that `EfMigrationsHistory.TableName` rejects; `Find` looks one discovered module up by canonical name, case-insensitively, and is `null` when no module carries that name. Each `[EfModule]` name is mirrored by a sibling `[ManifestExtension("efModules", name)]` on the same assembly, so a module's `elsa-package.json` lists its EF module name(s) under `extensions.efModules` without hand-editing (spec 171 slice 11, #1881); `EfModuleDescriptorTests` guards the two never drift apart |
+| `[EfSchemaContent]` / `[EfSchemaIntegrity]` | A family's content columns, one declaration per table beside its `[EfSchemaFamily]`: what every read upcasts through the family's chain before deserializing and every write that changes restamps (spec 180 FR-009, FR-014); and the document columns compared as stored bytes instead, each with the reason (FR-008). `EfSchemaFamilyCatalog` reads both onto the family's descriptor; `EfSchemaContentDeclarationTests` fails the build when a document column of a stamped table is declared by neither or a declared column is not in the model, and every read and write of a content column goes through the chain and the stamp, by review until #2606 restores a compiled check |
+| `[EfSchemaFamily]` / `EfSchemaFamilyCatalog.Discover` | The one declaration of a schema family (spec 180 FR-001): its name, as its skew check names it, the `[EfModule]` of the same assembly that owns it, and the version this build stamps and reads. `Discover` reads declarations as metadata matched by type name, so it also reads a package loaded with its own copy of this assembly, and refuses a family whose module its assembly does not declare, a blank name or version, or a family one assembly declares twice. Its `Upcasters` are the family's chain, oldest first; the readable set is the current version and every predecessor the chain reaches without a gap, and `EfSchemaChain` (`<Module>.Chain`) is what every store checks, upcasts and stamps through, so a host's readability report (spec 183 FR-020), derived from the same declarations, credits exactly what its reads accept; every family the stores check is declared, every chain is sound and every write stamps the current version, by review until #2606 restores a compiled check. A family whose loaded declarations disagree on the owning module is isolated rather than dropping the rest of the report: it reads no version and `EfSchemaReadabilitySource` logs the conflicting declarations. The two-argument `[EfSchemaFamily(name, currentVersion)]` form declares a family owned by no single EF module - shared mapping code that several modules' contexts call into - and is accepted only in an assembly with no `[EfModule]` of its own; its `Module` reads `null`, end to end through the descriptor and the readability report's `ReadabilityEntry.EfModule` |
+| `[UsesEfModule]` / `EfProviderAgreement` | The mapping from a CShells shell feature to the EF module(s) it depends on, and the per-feature provider-agreement check the `dotnet elsa persistence` tool runs against it (spec 171 FR-035-FR-037, FR-064; ADR 0076 D4). `AllowMultiple`, because one feature can depend on two modules' contexts, and carried on the feature class wherever it lives — a module's features are not always in its own project. `EfProviderAgreement.Discover` reads the mapping off a set of assemblies; `Check` compares each **enabled** feature's own configured provider against the requested one, per feature and never per module, so one correctly configured feature of a module can never speak for another. A mapped feature with no `Provider` setting at all is skipped, not defaulted to `Sqlite` |
+| `IEfPostMigrationAction` / `EfPostMigrationActions` | A module's named, audited, never-auto-run work for *after* its migrations apply (ADR 0076 D8). Declared by `Type` on `[EfModule(... PostMigration = ...)]`, constructed with no DI and no arguments, given only the `DbContext`. `EfPostMigrationActions.Create` turns a declaration into instances and refuses one it cannot honour; `EnsureNotRequiredAsync` is the fail-closed audit every migrator runs. See [Post-migration actions](#post-migration-actions) |
+| `EfSharedTransaction` | Own one connection and one transaction for several module contexts that must commit together; refuse split targets and provider mismatches |
+| `EfRelationalExceptionClassifier` | Classifies provider failures without referencing provider engines. `IsSaveConflict` recognizes a race SaveChanges reported, `IsProviderFailure` any provider failure, and both see through the `InvalidOperationException` a non-retrying SQL Server or PostgreSQL execution strategy wraps around one. `FindSaveFailure` returns the `DbUpdateException` for code needing its entries or constraint name; `IsStoreBoundaryFailure` additionally takes a bare `InvalidOperationException`, for outermost boundaries only |
+| `EfProviderBindingValidator` | Fail a host closed at startup, in the CShells `Prepare` phase ahead of every module migrator, when a configured module's provider engine is missing or no longer exposes what the reflection binding calls |
+| `EfWriteRetry` | The one bounded retry loop for compare-and-swap and race-prone store writes: the store supplies budget (`DefaultMaxAttempts` unless pinned), the `EfWriteConflict` kinds or predicate it retries, backoff, and exhaustion outcome; a transient conflict inside a caller's open transaction is rethrown, never retried. See [Retry policy](#retry-policy) |
+| `UnicodeOrdinalCasingTable` | The pinned Unicode simple-uppercase mappings that Secrets and OpenTelemetry project persisted ordinal-ignore-case search keys from; each consumer pins `ComputeMappingFingerprint()` in its algorithm id, so the table is never edited in place |
+| `EfSchemaFinalization` / `EfSchemaFinalizationStore` | The finalization record of each schema family ([spec 181](../../../../specs/181-schema-finalization-gate/spec.md), FR-001 and FR-002), with spec 186's finish record inside it. Every module context maps two tables beside its own history table, `__ElsaSchemaFinalization_<Module>` and `__ElsaDatabaseIdentity_<Module>`, through `modelBuilder.MapSchemaFinalization(<HistoryModuleName>)`, and its own baseline migration creates them. The store keeps the record's rules: every change is a compare-and-set on the record's revision, the finalized version only moves forward along the writer's chain, a hold abandons the intent it covers in the same write, and the opaque database identity is created once, never from a connection string. The identity row and a family's first record are the two writes hosts that start together race to create, so both go through `EfInsertIfAbsent`, the one helper that sends engine-specific SQL to write (its class comment holds the reasoning and its precondition, and review keeps raw SQL to the files that already send it): the loser inserts nothing, reads the winner's row, and logs no failure (#2162). When to finalize is the gate's decision (spec 181's B5, #2101), not the store's |
+| `EfPayloadCodec` / `EfPayloadColumns` | Encode a module's payload columns in band (`elsaz1.<codec>.<base64>`), so compressed and uncompressed rows coexist in one column with no schema change; refuses a declaration that is keyed, indexed, length-bounded, or on the excluded `ContentAuthority` family |
+| `ExpandOnlyMigrationGuard` / `ExpandOnlyMigrationOptOutAttribute` | Classify a migration's `Up` operations against the expand-only allowed list, and the reviewed, per-migration opt-out that permits exactly the destructive operations it lists ([spec 185](../../../../specs/185-expand-only-migration-guard/spec.md), #2104). On a contracting migration the opt-out also names the schema family and the version whose finalization makes the removal safe (FR-023, #2136); `ExpandOnlyMigrationFamilies` tells the guard which tables a stamped family covered before the migration |
+| `EfContractingMigrationCheck` | Refuses a context's whole pending batch, before anything runs, while it holds a contracting migration whose family is finalized below the version it names (spec 185 FR-024 and FR-025, #2136); on a database no host has admitted the module in, creates the family's record at that version before the contraction runs, as `migrator:<host id or machine name>`; `SeedVersionAsync` is the version the gate creates a missing record at, no lower than any applied contracting migration of the family names. See [Contracting migrations](#contracting-migrations-spec-185) |
+
+## Shared persistence resources
+
+Workbench can opt into named persistence resources through `AddEfPersistenceResources`. A resource
+selects a `Provider` and `ConnectionName` together; the connection value remains in the host's existing
+`ConnectionStrings` configuration. An enabled enrolled feature inherits, in order, its shell binding,
+the shell default, the root `Elsa:Persistence:DefaultResource`, or its existing legacy settings. A
+resource definition by itself does not select or enable a feature. See the
+[configuration contract](../../../../specs/173-shared-persistence/contracts/persistence-configuration.md)
+for the authored shape, precedence, and refusal rules.
+
+The first-slice shared layout assigns enabled enrolled Runtime, Workflows Design, Activities Design, and
+Publishing consumers to one target. The current Workbench live receipt exercises the enabled default-shell
+module set across those four groups. All eight enrolled Runtime feature identities use one
+`RuntimeDbContext`; selecting a Runtime feature does not create a separate Runtime store, and all enabled
+Runtime participants must agree on its provider and context options. The four-module Workbench journey
+proves the default-shell workflow path. Opt-in Runtime identities have activation and migration-placement
+evidence, but that does not establish each one's data behavior. The separate diagnostics layout for
+Structured Logs and OpenTelemetry is enrolled and modeled, but its two-target host/database proof remains
+pending; do not treat it as a verified layout yet.
+
+Resource selection supplies only provider and connection-name patches. It does not set schema, pooling,
+migration policy, or migration permission. Without applicable resource selection, legacy configuration
+keeps its existing behavior. With applicable selection, authored `Provider`, `ConnectionName`, or
+`ConnectionString` fields are ambiguous and refuse. Host-owned OpenIddict, IAM/provider configuration,
+Secrets, distributed stores, Dashboard readers, private stores, and unknown/custom consumers do not
+inherit a resource automatically. Resource names are references, not proof that two contexts share a
+physical database or transaction; required affinity is checked by the owning EF/runtime operation.
+
+The opt-in [`composition inspect`](../../Cli/Elsa.Cli/README.md#inspecting-an-accepted-runtime-candidate)
+command previews an accepted, edited file candidate through the host's candidate-inspection capability.
+It uses the declared host defaults, actual CShells dependency closure and shared resource preparer with
+configured connection-value checks enabled. The Elsa-owned inspection path detects incompatible
+configured targets without opening a database; the declared composer is arbitrary trusted code and
+remains unsandboxed. Its separate `configurationResolution` projection exposes logical identities and
+checked scopes, keeps legacy targets unprojected, and labels connectivity, physical target, migration
+readiness and running-host parity as unverified or unobserved. It does not replace the live migration
+connection match or the dedicated layout/database evidence above. See
+[spec 187](../../../../specs/187-effective-persistence-preview/spec.md) for the capture and trust boundary.
+
+## Retry policy
+
+Accepted [ADR 0074](../../../../docs/adr/0074-first-party-ef-stores-retry-in-bounded-application-loops.md):
+**first-party EF stores retry in bounded application loops, and no context enables EF's retrying
+execution strategy.** `EnableRetryOnFailure` and `Database.CreateExecutionStrategy` appear nowhere in
+this repository, and that is deliberate, not an oversight. The reasons are recorded in the ADR;
+the short form is that nine of the thirteen Elsa `DbContext` types own transactions a retrying
+strategy forbids, SQLite has no retrying strategy to enable and is the provider the container-free
+suites use, and `EfRelationalProviderBinding` has no per-provider seam for the option. The ADR names the
+conditions under which that is revisited.
+
+Four rules apply when you write or review a store:
+
+1. **Retry through `EfWriteRetry`, not a hand-rolled loop.** Declare the budget, the
+   `EfWriteConflict` kinds or the predicate, any backoff, and what exhaustion means for the store's
+   contract. `EfWriteRetry` refuses to retry a transient conflict while a transaction the caller owns
+   is still open on the context, because the provider may already have rolled it back; the caller
+   retries its whole unit instead.
+
+2. **Classify with `IsSaveConflict`, which walks the exception chain.** Do not match on the type of
+   the outermost exception. The *non-retrying* default execution strategies of SQL Server and
+   PostgreSQL raise a transient error, deadlock included, as an `InvalidOperationException` wrapping
+   the `DbUpdateException`, and a store's own persistence boundary may wrap that again. A store that
+   keys on the outer type looks correct on SQLite, where nothing wraps, and silently stops retrying
+   on the two providers where it matters. This is what #1801 and #1816 had to retrofit into ten
+   stores; write it in from the start.
+
+3. **Include `Transient` deliberately.** A predicate of `Concurrency | UniqueKey` alone means a
+   deadlock or lock timeout surfaces to the caller. That is a legitimate choice for some contracts,
+   but make it a choice: it is the difference between a lost race, which is the caller's to resolve,
+   and a provider conflict, which is not.
+
+4. **Map provider failures with `IsProviderFailure`, and order it last.** The same wrapping that
+   defeats a type-keyed conflict check defeats a type-keyed *failure* mapping, so a clause written as
+   `catch (DbUpdateException)` or `catch (DbException)` lets the wrapper escape past the store's own
+   persistence exception, usually leaving the change tracker dirty. `IsProviderFailure` answers "did a
+   provider fail here" for both shapes. It says nothing about retryability, so put it **after** the
+   conflict clauses or it will swallow them: that ordering mistake is a real one, not a hypothetical
+   (#1814). Two companions exist for the cases that clause cannot cover. `FindSaveFailure` returns the
+   `DbUpdateException` itself, for code that must read the save's own entries or constraint name
+   rather than the wrapper's. `IsStoreBoundaryFailure` is wider, taking a bare
+   `InvalidOperationException` too, because that is what EF raises for infrastructure faults carrying
+   no provider exception at all; use it only at an outermost boundary where the alternative is an
+   unnormalized escape, and read its remarks first, because it knowingly over-reaches.
+
+   One more trap, and it is not obvious: most stores' own persistence exceptions derive from
+   `InvalidOperationException` and carry the provider failure as their inner, so an already-normalized
+   failure matches `IsProviderFailure` too. A ladder that can see one must rethrow its own exception
+   type first, or it will wrap the same failure twice and the caller's `InnerException as DbException`
+   becomes `null`.
+## Ordinal string columns (`EfOrdinalCollation`)
+
+A module that compares or orders a string column the way .NET compares strings needs the database to
+agree. A server whose default collation is linguistic — SQL Server's `*_CI_AS` family, PostgreSQL's
+`en_US.UTF-8` — orders `'a'` before `'B'` and treats `'A'` and `'a'` as equal. An exact-value check
+then stops being exact, a uniqueness reservation stops separating two rows that differ only in case,
+and a keyset page built from an ordinal cursor can skip or repeat rows.
+
+| Provider | Collation |
+|---|---|
+| SQL Server | `Latin1_General_100_BIN2` |
+| PostgreSQL | `C` |
+| MySQL | `utf8mb4_0900_bin` |
+| SQLite | none — `BINARY` is its only TEXT collation and already its default |
+
+A module declares it once, in its shared context:
+
+```csharp
+private static readonly string[] OrdinallyComparedColumns = ["Id", "TenantId", "SortKey"];
+
+protected static void ApplyOrdinalCollation(ModelBuilder modelBuilder, string providerName) =>
+    EfOrdinalCollation.Apply(modelBuilder, providerName, OrdinallyComparedColumns);
+```
+
+and each provider-derived context calls it with its own `ExpectedProviderName`. `Apply` collates every
+string column a key or an index is built on, plus the names in the list — the lookup projections,
+identity columns and cursor keys nothing indexes. Content columns are left alone on purpose: giving a
+payload or a description a binary collation is a silent behaviour change for anything that searches it.
+
+**MySQL needs both channels.** Oracle's `MySql.EntityFrameworkCore` reads its own `MySQL:Collation`
+annotation out of a migration's *target model* — the `.Designer.cs` beside the migration — and ignores the
+relational column collation entirely. `Apply` therefore sets both on MySQL. A module that set only the
+relational one generated a migration whose every file read correctly and produced columns on
+`utf8mb4_0900_ai_ci`; `OrdinalCollationProviderTests` reads `information_schema` on a real MySQL so that
+cannot happen quietly again.
+
+**Per column, never at model level.** `modelBuilder.UseCollation(...)` declares a collation for the whole
+database, and modules can share one, so that is one module setting its neighbours' comparison semantics.
+It is also how [#1837](https://github.com/elsa-workflows/elsa-foundation/issues/1837) went unnoticed:
+Activities Design declared `Latin1_General_100_BIN2` and `C` at model level and its generated SQL Server
+and PostgreSQL migrations contained no collation at all, so every one of those columns inherited the
+server's default. `OrdinalCollationMigrationTests` therefore asserts against the generated migration
+rather than the model, and `OrdinalCollationProviderTests` proves the ordering on a real SQL Server and a
+real PostgreSQL whose databases are deliberately created with a linguistic default.
+
+## Payload columns (operator setting, not yet reachable)
+
+A module's payload column holds its lossless JSON document, with every attribute a query needs lifted into a sibling
+projection column. That separation is what makes an encoding possible: nothing in SQL reads a payload column, so its
+stored bytes are the module's business alone.
+
+`modelBuilder.UseElsaPayloadColumns(this, "ContentJson", …)` installs the codec on the named columns. It is called
+**unconditionally**, and with no codec configured it changes nothing about what is written — but the context can then
+*read* a frame written by any other host. That ordering is the point: a database written with compression on cannot be
+read by a build that predates the decoder, so the decoder ships first and a rollback still reads every row.
+
+Marking is in band rather than in a sibling `…CompressionAlgorithm` column, which is what Elsa 3 used. Elsa 3 had two
+payload columns; this tree has about forty across eight wired modules on four providers, so a sibling column would mean
+a migration in every module before a single byte was compressed. In band means **no schema change at all**: a value
+carrying the frame prefix is encoded, and anything else is plaintext, which is what every existing row already is.
+
+Three properties are load bearing and each has a test that goes red without it:
+
+- **Lossless, including lone surrogates.** The payload is UTF-16 code units, not UTF-8, because
+  `System.Text.Encoding` substitutes U+FFFD for a lone surrogate and the runtime deliberately carries those through
+  persistence.
+- **Never larger.** Base64 expands by four thirds, so the encoder compares and writes plaintext whenever the frame
+  would not be shorter. `MinimumLength` only short-circuits that comparison.
+- **Fails closed.** A frame this build cannot read raises rather than substituting a default, which is what Elsa 3's
+  equivalent path does.
+
+`EfPayloadCompressionOptions` rides on `DbContextOptions` through `EfPayloadCompressionOptionsExtension`, the same way
+the schema does and for the same reason: the encoding is baked into a value converter on the model, EF caches one
+model per internal service provider, and two contexts configured differently have to disagree on the extension hash or
+the second silently reuses the first one's model. It also keeps pooling correct, since a pool is keyed by options.
+
+### Turning it on
+
+Off everywhere by default. An operator names a codec per module, or once for the whole host:
+
+```jsonc
+// appsettings.Production.json
+{
+  "Elsa": { "Persistence": { "EntityFramework": {
+    "PayloadCompression": "None",                       // host-wide fallback
+    "OpenTelemetry": { "PayloadCompression": "GZip" },  // one module, by its owner name
+    "Runtime":       { "PayloadCompression": "GZip" }
+  } } }
+}
+```
+
+```bash
+export Elsa__Persistence__EntityFramework__OpenTelemetry__PayloadCompression=GZip
+```
+
+The module's own key wins, then the host-wide one, then no compression. The owner name is the one the module binds
+with — `Runtime`, `OpenTelemetry`, `WorkflowsDesign`, `ActivitiesDesign`, `StructuredLogs`, `Publishing`,
+`Distributedruntimeexecutioncommandtransport`, `Elsa3import` — the same name its history table and its errors carry.
+`…:PayloadCompressionMinimumLength` sets the threshold host-wide.
+
+Per module rather than one switch because the modules differ in kind: diagnostics rows are append-mostly and read
+rarely, runtime execution state is read on every resume, design documents back an interactive UI. The host-wide key
+is a fallback for operators who do not want to draw that distinction, and it is safe because the excluded columns are
+excluded **by column** rather than by module — a module that owns an excluded column also owns ordinary payload
+columns, and no switch can reach the excluded ones.
+
+Configuration only, with no C# option on each module's feature, unlike `Schema` and `Pooling`. Those exist in code
+because a module can be moved onto its own database or pool while composing a host; the codec is a deployment choice
+about stored bytes, and nothing in composition depends on it. It also keeps the setting out of the Runtime module's
+shared-context agreement, where every participating feature would otherwise have to carry and agree on a value none
+of them acts on. Tests that need a codec in-process call `UseElsaPayloadCompression` on the options builder directly.
+
+A host that configures nothing binds **no options extension at all**, so its contexts are byte-identical to what they
+were and do not split EF's model cache. An unknown codec name is refused at startup rather than ignored: a typo that
+fell back to no compression would look exactly like the setting working.
+
+**Turning it on is one-way in one respect.** A database written with a codec can only be read by a build that has the
+decoder, which shipped separately and earlier for exactly that reason. Rows already written stay readable whichever
+way the setting is later moved, and nothing needs a backfill.
+
+Excluded permanently: the `ContentAuthority` family, which four provider computed columns read in the database, so a
+client-side encoding would make every activity definition evaluate invalid and vanish from paged reads rather than
+error. `SecretRecord.Payload` is excluded pending a security decision, because compressing before encrypting leaks
+length structure.
+
+## Putting Elsa in its own schema (operator setting)
+
+An Elsa deployment that shares a database with an application which owns the default schema puts every
+module's tables, and every module's own `__EFMigrationsHistory_<Module>` table, in a schema of its own:
+
+```jsonc
+// appsettings.Production.json
+{
+  "Elsa": { "Persistence": { "EntityFramework": { "Schema": "elsa" } } }
+}
+```
+
+```bash
+export Elsa__Persistence__EntityFramework__Schema=elsa
+```
+
+A module that splits onto its own database can override it on its own feature (`Schema`), which wins over
+the host-wide key. Unset means what every deployment has today: the provider's own default schema.
+
+- **SQL Server and PostgreSQL** apply it, and create it: on both, EF's own migrations-history script creates
+  the schema before it creates `__EFMigrationsHistory_<Module>` inside it, which is the first thing a migrate
+  does. Nothing has to exist beforehand but the database.
+- **SQLite** ignores it. SQLite has no schemas, and a qualified name there addresses an attached database
+  file. One appsettings file can therefore name a schema and still run the SQLite developer shell.
+- **MySQL refuses it.** A MySQL schema *is* a database, so the setting would mean something different there
+  from what it means everywhere else, and `MySql.EntityFrameworkCore`'s history repository writes
+  `CREATE DATABASE IF NOT EXISTS …` with no statement terminator in front of its `CREATE TABLE`, which the
+  server rejects on the first migration. A MySQL host names the database in its connection string instead
+  (`Database=elsa`), which says the same thing in MySQL's own terms; the error says so.
+
+The value must be a plain identifier — ASCII letters, digits, `_` or `$`, up to 64 characters. A name that
+would need escaping is refused rather than escaped, because it is a configuration mistake rather than a schema.
+
+Migrations are deliberately scaffolded against a schema-less context, so one migration set applies into
+whatever schema a host picks: `EfSchemaMigrationsAssembly` fills the schema into every operation as the
+migration is read, because EF's SQL generator reads a schema off each operation and `HasDefaultSchema` never
+reaches migration DDL. Two consequences are worth knowing:
+
+- A migration that runs **raw SQL** cannot be redirected, so a configured schema refuses it by name rather
+  than applying it to the wrong schema.
+- The model snapshot a migration carries differs from a schema-configured model by exactly that default
+  schema, which EF reads as un-migrated model drift. A schema-configured context therefore suppresses
+  `RelationalEventId.PendingModelChangesWarning`. Real drift is still caught where the schema is not in
+  play: the model-versus-migrations test in CI, and `tools/ef/module-migrate.sh pending`.
+
+Applying migrations **out of process** into a schema works through the same path: set
+`ELSA_EF_SCHEMA` beside `ELSA_EF_CONNECTION` for `tools/ef/module-migrate.sh`. Scripting
+(`script` / `script-check`) honours it too, so the artifact a DBA reviews is the schema-qualified one.
+Never set it while *generating* migrations; `tools/ef/generate-module-migrations.sh` clears it for that reason.
+
+## Pooled contexts (operator setting)
+
+Every module feature also takes `Pooling`, which registers its context through `AddDbContextPool` instead of
+`AddDbContext`, so instances are reused across scopes rather than constructed per scope. It is off by default.
+
+Pooling is safe on **every** first-party module context, and that is a property of how they are written
+rather than a case-by-case judgement: each one is constructed from its `DbContextOptions<TContext>` alone and
+keeps no instance state, so there is nothing for a reused instance to carry from one request into the next.
+Per-request state in EF persistence lives in the stores and commands that take a context — `IPersistenceAccessContextAccessor`,
+persistence scopes — and those stay scoped whether or not the context is pooled.
+`ModuleSchemaTests.Every_module_context_is_constructed_from_its_options_alone` keeps that true: a module
+context that starts taking a service, or holding a field, fails it rather than quietly corrupting under pooling.
+
+The Runtime module's features share one context, so schema and pooling join the provider and connection in
+what its participants must agree on; a second feature that asks for a different one is refused at composition
+rather than silently ignored.
+
+## Choosing the policy (operator setting)
+
+`EfMigrateOptions.Policy` is bound from configuration, so switching a deployment to out-of-process
+migration needs no code change. Every module that registers a migrator binds the same key once:
+
+```jsonc
+// appsettings.Production.json
+{
+  "Elsa": { "Persistence": { "EntityFramework": { "Migrate": { "Policy": "Validate" } } } }
+}
+```
+
+```bash
+export Elsa__Persistence__EntityFramework__Migrate__Policy=Validate
+```
+
+- Unset (or blank) means `AutoMigrate`, which is the default a developer host runs on.
+- A value that is neither `AutoMigrate` nor `Validate` fails the host with a message naming the key;
+  it is never quietly treated as the default, because that would auto-migrate the database the
+  operator meant to protect.
+- In a CShells host the key is read from the shell's configuration, which layers the shell's own
+  `Configuration` node over the host's, so one shell can run `Validate` while another does not.
+- A host that calls `services.Configure<EfMigrateOptions>(…)` after composing the module still wins:
+  `IConfigureOptions` run in registration order.
+
+Under `Validate` a database that is behind fails `EfDatabaseMigrator.ApplyAsync`, which in a shell
+fails activation:
+
+```
+EF module 'Runtime' has pending migrations: 20260911000000_Initial. Apply them out of process with
+`dotnet elsa persistence apply --host "<host directory>" --modules Runtime --provider Sqlite --connection-env ELSA_EF_CONNECTION`,
+or set Elsa:Persistence:EntityFramework:Migrate:Policy to AutoMigrate.
+```
+
+The exception is an `IEfModuleRefusal` (in `Elsa.Persistence.Schema`, which every host shares with the packages it loads),
+as are `EfContractingMigrationRefusedException` and `EfSchemaActivationRefusedException`. A host reads the module, the pending
+migration ids, a stable `Code` and the command from it without naming the exception's type, which a module that
+loaded a private copy of this assembly would make a different type from any the host could reference.
+
+## Schema finalization (spec 181)
+
+A module's new persisted-schema version is read as soon as a host runs it, but written only once it is
+**finalized**: once every live host that may read the database can read it, unless an operator holds it. Each
+module's migrator admits the module through its finalization gate after its migrations, under both policies:
+
+- it publishes the host's readability report, then reads (or creates) each family's finalization record;
+- a family finalized at a version this build cannot read refuses the module, exactly where a pending migration
+  under `Validate` does, and the Modularity API's enable-time guard refuses the same feature with a 409 under both
+  policies before anything is saved;
+- it then evaluates, which on a host alone finalizes at once, and keeps evaluating and refreshing in the background,
+  so writers switch versions without a restart or a shell reload.
+
+The write version is the finalized version the host last observed; every module context refuses a row stamped with
+any other. Finalization is the rollback boundary: before it, no row at the new version exists and rolling back the
+binary is safe; after it, it is not.
+
+An operator holds finalization, for a canary, with the persistence tool, which writes the record directly and so
+works before any gate-aware host runs:
+
+```bash
+dotnet elsa persistence hold    --host <dir> --provider PostgreSql --modules Workflows.Runtime \
+  --family RuntimeWorkflowExecution --reason "canary of 4.1" --operator ops@example
+dotnet elsa persistence status  --host <dir> --provider PostgreSql --modules Workflows.Runtime
+dotnet elsa persistence release --host <dir> --provider PostgreSql --modules Workflows.Runtime \
+  --family RuntimeWorkflowExecution --operator ops@example
+```
+
+`status` also names, under each pending version, the cluster members that cannot read it and lists the members of the
+membership table, read through the host's closure (`IEfToolingFleetSource`; see `docs/foundation-host-feeds.md`, "Seeing which
+host holds a version back").
+
+A hold on a version already finalized is refused. No command finalizes, forces finalization or lowers a finalized
+version: going back past one means restoring a database backup taken before it.
+
+A feature whose data only the new version can hold stays **dormant** until its host observes that version as
+finalized (spec 182): composed and running, listed as enabled with a reason, and refusing, never dropping, whatever
+needs the new data. It declares `[RequiresSchemaVersion(family, version)]` on its feature class and asks
+`ISchemaDormancyCheck` (`Elsa.Cluster.Core`) where it accepts that data. The check answers from each gate's last
+observation, which `Elsa.Cluster.Readability`'s `AddEfSchemaDormancy()` exposes; before refusing, it has the gate
+re-read an observation older than two seconds, one read per bound however many requests ask
+(`EfSchemaModuleGate.RefreshIfOlderThanAsync`). A store that writes new-version data at an older write version is still
+refused by the write check, so a path that forgot to ask fails loudly.
+
+## Contracting migrations (spec 185)
+
+A change that is not expand-only ships in two releases: the first adds the new shape beside the old, the second
+removes the old one in a **contracting migration**. Its opt-out names the family and the version whose finalization
+makes the removal safe, and the build guard requires both exactly when the migration removes or renames something on
+a table a stamped family covers:
+
+```csharp
+[ExpandOnlyMigrationOptOut("Version 2 reads Replacement; once it is finalized nothing reads Legacy.", "#1234",
+    "DropColumn elsa_orders.Legacy", SchemaFamily = "Orders", FinalizedVersion = "2")]
+```
+
+Applying it waits for that version. While the family's finalized version in the target database is below it,
+`EfDatabaseMigrator.ApplyAsync` refuses the context's whole pending batch before anything runs, with
+`EfContractingMigrationRefusedException` naming the migration, the family and both versions: under `AutoMigrate` at
+Prepare, under `Validate` instead of the plain pending report, in `dotnet elsa persistence apply` as a refusal (exit
+code 2), and at enable time as a 409 under both policies.
+
+A database no host has admitted the module in yet, which no family's record there shows, such as a fresh install, is
+not refused, since nothing there reads what the batch removes. The migrator seeds first instead: under `AutoMigrate`,
+and in `apply`, `EfDatabaseMigrator` applies the pending migrations before the first contracting one, creates each
+contracted family's record at the version its contraction names, as `migrator:<host id>` (the host's member in the
+fleet) or `migrator:<machine name>`, reads the records again, and only then applies the contracting migrations and
+the rest. A release that reads only earlier versions is then refused (`EfSchemaActivationRefusedException`) whether it
+starts after the apply, during it, or after a process that applied it ended part-way through; if its gate created a
+record below the version first, the contraction is refused instead, with the migrations before it applied and named in
+the refusal. A process that ends between two families' records, or between the seed and the contraction, leaves only
+the migrator's own records, and the next apply completes that seed. Any other record admits the module, and a family
+with no record is then refused: one a member or an operator created, one changed since it was created, and one the
+migrator created for a contraction that has already run, since a gate that admits a module whose families all have a
+record leaves no trace of it.
+
+SQL run outside Elsa, such as `script`'s, creates no record. For it the first gate to admit the module creates the
+family's record no lower than the version an applied contraction names, and a host whose chain does not read that
+version is refused instead of creating the record; that relies on the first host to admit the module running a release
+that carries the contraction, as spec 185's Invariant states.
+
+## Post-migration actions
+
+Some repairs cannot be expressed as a migration — rewriting rows a changed projection algorithm left
+stale, for instance. A module declares them on its own `[EfModule]`:
+
+```csharp
+[assembly: EfModule("Secrets", typeof(SecretsDbContext), …, PostMigration = [typeof(SecretsProjectionReindex)])]
+```
+
+An action implements `IEfPostMigrationAction`: a concrete type with a public parameterless
+constructor, taking only the `DbContext` and using no DI, because the `dotnet elsa persistence`
+worker has no container to resolve from. It exposes `Id`, `Kind`, `RequiredWhen` and `Audit` — the
+four facts `migration-plan.json` records (FR-048) — plus `AuditAsync` and `RunAsync`.
+
+Two rules make this safe, and both are enforced rather than documented:
+
+- **`AuditAsync` never mutates, and never reports "not required" for a database it could not read.**
+  It runs after every apply, under both `EfMigratePolicy` values, and from `apply` and `validate`.
+  A failure propagates; it is never swallowed into a clean result.
+- **Nothing runs an action automatically.** `EfModuleMigrator<TContext>` audits and, if anything is
+  required, throws `EfPostMigrationRequiredException` naming the exact command:
+
+  ```
+  dotnet elsa persistence post-migrate --modules Secrets --provider Sqlite
+  ```
+
+  `post-migrate` is the only caller of `RunAsync`. It audits first, runs only what is required, then
+  re-audits and fails closed if anything still is.
+
+A declaration this build cannot use — a type that is not an action, one that needs constructor
+arguments, one that describes itself incompletely, or two sharing an `Id` — is refused by name at
+registration and by every tooling command, never skipped: a skipped action would leave a real
+obligation unaudited while every command still exited 0.
+
+## Custom migrate loops
+
+`Database.MigrateAsync` already acquires `IHistoryRepository.AcquireDatabaseLockAsync`.
+Hosts that call `IMigrator.Migrate` or apply pending migrations themselves **must take the
+same lock** or concurrent hosts race. Do not roll a second lock around `MigrateAsync`.
+
+On SQLite that lock is a row in `__EFMigrationsLock`, which a process killed mid-migration leaves behind and EF then waits for
+for ever. `EfSqliteMigrationLock.MigrateAsync` is `MigrateAsync` for that provider (#2196): it applies nothing when nothing is
+pending, waits for a lock younger than `Elsa:Persistence:EntityFramework:Migrate:SqliteMigrationLockStaleAfter` (default 10
+minutes), and fails an older one with `EfMigrationLockStaleException`, which names the `DELETE FROM "__EFMigrationsLock" WHERE
+"Id" = 1` that clears it. It never removes the row itself, because nothing in a SQLite file proves the holder dead. Every
+other provider releases its lock when the connection drops and passes straight through. Skipping when nothing is pending is
+safe because a migration's history row is written after its operations; for a migration that suppresses its transaction
+(SQLite table rebuilds), it is a statement of its own and not committed atomically with them, so a process killed between the two
+leaves a migration pending whose operations have run, which the next start migrates again under the lock.
+
+## Dual apply
+
+`EfDatabaseMigrator.ApplyAsync` is the in-process path (feature enable and CShells reload).
+Out-of-process apply, fail-if-pending and post-migration repair go through
+`dotnet elsa persistence apply` / `validate` / `post-migrate`, which run the host's own compiled
+migrations inside its own closure. There is no second implementation of that path: #1878 retired the
+Secrets-only `tools/ef/dual-migrate.sh` (FR-078), and
+[tools/ef/module-migrate.sh](../../../../tools/ef/module-migrate.sh) is a thin shim over the same CLI.
+
+## Provider packages stay in the host
+
+This project has no `PackageReference` to SqlServer, Sqlite, Npgsql, or MySql.EntityFrameworkCore. The host (or a
+design-time tooling project) brings exactly one runtime provider package.
+
+Because the binding is reflective, a missing or mismatched provider package cannot fail at compile time. Two
+guards replace that compile check:
+
+- **At startup.** `AddEfModuleMigrations<TContext>` records the provider each module context is configured for, and
+  `EfProviderBindingValidator` probes every one of them in the CShells `Prepare` phase — before any migrator runs, and
+  as the first hosted service on a plain host. The error names each module, its configured provider, the missing
+  assembly or extension method, and the `PackageReference` to add.
+- **In CI.** [Essentials/tests/Persistence/EntityFramework/BindingDriftTests](../../../../Essentials/tests/Persistence/EntityFramework/BindingDriftTests)
+  references all four engines at the versions `Directory.Packages.props` pins and binds against each, so a provider
+  upgrade that renames, moves, or reshapes a `Use*` extension fails CI rather than a host.
+
+### Why no typed registration helper
+
+ADR 0073's [EF dependency guard](../../../../Essentials/tests/Architecture/Tests/EfCoreDependencyGuardTests.cs) admits engine
+packages in `Elsa.Workbench` only, and asserts each admitted module project's EF closure exactly. Adding a typed
+`UseSqlServer` call to a module project would therefore fail the guard as an unexpectedly resolved package, and
+splitting each module into four provider-specific projects would turn thirteen module projects into fifty-two and
+needs its own ADR. Reflection stays the binding; the two guards above cover what a typed call would have caught.
+
+## Declaring the `ef-provider` Nuplane capability
+
+Every EF module package ships a package-root `nuplane.json` (schema 2) declaring capability `ef-provider`, one
+option per non-null provider on its `[EfModule]` — see Nuplane's Package-Authoring wiki, section "Capability
+metadata" — so a package-hosted host selects its engine with `Nuplane:Capabilities:ef-provider` instead of naming
+the engine by hand in the closure. Each option's `packageId` is `EfRelationalProviderBinding.ProviderPackageId`
+for that provider and its `version` is the central pin in `Directory.Packages.props`, written as the single-point
+range `[x.y.z]` (spec 172 D1, D5; #1938, child of #1936). The file is hand-written, not generated at pack time:
+`EfModuleDescriptorTests.Every_module_package_declares_an_ef_provider_capability_matching_its_EfModule_and_the_pinned_engines`
+reads every declaring project's `nuplane.json` from the repo and fails when a module's declared providers, an
+engine's package id, or its pinned version drifts from the file (spec 172 D2), the same way
+`Every_module_assembly_mirrors_its_EfModule_names_into_a_ManifestExtension_efModules_declaration` guards the
+`efModules` manifest mirror above.

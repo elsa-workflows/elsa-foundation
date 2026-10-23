@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Mapping\Elsa3.Mapping.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Essentials\src\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
+    <!-- The credential-literal rule the collection import admits its mapped states through (spec 188). -->
+    <ProjectReference Include="..\..\..\..\..\Essentials\src\Workflows\Design\Validations\Elsa.Workflows.Design.Validations\Elsa.Workflows.Design.Validations.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Essentials\tests\Serialization\Testing\Elsa.Serialization.Testing.csproj" />
+  </ItemGroup>
+
+  <!-- The Elsa 4 portable JavaScript evaluator, so converted expressions are run and compared with Elsa 3's results
+       (spec 247 SC-003). Test-only. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\Essentials\src\Expressions\Elsa.Expressions\Elsa.Expressions.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Essentials\src\Expressions\JavaScript\Elsa.Expressions.JavaScript\Elsa.Expressions.JavaScript.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Essentials\src\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
+  </ItemGroup>
+
+  <!-- The real activity catalog the map is tested against (spec 236 SC-002): the CLR scanner over the shipped Elsa 4
+       activity assemblies the map targets, and the graph provider that proves converted reusable output (R-10).
+       Test-only; the production Mapping project references none of these. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\Essentials\src\Activities\Design\Reconciliation\Clr\Elsa.Activities.Design.Reconciliation.Clr.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Essentials\src\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Essentials\src\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Essentials\src\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Essentials\src\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Essentials\src\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Essentials\src\Activities\Http\Elsa.Activities.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Essentials\src\Activities\DispatchWorkflow\Runtime\Elsa.Activities.DispatchWorkflow.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Essentials\src\Activities\Scripting\Elsa.Activities.Scripting.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Essentials\src\Activities\Graph\Runtime\Elsa.Activities.Graph.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Essentials\src\Activities\Graph\Design\Elsa.Activities.Graph.Design.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Fixtures\**\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

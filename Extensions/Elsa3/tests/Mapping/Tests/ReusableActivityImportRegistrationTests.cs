@@ -1,0 +1,126 @@
+using System.Reflection;
+using CShells.Features;
+using Elsa.Serialization.Core;
+using Elsa.Serialization.SystemText.Services;
+using Elsa.Tasks.Core;
+using Elsa.Workflows.Design.Validations;
+using Elsa3.Activities.Design.Import;
+using Elsa3.Activities.Design.Import.Contracts;
+using Elsa3.Activities.Design.Import.Models;
+using Elsa3.Activities.Design.Import.Services;
+using Elsa3.Mapping.Mappings;
+using Elsa3.Mapping.Services;
+using Elsa3.Models;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+
+namespace Elsa3.Mapping.Tests;
+
+public sealed class ReusableActivityImportRegistrationTests
+{
+    [Fact]
+    public void Import_feature_builds_and_resolves_every_owned_service()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        // The feature now registers the API Explorer refresh, whose change provider depends on the
+        // web host's composite EndpointDataSource; routing supplies it.
+        services.AddRouting();
+        services.AddScoped<IReusableActivityImportMaterializer, StubMaterializer>();
+        services.AddScoped<IReusableActivityImportCommand, StubCommand>();
+        services.AddScoped<IReusableActivityImportOperationStore, StubOperationStore>();
+        // Registered by WorkflowDesignValidations, on which the feature depends.
+        services.AddScoped(_ => ReusableActivityImportFixtures.Validator());
+
+        new Elsa3ImportActivitiesFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions
+        {
+            ValidateOnBuild = true,
+            ValidateScopes = true
+        });
+        using var scope = provider.CreateScope();
+        Assert.IsType<ReusableActivityCollectionAnalyzer>(scope.ServiceProvider.GetRequiredService<IReusableActivityCollectionAnalyzer>());
+        Assert.IsType<ReusableActivityCollectionImporter>(scope.ServiceProvider.GetRequiredService<IReusableActivityCollectionImporter>());
+        Assert.IsType<StubOperationStore>(scope.ServiceProvider.GetRequiredService<IReusableActivityImportOperationStore>());
+        Assert.IsType<ReusableActivityImportOperationService>(scope.ServiceProvider.GetRequiredService<IReusableActivityImportOperationService>());
+        // The sweep that deletes expired uploads is a recurring task, run by the Tasks feature the import depends on.
+        Assert.Single(provider.GetServices<IRecurringTask>().OfType<ExpiredImportCollectionSweepTask>());
+        Assert.Contains("Tasks", ImportFeatureDependencies());
+    }
+
+    [Fact]
+    public void Import_feature_depends_on_the_feature_that_registers_the_credential_literal_rule()
+    {
+        var validations = typeof(WorkflowDesignValidationsFeature).GetCustomAttribute<ShellFeatureAttribute>()!.Name;
+        var dependsOn = typeof(Elsa3ImportActivitiesFeature).GetCustomAttribute<ShellFeatureAttribute>()!.DependsOn.Select(dependency => dependency.ToString());
+
+        Assert.Contains(validations, dependsOn);
+    }
+
+    [Fact]
+    public void Generic_import_feature_does_not_select_a_concrete_persistence_provider()
+    {
+        Assert.DoesNotContain("Elsa3ImportActivitiesEntityFrameworkCore", ImportFeatureDependencies());
+    }
+
+    private static string?[] ImportFeatureDependencies()
+    {
+        var featureAttribute = typeof(Elsa3ImportActivitiesFeature)
+            .GetCustomAttributes(inherit: false)
+            .Single(x => x.GetType().Name == "ShellFeatureAttribute");
+        var dependencies = (IEnumerable<object>?)featureAttribute.GetType()
+            .GetProperty("DependsOn")
+            ?.GetValue(featureAttribute) ?? [];
+        return dependencies.Select(x => x?.ToString()).ToArray();
+    }
+
+    [Fact]
+    public async Task Single_definition_importer_routes_reusable_sources_to_collection_import()
+    {
+        var importer = new Elsa3WorkflowDefinitionImporter(null!, null!);
+        var source = ReusableActivityImportFixtures.Workflow(
+            "reusable",
+            "reusable-v1",
+            1,
+            true,
+            ReusableActivityImportFixtures.Leaf("root"));
+
+        var result = await importer.ImportAsync(new(
+            Elsa3MigrationInputKind.WorkflowDefinitionExportJson,
+            source));
+
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.False(result.Succeeded);
+        Assert.Equal(ReusableActivityImportDiagnosticCodes.SelectionInvalid, diagnostic.Code);
+        Assert.Contains("collection-aware", diagnostic.Message, StringComparison.Ordinal);
+    }
+
+    private sealed class StubMaterializer : IReusableActivityImportMaterializer
+    {
+        public ValueTask<ReusableActivityImportMutation> MaterializeAsync(
+            ReusableActivityImportCollection collection,
+            ReusableActivityImportPlan plan,
+            IReadOnlyList<ReusableActivityImportItem> selection,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new ReusableActivityImportMutation(plan.PlanId, plan.CollectionId, [], [], []));
+    }
+
+    private sealed class StubCommand : IReusableActivityImportCommand
+    {
+        public ValueTask<ReusableActivityImportCommitResult> CommitAsync(
+            ReusableActivityImportMutation mutation,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new ReusableActivityImportCommitResult(false));
+    }
+
+    private sealed class StubOperationStore : IReusableActivityImportOperationStore
+    {
+        public ValueTask<bool> TryCreateCollectionAsync(ReusableActivityImportCollectionHandle collection, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
+        public ValueTask<ReusableActivityImportCollectionHandle?> FindCollectionAsync(string handle, ReusableActivityImportAccessScope accessScope, CancellationToken cancellationToken = default) => ValueTask.FromResult<ReusableActivityImportCollectionHandle?>(null);
+        public ValueTask<ReusableActivityImportReceipt?> FindReceiptAsync(string idempotencyKey, ReusableActivityImportAccessScope accessScope, CancellationToken cancellationToken = default) => ValueTask.FromResult<ReusableActivityImportReceipt?>(null);
+        public ValueTask<bool> DeleteCollectionAsync(string handle, ReusableActivityImportAccessScope accessScope, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
+        public ValueTask<int> DeleteExpiredCollectionsAsync(DateTimeOffset expiresAtOrBefore, int maxCount, CancellationToken cancellationToken = default) => ValueTask.FromResult(0);
+    }
+
+}

@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 1,
+  "status": "accepted_bounded_immediate_before_capture",
+  "scope": "One Immediate HttpEndpoint request, one valid REST control, one primary settlement snapshot, and seven six-command resumption sweeps; six sweeps began after settlement. This is bounded accounting, not timing evidence or final integrated acceptance.",
+  "provenance": {
+    "baselineRevision": "e6faa5689814c33353009b13f5b9e44d0e9982a4",
+    "descriptorDifference": "configuration.cadence changed from Coalesced to Immediate only",
+    "unchangedBinaryPins": 589,
+    "rootAcceptanceSha256": "18b44cf1def5b02409855febccc739a856ce41950712bcb2c8df6e7a50596b3a",
+    "independentLedgerV2Sha256": "f3bc9dd7e6e1a92c973f463014b6784aaa5d704803d586aebbdfcb42a704dae1",
+    "rootArtifactChecksSha256": "988847bd918fa414731109c1b16dc3e8984e8c81567fa7ce3008b64a419dbc66",
+    "rootPairReconciliationSha256": "dc918569260dbd5806f5f6fdacada09f28f120634eb35769b5c140e8c448c955",
+    "finalReceiptSha256": "9b262a1dc1bf32f5d288223762a81135922f884a9885d2cf0b7fd45bb10f7629",
+    "probeSha256": "873ce23b9837659f211512a493ac72abeeaa30b72e1474b639e84b6bb10febc5",
+    "snapshotSha256": "bea1f8443b029a6c06282b3db4c10d59b79e69df634c6f7212c1e59159e7b060",
+    "guardReceiptSha256": "cdad642a856c8399deead4e68d51419550c91339ae54b28939ae36717731d61f"
+  },
+  "requestResults": {
+    "http": {
+      "invocations": 1,
+      "statusCode": 200,
+      "bodyMatched": true,
+      "expectedOutput": "Alice Smith",
+      "workflowStatus": "Completed",
+      "incidents": 0,
+      "checkpointCadence": "Immediate",
+      "maxSegmentCheckpoints": null,
+      "inspectionGranularity": "activity-level"
+    },
+    "rest": {
+      "invocations": 1,
+      "statusCode": 200,
+      "outputMatched": true,
+      "workflowStatus": "Completed",
+      "incidents": 0,
+      "inspectionGranularity": "activity-level"
+    },
+    "requestPlanTypedHmacTraceMappingsVerified": true
+  },
+  "commandReconciliation": {
+    "commandUnit": "One EF CommandExecuting/CommandExecuted pair, not a SQL statement, row count, or network round trip.",
+    "starts": 1233,
+    "terminals": 1233,
+    "pairs": 1233,
+    "duplicateStarts": 0,
+    "duplicateTerminals": 0,
+    "unmatched": 0,
+    "failedTerminals": 0,
+    "requestTraces": {
+      "http": {
+        "commands": 635,
+        "providerExecutions": {
+          "Npgsql.NpgsqlCommand": 505,
+          "Microsoft.Data.Sqlite.SqliteCommand": 130
+        },
+        "contextExecutions": {
+          "runtimePostgreSql": 505,
+          "diagnosticsSqlite": 128,
+          "placementSqlite": 2
+        },
+        "methodStopPairs": 609,
+        "descendantTailPairs": 8,
+        "outsideSourceBoundary": 18
+      },
+      "rest": {
+        "commands": 556,
+        "providerExecutions": {
+          "Npgsql.NpgsqlCommand": 441,
+          "Microsoft.Data.Sqlite.SqliteCommand": 115
+        },
+        "contextExecutions": {
+          "runtimePostgreSql": 441,
+          "diagnosticsSqlite": 112,
+          "placementSqlite": 2,
+          "identityIamSqlite": 1
+        },
+        "methodStopPairs": 525,
+        "descendantTailPairs": 16,
+        "outsideSourceBoundary": 15
+      },
+      "sweeps": {
+        "count": 7,
+        "postSettlementCount": 6,
+        "commands": 42,
+        "provider": "Npgsql.NpgsqlCommand"
+      },
+      "providerTotals": {
+        "Npgsql.NpgsqlCommand": 988,
+        "Microsoft.Data.Sqlite.SqliteCommand": 245
+      }
+    }
+  },
+  "saveChanges": {
+    "starts": 296,
+    "terminals": 296,
+    "pairs": 296,
+    "badPairs": 0
+  },
+  "transactions": {
+    "generationStarts": 70,
+    "generationTerminals": 70,
+    "generationPairs": 70,
+    "badGenerationPairs": 0,
+    "loggerCallbacks": 600,
+    "callbackNote": "Callbacks include repeated lifecycle annotations and savepoint events; 600 callbacks are not 600 transaction generations."
+  },
+  "primarySettlement": {
+    "snapshotReadMode": "postgres_read_only_repeatable_read",
+    "snapshotEligibleAndValidated": true,
+    "snapshotScope": "primary execution only",
+    "executionStatus": "Completed",
+    "executionTerminal": true,
+    "schedulerItems": 0,
+    "outboxStatusCounts": {
+      "Delivered": 15,
+      "Pending": 0,
+      "Delivering": 0,
+      "Cancelled": 0,
+      "FailedRetryable": 0,
+      "FailedFinal": 0
+    },
+    "deliveredRowsUnique": true,
+    "settlementMarkerMatchesSnapshotAndPrimary": true,
+    "restReadbackIsNotAnotherSettlementSnapshot": true
+  },
+  "sweeps": {
+    "total": 7,
+    "afterSettlement": 6,
+    "commandsPerSweep": 6,
+    "verb": "SELECT",
+    "tableTokenReferencesPerSweep": {
+      "elsa_runtime_execution_liveness_state": 4,
+      "elsa_runtime_scheduler_work_item": 1,
+      "elsa_runtime_post_commit_outbox": 1
+    },
+    "postSettlementMethodsCompleted": 6,
+    "postSettlementTailsConserved": 6,
+    "postSettlementInFlightCommandsAtStop": 0,
+    "postSettlementInFlightSaveChangesAtStop": 0,
+    "postSettlementInFlightTransactionGenerationsAtStop": 0
+  },
+  "cleanup": {
+    "ownedProcessGroupsChecked": 24,
+    "ownedProcessGroupsRemaining": 0,
+    "exactDisposablePostgresContainerAbsent": true,
+    "forcedHostKill": false
+  },
+  "interpretationLimits": [
+    "Activity ancestry identifies observed descendants but does not prove that the caller awaited them or exclusively owned their work.",
+    "The primary snapshot does not provide a second settlement snapshot for the REST control.",
+    "Exact repository-caller, checkpoint-participant/marker, and work-item/outbox identity joins remain incomplete.",
+    "The historical untraced command range and original transform cost are not reproduced or explained.",
+    "This packet does not establish final candidate accounting, integrated correctness, or a timing result."
+  ]
+}

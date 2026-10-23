@@ -4,7 +4,7 @@ Use this matrix to choose focused checks while iterating. It summarizes existing
 
 ## Existing merge gates
 
-- **Foundation:** the [Merge Gate](../skills/catalog.md#merge-gate) still requires the solution build, affected whole test projects, architecture guard, generated-maps check, diff review, green required checks on the PR head, and a PR evidence comment. A behavioral claim also requires the gate's red-then-green bite-proof. Follow the applicable [rebuilt-server E2E guidance](../../AGENTS.md#backend-e2e-tests).
+- **Foundation:** the [Merge Gate](../skills/catalog.md#merge-gate) still requires the solution build, affected whole test projects, architecture guard, generated-maps check (the committed solution filters), diff review, green required checks on the PR head, and a PR evidence comment. A behavioral claim also requires the gate's red-then-green bite-proof. Follow the applicable [rebuilt-server E2E guidance](task-paths.md#backend-e2e-tests).
 - **Studio:** use the [Studio contribution guide](https://github.com/elsa-workflows/elsa-foundation-studio/blob/main/CONTRIBUTING.md#local-checks-and-hosted-checks) and current PR branch rules. Its CI and Docker PR jobs are described there; the Packages workflow does not run on pull requests.
 
 ## By change area
@@ -12,12 +12,12 @@ Use this matrix to choose focused checks while iterating. It summarizes existing
 ### Documentation
 
 - **Inner loop:** review the rendered Markdown and links; run `git diff --check`. Follow any task-specific documentation check.
-- **Evidence:** report the relevant local review and let the configured repository PR checks run. A docs-only change does not make a behavioral bite-proof applicable, and it does not waive the existing merge gates.
+- **Evidence:** report the relevant local review and let the configured repository PR checks run. On a docs-only PR, `Build & test` takes a fast path (Python guards and the catalog link check, no .NET build); see [Merging](merging.md#pr-evidence) for which paths count. A docs-only change does not make a behavioral bite-proof applicable, and it does not waive the existing merge gates.
 
 ### Backend behavior
 
 - **Inner loop:** build and test the affected project or an appropriate [solution filter](../reference/developer-solution-filters.md). For Workbench startup and its REST smoke test, use the [backend source quickstart](backend-source-quickstart.md); use the [E2E guide](../../e2e-tests/README.md) to select other suites and their process-ownership rules.
-- **Evidence:** Foundation PR CI builds the full solution and runs its configured test jobs, including selected EF suites. When changing design, publishing, runtime, activity, stimulus, or scheduling behavior, run the relevant E2E suite against a rebuilt server as described in [AGENTS.md](../../AGENTS.md#backend-e2e-tests). Record the affected suites and the required bite-proof; Actions only supplies jobs already configured for the PR.
+- **Evidence:** Foundation PR CI builds the full solution and runs its configured test jobs, including selected EF suites. When changing design, publishing, runtime, activity, stimulus, or scheduling behavior, run the relevant E2E suite against a rebuilt server as described in [Backend e2e tests](task-paths.md#backend-e2e-tests). Record the affected suites and the required bite-proof; Actions only supplies jobs already configured for the PR.
 
 ### Studio UI
 
@@ -27,7 +27,7 @@ Use this matrix to choose focused checks while iterating. It summarizes existing
 ### Persistence
 
 - **Inner loop:** run the affected provider test project as a whole. The [solution-filter guide](../reference/developer-solution-filters.md) identifies the Testcontainers-backed profile; those tests need Docker. Use the E2E guide for persistence behavior exercised through a rebuilt Workbench.
-- **Evidence:** Foundation PR CI selects affected EF suites and runs the Secrets/PostgreSQL composition job. The broader Testcontainers integration workflow is nightly or manually dispatched, not a required PR check. Do not use its existence as evidence for an affected suite that did not run; identify and coordinate any additional required infrastructure-dependent check.
+- **Evidence:** Foundation PR CI runs no Testcontainers suite. The EF container matrix and the Secrets/PostgreSQL composition job run in `CI`'s nightly schedule and on manual dispatch only (#2632), not as a required PR check. Run the affected provider suite locally, or dispatch `CI` on the branch, and record the result; do not use the nightly's existence as evidence for an affected suite that did not run.
 
 ### Cross-repository change
 
