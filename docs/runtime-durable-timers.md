@@ -6,7 +6,7 @@
 
 A `Delay` of 5 seconds must suspend the workflow, survive a process restart, and resume on time. Surviving the restart is the hard part: an in-memory timer dies with the process.
 
-Durable timers solve it with a **saved timer record** plus a **background pump** that fires due timers through the **normal** bookmark-resume path. Nothing about resuming is special to timers. The EF store's composite index includes `DueTimeUtcTicks`; `ListDueAsync` filters due timers, orders them and `Take(limit)`s in the database.
+Durable timers solve it with a **saved timer record** plus a **background pump** that fires due timers through the **normal** bookmark-resume path. Nothing about resuming is special to timers.
 
 > *Good to know:* `Delay` survives a restart **only** in a shell with a durable timer store (EF Core). With the in-memory default it still suspends and resumes within one process, but a restart loses the timer.
 
@@ -14,9 +14,13 @@ Durable timers solve it with a **saved timer record** plus a **background pump**
 
 | Piece | What it does |
 |---|---|
-| **Timer store** | Saves each timer: which run it belongs to, the stimulus it will send, its due time and when it was created. Keyed by run and timer id. In memory by default; a database store when EF Core runtime persistence is on. |
-| **Timer pump** | A recurring background task. Each tick it takes a bounded batch of due timers, fires each as a bookmark resume through the same single-writer mailbox path every other resume uses, and backs off (per sweep and per timer) on failure. It never throws out of a tick. It is modelled on the [resumption pump](runtime-durable-resumption.md). |
+| **Timer store** | Saves each timer: which run it belongs to, the stimulus it will send, its due time and when it was created. Keyed by run and timer id. In memory by default; a database store when EF Core runtime persistence is on. Both shipped stores (`InMemoryDurableTimerStore` and `EfDurableTimerStore`) set `SupportsClaimTransitions` to true. |
+| **Timer pump** | A recurring background task (`DurableTimerPumpTask`). Each tick it claims a bounded batch of due timers, fires each as a bookmark resume through the same single-writer mailbox path every other resume uses, and backs off (per sweep and per timer) on failure. It never throws out of a tick. It is modelled on the [resumption pump](runtime-durable-resumption.md). |
 | **`Delay` activity** | Schedules a timer, then suspends with a matching bookmark registration. |
+
+`DurableTimerPumpTask.SweepAsync` therefore always takes the claim path: `ClaimDueAsync` with a `RuntimeDurableTimerClaimRequest` whose limit is `MaxTimersPerTick` and whose lease is `ClaimVisibilityTimeout`. `ListDueAsync` is only the fallback for a third-party store that cannot claim.
+
+The EF store's composite index includes `DueTimeUtcTicks`. The claim query filters on `DueTimeUtcTicks` (and visibility) and orders by `VisibleAfterUtcTicks ?? DueTimeUtcTicks` before `Take(limit)` in the database.
 
 The real `Delay.ExecuteAsync`, trimmed:
 
@@ -51,7 +55,7 @@ sequenceDiagram
     D->>B: suspend; runtime saves bookmark (no expiry)
     Note over T,B: both survive a restart
     loop every tick
-        P->>T: list due timers
+        P->>T: claim due timers
         P->>M: resume bookmark (key "timer:{TimerId}")
         M->>M: queue resume work durably
         M-->>P: Dispatched / Duplicate
@@ -64,7 +68,7 @@ sequenceDiagram
 
 ### 1. Deleting the timer once the resume is accepted is safe
 
-The pump deletes a timer as soon as the dispatcher answers *Dispatched* (or *Duplicate*). That is safe because the resume is **already saved in the queue** before the dispatcher answers: the scheduler's command router queues the work item (durably, with EF Core) before the drain runs and before the mailbox answers *Accepted*.
+The pump deletes a timer as soon as the dispatcher answers *Dispatched* (or *Duplicate*). That is safe because the resume is **already saved in the queue** before the dispatcher answers: the scheduler's command router queues the work item (durably, with EF Core) before the drain runs and before the dispatcher answers *Dispatched*.
 
 So if the process crashes after the timer is deleted but before the resume commits, the resumption sweep finds the queued work and finishes the run. The deleted timer has already done its one job.
 
@@ -77,9 +81,14 @@ The bookmark is saved with **no expiry**. If it expired at the due time, it woul
 Timers are delivered at least once. The pump fires with the idempotency key `timer:{TimerId}`. *Duplicate* and *NotFound* are different outcomes:
 
 - ***Duplicate*** means the idempotency key was already processed. The resume is already in the queue, so the pump deletes the timer the same way it does for *Dispatched*.
+- ***WorkflowExecutionMissing*** and ***ExecutableMissing*** also delete the timer: the run or its executable is gone, so there is nothing left to resume.
 - ***NotFound*** is only for an already-consumed bookmark (or one that will never match). **Within** the grace window (`NotFoundGrace`) the pump treats that as "a very short delay is still saving its bookmark" and retries; **after** the window it deletes the timer.
 
 A consumed single-use bookmark therefore cannot resume the workflow twice.
+
+### 4. A fenced claim lease is safe across several nodes
+
+Each claimed timer fires under a `FencedClaimLease` (#2195). The store's `ClaimDueAsync` gives the pump a batch under one visibility timeout (`ClaimVisibilityTimeout`). The lease is renewed immediately before the fire and kept renewed while it runs. Renewal is a compare-and-set on owner, fencing token and revision: a peer that re-claimed the row after the lease lapsed increments the fence, so a stale claimant cannot renew, complete or release — that timer is logged and skipped, and the sweep continues. A node that dies while holding a claim leaves the timer hidden until `VisibleAfter`; once the lease expires a peer (or the same node after a restart) reclaims it. Completing the claim (`CompleteClaimAsync`) deletes the timer.
 
 ## Timer and Cron start triggers: at least once per occurrence
 
@@ -144,7 +153,6 @@ that runs the recurring-trigger pump before relying on the guarantee, or stop th
 
 ## Known limits
 
-- **Due-time lookup.** The EF timer store's composite index includes `DueTimeUtcTicks`. `ListDueAsync` filters due timers, orders them and `Take(limit)`s in the database. `MaxTimersPerTick` is that limit.
 - **Atomic timer registration (proposed).** Registering the timer via a post-commit
   `RegisterDurableTimer` intent would make the timer==bookmark lifecycle fully atomic, at the cost of
   editing the core create-bookmark handler and the single-implementation post-commit intent dispatcher.
@@ -163,8 +171,8 @@ that runs the recurring-trigger pump before relying on the guarantee, or stop th
 | `Delay` activity | `Delay`, `DelayState`, `DurableTimerElapsed` | `Essentials/src/Activities/Scheduling/Activities/Delay.cs` (package `Elsa.Activities.Scheduling`) |
 | Scheduling a timer | `IDurableTimerScheduler.ScheduleAsync` | `Essentials/src/Workflows/Runtime/Core/Contracts/` |
 | Timer record | `DurableTimer { TimerId, WorkflowExecutionId, StimulusType, StimulusHash, DueTime, CreatedAt, … }`, keyed by `(WorkflowExecutionId, TimerId)` | `Essentials/src/Workflows/Runtime/Core/Models/` |
-| Timer store | `IDurableTimerStore` (`ListDueAsync`, `DeleteAsync`); `InMemoryDurableTimerStore` (default); `EfDurableTimerStore` (registered by `AddRuntimeEntityFrameworkCore`) | `Essentials/src/Workflows/Runtime/` |
-| Timer pump | `DurableTimerPumpTask : IRecurringTask` with `MaxTimersPerTick`, `NotFoundGrace`; feature in `Elsa.Workflows.Runtime.Scheduling` | `Essentials/src/Workflows/Runtime/Scheduling/DurableTimerPumpTask.cs`, `WorkflowsRuntimeSchedulingFeature.cs` |
+| Timer store | `IDurableTimerStore` (`ClaimDueAsync`, `CompleteClaimAsync`; `ListDueAsync` fallback, `DeleteAsync`); `InMemoryDurableTimerStore` (default) and `EfDurableTimerStore` (registered by `AddRuntimeEntityFrameworkCore`) both set `SupportsClaimTransitions` | `Essentials/src/Workflows/Runtime/` |
+| Timer pump | `DurableTimerPumpTask : IRecurringTask` with `MaxTimersPerTick`, `ClaimVisibilityTimeout`, `NotFoundGrace`; feature in `Elsa.Workflows.Runtime.Scheduling` | `Essentials/src/Workflows/Runtime/Scheduling/DurableTimerPumpTask.cs`, `WorkflowsRuntimeSchedulingFeature.cs` |
 | Resume path | `IBookmarkResumeDispatcher.DispatchAsync(ResumeBookmark)`; `WorkflowSchedulerCommandRouter.ProcessAsync` queues via `EnqueueAsync(workItem)` before draining | `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/` |
 | Crash recovery | `IRuntimeResumptionService.SweepAsync`, `ListClaimableWorkflowExecutionIdsAsync` | see [durable resumption](runtime-durable-resumption.md) |
 | Recurring start triggers | `IRecurringTriggerScheduleStore`, `RecurringTriggerPumpTask`, feature `WorkflowsRuntimeRecurringTriggers` | `Essentials/src/Workflows/Runtime/Scheduling/` |
