@@ -261,7 +261,8 @@ to set, or that the activity can be removed.
     own default.
   - For an alias or a catalog key, Elsa 3 ran its own activity class, with that class's declared default or the type's
     default, which the converter cannot see. Where the Elsa 4 activity declares a different default, the converted
-    value differs without a diagnostic. This is a known limit of this spec (found in review), not reproduced here.
+    value could differ. This was a known limit of this spec (found in review). Since #3293 the conversion reports it
+    with `ELS3-BEHAVIOUR-NULL-TAKES-ELSA4-DEFAULT`, naming the Elsa 4 default and what to set to keep Elsa 3's value.
 - A `null` R1 or R5 input of a mapped activity that the table above does not list is a gap in the table. The
   activity-map coverage test fails on it (FR-008); at run time such a member gets no binding.
 - R7 structure members (Switch and FlowJoin modes, Fork's join mode, SetVariable's variable, Complete's outcomes), ports

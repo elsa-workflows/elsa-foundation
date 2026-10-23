@@ -32,3 +32,14 @@ public sealed class SecondSharedClaimActivity : ReplacingTestActivity;
 /// <summary>Claims a built-in Elsa 3 type, which the built-in map keeps.</summary>
 [ReplacesActivityType("Elsa.WriteLine")]
 public sealed class WriteLineClaimActivity : ReplacingTestActivity;
+
+/// <summary>A rebuilt custom activity whose input declares a default: replaces Elsa 3 <c>Acme.RetryOrder</c> (#3293).</summary>
+[ReplacesActivityType("Acme.RetryOrder")]
+public sealed class RetryOrderActivity : ReplacingTestActivity
+{
+    [ActivityInput(DefaultValue = "3", DefaultSyntax = "Literal")]
+    public int Retries { get; set; } = 3;
+
+    [ActivityInput]
+    public string? Note { get; set; }
+}

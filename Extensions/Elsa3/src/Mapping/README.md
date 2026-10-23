@@ -104,7 +104,11 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
     cannot be published: #3280).
 
   A null output is captured by nothing, and a null member of an activity resolved by name gets no binding. An input
-  holding a literal null converts as a JSON null does. Nothing above reports a warning.
+  holding a literal null converts as a JSON null does. Nothing above reports a warning, except one case (#3293). On an
+  alias or a verbatim catalog key, Elsa 3 ran a null with its own activity's default, which the conversion cannot see.
+  Where the Elsa 4 input declares a default, the member converts with `ELS3-BEHAVIOUR-NULL-TAKES-ELSA4-DEFAULT`, which
+  names that default and says what to set to keep Elsa 3's value: the member in the Elsa 3 workflow, or the input on the
+  converted activity.
 - **`canStartWorkflow` on a non-trigger** (a WriteLine, SetVariable, …) only picks a flowchart's start node, as in Elsa 3
   when no trigger fired. It is dropped after that, without a diagnostic. HttpEndpoint and Event carry the flag; Cron and
   Timer require it.
