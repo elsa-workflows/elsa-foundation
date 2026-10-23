@@ -98,7 +98,7 @@ public sealed class ClrAssemblyScannerTests
     public static TheoryData<Type, string> StableTriggerCatalogHashes => new()
     {
         { typeof(TriggerFixtureActivity), "10C41B96E22D85F9A598D30A6AE51D2FAA0F4EF5AA9909D23932EBC3CD00D80E" },
-        { typeof(HttpEndpoint), "E7E0CBCEC193A6377AD9102415555997268AC479B89FDDE58578244A5EBF7C88" }
+        { typeof(HttpEndpoint), "3432C91C232D91852818ED02A289497FD4DD17112199328DC65BBE1239FA84DA" }
     };
 
     [Theory]
@@ -153,11 +153,11 @@ public sealed class ClrAssemblyScannerTests
 
     public static TheoryData<Type, string> UndeclaredCatalogHashes => new()
     {
-        // Captured before the sensitivity flags existed: an activity that declares nothing must keep
-        // its catalog hash, or reconciling an existing catalog throws ActivityVersionHashMismatchException. Both values
-        // were re-derived independently on unmodified main at df02ece3c and matched.
+        // PlainFixtureActivity still declares nothing, so it keeps the pre-sensitivity catalog hash.
+        // ComplexInputFixtureActivity declares input tiers, which are hashed, so its snapshot moves
+        // with this PR rather than throwing on re-reconcile.
         { typeof(PlainFixtureActivity), "41ADAB509FABBD50A14009DB8FD9D1BCA14B7C4ED67E86725937D1C6B2ABC87E" },
-        { typeof(ComplexInputFixtureActivity), "2F39C96B99BCE02E81CDA3DF8FBB0CA9E8CA41A1809CD59C38E9B36DDF59A167" }
+        { typeof(ComplexInputFixtureActivity), "950B126E699A6CEB156EA274E9DB0B9563BD628566AEE99C6BC5AE1E9623B7AE" }
     };
 
     [Theory]
@@ -170,7 +170,8 @@ public sealed class ClrAssemblyScannerTests
         var json = JsonSerializer.Serialize(model.Inputs);
         Assert.DoesNotContain(nameof(InputDefinition.IsSensitive), json, StringComparison.Ordinal);
         Assert.DoesNotContain(nameof(InputDefinition.IsCredential), json, StringComparison.Ordinal);
-        Assert.Equal(expectedHash, CatalogVersion(model, model, activityType.Assembly).Hash);
+        var actualHash = CatalogVersion(model, model, activityType.Assembly).Hash;
+        Assert.True(expectedHash == actualHash, $"Expected hash '{expectedHash}', actual hash '{actualHash}'.");
     }
 
     [Theory]
@@ -300,9 +301,13 @@ public sealed class ClrAssemblyScannerTests
         Assert.Equal("Simple", inputs[nameof(ComplexInputFixtureActivity.Mode)].Category);
         Assert.Equal("Auto", inputs[nameof(ComplexInputFixtureActivity.Mode)].DefaultValue?.GetString());
         Assert.Equal("Literal", inputs[nameof(ComplexInputFixtureActivity.Mode)].DefaultSyntax);
+        Assert.Equal(ActivityInputTiers.Essential, inputs[nameof(ComplexInputFixtureActivity.Mode)].Tier);
         Assert.Equal(20, inputs[nameof(ComplexInputFixtureActivity.Payload)].Order);
         Assert.Null(inputs[nameof(ComplexInputFixtureActivity.Payload)].Category);
+        Assert.Equal(ActivityInputTiers.Optional, inputs[nameof(ComplexInputFixtureActivity.Payload)].Tier);
         Assert.Equal(30, inputs[nameof(ComplexInputFixtureActivity.Label)].Order);
+        Assert.Null(inputs[nameof(ComplexInputFixtureActivity.Label)].Tier);
+        Assert.Equal(ActivityInputTiers.Setting, inputs[nameof(ComplexInputFixtureActivity.Count)].Tier);
     }
 
     [Fact]
@@ -729,6 +734,38 @@ public sealed class ClrAssemblyScannerTests
     }
 
     [Fact]
+    public void ReplacesActivityType_IsRecordedTrimmedDistinctAndSorted()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(ReplacingFixtureActivity).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(candidate => candidate.ActivityTypeKey == typeof(ReplacingFixtureActivity).FullName);
+        var facet = Assert.Single(model.DesignFacets, candidate => candidate.Kind == ClrAssemblyScanner.ReplacedActivityTypesFacetKind);
+
+        Assert.Equal("1", facet.SchemaVersion);
+        Assert.Equal(
+            ["Acme.Legacy.SendInvoice", "Acme.SendInvoice"],
+            facet.Payload.GetProperty("typeNames").EnumerateArray().Select(name => name.GetString()));
+        Assert.False(facet.Payload.TryGetProperty("ports", out _));
+    }
+
+    [Theory]
+    [InlineData(typeof(DerivedFromReplacingFixtureActivity))]
+    [InlineData(typeof(LucideIconFixtureActivity))]
+    public void ReplacesActivityType_IsNotInheritedAndAbsentWithoutADeclaration(Type activityType)
+    {
+        // No facet means the activity's catalog content, and so its hash, is what it was before the attribute existed.
+        using var folder = TempAssemblyFolder.WithCopyOf(activityType.Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(candidate => candidate.ActivityTypeKey == activityType.FullName);
+
+        Assert.DoesNotContain(model.DesignFacets, facet => facet.Kind == ClrAssemblyScanner.ReplacedActivityTypesFacetKind);
+    }
+
+    [Fact]
+    public void ReplacesActivityType_RefusesABlankName() =>
+        Assert.Throws<ArgumentException>(() => new ReplacesActivityTypeAttribute(" "));
+
+    [Fact]
     public void ActivityIconFacet_IsExcludedFromTheCatalogHash()
     {
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(LucideIconFixtureActivity).Assembly);
@@ -746,12 +783,15 @@ public sealed class ClrAssemblyScannerTests
 
     public static TheoryData<Type, string> BuiltInCatalogHashesUnchangedFromMain => new()
     {
-        // Snapshot of origin/main at 14dd6f6e7 (#2716). Built-ins declare no [Activity(Icon)], and the
-        // icon facet is excluded from the hash, so these stay the values main already persisted.
-        { typeof(HttpEndpoint), "E7E0CBCEC193A6377AD9102415555997268AC479B89FDDE58578244A5EBF7C88" },
+        // WriteLine and Parallel still declare no tier, so they keep the origin/main snapshot at
+        // 14dd6f6e7 (#2716). HttpEndpoint's version and ResponseMode default changed; SendHttpRequest
+        // declares tiers; #3064 promotes only its Connection tier to Essential. Those catalog changes move
+        // their snapshots with their owning changes. Icon facets are present
+        // on the descriptors but excluded from descriptor hashes.
+        { typeof(HttpEndpoint), "3432C91C232D91852818ED02A289497FD4DD17112199328DC65BBE1239FA84DA" },
         { typeof(WriteLine), "618BB61870A3FADC2551123EA520F7F5852CB0D00CD4AE5E6DB8A80D7677EF2C" },
         { typeof(ParallelActivity), "A466AC1D4873108D85B6BA08D2058ACD9FD51A60571E8BA043043A17B20CCC82" },
-        { typeof(SendHttpRequest), "7AD368DDFFE9850E7581CDCA314FBCD451CBD3EF43DB8FDCBC59DB10D47C27E1" }
+        { typeof(SendHttpRequest), "833CA49E624946FFF5E504A53B84354334501EE7E45F20505C34B48525B376A5" }
     };
 
     [Theory]
@@ -761,8 +801,40 @@ public sealed class ClrAssemblyScannerTests
         using var folder = TempAssemblyFolder.WithCopyOf(activityType.Assembly);
         var model = CreateScanner().Scan(folder.Path).Single(candidate => candidate.ActivityTypeKey == activityType.FullName);
 
-        Assert.DoesNotContain(model.DesignFacets, facet => facet.Kind == ActivityIconName.FacetKind);
-        Assert.Equal(expectedHash, CatalogVersion(model, model, activityType.Assembly).Hash);
+        // Icons remain available as presentation metadata; the descriptor hash deliberately ignores them.
+        Assert.Contains(model.DesignFacets, facet => facet.Kind == ActivityIconName.FacetKind);
+        var actualHash = CatalogVersion(model, model, activityType.Assembly).Hash;
+        Assert.True(expectedHash == actualHash, $"Expected hash '{expectedHash}', actual hash '{actualHash}'.");
+    }
+
+    [Fact]
+    public void BuiltInHttpActivities_DeclareTheObviousInputTiers()
+    {
+        using var httpFolder = TempAssemblyFolder.WithCopyOf(typeof(SendHttpRequest).Assembly);
+        var send = CreateScanner().Scan(httpFolder.Path).Single(candidate => candidate.ActivityTypeKey == typeof(SendHttpRequest).FullName);
+        var sendInputs = send.Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
+
+        Assert.Equal(ActivityInputTiers.Essential, sendInputs[nameof(SendHttpRequest.Url)].Tier);
+        Assert.Equal(ActivityInputTiers.Essential, sendInputs[nameof(SendHttpRequest.Method)].Tier);
+        Assert.Equal(ActivityInputTiers.Essential, sendInputs[nameof(SendHttpRequest.Content)].Tier);
+        Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.ContentType)].Tier);
+        Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.RequestHeaders)].Tier);
+        Assert.Equal(ActivityInputTiers.Essential, sendInputs[nameof(SendHttpRequest.Connection)].Tier);
+        Assert.False(sendInputs[nameof(SendHttpRequest.Connection)].IsRequired);
+        Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.ExpectedStatusCodes)].Tier);
+        Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.Timeout)].Tier);
+
+        var endpoint = CreateScanner().Scan(httpFolder.Path).Single(candidate => candidate.ActivityTypeKey == typeof(HttpEndpoint).FullName);
+        var endpointInputs = endpoint.Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
+
+        Assert.Equal(ActivityInputTiers.Essential, endpointInputs[nameof(HttpEndpoint.Path)].Tier);
+        Assert.Equal(ActivityInputTiers.Essential, endpointInputs[nameof(HttpEndpoint.SupportedMethods)].Tier);
+        Assert.Equal(ActivityInputTiers.Essential, endpointInputs[nameof(HttpEndpoint.ResponseMode)].Tier);
+        Assert.Equal(ActivityInputTiers.Optional, endpointInputs[nameof(HttpEndpoint.RequestTimeout)].Tier);
+        Assert.Equal(ActivityInputTiers.Optional, endpointInputs[nameof(HttpEndpoint.RequestSizeLimit)].Tier);
+        Assert.Equal(ActivityInputTiers.Setting, endpointInputs[nameof(HttpEndpoint.CanStartWorkflow)].Tier);
+        Assert.Equal(ActivityInputTiers.Setting, endpointInputs[nameof(HttpEndpoint.Authorize)].Tier);
+        Assert.Equal(ActivityInputTiers.Setting, endpointInputs[nameof(HttpEndpoint.Policy)].Tier);
     }
 
     [Fact]
@@ -821,29 +893,22 @@ public sealed class ClrAssemblyScannerTests
     }
 
     [Fact]
-    public void SendHttpRequest_DeclaresOnlyAuthorizationAsASensitiveCredential_WithNoDefault()
+    public void SendHttpRequest_DeclaresConnectionAsAnHttpActivityConnection_AndNoCredentialInput()
     {
-        // The one built-in credential input. A credential is also sensitive, accepts
-        // only a secret reference, and never carries a default; every other SendHttpRequest input stays undeclared.
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(SendHttpRequest).Assembly);
         var inputs = CreateScanner().Scan(folder.Path)
             .Single(model => model.ActivityTypeKey == typeof(SendHttpRequest).FullName)
             .Inputs;
 
-        var authorization = Assert.Single(inputs, input => input.Name == nameof(SendHttpRequest.Authorization));
-        Assert.Equal("String", authorization.Type.Alias);
-        Assert.True(authorization.IsSensitive);
-        Assert.True(authorization.IsCredential);
-        Assert.Null(authorization.DefaultValue);
-        Assert.Null(authorization.DefaultSyntax);
-
-        var others = inputs.Where(input => input.Name != nameof(SendHttpRequest.Authorization)).ToList();
-        Assert.NotEmpty(others);
-        Assert.All(others, input =>
-        {
-            Assert.Null(input.IsSensitive);
-            Assert.Null(input.IsCredential);
-        });
+        var connection = Assert.Single(inputs, input => input.Name == nameof(SendHttpRequest.Connection));
+        Assert.Equal(typeof(ConnectionReference).FullName, connection.Type.Alias);
+        Assert.Equal("http", connection.ConnectionType);
+        Assert.Equal("connection-picker", connection.UiHint);
+        Assert.Equal("Connection", connection.DefaultSyntax);
+        Assert.Null(connection.IsCredential);
+        Assert.Null(connection.IsSensitive);
+        Assert.DoesNotContain(inputs, input => input.Name == "Authorization");
+        Assert.All(inputs, input => Assert.Null(input.IsCredential));
     }
 
     [Fact]
@@ -856,6 +921,20 @@ public sealed class ClrAssemblyScannerTests
         // The fixture assembly is "Elsa.Activities.Design.Tests.ClrFixture" → segment "ClrFixture",
         // humanized to "Clr Fixture" for display (issue #928).
         Assert.All(models, m => Assert.Equal("Clr Fixture", m.Category));
+    }
+
+    [Fact]
+    public void OpenGenericActivities_AreNotCataloged_ButAClosedGenericSubclassIs()
+    {
+        // The runtime registry skips types with unbound generic parameters, so a cataloged open generic could
+        // never be activated (issue #385).
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
+
+        var keys = CreateScanner().Scan(folder.Path).Select(m => m.ActivityTypeKey).ToHashSet(StringComparer.Ordinal);
+
+        Assert.DoesNotContain(typeof(OpenGenericFixtureActivity<>).FullName!, keys);
+        Assert.DoesNotContain(typeof(GenericFixtureHost<>.NestedFixtureActivity).FullName!, keys);
+        Assert.Contains(typeof(ClosedGenericFixtureActivity).FullName!, keys);
     }
 
     [Fact]

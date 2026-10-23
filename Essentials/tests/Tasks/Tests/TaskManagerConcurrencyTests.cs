@@ -27,7 +27,7 @@ public sealed class TaskManagerConcurrencyTests
             .Select(_ => Task.Run(() =>
             {
                 barrier.SignalAndWait();
-                return (TaskStateManager)method!.Invoke(manager, [CancellationToken.None])!;
+                return (TaskStateManager)method!.Invoke(manager, [])!;
             }))
             .ToArray();
 

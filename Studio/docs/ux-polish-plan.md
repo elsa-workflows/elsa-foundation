@@ -28,6 +28,10 @@ Most of the win is available in **(a) quick token-level work** with no structura
 
 Legend: ✅ = Elsa 4 already comparable/good · ⚠️ = noticeable gap · 🔴 = clear gap that drives the "less polished" feeling.
 
+### Home — direct workflow tasks (`exists`)
+
+The #3063 Home slice adds a compact Workflow tasks group before the configurable widgets: one-use **Create workflow**, **Continue editing** by current draft identity, **Needs attention** into Runs' active-incident view, and **Browse workflows**. A single current-draft candidate opens its exact definition; multiple candidates use a chooser that shows stable IDs. Empty and failed discovery stay separate, and a stale or unavailable editor keeps the selected ID with explicit recovery. The group does not participate in widget preferences. Known permission checks only explain Home affordances; Workflows endpoints retain authorization authority, including the existing anonymous posture. No separate Home polish backlog item was present; the broader editor and shell work below remains open independently.
+
 ### 1. Workflow definition editor — canvas
 
 | Aspect | Elsa 3 (reference) | Elsa 4 Studio | Verdict |

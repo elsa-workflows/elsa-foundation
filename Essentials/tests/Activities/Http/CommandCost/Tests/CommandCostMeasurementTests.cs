@@ -14,7 +14,7 @@ internal static class CommandCostMeasurement
     public const string OutputVariable = "ELSA_COMMAND_COST_OUT";
 
     /// <summary>
-    /// Armed (1 or true) by the nightly EF container leg, through <c>tools/ci/ef-suites.json</c>: measure even without an
+    /// Armed (1 or true) by the EF container leg, through <c>containerSuites</c> in <c>tools/ci/test-tiers.json</c>: measure even without an
     /// output directory, into a temporary one, so the leg proves the tool still measures instead of reporting two skips.
     /// </summary>
     public const string RequireVariable = "ELSA_COMMAND_COST_REQUIRE_MEASUREMENT";

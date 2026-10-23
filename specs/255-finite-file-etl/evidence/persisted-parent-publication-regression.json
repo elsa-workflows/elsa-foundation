@@ -1,0 +1,10 @@
+{
+  "source": "Extensions/Etl/src/Workflows/Design/EtlWorkflowsDesignFeature.cs",
+  "originalSha256": "d2fa42179bad27b80a4fa0e59455da12304d11603f225d51d48bdcda7c4c70d9",
+  "mutatedSha256": "99c4416f79dc4cc24416ddaeda8ca85a6d889f21db6fc71b4ce4eaf86b09032f",
+  "mutation": "Omit production EtlPublishedArtifactPinSource registration; publish real native parent through normal handlers.",
+  "result": "Both Sequence and Flowchart fail the explicit persisted compilation-contribution assertion before workflow start. No compilation failure or timeout used as the oracle.",
+  "exitCode": 1,
+  "restoredByteExactly": true,
+  "restorationValidation": "Complete affected ETL suite: 299 passed, zero failed/skipped after byte-exact restoration."
+}

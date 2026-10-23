@@ -52,18 +52,19 @@ code.
 
 | Region | Status | Rule |
 |---|---|---|
-| Shell | `exists` | Sidebar or top menubar (theme or user choice). The top bar holds the page title, global actions and the theme control (`ThemeSwitcher`). |
+| Shell | `exists` | Sidebar or top menubar (theme or user choice). The top bar holds the page title, global actions, the theme control (`ThemeSwitcher`) and, when sign-in is on, the user menu. |
 | Navigation placement | `exists` | Each nav contribution may declare `placement` (`main` \| `more` \| `settings` \| `admin`), `order`, `requiresFeature` and `requiresRole` / `requiresPermission`. Unset `placement` is `more` at the top level; a child inherits its parent unless it declares a different placement, in which case it renders there. Main holds Home, Workflows, Runs and Tasks (Tasks only when the user-tasks feature is enabled). Extensions land under **More tools** (open state in `elsa-studio.ui.nav.more`). `settings` items (Appearance) render under Studio in the Settings shell and stay visible to every session. `admin` items render under Administration and use the host-control read gate. The sidebar keeps one Settings entry; searching still reveals the individual sections. Anonymous/demo sessions still see Administration when sign-in is off. Disabled features contribute nothing; role-gated items are hidden. Home is the customizable landing page at `/`, `/dashboard` and `/overview`; there is no separate Dashboard entry. |
 | Settings shell | `exists` | `/settings` is a two-pane shell (section list + content). Sections are deep-linkable as `/settings/<id>`. Original admin paths (`/modules`, `/theme-builder`, …) open the same shell and the same gate; a signed-in user without host-control read sees those sections as unavailable. The route is lazy-loaded. |
-| User menu | `target, phase 4` | See [User menu and sign-out](#user-menu-and-sign-out). Live has none. |
+| User menu | `exists` | See [User menu and sign-out](#user-menu-and-sign-out). |
 | Bottom dock | `exists` | Remembers the user's last state in `elsa-studio-bottom-panel-collapsed`, `elsa-studio-bottom-panel-height`, `elsa-studio-bottom-panel-maximized` and `elsa-studio-active-bottom-panel`. With no stored value the dock is **open** on desktop (`collapsed=false`) and collapsed at ≤640px. |
 | Bottom dock default | `target, phase 1` | Collapsed by default when no stored value, including on desktop. |
 | Bottom dock errors | `target, phase 2` | A status dot on the collapsed dock signals new errors. |
 | Page | `exists` | Content sits on the page surface. No wrapping card around a whole page. |
 | Page header | `target, phase 1` | Eyebrow, title, one-line description, actions. One `primary` button (see Principles). |
-| Lists | `target, phase 2` | A single filter row (search + segmented status + "More filters"), then the grid, then the pager. Filters apply live. |
+| Lists | `target, phase 2` | A single filter row with primary task controls and "More filters", then the grid, then the pager. Primary controls apply immediately; advanced criteria remain drafts until explicit Apply and applied criteria stay visible as removable chips outside the disclosure. |
+| Runs | `exists` for the reference implementation | Workflow names lead, with exact execution, artifact, definition and version IDs available as copyable identifiers. Bulk actions appear only after row selection and preserve the host's permission gates. Detail navigation returns to the validated local list query, including page size and cursor. Loading, empty, unsupported and request-error states stay distinct; failed requests offer Retry. |
 | Designer | `exists` | Palette / canvas / inspector. |
-| Designer tabs | `target, phase 1` | Tab labels never truncate: they collapse to icon + tooltip below the width they need. |
+| Designer tabs | `exists` for inspector / Runtime / Artifacts panel tabs (wrap + `title`, no ellipsis); remaining collapse-to-icon is `target, phase 1` | Tab labels never truncate. The inspector panel tabs wrap and keep a `title` plus keyboard access. Below the width they need they should collapse to icon + tooltip. |
 | Designer header | `exists` | Save, Review & publish and Run are all visible. None uses `StudioButton`. Run is the filled action (`.wf-run-button` uses `--studio-accent`). Review & publish is outlined (`.wf-review-button`). |
 | Designer header primary | `target, phase 1` | Review & publish becomes the one `primary` action; Save and Run become `default` (or `ghost`). |
 
@@ -76,12 +77,14 @@ code.
 | Button (new variants) | `target, phase 4` | `outline` and `destructive` variants. Until they exist, use `default` / `ghost` and do not name `outline` or `destructive` in new call sites. |
 | Tabs | `exists` | `ui/layout/Tabs` (`StudioTabs`). Sentence case; overflow collapse is `target, phase 1`. |
 | DataGrid | `exists` | `ui/data-grid/DataGrid`: row click (or Enter/Space) opens. |
+| Secrets inventory | `exists` (#3069) | Search by secret name or display name is server-backed and requests up to 100 records. Counts identify rows shown and loaded alongside the result total; a submitted search appears in the count so draft text cannot change its meaning. More matches than loaded means the result is partial; a full 100-row page with a total of 100 is complete. Type, store, scope and status facets apply only to loaded rows, and scope choices describe loaded results. |
 | DataGrid extras | `target, phase 4` | Sortable headers with an indicator; optional column picker persisted per grid; secondary actions in a ⋯ menu. |
 | Status | `exists` | `StatusChip` (filled) for run and definition status; `StatusPill` (outline) for low-emphasis metadata. Colours from the status tokens only. |
+| Incident details | `exists` | A compact **Next step** block sits before technical evidence and stays attached to the selected incident and current run. Keep active blocking, active non-blocking and historical states distinct; expose automatic retry timing only when the exact journal supplies it. Preserve copy, exact activity/input navigation, dialog Escape and trigger-focus return. |
 | Feedback | `exists` (primitives) / `target, phase 2` (rich pattern) | `EmptyState`, `SkeletonRows` and `StudioAlert` exist. The richer pattern — icon, title, one-line hint, optional action — is the phase 2 target. |
 | Overlays | `target, phase 3` | Popovers and dialogs animate in (fade + 4px slide/scale, ≤ 150ms) and honour `prefers-reduced-motion`. |
 | Icons | `exists` | lucide, 16px in controls, 20px in nodes and tiles. |
-| Disclosure kit | `exists` | `ui/disclosure/*`: `AddOption`, `RevealToggle`, `AdvancedSection`, `TechnicalDetails`, `OverflowMenu`, `ExpressionToggle`, `PeerViewSwitch`. Shared `persistKey` / `forceOpen`. A non-default, bound or invalid field is never hidden. Motion ≤ 150ms via `--studio-disclosure-duration`, honours `prefers-reduced-motion`. Keyboard + `aria-expanded` / `aria-controls`. Fixture at `/dev/disclosure` in dev builds only (`import.meta.env.DEV`) and `tests/browser/disclosure.html`. Not adopted on inspector, settings or other surfaces yet. |
+| Disclosure kit | `exists` | `ui/disclosure/*`: `AddOption`, `RevealToggle`, `AdvancedSection`, `TechnicalDetails`, `OverflowMenu`, `ExpressionToggle`, `PeerViewSwitch`. Shared `persistKey` / `forceOpen`. Activity catalog tiers are lowercase `essential`, `optional` and `setting`; tier controls presentation independently of `isRequired` and runtime validation. Only an exact optional tier that is not required goes under one “More options” section. Missing, null, unfamiliar and setting tiers, plus required optional inputs, stay directly visible. Configured HTTP values start open and may be collapsed with a set-count badge through `allowCollapseWhenSet`; Runs opts in only because applied criteria stay visible as chips outside the disclosure. Other callers retain the existing default. Host-reported errors, option-source failures and editors without complete local-error reporting keep the section open; explicit force-open remains authoritative, and a forced reveal does not overwrite the saved collapsed preference. Only reported blocking errors receive an Error badge. Motion ≤ 150ms via `--studio-disclosure-duration`, honours `prefers-reduced-motion`. Keyboard + `aria-expanded` / `aria-controls`. Fixture at `/dev/disclosure` in dev builds only (`import.meta.env.DEV`) and `tests/browser/disclosure.html`. Settings and other surfaces do not use the kit yet. |
 
 ## Appearance
 
@@ -117,14 +120,15 @@ owns the live state; this module owns the shape, defaults, persistence and resol
 
 ## User menu and sign-out
 
-`target, phase 4`. Live Studio has no user menu. The topbar today is title, Weaver (when
-enabled), two GitHub links and `ThemeSwitcher`.
+`exists` (ADR 0085 D7). `UserMenu` sits on the topbar after the theme control.
 
-- Place the user menu on the topbar, after the theme control.
-- Contents: signed-in display name (or account id) and **Sign out**.
-- Sign out calls `useAuthContext().logout()` (`AuthProvider.logout` already exists; only the
-  menu is missing).
-- When no auth provider is configured, omit the menu.
+- The trigger shows the signed-in display name (or the account id when there is none).
+- The menu repeats the name under "Signed in as" and offers **Sign out**.
+- Sign out calls `useAuthContext().logout()`, which posts to `/_elsa/identity/logout/{provider}`.
+  The session it leaves is anonymous, so `RequireAuth` sends the browser to the provider's
+  challenge: the backend-owned login page. Studio renders no login page of its own.
+- A failed sign-out keeps the menu open and says so in place.
+- When no auth provider is configured, the menu is omitted.
 
 ## Toasts vs banners
 
@@ -140,8 +144,8 @@ completed actions become toasts.
 
 | Item | Status | Notes |
 |---|---|---|
-| Minimap | `exists` | `MiniMap` on `GraphAuthoringCanvas` (and run / executable canvases). |
-| Fit / zoom | `exists` | xyflow `Controls` on the same canvases. |
+| Minimap | `exists` | Designer (`GraphAuthoringCanvas`) shows `MiniMap` only when the graph’s unzoomed bounds exceed the canvas pane. Run / executable canvases still render `MiniMap` unconditionally. |
+| Fit / zoom | `exists` | xyflow `Controls` on the same canvases. First-visit and Auto layout `fitView` clamp `maxZoom` to 1 so small graphs stay at their natural size. |
 | Empty-canvas add | `exists` | `.wf-empty-canvas-add`; editorial layout also has **Add step**. |
 | Save-state indicator | `exists` | `.wf-editor-save-status` in the Designer header (pending spinner / saved check). |
 | Duplicate / copy-paste | `exists` | In-workflow only. Ctrl/Cmd+C and Ctrl/Cmd+V copy the selected activities; Duplicate is on the node context menu and Ctrl/Cmd+D. Fresh ids and names, offset position, one undo step, nested containers remapped. Cross-workflow clipboard and graph-editor paste are later slices. |
@@ -156,11 +160,19 @@ widgets with `registerHomeWidget` (id, title, size, lazy component, optional
 Reset deletes the user layout. Anonymous/demo sessions use `localStorage` or the built-in
 default.
 
-**Get started** ticks Create a workflow / Run it / See what happened from real state, hides
-when every step is done or dismissed, and can be restored from Add widget.
+The built-in default landing is Get started, Quick actions, Recent workflows, Recent
+runs, and Needs attention. **Get started** ticks Create a workflow / Run it / See what
+happened from real state, links to the Elsa 4 docs for an empty install, hides when every
+step is done or dismissed, and can be restored from Add widget. **Quick actions** link to
+create a workflow and open the designer. Recent runs show status. List widgets have
+title / description / CTA empty states. **Tasks** is in the default layout and the widget
+registry, and only renders when `user-tasks` is enabled (`Elsa.Studio.UserTasks` matches).
+`requiresFeature: "workflows"` matches `Elsa.Studio.Workflows` only (not `Contoso.Workflows` or `Elsa.Studio.WorkflowsX`). A missing `enabledFeatures` list hides gated widgets.
+
+`exists`: a durable **Workflow tasks** group sits before the configurable grid and is not a widget. **Create workflow** consumes a one-use request to open the existing Workflows create dialog; **Browse workflows** still opens the definition collection. **Continue editing** reads the complete authorized definition list and uses actual current `draftId` values: one candidate opens that exact definition, while multiple candidates show a chooser with names and stable IDs. Empty results, request failures and missing current drafts remain distinct; a failed or stale selected definition keeps its ID and offers retry/browse recovery without silently choosing another workflow or creating a draft. **Needs attention** links to Runs' active-incident view. When Workflows is not composed the task group is absent; known permission denials are explained at Home while the existing server endpoints remain authoritative. None of these entries alter saved widget order, options or Get started behavior.
 
 **Edit home** is a tinted mode with add, remove, reorder, Add widget, Reset to default, and
-(for `studio-preferences.manage-defaults`) Save as server default. Normal view collapses
+(for `studio/preferences/defaults:manage`) Save as server default. Normal view collapses
 per-widget chrome into `OverflowMenu`. Add widget moves focus into the dialog, closes on
 Escape, and returns focus to the trigger. Reorder keeps focus on the moved widget and
 announces the new position.
@@ -176,10 +188,14 @@ description, pinned mark and body stay visible (content first).
 ## Activity icons
 
 `exists`: one resolver, `resolveActivityIcon` in `activityIcons.ts`, used by the designer
-palette, canvas nodes, and the run-view timeline. Order: catalog `icon` kind token, then
-catalog `iconName` (any lucide export or kebab name, `asset:<package>/<path>`, or
-`ext:<name>`), then the activity type key, then the category icon, then
-`executionType === trigger`. An `icon` / `iconName` that is not a known kind, not a
+palette, canvas nodes, and the run-view timeline. Order: module-supplied catalog `iconName`
+(any lucide export or kebab name, `asset:<package>/<path>`, or `ext:<name>`), then the
+historical `icon` kind token, then the activity type key, then the category icon, then
+`executionType === trigger`, then a reusable/generic fallback. Definition IDs alone never
+override a more specific icon: recommended CLR activities also have definition IDs, so a
+semantic type or category icon takes precedence over the reusable glyph when catalog provenance
+does not provide an explicit icon.
+An `icon` / `iconName` that is not a known kind, not a
 well-formed lucide / asset / extension name, or is unsafe is ignored so the later steps
 still run. `renderActivityIcon` (in `activityIconView.tsx`) lazy-loads the lucide table from
 `activityIconGlyphs.tsx` so the Workflows entry and landing paths stay inside the bundle

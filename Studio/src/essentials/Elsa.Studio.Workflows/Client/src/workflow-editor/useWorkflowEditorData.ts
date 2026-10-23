@@ -68,7 +68,7 @@ export function useWorkflowEditorData({ context, definitionId, resetHistory, loa
     }
   }, [context, definitionId]);
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (options?: { shouldLoadDraft(): boolean }) => {
     setError("");
     const [nextDetails, nextCatalog, nextRecommendedDefinitions] = await Promise.all([
       getDefinition(context, definitionId),
@@ -89,9 +89,13 @@ export function useWorkflowEditorData({ context, definitionId, resetHistory, loa
     ]);
     const nextDraft = nextDetails.draft ?? null;
     setDetails(nextDetails);
-    markSaved(nextDraft);
-    resetHistory(nextDraft);
-    loadDraft(nextDraft);
+    // Publication can finish while the author continues editing. Check after the requests settle,
+    // immediately before replacing the live draft and its undo/persistence baselines.
+    if (!options || options.shouldLoadDraft()) {
+      markSaved(nextDraft);
+      resetHistory(nextDraft);
+      loadDraft(nextDraft);
+    }
     const recommendedDefinitions = nextRecommendedDefinitions ?? [];
     const activities = decorateReusableCatalog(nextCatalog.activities ?? [], recommendedDefinitions);
     setCatalog(activities);

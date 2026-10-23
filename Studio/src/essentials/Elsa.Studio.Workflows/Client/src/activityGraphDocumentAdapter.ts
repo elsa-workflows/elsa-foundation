@@ -2,6 +2,7 @@ import type {
   StudioActivityDefinitionImplementationState,
   StudioActivityDefinitionLayoutRecord
 } from "@elsa-workflows/studio-sdk";
+import { canonicalizeStateForWire, expandStateFromWire } from "./activityInputWire";
 import type { ActivityNode, DesignMetadataRecord } from "./workflowTypes";
 import type { GraphDocumentAdapter } from "./graph-authoring/graphDocumentAdapter";
 
@@ -11,11 +12,11 @@ type ActivityGraphPayloadRecord = Record<string, unknown> & {
 
 export const activityGraphDocumentAdapter: GraphDocumentAdapter<StudioActivityDefinitionImplementationState> = {
   resourceKind: "activity-definition-graph",
-  readRoot: document => normalizeRoot(readPayload(document).rootActivity),
+  readRoot: document => expandRoot(readPayload(document).rootActivity),
   readLayout: document => activityGraphLayoutToDesign(document.layout),
   replaceRoot: (document, rootActivity) => ({
     ...document,
-    payload: { ...readPayload(document), rootActivity }
+    payload: { ...readPayload(document), rootActivity: canonicalizeRoot(rootActivity) }
   }),
   replaceLayout: (document, layout) => ({
     ...document,
@@ -23,7 +24,7 @@ export const activityGraphDocumentAdapter: GraphDocumentAdapter<StudioActivityDe
   }),
   replaceGraph: (document, rootActivity, layout) => ({
     ...document,
-    payload: { ...readPayload(document), rootActivity },
+    payload: { ...readPayload(document), rootActivity: canonicalizeRoot(rootActivity) },
     layout: activityGraphLayoutFromDesign(layout, document.layout)
   })
 };
@@ -86,6 +87,15 @@ function normalizeRoot(value: unknown): ActivityNode {
     outputs: Array.isArray(root.outputs) ? root.outputs : [],
     structure: root.structure ?? null
   };
+}
+
+function expandRoot(value: unknown): ActivityNode {
+  const root = normalizeRoot(value);
+  return expandStateFromWire({ rootActivity: root }).rootActivity ?? root;
+}
+
+function canonicalizeRoot(root: ActivityNode): ActivityNode {
+  return canonicalizeStateForWire({ rootActivity: root }).rootActivity ?? root;
 }
 
 function finiteNumber(value: unknown) {

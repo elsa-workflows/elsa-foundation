@@ -1,0 +1,194 @@
+{
+  "id": "flagged-start-v1",
+  "definitionId": "flagged-start",
+  "name": "flagged-start",
+  "description": "Test-owned reusable flowchart: 'Can start workflow' is ticked on a WriteLine, which Elsa 3 then starts at although another WriteLine comes first; that path completes with Approved.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [
+    "Approved",
+    "Rejected"
+  ],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": true
+  },
+  "root": {
+    "id": "flagged-start-root",
+    "nodeId": "flagged-start-root",
+    "name": "flagged-start-root",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "size": {
+          "width": 100,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "other",
+        "nodeId": "other",
+        "name": "other",
+        "type": "Elsa.WriteLine",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "text": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "not the start"
+          }
+        }
+      },
+      {
+        "id": "start",
+        "nodeId": "start",
+        "name": "start",
+        "type": "Elsa.WriteLine",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": true,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "text": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "the start"
+          }
+        }
+      },
+      {
+        "id": "approved",
+        "nodeId": "approved",
+        "name": "approved",
+        "type": "Elsa.Complete",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "outcomes": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "Approved"
+          }
+        }
+      },
+      {
+        "id": "rejected",
+        "nodeId": "rejected",
+        "name": "rejected",
+        "type": "Elsa.Complete",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "outcomes": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "Rejected"
+          }
+        }
+      }
+    ],
+    "connections": [
+      {
+        "source": {
+          "activity": "other",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "rejected",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "start",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "approved",
+          "port": "In"
+        },
+        "vertices": []
+      }
+    ],
+    "variables": []
+  }
+}

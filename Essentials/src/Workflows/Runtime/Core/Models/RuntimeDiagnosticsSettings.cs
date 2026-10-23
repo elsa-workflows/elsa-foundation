@@ -60,7 +60,8 @@ public sealed class RuntimeDiagnosticsHostPolicy
 
 public sealed class RuntimeDiagnosticsPermissions
 {
-    public bool CanManage { get; init; } = true;
+    /// <summary>Whether the caller may change the settings. Fails closed: the API sets it from the caller's grant (#3130).</summary>
+    public bool CanManage { get; init; }
 
     public bool CanEnableFullPayloads { get; init; }
 

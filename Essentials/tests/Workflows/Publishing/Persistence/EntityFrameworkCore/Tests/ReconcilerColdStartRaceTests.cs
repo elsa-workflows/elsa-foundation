@@ -411,6 +411,7 @@ internal sealed class ReconcilerColdStartRace(PublishingNativeProvider provider,
             stores,
             stores,
             stores,
+            stores,
             [publisher]).Reconcile(CancellationToken.None);
     }
 

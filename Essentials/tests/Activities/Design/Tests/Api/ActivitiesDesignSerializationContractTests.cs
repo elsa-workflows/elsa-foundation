@@ -47,7 +47,6 @@ public sealed class ActivitiesDesignSerializationContractTests
         typeof(ActivityAuthoringCatalogView),
         typeof(GetActivityAuthoringCapabilities),
         typeof(ActivityAuthoringCapabilitiesView),
-        typeof(GetDefinition),
         typeof(GetReusableActivityVersion),
 
         // Definitions and reusable authoring operations.
@@ -70,6 +69,8 @@ public sealed class ActivitiesDesignSerializationContractTests
         typeof(ListReusableActivityVersions),
         typeof(ActivityManagementPageView<ReusableActivityVersionManagementView>),
         typeof(CreateReusableActivityDraft),
+        typeof(CreateReusableActivityDraftRequest),
+        typeof(ActivityLayoutRecordsPayload),
         typeof(ReusableActivityDraftView),
 
         // Draft, fork, and contract operations.
@@ -94,10 +95,6 @@ public sealed class ActivitiesDesignSerializationContractTests
         typeof(GetActivityDependencies),
         typeof(ActivityDependencyPageView),
         typeof(CompareActivityVersions),
-        typeof(GetVersion),
-        typeof(ActivityDefinitionVersionDetailsView),
-        typeof(ListDefinitionVersions),
-        typeof(IEnumerable<ActivityDefinitionVersionSummary>),
         typeof(RetireReusableActivityVersion),
         typeof(RestoreReusableActivityVersion),
         typeof(RevokeReusableActivityVersion),
@@ -143,6 +140,30 @@ public sealed class ActivitiesDesignSerializationContractTests
             .ToArray();
 
         Assert.Empty(missing);
+    }
+
+    [Fact]
+    public void Add_draft_transport_request_preserves_the_existing_command_json_shape()
+    {
+        using var layoutData = JsonDocument.Parse("{\"x\":1}");
+        var layout = new[]
+        {
+            new ActivityLayoutRecord("node-1", layoutData.RootElement.Clone())
+        };
+        var command = new CreateReusableActivityDraft("definition-1", "version-1", null, null, layout, "Clone");
+        var request = new CreateReusableActivityDraftRequest(
+            "definition-1",
+            "version-1",
+            null,
+            null,
+            new ActivityLayoutRecordsPayload(layout),
+            "Clone");
+
+        Assert.Equal(Serialize(command), Serialize(request));
+
+        var commandWithoutLayout = new CreateReusableActivityDraft("definition-1", "version-1");
+        var requestWithoutLayout = new CreateReusableActivityDraftRequest("definition-1", "version-1");
+        Assert.Equal(Serialize(commandWithoutLayout), Serialize(requestWithoutLayout));
     }
 
     [Fact]
@@ -247,10 +268,9 @@ public sealed class ActivitiesDesignSerializationContractTests
         Assert.Contains("\"status\":\"active\"", json, StringComparison.Ordinal);
         Assert.Contains("\"updatedAt\":\"2026-01-02T03:04:05+00:00\"", json, StringComparison.Ordinal);
 
-        var definition = new ActivityDefinitionView("id", "type", "category", null, null);
-        var definitionJson = Serialize(definition);
-        Assert.Contains("\"displayName\":null", definitionJson, StringComparison.Ordinal);
-        Assert.Contains("\"description\":null", definitionJson, StringComparison.Ordinal);
+        var provenance = new ActivityAuthoringProvenanceView("Api", "source-1", null);
+        var provenanceJson = Serialize(provenance);
+        Assert.Contains("\"featureId\":null", provenanceJson, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -21,14 +21,16 @@ Some checkpoints are committed in every mode, because skipping them would lose w
 | A suspension, and the bookmark the run waits on (so a resume always finds it) | ✓ | ✓ | ✓ |
 | Resuming from a bookmark | ✓ | ✓ | ✓ |
 | A fault and its incident | ✓ | ✓ | ✓ |
+| An incident recorded or resolved | ✓ | ✓ | ✓ |
+| An alteration | ✓ | ✓ | ✓ |
 | A cancellation | ✓ | ✓ | ✓ |
 | Dispatching a child workflow | ✓ | ✓ | ✓ |
-| The step before an activity that is not safe to repeat | ✓ | ✓ | ✓ |
+| The attempt claim for an activity that is not safe to repeat | ✓ | ✓ | ✓ |
 | Completion | ✓ | ✓ | ✓ (see the exception below) |
 | Each activity | ✓ | every `MaxActivitiesPerCommit` | ✗ |
 | End of a burst | ✓ | ✓ | only if the run stopped without completing |
 
-"Not safe to repeat" covers activities that call out to other systems: an HTTP endpoint, publishing an event, and any custom activity not marked safe to repeat. They are committed before they run, so a crash never repeats them silently.
+"Not safe to repeat" covers activities that call out to other systems: an HTTP endpoint, publishing an event, and any custom activity not marked safe to repeat. The runtime commits each activity's attempt claim before its body runs, so a crash never repeats it silently. Marking an activity safe to repeat drops that commit, which is why publication warns when a [compensation scope](compensation.md#crashes-and-repeated-calls) step that has a compensation, or a compensation handler, is a leaf activity marked safe to repeat. Composite activities never get this warning.
 
 > **Good to know: the one exception.** A host can opt into it. Under Ephemeral with `RecordCompletion` off, a run that completes **without ever having been saved** writes no record at all. Completion is still always committed when:
 >

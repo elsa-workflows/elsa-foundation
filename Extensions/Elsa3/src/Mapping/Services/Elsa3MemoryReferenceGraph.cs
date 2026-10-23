@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa3.Models;
 
@@ -9,14 +8,27 @@ namespace Elsa3.Mapping.Services;
 /// Inventories legacy value-reference occurrences before any Elsa 4 lowering takes place.
 /// The resulting graph is importer-local and deliberately contains enough structural context for
 /// a later pass to resolve or reject each relationship without relying on traversal order.
+/// Each node's inputs and outputs come from the same resolution node mapping uses (spec FR-011), so lowering and
+/// mapping cannot disagree about a node's target.
 /// </summary>
-public sealed class Elsa3MemoryReferenceGraph(IActivityDefinitionLookup activityLookup)
+public sealed class Elsa3MemoryReferenceGraph
 {
-    public async ValueTask<Elsa3MemoryReferenceInventory> CollectAsync(
+    /// <param name="root">The normalized root activity.</param>
+    /// <param name="contractOf">The declared inputs and outputs of a node, or null when it has none.</param>
+    /// <param name="jsonPaths">The original JSON path of nodes normalization moved out of a port, if any.</param>
+    /// <param name="cancellationToken">Cancels the walk.</param>
+    internal async ValueTask<Elsa3MemoryReferenceInventory> CollectAsync(
         Elsa3Activity root,
-        CancellationToken cancellationToken = default)
+        Func<Elsa3Activity, Elsa3NodeContract?> contractOf,
+        IReadOnlyDictionary<Elsa3Activity, string>? jsonPaths = null,
+        CancellationToken cancellationToken = default,
+        Func<Elsa3Activity, string, string>? sourceNameOf = null)
     {
         ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(contractOf);
+        _contractOf = contractOf;
+        _jsonPaths = jsonPaths;
+        _sourceNameOf = sourceNameOf ?? ((_, name) => name);
 
         var occurrences = new List<Elsa3MemoryOccurrence>();
         var nodes = new List<Elsa3MemoryReferenceNode>();
@@ -44,6 +56,10 @@ public sealed class Elsa3MemoryReferenceGraph(IActivityDefinitionLookup activity
             propertyContracts.ToArray());
     }
 
+    private Func<Elsa3Activity, Elsa3NodeContract?> _contractOf = _ => null;
+    private IReadOnlyDictionary<Elsa3Activity, string>? _jsonPaths;
+    private Func<Elsa3Activity, string, string> _sourceNameOf = (_, name) => name;
+
     private async ValueTask CollectActivityAsync(
         Elsa3Activity activity,
         string jsonActivityPath,
@@ -58,7 +74,8 @@ public sealed class Elsa3MemoryReferenceGraph(IActivityDefinitionLookup activity
         var nodeId = GetNodeId(activity, jsonActivityPath);
         nodes.Add(new Elsa3MemoryReferenceNode(nodeId, activityPath, structuralFrameId));
 
-        var version = await GetVersionAsync(activity, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        var version = _contractOf(activity) ?? Elsa3NodeContract.Empty;
         CollectPropertyContracts(activity, version, nodeId, activityPath, structuralFrameId, propertyContracts);
         CollectOccurrences(activity, version, nodeId, jsonActivityPath, activityPath, structuralFrameId, occurrences);
 
@@ -73,7 +90,7 @@ public sealed class Elsa3MemoryReferenceGraph(IActivityDefinitionLookup activity
         for (var index = 0; index < children.Count; index++)
         {
             var child = children[index];
-            var childJsonPath = $"{jsonActivityPath}.activities[{index}]";
+            var childJsonPath = _jsonPaths?.GetValueOrDefault(child) ?? $"{jsonActivityPath}.activities[{index}]";
             var childNodeId = GetNodeId(child, childJsonPath);
             await CollectActivityAsync(
                 child,
@@ -90,7 +107,7 @@ public sealed class Elsa3MemoryReferenceGraph(IActivityDefinitionLookup activity
 
     private static void CollectPropertyContracts(
         Elsa3Activity activity,
-        IActivityDefinitionVersion version,
+        Elsa3NodeContract version,
         string nodeId,
         string activityPath,
         string structuralFrameId,
@@ -98,7 +115,7 @@ public sealed class Elsa3MemoryReferenceGraph(IActivityDefinitionLookup activity
     {
         foreach (var propertyName in activity.AdditionalProperties.Keys)
         {
-            foreach (var input in version.Inputs.Where(value => value.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase)))
+            foreach (var input in version.Inputs.Where(value => Names(value.Name, value.ReferenceKey, propertyName)))
             {
                 contracts.Add(new Elsa3PropertyContract(
                     nodeId,
@@ -109,7 +126,7 @@ public sealed class Elsa3MemoryReferenceGraph(IActivityDefinitionLookup activity
                     Elsa3PropertyDirection.Input,
                     input.Type));
             }
-            foreach (var output in version.Outputs.Where(value => value.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase)))
+            foreach (var output in version.Outputs.Where(value => Names(value.Name, value.ReferenceKey, propertyName)))
             {
                 contracts.Add(new Elsa3PropertyContract(
                     nodeId,
@@ -123,9 +140,9 @@ public sealed class Elsa3MemoryReferenceGraph(IActivityDefinitionLookup activity
         }
     }
 
-    private static void CollectOccurrences(
+    private void CollectOccurrences(
         Elsa3Activity activity,
-        IActivityDefinitionVersion version,
+        Elsa3NodeContract version,
         string nodeId,
         string jsonActivityPath,
         string activityPath,
@@ -137,12 +154,12 @@ public sealed class Elsa3MemoryReferenceGraph(IActivityDefinitionLookup activity
             if (!TryReadReference(value, out var memoryReferenceId, out var expression))
                 continue;
 
-            var jsonPath = $"{jsonActivityPath}{FormatJsonProperty(propertyName)}.memoryReference";
+            var jsonPath = $"{jsonActivityPath}{FormatJsonProperty(_sourceNameOf(activity, propertyName))}.memoryReference";
             var inputs = version.Inputs
-                .Where(x => x.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase))
+                .Where(x => Names(x.Name, x.ReferenceKey, propertyName))
                 .ToArray();
             var outputs = version.Outputs
-                .Where(x => x.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase))
+                .Where(x => Names(x.Name, x.ReferenceKey, propertyName))
                 .ToArray();
 
             foreach (var input in inputs)
@@ -167,18 +184,14 @@ public sealed class Elsa3MemoryReferenceGraph(IActivityDefinitionLookup activity
         }
     }
 
-    private async ValueTask<IActivityDefinitionVersion> GetVersionAsync(
-        Elsa3Activity source,
-        CancellationToken cancellationToken)
-    {
-        var definition = await activityLookup.GetDefinition(source.Type, cancellationToken);
-        var versions = await activityLookup.ListVersions(definition.Id, cancellationToken);
-        var sourceSemVer = $"{source.Version ?? 0}.0.0";
-        var summary = versions.FirstOrDefault(x => x.Version == sourceSemVer)
-            ?? throw new ArgumentException($"Activity '{source.Type}' does not have version '{sourceSemVer}'");
-
-        return await activityLookup.GetVersion(summary.Id, cancellationToken);
-    }
+    /// <summary>
+    /// Whether a member named <paramref name="name"/> with reference key <paramref name="referenceKey"/> is the one a
+    /// property names: normalization renames properties to exact Elsa 4 keys, and an alias binds by name.
+    /// </summary>
+    private static bool Names(string name, string referenceKey, string propertyName) =>
+        StringComparer.Ordinal.Equals(referenceKey, propertyName) ||
+        name.Equals(propertyName, StringComparison.OrdinalIgnoreCase) ||
+        referenceKey.Equals(propertyName, StringComparison.OrdinalIgnoreCase);
 
     private static bool TryReadReference(
         JsonElement value,
@@ -232,6 +245,12 @@ public sealed class Elsa3MemoryReferenceGraph(IActivityDefinitionLookup activity
             .Replace("'", "\\'", StringComparison.Ordinal);
         return $"['{escaped}']";
     }
+}
+
+/// <summary>The declared inputs and outputs value-flow lowering sees for one node.</summary>
+internal sealed record Elsa3NodeContract(IReadOnlyList<InputDefinition> Inputs, IReadOnlyList<OutputDefinition> Outputs)
+{
+    public static readonly Elsa3NodeContract Empty = new([], []);
 }
 
 public sealed record Elsa3MemoryReferenceInventory(

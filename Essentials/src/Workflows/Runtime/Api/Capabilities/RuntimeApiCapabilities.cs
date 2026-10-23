@@ -85,3 +85,34 @@ public sealed class RuntimeAlterationCapabilitySource(IServiceProvider servicePr
         return ValueTask.FromResult(declarations);
     }
 }
+
+/// <summary>
+/// Advertises the activity state view (spec 260 R-6) only when the shell composed at least one projector, so a client
+/// never follows a link that can only answer <c>NoProjector</c>.
+/// </summary>
+public sealed class RuntimeActivityStateViewCapabilitySource(IServiceProvider services) : IApiCapabilitySource
+{
+    public ValueTask<IReadOnlyCollection<ApiCapabilityDeclaration>> GetCapabilitiesAsync(CancellationToken cancellationToken = default)
+    {
+        IReadOnlyCollection<ApiCapabilityDeclaration> declarations = services.GetServices<IActivityStateViewProjector>().Any()
+            ? [new(RuntimeApiCapabilities.CapabilityId, 1,
+                [new ApiCapabilityLink("activity-execution-state-view", "runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/state-view", templated: true)],
+                $"{RuntimeApiCapabilities.SourceFeatureId}.ActivityStateView")]
+            : [];
+        return ValueTask.FromResult(declarations);
+    }
+}
+
+/// <summary>Deletion requires a cohesive provider capable of atomic, fenced run cleanup.</summary>
+public sealed class RuntimeRunDeletionCapabilitySource(IServiceProvider services) : IApiCapabilitySource
+{
+    public ValueTask<IReadOnlyCollection<ApiCapabilityDeclaration>> GetCapabilitiesAsync(CancellationToken cancellationToken = default)
+    {
+        IReadOnlyCollection<ApiCapabilityDeclaration> declarations = services.GetService<IWorkflowExecutionDeletionStore>() is not { IsSupported: true }
+            ? []
+            : [new(RuntimeApiCapabilities.CapabilityId, 1,
+                [new ApiCapabilityLink("workflow-instance-delete", "runtime/workflows/instances/{workflowExecutionId}", templated: true)],
+                $"{RuntimeApiCapabilities.SourceFeatureId}.RunDeletion")];
+        return ValueTask.FromResult(declarations);
+    }
+}

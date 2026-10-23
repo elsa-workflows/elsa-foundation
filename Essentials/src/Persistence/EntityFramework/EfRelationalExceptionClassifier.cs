@@ -205,4 +205,29 @@ public static class EfRelationalExceptionClassifier
 
         return false;
     }
+
+    /// <summary>
+    /// Returns whether a relational provider refused a row because its key is longer than the key allows.
+    /// </summary>
+    /// <remarks>
+    /// Only SQL Server has an arm. Its clustered key is limited to 900 bytes, which can be less than the key columns
+    /// hold together, and it refuses a row past that with error 1946 when the row is written. SQLite has no key limit.
+    /// PostgreSQL's B-tree entry limit and MySQL's key prefix limit both exceed the most bytes the bounded key columns
+    /// of the first-party contexts can hold, and MySQL enforces its limit when the key is created, not when a row is
+    /// written, so neither raises this from a write.
+    /// </remarks>
+    public static bool IsKeyTooLong(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            var type = current.GetType();
+            if (type.Name.Equals("SqlException", StringComparison.Ordinal) &&
+                type.GetProperty("Number")?.GetValue(current) is 1946)
+                return true;
+        }
+
+        return false;
+    }
 }

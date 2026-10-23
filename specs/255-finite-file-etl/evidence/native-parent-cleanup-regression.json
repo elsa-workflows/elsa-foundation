@@ -1,0 +1,16 @@
+{
+  "removedExitCode": 1,
+  "restoredSha256": "eaa76794e538ce78244c4e505a7dbc407c5c7d313391d3c9b3bf0a139cbee1f3",
+  "byteExactRestoration": true,
+  "genericRemovedExitCode": 1,
+  "genericRestoredExitCode": 0,
+  "genericCommand": [
+    "dotnet",
+    "test",
+    "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+    "--no-restore",
+    "--filter",
+    "FullyQualifiedName~RuntimeCancellationContractTests"
+  ],
+  "sourcePath": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/WorkHandlers/WorkflowCancelSchedulerWorkHandler.cs"
+}

@@ -1,0 +1,62 @@
+name: CI flake record
+
+# Records every test that failed once and passed on its automatic retry (spec 263, FR-004) as one comment per run on the
+# standing flake-tracking issue (flakeTrackerIssue in tools/ci/test-tiers.json), so repeat offenders become visible.
+#
+# Why a workflow_run: shards of a pull request from a fork get a read-only token and cannot comment on an issue. This
+# workflow runs on main's own code with its own token, after the run finishes. The shard artifacts it downloads may come
+# from a fork, so they are data only: tools/ci/test_results.py record-flakes validates every name against a strict
+# pattern before writing it, and nothing from an artifact reaches a shell command line.
+#
+# GitHub runs workflow_run workflows from the default branch only, so this file takes effect once it is on main.
+
+on:
+  workflow_run:
+    workflows: [CI, CI full tier]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-flake-record
+  cancel-in-progress: false
+
+jobs:
+  record:
+    name: Record retried tests
+    if: ${{ github.event.workflow_run.conclusion != 'cancelled' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read   # download the triggering run's artifacts
+      issues: write   # comment on the flake-tracking issue
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Download the shard outcomes
+        # A documentation-only run uploads no outcomes; nothing to record is not a failure.
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          pattern: test-outcomes-*
+          path: ${{ runner.temp }}/outcomes
+
+      - name: Comment on the flake tracker
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          set -euo pipefail
+          issue=$(python3 -c 'import json; print(int(json.load(open("tools/ci/test-tiers.json"))["flakeTrackerIssue"]))')
+          python3 tools/ci/test_results.py record-flakes "$RUNNER_TEMP/outcomes" --run-url "$RUN_URL" --body "$RUNNER_TEMP/comment.md"
+          if [[ -s "$RUNNER_TEMP/comment.md" ]]; then
+            gh issue comment "$issue" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/comment.md"
+          fi

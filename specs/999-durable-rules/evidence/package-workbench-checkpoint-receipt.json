@@ -1,0 +1,305 @@
+{
+  "schemaVersion": 1,
+  "productSourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+  "publishStateCommit": "eb3e12531b0cbd594374df1e49df0fadef9a50f3",
+  "completedTasks": [
+    "T014",
+    "T015",
+    "T031"
+  ],
+  "fullAcceptancePassed": false,
+  "workbenchFullSuitePassed": false,
+  "harness": {
+    "tools/rules/verify-packaged-rules.py": "7bd702dfec74d808847ecd688488dbb142ac26617753894a6b18689940e9ed4a",
+    "tools/rules/package_consumer.py": "6048ddb2b8939c00f0af7cf4eeb3ace039cb8675d7d12291886fdc3c4e1d7646",
+    "tools/rules/package_process.py": "3078659a369cba732775a559b4cc6ff7d0e02cbc24d7daa29791e1e7f689f8e4",
+    "tools/rules/package_adversarial.py": "411ea8d9a7f5bfaf279339e5807d6532b86ee8a76a16aba19e23544365ffc832",
+    "tools/rules/package_workbench.py": "323297bea0d0c1173882cab478b47f301cc25e250936b3092ef9d598d31f4984",
+    "e2e-tests/_ServerLifecycle.ps1": "2b09790145f93c0e30ff1c08ff7066a172755236de51d0b7af258ac61060e93d",
+    "e2e-tests/_ElsaCommon.ps1": "16905ef3c7503c33308d596290601c2b94cd8e829220a08ab857d0680f6d469f",
+    "e2e-tests/rules/Test-DurableRules.ps1": "36aa75f07f24a5b201597ce7301085a9f87396077cc4337d6a6343c47c0690ee",
+    "tools/rules/PackageProbe/PersistenceControlProbe.cs": "3639099ede1dfa1d20533e4c34e7b75f456c0e79db35de9d1fdeed73d157f9e4",
+    "tools/rules/PackageProbe/ProcessProbe.cs": "0d1d523cc94f94d59bb04fbd4c9d4cfa877d02a7b775191d58b535c12335627a",
+    "tools/rules/PackageProbe/Program.cs": "61e2d856357eb47797b9666400dd2ea76712c54cb802841fef0e285fe7a7d8af",
+    "tools/rules/PackageProbe/StaleProcessProbe.cs": "6650165ef27ccddc241f44a5aaccd270e98e0f9567afaab95a239f5c9c471b52"
+  },
+  "packageProcess": {
+    "path": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/receipt.json",
+    "sha256": "c2798681181f3bdbb960563e93013bf11aaae55b8b96b4f145607ebeddd072f1"
+  },
+  "packageWorkbench": {
+    "path": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/receipt.json",
+    "sha256": "c1ef3e75056b18ba0297c948db920118fbee36f6b5b3980fafe05c7c6baa0a3a"
+  },
+  "rest": {
+    "path": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/workbench-rest.json",
+    "sha256": "d0ddfb8907377fbcce36e1b9d3206bc41bdaca4e442d294731d45233a18cb69c"
+  },
+  "failedRestAttempt": {
+    "path": "/private/tmp/rules-six-module-workbench/run-6593b7622d1840b288c15b1ac84f91f7/receipt.json",
+    "sha256": "855b75916eaf3851cdae5a05aee399981943b6e8c67429d2497abbb202024263"
+  },
+  "scopeDiagnostics": {
+    "path": "/Users/sipke/.codex/worktrees/unified-presentation-qa/elsa-foundation-main/specs/999-durable-rules/evidence/workbench-rest-scope-diagnostics.json",
+    "sha256": "6b380c2b955ac5d68e258f565801b617f38e9e696893ffe78adf455d8263b667"
+  },
+  "validation": {
+    "architectureInitial": {
+      "trx": {
+        "path": "/Users/sipke/.codex/worktrees/unified-presentation-qa/elsa-foundation-main/Essentials/tests/Architecture/Tests/TestResults/rules-package-workbench-architecture.trx",
+        "sha256": "0ae4fefc700665695c14f8771b295c4598b61a9b673a3b555ced35fda00fea97"
+      },
+      "log": {
+        "path": "/tmp/rules-package-workbench-architecture.log",
+        "sha256": "d74767bc693edeb2378cb5038bdedeeb5dc4069fe210a8e4960a41606eb8a8bd"
+      },
+      "counts": {
+        "total": 585,
+        "executed": 585,
+        "passed": 583,
+        "failed": 2,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "failures": [
+        {
+          "name": "Elsa.Architecture.Tests.DockerBuildContextGuardTests.Every_dockerfile_copies_every_required_build_file_before_restore",
+          "messageExcerpt": "1 required build file(s) are not reliably in the Docker build context before restore:\nEssentials/apps/Elsa.Workbench/Dockerfile: Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj imports '$(RulesPackageReferencesFile)', a form this guard cannot resolve and must be extended for.",
+          "messageLength": 281,
+          "excerptTruncated": false
+        },
+        {
+          "name": "Elsa.Architecture.Tests.EfCoreDependencyGuardTests.First_party_dependency_edges_cannot_be_conditionally_hidden_from_the_reviewed_restore_graphs",
+          "messageExcerpt": "These src entries conditionally declare dependency/import edges that are not covered by the Release and Debug restore graphs:\nEssentials/apps/Elsa.Workbench/Elsa.Workbench.csproj: Import\nEssentials/apps/Elsa.Workbench/Elsa.Workbench.csproj: ProjectReference\nEssentials/apps/Elsa.Workbench/Elsa.Workbench.csproj: ProjectReference\nEssentials/apps/Elsa.Workbench/Elsa.Workbench.csproj: ProjectReference\nEssentials/apps/Elsa.Workbench/Elsa.Workbench.csproj: ProjectReference",
+          "messageLength": 470,
+          "excerptTruncated": false
+        }
+      ]
+    },
+    "architectureFocusedCorrection": {
+      "trx": {
+        "path": "/Users/sipke/.codex/worktrees/unified-presentation-qa/elsa-foundation-main/Essentials/tests/Architecture/Tests/TestResults/rules-package-workbench-guards-fixed.trx",
+        "sha256": "24929603d4d4b280ae61996b99c4d994d28129af31311c0f13b24d526f8434cb"
+      },
+      "log": {
+        "path": "/tmp/rules-package-workbench-guards-fixed.log",
+        "sha256": "d5db3a4b54ba0ae9f3596d0e9754bc471f01a933345ca7b2f67ebae6f9f34ed5"
+      },
+      "counts": {
+        "total": 2,
+        "executed": 2,
+        "passed": 2,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "failures": []
+    },
+    "architectureStaleBinaryAttempt": {
+      "trx": {
+        "path": "/Users/sipke/.codex/worktrees/unified-presentation-qa/elsa-foundation-main/Essentials/tests/Architecture/Tests/TestResults/rules-package-workbench-architecture-final.trx",
+        "sha256": "c1ed07443bde0634a7dd1a845872dc92c8a9517ed88baf0dd7f005bb935a19ec"
+      },
+      "log": {
+        "path": "/tmp/rules-package-workbench-architecture-final.log",
+        "sha256": "08a237b0b1994919e526b5e0a7083c7298ba8e4e593bb613c0bb2c4bc5df95af"
+      },
+      "counts": {
+        "total": 585,
+        "executed": 585,
+        "passed": 584,
+        "failed": 1,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "failures": [
+        {
+          "name": "Elsa.Architecture.Tests.ArchitectureGuardTests.InternalsVisibleTo_grants_stay_within_the_granting_domain",
+          "messageExcerpt": "InternalsVisibleTo may name only the granting project's own domain's test assemblies and, from a production project, its own domain's production projects:\nElsa.Workbench: the compiled assembly at Essentials/apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workbench.dll is older than Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj; build it again, because a stale assembly can hide a grant or report one that is gone",
+          "messageLength": 416,
+          "excerptTruncated": false
+        }
+      ]
+    },
+    "architectureRebuilt": {
+      "trx": {
+        "path": "/Users/sipke/.codex/worktrees/unified-presentation-qa/elsa-foundation-main/Essentials/tests/Architecture/Tests/TestResults/rules-package-workbench-architecture-rebuilt.trx",
+        "sha256": "e02c60365a5a190b0d40106a2685765e824364dd32a3a9ab8612c3adc29bae4e"
+      },
+      "log": {
+        "path": "/tmp/rules-package-workbench-architecture-rebuilt.log",
+        "sha256": "de3d4168a60a9c752cfbbd616bd1314c2e6e5fbb08ed6930c829bd758aeb960d"
+      },
+      "counts": {
+        "total": 585,
+        "executed": 585,
+        "passed": 585,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "failures": []
+    },
+    "workbenchFull": {
+      "trx": {
+        "path": "/Users/sipke/.codex/worktrees/unified-presentation-qa/elsa-foundation-main/Essentials/tests/Workbench/Tests/TestResults/rules-workbench-host.trx",
+        "sha256": "8855bfdd89af629e8848c8faed86a994ab54de35301ef2547960a0d5f66e1814"
+      },
+      "log": {
+        "path": "/tmp/rules-workbench-tests.log",
+        "sha256": "7c6cd9cee5fe48ce5656048f84345c37d89d8ec94335bfa9eb69e66e0240efb5"
+      },
+      "counts": {
+        "total": 62,
+        "executed": 62,
+        "passed": 61,
+        "failed": 1,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "failures": [
+        {
+          "name": "Elsa.Workbench.Tests.NativeHostingConformanceTests.Original_uncancelled_checkpoint_is_rejected_after_a_real_successor_acquires",
+          "messageExcerpt": "Timed out waiting for native hosting event 'stale-successor-acquired' for 14YT10bOgop.\n{\"Stage\":\"stale-commit-public\",\"RecordedAt\":\"2026-10-22T05:07:04.326964\\u002B00:00\",\"ProcessId\":8495,\"Role\":\"owner\",\"ExecutionId\":\"14YT10bOgop\",\"CommitId\":\"commit:8e00a31484824b01:background-result:activity-completed:14YT15dhPc5\",\"CheckpointId\":\"checkpoint:8e00a31484824b01:background-result:activity-completed:14YT15dhPc5\",\"WorkItemId\":\"8e00a31484824b01:background-result\",\"CheckpointName\":\"ActivityCompleted\",\"CheckpointReason\":\"BackgroundActivityResult\",\"ActivityExecutionId\":\"14YT15dhPc5\",\"ExecutableNodeId\":\"left\",\"ArtifactId\":\"artifact-adf8e942f94b\",\"ArtifactVersion\":\"1.0.0\",\"ArtifactHash\":\"sha256:adf8e942f94b7a32946fd1b995959fe55eed3a8f3db1e05fe93826cbc38e1e37\",\"DecisionMode\":\"Immediate\",\"ExpectedFence\":{\"LeaseId\":\"14YT1uNJf90\",\"OwnerId\":\"native-hosting-72ad985bd94148-owner\",\"FencingToken\":3},\"CancellationTokenCanBeCanceled\":true,\"CancellationRequested\":false,\"CancellationTokenHash\":38992083,\"CommitObjectId\":7956259,\"Fingerprint\":\"16154375c5fd8cde644b8d0f555446f82ff9b38078f686853ee19d172ac5932a\",\"ActivityParticipantIds\":[\"14YT15dhPc5\"],\"ReceiptAcceptances\":[{\"WorkId\":\"231c6f1a8feddae0:14YT15dhPc5:attempt:1\",\"ExpectedReceiptDigest\":\"8a881a6cf9b960014bf7e5d84a466bef91cb7f83340fedd2343bc18b78bde7c6\"}],\"ConsumedSchedulerWorkItemIds\":[],\"CoalescedFlush\":false,\"Outcome\":null,\"ReturnedPendingPostCommitWorkIds\":null,\"ReturnedConsumedSchedulerWorkItemIds\":null,\"ExceptionType\":null,\"ExceptionMessage\":null,\"PresentedFencingToken\":null,\"ExceptionCurrentFencingToken\":null,\"FencingRejectionReason\":null,\"Marker\":null,\"BackgroundStatus\":null,\"ReceiptDigest\":null,\"BackgroundRevision\":null,\"ActivityStatus\":null,\"ActivityRevision\":null,\"ActivityContentHash\":null,\"SchedulerRow\":null,\"CurrentOwnerId\":null,\"CurrentLeaseId\":null,\"PersistedFencingToken\":null,\"CurrentLeaseExpiresAt\":null}\n{\"Stage\":\"stale-commit-baseline\",\"RecordedAt\":\"2026-10-22T05:07:04.356031\\u002B00:00\",\"ProcessId\":8495,\"Role\":\"owner\",\"ExecutionId\":\"14YT10bOgop\",\"CommitId\":\"commit:8e00a31484824b01:background-result:activity-completed:14YT15dhPc5\",\"CheckpointId\":\"checkpoint:8e00a31484824b01:background-result:activity-completed:14YT15dhPc5\",\"WorkItemId\":\"8e00a31484824b01:background-result\",\"CheckpointName\":\"ActivityCompleted\",\"CheckpointReason\":\"BackgroundActivityResult\",\"ActivityExecutionId\":\"14YT15dhPc5\",\"ExecutableNodeId\":\"left\",\"ArtifactId\":\"artifact-adf8e942f94b\",\"ArtifactVersion\":\"1.0.0\",\"ArtifactHash\":\"sha256:adf8e942f94b7a32946fd1b995959fe55eed3a8f3db1e05fe93826cbc38e1e37\",\"DecisionMode\":\"Immediate\",\"ExpectedFence\":{\"LeaseId\":\"14YT1uNJf90\",\"OwnerId\":\"native-hosting-72ad985bd94148-owner\",\"FencingToken\":3},\"CancellationTokenCanBeCanceled\":true,\"CancellationRequested\":false,\"CancellationTokenHash\":38992083,\"CommitObjectId\":7956259,\"Fingerprint\":\"16154375c5fd8cde644b8d0f555446f82ff9b38078f686853ee19d172ac5932a\",\"ActivityParticipantIds\":[\"14YT15dhPc5\"],\"ReceiptAcceptances\":[{\"WorkId\":\"231c6f1a8feddae0:14YT15dhPc5:",
+          "messageLength": 314253,
+          "excerptTruncated": true
+        }
+      ]
+    },
+    "workbenchIsolatedAfterDiagnosticInspection": {
+      "trx": {
+        "path": "/Users/sipke/.codex/worktrees/unified-presentation-qa/elsa-foundation-main/Essentials/tests/Workbench/Tests/TestResults/rules-workbench-host-isolated.trx",
+        "sha256": "ef1a10aaf6a59e5db818b75f06491139422e4a01bb1f8cf4d5905c987da01109"
+      },
+      "log": {
+        "path": "/tmp/rules-workbench-tests-isolated.log",
+        "sha256": "142e0765bc5a8825fa545b552abfacc54ff55b236a81b50b61ae12e4cbe46eab"
+      },
+      "counts": {
+        "total": 1,
+        "executed": 1,
+        "passed": 1,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "failures": []
+    }
+  },
+  "sourceBuild": {
+    "path": "/tmp/rules-workbench-unconditional-build.log",
+    "sha256": "05fd5928358530227bd143aef246c4b57e24ed63c06aa105e5ffe339469ba652"
+  },
+  "mapsCheck": {
+    "path": "/tmp/rules-package-workbench-maps-final.log",
+    "sha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04"
+  },
+  "syntaxAndDiffCheck": {
+    "path": "/tmp/rules-package-workbench-static-final.log",
+    "sha256": "1ae3b2f757404ff5bcbf15069bbd95d7a5a2ad957b89b28176f73c5292fec33b"
+  },
+  "cleanup": {
+    "successSourceClean": true,
+    "generatedProjectRemoved": true,
+    "retainedProject": {
+      "path": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/workbench-package-host/qualification-project.csproj",
+      "sha256": "10fa675a63cd5a268af054286d02d995b92105f64190831d87ce77dd8b27aea6"
+    },
+    "exceptionControl": {
+      "path": "/tmp/rules-workbench-cleanup-exception.json",
+      "sha256": "822db513d1107ee53dddf451a368afb7dcc8a8deeeeb26ed8b0e9b1dd62a19be"
+    },
+    "exceptionControlObservations": {
+      "buildInputProjectPath": "/var/folders/63/lbnh2n0n6dv9dzm8bks0854c0000gn/T/rules-workbench-cleanup-control-y0vizorc/source/Essentials/apps/RulesPackageWorkbench-f7ff9hb4/Elsa.Workbench.csproj",
+      "projectPresentAtRestoreBoundary": true,
+      "expectedException": "intentional cleanup check at restore boundary",
+      "generatedProjectRemoved": true,
+      "noTemporaryCopiesRemain": true,
+      "sourceFilesUnchanged": true,
+      "sourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+      "helperSha256": "323297bea0d0c1173882cab478b47f301cc25e250936b3092ef9d598d31f4984",
+      "scope": "Copied immutable Workbench source/config; generated real qualification project; injected first restore callback exception before external build. Success cleanup and git cleanliness are separately verified by the full package run.",
+      "passed": true
+    }
+  },
+  "review": {
+    "scope": "Package consumer selection, Workbench opt-in composition, copied package host, owned REST lifecycle, result scope binding and evidence.",
+    "roundsThisContinuation": 4,
+    "findingsAddressed": [
+      "Flowchart result binding requires its persisted local execution scope, not the outer node ID.",
+      "Keep production project references unconditional; build qualification from a copied host project.",
+      "Use a four-runtime-root consumer for the no-Design process proof and six roots for direct/Workbench proof.",
+      "Remove the owned generated host on success and exception, retain transformed project evidence and verify source cleanliness."
+    ]
+  },
+  "limits": [
+    "The full Workbench suite is not green. Its successor-acquisition case timed out with startup SQLite lock diagnostics, then passed alone. Lock owner and cause remain unproven.",
+    "REST Flowchart is linear; restart occurs after terminal completion. Neither proves sibling joins or mid-flight recovery.",
+    "The REST budget fault projection does not expose the exact Rules diagnostic.",
+    "Native unavailable retry and persisted proof-before-acknowledgement acceptance remain pending.",
+    "Retained native schema coexistence and Rules upgrade/admission-disabled rollback remain pending.",
+    "Local multi-process PostgreSQL proof is not a multi-machine cluster qualification.",
+    "No package release, production deployment, permission or workflow change. General task runner and Orleans remain outside this leaf.",
+    "External effects retain at-least-once semantics."
+  ]
+}

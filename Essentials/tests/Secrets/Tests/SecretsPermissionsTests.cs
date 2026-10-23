@@ -21,7 +21,7 @@ public sealed class SecretsPermissionsTests
     }
 
     [Fact]
-    public void Contributor_owns_all_stable_permissions_and_only_write_implies_read()
+    public void Contributor_owns_all_stable_permissions()
     {
         var contributor = CreateContributor();
         var permissions = contributor.Contribute().ToArray();
@@ -48,10 +48,6 @@ public sealed class SecretsPermissionsTests
             Assert.NotEmpty(permission.Description);
         });
 
-        Assert.Equal([SecretsPermissions.Read], permissions.Single(permission => permission.Key == SecretsPermissions.Write).Implies);
-        Assert.All(
-            permissions.Where(permission => permission.Key != SecretsPermissions.Write),
-            permission => Assert.True(permission.Implies is null || permission.Implies.Count == 0));
         Assert.DoesNotContain(permissions, permission => permission.Key == PermissionKey.Wildcard);
     }
 

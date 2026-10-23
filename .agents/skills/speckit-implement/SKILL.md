@@ -172,6 +172,7 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Check that implemented features match the original specification
    - Validate that tests pass and coverage meets requirements
    - Confirm the implementation follows the technical plan
+   - If the work goes to a pull request in elsa-foundation, open it as a draft and mark it ready (`gh pr ready <n>`) before requesting review, so the required `Full tier` runs on its head; see `docs/contributing/merging.md#ci-tiers`
 
 Note: This command assumes a complete task breakdown exists in tasks.md. If tasks are incomplete or missing, suggest running `/speckit-tasks` first to regenerate the task list.
 

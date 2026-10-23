@@ -27,8 +27,16 @@ namespace Elsa.Architecture.Tests;
 /// activate a real CShells shell instead of constructing a flat service collection: HttpFeature must register its
 /// adapter in the child shell after root endpoint sources have been composed.
 /// </summary>
+/// <remarks>
+/// Collectibility of an <see cref="System.Runtime.Loader.AssemblyLoadContext"/> is not safe to prove while sibling
+/// architecture tests keep allocating. This class shares the OpenAPI lifetime pattern: its own collection with
+/// <c>DisableParallelization</c>, NoInlining unload boundaries, and a blocking GC loop that names any surviving root.
+/// </remarks>
+[Collection(Name)]
 public sealed class DynamicHttpRouteCompositionTests
 {
+    public const string Name = nameof(DynamicHttpRouteCompositionTests);
+
     [Fact]
     public async Task Root_module_endpoint_manifest_is_promoted_into_http_shell_and_rejects_workflow_collision()
     {
@@ -90,50 +98,60 @@ public sealed class DynamicHttpRouteCompositionTests
     }
 
     [Fact]
-    public async Task Repeated_http_shell_reload_releases_collectible_route_generation_roots()
+    public void Repeated_http_shell_reload_releases_collectible_route_generation_roots()
     {
-        var evidence = new List<WeakReference>();
+        // An async test method keeps the last cycle's WebApplication on its state machine until the
+        // assertion finishes, so the last shell/DI/state-owner roots never collect. The OpenAPI
+        // collectibility fixture is synchronous for the same reason.
+        var evidence = RunCollectibleShellCycles();
 
-        for (var cycle = 0; cycle < 4; cycle++)
-        {
-            var cycleEvidence = await RunCollectibleShellCycleAsync(cycle);
-            evidence.AddRange(cycleEvidence);
+        for (var attempt = 0; attempt < 32 && evidence.Any(item => item.Reference.IsAlive); attempt++)
             ForceCollection();
-        }
-
-        for (var attempt = 0; attempt < 20 && evidence.Any(reference => reference.IsAlive); attempt++)
-        {
-            ForceCollection();
-            await Task.Delay(10);
-        }
 
         Assert.NotEmpty(evidence);
-        Assert.All(evidence, reference => Assert.False(reference.IsAlive));
+        var live = evidence
+            .Where(item => item.Reference.IsAlive)
+            .Select(item => item.Label)
+            .ToArray();
+        Assert.True(live.Length == 0, $"Collectible route-generation roots still alive: {string.Join(", ", live)}.");
     }
 
-    private static async Task<WeakReference[]> RunCollectibleShellCycleAsync(int cycle)
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static List<LabeledReference> RunCollectibleShellCycles()
     {
-        var app = await StartHttpShellHostAsync();
+        var evidence = new List<LabeledReference>();
+        for (var cycle = 0; cycle < 4; cycle++)
+        {
+            evidence.AddRange(RunCollectibleShellCycle(cycle));
+            ForceCollection();
+        }
+
+        return evidence;
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static LabeledReference[] RunCollectibleShellCycle(int cycle)
+    {
+        var app = StartHttpShellHostAsync().GetAwaiter().GetResult();
         try
         {
             var registry = app.Services.GetRequiredService<IShellRegistry>();
             var shell = registry.GetActive("default")
                 ?? throw new InvalidOperationException("The test shell was not activated.");
             var evidence = PublishCollectibleGeneration(shell, cycle);
-            var reload = await registry.ReloadAsync("default");
-            if (reload.Drain is not null)
-                await reload.Drain.WaitAsync();
+            var reload = registry.ReloadAsync("default").GetAwaiter().GetResult();
+            reload.Drain?.WaitAsync().GetAwaiter().GetResult();
 
             // A code-first blueprint is intentionally read-only, so CShells retains disposed shell history for
             // diagnostics during reload. Disposing this real host is the supported unload boundary that releases
             // the registry and all of its historical shell/provider roots.
-            await app.StopAsync();
-            await app.DisposeAsync();
+            app.StopAsync().GetAwaiter().GetResult();
+            app.DisposeAsync().AsTask().GetAwaiter().GetResult();
             return evidence;
         }
         catch
         {
-            await app.DisposeAsync();
+            app.DisposeAsync().AsTask().GetAwaiter().GetResult();
             throw;
         }
     }
@@ -169,7 +187,7 @@ public sealed class DynamicHttpRouteCompositionTests
     }
 
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
-    private static WeakReference[] PublishCollectibleGeneration(
+    private static LabeledReference[] PublishCollectibleGeneration(
         IShell shell,
         int cycle)
     {
@@ -185,10 +203,6 @@ public sealed class DynamicHttpRouteCompositionTests
         // disposition for this custom publication path, rather than an omitted assertion.
         Assert.Null(serializerType is null ? null : scope.ServiceProvider.GetService(serializerType));
 
-        var shellReference = new WeakReference(shell);
-        var shellServicesReference = new WeakReference(shell.ServiceProvider);
-        var scopeServicesReference = new WeakReference(scope.ServiceProvider);
-        var routeTableReference = new WeakReference(routeTable);
         var snapshotProvider = (IRouteTableSnapshotProvider)routeTable;
         using var currentLease = snapshotProvider.AcquireSnapshot();
         var expectedGeneration = currentLease.Snapshot.Generation + 1;
@@ -201,15 +215,15 @@ public sealed class DynamicHttpRouteCompositionTests
         var providerRoot = provider;
         var evidence = new[]
         {
-            new WeakReference(loadContext),
-            new WeakReference(assembly),
-            new WeakReference(routeType),
-            new WeakReference(routeMetadata),
-            new WeakReference(routeDelegate),
-            new WeakReference(providerRoot),
-            new WeakReference(stateOwner),
-            routeTableReference,
-            scopeServicesReference
+            Label($"cycle-{cycle}/load-context", loadContext),
+            Label($"cycle-{cycle}/assembly", assembly),
+            Label($"cycle-{cycle}/route-type", routeType),
+            Label($"cycle-{cycle}/route-metadata", routeMetadata),
+            Label($"cycle-{cycle}/route-delegate", routeDelegate),
+            Label($"cycle-{cycle}/provider", providerRoot),
+            Label($"cycle-{cycle}/state-owner", stateOwner),
+            Label($"cycle-{cycle}/route-table", routeTable),
+            Label($"cycle-{cycle}/scope-services", scope.ServiceProvider)
         };
 
         routeTable.Refresh([
@@ -227,13 +241,15 @@ public sealed class DynamicHttpRouteCompositionTests
         routeTable.Refresh([new HttpRouteData($"replacement/{cycle}")]).GetAwaiter().GetResult();
         loadContext.Unload();
         return [
-            shellReference,
-            shellServicesReference,
+            Label($"cycle-{cycle}/shell", shell),
+            Label($"cycle-{cycle}/shell-services", shell.ServiceProvider),
             .. evidence,
-            new WeakReference(publishedRoute),
-            new WeakReference(owner)
+            Label($"cycle-{cycle}/published-route", publishedRoute),
+            Label($"cycle-{cycle}/owner", owner)
         ];
     }
+
+    private static LabeledReference Label(string label, object target) => new(label, new WeakReference(target));
 
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
     private static void ForceCollection()
@@ -242,4 +258,9 @@ public sealed class DynamicHttpRouteCompositionTests
         GC.WaitForPendingFinalizers();
         GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
     }
+
+    private readonly record struct LabeledReference(string Label, WeakReference Reference);
 }
+
+[CollectionDefinition(DynamicHttpRouteCompositionTests.Name, DisableParallelization = true)]
+public sealed class DynamicHttpRouteCompositionTestCollection;

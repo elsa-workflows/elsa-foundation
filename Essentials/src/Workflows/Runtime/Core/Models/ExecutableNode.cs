@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -13,7 +14,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 public sealed class ExecutableNode
 {
     [JsonConstructor]
-    public ExecutableNode(
+    internal ExecutableNode(
         string executableNodeId,
         string authoredActivityId,
         string activityType,
@@ -28,7 +29,8 @@ public sealed class ExecutableNode
         WorkflowIntrinsicKind? intrinsicKind = null,
         RuntimeVariableReference? intrinsicVariable = null,
         IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null,
-        string? descriptorSchemaVersion = null)
+        string? descriptorSchemaVersion = null,
+        ActivityExecutionPlacement executionPlacement = ActivityExecutionPlacement.Inline)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executableNodeId);
         ArgumentException.ThrowIfNullOrWhiteSpace(authoredActivityId);
@@ -37,6 +39,8 @@ public sealed class ExecutableNode
         ArgumentException.ThrowIfNullOrWhiteSpace(descriptorType);
         ArgumentNullException.ThrowIfNull(inputBindings);
         ArgumentNullException.ThrowIfNull(metadata);
+        if (!Enum.IsDefined(executionPlacement))
+            throw new ArgumentOutOfRangeException(nameof(executionPlacement), executionPlacement, "Activity execution placement is not defined.");
 
         var inputBindingSnapshot = inputBindings.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         var outputCaptureSnapshot = (outputCaptures ?? new Dictionary<string, RuntimeOutputCapture>())
@@ -114,6 +118,80 @@ public sealed class ExecutableNode
         ActivityContract = activityContract;
         IntrinsicKind = intrinsicKind;
         IntrinsicVariable = intrinsicVariable;
+        ExecutionPlacement = executionPlacement;
+    }
+
+    public ExecutableNode(
+        string executableNodeId,
+        string authoredActivityId,
+        string activityType,
+        string activityTypeVersion,
+        string descriptorType,
+        JsonElement descriptorPayload,
+        IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
+        IReadOnlyDictionary<string, string> metadata,
+        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null,
+        ExecutableActivityStructure? structure = null,
+        ActivityContract? activityContract = null,
+        WorkflowIntrinsicKind? intrinsicKind = null,
+        RuntimeVariableReference? intrinsicVariable = null,
+        IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null,
+        string? descriptorSchemaVersion = null)
+        : this(
+            executableNodeId,
+            authoredActivityId,
+            activityType,
+            activityTypeVersion,
+            descriptorType,
+            descriptorPayload,
+            inputBindings,
+            metadata,
+            childSlots,
+            structure,
+            activityContract,
+            intrinsicKind,
+            intrinsicVariable,
+            outputCaptures,
+            descriptorSchemaVersion,
+            ActivityExecutionPlacement.Inline)
+    {
+    }
+
+    public ExecutableNode(
+        string executableNodeId,
+        string authoredActivityId,
+        string activityType,
+        string activityTypeVersion,
+        string descriptorType,
+        JsonElement descriptorPayload,
+        IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
+        IReadOnlyDictionary<string, string> metadata,
+        ActivityExecutionPlacement executionPlacement,
+        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null,
+        ExecutableActivityStructure? structure = null,
+        ActivityContract? activityContract = null,
+        WorkflowIntrinsicKind? intrinsicKind = null,
+        RuntimeVariableReference? intrinsicVariable = null,
+        IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null,
+        string? descriptorSchemaVersion = null)
+        : this(
+            executableNodeId,
+            authoredActivityId,
+            activityType,
+            activityTypeVersion,
+            descriptorType,
+            descriptorPayload,
+            inputBindings,
+            metadata,
+            childSlots,
+            structure,
+            activityContract,
+            intrinsicKind,
+            intrinsicVariable,
+            outputCaptures,
+            descriptorSchemaVersion,
+            executionPlacement)
+    {
     }
 
     public ExecutableNode(
@@ -144,7 +222,42 @@ public sealed class ExecutableNode
             intrinsicKind,
             intrinsicVariable,
             outputCaptures: null,
-            descriptorSchemaVersion: descriptor.SchemaVersion)
+            descriptorSchemaVersion: descriptor.SchemaVersion,
+            executionPlacement: ActivityExecutionPlacement.Inline)
+    {
+    }
+
+    public ExecutableNode(
+        string executableNodeId,
+        string authoredActivityId,
+        string activityType,
+        string activityTypeVersion,
+        RuntimeActivityDescriptor descriptor,
+        IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
+        IReadOnlyDictionary<string, string> metadata,
+        ActivityExecutionPlacement executionPlacement,
+        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null,
+        ExecutableActivityStructure? structure = null,
+        ActivityContract? activityContract = null,
+        WorkflowIntrinsicKind? intrinsicKind = null,
+        RuntimeVariableReference? intrinsicVariable = null)
+        : this(
+            executableNodeId,
+            authoredActivityId,
+            activityType,
+            activityTypeVersion,
+            descriptor.ConsumerKey,
+            descriptor.Payload,
+            inputBindings,
+            metadata,
+            childSlots,
+            structure,
+            activityContract,
+            intrinsicKind,
+            intrinsicVariable,
+            outputCaptures: null,
+            descriptorSchemaVersion: descriptor.SchemaVersion,
+            executionPlacement: executionPlacement)
     {
     }
 
@@ -177,7 +290,43 @@ public sealed class ExecutableNode
             intrinsicKind,
             intrinsicVariable,
             outputCaptures,
-            descriptor.SchemaVersion)
+            descriptor.SchemaVersion,
+            ActivityExecutionPlacement.Inline)
+    {
+    }
+
+    public ExecutableNode(
+        string executableNodeId,
+        string authoredActivityId,
+        string activityType,
+        string activityTypeVersion,
+        RuntimeActivityDescriptor descriptor,
+        IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
+        IReadOnlyDictionary<string, RuntimeOutputCapture> outputCaptures,
+        IReadOnlyDictionary<string, string> metadata,
+        ActivityExecutionPlacement executionPlacement,
+        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null,
+        ExecutableActivityStructure? structure = null,
+        ActivityContract? activityContract = null,
+        WorkflowIntrinsicKind? intrinsicKind = null,
+        RuntimeVariableReference? intrinsicVariable = null)
+        : this(
+            executableNodeId,
+            authoredActivityId,
+            activityType,
+            activityTypeVersion,
+            descriptor.ConsumerKey,
+            descriptor.Payload,
+            inputBindings,
+            metadata,
+            childSlots,
+            structure,
+            activityContract,
+            intrinsicKind,
+            intrinsicVariable,
+            outputCaptures,
+            descriptor.SchemaVersion,
+            executionPlacement)
     {
     }
 
@@ -198,6 +347,8 @@ public sealed class ExecutableNode
     public ActivityContract? ActivityContract { get; }
     public WorkflowIntrinsicKind? IntrinsicKind { get; }
     public RuntimeVariableReference? IntrinsicVariable { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public ActivityExecutionPlacement ExecutionPlacement { get; }
 
     /// <summary>
     /// This node and every node below it, in document order: each node before its children, and child slots and

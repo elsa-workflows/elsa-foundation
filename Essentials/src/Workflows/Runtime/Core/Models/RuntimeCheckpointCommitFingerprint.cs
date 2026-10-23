@@ -17,7 +17,43 @@ public static class RuntimeCheckpointCommitFingerprint
         // Consumed scheduler work items only appear on the atomic-ack path, which never existed for older markers.
         // Emit a superset shape that also includes them so the pre-existing branches below stay byte-identical (and old
         // durable replay markers keep the same fingerprint) whenever no work item is consumed.
-        object stateChanges = commit.StateChanges.ConsumedSchedulerWorkItems.Count > 0 || commit.StateChanges.AlterationJobTerminalChange is not null
+        object stateChanges = !commit.StateChanges.BackgroundActivityWork.IsEmpty
+            ? new
+            {
+                commit.StateChanges.WorkflowExecution,
+                commit.StateChanges.Scheduler,
+                ActivityExecutions = Order(commit.StateChanges.ActivityExecutions),
+                ActivityExecutionInspections = Order(commit.StateChanges.ActivityExecutionInspections),
+                Bookmarks = Order(commit.StateChanges.Bookmarks),
+                DurableValues = Order(commit.StateChanges.DurableValues),
+                Incidents = Order(commit.StateChanges.Incidents),
+                Operational = Order(commit.StateChanges.Operational),
+                WorkflowDispatches = Order(commit.StateChanges.WorkflowDispatches),
+                WorkflowDispatchCancellations = commit.StateChanges.WorkflowDispatchCancellations
+                    .OrderBy(request => request.DispatchId, StringComparer.Ordinal)
+                    .ToArray(),
+                ActivityScopeCleanups = commit.StateChanges.ActivityScopeCleanups
+                    .OrderBy(request => request.WorkflowExecutionId, StringComparer.Ordinal)
+                    .ThenBy(request => request.ExecutionScopeId, StringComparer.Ordinal)
+                    .ToArray(),
+                ConsumedSchedulerWorkItems = commit.StateChanges.ConsumedSchedulerWorkItems
+                    .OrderBy(item => item.WorkItemId, StringComparer.Ordinal)
+                    .ToArray(),
+                commit.StateChanges.AlterationJobTerminalChange,
+                BackgroundActivityWork = new
+                {
+                    Admissions = commit.StateChanges.BackgroundActivityWork.Admissions
+                        .OrderBy(request => request.WorkId, StringComparer.Ordinal).ToArray(),
+                    Acceptances = commit.StateChanges.BackgroundActivityWork.Acceptances
+                        .OrderBy(request => request.WorkId, StringComparer.Ordinal).ToArray(),
+                    Cancellations = commit.StateChanges.BackgroundActivityWork.Cancellations
+                        .OrderBy(request => request.WorkflowExecutionId, StringComparer.Ordinal)
+                        .ThenBy(request => JsonSerializer.Serialize(request.ActivityExecutionIds), StringComparer.Ordinal)
+                        .ToArray()
+                },
+                PostCommitOutbox = Order(commit.StateChanges.PostCommitOutbox)
+            }
+            : commit.StateChanges.ConsumedSchedulerWorkItems.Count > 0 || commit.StateChanges.AlterationJobTerminalChange is not null
             ? new
             {
                 commit.StateChanges.WorkflowExecution,

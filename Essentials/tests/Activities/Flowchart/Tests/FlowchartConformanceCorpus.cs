@@ -43,9 +43,6 @@ internal static class FlowchartConformanceCorpus
                 services.AddSingleton(new FlowchartOptions { JoinPolicyKind = joinPolicyKind });
                 foreach (var policy in policies)
                     services.AddSingleton<IFlowchartPolicy>(policy);
-                // A corpus loop runs more drain cycles than the default 64 allows; the limit exists to catch
-                // runaway drains, not to bound a legitimate multi-iteration loop.
-                services.AddSingleton(new WorkflowDrainOrchestratorOptions(maxDrainCycles: 4096));
             });
 
         await fixture.ExecuteAsync(buildExecutable(fixture));

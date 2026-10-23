@@ -1,6 +1,7 @@
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Mediator.Core.Contracts;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Elsa.Activities.Design.Api.Commands;
@@ -45,6 +46,46 @@ public sealed record CreateReusableActivityDraft(
     ActivityContractView? Contract = null,
     IReadOnlyList<ActivityLayoutRecord>? Layout = null,
     string? PresentationLabel = null) : ICommand<ReusableActivityDraftView>;
+
+/// <summary>
+/// The wire request for cloning or creating a reusable activity draft.
+/// <see cref="Layout"/> is wrapped so NativeEndpoints treats an omitted body array as absent rather
+/// than falling through to an empty query collection.
+/// </summary>
+public sealed record CreateReusableActivityDraftRequest(
+    [property: JsonIgnore] string DefinitionId,
+    string? SourceVersionId,
+    ActivityProviderManifest? Provider = null,
+    ActivityContractView? Contract = null,
+    ActivityLayoutRecordsPayload? Layout = null,
+    string? PresentationLabel = null);
+
+[JsonConverter(typeof(ActivityLayoutRecordsPayloadJsonConverter))]
+public sealed record ActivityLayoutRecordsPayload(IReadOnlyList<ActivityLayoutRecord> Records);
+
+internal sealed class ActivityLayoutRecordsPayloadJsonConverter : JsonConverter<ActivityLayoutRecordsPayload>
+{
+    public override ActivityLayoutRecordsPayload Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        using var document = JsonDocument.ParseValue(ref reader);
+        if (document.RootElement.ValueKind != JsonValueKind.Array)
+            throw new JsonException("Activity layout must be an array.");
+
+        var records = document.RootElement.EnumerateArray()
+            .Select(element => element.Deserialize<ActivityLayoutRecord>(options)
+                ?? throw new JsonException("Activity layout records cannot be null."))
+            .ToArray();
+        return new(records);
+    }
+
+    public override void Write(Utf8JsonWriter writer, ActivityLayoutRecordsPayload value, JsonSerializerOptions options)
+    {
+        writer.WriteStartArray();
+        foreach (var record in value.Records)
+            JsonSerializer.Serialize(writer, record, options);
+        writer.WriteEndArray();
+    }
+}
 
 public sealed record UpdateReusableActivityDraftPresentation(
     [property: JsonIgnore] string DraftId,

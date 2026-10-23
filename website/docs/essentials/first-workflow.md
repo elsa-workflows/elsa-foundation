@@ -13,7 +13,7 @@ You will publish a workflow containing one Write Line activity, run that publish
 1. Open **Workflow Definitions** and create a workflow using the default Flowchart.
 2. Choose **Add activity**, search for `WriteLine`, and select **Write Line** (singular).
 3. Set **Text** to a recognizable message, such as `Hello from my first Elsa workflow`.
-4. Choose **Review & publish**, then **Publish** in the **Review and publish** dialog. Note the published artifact identifier.
+4. Choose **Review & publish**. In the **Review and publish** dialog, choose **Publish**. Note the published artifact identifier.
 
 <img src="../assets/elsa4/elsa4-03-workflow-definitions_studio-7cb2f2c2_act-4.0.5-preview.png" alt="Studio Workflow Definitions list showing one draft workflow named Hello first workflow" width="800">
 
@@ -35,7 +35,7 @@ Open **Workflows → Executables** and run the artifact you just published. The 
 
 *The published artifact in Executables.*
 
-Open the resulting run in history. Check that it belongs to the published artifact and has status **Completed**. Its timeline should contain exactly one completed Write Line activity. Open the activity's **Activity** tab and the **Issues** tab; the run should have zero incidents and an empty Issues view.
+After it starts, choose **Open Run** in the status line, or open **Workflows → Runs**. Check that it belongs to the published artifact and has status **Completed**. Its timeline should contain exactly one completed Write Line activity. Open the run-details **Activity** and **Issues** tabs (they appear as ACTIVITY / ISSUES). At 1024 px on this pinned Studio the labels can clip; hover a tab or widen the window. The run should have zero incidents and an empty Issues view.
 
 <img src="../assets/elsa4/elsa4-07-run-timeline_studio-7cb2f2c2_act-4.0.5-preview.png" alt="Completed run with the Write Line activity marked Completed and a timeline listing Flowchart and Write Line as OK" width="800">
 
@@ -47,7 +47,7 @@ In your demo terminal, inspect the Workbench output:
 docker compose -p elsa-first-workflow -f docker-compose.images.yml logs --no-color elsa-workbench
 ```
 
-Use the project name you chose in the quickstart. Your unique message should appear once for this run. If you ran the workflow again, account for those additional runs when reading the log.
+Use the `-p` project name you chose in the quickstart (that flag overrides the compose file's `name: elsa-stack`). Your unique message should appear once for this run. If you ran the workflow again, account for those additional runs when reading the log.
 
 ## Understand the result
 

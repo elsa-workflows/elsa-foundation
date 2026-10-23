@@ -459,6 +459,52 @@ describe("module management page", () => {
     await unmount();
   });
 
+  it.each(["add", "edit"] as const)("focuses, contains, and restores focus for the %s feed dialog", async mode => {
+    const { container, unmount } = await renderPackageFeedsPage(stubApi());
+    const opener = mode === "add"
+      ? Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.trim() === "Add feed")!
+      : container.querySelector<HTMLButtonElement>("[aria-label='Edit studio-local-packages']")!;
+    opener.focus();
+    flushSync(() => opener.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    await flushPromises();
+    await flushAnimationFrame();
+
+    const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;
+    const name = dialog.querySelector<HTMLInputElement>("[data-dialog-initial-focus]")!;
+    expect(document.activeElement).toBe(name);
+    const focusable = [...dialog.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled)")];
+    focusable[0]!.focus();
+    flushSync(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true })));
+    expect(document.activeElement).toBe(focusable.at(-1));
+    flushSync(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    expect(container.querySelector("[role='dialog']")).toBeNull();
+    expect(document.activeElement).toBe(opener);
+
+    await unmount();
+  });
+
+  it("submits a new package feed through the form when Enter requests submission", async () => {
+    const fetchMock = mockFetch();
+    const { container, unmount } = await renderPackageFeedsPage(stubApi());
+    const addFeedButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.trim() === "Add feed")!;
+    flushSync(() => addFeedButton.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    await flushPromises();
+    await flushAnimationFrame();
+
+    const form = container.querySelector<HTMLFormElement>("#package-feed-form")!;
+    const name = form.querySelector<HTMLInputElement>("[aria-label='Feed name']")!;
+    setInputValue(name, "test-feed");
+    flushSync(() => form.requestSubmit());
+    await flushPromises();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://studio.example/_elsa/module-management/feeds",
+      expect.objectContaining({ method: "POST", body: expect.stringContaining('"name":"test-feed"') })
+    );
+    expect(container.querySelector("[role='dialog']")).toBeNull();
+    await unmount();
+  });
+
   it("confirms before deleting a package feed and calls the delete API when confirmed", async () => {
     const fetchMock = mockFetch();
     const confirm = vi.fn(async () => true);
@@ -520,6 +566,95 @@ describe("module management page", () => {
     expect(container.textContent).toContain("Server");
     expect(activeGridPanel(container)?.textContent).toContain("Workflows Runtime API");
     expect(container.textContent).toContain("local-packages");
+
+    await unmount();
+  });
+
+  it("adapts the Workbench registry shape into built-in and Nuplane Server rows", async () => {
+    const backendGetJson = vi.fn(async () => workbenchRegistry(true));
+    const { container, unmount } = await renderModuleManagementPage(stubApi({ backendGetJson }));
+
+    const serverTab = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Server");
+    expect(serverTab).toBeTruthy();
+    flushSync(() => serverTab!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    await flushPromises();
+
+    expect(activeGridPanel(container)?.textContent).toContain("Elsa.Workbench");
+    expect(Array.from(sourceNavigator(container)?.querySelectorAll(".modules-source-button em") ?? []).map(count => count.textContent)).toEqual(["1", "1"]);
+
+    await clickRowContaining(activeGridPanel(container), "Elsa.Workbench");
+    await clickInspectorTab(container, "Contributions");
+    expect(container.querySelector(".modules-inspector")?.textContent).toContain("Workflow Runtime");
+    expect(container.querySelector(".modules-inspector")?.textContent).toContain("feature");
+
+    await clickSourceButton(container, "Nuplane");
+    expect(activeGridPanel(container)?.textContent).toContain("Elsa.Samples.Nuplane.Activities");
+    expect(activeGridPanel(container)?.textContent).toContain("local-packages");
+    expect(activeGridPanel(container)?.textContent).not.toContain("Upload Packages");
+    expect(activeGridPanel(container)?.textContent).toContain("read-only in Studio");
+
+    await clickRowContaining(activeGridPanel(container), "Elsa.Samples.Nuplane.Activities");
+    await clickInspectorTab(container, "Package");
+    const inspector = container.querySelector(".modules-inspector")?.textContent ?? "";
+    expect(inspector).toContain("1.2.3");
+    expect(inspector).toContain("local-packages");
+    expect(inspector).toContain("/server/packages/Elsa.Samples.Nuplane.Activities/1.2.3");
+    expect(inspector).toContain("Elsa.Activities.Design.Core");
+    expect(container.textContent).not.toContain("Upload Packages");
+
+    await unmount();
+  });
+
+  it("adapts a built-in-only Workbench registry without classifying the host as a Nuplane package", async () => {
+    const backendGetJson = vi.fn(async () => workbenchRegistry(false));
+    const { container, unmount } = await renderModuleManagementPage(stubApi({ backendGetJson }));
+
+    const serverTab = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Server");
+    expect(serverTab).toBeTruthy();
+    flushSync(() => serverTab!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    await flushPromises();
+
+    expect(activeGridPanel(container)?.textContent).toContain("Elsa.Workbench");
+    expect(activeGridPanel(container)?.textContent).toContain("Server");
+    expect(Array.from(sourceNavigator(container)?.querySelectorAll(".modules-source-button em") ?? []).map(count => count.textContent)).toEqual(["1", "0"]);
+    expect(activeGridPanel(container)?.textContent).not.toContain("local-packages");
+
+    await clickRowContaining(activeGridPanel(container), "Elsa.Workbench");
+    await clickInspectorTab(container, "Overview");
+    const inspector = container.querySelector(".modules-inspector")?.textContent ?? "";
+    expect(inspector).toContain("OriginBuilt-in");
+    expect(inspector).toContain("Packagen/a");
+
+    await unmount();
+  });
+
+  it("fills duplicate package metadata from the Workbench module and deduplicates feature diagnostics", async () => {
+    const backendGetJson = vi.fn(async () => workbenchRegistry(true, true));
+    const { container, unmount } = await renderModuleManagementPage(stubApi({ backendGetJson }));
+
+    const serverTab = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Server");
+    expect(serverTab).toBeTruthy();
+    flushSync(() => serverTab!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    await flushPromises();
+    await clickSourceButton(container, "Nuplane");
+
+    expect(activeGridPanel(container)?.querySelectorAll(".studio-data-grid-row")).toHaveLength(1);
+    await clickRowContaining(activeGridPanel(container), "Elsa.Samples.Nuplane.Activities");
+    await clickInspectorTab(container, "Package");
+    const inspector = container.querySelector(".modules-inspector")?.textContent ?? "";
+    expect(inspector).toContain("1.2.3");
+    expect(inspector).toContain("local-packages");
+    expect(inspector).toContain("/server/packages/Elsa.Samples.Nuplane.Activities/1.2.3");
+    expect(inspector).toContain("Elsa.Activities.Design.Core");
+
+    await clickInspectorTab(container, "Manifest");
+    expect(container.querySelector(".modules-inspector")?.textContent).toContain("elsa-package");
+    expect(container.querySelector(".modules-inspector")?.textContent).toContain('"version": "1.2.3"');
+    await clickInspectorTab(container, "Diagnostics");
+    const diagnostics = Array.from(container.querySelectorAll(".modules-diagnostic-row"));
+    expect(diagnostics).toHaveLength(2);
+    expect(diagnostics.map(row => row.textContent).join(" ")).toContain("Feature load failed");
+    expect(diagnostics.map(row => row.textContent).join(" ")).toContain("Experimental feature warning");
 
     await unmount();
   });
@@ -592,7 +727,7 @@ describe("module management page", () => {
 
   it("renders a distinct permission-denied state (not backend-unavailable) when the bridge registry read is forbidden", async () => {
     // A 403 on the Server-tab bridge registry read is a Studio authorization failure — the signed-in user lacks
-    // module-management.read (#249). It must render "Permission required" / "do not have permission", NOT the
+    // module-management:read (#249). It must render "Permission required" / "do not have permission", NOT the
     // backend-unavailable/unreachable state and NOT a login prompt.
     const { container, unmount } = await renderModuleManagementPage(stubApi({
       bridgeRegistryGetJson: async () => { throw new StudioHttpError(403, "Forbidden"); }
@@ -606,7 +741,7 @@ describe("module management page", () => {
 
     expect(container.textContent).toContain("Permission required");
     expect(container.textContent).toContain("do not have permission");
-    expect(container.textContent).toContain("module-management.read");
+    expect(container.textContent).toContain("module-management:read");
     // Not conflated with a backend-unavailable/reachability state.
     expect(container.textContent).not.toContain("Unreachable");
     expect(container.textContent).not.toContain("could not be reached");
@@ -750,6 +885,13 @@ function stagedUploads(container: Element) {
   return container.querySelector("[aria-label='Studio staged uploads'], [aria-label='Server staged uploads']");
 }
 
+function setInputValue(input: HTMLInputElement, value: string) {
+  flushSync(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
 function mockFetch() {
   const fetchMock = vi.fn(async () => ({
     ok: true,
@@ -783,6 +925,20 @@ async function clickRowContaining(section: Element | null, text: string) {
 
   flushSync(() => {
     row.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  await flushPromises();
+}
+
+async function clickInspectorTab(container: Element, text: string) {
+  const button = Array.from(container.querySelectorAll(".modules-inspector [role='tab'], .modules-inspector button"))
+    .find(candidate => candidate.textContent?.trim() === text);
+
+  if (!button) {
+    throw new Error(`Could not find inspector tab '${text}'.`);
+  }
+
+  flushSync(() => {
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
   await flushPromises();
 }
@@ -907,6 +1063,101 @@ function serverRegistry() {
   };
 }
 
+function workbenchRegistry(includeNuplanePackage: boolean, includeDuplicatePackageMetadata = false) {
+  const builtIn = {
+    id: "Elsa.Workbench",
+    displayName: "Elsa.Workbench",
+    packageId: "Elsa.Workbench",
+    version: "",
+    sourceKind: "server",
+    feedName: "",
+    sourceName: "",
+    installPath: "",
+    status: "loaded",
+    compatibility: "compatible",
+    manifest: null,
+    dependencies: [],
+    features: [{
+      id: "WorkflowsRuntimeApi",
+      displayName: "Workflow Runtime",
+      enabled: true,
+      sourceKind: "cshells-feature",
+      diagnostics: []
+    }],
+    diagnostics: []
+  };
+  const nuplanePackage = {
+    id: "Elsa.Samples.Nuplane.Activities@1.2.3",
+    displayName: "Elsa.Samples.Nuplane.Activities",
+    packageId: "Elsa.Samples.Nuplane.Activities",
+    version: "1.2.3",
+    sourceKind: "package",
+    feedName: "local-packages",
+    sourceName: "local-packages",
+    installPath: "/server/packages/Elsa.Samples.Nuplane.Activities/1.2.3",
+    status: "loaded",
+    compatibility: "compatible",
+    manifest: {
+      kind: "elsa-package",
+      path: "/server/packages/Elsa.Samples.Nuplane.Activities/1.2.3/elsa-package.json",
+      content: { package: { id: "Elsa.Samples.Nuplane.Activities", version: "1.2.3" } },
+      text: null
+    },
+    dependencies: [{ id: "Elsa.Activities.Design.Core", versionRange: "[1.0.0, )", group: "net10.0", source: "nuspec" }],
+    features: [{
+      id: "NuplaneActivities",
+      displayName: "Nuplane Activities",
+      enabled: true,
+      sourceKind: "nuplane-feature",
+      diagnostics: includeDuplicatePackageMetadata
+        ? [
+            { source: "", status: "failed", reason: "Feature load failed" },
+            { source: "NuplaneActivities", status: "warning", reason: "Experimental feature warning" }
+          ]
+        : []
+    }],
+    diagnostics: includeDuplicatePackageMetadata
+      ? [{ source: "NuplaneActivities", status: "failed", reason: "Feature load failed" }]
+      : []
+  };
+
+  const registry = {
+    host: { id: "server", displayName: "Server", runtime: "Elsa.Workbench", contentRootPath: "/server" },
+    generatedAt: new Date().toISOString(),
+    modules: includeNuplanePackage ? [builtIn, nuplanePackage] : [builtIn],
+    dropFolderPackages: [],
+    feeds: [{
+      name: "local-packages",
+      directoryPath: "packages",
+      serviceIndex: null,
+      credentials: null,
+      includeAll: true,
+      includePatterns: ["*"],
+      directory: { watch: true, debounceWindow: "00:00:01" }
+    }],
+    retentionPolicy: { retainLastNVersions: 3, retainYoungerThanDays: 30, mode: "Automatic", protectLastKnownGood: true },
+    capabilities: { canUploadPackages: true, canManageFeeds: true, canReconcile: true, canPrunePackages: true, feedChangesRequireRestart: true },
+    diagnostics: []
+  };
+
+  if (includeDuplicatePackageMetadata) {
+    return {
+      ...registry,
+      packages: [{
+        id: "Elsa.Samples.Nuplane.Activities",
+        version: "1.2.3",
+        feedName: "",
+        sourceName: "",
+        installPath: "",
+        manifest: { kind: "elsa-package", path: "", content: null, text: null },
+        dependencies: []
+      }]
+    };
+  }
+
+  return registry;
+}
+
 async function renderModuleManagementPage(api: ElsaStudioModuleApi) {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -943,6 +1194,10 @@ async function renderPackageFeedsPage(api: ElsaStudioModuleApi) {
       container.remove();
     }
   };
+}
+
+async function flushAnimationFrame() {
+  await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
 }
 
 async function flushPromises() {

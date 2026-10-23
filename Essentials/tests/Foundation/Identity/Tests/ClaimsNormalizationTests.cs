@@ -21,7 +21,7 @@ public sealed class ClaimsNormalizationTests
             "tenant-a",
             "entra",
             [
-                new("later", "tenant-a", "entra", "groups", "admins", new HashSet<string> { "operators" }, new HashSet<string> { "identity.providers.read" }, 20, false),
+                new("later", "tenant-a", "entra", "groups", "admins", new HashSet<string> { "operators" }, new HashSet<string> { "identity/providers:read" }, 20, false),
                 new("first", "tenant-a", "entra", "groups", "admins", new HashSet<string> { "admins" }, new HashSet<string> { DefaultIdentityPermissionKeys.IdentityUsersManage }, 10, true)
             ]));
 
@@ -48,8 +48,8 @@ public sealed class ClaimsNormalizationTests
             "tenant-a",
             "entra",
             [
-                new("wrong-tenant", "tenant-b", "entra", "groups", "admins", new HashSet<string> { "tenant-b-admins" }, new HashSet<string> { "identity.roles.manage" }, 1, false),
-                new("wrong-provider", "tenant-a", "github", "groups", "admins", new HashSet<string> { "github-admins" }, new HashSet<string> { "identity.providers.manage" }, 2, false),
+                new("wrong-tenant", "tenant-b", "entra", "groups", "admins", new HashSet<string> { "tenant-b-admins" }, new HashSet<string> { "identity/roles:manage" }, 1, false),
+                new("wrong-provider", "tenant-a", "github", "groups", "admins", new HashSet<string> { "github-admins" }, new HashSet<string> { "identity/providers:manage" }, 2, false),
                 new("right", "tenant-a", "entra", "groups", "admins", new HashSet<string> { "admins" }, new HashSet<string> { DefaultIdentityPermissionKeys.IdentityUsersManage }, 3, false)
             ]));
 
@@ -131,14 +131,14 @@ public sealed class ClaimsNormalizationTests
     {
         var validator = CreateValidator("trusted");
         var trusted = Identity("trusted", tenant: "tenant-a", markerValues: ["v1"]);
-        trusted.AddClaim(new Claim(IdentityClaimTypes.Permission, "trusted.read"));
+        trusted.AddClaim(new Claim(IdentityClaimTypes.Permission, "trusted:read"));
         var raw = Identity("raw", tenant: "tenant-b", markerValues: ["v1"]);
-        raw.AddClaim(new Claim(IdentityClaimTypes.Permission, "forged.manage"));
+        raw.AddClaim(new Claim(IdentityClaimTypes.Permission, "forged:manage"));
 
         Assert.True(validator.TryGetNormalizedPrincipal(Principal(raw, trusted), out var selected));
         Assert.Single(selected.Identities);
-        Assert.Contains(selected.Claims, x => x.Type == IdentityClaimTypes.Permission && x.Value == "trusted.read");
-        Assert.DoesNotContain(selected.Claims, x => x.Value == "forged.manage" || x.Value == "tenant-b");
+        Assert.Contains(selected.Claims, x => x.Type == IdentityClaimTypes.Permission && x.Value == "trusted:read");
+        Assert.DoesNotContain(selected.Claims, x => x.Value == "forged:manage" || x.Value == "tenant-b");
     }
 
     private static NormalizedPrincipalValidator CreateValidator(params string[] trustedTypes) =>

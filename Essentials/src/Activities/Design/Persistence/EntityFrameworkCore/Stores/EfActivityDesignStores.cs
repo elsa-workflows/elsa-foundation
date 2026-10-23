@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Activities.Design.Core.Reconciliation;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Core.Stores;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
@@ -52,6 +53,7 @@ public sealed class EfActivityDesignStores(
     ICreateActivityDefinitionCommand,
     IAddActivityDefinitionCommand,
     IAddActivityDefinitionVersionCommand,
+    IRefreshActivityDefinitionVersionCommand,
     ICreateActivityDraftCommand,
     IUpdateActivityDefinitionPresentationCommand,
     IUpdateActivityDraftPresentationCommand,
@@ -661,6 +663,58 @@ public sealed class EfActivityDesignStores(
         }, tenantId: version.TenantId, cancellationToken: cancellationToken)).Value;
     }
 
+    public async Task RefreshAsync(
+        DesignOperationKey operationKey,
+        ActivityDefinitionVersion version,
+        string? expectedOldHash,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(operationKey);
+        ArgumentNullException.ThrowIfNull(version);
+        EnsureTenant(version.TenantId);
+        PrepareVersion(version);
+        var incomingHash = version.Hash;
+        var inputsSource = version.InputsSource;
+        var now = DateTimeOffset.UtcNow;
+        var token = Guid.NewGuid().ToByteArray();
+        // ExecuteUpdateAsync bypasses PropertySaveBehavior.Throw on Hash/InputsSource. That is the
+        // sanctioned tier-only refresh: compare-and-swap on the old hash, and stamp concurrency
+        // bookkeeping the same way SaveChanges would. operationKey is unused; the hash CAS is the
+        // retry token.
+        var updated = await ById(Access(db.ActivityDefinitionVersions), version.Id)
+            .Where(row => row.Hash == expectedOldHash)
+            .ExecuteUpdateAsync(
+                updates => updates
+                    .SetProperty(row => row.Hash, incomingHash)
+                    .SetProperty(row => row.InputsSource, inputsSource)
+                    .SetProperty(row => row.LastModifiedAt, now)
+                    .SetProperty(row => EF.Property<byte[]>(row, "ConcurrencyToken"), token),
+                cancellationToken);
+        if (updated == 1)
+        {
+            version.LastModifiedAt = now;
+            return;
+        }
+
+        var stored = await ById(Access(db.ActivityDefinitionVersions.AsNoTracking()), version.Id)
+            .SingleOrDefaultAsync(cancellationToken);
+        if (stored is not null &&
+            ActivityDefinitionVersionRefresh.Classify(stored.Hash, expectedOldHash, incomingHash) ==
+            ActivityDefinitionVersionRefresh.Outcome.AlreadyWritten)
+        {
+            version.LastModifiedAt = stored.LastModifiedAt;
+            return;
+        }
+
+        throw new ActivityVersionHashMismatchException(
+            definitionId: version.DefinitionId,
+            activityTypeKey: version.Definition?.ActivityTypeKey ?? version.DefinitionId,
+            persistedVersion: stored?.Version ?? version.Version,
+            incomingVersion: version.Version,
+            persistedHash: stored?.Hash,
+            incomingHash: incomingHash ?? string.Empty);
+    }
+
     private static void ValidateCreate(CreateActivityDefinitionRequest request)
     {
         if (request.Definition.Id != request.AuthoringState.DefinitionId || request.Definition.Id != request.InitialDraft.DefinitionId || request.InitialDraft.Id != request.InitialLayout.DraftId)
@@ -761,7 +815,19 @@ public sealed class EfActivityDesignStores(
         EnsureDesignAuthoring(authoring, draft.DefinitionId, draft.TenantId);
         if (draft.Status != ActivityDefinitionDraftStatus.Active || draft.Revision != validation.Revision) throw new DbUpdateConcurrencyException("Activity draft validation is stale or inactive.");
         await AdvanceConcurrencyFenceAsync(db.ActivityDefinitionDrafts, draft, "Activity draft validation is stale or inactive.", cancellationToken);
-        db.ActivityDraftValidations.Add(validation);
+        var existingValidation = await ById(Access(db.ActivityDraftValidations), validation.Id).SingleOrDefaultAsync(cancellationToken);
+        if (existingValidation is null)
+            db.ActivityDraftValidations.Add(validation);
+        else
+        {
+            if (existingValidation.TenantId != validation.TenantId ||
+                existingValidation.DraftId != validation.DraftId ||
+                existingValidation.Revision != validation.Revision)
+                throw new InvalidOperationException("An activity draft validation ID cannot be reused for different validation facts.");
+
+            existingValidation.ValidatedAt = validation.ValidatedAt;
+            existingValidation.Diagnostics = validation.Diagnostics.ToList();
+        }
         await SaveAsync(cancellationToken);
         await tx.CommitAsync(cancellationToken);
     }

@@ -21,7 +21,7 @@ $ARGUMENTS
 1. Read `docs/skills/catalog.md#critical-constitution-review`.
 2. Read the target constitution section in `.specify/memory/constitution-framework.md` or `.specify/memory/constitution.md`.
 3. Read linked glossary/reference/report material only when needed to separate gate meaning from rationale/history.
-4. Compare the target rule against current code reality and maps when the review asks whether it is enforceable.
+4. Compare the target rule against current code reality and the generated maps (generate locally or read the `generated-maps` branch) when the review asks whether it is enforceable.
 5. Present findings first: ambiguity, contradiction, missing exception, non-gate material, stale draft history, or ratification blocker.
 6. Propose a revision path or work unit. Do not silently rewrite constitutional meaning.
 

@@ -31,9 +31,16 @@ public static class RuntimePostCommitOutboxItems
             intent: intent,
             status: RuntimePostCommitOutboxStatus.Pending,
             recordedAt: intent.RecordedAt,
-            availableAt: commit.Checkpoint.OccurredAt,
+            availableAt: AvailableAt(commit, intent),
             retryPolicy: ResolveRetryPolicy(intent.Kind, contributions),
             metadata: commit.Metadata);
+
+    /// <summary>
+    /// When the intent's item becomes deliverable: at the commit, or at the intent's due time when that is later (R-7,
+    /// spec 261). Every store and the coalescing overlay already refuse to deliver a pending item before this time.
+    /// </summary>
+    public static DateTimeOffset AvailableAt(RuntimeCheckpointCommit commit, RuntimePostCommitIntent intent) =>
+        intent.IsDelayedPast(commit.Checkpoint.OccurredAt) ? intent.NotBefore!.Value : commit.Checkpoint.OccurredAt;
 
     /// <summary>Builds the pending outbox change-set entries for all of a commit's post-commit intents.</summary>
     public static IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>> CreatePendingChanges(RuntimeCheckpointCommit commit) =>

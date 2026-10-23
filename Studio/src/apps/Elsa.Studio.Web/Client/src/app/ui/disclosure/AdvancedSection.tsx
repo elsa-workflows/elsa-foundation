@@ -10,11 +10,12 @@ export interface AdvancedSectionProps extends DisclosureControlProps {
   setCount?: number;
   hasError?: boolean;
   defaultOpen?: boolean;
+  allowCollapseWhenSet?: boolean;
   children: React.ReactNode;
 }
 
-export function isAdvancedSectionForced(props: Pick<AdvancedSectionProps, "forceOpen" | "hasError" | "setCount">): boolean {
-  return Boolean(props.forceOpen || props.hasError || (props.setCount ?? 0) > 0);
+export function isAdvancedSectionForced(props: Pick<AdvancedSectionProps, "forceOpen" | "hasError" | "setCount" | "allowCollapseWhenSet">): boolean {
+  return Boolean(props.forceOpen || props.hasError || (!props.allowCollapseWhenSet && (props.setCount ?? 0) > 0));
 }
 
 export function AdvancedSection({
@@ -23,12 +24,17 @@ export function AdvancedSection({
   setCount = 0,
   hasError,
   defaultOpen = false,
+  allowCollapseWhenSet = false,
   persistKey,
   forceOpen,
   children
 }: AdvancedSectionProps) {
   const [open, setOpen] = useDisclosureState(persistKey, defaultOpen, isDisclosureBoolean);
-  const forced = isAdvancedSectionForced({ forceOpen, hasError, setCount });
+  const forced = isAdvancedSectionForced({ forceOpen, hasError, setCount, allowCollapseWhenSet });
+  const [revealedAfterForce, setRevealedAfterForce] = React.useState(false);
+  React.useEffect(() => {
+    if (forced) setRevealedAfterForce(true);
+  }, [forced]);
   const badge = setCount > 0
     ? <StatusPill tone={hasError ? "danger" : "accent"}>{setCount} set</StatusPill>
     : hasError ? <StatusPill tone="danger">Error</StatusPill> : null;
@@ -39,9 +45,12 @@ export function AdvancedSection({
       label={label}
       summary={summary}
       badge={badge}
-      open={open}
+      open={open || revealedAfterForce}
       forced={forced}
-      onOpenChange={setOpen}
+      onOpenChange={nextOpen => {
+        setRevealedAfterForce(false);
+        setOpen(nextOpen);
+      }}
     >
       {children}
     </DisclosureFold>

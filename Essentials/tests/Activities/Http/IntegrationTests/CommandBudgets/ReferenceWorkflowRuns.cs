@@ -142,7 +142,7 @@ internal static class ReferenceWorkflowRuns
                     workflowExecutionId: executionId,
                     stimulusType: bookmark.StimulusType,
                     stimulusHash: bookmark.StimulusHash,
-                    input: JsonSerializer.SerializeToElement(new EventReceived(ReferenceWorkflows.EventName))));
+                    input: JsonSerializer.SerializeToElement(new { eventName = ReferenceWorkflows.EventName })));
         });
 
         Assert.Equal(BookmarkResumeDispatchStatus.Dispatched, resumed!.Status);
@@ -170,12 +170,19 @@ internal static class ReferenceWorkflowRuns
     /// </summary>
     private static async Task AssertSettledAsync(HttpEndpointHostFixture fixture)
     {
+        await AssertNothingLeftToDrainAsync(fixture);
+        await using var scope = fixture.Services.CreateAsyncScope();
+        Assert.Empty(await scope.ServiceProvider.GetRequiredService<RuntimeDbContext>().IncidentStates.AsNoTracking().ToArrayAsync());
+    }
+
+    /// <summary>No scheduler work is queued and every post-commit outbox item is delivered.</summary>
+    internal static async Task AssertNothingLeftToDrainAsync(HttpEndpointHostFixture fixture)
+    {
         await using var scope = fixture.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
         Assert.Empty(await context.SchedulerWorkItems.AsNoTracking().ToArrayAsync());
         Assert.All(
             await context.RuntimePostCommitOutbox.AsNoTracking().Select(item => item.Status).ToArrayAsync(),
             status => Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (RuntimePostCommitOutboxStatus)status));
-        Assert.Empty(await context.IncidentStates.AsNoTracking().ToArrayAsync());
     }
 }

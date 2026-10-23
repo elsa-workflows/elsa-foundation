@@ -1,0 +1,240 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "1b48aebd157a82d34d2539f9113590aebae160b0",
+  "productionBaseCommit": "8df68f10e2625d505e41a16428070a0e7cf48ad4",
+  "configuration": "Release",
+  "targetFramework": "net10.0",
+  "sourceTreeState": "Code/configuration match sourceCommit; only quickstart Markdown was edited during the run.",
+  "command": "dotnet test Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603 --logger 'trx;LogFileName=native-diagnostics-workbench-full.trx' --results-directory /tmp/elsa-program-20261019/native-hosting-baseline/native-diagnostics-workbench-full",
+  "buildArtifacts": [
+    {
+      "path": "Essentials/apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.dll",
+      "sha256": "948ff8b9cb9135df76b14ecbe9a3454d9c4d9237d1a0c2ef720c22bfcfeb32f1",
+      "bytes": 303104
+    },
+    {
+      "path": "Essentials/tests/Workbench/Tests/bin/Release/net10.0/Elsa.Workbench.Tests.dll",
+      "sha256": "c617d882294b2d2e824993597a9a7af7e1bfddc53deb103426720299ebd6ce6d",
+      "bytes": 306176
+    },
+    {
+      "path": "Essentials/tests/Workbench/Fixtures/BackgroundActivities/bin/Release/net10.0/Elsa.Workbench.Tests.BackgroundActivities.dll",
+      "sha256": "7ccf524f6d90173c0a300abf016772029ed31c5066d79458823d74a6af52a37a",
+      "bytes": 213504
+    },
+    {
+      "path": "Essentials/tests/Workbench/Fixtures/BackgroundActivities/elsa-package.json",
+      "sha256": "6cff2ebdf32af0d341a1c01033d060110b9d6cc740b782de8374eb01f84d43ef",
+      "bytes": 1144
+    },
+    {
+      "path": "Essentials/tests/Workbench/Tests/NativeHostingFixture.cs",
+      "sha256": "dbcb6b5dd48d1fa8b93ffe3daad697154c454400a968e5fefae552843adc83fe",
+      "bytes": 10542
+    },
+    {
+      "path": "Essentials/tests/Workbench/Tests/NativeHostingScenario.cs",
+      "sha256": "86248405f4823ca45b78400795fa47b7070bb44ca1e924fc43b1742b0f5a3f9b",
+      "bytes": 20895
+    }
+  ],
+  "runs": [
+    {
+      "gate": "workbench-full",
+      "runId": "e8867377-9e05-4615-9beb-bc10fd9b8af4",
+      "times": {
+        "creation": "2026-10-20T03:10:20.5146430+02:00",
+        "queuing": "2026-10-20T03:10:20.5146430+02:00",
+        "start": "2026-10-20T03:10:19.7338440+02:00",
+        "finish": "2026-10-20T03:26:04.1622150+02:00"
+      },
+      "counters": {
+        "total": 55,
+        "executed": 55,
+        "passed": 55,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "trxFile": "native-diagnostics-workbench-full/native-diagnostics-workbench-full.trx",
+      "trxBytes": 144577,
+      "trxSha256": "37f52d0fb462be0882438380176d603a9a984721a1e85fd20b25174332d90ceb",
+      "nativeAndDiagnosticCases": [
+        {
+          "testName": "Elsa.Workbench.Tests.WorkbenchBackgroundActivityRecoveryTests.Killed_workers_are_reclaimed_with_stable_invocations_and_one_native_continuation(profile: Clustered, first: \"right\", second: \"left\")",
+          "outcome": "Passed",
+          "duration": "00:02:52.5115340",
+          "startTime": "2026-10-20T03:16:26.2910490+02:00",
+          "endTime": "2026-10-20T03:19:18.8045410+02:00"
+        },
+        {
+          "testName": "Elsa.Workbench.Tests.WorkbenchBackgroundActivityRecoveryTests.Remaining_lease_wait_is_zero_only_after_the_authored_lease_plus_one_poll",
+          "outcome": "Passed",
+          "duration": "00:00:00.0022711",
+          "startTime": "2026-10-20T03:14:12.7497850+02:00",
+          "endTime": "2026-10-20T03:14:12.7518650+02:00"
+        },
+        {
+          "testName": "Elsa.Workbench.Tests.WorkbenchBackgroundActivityRecoveryTests.Explicit_cancellation_stops_held_bodies_and_survives_process_restart(profile: InProcess)",
+          "outcome": "Passed",
+          "duration": "00:00:17.4491767",
+          "startTime": "2026-10-20T03:12:55.9805560+02:00",
+          "endTime": "2026-10-20T03:13:13.4297430+02:00"
+        },
+        {
+          "testName": "Elsa.Workbench.Tests.NativeHostingConformanceTests.Departed_routing_owner_is_reclaimed_and_its_real_transport_command_completes_on_survivor(first: \"left\", second: \"right\")",
+          "outcome": "Passed",
+          "duration": "00:01:05.2227705",
+          "startTime": "2026-10-20T03:24:03.2469310+02:00",
+          "endTime": "2026-10-20T03:25:08.4703880+02:00"
+        },
+        {
+          "testName": "Elsa.Workbench.Tests.NativeHostingScenarioTests.Shared_json_sender_reports_a_non_json_error_with_request_and_host_diagnostics_once",
+          "outcome": "Passed",
+          "duration": "00:00:00.0087179",
+          "startTime": "2026-10-20T03:10:20.1893640+02:00",
+          "endTime": "2026-10-20T03:10:20.2981640+02:00"
+        },
+        {
+          "testName": "Elsa.Workbench.Tests.WorkbenchBackgroundActivityRecoveryTests.Explicit_cancellation_stops_held_bodies_and_survives_process_restart(profile: Clustered)",
+          "outcome": "Passed",
+          "duration": "00:00:59.3196290",
+          "startTime": "2026-10-20T03:13:13.4299440+02:00",
+          "endTime": "2026-10-20T03:14:12.7495480+02:00"
+        },
+        {
+          "testName": "Elsa.Workbench.Tests.WorkbenchBackgroundActivityRecoveryTests.Killed_workers_are_reclaimed_with_stable_invocations_and_one_native_continuation(profile: InProcess, first: \"right\", second: \"left\")",
+          "outcome": "Passed",
+          "duration": "00:01:06.7845505",
+          "startTime": "2026-10-20T03:15:19.5036990+02:00",
+          "endTime": "2026-10-20T03:16:26.2907020+02:00"
+        },
+        {
+          "testName": "Elsa.Workbench.Tests.NativeHostingConformanceTests.Departed_routing_owner_is_reclaimed_and_its_real_transport_command_completes_on_survivor(first: \"right\", second: \"left\")",
+          "outcome": "Passed",
+          "duration": "00:01:04.2096786",
+          "startTime": "2026-10-20T03:22:59.0361740+02:00",
+          "endTime": "2026-10-20T03:24:03.2466400+02:00"
+        },
+        {
+          "testName": "Elsa.Workbench.Tests.NativeHostingGracefulHandoffTests.Draining_owner_hands_off_accepted_execution_while_survivor_admits_work",
+          "outcome": "Passed",
+          "duration": "00:00:47.1391103",
+          "startTime": "2026-10-20T03:22:11.8961360+02:00",
+          "endTime": "2026-10-20T03:22:59.0358140+02:00"
+        },
+        {
+          "testName": "Elsa.Workbench.Tests.WorkbenchBackgroundActivityRecoveryTests.Killed_workers_are_reclaimed_with_stable_invocations_and_one_native_continuation(profile: InProcess, first: \"left\", second: \"right\")",
+          "outcome": "Passed",
+          "duration": "00:01:06.7144406",
+          "startTime": "2026-10-20T03:14:12.7519380+02:00",
+          "endTime": "2026-10-20T03:15:19.5032510+02:00"
+        },
+        {
+          "testName": "Elsa.Workbench.Tests.NativeHostingScenarioTests.Shared_json_sender_parses_a_successful_response",
+          "outcome": "Passed",
+          "duration": "00:00:00.0254123",
+          "startTime": "2026-10-20T03:10:20.3709710+02:00",
+          "endTime": "2026-10-20T03:10:20.3710180+02:00"
+        },
+        {
+          "testName": "Elsa.Workbench.Tests.WorkbenchBackgroundActivityRecoveryTests.Killed_workers_are_reclaimed_with_stable_invocations_and_one_native_continuation(profile: Clustered, first: \"left\", second: \"right\")",
+          "outcome": "Passed",
+          "duration": "00:02:53.0888499",
+          "startTime": "2026-10-20T03:19:18.8047870+02:00",
+          "endTime": "2026-10-20T03:22:11.8956720+02:00"
+        },
+        {
+          "testName": "Elsa.Workbench.Tests.NativeHostingConformanceTests.Original_uncancelled_checkpoint_is_rejected_after_a_real_successor_acquires",
+          "outcome": "Passed",
+          "duration": "00:00:55.6532515",
+          "startTime": "2026-10-20T03:25:08.4706980+02:00",
+          "endTime": "2026-10-20T03:26:04.1245340+02:00"
+        }
+      ]
+    },
+    {
+      "gate": "fixture",
+      "runId": "1a442e4e-aedf-4a5d-a463-fd9b01910ec7",
+      "times": {
+        "creation": "2026-10-20T03:26:10.5867300+02:00",
+        "queuing": "2026-10-20T03:26:10.5867300+02:00",
+        "start": "2026-10-20T03:26:10.1832960+02:00",
+        "finish": "2026-10-20T03:26:10.6071320+02:00"
+      },
+      "counters": {
+        "total": 44,
+        "executed": 44,
+        "passed": 44,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "trxFile": "native-diagnostics-fixture/native-diagnostics-fixture.trx",
+      "trxBytes": 85493,
+      "trxSha256": "0396c6f2b9e0cf57b3ceeed3db5e8220bab9f1859f14d2fde359ef0c9ae95477"
+    },
+    {
+      "gate": "architecture",
+      "runId": "abd24ebb-97b1-4f7d-8f37-5df300909434",
+      "times": {
+        "creation": "2026-10-20T03:26:46.5751630+02:00",
+        "queuing": "2026-10-20T03:26:46.5751630+02:00",
+        "start": "2026-10-20T03:26:45.8782560+02:00",
+        "finish": "2026-10-20T03:27:32.7949880+02:00"
+      },
+      "counters": {
+        "total": 578,
+        "executed": 578,
+        "passed": 578,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "trxFile": "native-diagnostics-architecture/native-diagnostics-architecture.trx",
+      "trxBytes": 938427,
+      "trxSha256": "3aaf0bc3d607a6ccb56c176b06c8c736fcc5966e9b5ac75017060ffa0f814219"
+    }
+  ],
+  "limits": [
+    "This is the full affected project; its native11-case process subset and focused diagnostics must not be counted again as unique tests.",
+    "Physical external effects remain at least once; historical timeout and omitted HTTP400 cause remain unproven.",
+    "Raw logs/TRX remain local; hashes and selected actual case results are retained here.",
+    "This result does not establish the cause of the omitted historical HTTP400 response, qualify Orleans, or complete the program."
+  ],
+  "otherGates": {
+    "requiredArchitectureRestore": "tools/architecture/restore-ci-project-graph.sh passed",
+    "maps": "check passed; generated changes reviewed and committed",
+    "diff": "passed"
+  }
+}

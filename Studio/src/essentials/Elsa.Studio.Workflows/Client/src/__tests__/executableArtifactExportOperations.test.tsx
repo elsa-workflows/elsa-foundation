@@ -72,9 +72,19 @@ describe("executable artifact export availability", () => {
     const fixture = renderAvailability({ advertiseExport: false });
     await flushUpdates();
 
-    expect(fixture.current()).toEqual({ status: "unavailable", supported: false, target: null });
-    // Executables are never listed once the relation is known to be absent.
-    expect(fixture.getJson.mock.calls.map(([url]) => url)).toEqual(["/capabilities"]);
+    expect(fixture.current()).toEqual({
+      status: "unavailable",
+      supported: false,
+      target: null,
+      publishedTarget: {
+        versionId: "version-1",
+        definitionId: "definition-1",
+        artifactVersion: "1.0.0",
+        artifactId: "artifact-1"
+      }
+    });
+    // Live testing still needs the normal Runtime published list when artifact export is unsupported.
+    expect(fixture.getJson.mock.calls.map(([url]) => url)).toContain("/runtime/workflows/executables?scope=Published");
   });
 
   it("reports no target for a workflow that was never published", async () => {
@@ -86,9 +96,10 @@ describe("executable artifact export availability", () => {
 
   it("hides the action rather than erroring when the probe fails", async () => {
     const fixture = renderAvailability({ failExecutables: true });
-    await flushUpdates();
-
-    expect(fixture.current()).toEqual({ status: "unavailable", supported: false, target: null });
+    await vi.waitFor(async () => {
+      await flushUpdates();
+      expect(fixture.current()).toEqual({ status: "unavailable", supported: false, target: null, publishedTarget: null });
+    });
   });
 
   it("exports this definition's most recently published artifact", () => {

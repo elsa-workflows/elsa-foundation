@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+const nodePresentationStyles = readFileSync(new URL("../workflow-editor/workflowNodePresentation.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 const token = (name: string) => {
   const match = styles.match(new RegExp(`${name}\\s*:([^;]+);`));
   return match?.[1].replace(/\s+/g, " ").trim();
@@ -26,5 +27,11 @@ describe("activity icon host override", () => {
     expect(styles).toMatch(/\.wf-node\[data-tone="terminal"\] \.wf-node-icon[\s\S]*?color:\s*var\(--wf-activity-terminal\)/);
     expect(styles).toMatch(/\.wf-activity-icon\[data-tone="composite"\][\s\S]*?color:\s*var\(--wf-activity-composite\)/);
     expect(styles).toMatch(/\.wf-node\[data-tone="trigger"\] \.wf-node-icon[\s\S]*?color:\s*var\(--wf-activity-trigger\)/);
+  });
+
+  it("soft-fills node and palette icons outside material themes and gives node actions a token-backed focus ring", () => {
+    expect(nodePresentationStyles).toMatch(/html:not\(\[data-theme-material\]\) \.wf-node\[data-tone\] \.wf-node-icon[\s\S]*?border:\s*0[;\s]*[\s\S]*?background:\s*color-mix\(in srgb, currentColor/);
+    expect(nodePresentationStyles).toMatch(/html:not\(\[data-theme-material\]\) \.wf-activity-icon\[data-tone\][\s\S]*?border-color:\s*transparent[;\s]*[\s\S]*?background:\s*color-mix\(in srgb, currentColor/);
+    expect(nodePresentationStyles).toMatch(/\.wf-node-context-action:focus-visible[\s\S]*?outline:\s*2px solid var\(--studio-focus\)/);
   });
 });

@@ -18,19 +18,19 @@ public sealed class DefaultIdentityPermissionCatalog : IPermissionCatalog, IPerm
     private static readonly IReadOnlyCollection<Permission> Permissions = Array.AsReadOnly<Permission>(
     [
         Owned(DefaultIdentityPermissionKeys.IdentityUsersRead, "Read users", "Identity", "Read identity users."),
-        Owned(DefaultIdentityPermissionKeys.IdentityUsersManage, "Manage users", "Identity", "Create, update, disable, and link identity users.", new HashSet<string> { DefaultIdentityPermissionKeys.IdentityUsersRead }),
+        Owned(DefaultIdentityPermissionKeys.IdentityUsersManage, "Manage users", "Identity", "Create, update, disable, and link identity users."),
         Owned(DefaultIdentityPermissionKeys.IdentityRolesRead, "Read roles", "Identity", "Read identity roles."),
-        Owned(DefaultIdentityPermissionKeys.IdentityRolesManage, "Manage roles", "Identity", "Create, update, and assign identity roles.", new HashSet<string> { DefaultIdentityPermissionKeys.IdentityRolesRead, DefaultIdentityPermissionKeys.IdentityPermissionsRead }),
+        Owned(DefaultIdentityPermissionKeys.IdentityRolesManage, "Manage roles", "Identity", "Create, update, and assign identity roles."),
         Owned(DefaultIdentityPermissionKeys.IdentityPermissionsRead, "Read permissions", "Identity", "Read the shared identity permission catalog."),
         Owned(DefaultIdentityPermissionKeys.IdentityApplicationsRead, "Read applications", "Identity", "Read registered applications and clients."),
-        Owned(DefaultIdentityPermissionKeys.IdentityApplicationsManage, "Manage applications", "Identity", "Create, update, and revoke applications and clients.", new HashSet<string> { DefaultIdentityPermissionKeys.IdentityApplicationsRead }),
+        Owned(DefaultIdentityPermissionKeys.IdentityApplicationsManage, "Manage applications", "Identity", "Create, update, and revoke applications and clients."),
         Owned(DefaultIdentityPermissionKeys.IdentityProvidersRead, "Read providers", "Identity", "Read configured authentication providers."),
-        Owned(DefaultIdentityPermissionKeys.IdentityProvidersManage, "Manage providers", "Identity", "Create, update, test, and disable authentication providers.", new HashSet<string> { DefaultIdentityPermissionKeys.IdentityProvidersRead }),
+        Owned(DefaultIdentityPermissionKeys.IdentityProvidersManage, "Manage providers", "Identity", "Create, update, test, and disable authentication providers."),
         Owned(DefaultIdentityPermissionKeys.IdentityCredentialsManage, "Manage credentials", "Identity", "Issue, rotate, and revoke non-interactive credentials.")
     ]);
 
-    private static Permission Owned(string key, string displayName, string category, string description, IReadOnlySet<string>? implies = null) =>
-        new(key, displayName, category, description, implies?.ToFrozenSet(StringComparer.Ordinal))
+    private static Permission Owned(string key, string displayName, string category, string description) =>
+        new(key, displayName, category, description)
         {
             OwnerId = DefaultOwnerId,
             ContributorType = typeof(DefaultIdentityPermissionCatalog).FullName!
@@ -61,8 +61,9 @@ public sealed class DefaultIdentityPermissionCatalog : IPermissionCatalog, IPerm
 /// and are protected: a later contributor whose key collides (case-insensitively) with an identity
 /// permission is rejected at construction so feature contributions can never silently shadow or redefine
 /// identity permissions. Duplicate keys between any two contributions are also rejected, so no
-/// contribution can silently override another. Both conditions fail fast at construction (startup)
-/// rather than producing an ambiguous catalog at request time.
+/// contribution can silently override another. A key that is not one concrete <c>{resource}:{verb}</c>
+/// permission (see <see cref="PermissionKey"/>) is rejected as well. All three conditions fail fast at
+/// construction (startup) rather than producing an ambiguous catalog at request time.
 /// </summary>
 public sealed class CompositePermissionCatalog : IPermissionCatalog
 {
@@ -90,27 +91,19 @@ public sealed class CompositePermissionCatalog : IPermissionCatalog
             {
                 ArgumentNullException.ThrowIfNull(permission);
 
-                var canonicalKey = CanonicalizeCatalogKey(permission.Key, "key", ownerId, contributorType);
+                var canonicalKey = CanonicalizeCatalogKey(permission.Key, ownerId, contributorType);
                 if (canonicalKey == PermissionKey.Wildcard)
                     throw new InvalidOperationException(
                         $"Permission contributor '{contributorType}' owned by '{ownerId}' cannot catalog reserved wildcard permission '{permission.Key}'.");
 
-                if (permission.Implies is not null)
-                {
-                    foreach (var implied in permission.Implies)
-                    {
-                        var canonicalImplied = CanonicalizeCatalogKey(implied, "implication target", ownerId, contributorType);
-                        if (canonicalImplied == PermissionKey.Wildcard)
-                            throw new InvalidOperationException(
-                                $"Permission '{permission.Key}' contributed by '{contributorType}' owned by '{ownerId}' cannot imply reserved wildcard permission '{implied}'.");
-                    }
-                }
+                if (!PermissionKey.IsConcrete(canonicalKey))
+                    throw new InvalidOperationException(
+                        $"Permission contributor '{contributorType}' owned by '{ownerId}' supplied '{permission.Key}', which is not a '{{resource}}:{{verb}}' permission without wildcards.");
 
                 var ownedPermission = permission with
                 {
                     OwnerId = ownerId,
-                    ContributorType = contributorType,
-                    Implies = permission.Implies?.ToFrozenSet(StringComparer.Ordinal)
+                    ContributorType = contributorType
                 };
 
                 if (byKey.TryGetValue(canonicalKey, out var existing))
@@ -150,7 +143,7 @@ public sealed class CompositePermissionCatalog : IPermissionCatalog
         }
     }
 
-    private static string CanonicalizeCatalogKey(string key, string kind, string ownerId, string contributorType)
+    private static string CanonicalizeCatalogKey(string key, string ownerId, string contributorType)
     {
         try
         {
@@ -159,144 +152,75 @@ public sealed class CompositePermissionCatalog : IPermissionCatalog
         catch (ArgumentException exception)
         {
             throw new InvalidOperationException(
-                $"Permission contributor '{contributorType}' owned by '{ownerId}' supplied malformed {kind} '{key}'.",
+                $"Permission contributor '{contributorType}' owned by '{ownerId}' supplied malformed key '{key}'.",
                 exception);
         }
     }
 }
 
-public sealed class ClaimsPermissionEvaluator(IPermissionCatalog catalog) : IPermissionEvaluator
+/// <summary>
+/// The one permission evaluator. A permission claim grants a request when it matches on both axes of
+/// <see cref="PermissionKey"/>. Resource: equal, or the grant's resource is <c>*</c>, or it ends in <c>/*</c> and the
+/// request names that resource or one beneath it. Verb: equal, or the grant's verb is <c>*</c>, or the grant's verb is
+/// <c>manage</c> and the request's is <c>read</c>; that last clause is the only implication. A bare <c>*</c> grant
+/// satisfies everything, and a claim that does not parse satisfies nothing.
+/// </summary>
+public sealed class ClaimsPermissionEvaluator : IPermissionEvaluator
 {
-    // The catalog is a singleton whose contributors have all run by the time anything evaluates, so its canonical
-    // index is the same for every evaluation this scoped evaluator serves. Rebuilding it per evaluation put a full
-    // catalog walk, key canonicalization and dictionary allocation on the per-row path of any endpoint that
-    // authorizes each row of a page. A malformed catalog still throws on every evaluation, because a failed build
-    // assigns nothing.
-    private IReadOnlyDictionary<string, Permission>? _catalogIndex;
+    private static readonly string Manage = PermissionKey.Normalize("manage");
+    private static readonly string Read = PermissionKey.Normalize("read");
 
     public ValueTask<PermissionEvaluationResult> EvaluateAsync(PermissionEvaluationContext context, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         context.CancellationToken.ThrowIfCancellationRequested();
 
-        var permissions = _catalogIndex ??= BuildCatalogIndex();
-        var granted = context.Principal.Claims
-            .Where(x => x.Type == IdentityClaimTypes.Permission)
-            .Select(x => x.Value)
-            .Select(CanonicalizeClaim)
-            .Where(x => x is not null)
-            .Select(x => x!)
-            .SelectMany(permission => ExpandGranted(permission, permissions, cancellationToken, context.CancellationToken))
-            .ToHashSet(StringComparer.Ordinal);
-
-        var requested = CanonicalizeRequested(context.Permission);
-        var succeeds = requested.Length > 0 &&
-            (granted.Contains(requested) || (requested != PermissionKey.Wildcard && granted.Contains(PermissionKey.Wildcard)));
+        var succeeds = !string.IsNullOrWhiteSpace(context.Permission) &&
+            PermissionKey.TryParse(PermissionKey.NormalizeRequirement(context.Permission), out var resource, out var verb) &&
+            context.Principal.Claims
+                .Where(x => x.Type == IdentityClaimTypes.Permission)
+                .Any(x => Satisfies(x.Value, resource, verb));
 
         return ValueTask.FromResult(succeeds
             ? PermissionEvaluationResult.Success
             : PermissionEvaluationResult.Denied($"Missing permission '{context.Permission}'."));
     }
 
-    private IReadOnlyDictionary<string, Permission> BuildCatalogIndex()
+    private static bool Satisfies(string? grant, string resource, string verb) =>
+        TryCanonicalize(grant, out var canonical) &&
+        PermissionKey.TryParse(canonical, out var grantedResource, out var grantedVerb) &&
+        ResourceMatches(grantedResource, resource) &&
+        VerbMatches(grantedVerb, verb);
+
+    private static bool ResourceMatches(string granted, string required)
     {
-        var byKey = new Dictionary<string, Permission>(StringComparer.Ordinal);
+        if (granted == PermissionKey.Wildcard || granted == required)
+            return true;
 
-        foreach (var permission in catalog.List())
-        {
-            string key;
-            try
-            {
-                key = CanonicalizeCatalogKey(permission.Key);
-            }
-            catch (ArgumentException exception)
-            {
-                throw new InvalidOperationException($"Permission catalog contains malformed key '{permission.Key}'.", exception);
-            }
-
-            if (key == PermissionKey.Wildcard)
-                throw new InvalidOperationException("The wildcard permission cannot be cataloged.");
-
-            if (!byKey.TryAdd(key, permission))
-                throw new InvalidOperationException($"Permission catalog contains duplicate canonical key '{key}'.");
-
-            if (permission.Implies is null)
-                continue;
-
-            foreach (var implied in permission.Implies)
-            {
-                string canonicalImplied;
-                try
-                {
-                    canonicalImplied = CanonicalizeCatalogKey(implied);
-                }
-                catch (ArgumentException exception)
-                {
-                    throw new InvalidOperationException($"Permission '{permission.Key}' contains malformed implication '{implied}'.", exception);
-                }
-
-                if (canonicalImplied == PermissionKey.Wildcard)
-                    throw new InvalidOperationException($"Permission '{permission.Key}' cannot imply the wildcard permission.");
-            }
-        }
-
-        return byKey;
+        // A trailing '/*' covers the named resource itself and everything beneath it, at any depth.
+        var subtree = granted.EndsWith($"{PermissionKey.ResourceSeparator}{PermissionKey.Wildcard}", StringComparison.Ordinal);
+        return subtree && (required == granted[..^2] || required.StartsWith(granted[..^1], StringComparison.Ordinal));
     }
 
-    private static IEnumerable<string> ExpandGranted(
-        string permission,
-        IReadOnlyDictionary<string, Permission> permissions,
-        CancellationToken cancellationToken,
-        CancellationToken contextCancellationToken)
+    private static bool VerbMatches(string granted, string required) =>
+        granted == PermissionKey.Wildcard || granted == required || (granted == Manage && required == Read);
+
+    private static bool TryCanonicalize(string? permission, out string canonical)
     {
-        var visited = new HashSet<string>(StringComparer.Ordinal);
-        var stack = new Stack<string>();
-        stack.Push(permission);
-
-        while (stack.TryPop(out var current))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            contextCancellationToken.ThrowIfCancellationRequested();
-
-            if (!visited.Add(current))
-                continue;
-
-            yield return current;
-
-            if (current == PermissionKey.Wildcard)
-                continue;
-
-            if (!permissions.TryGetValue(current, out var catalogPermission))
-                continue;
-
-            if (catalogPermission.Implies is null)
-                continue;
-
-            foreach (var implied in catalogPermission.Implies)
-                stack.Push(CanonicalizeCatalogKey(implied));
-        }
-    }
-
-    private static string? CanonicalizeClaim(string? permission)
-    {
+        canonical = string.Empty;
         if (string.IsNullOrWhiteSpace(permission))
-            return null;
+            return false;
 
         try
         {
-            return PermissionKey.Normalize(permission);
+            canonical = PermissionKey.Normalize(permission);
+            return true;
         }
         catch (ArgumentException)
         {
-            return null;
+            return false;
         }
     }
-
-    private static string CanonicalizeRequested(string? permission) =>
-        string.IsNullOrWhiteSpace(permission) ? string.Empty : PermissionKey.Normalize(permission);
-
-    private static string CanonicalizeCatalogKey(string permission) => PermissionKey.Normalize(permission);
-
 }
 
 public sealed record AuthorizationPolicyProviderFallback(IAuthorizationPolicyProvider Provider);
@@ -357,6 +281,25 @@ public sealed class RequireAnyPermissionAttribute : AuthorizeAttribute, NativeEn
 
     public void Apply(Microsoft.AspNetCore.Builder.IEndpointConventionBuilder builder) =>
         builder.RequireAnyPermission([.. Permissions]);
+}
+
+/// <summary>
+/// The attribute form of <c>RequireAllPermissions</c> for endpoint classes: the caller must hold every permission, and
+/// the applied convention carries the full all-mode policy plus the security-disposition metadata the endpoint inventory
+/// asserts on.
+/// </summary>
+public sealed class RequireAllPermissionsAttribute : AuthorizeAttribute, NativeEndpoints.IEndpointConventionAttribute
+{
+    public RequireAllPermissionsAttribute(params string[] permissions)
+    {
+        Permissions = permissions;
+        Policy = new PermissionPolicyCodec().Format(PermissionPolicyDescriptor.All(permissions));
+    }
+
+    public IReadOnlyList<string> Permissions { get; }
+
+    public void Apply(Microsoft.AspNetCore.Builder.IEndpointConventionBuilder builder) =>
+        builder.RequireAllPermissions([.. Permissions]);
 }
 
 internal sealed record NormalizedPermissionPrincipalRequirement : IAuthorizationRequirement;

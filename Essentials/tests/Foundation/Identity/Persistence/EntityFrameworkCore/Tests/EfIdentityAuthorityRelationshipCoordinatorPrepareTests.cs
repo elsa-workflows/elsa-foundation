@@ -30,7 +30,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinatorPrepareTests
         {
             SchemaVersion = IdentityIamEfModule.SchemaVersion,
             RoleIdsJson = """["role-a","role-b"]""",
-            DirectPermissionsJson = """["identity.users.read"]""",
+            DirectPermissionsJson = """["identity/users:read"]""",
             Status = 1,
             Revision = 3
         };
@@ -39,7 +39,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinatorPrepareTests
 
         Assert.Equal(IdentityIamEfModule.SchemaVersion, row.SchemaVersion);
         Assert.Equal("""["role-a","role-b"]""", row.RoleIdsJson);
-        Assert.Equal("""["identity.users.read"]""", row.DirectPermissionsJson);
+        Assert.Equal("""["identity/users:read"]""", row.DirectPermissionsJson);
         Assert.Equal(tenant, row.TenantId);
         Assert.Equal(EfIdentityStoreSupport.TenantLookup(tenant), row.TenantLookupKey);
         Assert.Equal(user, row.UserId);

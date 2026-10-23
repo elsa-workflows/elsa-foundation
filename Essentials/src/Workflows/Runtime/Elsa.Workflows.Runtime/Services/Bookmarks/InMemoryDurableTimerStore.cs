@@ -14,6 +14,17 @@ public sealed class InMemoryDurableTimerStore : IDurableTimerStore
     private readonly object _syncRoot = new();
     private readonly Dictionary<TimerKey, TimerState> _timers = new();
 
+    internal void DeleteForWorkflowExecution(string workflowExecutionId)
+    {
+        lock (_syncRoot)
+        {
+            foreach (var key in _timers.Keys
+                         .Where(key => StringComparer.Ordinal.Equals(key.WorkflowExecutionId, workflowExecutionId))
+                         .ToArray())
+                _timers.Remove(key);
+        }
+    }
+
     public bool SupportsClaimTransitions => true;
 
     public ValueTask<DurableTimer> SaveAsync(DurableTimer timer, CancellationToken cancellationToken = default)

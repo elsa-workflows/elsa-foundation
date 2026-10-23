@@ -118,7 +118,7 @@ test("a lost child-stage response reconciles once, survives reload, hands off ex
     response.url().includes("/design/activities/drafts/activity-child-draft") &&
     response.request().method() === "GET"
   );
-  await page.getByRole("link", { name: "Open next required draft" }).click();
+  await expectInAppNavigation(page, () => page.getByRole("link", { name: "Open next required draft" }).click());
   await expect(page).toHaveURL(/section=editor.*draft=activity-child-draft.*returnPlan=plan-1/);
   expect((await draftGet).status()).toBe(404);
   await expect(page.getByRole("heading", { name: "Activity draft unavailable" })).toBeVisible();
@@ -439,6 +439,14 @@ async function json(route: Route, body: unknown, status = 200) {
     contentType: status >= 400 ? "application/problem+json" : "application/json",
     body: JSON.stringify(body)
   });
+}
+
+async function expectInAppNavigation(page: Page, click: () => Promise<void>) {
+  await page.evaluate(() => {
+    (window as Window & { __elsaStudioNoReload?: string }).__elsaStudioNoReload = "present";
+  });
+  await click();
+  expect(await page.evaluate(() => (window as Window & { __elsaStudioNoReload?: string }).__elsaStudioNoReload)).toBe("present");
 }
 
 async function overflowOffenders(page: Page) {

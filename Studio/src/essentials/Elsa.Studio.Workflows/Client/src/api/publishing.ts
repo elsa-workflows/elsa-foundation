@@ -5,9 +5,14 @@ import type {
   IncidentStrategiesResponse,
   IncidentStrategyDescriptor,
   IncidentStrategyReference,
+  GetWorkflowDraftTestRunOptionsRequest,
+  WorkflowDraftTestRunOptionsView,
   StartWorkflowDraftTestRunRequest,
   WorkflowDefinitionState,
-  WorkflowTestRunView
+  WorkflowTestRunView,
+  WorkflowTestRunWaitEventRequest,
+  WorkflowTestRunWaitEventView,
+  WorkflowTestRunWaitsView
 } from "../workflowTypes";
 import {
   ApiCapabilityUnavailableError,
@@ -598,6 +603,55 @@ export async function startWorkflowDraftTestRun(
     if (rejected) return rejected;
     throw error;
   }
+}
+
+export async function getWorkflowDraftTestRunOptions(
+  context: StudioEndpointContext,
+  request: GetWorkflowDraftTestRunOptionsRequest
+) {
+  const path = await resolveCapabilityLink(context, capabilityIds.publishing, "workflow-draft-test-run-options");
+  const wireRequest = { ...request, state: canonicalizeStateForWire(request.state) };
+  return context.http.postJson<WorkflowDraftTestRunOptionsView>(path, wireRequest);
+}
+
+export async function getWorkflowTestRun(context: StudioEndpointContext, testRunId: string) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.publishing,
+    "workflow-test-run-status",
+    { testRunId });
+  return context.http.getJson<WorkflowTestRunView>(path);
+}
+
+export async function stopWorkflowTestRun(context: StudioEndpointContext, testRunId: string) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.publishing,
+    "workflow-test-run-stop",
+    { testRunId });
+  return context.http.requestJson<WorkflowTestRunView>(path, { method: "POST" });
+}
+
+export async function getWorkflowTestRunWaits(context: StudioEndpointContext, testRunId: string) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.publishing,
+    "workflow-test-run-waits",
+    { testRunId });
+  return context.http.getJson<WorkflowTestRunWaitsView>(path);
+}
+
+export async function deliverWorkflowTestRunWaitEvent(
+  context: StudioEndpointContext,
+  testRunId: string,
+  request: WorkflowTestRunWaitEventRequest
+) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.publishing,
+    "workflow-test-run-events",
+    { testRunId });
+  return context.http.postJson<WorkflowTestRunWaitEventView>(path, request);
 }
 
 function parseRejectedTestRun(error: unknown): WorkflowTestRunView | null {

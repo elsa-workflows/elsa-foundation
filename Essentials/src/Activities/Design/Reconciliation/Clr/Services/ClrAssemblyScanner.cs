@@ -43,6 +43,7 @@ public sealed class ClrAssemblyScanner(
     private static readonly string RequiredAttributeFullName = typeof(RequiredAttribute).FullName!;
     private static readonly string RequiredMemberAttributeFullName = typeof(RequiredMemberAttribute).FullName!;
     private static readonly string ActivityInputAttributeFullName = typeof(ActivityInputAttribute).FullName!;
+    private static readonly string ActivityConnectionAttributeFullName = typeof(ActivityConnectionAttribute).FullName!;
     private static readonly string OutputAttributeFullName = typeof(OutputAttribute).FullName!;
     private static readonly string ActivityInputOptionAttributeFullName = typeof(ActivityInputOptionAttribute).FullName!;
     private static readonly string ActivityStructureAttributeFullName = typeof(ActivityStructureAttribute).FullName!;
@@ -51,6 +52,10 @@ public sealed class ClrAssemblyScanner(
     private static readonly string ActivityValueOutcomesAttributeFullName = typeof(ActivityValueOutcomesAttribute).FullName!;
     private static readonly string ActivityAttributeFullName = typeof(ActivityAttribute).FullName!;
     private static readonly string RefusesSecretBindingAttributeFullName = typeof(RefusesSecretBindingAttribute).FullName!;
+    private static readonly string ReplacesActivityTypeAttributeFullName = typeof(ReplacesActivityTypeAttribute).FullName!;
+
+    /// <summary>The design facet that records the activity type names an activity declares it replaces.</summary>
+    public const string ReplacedActivityTypesFacetKind = "elsa.replaced-activity-types";
     private static readonly string StringTypeFullName = typeof(string).FullName!;
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -149,6 +154,18 @@ public sealed class ClrAssemblyScanner(
             if (isCredential)
                 EnsureCredentialCanBeBound(type, property, key, metadata);
 
+            var connectionAttribute = ReflectionOnlyAttributes.FindAttributeUpPropertyChain(property, ActivityConnectionAttributeFullName);
+            var connectionType = connectionAttribute is null
+                ? null
+                : ReadNamedStringArgument(connectionAttribute, nameof(ActivityConnectionAttribute.ConnectionType));
+            var uiHint = metadata.UiHint;
+            var defaultSyntax = metadata.DefaultSyntax;
+            if (connectionType is { Length: > 0 })
+            {
+                uiHint ??= "connection-picker";
+                defaultSyntax ??= "Connection";
+            }
+
             inputs.Add(new InputDefinition(
                 ReferenceKey: key,
                 Name: property.Name,
@@ -159,14 +176,18 @@ public sealed class ClrAssemblyScanner(
                 IsNullable: IsNullable(property),
                 Description: metadata.Description,
                 Order: metadata.Order,
-                UiHint: metadata.UiHint,
+                UiHint: uiHint,
                 UISpecifications: metadata.UiSpecifications,
                 IsRequired: HasRequired(property),
                 DefaultValue: metadata.DefaultValue,
-                DefaultSyntax: metadata.DefaultSyntax,
+                DefaultSyntax: defaultSyntax,
                 // Null rather than false when not declared, so an input that declares nothing keeps its catalog hash.
                 IsSensitive: isSensitive ? true : null,
-                IsCredential: isCredential ? true : null));
+                IsCredential: isCredential ? true : null,
+                // Presentation only, but part of the descriptor hash: a tier-only change on an existing version
+                // is refreshed in place by reconciliation instead of raising a hash mismatch.
+                Tier: metadata.Tier,
+                ConnectionType: string.IsNullOrWhiteSpace(connectionType) ? null : connectionType));
         }
 
         var resultType = FindTypedActivityResult(type);
@@ -254,7 +275,34 @@ public sealed class ClrAssemblyScanner(
         if (iconFacet is not null)
             facets.Add(iconFacet);
 
+        var replacedTypesFacet = BuildReplacedActivityTypesFacet(attributes);
+        if (replacedTypesFacet is not null)
+            facets.Add(replacedTypesFacet);
+
         return facets;
+    }
+
+    /// <summary>
+    /// Records <see cref="ReplacesActivityTypeAttribute"/> declarations from the class itself (the attribute is not
+    /// inherited) as facet <see cref="ReplacedActivityTypesFacetKind"/> v1 with payload
+    /// <c>{ "typeNames": [...] }</c>: trimmed, distinct and ordinally sorted. No declaration, no facet, so every
+    /// activity that declares none keeps its catalog content and hash. The payload has no <c>ports</c> member, which
+    /// the authoring catalog would read as ports.
+    /// </summary>
+    private static ActivityDesignFacet? BuildReplacedActivityTypesFacet(IReadOnlyCollection<CustomAttributeData> attributes)
+    {
+        var typeNames = attributes
+            .Where(attribute => attribute.AttributeType.FullName == ReplacesActivityTypeAttributeFullName)
+            .Select(attribute => ReadRequiredStringConstructorArgument(attribute, 0).Trim())
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        return typeNames.Length == 0
+            ? null
+            : new ActivityDesignFacet(
+                ReplacedActivityTypesFacetKind,
+                "1",
+                JsonSerializer.SerializeToElement(new { typeNames }, SerializerOptions));
     }
 
     /// <summary>
@@ -454,8 +502,10 @@ public sealed class ClrAssemblyScanner(
     private static InvalidOperationException InvalidCredentialDeclaration(Type type, PropertyInfo property, string reason) =>
         new($"Invalid credential input declaration for '{type.FullName}.{property.Name}': {reason}");
 
+    // A type with unbound generic parameters (an open generic, or a type nested in one) can never be instantiated,
+    // and the runtime registry skips it too, so cataloging it would offer an activity that always fails to activate.
     private static bool IsActivityType(Type type) =>
-        type is { IsClass: true, IsAbstract: false }
+        type is { IsClass: true, IsAbstract: false, ContainsGenericParameters: false }
         && type.GetInterfaces().Any(i => i.FullName == ActivityInterfaceFullName);
 
     private static Type? FindTypedActivityResult(Type activityType)
@@ -516,6 +566,9 @@ public sealed class ClrAssemblyScanner(
         var defaultSyntax = attribute is null ? null : ReadNamedStringArgument(attribute, nameof(ActivityInputAttribute.DefaultSyntax));
         var uiHint = attribute is null ? null : ReadNamedStringArgument(attribute, nameof(ActivityInputAttribute.UIHint));
         var uiSpecifications = ReadOptionSpecifications(property, valueType, inputNames, activityTypeName);
+        var tier = attribute is not null && HasNamedArgument(attribute, nameof(ActivityInputAttribute.Tier))
+            ? ReadNamedEnumArgument<InputTier>(attribute, nameof(ActivityInputAttribute.Tier))
+            : null;
 
         return new ActivityInputMetadata(
             order,
@@ -525,8 +578,17 @@ public sealed class ClrAssemblyScanner(
             string.IsNullOrWhiteSpace(defaultValue) ? null : ParseDefaultValue(defaultValue, valueType),
             defaultSyntax,
             string.IsNullOrWhiteSpace(uiHint) ? null : uiHint.Trim(),
-            uiSpecifications);
+            uiSpecifications,
+            ToInputTierWire(tier));
     }
+
+    private static string? ToInputTierWire(InputTier? tier) => tier switch
+    {
+        InputTier.Essential => ActivityInputTiers.Essential,
+        InputTier.Optional => ActivityInputTiers.Optional,
+        InputTier.Setting => ActivityInputTiers.Setting,
+        _ => null
+    };
 
     private static JsonElement? ReadOptionSpecifications(
         PropertyInfo property,
@@ -873,7 +935,8 @@ public sealed class ClrAssemblyScanner(
         JsonElement? DefaultValue,
         string? DefaultSyntax,
         string? UiHint,
-        JsonElement? UiSpecifications);
+        JsonElement? UiSpecifications,
+        string? Tier);
 
     private sealed record ActivityInputOptionSpecification(string Label, JsonElement Value);
 

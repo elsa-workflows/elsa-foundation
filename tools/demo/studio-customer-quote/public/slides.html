@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b1829">
+<title>Customer quote · Elsa Studio</title>
+<style>
+:root{color-scheme:dark;--ink:#edf7fc;--ink-2:#c5d7e5;--slate:#abc1d2;--muted:#9bb3c6;--paper:#0b1829;--white:#13263a;--line:#294055;--line-strong:#42596b;--cyan:#58d9f2;--cyan-deep:#58d9f2;--cyan-wash:#133c4b;--good:#8ce1ba;--error:#ffb197;--display:"Avenir Next","Segoe UI Variable Display",system-ui,sans-serif;--body:"Avenir Next","Segoe UI",system-ui,sans-serif;--mono:"SFMono-Regular",Consolas,monospace}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#040b13;color:var(--ink);font-family:var(--body);-webkit-font-smoothing:antialiased}button,select,a{font:inherit}a{color:inherit}button,select{min-height:36px;border:1px solid #33495e;border-radius:6px;background:#142438;color:#dbeaf4}button{padding:7px 14px;cursor:pointer}button:disabled{opacity:.35;cursor:default}select{padding:7px 30px 7px 12px;cursor:pointer}:focus-visible{outline:3px solid var(--cyan);outline-offset:4px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.stage{min-height:calc(100dvh - 60px);display:grid;place-items:center;padding:16px 24px;background:#040b13}.slide{--accent:var(--cyan);container-type:inline-size;position:relative;isolation:isolate;display:grid;grid-template-rows:44px minmax(0,1fr) 42px;width:min(100%,1680px,calc((100dvh - 92px)*1.777778));aspect-ratio:16/9;padding:22px 40px 20px;overflow:hidden;border:1px solid #304456;border-radius:8px;background:radial-gradient(ellipse at 90% 8%,#173d4d 0,transparent 57%),#0b1829;box-shadow:0 24px 70px #0007}.slide[hidden]{display:none}.chapter-watermark{position:absolute;z-index:-1;right:1%;top:12%;color:#9de9ff;font-family:var(--display);font-size:36cqw;font-weight:800;line-height:1;letter-spacing:-.09em;opacity:.027;pointer-events:none}#calculation{--accent:#8ce1ba}#diagnosis{--accent:#ffb197}#rotation{--accent:#8bd9f6}
+.masthead{display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:1px solid #abc1d224;color:var(--slate);font-size:12px;letter-spacing:.1em;text-transform:uppercase}.wordmark{display:flex;align-items:center;gap:10px;color:var(--ink);font-size:14px;font-weight:750;letter-spacing:.08em}.wordmark:before{content:"";width:28px;height:28px;background:url("assets/elsa-icon.png") center/contain no-repeat}.wordmark small{color:var(--slate);font-size:11px;font-weight:500;letter-spacing:.16em}.slide-count{font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--muted)}.slide-count strong{font-size:16px;color:var(--accent)}
+.slide-body{min-height:0;display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);align-items:center;gap:4cqw;padding:24px 0}.slide-body.visual-first{grid-template-columns:minmax(0,1.12fr) minmax(0,.88fr)}.slide-body.visual-first .copy{order:2}.slide-body.visual-first .visual{order:1}.copy,.visual{min-width:0}.copy{position:relative}.chapter-title{display:flex;align-items:center;gap:10px;margin:0 0 17px;color:var(--accent);font-size:clamp(12px,1.25cqw,18px);font-weight:600;letter-spacing:.06em}.chapter-title:before{content:"";width:28px;height:2px;background:var(--accent)}h1{max-width:12ch;margin:0 0 25px;color:var(--ink);font-family:var(--display);font-size:clamp(40px,6.3cqw,104px);font-weight:720;line-height:1.01;letter-spacing:-.06em;text-wrap:balance}.lines{display:grid;gap:12px;margin:0;padding:0;list-style:none;color:var(--slate);font-size:clamp(15px,1.65cqw,27px);line-height:1.4}.lines li{display:grid;grid-template-columns:6px minmax(0,1fr);gap:12px;align-items:baseline}.lines li:before{content:"";width:4px;height:4px;border-radius:50%;transform:translateY(-3px);background:var(--accent)}
+figure{margin:0}.visual{position:relative}.product-shot{display:block;width:100%;height:auto;max-height:29cqw;object-fit:contain;border:1px solid #57778b;border-radius:8px;background:#101a2b;box-shadow:0 20px 45px #0005}figcaption{display:flex;justify-content:space-between;gap:12px;margin-top:12px;color:var(--slate);font-size:clamp(10px,1cqw,15px);line-height:1.45}figcaption span:last-child{text-align:right;color:var(--accent)}
+.rail{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;align-items:end;margin:0;padding:9px 0 0;border-top:1px solid #abc1d224;list-style:none}.rail li{position:relative;overflow:hidden;padding-top:9px;color:#829aae;font-size:clamp(9px,.86cqw,14px);line-height:1.25;white-space:nowrap;text-overflow:ellipsis}.rail li:before{content:"";position:absolute;top:0;left:0;width:100%;height:2px;background:#32485c}.rail li[aria-current=step]{color:var(--ink);font-weight:600}.rail li[aria-current=step]:before{background:var(--accent);box-shadow:0 0 12px #58d9f233}
+.quote-trace{overflow:hidden;border:1px solid #386478;border-radius:12px;background:#0b202f;box-shadow:0 25px 55px #0005}.hero-total{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 25px 10px;background:#d9f7f7;color:#103d4b}.hero-total strong{font-family:var(--display);font-size:clamp(72px,10.5cqw,165px);font-weight:750;line-height:.95;letter-spacing:-.08em}.hero-total div{display:grid;gap:9px;text-align:right}.hero-total span{font-size:clamp(12px,1.25cqw,19px);font-weight:700}.hero-total small{color:#3b6671;font-family:var(--mono);font-size:clamp(10px,1.08cqw,16px)}.trace-request,.trace-result{padding:16px 22px}.trace-request{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:14px;border-bottom:1px solid #29495b}.trace-label{color:#a1c3d0;font-size:clamp(9px,.85cqw,13px);font-weight:650;letter-spacing:.1em;text-transform:uppercase}.trace-request code{color:#e3f8ff;font-family:var(--mono);font-size:clamp(10px,1.03cqw,16px);overflow-wrap:anywhere}.trace-path{display:grid;grid-template-columns:1fr 16px 1fr 16px 1fr;align-items:center;gap:7px;padding:23px 22px}.trace-step{min-width:0;padding-left:9px;border-left:2px solid var(--cyan)}.trace-step b{display:block;margin-bottom:5px;font-size:clamp(10px,1.15cqw,18px);font-weight:650}.trace-step small{display:block;color:#b0c9d8;font-size:clamp(9px,.9cqw,14px);line-height:1.5}.trace-arrow{color:var(--cyan);text-align:center}.trace-result{display:grid;grid-template-columns:1fr;gap:7px;background:#123247;border-top:1px solid #29495b}.trace-result pre{margin:0;color:#dff6f8;font-family:var(--mono);font-size:clamp(10px,1.02cqw,16px);line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}.trace-caption{margin:0;padding:8px 22px;border-top:1px solid #29495b;color:#a6c4d1;font-size:clamp(9px,.85cqw,13px)}
+.calc-equation{display:grid;grid-template-columns:1fr auto;gap:7px 12px;align-items:center;margin-top:22px;padding:17px 0 0;border-top:1px solid #8ce1ba44;background:transparent}.calc-equation small{color:var(--slate);font-size:11px;letter-spacing:.1em;text-transform:uppercase}.calc-equation strong{grid-column:1;font-family:var(--mono);font-size:clamp(19px,2.6cqw,40px);letter-spacing:-.05em;color:var(--accent);white-space:nowrap}.calc-equation em{grid-column:2;grid-row:1/3;align-self:center;padding:7px 10px;border:1px solid #8ce1ba55;border-radius:4px;color:var(--accent);font-size:12px;font-style:normal}.request-path{margin:22px 0 0;color:var(--accent);font-family:var(--mono);font-size:clamp(10px,1.1cqw,17px);overflow-wrap:anywhere}.response-fact{display:flex;justify-content:space-between;align-items:baseline;gap:14px;margin-top:12px;padding:12px 0 0;border-top:1px solid #46677d;color:var(--slate);font-size:clamp(12px,1.16cqw,18px)}.response-fact strong{color:var(--ink);font-weight:600}.response-fact:last-child strong{color:var(--accent);font-size:clamp(28px,3.5cqw,54px);line-height:1}
+.incident-note{display:grid;grid-template-columns:44px minmax(0,1fr);gap:12px;margin-top:15px;padding:14px 16px;border-left:2px solid var(--error);background:#2e2630;border-radius:0 5px 5px 0}.incident-note strong{color:var(--error);font-size:11px;letter-spacing:.05em;text-transform:uppercase}.incident-note code{color:#f4d1c6;font-family:var(--mono);font-size:clamp(10px,1cqw,15px);line-height:1.55;overflow-wrap:anywhere}
+.rotation-evidence{display:grid;grid-template-columns:1fr;gap:16px;align-items:start}.rotation-evidence .product-shot{max-height:20cqw}.safe-receipt{padding:14px 18px;border:1px solid #426376;border-radius:7px;background:#112b3c}.safe-receipt h2{margin:0 0 13px;color:var(--accent);font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase}.safe-receipt dl{display:grid;grid-template-columns:1fr .7fr 1fr;gap:12px;margin:0}.safe-receipt dl div{display:grid;gap:7px}.safe-receipt dt{color:#a5c0d2;font-size:10px;text-transform:uppercase}.safe-receipt dd{margin:0;color:var(--ink);font-size:clamp(11px,1.1cqw,17px);font-weight:600}.safe-receipt code{font-family:var(--mono);font-size:inherit}
+.controls{min-height:60px;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px;padding:10px 16px;background:#040b13;color:#c1d5e2}.controls button,.controls select{font-size:12px}.controls button:hover:not(:disabled),.controls select:hover{border-color:#6b93a9;background:#1c3449}.controls select{max-width:min(340px,40vw)}.control-link{display:inline-flex;align-items:center;min-height:36px;padding:0 10px;color:#a9c9db;font-size:11px;text-underline-offset:4px}.control-link:hover{color:white}.fullscreen-exit{display:none;position:fixed;z-index:5;top:16px;right:16px;border-color:#6b93a9;background:#0c1c2edd;color:white;opacity:.25}.fullscreen-exit:hover,.fullscreen-exit:focus-visible{opacity:1}body:fullscreen .stage{min-height:100dvh;padding:0}body:fullscreen .slide{width:100vw;height:100dvh;aspect-ratio:auto;padding:3.2vh 4vw;grid-template-rows:6vh minmax(0,1fr) 6vh;border:0;border-radius:0}body:fullscreen .controls{display:none}body:fullscreen .fullscreen-exit{display:block}
+@media(min-width:1500px){.slide{padding:30px 54px 26px;grid-template-rows:52px minmax(0,1fr) 50px}.slide-body{padding:32px 0}}
+@media(max-width:900px){.product-shot{max-height:23cqw}.incident-note{padding:10px 12px}.response-fact{margin-top:9px;padding-top:9px}.stage{padding:12px}.slide{width:min(100%,calc((100dvh - 88px)*1.777778));padding:18px 25px 16px;grid-template-rows:36px minmax(0,1fr) 34px}.slide-body{gap:3cqw;padding:20px 0}.chapter-title{margin-bottom:12px}h1{font-size:5.8cqw;margin-bottom:18px}.lines{gap:8px}.wordmark{font-size:11px}.wordmark small{font-size:9px}.wordmark:before{width:23px;height:23px}.rail{gap:7px}.rail li{font-size:8px}.hero-total{padding:14px 17px}.trace-request,.trace-result{padding:12px 15px}.trace-path{padding:17px 15px}.trace-caption{padding:7px 15px}.safe-receipt{padding:12px}.safe-receipt dl{gap:7px}.safe-receipt dd{font-size:10px}}
+@media(max-width:620px){.stage{display:block;min-height:calc(100dvh - 100px);padding:10px}.slide{width:100%;min-height:78dvh;height:auto;aspect-ratio:auto;padding:18px 20px 16px;grid-template-rows:38px auto 40px;border-radius:6px}.slide-body,.slide-body.visual-first{display:flex;flex-direction:column;align-items:stretch;gap:26px;padding:28px 0}.slide-body.visual-first .copy,.slide-body.visual-first .visual{order:initial}.slide-body.visual-first .copy{order:0}.slide-body.visual-first .visual{order:1}h1{max-width:13ch;font-size:clamp(38px,10cqw,60px);margin-bottom:20px}.chapter-title{font-size:12px}.lines{font-size:15px;gap:8px}.product-shot,.rotation-evidence .product-shot{max-height:none}.rail{display:flex;gap:7px;overflow:hidden}.rail li{flex:1 1 0;min-width:0;font-size:0}.rail li[aria-current=step]{flex:0 1 auto;max-width:48%;font-size:9px}.hero-total strong{font-size:25cqw}.hero-total span{font-size:15px}.hero-total small{font-size:12px}.trace-request code{font-size:10px}.trace-step b{font-size:11px}.trace-step small{font-size:10px}.trace-result pre{font-size:11px}.trace-label,.trace-caption{font-size:9px}figcaption{font-size:10px}.calc-equation{margin-top:18px}.calc-equation strong{font-size:28px}.response-fact{font-size:12px}.response-fact:last-child strong{font-size:36px}.incident-note code{font-size:11px}.safe-receipt dd{font-size:12px}.controls{gap:5px;padding:8px 5px}.controls button{padding:7px 9px;font-size:11px}.controls select{max-width:145px;font-size:11px}.control-link{padding:0 5px;font-size:10px}#fullscreen{display:none}}
+
+@media print{@page{size:16in 9in;margin:0}html,body{background:#0b1829}.stage{display:block;min-height:0;padding:0}.slide,.slide[hidden]{display:grid!important;width:100vw;height:100vh;aspect-ratio:auto;border:0;border-radius:0;break-after:page;page-break-after:always;-webkit-print-color-adjust:exact;print-color-adjust:exact}.slide:last-child{break-after:auto;page-break-after:auto}.controls,.fullscreen-exit{display:none!important}}
+
+</style>
+</head>
+<body>
+<main class="stage" id="stage" aria-label="Elsa Studio customer quote presentation">
+  <section class="slide" id="quote" aria-labelledby="title-quote"><span class="chapter-watermark" aria-hidden="true">01</span>
+    <header class="masthead"><div class="wordmark">ELSA <small>STUDIO</small></div><span class="slide-count"><strong>01</strong> / 06</span></header>
+    <div class="slide-body">
+      <div class="copy">
+        <p class="chapter-title">Customer quote</p>
+        <h1 id="title-quote">A customer and a total</h1>
+        <ul class="lines"><li>Protected customer lookup</li><li>Reusable calculation</li><li>One JSON response</li></ul>
+      </div>
+      <figure class="visual quote-trace" aria-label="Quote request flows through a customer lookup and calculation to one JSON response">
+        <div class="hero-total"><strong>42</strong><div><span>One complete quote.</span><small>40 subtotal + 2 shipping</small></div></div>
+        <div class="trace-request"><span class="trace-label">Request</span><code>POST /workflows/http/quotes</code></div>
+        <div class="trace-path">
+          <div class="trace-step"><b>Customer lookup</b><small>Local API · C-1042</small></div><span class="trace-arrow" aria-hidden="true">→</span>
+          <div class="trace-step"><b>Calculate</b><small>40 + 2 → 42</small></div><span class="trace-arrow" aria-hidden="true">→</span>
+          <div class="trace-step"><b>Return</b><small>HTTP 200</small></div>
+        </div>
+        <div class="trace-result"><span class="trace-label">JSON response</span><pre>{"customerId":"C-1042","name":"Alex Morgan","total":42}</pre></div>
+        <figcaption class="trace-caption">Synthetic local customer fixture</figcaption>
+      </figure>
+    </div>
+    <ol class="rail" aria-label="Story chapters"><li aria-current="step">01 · Customer quote</li><li>02 · API access</li><li>03 · Reusable calculation</li><li>04 · Quote workflow</li><li>05 · Runtime diagnosis</li><li>06 · Secret rotation</li></ol>
+  </section>
+
+  <section class="slide" id="api-access" aria-labelledby="title-api" hidden><span class="chapter-watermark" aria-hidden="true">02</span>
+    <header class="masthead"><div class="wordmark">ELSA <small>STUDIO</small></div><span class="slide-count"><strong>02</strong> / 06</span></header>
+    <div class="slide-body">
+      <div class="copy">
+        <p class="chapter-title">API access</p>
+        <h1 id="title-api">A Secret and a Connection</h1>
+        <ul class="lines"><li>Secret: customer-api</li><li>HTTP Connection with Bearer authentication</li><li>The workflow uses the Connection</li></ul>
+      </div>
+      <figure class="visual">
+        <img class="product-shot" src="assets/api-connection.jpg" alt="Studio HTTP Connection setup using Bearer authentication and the existing customer-api Secret; no Secret value is displayed">
+        <figcaption><span>Existing Secret selected for the Bearer Connection</span><span>Value hidden</span></figcaption>
+      </figure>
+    </div>
+    <ol class="rail" aria-label="Story chapters"><li>01 · Customer quote</li><li aria-current="step">02 · API access</li><li>03 · Reusable calculation</li><li>04 · Quote workflow</li><li>05 · Runtime diagnosis</li><li>06 · Secret rotation</li></ol>
+  </section>
+
+  <section class="slide" id="calculation" aria-labelledby="title-calculation" hidden><span class="chapter-watermark" aria-hidden="true">03</span>
+    <header class="masthead"><div class="wordmark">ELSA <small>STUDIO</small></div><span class="slide-count"><strong>03</strong> / 06</span></header>
+    <div class="slide-body visual-first">
+      <figure class="visual">
+        <img class="product-shot" src="assets/calculator-publication.jpg" alt="Studio confirms CalculateOrderTotal published as immutable version 1.1.0">
+        <figcaption><span>CalculateOrderTotal</span><span>Published · version 1.1.0</span></figcaption>
+      </figure>
+      <div class="copy">
+        <p class="chapter-title">Reusable calculation</p>
+        <h1 id="title-calculation">40 + 2 = 42</h1>
+        <ul class="lines"><li>Inputs: Subtotal and Shipping</li><li>Output: Total</li><li>Outcome: Calculated</li></ul>
+        <div class="calc-equation" role="group" aria-label="Test values: subtotal 40 plus shipping 2 equals total 42; outcome Calculated"><small>Test Run</small><strong>40 + 2 = 42</strong><em>Calculated</em></div>
+      </div>
+    </div>
+    <ol class="rail" aria-label="Story chapters"><li>01 · Customer quote</li><li>02 · API access</li><li aria-current="step">03 · Reusable calculation</li><li>04 · Quote workflow</li><li>05 · Runtime diagnosis</li><li>06 · Secret rotation</li></ol>
+  </section>
+
+  <section class="slide" id="workflow" aria-labelledby="title-workflow" hidden><span class="chapter-watermark" aria-hidden="true">04</span>
+    <header class="masthead"><div class="wordmark">ELSA <small>STUDIO</small></div><span class="slide-count"><strong>04</strong> / 06</span></header>
+    <div class="slide-body">
+      <div class="copy">
+        <p class="chapter-title">Quote workflow</p>
+        <h1 id="title-workflow">One request, one quote</h1>
+        <ul class="lines"><li>Look up the customer</li><li>Calculate the total</li><li>Return the response</li></ul>
+        <p class="request-path">POST /workflows/http/quotes</p>
+      </div>
+      <figure class="visual">
+        <img class="product-shot" src="assets/quote-response.png" alt="Studio HTTP tester shows a POST quote request with subtotal 40 and shipping 2, returning HTTP 200 with customer C-1042, Alex Morgan, and total 42">
+        <figcaption><span>Request and synchronous response in Studio</span><span>Customer ID from lookup route</span></figcaption>
+        <div class="response-fact"><span>Customer</span><strong>C-1042 · Alex Morgan</strong></div>
+        <div class="response-fact"><span>Total</span><strong>42</strong></div>
+      </figure>
+    </div>
+    <ol class="rail" aria-label="Story chapters"><li>01 · Customer quote</li><li>02 · API access</li><li>03 · Reusable calculation</li><li aria-current="step">04 · Quote workflow</li><li>05 · Runtime diagnosis</li><li>06 · Secret rotation</li></ol>
+  </section>
+
+  <section class="slide" id="diagnosis" aria-labelledby="title-diagnosis" hidden><span class="chapter-watermark" aria-hidden="true">05</span>
+    <header class="masthead"><div class="wordmark">ELSA <small>STUDIO</small></div><span class="slide-count"><strong>05</strong> / 06</span></header>
+    <div class="slide-body visual-first">
+      <figure class="visual">
+        <img class="product-shot" src="assets/body-incident.jpg" alt="Studio run inspector shows a blocking incident on the Write HTTP Response Body input and its evaluation error">
+        <figcaption><span>Run inspector · Write HTTP Response</span><span>Body input failed</span></figcaption>
+        <div class="incident-note"><strong>Body</strong><code>profile.segment<br>Cannot read properties of undefined (reading 'segment')</code></div>
+      </figure>
+      <div class="copy">
+        <p class="chapter-title">Runtime diagnosis</p>
+        <h1 id="title-diagnosis">The failed Body input</h1>
+        <ul class="lines"><li>Inspect the incident</li><li>Read the input and its error</li><li>Fix, publish and retry</li></ul>
+      </div>
+    </div>
+    <ol class="rail" aria-label="Story chapters"><li>01 · Customer quote</li><li>02 · API access</li><li>03 · Reusable calculation</li><li>04 · Quote workflow</li><li aria-current="step">05 · Runtime diagnosis</li><li>06 · Secret rotation</li></ol>
+  </section>
+
+  <section class="slide" id="rotation" aria-labelledby="title-rotation" hidden><span class="chapter-watermark" aria-hidden="true">06</span>
+    <header class="masthead"><div class="wordmark">ELSA <small>STUDIO</small></div><span class="slide-count"><strong>06</strong> / 06</span></header>
+    <div class="slide-body">
+      <div class="copy">
+        <p class="chapter-title">Secret rotation</p>
+        <h1 id="title-rotation">The workflow stays the same</h1>
+        <ul class="lines"><li>Update the existing Secret</li><li>Send the same request</li><li>Confirm 200 and total 42</li></ul>
+      </div>
+      <div class="visual rotation-evidence">
+        <figure>
+          <img class="product-shot" src="assets/secret-rotation.jpg" alt="Studio Secrets page confirms the customer-api Secret was rotated; the credential value is not shown">
+          <figcaption><span>Secret rotated in Studio</span><span>Credential hidden</span></figcaption>
+        </figure>
+        <section class="safe-receipt" aria-labelledby="receipt-title">
+          <h2 id="receipt-title">Safe API receipt</h2>
+          <dl>
+            <div><dt>Workflow</dt><dd>Same publication · <code>3.0.0</code></dd></div>
+            <div><dt>Secret</dt><dd>Version 2</dd></div>
+            <div><dt>Response</dt><dd>HTTP 200 · total 42</dd></div>
+          </dl>
+        </section>
+      </div>
+    </div>
+    <ol class="rail" aria-label="Story chapters"><li>01 · Customer quote</li><li>02 · API access</li><li>03 · Reusable calculation</li><li>04 · Quote workflow</li><li>05 · Runtime diagnosis</li><li aria-current="step">06 · Secret rotation</li></ol>
+  </section>
+</main>
+
+<nav class="controls" aria-label="Presentation controls">
+  <button type="button" id="previous" aria-label="Previous slide">Previous</button>
+  <label class="sr-only" for="chapter">Slide</label>
+  <select id="chapter">
+    <option value="0">1. Customer quote</option>
+    <option value="1">2. API access</option>
+    <option value="2">3. Reusable calculation</option>
+    <option value="3">4. Quote workflow</option>
+    <option value="4">5. Runtime diagnosis</option>
+    <option value="5">6. Secret rotation</option>
+  </select>
+  <button type="button" id="next" aria-label="Next slide">Next</button>
+  <button type="button" id="fullscreen">Full screen</button>
+  <a class="control-link" href="Elsa-Studio-Demo-v4.pptx" download>PowerPoint</a>
+</nav>
+<button type="button" class="fullscreen-exit" id="exit-fullscreen">Exit full screen</button>
+
+<script>
+const slides=[...document.querySelectorAll(".slide")];
+const chapter=document.querySelector("#chapter");
+const previous=document.querySelector("#previous");
+const next=document.querySelector("#next");
+const rails=[...document.querySelectorAll(".rail")];
+let current=0;
+function show(){
+  const found=slides.findIndex(slide=>slide.id===location.hash.slice(1));
+  current=found<0?0:found;
+  slides.forEach((slide,index)=>{
+    slide.hidden=index!==current;
+    slide.setAttribute("aria-hidden",String(index!==current));
+  });
+  chapter.value=String(current);
+  previous.disabled=current===0;
+  next.disabled=current===slides.length-1;
+  rails.forEach(rail=>{
+    [...rail.children].forEach((item,index)=>{
+      if(index===current)item.setAttribute("aria-current","step");
+      else item.removeAttribute("aria-current");
+    });
+  });
+  document.title=chapter.options[current].text+" · Elsa Studio";
+}
+function go(index){
+  const target=Math.max(0,Math.min(slides.length-1,index));
+  if(target!==current)location.hash=slides[target].id;
+}
+previous.addEventListener("click",()=>go(current-1));
+next.addEventListener("click",()=>go(current+1));
+chapter.addEventListener("change",()=>go(Number(chapter.value)));
+document.querySelector("#fullscreen").addEventListener("click",async()=>{
+  try{await document.body.requestFullscreen();}
+  catch{document.querySelector("#fullscreen").textContent="Use browser full screen";}
+});
+document.querySelector("#exit-fullscreen").addEventListener("click",()=>{
+  if(document.fullscreenElement)document.exitFullscreen();
+});
+window.addEventListener("hashchange",show);
+window.addEventListener("keydown",event=>{
+  if(/^(INPUT|SELECT|TEXTAREA|BUTTON|A)$/.test(event.target.tagName)||event.ctrlKey||event.metaKey||event.altKey)return;
+  if(event.key==="ArrowRight"||event.key==="PageDown"){event.preventDefault();go(current+1);}
+  if(event.key==="ArrowLeft"||event.key==="PageUp"){event.preventDefault();go(current-1);}
+  if(event.key==="Home"){event.preventDefault();go(0);}
+  if(event.key==="End"){event.preventDefault();go(slides.length-1);}
+});
+show();
+</script>
+</body>
+</html>

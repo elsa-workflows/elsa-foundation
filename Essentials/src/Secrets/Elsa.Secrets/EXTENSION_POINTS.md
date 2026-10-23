@@ -12,7 +12,9 @@ selection is order-independent rather than last-write-wins. See
 [`Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](../Persistence/EntityFrameworkCore/EXTENSION_POINTS.md)
 and that module's README for the model, migrations and host settings.
 
-Tenant id and normalized secret name form the row key, searchable and filterable values are projected into typed
+Tenant id, normalized secret name and a tombstone form the row key: the tombstone is empty for the secret holding a
+name and the secret's id once it is deleted, so a soft delete frees the name while the deleted secret keeps its row and
+versions. Searchable and filterable values are projected into typed
 columns, and the complete secret is retained in a JSON payload. Every repository operation runs inside an explicit
 tenant-scoped persistence access context. Reads, writes, counts, ordering, paging, active-version filtering and
 revision preconditions all execute through the module's own EF model.
@@ -32,6 +34,13 @@ Use `services.AddSecrets()` to register defaults, then replace these services as
 - `ISecretAuditSink` for audit export. The default `LoggingSecretAuditSink` emits every audit record and warns once when auditing is unconfigured; register `NullSecretAuditSink` to opt out.
 - `ISecretStore` implementations for external providers such as Azure Key Vault, HashiCorp Vault, AWS Secrets Manager, or Kubernetes secrets.
 - `ISecretTypeProvider` implementations for domain-specific secret types.
+- `ISecretScopeProvider` implementations for static, advisory scope suggestions shown by the Secrets picker. Register each provider once with `TryAddEnumerable` in the host or module service configuration:
+
+  ```csharp
+  services.TryAddEnumerable(ServiceDescriptor.Singleton<ISecretScopeProvider, BillingSecretScopeProvider>());
+  ```
+
+  Providers should be singleton because the registry is a singleton and reads their metadata once when first resolved; register them during service configuration and return stable metadata. Set `Source` only when you have a friendly contributor label. Suggestions do not restrict secret creation or runtime resolution. `AddSecrets()` registers an empty catalog when no providers contribute scopes.
 
 ## Master-Key Rotation
 

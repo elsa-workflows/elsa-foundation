@@ -59,6 +59,8 @@ public sealed class OrdinalCollationMigrationTests
         ("PublishingSnapshotReview", "elsa_publication_records", "PublicationIdHash"),
         ("PublishingSnapshotReview", "elsa_publication_snapshot_reviews", "PreflightToken"),
         ("Secrets", "elsa_secrets", "NormalizedName"),
+        // Part of the key and of the projection audit's keyset cursor, beside the name.
+        ("Secrets", "elsa_secrets", "Tombstone"),
         ("Secrets", "elsa_secrets", "ScopeLookupKey"),
         ("WorkflowsDesign", "elsa_workflow_definitions_v2", "IdLookupHash"),
         ("WorkflowsDesign", "elsa_workflow_definition_versions", "SemVerSortKey")

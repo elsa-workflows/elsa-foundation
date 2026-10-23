@@ -25,6 +25,14 @@ public sealed record FeatureCatalogItem(
     IReadOnlyList<FeatureDependency> Dependencies)
 {
     /// <summary>
+    /// Whether the runtime catalog supplied a live descriptor for this feature, independently of
+    /// <see cref="Enabled"/>. An enabled feature without a descriptor is requested but skipped by
+    /// lenient shell composition. Manifest metadata alone does not establish runtime availability.
+    /// This does not assert successful activation or schema readability; see <see cref="Availability"/>.
+    /// </summary>
+    public bool RuntimeAvailable { get; init; }
+
+    /// <summary>
     /// Whether an enabled feature is available or dormant, and why, or <see langword="null"/> for a
     /// feature that is not enabled: dormancy is reported only for enabled features. Distinct from <see cref="ReadError"/>,
     /// which means a manifest could not be read.
@@ -83,6 +91,9 @@ public sealed class FeatureCatalogItemBuilder
     // info available" instead of treating an empty list as an unknown sentinel. Not part of ToItem().
     public bool DependenciesResolved { get; set; }
 
+    /// <inheritdoc cref="FeatureCatalogItem.RuntimeAvailable" />
+    public bool RuntimeAvailable { get; set; }
+
     /// <summary>
     /// The feature's class, set by the runtime contributor when a live descriptor exists, so a later contributor can read
     /// what the class declares, such as its dormancy requirements. Not part of <see cref="ToItem"/>.
@@ -111,6 +122,7 @@ public sealed class FeatureCatalogItemBuilder
             Settings,
             Dependencies)
         {
+            RuntimeAvailable = RuntimeAvailable,
             // Dormancy is reported only for enabled features.
             Availability = Enabled ? Availability : null
         };

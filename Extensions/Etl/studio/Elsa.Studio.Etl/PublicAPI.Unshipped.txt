@@ -1,0 +1,4 @@
+#nullable enable
+Elsa.Studio.Etl.EtlStudioFeature
+Elsa.Studio.Etl.EtlStudioFeature.EtlStudioFeature() -> void
+virtual Elsa.Studio.Etl.EtlStudioFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

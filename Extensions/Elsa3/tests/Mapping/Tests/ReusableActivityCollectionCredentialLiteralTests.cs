@@ -7,6 +7,8 @@ using Elsa.Workflows.Design.Validations.Core.Exceptions;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Endpoints;
 using Elsa3.Activities.Design.Import.Models;
+using Elsa3.Mapping.Conversion;
+using Elsa3.Mapping.Tests.Support;
 using Elsa3.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,6 +31,7 @@ public sealed class ReusableActivityCollectionCredentialLiteralTests : IAsyncDis
     private const string CredentialInput = "ApiKey";
     private const string OtherCaseSpelling = "apiKey";
     private const string NodeId = "send";
+    private const string CredentialActivityType = "Acme.SendRequest";
 
     /// <summary>A literal no refusal may echo. Built at run time, never credential-shaped.</summary>
     private static readonly string Literal = $"literal-value-{Guid.NewGuid():N}";
@@ -39,7 +42,9 @@ public sealed class ReusableActivityCollectionCredentialLiteralTests : IAsyncDis
 
     public ReusableActivityCollectionCredentialLiteralTests()
     {
-        var catalog = new ReusableActivityImportFixtures.BuiltInActivityLookup(
+        // The real Elsa 4 catalog (containers are native Sequences) plus a test activity declaring the credential input.
+        var catalog = RealActivityCatalog.Create().WithActivity(
+            CredentialActivityType,
             new InputDefinition(CredentialInput, CredentialInput, new TypeReference("String"), null, CredentialInput, null, IsNullable: true)
                 with { IsSensitive = true, IsCredential = true });
         _services = ReusableActivityImportFixtures.ImportServices(catalog, _command);
@@ -125,7 +130,7 @@ public sealed class ReusableActivityCollectionCredentialLiteralTests : IAsyncDis
     public async Task A_literal_at_the_deepest_supported_nesting_is_judged(bool reusable)
     {
         var refusal = await Assert.ThrowsAsync<CredentialLiteralRefusedException>(() => ApplyAsync(
-            Source("source", reusable, Elsa3ImportedActivityStructure.MaxNestingDepth, NodeId, Argument(CredentialInput, "Literal", Literal))));
+            Source("source", reusable, Elsa3ActivityNormalizer.MaxSequenceNestingDepth, NodeId, Argument(CredentialInput, "Literal", Literal))));
 
         Assert.Equal($"{NodeId}/inputs/{CredentialInput}", Assert.Single(refusal.Findings).Path);
     }
@@ -135,29 +140,29 @@ public sealed class ReusableActivityCollectionCredentialLiteralTests : IAsyncDis
     [InlineData(true)]
     public async Task A_secret_reference_at_the_deepest_supported_nesting_imports_and_what_is_stored_reads_back(bool reusable)
     {
-        await ApplyAsync(Source("source", reusable, Elsa3ImportedActivityStructure.MaxNestingDepth, NodeId, Argument(CredentialInput, "Secret", new { name = "service-key" })));
+        await ApplyAsync(Source("source", reusable, Elsa3ActivityNormalizer.MaxSequenceNestingDepth, NodeId, Argument(CredentialInput, "Secret", new { name = "service-key" })));
 
         // Through the serializer the design stores use, and the default reader of a stored descriptor payload.
         var mutation = Assert.IsType<ReusableActivityImportMutation>(_command.Mutation);
         var serializer = ReusableActivityImportFixtures.PayloadSerializer();
         Assert.All(mutation.Workflows, workflow =>
             Assert.NotNull(serializer.Deserialize<WorkflowDefinitionState>(serializer.Serialize(workflow.Version.State))));
-        Assert.All(mutation.Activities, activity => JsonDocument.Parse(activity.Version.DescriptorPayload.GetRawText()).Dispose());
+        Assert.All(mutation.Activities, activity => JsonDocument.Parse(activity.Version.GraphManifest.GetRawText()).Dispose());
         Assert.Equal([CredentialInput], StoredBindingKeys());
     }
 
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Nesting_deeper_than_supported_refuses_the_apply_with_400_naming_the_limit(bool reusable)
+    public async Task Nesting_deeper_than_supported_refuses_the_apply_with_422_naming_the_limit(bool reusable)
     {
-        var refusal = await Assert.ThrowsAsync<ArgumentException>(() => ApplyAsync(
-            Source("source", reusable, Elsa3ImportedActivityStructure.MaxNestingDepth + 1, NodeId, Argument(CredentialInput, "Literal", Literal))));
+        var refusal = await Assert.ThrowsAsync<ReusableActivityImportValidationException>(() => ApplyAsync(
+            Source("source", reusable, Elsa3ActivityNormalizer.MaxSequenceNestingDepth + 1, NodeId, Argument(CredentialInput, "Literal", Literal))));
 
         Assert.Null(_command.Mutation);
+        Assert.Contains(refusal.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.NestingTooDeep);
         var (status, body) = await RenderAsync(refusal);
-        Assert.Equal(StatusCodes.Status400BadRequest, status);
-        Assert.Contains($"more than {Elsa3ImportedActivityStructure.MaxNestingDepth} containers", JsonDocument.Parse(body).RootElement.GetProperty("detail").GetString(), StringComparison.Ordinal);
+        Assert.Equal(StatusCodes.Status422UnprocessableEntity, status);
         Assert.DoesNotContain(Literal, body, StringComparison.Ordinal);
     }
 
@@ -169,7 +174,7 @@ public sealed class ReusableActivityCollectionCredentialLiteralTests : IAsyncDis
         var activity = Assert.Single(Assert.IsType<ReusableActivityImportMutation>(_command.Mutation).Activities);
         Assert.Equal(
             JsonSerializer.Serialize(activity.Body.RootActivity, new JsonSerializerOptions(JsonSerializerDefaults.Web)),
-            activity.Version.DescriptorPayload.GetProperty("rootActivity").GetRawText());
+            activity.Version.GraphManifest.GetProperty("rootActivity").GetRawText());
     }
 
     [Fact]
@@ -199,16 +204,18 @@ public sealed class ReusableActivityCollectionCredentialLiteralTests : IAsyncDis
 
     [Theory]
     [MemberData(nameof(SourcesAndDepths))]
-    public async Task Two_spellings_of_the_credential_input_refuse_the_apply_with_400_rather_than_keep_one(bool reusable, int depth)
+    public async Task Two_spellings_of_the_credential_input_refuse_the_apply_with_422_rather_than_keep_one(bool reusable, int depth)
     {
-        var refusal = await Assert.ThrowsAsync<ArgumentException>(() => ApplyAsync(Source("source", reusable, depth, NodeId,
+        var refusal = await Assert.ThrowsAsync<ReusableActivityImportValidationException>(() => ApplyAsync(Source("source", reusable, depth, NodeId,
             Argument(CredentialInput, "Secret", new { name = "service-key" }),
             Argument(OtherCaseSpelling, "Literal", Literal))));
 
         Assert.Null(_command.Mutation);
+        var duplicate = Assert.Single(refusal.Diagnostics);
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.DuplicateInputBinding, duplicate.Code);
+        Assert.Contains($"'{CredentialInput}' and '{OtherCaseSpelling}'", duplicate.Message, StringComparison.Ordinal);
         var (status, body) = await RenderAsync(refusal);
-        Assert.Equal(StatusCodes.Status400BadRequest, status);
-        Assert.Contains($"'{CredentialInput}' and '{OtherCaseSpelling}'", JsonDocument.Parse(body).RootElement.GetProperty("detail").GetString(), StringComparison.Ordinal);
+        Assert.Equal(StatusCodes.Status422UnprocessableEntity, status);
         Assert.DoesNotContain(Literal, body, StringComparison.Ordinal);
     }
 
@@ -261,7 +268,7 @@ public sealed class ReusableActivityCollectionCredentialLiteralTests : IAsyncDis
     /// </summary>
     private static Elsa3WorkflowDefinition Source(string definitionId, bool reusable, int depth, string nodeId, params (string Name, JsonElement Value)[] properties)
     {
-        var activity = ReusableActivityImportFixtures.Leaf(nodeId, "Elsa.SendRequest");
+        var activity = ReusableActivityImportFixtures.Leaf(nodeId, CredentialActivityType);
         activity.AdditionalProperties = properties.ToDictionary(property => property.Name, property => property.Value);
         var root = Enumerable.Range(0, depth).Aggregate(activity, (child, level) =>
         {
@@ -281,7 +288,7 @@ public sealed class ReusableActivityCollectionCredentialLiteralTests : IAsyncDis
         var root = ReusableActivityImportFixtures.Leaf("siblings-root", "Elsa.Sequence");
         root.Activities = Enumerable.Range(0, 3).Select(index =>
         {
-            var sibling = ReusableActivityImportFixtures.Leaf($"sibling-{index}", "Elsa.SendRequest");
+            var sibling = ReusableActivityImportFixtures.Leaf($"sibling-{index}", CredentialActivityType);
             var (name, value) = offending.Contains(index)
                 ? Argument(CredentialInput, "Literal", Literal)
                 : Argument(CredentialInput, "Secret", new { name = "service-key" });
@@ -302,7 +309,7 @@ public sealed class ReusableActivityCollectionCredentialLiteralTests : IAsyncDis
         var mutation = Assert.IsType<ReusableActivityImportMutation>(_command.Mutation);
         var roots = mutation.Workflows.Select(workflow => workflow.Version.State.RootActivity!)
             .Concat(mutation.Activities.Select(activity => activity.Body.RootActivity!));
-        return roots.SelectMany(Elsa3ImportedActivityStructure.Nodes).Single(node => node.NodeId == NodeId).Inputs.Select(input => input.ReferenceKey);
+        return roots.SelectMany(Elsa3ImportedActivityNodes.Walk).Single(node => node.NodeId == NodeId).Inputs.Select(input => input.ReferenceKey);
     }
 
     /// <summary>The status and body the apply route answers <paramref name="refusal"/> with, through the renderer its endpoint pipeline hands every dispatch failure to.</summary>

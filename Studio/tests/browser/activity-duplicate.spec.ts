@@ -1,6 +1,12 @@
 import { expect, test } from "@playwright/test";
 import axe from "axe-core";
 
+test.use({
+  screenshot: "only-on-failure",
+  video: "retain-on-failure",
+  trace: "retain-on-failure"
+});
+
 test("duplicates the selected activity from the context menu with a fresh name", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto("/?mode=activity-duplicate&theme=light");
@@ -52,6 +58,17 @@ async function selectNotifyBuyer(page: import("@playwright/test").Page) {
   await expect(node).toHaveAttribute("aria-pressed", "true");
 }
 
+function describeActiveElement() {
+  const active = document.activeElement;
+  return {
+    tag: active instanceof HTMLElement ? active.tagName : String(active),
+    className: active instanceof HTMLElement ? active.className : "",
+    inEditor: active instanceof Element && Boolean(active.closest("[data-studio-code-editor]")),
+    ready: Boolean(document.querySelector("[data-studio-code-editor][data-studio-code-editor-ready='true']")),
+    surface: document.querySelector("[data-studio-code-editor-surface]")?.getAttribute("data-studio-code-editor-surface") ?? null
+  };
+}
+
 async function dispatchCanvasShortcut(page: import("@playwright/test").Page, key: "c" | "v" | "d" | "z") {
   const node = page.locator(".wf-canvas .react-flow__node[data-id='write-one']");
   await node.evaluate((element, pressed) => {
@@ -95,23 +112,35 @@ test("Ctrl+D does nothing while the designer code editor is focused", async ({ p
 
   const syntaxTrigger = page.getByRole("button", { name: /expression syntax/i }).first();
   if (await syntaxTrigger.isVisible()) {
-    const current = await syntaxTrigger.textContent();
+    const current = await syntaxTrigger.getAttribute("title");
     if (!current?.includes("JavaScript")) {
       await syntaxTrigger.click();
       await page.getByRole("option", { name: "JavaScript" }).click();
     }
   }
 
-  const codeEditor = page.locator("[data-studio-code-editor]");
+  const inspector = page.getByRole("complementary", { name: /inspector/i });
+  const codeEditor = inspector.locator("[data-studio-code-editor]");
   await expect(codeEditor).toBeVisible({ timeout: 15_000 });
   await codeEditor.click();
-  const editorSurface = page.locator("[data-studio-code-editor] .cm-content, [data-studio-code-editor] textarea").first();
-  await editorSurface.focus();
-  await expect(editorSurface).toBeFocused();
 
-  const startingCount = await page.locator(".wf-canvas .wf-node").count();
-  await page.keyboard.press("Control+d");
-  await expect(page.locator(".wf-canvas .wf-node")).toHaveCount(startingCount);
+  const readyEditor = inspector.locator("[data-studio-code-editor][data-studio-code-editor-ready='true']");
+  await expect(readyEditor).toBeVisible({ timeout: 15_000 });
+  const settledContent = readyEditor.locator("[data-studio-code-editor-surface='codemirror'] .cm-content");
+  await expect(settledContent).toBeVisible({ timeout: 15_000 });
+  await settledContent.focus();
+  await expect(settledContent).toBeFocused();
+
+  const nodes = page.locator(".wf-canvas .wf-node");
+  const startingCount = await nodes.count();
+  await page.keyboard.press("ControlOrMeta+d");
+  const activeAfterPress = await page.evaluate(describeActiveElement);
+  expect(activeAfterPress.inEditor).toBe(true);
+
+  await expect.poll(async () => {
+    const duplicated = (await page.locator(".wf-editor-save-status").textContent())?.includes("Duplicated") === true;
+    return { duplicated, count: await nodes.count() };
+  }).toEqual({ duplicated: false, count: startingCount });
   await expect(page.locator(".wf-canvas .wf-node").filter({ hasText: "Notify buyer (copy)" })).toHaveCount(0);
   await expect(page.locator(".wf-editor-save-status")).not.toContainText("Duplicated");
 });
@@ -131,4 +160,111 @@ test("activity duplicate menu has no critical or serious automated accessibility
     );
   });
   expect(violations).toEqual([]);
+});
+
+test("floating node tools duplicate with undo and keep keyboard focus in the canvas", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/?mode=activity-duplicate-editor&theme=dark");
+  await selectNotifyBuyer(page);
+  const tools = page.getByRole("toolbar", { name: "Actions for Notify buyer", exact: true });
+  await expect(tools).toBeVisible();
+  await expect(tools.getByRole("button", { name: "Add next activity", exact: true })).toHaveCount(1);
+  await tools.getByRole("button", { name: "Duplicate Notify buyer", exact: true }).press("Enter");
+  const copy = page.locator(".react-flow__node").filter({ hasText: "Notify buyer (copy)" });
+  await expect(copy).toBeFocused();
+  await expect(copy).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(copy).toHaveCount(0);
+  await selectNotifyBuyer(page);
+  await page.getByRole("button", { name: "Delete Notify buyer", exact: true }).press("Enter");
+  await expect(page.locator(".react-flow__node[data-id='write-two']")).toBeFocused();
+  await expect(page.locator(".react-flow__node[data-id='write-one']")).toHaveCount(0);
+  await page.getByRole("button", { name: "Delete Write Line", exact: true }).press("Enter");
+  await expect(page.getByLabel("Workflow canvas", { exact: true })).toBeFocused();
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(page.locator(".react-flow__node[data-id='write-one']")).toBeVisible();
+});
+
+test("Sequence uses authored order, step commands, undo and nested body navigation", async ({ page }) => {
+  await page.goto("/?mode=activity-duplicate-editor&composition=sequence&theme=dark");
+  const steps = page.locator(".wf-sequence-step");
+  const ids = () => steps.evaluateAll(elements => elements.map(element => element.getAttribute("data-id")));
+  await expect(steps).toHaveCount(3);
+  expect(await ids()).toEqual(["write-one", "loop", "write-two"]);
+  await page.getByRole("button", { name: "1. Notify buyer", exact: true }).click();
+  await page.getByRole("button", { name: "Move Notify buyer down", exact: true }).click();
+  expect(await ids()).toEqual(["loop", "write-one", "write-two"]);
+  await expect(page.locator('.wf-sequence-step[data-id="write-one"]')).toBeFocused();
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  expect(await ids()).toEqual(["write-one", "loop", "write-two"]);
+  await page.getByRole("button", { name: "1. Notify buyer", exact: true }).click();
+  await page.getByRole("button", { name: "Duplicate Notify buyer", exact: true }).click();
+  await expect(steps).toHaveCount(4);
+  await expect(steps.nth(1)).toContainText("Notify buyer (copy)");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await page.getByRole("button", { name: "Open Body, 1 activity", exact: true }).click();
+  await expect(steps).toHaveCount(1);
+  await expect(steps).toHaveAttribute("data-id", "nested");
+  await page.getByRole("button", { name: "Root", exact: true }).click();
+  await expect(steps).toHaveCount(3);
+});
+
+test("Activity Graph Sequence host preserves order, undo, and duplicate focus", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto("/?mode=activity-duplicate-editor&host=activity&composition=sequence&theme=dark");
+
+  const steps = page.locator(".ad-graph-editor .wf-sequence-step");
+  const ids = () => steps.evaluateAll(elements => elements.map(element => element.getAttribute("data-id")));
+  await expect(steps).toHaveCount(3, { timeout: 15_000 });
+  expect(await ids()).toEqual(["write-one", "loop", "write-two"]);
+
+  await page.getByRole("button", { name: "1. Write Line", exact: true }).click();
+  await page.getByRole("button", { name: "Move Write Line down", exact: true }).click();
+  expect(await ids()).toEqual(["loop", "write-one", "write-two"]);
+  await page.getByRole("button", { name: "Undo Activity Graph edit", exact: true }).click();
+  expect(await ids()).toEqual(["write-one", "loop", "write-two"]);
+
+  await page.getByRole("button", { name: "1. Write Line", exact: true }).click();
+  await page.getByRole("button", { name: "Duplicate Write Line", exact: true }).click();
+  await expect(steps).toHaveCount(4);
+  const clone = steps.nth(1);
+  expect(await clone.getAttribute("data-id")).not.toBe("write-one");
+  await expect(clone).toBeFocused();
+});
+
+test("Sequence insertion works before an existing step without manual connections", async ({ page }) => {
+  await page.goto("/?mode=activity-duplicate-editor&composition=sequence&theme=light");
+  await page.getByRole("button", { name: "Insert step before Notify buyer", exact: true }).click();
+  await page.getByRole("searchbox", { name: "Search activities", exact: true }).fill("Write Line");
+  await page.getByRole("option", { name: /Write Line/ }).click();
+  const steps = page.locator(".wf-sequence-step");
+  await expect(steps).toHaveCount(4);
+  await expect(steps.nth(0)).toContainText("Write Line");
+  await expect(steps.nth(1)).toContainText("Notify buyer");
+  await expect(page.locator(".react-flow__edge")).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(steps).toHaveCount(3);
+});
+
+test("Sequence drag gestures reorder and insert exactly once at an explicit boundary", async ({ page }) => {
+  await page.goto("/?mode=activity-duplicate-editor&composition=sequence&theme=dark");
+  const steps = page.locator(".wf-sequence-step");
+  await expect(steps).toHaveCount(3);
+  await page.locator('.wf-sequence-step[data-id="write-one"]').dragTo(
+    page.getByRole("button", { name: "Insert step after Write Line", exact: true })
+  );
+  // Order is authored by the drop boundary, not saved XY.
+  await expect.poll(() => steps.evaluateAll(items => items.map(item => item.getAttribute("data-id"))))
+    .toEqual(["loop", "write-two", "write-one"]);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await page.getByRole("treeitem", { name: "Write Line, Exact version 1.0.0", exact: true }).dragTo(
+    page.getByRole("button", { name: "Insert step between Notify buyer and For Each", exact: true })
+  );
+  await expect(steps).toHaveCount(4);
+  await expect(steps.nth(0)).toHaveAttribute("data-id", "write-one");
+  await expect(steps.nth(1)).toHaveAccessibleName("2. Write Line");
+  await expect(steps.nth(2)).toHaveAttribute("data-id", "loop");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(steps).toHaveCount(3);
 });

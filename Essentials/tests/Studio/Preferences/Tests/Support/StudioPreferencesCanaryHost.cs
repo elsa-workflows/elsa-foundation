@@ -214,8 +214,8 @@ public sealed class StudioPreferencesCanaryHost : IAsyncDisposable
                 "write" => [StudioPreferencesPermissions.Write],
                 "wildcard" => [PermissionKey.Wildcard],
                 "resource-denied" => [StudioPreferencesPermissions.Read, StudioPreferencesPermissions.Write],
-                "host-read" => ["module-management.read"],
-                "host-manage" => ["module-management.manage"],
+                "host-read" => ["module-management:read"],
+                "host-manage" => ["module-management:manage"],
                 "manage-defaults" => [StudioPreferencesPermissions.ManageDefaults],
                 _ => Array.Empty<string>()
             };

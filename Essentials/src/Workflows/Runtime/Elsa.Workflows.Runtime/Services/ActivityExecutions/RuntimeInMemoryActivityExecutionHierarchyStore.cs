@@ -9,6 +9,21 @@ public sealed class RuntimeInMemoryActivityExecutionHierarchyStore(IActivityExec
     private readonly Dictionary<(string WorkflowExecutionId, string ActivityExecutionId), ActivityExecutionLayout> _layouts = new();
     private readonly Lock _gate = new();
 
+    internal void DeleteForWorkflowExecution(string workflowExecutionId)
+    {
+        lock (_gate)
+        {
+            foreach (var key in _records.Keys
+                         .Where(key => StringComparer.Ordinal.Equals(key.WorkflowExecutionId, workflowExecutionId))
+                         .ToArray())
+                _records.Remove(key);
+            foreach (var key in _layouts.Keys
+                         .Where(key => StringComparer.Ordinal.Equals(key.WorkflowExecutionId, workflowExecutionId))
+                         .ToArray())
+                _layouts.Remove(key);
+        }
+    }
+
     public ValueTask SaveAsync(ActivityExecutionHierarchyRecord record, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

@@ -81,35 +81,45 @@ unpublished, or already publishing-owned. `canActivate` is false when there are 
 activation returned (the `slot_owner_conflict` failure, its detail naming the owner), but before it writes an executable,
 source reference, or publication record: ownership transfer is an operator action (ADR 0043).
 
+Trigger conflicts retain their stable `key` and optionally include a readable `descriptor`, such as
+`GET /orders/{id}`. Display the descriptor when present and retain the key for correlation. Providers supply only
+safe display text; routing metadata such as authorization policy is not exposed. Declaring two channels does not
+isolate their HTTP routes: simultaneous exclusive claims still need distinct route surfaces.
+
+When [activation channel configuration](../../Runtime/Elsa.Workflows.Runtime/README.md#activation-channels)
+disables ad-hoc channels, both workflow preflight routes and publication reject an undeclared channel with
+`400` and `errorCode: channel_not_declared` before publication writes. Read declarations and creation policy from
+the Runtime activation-slot list response; a previously existing undeclared slot remains visible.
+
 ## HTTP endpoint surface
 
 All routes are relative to the host's Elsa API base path.
 
 | Method | Route | Permission | Purpose |
 |---|---|---|---|
-| `GET` | `publishing/activities` | `workflow-publishing.read` | List constructable activity catalog rows. |
-| `GET` | `publishing/activities/{activityId}/construct` | `workflow-publishing.read` | Construct an activity from a catalog row. |
-| `GET` | `publishing/incident-strategies` | `workflow-publishing.read` | List safe incident-strategy descriptors and the effective default publication strategy. |
-| `GET` | `publishing/value-conversion/profiles` | `workflow-publishing.read` | List safe value-conversion profiles. |
-| `POST` | `publishing/workflows/{versionId}/preflight` | `workflow-publishing.read` | Resolve policy and return trigger changes/conflicts and any foreign target-slot owner without changing authority. |
-| `POST` | `publishing/workflows/preflight` | `workflow-publishing.read` | Preflight a supplied workflow snapshot and issue a review token. |
-| `DELETE` | `publishing/workflows/{definitionId}/slots/{slotName}` | `workflow-publishing.manage` | Unpublish the slot authority and its serving projections. |
-| `POST` | `publishing/workflows/{definitionId}/slots/{slotName}/restore` | `workflow-publishing.manage` | Restore the latest eligible retired publication with a new authority transition. |
-| `GET` | `publishing/publications/{publicationId}` | `workflow-publishing.read` | Read one publication journal record, including the design version it published. |
-| `GET` | `publishing/workflows/{definitionId}/policy` | `workflow-publishing.read` | Read the effective workflow/host policy. |
-| `PUT` | `publishing/workflows/{definitionId}/policy` | `workflow-publishing.manage` | CAS-update workflow publication policy. |
-| `POST` | `publishing/workflows/{versionId}/publish` | `workflow-publishing.manage` | Compile, prepare, CAS-activate, reconcile, and return the publication. |
-| `GET` | `publishing/workflows/{versionId}/executable-export` | `workflow-publishing.read` | Download the published executable closure as an attachment. |
-| `POST` | `publishing/workflows/{versionId}/test-runs` | `workflow-publishing.manage` | Compile and run a persisted Design version without granting publication authority. |
-| `POST` | `publishing/workflows/drafts/test-runs` | `workflow-publishing.manage` | Compile and run a supplied draft snapshot without granting publication authority. |
-| `POST` | `publishing/preflight` | `workflow-publishing.read` | Validate Runtime Evidence requirements for supplied executable artifacts. |
-| `POST` | `design/activities/drafts/{draftId}/publication-preflight` | `workflow-publishing.read` | Return exact draft/head-bound diagnostics, diff, dependencies, readiness, SemVer choices, and review token. |
-| `POST` | `design/activities/drafts/{draftId}/publish` | `workflow-publishing.manage` | Recheck and atomically apply an idempotent reviewed activity publication. |
-| `GET` | `design/activities/publications/{idempotencyKey}` | `workflow-publishing.read` | Read the durable activity publication receipt and terminal outcome. |
-| `POST` | `publishing/activity-drafts/{draftId}/test-runs` | `workflow-publishing.manage` | Start an activity draft test run. |
-| `GET` | `publishing/activity-test-runs/{testRunId}` | `workflow-publishing.manage` | Read an activity draft test run. |
-| `GET` | `publishing/activity-drafts/{draftId}/test-runs/idempotency/{idempotencyKey}` | `workflow-publishing.manage` | Resolve an activity test run by its draft-scoped idempotency key. |
-| `POST` | `publishing/activity-test-runs/{testRunId}/cancel` | `workflow-publishing.manage` | Request cancellation of an activity draft test run. |
+| `GET` | `publishing/activities` | `workflows/publishing:read` | List constructable activity catalog rows. |
+| `GET` | `publishing/activities/{activityId}/construct` | `workflows/publishing:read` | Construct an activity from a catalog row. |
+| `GET` | `publishing/incident-strategies` | `workflows/publishing:read` | List safe incident-strategy descriptors and the effective default publication strategy. |
+| `GET` | `publishing/value-conversion/profiles` | `workflows/publishing:read` | List safe value-conversion profiles. |
+| `POST` | `publishing/workflows/{versionId}/preflight` | `workflows/publishing:read` | Resolve policy and return trigger changes/conflicts and any foreign target-slot owner without changing authority. |
+| `POST` | `publishing/workflows/preflight` | `workflows/publishing:read` | Preflight a supplied workflow snapshot and issue a review token. |
+| `DELETE` | `publishing/workflows/{definitionId}/slots/{slotName}` | `workflows/publishing:manage` | Unpublish the slot authority and its serving projections. |
+| `POST` | `publishing/workflows/{definitionId}/slots/{slotName}/restore` | `workflows/publishing:manage` | Restore the latest eligible retired publication with a new authority transition. |
+| `GET` | `publishing/publications/{publicationId}` | `workflows/publishing:read` | Read one publication journal record, including the design version it published. |
+| `GET` | `publishing/workflows/{definitionId}/policy` | `workflows/publishing:read` | Read the effective workflow/host policy. |
+| `PUT` | `publishing/workflows/{definitionId}/policy` | `workflows/publishing:manage` | CAS-update workflow publication policy. |
+| `POST` | `publishing/workflows/{versionId}/publish` | `workflows/publishing:manage` | Compile, prepare, CAS-activate, reconcile, and return the publication. |
+| `GET` | `publishing/workflows/{versionId}/executable-export` | `workflows/publishing:read` | Download the published executable closure as an attachment. |
+| `POST` | `publishing/workflows/{versionId}/test-runs` | `workflows/publishing:manage` | Compile and run a persisted Design version without granting publication authority. |
+| `POST` | `publishing/workflows/drafts/test-runs` | `workflows/publishing:manage` | Compile and run a supplied draft snapshot without granting publication authority. |
+| `POST` | `publishing/preflight` | `workflows/publishing:read` | Validate Runtime Evidence requirements for supplied executable artifacts. |
+| `POST` | `design/activities/drafts/{draftId}/publication-preflight` | `workflows/publishing:read` | Return exact draft/head-bound diagnostics, diff, dependencies, readiness, SemVer choices, and review token. |
+| `POST` | `design/activities/drafts/{draftId}/publish` | `workflows/publishing:manage` | Recheck and atomically apply an idempotent reviewed activity publication. |
+| `GET` | `design/activities/publications/{idempotencyKey}` | `workflows/publishing:read` | Read the durable activity publication receipt and terminal outcome. |
+| `POST` | `publishing/activity-drafts/{draftId}/test-runs` | `workflows/publishing:manage` | Start an activity draft test run. |
+| `GET` | `publishing/activity-test-runs/{testRunId}` | `workflows/publishing:manage` | Read an activity draft test run. |
+| `GET` | `publishing/activity-drafts/{draftId}/test-runs/idempotency/{idempotencyKey}` | `workflows/publishing:manage` | Resolve an activity test run by its draft-scoped idempotency key. |
+| `POST` | `publishing/activity-test-runs/{testRunId}/cancel` | `workflows/publishing:manage` | Request cancellation of an activity draft test run. |
 
 The version route excludes the reserved literal `drafts`, so the two test-run routes cannot overlap.
 

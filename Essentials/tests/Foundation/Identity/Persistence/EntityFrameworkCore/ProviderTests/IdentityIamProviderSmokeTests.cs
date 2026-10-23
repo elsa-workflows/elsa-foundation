@@ -18,6 +18,10 @@ public sealed class IdentityIamPostgreSqlSmokeTests(IdentityProviderPostgreSqlFi
     [SkippableFact]
     public Task Crud_readback_rollback_and_revision_semantics_on_postgresql() =>
         IdentityIamProviderSmoke.RunAsync(fixture, "PostgreSql");
+
+    [SkippableFact]
+    public Task User_paging_search_status_and_delete_on_postgresql() =>
+        IdentityIamProviderSmoke.RunUserAdministrationAsync(fixture, "PostgreSql");
 }
 
 [Collection(IdentityProviderSqlServerFixture.CollectionName)]
@@ -26,6 +30,10 @@ public sealed class IdentityIamSqlServerSmokeTests(IdentityProviderSqlServerFixt
     [SkippableFact]
     public Task Crud_readback_rollback_and_revision_semantics_on_sql_server() =>
         IdentityIamProviderSmoke.RunAsync(fixture, "SqlServer");
+
+    [SkippableFact]
+    public Task User_paging_search_status_and_delete_on_sql_server() =>
+        IdentityIamProviderSmoke.RunUserAdministrationAsync(fixture, "SqlServer");
 }
 
 [Collection(IdentityProviderMySqlFixture.CollectionName)]
@@ -34,10 +42,68 @@ public sealed class IdentityIamMySqlSmokeTests(IdentityProviderMySqlFixture fixt
     [SkippableFact]
     public Task Crud_readback_rollback_and_revision_semantics_on_mysql() =>
         IdentityIamProviderSmoke.RunAsync(fixture, "MySql");
+
+    [SkippableFact]
+    public Task User_paging_search_status_and_delete_on_mysql() =>
+        IdentityIamProviderSmoke.RunUserAdministrationAsync(fixture, "MySql");
 }
 
 internal static class IdentityIamProviderSmoke
 {
+    private static readonly string[] ModuleTables =
+    [
+        IdentityIamEfModule.ApplicationTableName,
+        IdentityIamEfModule.CredentialTableName,
+        IdentityIamEfModule.UserTableName,
+        IdentityIamEfModule.RoleTableName,
+        IdentityIamEfModule.ClaimMappingTableName,
+        IdentityIamEfModule.ExternalIdentityTableName,
+        IdentityIamEfModule.UserClaimTableName,
+        IdentityIamEfModule.RoleClaimTableName,
+        IdentityIamEfModule.UserRoleTableName,
+        IdentityIamEfModule.UserTokenTableName,
+        IdentityIamEfModule.TenantMembershipTableName,
+        IdentityIamEfModule.UserNameReservationTableName,
+        IdentityIamEfModule.EmailReservationTableName,
+        IdentityIamEfModule.RoleNameReservationTableName,
+        IdentityIamEfModule.MutationReceiptTableName
+    ];
+
+    /// <summary>
+    /// The #2774 admin queries on a real provider: tenant-scoped stable paging, whole-value case-insensitive search,
+    /// status changes and delete. It writes only user rows (and their reservations) in its own tenant, so the
+    /// table-wide counts in <see cref="RunAsync"/> are unaffected.
+    /// </summary>
+    public static async Task RunUserAdministrationAsync(IdentityProviderFixture fixture, string provider)
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? $"{provider} is unavailable.");
+
+        var tenant = $"iam-users-{provider}-{Guid.NewGuid():N}";
+        await using var context = CreateContext(provider, fixture.ConnectionString);
+        await IdentityEfProviderDatabaseProvisioning.EnsureModuleTablesAsync(context, provider, ModuleTables);
+        var users = new EfUserStore(context, new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope(tenant))));
+        foreach (var (id, name) in new[] { ("user-z", "Zoe"), ("user-a", "Ada"), ("user-m", "Mia"), ("user-b", "Bob") })
+            await users.SaveAsync(User(tenant, id) with { UserName = name, Email = $"{name.ToLowerInvariant()}@example.test" });
+
+        var firstPage = await users.ListPageAsync(tenant, new IamPageRequest(skip: 0, take: 3));
+        var secondPage = await users.ListPageAsync(tenant, new IamPageRequest(skip: 3, take: 3));
+        Assert.Equal(4, firstPage.TotalCount);
+        Assert.Equal(["user-a", "user-b", "user-m"], firstPage.Items.Select(user => user.Id));
+        Assert.Equal(["user-z"], secondPage.Items.Select(user => user.Id));
+        Assert.Equal("user-a", Assert.Single((await users.ListPageAsync(tenant, new IamPageRequest(), "ADA")).Items).Id);
+        Assert.Equal("user-b", Assert.Single((await users.ListPageAsync(tenant, new IamPageRequest(), "Bob@Example.Test")).Items).Id);
+        Assert.Empty((await users.ListPageAsync(tenant, new IamPageRequest(), "ad")).Items);
+
+        Assert.True(await users.SetStatusAsync(tenant, "user-m", UserStatus.Disabled));
+        Assert.Equal(UserStatus.Disabled, Assert.IsType<UserRecord>(await users.FindAsync(tenant, "user-m")).Status);
+        Assert.True(await users.DeleteAsync(tenant, "user-m"));
+        Assert.False(await users.DeleteAsync(tenant, "user-m"));
+        Assert.Null(await users.FindAsync(tenant, "user-m"));
+        Assert.Equal(3, (await users.ListPageAsync(tenant, new IamPageRequest())).TotalCount);
+        foreach (var id in new[] { "user-a", "user-b", "user-z" })
+            Assert.True(await users.DeleteAsync(tenant, id));
+    }
+
     public static async Task RunAsync(IdentityProviderFixture fixture, string provider)
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? $"{provider} is unavailable.");
@@ -55,24 +121,7 @@ internal static class IdentityIamProviderSmoke
                 typeof(MutationReceiptEntity)
             }.OrderBy(type => type.FullName),
             context.Model.GetEntityTypes().ExcludingSchemaFinalization().Select(entity => entity.ClrType).OrderBy(type => type.FullName));
-        await IdentityEfProviderDatabaseProvisioning.EnsureModuleTablesAsync(
-            context,
-            provider,
-            IdentityIamEfModule.ApplicationTableName,
-            IdentityIamEfModule.CredentialTableName,
-            IdentityIamEfModule.UserTableName,
-            IdentityIamEfModule.RoleTableName,
-            IdentityIamEfModule.ClaimMappingTableName,
-            IdentityIamEfModule.ExternalIdentityTableName,
-            IdentityIamEfModule.UserClaimTableName,
-            IdentityIamEfModule.RoleClaimTableName,
-            IdentityIamEfModule.UserRoleTableName,
-            IdentityIamEfModule.UserTokenTableName,
-            IdentityIamEfModule.TenantMembershipTableName,
-            IdentityIamEfModule.UserNameReservationTableName,
-            IdentityIamEfModule.EmailReservationTableName,
-            IdentityIamEfModule.RoleNameReservationTableName,
-            IdentityIamEfModule.MutationReceiptTableName);
+        await IdentityEfProviderDatabaseProvisioning.EnsureModuleTablesAsync(context, provider, ModuleTables);
         if (provider == "MySql")
             await AssertMySqlTableEncodingAsync(context);
 
@@ -527,14 +576,14 @@ internal static class IdentityIamProviderSmoke
         UserStatus.Active,
         ResourceOwnership.Foundation,
         new HashSet<string>(["role-primary"], StringComparer.Ordinal),
-        new HashSet<string>(["identity.users.read"], StringComparer.Ordinal));
+        new HashSet<string>(["identity/users:read"], StringComparer.Ordinal));
 
     private static RoleRecord Role(string tenant, string id) => new(
         id,
         tenant,
         "role-name",
         "role-primary",
-        new HashSet<string>(["identity.users.read"], StringComparer.Ordinal),
+        new HashSet<string>(["identity/users:read"], StringComparer.Ordinal),
         false);
 
     private static void AssertUser(UserRecord expected, UserRecord actual)

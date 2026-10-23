@@ -48,6 +48,7 @@ function optionsContext(postJson: ReturnType<typeof vi.fn>) {
 
 const editor: StudioActivityPropertyEditorContribution = {
   id: "test.options",
+  supportsValidationReporting: true,
   supports: descriptor => !!descriptor.uiSpecifications?.optionsProvider,
   component: ({ descriptor, disabled }) => (
     <select aria-label={descriptor.name} disabled={disabled}>
@@ -72,12 +73,14 @@ function state(node: ActivityNode): WorkflowDefinitionState {
   return { variables: [], rootActivity: node, inputs: [], outputs: [] };
 }
 
-function renderPanel(context: StudioEndpointContext, node: ActivityNode, objectCollection = false) {
+function renderPanel(context: StudioEndpointContext, node: ActivityNode, objectCollection = false, fieldTier?: string) {
   const descriptor = activityInputOptionsDescriptor({
     name: "Field",
     typeName: objectCollection ? "System.Collections.Generic.ICollection`1[System.String]" : "System.String",
     uiSpecifications: { optionsProvider: { key: "catalog.fields", dependsOn: ["Entity"] } }
   });
+  const field = descriptor.inputs.find(input => input.name === "Field")!;
+  if (fieldTier !== undefined) field.tier = fieldTier;
   descriptor.inputs.unshift({ name: "Entity", typeName: "System.String", isWrapped: true });
   flushSync(() => root.render(
     <ActivityPropertiesPanel
@@ -176,18 +179,27 @@ describe("dynamic activity input options", () => {
   });
 
   it("keeps the constrained editor disabled on failure and retries immediately", async () => {
+    let resolveRetry!: (value: unknown) => void;
     const postJson = vi.fn()
       .mockRejectedValueOnce(new Error("provider failed"))
-      .mockResolvedValueOnce({ options: [{ label: "Name", value: "name" }] });
+      .mockImplementationOnce(() => new Promise(resolve => { resolveRetry = resolve; }));
     const context = optionsContext(postJson);
 
-    renderPanel(context, activity("Customer"));
+    renderPanel(context, activity("Customer"), false, "optional");
     await vi.advanceTimersByTimeAsync(0);
     await vi.waitFor(() => expect(container.querySelector("[role='alert']")?.textContent).toContain("Options are unavailable"));
     expect(container.querySelector<HTMLSelectElement>("select[aria-label='Field']")?.disabled).toBe(true);
+    expect(container.querySelector(".studio-advanced-section .studio-disclosure-fold-trigger")?.getAttribute("aria-expanded"))
+      .toBe("true");
+    expect(container.querySelector(".studio-advanced-section .studio-status-pill")).toBeNull();
 
     flushSync(() => container.querySelector<HTMLButtonElement>(".wf-property-options-error button")!.click());
     await vi.advanceTimersByTimeAsync(0);
+    await vi.waitFor(() => expect(postJson).toHaveBeenCalledTimes(2));
+    expect(container.querySelector(".studio-advanced-section .studio-disclosure-fold-trigger")?.getAttribute("aria-expanded"))
+      .toBe("true");
+    expect(container.querySelector(".studio-advanced-section .studio-status-pill")).toBeNull();
+    resolveRetry({ options: [{ label: "Name", value: "name" }] });
     await vi.waitFor(() => expect(container.querySelector<HTMLSelectElement>("select[aria-label='Field']")?.disabled).toBe(false));
     expect(postJson).toHaveBeenCalledTimes(2);
     expect(container.querySelector("[role='alert']")).toBeNull();

@@ -159,6 +159,7 @@ Examples of foundational tasks (adjust based on your project):
 - [ ] TXXX [P] Additional scope-specific tests (when warranted) in tests/
 - [ ] TXXX Security hardening
 - [ ] TXXX Run quickstart.md validation
+- [ ] TXXX Set the spec's `**Status**:` line to `Implemented` in this PR, before it merges (docs/reference/spec-lifecycle.md transition rule; never a separate status PR)
 
 ---
 

@@ -120,6 +120,25 @@ public sealed class PackageManifestFeatureCatalogContributorTests : IAsyncDispos
     }
 
     [Fact]
+    public void ManifestMetadataAloneDoesNotClaimRuntimeAvailability()
+    {
+        var context = ReadAndApply("""
+        {
+          "package": { "id": "Elsa.FeaturePackage", "version": "1.0.0" },
+          "features": [ { "id": "ManifestFeature" } ]
+        }
+        """);
+        var feature = context.Items["ManifestFeature"];
+        feature.Enabled = true;
+
+        var item = JsonSerializer.SerializeToElement(feature.ToItem(), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.Equal(FeatureSourceKinds.Manifest, feature.SourceKind);
+        Assert.True(item.GetProperty("enabled").GetBoolean());
+        Assert.False(item.GetProperty("runtimeAvailable").GetBoolean());
+    }
+
+    [Fact]
     public void ApplyStripsSamePackagePrefixFromDependencyFeatureIds()
     {
         var context = ReadAndApply("""

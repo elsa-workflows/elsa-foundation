@@ -49,6 +49,7 @@ namespace Elsa.Activities.While.Activities;
 /// immediately.
 /// </para>
 /// </remarks>
+[Activity(Icon = "Repeat")]
 [ActivityStructure("elsa.while.structure", "1.0.0")]
 [ActivityChildSlot("While.Body", "body", "Body", ActivityChildSlotCardinalities.Single)]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
@@ -64,7 +65,7 @@ public sealed class While : StructuralActivity, IRuntimeStructuralActivity, IRun
 
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
-        var navigator = LoopNavigator.From(runtimeContext.ExecutableNode, LoopKind.While);
+        var navigator = runtimeContext.ExecutableNode.GetOrAddRoutingStructure(static node => LoopNavigator.From(node, LoopKind.While));
 
         // First condition evaluation: false on entry means the body never runs.
         return ValueTask.FromResult(ContinueOrComplete(runtimeContext, navigator, Condition, completedChildActivityExecutionId: null));
@@ -75,7 +76,7 @@ public sealed class While : StructuralActivity, IRuntimeStructuralActivity, IRun
         ArgumentNullException.ThrowIfNull(context);
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
-        var navigator = LoopNavigator.From(runtimeContext.ExecutableNode, LoopKind.While);
+        var navigator = runtimeContext.ExecutableNode.GetOrAddRoutingStructure(static node => LoopNavigator.From(node, LoopKind.While));
 
         // #381: validate the completed child is actually this loop's body (mirroring For/ForEach/If/
         // Switch/Parallel) so a stray callback fails diagnosably instead of silently rescheduling.

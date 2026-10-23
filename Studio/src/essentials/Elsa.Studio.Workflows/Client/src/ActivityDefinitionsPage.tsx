@@ -11,7 +11,6 @@ import type {
   StudioWorkflowRunInputEditorContribution
 } from "@elsa-workflows/studio-sdk";
 import {
-  isActivityDefinitionEnumValue,
   type ActivityDefinitionCollectionRequest,
   type ActivityDefinitionManagementView
 } from "./activityDefinitionTypes";
@@ -20,6 +19,7 @@ import { classifyActivityDefinitionReadFailure, redactActivityDefinitionManageme
 import { activityDefinitionDurationBucket, activityDefinitionResultBand, observeActivityDefinitions } from "./activityDefinitionObservability";
 import { WorkflowLazyBoundary } from "./WorkflowLazyBoundary";
 import "./activityDefinitions.css";
+import "./activityDefinitionCollection.css";
 
 const ActivityDefinitionWorkbench = lazy(() => import("./ActivityDefinitionWorkbench").then(module => ({ default: module.ActivityDefinitionWorkbench })));
 const ActivityDefinitionCreateDialog = lazy(() => import("./ActivityDefinitionCreateDialog").then(module => ({ default: module.ActivityDefinitionCreateDialog })));
@@ -94,12 +94,12 @@ export function ActivityDefinitionsPage({
           navigateToStudioPath(`/workflows/activity-definitions/upgrades?plan=${encodeURIComponent(route.returnPlanId)}`);
           return;
         }
-        navigate({ definitionId: route.definitionId, section: "drafts", draftId: route.draftId, versionId: null }, force);
+        navigate({ definitionId: route.definitionId, section: null, draftId: null, versionId: null }, force);
       }} onOpenDraft={(definitionId, draftId) => navigate({ definitionId, section: "editor", draftId, versionId: null, returnPlanId: route.returnPlanId }, true)} onOpenVersion={(definitionId, versionId) => navigate({ definitionId, section: "versions", draftId: null, versionId, returnPlanId: route.returnPlanId }, true)} onOpenStudioPath={navigateToStudioPath} /></WorkflowLazyBoundary>;
     }
     return (
       <WorkflowLazyBoundary label="activity definition workbench">
-        <ActivityDefinitionWorkbench context={context} definitionId={route.definitionId} section={route.section} selectedDraftId={route.draftId} selectedVersionId={route.versionId} requestedDraftActionVersionId={route.draftActionVersionId} activityEditors={activityEditors()} onNavigate={navigate} onPlanUpgrade={(kind, id) => navigateToStudioPath(`/workflows/activity-definitions/upgrades?rootKind=${encodeURIComponent(kind)}&rootId=${encodeURIComponent(id)}`)} />
+        <ActivityDefinitionWorkbench context={context} definitionId={route.definitionId} section={route.section} selectedDraftId={route.draftId} selectedVersionId={route.versionId} requestedDraftActionVersionId={route.draftActionVersionId} activityEditors={activityEditors()} onNavigate={navigate} onOpenWorkflows={() => navigateToStudioPath("/workflows/definitions")} onPlanUpgrade={(kind, id) => navigateToStudioPath(`/workflows/activity-definitions/upgrades?rootKind=${encodeURIComponent(kind)}&rootId=${encodeURIComponent(id)}`)} />
       </WorkflowLazyBoundary>
     );
   }
@@ -130,7 +130,7 @@ function ActivityDefinitionCollection({ context, activityEditors, onImport, onPl
   const [providerInput, setProviderInput] = useState("");
   const search = useDebouncedValue(searchInput, 250);
   const providerKey = useDebouncedValue(providerInput, 250);
-  const [authority, setAuthority] = useState<ActivityDefinitionCollectionRequest["authority"]>("");
+  const [authority, setAuthority] = useState<ActivityDefinitionCollectionRequest["authority"]>("Design");
   const [pageSize, setPageSize] = useState<PageSize>(25);
   const [cursorStack, setCursorStack] = useState<(string | null)[]>([null]);
   const [cursorIndex, setCursorIndex] = useState(0);
@@ -145,7 +145,8 @@ function ActivityDefinitionCollection({ context, activityEditors, onImport, onPl
   const failure = privacyFailure ?? directFailure;
   const mustDiscardData = failure === "forbidden" || failure === "unavailable";
   const data = mustDiscardData ? undefined : query.data;
-  const filtersActive = Boolean(search.trim() || providerKey.trim() || authority);
+  const defaultDesignedView = authority === "Design" && !searchInput.trim() && !providerInput.trim();
+  const filtersActive = Boolean(searchInput.trim() || providerInput.trim() || authority !== "Design");
 
   useEffect(() => {
     setCursorStack([null]);
@@ -206,36 +207,56 @@ function ActivityDefinitionCollection({ context, activityEditors, onImport, onPl
   };
 
   return (
-    <main className="ad-page" aria-labelledby="activity-definitions-title">
+    <main className="ad-page ad-designed-collection" aria-labelledby="activity-definitions-title">
       <header className="ad-page-header">
-        <div><span className="ad-kicker">Workflows</span><h1 id="activity-definitions-title">Activity Definitions</h1><p>Browse stable reusable activity identities. Draft and version history stay attached to the definition you open.</p></div>
-        <div className="ad-header-actions"><button type="button" onClick={onPlanUpgrade}>Plan broad upgrade</button><button type="button" onClick={onImport}>Import from Elsa 3</button><button type="button" onClick={() => setCreateOpen(true)}>Create Activity Definition</button><button type="button" className="ad-primary-action" onClick={refresh} disabled={query.isFetching}><RefreshCw size={16} aria-hidden /> {query.isFetching && data ? "Refreshing" : "Refresh"}</button></div>
+        <div><span className="ad-kicker">Workflows</span><h1 id="activity-definitions-title">Activity Definitions</h1><p>Design reusable activities here. Drafts stay editable, while published versions remain in history.</p></div>
+        <div className="ad-header-actions"><button type="button" className="ad-primary-action" onClick={() => setCreateOpen(true)}>Create activity</button><button type="button" onClick={refresh} disabled={query.isFetching}><RefreshCw size={16} aria-hidden /> {query.isFetching && data ? "Refreshing" : "Refresh"}</button><details className="ad-collection-disclosure ad-tools-disclosure"><summary>Tools</summary><div className="ad-disclosure-panel"><button type="button" onClick={onImport}>Import from Elsa 3</button><button type="button" onClick={onPlanUpgrade}>Plan broad upgrade</button></div></details></div>
       </header>
 
-      <section className="ad-filters" aria-label="Activity Definition filters">
+      <section className="ad-filters ad-collection-filters" aria-label="Activity Definition filters">
         <label className="ad-search-field"><span>Search</span><span className="ad-input-shell"><Search size={16} aria-hidden /><input value={searchInput} onChange={event => setSearchInput(event.target.value)} placeholder="Name, type key, or category" /></span></label>
-        <label><span>Authority</span><select value={authority} onChange={event => setAuthority(event.target.value as ActivityDefinitionCollectionRequest["authority"])}><option value="">All authorized</option><option value="Design">Design owned</option><option value="ProviderSource">Source owned</option></select></label>
-        <label><span>Provider key</span><input value={providerInput} onChange={event => setProviderInput(event.target.value)} placeholder="Exact provider key" /></label>
-        <label><span>Rows</span><select value={pageSize} onChange={event => setPageSize(Number(event.target.value) as PageSize)}><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></select></label>
+        <div className="ad-collection-view" role="group" aria-label="Activity definition collection">
+          <button type="button" aria-pressed={authority === "Design"} onClick={() => setAuthority("Design")}>Designed</button>
+          <button type="button" aria-pressed={authority === "ProviderSource"} onClick={() => setAuthority("ProviderSource")}>Built-in</button>
+          <button type="button" aria-pressed={authority === ""} onClick={() => setAuthority("")}>All</button>
+        </div>
+        <details className="ad-collection-disclosure ad-advanced-filters">
+          <summary>Advanced filters</summary>
+          <div className="ad-disclosure-panel ad-advanced-filter-fields">
+            <label><span>Provider key</span><input value={providerInput} onChange={event => setProviderInput(event.target.value)} placeholder="Exact provider key" /></label>
+            <label><span>Rows per page</span><select value={pageSize} onChange={event => setPageSize(Number(event.target.value) as PageSize)}><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></select></label>
+          </div>
+        </details>
       </section>
 
       {query.isFetching && data ? <div className="ad-inline-status" role="status" aria-live="polite">Refreshing the authorized collection while keeping the last confirmed page visible.</div> : null}
       {query.isError && data && failure === "expired" ? <div className="ad-stale-warning" role="alert"><AlertTriangle size={18} aria-hidden /><div><strong>Collection snapshot expired</strong><span>The retained page is stale. Restart paging to request a new authorized snapshot.</span></div><button type="button" onClick={restartPaging}>Restart paging</button></div> : null}
       {query.isError && data && failure !== "expired" ? <div className="ad-stale-warning" role="alert"><AlertTriangle size={18} aria-hidden /><div><strong>Refresh failed; showing retained data</strong><span>Last confirmed {formatTimestamp(lastConfirmedAt)}. Retry to request a new snapshot.</span></div><button type="button" onClick={refresh}>Retry</button></div> : null}
-      {!data && query.isPending && !failure ? <ActivityDefinitionSkeleton /> : null}
+      {!data && (query.isPending || query.isFetching) && !failure ? <ActivityDefinitionSkeleton /> : null}
       {!data && failure ? <ActivityDefinitionFailure kind={failure} onRetry={failure === "expired" ? restartPaging : refresh} /> : null}
-      {data && data.items.length === 0 ? <section className="ad-empty" role="status"><Database size={24} aria-hidden /><h2>{filtersActive ? "No Activity Definitions match" : "No Activity Definitions yet"}</h2><p>{filtersActive ? "Clear or change the server-side filters to search the authorized collection again." : "No authorized Activity Definitions are available in this scope."}</p>{filtersActive ? <button type="button" onClick={() => { setSearchInput(""); setProviderInput(""); setAuthority(""); }}>Clear filters</button> : null}</section> : null}
+      {data && data.items.length === 0 ? <section className="ad-empty ad-collection-empty" role="status"><Database size={24} aria-hidden /><h2>{defaultDesignedView ? "No designed activities yet" : filtersActive ? "No Activity Definitions match" : "No Activity Definitions available"}</h2><p>{defaultDesignedView ? "Create a reusable activity definition, or browse built-in activities to see source-owned entries." : filtersActive ? "Clear or change the server-side filters to search the authorized collection again." : "No authorized Activity Definitions are available in this scope."}</p>{defaultDesignedView ? <div><button type="button" className="ad-primary-action" onClick={() => setCreateOpen(true)}>Create activity</button><button type="button" onClick={() => setAuthority("ProviderSource")}>Browse built-in activities</button></div> : filtersActive ? <button type="button" onClick={() => { setSearchInput(""); setProviderInput(""); setAuthority("Design"); }}>Clear filters</button> : null}</section> : null}
       {data && data.items.length > 0 ? <>
         <div className="ad-collection" role="table" aria-label="Activity Definitions" aria-rowcount={data.totalCount}>
-          <div className="ad-collection-head" role="row"><span role="columnheader">Definition</span><span role="columnheader">Authority</span><span role="columnheader">Provider</span><span role="columnheader">Recommendation</span><span role="columnheader">Updated</span></div>
+          <div className="ad-collection-head" role="row"><span role="columnheader">Activity</span><span role="columnheader">State</span><span role="columnheader">Updated</span></div>
           {data.items.map(definition => {
             const title = resolveActivityDefinitionTitle(definition.definition.displayName, definition.definition.activityTypeKey);
-            const typeKey = definition.definition.activityTypeKey;
-            return <div key={definition.definition.definitionId} className="ad-collection-row" role="row" tabIndex={0} aria-label={`Open Activity Definition ${title}`} onClick={() => openDefinition(definition)} onKeyDown={event => { if (event.key !== "Enter" && event.key !== " ") return; event.preventDefault(); openDefinition(definition); }}>
-            <span role="cell" data-label="Definition"><strong>{title}</strong>{typeKey && typeKey !== title ? <small>{typeKey}</small> : null}</span>
-            <span role="cell" data-label="Authority"><AuthorityBadge kind={definition.definition.contentAuthority.kind} /></span>
-            <span role="cell" data-label="Provider">{definition.lifecycle.recommendation?.providerKey ?? definition.lifecycle.head?.providerKey ?? "Not established"}</span>
-            <span role="cell" data-label="Recommendation">{definition.lifecycle.recommendation ? (() => { const version = formatActivityVersion(definition.lifecycle.recommendation.version); return <span title={`Exact version ${version.full}`}>{version.short} · {definition.lifecycle.recommendation.lifecycle}</span>; })() : "Not recommended"}</span>
+            const recommendation = definition.lifecycle.recommendation;
+            const recommendedVersion = recommendation ? formatActivityVersion(recommendation.version) : null;
+            const providerKey = recommendation?.providerKey ?? definition.lifecycle.head?.providerKey;
+            const authorityKind = definition.definition.contentAuthority.kind;
+            const rowDetails = [
+              `Activity Type Key: ${definition.definition.activityTypeKey}`,
+              providerKey ? `Provider: ${providerKey}` : null,
+              `Authority: ${authorityKind}`
+            ].filter(Boolean).join(" · ");
+            return <div key={definition.definition.definitionId} className="ad-collection-row" role="row" tabIndex={0} aria-label={`Open Activity Definition ${title}`} title={rowDetails} onClick={() => openDefinition(definition)} onKeyDown={event => { if (event.key !== "Enter" && event.key !== " ") return; event.preventDefault(); openDefinition(definition); }}>
+            <span role="cell" data-label="Activity" className="ad-collection-activity"><strong>{title}</strong>{definition.definition.description ? <small className="ad-collection-description">{definition.definition.description}</small> : null}<small className="ad-collection-category">{definition.definition.category}</small></span>
+            <span role="cell" data-label="State" className="ad-collection-state">
+              {definition.lifecycle.versionCount === 0 && definition.lifecycle.draftCount > 0 ? <span className="ad-status-chip is-draft">Draft</span> : null}
+              {definition.lifecycle.versionCount > 0 ? <span className="ad-status-chip is-published">Published</span> : null}
+              {definition.lifecycle.versionCount === 0 && definition.lifecycle.draftCount === 0 ? <span className="ad-status-copy">No versions yet</span> : null}
+              {recommendedVersion ? <small title={`Exact recommended version ${recommendedVersion.full}`}>Recommended {recommendedVersion.short}</small> : definition.lifecycle.versionCount > 0 ? <small>No recommended version</small> : null}
+            </span>
             <span role="cell" data-label="Updated">{formatActivityDefinitionDate(definition.updatedAt)}</span>
           </div>;
           })}
@@ -260,11 +281,6 @@ function ActivityDefinitionFailure({ kind, onRetry }: { kind: ReturnType<typeof 
     failed: ["Couldn't load Activity Definitions", "Studio could not confirm the authorized collection. No unconfirmed data is shown."]
   }[kind];
   return <section className="ad-failure" role="alert"><AlertTriangle size={22} aria-hidden /><h2>{copy[0]}</h2><p>{copy[1]}</p><button type="button" onClick={onRetry}>{kind === "expired" ? "Restart paging" : "Try again"}</button></section>;
-}
-
-function AuthorityBadge({ kind }: { kind: string }) {
-  const designOwned = isActivityDefinitionEnumValue(kind, "Design");
-  return <span className={`ad-badge ${designOwned ? "is-design" : "is-source"}`}>{designOwned ? "Design owned" : "Source owned"}</span>;
 }
 
 function useDebouncedValue(value: string, delay: number) {

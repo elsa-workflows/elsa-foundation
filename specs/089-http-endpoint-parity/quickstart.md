@@ -10,10 +10,11 @@ End-to-end verification walkthrough, extended per sub-unit as each lands.
 ## A — live request reaches the workflow
 
 1. Run the server. Publish a workflow whose start trigger is `HttpEndpoint` with `Path = "orders/webhook"`.
-2. `curl -s -X POST http://localhost:<port>/workflows/http/orders/webhook -H 'content-type: application/json' -d '{"id":7}'`
-3. Expect `202 Accepted` with `{ "started": ["<executionId>"] }` — the middleware is mounted via the shell feature, no host-code edits.
-4. Inspect the execution's state (management API): the trigger activity's Result contains method `POST`, the `content-type` header, and body `{"id":7}` — not the authored-route placeholder.
-5. `curl http://localhost:<port>/workflows/http/nope` → `404`. `curl http://localhost:<port>/` → untouched health response (pass-through).
+2. Select `ResponseMode = Async` so this input-delivery check explicitly exercises background acceptance. The example uses the default `/workflows/http` mount; replace it with the active server's configured mount when it differs.
+3. `curl -s -X POST http://localhost:<port>/workflows/http/orders/webhook -H 'content-type: application/json' -d '{"id":7}'`
+4. Expect `202 Accepted` with `{ "started": ["<executionId>"], "resumed": [], "response": { "mode": "async", "reason": "background-accepted", "message": "The endpoint accepts work in the background and returns 202 before the workflow responds." } }` — the middleware is mounted via the shell feature, no host-code edits.
+5. Inspect the execution's state (management API): the trigger activity's Result contains method `POST`, the `content-type` header, and body `{"id":7}` — not the authored-route placeholder.
+6. `curl http://localhost:<port>/workflows/http/nope` → `404`. `curl http://localhost:<port>/` → untouched health response (pass-through).
 
 ## B — templates and methods
 
@@ -35,7 +36,9 @@ End-to-end verification walkthrough, extended per sub-unit as each lands.
 ## E — synchronous response
 
 1. Publish a sync-mode endpoint whose workflow runs `WriteHttpResponse(200, "text/plain", "pong")` — `curl` receives `200 pong` in the same exchange; the durable HttpResponse artifact is also recorded.
-2. Sync-mode workflow that suspends first → `202` degrade. Timeout exceeded → `408`. Async-mode endpoint → always `202` (baseline preserved).
+2. Sync-mode workflow that suspends first → `202` degrade with the execution identifiers and nested `response.mode = "sync"`, `response.reason = "workflow-response-not-produced"`.
+3. The server's configurable `SyncRequestTimeout` defaults to 30 seconds. A positive endpoint `RequestTimeout` may shorten that deadline. It covers authorization, body read, inline dispatch, and response delivery after the route settings are selected; cooperative timeout cancellation returns `408` before response headers start, or aborts the connection after response start. A workflow component that ignores cancellation cannot be forcibly stopped.
+4. Async-mode endpoint → `202` acceptance when dispatch completes within its authored `RequestTimeout`. That timeout may still return `408`; it is not replaced by the server-wide Sync deadline.
 
 ## Test-suite verification (every sub-unit)
 
