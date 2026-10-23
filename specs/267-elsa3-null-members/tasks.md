@@ -47,12 +47,14 @@ and WriteLine `text: null`.
   null alone (R-8); `IsEmittedDefault`: accept an `OnNull` emitted value (R-9)
 - [x] T009 [US1] In `Extensions/Elsa3/src/Mapping/Mappings/Elsa3ActivityToState.cs`: map a literal holding null to
   `new ArgumentValue(null, "Literal")`, and drop any other value it cannot read, null included (D-3, D-4)
-- [x] T010 [P] [US1] Fixture `Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/Fixtures/null-members.json`:
-  a flowchart with a RunJavaScript (`possibleOutcomes: null`, `result: null`) connected by `Done` to a WriteLine
-  (`text: null`) and a SetName (`value: null`)
+- [x] T010 [P] [US1] Fixtures in `Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/Fixtures/`:
+  `null-members-script.json`, a RunJavaScript with `possibleOutcomes: null` and `result: null`; and `null-members.json`,
+  a flowchart that sets a correlation id and an instance name, then runs a WriteLine (`text: null`), a PublishEvent
+  (`correlationId`, `payload`, `isLocalEvent` null), a Correlate and a SetName (`null` values). Running an imported
+  RunJavaScript is blocked by #3195 and #3287, so the script fixture is published only
 - [x] T011 [US1] `Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/NullMemberPublishTests.cs`:
-  import, publish and run the fixture through `Elsa3ImportHost`; the run completes with no incident and runs the
-  WriteLine after the RunJavaScript (SC-003)
+  through `Elsa3ImportHost`, the script fixture imports and publishes; the flowchart fixture imports, publishes and
+  runs to completion with no incident, and its correlation id and instance name end cleared (SC-003)
 - [x] T012 [P] [US1] `Extensions/Elsa3/tests/Mapping/Tests/Elsa3NullMemberTests.cs`: typed-null rows (one case per
   row: the input is a `Literal` holding null), no-binding rows (no input), a null output (no output), a null member
   on a member resolved by name (no input), and the deliberate-null shape converting like JSON `null`

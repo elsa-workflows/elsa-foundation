@@ -42,6 +42,66 @@
     },
     "activities": [
       {
+        "id": "correlate-set",
+        "nodeId": "correlate-set",
+        "name": "correlate-set",
+        "type": "Elsa.Correlate",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "correlationId": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "order-1"
+          }
+        }
+      },
+      {
+        "id": "name-set",
+        "nodeId": "name-set",
+        "name": "name-set",
+        "type": "Elsa.SetName",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "value": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "Order 1"
+          }
+        }
+      },
+      {
         "id": "write",
         "nodeId": "write",
         "name": "write",
@@ -148,6 +208,28 @@
       }
     ],
     "connections": [
+      {
+        "source": {
+          "activity": "correlate-set",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "name-set",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "name-set",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "write",
+          "port": "In"
+        },
+        "vertices": []
+      },
       {
         "source": {
           "activity": "write",

@@ -105,8 +105,11 @@ does for WriteLine's R2 empty string.
 ## R-10 Null outputs and members resolved by name
 
 **Decision**: a null output (R1 Carry output) gets no binding. On an alias, catalog key or workflow-as-activity
-replacement (`BindByName`), a null member gets no binding: Elsa 3 skipped a null synthetic member, and the Elsa 4
-contract's default applies. Lost outputs (R4), removed inputs (R3) and restrictions (R6) already handle null.
+replacement (`BindByName`), a null member gets no binding, and the Elsa 4 contract's default applies. That is faithful
+for a replacement, because Elsa 3 skipped a null synthetic member. For an alias or a catalog key, Elsa 3 ran its own CLR
+activity with that activity's default, which the converter does not know; the result matches only when the Elsa 4
+default is the same (review finding, recorded as a known limit in the spec's edge cases). Lost outputs (R4), removed
+inputs (R3) and restrictions (R6) already handle null.
 
 ## R-11 Measurement
 

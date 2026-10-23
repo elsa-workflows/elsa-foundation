@@ -16,8 +16,9 @@ namespace Elsa3.Mapping.ActivityMap;
 /// <param name="BehaviourWarning">The <c>ELS3-BEHAVIOUR-*</c> code emitted when the member is bound (for a removed input: unless it equals the default).</param>
 /// <param name="WhenBound">For a default flip: emit the default only when this other Elsa 3 member is bound.</param>
 /// <param name="OnNull">
-/// For an R1 or R5 input: what a JSON <c>null</c> converts to, from what Elsa 3 ran the member with (spec 267). Unset on
-/// an R2 default flip or an R5 rule with an Elsa 3 default, whose default is emitted for a null as for an absent member.
+/// For an R1 or R5 input: what a JSON <c>null</c> converts to, from what Elsa 3 ran the member with (spec 267). Usually
+/// unset on an R2 default flip or an R5 rule with an Elsa 3 default, whose default is emitted for a null as for an absent
+/// member; set on a conditional R2 rule whose null converts otherwise (SendHttpRequest.ContentType).
 /// </param>
 public sealed record Elsa3MemberRule(
     string Elsa3Name,

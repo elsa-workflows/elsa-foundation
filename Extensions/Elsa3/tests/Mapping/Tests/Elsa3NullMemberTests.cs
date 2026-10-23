@@ -32,12 +32,14 @@ public sealed class Elsa3NullMemberTests
     [InlineData("Elsa.SendHttpRequest", "content", "Content", "url=https://example.org")]
     [InlineData("Elsa.SendHttpRequest", "contentType", "ContentType", "url=https://example.org")]
     [InlineData("Elsa.FlowSendHttpRequest", "content", "Content", "url=https://example.org")]
+    [InlineData("Elsa.FlowSendHttpRequest", "contentType", "ContentType", "url=https://example.org")]
     [InlineData("Elsa.WriteHttpResponse", "content", "Body", "")]
     [InlineData("Elsa.WriteHttpResponse", "contentType", "ContentType", "")]
     [InlineData("Elsa.PublishEvent", "correlationId", "CorrelationId", "eventName=order-placed")]
     [InlineData("Elsa.PublishEvent", "payload", "Payload", "eventName=order-placed")]
     [InlineData("Elsa.DispatchWorkflow", "correlationId", "CorrelationId", "workflowDefinitionId=child")]
     [InlineData("Elsa.DispatchWorkflow", "input", "Inputs", "workflowDefinitionId=child")]
+    [InlineData("Elsa.ExecuteWorkflow", "correlationId", "CorrelationId", "workflowDefinitionId=child")]
     [InlineData("Elsa.ExecuteWorkflow", "input", "Inputs", "workflowDefinitionId=child")]
     public async Task A_null_that_Elsa_3_ran_as_null_is_a_typed_null(string type, string member, string elsa4Key, string others)
     {
@@ -56,6 +58,7 @@ public sealed class Elsa3NullMemberTests
     [InlineData("Elsa.For", "end", "End", "")]
     [InlineData("Elsa.HttpEndpoint", "authorize", "Authorize", "path=/orders")]
     [InlineData("Elsa.SendHttpRequest", "method", "Method", "url=https://example.org")]
+    [InlineData("Elsa.FlowSendHttpRequest", "method", "Method", "url=https://example.org")]
     [InlineData("Elsa.WriteHttpResponse", "statusCode", "StatusCode", "")]
     [InlineData("Elsa.PublishEvent", "isLocalEvent", "IsLocalEvent", "eventName=order-placed")]
     [InlineData("Elsa.DispatchWorkflow", "waitForCompletion", "WaitForCompletion", "workflowDefinitionId=child")]
@@ -96,10 +99,14 @@ public sealed class Elsa3NullMemberTests
     [InlineData("Elsa.FlowSendHttpRequest", "requestHeaders", "url=https://example.org")]
     [InlineData("Elsa.WriteHttpResponse", "responseHeaders", "")]
     [InlineData("Elsa.SendHttpRequest", "contentType", "url=https://example.org;content=hello")]
+    [InlineData("Elsa.FlowSendHttpRequest", "contentType", "url=https://example.org;content=hello")]
+    // Elsa 3 checked only that the content was not null, so "{}" is content it did not send either.
+    [InlineData("Elsa.SendHttpRequest", "contentType", "url=https://example.org;content={}")]
     [InlineData("Elsa.Cron", "cronExpression", "+start")]
     [InlineData("Elsa.RunJavaScript", "script", "")]
     [InlineData("Elsa.HttpEndpoint", "path", "")]
     [InlineData("Elsa.SendHttpRequest", "url", "")]
+    [InlineData("Elsa.FlowSendHttpRequest", "url", "")]
     [InlineData("Elsa.Event", "eventName", "")]
     [InlineData("Elsa.PublishEvent", "eventName", "")]
     [InlineData("Elsa.DispatchWorkflow", "workflowDefinitionId", "")]
@@ -118,6 +125,16 @@ public sealed class Elsa3NullMemberTests
         // The refusal fails the node, so the required-input check does not report the same member again.
         Assert.DoesNotContain(result.Diagnostics, diagnostic =>
             diagnostic.Code == Elsa3ActivityDiagnosticCodes.RequiredInputUnbound && diagnostic.Path.EndsWith($".{member}", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_null_ExecuteWorkflow_wait_keeps_spec_236s_mapping()
+    {
+        // Elsa 3 ran a null WaitForCompletion as false (run the child inline until it completes or goes idle); spec 236
+        // maps ExecuteWorkflow to a Dispatch that waits, with its own behaviour warning, and a null keeps that mapping.
+        var node = await ConvertAsync("Elsa.ExecuteWorkflow", "waitForCompletion", Null, "workflowDefinitionId=child");
+
+        Assert.Equal("true", Text(Input(node, "WaitForCompletion")));
     }
 
     [Fact]

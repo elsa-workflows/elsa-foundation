@@ -129,10 +129,6 @@ internal static class Elsa3TypedValues
             ["expression"] = new JsonObject { ["type"] = Literal, ["value"] = null }
         });
 
-    /// <summary>Whether the property is JSON null or a literal holding null.</summary>
-    public static bool IsNull(JsonElement value) =>
-        value.ValueKind == JsonValueKind.Null || IsNullLiteral(value);
-
     /// <summary>Whether the property is a literal holding null: <c>{ expression: { type: "Literal", value: null } }</c>.</summary>
     public static bool IsNullLiteral(JsonElement value) =>
         value.ValueKind == JsonValueKind.Object &&

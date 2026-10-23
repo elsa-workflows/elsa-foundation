@@ -202,14 +202,17 @@ covered by R2, and so is WriteLine.text (`""`, spec 248): a blank R2 default cou
 Added by [spec 267](../267-elsa3-null-members/spec.md) (#3200). A JSON `null` member converts to what the Elsa 3
 runtime ran the activity with: a null input property runs with the input's declared default, otherwise with its type's
 default (`false`, `0`, `null`). Every R1 and R5 input records its conversion (`OnNull`); an R2 default flip, and an R5
-rule with an Elsa 3 default, emit that default for a null as for an absent member. The coverage test fails on a gap.
+rule with an Elsa 3 default, emit that default for a null as for an absent member, except where the rule records its own
+(SendHttpRequest.ContentType, whose R2 default applies only when Content is bound). The coverage test fails on a gap.
+R7 structure members, ports and custom properties keep their own handling, which reads a null as unset.
 
 | Conversion | Members |
 |---|---|
 | Typed null (`Literal` holding null) | RunJavaScript.PossibleOutcomes; Fault.Message; HttpEndpoint.SupportedMethods, Policy, RequestTimeout, RequestSizeLimit; SendHttpRequest / FlowSendHttpRequest.Content; WriteHttpResponse.Content, ContentType; PublishEvent.CorrelationId, Payload; DispatchWorkflow / ExecuteWorkflow.CorrelationId, Input |
 | No binding (Elsa 4's default is Elsa 3's value) | If / While / FlowDecision.Condition; For.Start, End; HttpEndpoint.Authorize; SendHttpRequest / FlowSendHttpRequest.Method; WriteHttpResponse.StatusCode; PublishEvent.IsLocalEvent; DispatchWorkflow.WaitForCompletion |
-| Elsa 3's value | R2: For.OuterBoundInclusive `true` (3.6.3), Delay `00:01:00`, WriteLine `""`, Fault code / category / faultType, ExecuteWorkflow.WaitForCompletion (spec 236's mapping); R5: Timer `00:01:00`; recorded: FlowSendHttpRequest.ExpectedStatusCodes `[200]`, Correlate.CorrelationId and SetName.Value `""` |
+| Elsa 3's value | R2: For.OuterBoundInclusive `true` (3.6.3), Delay `00:01:00`, WriteLine `""`, Fault code / category / faultType; R5: Timer `00:01:00`; recorded: FlowSendHttpRequest.ExpectedStatusCodes `[200]`, Correlate.CorrelationId and SetName.Value `""` |
 | `ELS3-ACTIVITY-NULL-UNCONVERTIBLE` | For.Step (ran as 0); ForEach.Items, SendHttpRequest / FlowSendHttpRequest.RequestHeaders, WriteHttpResponse.ResponseHeaders (faulted); SendHttpRequest / FlowSendHttpRequest.ContentType with Content bound (no body sent; a typed null otherwise); Cron.CronExpression (a disabled trigger); RunJavaScript.Script (ran nothing); HttpEndpoint.Path, SendHttpRequest / FlowSendHttpRequest.Url, Event / PublishEvent.EventName, DispatchWorkflow / ExecuteWorkflow.WorkflowDefinitionId, SetOutput.OutputName (required); SetVariable.Value, SetOutput.OutputValue (Elsa 4 cannot publish a null value, #3280) |
+| Unchanged (spec 236's mapping) | ExecuteWorkflow.WaitForCompletion: Elsa 3 ran a null as `false`, but spec 236 maps ExecuteWorkflow to a Dispatch that waits (`true`), with `ELS3-BEHAVIOUR-EXECUTE-WORKFLOW-DURABLE` |
 | No binding, by rule | A null output (nothing captures it); a null member of an activity resolved by name; R3 removed inputs and R6 restrictions, which already treat null as absent |
 
 ## SetOutput in reusable workflows

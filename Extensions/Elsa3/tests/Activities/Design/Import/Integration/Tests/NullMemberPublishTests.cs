@@ -1,4 +1,5 @@
 using System.Net;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa3.Activities.Design.Import.Integration.Tests.Support;
 using Xunit;
@@ -31,7 +32,8 @@ public sealed class NullMemberPublishTests(ITestOutputHelper output)
 
     /// <summary>
     /// Null members of activities that run today: WriteLine writes an empty line, PublishEvent publishes with no
-    /// correlation id and no payload, and Correlate and SetName clear the correlation id and the instance name.
+    /// correlation id and no payload, and Correlate and SetName clear the correlation id and the instance name an
+    /// earlier Correlate and SetName set.
     /// </summary>
     [Fact]
     public async Task A_workflow_with_null_members_publishes_and_runs_as_in_Elsa_3()
@@ -48,5 +50,8 @@ public sealed class NullMemberPublishTests(ITestOutputHelper output)
         Assert.Empty(run.Incidents);
         Assert.Contains("name", run.ExecutedNodeIds);
         Assert.All(run.Activities, state => Assert.Equal(ActivityExecutionStatus.Completed, state.Status));
+        // Elsa 3 set a null correlation id and instance name; Elsa 4 clears both on the empty string the null became.
+        Assert.Null(run.Workflow!.CorrelationId);
+        Assert.False(run.Workflow.SystemMetadata.ContainsKey(RuntimeMetadataKeys.InstanceName), run.Describe());
     }
 }

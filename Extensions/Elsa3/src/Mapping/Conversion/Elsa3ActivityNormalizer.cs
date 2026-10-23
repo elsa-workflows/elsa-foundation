@@ -414,7 +414,7 @@ internal sealed class Elsa3ActivityNormalizer(
             case Elsa3NullRule.Emit:
                 Add(context, key, propertyName, Elsa3TypedValues.CreateLiteral(alias, LiteralNode(onNull.Value ?? string.Empty)), result, boundBy);
                 return;
-            case Elsa3NullRule.Refuse when onNull.WhenBound is { } other && !IsBoundMember(context, other):
+            case Elsa3NullRule.Refuse when onNull.WhenBound is { } other && !HasValue(context, other):
                 Add(context, key, propertyName, Elsa3TypedValues.CreateNull(alias), result, boundBy);
                 return;
             case Elsa3NullRule.Refuse:
@@ -430,9 +430,17 @@ internal sealed class Elsa3ActivityNormalizer(
     private static JsonNode? LiteralNode(string value) =>
         value.TrimStart() is ['[' or '{', ..] ? JsonNode.Parse(value) : JsonValue.Create(value);
 
-    private static bool IsBoundMember(Elsa3RewriteContext context, string elsa3Name) =>
+    /// <summary>
+    /// Whether Elsa 3 ran the member with a value: anything but null, a literal holding null or an empty string. Unlike
+    /// <see cref="Elsa3TypedValues.IsBound"/>, a literal <c>{}</c>, <c>[]</c> or <c>null</c> text is a value, as Elsa 3
+    /// sent it.
+    /// </summary>
+    private static bool HasValue(Elsa3RewriteContext context, string elsa3Name) =>
         context.Activity.AdditionalProperties.Any(property =>
-            StringComparer.OrdinalIgnoreCase.Equals(property.Key, elsa3Name) && Elsa3TypedValues.IsBound(property.Value));
+            StringComparer.OrdinalIgnoreCase.Equals(property.Key, elsa3Name) &&
+            property.Value.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined) &&
+            !Elsa3TypedValues.IsNullLiteral(property.Value) &&
+            !(Elsa3TypedValues.TryGetLiteral(property.Value, out var literal) && string.IsNullOrEmpty(literal)));
 
     private static void Add(
         Elsa3RewriteContext context,

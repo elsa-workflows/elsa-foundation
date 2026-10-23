@@ -193,16 +193,18 @@ behaves as the workflow did in Elsa 3.
 
 **Why this priority**: this is #3200. Elsa 3 exports are full of `null` members, and today they block publishing.
 
-**Independent Test**: import, publish and run a workflow whose RunJavaScript has `"possibleOutcomes": null` and
-`"result": null`, and whose WriteLine has `"text": null`.
+**Independent Test**: import and publish a workflow whose RunJavaScript has `"possibleOutcomes": null` and
+`"result": null`; import, publish and run one whose WriteLine, PublishEvent, Correlate and SetName have null members.
+Running an imported RunJavaScript is blocked separately (#3195, #3287).
 
 **Acceptance Scenarios**:
 
 1. **Given** an Elsa 3 RunJavaScript with `"possibleOutcomes": null`, **When** it is imported and published, **Then**
-   publishing succeeds and the run completes through the activity's `Done` path, as in Elsa 3.
+   publishing succeeds, with the possible outcomes bound to null, as in Elsa 3. (Running it waits on #3195 and #3287.)
 2. **Given** an Elsa 3 activity output that is `null`, **When** it is imported and published, **Then** publishing
    succeeds and nothing is captured, as in Elsa 3.
-3. **Given** an Elsa 3 WriteLine with `"text": null`, **When** it runs, **Then** it writes an empty line, as in Elsa 3.
+3. **Given** an Elsa 3 WriteLine with `"text": null`, **When** it runs, **Then** it writes an empty line (its text is
+   `""`), as in Elsa 3.
 
 ---
 
@@ -254,10 +256,17 @@ to set, or that the activity can be removed.
   #3281.
 - A member that is absent converts by the existing rules; absent members whose value differs from Elsa 3's are #3281.
 - A `null` member on an activity resolved by name (an alias, a catalog key or a workflow-as-activity reference) has no
-  recorded Elsa 3 default. It gets no binding, and the Elsa 4 contract's default applies, as the reusable's did in
-  Elsa 3.
-- A `null` member of a mapped activity that the table above does not list is a gap in the table. The activity-map
-  coverage test fails on it (FR-008); at run time such a member gets no binding.
+  recorded Elsa 3 default, and gets no binding, so the Elsa 4 contract's default applies.
+  - For a workflow-as-activity reference this is faithful: Elsa 3 skipped a null member, and the reusable ran with its
+    own default.
+  - For an alias or a catalog key, Elsa 3 ran its own activity class, with that class's declared default or the type's
+    default, which the converter cannot see. Where the Elsa 4 activity declares a different default, the converted
+    value differs without a diagnostic. This is a known limit of this spec (found in review), not reproduced here.
+- A `null` R1 or R5 input of a mapped activity that the table above does not list is a gap in the table. The
+  activity-map coverage test fails on it (FR-008); at run time such a member gets no binding.
+- R7 structure members (Switch and FlowJoin modes, Fork's join mode, SetVariable's variable, Complete's outcomes), ports
+  and custom properties are not in the table. Their rewrites and rules already read a null as unset, and this spec does
+  not change them.
 
 ## Requirements *(mandatory)*
 
@@ -277,8 +286,8 @@ to set, or that the activity can be removed.
   stable diagnostic code (the table's "refuse" rows). The message names the member and the reason; the guidance says
   to set a value in the Elsa 3 workflow, or to remove the activity.
 - **FR-007**: The converter MUST NOT report a warning for a `null` member it converts under FR-002, FR-003 or FR-004.
-- **FR-008**: Each member of a mapped Elsa 3 activity MUST have a recorded `null` conversion. A test fails when a
-  mapped member has none.
+- **FR-008**: Each R1 (carried) and R5 (narrowed) input of a mapped Elsa 3 activity MUST have a recorded `null`
+  conversion, or an Elsa 3 default it emits. A test fails when one has neither.
 - **FR-009**: The spec 236 member map document MUST record each member's `null` conversion next to the member.
 - **FR-010**: Elsa 4 activity defaults, publication and the runtime MUST NOT change. Absent and blank members do not
   change in this spec (#3281).
@@ -299,7 +308,8 @@ to set, or that the activity can be removed.
 - **SC-002**: No JTest definition that converts on `main` (8) stops converting.
 - **SC-003**: An integration test imports, publishes and runs a workflow with `null` activity members, and the run
   behaves as in Elsa 3.
-- **SC-004**: Every row of the per-member table has a test with the member `null`.
+- **SC-004**: Every row of the per-member table has a test with the member `null`, for each activity the row names.
+  The workflow-as-activity row shares the by-name path with a catalog key, which has its own case.
 - **SC-005**: The converted workflows of the corpus carry no warning that this spec introduced.
 - **SC-006**: The spec 236 member map document records the `null` conversion of every mapped member (FR-009).
 - **SC-007**: The change touches no Elsa 4 activity, publication or runtime code (FR-010). The diff outside
