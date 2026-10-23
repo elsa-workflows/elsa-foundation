@@ -33,7 +33,9 @@ WORKDIR /src
 # self-contained and needs no user-level NuGet config. *.props and *.targets rather
 # than names, because Directory.Build.props imports sibling root files and restore
 # ignores a missing import -- see the same step in the Workbench Dockerfile.
-COPY *.props *.targets NuGet.config ./
+# .editorconfig carries the naming analyzer's per-domain retired terms, so the image compiles under the same
+# naming rules as CI.
+COPY *.props *.targets .editorconfig NuGet.config ./
 
 # Restore inputs: the host, its shared endpoint-metadata project, Line A, its cluster membership, the EF closure that membership's
 # durable provider carries (Elsa.Persistence.EntityFramework plus the EF Core packages, #2151), its Data Protection key store,
@@ -65,6 +67,9 @@ COPY Essentials/src/Pipelines/Core/Elsa.Pipelines.Core.csproj Essentials/src/Pip
 COPY Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj Essentials/src/Primitives/Primitives/packages.lock.json Essentials/src/Primitives/Primitives/
 COPY Essentials/src/Serialization/Core/Elsa.Serialization.Core.csproj Essentials/src/Serialization/Core/packages.lock.json Essentials/src/Serialization/Core/
 COPY Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj Essentials/src/Tasks/Core/packages.lock.json Essentials/src/Tasks/Core/
+# The naming analyzer every production project compiles with: Directory.Build.props adds it to the host and each
+# project above, so it restores with them, and a build without it fails (ELSABUILD001).
+COPY Essentials/build/Analyzers/Elsa.Architecture.Analyzers.csproj Essentials/build/Analyzers/packages.lock.json Essentials/build/Analyzers/
 # NU1603: tolerate a restore-only warning when a transitive preview dependency
 # resolves to a newer available version; does not relax real code warnings.
 RUN dotnet restore Essentials/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj \
@@ -91,6 +96,7 @@ COPY Essentials/src/Pipelines/Core/ Essentials/src/Pipelines/Core/
 COPY Essentials/src/Primitives/Primitives/ Essentials/src/Primitives/Primitives/
 COPY Essentials/src/Serialization/Core/ Essentials/src/Serialization/Core/
 COPY Essentials/src/Tasks/Core/ Essentials/src/Tasks/Core/
+COPY Essentials/build/Analyzers/ Essentials/build/Analyzers/
 
 # Package versions (ADR 0067, spec 150, #2084, #2126). The Docker Images workflow passes
 # ELSA_PACKAGE_VERSIONS: the pack-properties file the version calculator writes for this

@@ -59,14 +59,12 @@ internal static class ActivitiesDesignJsonOptions
     PropertyNameCaseInsensitive = true,
     GenerationMode = JsonSourceGenerationMode.Metadata)]
 
-// Requests and commands accepted by the 38 registrations, including the two legacy mediator
-// commands retained for handler and binary-compatibility coverage.
+// Requests and commands accepted by the 38 registrations.
 [JsonSerializable(typeof(GetActivityAvailabilitySettings))]
 [JsonSerializable(typeof(ListActivityAvailabilityDiagnostics))]
 [JsonSerializable(typeof(SaveActivityAvailabilitySettings))]
 [JsonSerializable(typeof(ListActivityAuthoringCatalog))]
 [JsonSerializable(typeof(GetActivityAuthoringCapabilities))]
-[JsonSerializable(typeof(ListDefinitions))]
 [JsonSerializable(typeof(CreateReusableActivityDefinition))]
 [JsonSerializable(typeof(PreviewReusableActivityFork))]
 [JsonSerializable(typeof(ListReusableActivityDefinitions))]
@@ -77,6 +75,8 @@ internal static class ActivitiesDesignJsonOptions
 [JsonSerializable(typeof(ListReusableActivityDrafts))]
 [JsonSerializable(typeof(ListReusableActivityVersions))]
 [JsonSerializable(typeof(CreateReusableActivityDraft))]
+[JsonSerializable(typeof(CreateReusableActivityDraftRequest))]
+[JsonSerializable(typeof(ActivityLayoutRecordsPayload))]
 [JsonSerializable(typeof(GetReusableActivityDraft))]
 [JsonSerializable(typeof(ReplaceReusableActivityDraft))]
 [JsonSerializable(typeof(UpdateReusableActivityDraftPresentation))]
@@ -91,7 +91,6 @@ internal static class ActivitiesDesignJsonOptions
 [JsonSerializable(typeof(GetReusableActivityForkStatus))]
 [JsonSerializable(typeof(GetActivityDependencies))]
 [JsonSerializable(typeof(CompareActivityVersions))]
-[JsonSerializable(typeof(GetVersion))]
 [JsonSerializable(typeof(RetireReusableActivityVersion))]
 [JsonSerializable(typeof(RestoreReusableActivityVersion))]
 [JsonSerializable(typeof(RevokeReusableActivityVersion))]
@@ -100,11 +99,7 @@ internal static class ActivitiesDesignJsonOptions
 [JsonSerializable(typeof(ApplyActivityUpgradePlan))]
 [JsonSerializable(typeof(GetActivityUpgradeApplyReceipt))]
 [JsonSerializable(typeof(RefreshActivityUpgradePlan))]
-[JsonSerializable(typeof(ListDefinitionVersions))]
-[JsonSerializable(typeof(GetDefinition))]
 [JsonSerializable(typeof(GetReusableActivityVersion))]
-[JsonSerializable(typeof(AddDefinition))]
-[JsonSerializable(typeof(AddVersion))]
 
 // Responses and shared error contracts emitted by the owner mapper.
 [JsonSerializable(typeof(ActivityAvailabilitySettings))]
@@ -118,11 +113,6 @@ internal static class ActivitiesDesignJsonOptions
 [JsonSerializable(typeof(ActivityPortDescriptorView))]
 [JsonSerializable(typeof(ActivityAuthoringTemplateView))]
 [JsonSerializable(typeof(ActivityAuthoringStructureView))]
-[JsonSerializable(typeof(ActivityDefinitionView))]
-[JsonSerializable(typeof(ActivityDefinitionDetailsView))]
-[JsonSerializable(typeof(ActivityDefinitionVersionDetailsView))]
-[JsonSerializable(typeof(ActivityDefinitionVersionSummary))]
-[JsonSerializable(typeof(IEnumerable<ActivityDefinitionVersionSummary>))]
 [JsonSerializable(typeof(ActivityDependencyPageView))]
 [JsonSerializable(typeof(ActivityAuthoringCapabilitiesView))]
 [JsonSerializable(typeof(ActivityAuthoringCapabilitiesSnapshot))]
@@ -184,6 +174,7 @@ internal static class ActivitiesDesignJsonOptions
 [JsonSerializable(typeof(ActivityOutputContractView))]
 [JsonSerializable(typeof(ActivityOutcomeContractView))]
 [JsonSerializable(typeof(ActivityProviderManifestView))]
+[JsonSerializable(typeof(ActivityProviderManifestSourceView))]
 [JsonSerializable(typeof(ActivityProviderManifestSchemaCapabilityView))]
 [JsonSerializable(typeof(ActivityProviderAuthoringCapabilityView))]
 [JsonSerializable(typeof(ActivityContractTypeCapabilityView))]

@@ -176,6 +176,6 @@ Known limits of slice 8, recorded and not fixed (review round 1):
 
 Not covered by masking in phase 0 (spec assumption): text an activity writes to the console or its own logger, values
 it returns as outputs, and values it places in private state or bookmark payloads. For the built-ins, publish refuses a
-`Secret` binding on every input found returned, copied or persisted (research R3a IP14 to IP22), so the remaining
-cases are `WriteLine.Text` on the console and a server that reflects `SendHttpRequest`'s `Authorization` value in its
-response (research R17).
+`Secret` binding on every input found returned, copied or persisted (research R3a IP14 to IP22), and since #2609 on
+`WriteLine.Text` and `WriteLines.Lines`, which write to the console, so the remaining case is a server that reflects
+`SendHttpRequest`'s `Authorization` value in its response (research R17).

@@ -112,6 +112,23 @@ public sealed class RuntimeActivityCompletionPropagationContractTests
         Assert.Contains("completed child", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void CompletionDrainWork_RejectsParentOutcomeWithoutItsVersionedPayload()
+    {
+        var exception = Assert.Throws<ArgumentException>(() => new SchedulerCompletionWorkItem(
+            workItemId: "completion-outcome-1",
+            workflowExecutionId: "wfexec-1",
+            subjectActivityExecutionId: "actexec-parent",
+            completedChildActivityExecutionId: "actexec-child",
+            branchId: "branch-a",
+            kind: SchedulerCompletionKind.ParentOutcomeEvaluation,
+            sequence: 2,
+            enqueuedAt: _now,
+            reason: "ParentOutcomeEvaluation"));
+
+        Assert.Contains("versioned activity command payload", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Theory]
     [InlineData(SchedulerCompletionKind.ActivityCompleted)]
     [InlineData(SchedulerCompletionKind.ContinuationScheduling)]

@@ -2,6 +2,7 @@ import type { Node } from "@xyflow/react";
 import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary } from "./workflowTypes";
 import { getChildSlots, latestActivityExecution, type ChildSlot, type WorkflowRuntimeNodeOverlay } from "./workflowAdapter";
 import type { ExecutableActivityGraph } from "./executableGraph";
+import { compensatedOutcome } from "./compensationRuntime";
 
 export function isActiveIncident(incident: Pick<IncidentStateSummary, "status">) {
   const status = incident.status.trim().toLowerCase();
@@ -100,12 +101,14 @@ export function applyRuntimeOverlays<TNodeData extends Record<string, unknown>>(
     const uniqueContainedIncidents = [...containedIncidentsById.values()];
     const containedPrimaryIncident = [...uniqueContainedIncidents].sort((left, right) =>
       Number(right.isBlocking) - Number(left.isBlocking) || Date.parse(right.createdAt) - Date.parse(left.createdAt))[0];
-    if (nodeActivities.length === 0 && nodeIncidents.length === 0 && uniqueContainedIncidents.length === 0) return node as NodeWithRuntime;
-
-    const latestActivity = latestActivityExecution(nodeActivities);
     const selected = selectedEvidenceId === runtimeNodeId || selectedEvidenceId === node.id ||
       nodeActivities.some(activity => activity.activityExecutionId === selectedEvidenceId) ||
       nodeIncidents.some(incident => incident.incidentId === selectedEvidenceId);
+    if (nodeActivities.length === 0 && nodeIncidents.length === 0 && uniqueContainedIncidents.length === 0) {
+      return { ...node, selected } as NodeWithRuntime;
+    }
+
+    const latestActivity = latestActivityExecution(nodeActivities);
     const activeIncidents = nodeIncidents.filter(isActiveIncident);
     const historicalIncidents = nodeIncidents.filter(incident => !isActiveIncident(incident));
     const primaryIncident = [...activeIncidents].sort((left, right) =>
@@ -124,6 +127,7 @@ export function applyRuntimeOverlays<TNodeData extends Record<string, unknown>>(
       containedAffectedActivityCount: containedAffectedNodeIds.length,
       containedPrimaryIncidentId: containedPrimaryIncident?.incidentId,
       containsBlockingIncident: uniqueContainedIncidents.some(incident => incident.isBlocking),
+      ...(latestActivity?.status === "Completed" && latestActivity.outcomeNames?.includes(compensatedOutcome) ? { compensated: true } : {}),
       selected
     };
 

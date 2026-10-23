@@ -11,7 +11,7 @@ using System.Runtime.CompilerServices;
 namespace Elsa.Expressions.JavaScript.Rendering.Services;
 
 /// <inheritdoc />
-public sealed class JavaScriptTypeDeclarationFactory(IOptions<JavaScriptDeclarationOptions> options)
+internal sealed class JavaScriptTypeDeclarationFactory(IOptions<JavaScriptDeclarationOptions> options)
     : IJavaScriptTypeDeclarationFactory
 {
     /// <inheritdoc />

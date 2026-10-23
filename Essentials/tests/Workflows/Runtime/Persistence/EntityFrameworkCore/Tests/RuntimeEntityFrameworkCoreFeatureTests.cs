@@ -173,7 +173,6 @@ public sealed class RuntimeEntityFrameworkCoreFeatureTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
         foreach (var file in new[] { databasePath, $"{databasePath}-wal", $"{databasePath}-shm" })
             File.Delete(file);
     }

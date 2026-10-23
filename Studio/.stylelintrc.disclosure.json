@@ -1,0 +1,6 @@
+{
+  "plugins": ["./stylelint/no-raw-color-literal.mjs"],
+  "rules": {
+    "elsa/no-raw-color-literal": true
+  }
+}

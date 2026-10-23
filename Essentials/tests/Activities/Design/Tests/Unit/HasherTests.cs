@@ -84,6 +84,51 @@ public sealed class HasherTests
     }
 
     [Fact]
+    public void Hash_IsStable_WhenOnlyTheActivityIconFacetChanges()
+    {
+        var hasher = new DefaultActivityDefinitionHasher();
+        var (def, _) = MakeFixture();
+
+        var withoutIcon = NewVersion(def, designFacets: [Facet("elsa.test.shape", """{ "value": "A" }""")]);
+        var withIcon = NewVersion(def, designFacets:
+        [
+            Facet("elsa.test.shape", """{ "value": "A" }"""),
+            new ActivityDesignFacet(
+                ActivityIconName.FacetKind,
+                ActivityIconName.FacetSchemaVersion,
+                JsonSerializer.SerializeToElement(new { iconName = "Rocket" }))
+        ]);
+        var changedIcon = NewVersion(def, designFacets:
+        [
+            Facet("elsa.test.shape", """{ "value": "A" }"""),
+            new ActivityDesignFacet(
+                ActivityIconName.FacetKind,
+                ActivityIconName.FacetSchemaVersion,
+                JsonSerializer.SerializeToElement(new { iconName = "Mail" }))
+        ]);
+
+        Assert.Equal(hasher.Hash(def, withoutIcon), hasher.Hash(def, withIcon));
+        Assert.Equal(hasher.Hash(def, withIcon), hasher.Hash(def, changedIcon));
+    }
+
+    [Fact]
+    public void Hash_Changes_WhenTheInputTierChanges()
+    {
+        var hasher = new DefaultActivityDefinitionHasher();
+        var (def, _) = MakeFixture();
+        var unset = Input("url");
+        var essential = unset with { Tier = ActivityInputTiers.Essential };
+        var optional = unset with { Tier = ActivityInputTiers.Optional };
+
+        var withoutTier = NewVersion(def, inputs: [unset]);
+        var withTier = NewVersion(def, inputs: [essential]);
+        var changedTier = NewVersion(def, inputs: [optional]);
+
+        Assert.NotEqual(hasher.Hash(def, withoutTier), hasher.Hash(def, withTier));
+        Assert.NotEqual(hasher.Hash(def, withTier), hasher.Hash(def, changedTier));
+    }
+
+    [Fact]
     public void Hash_IsStable_AcrossVersionDifferences()
     {
         // Version is row identity, not projected content. The reconciler uses it to find the row;
@@ -118,7 +163,8 @@ public sealed class HasherTests
         string version = "1.0.0",
         string sourceKind = "Json",
         string sourceId = "Acme.Pkg",
-        IEnumerable<ActivityDesignFacet>? designFacets = null) =>
+        IEnumerable<ActivityDesignFacet>? designFacets = null,
+        IEnumerable<InputDefinition>? inputs = null) =>
         new FakeVersion(
             Id: id,
             Version: version,
@@ -132,10 +178,13 @@ public sealed class HasherTests
             SourceKind: sourceKind,
             SourceId: sourceId,
             ExecutionType: ActivityExecutionType.Action,
-            Inputs: [],
+            Inputs: inputs ?? [],
             Outputs: [],
             DesignFacets: designFacets ?? [],
             Definition: def);
+
+    private static InputDefinition Input(string referenceKey) =>
+        new(referenceKey, referenceKey, new TypeReference("String"), null, referenceKey, null, IsNullable: true);
 
     private static ActivityDesignFacet Facet(string kind, string json)
     {

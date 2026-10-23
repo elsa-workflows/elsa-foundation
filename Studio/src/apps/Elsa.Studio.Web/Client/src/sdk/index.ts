@@ -1,7 +1,10 @@
 import type { ComponentType } from "react";
+import type { StudioActivityIconComponent } from "./activityIcons";
 
 export * from "../auth";
 export * from "./themeLayout";
+export * from "./activityIcons";
+export * from "./useDialogFocus";
 
 export type StudioModuleStatus = "available" | "loaded" | "disabled" | "incompatible" | "failed";
 
@@ -128,6 +131,8 @@ export const studioBackendManagementRegistryPath = "/_elsa/studio/backend-manage
  */
 export interface StudioRequestInit extends RequestInit {
   timeoutMs?: number;
+  /** Disables the authenticated transport's automatic 401 refresh retry for endpoint-defined responses. */
+  retryOnUnauthorized?: boolean;
 }
 
 /**
@@ -142,6 +147,12 @@ export interface StudioJsonResponse<T> {
 }
 
 export interface StudioHttpClient {
+  /**
+   * Sends a request through the configured backend transport and returns the untouched response. Optional so
+   * existing module-owned and test clients remain compatible; callers that need status, headers, or a non-JSON
+   * body should check for its presence rather than falling back to global fetch.
+   */
+  requestResponse?(url: string, init?: StudioRequestInit): Promise<Response>;
   requestJson<T>(url: string, init?: StudioRequestInit): Promise<T>;
   getJson<T>(url: string, init?: StudioRequestInit): Promise<T>;
   postJson<T>(url: string, body: unknown, init?: StudioRequestInit): Promise<T>;
@@ -184,6 +195,22 @@ export interface StudioRouteContribution {
 /** The sidebar sections the Studio host groups navigation into. */
 export type StudioNavigationSection = "workspace" | "settings";
 
+/**
+ * Where a nav contribution appears in the Studio sidebar.
+ * Unset defaults to `more` at the top level (extensions land under More tools). A child with no
+ * placement inherits its parent's resolved placement so it stays visible; a child that declares a
+ * different placement is listed there instead of vanishing. `section: "settings"` still maps to
+ * `admin` so older modules keep their Settings grouping until they declare `placement`.
+ * `admin` and `settings` stay visible to anonymous/demo users because the server allows admin
+ * calls when sign-in is off; authenticated users need host-control read.
+ */
+export type StudioNavigationPlacement = "main" | "more" | "settings" | "admin";
+
+export const defaultStudioNavigationPlacement: StudioNavigationPlacement = "more";
+export const defaultStudioNavigationOrder = 1000;
+
+export type StudioNavigationRequirement = string | readonly string[];
+
 export interface StudioNavigationContribution {
   id: string;
   label: string;
@@ -195,13 +222,89 @@ export interface StudioNavigationContribution {
   /**
    * The sidebar section the item is listed under. When omitted the host infers it: its own settings-style paths
    * (modules, feeds, features, themes) land under Settings and everything else under Workspace.
+   * Prefer `placement` for new contributions.
    */
   section?: StudioNavigationSection;
+  /**
+   * Sidebar placement. `main` is the curated Home / Workflows / Runs / Tasks list; `more` is More tools;
+   * `settings` is a Settings shell section (Appearance; available to every session); `admin` is
+   * Settings › Administration and uses the host-control read gate. Unset defaults to `more` at the
+   * top level, or to the parent placement when this item is a child. The sidebar keeps one Settings
+   * entry.
+   */
+  placement?: StudioNavigationPlacement;
+  /** Hide the item when any listed feature is disabled. The contributing module's own gate still applies. */
+  requiresFeature?: StudioNavigationRequirement;
+  /** Hide the item from authenticated users who lack every listed role. */
+  requiresRole?: StudioNavigationRequirement;
+  /** Hide the item from authenticated users who lack every listed permission. `admin` implies host-control read. */
+  requiresPermission?: StudioNavigationRequirement;
   /** The icon rendered in the item's navigation tile. When omitted the host picks one from the item id. */
   icon?: ComponentType<{ size?: number }>;
 }
 
 export type StudioDashboardWidgetSize = "small" | "medium" | "wide" | "full";
+export type StudioHomeWidgetSizeAlias = "S" | "M" | "L";
+export type StudioHomeWidgetSize = StudioDashboardWidgetSize | StudioHomeWidgetSizeAlias;
+
+export const homeWidgetIds = {
+  getStarted: "home.get-started",
+  quickActions: "home.quick-actions",
+  recentWorkflows: "home.recent-workflows",
+  needsAttention: "home.needs-attention",
+  recentRuns: "home.recent-runs",
+  tasks: "home.tasks"
+} as const;
+
+export const homeRunDetailOpenedStorageKey = "elsa-studio.ui.home.run-detail-opened";
+
+export function normalizeHomeWidgetSize(size?: string): StudioDashboardWidgetSize {
+  switch (size) {
+    case "S":
+    case "small":
+      return "small";
+    case "M":
+    case "medium":
+      return "medium";
+    case "wide":
+      return "wide";
+    case "L":
+    case "full":
+      return "full";
+    default:
+      return "medium";
+  }
+}
+
+export function recordHomeRunDetailOpened(storage: Pick<Storage, "setItem"> | undefined = defaultHomeStorage()) {
+  try {
+    storage?.setItem(homeRunDetailOpenedStorageKey, "true");
+  } catch {
+    /* device storage is best effort */
+  }
+}
+
+export function hasHomeRunDetailOpened(storage: Pick<Storage, "getItem"> | undefined = defaultHomeStorage()) {
+  try {
+    return storage?.getItem(homeRunDetailOpenedStorageKey) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function defaultHomeStorage(): Storage | undefined {
+  try {
+    return typeof window === "undefined" ? undefined : window.localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+/** True when `path` is a workflow run detail (`/workflows/instances/:id`), not the Runs list. */
+export function isHomeRunDetailPath(path: string) {
+  const segments = path.split("/").filter(Boolean);
+  return segments.length === 3 && segments[0] === "workflows" && segments[1] === "instances" && segments[2] !== "";
+}
 
 export interface StudioDashboardWidgetLoadContext<TSettings> {
   settings: TSettings;
@@ -237,6 +340,10 @@ export interface StudioDashboardWidgetContribution<TSnapshot = unknown, TSetting
   defaultSize: StudioDashboardWidgetSize;
   supportedSizes: StudioDashboardWidgetSize[];
   permissions?: string[];
+  /** Hide the widget unless every listed feature/capability is enabled on the host. */
+  requiresFeature?: string | readonly string[];
+  /** Core widgets may appear on the server default Home layout. */
+  core?: boolean;
   minimumRefreshIntervalMs?: number;
   cacheLifetimeMs?: number;
   timeoutMs?: number;
@@ -245,6 +352,29 @@ export interface StudioDashboardWidgetContribution<TSnapshot = unknown, TSetting
   isEmpty?(snapshot: TSnapshot | undefined, settings: TSettings): boolean;
   emptyState?: StudioDashboardWidgetEmptyState;
   component: ComponentType<StudioDashboardWidgetBodyProps<TSnapshot, TSettings>>;
+}
+
+export interface StudioHomeWidgetContribution<TSnapshot = unknown, TSettings = unknown>
+  extends Omit<StudioDashboardWidgetContribution<TSnapshot, TSettings>, "defaultSize" | "supportedSizes" | "defaultVisible"> {
+  defaultSize?: StudioHomeWidgetSize;
+  supportedSizes?: StudioHomeWidgetSize[];
+  defaultVisible?: boolean;
+}
+
+export function registerHomeWidget<TSnapshot = unknown, TSettings = unknown>(
+  api: Pick<ElsaStudioModuleApi, "dashboardWidgets" | "homeWidgets">,
+  contribution: StudioHomeWidgetContribution<TSnapshot, TSettings>
+) {
+  const defaultSize = normalizeHomeWidgetSize(contribution.defaultSize);
+  const supportedSizes = (contribution.supportedSizes?.length ? contribution.supportedSizes : [defaultSize])
+    .map(normalizeHomeWidgetSize);
+  const widget: StudioDashboardWidgetContribution<TSnapshot, TSettings> = {
+    ...contribution,
+    defaultVisible: contribution.defaultVisible ?? true,
+    defaultSize,
+    supportedSizes
+  };
+  (api.homeWidgets ?? api.dashboardWidgets).add(widget);
 }
 
 export type StudioDiagnosticsWidgetMode = "snapshot" | "live";
@@ -354,6 +484,11 @@ export interface StudioFeatureAreaNavLeaf {
   path: string;
   iconColor?: string;
   placeholder?: boolean;
+  placement?: StudioNavigationPlacement;
+  order?: number;
+  requiresFeature?: StudioNavigationRequirement;
+  requiresRole?: StudioNavigationRequirement;
+  requiresPermission?: StudioNavigationRequirement;
 }
 
 export interface StudioFeatureAreaNavParent {
@@ -362,6 +497,11 @@ export interface StudioFeatureAreaNavParent {
   path: string;
   iconColor?: string;
   items: StudioFeatureAreaNavLeaf[];
+  placement?: StudioNavigationPlacement;
+  order?: number;
+  requiresFeature?: StudioNavigationRequirement;
+  requiresRole?: StudioNavigationRequirement;
+  requiresPermission?: StudioNavigationRequirement;
 }
 
 export type StudioFeatureAreaNavContribution = StudioFeatureAreaNavLeaf | StudioFeatureAreaNavParent;
@@ -479,6 +619,10 @@ export type StudioActivityCollectionKind = "Single" | "Array" | "List" | "HashSe
 export interface StudioActivityInputDescriptor extends StudioActivityPropertyDescriptor {
   /** Stable identity used to correlate authored bindings and runtime input evidence. */
   referenceKey?: string | null;
+  /** Presentation tier from the activity catalog; unknown values remain forward-compatible. */
+  tier?: string | null;
+  /** Whether the activity requires this input at runtime; independent of its presentation tier. */
+  isRequired?: boolean | null;
   /** Collection shape of the CLR type (elsa-foundation#945); absent on older backends. */
   collectionKind?: StudioActivityCollectionKind | null;
   isWrapped?: boolean;
@@ -492,6 +636,8 @@ export interface StudioActivityInputDescriptor extends StudioActivityPropertyDes
   isSensitive?: boolean | null;
   /** Activity-declared: accepts only a Secret Reference. Implies isSensitive. Absent on older backends. */
   isCredential?: boolean | null;
+  /** Activity-declared: the required connection type. Absent on older backends. */
+  connectionType?: string | null;
 }
 
 export function readActivityInputOptionsProvider(input: StudioActivityInputDescriptor): StudioActivityInputOptionsProviderDescriptor | null {
@@ -506,6 +652,8 @@ export function readActivityInputOptionsProvider(input: StudioActivityInputDescr
 }
 
 export interface StudioActivityOutputDescriptor extends StudioActivityPropertyDescriptor {
+  /** Stable identity used to correlate output captures with the activity's published contract. */
+  referenceKey?: string | null;
 }
 
 export interface StudioActivityPortDescriptor {
@@ -582,11 +730,15 @@ export interface StudioActivityPropertyEditorProps {
   disabled?: boolean;
   context: StudioActivityPropertyEditorContext;
   onChange(value: unknown): void;
+  /** Reports only whether this mounted editor currently has a local blocking error. */
+  onValidationChange?: (hasError: boolean) => void;
 }
 
 export interface StudioActivityPropertyEditorContribution {
   id: string;
   order?: number;
+  /** Declares that all local blocking errors are reported through onValidationChange, or that none exist. */
+  supportsValidationReporting?: true;
   supports(descriptor: StudioActivityInputDescriptor, context: StudioActivityPropertyEditorContext): boolean;
   component: ComponentType<StudioActivityPropertyEditorProps>;
 }
@@ -646,6 +798,105 @@ export interface StudioWorkflowRunInputEditorContribution {
   component: ComponentType<StudioWorkflowRunInputEditorProps>;
   validate(context: StudioWorkflowRunInputEditorContext): string | undefined;
   serialize(context: StudioWorkflowRunInputEditorContext): unknown;
+}
+
+/** A backend-discovered trigger mode available while driving a workflow Test Run. */
+export interface StudioTestRunModeDescriptor extends Record<string, unknown> {
+  modeId: string;
+  label: string;
+  description?: string;
+  isDefault?: boolean;
+  configurationVersion?: number;
+  /** Safe JSON Schema for the user-supplied stimulus value. */
+  configurationSchema?: unknown;
+  /** Read-only module context, such as a resolved route or authored schedule. */
+  configuration?: unknown;
+}
+
+/** One eligible, backend-validated workflow start option. */
+export interface StudioTestRunOptionDescriptor extends Record<string, unknown> {
+  optionId: string;
+  driverId?: string | null;
+  nodeId: string;
+  label: string;
+  isAvailable?: boolean;
+  reason?: string | null;
+  configuration?: unknown;
+  modes: StudioTestRunModeDescriptor[];
+}
+
+/** One active, module-supported wait on a workflow Test Run execution. */
+export interface StudioTestRunWaitDescriptor extends Record<string, unknown> {
+  waitId: string;
+  nodeId: string;
+  label: string;
+  driverId?: string | null;
+  isAvailable: boolean;
+  reason?: string | null;
+  modes: StudioTestRunModeDescriptor[];
+}
+
+/** Opaque module-owned action returned by a Test Run preparation response. */
+export interface StudioTestRunDriverAction extends Record<string, unknown> {
+  kind: string;
+  /** Server-resolved path from the API origin; includes the deployment PathBase when one is configured. */
+  relativeUrl?: string;
+  method?: string;
+  details?: unknown;
+}
+
+export interface StudioTestStimulusEditorContext {
+  option: StudioTestRunOptionDescriptor;
+  mode: StudioTestRunModeDescriptor;
+  draft: string;
+}
+
+export interface StudioTestStimulusControlProps {
+  id: string;
+  "aria-label": string;
+  "aria-describedby"?: string;
+  "aria-invalid": boolean;
+}
+
+export interface StudioTestStimulusEditorProps extends StudioTestStimulusEditorContext {
+  disabled?: boolean;
+  controlProps: StudioTestStimulusControlProps;
+  onChange(draft: string): void;
+}
+
+export interface StudioTestStimulusActionContext {
+  backend: StudioEndpointContext;
+  option: StudioTestRunOptionDescriptor;
+  mode: StudioTestRunModeDescriptor;
+  action: StudioTestRunDriverAction;
+  data: unknown;
+  editorDraft: string;
+}
+
+export interface StudioTestStimulusActionResult extends Record<string, unknown> {
+  kind: string;
+}
+
+export interface StudioTestStimulusResultProps {
+  action: StudioTestRunDriverAction;
+  result: StudioTestStimulusActionResult;
+}
+
+/**
+ * Edits a module's one-off trigger data and may execute a prepared module action through Studio's
+ * authenticated backend transport. Match on stable driver/mode identifiers, not workflow activity types.
+ */
+export interface StudioTestStimulusEditorContribution {
+  id: string;
+  order?: number;
+  startLabel?: string;
+  actionLabel?: string;
+  supports(context: Omit<StudioTestStimulusEditorContext, "draft">): boolean;
+  component: ComponentType<StudioTestStimulusEditorProps>;
+  validate(context: StudioTestStimulusEditorContext): string | undefined;
+  serialize(context: StudioTestStimulusEditorContext): unknown;
+  executeAction?(context: StudioTestStimulusActionContext): Promise<StudioTestStimulusActionResult>;
+  actionResultComponent?: ComponentType<StudioTestStimulusResultProps>;
 }
 
 export type StudioExpressionEditorSurface = "inline" | "expanded";
@@ -1249,6 +1500,7 @@ export const studioSlotIds = {
   propertyEditors: "workflow.activity.property-editors",
   expressionEditors: "workflow.expression-editors",
   workflowRunInputEditors: "workflow.run-input.editors",
+  workflowTestStimulusEditors: "workflow.test-stimulus.editors",
   settingEditors: "studio.setting-editors",
   agentContextProviders: "studio.weaver.context-providers",
   agentPromptStarters: "studio.weaver.prompt-starters",
@@ -1341,6 +1593,7 @@ export const studioSlots = {
   propertyEditors: defineStudioSlot({ id: studioSlotIds.propertyEditors, kind: "property-editor", title: "Activity property editors", owner: hostSlotOwner() }),
   expressionEditors: defineStudioSlot({ id: studioSlotIds.expressionEditors, kind: "expression-editor", title: "Expression editors", owner: hostSlotOwner() }),
   workflowRunInputEditors: defineStudioSlot({ id: studioSlotIds.workflowRunInputEditors, kind: "workflow-run-input-editor", title: "Workflow run input editors", owner: hostSlotOwner() }),
+  workflowTestStimulusEditors: defineStudioSlot({ id: studioSlotIds.workflowTestStimulusEditors, kind: "workflow-test-stimulus-editor", title: "Workflow Test Run stimulus editors", owner: hostSlotOwner() }),
   settingEditors: defineStudioSlot({ id: studioSlotIds.settingEditors, kind: "setting-editor", title: "Setting editors", owner: hostSlotOwner() }),
   agentContextProviders: defineStudioSlot({ id: studioSlotIds.agentContextProviders, kind: "weaver-context-provider", title: "Weaver context providers", owner: hostSlotOwner() }),
   agentPromptStarters: defineStudioSlot({ id: studioSlotIds.agentPromptStarters, kind: "weaver-prompt-starter", title: "Weaver prompt starters", owner: hostSlotOwner() }),
@@ -1443,6 +1696,8 @@ export interface StudioRuntimeSettings {
     widgetTimeoutMs?: number;
     pinnedWidgetIds?: string[];
   };
+  /** Loaded module ids and capabilities. Home widgets with `requiresFeature` consult this list. */
+  enabledFeatures?: readonly string[];
 }
 
 export const studioNavigationRequestedEvent = "elsa:studio-navigation-requested";
@@ -1586,6 +1841,8 @@ export interface ElsaStudioModuleApi {
   readonly navigation: StudioContributionRegistry<StudioNavigationContribution>;
   readonly routes: StudioContributionRegistry<StudioRouteContribution>;
   readonly dashboardWidgets: StudioDashboardWidgetRegistry;
+  /** Alias of {@link dashboardWidgets}. Modules should prefer {@link registerHomeWidget}. */
+  readonly homeWidgets: StudioDashboardWidgetRegistry;
   readonly diagnosticsWidgets: StudioContributionRegistry<StudioDiagnosticsWidgetContribution>;
   readonly panels: StudioContributionRegistry<StudioPanelContribution>;
   readonly toolbarActions: StudioContributionRegistry<unknown>;
@@ -1594,12 +1851,16 @@ export interface ElsaStudioModuleApi {
   readonly expressionEditors: StudioContributionRegistry<StudioExpressionEditorContribution>;
   /** Available on hosts that support the workflow run-input editor Slot. */
   readonly workflowRunInputEditors?: StudioContributionRegistry<StudioWorkflowRunInputEditorContribution>;
+  /** Available on hosts that support module-owned workflow Test Run stimulus editors. */
+  readonly workflowTestStimulusEditors?: StudioContributionRegistry<StudioTestStimulusEditorContribution>;
   readonly settingEditors: StudioContributionRegistry<StudioSettingEditorContribution>;
   readonly agent: StudioAgentRegistry;
   readonly workflowDesigner: {
     readonly nodeRenderers: StudioContributionRegistry<unknown>;
     readonly toolboxItems: StudioContributionRegistry<unknown>;
     readonly panels: StudioContributionRegistry<StudioWorkflowDesignerPanelContribution>;
+    /** Optional host alias of the standalone `registerActivityIcons` export. Callers must guard when it is missing. */
+    registerActivityIcons?: (icons: Record<string, StudioActivityIconComponent | null | undefined>) => void;
   };
   readonly ai: StudioAiContributionApi;
   readonly dialogs: StudioDialogApi;
@@ -1954,6 +2215,10 @@ export function createHttpClient(baseUrl: string, defaultHeadersOrOptions?: Head
   const send = <T>(url: string, init?: StudioRequestInit) => requestJson<T>(baseUrl, url, init, options);
 
   return {
+    async requestResponse(url: string, init?: StudioRequestInit) {
+      const { response } = await sendRequest(baseUrl, url, withDefaultHeaders(defaultHeaders, init), options);
+      return response;
+    },
     requestJson<T>(url: string, init?: StudioRequestInit) {
       return send<T>(url, withDefaultHeaders(defaultHeaders, withJsonAccept(init)));
     },

@@ -41,7 +41,7 @@ namespace Elsa.Serialization.SystemText.Services;
 /// </para>
 /// </remarks>
 [Order(-100)]
-public sealed class JsonPayloadConvertersInitializingStartupTask(
+internal sealed class JsonPayloadConvertersInitializingStartupTask(
     IInlineEventPublisher eventPublisher,
     JsonPayloadConverterRegistry registry)
     : IStartupTask

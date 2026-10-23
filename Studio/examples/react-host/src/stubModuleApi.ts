@@ -41,6 +41,7 @@ export function createStubModuleApi(backendBaseUrl: string): ElsaStudioModuleApi
   const navigation = createContributionRegistry<StudioNavigationContribution>({ slot: studioSlots.navigation });
   const routes = createContributionRegistry<StudioRouteContribution>({ slot: studioSlots.routes });
   const featureAreas = createFeatureAreaRegistry(navigation, routes);
+  const dashboardWidgets = createDashboardWidgetRegistry();
 
   return {
     host,
@@ -49,7 +50,8 @@ export function createStubModuleApi(backendBaseUrl: string): ElsaStudioModuleApi
     featureAreas,
     navigation,
     routes,
-    dashboardWidgets: createDashboardWidgetRegistry(),
+    dashboardWidgets,
+    homeWidgets: dashboardWidgets,
     diagnosticsWidgets: createContributionRegistry({ slot: studioSlots.diagnosticsWidgets }),
     panels: createContributionRegistry({ slot: studioSlots.panels }),
     toolbarActions: createContributionRegistry({ slot: studioSlots.toolbarActions }),

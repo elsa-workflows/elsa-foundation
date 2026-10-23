@@ -23,3 +23,10 @@ internal sealed class ActivityValuePayloadDeniedSignal : Exception;
 
 /// <summary>A value payload was never captured: the published response is the 409 problem document.</summary>
 internal sealed class ActivityValuePayloadUnavailableSignal : Exception;
+
+/// <summary>A safe, actionable failure of a manual run deletion request.</summary>
+internal sealed class RuntimeRunDeletionRejectedSignal(int status, string detail) : Exception
+{
+    public int Status { get; } = status;
+    public string Detail { get; } = detail;
+}

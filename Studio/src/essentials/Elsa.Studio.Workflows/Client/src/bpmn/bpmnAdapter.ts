@@ -2,7 +2,8 @@ import type { Edge, Node, XYPosition } from "@xyflow/react";
 import type { ActivityCatalogItem, ActivityNode, ActivityPresentationRecord, DesignMetadataRecord } from "../workflowTypes";
 import { indexActivityPresentation, resolveActivityLabel } from "../activityPresentation";
 import type { WorkflowRuntimeNodeOverlay } from "../workflowAdapter";
-import { collectActivityNodeIds, getActivityDisplay, getChildSlots, readStructureDesignFacet, resolveActivityIcon, type ActivityCatalogLookup, type CanvasScope, type ChildSlot, type WorkflowNodeIcon } from "../workflowAdapter";
+import { resolveActivityIcon, resolveActivityIconTone } from "../activityIcons";
+import { collectActivityNodeIds, getActivityDisplay, getChildSlots, readStructureDesignFacet, type ActivityCatalogLookup, type ActivityIconTone, type CanvasScope, type ChildSlot, type WorkflowNodeIcon } from "../workflowAdapter";
 import {
   bpmnElementTypes,
   bpmnStructureKind,
@@ -23,6 +24,7 @@ export interface BpmnNodeData extends Record<string, unknown> {
     activityTypeKey?: string;
     label: string;
     icon: WorkflowNodeIcon;
+    iconTone?: ActivityIconTone;
   };
   // The BOUND ACTIVITY's child slots, so a subprocess offers the same slot entry an ordinary node does
   // (empty for events, gateways, unbound tasks, and tasks bound to a leaf). Slot entry addresses
@@ -107,7 +109,8 @@ function createBpmnNode(
           presentationByNodeId.get(boundActivityNode.nodeId),
           catalogItem,
           boundActivityNode.activityVersionId),
-        icon: resolveActivityIcon(catalogItem)
+        icon: resolveActivityIcon(catalogItem),
+        iconTone: resolveActivityIconTone(catalogItem)
       }
     : undefined;
 
@@ -247,7 +250,8 @@ export function createBpmnBoundNode(
         activityVersionId: activityNode.activityVersionId,
         activityTypeKey: catalogItem.activityTypeKey,
         label: getActivityDisplay(catalogItem),
-        icon: resolveActivityIcon(catalogItem)
+        icon: resolveActivityIcon(catalogItem),
+        iconTone: resolveActivityIconTone(catalogItem)
       },
       childSlots: getChildSlots(activityNode, catalogItem)
     }

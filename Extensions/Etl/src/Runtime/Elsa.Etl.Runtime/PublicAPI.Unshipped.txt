@@ -1,0 +1,117 @@
+#nullable enable
+Elsa.Etl.Runtime.EtlHostFileBindingOptions
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.Alias.get -> string!
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.Alias.set -> void
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.AtomicPublication.get -> bool
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.AtomicPublication.set -> void
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.EtlHostFileBindingOptions() -> void
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.ExpectedSha256.get -> string?
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.ExpectedSha256.set -> void
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.ImmutableInput.get -> bool
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.ImmutableInput.set -> void
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.IsCurrent.get -> bool
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.IsCurrent.set -> void
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.Path.get -> string!
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.Path.set -> void
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.PersistencePartition.get -> string!
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.PersistencePartition.set -> void
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.Revision.get -> string!
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.Revision.set -> void
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.Role.get -> string!
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.Role.set -> void
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.TenantId.get -> string?
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.TenantId.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature
+virtual Elsa.Etl.Runtime.EtlRuntimeFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.EtlRuntimeFeature() -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.FileBindings.get -> System.Collections.Generic.List<Elsa.Etl.Runtime.EtlHostFileBindingOptions!>!
+Elsa.Etl.Runtime.EtlRuntimeFeature.FileBindings.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxConcurrentAttempts.get -> int
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxConcurrentAttempts.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLiveInputBytes.get -> long
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLiveInputBytes.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLiveLookupBytes.get -> long
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLiveLookupBytes.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLiveOutputBytes.get -> long
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLiveOutputBytes.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLiveRecords.get -> long
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLiveRecords.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLookupCells.get -> long
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLookupCells.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLookupRecords.get -> long
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLookupRecords.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxPartitions.get -> int
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxPartitions.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxSnapshotBytes.get -> long
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxSnapshotBytes.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.SnapshotRoot.get -> string!
+Elsa.Etl.Runtime.EtlRuntimeFeature.SnapshotRoot.set -> void
+Elsa.Etl.Runtime.EtlHttpHostLimits
+Elsa.Etl.Runtime.EtlHttpHostLimits.EtlHttpHostLimits() -> void
+Elsa.Etl.Runtime.EtlHttpHostLimits.<Clone>$() -> Elsa.Etl.Runtime.EtlHttpHostLimits!
+Elsa.Etl.Runtime.EtlHttpHostLimits.Equals(Elsa.Etl.Runtime.EtlHttpHostLimits? other) -> bool
+override Elsa.Etl.Runtime.EtlHttpHostLimits.Equals(object? obj) -> bool
+override Elsa.Etl.Runtime.EtlHttpHostLimits.GetHashCode() -> int
+override Elsa.Etl.Runtime.EtlHttpHostLimits.ToString() -> string!
+static Elsa.Etl.Runtime.EtlHttpHostLimits.operator !=(Elsa.Etl.Runtime.EtlHttpHostLimits? left, Elsa.Etl.Runtime.EtlHttpHostLimits? right) -> bool
+static Elsa.Etl.Runtime.EtlHttpHostLimits.operator ==(Elsa.Etl.Runtime.EtlHttpHostLimits? left, Elsa.Etl.Runtime.EtlHttpHostLimits? right) -> bool
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxPageBytes.get -> long
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxPageBytes.init -> void
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxPageRecords.get -> int
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxPageRecords.init -> void
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxJsonDepth.get -> int
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxJsonDepth.init -> void
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxContinuationBytes.get -> int
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxContinuationBytes.init -> void
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxPagesPerPartition.get -> int
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxPagesPerPartition.init -> void
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxRetainedInputBytes.get -> long
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxRetainedInputBytes.init -> void
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxRetainedMetadataBytes.get -> long
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxRetainedMetadataBytes.init -> void
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxAttempts.get -> int
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxAttempts.init -> void
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxDeadlineSeconds.get -> int
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxDeadlineSeconds.init -> void
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxRequestTimeoutSeconds.get -> int
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxRequestTimeoutSeconds.init -> void
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxDelaySeconds.get -> int
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxDelaySeconds.init -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.HttpLimits.get -> Elsa.Etl.Runtime.EtlHttpHostLimits!
+Elsa.Etl.Runtime.EtlRuntimeFeature.HttpLimits.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxRetainedOutputBytes.get -> long
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxRetainedOutputBytes.set -> void
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.Alias.get -> string!
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.Alias.set -> void
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.AllowHttp.get -> bool
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.AllowHttp.set -> void
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.AllowedPaths.get -> System.Collections.Generic.IList<string!>!
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.AllowedPaths.set -> void
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.ConnectionName.get -> string?
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.ConnectionName.set -> void
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.Endpoint.get -> string!
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.Endpoint.set -> void
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.EtlHostHttpBindingOptions() -> void
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.IdempotencyHeader.get -> string!
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.IdempotencyHeader.set -> void
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.IsCurrent.get -> bool
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.IsCurrent.set -> void
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.PersistencePartition.get -> string!
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.PersistencePartition.set -> void
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.Revision.get -> string!
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.Revision.set -> void
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.Role.get -> string!
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.Role.set -> void
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.Shards.get -> System.Collections.Generic.IList<Elsa.Etl.Runtime.EtlHostHttpShardOptions!>!
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.Shards.set -> void
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.TenantId.get -> string?
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.TenantId.set -> void
+Elsa.Etl.Runtime.EtlHostHttpShardOptions
+Elsa.Etl.Runtime.EtlHostHttpShardOptions.EtlHostHttpShardOptions() -> void
+Elsa.Etl.Runtime.EtlHostHttpShardOptions.Id.get -> string!
+Elsa.Etl.Runtime.EtlHostHttpShardOptions.Id.set -> void
+Elsa.Etl.Runtime.EtlHostHttpShardOptions.SeedUri.get -> string!
+Elsa.Etl.Runtime.EtlHostHttpShardOptions.SeedUri.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.HttpBindings.get -> System.Collections.Generic.List<Elsa.Etl.Runtime.EtlHostHttpBindingOptions!>!
+Elsa.Etl.Runtime.EtlRuntimeFeature.HttpBindings.set -> void

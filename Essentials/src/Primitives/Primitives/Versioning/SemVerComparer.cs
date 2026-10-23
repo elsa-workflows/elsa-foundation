@@ -5,7 +5,7 @@ namespace Elsa.Primitives.Versioning;
 /// precedence. Provided as a strategy so callers (sorting, ordering, "latest version" selection)
 /// can depend on the comparer rather than re-implementing precedence.
 /// </summary>
-public sealed class SemVerComparer : IComparer<SemVer>
+internal sealed class SemVerComparer : IComparer<SemVer>
 {
     public static SemVerComparer Instance { get; } = new();
 

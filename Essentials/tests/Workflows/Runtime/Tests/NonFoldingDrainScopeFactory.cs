@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Contracts;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Coalescing;
 using Elsa.Workflows.Runtime.Services.Scheduler;
@@ -13,6 +14,9 @@ namespace Elsa.Workflows.Runtime.Tests;
 internal sealed class NonFoldingDrainScopeFactory : IRuntimeCoalescingDrainScopeFactory
 {
     public static NonFoldingDrainScopeFactory Instance { get; } = new();
+
+    /// <summary>Resolves every run as a Durable run that has a record, for the same tests.</summary>
+    public static IRuntimePersistenceModeResolver Resolver { get; } = new FixedPersistenceModeResolver(PersistenceMode.Durable);
 
     public IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, ResolvedPersistenceMode mode) =>
         new Scope(new RuntimeCoalescingSession(workflowExecutionId, new InMemoryWorkflowSchedulerWorkQueue(), new PersistenceModeOptions(), mode: mode));

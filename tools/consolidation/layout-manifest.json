@@ -2,7 +2,7 @@
   "schema_version": 1,
   "foundation_source": "0e0c1ff6fa101282cef65e1eabf030b72de32acf",
   "studio_source": "3eef8fa788bfe2ebd4686df0e9a116532c9b0dc9",
-  "scope": "Pinned migration inventory; update deliberately when qualifying a new source baseline. Not a permanent feature backlog.",
+  "scope": "Frozen record of the Foundation/Studio consolidation (#2644, #2656): the projects as they stood when the consolidation landed. Not checked in CI; projects added, merged or renamed afterwards are not tracked here. verify-layout.py checks a checkout against it on demand.",
   "projects": [
     {
       "product": "foundation",
@@ -2756,6 +2756,15 @@
       "project_name": "Elsa.Studio.Secrets",
       "package_id": "Elsa.Studio.Secrets",
       "assembly_name": "Elsa.Studio.Secrets",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "studio",
+      "source": "src/extensions/Elsa.Studio.Connections/Elsa.Studio.Connections.csproj",
+      "target": "Extensions/Connections/studio/Elsa.Studio.Connections/Elsa.Studio.Connections.csproj",
+      "project_name": "Elsa.Studio.Connections",
+      "package_id": "Elsa.Studio.Connections",
+      "assembly_name": "Elsa.Studio.Connections",
       "explicit_is_packable": null
     },
     {

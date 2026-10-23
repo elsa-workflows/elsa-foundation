@@ -30,7 +30,6 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Workflows.Runtime.Services.Coalescing;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -105,8 +104,8 @@ public sealed class EmbeddedFixtureHostEvidenceTests : IDisposable
         var settings = shell.ServiceProvider.GetRequiredService<ShellSettings>();
         Assert.Equal(selectedIds.OrderBy(id => id, StringComparer.Ordinal),
             settings.EnabledFeatures.OrderBy(id => id, StringComparer.Ordinal));
-        Assert.IsType<DistributedLockProviderAdaptor>(
-            shell.ServiceProvider.GetRequiredService<IDistributedLockProvider>());
+        Assert.Equal(typeof(FileSystemLockingFeature).Assembly,
+            shell.ServiceProvider.GetRequiredService<IDistributedLockProvider>().GetType().Assembly);
 
         await ExerciseRuntimeAsync(shell);
     }
@@ -233,7 +232,7 @@ public sealed class EmbeddedFixtureHostEvidenceTests : IDisposable
                 workflowExecutionId: started.WorkflowExecutionId,
                 stimulusType: bookmark.StimulusType,
                 stimulusHash: bookmark.StimulusHash,
-                input: JsonSerializer.SerializeToElement(new EventReceived("embedded-ready"))));
+                input: JsonSerializer.SerializeToElement(new { eventName = "embedded-ready" })));
         Assert.Equal(BookmarkResumeDispatchStatus.Dispatched, resumed.Status);
 
         Assert.Empty(await bookmarks.ListAllBookmarkStatesAsync(started.WorkflowExecutionId));
@@ -247,7 +246,6 @@ public sealed class EmbeddedFixtureHostEvidenceTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
         foreach (var path in new[] { databasePath, $"{databasePath}-wal", $"{databasePath}-shm" })
             File.Delete(path);
         if (Directory.Exists(locksFolderPath))

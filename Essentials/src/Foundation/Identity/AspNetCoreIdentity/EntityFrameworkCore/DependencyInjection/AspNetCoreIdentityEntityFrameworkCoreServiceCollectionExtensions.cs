@@ -69,6 +69,8 @@ public static class AspNetCoreIdentityEntityFrameworkCoreServiceCollectionExtens
 
         services.RemoveAll<IIdentityEmailUniquenessPolicy>();
         services.AddScoped<IIdentityEmailUniquenessPolicy, EfCoreIdentityEmailUniquenessPolicy>();
+        services.RemoveAll<IIdentityUserLookupNormalizer>();
+        services.AddScoped<IIdentityUserLookupNormalizer, EfCoreIdentityUserLookupNormalizer>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<AuthenticationOptions>, ConfigureEfCoreIdentityDefaultAuthenticationSchemes>());
 
         ReplaceScoped<IUserStore<AspNetCoreIdentityUser>, EfCoreIdentityUserStore>(services);

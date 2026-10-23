@@ -46,5 +46,5 @@ design-side draft locks, the activity publisher — therefore needs a store ever
 
 ## Cross-references
 
-- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
+- Repo-wide index: [`EXTENSION_POINTS.md`](../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.2 + §2.22.1.

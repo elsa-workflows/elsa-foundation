@@ -3,7 +3,7 @@ using System.Reflection;
 
 namespace Elsa.Primitives.Extensions;
 
-public static class PropertyAccessorExtensions
+internal static class PropertyAccessorExtensions
 {
     /// <summary>
     /// Gets the property referenced by the expression.

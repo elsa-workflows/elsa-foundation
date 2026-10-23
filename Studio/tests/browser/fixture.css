@@ -74,6 +74,54 @@ body {
   padding: 18px;
 }
 
+.activity-icons-fixture {
+  height: 100vh;
+  min-height: 100vh;
+  overflow: hidden;
+  background: var(--studio-bg, var(--background));
+  color: var(--studio-text, var(--foreground));
+}
+
+.activity-icons-fixture .wf-page-header {
+  flex: 0 0 auto;
+  padding: 16px 20px 8px;
+}
+
+.activity-icons-workbench {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  min-height: 0;
+  flex: 1;
+  border-top: 1px solid var(--studio-border, var(--border));
+}
+
+.activity-icons-workbench .wf-palette,
+.activity-icons-workbench .wf-canvas-shell {
+  grid-column: auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.activity-icons-workbench .wf-palette {
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  border-right: 1px solid var(--studio-border, var(--border));
+}
+
+.activity-icons-canvas {
+  position: relative;
+  min-width: 0;
+  min-height: 100%;
+  overflow: hidden;
+  background: var(--wf-canvas, var(--studio-bg, var(--background)));
+}
+
+.activity-icons-node {
+  position: absolute;
+}
+
 .browser-fixture {
   min-height: 100vh;
   padding: 32px;
@@ -187,4 +235,31 @@ body {
   min-height: 0;
   flex: 1;
   padding: 16px;
+}
+
+.activity-duplicate-fixture .wf-page-header {
+  padding: 20px 24px 8px;
+}
+
+.activity-duplicate-canvas {
+  min-height: 720px;
+  background-color: var(--studio-surface, var(--background));
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--studio-border, var(--border)) 70%, transparent) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+.activity-duplicate-editor,
+.activity-duplicate-editor .wf-editor {
+  height: 100vh;
+  width: 100vw;
+}
+
+.validation-labels-fixture {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-height: 100vh;
+  padding: 32px;
+  background: var(--studio-surface, var(--background));
+  color: var(--studio-text, var(--foreground));
 }

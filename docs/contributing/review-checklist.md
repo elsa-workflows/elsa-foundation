@@ -32,6 +32,7 @@ The constitution gates that no test or analyzer checks. A reviewer, or a plan's 
 - **§2.21.1** Tests describing valid behaviour still pass; a rewritten or deleted test names its reason.
 - **§2.22, §2.22.1, §2.22.2** Feature docs list handlers, contributors and tasks; `EXTENSION_POINTS.md` changes in the same unit; the root index links every catalog.
 - **§2.23.1, §2.23.2** Logic-bearing wiring has a registration test; risky paths have behaviour tests; no test asserts on text.
+- **§2.23.3** A type is public for what it means to someone building on the application, not because another project uses it or because nothing does. An `[InternalsVisibleTo]` grant to another production project (same domain only, which the guard checks) passes the sibling test: a third party writing the same kind of package would not need the type; if it would, the type is a public extension point instead.
 - **§2.23.4** Exposed hidden coupling is lifted to a contract, not reproduced in a stub.
 - **§2.23.5** Infrastructure exceptions are wrapped in domain exceptions at the boundary.
 - **§2.24 (draft)** The change uses a catalogued pattern or raises a new one.
@@ -47,3 +48,4 @@ The constitution gates that no test or analyzer checks. A reviewer, or a plan's 
 - **§E2.9 (provisional)** `WorkflowDefinitionState` gains no out-of-scope member; `ActivityNode` gets no generic child collection, connection list, start-child member or executable mirror (§E2.9.1); State, read models and `WorkflowExecutable` stay separate (§E2.9.3); draft mutation stays one diff-based command; workflow-definition reconciliation follows Model X and no workflow-design entity gains per-pass mutating fields (§E2.9.5).
 - **§E5** One version line until GA; `Elsa.Server` stays reserved; Nuplane promotes a domain's `.Core` within its subtree, never host-pinned. Until the magnitude gate is built, a change to a package's public API is compared by hand with the last released baseline, and the bump must cover the delta (§4.2).
 - **§E6** New or renamed Elsa-owned types follow R1–R8.
+- **§E7** A new test project has an entry in `tools/ci/test-tiers.json`, in the integration tier if it reaches Testcontainers or launches a child host and takes 2 minutes or more; a quarantine entry names its open tracking issue (`test-tiers-check`; [CI tiers](merging.md#ci-tiers)).

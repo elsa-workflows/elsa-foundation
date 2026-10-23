@@ -3,7 +3,7 @@ using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.Models;
 using Elsa.Expressions.Services;
 using Elsa.Primitives.Models;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -17,7 +17,7 @@ public sealed class VariableMapperTests
     public VariableMapperTests()
     {
         var registry = TestRegistry.SeededWithPrimitives();
-        var objectConverter = new ObjectConverter(new ServiceCollection().BuildServiceProvider());
+        var objectConverter = SerializationServices.ObjectConverter();
         _mapper = new VariableMapper(registry, objectConverter, new VariableDefaultValueFormatter(), NullLogger<VariableMapper>.Instance);
     }
 

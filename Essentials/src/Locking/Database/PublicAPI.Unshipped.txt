@@ -1,0 +1,13 @@
+#nullable enable
+const Elsa.Locking.Database.DatabaseLockingFeature.DefaultConnectionName = "Elsa" -> string!
+Elsa.Locking.Database.DatabaseLockingFeature
+Elsa.Locking.Database.DatabaseLockingFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Locking.Database.DatabaseLockingFeature.ConnectionName.get -> string?
+Elsa.Locking.Database.DatabaseLockingFeature.ConnectionName.set -> void
+Elsa.Locking.Database.DatabaseLockingFeature.ConnectionString.get -> string?
+Elsa.Locking.Database.DatabaseLockingFeature.ConnectionString.set -> void
+Elsa.Locking.Database.DatabaseLockingFeature.DatabaseLockingFeature() -> void
+Elsa.Locking.Database.DatabaseLockingFeature.LockAcquisitionTimeoutMinutes.get -> double
+Elsa.Locking.Database.DatabaseLockingFeature.LockAcquisitionTimeoutMinutes.set -> void
+Elsa.Locking.Database.DatabaseLockingFeature.Provider.get -> string?
+Elsa.Locking.Database.DatabaseLockingFeature.Provider.set -> void

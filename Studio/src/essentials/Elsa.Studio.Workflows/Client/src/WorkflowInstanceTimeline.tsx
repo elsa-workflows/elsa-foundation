@@ -1,8 +1,11 @@
 import { useMemo } from "react";
 import { resolveActivityLabel } from "./activityPresentation";
 import { findExecutableNodeFacts, type ExecutableActivityGraph } from "./executableGraph";
-import { resolveActivityIcon } from "./workflowAdapter";
-import { formatDuration, renderActivityIcon, shortTypeName } from "./workflowFormatting";
+import { resolveActivityIcon, resolveActivityIconFallback } from "./activityIcons";
+import { renderActivityIcon } from "./activityIconView";
+import { formatDuration, shortTypeName } from "./workflowFormatting";
+import { Undo2 } from "lucide-react";
+import { isCompensationHandlerExecution } from "./compensationRuntime";
 import type { ActivityCatalogItem, ActivityExecutionStateSummary } from "./workflowTypes";
 
 export function WorkflowExecutionTimeline({ activities, activityCatalog, executableGraph, selectedEvidenceId = null, onSelectEvidence }: {
@@ -32,18 +35,21 @@ export function WorkflowExecutionTimeline({ activities, activityCatalog, executa
         const typeName = shortTypeName(activity.activityType) ?? activity.activityType;
         const timestamp = formatClockTime(activity.startedAt ?? activity.scheduledAt);
         const duration = formatDuration(activity.startedAt, activity.completedAt);
+        const compensation = isCompensationHandlerExecution(activity);
         return (
           <li key={activity.activityExecutionId}>
             <button
               type="button"
               className="wf-timeline-entry"
               data-selected={activity.activityExecutionId === selectedEvidenceId}
+              data-compensation={compensation || undefined}
               onClick={() => onSelectEvidence?.(activity.activityExecutionId)}
             >
-              <span className="wf-timeline-icon wf-activity-icon" data-icon={icon} aria-hidden="true">{renderActivityIcon(icon)}</span>
+              <span className="wf-timeline-icon wf-activity-icon" data-icon={icon} aria-hidden="true">{renderActivityIcon(icon, resolveActivityIconFallback(catalogItem))}</span>
               <span className="wf-timeline-body">
                 <strong title={label}>{label}</strong>
                 <small title={typeName}>{typeName}</small>
+                {compensation ? <small className="wf-timeline-tag"><Undo2 size={11} aria-hidden="true" /> Compensation</small> : null}
               </span>
               <span className="wf-timeline-meta">
                 {timestamp ? <time>{timestamp}</time> : null}

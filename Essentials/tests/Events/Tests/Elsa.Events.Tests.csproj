@@ -19,6 +19,7 @@
     <ProjectReference Include="..\..\..\src\Events\Strategies\Elsa.Events.Strategies.csproj" />
     <ProjectReference Include="..\..\..\src\Events\Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Tasks\Elsa.Tasks\Elsa.Tasks.csproj" />
+    <ProjectReference Include="..\..\Tasks\Testing\Elsa.Tasks.Testing.csproj" />
     <ProjectReference Include="..\..\..\src\Tasks\Core\Elsa.Tasks.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Locking\Core\Elsa.Locking.Core.csproj" />
   </ItemGroup>

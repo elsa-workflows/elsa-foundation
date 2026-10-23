@@ -32,4 +32,8 @@
     <ProjectReference Include="..\Core\Elsa.Workflows.Publishing.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Workflows.Publishing.Api.Tests" />
+  </ItemGroup>
+
 </Project>

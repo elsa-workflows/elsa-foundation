@@ -27,7 +27,7 @@ export function BackendRegistryUnavailable({
         </StudioAlert>
         <EmptyState icon={<ShieldAlert size={22} />}>
           You are signed in but do not have permission to view {host.label} module management. Ask an administrator for the
-          module-management.read permission.
+          module-management:read permission.
         </EmptyState>
       </>
     );

@@ -23,6 +23,28 @@ internal static class ModuleRoots
     /// <summary>The roots holding shipping backend module and host code; extension tests are separate sibling roots.</summary>
     internal static readonly string[] Production = ["Essentials/src", "Essentials/apps", "Extensions/*/src"];
 
+    /// <summary>The roots holding backend test projects.</summary>
+    internal static readonly string[] Tests = ["Essentials/tests", "Extensions/*/tests"];
+
+    /// <summary>
+    /// Whether a repository-relative path (either separator) lies under one of the <see cref="Production"/> roots. This is
+    /// the one definition of a production project the guards share, and the root <c>Directory.Build.props</c> repeats it
+    /// as the regular expression that decides which projects compile with the naming analyzer;
+    /// <c>ProductionPathAgreementTests</c> holds the two together.
+    /// </summary>
+    internal static bool IsProductionPath(string relativePath) => IsUnder(relativePath, Production);
+
+    /// <summary>Whether a repository-relative path (either separator) lies under one of the <see cref="Tests"/> roots.</summary>
+    internal static bool IsTestPath(string relativePath) => IsUnder(relativePath, Tests);
+
+    private static bool IsUnder(string relativePath, IEnumerable<string> roots)
+    {
+        var segments = relativePath.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return roots.Select(root => root.Split('/')).Any(root =>
+            segments.Length > root.Length &&
+            root.Select((segment, index) => segment == "*" || segment == segments[index]).All(matches => matches));
+    }
+
     /// <summary>
     /// Resolves relative roots, expanding a whole-segment <c>*</c> to one directory level, under <paramref name="repoRoot"/>.
     /// </summary>

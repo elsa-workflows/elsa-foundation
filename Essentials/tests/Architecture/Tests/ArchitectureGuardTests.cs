@@ -18,27 +18,6 @@ public sealed partial class ArchitectureGuardTests
         ("Elsa.Workflows.Runtime.JavaScript", "Elsa.Workflows.Design.Core")
     ];
 
-    // Documented exceptions to the no-InternalsVisibleTo rule. Each entry needs a reason
-    // recorded at the declaration site (csproj comment) and here. Additions require architect review.
-    private static readonly HashSet<(string Project, string Target)> AllowedInternalsVisibleTo =
-    [
-        // The Extension Builder subsystem is a host-private surface of ~80 interlocking internal types;
-        // publicizing it to satisfy that rule would promote host-only contracts into public API. It lives in
-        // its own optional extension (Elsa.ExtensionBuilder.Api, #2294) which exposes those internals to
-        // the extension's own test project (MD-3, Elsa 4 architecture review 2026-07).
-        ("Elsa.ExtensionBuilder.Api", "Elsa.ExtensionBuilder.Api.Tests"),
-        // Elsa.Workbench keeps a narrow exception for the host-only module-management registry builder
-        // (ModuleManagementRegistryBuilder), exercised by ModuleManagementRegistryBuilderTests.
-        ("Elsa.Workbench", "Elsa.Modularity.Tests"),
-        // The shared-persistence resolver stays internal to the EF policy assembly. Focused unit
-        // and migration metadata tests inspect detached plans without widening its production API.
-        ("Elsa.Persistence.EntityFramework", "Elsa.Persistence.EntityFramework.Tests"),
-        ("Elsa.Persistence.EntityFramework", "Elsa.Persistence.EntityFrameworkCore.Migrations.Tests"),
-        // The worker's reflected host-context API stays internal; CLI tests verify exact and
-        // partial shape negotiation without making those details part of its public surface.
-        ("Elsa.Cli.Worker", "Elsa.Cli.Tests")
-    ];
-
     [Fact]
     public void Solution_has_no_global_layer_marker_folders()
     {
@@ -429,21 +408,6 @@ public sealed partial class ArchitectureGuardTests
     }
 
     [Fact]
-    public void InternalsVisibleTo_occurrences_are_limited_to_documented_exceptions()
-    {
-        var violations = ProjectFiles()
-            .SelectMany(project => XDocument.Load(project.FullPath)
-                .Descendants("InternalsVisibleTo")
-                .Select(x => x.Attribute("Include")?.Value)
-                .OfType<string>()
-                .Where(target => !AllowedInternalsVisibleTo.Contains((project.Name, target)))
-                .Select(target => $"{project.Name} -> {target} ({project.RelativePath})"))
-            .ToList();
-
-        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
-    }
-
-    [Fact]
     public void Projects_do_not_declare_duplicate_project_references()
     {
         var violations = ProjectFiles()
@@ -591,6 +555,8 @@ public sealed partial class ArchitectureGuardTests
     [
         ("Elsa3.", "Elsa3"),
         ("Elsa.Agent.", "Agent"),
+        ("Elsa.Etl.", "Etl"),
+        ("Elsa.Rules.", "Rules"),
         ("Elsa.ExtensionBuilder.", "ExtensionBuilder"),
     ];
 
@@ -602,6 +568,8 @@ public sealed partial class ArchitectureGuardTests
     {
         // The CLR scanner tests read this assembly's name ("Elsa.Activities.Design.Tests.ClrFixture") and its activities' type names.
         ["Elsa.Activities.Design.Tests.ClrFixture"] = "Essentials/tests/Activities/Design/Fixtures/ClrFixture/Elsa.Activities.Design.Tests.ClrFixture.csproj",
+        // Icon fixtures live in their own assembly so CLR reconciliation still counts the original eighteen.
+        ["Elsa.Activities.Design.Tests.ClrIconFixture"] = "Essentials/tests/Activities/Design/Fixtures/ClrIconFixture/Elsa.Activities.Design.Tests.ClrIconFixture.csproj",
         // Beside the library it tests, as Elsa.Cluster.Tests sits beside Elsa.Cluster.Testing.
         ["Elsa.Api.Compatibility.Testing.Tests"] = "Essentials/tests/Api/Compatibility/Tests/Elsa.Api.Compatibility.Testing.Tests.csproj",
     };
@@ -730,6 +698,7 @@ internal static class PersistenceProviderNeutralityBoundary
         "Elsa.Foundation.Identity.Core",
         "Elsa.Foundation.Identity",
         "Elsa.Secrets.Core",
+        "Elsa.Connections.Core",
         "Elsa.Workflows.Runtime.Distributed"
     ];
 

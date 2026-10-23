@@ -13,8 +13,10 @@ import {
   reconcileGraphLayout
 } from "../ActivityGraphImplementationEditor";
 import { inputReferenceContribution } from "../inputReferenceContribution";
+import { variableReferenceContribution } from "../variableReferenceContribution";
 import { flowchartStructureKind } from "../flowchartStartNode";
 import { bpmnStructureKind } from "../bpmn/bpmnTypes";
+import { sequenceStructureKind } from "../workflowAdapter";
 import { activityDragDataType } from "../workflow-editor/constants";
 import type { ActivityCatalogItem } from "../workflowTypes";
 
@@ -54,15 +56,15 @@ describe("ActivityGraphImplementationEditor boundary outcome mappings", () => {
       onChange
     });
 
-    const source = rendered.container.querySelector<HTMLSelectElement>("select[aria-label='Root outcome reference key']")!;
-    const boundary = rendered.container.querySelector<HTMLSelectElement>("select[aria-label='Boundary outcome reference key']")!;
+    const source = rendered.container.querySelector<HTMLSelectElement>("select[aria-label='Designer outcome']")!;
+    const boundary = rendered.container.querySelector<HTMLSelectElement>("select[aria-label='Activity outcome']")!;
     expect([...source.options].map(option => ({ value: option.value, disabled: option.disabled }))).toContainEqual({ value: "rejected", disabled: false });
     expect([...source.options].map(option => option.value)).not.toContain("unstable-name-only");
     expect([...boundary.options].map(option => ({ value: option.value, disabled: option.disabled }))).toContainEqual({ value: "declined-boundary", disabled: false });
 
     change(source, "rejected");
     change(boundary, "declined-boundary");
-    click(buttonByText(rendered.container, "Add mapping"));
+    click(buttonByText(rendered.container, "Connect"));
 
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
       payload: expect.objectContaining({
@@ -82,16 +84,16 @@ describe("ActivityGraphImplementationEditor boundary outcome mappings", () => {
       })
     });
 
-    expect(rendered.container.querySelector<HTMLSelectElement>("select[aria-label='Root outcome reference key']")?.disabled).toBe(true);
-    expect(rendered.container.querySelector<HTMLSelectElement>("select[aria-label='Boundary outcome reference key']")?.disabled).toBe(true);
-    expect(buttonByText(rendered.container, "Add mapping").disabled).toBe(true);
-    expect(buttonByText(rendered.container, "Remove mapping").disabled).toBe(true);
+    expect(rendered.container.querySelector<HTMLSelectElement>("select[aria-label='Designer outcome']")?.disabled).toBe(true);
+    expect(rendered.container.querySelector<HTMLSelectElement>("select[aria-label='Activity outcome']")?.disabled).toBe(true);
+    expect(buttonByText(rendered.container, "Connect").disabled).toBe(true);
+    expect(buttonByText(rendered.container, "Remove connection").disabled).toBe(true);
   });
 
   it("keeps schema 1 free of schema-2 mapping controls", () => {
     const rendered = renderEditor({ providerSchemaVersion: "1" });
 
-    expect(rendered.container.textContent).not.toContain("Boundary outcome mappings");
+    expect(rendered.container.textContent).not.toContain("Completion paths");
   });
 });
 
@@ -137,6 +139,65 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
 
     click(buttonByText(rendered.container, "Undo Activity Graph edit", "aria-label"));
     expect(onChange).toHaveBeenLastCalledWith(flowchartImplementationValue());
+  });
+
+  it("canonicalizes direct inputs when the first composition is adopted from the palette", () => {
+    const inputKey = "public.amount/opaque-key";
+    catalogItems = [flowchartCatalogItemWithDirectInput(inputKey)];
+    const onChange = vi.fn();
+    const rendered = renderDesigner({ value: emptyActivityGraphImplementationValue(), onChange });
+
+    const palette = rendered.container.querySelector<HTMLElement>(".wf-palette")!;
+    click(palette.querySelector(".wf-palette-category-toggle")!);
+    click(palette.querySelector(".wf-palette-activity")!);
+
+    const payload = onChange.mock.calls.at(-1)![0].payload as Record<string, unknown>;
+    const root = payload.rootActivity as Record<string, unknown>;
+    expect(root.inputs).toEqual([{
+      referenceKey: inputKey,
+      value: { value: "seeded root value", expressionType: "Literal" }
+    }]);
+    expect(root[inputKey]).toBeUndefined();
+    expect(payload.outcomeMappings).toEqual([]);
+  });
+
+  it("canonicalizes direct inputs when a root composition is selected", () => {
+    const inputKey = "contract.input/with:opaque-key";
+    catalogItems = [flowchartCatalogItemWithDirectInput(inputKey)];
+    const onChange = vi.fn();
+    const rendered = renderDesigner({ value: emptyActivityGraphImplementationValue(), onChange });
+
+    const composition = rendered.container.querySelector<HTMLElement>("[aria-label='Graph composition']")!;
+    click(composition.querySelector("button")!);
+
+    const payload = onChange.mock.calls.at(-1)![0].payload as Record<string, unknown>;
+    const root = payload.rootActivity as Record<string, unknown>;
+    expect(root.inputs).toEqual([{
+      referenceKey: inputKey,
+      value: { value: "seeded root value", expressionType: "Literal" }
+    }]);
+    expect(root[inputKey]).toBeUndefined();
+    expect(payload.outcomeMappings).toEqual([]);
+  });
+
+  it("removes the selected second Sequence child in a controlled editor", () => {
+    catalogItems = [sequenceCatalogItem(), leafCatalogItem()];
+    const value = sequenceImplementationValue([
+      { nodeId: "write-line-1", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null },
+      { nodeId: "write-line-2", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null }
+    ]);
+    const rendered = renderControlledDesigner(value);
+
+    click(rendered.container.querySelector("[data-graph-node-id='write-line-2']")!);
+    expect(rendered.container.querySelector(".wf-inspector-context h3")?.textContent).toBe("Write line");
+    confirmOnce();
+    click(buttonByText(rendered.container, "Remove"));
+
+    expect(rendered.onChange).toHaveBeenCalledTimes(1);
+    expect(rendered.onChange.mock.calls[0][0].payload.rootActivity.structure.payload.activities)
+      .toEqual([expect.objectContaining({ nodeId: "write-line-1" })]);
+    expect(rendered.container.querySelector("[data-graph-node-id='write-line-2']")).toBeNull();
+    expect(() => buttonByText(rendered.container, "Remove")).toThrow();
   });
 
   it("places public contract inputs in the graph node expression scope", async () => {
@@ -193,6 +254,43 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
     await vi.waitFor(() => {
       const picker = rendered.container.querySelector<HTMLSelectElement>("select[aria-label='Input reference']");
       expect([...picker!.options].map(option => option.textContent)).toContainEqual(expect.stringContaining("Customer ID"));
+    });
+  });
+
+  // Inside a graph body the root scope is the graph, so graph variables are offered as workflow-scope
+  // variables; placement remaps them to the placed graph. The earlier "activity-graph" scope had no runtime frame.
+  it("offers graph variables to body nodes under the workflow root scope", async () => {
+    expressionDescriptors = [{ type: "Variable", displayName: "Variable", editingMode: "reference" }];
+    catalogItems = [flowchartCatalogItem(), inputLeafCatalogItem("Variable")];
+    const value = flowchartImplementationValue(flowchartStructureKind, [{
+      nodeId: "write-line-1",
+      activityVersionId: "write-line-v1",
+      inputs: [],
+      outputs: [],
+      structure: null
+    }]);
+    const rendered = renderDesigner({
+      value: {
+        ...value,
+        payload: {
+          ...value.payload,
+          variables: [{
+            referenceKey: "running-total",
+            name: "RunningTotal",
+            type: { alias: "String", collectionKind: "Single" },
+            storageDriverKey: "elsa.json"
+          }]
+        }
+      },
+      expressionEditors: [variableReferenceContribution]
+    });
+
+    click(rendered.container.querySelector("[data-graph-node-id='write-line-1']")!);
+
+    await vi.waitFor(() => {
+      const picker = rendered.container.querySelector<HTMLSelectElement>("select[aria-label='Variable reference']");
+      const option = [...picker!.options].find(candidate => candidate.textContent?.includes("RunningTotal"));
+      expect(option?.value.startsWith("workflow")).toBe(true);
     });
   });
 
@@ -635,9 +733,9 @@ describe("ActivityGraphImplementationEditor boundary output mappings", () => {
       onChange
     });
 
-    expect(rendered.container.textContent).toContain("A required public output needs exactly one boundary expression.");
-    await vi.waitFor(() => expect(buttonByText(rendered.container, "Add expression").disabled).toBe(false));
-    click(buttonByText(rendered.container, "Add expression"));
+    expect(rendered.container.textContent).toContain("Choose a value for this required output.");
+    await vi.waitFor(() => expect(buttonByText(rendered.container, "Set value").disabled).toBe(false));
+    click(buttonByText(rendered.container, "Set value"));
 
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
       payload: expect.objectContaining({
@@ -667,8 +765,8 @@ describe("ActivityGraphImplementationEditor boundary output mappings", () => {
       }
     });
 
-    expect(rendered.container.textContent).toContain("No boundary expression is configured.");
-    expect(rendered.container.textContent).not.toContain("A required public output needs exactly one boundary expression.");
+    expect(rendered.container.textContent).toContain("No value is configured.");
+    expect(rendered.container.textContent).not.toContain("Choose a value for this required output.");
   });
 });
 
@@ -716,7 +814,15 @@ function renderDesigner(overrides: Partial<StudioActivityDefinitionImplementatio
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
-  const props: StudioActivityDefinitionImplementationEditorProps = {
+  const props = designerProps(overrides);
+  flushSync(() => root.render(<ActivityGraphImplementationEditor {...props} />));
+  const rendered = { root, container };
+  mounted.push(rendered);
+  return rendered;
+}
+
+function designerProps(overrides: Partial<StudioActivityDefinitionImplementationEditorProps> = {}): StudioActivityDefinitionImplementationEditorProps {
+  return {
     context: {
       baseUrl: "test://activity-graph",
       http: {
@@ -744,8 +850,24 @@ function renderDesigner(overrides: Partial<StudioActivityDefinitionImplementatio
     onChange: () => {},
     ...overrides
   };
-  flushSync(() => root.render(<ActivityGraphImplementationEditor {...props} />));
-  const rendered = { root, container };
+}
+
+function renderControlledDesigner(initialValue: StudioActivityDefinitionImplementationEditorProps["value"]) {
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  const onChange = vi.fn();
+  const props = designerProps({ value: initialValue });
+  function ControlledDesigner() {
+    const [value, setValue] = React.useState(initialValue);
+    const handleChange = React.useCallback((next: typeof initialValue) => {
+      onChange(next);
+      setValue(next);
+    }, []);
+    return <ActivityGraphImplementationEditor {...props} value={value} onChange={handleChange} />;
+  }
+  flushSync(() => root.render(<ControlledDesigner />));
+  const rendered = { root, container, onChange };
   mounted.push(rendered);
   return rendered;
 }
@@ -801,6 +923,37 @@ function flowchartCatalogItem() {
   };
 }
 
+function flowchartCatalogItemWithDirectInput(referenceKey: string) {
+  return {
+    ...flowchartCatalogItem(),
+    authoringTemplate: {
+      nodeId: "template-root",
+      activityVersionId: "flowchart-v1",
+      inputs: [],
+      outputs: [],
+      [referenceKey]: {
+        typeName: "System.String",
+        expression: { type: "Literal", value: "seeded root value" }
+      },
+      structure: null
+    }
+  };
+}
+
+function sequenceCatalogItem() {
+  return {
+    activityVersionId: "sequence-v1",
+    activityTypeKey: "Elsa.Sequence",
+    version: "1.0.0",
+    category: "Composition",
+    displayName: "Sequence",
+    executionType: "Action",
+    inputs: [],
+    outputs: [],
+    ports: []
+  };
+}
+
 function leafCatalogItem() {
   return {
     activityVersionId: "write-line-v1",
@@ -815,7 +968,7 @@ function leafCatalogItem() {
   };
 }
 
-function inputLeafCatalogItem() {
+function inputLeafCatalogItem(defaultSyntax = "Input") {
   return {
     ...leafCatalogItem(),
     inputs: [{
@@ -825,7 +978,7 @@ function inputLeafCatalogItem() {
       description: "Message to write.",
       isBrowsable: true,
       isWrapped: true,
-      defaultSyntax: "Input"
+      defaultSyntax
     }]
   };
 }
@@ -850,6 +1003,46 @@ function flowchartImplementationValue(kind = "Flowchart", activities: unknown[] 
             nodeMetadata: {},
             connectionMetadata: {}
           }
+        }
+      },
+      variables: [],
+      outputMappings: [],
+      outcomeMappings: []
+    },
+    layout: []
+  };
+}
+
+function emptyActivityGraphImplementationValue() {
+  return {
+    payload: {
+      rootActivity: {
+        nodeId: "root",
+        activityVersionId: "",
+        inputs: [],
+        outputs: [],
+        structure: null
+      },
+      variables: [],
+      outputMappings: [],
+      outcomeMappings: [{ sourceOutcomeReferenceKey: "old", boundaryOutcomeReferenceKey: "done" }]
+    },
+    layout: []
+  };
+}
+
+function sequenceImplementationValue(activities: unknown[] = []) {
+  return {
+    payload: {
+      rootActivity: {
+        nodeId: "root",
+        activityVersionId: "sequence-v1",
+        inputs: [],
+        outputs: [],
+        structure: {
+          kind: sequenceStructureKind,
+          schemaVersion: "1.0.0",
+          payload: { activities }
         }
       },
       variables: [],

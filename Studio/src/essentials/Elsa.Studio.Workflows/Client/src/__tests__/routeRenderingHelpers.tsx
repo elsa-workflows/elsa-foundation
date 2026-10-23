@@ -42,7 +42,8 @@ export async function renderRegisteredRoute(
   path = "/workflows/definitions",
   configureApi?: (api: ElsaStudioModuleApi) => void,
   followNavigation = false,
-  capabilities = capabilityDocument()
+  capabilities = capabilityDocument(),
+  historyState: unknown = {}
 ) {
   if (typeof ResizeObserver === "undefined") {
     vi.stubGlobal("ResizeObserver", class {
@@ -58,7 +59,7 @@ export async function renderRegisteredRoute(
     if (url.includes("/design/activities/definitions/picker")) return response(recommendedActivityPicker());
     return fetchWithoutCapabilities(input, init);
   }));
-  window.history.replaceState({}, "", path);
+  window.history.replaceState(historyState, "", path);
   const api = testApi();
   configureApi?.(api);
   register(api);
@@ -92,9 +93,10 @@ export async function renderRegisteredRoute(
     return <Component navigate={navigate} />;
   }
 
-  flushSync(() => {
+  const rerender = () => flushSync(() => {
     root.render(<QueryClientProvider client={queryClient}><RegisteredRouteHost /></QueryClientProvider>);
   });
+  rerender();
 
   const unmount = async () => {
     if (!mountedRouteHosts.delete(unmount)) return;
@@ -104,7 +106,7 @@ export async function renderRegisteredRoute(
   };
   mountedRouteHosts.add(unmount);
 
-  return { api, container, unmount };
+  return { api, container, rerender, unmount };
 }
 
 function routeMatchesPath(routePath: string, path: string) {
@@ -130,6 +132,7 @@ export function testApi(): ElsaStudioModuleApi {
     propertyEditors: registry(),
     expressionEditors: registry(),
     workflowRunInputEditors: registry(),
+    workflowTestStimulusEditors: registry(),
     workflowDesigner: {
       panels: registry()
     },
@@ -152,6 +155,24 @@ export function testApi(): ElsaStudioModuleApi {
   } as unknown as ElsaStudioModuleApi;
 }
 
+function copyPlacementMetadata(nav: {
+  placement?: string;
+  requiresFeature?: string;
+  requiresRole?: string;
+  requiresPermission?: string;
+}) {
+  return {
+    ...(nav.placement ? { placement: nav.placement } : {}),
+    ...(nav.requiresFeature ? { requiresFeature: nav.requiresFeature } : {}),
+    ...(nav.requiresRole ? { requiresRole: nav.requiresRole } : {}),
+    ...(nav.requiresPermission ? { requiresPermission: nav.requiresPermission } : {})
+  };
+}
+
+function slug(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
 function featureAreaRegistry(navigation: ReturnType<typeof registry>, routes: ReturnType<typeof registry>) {
   const featureAreas = registry();
 
@@ -159,22 +180,29 @@ function featureAreaRegistry(navigation: ReturnType<typeof registry>, routes: Re
     ...featureAreas,
     add(featureArea: any) {
       featureAreas.add(featureArea);
+      const parentId = featureArea.nav.id ?? featureArea.id;
       navigation.add({
-        id: featureArea.id,
+        id: parentId,
         label: featureArea.nav.title,
         path: featureArea.nav.path,
         activePathPrefix: featureArea.ownedPaths[0],
-        order: featureArea.order,
-        iconColor: featureArea.nav.iconColor
+        order: featureArea.nav.order ?? featureArea.order,
+        iconColor: featureArea.nav.iconColor,
+        ...copyPlacementMetadata(featureArea.nav)
       });
-      for (const item of featureArea.nav.items ?? []) {
+      for (const [index, item] of (featureArea.nav.items ?? []).entries()) {
+        if (item.path === featureArea.nav.path) {
+          continue;
+        }
         navigation.add({
-          id: item.id ?? `${featureArea.id}-${item.title.toLowerCase()}`,
+          id: item.id ?? `${featureArea.id}-${slug(item.title)}`,
           label: item.title,
           path: item.path,
-          parentId: featureArea.id,
+          parentId: item.placement ? undefined : parentId,
           activePathPrefix: item.path,
-          iconColor: item.iconColor ?? featureArea.nav.iconColor
+          order: item.order ?? (featureArea.order ?? 500) + index + 1,
+          iconColor: item.iconColor ?? featureArea.nav.iconColor,
+          ...copyPlacementMetadata(item)
         });
       }
       for (const route of featureArea.routes) {
@@ -294,6 +322,7 @@ export function capabilityDocument() {
           { rel: "workflow-publish", href: "publishing/workflows/{versionId}/publish", templated: true },
           { rel: "publication-record", href: "publishing/publications/{publicationId}", templated: true },
           { rel: "publication-policy", href: "publishing/workflows/{definitionId}/policy", templated: true },
+          { rel: "workflow-draft-test-run-options", href: "publishing/workflows/drafts/test-run-options" },
           { rel: "workflow-test-runs", href: "publishing/workflows/{versionId}/test-runs", templated: true },
           { rel: "workflow-draft-test-runs", href: "publishing/workflows/drafts/test-runs" }
         ]

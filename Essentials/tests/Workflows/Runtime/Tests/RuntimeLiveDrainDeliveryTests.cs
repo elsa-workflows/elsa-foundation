@@ -133,6 +133,7 @@ public sealed class RuntimeLiveDrainDeliveryTests
             options: new WorkflowDrainOrchestratorOptions(),
             coalescingScopeFactory: NonFoldingDrainScopeFactory.Instance,
             liveDrainDeliveryAccessor: liveDrain,
+            persistenceModeResolver: NonFoldingDrainScopeFactory.Resolver,
             timeProvider: new FakeTimeProvider(Now));
 
     private static RuntimeSchedulerWorkItem NewWorkItem(string workItemId) =>

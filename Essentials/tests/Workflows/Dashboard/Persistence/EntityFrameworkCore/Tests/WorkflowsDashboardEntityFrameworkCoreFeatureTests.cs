@@ -14,7 +14,6 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Resumption;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -71,7 +70,6 @@ public sealed class WorkflowsDashboardEntityFrameworkCoreFeatureTests : IDisposa
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
         foreach (var file in new[] { databasePath, $"{databasePath}-wal", $"{databasePath}-shm" })
             File.Delete(file);
     }

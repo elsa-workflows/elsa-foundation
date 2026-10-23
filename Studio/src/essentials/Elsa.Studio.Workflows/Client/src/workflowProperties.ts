@@ -65,11 +65,6 @@ export function readStoredPersistenceMode(strategyOptions: unknown): string | nu
   return typeof persistenceMode === "string" && persistenceMode.trim().length > 0 ? persistenceMode : null;
 }
 
-export function readPersistenceMode(strategyOptions: unknown): PersistenceMode | null {
-  const stored = readStoredPersistenceMode(strategyOptions);
-  return isPersistenceMode(stored) ? stored : null;
-}
-
 // Choosing the host default removes the field rather than storing null, so the workflow carries no choice at all.
 export function updatePersistenceMode(strategyOptions: unknown, mode: PersistenceMode | null): WorkflowStrategyOptions {
   const { persistenceMode: _previous, ...others } = isPlainRecord(strategyOptions) ? strategyOptions : {};
@@ -78,6 +73,13 @@ export function updatePersistenceMode(strategyOptions: unknown, mode: Persistenc
 
 export function isCollectionKind(value: unknown): value is CollectionKind {
   return value === "Single" || value === "Array" || value === "List" || value === "HashSet";
+}
+
+export function normalizeCollectionKind(value: unknown): CollectionKind {
+  if (typeof value !== "string") return "Single";
+  const normalized = value.toLowerCase();
+  const kinds: readonly CollectionKind[] = ["Single", "Array", "List", "HashSet"];
+  return kinds.find(kind => kind.toLowerCase() === normalized) ?? "Single";
 }
 
 // Build an ArgumentType from a picker alias; collection kind defaults to a scalar.
@@ -93,7 +95,7 @@ export function readArgumentType(record: Record<string, unknown>): ArgumentType 
   const raw = record.type ?? record.Type;
   if (isPlainRecord(raw)) {
     const alias = typeof raw.alias === "string" ? raw.alias : typeof raw.typeName === "string" ? raw.typeName : "";
-    return { alias, collectionKind: isCollectionKind(raw.collectionKind) ? raw.collectionKind : "Single" };
+    return { alias, collectionKind: normalizeCollectionKind(raw.collectionKind) };
   }
   const legacy = record.typeInformation ?? record.TypeInformation;
   if (isPlainRecord(legacy)) {

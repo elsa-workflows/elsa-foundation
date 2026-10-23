@@ -54,6 +54,15 @@ public sealed class ScopeRequestHandler(ScopeMarker marker) : IRequestHandler<Sc
     public Task<Guid> Handle(ScopeRequest request, CancellationToken cancellationToken) => Task.FromResult(marker.Id);
 }
 
+/// <summary>A request and handler internal to this assembly, as a domain's own handlers are once they turn internal.</summary>
+internal sealed record InternalPingRequest(string Value) : IRequest<string>;
+
+internal sealed class InternalPingRequestHandler : IRequestHandler<InternalPingRequest, string>
+{
+    public Task<string> Handle(InternalPingRequest request, CancellationToken cancellationToken) =>
+        Task.FromResult($"internal:{request.Value}");
+}
+
 // --- Commands ---------------------------------------------------------------------------------
 
 public sealed record AddCommand(int X, int Y) : ICommand<int>;

@@ -5,14 +5,17 @@ import {
   historyKeymap,
   indentLess,
   indentMore,
+  insertNewlineAndIndent,
   temporarilySetTabFocusMode,
   toggleTabFocusMode
 } from "@codemirror/commands";
-import { bracketMatching, defaultHighlightStyle, foldGutter, indentOnInput, syntaxHighlighting, syntaxTree } from "@codemirror/language";
+import { bracketMatching, HighlightStyle, foldGutter, indentOnInput, syntaxHighlighting, syntaxTree } from "@codemirror/language";
+import { tags } from "@lezer/highlight";
 import { Compartment, EditorState, Prec, Transaction } from "@codemirror/state";
 import { EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers, type KeyBinding } from "@codemirror/view";
 import { useEffect, useRef } from "react";
 import { applyCodeMirrorDiagnostics } from "./codeMirrorDiagnostics";
+import { markCodeEditorReady } from "./markCodeEditorReady";
 import {
   cancelCodeMirrorIntelligence,
   createCodeMirrorCodeIntelligenceExtensions,
@@ -26,6 +29,13 @@ import {
   subscribeToStudioCodeEditorSessionRevocation
 } from "../sessions/studioCodeEditorSessions";
 import type { StudioCodeDiagnostic, StudioCodeEditorEngineProps } from "../types";
+
+const studioHighlightStyle = HighlightStyle.define([
+  { tag: tags.string, color: "var(--studio-success-fg)" },
+  { tag: [tags.number, tags.bool, tags.null], color: "var(--studio-warning-fg)" },
+  { tag: [tags.keyword, tags.propertyName, tags.tagName, tags.attributeName], color: "var(--studio-accent)" },
+  { tag: tags.comment, color: "var(--studio-text-muted)", fontStyle: "italic" }
+]);
 
 interface CodeMirrorSessionEntry {
   state: EditorState;
@@ -69,12 +79,15 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+    const root = container.closest("[data-studio-code-editor]");
     const mountedAuthorizationGeneration = authorizationGeneration;
 
     const view = claimCompactView(entry, props.profile, container)
       ?? new EditorView({ state: entry.state, parent: container });
     activeCodeMirrorViews.add(view);
     viewRef.current = view;
+    container.dataset.studioCodeEditorSurface = "codemirror";
+    markCodeEditorReady(container, true);
     view.dispatch({
       effects: entry.presentation.reconfigure(presentationExtensions(props.profile))
     });
@@ -83,6 +96,7 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
     void loadLanguageSupport(view, props.document.language, entry);
 
     return () => {
+      markCodeEditorReady(root instanceof HTMLElement ? root : container, false);
       entry.runtime.tabEscapeArmed = false;
       entry.state = view.state;
       setStudioCodeEditorSessionEntry(props.session, props.document.uri, entry);
@@ -213,7 +227,7 @@ function resolveEntry(props: StudioCodeEditorEngineProps): CodeMirrorSessionEntr
         language.of([]),
         indentOnInput(),
         bracketMatching(),
-        syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+        syntaxHighlighting(studioHighlightStyle, { fallback: true }),
         Prec.highest(keymap.of(editorKeymap(runtime))),
         createCodeMirrorCodeIntelligenceExtensions({
           document: props.document,
@@ -282,7 +296,9 @@ function editorKeymap(runtime: CodeMirrorRuntime): KeyBinding[] {
     ...hoverHelp,
     {
       key: "Enter",
-      run: view => runtime.props.profile === "compact" && (acceptCompletion(view) || requestExpansion(runtime))
+      run: view => acceptCompletion(view) || (runtime.props.profile === "compact"
+        ? requestExpansion(runtime)
+        : insertNewlineAndIndent(view))
     },
     {
       key: "Escape",

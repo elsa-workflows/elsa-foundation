@@ -153,7 +153,7 @@ describe("workflow adapter", () => {
       structure: null
     });
     expect(canvas.nodes[0]?.data).toMatchObject({
-      icon: "reusable",
+      activityDefinitionId: "invoice-definition",
       activityDefinitionVersion: "2.0.0"
     });
   });
@@ -401,7 +401,6 @@ describe("workflow adapter", () => {
         label: "Write Line",
         category: "Primitives",
         executionType: "Action",
-        icon: "terminal",
         suppressFlowPorts: true,
         sourcePorts: [],
         childSlots: [expect.objectContaining({ property: "embedded", activities: [expect.objectContaining({ nodeId: "child" })] })]
@@ -412,10 +411,10 @@ describe("workflow adapter", () => {
   it("uses explicit known activity icon metadata before fallback icon resolution", () => {
     const canvas = buildUnsupportedActivityCanvas(node("explicit-icon"), [{ ...writeLine, icon: "trigger" }], []);
 
-    expect(canvas.nodes[0].data.icon).toBe("trigger");
+    expect(canvas.nodes[0].data.catalogIcon).toBe("trigger");
   });
 
-  it("uses the Sequence adapter to preserve ordered child activities", () => {
+  it("preserves authored Sequence order regardless of saved horizontal positions", () => {
     const root = sequenceRoot([node("b"), node("a")]);
     const scope = firstScope(root);
     const canvas = buildCanvas(scope, [writeLine], [
@@ -426,7 +425,7 @@ describe("workflow adapter", () => {
     const updated = syncCanvasToScope(scope, canvas.nodes, canvas.edges);
     const activities = getChildSlots(updated)[0].activities;
 
-    expect(activities.map(activity => activity.nodeId)).toEqual(["a", "b"]);
+    expect(activities.map(activity => activity.nodeId)).toEqual(["b", "a"]);
   });
 
   it("replaces nested slot activities through the generic scope path", () => {
@@ -571,6 +570,15 @@ describe("workflow adapter", () => {
         }
       }
     });
+  });
+
+  it("marks a node whose latest execution completed through compensation", () => {
+    const canvas = buildCanvas(firstScope(sequenceRoot([node("write-line-1")])), [writeLine], []);
+    const compensated = applyRuntimeOverlays(canvas.nodes, [activityExecution({ status: "Completed", outcomeNames: ["Compensated"] })], []);
+    const done = applyRuntimeOverlays(canvas.nodes, [activityExecution({ status: "Completed", outcomeNames: ["Done"] })], []);
+
+    expect(compensated[0].data.runtime?.compensated).toBe(true);
+    expect(done[0].data.runtime?.compensated).toBeUndefined();
   });
 
   it("groups repeated authored placements by the executable identity present on the canvas", () => {
@@ -1218,7 +1226,7 @@ function incident(overrides: Partial<IncidentStateSummary> = {}): IncidentStateS
     executableNodeId: "write-line-1",
     severity: "Error",
     status: "Open",
-    resolutionAction: "None",
+    resolutionOutcome: null,
     failureType: "ActivityFaulted",
     message: "Required service is not registered.",
     createdAt: "2026-06-18T01:00:02Z",

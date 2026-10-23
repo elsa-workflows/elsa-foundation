@@ -3,24 +3,12 @@
 //
 // The budgets live in ef-command-budgets.json next to this file. Lowering a budget is a normal change. Raising one
 // needs a stated reason in the pull request that raises it.
-using System.Net;
-using System.Text;
 using System.Text.Json;
-using Elsa.Activities.ControlFlow;
-using Elsa.Activities.Primitives.Activities;
-using Elsa.Expressions.JavaScript;
-using Elsa.Expressions.JavaScript.Jint;
-using Elsa.Persistence.EntityFramework.SchemaBackfill;
-using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Elsa.Persistence.EntityFramework.Tests;
-using Elsa.Workflows.Runtime.Api.Coalescing;
-using Elsa.Workflows.Runtime.Core.Configuration;
-using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit.Abstractions;
 
 namespace Elsa.Activities.Http.IntegrationTests;
@@ -33,30 +21,11 @@ namespace Elsa.Activities.Http.IntegrationTests;
 public sealed class EfCommandBudgetTests(ITestOutputHelper output)
 {
     private const string BudgetFile = "ef-command-budgets.json";
-    private const string BasePath = "/workflows/http/";
-    private const int MaxActivitiesPerCommit = 50;
-
-    /// <summary>
-    /// What runs on a timer instead of because of the workflow: the execution lease, the scheduler work claim and the
-    /// executable root-write lease renew every third of their duration (20 seconds by default), and the EF schema gate
-    /// refreshes, evaluates and checks for backfill work every 15 to 30 seconds from host start. A run slowed past those
-    /// by a busy machine counted that work too, so the count depended on wall time. A period no run reaches keeps the
-    /// count a property of the workflow alone.
-    /// </summary>
-    private static readonly TimeSpan BeyondAnyRun = TimeSpan.FromHours(1);
-
-    private static readonly IReadOnlyDictionary<string, Func<HttpEndpointHostFixture, CommandCaptureInterceptor, Task<int>>> Workflows =
-        new Dictionary<string, Func<HttpEndpointHostFixture, CommandCaptureInterceptor, Task<int>>>(StringComparer.Ordinal)
-        {
-            ["writeline-sequence"] = RunWriteLineSequenceAsync,
-            ["http-reference"] = RunHttpReferenceAsync,
-            ["fork-join-resume"] = RunForkJoinResumeAsync
-        };
 
     public static TheoryData<string, PersistenceMode> Cases()
     {
         var cases = new TheoryData<string, PersistenceMode>();
-        foreach (var workflow in Workflows.Keys)
+        foreach (var workflow in ReferenceWorkflowRuns.Workflows)
         foreach (var mode in Enum.GetValues<PersistenceMode>())
             cases.Add(workflow, mode);
         return cases;
@@ -85,7 +54,7 @@ public sealed class EfCommandBudgetTests(ITestOutputHelper output)
         var modes = Enum.GetNames<PersistenceMode>();
         foreach (var (workflow, budgets) in ReadBudgets())
         {
-            Assert.True(Workflows.ContainsKey(workflow), $"{BudgetFile} budgets unknown workflow '{workflow}'.");
+            Assert.True(ReferenceWorkflowRuns.Workflows.Contains(workflow), $"{BudgetFile} budgets unknown workflow '{workflow}'.");
             foreach (var mode in budgets.Keys)
                 Assert.True(modes.Contains(mode), $"{BudgetFile} budgets workflow '{workflow}' under unknown mode '{mode}'.");
         }
@@ -94,110 +63,20 @@ public sealed class EfCommandBudgetTests(ITestOutputHelper output)
     private static async Task<int> MeasureAsync(string workflow, PersistenceMode mode)
     {
         var capture = new CommandCaptureInterceptor();
-        await using var fixture = await HttpEndpointHostFixture.StartDurableSqliteAsync(mode, MaxActivitiesPerCommit, services =>
+        await using var fixture = await HttpEndpointHostFixture.StartDurableSqliteAsync(mode, ReferenceWorkflowRuns.MaxActivitiesPerCommit, services =>
         {
-            new ActivitiesControlFlowFeature().ConfigureServices(services);
-            new JavaScriptFeature().ConfigureServices(services);
-            new JintFeature().ConfigureServices(services);
+            ReferenceWorkflowRuns.ComposeHost(services);
             services.ConfigureDbContext<RuntimeSqliteDbContext>(builder => builder.AddInterceptors(capture));
-            services.Replace(ServiceDescriptor.Singleton(new RuntimeExecutionOwnershipOptions { LeaseDuration = BeyondAnyRun }));
-            services.Replace(ServiceDescriptor.Singleton(new RuntimeSchedulerWorkClaimOptions { VisibilityTimeout = BeyondAnyRun }));
-            services.Configure<WorkflowExecutableGarbageCollectionOptions>(options => options.RootWriteLeaseDuration = BeyondAnyRun);
-            services.Configure<EfSchemaFinalizationOptions>(options =>
-            {
-                options.RefreshInterval = BeyondAnyRun;
-                options.EvaluationInterval = BeyondAnyRun;
-            });
-            services.Configure<EfSchemaBackfillOptions>(options => options.CheckInterval = BeyondAnyRun);
         });
 
-        var actual = await Workflows[workflow](fixture, capture);
-        await AssertSettledAsync(fixture);
-        return actual;
-    }
-
-    private static async Task<int> RunWriteLineSequenceAsync(HttpEndpointHostFixture fixture, CommandCaptureInterceptor capture)
-    {
-        var executable = ReferenceWorkflows.WriteLineSequence();
-        await fixture.PublishAsync(executable);
-
-        var executionId = string.Empty;
-        var commands = await CountAsync(capture, async () => executionId = await fixture.StartWorkflowDirectlyAsync(executable.Identity.ArtifactId));
-
-        Assert.Equal(WorkflowExecutionStatus.Completed, (await fixture.WorkflowExecutionAsync(executionId)).Status);
-        return commands;
-    }
-
-    private static async Task<int> RunHttpReferenceAsync(HttpEndpointHostFixture fixture, CommandCaptureInterceptor capture)
-    {
-        await fixture.PublishAsync(ReferenceWorkflows.HttpReference());
-
-        HttpResponseMessage? response = null;
-        var commands = await CountAsync(capture, async () =>
+        var commands = 0;
+        await ReferenceWorkflowRuns.RunAsync(workflow, fixture, async run =>
         {
-            using var body = new StringContent("""{"firstName":"Alice","lastName":"Smith"}""", Encoding.UTF8, "application/json");
-            response = await fixture.Client.PostAsync($"{BasePath}{ReferenceWorkflows.HttpPath}", body);
+            var before = capture.Commands.Count;
+            await run();
+            commands += capture.Commands.Count - before;
         });
-
-        using (response)
-        {
-            Assert.Equal(HttpStatusCode.OK, response!.StatusCode);
-            Assert.Equal("Alice Smith", await response.Content.ReadAsStringAsync());
-        }
-        Assert.Equal(WorkflowExecutionStatus.Completed, (await fixture.SingleWorkflowExecutionAsync()).Status);
         return commands;
-    }
-
-    private static async Task<int> RunForkJoinResumeAsync(HttpEndpointHostFixture fixture, CommandCaptureInterceptor capture)
-    {
-        var executable = ReferenceWorkflows.ForkJoinResume();
-        await fixture.PublishAsync(executable);
-
-        var executionId = string.Empty;
-        var commands = await CountAsync(capture, async () => executionId = await fixture.StartWorkflowDirectlyAsync(executable.Identity.ArtifactId));
-
-        var bookmark = Assert.Single(await fixture.ListBookmarksAsync(executionId));
-        Assert.Equal(ReferenceWorkflows.EventNodeId, bookmark.ExecutableNodeId);
-        Assert.Equal(WorkflowExecutionStatus.Running, (await fixture.WorkflowExecutionAsync(executionId)).Status);
-
-        BookmarkResumeDispatchResult? resumed = null;
-        commands += await CountAsync(capture, async () =>
-        {
-            await using var scope = fixture.Services.CreateAsyncScope();
-            resumed = await scope.ServiceProvider.GetRequiredService<IBookmarkResumeDispatcher>().DispatchAsync(
-                new BookmarkResumeDispatchRequest(
-                    workflowExecutionId: executionId,
-                    stimulusType: bookmark.StimulusType,
-                    stimulusHash: bookmark.StimulusHash,
-                    input: JsonSerializer.SerializeToElement(new EventReceived(ReferenceWorkflows.EventName))));
-        });
-
-        Assert.Equal(BookmarkResumeDispatchStatus.Dispatched, resumed!.Status);
-        Assert.Empty(await fixture.ListBookmarksAsync(executionId));
-        Assert.Equal(WorkflowExecutionStatus.Completed, (await fixture.WorkflowExecutionAsync(executionId)).Status);
-        return commands;
-    }
-
-    private static async Task<int> CountAsync(CommandCaptureInterceptor capture, Func<Task> run)
-    {
-        var before = capture.Commands.Count;
-        await run();
-        return capture.Commands.Count - before;
-    }
-
-    /// <summary>
-    /// Checks the run left nothing for a background pump to do after the count was taken, which that count would miss: no
-    /// queued scheduler work, no post-commit work short of delivered, and no incident.
-    /// </summary>
-    private static async Task AssertSettledAsync(HttpEndpointHostFixture fixture)
-    {
-        await using var scope = fixture.Services.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
-        Assert.Empty(await context.SchedulerWorkItems.AsNoTracking().ToArrayAsync());
-        Assert.All(
-            await context.RuntimePostCommitOutbox.AsNoTracking().Select(item => item.Status).ToArrayAsync(),
-            status => Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (RuntimePostCommitOutboxStatus)status));
-        Assert.Empty(await context.IncidentStates.AsNoTracking().ToArrayAsync());
     }
 
     private static Dictionary<string, Dictionary<string, int>> ReadBudgets() =>

@@ -93,6 +93,8 @@ public static class RuntimeCheckpointCommitValidator
                 throw new RuntimeCheckpointCommitValidationException($"Workflow dispatch cancellation request '{request.DispatchId}' must be committed by its parent workflow execution.");
         }
 
+        ValidateBackgroundActivityWork(commit);
+
         foreach (var consumed in changes.ConsumedSchedulerWorkItems)
         {
             RequireWorkflow(consumed.WorkflowExecutionId, commit, "Consumed scheduler work item");
@@ -103,6 +105,36 @@ public static class RuntimeCheckpointCommitValidator
         if (changes.AlterationJobTerminalChange is { } alteration &&
             !StringComparer.Ordinal.Equals(alteration.CheckpointCommitId, commit.CommitId))
             throw new RuntimeCheckpointCommitValidationException("Workflow alteration terminal evidence must reference its checkpoint commit ID.");
+    }
+
+    private static void ValidateBackgroundActivityWork(RuntimeCheckpointCommit commit)
+    {
+        var participants = commit.StateChanges.BackgroundActivityWork;
+        if (participants.Admissions.Count > 0 && commit.ExpectedFence is null)
+            throw new RuntimeCheckpointCommitValidationException("Background activity work admission requires the current workflow execution fence.");
+
+        var admissionIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var request in participants.Admissions)
+        {
+            RequireWorkflow(request.WorkflowExecutionId, commit, "Background activity work admission");
+            if (!StringComparer.Ordinal.Equals(request.CoordinatorWorkItem.WorkflowExecutionId, commit.WorkflowExecutionId))
+                throw new RuntimeCheckpointCommitValidationException($"Background activity work admission '{request.WorkId}' carries coordinator work for a different workflow execution.");
+            if (!admissionIds.Add(request.WorkId))
+                throw new RuntimeCheckpointCommitValidationException($"Background activity work admission '{request.WorkId}' occurs more than once in one checkpoint.");
+        }
+
+        var acceptanceIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var acceptance in participants.Acceptances)
+        {
+            RequireWorkflow(acceptance.WorkflowExecutionId, commit, "Background activity work acceptance");
+            if (acceptance.ExpectedReceiptDigest.Length != 64 || acceptance.ExpectedReceiptDigest.Any(character => !Uri.IsHexDigit(character)))
+                throw new RuntimeCheckpointCommitValidationException($"Background activity work acceptance '{acceptance.WorkId}' must name a SHA-256 receipt digest.");
+            if (!acceptanceIds.Add(acceptance.WorkId))
+                throw new RuntimeCheckpointCommitValidationException($"Background activity work acceptance '{acceptance.WorkId}' occurs more than once in one checkpoint.");
+        }
+
+        foreach (var cancellation in participants.Cancellations)
+            RequireWorkflow(cancellation.WorkflowExecutionId, commit, "Background activity work cancellation");
     }
 
     /// <summary>

@@ -56,6 +56,7 @@ namespace Elsa.Activities.Do.Activities;
 /// completes, because the post-completion re-evaluation reads <c>false</c>.
 /// </para>
 /// </remarks>
+[Activity(Icon = "RotateCcw")]
 [ActivityStructure("elsa.do.structure", "1.0.0")]
 [ActivityChildSlot("Do.Body", "body", "Body", ActivityChildSlotCardinalities.Single)]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
@@ -76,7 +77,7 @@ public sealed class Do : StructuralActivity, IRuntimeStructuralActivity, IRuntim
     {
         // Post-test loop: schedule the body unconditionally before the first condition check, so it runs
         // at least once even when the condition is false on entry.
-        var navigator = LoopNavigator.From(runtimeContext.ExecutableNode, LoopKind.Do);
+        var navigator = runtimeContext.ExecutableNode.GetOrAddRoutingStructure(static node => LoopNavigator.From(node, LoopKind.Do));
 
         if (navigator.Body is not { } body)
         {
@@ -92,7 +93,7 @@ public sealed class Do : StructuralActivity, IRuntimeStructuralActivity, IRuntim
         ArgumentNullException.ThrowIfNull(context);
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
-        var navigator = LoopNavigator.From(runtimeContext.ExecutableNode, LoopKind.Do);
+        var navigator = runtimeContext.ExecutableNode.GetOrAddRoutingStructure(static node => LoopNavigator.From(node, LoopKind.Do));
 
         // #381: validate the completed child is actually this loop's body (mirroring For/ForEach/If/
         // Switch/Parallel) so a stray callback fails diagnosably instead of silently rescheduling.

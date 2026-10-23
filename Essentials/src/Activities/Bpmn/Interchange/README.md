@@ -202,9 +202,9 @@ is synthesized for elements without one.
 Ingestion-style endpoints (no API capability, mirroring the Elsa3 reusable-import surface); all
 three are pure conversions — nothing is persisted server-side:
 
-- `POST interchange/bpmn/analyze` (`bpmn-interchange.read`) — inventory a document before import.
-- `POST interchange/bpmn/import` (`bpmn-interchange.manage`) — document → `BpmnProcess` node + analysis.
-- `POST interchange/bpmn/export` (`bpmn-interchange.read`) — `BpmnProcess` node → BPMN XML + DI.
+- `POST interchange/bpmn/analyze` (`bpmn-interchange:read`) — inventory a document before import.
+- `POST interchange/bpmn/import` (`bpmn-interchange:manage`) — document → `BpmnProcess` node + analysis.
+- `POST interchange/bpmn/export` (`bpmn-interchange:read`) — `BpmnProcess` node → BPMN XML + DI.
 
 ## Not yet in this slice
 

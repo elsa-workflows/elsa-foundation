@@ -104,7 +104,7 @@ public sealed class BpmnBoundaryEventTests
         var hostBookmark = Assert.Single(await fixture.BookmarksAsync(), candidate => candidate.ExecutableNodeId == "node-host");
 
         // The host "proceed" completes first: it routes onward and its still-armed timer listener is torn down.
-        var resumed = await fixture.ResumeAsync(hostBookmark, JsonSerializer.SerializeToElement(new EventReceived("proceed")));
+        var resumed = await fixture.ResumeAsync(hostBookmark, JsonSerializer.SerializeToElement(new { eventName = "proceed" }));
 
         resumed.AssertCompleted(BpmnRuntimeFixture.ProcessNodeId);
         resumed.AssertWorkflowCompleted();
@@ -145,14 +145,14 @@ public sealed class BpmnBoundaryEventTests
         var pingBookmark = Assert.Single(await fixture.BookmarksAsync(), candidate => candidate.ExecutableNodeId == "node-ping");
 
         // The non-interrupting boundary fires: its path runs, but the host keeps waiting (process still Running).
-        var afterPing = await fixture.ResumeAsync(pingBookmark, JsonSerializer.SerializeToElement(new EventReceived("ping")));
+        var afterPing = await fixture.ResumeAsync(pingBookmark, JsonSerializer.SerializeToElement(new { eventName = "ping" }));
         Assert.Equal(WorkflowExecutionStatus.Running, afterPing.WorkflowState?.Status);
         Assert.Equal(ActivityExecutionStatus.Completed, afterPing.State("node-ping").Status);
         Assert.NotEqual(ActivityExecutionStatus.Cancelled, afterPing.State("node-host").Status);
 
         // The host then completes normally; both the boundary path and the host path reached their ends.
         var hostBookmark = Assert.Single(await fixture.BookmarksAsync(), candidate => candidate.ExecutableNodeId == "node-host");
-        var afterProceed = await fixture.ResumeAsync(hostBookmark, JsonSerializer.SerializeToElement(new EventReceived("proceed")));
+        var afterProceed = await fixture.ResumeAsync(hostBookmark, JsonSerializer.SerializeToElement(new { eventName = "proceed" }));
         afterProceed.AssertCompleted(BpmnRuntimeFixture.ProcessNodeId);
         afterProceed.AssertWorkflowCompleted();
         Assert.Equal(ActivityExecutionStatus.Completed, afterProceed.State("node-host").Status);
@@ -352,14 +352,14 @@ public sealed class BpmnBoundaryEventTests
 
         // The non-interrupting message boundary fires first: its path runs, host and timer stay live.
         var pingBookmark = Assert.Single(await fixture.BookmarksAsync(), candidate => candidate.ExecutableNodeId == "node-ping");
-        var afterPing = await fixture.ResumeAsync(pingBookmark, JsonSerializer.SerializeToElement(new EventReceived("ping")));
+        var afterPing = await fixture.ResumeAsync(pingBookmark, JsonSerializer.SerializeToElement(new { eventName = "ping" }));
         Assert.Equal(WorkflowExecutionStatus.Running, afterPing.WorkflowState?.Status);
         Assert.NotEqual(ActivityExecutionStatus.Cancelled, afterPing.State("node-host").Status);
         Assert.NotEqual(ActivityExecutionStatus.Cancelled, afterPing.State("node-timer").Status);
 
         // The host completes next: it routes and tears down the still-armed timer listener.
         var hostBookmark = Assert.Single(await fixture.BookmarksAsync(), candidate => candidate.ExecutableNodeId == "node-host");
-        var afterProceed = await fixture.ResumeAsync(hostBookmark, JsonSerializer.SerializeToElement(new EventReceived("proceed")));
+        var afterProceed = await fixture.ResumeAsync(hostBookmark, JsonSerializer.SerializeToElement(new { eventName = "proceed" }));
         afterProceed.AssertCompleted(BpmnRuntimeFixture.ProcessNodeId);
         afterProceed.AssertWorkflowCompleted();
         Assert.Equal(ActivityExecutionStatus.Cancelled, afterProceed.State("node-timer").Status);

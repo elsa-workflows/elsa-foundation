@@ -86,17 +86,27 @@ public sealed class RuntimeCheckpointCommitter
         commit = AttachExpectedFence(commit);
 
         var decision = await _persistencePolicy.DecideAsync(commit.Checkpoint, cancellationToken);
+        if (!commit.StateChanges.BackgroundActivityWork.IsEmpty)
+            decision = new RuntimeCheckpointPersistenceDecision(
+                RuntimeCheckpointPersistenceMode.Immediate,
+                "Background activity work participants require an atomic checkpoint flush.");
+        else if (HasDelayedIntent(commit))
+            // R-7 (spec 261): a delayed child schedule is written durably at once in every persistence mode. Folded into
+            // a coalesced segment it would live only in the drain's memory until the end-of-drain flush.
+            decision = new RuntimeCheckpointPersistenceDecision(
+                RuntimeCheckpointPersistenceMode.Immediate,
+                "A delayed post-commit intent requires a durable checkpoint.");
 
         if (activity is not null)
         {
-            activity.SetTag(WorkflowEngineTelemetry.CheckpointPersistenceModeTag, decision.Mode.ToString());
-            activity.SetTag(WorkflowEngineTelemetry.CheckpointMandatoryTag, IsMandatoryCheckpoint(commit.Checkpoint));
+            activity.SetTag(WorkflowEngineTelemetry.CheckpointPersistenceDecisionTag, decision.Mode.ToString());
+            activity.SetTag(WorkflowEngineTelemetry.CheckpointMandatoryTag, IsMandatoryCheckpoint(commit));
             activity.SetTag(WorkflowEngineTelemetry.CheckpointPostCommitIntentsTag, commit.PostCommitIntents.Count);
         }
 
         if (decision.Mode == RuntimeCheckpointPersistenceMode.Skip)
         {
-            if (IsMandatoryCheckpoint(commit.Checkpoint))
+            if (IsMandatoryCheckpoint(commit))
                 throw new InvalidOperationException(
                     $"Mandatory runtime checkpoint '{commit.Checkpoint.CheckpointId}' cannot be skipped by the persistence policy.");
 
@@ -173,8 +183,8 @@ public sealed class RuntimeCheckpointCommitter
 
     // Publishes each committed EnqueueSchedulerWork continuation's materialized work item onto the owning live drain's
     // in-process-hop carrier. Guards (all must hold): the fast path is enabled; a live-drain delivery scope owns THIS
-    // execution (so the dispatcher will look here rather than deserialize); and no coalescing session owns the execution
-    // (the coalescing overlay is authoritative on continuation delivery). When any guard
+    // execution (so the dispatcher will look here rather than deserialize); and the drain's session for the execution
+    // has stopped folding (while it folds, its overlay is authoritative on continuation delivery). When any guard
     // fails the carrier stays empty and delivery deserializes the durable payload — byte-identical result either way.
     private void PublishInProcessHopWorkItems(RuntimeCheckpointCommit commit)
     {
@@ -189,8 +199,10 @@ public sealed class RuntimeCheckpointCommitter
 
         foreach (var intent in commit.PostCommitIntents)
         {
+            // A delayed intent (R-7) is delivered by the outbox sweep once it is due, never by this drain.
             if (intent.MaterializedSchedulerWorkItem is { } workItem &&
-                StringComparer.Ordinal.Equals(intent.Kind, RuntimePostCommitIntentKinds.EnqueueSchedulerWork))
+                StringComparer.Ordinal.Equals(intent.Kind, RuntimePostCommitIntentKinds.EnqueueSchedulerWork) &&
+                !intent.IsDelayedPast(commit.Checkpoint.OccurredAt))
                 scope.PublishHopWorkItem(intent.IntentId, workItem);
         }
     }
@@ -201,12 +213,20 @@ public sealed class RuntimeCheckpointCommitter
             ? accessor.BeginConsumeAttempt(consumed.WorkItemId)
             : null;
 
-    private static bool IsMandatoryCheckpoint(RuntimeCheckpoint checkpoint) =>
-        checkpoint.Metadata.TryGetValue(RuntimeMetadataKeys.CheckpointRequirement, out var requirement) &&
+    private static bool HasDelayedIntent(RuntimeCheckpointCommit commit) =>
+        commit.PostCommitIntents.Any(intent => intent.IsDelayedPast(commit.Checkpoint.OccurredAt));
+
+    private static bool IsMandatoryCheckpoint(RuntimeCheckpointCommit commit) =>
+        !commit.StateChanges.BackgroundActivityWork.IsEmpty ||
+        HasDelayedIntent(commit) ||
+        commit.Checkpoint.Metadata.TryGetValue(RuntimeMetadataKeys.CheckpointRequirement, out var requirement) &&
         StringComparer.Ordinal.Equals(requirement, RuntimeMetadataKeys.CheckpointRequirementMandatory);
 
     private IReadOnlyCollection<ConsumedSchedulerWorkItem> ResolveConsumedWorkItems(RuntimeCheckpointCommit commit)
     {
+        if (commit.RetainSchedulerWork)
+            return [];
+
         if (_consumedWorkClaimAccessor is not { PendingConsume: { } pending, WasConsumedDurably: false })
             return [];
 

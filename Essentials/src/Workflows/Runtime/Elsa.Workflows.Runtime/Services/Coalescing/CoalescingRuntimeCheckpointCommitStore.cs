@@ -10,8 +10,8 @@ namespace Elsa.Workflows.Runtime.Services.Coalescing;
 /// Coalescing decorator for <see cref="IRuntimeCheckpointCommitStore"/>. While a coalescing session owns
 /// the target workflow execution, deferred checkpoints are buffered into an in-memory working set and folded into a
 /// single atomic durable commit at a flush boundary (attempt activation, suspension/fault/cancellation/completion, an
-/// operational or bookmark write, the per-segment activity cap of Durable or Balanced, or the end-of-drain quiescence
-/// flush).
+/// operational, incident, bookmark, alteration-job, child-dispatch or dispatch-cancellation write, the per-segment
+/// activity cap of Durable or Balanced, or the end-of-drain quiescence flush).
 /// The one boundary that may be dropped instead is the completion of an Ephemeral run that has no record, on a host
 /// that turned completion records off (see <see cref="RuntimeCoalescingSession.CanDiscardCompletion"/>). A durable attempt
 /// boundary and a cap-hit fold-and-flush each start another coalesced segment in the same drain; when no session is
@@ -60,7 +60,6 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
             var flushResult = await CommitInnerAsync(session, commit, decision, cancellationToken);
             try
             {
-                session.InvalidateInspectionBaselines();
                 await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
                 await session.AdvanceInnerQueueAsync(consumeInFlightClaims: true, cancellationToken);
             }
@@ -141,7 +140,6 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
             await CommitInnerAsync(session, foldedCommit, ImmediateDecision, cancellationToken);
             try
             {
-                session.InvalidateInspectionBaselines();
                 if (capFold)
                 {
                     // The trailing commit's outbox items stay overlay-delivered for the next segment; the flush persisted
@@ -154,10 +152,10 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
                 await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
                 // A deactivating boundary — and a cap fold, whose trailing commit rode the in-flight dispatch — already
                 // carries the in-flight item's effect in this flush, so the item must be consumed here instead of
-                // surviving as a durable duplicate (see AdvanceInnerQueueAsync). Only the pre-activation attempt boundary
-                // keeps it.
+                // surviving as a durable duplicate (see AdvanceInnerQueueAsync). A retaining checkpoint or
+                // pre-activation attempt boundary keeps it for redrive.
                 await session.AdvanceInnerQueueAsync(
-                    consumeInFlightClaims: capFold || !continueAfterBoundary,
+                    consumeInFlightClaims: !commit.RetainSchedulerWork && (capFold || !continueAfterBoundary),
                     cancellationToken,
                     preserveActiveFusedScheduleAnchors: capFold);
             }
@@ -180,12 +178,11 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         var passthrough = await CommitInnerAsync(session, commit, decision, cancellationToken);
         try
         {
-            session.InvalidateInspectionBaselines();
             if (continueAfterBoundary)
                 session.RecordDurableBoundaryState(commit.StateChanges);
             await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
             await session.AdvanceInnerQueueAsync(
-                consumeInFlightClaims: !continueAfterBoundary,
+                consumeInFlightClaims: !commit.RetainSchedulerWork && !continueAfterBoundary,
                 cancellationToken,
                 preserveActiveFusedScheduleAnchors: false);
         }
@@ -284,6 +281,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         commit.StateChanges.Operational.Count > 0 ||
         commit.StateChanges.Incidents.Count > 0 ||
         commit.StateChanges.Bookmarks.Count > 0 ||
+        !commit.StateChanges.BackgroundActivityWork.IsEmpty ||
         commit.StateChanges.AlterationJobTerminalChange is not null ||
         commit.StateChanges.WorkflowDispatches.Count > 0 ||
         commit.StateChanges.WorkflowDispatchCancellations.Count > 0;

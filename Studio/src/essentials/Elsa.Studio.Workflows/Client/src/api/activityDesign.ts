@@ -80,7 +80,10 @@ export function useActivityDefinitions(context: StudioEndpointContext, request: 
   return useQuery({
     queryKey: activityDesignKeys.definitionCollection(request),
     queryFn: ({ signal }) => listActivityDefinitions(context, request, signal),
-    placeholderData: previous => previous,
+    placeholderData: (previous, previousQuery) => {
+      const previousRequest = previousQuery?.queryKey[2] as ActivityDefinitionCollectionRequest | undefined;
+      return previousRequest?.authority === request.authority ? previous : undefined;
+    },
     retry: false
   });
 }

@@ -141,6 +141,7 @@
         "dependencies": {
           "Elsa.Cluster.Core": "[4.0.0-dev, )",
           "Elsa.Serialization.SystemText": "[4.0.0-dev, )",
+          "Elsa.Serialization.Testing": "[1.0.0, )",
           "Elsa.Workflows.Runtime.Distributed": "[4.0.0-dev, )",
           "Xunit.SkippableFact": "[1.5.23, )",
           "xunit": "[2.9.3, )"
@@ -178,13 +179,21 @@
       "elsa.serialization.systemtext": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.30, )",
+          "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Expressions.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Serialization.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.10, )",
+          "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )"
+        }
+      },
+      "elsa.serialization.testing": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Serialization.SystemText": "[4.0.0-dev, )",
+          "Microsoft.Extensions.DependencyInjection": "[10.0.10, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )"
         }
       },
@@ -206,7 +215,7 @@
       "elsa.workflows.runtime": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.30, )",
+          "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Attention.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
@@ -232,7 +241,7 @@
       "elsa.workflows.runtime.distributed": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.30, )",
+          "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Cluster.Core": "[4.0.0-dev, )",
           "Elsa.Cluster.InProcess": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
@@ -252,9 +261,9 @@
       },
       "CShells.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.0.30, )",
-        "resolved": "0.0.30",
-        "contentHash": "Kf3tyvnuRMIZui951/iZA95SCnb3zPjnK02x/JXJE1xNhqlYqbMKtIhqlUAj54dC33g3n5rWpXYSKK5cGe3RKw==",
+        "requested": "[0.0.31, )",
+        "resolved": "0.0.31",
+        "contentHash": "se7fS2KnM3mFQjIDvB+KfvZNGdKbc68ITzlSde5V16ZGEeVZdHkRgkTlnJnFalXqkipiIr1oUQdXmqtEV6AE0g==",
         "dependencies": {
           "JetBrains.Annotations": "2025.2.4",
           "Microsoft.Extensions.Configuration": "10.0.0",

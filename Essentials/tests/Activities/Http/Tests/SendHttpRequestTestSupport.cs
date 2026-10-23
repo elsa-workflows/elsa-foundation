@@ -7,7 +7,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.SystemText;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
@@ -59,7 +59,7 @@ internal static class SendHttpRequestTestSupport
     internal static ExecutableNode NewSendNode(
         Uri? url = null,
         int[]? expectedStatusCodes = null,
-        string? authorization = null,
+        ConnectionReference? connection = null,
         IDictionary<string, string>? requestHeaders = null)
     {
         var inputBindings = new Dictionary<string, RuntimeInputBinding>
@@ -74,8 +74,8 @@ internal static class SendHttpRequestTestSupport
                 expectedStatusCodes,
                 typeof(ICollection<int>));
 
-        if (authorization is not null)
-            inputBindings["Authorization"] = LiteralBinding("Authorization", authorization, typeof(string));
+        if (connection is not null)
+            inputBindings["Connection"] = LiteralBinding("Connection", connection, typeof(ConnectionReference));
 
         if (requestHeaders is not null)
             inputBindings["RequestHeaders"] = LiteralBinding("RequestHeaders", requestHeaders, typeof(IDictionary<string, string>));
@@ -91,7 +91,7 @@ internal static class SendHttpRequestTestSupport
                 "Url" => ValueType(typeof(Uri)),
                 "Method" => ValueType(typeof(string)),
                 "ExpectedStatusCodes" => ValueType(typeof(ICollection<int>)),
-                "Authorization" => ValueType(typeof(string)),
+                "Connection" => ValueType(typeof(ConnectionReference)),
                 "RequestHeaders" => ValueType(typeof(IDictionary<string, string>)),
                 _ => throw new InvalidOperationException($"Unknown test input '{key}'.")
             },
@@ -160,8 +160,7 @@ internal static class SendHttpRequestTestSupport
             ? new ValueTypeDescriptor(reference.Alias, reference.CollectionKind)
             : throw new InvalidOperationException($"Could not describe '{type}'.");
 
-    internal static Elsa.Serialization.Core.IPayloadSerializer Serializer =>
-        TestPayloadSerializers.NewPayloadSerializer();
+    internal static readonly Elsa.Serialization.Core.IPayloadSerializer Serializer = SerializationServices.PayloadSerializer();
 
     internal sealed class StubHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> responder) : HttpMessageHandler
     {

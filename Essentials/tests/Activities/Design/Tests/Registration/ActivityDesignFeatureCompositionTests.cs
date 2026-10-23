@@ -13,8 +13,7 @@ using Elsa.Api.Capabilities.Extensions;
 using Elsa.Events.Core.Contracts;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Extensions;
-using Elsa.Primitives.Contracts;
-using Elsa.Primitives.Hosting.Services;
+using Elsa.Primitives.Hosting;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
 using Microsoft.AspNetCore.Http;
@@ -258,7 +257,7 @@ public sealed class ActivityDesignFeatureCompositionTests
     private static ServiceCollection MinimalServices()
     {
         var services = new ServiceCollection();
-        services.AddSingleton<ISystemClock, SystemClock>();
+        new PrimitivesFeature().ConfigureServices(services);
         services.AddSingleton<IInlineEventPublisher, StubEventPublisher>();
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         services.AddLogging();

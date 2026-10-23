@@ -52,6 +52,7 @@ describe("activity presentation metadata", () => {
       .toBe("Notify buyer");
     expect(resolveActivityLabel(undefined, catalogItem, catalogItem.activityTypeKey)).toBe("Write Line");
     expect(resolveActivityLabel(undefined, undefined, catalogItem.activityTypeKey)).toBe("WriteLine");
+    expect(resolveActivityLabel(undefined, undefined, "executable-missing:Elsa.HttpEndpoint@1.1.0")).toBe("HttpEndpoint");
   });
 
   it("copies metadata on duplication and prunes selected node identities", () => {

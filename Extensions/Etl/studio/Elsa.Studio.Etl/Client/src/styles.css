@@ -1,0 +1,118 @@
+.etl-shell,
+.etl-selection-editor {
+  color: var(--studio-text);
+  font-size: var(--studio-body-size);
+  line-height: 1.5;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.etl-shell {
+  margin: 1.25rem 0;
+  padding: 1.25rem;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-material-panel-bg);
+}
+.etl-shell h1,
+.etl-shell h2,
+.etl-shell h3 { line-height: 1.3; overflow-wrap: anywhere; }
+.etl-shell h1 { font-size: var(--studio-page-title-size, 1.5rem); }
+.etl-shell h2 { font-size: 1.15rem; }
+.etl-shell h3 { font-size: 1rem; }
+.etl-shell p,
+.etl-selection-editor p { margin-block: 0.5rem; }
+.etl-shell small,
+.etl-editor-eyebrow,
+.etl-editor-limit-note { color: var(--studio-text-muted); }
+.etl-editor-eyebrow { font-size: var(--studio-label-size); font-weight: 600; }
+.etl-toolbar,
+.etl-actions,
+.etl-editor-section-heading,
+.etl-editor-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; }
+.etl-actions { justify-content: flex-start; }
+.etl-shell button,
+.etl-selection-editor button,
+.etl-shell input,
+.etl-shell select,
+.etl-selection-editor select {
+  min-height: 2.5rem;
+  max-width: 100%;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-material-control-bg);
+  color: var(--studio-text);
+  font: inherit;
+}
+.etl-shell button,
+.etl-selection-editor button { cursor: pointer; }
+.etl-shell button:disabled,
+.etl-selection-editor button:disabled { cursor: not-allowed; opacity: 0.6; }
+.etl-shell button:hover:not(:disabled),
+.etl-selection-editor button:hover:not(:disabled) { background: var(--studio-material-hover-bg); }
+.etl-shell .etl-primary { background: var(--studio-accent); color: var(--studio-accent-text); border-color: var(--studio-accent); }
+.etl-shell :focus-visible,
+.etl-selection-editor :focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 2px; }
+.etl-shell input[type="checkbox"] { min-height: 1.2rem; width: 1.2rem; height: 1.2rem; accent-color: var(--studio-accent); }
+.etl-editor-section,
+.etl-run-inspection > section { border-top: 1px solid var(--studio-border); padding-block: 1.25rem; }
+.etl-editor-binding-grid,
+.etl-editor-limits-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 1rem; }
+.etl-editor-field { display: flex; flex-direction: column; align-items: stretch; gap: 0.35rem; min-width: 0; margin-block: 0.5rem; }
+.etl-editor-field label { font-weight: 600; }
+.etl-editor-field input,
+.etl-editor-field select { width: 100%; min-width: 0; box-sizing: border-box; }
+.etl-editor-order { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); list-style: none; padding: 0; margin-block: 1.5rem; gap: 0.5rem; }
+.etl-editor-order li { display: flex; align-items: flex-start; gap: 0.6rem; padding: 0.9rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-sm); background: var(--studio-material-panel-bg-soft); }
+.etl-editor-order li > span { color: var(--studio-accent); font-weight: 700; }
+.etl-editor-order small { display: block; margin-top: 0.3rem; }
+.etl-table-scroll,
+.etl-editor-table-wrap { position: relative; overflow-x: auto; max-width: 100%; margin-block: 0.75rem; }
+.etl-shell table { width: 100%; border-collapse: collapse; text-align: left; }
+.etl-shell th,
+.etl-shell td { padding: 0.65rem; border-bottom: 1px solid var(--studio-border); vertical-align: top; }
+.etl-shell th { font-weight: 600; color: var(--studio-text-muted); }
+.etl-shell caption { text-align: left; font-weight: 600; margin-bottom: 0.75rem; }
+.etl-editor-table { min-width: 38rem; }
+.etl-editor-table input:not([type="checkbox"]),
+.etl-editor-table select { min-width: 6rem; width: 100%; box-sizing: border-box; }
+.etl-editor-actions-cell { white-space: nowrap; }
+.etl-editor-checkbox { display: inline-flex; align-items: center; gap: 0.5rem; }
+.etl-editor-diagnostics,
+.etl-notice,
+.etl-error { margin-block: 1rem; padding: 1rem; border: 1px solid var(--studio-border); border-inline-start: 3px solid var(--studio-accent); border-radius: var(--studio-radius-sm); background: var(--studio-material-panel-bg-soft); }
+.etl-editor-diagnostics li { margin-block: 0.5rem; }
+.etl-editor-diagnostic-path { display: block; color: var(--studio-text-muted); }
+.etl-shell code,
+.etl-selection-editor code { overflow-wrap: anywhere; white-space: pre-wrap; }
+.etl-facts { display: grid; grid-template-columns: minmax(8rem, 1fr) minmax(0, 2fr); gap: 0.5rem 1rem; }
+.etl-facts dt { color: var(--studio-text-muted); }
+.etl-facts dd { margin: 0; overflow-wrap: anywhere; }
+.etl-editor-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+@media (max-width: 600px) {
+  .etl-shell { margin: 0.5rem 0; padding: 0.75rem; }
+  .etl-facts { grid-template-columns: minmax(0, 1fr); }
+  .etl-facts dd { margin-bottom: 0.5rem; }
+  .etl-toolbar { align-items: stretch; }
+}
+.etl-runs-header,
+.etl-runs-section-heading,
+.etl-run-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.etl-runs-layout { display: grid; grid-template-columns: minmax(14rem, 1fr) minmax(0, 2fr); gap: 1.5rem; }
+.etl-runs-list,
+.etl-run-detail { min-width: 0; }
+.etl-run-list { list-style: none; padding: 0; display: grid; gap: 0.5rem; }
+.etl-shell .etl-run-select { display: flex; flex-direction: column; align-items: flex-start; width: 100%; gap: 0.35rem; text-align: left; }
+.etl-run-select small { display: block; overflow-wrap: anywhere; }
+.etl-shell .etl-run-select[aria-pressed="true"] { border-color: var(--studio-accent); background: var(--studio-material-panel-bg-soft); }
+.etl-run-status { font-weight: 600; }
+.etl-run-counts { color: var(--studio-text-muted); font-size: var(--studio-label-size); }
+.etl-run-error,
+.etl-run-notice { border-inline-start: 3px solid var(--studio-accent); padding-inline-start: 0.75rem; margin-block: 1rem; }
+@media (max-width: 900px) {
+  .etl-runs-layout { grid-template-columns: minmax(0, 1fr); }
+}
+.etl-definition-list { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 0.5rem; }
+.etl-definition-list button { display: flex; flex-direction: column; align-items: flex-start; width: 100%; text-align: left; gap: 0.25rem; }
+.etl-definition-list button[aria-pressed="true"] { border-color: var(--studio-accent); }
+.etl-definition-list small { overflow-wrap: anywhere; }

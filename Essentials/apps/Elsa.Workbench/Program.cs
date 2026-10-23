@@ -51,6 +51,10 @@ using Elsa.Modularity.EntityFramework.Extensions;
 using Elsa.Modularity.Nuplane.Extensions;
 using Elsa.Modularity.Nuplane.Services;
 using Elsa.Primitives.Hosting;
+using Elsa.Connections.Api.Features;
+using Elsa.Connections.Design.Features;
+using Elsa.Connections.Features;
+using Elsa.Connections.Workflows.Features;
 using Elsa.Secrets.Attention;
 using Elsa.Serialization.Newtonsoft;
 using Elsa.Serialization.SystemText;
@@ -382,6 +386,24 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(ModularityApiFeature).Assembly,
             typeof(ModularityAttentionFeature).Assembly,
             typeof(SecretsAttentionFeature).Assembly,
+            typeof(ConnectionsFeature).Assembly,
+            typeof(ConnectionsApiFeature).Assembly,
+            typeof(ConnectionsDesignFeature).Assembly,
+            typeof(ConnectionsWorkflowsFeature).Assembly,
+            // Opt-in finite ETL authoring, native execution and independent runtime inspection.
+            typeof(Elsa.Etl.Design.EtlDesignFeature).Assembly,
+            typeof(Elsa.Etl.Design.Api.EtlDesignApiFeature).Assembly,
+            typeof(Elsa.Etl.Runtime.EtlRuntimeFeature).Assembly,
+            typeof(Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature).Assembly,
+            typeof(Elsa.Etl.Persistence.EntityFrameworkCore.EtlDesignEntityFrameworkCoreFeature).Assembly,
+            typeof(Elsa.Etl.Workflows.Design.EtlWorkflowsDesignFeature).Assembly,
+            typeof(Elsa.Etl.Workflows.Runtime.EtlWorkflowsRuntimeFeature).Assembly,
+            // Opt-in durable Rules. Package qualification references these same host assemblies from NuGet;
+            // the configured deployment receipt must still match the active package graph and loaded assets.
+            typeof(Elsa.Rules.Runtime.RulesRuntimeFeature).Assembly,
+            typeof(Elsa.Rules.Persistence.EntityFrameworkCore.RulesRuntimeEntityFrameworkCoreFeature).Assembly,
+            typeof(Elsa.Rules.Workflows.Design.RulesWorkflowsDesignFeature).Assembly,
+            typeof(Elsa.Rules.Workflows.Runtime.RulesWorkflowsRuntimeFeature).Assembly,
             typeof(WorkflowsRuntimeAttentionFeature).Assembly,
             typeof(StructuredLogsFeature).Assembly,
             typeof(OpenTelemetryFeature).Assembly,

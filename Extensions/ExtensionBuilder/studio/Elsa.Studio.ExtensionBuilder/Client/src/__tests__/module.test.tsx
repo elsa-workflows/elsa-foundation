@@ -14,13 +14,14 @@ describe("extension builder module", () => {
 
     register(api);
 
-    // The nav item places itself under Settings with its own icon — the host no longer special-cases the id (#535).
+    // The nav item places itself under Administration with its own icon — the host no longer special-cases the id (#535).
     expect(navigation).toEqual([{
       id: "extension-builder",
       label: "Extension Builder",
       path: "/extension-builder",
-      order: 40,
+      order: 50,
       iconColor: "#ec4899",
+      placement: "admin",
       section: "settings",
       icon: Hammer
     }]);

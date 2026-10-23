@@ -597,7 +597,8 @@ public sealed class CoalescingDurableValuePageReuseTests
             checkpointStore,
             checkpointStore,
             new InMemoryWorkflowSchedulerWorkQueue(),
-            coalescingScopeFactory: drainScopeFactory);
+            coalescingScopeFactory: drainScopeFactory,
+            persistenceModeResolver: NonFoldingDrainScopeFactory.Resolver);
         using var cancellation = new CancellationTokenSource();
 
         var drain = orchestrator.DrainAsync(NewEnvelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId), cancellation.Token).AsTask();
@@ -624,18 +625,20 @@ public sealed class CoalescingDurableValuePageReuseTests
         var drainScopeFactory = new CapturingDrainScopeFactory(fixture.SessionAccessor);
         using var cancellationCallbackGate = new CancellationCallbackGate();
         var drainer = new HeartbeatLossHoldingDrainer(store, cancellationCallbackGate);
+        var ownershipService = new StaleHeartbeatOwnershipService();
         var checkpointStore = new InMemoryRuntimeCheckpointCommitStore();
         var orchestrator = new WorkflowDrainOrchestrator(
             drainer,
             new EmptyPostCommitOutboxProcessor(),
             [],
             TestCheckpointRuleViolationFaulter.Create(),
-            new StaleHeartbeatOwnershipService(),
+            ownershipService,
             new AsyncLocalRuntimeExecutionOwnershipContextAccessor(),
             checkpointStore,
             checkpointStore,
             new InMemoryWorkflowSchedulerWorkQueue(),
-            coalescingScopeFactory: drainScopeFactory);
+            coalescingScopeFactory: drainScopeFactory,
+            persistenceModeResolver: NonFoldingDrainScopeFactory.Resolver);
 
         var drain = orchestrator.DrainAsync(
             NewEnvelope(),
@@ -643,6 +646,8 @@ public sealed class CoalescingDurableValuePageReuseTests
         await drainer.PageWarmed.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.NotNull(drainScopeFactory.Session);
         drainScopeFactory.Session!.BufferDeferred(UpsertCommit(Row("b", "staged-during-drain")));
+        // The heartbeat reports the lease lost only now, so its cancellation follows the staged write.
+        ownershipService.LoseLease();
         int pageReadsDuringCancellationCallback;
         IReadOnlyList<DurableValueState> rowsDuringCancellationCallback;
         try
@@ -983,10 +988,12 @@ public sealed class CoalescingDurableValuePageReuseTests
             CancellationToken cancellationToken = default)
         {
             await store.ListPageAsync(new DurableValueStatePageQuery(request.WorkflowExecutionId, limit: 10), CancellationToken.None);
-            PageWarmed.TrySetResult();
+            // Register before reporting the page warm. The test loses the lease only after that report, so the blocker is
+            // never invoked inline here, where it would block the drain before the test could release it.
             using var delayedDisable = cancellationToken.Register(
                 static state => ((CancellationCallbackGate)state!).Block(),
                 cancellationCallbackGate);
+            PageWarmed.TrySetResult();
             try
             {
                 await Task.Delay(Timeout.Infinite, cancellationToken);
@@ -1006,16 +1013,25 @@ public sealed class CoalescingDurableValuePageReuseTests
         }
     }
 
+    // The 120 ms lease makes the orchestrator heartbeat every 40 ms. Holding the heartbeat's answer until the test calls
+    // LoseLease orders the heartbeat's drain cancellation after the test's setup, instead of racing it on that cadence.
     private sealed class StaleHeartbeatOwnershipService : IRuntimeExecutionOwnershipService
     {
+        private readonly TaskCompletionSource _leaseLost = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public void LoseLease() => _leaseLost.TrySetResult();
+
         public ValueTask<RuntimeExecutionLease> AcquireAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
         {
             var now = DateTimeOffset.UtcNow;
             return ValueTask.FromResult(new RuntimeExecutionLease("lease", workflowExecutionId, "owner", now, now.AddMilliseconds(120), 1));
         }
 
-        public ValueTask<RuntimeExecutionOwnershipTransitionResult> HeartbeatAsync(RuntimeExecutionLease lease, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(new RuntimeExecutionOwnershipTransitionResult(RuntimeExecutionOwnershipTransitionStatus.Stale, lease.FencingToken));
+        public async ValueTask<RuntimeExecutionOwnershipTransitionResult> HeartbeatAsync(RuntimeExecutionLease lease, CancellationToken cancellationToken = default)
+        {
+            await _leaseLost.Task.WaitAsync(cancellationToken);
+            return new RuntimeExecutionOwnershipTransitionResult(RuntimeExecutionOwnershipTransitionStatus.Stale, lease.FencingToken);
+        }
 
         public ValueTask<RuntimeExecutionOwnershipTransitionResult> ReleaseAsync(RuntimeExecutionLease lease, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(new RuntimeExecutionOwnershipTransitionResult(RuntimeExecutionOwnershipTransitionStatus.Applied, lease.FencingToken));

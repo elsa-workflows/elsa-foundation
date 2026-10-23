@@ -13,6 +13,7 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -98,8 +99,19 @@ public sealed class ExecutableNodeCompiler(
         IReadOnlyDictionary<string, ExecutableNode> placedActivities,
         IReadOnlyCollection<VariableDefinition> workflowVariables)
     {
+        if (!Enum.IsDefined(activity.ExecutionPlacement))
+            throw BackgroundExecutionNotEligible(activity, $"execution placement '{activity.ExecutionPlacement}' is not defined");
+
+        if (activity.ExecutionPlacement == ActivityExecutionPlacement.Background && activity.Intrinsic is not null)
+            throw BackgroundExecutionNotEligible(activity, "engine intrinsics cannot run as background activities");
+
         if (placedActivities.TryGetValue(activity.NodeId, out var placed))
+        {
+            if (activity.ExecutionPlacement == ActivityExecutionPlacement.Background)
+                throw BackgroundExecutionNotEligible(activity, "reusable activity boundaries are not supported");
+
             return placed;
+        }
 
         if (activity.Intrinsic is not null)
             return CompileIntrinsicNode(activity, projection, activityRows, placedActivities, workflowVariables);
@@ -129,6 +141,9 @@ public sealed class ExecutableNodeCompiler(
             ? null
             : BuildActivityContract(activity, activityVersion, inputDefinitions, clrActivityType, activityType, structure, inputBindings: inputBindings);
 
+        if (activity.ExecutionPlacement == ActivityExecutionPlacement.Background)
+            ValidateBackgroundExecution(activity, clrActivityType, childSlots, structure, activityContract);
+
         var outputCaptures = CompileOutputCaptures(activity, activityContract, workflowVariables);
 
         return new ExecutableNode(
@@ -139,15 +154,101 @@ public sealed class ExecutableNodeCompiler(
             descriptor: descriptor,
             inputBindings: inputBindings,
             outputCaptures: outputCaptures,
-            metadata: new Dictionary<string, string>
-            {
-                ["authoredNodeId"] = activity.NodeId,
-                [TriggerNodeMetadata.ExecutionTypeKey] = executionType
-            },
+            metadata: CompileNodeMetadata(activity.NodeId, executionType, clrActivityType),
             childSlots: childSlots,
             structure: structure,
-            activityContract: activityContract);
+            activityContract: activityContract,
+            executionPlacement: activity.ExecutionPlacement);
     }
+
+    private static Dictionary<string, string> CompileNodeMetadata(string nodeId, string executionType, Type? clrActivityType)
+    {
+        var metadata = new Dictionary<string, string>
+        {
+            ["authoredNodeId"] = nodeId,
+            [TriggerNodeMetadata.ExecutionTypeKey] = executionType
+        };
+
+        // Spec 258 R-3: how the node handles faults below it, read by the runtime without constructing the activity.
+        if (StructuralFaultHandling(clrActivityType) is { } faultHandling)
+            metadata[RuntimeMetadataKeys.StructuralFaultHandling] = faultHandling;
+        // #3135: whether rescheduling a faulted child the node already evaluated may reach it, read at preflight.
+        if (clrActivityType is not null && typeof(IRuntimeAcceptsRescheduledFaultedChild).IsAssignableFrom(clrActivityType))
+            metadata[RuntimeMetadataKeys.AcceptsRescheduledFaultedChild] = "true";
+
+        return metadata;
+    }
+
+    private static string? StructuralFaultHandling(Type? clrActivityType)
+    {
+        if (clrActivityType is null)
+            return null;
+        if (typeof(IRuntimeActivityDescendantFaultHandler).IsAssignableFrom(clrActivityType))
+            return RuntimeMetadataKeys.StructuralFaultHandlingDescendant;
+        if (typeof(IRuntimeActivityChildFaultHandler).IsAssignableFrom(clrActivityType) ||
+            typeof(IRuntimeActivityChildOutcomeHandler).IsAssignableFrom(clrActivityType))
+            return RuntimeMetadataKeys.StructuralFaultHandlingChild;
+        return null;
+    }
+
+    private static void ValidateBackgroundExecution(
+        ActivityNode activity,
+        Type? clrActivityType,
+        IReadOnlyCollection<ExecutableChildSlot> childSlots,
+        ExecutableActivityStructure? structure,
+        Elsa.Activities.Runtime.Core.Models.ActivityContract? activityContract)
+    {
+        if (clrActivityType is null)
+            throw BackgroundExecutionNotEligible(activity, "the activity type is not a registered CLR activity");
+
+        if (structure is not null || childSlots.Count > 0 ||
+            typeof(IRuntimeStructuralActivity).IsAssignableFrom(clrActivityType) ||
+            typeof(IRuntimeActivityChildCompletionHandler).IsAssignableFrom(clrActivityType) ||
+            typeof(IRuntimeActivityChildFaultHandler).IsAssignableFrom(clrActivityType) ||
+            typeof(IRuntimeActivityChildOutcomeHandler).IsAssignableFrom(clrActivityType) ||
+            typeof(IRuntimeActivityChildNotificationHandler).IsAssignableFrom(clrActivityType))
+        {
+            throw BackgroundExecutionNotEligible(activity, "structural activities and nodes with children are not supported");
+        }
+
+        if (typeof(IStatefulActivity).IsAssignableFrom(clrActivityType))
+            throw BackgroundExecutionNotEligible(activity, "stateful activities are not supported");
+
+        if (typeof(IRuntimeActivityCheckpointParticipant).IsAssignableFrom(clrActivityType))
+            throw BackgroundExecutionNotEligible(activity, "checkpoint-participating activities are not supported");
+
+        if (activityContract is null)
+            throw BackgroundExecutionNotEligible(activity, "the activity has no pinned typed result contract");
+
+        if (!activityContract.SupportsBackgroundExecution)
+            throw BackgroundExecutionNotEligible(activity, "the activity type does not declare BackgroundExecutionSafe");
+
+        var resultClrType = FindTypedActivityResult(clrActivityType);
+        if (resultClrType == typeof(object) ||
+            activityContract.Result.Type.Alias is "Object" or "Elsa.Any")
+        {
+            throw BackgroundExecutionNotEligible(activity, "untyped object results are not supported");
+        }
+
+        var resultRepresentations = activityContract.Result.Projections.Values
+            .Select(projection => projection.EffectiveSourceRepresentation)
+            .Prepend(activityContract.Result.EffectiveSourceRepresentation);
+        if (typeof(Stream).IsAssignableFrom(resultClrType) ||
+            resultRepresentations.Any(representation => representation == ValueRepresentation.TransientResource))
+            throw BackgroundExecutionNotEligible(activity, "transient result values are not supported");
+
+        var resultPolicies = activityContract.Result.Projections.Values
+            .Select(projection => projection.Policy)
+            .Prepend(activityContract.Result.Policy);
+        if (resultPolicies.Any(policy => !policy.IsPersistable))
+            throw BackgroundExecutionNotEligible(activity, "transient result values are not supported");
+
+        if (resultPolicies.Any(policy => policy.IsSensitive || policy.RequiresEncryption))
+            throw BackgroundExecutionNotEligible(activity, "sensitive or encryption-required result values are not supported");
+    }
+
+    private static InvalidOperationException BackgroundExecutionNotEligible(ActivityNode activity, string reason) =>
+        new($"VF-BG-001: Background execution is not eligible for activity node '{activity.NodeId}': {reason}.");
 
     /// <summary>
     /// Turns a leaf activity's authored outputs (<see cref="ActivityNode.Outputs"/>) into durable output captures
@@ -248,7 +349,7 @@ public sealed class ExecutableNodeCompiler(
             ? null
             : new RuntimeVariableReference(
                 intrinsic.Variable.ReferenceKey,
-                intrinsic.Variable.DeclaringScopeId ?? VariableReference.WorkflowScopeId);
+                intrinsic.Variable.IsWorkflowScope ? VariableReference.WorkflowScopeId : intrinsic.Variable.DeclaringScopeId!);
         var activityType = $"elsa.intrinsic.{intrinsic.Kind.ToString().ToLowerInvariant()}";
         var descriptorPayload = JsonSerializer.SerializeToElement(new
         {
@@ -310,7 +411,8 @@ public sealed class ExecutableNodeCompiler(
                 input.DefaultValue.HasValue,
                 input.DefaultValue,
                 RuntimeInputBindingCompiler.EffectivePolicy(activity.NodeId, input, state),
-                isCredential: input.IsCredential == true);
+                isCredential: input.IsCredential == true,
+                connectionType: input.ConnectionType);
         });
         var outputDefinitions = activityVersion.Outputs.ToDictionary(output => output.ReferenceKey, StringComparer.Ordinal);
         var outputStates = activity.Outputs.ToDictionary(output => output.ReferenceKey, StringComparer.Ordinal);
@@ -357,14 +459,12 @@ public sealed class ExecutableNodeCompiler(
                 ValueRepresentationDefaults.Infer(new ValueTypeDescriptor(resultReference.Alias, resultReference.CollectionKind))),
             outcomes,
             new ActivityActivationRequirement(typeof(ClrActivityDescriptor).FullName!, TypeAliasConvention.CanonicalAlias(activityType)),
-            ResolveSideEffectProfile(activityType));
+            ResolveSideEffectProfile(activityType),
+            supportsBackgroundExecution: activityType.IsDefined(typeof(BackgroundExecutionSafeAttribute), inherit: true));
     }
 
-    // An unmarked activity is External (fail-safe); only an explicit
-    // [ActivitySideEffectProfile(ReplaySafe)] opts a pure/deterministic activity into a deferrable claim boundary.
-    private static SideEffectProfile ResolveSideEffectProfile(Type activityType) =>
-        activityType.GetCustomAttribute<ActivitySideEffectProfileAttribute>(inherit: true)?.Profile
-        ?? SideEffectProfile.External;
+    // The rule is shared with the design-time ActivitySideEffectProfileReader (spec 261 FR-513).
+    private static SideEffectProfile ResolveSideEffectProfile(Type activityType) => ActivitySideEffectProfiles.Of(activityType);
 
     private static ValueRepresentation ResolveSourceRepresentation(
         OutputAttribute attribute,

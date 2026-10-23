@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Reconciliation;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Graph.Design.Models;
 using Elsa.Activities.Graph.Design.Services;
@@ -14,12 +15,13 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using DesignActivityContract = Elsa.Activities.Design.Core.Models.ActivityContract;
 
 namespace Elsa.Activities.Graph.Tests;
 
-public sealed class GraphActivityProviderTests
+public sealed partial class GraphActivityProviderTests
 {
     private readonly GraphActivityProvider _provider = new(
         new TestActivityStructureService(),
@@ -385,6 +387,9 @@ public sealed class GraphActivityProviderTests
         Assert.False(first.ExecutableRoot.Descriptor.Payload.TryGetProperty("rootActivity", out _));
         Assert.False(first.ExecutableRoot.Descriptor.Payload.TryGetProperty("provider", out _));
         Assert.False(first.ExecutableRoot.Descriptor.Payload.TryGetProperty("templateHash", out _));
+        // Every graph compiled now is a closed value scope, so placement remaps its body.
+        Assert.Equal("closed", first.ExecutableRoot.Descriptor.Payload.GetProperty("scopeModel").GetString());
+        Assert.Equal("elsa.activity-graph/compiler/3.0.0", GraphActivityProvider.Fingerprint);
         Assert.Equal(2, first.ResourceMeasurements.LocalNodeCount);
         Assert.Equal(2, first.ResourceMeasurements.MaximumObservedAuthoredDepth);
         Assert.Equal(2, first.ResourceMeasurements.DependencyCount);
@@ -498,6 +503,182 @@ public sealed class GraphActivityProviderTests
         Assert.Contains(compilation.Diagnostics, x => x.Code == expectedCode);
         Assert.Null(compilation.ExecutableRoot);
     }
+
+    [Fact]
+    public async Task Complete_compilation_lets_a_Complete_node_reach_an_outcome_without_a_mapping()
+    {
+        var compilation = await _provider.CompileAsync(CompleteRequest(CompleteManifest(CompleteNodeJson("exit", "fail"))));
+
+        Assert.Empty(compilation.Diagnostics);
+        var completeOutcomes = compilation.ExecutableRoot!.Descriptor.Payload.GetProperty("completeOutcomes")
+            .Deserialize<GraphActivityCompleteOutcomeDescriptor[]>(new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Equal([new GraphActivityCompleteOutcomeDescriptor("fail", "Failed")], completeOutcomes);
+        Assert.Equal(["Succeeded", "Failed"], compilation.ExecutableRoot.ActivityContract!.Outcomes);
+    }
+
+    [Fact]
+    public async Task Complete_compilation_finds_a_Complete_node_at_any_depth()
+    {
+        var nested = $$"""
+            {
+              "nodeId": "branch",
+              "activityVersionId": "activity-ver-if",
+              "inputs": [],
+              "outputs": [],
+              "structure": { "kind": "If", "schemaVersion": "1", "payload": { "then": {{CompleteNodeJson("exit", "fail")}}, "else": null } }
+            }
+            """;
+        var request = CompleteRequest(
+            CompleteManifest(nested),
+            extraDependencies: [CreateDependency("branch", "activity-ver-if", "branch-origin", declaredStructure: new("If", "1"))]);
+
+        var compilation = await _provider.CompileAsync(request);
+
+        Assert.Empty(compilation.Diagnostics);
+        Assert.True(compilation.ExecutableRoot!.Descriptor.Payload.TryGetProperty("completeOutcomes", out _));
+    }
+
+    [Fact]
+    public async Task Complete_compilation_still_requires_every_outcome_to_be_reachable()
+    {
+        var compilation = await _provider.CompileAsync(CompleteRequest(
+            CompleteManifest(CompleteNodeJson("exit", "fail")),
+            OutcomeContract(("succeed", "Succeeded"), ("fail", "Failed"), ("other", "Other"))));
+
+        var diagnostic = Assert.Single(compilation.Diagnostics);
+        Assert.Equal("activity.graph.outcome-mapping-required", diagnostic.Code);
+        Assert.Equal("other", diagnostic.Location!.ReferenceKey);
+    }
+
+    [Theory]
+    [InlineData("missing", "Literal", "activity.graph.complete.outcome-unknown")]
+    [InlineData("fail", "JavaScript", "activity.graph.complete.outcome-literal-required")]
+    [InlineData("", "Literal", "activity.graph.complete.outcome-literal-required")]
+    public async Task Complete_compilation_rejects_an_invalid_outcome(string outcome, string expressionType, string expectedCode)
+    {
+        var compilation = await _provider.CompileAsync(CompleteRequest(CompleteManifest(CompleteNodeJson("exit", outcome, expressionType))));
+
+        Assert.Contains(compilation.Diagnostics, x => x.Code == expectedCode);
+        Assert.Null(compilation.ExecutableRoot);
+    }
+
+    [Fact]
+    public async Task Complete_compilation_rejects_a_Complete_node_in_schema_one()
+    {
+        var manifest = CompleteManifest(CompleteNodeJson("exit", "done"), ActivityGraphManifest.SchemaVersion);
+
+        var compilation = await _provider.CompileAsync(CompleteRequest(manifest, OutcomeContract(("done", "Done"))));
+
+        Assert.Contains(compilation.Diagnostics, x => x.Code == "activity.graph.complete.schema-unsupported");
+        Assert.Null(compilation.ExecutableRoot);
+    }
+
+    [Fact]
+    public async Task Compilation_without_a_Complete_node_writes_no_complete_outcomes()
+    {
+        var request = new ActivityTemplateCompilationRequest(
+            "definition-1",
+            "activity-type-1",
+            "draft-1",
+            7,
+            "2.0.0",
+            OutcomeContract(("accepted", "Accepted"), ("declined", "Declined")),
+            CreateSchemaTwoManifest(),
+            [CreateDependency("graph-root", "activity-ver-root", "root-origin", OutcomeContract(("approved", "Approved"), ("rejected", "Rejected")))],
+            "provider-fingerprint");
+
+        var compilation = await _provider.CompileAsync(request);
+
+        Assert.Empty(compilation.Diagnostics);
+        Assert.False(compilation.ExecutableRoot!.Descriptor.Payload.TryGetProperty("completeOutcomes", out _));
+    }
+
+    [Fact]
+    public async Task Draft_validation_recognises_Complete_nodes_through_the_catalog()
+    {
+        var catalog = new TypeKeyActivityCatalog().Add("activity-ver-complete", GraphActivityProvider.CompleteActivityTypeKey);
+        var provider = ProviderWithCatalog(catalog);
+
+        var valid = await provider.ValidateAsync(CompleteManifest(CompleteNodeJson("exit", "fail")), CompleteContract());
+        var unknown = await provider.ValidateAsync(CompleteManifest(CompleteNodeJson("exit", "missing")), CompleteContract());
+
+        Assert.Empty(valid);
+        Assert.Contains(unknown, x => x.Code == "activity.graph.complete.outcome-unknown");
+    }
+
+    [Fact]
+    public async Task Draft_validation_without_a_catalog_cannot_credit_Complete_nodes()
+    {
+        var diagnostics = await _provider.ValidateAsync(CompleteManifest(CompleteNodeJson("exit", "fail")), CompleteContract());
+
+        Assert.Contains(diagnostics, x => x.Code == "activity.graph.outcome-mapping-required" && x.Location!.ReferenceKey == "fail");
+    }
+
+    private static GraphActivityProvider ProviderWithCatalog(TypeKeyActivityCatalog catalog) =>
+        new(
+            new TestActivityStructureService(),
+            new ActivityContractAuthoringValidator(new TestContractCapabilityCatalog()),
+            new ServiceCollection()
+                .AddSingleton<IActivityDefinitionLookup>(catalog)
+                .BuildServiceProvider()
+                .GetRequiredService<IServiceScopeFactory>());
+
+    private static DesignActivityContract CompleteContract() => OutcomeContract(("succeed", "Succeeded"), ("fail", "Failed"));
+
+    // Schema 2 graph: Sequence[step, <body>]; the Sequence's natural Done maps to 'succeed'.
+    private static ActivityProviderManifest CompleteManifest(string bodyJson, string? schemaVersion = null) => new(
+        GraphActivityProvider.Key,
+        schemaVersion ?? ActivityGraphManifest.MultipleOutcomesSchemaVersion,
+        ParseJson($$"""
+            {
+              "variables": [],
+              "rootActivity": {
+                "nodeId": "root",
+                "activityVersionId": "activity-ver-root",
+                "inputs": [],
+                "outputs": [],
+                "structure": { "kind": "Sequence", "schemaVersion": "1", "payload": { "activities": [
+                  { "nodeId": "step", "activityVersionId": "activity-ver-step", "inputs": [], "outputs": [], "structure": null },
+                  {{bodyJson}}
+                ] } }
+              },
+              "outputMappings": [],
+              "outcomeMappings": [{ "sourceOutcomeReferenceKey": "done", "boundaryOutcomeReferenceKey": "succeed" }]
+            }
+            """));
+
+    private static string CompleteNodeJson(string nodeId, string outcome, string expressionType = "Literal") => $$"""
+        {
+          "nodeId": "{{nodeId}}",
+          "activityVersionId": "activity-ver-complete",
+          "inputs": [{ "referenceKey": "outcome", "value": { "value": "{{outcome}}", "expressionType": "{{expressionType}}" } }],
+          "outputs": [],
+          "structure": null
+        }
+        """;
+
+    private static ActivityTemplateCompilationRequest CompleteRequest(
+        ActivityProviderManifest manifest,
+        DesignActivityContract? contract = null,
+        IReadOnlyList<ActivityResolvedDependency>? extraDependencies = null) =>
+        new(
+            "definition-1",
+            "activity-type-1",
+            "draft-1",
+            7,
+            "2.0.0",
+            contract ?? CompleteContract(),
+            manifest,
+            [
+                CreateDependency("root", "activity-ver-root", "root-origin", OutcomeContract(("done", "Done")), declaredStructure: new("Sequence", "1")),
+                CreateDependency("step", "activity-ver-step", "step-origin"),
+                CreateDependency("exit", "activity-ver-complete", "exit-origin", OutcomeContract()) with
+                {
+                    DefinitionId = ActivityCatalogStableIds.DefinitionId(GraphActivityProvider.CompleteActivityTypeKey)!
+                },
+                .. extraDependencies ?? []
+            ],
+            "provider-fingerprint");
 
     [Fact]
     public async Task Dependency_discovery_preserves_parent_slot_and_authored_order()

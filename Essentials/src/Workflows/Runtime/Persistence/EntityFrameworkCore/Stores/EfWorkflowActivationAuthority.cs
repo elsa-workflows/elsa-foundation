@@ -18,6 +18,8 @@ public sealed class EfWorkflowActivationAuthority(
     IPersistenceAccessContextAccessor accessContextAccessor) : IWorkflowActivationAuthority
 {
     private const int PageSize = 100;
+    // Provider IN/parameter limits; the slot index prefix (ScopeKeyHash, WorkflowDefinitionIdHash, …) covers each chunk.
+    private const int DefinitionIdInClauseChunkSize = 500;
     // A transient conflict is retried only when SaveChanges reports it, never when a read raises it.
     private static readonly EfWriteRetry Transitions = new(
         EfWriteRetry.DefaultMaxAttempts,
@@ -71,6 +73,48 @@ public sealed class EfWorkflowActivationAuthority(
                 return rows;
             after = page[^1].SlotNameOrderKey;
         }
+    }
+
+    public async ValueTask<IReadOnlyCollection<WorkflowActivationSlot>> ListByDefinitionIdsAsync(
+        IReadOnlyCollection<string> workflowDefinitionIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(workflowDefinitionIds);
+        var ids = workflowDefinitionIds
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        foreach (var id in ids)
+            ValidateIdentity(id, nameof(workflowDefinitionIds));
+        if (ids.Length == 0)
+            return [];
+
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = RequireScope();
+        var scopeKey = Encode(scope);
+        var scopeHash = Hash(scope);
+        var slots = new List<WorkflowActivationSlot>();
+        foreach (var chunk in ids.Chunk(DefinitionIdInClauseChunkSize))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var hashes = chunk.Select(Hash).Distinct(StringComparer.Ordinal).ToArray();
+            var byEncoded = chunk.ToDictionary(Encode, StringComparer.Ordinal);
+            var rows = await context.WorkflowActivationSlots.AsNoTracking()
+                .Where(x => x.ScopeKey == scopeKey && x.ScopeKeyHash == scopeHash &&
+                            hashes.Contains(x.WorkflowDefinitionIdHash))
+                .OrderBy(x => x.WorkflowDefinitionIdOrderKey)
+                .ThenBy(x => x.SlotNameOrderKey)
+                .ThenBy(x => x.SlotIdOrderKey)
+                .ToArrayAsync(cancellationToken);
+            foreach (var row in rows)
+            {
+                if (!byEncoded.TryGetValue(row.WorkflowDefinitionId, out var definitionId))
+                    continue;
+                slots.Add(Read(row, scope, definitionId));
+            }
+        }
+
+        return slots;
     }
 
     public async ValueTask<WorkflowActivationTransition> TryActivateAsync(

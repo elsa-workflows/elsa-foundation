@@ -465,36 +465,22 @@ internal static class CoalescingRuntimeStorePageMerger
 /// projection the session last recorded for an activity execution, so a later checkpoint in the segment merges onto it
 /// exactly as it would have merged onto a committed one. Building from the durable baseline instead would drop what the
 /// recorded projection holds, such as the outcome a completion carried, when the activity's later checkpoint folds
-/// into the same commit. Otherwise it memoizes the <b>durable baseline</b> per activity execution for the duration of
-/// a coalesced window, so the inspection-projection build stops paying a durable store read for every intermediate
-/// checkpoint the fold discards, while every such read stays byte-identical to a fresh durable read. The memo is
-/// invalidated at every durable flush; the single-writer ownership lease guarantees the durable rows cannot change
-/// between flushes. The memo is disabled via <see cref="PersistenceModeOptions.CoalesceInspectionReads"/>.
+/// into the same commit. An activity the session has recorded nothing for is read from the durable store, so each
+/// activity's durable row is read at most once per drain.
 /// </summary>
 public sealed class CoalescingActivityExecutionInspectionStore(
     CoalescingInner<IActivityExecutionInspectionStore> inner,
-    IRuntimeCoalescingSessionAccessor sessionAccessor,
-    PersistenceModeOptions options) : IActivityExecutionInspectionStore
+    IRuntimeCoalescingSessionAccessor sessionAccessor) : IActivityExecutionInspectionStore
 {
     private readonly IActivityExecutionInspectionStore _inner = inner.Value;
 
     public async ValueTask<ActivityExecutionInspectionProjection?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default)
     {
-        if (sessionAccessor.Current is not { } session || !session.AppliesTo(workflowExecutionId))
-            return await _inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
-
-        if (session.TryGetInspection(activityExecutionId, out var recorded))
+        if (sessionAccessor.Current is { } session && session.AppliesTo(workflowExecutionId) &&
+            session.TryGetInspection(activityExecutionId, out var recorded))
             return recorded;
 
-        if (!options.CoalesceInspectionReads)
-            return await _inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
-
-        if (session.TryGetInspectionBaseline(activityExecutionId, out var baseline))
-            return baseline;
-
-        var projection = await _inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
-        session.CacheInspectionBaseline(activityExecutionId, projection);
-        return projection;
+        return await _inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
     }
 
     public ValueTask<ActivityExecutionInspectionSummaryPage> ListSummariesPageAsync(

@@ -1,7 +1,9 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Options;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Runtime.Services.Executables;
 
@@ -20,13 +22,15 @@ public sealed partial class WorkflowActivationCoordinator(
     IWorkflowTriggerBindingStore? triggerBindingStore = null,
     IRecurringTriggerScheduleStore? recurringScheduleStore = null,
     IEnumerable<IWorkflowTriggerIndexObserver>? triggerObservers = null,
-    ILogger<WorkflowActivationCoordinator>? logger = null) : IWorkflowActivationCoordinator
+    ILogger<WorkflowActivationCoordinator>? logger = null,
+    IOptions<ActivationChannelOptions>? activationChannelOptions = null) : IWorkflowActivationCoordinator
 {
     public const string ReplacedRetireReason = "activation-replaced";
     public const string FailedRetireReason = "activation-failed";
 
     private const int MaximumDiagnosticLength = 512;
     private readonly IReadOnlyCollection<IWorkflowTriggerIndexObserver> _triggerObservers = triggerObservers?.ToArray() ?? [];
+    private readonly ActivationChannelOptions _activationChannelOptions = activationChannelOptions?.Value ?? new();
 
     public async ValueTask<WorkflowActivationResult> ActivateAsync(
         WorkflowActivationCommand command,
@@ -47,6 +51,14 @@ public sealed partial class WorkflowActivationCoordinator(
                 nameof(command));
 
         var definitionId = identity.DefinitionId;
+        if (!_activationChannelOptions.Allows(command.SlotName))
+            return new(
+                false,
+                WorkflowActivationOutcome.ChannelNotAllowed,
+                await authority.FindAsync(definitionId, command.SlotName, cancellationToken) ?? EmptySlot(definitionId, command.SlotName),
+                Diagnostic: $"Activation channel '{command.SlotName}' is not declared for this shell.",
+                FailedStep: WorkflowActivationStep.ChannelValidation);
+
         var slotId = WorkflowActivationSlotIdentity.Create(definitionId, command.SlotName);
         GuardComposition(definitionId, command.SlotName, command.ActivationId);
 

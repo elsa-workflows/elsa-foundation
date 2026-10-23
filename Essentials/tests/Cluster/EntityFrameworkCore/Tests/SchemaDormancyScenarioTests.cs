@@ -79,7 +79,7 @@ public sealed class SchemaDormancyScenarioTests : IAsyncLifetime
     public async Task DisposeAsync()
     {
         await _services.DisposeAsync();
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        Microsoft.Data.Sqlite.SqliteConnection.ClearPool(new($"Data Source={_file}"));
         foreach (var file in new[] { _file, _file + "-journal", _file + "-wal", _file + "-shm" })
             File.Delete(file);
     }

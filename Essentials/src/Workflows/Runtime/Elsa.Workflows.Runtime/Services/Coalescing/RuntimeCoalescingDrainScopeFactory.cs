@@ -27,7 +27,7 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
         // A nested owner gets a fresh memo. The parent cannot resume reusing its old baseline after the child exits.
         sessionAccessor.Current?.DisableDurableValuePageReuse();
 
-        var session = new RuntimeCoalescingSession(workflowExecutionId, innerQueue.Value, options, innerOutboxStore.Value, mode);
+        var session = new RuntimeCoalescingSession(workflowExecutionId, innerQueue.Value, options, innerOutboxStore.Value, mode, timeProvider);
         // A legacy provider may not support identity deletion. Never discover that after a folded commit has landed:
         // disable buffering before the drain begins, leaving queue operations and checkpoint writes durable.
         if (!innerQueue.Value.SupportsTargetedDeletion)

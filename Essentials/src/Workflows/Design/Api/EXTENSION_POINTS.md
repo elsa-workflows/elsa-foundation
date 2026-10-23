@@ -12,7 +12,7 @@ The per-domain catalog (framework §2.22.1) of everything you can implement or o
 - **Implementable contributor interfaces** — *add-don't-replace* seams aggregated by a single handler (framework §2.6.1, §2.24.2).
 - **Events** — the FR-018/FR-018a mutation + lifecycle events this domain publishes.
 
-> **Domain spans several projects.** Contracts live in `Elsa.Workflows.Design.Core` and `Elsa.Workflows.Design.Persistence.Core`; the provider-neutral default services (`WorkflowDefinitionLookup`, `DraftStateDiffEngine`) also live in `Elsa.Workflows.Design.Persistence.Core`, while the concrete store/command provider implementations are in `Elsa.Workflows.Design.Persistence.EntityFrameworkCore`. Per three-layer rule (framework §2.1): contracts in `.Core`, defaults in the persistence layer, composition in this Api feature. The EF Core provider persists design records through provider-neutral read/write ports (no EF `EntitySaving` / `EntityLoading` hydration seams); see [`Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md).
+> **Domain spans several projects.** Contracts live in `Elsa.Workflows.Design.Core` and `Elsa.Workflows.Design.Persistence.Core`; the provider-neutral default services (`WorkflowDefinitionLookup`, `DraftStateDiffEngine`) also live in `Elsa.Workflows.Design.Persistence.Core`, while the concrete store/command provider implementations are in `Elsa.Workflows.Design.Persistence.EntityFrameworkCore`. Per three-layer rule (framework §2.1): contracts in `.Core`, defaults in the persistence layer, composition in this Api feature. The EF Core provider persists design records through provider-neutral read/write ports (no EF `EntitySaving` / `EntityLoading` hydration seams); see [`Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md`](../Persistence/EntityFrameworkCore/EXTENSION_POINTS.md).
 
 ---
 
@@ -23,20 +23,26 @@ The per-domain catalog (framework §2.22.1) of everything you can implement or o
 | `IWorkflowDefinitionLookup` | Core — `Elsa.Workflows.Design.Core` | `WorkflowDefinitionLookup` (`.Persistence.Core`) | You want a different read strategy (caching, projection store) while keeping the write path. |
 | Command interfaces (`IUpdateDraftCommand` + 5 lifecycle) | Core — `Elsa.Workflows.Design.Persistence.Core` | EF Core command implementations (`.Persistence.EntityFrameworkCore`) | You want different mutation/lifecycle behaviour while keeping the built-in `IWorkflowDefinitionLookup`. |
 | `IDraftStateDiffEngine` | Contract — `Elsa.Workflows.Design.Persistence.Core` | `DraftStateDiffEngine` (`.Persistence.Core`) | You want to change which mutation events are emitted or the match-key semantics. |
+| `IWorkflowDefinitionPublicationStateLookup` | Contract — `Elsa.Workflows.Design.Persistence.Core` | `NullWorkflowDefinitionPublicationStateLookup` (`Elsa.Workflows.Design.Api.Services`); Publishing replaces with `WorkflowDefinitionPublicationStateLookup` | Publishing is composed and definition list/detail views should distinguish Retracted and Retired from Published. Design-only hosts keep the null-object and leave `publicationState` unset. |
 
 ### `IWorkflowDefinitionLookup` *(Core — `Elsa.Workflows.Design.Core`)*
 - **Signature:** `GetDefinition(id)`, `ListDefinitions(searchTerm?)`, `GetVersion(versionId)`, `FindLatestVersion(definitionId)`, `ListVersions(definitionId)` — all `Task`-returning reads.
 - **Default impl:** `WorkflowDefinitionLookup` (`Elsa.Workflows.Design.Persistence.Core`), backed by the named `IWorkflowDefinitionVersionStore` + `IWorkflowDefinitionStore` read ports.
-- **Override:** `services.Replace(ServiceDescriptor.Scoped<IWorkflowDefinitionLookup, MyLookup>())`. Or override one of the underlying named read ports (see [`Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md)) — two granularities of the same *override* axis.
+- **Override:** `services.Replace(ServiceDescriptor.Scoped<IWorkflowDefinitionLookup, MyLookup>())`. Or override one of the underlying named read ports (see [`Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md`](../Persistence/EntityFrameworkCore/EXTENSION_POINTS.md)) — two granularities of the same *override* axis.
 
 ### Commands — `IUpdateDraftCommand` + 5 lifecycle *(Core — `Elsa.Workflows.Design.Persistence.Core`)*
-Full detail in the persistence catalog: [`Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md).
+Full detail in the persistence catalog: [`Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md`](../Persistence/EntityFrameworkCore/EXTENSION_POINTS.md).
 
 Summary: `IUpdateDraftCommand`, `ICreateDraftCommand`, `ICloneDraftFromVersionCommand`, `IDiscardDraftCommand`, `IPromoteDraftToVersionCommand`, `IAddWorkflowDefinitionCommand` — each backed by an EF Core default; `services.Replace(...)` to swap individual commands while keeping the rest (the canonical *swap-commands-keep-queries* example per Joey's framing). A replacement `IPromoteDraftToVersionCommand` keeps its content precondition: it takes the `WorkflowDraftStateHash` of the draft the Drafts/Promote route admitted and refuses with `WorkflowDraftChangedException` (409) when the draft it promotes no longer has that content (spec 188, research R7).
 
 ### `IDraftStateDiffEngine` *(Contract — `Elsa.Workflows.Design.Persistence.Core`)*
 - **Signature:** `IReadOnlyList<IEvent> Evaluate(string draftId, WorkflowDefinitionState stored, IReadOnlyCollection<DesignMetadataRecord> storedLayout, WorkflowDefinitionState desired, IReadOnlyCollection<DesignMetadataRecord> desiredLayout)`
 - **Default impl:** `DraftStateDiffEngine`. Override to change emission / matching.
+
+### `IWorkflowDefinitionPublicationStateLookup` *(Contract — `Elsa.Workflows.Design.Persistence.Core`)*
+- **Signature:** `ListByDefinitionIdsAsync(workflowDefinitionIds)` returns a dictionary of `WorkflowDefinitionPublicationSummary` values: `State` (`Draft`, `Published`, `Retracted`, `Retired`) and optional `PublishedVersionId`, the active publication's immutable source version ID. An absent entry means the provider cannot establish publication state.
+- **Default impl:** `NullWorkflowDefinitionPublicationStateLookup` in `Elsa.Workflows.Design.Api.Services`, so NativeEndpoints `GetRequiredService` succeeds on a design-only host and list/detail views leave `publicationState` unset. Publishing `Replace`s it with `WorkflowDefinitionPublicationStateLookup`. Live and empty slots cover Published and Retracted on every store. The source version comes from the active configured primary slot, or a unique version shared by all valid active publications when no primary is active. Conflicting or unavailable records leave the source version unset. Without a slot, Retired needs journal evidence and Draft needs a complete definition-keyed journal lookup; unsupported lookup leaves the state unset. The in-memory journal supports this lookup; the EF ledger lacks a definition-id hash — tracked by [#2801](https://github.com/elsa-workflows/elsa-foundation/issues/2801).
+- **Override:** `services.Replace(ServiceDescriptor.Scoped<IWorkflowDefinitionPublicationStateLookup, MyLookup>())`. Do not add a Design.Api → Publishing project reference; the lookup is the bridge.
 
 ### Domain-model abstractions
 `IWorkflowDefinition`, `IWorkflowDefinitionVersion`, `IWorkflowDefinitionDraft`, `IWorkflowDefinitionLayout`, `IWorkflowGraph` are read-model abstractions (framework §2.1). A custom persistence provider realises them; application code does not replace them piecemeal.
@@ -45,7 +51,7 @@ Summary: `IUpdateDraftCommand`, `ICreateDraftCommand`, `ICloneDraftFromVersionCo
 
 ## Implementable contributor interfaces
 
-The Draft-validation contributor (`IDraftValidator`) lives in [`Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md). Subscribers also extend this domain by handling the Background events below.
+The Draft-validation contributor (`IDraftValidator`) lives in [`Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md`](../Validations/Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md). Subscribers also extend this domain by handling the Background events below.
 
 ### `IExpressionAuthoringContextSource` *(Core — `Elsa.Workflows.Design.Core`)*
 
@@ -100,6 +106,7 @@ Known implementations: none in the foundation host; feature modules opt in by re
   - `CompileExecutableStructure(activity)` — materialize the authored structure into the executable structure the runtime consumes.
   - `SupportsScopedVariables` *(default `false`)* — whether this activity is a **container scope** that can own container-scoped variable declarations (ADR 0027). Container activities (`Sequence`, `Flowchart`) return `true`.
   - `ProjectScopedVariables(activity)` *(default empty)* — the container-scoped `VariableDefinition`s the activity declares, visible to its descendant activities. These flow through publishing into the compiled executable structure's `variables`, so the runtime materializes the visible variable scope chain (`RuntimeVariableScopeFactory` / `RuntimeContainerScopeService` in `Elsa.Workflows.Runtime.Core`) without re-reading the design document.
+  - `ChildrenCompletedBefore(activity, childNodeId)` *(default `null`)* — the direct children whose results the structure guarantees are committed before `childNodeId` runs, most relevant first. `PersistedExpressionAuthoringContextSource` offers their results to that child's expressions, ranked first; `null` promises no order. Sequence keeps its built-in document-order rule.
   - `AuthoredPayloadType` *(default `null`)* — the CLR model type of the handler's *authored* structure payload. The structure-kind registry endpoint (`GET design/workflows/structures`) publishes a generated JSON Schema per kind from this type so headless clients can compose structure payloads without reading source; `null` keeps the payload opaque/undocumented.
 - **Aggregation:** `IActivityStructureService` (`DefaultActivityStructureService`) resolves the registered handlers by `Kind`. `ScopedVariableResolver` walks the authored tree through this contract to compute per-node scoped-variable visibility.
 - **Registration:** register an implementation with DI as `IActivityStructureHandler` from the activity's own module.
@@ -107,6 +114,7 @@ Known implementations: none in the foundation host; feature modules opt in by re
 Known implementations:
 - `SequenceStructureHandler` (`Elsa.Activities.Sequence`) *(cross-domain — `SupportsScopedVariables = true`)*.
 - `FlowchartStructureHandler` (`Elsa.Activities.Flowchart`) *(cross-domain — `SupportsScopedVariables = true`)*.
+- `CompensationScopeStructureHandler` (`Elsa.Activities.Compensation`) *(cross-domain — implements `ChildrenCompletedBefore`: a handler sees its own step's result first)*.
 
 ---
 
@@ -114,11 +122,11 @@ Known implementations:
 
 Every event the Workflows.Design domain publishes is an `IEvent` (framework §2.6.1), grouped by **delivery strategy** (§2.6.6).
 
-**Sequential / contribution** — none in this domain's Core. The contribution event (`DraftValidating`, Sequential) lives in [`Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md).
+**Sequential / contribution** — none in this domain's Core. The contribution event (`DraftValidating`, Sequential) lives in [`Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md`](../Validations/Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md).
 
 Heading convention: `### <EventClassName>`. Every published `IEvent` type of the `Elsa.Workflows.Design.Core` design namespace has a heading here, and every such heading names one; review keeps the two in step.
 
-**Background / notification** (§2.6.6) — published via `EventPublishingStrategy.Background`. Queued on `IEventChannel`; `BackgroundEventPublisher` drains asynchronously. Subscriber exceptions are caught + logged; one flaky subscriber cannot break the publish.
+**Background / notification** (§2.6.6): published through `IDeferredEventPublisher`, which queues the event and returns before handlers run; the Events domain's background worker drains the queue asynchronously. Subscriber exceptions are caught + logged; one flaky subscriber cannot break the publish.
 
 **Lifecycle — origination + disposal.**
 
@@ -243,7 +251,7 @@ Heading convention: `### <EventClassName>`. Every published `IEvent` type of the
 
 ## Cross-references
 
-- Validation events (`DraftValidating` Sequential gate + `DraftValidated` Background outcome): [`Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md).
-- Command + diff-engine overridables: [`Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md).
-- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
+- Validation events (`DraftValidating` Sequential gate + `DraftValidated` Background outcome): [`Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md`](../Validations/Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md).
+- Command + diff-engine overridables: [`Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md`](../Persistence/EntityFrameworkCore/EXTENSION_POINTS.md).
+- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.6.6 + §2.22.1.

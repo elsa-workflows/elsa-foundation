@@ -55,6 +55,12 @@ the two values derived from assembly/type identity:
   fails the scan, naming the type and the input: one with a `DefaultValue`, one on a property that is not a `string`,
   one on an input the type names in `[RefusesSecretBinding]` (read for this check only, never written to the catalog),
   and any on a type implementing `IRuntimeActivityCheckpointParticipant` (matched by name);
+- `[ReplacesActivityType("…")]` on the class itself (not inherited) → design facet `elsa.replaced-activity-types` v1,
+  payload `{ "typeNames": [...] }` (trimmed, distinct, ordinally sorted). It records which type names from another
+  system or generation the activity replaces; the Elsa 3 converter reads it to find a rebuilt custom activity. With no
+  declaration there is no facet, so existing catalog hashes are unchanged. The facet is part of the version's content
+  hash: adding or removing a declaration needs a new activity version (otherwise reconciliation refuses the changed
+  content), and a converter reading only the highest version stops honouring a removed declaration;
 - the resolved semver (above);
 - the resolved category, derived from the declaring assembly's name (above).
 

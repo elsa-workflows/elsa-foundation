@@ -127,8 +127,9 @@ internal static class Elsa3ImportNativeSmoke
         var applied = await service.ApplyAsync(upload.CollectionHandle, planId, ["a-v1", "consumer-v1"], "native-first", scope);
         Assert.Equal(ReusableActivityImportReceiptStatus.Applied, applied.Status);
         var afterFirst = await db.CountAsync();
-        // The apply consumed its upload; the two ledger CRUD rows above are what is left.
-        Assert.Equal((2, 1, 3, 1, 1, 1, 2, 2), (afterFirst.Collections, afterFirst.Receipts, afterFirst.Bindings, afterFirst.ActivityDefinitions, afterFirst.ActivityVersions, afterFirst.Authoring, afterFirst.WorkflowDefinitions, afterFirst.WorkflowVersions));
+        // The apply consumed its upload; the two ledger CRUD rows above are what is left. An imported reusable activity
+        // lands as a draft, not a published version (spec 246).
+        Assert.Equal((2, 1, 3, 1, 0, 1, 1, 2, 2), (afterFirst.Collections, afterFirst.Receipts, afterFirst.Bindings, afterFirst.ActivityDefinitions, afterFirst.ActivityVersions, afterFirst.Authoring, afterFirst.Drafts, afterFirst.WorkflowDefinitions, afterFirst.WorkflowVersions));
 
         // Restart: fresh contexts replay the durable receipt.
         Assert.Equal(ReusableActivityImportReceiptStatus.AlreadyImported,
@@ -139,11 +140,7 @@ internal static class Elsa3ImportNativeSmoke
         var laterPlanId = (await service.AnalyzeAsync(laterUpload.CollectionHandle, 0, 10, scope)).PlanId;
         var beforeLater = await db.CountAsync();
 
-        // Rollback: a failure after the Design writes of a later import leaves nothing partial, and keeps the upload.
-        var failing = db.Service(access, clock, db.Command(access, clock, activitiesInterceptors: [new SaveFailureInterceptor<ActivityManagementProjectionSnapshot>()]));
-        await Assert.ThrowsAsync<ReusableActivityImportPersistenceException>(async () =>
-            await failing.ApplyAsync(laterUpload.CollectionHandle, laterPlanId, ["a-v2"], "native-rolled-back", scope));
-        Assert.Equal(beforeLater, await db.CountAsync());
+        // Rollback: a commit lost after the Design writes of a later import leaves nothing partial, and keeps the upload.
         var lostCommit = db.Service(access, clock, db.Command(access, clock, importInterceptors: [new CommitFailureInterceptor(afterCommit: false)]));
         await Assert.ThrowsAsync<ReusableActivityImportPersistenceException>(async () =>
             await lostCommit.ApplyAsync(laterUpload.CollectionHandle, laterPlanId, ["a-v2"], "native-rolled-back", scope));
@@ -155,9 +152,9 @@ internal static class Elsa3ImportNativeSmoke
         Assert.Equal(ReusableActivityImportResourceDisposition.Reused, v2.ActivityDefinitionDisposition);
         Assert.Equal(ReusableActivityImportResourceDisposition.Created, v2.ActivityVersionDisposition);
         await using var readback = db.Activities();
-        Assert.Equal(v2.ActivityDefinitionVersionId, (await readback.ActivityDefinitionAuthoringStates.AsNoTracking().SingleAsync()).HeadVersionId);
+        Assert.Null((await readback.ActivityDefinitionAuthoringStates.AsNoTracking().SingleAsync()).HeadVersionId);
         var afterLater = await db.CountAsync();
-        Assert.Equal((2, 2, 2, 1), (afterLater.Collections, afterLater.Receipts, afterLater.ActivityVersions, afterLater.ActivityDefinitions));
+        Assert.Equal((2, 2, 0, 1, 1), (afterLater.Collections, afterLater.Receipts, afterLater.ActivityVersions, afterLater.Drafts, afterLater.ActivityDefinitions));
 
         // Ledger deletes on this provider: one upload by its exact identity, the other by the expiry sweep.
         Assert.False(await store.DeleteCollectionAsync("NATIVE-HANDLE", upper));

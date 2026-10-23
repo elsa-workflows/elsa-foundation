@@ -1,4 +1,3 @@
-using CShells;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using Elsa.Cluster.Core.Models;
@@ -6,12 +5,12 @@ using Elsa.Locking.Core;
 using Elsa.Tasks.Core;
 using Elsa.Tasks.Core.Attributes;
 using Elsa.Tasks.Diagnostics;
-using Elsa.Tasks.Services;
+using Elsa.Tasks.Testing;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Tasks.Tests;
 
+[Collection(StartupTaskRuns.Name)]
 public sealed class StartupTaskTelemetryTests
 {
     [Fact]
@@ -121,15 +120,11 @@ public sealed class StartupTaskTelemetryTests
 
     private static async Task ExecuteAsync(IStartupTask task, IDistributedLockProvider lockProvider, CancellationToken cancellationToken)
     {
-        var executor = new TaskExecutor(lockProvider, NullLogger<TaskExecutor>.Instance, new ShellSettings("default"));
-        var services = new ServiceCollection();
-        services.AddSingleton<ITaskExecutor>(executor);
-        services.AddSingleton<IBackgroundTaskStarter>(executor);
+        var services = TaskServices.Compose(lockProvider);
         services.AddScoped<IStartupTask>(_ => task);
 
         await using var provider = services.BuildServiceProvider();
-        await using var manager = new TaskManager(NullLoggerFactory.Instance, provider);
-        await manager.StartExecutingRegisteredTasks(cancellationToken);
+        await provider.GetRequiredService<ITaskManager>().StartExecutingRegisteredTasks(cancellationToken);
     }
 
     private sealed class SuccessfulTask : IStartupTask

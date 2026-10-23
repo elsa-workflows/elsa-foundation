@@ -51,6 +51,14 @@
 	<!-- The computed-vs-source-build production configuration swap this host shares with Elsa.Foundation.Host (#2084, #2126). -->
 	<Import Project="$(MSBuildThisFileDirectory)../ComputedProductionSettings.targets" />
 
+	<!-- Rules is discoverable here and enabled only by an explicit shell composition. -->
+	<ItemGroup>
+		<ProjectReference Include="..\..\..\Extensions\Rules\src\Runtime\Elsa.Rules.Runtime.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Rules\src\Persistence\EntityFrameworkCore\Elsa.Rules.Persistence.EntityFrameworkCore.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Rules\src\Workflows\Design\Elsa.Rules.Workflows.Design.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Rules\src\Workflows\Runtime\Elsa.Rules.Workflows.Runtime.csproj" />
+	</ItemGroup>
+
 	<ItemGroup>
 		<ProjectReference Include="..\..\src\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
 		<!-- Cluster membership, selected from host configuration on the host container (spec 183, FR-024). -->
@@ -78,8 +86,16 @@
 		<ProjectReference Include="..\..\src\Workflows\Design\Reconciliation\Elsa.Workflows.Design.Reconciliation\Elsa.Workflows.Design.Reconciliation.csproj" />
 		<ProjectReference Include="..\..\src\Workflows\Design\Reconciliation\Json\Elsa.Workflows.Design.Reconciliation.Json.csproj" />
 		<ProjectReference Include="..\..\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
+		<!-- ETL is discoverable here and enabled only by an explicit shell composition. -->
+		<ProjectReference Include="..\..\..\Extensions\Etl\src\Design\Api\Elsa.Etl.Design.Api.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Etl\src\Runtime\Api\Elsa.Etl.Runtime.Api.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Etl\src\Runtime\Elsa.Etl.Runtime\Elsa.Etl.Runtime.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Etl\src\Persistence\EntityFrameworkCore\Elsa.Etl.Persistence.EntityFrameworkCore.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Etl\src\Workflows\Design\Elsa.Etl.Workflows.Design.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Etl\src\Workflows\Runtime\Elsa.Etl.Workflows.Runtime.csproj" />
 		<ProjectReference Include="..\..\src\Activities\Bpmn\Elsa.Activities.Bpmn\Elsa.Activities.Bpmn.csproj" />
 		<ProjectReference Include="..\..\src\Activities\Bpmn\Interchange\Elsa.Activities.Bpmn.Interchange.csproj" />
+		<ProjectReference Include="..\..\src\Activities\Compensation\Elsa.Activities.Compensation.csproj" />
 		<ProjectReference Include="..\..\src\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
 		<ProjectReference Include="..\..\src\Activities\DispatchWorkflow\Design\Elsa.Activities.DispatchWorkflow.Design.csproj" />
 		<ProjectReference Include="..\..\src\Activities\DispatchWorkflow\Runtime\Elsa.Activities.DispatchWorkflow.Runtime.csproj" />
@@ -158,6 +174,11 @@
 		<ProjectReference Include="..\..\src\Secrets\Core\Elsa.Secrets.Core.csproj" />
 		<ProjectReference Include="..\..\src\Secrets\Elsa.Secrets\Elsa.Secrets.csproj" />
 		<ProjectReference Include="..\..\src\Secrets\Workflows\Elsa.Secrets.Workflows.csproj" />
+		<ProjectReference Include="..\..\src\Connections\Core\Elsa.Connections.Core.csproj" />
+		<ProjectReference Include="..\..\src\Connections\Elsa.Connections\Elsa.Connections.csproj" />
+		<ProjectReference Include="..\..\src\Connections\Api\Elsa.Connections.Api.csproj" />
+		<ProjectReference Include="..\..\src\Connections\Design\Elsa.Connections.Design.csproj" />
+		<ProjectReference Include="..\..\src\Connections\Workflows\Elsa.Connections.Workflows.csproj" />
 		<ProjectReference Include="..\..\src\Tasks\Core\Elsa.Tasks.Core.csproj" />
 		<ProjectReference Include="..\..\src\Tasks\Schedules\Elsa.Tasks.Schedules.csproj" />
 		<ProjectReference Include="..\..\src\Tasks\Elsa.Tasks\Elsa.Tasks.csproj" />
@@ -196,11 +217,11 @@
 
 	<ItemGroup>
 		<!--
-			Documented exception to the §2.23.3 no-InternalsVisibleTo rule: the host-only module-management
-			registry builder (ModuleManagementRegistryBuilder) is a host-private helper exercised directly by
-			ModuleManagementRegistryBuilderTests. Publicizing it to satisfy tests would promote a host-private
-			API into the public surface. Tracked by the InternalsVisibleTo allow-list guard test
-			(ArchitectureGuardTests.InternalsVisibleTo_occurrences_are_limited_to_documented_exceptions).
+			The one listed exception to §2.23.3: hosts have no domain, so they grant nothing else. The host-only
+			module-management registry builder (ModuleManagementRegistryBuilder) is a host-private helper exercised
+			directly by ModuleManagementRegistryBuilderTests. Publicizing it to satisfy tests would promote a
+			host-private API into the public surface. Checked by
+			ArchitectureGuardTests.InternalsVisibleTo_grants_stay_within_the_granting_domain.
 		-->
 		<InternalsVisibleTo Include="Elsa.Modularity.Tests" />
 	</ItemGroup>

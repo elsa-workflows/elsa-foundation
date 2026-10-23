@@ -1,6 +1,7 @@
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Projections;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Definitions;
@@ -22,7 +23,8 @@ public interface IWorkflowDefinitionDetailsReader
 public sealed class WorkflowDefinitionDetailsReader(
     IWorkflowDefinitionVersionStore versionStore,
     IWorkflowDefinitionStore definitionStore,
-    IWorkflowDefinitionDraftStore draftStore) : IWorkflowDefinitionDetailsReader
+    IWorkflowDefinitionDraftStore draftStore,
+    IWorkflowDefinitionPublicationStateLookup? publicationStateLookup = null) : IWorkflowDefinitionDetailsReader
 {
     public async Task<WorkflowDefinitionDetailsView> ReadAsync(string definitionId, CancellationToken cancellationToken)
     {
@@ -33,9 +35,28 @@ public sealed class WorkflowDefinitionDetailsReader(
         var metadata = draft is null
             ? null
             : await draftStore.FindWithLayoutByIdAsync(draft.Id, cancellationToken);
+        var latestVersion = versions
+            .OrderByDescending(version => version.SemVerSortKey, StringComparer.Ordinal)
+            .ThenByDescending(version => version.Id, StringComparer.Ordinal)
+            .FirstOrDefault();
+        var versionsById = versions.ToDictionary(version => version.Id, version => version.Version, StringComparer.Ordinal);
+        var publicationSummaries = publicationStateLookup is null
+            ? null
+            : await publicationStateLookup.ListByDefinitionIdsAsync([definitionId], cancellationToken);
+        var definitionView = definition.ToView() with
+        {
+            DraftId = draft?.Id,
+            DraftSourceVersionId = draft?.SourceVersionId,
+            DraftSourceVersion = draft?.SourceVersionId is { } sourceVersionId && versionsById.TryGetValue(sourceVersionId, out var sourceVersion)
+                ? sourceVersion
+                : null,
+            LatestVersionId = latestVersion?.Id,
+            LatestVersion = latestVersion?.Version,
+            VersionCount = versions.Count
+        };
 
         return new WorkflowDefinitionDetailsView(
-            definition.ToView(),
+            definitionView.WithPublicationState(publicationSummaries, versionsById),
             draft is null
                 ? null
                 : WorkflowDraftView.From(

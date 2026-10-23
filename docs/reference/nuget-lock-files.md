@@ -10,9 +10,11 @@ with its version and content hash, and every project its references reach. Two t
   `NU1004` when a lock file no longer matches its project: a version changed in `Directory.Packages.props`, a pin added
   or removed, a `PackageReference` or `ProjectReference` added or removed. A dependency change therefore lands only as a
   reviewed lock-file diff, and a version the feed has since removed fails the restore rather than resolving to another.
-- **Generating and checking the maps needs no restore.** The dependency map's pinned-transitive edges
+- **Generating and deriving the dependency map needs no restore.** Its pinned-transitive edges
   ([spec 149](../../specs/149-canonical-dependency-map/spec.md) FR-012) are read from each packable project's lock file,
-  so `dotnet run --project tools/maps/Elsa.Maps.Generator -- check` is a scan of the checkout alone.
+  so the versioning calculator derives the dataset from a commit's tree alone
+  ([spec 259](../../specs/259-derived-dependency-map/spec.md)), and
+  `dotnet run --project tools/maps/Elsa.Maps.Generator -- dependency-map` is a scan of the checkout alone.
 
 ## Updating lock files on a package bump
 
@@ -28,9 +30,9 @@ with its version and content hash, and every project its references reach. Two t
    untouched.
 3. Review the `packages.lock.json` diffs and commit them with the change. They name every project the change reaches,
    test projects and transitive packages included.
-4. Regenerate the maps, `dotnet run --project tools/maps/Elsa.Maps.Generator -- all`: a pin moving moves the dependency
-   map's edges to it. The generator refuses a lock file the tree has moved past, naming the project, so running it
-   before step 2 says what to do.
+4. Check that the dependency map still derives: `dotnet run --project tools/maps/Elsa.Maps.Generator -- dependency-map`.
+   There is nothing to commit, since the file is git-ignored and the calculator derives it per commit, but the scan
+   refuses a lock file the tree has moved past, naming the project, so running it before step 2 says what to do.
 
 A plain restore leaves a lock file that still matches its project as it is. `dotnet restore Elsa.Server.slnx
 --force-evaluate` resolves every project afresh and rewrites every lock file; it is for deliberately taking whatever
@@ -119,7 +121,7 @@ first commit of the lock files.
 
 - **Packages Nuplane loads at runtime.** Feature packages a host takes from its module feed are resolved by Nuplane, not
   by a project restore; Nuplane has its own lock file for them
-  ([Pinning and integrity](../foundation-host-feeds.md#pinning-and-integrity)).
+  ([Pinning and integrity](../host-feeds/pinning-and-closures.md#pinning-and-integrity)).
 - **Repository-local .NET tools.** `dotnet tool restore` reads `.config/dotnet-tools.json`, which pins each tool's version
   and has no lock file.
 - **Projects outside `Elsa.Server.slnx`**, such as the repros under `docs/reports/repros/`. Restoring one writes a lock

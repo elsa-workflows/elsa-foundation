@@ -30,18 +30,24 @@ Do not invent a named program-goal bucket just because one is missing. Propose c
 | [Elsa 4 Website and Documentation](https://github.com/elsa-workflows/elsa-foundation/issues/2495) | Active in parallel | Foundation-owned documentation and GitBook | Sipke | #2498 source setup and hosted qualification; preserve Elsa 3 publishing |
 | [Elsa 4 Simplification](elsa-4-simplification.md) | Active | Whole product: tests, API, language, structure, docs | Sipke | Program #2559, ADR 0080 |
 | [Runtime Efficiency](runtime-efficiency.md) | Active | Runtime database access, persistence modes, concurrent correctness | Sipke | Program #2531; persistence-mode epic #2564 |
+| [Unified Execution](unified-execution.md) | Active; owner authorization, 18 October | Native workflows, BPMN, ETL, hosting and agent collaboration | Sipke | Program #2892; lifecycle compatibility under #2905, released BPMN adoption under #2735 |
+| [Native Compensation and Saga Recovery](native-compensation.md) | Active; owner authorization, 19 October | Native workflow compensation and integrated Studio authoring/inspection | Sipke | Program #3035; design packet #3043, then the M1 journey #3044 |
+| [BPMN Engine](bpmn-engine.md) | Active; owner exception, 14 October | BPMN composite, interchange, shared `valence-works/bpmn` core | Sipke | #2735 switch to `Bpmn.Semantics`; #2736 refuse degraded imports |
+| [Elsa 3.8/3.9 Parity](elsa3-parity.md) | Active; owner exception, 15 October | Identity administration, then tenancy, Elsa 3 import, operations, modules | Sipke | Program #2771, ADR 0085; Phase 1 users and roles |
 
-The [11 October owner amendment to ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus)
-reactivates existing #2501 and #2495 as named exceptions to parking and the two-program cap.
-Their linked issues are the current charters and decision records; reuse their existing queues.
-This does not reactivate other parked goals or authorize new programs. The remaining goals below retain
-their own status and decisions, including the 2026-11-21 review for parked work unless separately superseded.
+The Active table above is the complete list of active programs. The
+[19 October owner amendment to ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus) replaced the
+former two-program cap and its run of named exceptions (11, 14, 15 and 18 October). A program is active only
+when an owner amendment there names it and states its sequencing. Each authorization covers only its named
+scope and reactivates nothing else; linked issues remain the charters and decision records. The goals below
+retain their own status and decisions, including the 2026-11-21 review for parked work unless separately
+superseded.
 
 | Goal | Status |
 |---|---|
 | [Elsa 4 Contributor Experience](workspace-launch-readiness.md) | Parked |
 | [Elsa Foundation Operating Model](elsa-foundation-operating-model.md) | Parked |
-| [Runtime Execution Seam](runtime-execution-seam.md) | Parked |
+| [Runtime Execution Seam](runtime-execution-seam.md) | Historical objectives parked; named #2892 continuation active |
 | [Runtime Database Access](runtime-db-access.md) | Merged into Runtime Efficiency |
 | [Runtime Throughput](runtime-throughput.md) | Merged into Runtime Efficiency |
 | [Runtime Execution Evidence](runtime-execution-evidence.md) | Parked |
@@ -58,7 +64,6 @@ their own status and decisions, including the 2026-11-21 review for parked work 
 | [Workspace Split Readiness](workspace-split-readiness.md) | Parked |
 | [Diagnostics Observability Readiness](diagnostics-observability-readiness.md) | Parked |
 | [Elsa 4 Architecture Review Remediation](elsa-4-review-remediation.md) | Folded into Elsa 4 Simplification |
-| [BPMN Engine](bpmn-engine.md) | Parked |
 | [First-Request / Cold-Start Readiness](first-request-cold-start-readiness.md) | Superseded |
 
 ## Goal File Rules

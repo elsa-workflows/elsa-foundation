@@ -7,7 +7,7 @@ namespace Elsa.Tasks.Services;
 /// <summary>
 /// Sorts tasks based on their dependencies using topological ordering.
 /// </summary>
-public sealed class TopologicalTaskSorter : ITopologicalTaskSorter
+internal sealed class TopologicalTaskSorter
 {
     /// <summary>
     /// Sorts tasks in topological order based on their TaskDependencyAttribute declarations.

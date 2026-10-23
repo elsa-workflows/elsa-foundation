@@ -626,7 +626,7 @@ public sealed class ReplacementContractRegistrationTests
     {
         var codec = provider.GetRequiredService<IPermissionPolicyCodec>();
         var policyProvider = provider.GetRequiredService<IAuthorizationPolicyProvider>();
-        var policy = await policyProvider.GetPolicyAsync(codec.Format(PermissionPolicyDescriptor.Single("shell-management.read")));
+        var policy = await policyProvider.GetPolicyAsync(codec.Format(PermissionPolicyDescriptor.Single("shell-management:read")));
         Assert.NotNull(policy);
         return policy!;
     }
@@ -677,7 +677,7 @@ public sealed class ReplacementContractRegistrationTests
         "untrusted-provider");
 
     private static ClaimsPrincipal UnmarkedAuthenticatedPrincipal() => new(new ClaimsIdentity(
-        [new Claim(IdentityClaimTypes.Permission, "shell-management.read")],
+        [new Claim(IdentityClaimTypes.Permission, "shell-management:read")],
         "unmarked-provider"));
 
     private const string TrustedAuthenticationType = "trusted-provider";

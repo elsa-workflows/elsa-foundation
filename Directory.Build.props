@@ -11,8 +11,11 @@
     package version comes from PackageVersioning.props, which enforces that itself.
     Two projects deliberately keep their own copies rather than inheriting:
 
-      - src/essentials/Workflows/Design/CodeGeneration targets netstandard2.0 as a
+      - Essentials/src/Workflows/Design/CodeGeneration targets netstandard2.0 as a
         Roslyn source generator and pins its own TargetFramework/ImplicitUsings.
+
+      - Essentials/build/Analyzers targets netstandard2.0 as the Roslyn naming
+        analyzer and pins its own TargetFramework/ImplicitUsings.
 
       - The former src/essentials/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore
         tree was retired with issue #1482 together with its frozen oracle and ratchet.
@@ -26,8 +29,8 @@
   <!--
     Version line, ADR 0067. VersionLines.props holds the one reviewed Line A list; this turns it into
     a per-project signal every project can read from its own $(ElsaVersionLine), without repeating the
-    list or re-parsing it per project. #2078 reads it below to enable PublicApiAnalyzers on Line A;
-    PackageVersioning.props reads it to choose between ElsaVersion and ElsaContractsVersion.
+    list or re-parsing it per project. PackageVersioning.props reads it to choose between ElsaVersion
+    and ElsaContractsVersion. Public API tracking no longer reads it (see ElsaTrackPublicApi below).
 
     The membership check is a property function ($(...Contains(...))), not an item-list Condition,
     because outside a Target MSBuild rejects an item-list reference in a PropertyGroup Condition
@@ -120,26 +123,70 @@
   <Import Project="$(MSBuildThisFileDirectory)PackageRanges.targets" />
 
   <!--
-    #2078: Line A's version is meant to move only when its contract changes, and PublicApiAnalyzers is
-    what makes such a change visible - it fails the build when a public member is added or removed
-    without a matching PublicAPI.Shipped.txt/PublicAPI.Unshipped.txt entry. Scoped to
-    $(ElsaVersionLine) == 'A' so the other ~120 packages are untouched; they wait for the 4.0 cut and
-    ApiCompat (a separate issue). PrivateAssets="all" keeps the analyzer a build-time-only reference:
-    it must not appear as a dependency of the packed Line A nupkg.
+    Public API tracking. A packable project opts in with <ElsaTrackPublicApi>true</ElsaTrackPublicApi> in
+    its own project file, beside its PublicAPI.Shipped.txt and PublicAPI.Unshipped.txt; a domain's
+    internal-by-default change flips it on for each of the domain's packable projects. PublicApiAnalyzers
+    then fails the build when a public member is added or removed without a matching entry, so every
+    change to the public surface is a reviewed diff of those two files. PublicApiFilesGuardTests holds the
+    opt-in, the two files and the analyzer together.
 
-    RS0016 (public API not declared) and RS0017 (declared API removed) are promoted to errors for Line
-    A only, via WarningsAsErrors rather than the repo-wide TreatWarningsAsErrors, so this stays additive
-    to the warnings-only analysis policy above. Every other PublicApiAnalyzers rule stays a warning.
+    Only items are conditioned on the opt-in. The project sets it in its own body, which MSBuild evaluates
+    after this file but before any item, so an item condition here sees it and a property condition would
+    not. RS0016 (public API not declared) and RS0017 (declared API removed) are therefore promoted to
+    errors for every project: only a project that runs the analyzer can raise them. This stays additive to
+    the warnings-only analysis policy below, and every other PublicApiAnalyzers rule stays a warning.
+    PrivateAssets="all" keeps the analyzer out of every packed nupkg's dependencies.
+
+    The condition reads a project-file property, never $(Configuration), so the Release and Debug restore
+    graphs agree; EfCoreDependencyGuardTests admits exactly this condition.
   -->
-  <ItemGroup Condition="'$(ElsaVersionLine)' == 'A'">
+  <ItemGroup Condition="'$(ElsaTrackPublicApi)' == 'true'">
     <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />
     <AdditionalFiles Include="PublicAPI.Shipped.txt" />
     <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
   </ItemGroup>
 
-  <PropertyGroup Condition="'$(ElsaVersionLine)' == 'A'">
+  <PropertyGroup>
     <WarningsAsErrors>$(WarningsAsErrors);RS0016;RS0017</WarningsAsErrors>
   </PropertyGroup>
+
+  <!--
+    Naming analyzer. Every production project (Essentials/src, Essentials/apps and Extensions/<name>/src)
+    compiles with Essentials/build/Analyzers, which refuses retired terms in type and namespace names. Which
+    terms apply is configured per domain in the root .editorconfig (key elsa_naming.retired_terms); a file no
+    section configures is held to nothing. The analyzer lives outside the module roots on purpose: it is build
+    tooling, not a domain or a production project, and every Docker build context that copies Essentials/
+    reaches it.
+
+    OutputItemType="Analyzer" with ReferenceOutputAssembly="false" hands the analyzer to the compiler
+    without referencing its assembly, and PrivateAssets="all" keeps it out of every packed nuspec. A build
+    context that lacks the analyzer project would only warn (MSB9008) and compile without it, so
+    ElsaRequireNamingAnalyzer turns that into an error.
+
+    The condition reads the project's location, never $(Configuration), so the Release and Debug restore
+    graphs agree; EfCoreDependencyGuardTests admits exactly this condition. ProductionPathAgreementTests
+    holds the location test to the one the architecture guards use.
+  -->
+  <PropertyGroup>
+    <_ElsaNamingAnalyzerProject>$(MSBuildThisFileDirectory)Essentials/build/Analyzers/Elsa.Architecture.Analyzers.csproj</_ElsaNamingAnalyzerProject>
+    <_ElsaProjectDirectoryFromRoot>$([MSBuild]::MakeRelative('$(MSBuildThisFileDirectory)', '$(MSBuildProjectDirectory)/'))</_ElsaProjectDirectoryFromRoot>
+    <_ElsaProjectDirectoryFromRoot>$(_ElsaProjectDirectoryFromRoot.Replace('\', '/'))</_ElsaProjectDirectoryFromRoot>
+    <ElsaIsProductionProject>false</ElsaIsProductionProject>
+    <ElsaIsProductionProject Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('$(_ElsaProjectDirectoryFromRoot)', '^(Essentials/(src|apps)|Extensions/[^/]+/src)/'))">true</ElsaIsProductionProject>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(ElsaIsProductionProject)' == 'true'">
+    <ProjectReference Include="$(_ElsaNamingAnalyzerProject)"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all" />
+  </ItemGroup>
+
+  <Target Name="ElsaRequireNamingAnalyzer" BeforeTargets="BeforeBuild"
+          Condition="'$(ElsaIsProductionProject)' == 'true' and !Exists('$(_ElsaNamingAnalyzerProject)')">
+    <Error Code="ELSABUILD001"
+           Text="$(MSBuildProjectName) is a production project, so it compiles with the naming analyzer, but $(_ElsaNamingAnalyzerProject) is not here. A Docker build context or partial checkout that leaves out Essentials/build/Analyzers would otherwise build without the analyzer, with only an MSB9008 warning." />
+  </Target>
 
   <!--
     Static analysis. The repository had no .editorconfig and no analyzer settings

@@ -1139,8 +1139,163 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
 
         var writer = scope.ServiceProvider.GetRequiredService<IRuntimeCheckpointCommitStore>();
         Assert.IsType<EfRuntimeCheckpointCommitStore>(writer);
+        Assert.IsType<EfBackgroundActivityWorkStore>(scope.ServiceProvider.GetRequiredService<IBackgroundActivityWorkStore>());
         await writer.CommitAsync(Commit("di-checkpoint"), Decision());
         Assert.Single(await context.RuntimeCheckpointCommits.AsNoTracking().ToArrayAsync());
+    }
+
+    [Fact]
+    public void Full_runtime_ef_composition_resolves_execution_state_contracts_to_ef_stores()
+    {
+        var services = CompleteEfServices();
+        services.Configure<RuntimeRecoveryContinuationOptions>(options =>
+            options.SigningKey = new string('k', 32));
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        Assert.IsType<EfWorkflowExecutionStateStore>(scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>());
+        Assert.IsType<EfActivityExecutionStateStore>(scope.ServiceProvider.GetRequiredService<IActivityExecutionStateStore>());
+    }
+
+    [Fact]
+    public async Task Background_admission_receipt_replay_and_terminal_acceptance_are_checkpoint_scoped()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var request = BackgroundRequest("work-receipt");
+        await using (var context = database.Open("tenant-a"))
+        {
+            var accessor = new FixedAccessor("tenant-a");
+            var owner = await BackgroundActivityWorkTestSupport.SeedLiveExecutionAsync(context, accessor, "workflow-a", "tenant-a");
+            var checkpoints = new EfRuntimeCheckpointCommitStore(context, accessor);
+            var admission = Commit("commit-bg-admission") with { ExpectedFence = owner.ToFence() };
+            await checkpoints.CommitAsync(admission with
+            {
+                StateChanges = admission.StateChanges.WithBackgroundActivityWork(
+                    new BackgroundActivityWorkCheckpointChanges(admissions: [request]))
+            }, Decision());
+
+            var worker = new EfBackgroundActivityWorkStore(context, new FixedAccessor("tenant-a"));
+            Assert.Equal(BackgroundActivityWorkStatus.Pending, (await worker.FindAsync("workflow-a", request.WorkId))!.Status);
+            var claim = await worker.ClaimNextAsync("worker-a", OccurredAt.AddSeconds(1), TimeSpan.FromMinutes(1));
+            Assert.NotNull(claim);
+
+            var reorderedJson = new BackgroundActivityWorkTerminalResult(BackgroundActivityWorkResultKind.Complete, resultJson: "{\"b\":2, \"a\":1}");
+            var canonicalJson = new BackgroundActivityWorkTerminalResult(BackgroundActivityWorkResultKind.Complete, resultJson: "{\"a\":1,\"b\":2}");
+            Assert.Equal(
+                BackgroundActivityWorkReceipt.ComputeDigest(request, reorderedJson),
+                BackgroundActivityWorkReceipt.ComputeDigest(request, canonicalJson));
+
+            var ready = await worker.RecordResultAsync(claim!, reorderedJson, OccurredAt.AddSeconds(2));
+            Assert.Equal(BackgroundActivityWorkStatus.ResultReady, ready.Status);
+            var replay = await worker.RecordResultAsync(claim!, canonicalJson, OccurredAt.AddMinutes(5));
+            Assert.Equal(ready.ReceiptDigest, replay.ReceiptDigest);
+            await Assert.ThrowsAsync<BackgroundActivityWorkConflictException>(() => worker.RecordResultAsync(
+                new BackgroundActivityWorkClaim(claim!.WorkflowExecutionId, claim.WorkId, claim.ClaimOwnerId,
+                    claim.ClaimFence, claim.ClaimedAt, claim.VisibleUntil, claim.Revision + 1),
+                canonicalJson, OccurredAt.AddMinutes(5)).AsTask());
+            await Assert.ThrowsAsync<BackgroundActivityWorkConflictException>(() => worker.RecordResultAsync(
+                claim!, new BackgroundActivityWorkTerminalResult(BackgroundActivityWorkResultKind.Complete, resultJson: "{\"a\":3}"),
+                OccurredAt.AddMinutes(5)).AsTask());
+
+            var terminal = Commit("commit-bg-terminal");
+            terminal = terminal with
+            {
+                StateChanges = terminal.StateChanges.WithBackgroundActivityWork(new BackgroundActivityWorkCheckpointChanges(
+                    acceptances: [new BackgroundActivityWorkAcceptance("workflow-a", request.WorkId, ready.ReceiptDigest!, OccurredAt.AddMinutes(6))],
+                    cancellations: [new BackgroundActivityWorkCancellationRequest("workflow-a")]))
+            };
+            await checkpoints.CommitAsync(terminal, Decision());
+        }
+
+        await using (var tenantA = database.Open("tenant-a"))
+        {
+            var item = await new EfBackgroundActivityWorkStore(tenantA, new FixedAccessor("tenant-a"))
+                .FindAsync("workflow-a", request.WorkId);
+            Assert.Equal(BackgroundActivityWorkStatus.Accepted, item!.Status);
+            Assert.Equal("{\"b\":2, \"a\":1}", item.Result!.ResultJson);
+        }
+
+        await using var tenantB = database.Open("tenant-b");
+        Assert.Null(await new EfBackgroundActivityWorkStore(tenantB, new FixedAccessor("tenant-b"))
+            .FindAsync("workflow-a", request.WorkId));
+    }
+
+    [Fact]
+    public async Task Background_cancellation_tombstone_fences_a_late_worker_result()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var request = BackgroundRequest("work-cancel");
+        await using (var context = database.Open("tenant-a"))
+        {
+            var accessor = new FixedAccessor("tenant-a");
+            var owner = await BackgroundActivityWorkTestSupport.SeedLiveExecutionAsync(context, accessor, "workflow-a", "tenant-a");
+            var checkpoints = new EfRuntimeCheckpointCommitStore(context, accessor);
+            var admission = Commit("commit-bg-cancel-admit") with { ExpectedFence = owner.ToFence() };
+            await checkpoints.CommitAsync(admission with
+            {
+                StateChanges = admission.StateChanges.WithBackgroundActivityWork(
+                    new BackgroundActivityWorkCheckpointChanges(admissions: [request]))
+            }, Decision());
+
+            var worker = new EfBackgroundActivityWorkStore(context, new FixedAccessor("tenant-a"));
+            var claim = await worker.ClaimNextAsync("worker-a", OccurredAt.AddSeconds(1), TimeSpan.FromMinutes(1));
+            Assert.NotNull(claim);
+            var cancel = Commit("commit-bg-cancel");
+            await checkpoints.CommitAsync(cancel with
+            {
+                StateChanges = cancel.StateChanges.WithBackgroundActivityWork(
+                    new BackgroundActivityWorkCheckpointChanges(cancellations: [new BackgroundActivityWorkCancellationRequest("workflow-a")]))
+            }, Decision());
+
+            var cancelled = await worker.FindAsync("workflow-a", request.WorkId);
+            Assert.Equal(BackgroundActivityWorkStatus.Cancelled, cancelled!.Status);
+            Assert.True(cancelled.ClaimFence > claim!.ClaimFence);
+            await Assert.ThrowsAsync<BackgroundActivityWorkConflictException>(() => worker.RecordResultAsync(
+                claim, new BackgroundActivityWorkTerminalResult(BackgroundActivityWorkResultKind.Complete, resultJson: "{}"),
+                OccurredAt.AddSeconds(3)).AsTask());
+        }
+    }
+
+    [Fact]
+    public async Task Background_expired_claim_cannot_record_a_result_but_successor_can()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var request = BackgroundRequest("work-expired-claim");
+        await using (var context = database.Open("tenant-a"))
+        {
+            var accessor = new FixedAccessor("tenant-a");
+            var owner = await BackgroundActivityWorkTestSupport.SeedLiveExecutionAsync(context, accessor, "workflow-a", "tenant-a");
+            var checkpoints = new EfRuntimeCheckpointCommitStore(context, accessor);
+            var admission = Commit("commit-bg-expired-admission") with { ExpectedFence = owner.ToFence() };
+            await checkpoints.CommitAsync(admission with
+            {
+                StateChanges = admission.StateChanges.WithBackgroundActivityWork(
+                    new BackgroundActivityWorkCheckpointChanges(admissions: [request]))
+            }, Decision());
+
+            var worker = new EfBackgroundActivityWorkStore(context, new FixedAccessor("tenant-a"));
+            var staleClaim = await worker.ClaimNextAsync("worker-old", OccurredAt.AddSeconds(1), TimeSpan.FromSeconds(5));
+            Assert.NotNull(staleClaim);
+
+            await Assert.ThrowsAsync<BackgroundActivityWorkConflictException>(() => worker.RecordResultAsync(
+                staleClaim!,
+                new BackgroundActivityWorkTerminalResult(BackgroundActivityWorkResultKind.Complete, resultJson: "{\"value\":\"stale\"}"),
+                staleClaim.VisibleUntil).AsTask());
+
+            var successor = await worker.ClaimNextAsync("worker-new", staleClaim.VisibleUntil, TimeSpan.FromSeconds(5));
+            Assert.NotNull(successor);
+            Assert.True(successor.ClaimFence > staleClaim.ClaimFence);
+            await Assert.ThrowsAsync<BackgroundActivityWorkConflictException>(() => worker.RecordResultAsync(
+                staleClaim!,
+                new BackgroundActivityWorkTerminalResult(BackgroundActivityWorkResultKind.Complete, resultJson: "{\"value\":\"late-old-worker\"}"),
+                successor.ClaimedAt.AddSeconds(1)).AsTask());
+            var acceptedResult = await worker.RecordResultAsync(
+                successor,
+                new BackgroundActivityWorkTerminalResult(BackgroundActivityWorkResultKind.Complete, resultJson: "{\"value\":\"current\"}"),
+                successor.ClaimedAt.AddSeconds(1));
+            Assert.Equal(BackgroundActivityWorkStatus.ResultReady, acceptedResult.Status);
+            Assert.Equal("{\"value\":\"current\"}", acceptedResult.Result!.ResultJson);
+        }
     }
 
     [Fact]
@@ -1222,6 +1377,25 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
         new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [], []),
         [],
         new Dictionary<string, string>());
+
+    private static BackgroundActivityWorkRequest BackgroundRequest(string workId)
+    {
+        const string workflowExecutionId = "workflow-a";
+        var attempt = new ActivityAttempt(
+            $"attempt-{workId}", $"invocation-{workId}", 1, ActivityAttemptReason.Initial, OccurredAt);
+        return new BackgroundActivityWorkRequest(
+            workId,
+            workflowExecutionId,
+            $"activity-{workId}",
+            attempt,
+            new WorkflowExecutableIdentity("artifact-a", "definition-a", "version-a", "1", "artifact-hash"),
+            "node-a",
+            "contract-fingerprint",
+            new ActivityInputSnapshot(attempt.InvocationId, "contract-fingerprint", "binding-fingerprint", new Dictionary<string, ValueEnvelope>(), OccurredAt),
+            new RuntimeSchedulerWorkItem(
+                $"coordinator-{workId}", workflowExecutionId, $"command-{workId}", WorkflowExecutionCommandKind.ScheduleActivity,
+                $"envelope-{workId}", $"idempotency-{workId}", OccurredAt, OccurredAt, 1));
+    }
 
     private static RuntimeCheckpointCommit WithPendingIntent(string commitId, string intentId)
     {

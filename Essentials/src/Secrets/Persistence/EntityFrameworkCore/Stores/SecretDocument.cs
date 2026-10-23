@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Serialization;
@@ -45,12 +46,21 @@ public sealed record SecretDocument(
         payload.Deserialize<SecretDocument>(SecretsEfJson.Options)
         ?? throw new InvalidOperationException("Secret document content is invalid.");
 
+    /// <summary>
+    /// The key part that tells this secret's row from the others under its name: empty while it holds the name, and its
+    /// id once it is deleted. Derived, never serialized, so the stored document is the same as before names could be
+    /// reused.
+    /// </summary>
+    [JsonIgnore]
+    public string Tombstone => Secret.Status == SecretStatus.Deleted ? Secret.Id : "";
+
     public string ToPayload() => JsonSerializer.Serialize(this, SecretsEfJson.Options);
 
     public SecretRecord ToRecord(byte[]? concurrencyToken = null) => new()
     {
         TenantId = TenantId,
         NormalizedName = NormalizedName,
+        Tombstone = Tombstone,
         NameSearchKey = NameSearchKey,
         DisplayNameSearchKey = DisplayNameSearchKey,
         TypeNameLookupKey = TypeNameLookupKey,

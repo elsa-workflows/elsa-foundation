@@ -23,8 +23,9 @@ public sealed class ActivityContract
         ActivityResultContract result,
         IReadOnlyCollection<string> outcomes,
         ActivityActivationRequirement activation,
-        SideEffectProfile sideEffectProfile = SideEffectProfile.External)
-        : this(activityTypeKey, contractVersion, descriptorKind, descriptorPayload, inputs.Values, result, outcomes, activation, sideEffectProfile)
+        SideEffectProfile sideEffectProfile = SideEffectProfile.External,
+        bool supportsBackgroundExecution = false)
+        : this(activityTypeKey, contractVersion, descriptorKind, descriptorPayload, inputs.Values, result, outcomes, activation, sideEffectProfile, supportsBackgroundExecution)
     {
         if (!StringComparer.Ordinal.Equals(schemaFingerprint, SchemaFingerprint))
             throw new JsonException($"Activity contract fingerprint '{schemaFingerprint}' does not match computed fingerprint '{SchemaFingerprint}'.");
@@ -40,6 +41,31 @@ public sealed class ActivityContract
         IEnumerable<string> outcomes,
         ActivityActivationRequirement activation,
         SideEffectProfile sideEffectProfile = SideEffectProfile.External)
+        : this(
+            activityTypeKey,
+            contractVersion,
+            descriptorKind,
+            descriptorPayload,
+            inputs,
+            result,
+            outcomes,
+            activation,
+            sideEffectProfile,
+            supportsBackgroundExecution: false)
+    {
+    }
+
+    public ActivityContract(
+        string activityTypeKey,
+        string contractVersion,
+        string descriptorKind,
+        JsonElement descriptorPayload,
+        IEnumerable<ActivityInputContract> inputs,
+        ActivityResultContract result,
+        IEnumerable<string> outcomes,
+        ActivityActivationRequirement activation,
+        SideEffectProfile sideEffectProfile,
+        bool supportsBackgroundExecution)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(activityTypeKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(contractVersion);
@@ -69,6 +95,7 @@ public sealed class ActivityContract
         Outcomes = outcomeArray.ToArray();
         Activation = activation;
         SideEffectProfile = sideEffectProfile;
+        SupportsBackgroundExecution = supportsBackgroundExecution;
         SchemaFingerprint = ComputeFingerprint();
     }
 
@@ -84,14 +111,21 @@ public sealed class ActivityContract
 
     /// <summary>
     /// Author-declared replay/side-effect classification. Part of the pinned, fingerprinted
-    /// contract: it gates whether the pre-activation attempt-claim checkpoint may be deferred under a
-    /// coalescing cadence. <see cref="SideEffectProfile.External"/> is the fail-safe default — an unmarked
+    /// contract: it gates whether the pre-activation attempt-claim checkpoint may be deferred into a later commit, in
+    /// every persistence mode. <see cref="SideEffectProfile.External"/> is the fail-safe default: an unmarked
     /// activity keeps the mandatory pre-activation durability boundary. Omitted from the serialized shape
     /// when it is the default so a default-External contract's document is byte-identical to before this
     /// unit (consistent with the fingerprint, which also only carries the non-default profile).
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public SideEffectProfile SideEffectProfile { get; }
+
+    /// <summary>
+    /// Whether this activity type explicitly declares support for durable background execution. The default false
+    /// value is omitted from the serialized contract and fingerprint to preserve existing artifacts.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool SupportsBackgroundExecution { get; }
 
     private string ComputeFingerprint()
     {
@@ -118,6 +152,11 @@ public sealed class ActivityContract
         if (SideEffectProfile != SideEffectProfile.External)
             node["sideEffectProfile"] = SideEffectProfile.ToString();
 
+        // This declaration changes the capabilities pinned to the activity contract. Keep the default false
+        // shape byte-identical for existing contracts.
+        if (SupportsBackgroundExecution)
+            node[nameof(SupportsBackgroundExecution)] = true;
+
         var canonical = SortNode(node).ToJsonString();
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
         return $"sha256:{Convert.ToHexString(hash).ToLowerInvariant()}";
@@ -140,6 +179,9 @@ public sealed class ActivityContract
         // the canonical shape, and the fingerprint, it had before the flag existed.
         if (input.IsCredential)
             projection[nameof(input.IsCredential)] = true;
+
+        if (!string.IsNullOrWhiteSpace(input.ConnectionType))
+            projection[nameof(input.ConnectionType)] = input.ConnectionType;
 
         return projection;
     }
@@ -216,7 +258,8 @@ public sealed class ActivityInputContract
         JsonElement? defaultValue,
         ActivityValuePolicy policy,
         IReadOnlyDictionary<string, string>? editorMetadata = null,
-        bool isCredential = false)
+        bool isCredential = false,
+        string? connectionType = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -238,6 +281,7 @@ public sealed class ActivityInputContract
             ? new Dictionary<string, string>()
             : new Dictionary<string, string>(editorMetadata, StringComparer.Ordinal);
         IsCredential = isCredential;
+        ConnectionType = string.IsNullOrWhiteSpace(connectionType) ? null : connectionType;
     }
 
     public string Key { get; }
@@ -259,6 +303,15 @@ public sealed class ActivityInputContract
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool IsCredential { get; }
+
+    /// <summary>
+    /// The required connection type when this input is a connection reference
+    /// (<c>[ActivityConnection(ConnectionType = ...)]</c>). Omitted from the serialized shape, and from the
+    /// fingerprint, while null, so a contract whose inputs declare none keeps the document and fingerprint it had
+    /// before the field existed.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ConnectionType { get; }
 }
 
 public sealed class ActivityResultContract
@@ -414,8 +467,9 @@ public enum SideEffectProfile
     /// <summary>
     /// The activity is pure/deterministic between checkpoint boundaries (in-workflow routing, compute, variable
     /// transforms): re-executing it on replay produces byte-identical state and no observable effect. Its
-    /// attempt-claim checkpoint may be deferred and folded forward into the next flushed commit under a
-    /// coalescing cadence, so a hot loop of such activities collapses to a single coalesced commit.
+    /// attempt-claim checkpoint may be deferred and folded forward into the next commit in every persistence mode, so
+    /// a hot loop of such activities folds into one commit per cap's worth of activities under Balanced, and into a
+    /// single commit under Ephemeral when nothing else in the loop commits.
     /// </summary>
     ReplaySafe
 }

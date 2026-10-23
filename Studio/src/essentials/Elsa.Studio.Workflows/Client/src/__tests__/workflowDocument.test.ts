@@ -150,6 +150,39 @@ describe("workflowDocumentReducer", () => {
     expect(workflowDocumentReducer(empty, { type: "testRunCleared" })).toBe(empty);
   });
 
+  it("refreshes the run view while retaining the captured draft, inputs, and action exchange", () => {
+    const withEvidence: WorkflowTestRunState = {
+      ...testRun,
+      startLabel: "HTTP request",
+      workflowInputNames: ["orderId"],
+      driverActionResult: { contributionId: "http-editor", value: { kind: "http-exchange", body: "response" } }
+    };
+    const start = { ...dirtyState(), testRun: withEvidence };
+    const refreshedView = { ...testRun.view, status: "Stopped", workflowExecutionId: "execution-1" };
+    const next = workflowDocumentReducer(start, { type: "testRunViewUpdated", view: refreshedView });
+
+    expect(next.testRun).toMatchObject({
+      ...withEvidence,
+      view: refreshedView,
+      startLabel: "HTTP request",
+      workflowInputNames: ["orderId"],
+      driverActionResult: withEvidence.driverActionResult
+    });
+  });
+
+  it("retains wait data and retry identity in the owner-held Test Run state", () => {
+    const start = { ...dirtyState(), testRun };
+    const waitDraft = {
+      modeId: "event",
+      draft: '{"payload":{"id":"evt-1"}}',
+      attempt: { signature: '{"waitId":"wait-1"}', deliveryId: "delivery-1" }
+    };
+    const next = workflowDocumentReducer(start, { type: "testRunWaitDraftUpdated", waitId: "wait-1", state: waitDraft });
+
+    expect(next.testRun?.waitDrafts?.["wait-1"]).toEqual(waitDraft);
+    expect(start.testRun?.waitDrafts).toBeUndefined();
+  });
+
   it("publishedArtifactChanged sets and clears the artifact id", () => {
     const set = workflowDocumentReducer(dirtyState(), { type: "publishedArtifactChanged", publishedArtifactId: "artifact-2" });
     expect(set.publishedArtifactId).toBe("artifact-2");

@@ -1,0 +1,1247 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+  "publishStateCommit": "eb3e12531b0cbd594374df1e49df0fadef9a50f3",
+  "stage": "process",
+  "directProofPassed": true,
+  "processBoundaryProofPassed": true,
+  "fullAcceptancePassed": false,
+  "commands": [
+    {
+      "command": [
+        "dotnet",
+        "--version"
+      ],
+      "cwd": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/consumer",
+      "log": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/01-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "f57769402c5259afcb4827defd14477a9a204c0c51885d5e8c2e0f0ea3ac9074"
+    },
+    {
+      "command": [
+        "dotnet",
+        "restore",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/consumer/Rules.PackageProbe.csproj",
+        "--configfile",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/consumer/NuGet.Config"
+      ],
+      "cwd": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/consumer",
+      "log": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/02-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "597b87c6199acdb3a558753d2806acdc5a88e27614dc3c59c026d887caf871b2"
+    },
+    {
+      "command": [
+        "dotnet",
+        "restore",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/consumer/Rules.PackageProbe.csproj",
+        "--locked-mode",
+        "--configfile",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/consumer/NuGet.Config"
+      ],
+      "cwd": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/consumer",
+      "log": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/03-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "809169403cf17b8d22e3b4a39f7374c6f092b0b12c38dea1436e8721574dbdf0"
+    },
+    {
+      "command": [
+        "dotnet",
+        "publish",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/consumer/Rules.PackageProbe.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--output",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment"
+      ],
+      "cwd": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/consumer",
+      "log": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/04-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "a499665c3a8a5c9f2aaafd247516a1a1c076357c03220f0b4f077de49bce308a"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment/Rules.PackageProbe.dll",
+        "receipt",
+        "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment-receipt-evidence.json"
+      ],
+      "cwd": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment",
+      "log": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/05-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "cde4c08e316cd294b53e3b08798665b3e4cbb90da23fc581b8a6a75e86b3edd1"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment/Rules.PackageProbe.dll",
+        "direct",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/direct.db",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/direct.json"
+      ],
+      "cwd": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment",
+      "log": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/06-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "2d991e7298966a24b6b847530076f484bcdcd7bc70df2e9f5acba99d2b23ccc4"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment/Rules.PackageProbe.dll",
+        "incompatible",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/incompatible.db",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/incompatible.json"
+      ],
+      "cwd": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment",
+      "log": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/07-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "0e80357e95fdfee57cad85217f650b0ed323f9d128dadc71c2ee8cc5d7a7382e"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment/Rules.PackageProbe.dll",
+        "unavailable",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/unavailable.db",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/unavailable.json"
+      ],
+      "cwd": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment",
+      "log": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/08-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "a75a1e89990bc2851b97f32e1cf22b402e0c1a4f52db114d2bd0c115fe073cb0"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment/Rules.PackageProbe.dll",
+        "direct",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/restored.db",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/restored.json"
+      ],
+      "cwd": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment",
+      "log": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/09-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "a3aabddc3d652bd1cdbb2cd6518b8d846e9bddc9c4b4fbd63c69114229761f9f"
+    },
+    {
+      "command": [
+        "dotnet",
+        "build",
+        "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source/Extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--no-dependencies",
+        "-p:CustomBeforeDirectoryBuildProps=/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/package-versions.props"
+      ],
+      "cwd": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source",
+      "log": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/10-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "24eeb723befc89ba0dd54db309a9bd00c4f5935e746ad1504ac5146b84de9654"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment/Rules.PackageProbe.dll",
+        "unavailable",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/alternate.db",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/alternate.json"
+      ],
+      "cwd": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment",
+      "log": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/11-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "d2cc0509a54c8a7f43f3002c4ec42c1c3dfc30b6c417cbcd3cda5a7e55958bcf"
+    },
+    {
+      "command": [
+        "dotnet",
+        "build",
+        "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source/Extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--no-dependencies",
+        "-p:CustomBeforeDirectoryBuildProps=/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/package-versions.props"
+      ],
+      "cwd": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source",
+      "log": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/12-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "3f2f676bc649a596cdba741ebb8d89ce67215a8a9cf0f9b7c04827d8f0cbaf86"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment/Rules.PackageProbe.dll",
+        "unavailable",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/control.db",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/control.json"
+      ],
+      "cwd": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment",
+      "log": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/13-command.log",
+      "exitCode": 1,
+      "expectedFailure": true,
+      "logSha256": "3571de59b9a143e5762544aa982d70440b84acdac58fbc4cc90bb57048c2d1e9"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment/Rules.PackageProbe.dll",
+        "direct",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/control-restored.db",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/control-restored.json"
+      ],
+      "cwd": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment",
+      "log": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/14-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "927c23456505b0eb850579506999d6333e7f4dc2222a396dd6e9227576dd07f1"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment/Rules.PackageProbe.dll",
+        "process-boundary",
+        "accepted",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/accepted-crash-state.json",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/accepted-crash-origin.json"
+      ],
+      "cwd": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment",
+      "log": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/accepted-crash-origin.log",
+      "role": "original-worker",
+      "pid": 87883,
+      "exitCode": -9,
+      "intentionalTermination": true,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment/Rules.PackageProbe.dll",
+        "process-recover",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/accepted-crash-state.json",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/accepted-crash-successor.json"
+      ],
+      "cwd": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment",
+      "log": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/16-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "ebdb7a0a0d7e7dabd71c9935fb398191f6a0280fa3045bbc61c1549f609344b5"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment/Rules.PackageProbe.dll",
+        "process-boundary",
+        "consumed",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/consumed-crash-state.json",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/consumed-crash-origin.json"
+      ],
+      "cwd": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment",
+      "log": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/consumed-crash-origin.log",
+      "role": "original-worker",
+      "pid": 87942,
+      "exitCode": -9,
+      "intentionalTermination": true,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment/Rules.PackageProbe.dll",
+        "process-recover",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/consumed-crash-state.json",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/consumed-crash-successor.json"
+      ],
+      "cwd": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment",
+      "log": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/18-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "d87e0fb8cb344ad8f26dbccad67551d0606b18a38c17356a6da57735663202fa"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment/Rules.PackageProbe.dll",
+        "process-boundary",
+        "accepted",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/accepted-delayed-state.json",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/accepted-delayed-origin.json"
+      ],
+      "cwd": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment",
+      "log": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/accepted-delayed-origin.log",
+      "role": "original-worker",
+      "pid": 87958,
+      "exitCode": 0,
+      "logSha256": "4e2f5503b479419d9ee00904242558c1217e19d00f153f9bf8e094f4460ea119"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment/Rules.PackageProbe.dll",
+        "process-recover",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/accepted-delayed-state.json",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/accepted-delayed-successor.json"
+      ],
+      "cwd": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment",
+      "log": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/20-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "71172574ca24537328d843a85f7b09028edfcc9e72dc1305cdc40fdea85ac4d2"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment/Rules.PackageProbe.dll",
+        "process-boundary",
+        "consumed",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/consumed-delayed-state.json",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/consumed-delayed-origin.json"
+      ],
+      "cwd": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment",
+      "log": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/consumed-delayed-origin.log",
+      "role": "original-worker",
+      "pid": 88059,
+      "exitCode": 0,
+      "logSha256": "ad627120d3c14f00517feea455628996dcdb15fa84cc4ad3ab29b28838cee4c9"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment/Rules.PackageProbe.dll",
+        "process-recover",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/consumed-delayed-state.json",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/consumed-delayed-successor.json"
+      ],
+      "cwd": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment",
+      "log": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/22-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "91c489a12fcc1edf50d90af703ac8b5248b4f257957d5522038acf78ff66811c"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment/Rules.PackageProbe.dll",
+        "process-boundary",
+        "accepted",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/accepted-cancel-state.json",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/accepted-cancel-origin.json"
+      ],
+      "cwd": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment",
+      "log": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/accepted-cancel-origin.log",
+      "role": "original-worker",
+      "pid": 88077,
+      "exitCode": 0,
+      "logSha256": "94e36745b21638020e8a8e4e9378aecac300987684a923d733ec55df38ff6b10"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment/Rules.PackageProbe.dll",
+        "process-cancel",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/accepted-cancel-state.json",
+        "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/accepted-cancel-successor.json"
+      ],
+      "cwd": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/deployment",
+      "log": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/24-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "13de86e4ef9c36353073ca8ffb2bffeb1e98ce3cecc26f6d9fc5eb92f6357ee1"
+    }
+  ],
+  "harness": {
+    "tools/rules/verify-packaged-rules.py": "8bc6bc94032a96e61233afab1ce70b5b111798d82c4719228fb798adabd37d7d",
+    "tools/rules/package_consumer.py": "fe0949b8eb96ae06fe3ce5b75b27ee44d1b490e83f735070f3aa25431ca2aeb5",
+    "tools/rules/package_process.py": "bdbd362189c9a6f9686670470437b99996f534d16cfc03fb50575a601fbb08ad",
+    "tools/rules/PackageProbe/ProcessProbe.cs": "36938e4b8e66bbb93c05b3352045da4ff6f866efdde769369df0aaa50a098d9a",
+    "tools/rules/PackageProbe/Program.cs": "06418d3a27e5cb589546401977c2b5a273b29c4b0371d9cc46d3841c90911e71"
+  },
+  "reusedPackReceipt": {
+    "path": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/receipt.json",
+    "sha256": "1f532af730e2cd3e375d67f92644e9d1d2ea483e4391cb0e28b4c8d87a5ad0ef"
+  },
+  "lastPublishCommit": "9462cb743c08a515e9b8973c57110e3f44df0f7f",
+  "modules": [
+    "Elsa.Rules.Core",
+    "Elsa.Rules.Persistence.Core",
+    "Elsa.Rules.Runtime",
+    "Elsa.Rules.Persistence.EntityFrameworkCore"
+  ],
+  "pendingNativeModules": [
+    "Elsa.Rules.Workflows.Design",
+    "Elsa.Rules.Workflows.Runtime"
+  ],
+  "closure": [
+    {
+      "id": "Elsa.Rules.Core",
+      "path": "Extensions/Rules/src/Core/Elsa.Rules.Core.csproj",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules"
+    },
+    {
+      "id": "Elsa.Rules.Persistence.Core",
+      "path": "Extensions/Rules/src/Persistence/Core/Elsa.Rules.Persistence.Core.csproj",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules"
+    },
+    {
+      "id": "Elsa.Tasks.Core",
+      "path": "Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj",
+      "version": "4.0.14-preview"
+    },
+    {
+      "id": "Elsa.Rules.Runtime",
+      "path": "Extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules"
+    },
+    {
+      "id": "Elsa.Persistence.Schema",
+      "path": "Essentials/src/Persistence/Schema/Elsa.Persistence.Schema.csproj",
+      "version": "4.0.12-preview"
+    },
+    {
+      "id": "Elsa.Primitives",
+      "path": "Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj",
+      "version": "4.0.14-preview"
+    },
+    {
+      "id": "Elsa.Persistence.EntityFramework",
+      "path": "Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj",
+      "version": "4.0.32-preview"
+    },
+    {
+      "id": "Elsa.Rules.Persistence.EntityFrameworkCore",
+      "path": "Extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules"
+    }
+  ],
+  "packages": [
+    {
+      "id": "Elsa.Persistence.EntityFramework",
+      "version": "4.0.32-preview",
+      "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+      "fingerprint": "sha256:b758cfe4eaea58cf8ca4e5eba74e0d4a0456d1bdabd491dc416f1b4a0a74a215",
+      "archiveSha512": "hYJXRzBGwePdycGG6dkktsApb+HduafdS2ors2IhQ5yv4AfdqBkT6zydQFnMFca+QwqBxXj2tR8G9x9XgedXFQ==",
+      "path": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed/Elsa.Persistence.EntityFramework.4.0.32-preview.nupkg"
+    },
+    {
+      "id": "Elsa.Persistence.Schema",
+      "version": "4.0.12-preview",
+      "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+      "fingerprint": "sha256:134a1dea7a13f2113395548c38f81c34a89447602210402e4a58d63517b5c52e",
+      "archiveSha512": "RuBK4Vl9/b59/GX4s+7ntJwogbe/lBJILNorrXFz9V6YC69qBt0Cq79FGWDRFAiQHX69rANsSIU4HyXFAKRgEQ==",
+      "path": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed/Elsa.Persistence.Schema.4.0.12-preview.nupkg"
+    },
+    {
+      "id": "Elsa.Primitives",
+      "version": "4.0.14-preview",
+      "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+      "fingerprint": "sha256:b94d22e598c763c76493a386e5bc1c639515a38c2002b7111765758f8c50d682",
+      "archiveSha512": "mYjg0S7FZI9N6vLe72XkUJg4rup1SNwDH1sgqfWnv8ywyKnmS9czKwHzaPx2sLKIjR7COOsIqNnIO1r2o43l0g==",
+      "path": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed/Elsa.Primitives.4.0.14-preview.nupkg"
+    },
+    {
+      "id": "Elsa.Rules.Core",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+      "fingerprint": "sha256:721701daa7675c54bd688d1f019371330273a74e93b3c0eac6dfd14ab5206202",
+      "archiveSha512": "2uMPfqyq3+Yj1/eVIjxHhzYjKcjFz46CBDix8J/Rws4T1VG1dDGw29uKHxawFSlX2KtTv1rKQSz0SNZ3iYT4yA==",
+      "path": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed/Elsa.Rules.Core.4.0.0-branch-agent-codex-3181-durable-rules.nupkg"
+    },
+    {
+      "id": "Elsa.Rules.Persistence.Core",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+      "fingerprint": "sha256:3c2d9c7db66b9e28b59fca03596c37f48741ad361a5493061eccb1b561ec2bda",
+      "archiveSha512": "Z+t08G9J+4v5gQMZqYoLcFxXh+eqT7X0+/Qgbj3B3v9FAX/SqaKkYioPv/4WipqdcNRH+0fn+FU2JtO9OD2H4g==",
+      "path": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed/Elsa.Rules.Persistence.Core.4.0.0-branch-agent-codex-3181-durable-rules.nupkg"
+    },
+    {
+      "id": "Elsa.Rules.Persistence.EntityFrameworkCore",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+      "fingerprint": "sha256:4d900156f9797a8ee41ba9b9469cc767912a150f3856e6d05c7555829ad50ce9",
+      "archiveSha512": "D0FdlnT2GBs7VqecJ9PtVCFY1D2W50QUkPt08cMY2UIqaIvxGRJUq/FG7dZ7gjWhkkuNLlzFIg/sHCi127Wlhw==",
+      "path": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed/Elsa.Rules.Persistence.EntityFrameworkCore.4.0.0-branch-agent-codex-3181-durable-rules.nupkg"
+    },
+    {
+      "id": "Elsa.Rules.Runtime",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+      "fingerprint": "sha256:59c3c50cbde216d0fa394b6b75c708763e387126e4ca85e1a9ac20fdde166685",
+      "archiveSha512": "u3SdpnB/pfUiDTT2LEbvpXEhHw25h/luDq0K/Q+TdztqprXrnbSrwihI/cpaHIU01bEIC9CIZWhRwzxVqHO92w==",
+      "path": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed/Elsa.Rules.Runtime.4.0.0-branch-agent-codex-3181-durable-rules.nupkg"
+    },
+    {
+      "id": "Elsa.Tasks.Core",
+      "version": "4.0.14-preview",
+      "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+      "fingerprint": "sha256:1a59a5c06cb4b360bd8c3fefeb85356a64f4b2916293ad8e3d67b00ddc3b721c",
+      "archiveSha512": "Ptx3b7GZEyb3qarIO6CajyMzdG1EqM2/+3PtUWJdxdJip2m6nsxUdbc8VSyC4NrohsDSvmgi7i7vVNKxqGj12Q==",
+      "path": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed/Elsa.Tasks.Core.4.0.14-preview.nupkg"
+    }
+  ],
+  "packPassed": true,
+  "consumerTemplateSha256": "06418d3a27e5cb589546401977c2b5a273b29c4b0371d9cc46d3841c90911e71",
+  "consumerBuildSdkVersion": "10.0.300",
+  "restoredProjectLibraries": 0,
+  "resolvedPackages": {
+    "CShells/0.0.31": "0BzVoyFzBjhs6GeyFkOlsNC/0708/M0eS86d3nuQ/iSCUAcd/qcCbbVCE/0cY+1Awyu/awYkHIjIPRT1PQ8mgQ==",
+    "CShells.Abstractions/0.0.31": "se7fS2KnM3mFQjIDvB+KfvZNGdKbc68ITzlSde5V16ZGEeVZdHkRgkTlnJnFalXqkipiIr1oUQdXmqtEV6AE0g==",
+    "Elsa.Persistence.EntityFramework/4.0.32-preview": "hYJXRzBGwePdycGG6dkktsApb+HduafdS2ors2IhQ5yv4AfdqBkT6zydQFnMFca+QwqBxXj2tR8G9x9XgedXFQ==",
+    "Elsa.Persistence.Schema/4.0.12-preview": "RuBK4Vl9/b59/GX4s+7ntJwogbe/lBJILNorrXFz9V6YC69qBt0Cq79FGWDRFAiQHX69rANsSIU4HyXFAKRgEQ==",
+    "Elsa.Primitives/4.0.14-preview": "mYjg0S7FZI9N6vLe72XkUJg4rup1SNwDH1sgqfWnv8ywyKnmS9czKwHzaPx2sLKIjR7COOsIqNnIO1r2o43l0g==",
+    "Elsa.Rules.Core/4.0.0-branch-agent-codex-3181-durable-rules": "2uMPfqyq3+Yj1/eVIjxHhzYjKcjFz46CBDix8J/Rws4T1VG1dDGw29uKHxawFSlX2KtTv1rKQSz0SNZ3iYT4yA==",
+    "Elsa.Rules.Persistence.Core/4.0.0-branch-agent-codex-3181-durable-rules": "Z+t08G9J+4v5gQMZqYoLcFxXh+eqT7X0+/Qgbj3B3v9FAX/SqaKkYioPv/4WipqdcNRH+0fn+FU2JtO9OD2H4g==",
+    "Elsa.Rules.Persistence.EntityFrameworkCore/4.0.0-branch-agent-codex-3181-durable-rules": "D0FdlnT2GBs7VqecJ9PtVCFY1D2W50QUkPt08cMY2UIqaIvxGRJUq/FG7dZ7gjWhkkuNLlzFIg/sHCi127Wlhw==",
+    "Elsa.Rules.Runtime/4.0.0-branch-agent-codex-3181-durable-rules": "u3SdpnB/pfUiDTT2LEbvpXEhHw25h/luDq0K/Q+TdztqprXrnbSrwihI/cpaHIU01bEIC9CIZWhRwzxVqHO92w==",
+    "Elsa.Tasks.Core/4.0.14-preview": "Ptx3b7GZEyb3qarIO6CajyMzdG1EqM2/+3PtUWJdxdJip2m6nsxUdbc8VSyC4NrohsDSvmgi7i7vVNKxqGj12Q==",
+    "JetBrains.Annotations/2025.2.4": "TwbgxAkXxY+vNEhNVx/QXjJ4vqxmepOjsgRvvImQPbHkHMMb4W+ahL3laMsxXKtNT7iMy+E1B3xkqao2hf1n3A==",
+    "Microsoft.Data.Sqlite.Core/10.0.10": "TPCs0ldm7AWqcKmp6f/Xr+14sat7hx4rHfRlS4RgCURBH2thEWbAKEyX7cCWr63zVJVOJIJZTg2cBiUXa8ys6g==",
+    "Microsoft.EntityFrameworkCore/10.0.10": "a0V7zj/VbYP6dTdWpUgE/r2PuLKtUGe2aJ0lVKkn/wP9ZhaxUz2kQydVfvOjCv2SKxlrqdBfHhPD4Cvlf+4ffA==",
+    "Microsoft.EntityFrameworkCore.Abstractions/10.0.10": "bOzrFCl6uZCjaSh2bG1ToRQRdx+iXvxosCg9hFyG9OWeAzOFI4xev9OqKeWfKf/kAHyox2JnbcvLVf2ceA7sqA==",
+    "Microsoft.EntityFrameworkCore.Analyzers/10.0.10": "2gLDordUCGf3aNOOuqtTbP5mxhiP9nk6TnvGiE3RnqT891O+Zf/qKu1PIREubs1M16A0SImr4vULBfU5BTDs1Q==",
+    "Microsoft.EntityFrameworkCore.Relational/10.0.10": "wNonj40aZxia+GtuBiiD6ZqVh4h6y5Nje1bGdmzZ8/ui0QRsAN+S0SIrLHFCEGbG9cDbeaE40sh+Lr7o9rRs6g==",
+    "Microsoft.EntityFrameworkCore.Sqlite/10.0.10": "kzg9MuQNJvZQxAU+piSkEzc7/1tpW6n1nVSGGMObu2GgxLK8Nf+6fvZundaznTZ+O2KhfPZ8HFNCzMH3PWDUmA==",
+    "Microsoft.EntityFrameworkCore.Sqlite.Core/10.0.10": "YbVWMIouzwTKBiLms8boa7xeRT88wI14R1msv3XExFk9n0/sa8nU7MwDa1CKtfLGMJs7O7QWuS9/xhcQ72AD2A==",
+    "Microsoft.Extensions.DependencyModel/10.0.10": "rfZA1RjR021RPqSmIPovfz2aOd79TGqJ9BengbjnzIISOVwjLmuSDnhCMmiY/1c6iYvGolQ1iNGzkav0u11XEA==",
+    "Newtonsoft.Json/13.0.3": "HrC5BXdl00IP9zeV+0Z848QWPAoCr9P3bDEZguI+gkLcBKAOxix/tLEAAHC+UvDNPv4a2d18lOReHMOagPa+zQ==",
+    "Npgsql/10.0.0": "xZAYhPOU2rUIFpV48xsqhCx9vXs6Y+0jX2LCoSEfDFYMw9jtAOUk3iQsCnDLrFIv9NT3JGMihn7nnuZsPKqJmA==",
+    "Npgsql.EntityFrameworkCore.PostgreSQL/10.0.0": "E2+uSWxSB8LdsUVwPaqRWOcGOP92biry2JEwc0KJMdLJF+aZdczeIdEXVwEyv4nSVMQJH0o8tLhyAMiR6VF0lw==",
+    "NuGet.Common/7.9.0": "OWFEzHpwvgzSaHYmWzfbyTm6oBOy/BFSFEDk73zM9jiJaxdopYZ/DrqIQogaM3F+ZGTppBJffmzu5adetEI/YA==",
+    "NuGet.Configuration/7.9.0": "oY9XZp+TWjOmiGmU4R4JWBRY3F4TAVo7tqPr/z7MOsFcEpdYHMryjNSscoLBxUTR3WmFmYgO0Gvu4eRbz6pzOg==",
+    "NuGet.Frameworks/7.9.0": "w2adPmgUafmW9ON1MzDjuHmViN0vtiPV48Dz3OE6px8BiGSqrnWHOjwFEPOEPAZx20J1c7bxp90Hxo9l4xGWtw==",
+    "NuGet.Packaging/7.9.0": "Q2jxuud5kJLV0rUzsC02iC5ts8QsQu9UVyMvF8lULY3TwHL/W/PrnQ9bQFvMR7jJkzF1uilRPI1o+7VOtc2XMg==",
+    "NuGet.Versioning/7.9.0": "r4sZuVpVqwSBLe4qYDrnpScqdyctlRXg0HSF5OoCGkeBc8b+o8BBYHuI/u1RoWYX78PbieijU13TBt71/Xf3lw==",
+    "SQLitePCLRaw.bundle_e_sqlite3/2.1.11": "DC4nA7yWnf4UZdgJDF+9Mus4/cb0Y3Sfgi3gDnAoKNAIBwzkskNAbNbyu+u4atT0ruVlZNJfwZmwiEwE5oz9LQ==",
+    "SQLitePCLRaw.core/2.1.11": "PK0GLFkfhZzLQeR3PJf71FmhtHox+U3vcY6ZtswoMjrefkB9k6ErNJEnwXqc5KgXDSjige2XXrezqS39gkpQKA==",
+    "SQLitePCLRaw.lib.e_sqlite3/2.1.11": "Ev2ytaXiOlWZ4b3R67GZBsemTINslLD1DCJr2xiacpn4tbapu0Q4dHEzSvZSMnVWeE5nlObU3VZN2p81q3XOYQ==",
+    "SQLitePCLRaw.provider.e_sqlite3/2.1.11": "Y/0ZkR+r0Cg3DQFuCl1RBnv/tmxpIZRU3HUvelPw6MVaKHwYYR8YNvgs0vuNuXCMvlyJ+Fh88U1D4tah1tt6qw==",
+    "System.Security.Cryptography.Pkcs/8.0.1": "CoCRHFym33aUSf/NtWSVSZa99dkd0Hm7OCZUxORBjRB16LNhIEOf8THPqzIYlvKM0nNDAPTRBa1FxEECrgaxxA==",
+    "System.Security.Cryptography.ProtectedData/8.0.0": "+TUFINV2q2ifyXauQXRwy4CiBhqvDEDZeVJU7qfxya4aRYOKzVBpN+4acx25VcPB9ywUN6C0n8drWl110PhZEg=="
+  },
+  "identityRemovalControl": {
+    "originalSourceSha256": "6bb89ce0024a03020972583d7e1d16436101d357300e999695460f7fd987f9fd",
+    "originalDeployedAssetSha256": "0d72bfb1ec4643914fa9da042e8525bfd97734c144105103b38ea45bf80aa957",
+    "alternateAssetSha256": "3730527a306e607734e6d339919f67cc94cf4a24f0f47f4e13b4b8640de9bafc",
+    "removedGuardAssetSha256": "b3fa22c6f0e15c68d2f1ba4f0fcb3473df3e197623e17a8586ba774c819eb07d",
+    "intendedAssertionFailed": true,
+    "restoredSourceSha256": "6bb89ce0024a03020972583d7e1d16436101d357300e999695460f7fd987f9fd",
+    "restoredDeployedAssetSha256": "0d72bfb1ec4643914fa9da042e8525bfd97734c144105103b38ea45bf80aa957",
+    "restoredDirectPassed": true
+  },
+  "proofScope": "Four-module clean PackageReference direct execution and identity rejection; native/upgrade gates pending.",
+  "processRecovery": {
+    "topology": "independent-processes-on-one-machine",
+    "cases": [
+      {
+        "name": "accepted-crash",
+        "boundary": "accepted",
+        "action": "crash",
+        "database": "rules_7ad7fcfccdb6426f88698662c90585d0",
+        "passed": true,
+        "statePath": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/accepted-crash-state.json",
+        "boundaryState": {
+          "schemaVersion": 1,
+          "boundary": "accepted",
+          "invocationBase64": "eyJpbnZvY2F0aW9uU2NoZW1hVmVyc2lvbiI6MSwiaWRlbnRpdHkiOnsidGVuYW50IjpudWxsLCJwYXJ0aXRpb24iOiJwYWNrYWdlZC1ydWxlcy1wcm9iZSIsImludm9jYXRpb24iOiJwcm9jZXNzLWFjY2VwdGVkLWMwMWRkNTA5M2M4MDRmMzI4MGE4MzIxN2Y0YmU1MjU4In0sImFydGlmYWN0Ijp7ImZvcm1hdFZlcnNpb24iOjEsImlkIjoicnVsZXM6MGYwMzA5ZDU4MTM2NzFhZTZhNDliMzE2NzM2NjUxNDI4NTRkM2U2MDFjZjAwMWJjZjBmNDdjMTM1ZDMzMDg0MSIsInNoYTI1NiI6IjBmMDMwOWQ1ODEzNjcxYWU2YTQ5YjMxNjczNjY1MTQyODU0ZDNlNjAxY2YwMDFiY2YwZjQ3YzEzNWQzMzA4NDEiLCJieXRlcyI6ImV5Sm1iM0p0WVhSV1pYSnphVzl1SWpveExDSnNZVzVuZFdGblpVbGtJam9pWld4ellTNXlkV3hsY3k1bWFXNXBkR1V0Y0c5emFYUnBkbVVpTENKc1lXNW5kV0ZuWlZabGNuTnBiMjRpT2pFc0luWnZZMkZpZFd4aGNua2lPbHNpWm1sdVlXd2lMQ0pxYjJsdVpXUWlMQ0pzWldaMElpd2libVYyWlhJdFpHVnlhWFpsWkNJc0luSnBaMmgwSWl3aWMyVmxaQ0lzSW5WdWNtVmhZMmhoWW14bElsMHNJbkoxYkdWeklqcGJleUpwWkNJNkltWnBibUZzSWl3aWNISmxiV2x6WlhNaU9sc2lhbTlwYm1Wa0lsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKbWFXNWhiQ0o5TEhzaWFXUWlPaUpxYjJsdUlpd2ljSEpsYldselpYTWlPbHNpYkdWbWRDSXNJbkpwWjJoMElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKcWIybHVaV1FpZlN4N0ltbGtJam9pYkdWbWRDSXNJbkJ5WlcxcGMyVnpJanBiSW5ObFpXUWlYU3dpWTI5dVkyeDFjMmx2YmlJNklteGxablFpZlN4N0ltbGtJam9pY21sbmFIUWlMQ0p3Y21WdGFYTmxjeUk2V3lKelpXVmtJbDBzSW1OdmJtTnNkWE5wYjI0aU9pSnlhV2RvZENKOUxIc2lhV1FpT2lKMWJuSmxZV05vWVdKc1pTSXNJbkJ5WlcxcGMyVnpJanBiSW5WdWNtVmhZMmhoWW14bElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKdVpYWmxjaTFrWlhKcGRtVmtJbjFkZlE9PSJ9LCJpbml0aWFsRmFjdHMiOlsic2VlZCJdLCJtYXhSb3VuZHMiOjcsImltcGxlbWVudGF0aW9uIjp7InBpblNjaGVtYVZlcnNpb24iOjEsImxhbmd1YWdlSWQiOiJlbHNhLnJ1bGVzLmZpbml0ZS1wb3NpdGl2ZSIsImxhbmd1YWdlVmVyc2lvbiI6MSwicmVjZWlwdFNjaGVtYVZlcnNpb24iOjEsInN0YXRlU2NoZW1hVmVyc2lvbiI6MSwicGFja2FnZXMiOlt7ImlkIjoiRWxzYS5SdWxlcy5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IjJ1TVBmcXlxM1x1MDAyQllqMS9lVklqeEhoellqS2NqRno0NkNCRGl4OEovUndzNFQxVkcxZERHdzI5dUtIeGF3RlNsWDJLdFR2MXJLUVN6MFNOWjNpWVQ0eUE9PSIsImFzc2V0cyI6W3sicGF0aCI6ImxpYi9uZXQxMC4wL0Vsc2EuUnVsZXMuQ29yZS5kbGwiLCJhc3NlbWJseSI6IkVsc2EuUnVsZXMuQ29yZSwgVmVyc2lvbj00LjAuMC4wLCBDdWx0dXJlPW5ldXRyYWwsIFB1YmxpY0tleVRva2VuPW51bGwiLCJzaGEyNTYiOiJiNjlmNmMzODg5NjdmMWEyNmMxZDM5YTNjOGQ0ZGZiOGM3MjMzNTI1MzhmMjFjNGJlYTM2MmU1M2NlNGI4MGExIn1dfSx7ImlkIjoiRWxzYS5SdWxlcy5QZXJzaXN0ZW5jZS5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IlpcdTAwMkJ0MDhHOUpcdTAwMkI0djVnUU1acVlvTGNGeFhoXHUwMDJCZXFUN1gwXHUwMDJCL1FnYmozQjN2OUZBWC9TcWFLa1lpb1B2LzRXaXBxZGNOUkhcdTAwMkIwZm5cdTAwMkJGVTJKdE85T0QySDRnPT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMmFhNDBiNDViMzlhMmQzMzNkYmVlYmNjZWE1YzRjOGQzMTBjMjliY2M0MTE5ZTgyMDNhN2M3NWU4MDhkOTY0NCJ9XX0seyJpZCI6IkVsc2EuUnVsZXMuUnVudGltZSIsInZlcnNpb24iOiI0LjAuMC1icmFuY2gtYWdlbnQtY29kZXgtMzE4MS1kdXJhYmxlLXJ1bGVzIiwiY29udGVudEhhc2giOiJ1M1NkcG5CL3BmVWlEVFQyTEVidnBYRWhIdzI1aC9sdURxMEsvUVx1MDAyQlRkenRxcHJYcm5iU3J3aWhJL2NwYUhJVTAxYkVJQzlDSVpXaFJ3enhWcUhPOTJ3PT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlJ1bnRpbWUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlJ1bnRpbWUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMGQ3MmJmYjFlYzQ2NDM5MTRmYTlkYTA0MmU4NTI1YmZkOTc3MzRjMTQ0MTA1MTAzYjM4ZWE0NWJmODBhYTk1NyJ9XX1dfSwibmF0aXZlRGVzdGluYXRpb24iOm51bGx9",
+          "invocationFingerprint": "334348283b89722b15bb5e6f35c78f99bbdebb205be4e595e80f6acd4021368d",
+          "receiptRecordBase64": "eyJyZWNlaXB0Ijp7ImlkZW50aXR5Ijp7InRlbmFudCI6bnVsbCwicGFydGl0aW9uIjoicGFja2FnZWQtcnVsZXMtcHJvYmUiLCJpbnZvY2F0aW9uIjoicHJvY2Vzcy1hY2NlcHRlZC1jMDFkZDUwOTNjODA0ZjMyODBhODMyMTdmNGJlNTI1OCIsImZpbmdlcnByaW50IjoiMzM0MzQ4MjgzYjg5NzIyYjE1YmI1ZTZmMzVjNzhmOTliYmRlYmIyMDViZTRlNTk1ZTgwZjZhY2Q0MDIxMzY4ZCIsIm9yZGluYWwiOjAsImlucHV0U3RhdGVTaGEyNTYiOiI4MGIwMTBkYzI2ZjI1NjhjOTM3NWEyOTllMzcwN2ViN2M0NWQwNDZhMTM5ODVmYTFmYWMwYzcyMmNhYWIwY2M0In0sImltcGxlbWVudGF0aW9uUGluSGFzaCI6ImM4ZDUzOGFmMzRjYjllYjE2MGIyNWE3MzllMTM4Mzg3ZWM4M2QzNzAyNmM1ODVlZjllMTYxODM2OTY4YzIxZWQiLCJhZGRlZEZhY3RzIjpbImxlZnQiLCJyaWdodCJdLCJmaXJpbmdzIjpbeyJydWxlSWQiOiJsZWZ0IiwiY29uY2x1c2lvbiI6ImxlZnQifSx7InJ1bGVJZCI6InJpZ2h0IiwiY29uY2x1c2lvbiI6InJpZ2h0In1dfSwic2VtYW50aWNSZWNlaXB0U2hhMjU2IjoiMWEwMDU0ZTEyZGQ4MGNmZWEzNmZjMWE2YTM4ZjVhMjhjMmIzOWZjODg3NzZiMmU0NGJkNTQ1YmYzNjIxMDZjMCJ9",
+          "receiptId": "18826d9f90a4c12c5003525c496a3b4554625bd028ab0cbce90f430378df3fcb",
+          "semanticReceiptSha256": "1a0054e12dd80cfea36fc1a6a38f5a28c2b39fc88776b2e44bd545bf362106c0",
+          "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+          "beforeFacts": [
+            "seed"
+          ],
+          "afterFacts": [
+            "seed"
+          ],
+          "modelRevision": 2,
+          "committedRounds": 0,
+          "pendingReceiptId": "18826d9f90a4c12c5003525c496a3b4554625bd028ab0cbce90f430378df3fcb",
+          "acceptedAttemptId": "052281f1803146dfa85c72e80208c4cb",
+          "acceptedWorkerId": "rules-13e44c7c6a4c412ea1dc20f212bdc5f0",
+          "acceptedLeaseFence": 1,
+          "acceptedModelRevision": 2,
+          "tokenOwner": "rules-13e44c7c6a4c412ea1dc20f212bdc5f0",
+          "tokenFence": 1,
+          "tokenExpiresAtUtc": "2026-10-21T23:49:13.922309+00:00",
+          "tokenExpectedModelRevision": 1,
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_7ad7fcfccdb6426f88698662c90585d0",
+          "processId": 87883,
+          "machineName": "Sipkes-MacBook-Air",
+          "capturedUtc": "2026-10-21T23:49:11.127347+00:00"
+        },
+        "originalPid": 87883,
+        "successor": {
+          "command": "process-recover",
+          "passed": true,
+          "recoveredBoundary": "accepted",
+          "terminalBase64": "eyJ0ZXJtaW5hbElkIjoiMWRhN2UyNWQ5YjE2ZGZhNGUzYTVjOTkwOTZjYTFkYTlmMTE2ODM1NTcyYjE5YjMwZjZlY2I0NzAyZjdhNDY0NiIsImtpbmQiOiJTdWNjZWVkZWQiLCJjb21taXR0ZWRSb3VuZHMiOjQsInJlc3VsdFNjaGVtYVZlcnNpb24iOjEsImZhY3RzIjpbImZpbmFsIiwiam9pbmVkIiwibGVmdCIsInJpZ2h0Iiwic2VlZCJdLCJmYWN0c1NoYTI1NiI6IjVlOTcwZGQyMDYxODFjNDFkOTViNTM0ZjdiNzY0MzAzOTJlZjY1OWRiODUyMWM2NjBlMmY2NzIzN2VlYzRjY2MiLCJkaWFnbm9zdGljIjpudWxsfQ==",
+          "modelRevision": 9,
+          "processId": 87884,
+          "originalProcessId": 87883,
+          "machineName": "Sipkes-MacBook-Air",
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_7ad7fcfccdb6426f88698662c90585d0",
+          "invocationFingerprint": "334348283b89722b15bb5e6f35c78f99bbdebb205be4e595e80f6acd4021368d",
+          "status": "Succeeded",
+          "committedRounds": 4,
+          "finalFacts": [
+            "final",
+            "joined",
+            "left",
+            "right",
+            "seed"
+          ],
+          "roundHistory": [
+            {
+              "ordinal": 0,
+              "receiptId": "18826d9f90a4c12c5003525c496a3b4554625bd028ab0cbce90f430378df3fcb",
+              "semanticReceiptSha256": "1a0054e12dd80cfea36fc1a6a38f5a28c2b39fc88776b2e44bd545bf362106c0",
+              "acceptedAttemptId": "052281f1803146dfa85c72e80208c4cb",
+              "acceptedWorkerId": "rules-13e44c7c6a4c412ea1dc20f212bdc5f0",
+              "acceptedLeaseFence": 1,
+              "acceptedModelRevision": 2,
+              "consumedModelRevision": 3
+            },
+            {
+              "ordinal": 1,
+              "receiptId": "2a1dc070c7cf60ba7944a64eb976b5195512d3714a17dc45a6744928142188fb",
+              "semanticReceiptSha256": "cd7962e0bf0a36564b885565e3017840640222e6bb11fc2b83d1c4c7c3f26855",
+              "acceptedAttemptId": "fa6ddbaf61474b6f9b4bcd61e8ac0b48",
+              "acceptedWorkerId": "rules-eac764ca816948fba75428cd2ba2db00",
+              "acceptedLeaseFence": 4,
+              "acceptedModelRevision": 4,
+              "consumedModelRevision": 5
+            },
+            {
+              "ordinal": 2,
+              "receiptId": "7955a85f6ef82f76d5450739889a1a952df01813823939966f86b3d9c56ba409",
+              "semanticReceiptSha256": "b11f5e4e361fe37191888329e5d106cc5e485a79e32c5a4454b712c30266ff5c",
+              "acceptedAttemptId": "1c62f3d751d449ccb45a81599152734e",
+              "acceptedWorkerId": "rules-eac764ca816948fba75428cd2ba2db00",
+              "acceptedLeaseFence": 6,
+              "acceptedModelRevision": 6,
+              "consumedModelRevision": 7
+            },
+            {
+              "ordinal": 3,
+              "receiptId": "49b6cd8393189a3401d023afb61774b322d8d83c737ce1b1c80191ecc6b2953e",
+              "semanticReceiptSha256": "5bda77b0936082885e36bf8c45cb54be93639ae57472f2b76d388df9aabe5023",
+              "acceptedAttemptId": "301ca62bb14b4d88aef4f41bc084c828",
+              "acceptedWorkerId": "rules-eac764ca816948fba75428cd2ba2db00",
+              "acceptedLeaseFence": 8,
+              "acceptedModelRevision": 8,
+              "consumedModelRevision": 9
+            }
+          ],
+          "terminalId": "1da7e25d9b16dfa4e3a5c99096ca1da9f116835572b19b30f6ecb4702f7a4646",
+          "terminalStabilityVerified": true,
+          "designStorageUsed": false
+        }
+      },
+      {
+        "name": "consumed-crash",
+        "boundary": "consumed",
+        "action": "crash",
+        "database": "rules_4dc3f52e51754709b9977fd6ac12bcb1",
+        "passed": true,
+        "statePath": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/consumed-crash-state.json",
+        "boundaryState": {
+          "schemaVersion": 1,
+          "boundary": "consumed",
+          "invocationBase64": "eyJpbnZvY2F0aW9uU2NoZW1hVmVyc2lvbiI6MSwiaWRlbnRpdHkiOnsidGVuYW50IjpudWxsLCJwYXJ0aXRpb24iOiJwYWNrYWdlZC1ydWxlcy1wcm9iZSIsImludm9jYXRpb24iOiJwcm9jZXNzLWNvbnN1bWVkLTkxNDQ1ZGM1NzBkOTRjYmM5NzA0YTljZGI2ZmMzNTUxIn0sImFydGlmYWN0Ijp7ImZvcm1hdFZlcnNpb24iOjEsImlkIjoicnVsZXM6MGYwMzA5ZDU4MTM2NzFhZTZhNDliMzE2NzM2NjUxNDI4NTRkM2U2MDFjZjAwMWJjZjBmNDdjMTM1ZDMzMDg0MSIsInNoYTI1NiI6IjBmMDMwOWQ1ODEzNjcxYWU2YTQ5YjMxNjczNjY1MTQyODU0ZDNlNjAxY2YwMDFiY2YwZjQ3YzEzNWQzMzA4NDEiLCJieXRlcyI6ImV5Sm1iM0p0WVhSV1pYSnphVzl1SWpveExDSnNZVzVuZFdGblpVbGtJam9pWld4ellTNXlkV3hsY3k1bWFXNXBkR1V0Y0c5emFYUnBkbVVpTENKc1lXNW5kV0ZuWlZabGNuTnBiMjRpT2pFc0luWnZZMkZpZFd4aGNua2lPbHNpWm1sdVlXd2lMQ0pxYjJsdVpXUWlMQ0pzWldaMElpd2libVYyWlhJdFpHVnlhWFpsWkNJc0luSnBaMmgwSWl3aWMyVmxaQ0lzSW5WdWNtVmhZMmhoWW14bElsMHNJbkoxYkdWeklqcGJleUpwWkNJNkltWnBibUZzSWl3aWNISmxiV2x6WlhNaU9sc2lhbTlwYm1Wa0lsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKbWFXNWhiQ0o5TEhzaWFXUWlPaUpxYjJsdUlpd2ljSEpsYldselpYTWlPbHNpYkdWbWRDSXNJbkpwWjJoMElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKcWIybHVaV1FpZlN4N0ltbGtJam9pYkdWbWRDSXNJbkJ5WlcxcGMyVnpJanBiSW5ObFpXUWlYU3dpWTI5dVkyeDFjMmx2YmlJNklteGxablFpZlN4N0ltbGtJam9pY21sbmFIUWlMQ0p3Y21WdGFYTmxjeUk2V3lKelpXVmtJbDBzSW1OdmJtTnNkWE5wYjI0aU9pSnlhV2RvZENKOUxIc2lhV1FpT2lKMWJuSmxZV05vWVdKc1pTSXNJbkJ5WlcxcGMyVnpJanBiSW5WdWNtVmhZMmhoWW14bElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKdVpYWmxjaTFrWlhKcGRtVmtJbjFkZlE9PSJ9LCJpbml0aWFsRmFjdHMiOlsic2VlZCJdLCJtYXhSb3VuZHMiOjcsImltcGxlbWVudGF0aW9uIjp7InBpblNjaGVtYVZlcnNpb24iOjEsImxhbmd1YWdlSWQiOiJlbHNhLnJ1bGVzLmZpbml0ZS1wb3NpdGl2ZSIsImxhbmd1YWdlVmVyc2lvbiI6MSwicmVjZWlwdFNjaGVtYVZlcnNpb24iOjEsInN0YXRlU2NoZW1hVmVyc2lvbiI6MSwicGFja2FnZXMiOlt7ImlkIjoiRWxzYS5SdWxlcy5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IjJ1TVBmcXlxM1x1MDAyQllqMS9lVklqeEhoellqS2NqRno0NkNCRGl4OEovUndzNFQxVkcxZERHdzI5dUtIeGF3RlNsWDJLdFR2MXJLUVN6MFNOWjNpWVQ0eUE9PSIsImFzc2V0cyI6W3sicGF0aCI6ImxpYi9uZXQxMC4wL0Vsc2EuUnVsZXMuQ29yZS5kbGwiLCJhc3NlbWJseSI6IkVsc2EuUnVsZXMuQ29yZSwgVmVyc2lvbj00LjAuMC4wLCBDdWx0dXJlPW5ldXRyYWwsIFB1YmxpY0tleVRva2VuPW51bGwiLCJzaGEyNTYiOiJiNjlmNmMzODg5NjdmMWEyNmMxZDM5YTNjOGQ0ZGZiOGM3MjMzNTI1MzhmMjFjNGJlYTM2MmU1M2NlNGI4MGExIn1dfSx7ImlkIjoiRWxzYS5SdWxlcy5QZXJzaXN0ZW5jZS5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IlpcdTAwMkJ0MDhHOUpcdTAwMkI0djVnUU1acVlvTGNGeFhoXHUwMDJCZXFUN1gwXHUwMDJCL1FnYmozQjN2OUZBWC9TcWFLa1lpb1B2LzRXaXBxZGNOUkhcdTAwMkIwZm5cdTAwMkJGVTJKdE85T0QySDRnPT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMmFhNDBiNDViMzlhMmQzMzNkYmVlYmNjZWE1YzRjOGQzMTBjMjliY2M0MTE5ZTgyMDNhN2M3NWU4MDhkOTY0NCJ9XX0seyJpZCI6IkVsc2EuUnVsZXMuUnVudGltZSIsInZlcnNpb24iOiI0LjAuMC1icmFuY2gtYWdlbnQtY29kZXgtMzE4MS1kdXJhYmxlLXJ1bGVzIiwiY29udGVudEhhc2giOiJ1M1NkcG5CL3BmVWlEVFQyTEVidnBYRWhIdzI1aC9sdURxMEsvUVx1MDAyQlRkenRxcHJYcm5iU3J3aWhJL2NwYUhJVTAxYkVJQzlDSVpXaFJ3enhWcUhPOTJ3PT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlJ1bnRpbWUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlJ1bnRpbWUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMGQ3MmJmYjFlYzQ2NDM5MTRmYTlkYTA0MmU4NTI1YmZkOTc3MzRjMTQ0MTA1MTAzYjM4ZWE0NWJmODBhYTk1NyJ9XX1dfSwibmF0aXZlRGVzdGluYXRpb24iOm51bGx9",
+          "invocationFingerprint": "96cc15cb64f3b9b63de5b0554a410b1ba5a6b3e9dc80bcb6e9f4e8b56d1a2ea6",
+          "receiptRecordBase64": "eyJyZWNlaXB0Ijp7ImlkZW50aXR5Ijp7InRlbmFudCI6bnVsbCwicGFydGl0aW9uIjoicGFja2FnZWQtcnVsZXMtcHJvYmUiLCJpbnZvY2F0aW9uIjoicHJvY2Vzcy1jb25zdW1lZC05MTQ0NWRjNTcwZDk0Y2JjOTcwNGE5Y2RiNmZjMzU1MSIsImZpbmdlcnByaW50IjoiOTZjYzE1Y2I2NGYzYjliNjNkZTViMDU1NGE0MTBiMWJhNWE2YjNlOWRjODBiY2I2ZTlmNGU4YjU2ZDFhMmVhNiIsIm9yZGluYWwiOjAsImlucHV0U3RhdGVTaGEyNTYiOiI4MGIwMTBkYzI2ZjI1NjhjOTM3NWEyOTllMzcwN2ViN2M0NWQwNDZhMTM5ODVmYTFmYWMwYzcyMmNhYWIwY2M0In0sImltcGxlbWVudGF0aW9uUGluSGFzaCI6ImM4ZDUzOGFmMzRjYjllYjE2MGIyNWE3MzllMTM4Mzg3ZWM4M2QzNzAyNmM1ODVlZjllMTYxODM2OTY4YzIxZWQiLCJhZGRlZEZhY3RzIjpbImxlZnQiLCJyaWdodCJdLCJmaXJpbmdzIjpbeyJydWxlSWQiOiJsZWZ0IiwiY29uY2x1c2lvbiI6ImxlZnQifSx7InJ1bGVJZCI6InJpZ2h0IiwiY29uY2x1c2lvbiI6InJpZ2h0In1dfSwic2VtYW50aWNSZWNlaXB0U2hhMjU2IjoiYzQ3ZWI4ZmJlNjBiMzY0ZDcwZGRmZDQwNTA5N2I1ZjAxYTA2MTEwYTgzMDI4MDM1ZWU2YTJmNjlkZmRkZjdlOCJ9",
+          "receiptId": "58624762c236e473f6347679cc06c6df0cb5cf64b3dbd4a21d44aa30d1e7f2af",
+          "semanticReceiptSha256": "c47eb8fbe60b364d70ddfd405097b5f01a06110a83028035ee6a2f69dfddf7e8",
+          "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+          "beforeFacts": [
+            "seed"
+          ],
+          "afterFacts": [
+            "left",
+            "right",
+            "seed"
+          ],
+          "modelRevision": 3,
+          "committedRounds": 1,
+          "acceptedAttemptId": "08705a0b7e344fd5a4e45902782b3f64",
+          "acceptedWorkerId": "rules-1fdd9521787f41c08bb0259f54bb6a82",
+          "acceptedLeaseFence": 1,
+          "acceptedModelRevision": 2,
+          "consumedModelRevision": 3,
+          "tokenOwner": "rules-1fdd9521787f41c08bb0259f54bb6a82",
+          "tokenFence": 1,
+          "tokenExpiresAtUtc": "2026-10-21T23:49:19.236066+00:00",
+          "tokenExpectedModelRevision": 2,
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_4dc3f52e51754709b9977fd6ac12bcb1",
+          "processId": 87942,
+          "machineName": "Sipkes-MacBook-Air",
+          "capturedUtc": "2026-10-21T23:49:16.515682+00:00"
+        },
+        "originalPid": 87942,
+        "successor": {
+          "command": "process-recover",
+          "passed": true,
+          "recoveredBoundary": "consumed",
+          "terminalBase64": "eyJ0ZXJtaW5hbElkIjoiOTYyNGNlYjcwNTA2ZWE5ZWU1ZWQ0MjE0ZWU0ODYzNDYwY2UxOTgxMzhjMjAyNWQ0N2FmZGQ1NTVkZDNhM2UyYyIsImtpbmQiOiJTdWNjZWVkZWQiLCJjb21taXR0ZWRSb3VuZHMiOjQsInJlc3VsdFNjaGVtYVZlcnNpb24iOjEsImZhY3RzIjpbImZpbmFsIiwiam9pbmVkIiwibGVmdCIsInJpZ2h0Iiwic2VlZCJdLCJmYWN0c1NoYTI1NiI6IjVlOTcwZGQyMDYxODFjNDFkOTViNTM0ZjdiNzY0MzAzOTJlZjY1OWRiODUyMWM2NjBlMmY2NzIzN2VlYzRjY2MiLCJkaWFnbm9zdGljIjpudWxsfQ==",
+          "modelRevision": 9,
+          "processId": 87943,
+          "originalProcessId": 87942,
+          "machineName": "Sipkes-MacBook-Air",
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_4dc3f52e51754709b9977fd6ac12bcb1",
+          "invocationFingerprint": "96cc15cb64f3b9b63de5b0554a410b1ba5a6b3e9dc80bcb6e9f4e8b56d1a2ea6",
+          "status": "Succeeded",
+          "committedRounds": 4,
+          "finalFacts": [
+            "final",
+            "joined",
+            "left",
+            "right",
+            "seed"
+          ],
+          "roundHistory": [
+            {
+              "ordinal": 0,
+              "receiptId": "58624762c236e473f6347679cc06c6df0cb5cf64b3dbd4a21d44aa30d1e7f2af",
+              "semanticReceiptSha256": "c47eb8fbe60b364d70ddfd405097b5f01a06110a83028035ee6a2f69dfddf7e8",
+              "acceptedAttemptId": "08705a0b7e344fd5a4e45902782b3f64",
+              "acceptedWorkerId": "rules-1fdd9521787f41c08bb0259f54bb6a82",
+              "acceptedLeaseFence": 1,
+              "acceptedModelRevision": 2,
+              "consumedModelRevision": 3
+            },
+            {
+              "ordinal": 1,
+              "receiptId": "41d09313efdbf9c9d7581e8d9c1ae893357e0fe1611ace7ebbeeaf4917d21598",
+              "semanticReceiptSha256": "223499d8b96d26e632ee3acb6f653173fd816ef012515fd84100a1a188556b38",
+              "acceptedAttemptId": "9d202c47a2304eaea6493b8bbde17686",
+              "acceptedWorkerId": "rules-c262625ca693486288d927c6d743a9a0",
+              "acceptedLeaseFence": 2,
+              "acceptedModelRevision": 4,
+              "consumedModelRevision": 5
+            },
+            {
+              "ordinal": 2,
+              "receiptId": "a58afe9e545e8d71dc4b5d4cc281d8b813839378c1f493be577f659288fd72ec",
+              "semanticReceiptSha256": "3672d60be3e731386f11d0be596f571a2cc87edd587d1a2f75c80a7f80668dbc",
+              "acceptedAttemptId": "f99036c2e1c849f280d7a1a1faf4c3e6",
+              "acceptedWorkerId": "rules-c262625ca693486288d927c6d743a9a0",
+              "acceptedLeaseFence": 4,
+              "acceptedModelRevision": 6,
+              "consumedModelRevision": 7
+            },
+            {
+              "ordinal": 3,
+              "receiptId": "3aa3b87ab3d4de3de549c3e8cf89a5c746734fe4d5295032bacbe22c3cb938b1",
+              "semanticReceiptSha256": "e9bff3df8ae7eb66cabee9d9b9207a0c399f1c30e462417634ea5c74fadb8066",
+              "acceptedAttemptId": "8d19fa0229df424c9285f58089900fd6",
+              "acceptedWorkerId": "rules-c262625ca693486288d927c6d743a9a0",
+              "acceptedLeaseFence": 6,
+              "acceptedModelRevision": 8,
+              "consumedModelRevision": 9
+            }
+          ],
+          "terminalId": "9624ceb70506ea9ee5ed4214ee4863460ce198138c2025d47afdd555dd3a3e2c",
+          "terminalStabilityVerified": true,
+          "designStorageUsed": false
+        }
+      },
+      {
+        "name": "accepted-delayed",
+        "boundary": "accepted",
+        "action": "delayed",
+        "database": "rules_13763e80416f49c195a1c5a28d70c831",
+        "passed": true,
+        "statePath": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/accepted-delayed-state.json",
+        "boundaryState": {
+          "schemaVersion": 1,
+          "boundary": "accepted",
+          "invocationBase64": "eyJpbnZvY2F0aW9uU2NoZW1hVmVyc2lvbiI6MSwiaWRlbnRpdHkiOnsidGVuYW50IjpudWxsLCJwYXJ0aXRpb24iOiJwYWNrYWdlZC1ydWxlcy1wcm9iZSIsImludm9jYXRpb24iOiJwcm9jZXNzLWFjY2VwdGVkLTZhZjQwYTRlMTlhYjRjYzdiMDA2YzQ1NmI0YTFkMzAxIn0sImFydGlmYWN0Ijp7ImZvcm1hdFZlcnNpb24iOjEsImlkIjoicnVsZXM6MGYwMzA5ZDU4MTM2NzFhZTZhNDliMzE2NzM2NjUxNDI4NTRkM2U2MDFjZjAwMWJjZjBmNDdjMTM1ZDMzMDg0MSIsInNoYTI1NiI6IjBmMDMwOWQ1ODEzNjcxYWU2YTQ5YjMxNjczNjY1MTQyODU0ZDNlNjAxY2YwMDFiY2YwZjQ3YzEzNWQzMzA4NDEiLCJieXRlcyI6ImV5Sm1iM0p0WVhSV1pYSnphVzl1SWpveExDSnNZVzVuZFdGblpVbGtJam9pWld4ellTNXlkV3hsY3k1bWFXNXBkR1V0Y0c5emFYUnBkbVVpTENKc1lXNW5kV0ZuWlZabGNuTnBiMjRpT2pFc0luWnZZMkZpZFd4aGNua2lPbHNpWm1sdVlXd2lMQ0pxYjJsdVpXUWlMQ0pzWldaMElpd2libVYyWlhJdFpHVnlhWFpsWkNJc0luSnBaMmgwSWl3aWMyVmxaQ0lzSW5WdWNtVmhZMmhoWW14bElsMHNJbkoxYkdWeklqcGJleUpwWkNJNkltWnBibUZzSWl3aWNISmxiV2x6WlhNaU9sc2lhbTlwYm1Wa0lsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKbWFXNWhiQ0o5TEhzaWFXUWlPaUpxYjJsdUlpd2ljSEpsYldselpYTWlPbHNpYkdWbWRDSXNJbkpwWjJoMElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKcWIybHVaV1FpZlN4N0ltbGtJam9pYkdWbWRDSXNJbkJ5WlcxcGMyVnpJanBiSW5ObFpXUWlYU3dpWTI5dVkyeDFjMmx2YmlJNklteGxablFpZlN4N0ltbGtJam9pY21sbmFIUWlMQ0p3Y21WdGFYTmxjeUk2V3lKelpXVmtJbDBzSW1OdmJtTnNkWE5wYjI0aU9pSnlhV2RvZENKOUxIc2lhV1FpT2lKMWJuSmxZV05vWVdKc1pTSXNJbkJ5WlcxcGMyVnpJanBiSW5WdWNtVmhZMmhoWW14bElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKdVpYWmxjaTFrWlhKcGRtVmtJbjFkZlE9PSJ9LCJpbml0aWFsRmFjdHMiOlsic2VlZCJdLCJtYXhSb3VuZHMiOjcsImltcGxlbWVudGF0aW9uIjp7InBpblNjaGVtYVZlcnNpb24iOjEsImxhbmd1YWdlSWQiOiJlbHNhLnJ1bGVzLmZpbml0ZS1wb3NpdGl2ZSIsImxhbmd1YWdlVmVyc2lvbiI6MSwicmVjZWlwdFNjaGVtYVZlcnNpb24iOjEsInN0YXRlU2NoZW1hVmVyc2lvbiI6MSwicGFja2FnZXMiOlt7ImlkIjoiRWxzYS5SdWxlcy5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IjJ1TVBmcXlxM1x1MDAyQllqMS9lVklqeEhoellqS2NqRno0NkNCRGl4OEovUndzNFQxVkcxZERHdzI5dUtIeGF3RlNsWDJLdFR2MXJLUVN6MFNOWjNpWVQ0eUE9PSIsImFzc2V0cyI6W3sicGF0aCI6ImxpYi9uZXQxMC4wL0Vsc2EuUnVsZXMuQ29yZS5kbGwiLCJhc3NlbWJseSI6IkVsc2EuUnVsZXMuQ29yZSwgVmVyc2lvbj00LjAuMC4wLCBDdWx0dXJlPW5ldXRyYWwsIFB1YmxpY0tleVRva2VuPW51bGwiLCJzaGEyNTYiOiJiNjlmNmMzODg5NjdmMWEyNmMxZDM5YTNjOGQ0ZGZiOGM3MjMzNTI1MzhmMjFjNGJlYTM2MmU1M2NlNGI4MGExIn1dfSx7ImlkIjoiRWxzYS5SdWxlcy5QZXJzaXN0ZW5jZS5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IlpcdTAwMkJ0MDhHOUpcdTAwMkI0djVnUU1acVlvTGNGeFhoXHUwMDJCZXFUN1gwXHUwMDJCL1FnYmozQjN2OUZBWC9TcWFLa1lpb1B2LzRXaXBxZGNOUkhcdTAwMkIwZm5cdTAwMkJGVTJKdE85T0QySDRnPT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMmFhNDBiNDViMzlhMmQzMzNkYmVlYmNjZWE1YzRjOGQzMTBjMjliY2M0MTE5ZTgyMDNhN2M3NWU4MDhkOTY0NCJ9XX0seyJpZCI6IkVsc2EuUnVsZXMuUnVudGltZSIsInZlcnNpb24iOiI0LjAuMC1icmFuY2gtYWdlbnQtY29kZXgtMzE4MS1kdXJhYmxlLXJ1bGVzIiwiY29udGVudEhhc2giOiJ1M1NkcG5CL3BmVWlEVFQyTEVidnBYRWhIdzI1aC9sdURxMEsvUVx1MDAyQlRkenRxcHJYcm5iU3J3aWhJL2NwYUhJVTAxYkVJQzlDSVpXaFJ3enhWcUhPOTJ3PT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlJ1bnRpbWUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlJ1bnRpbWUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMGQ3MmJmYjFlYzQ2NDM5MTRmYTlkYTA0MmU4NTI1YmZkOTc3MzRjMTQ0MTA1MTAzYjM4ZWE0NWJmODBhYTk1NyJ9XX1dfSwibmF0aXZlRGVzdGluYXRpb24iOm51bGx9",
+          "invocationFingerprint": "0eedadc1131b19c09dbdf5ad17400742270f8067281907ac4093c669ca90f0d8",
+          "receiptRecordBase64": "eyJyZWNlaXB0Ijp7ImlkZW50aXR5Ijp7InRlbmFudCI6bnVsbCwicGFydGl0aW9uIjoicGFja2FnZWQtcnVsZXMtcHJvYmUiLCJpbnZvY2F0aW9uIjoicHJvY2Vzcy1hY2NlcHRlZC02YWY0MGE0ZTE5YWI0Y2M3YjAwNmM0NTZiNGExZDMwMSIsImZpbmdlcnByaW50IjoiMGVlZGFkYzExMzFiMTljMDlkYmRmNWFkMTc0MDA3NDIyNzBmODA2NzI4MTkwN2FjNDA5M2M2NjljYTkwZjBkOCIsIm9yZGluYWwiOjAsImlucHV0U3RhdGVTaGEyNTYiOiI4MGIwMTBkYzI2ZjI1NjhjOTM3NWEyOTllMzcwN2ViN2M0NWQwNDZhMTM5ODVmYTFmYWMwYzcyMmNhYWIwY2M0In0sImltcGxlbWVudGF0aW9uUGluSGFzaCI6ImM4ZDUzOGFmMzRjYjllYjE2MGIyNWE3MzllMTM4Mzg3ZWM4M2QzNzAyNmM1ODVlZjllMTYxODM2OTY4YzIxZWQiLCJhZGRlZEZhY3RzIjpbImxlZnQiLCJyaWdodCJdLCJmaXJpbmdzIjpbeyJydWxlSWQiOiJsZWZ0IiwiY29uY2x1c2lvbiI6ImxlZnQifSx7InJ1bGVJZCI6InJpZ2h0IiwiY29uY2x1c2lvbiI6InJpZ2h0In1dfSwic2VtYW50aWNSZWNlaXB0U2hhMjU2IjoiYzU2NTBjNzNjMjZjNDYxMjUzMjBjMTA4OTRhMjNhMmJmZmM5NzYwYzhjNGIxMjNiMDE1NDU3YzBhN2ZkNTE5ZSJ9",
+          "receiptId": "9e65be4fcb5a69e1c2a33f6864c0419aebf32729dcbd8274036840bee19ae513",
+          "semanticReceiptSha256": "c5650c73c26c46125320c10894a23a2bffc9760c8c4b123b015457c0a7fd519e",
+          "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+          "beforeFacts": [
+            "seed"
+          ],
+          "afterFacts": [
+            "seed"
+          ],
+          "modelRevision": 2,
+          "committedRounds": 0,
+          "pendingReceiptId": "9e65be4fcb5a69e1c2a33f6864c0419aebf32729dcbd8274036840bee19ae513",
+          "acceptedAttemptId": "2795533698ff4a3ea6bf783f7c8f3831",
+          "acceptedWorkerId": "rules-267410843e0e4c99970819e7c889ee0a",
+          "acceptedLeaseFence": 1,
+          "acceptedModelRevision": 2,
+          "tokenOwner": "rules-267410843e0e4c99970819e7c889ee0a",
+          "tokenFence": 1,
+          "tokenExpiresAtUtc": "2026-10-21T23:49:24.443379+00:00",
+          "tokenExpectedModelRevision": 1,
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_13763e80416f49c195a1c5a28d70c831",
+          "processId": 87958,
+          "machineName": "Sipkes-MacBook-Air",
+          "capturedUtc": "2026-10-21T23:49:21.661+00:00"
+        },
+        "originalPid": 87958,
+        "successor": {
+          "command": "process-recover",
+          "passed": true,
+          "recoveredBoundary": "accepted",
+          "terminalBase64": "eyJ0ZXJtaW5hbElkIjoiMDA4OGY4MTRjZDQxMzJiYmJkOGE2MGI1NjI5MDVmMTFhYzk5OTEwYmU3NTYyNzMzNWE3ZTk1YTRmNjVjNDg5ZCIsImtpbmQiOiJTdWNjZWVkZWQiLCJjb21taXR0ZWRSb3VuZHMiOjQsInJlc3VsdFNjaGVtYVZlcnNpb24iOjEsImZhY3RzIjpbImZpbmFsIiwiam9pbmVkIiwibGVmdCIsInJpZ2h0Iiwic2VlZCJdLCJmYWN0c1NoYTI1NiI6IjVlOTcwZGQyMDYxODFjNDFkOTViNTM0ZjdiNzY0MzAzOTJlZjY1OWRiODUyMWM2NjBlMmY2NzIzN2VlYzRjY2MiLCJkaWFnbm9zdGljIjpudWxsfQ==",
+          "modelRevision": 9,
+          "processId": 87972,
+          "originalProcessId": 87958,
+          "machineName": "Sipkes-MacBook-Air",
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_13763e80416f49c195a1c5a28d70c831",
+          "invocationFingerprint": "0eedadc1131b19c09dbdf5ad17400742270f8067281907ac4093c669ca90f0d8",
+          "status": "Succeeded",
+          "committedRounds": 4,
+          "finalFacts": [
+            "final",
+            "joined",
+            "left",
+            "right",
+            "seed"
+          ],
+          "roundHistory": [
+            {
+              "ordinal": 0,
+              "receiptId": "9e65be4fcb5a69e1c2a33f6864c0419aebf32729dcbd8274036840bee19ae513",
+              "semanticReceiptSha256": "c5650c73c26c46125320c10894a23a2bffc9760c8c4b123b015457c0a7fd519e",
+              "acceptedAttemptId": "2795533698ff4a3ea6bf783f7c8f3831",
+              "acceptedWorkerId": "rules-267410843e0e4c99970819e7c889ee0a",
+              "acceptedLeaseFence": 1,
+              "acceptedModelRevision": 2,
+              "consumedModelRevision": 3
+            },
+            {
+              "ordinal": 1,
+              "receiptId": "22d54306ae16f88340a25e75e12205af38988b2d741b0fcf54afe747005a970e",
+              "semanticReceiptSha256": "ad55bfd5fae7a6bdc5ab859cc25922ff3eeffe9cb3dc88716c8f1a1c2737168a",
+              "acceptedAttemptId": "e508b6a59dd646ebb24d41c4316e0a2e",
+              "acceptedWorkerId": "rules-fd70397302934ba2affe6f8c8619ca45",
+              "acceptedLeaseFence": 4,
+              "acceptedModelRevision": 4,
+              "consumedModelRevision": 5
+            },
+            {
+              "ordinal": 2,
+              "receiptId": "c31869eafa87ee823ad8de8bd7280ad04e01eb923f0a0bacff87268a55993a46",
+              "semanticReceiptSha256": "7ab681aa983b2d4c15daeda33801fe3cd1368fcf10891d31f01c651a556ea316",
+              "acceptedAttemptId": "0dcb2b81e14b4f50a4d844fd6a20f35a",
+              "acceptedWorkerId": "rules-fd70397302934ba2affe6f8c8619ca45",
+              "acceptedLeaseFence": 6,
+              "acceptedModelRevision": 6,
+              "consumedModelRevision": 7
+            },
+            {
+              "ordinal": 3,
+              "receiptId": "297206bdf3e80ed331f6423abe59b0f1e8361350ab8d955f17cfdafa9182f5d1",
+              "semanticReceiptSha256": "4ea17690fe85dec3a6b51ce291f97a4cfe273af0ebb2bde91526d112c14def27",
+              "acceptedAttemptId": "0736445ca0cd417ba08db87d918ad5fc",
+              "acceptedWorkerId": "rules-fd70397302934ba2affe6f8c8619ca45",
+              "acceptedLeaseFence": 8,
+              "acceptedModelRevision": 8,
+              "consumedModelRevision": 9
+            }
+          ],
+          "terminalId": "0088f814cd4132bbbd8a60b562905f11ac99910be75627335a7e95a4f65c489d",
+          "terminalStabilityVerified": true,
+          "designStorageUsed": false
+        },
+        "originalAfterRelease": {
+          "command": "process-boundary",
+          "passed": true,
+          "boundary": "accepted",
+          "processId": 87958,
+          "machineName": "Sipkes-MacBook-Air",
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_13763e80416f49c195a1c5a28d70c831",
+          "invocationFingerprint": "0eedadc1131b19c09dbdf5ad17400742270f8067281907ac4093c669ca90f0d8",
+          "boundaryReceiptId": "9e65be4fcb5a69e1c2a33f6864c0419aebf32729dcbd8274036840bee19ae513",
+          "boundaryAttemptId": "2795533698ff4a3ea6bf783f7c8f3831",
+          "boundaryWorkerId": "rules-267410843e0e4c99970819e7c889ee0a",
+          "boundaryLeaseFence": 1,
+          "originalCallbackDisposition": "Terminal",
+          "terminalBase64": "eyJ0ZXJtaW5hbElkIjoiMDA4OGY4MTRjZDQxMzJiYmJkOGE2MGI1NjI5MDVmMTFhYzk5OTEwYmU3NTYyNzMzNWE3ZTk1YTRmNjVjNDg5ZCIsImtpbmQiOiJTdWNjZWVkZWQiLCJjb21taXR0ZWRSb3VuZHMiOjQsInJlc3VsdFNjaGVtYVZlcnNpb24iOjEsImZhY3RzIjpbImZpbmFsIiwiam9pbmVkIiwibGVmdCIsInJpZ2h0Iiwic2VlZCJdLCJmYWN0c1NoYTI1NiI6IjVlOTcwZGQyMDYxODFjNDFkOTViNTM0ZjdiNzY0MzAzOTJlZjY1OWRiODUyMWM2NjBlMmY2NzIzN2VlYzRjY2MiLCJkaWFnbm9zdGljIjpudWxsfQ==",
+          "modelRevision": 9,
+          "finalStatus": "Succeeded",
+          "finalModelRevision": 9,
+          "finalCommittedRounds": 4,
+          "finalFacts": [
+            "final",
+            "joined",
+            "left",
+            "right",
+            "seed"
+          ]
+        }
+      },
+      {
+        "name": "consumed-delayed",
+        "boundary": "consumed",
+        "action": "delayed",
+        "database": "rules_53124de0498840c1bc025a14eb712cf6",
+        "passed": true,
+        "statePath": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/consumed-delayed-state.json",
+        "boundaryState": {
+          "schemaVersion": 1,
+          "boundary": "consumed",
+          "invocationBase64": "eyJpbnZvY2F0aW9uU2NoZW1hVmVyc2lvbiI6MSwiaWRlbnRpdHkiOnsidGVuYW50IjpudWxsLCJwYXJ0aXRpb24iOiJwYWNrYWdlZC1ydWxlcy1wcm9iZSIsImludm9jYXRpb24iOiJwcm9jZXNzLWNvbnN1bWVkLWZiY2QwY2FiMGVjMjQ2MzVhNzk1YjliMzcyYzc3OGU0In0sImFydGlmYWN0Ijp7ImZvcm1hdFZlcnNpb24iOjEsImlkIjoicnVsZXM6MGYwMzA5ZDU4MTM2NzFhZTZhNDliMzE2NzM2NjUxNDI4NTRkM2U2MDFjZjAwMWJjZjBmNDdjMTM1ZDMzMDg0MSIsInNoYTI1NiI6IjBmMDMwOWQ1ODEzNjcxYWU2YTQ5YjMxNjczNjY1MTQyODU0ZDNlNjAxY2YwMDFiY2YwZjQ3YzEzNWQzMzA4NDEiLCJieXRlcyI6ImV5Sm1iM0p0WVhSV1pYSnphVzl1SWpveExDSnNZVzVuZFdGblpVbGtJam9pWld4ellTNXlkV3hsY3k1bWFXNXBkR1V0Y0c5emFYUnBkbVVpTENKc1lXNW5kV0ZuWlZabGNuTnBiMjRpT2pFc0luWnZZMkZpZFd4aGNua2lPbHNpWm1sdVlXd2lMQ0pxYjJsdVpXUWlMQ0pzWldaMElpd2libVYyWlhJdFpHVnlhWFpsWkNJc0luSnBaMmgwSWl3aWMyVmxaQ0lzSW5WdWNtVmhZMmhoWW14bElsMHNJbkoxYkdWeklqcGJleUpwWkNJNkltWnBibUZzSWl3aWNISmxiV2x6WlhNaU9sc2lhbTlwYm1Wa0lsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKbWFXNWhiQ0o5TEhzaWFXUWlPaUpxYjJsdUlpd2ljSEpsYldselpYTWlPbHNpYkdWbWRDSXNJbkpwWjJoMElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKcWIybHVaV1FpZlN4N0ltbGtJam9pYkdWbWRDSXNJbkJ5WlcxcGMyVnpJanBiSW5ObFpXUWlYU3dpWTI5dVkyeDFjMmx2YmlJNklteGxablFpZlN4N0ltbGtJam9pY21sbmFIUWlMQ0p3Y21WdGFYTmxjeUk2V3lKelpXVmtJbDBzSW1OdmJtTnNkWE5wYjI0aU9pSnlhV2RvZENKOUxIc2lhV1FpT2lKMWJuSmxZV05vWVdKc1pTSXNJbkJ5WlcxcGMyVnpJanBiSW5WdWNtVmhZMmhoWW14bElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKdVpYWmxjaTFrWlhKcGRtVmtJbjFkZlE9PSJ9LCJpbml0aWFsRmFjdHMiOlsic2VlZCJdLCJtYXhSb3VuZHMiOjcsImltcGxlbWVudGF0aW9uIjp7InBpblNjaGVtYVZlcnNpb24iOjEsImxhbmd1YWdlSWQiOiJlbHNhLnJ1bGVzLmZpbml0ZS1wb3NpdGl2ZSIsImxhbmd1YWdlVmVyc2lvbiI6MSwicmVjZWlwdFNjaGVtYVZlcnNpb24iOjEsInN0YXRlU2NoZW1hVmVyc2lvbiI6MSwicGFja2FnZXMiOlt7ImlkIjoiRWxzYS5SdWxlcy5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IjJ1TVBmcXlxM1x1MDAyQllqMS9lVklqeEhoellqS2NqRno0NkNCRGl4OEovUndzNFQxVkcxZERHdzI5dUtIeGF3RlNsWDJLdFR2MXJLUVN6MFNOWjNpWVQ0eUE9PSIsImFzc2V0cyI6W3sicGF0aCI6ImxpYi9uZXQxMC4wL0Vsc2EuUnVsZXMuQ29yZS5kbGwiLCJhc3NlbWJseSI6IkVsc2EuUnVsZXMuQ29yZSwgVmVyc2lvbj00LjAuMC4wLCBDdWx0dXJlPW5ldXRyYWwsIFB1YmxpY0tleVRva2VuPW51bGwiLCJzaGEyNTYiOiJiNjlmNmMzODg5NjdmMWEyNmMxZDM5YTNjOGQ0ZGZiOGM3MjMzNTI1MzhmMjFjNGJlYTM2MmU1M2NlNGI4MGExIn1dfSx7ImlkIjoiRWxzYS5SdWxlcy5QZXJzaXN0ZW5jZS5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IlpcdTAwMkJ0MDhHOUpcdTAwMkI0djVnUU1acVlvTGNGeFhoXHUwMDJCZXFUN1gwXHUwMDJCL1FnYmozQjN2OUZBWC9TcWFLa1lpb1B2LzRXaXBxZGNOUkhcdTAwMkIwZm5cdTAwMkJGVTJKdE85T0QySDRnPT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMmFhNDBiNDViMzlhMmQzMzNkYmVlYmNjZWE1YzRjOGQzMTBjMjliY2M0MTE5ZTgyMDNhN2M3NWU4MDhkOTY0NCJ9XX0seyJpZCI6IkVsc2EuUnVsZXMuUnVudGltZSIsInZlcnNpb24iOiI0LjAuMC1icmFuY2gtYWdlbnQtY29kZXgtMzE4MS1kdXJhYmxlLXJ1bGVzIiwiY29udGVudEhhc2giOiJ1M1NkcG5CL3BmVWlEVFQyTEVidnBYRWhIdzI1aC9sdURxMEsvUVx1MDAyQlRkenRxcHJYcm5iU3J3aWhJL2NwYUhJVTAxYkVJQzlDSVpXaFJ3enhWcUhPOTJ3PT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlJ1bnRpbWUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlJ1bnRpbWUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMGQ3MmJmYjFlYzQ2NDM5MTRmYTlkYTA0MmU4NTI1YmZkOTc3MzRjMTQ0MTA1MTAzYjM4ZWE0NWJmODBhYTk1NyJ9XX1dfSwibmF0aXZlRGVzdGluYXRpb24iOm51bGx9",
+          "invocationFingerprint": "201815a5141443ff35a01050a5c0574d599c6ce51315c04cc397e2382289e57f",
+          "receiptRecordBase64": "eyJyZWNlaXB0Ijp7ImlkZW50aXR5Ijp7InRlbmFudCI6bnVsbCwicGFydGl0aW9uIjoicGFja2FnZWQtcnVsZXMtcHJvYmUiLCJpbnZvY2F0aW9uIjoicHJvY2Vzcy1jb25zdW1lZC1mYmNkMGNhYjBlYzI0NjM1YTc5NWI5YjM3MmM3NzhlNCIsImZpbmdlcnByaW50IjoiMjAxODE1YTUxNDE0NDNmZjM1YTAxMDUwYTVjMDU3NGQ1OTljNmNlNTEzMTVjMDRjYzM5N2UyMzgyMjg5ZTU3ZiIsIm9yZGluYWwiOjAsImlucHV0U3RhdGVTaGEyNTYiOiI4MGIwMTBkYzI2ZjI1NjhjOTM3NWEyOTllMzcwN2ViN2M0NWQwNDZhMTM5ODVmYTFmYWMwYzcyMmNhYWIwY2M0In0sImltcGxlbWVudGF0aW9uUGluSGFzaCI6ImM4ZDUzOGFmMzRjYjllYjE2MGIyNWE3MzllMTM4Mzg3ZWM4M2QzNzAyNmM1ODVlZjllMTYxODM2OTY4YzIxZWQiLCJhZGRlZEZhY3RzIjpbImxlZnQiLCJyaWdodCJdLCJmaXJpbmdzIjpbeyJydWxlSWQiOiJsZWZ0IiwiY29uY2x1c2lvbiI6ImxlZnQifSx7InJ1bGVJZCI6InJpZ2h0IiwiY29uY2x1c2lvbiI6InJpZ2h0In1dfSwic2VtYW50aWNSZWNlaXB0U2hhMjU2IjoiZmVmYTM2YWYzMTAzZWZhOWRlOWRiMzBhMzZiYjg4ZTZkZmUxYzhmMGFiZjE5MzhjY2MyNDZiMjUwMmYyNjk4ZCJ9",
+          "receiptId": "bee179e3a09247417e96248ebafe1197a9add78c53655d03c55f5628223a1d07",
+          "semanticReceiptSha256": "fefa36af3103efa9de9db30a36bb88e6dfe1c8f0abf1938ccc246b2502f2698d",
+          "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+          "beforeFacts": [
+            "seed"
+          ],
+          "afterFacts": [
+            "left",
+            "right",
+            "seed"
+          ],
+          "modelRevision": 3,
+          "committedRounds": 1,
+          "acceptedAttemptId": "a01aa64b9a2a44eca2238573e21923f8",
+          "acceptedWorkerId": "rules-57941d896e824be2a1f14efe5fe36326",
+          "acceptedLeaseFence": 1,
+          "acceptedModelRevision": 2,
+          "consumedModelRevision": 3,
+          "tokenOwner": "rules-57941d896e824be2a1f14efe5fe36326",
+          "tokenFence": 1,
+          "tokenExpiresAtUtc": "2026-10-21T23:49:29.982617+00:00",
+          "tokenExpectedModelRevision": 2,
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_53124de0498840c1bc025a14eb712cf6",
+          "processId": 88059,
+          "machineName": "Sipkes-MacBook-Air",
+          "capturedUtc": "2026-10-21T23:49:27.276829+00:00"
+        },
+        "originalPid": 88059,
+        "successor": {
+          "command": "process-recover",
+          "passed": true,
+          "recoveredBoundary": "consumed",
+          "terminalBase64": "eyJ0ZXJtaW5hbElkIjoiNmFlOWM0MDE4NGY5MzNmOWNjNTMyMjI1NGQ2NjE3OGZiYmNiZTI4OTcyOWI4NzExY2U3MjQ0YjI1MWNkYmUyZSIsImtpbmQiOiJTdWNjZWVkZWQiLCJjb21taXR0ZWRSb3VuZHMiOjQsInJlc3VsdFNjaGVtYVZlcnNpb24iOjEsImZhY3RzIjpbImZpbmFsIiwiam9pbmVkIiwibGVmdCIsInJpZ2h0Iiwic2VlZCJdLCJmYWN0c1NoYTI1NiI6IjVlOTcwZGQyMDYxODFjNDFkOTViNTM0ZjdiNzY0MzAzOTJlZjY1OWRiODUyMWM2NjBlMmY2NzIzN2VlYzRjY2MiLCJkaWFnbm9zdGljIjpudWxsfQ==",
+          "modelRevision": 9,
+          "processId": 88064,
+          "originalProcessId": 88059,
+          "machineName": "Sipkes-MacBook-Air",
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_53124de0498840c1bc025a14eb712cf6",
+          "invocationFingerprint": "201815a5141443ff35a01050a5c0574d599c6ce51315c04cc397e2382289e57f",
+          "status": "Succeeded",
+          "committedRounds": 4,
+          "finalFacts": [
+            "final",
+            "joined",
+            "left",
+            "right",
+            "seed"
+          ],
+          "roundHistory": [
+            {
+              "ordinal": 0,
+              "receiptId": "bee179e3a09247417e96248ebafe1197a9add78c53655d03c55f5628223a1d07",
+              "semanticReceiptSha256": "fefa36af3103efa9de9db30a36bb88e6dfe1c8f0abf1938ccc246b2502f2698d",
+              "acceptedAttemptId": "a01aa64b9a2a44eca2238573e21923f8",
+              "acceptedWorkerId": "rules-57941d896e824be2a1f14efe5fe36326",
+              "acceptedLeaseFence": 1,
+              "acceptedModelRevision": 2,
+              "consumedModelRevision": 3
+            },
+            {
+              "ordinal": 1,
+              "receiptId": "96c36724498dca062b663e6a1fdbcb8cad2a61fc2f1b69a230ebd19e0014a9b9",
+              "semanticReceiptSha256": "dfe7a87d97fdc58dd2ebb00c8806ff52e9fb03186106af58e19133c859caad2c",
+              "acceptedAttemptId": "15c07da7d30841848a5c1460345bf148",
+              "acceptedWorkerId": "rules-0bd30cdcdf8a4b89a6275ba35e06c71b",
+              "acceptedLeaseFence": 2,
+              "acceptedModelRevision": 4,
+              "consumedModelRevision": 5
+            },
+            {
+              "ordinal": 2,
+              "receiptId": "9a919b29d71d9cf36d5ae74be2fe6bb16bec708943da6c72693976569feac232",
+              "semanticReceiptSha256": "349a1dbd698747c4677a9517071bab4839e9e1177e3c4f2a28005787adbb5e7f",
+              "acceptedAttemptId": "a57b4c70abd446c8b5926d14b99e3d0d",
+              "acceptedWorkerId": "rules-0bd30cdcdf8a4b89a6275ba35e06c71b",
+              "acceptedLeaseFence": 4,
+              "acceptedModelRevision": 6,
+              "consumedModelRevision": 7
+            },
+            {
+              "ordinal": 3,
+              "receiptId": "7fc60c52bba5933639d70fdbb9ffab4f5d05df7b916752be64fb5696729cf4c1",
+              "semanticReceiptSha256": "5ac46d90e29204e91659523e5c4b138e45a3b00e0332853f2f3b00855402c75d",
+              "acceptedAttemptId": "ff977cfa7a764ff3be3ac11c79177a81",
+              "acceptedWorkerId": "rules-0bd30cdcdf8a4b89a6275ba35e06c71b",
+              "acceptedLeaseFence": 6,
+              "acceptedModelRevision": 8,
+              "consumedModelRevision": 9
+            }
+          ],
+          "terminalId": "6ae9c40184f933f9cc5322254d66178fbbcbe289729b8711ce7244b251cdbe2e",
+          "terminalStabilityVerified": true,
+          "designStorageUsed": false
+        },
+        "originalAfterRelease": {
+          "command": "process-boundary",
+          "passed": true,
+          "boundary": "consumed",
+          "processId": 88059,
+          "machineName": "Sipkes-MacBook-Air",
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_53124de0498840c1bc025a14eb712cf6",
+          "invocationFingerprint": "201815a5141443ff35a01050a5c0574d599c6ce51315c04cc397e2382289e57f",
+          "boundaryReceiptId": "bee179e3a09247417e96248ebafe1197a9add78c53655d03c55f5628223a1d07",
+          "boundaryAttemptId": "a01aa64b9a2a44eca2238573e21923f8",
+          "boundaryWorkerId": "rules-57941d896e824be2a1f14efe5fe36326",
+          "boundaryLeaseFence": 1,
+          "originalCallbackDisposition": "LeaseLost",
+          "terminalBase64": "eyJ0ZXJtaW5hbElkIjoiNmFlOWM0MDE4NGY5MzNmOWNjNTMyMjI1NGQ2NjE3OGZiYmNiZTI4OTcyOWI4NzExY2U3MjQ0YjI1MWNkYmUyZSIsImtpbmQiOiJTdWNjZWVkZWQiLCJjb21taXR0ZWRSb3VuZHMiOjQsInJlc3VsdFNjaGVtYVZlcnNpb24iOjEsImZhY3RzIjpbImZpbmFsIiwiam9pbmVkIiwibGVmdCIsInJpZ2h0Iiwic2VlZCJdLCJmYWN0c1NoYTI1NiI6IjVlOTcwZGQyMDYxODFjNDFkOTViNTM0ZjdiNzY0MzAzOTJlZjY1OWRiODUyMWM2NjBlMmY2NzIzN2VlYzRjY2MiLCJkaWFnbm9zdGljIjpudWxsfQ==",
+          "modelRevision": 9,
+          "finalStatus": "Succeeded",
+          "finalModelRevision": 9,
+          "finalCommittedRounds": 4,
+          "finalFacts": [
+            "final",
+            "joined",
+            "left",
+            "right",
+            "seed"
+          ]
+        }
+      },
+      {
+        "name": "accepted-cancel",
+        "boundary": "accepted",
+        "action": "cancel",
+        "database": "rules_5d679fd81ed1474c9c0d6a0e59d4fdc3",
+        "passed": true,
+        "statePath": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f/processes/accepted-cancel-state.json",
+        "boundaryState": {
+          "schemaVersion": 1,
+          "boundary": "accepted",
+          "invocationBase64": "eyJpbnZvY2F0aW9uU2NoZW1hVmVyc2lvbiI6MSwiaWRlbnRpdHkiOnsidGVuYW50IjpudWxsLCJwYXJ0aXRpb24iOiJwYWNrYWdlZC1ydWxlcy1wcm9iZSIsImludm9jYXRpb24iOiJwcm9jZXNzLWFjY2VwdGVkLWVlZDc5YjlhNjRlOTQzZmNhMmVlYmI3ZWVjYmM2ZmQ4In0sImFydGlmYWN0Ijp7ImZvcm1hdFZlcnNpb24iOjEsImlkIjoicnVsZXM6MGYwMzA5ZDU4MTM2NzFhZTZhNDliMzE2NzM2NjUxNDI4NTRkM2U2MDFjZjAwMWJjZjBmNDdjMTM1ZDMzMDg0MSIsInNoYTI1NiI6IjBmMDMwOWQ1ODEzNjcxYWU2YTQ5YjMxNjczNjY1MTQyODU0ZDNlNjAxY2YwMDFiY2YwZjQ3YzEzNWQzMzA4NDEiLCJieXRlcyI6ImV5Sm1iM0p0WVhSV1pYSnphVzl1SWpveExDSnNZVzVuZFdGblpVbGtJam9pWld4ellTNXlkV3hsY3k1bWFXNXBkR1V0Y0c5emFYUnBkbVVpTENKc1lXNW5kV0ZuWlZabGNuTnBiMjRpT2pFc0luWnZZMkZpZFd4aGNua2lPbHNpWm1sdVlXd2lMQ0pxYjJsdVpXUWlMQ0pzWldaMElpd2libVYyWlhJdFpHVnlhWFpsWkNJc0luSnBaMmgwSWl3aWMyVmxaQ0lzSW5WdWNtVmhZMmhoWW14bElsMHNJbkoxYkdWeklqcGJleUpwWkNJNkltWnBibUZzSWl3aWNISmxiV2x6WlhNaU9sc2lhbTlwYm1Wa0lsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKbWFXNWhiQ0o5TEhzaWFXUWlPaUpxYjJsdUlpd2ljSEpsYldselpYTWlPbHNpYkdWbWRDSXNJbkpwWjJoMElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKcWIybHVaV1FpZlN4N0ltbGtJam9pYkdWbWRDSXNJbkJ5WlcxcGMyVnpJanBiSW5ObFpXUWlYU3dpWTI5dVkyeDFjMmx2YmlJNklteGxablFpZlN4N0ltbGtJam9pY21sbmFIUWlMQ0p3Y21WdGFYTmxjeUk2V3lKelpXVmtJbDBzSW1OdmJtTnNkWE5wYjI0aU9pSnlhV2RvZENKOUxIc2lhV1FpT2lKMWJuSmxZV05vWVdKc1pTSXNJbkJ5WlcxcGMyVnpJanBiSW5WdWNtVmhZMmhoWW14bElsMHNJbU52Ym1Oc2RYTnBiMjRpT2lKdVpYWmxjaTFrWlhKcGRtVmtJbjFkZlE9PSJ9LCJpbml0aWFsRmFjdHMiOlsic2VlZCJdLCJtYXhSb3VuZHMiOjcsImltcGxlbWVudGF0aW9uIjp7InBpblNjaGVtYVZlcnNpb24iOjEsImxhbmd1YWdlSWQiOiJlbHNhLnJ1bGVzLmZpbml0ZS1wb3NpdGl2ZSIsImxhbmd1YWdlVmVyc2lvbiI6MSwicmVjZWlwdFNjaGVtYVZlcnNpb24iOjEsInN0YXRlU2NoZW1hVmVyc2lvbiI6MSwicGFja2FnZXMiOlt7ImlkIjoiRWxzYS5SdWxlcy5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IjJ1TVBmcXlxM1x1MDAyQllqMS9lVklqeEhoellqS2NqRno0NkNCRGl4OEovUndzNFQxVkcxZERHdzI5dUtIeGF3RlNsWDJLdFR2MXJLUVN6MFNOWjNpWVQ0eUE9PSIsImFzc2V0cyI6W3sicGF0aCI6ImxpYi9uZXQxMC4wL0Vsc2EuUnVsZXMuQ29yZS5kbGwiLCJhc3NlbWJseSI6IkVsc2EuUnVsZXMuQ29yZSwgVmVyc2lvbj00LjAuMC4wLCBDdWx0dXJlPW5ldXRyYWwsIFB1YmxpY0tleVRva2VuPW51bGwiLCJzaGEyNTYiOiJiNjlmNmMzODg5NjdmMWEyNmMxZDM5YTNjOGQ0ZGZiOGM3MjMzNTI1MzhmMjFjNGJlYTM2MmU1M2NlNGI4MGExIn1dfSx7ImlkIjoiRWxzYS5SdWxlcy5QZXJzaXN0ZW5jZS5Db3JlIiwidmVyc2lvbiI6IjQuMC4wLWJyYW5jaC1hZ2VudC1jb2RleC0zMTgxLWR1cmFibGUtcnVsZXMiLCJjb250ZW50SGFzaCI6IlpcdTAwMkJ0MDhHOUpcdTAwMkI0djVnUU1acVlvTGNGeFhoXHUwMDJCZXFUN1gwXHUwMDJCL1FnYmozQjN2OUZBWC9TcWFLa1lpb1B2LzRXaXBxZGNOUkhcdTAwMkIwZm5cdTAwMkJGVTJKdE85T0QySDRnPT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlBlcnNpc3RlbmNlLkNvcmUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMmFhNDBiNDViMzlhMmQzMzNkYmVlYmNjZWE1YzRjOGQzMTBjMjliY2M0MTE5ZTgyMDNhN2M3NWU4MDhkOTY0NCJ9XX0seyJpZCI6IkVsc2EuUnVsZXMuUnVudGltZSIsInZlcnNpb24iOiI0LjAuMC1icmFuY2gtYWdlbnQtY29kZXgtMzE4MS1kdXJhYmxlLXJ1bGVzIiwiY29udGVudEhhc2giOiJ1M1NkcG5CL3BmVWlEVFQyTEVidnBYRWhIdzI1aC9sdURxMEsvUVx1MDAyQlRkenRxcHJYcm5iU3J3aWhJL2NwYUhJVTAxYkVJQzlDSVpXaFJ3enhWcUhPOTJ3PT0iLCJhc3NldHMiOlt7InBhdGgiOiJsaWIvbmV0MTAuMC9FbHNhLlJ1bGVzLlJ1bnRpbWUuZGxsIiwiYXNzZW1ibHkiOiJFbHNhLlJ1bGVzLlJ1bnRpbWUsIFZlcnNpb249NC4wLjAuMCwgQ3VsdHVyZT1uZXV0cmFsLCBQdWJsaWNLZXlUb2tlbj1udWxsIiwic2hhMjU2IjoiMGQ3MmJmYjFlYzQ2NDM5MTRmYTlkYTA0MmU4NTI1YmZkOTc3MzRjMTQ0MTA1MTAzYjM4ZWE0NWJmODBhYTk1NyJ9XX1dfSwibmF0aXZlRGVzdGluYXRpb24iOm51bGx9",
+          "invocationFingerprint": "7b6a1a826dcc1c94f61c9d7500357e364e3d5a0d49fa52b1ef25778761300a49",
+          "receiptRecordBase64": "eyJyZWNlaXB0Ijp7ImlkZW50aXR5Ijp7InRlbmFudCI6bnVsbCwicGFydGl0aW9uIjoicGFja2FnZWQtcnVsZXMtcHJvYmUiLCJpbnZvY2F0aW9uIjoicHJvY2Vzcy1hY2NlcHRlZC1lZWQ3OWI5YTY0ZTk0M2ZjYTJlZWJiN2VlY2JjNmZkOCIsImZpbmdlcnByaW50IjoiN2I2YTFhODI2ZGNjMWM5NGY2MWM5ZDc1MDAzNTdlMzY0ZTNkNWEwZDQ5ZmE1MmIxZWYyNTc3ODc2MTMwMGE0OSIsIm9yZGluYWwiOjAsImlucHV0U3RhdGVTaGEyNTYiOiI4MGIwMTBkYzI2ZjI1NjhjOTM3NWEyOTllMzcwN2ViN2M0NWQwNDZhMTM5ODVmYTFmYWMwYzcyMmNhYWIwY2M0In0sImltcGxlbWVudGF0aW9uUGluSGFzaCI6ImM4ZDUzOGFmMzRjYjllYjE2MGIyNWE3MzllMTM4Mzg3ZWM4M2QzNzAyNmM1ODVlZjllMTYxODM2OTY4YzIxZWQiLCJhZGRlZEZhY3RzIjpbImxlZnQiLCJyaWdodCJdLCJmaXJpbmdzIjpbeyJydWxlSWQiOiJsZWZ0IiwiY29uY2x1c2lvbiI6ImxlZnQifSx7InJ1bGVJZCI6InJpZ2h0IiwiY29uY2x1c2lvbiI6InJpZ2h0In1dfSwic2VtYW50aWNSZWNlaXB0U2hhMjU2IjoiZjlhNmIwMWI3MzIzOTk2ZjU4YWRlOWNlZWFhZGViNDk0MzExN2QzNzY3MGM4MzQyOWNhODc1OTg5YjVkNzgzMCJ9",
+          "receiptId": "2169acd8214539c1c34f25995a1efa7f2355f9ff0f4c8c097fce21247c33f98e",
+          "semanticReceiptSha256": "f9a6b01b7323996f58ade9ceeaadeb4943117d37670c83429ca875989b5d7830",
+          "inputStateSha256": "80b010dc26f2568c9375a299e3707eb7c45d046a13985fa1fac0c722caab0cc4",
+          "beforeFacts": [
+            "seed"
+          ],
+          "afterFacts": [
+            "seed"
+          ],
+          "modelRevision": 2,
+          "committedRounds": 0,
+          "pendingReceiptId": "2169acd8214539c1c34f25995a1efa7f2355f9ff0f4c8c097fce21247c33f98e",
+          "acceptedAttemptId": "033b0612f2ff4f24af0c64a87305ca83",
+          "acceptedWorkerId": "rules-d68b57db57424efaaabd1393d80ce3c0",
+          "acceptedLeaseFence": 1,
+          "acceptedModelRevision": 2,
+          "tokenOwner": "rules-d68b57db57424efaaabd1393d80ce3c0",
+          "tokenFence": 1,
+          "tokenExpiresAtUtc": "2026-10-21T23:49:35.672652+00:00",
+          "tokenExpectedModelRevision": 1,
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_5d679fd81ed1474c9c0d6a0e59d4fdc3",
+          "processId": 88077,
+          "machineName": "Sipkes-MacBook-Air",
+          "capturedUtc": "2026-10-21T23:49:32.897925+00:00"
+        },
+        "originalPid": 88077,
+        "successor": {
+          "command": "process-cancel",
+          "passed": true,
+          "terminalBase64": "eyJ0ZXJtaW5hbElkIjoiMDg1YTU0MGEzYzJmYmJkM2E4ZTM1ZTRiYjFjZjJjY2NlZDZkNDI5YjhiZDAxMjNlYjE1ODE3N2M0OTdmMDk4ZiIsImtpbmQiOiJDYW5jZWxsZWQiLCJjb21taXR0ZWRSb3VuZHMiOjAsInJlc3VsdFNjaGVtYVZlcnNpb24iOjEsImZhY3RzIjpbInNlZWQiXSwiZmFjdHNTaGEyNTYiOiI4MGIwMTBkYzI2ZjI1NjhjOTM3NWEyOTllMzcwN2ViN2M0NWQwNDZhMTM5ODVmYTFmYWMwYzcyMmNhYWIwY2M0IiwiZGlhZ25vc3RpYyI6bnVsbH0=",
+          "modelRevision": 3,
+          "processId": 88078,
+          "machineName": "Sipkes-MacBook-Air",
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_5d679fd81ed1474c9c0d6a0e59d4fdc3",
+          "acceptedRun": {
+            "invocationFingerprint": "7b6a1a826dcc1c94f61c9d7500357e364e3d5a0d49fa52b1ef25778761300a49",
+            "changedFingerprint": "Conflict",
+            "exactCancellation": "Cancelled",
+            "exactReplay": "Replay",
+            "status": "Cancelled",
+            "committedRounds": 0,
+            "committedFacts": [
+              "seed"
+            ]
+          },
+          "cancellationBeforeAdmission": {
+            "invocationId": "cancel-before-admission-667b86294b75484393dd03eed94dd9e7",
+            "cancellation": "Cancelled",
+            "admission": "AlreadyCancelled",
+            "changedFingerprint": "Conflict",
+            "status": "Cancelled",
+            "committedFacts": [],
+            "receiptCount": 0
+          },
+          "workerSuppressed": true
+        },
+        "originalAfterRelease": {
+          "command": "process-boundary",
+          "passed": true,
+          "boundary": "accepted",
+          "processId": 88077,
+          "machineName": "Sipkes-MacBook-Air",
+          "databaseEngine": "PostgreSQL",
+          "databaseEngineVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+          "databaseName": "rules_5d679fd81ed1474c9c0d6a0e59d4fdc3",
+          "invocationFingerprint": "7b6a1a826dcc1c94f61c9d7500357e364e3d5a0d49fa52b1ef25778761300a49",
+          "boundaryReceiptId": "2169acd8214539c1c34f25995a1efa7f2355f9ff0f4c8c097fce21247c33f98e",
+          "boundaryAttemptId": "033b0612f2ff4f24af0c64a87305ca83",
+          "boundaryWorkerId": "rules-d68b57db57424efaaabd1393d80ce3c0",
+          "boundaryLeaseFence": 1,
+          "originalCallbackDisposition": "Terminal",
+          "terminalBase64": "eyJ0ZXJtaW5hbElkIjoiMDg1YTU0MGEzYzJmYmJkM2E4ZTM1ZTRiYjFjZjJjY2NlZDZkNDI5YjhiZDAxMjNlYjE1ODE3N2M0OTdmMDk4ZiIsImtpbmQiOiJDYW5jZWxsZWQiLCJjb21taXR0ZWRSb3VuZHMiOjAsInJlc3VsdFNjaGVtYVZlcnNpb24iOjEsImZhY3RzIjpbInNlZWQiXSwiZmFjdHNTaGEyNTYiOiI4MGIwMTBkYzI2ZjI1NjhjOTM3NWEyOTllMzcwN2ViN2M0NWQwNDZhMTM5ODVmYTFmYWMwYzcyMmNhYWIwY2M0IiwiZGlhZ25vc3RpYyI6bnVsbH0=",
+          "modelRevision": 3,
+          "finalStatus": "Cancelled",
+          "finalModelRevision": 3,
+          "finalCommittedRounds": 0,
+          "finalFacts": [
+            "seed"
+          ]
+        }
+      }
+    ],
+    "designStorage": "absent: consumer has no design package or project reference",
+    "resolvedDesignLibraries": [],
+    "qualificationScope": "Five real-worker boundary/recovery/cancellation cases; separate removal controls pending.",
+    "removalControlsComplete": false,
+    "qualified": true,
+    "containerId": "bf0d08877a427c96a78bceb743f75b388233b670509407faa301da370c9a4e8a",
+    "containerImage": "sha256:ed134ce8cc303c24d12c4bc6f5a2a43dc7ee7bbde8f67d9f60be5cc03206eab0",
+    "serverVersion": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+    "ownedContainerRemoved": true
+  },
+  "harnessUnchanged": true,
+  "retainedRunDirectory": "/private/tmp/3181-package-process-final/run-29a4994961964febafedaa1e65958f4f",
+  "rawReceiptSha256": "4628c8ef37e25b1098f6cfc7d1d4082dcd624bd25ea040ed7816fc34bd2281b5",
+  "processArtifacts": {
+    "processes/accepted-cancel-origin.json": {
+      "sha256": "4631cf944a509736b30e8c8e22ddf6bb0938ca95c9074f8e14d9ad93aacf132d",
+      "size": 1288
+    },
+    "processes/accepted-cancel-origin.log": {
+      "sha256": "94e36745b21638020e8a8e4e9378aecac300987684a923d733ec55df38ff6b10",
+      "size": 148
+    },
+    "processes/accepted-cancel-state.json": {
+      "sha256": "50d3e2c31a5bcae08afbf17880933173e2d63775927e9df02031b9bc982afb97",
+      "size": 5567
+    },
+    "processes/accepted-cancel-state.json.release": {
+      "sha256": "3933e3274b63dc01fd286d6d939a626867c83a4603fc4347e0f8b8856f1b98fd",
+      "size": 8
+    },
+    "processes/accepted-cancel-successor.json": {
+      "sha256": "69eb9c21b6d17c21084b941d5be63d6a89706bb06078f1137c5f69cf47d2017c",
+      "size": 1412
+    },
+    "processes/accepted-crash-origin.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    "processes/accepted-crash-state.json": {
+      "sha256": "0c2c999799dc45994b43c31b15f6937e4ff32134003ef7699154b7043eb32558",
+      "size": 5567
+    },
+    "processes/accepted-crash-successor.json": {
+      "sha256": "3bfa08d542af2a298404448ace37016b8e9009240a5096f861f4c0784054b652",
+      "size": 3066
+    },
+    "processes/accepted-delayed-origin.json": {
+      "sha256": "1165cd34bb3ff8e925f021030b57d45e09ee146847784745854cdd381b8e97cf",
+      "size": 1384
+    },
+    "processes/accepted-delayed-origin.log": {
+      "sha256": "4e2f5503b479419d9ee00904242558c1217e19d00f153f9bf8e094f4460ea119",
+      "size": 149
+    },
+    "processes/accepted-delayed-state.json": {
+      "sha256": "3162f4a0f7497bd5e4ee04867aeaddfe554aebe4a47756b2f3a5c2ab470846f6",
+      "size": 5564
+    },
+    "processes/accepted-delayed-state.json.release": {
+      "sha256": "3933e3274b63dc01fd286d6d939a626867c83a4603fc4347e0f8b8856f1b98fd",
+      "size": 8
+    },
+    "processes/accepted-delayed-successor.json": {
+      "sha256": "baf469eda335f53a8fbe32d024045d69a678ba719d768e7fa50f0d844573ceb3",
+      "size": 3066
+    },
+    "processes/consumed-crash-origin.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    "processes/consumed-crash-state.json": {
+      "sha256": "ae2b44825c4dd3875dbe14ba4d2c1b628a0aef0a6cf9542af4f45a2a0405e2ab",
+      "size": 5532
+    },
+    "processes/consumed-crash-successor.json": {
+      "sha256": "446e9a76b86a1ee9233268ba9c1a53e0fcadeed6d1130c931e4b4c62e585af16",
+      "size": 3066
+    },
+    "processes/consumed-delayed-origin.json": {
+      "sha256": "bca0e485aac8ad3fe3d443cc66a3dbb9336a6277cd107df284c848c02272832f",
+      "size": 1385
+    },
+    "processes/consumed-delayed-origin.log": {
+      "sha256": "ad627120d3c14f00517feea455628996dcdb15fa84cc4ad3ab29b28838cee4c9",
+      "size": 149
+    },
+    "processes/consumed-delayed-state.json": {
+      "sha256": "58a5c963b1172f6c02b957c5dc7512cceccdd12c9db5b2439504e9d03981419b",
+      "size": 5532
+    },
+    "processes/consumed-delayed-state.json.release": {
+      "sha256": "3933e3274b63dc01fd286d6d939a626867c83a4603fc4347e0f8b8856f1b98fd",
+      "size": 8
+    },
+    "processes/consumed-delayed-successor.json": {
+      "sha256": "53e83c6047ef53fb433bd080ead34eade0fc7fe6d700182c65b6d06567586585",
+      "size": 3066
+    }
+  }
+}

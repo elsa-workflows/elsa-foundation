@@ -17,18 +17,19 @@ public enum PersistenceMode
     Durable,
 
     /// <summary>
-    /// Folds checkpoints in memory and commits on suspension, fault, completion, at the end of each execution pass and
-    /// after a bounded amount of work. After a crash the activities since the last commit run again. The default when
+    /// Folds checkpoints in memory and commits on suspension, fault, completion, before an activity that is not safe to
+    /// repeat, at the end of each execution pass and after a bounded amount of work. After a crash the activities since the last commit run again. The default when
     /// neither the workflow nor the host chooses a mode.
     /// </summary>
     Balanced,
 
     /// <summary>
-    /// Commits only when the run suspends or faults, before an activity that is not safe to repeat runs, and once at
-    /// completion. A host that turns <see cref="PersistenceModeOptions.RecordCompletion"/> off drops that completion
-    /// record for a run that was never committed before, so such a run leaves no trace; a run that already has a record
-    /// always gets its completion committed. After a crash the run starts again from its last commit, which may be the
-    /// beginning.
+    /// Commits when the run suspends or faults, when it dispatches a child workflow, before an activity that is not safe
+    /// to repeat runs, at the end of a pass that does not complete the run, and once at completion. A host that turns
+    /// <see cref="PersistenceModeOptions.RecordCompletion"/> off drops that completion record for a run that was never
+    /// committed before, so a run that completes in one pass with none of those earlier commits leaves no trace; a run
+    /// that already has a record always gets its completion committed. After a crash the run starts again from its
+    /// last commit, which may be the beginning.
     /// </summary>
     Ephemeral
 }

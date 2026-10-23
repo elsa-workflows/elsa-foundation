@@ -109,8 +109,10 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
             Assert.NotNull(source.ActivityDefinitionId);
             Assert.NotNull(source.ActivityVersionNavigationIdentity);
         });
+        // Spec 246 FR-004: the commit writes each new definition with the draft of its first version and no catalog
+        // version; the publish phase publishes the versions.
         var counts = await Db.CountAsync();
-        Assert.Equal((1, 4, 2, 2, 2, 2, 2), (counts.Receipts, counts.Bindings, counts.ActivityDefinitions, counts.ActivityVersions, counts.Authoring, counts.WorkflowDefinitions, counts.WorkflowVersions));
+        Assert.Equal((1, 4, 2, 0, 2, 2, 2, 2), (counts.Receipts, counts.Bindings, counts.ActivityDefinitions, counts.ActivityVersions, counts.Authoring, counts.Drafts, counts.WorkflowDefinitions, counts.WorkflowVersions));
 
         // One physical connection and one transaction carried the writes of all three contexts.
         Assert.Equal(3, applyWrites.Select(command => command.Context).Distinct().Count());
@@ -165,14 +167,15 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
         Assert.All(later.Sources, source => Assert.Equal(ReusableActivityImportResourceDisposition.Reused, source.ActivityDefinitionDisposition));
         var v2 = Assert.Single(later.Sources, x => x.SourceVersionId == "a-v2");
         Assert.Equal(ReusableActivityImportResourceDisposition.Created, v2.ActivityVersionDisposition);
+        // A version is reported created until it is published; this suite composes no publish phase (spec 246 R-4).
         if (repeatFirstVersion)
-            Assert.Equal(ReusableActivityImportResourceDisposition.Reused, Assert.Single(later.Sources, x => x.SourceVersionId == "a-v1").ActivityVersionDisposition);
+            Assert.Equal(ReusableActivityImportResourceDisposition.Created, Assert.Single(later.Sources, x => x.SourceVersionId == "a-v1").ActivityVersionDisposition);
         var counts = await Db.CountAsync();
-        Assert.Equal((1, 2, 1, 2, 2), (counts.ActivityDefinitions, counts.ActivityVersions, counts.Authoring, counts.WorkflowVersions, counts.Receipts));
-        Assert.Equal(v2.ActivityDefinitionVersionId, (await CurrentAuthoringAsync()).HeadVersionId);
+        Assert.Equal((1, 0, 1, 1, 2, 2), (counts.ActivityDefinitions, counts.ActivityVersions, counts.Authoring, counts.Drafts, counts.WorkflowVersions, counts.Receipts));
+        // The commit never moves the head: it stays empty until the publish phase publishes the first version.
+        Assert.Null((await CurrentAuthoringAsync()).HeadVersionId);
         var projection = await CurrentProjectionAsync();
-        Assert.Equal(v2.ActivityDefinitionVersionId, projection.HeadVersionId);
-        // An imported version is the head before it is ever published: the projection carries no head reference.
+        Assert.Null(projection.HeadVersionId);
         Assert.Null(projection.Head);
     }
 
@@ -195,29 +198,6 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
             await Db.Service(access).GetStatusAsync("rolled-back", Scope));
         var clean = await Db.Service(access).ApplyAsync(upload.CollectionHandle, planId, ["a-v1", "b-v1"], "rolled-back", Scope);
         Assert.Equal(ReusableActivityImportReceiptStatus.Applied, clean.Status);
-    }
-
-    [Fact]
-    public async Task Later_subset_projection_failure_rolls_back_the_head_version_and_receipt_atomically()
-    {
-        Elsa3WorkflowDefinition[] export =
-        [
-            Workflow("atomic", "atomic-v1", 1, true, Leaf("root-v1")),
-            Workflow("atomic", "atomic-v2", 2, true, Leaf("root-v2"))
-        ];
-        var (upload, planId) = await UploadAsync(Db.Service(access), Scope, export);
-        var first = await Db.Service(access).ApplyAsync(upload.CollectionHandle, planId, ["atomic-v1"], "atomic-first", Scope);
-        var v1 = Assert.Single(first.Sources).ActivityDefinitionVersionId;
-        var failing = Db.Service(access, command: Db.Command(access, activitiesInterceptors: [new SaveFailureInterceptor<ActivityManagementProjectionSnapshot>()]));
-        var (laterUpload, laterPlanId) = await UploadAsync(failing, Scope, export);
-
-        await Assert.ThrowsAsync<ReusableActivityImportPersistenceException>(async () =>
-            await failing.ApplyAsync(laterUpload.CollectionHandle, laterPlanId, ["atomic-v2"], "atomic-second", Scope));
-
-        var counts = await Db.CountAsync();
-        Assert.Equal((1, 1, 1, 2), (counts.ActivityVersions, counts.WorkflowVersions, counts.Receipts, counts.Bindings));
-        Assert.Equal(v1, (await CurrentAuthoringAsync()).HeadVersionId);
-        Assert.Equal(v1, (await CurrentProjectionAsync()).HeadVersionId);
     }
 
     /// <summary>
@@ -249,7 +229,8 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
 
         var mixed = await Db.CountAsync();
         Assert.Equal(seeded.ActivityDefinitions + 1, mixed.ActivityDefinitions);
-        Assert.Equal(seeded.ActivityVersions + 1, mixed.ActivityVersions);
+        Assert.Equal(seeded.ActivityVersions, mixed.ActivityVersions);
+        Assert.Equal(seeded.Drafts + 1, mixed.Drafts);
         Assert.Equal(seeded.Authoring + 1, mixed.Authoring);
         Assert.Equal(seeded.WorkflowDefinitions + 2, mixed.WorkflowDefinitions);
         Assert.Equal(seeded.WorkflowVersions + 2, mixed.WorkflowVersions);
@@ -398,10 +379,11 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
         Assert.Equal(ReusableActivityImportResourceDisposition.Created, sourceA.ActivityVersionDisposition);
         Assert.Equal(ReusableActivityImportResourceDisposition.Reused, sourceB.WorkflowDisposition);
         Assert.Equal(ReusableActivityImportResourceDisposition.Reused, sourceB.ActivityDefinitionDisposition);
-        Assert.Equal(ReusableActivityImportResourceDisposition.Reused, sourceB.ActivityVersionDisposition);
+        // Not yet published, so still to be created by the publish phase (spec 246 R-4).
+        Assert.Equal(ReusableActivityImportResourceDisposition.Created, sourceB.ActivityVersionDisposition);
         var counts = await Db.CountAsync();
         // Each user's apply consumed that user's own upload.
-        Assert.Equal((0, 2, 2, 1, 1, 1, 1), (counts.Collections, counts.Receipts, counts.Bindings, counts.ActivityDefinitions, counts.ActivityVersions, counts.WorkflowDefinitions, counts.WorkflowVersions));
+        Assert.Equal((0, 2, 2, 1, 0, 1, 1, 1), (counts.Collections, counts.Receipts, counts.Bindings, counts.ActivityDefinitions, counts.ActivityVersions, counts.Drafts, counts.WorkflowDefinitions, counts.WorkflowVersions));
     }
 
     [Fact]
@@ -530,15 +512,17 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
     public async Task Scoped_identity_collision_fails_without_writing_a_second_receipt()
     {
         var service = Db.Service(access);
-        var original = await UploadAsync(service, Scope, Workflow("collision", "collision-v1", 1, true, Leaf("original")));
+        // A reusable body is no longer committed as a catalog version (spec 246 FR-004); its publish phase refuses a
+        // changed body. The commit still refuses a workflow version bound to different content.
+        var original = await UploadAsync(service, Scope, Workflow("collision", "collision-v1", 1, false, Leaf("original")));
         await service.ApplyAsync(original.Upload.CollectionHandle, original.PlanId, ["collision-v1"], "collision-first", Scope);
 
-        var changed = await UploadAsync(service, Scope, Workflow("collision", "collision-v1", 1, true, Leaf("changed")));
+        var changed = await UploadAsync(service, Scope, Workflow("collision", "collision-v1", 1, false, Leaf("changed")));
         await Assert.ThrowsAsync<ReusableActivityImportCollisionException>(async () =>
             await service.ApplyAsync(changed.Upload.CollectionHandle, changed.PlanId, ["collision-v1"], "collision-second", Scope));
 
         var counts = await Db.CountAsync();
-        Assert.Equal((1, 1), (counts.Receipts, counts.ActivityVersions));
+        Assert.Equal((1, 1), (counts.Receipts, counts.WorkflowVersions));
     }
 
     [Fact]
@@ -613,7 +597,7 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
         Assert.Equal(ReusableActivityImportReceiptStatus.AlreadyImported, replayed.Status);
         Assert.Equal(reconciled.ReceiptId, replayed.ReceiptId);
         var counts = await Db.CountAsync();
-        Assert.Equal((1, 4, 2, 2, 2, 2), (counts.Receipts, counts.Bindings, counts.ActivityDefinitions, counts.ActivityVersions, counts.WorkflowDefinitions, counts.WorkflowVersions));
+        Assert.Equal((1, 4, 2, 0, 2, 2, 2), (counts.Receipts, counts.Bindings, counts.ActivityDefinitions, counts.ActivityVersions, counts.Drafts, counts.WorkflowDefinitions, counts.WorkflowVersions));
     }
 
     [Theory]
@@ -667,7 +651,7 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
         finally
         {
             await other.DisposeAsync();
-            TemporarySqliteDatabase.ClearPoolAndDeleteFiles(otherPath);
+            TemporarySqliteDatabase.ClearPoolAndDeleteFiles(SqliteImportHarness.ConnectionStringFor(otherPath));
         }
     }
 
@@ -707,12 +691,14 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
         var reusable = Assert.Single(applied.Sources, x => x.SourceVersionId == "a-v1");
         var consumer = Assert.Single(applied.Sources, x => x.SourceVersionId == "consumer-v1");
         var stores = new EfActivityDesignStores(restarted.Activities(), access);
-        var version = await ((IActivityDefinitionVersionStore)stores).GetAsync(reusable.ActivityDefinitionVersionId!);
-        Assert.Equal("elsa.activity-graph", version.ProviderKey);
-        Assert.Equal("a-v1", version.SourceId);
+        // The version waits for the publish phase in its draft (spec 246 R-4); the definition has no head yet.
+        Assert.Empty(await ((IActivityDefinitionVersionStore)stores).ListByDefinitionAsync(reusable.ActivityDefinitionId!));
+        var draft = Assert.Single(await ((IActivityDefinitionDraftStore)stores).ListByDefinitionAsync(reusable.ActivityDefinitionId!));
+        Assert.Equal("elsa.activity-graph", draft.State.Provider.ProviderKey);
+        Assert.Equal(Elsa.Activities.Design.Core.Models.ActivityDefinitionDraftStatus.Active, draft.Status);
         var definitionProjection = await stores.FindDefinitionAsync(reusable.ActivityDefinitionId!, "tenant-a");
         Assert.NotNull(definitionProjection);
-        Assert.Equal(reusable.ActivityDefinitionVersionId, definitionProjection.HeadVersionId);
+        Assert.Null(definitionProjection.HeadVersionId);
         var workflows = restarted.Workflows();
         var workflowDefinitions = new EfWorkflowDefinitionStore(workflows, access);
         var workflowVersion = await new EfWorkflowDefinitionVersionStore(workflows, Serializer(), workflowDefinitions, access)
@@ -756,6 +742,26 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
         Assert.Null(first.Receipt);
         await using var activities = Db.Activities();
         Assert.All(await activities.ActivityDefinitions.AsNoTracking().ToListAsync(), row => Assert.Equal("tenant-a", row.TenantId));
+    }
+
+    [Fact]
+    public async Task The_stored_receipt_keeps_conversion_warnings_and_never_publication_states()
+    {
+        // Spec 246 D-3: the warnings describe the conversion, so a status read returns the ones the apply did. A declared
+        // outcome no Complete reaches is one (ELS3-BEHAVIOUR-OUTCOME-UNREACHED).
+        var reusable = Workflow("warned", "warned-v1", 1, true, Leaf("root"));
+        reusable.Outcomes = ["never"];
+        var (upload, planId) = await UploadAsync(Db.Service(access), Scope, reusable);
+
+        var applied = await Db.Service(access).ApplyAsync(upload.CollectionHandle, planId, ["warned-v1"], "warned", Scope);
+        var status = await Db.Service(access).GetStatusAsync("warned", Scope);
+
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.OutcomeUnreached, Assert.Single(applied.Warnings!).Code);
+        Assert.Equal(applied.Warnings!.Select(warning => (warning.Code, warning.Message)), status.Warnings!.Select(warning => (warning.Code, warning.Message)));
+        await using var import = Db.Import();
+        var stored = (await import.Receipts.AsNoTracking().SingleAsync()).ContentJson;
+        Assert.Contains(Elsa3ActivityDiagnosticCodes.OutcomeUnreached, stored, StringComparison.Ordinal);
+        Assert.DoesNotContain("publications", stored, StringComparison.OrdinalIgnoreCase);
     }
 
     private static async Task<(ReusableActivityImportUploadResult Upload, string PlanId)> UploadAsync(

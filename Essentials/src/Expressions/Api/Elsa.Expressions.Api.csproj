@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="CShells.AspNetCore.Abstractions" />
@@ -15,6 +19,10 @@
 
   <ItemGroup>
     <PackageReference Include="NativeEndpoints" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Expressions.Api.Tests" />
   </ItemGroup>
 
 </Project>

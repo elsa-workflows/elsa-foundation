@@ -5,6 +5,7 @@ using Elsa.Foundation.Identity.OpenIddict;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using OpenIddict.Abstractions;
 using OpenIddict.Validation.AspNetCore;
 
 namespace Elsa.Foundation.Identity.Tests.OpenIddict;
@@ -20,7 +21,7 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
     [Fact]
     public async Task Issue_Produces_Signed_Readable_Jwt_With_Subject_Tenant_And_Permission_Claims()
     {
-        var issued = await _fixture.IssueAsync("user-7", "tenant-x", "identity.users.read", "identity.roles.read");
+        var issued = await _fixture.IssueAsync("user-7", "tenant-x", "identity/users:read", "identity/roles:read");
 
         var jwt = new JsonWebToken(issued.AccessToken);
 
@@ -35,8 +36,8 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
         Assert.True(jwt.TryGetClaim("oi_tkn_id", out _), "the JWT should reference its token-store entry");
 
         var permissions = jwt.Claims.Where(x => x.Type == IdentityClaimTypes.Permission).Select(x => x.Value).ToList();
-        Assert.Contains("identity.users.read", permissions);
-        Assert.Contains("identity.roles.read", permissions);
+        Assert.Contains("identity/users:read", permissions);
+        Assert.Contains("identity/roles:read", permissions);
 
         Assert.NotNull(issued.RefreshToken);
         Assert.InRange(issued.ExpiresAt, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(16));
@@ -45,14 +46,14 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
     [Fact]
     public async Task Issued_Token_Validates_To_An_Authenticated_Principal_With_Claims()
     {
-        var issued = await _fixture.IssueAsync("user-8", "tenant-y", "identity.users.manage");
+        var issued = await _fixture.IssueAsync("user-8", "tenant-y", "identity/users:manage");
 
         var result = await _fixture.TokenService.ValidateAsync(new TokenValidationRequest(issued.AccessToken));
 
         Assert.True(result.Succeeded, result.Failure);
         Assert.True(result.Principal!.Identity!.IsAuthenticated);
         Assert.Equal("tenant-y", result.Principal.FindFirst(IdentityClaimTypes.TenantId)?.Value);
-        Assert.Contains("identity.users.manage", result.Principal.FindAll(IdentityClaimTypes.Permission).Select(x => x.Value));
+        Assert.Contains("identity/users:manage", result.Principal.FindAll(IdentityClaimTypes.Permission).Select(x => x.Value));
         Assert.Contains("user-8", result.Principal.FindAll("sub").Select(x => x.Value));
         Assert.Equal(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme, result.Principal.Identity!.AuthenticationType);
     }
@@ -76,6 +77,22 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
         var result = await expiring.TokenService.ValidateAsync(new TokenValidationRequest(issued.AccessToken));
 
         Assert.False(result.Succeeded);
+    }
+
+    [Fact]
+    public async Task RevokeSubject_Revokes_Live_Entries_And_Leaves_Expired_Ones_Unwritten()
+    {
+        // The access entry is born expired while its refresh entry is live, so one subject holds both kinds.
+        await using var expiring = new OpenIddictIdentityFixture(options => options.AccessTokenLifetime = TimeSpan.FromMinutes(-15));
+        var issued = await expiring.IssueAsync("user-expired");
+        var manager = expiring.Services.GetRequiredService<IOpenIddictTokenManager>();
+        var accessEntry = (await manager.FindByIdAsync(new JsonWebToken(issued.AccessToken).GetClaim("oi_tkn_id").Value))!;
+        var refreshEntry = (await manager.FindByReferenceIdAsync(issued.RefreshToken!))!;
+
+        await expiring.TokenService.RevokeSubjectAsync("user-expired");
+
+        Assert.True(await manager.HasStatusAsync(accessEntry, OpenIddictConstants.Statuses.Valid), "an expired entry must not be written");
+        Assert.True(await manager.HasStatusAsync(refreshEntry, OpenIddictConstants.Statuses.Revoked));
     }
 
     [Fact]
@@ -104,7 +121,7 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
     [Fact]
     public async Task Refresh_Rotates_Tokens_And_Preserves_Subject_Tenant_And_Scopes()
     {
-        var issued = await _fixture.IssueAsync("user-9", "tenant-z", "identity.roles.manage");
+        var issued = await _fixture.IssueAsync("user-9", "tenant-z", "identity/roles:manage");
 
         var refreshed = await _fixture.TokenService.RefreshAsync(new TokenRefreshRequest(issued.RefreshToken!));
 
@@ -112,7 +129,7 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
         var jwt = new JsonWebToken(refreshed.AccessToken);
         Assert.Equal("user-9", jwt.Subject);
         Assert.Equal("tenant-z", jwt.GetClaim(IdentityClaimTypes.TenantId).Value);
-        Assert.Contains("identity.roles.manage", jwt.Claims.Where(x => x.Type == IdentityClaimTypes.Permission).Select(x => x.Value));
+        Assert.Contains("identity/roles:manage", jwt.Claims.Where(x => x.Type == IdentityClaimTypes.Permission).Select(x => x.Value));
         Assert.True((await _fixture.TokenService.ValidateAsync(new TokenValidationRequest(refreshed.AccessToken))).Succeeded);
     }
 

@@ -105,6 +105,27 @@ public sealed class EfCoreDependencyGuardTests
     };
 
     [Fact]
+    public void Every_admitted_Rules_project_resolves_only_its_reviewed_EF_closure() =>
+        AssertReviewedModuleClosure(Adr0088FiniteRulesEf.ExpectedEfPackagesByProject, "finite Rules");
+
+    [Fact]
+    public void Every_admitted_ETL_project_resolves_only_its_reviewed_EF_closure() =>
+        AssertReviewedModuleClosure(Adr0087FiniteEtlEf.ExpectedEfPackagesByProject, "finite ETL");
+
+    private static void AssertReviewedModuleClosure(IReadOnlyDictionary<string, string[]> projects, string module)
+    {
+        var offenders = projects.SelectMany(project => RestoreConfigurations.SelectMany(configuration =>
+        {
+            var resolved = ReadProjectEfPackages(project.Key, configuration);
+            return FindUnexpectedEfPackages(resolved, project.Value)
+                .Select(package => $"{project.Key} ({configuration}) unexpectedly resolves {package}")
+                .Concat(FindUnexpectedEfPackages(project.Value, resolved)
+                    .Select(package => $"{project.Key} ({configuration}) no longer resolves reviewed package {package}"));
+        })).ToArray();
+        Assert.True(offenders.Length == 0, Report($"drift from the reviewed {module} EF closure", offenders));
+    }
+
+    [Fact]
     public void Every_admitted_Secrets_pilot_project_resolves_only_its_reviewed_EF_closure()
     {
         var offenders = Adr0072SecretsEfPilot.ExpectedEfPackagesByProject
@@ -609,20 +630,27 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// Directory.Build.props's Line A PublicApiAnalyzers wiring (#2078) is the one declared exception. Its
-    /// Condition reads $(ElsaVersionLine), a property that same file computes from $(MSBuildProjectName)
-    /// alone (VersionLines.props) - never from $(Configuration) - so the Release and Debug restore graphs
-    /// this guard reads already resolve it identically. It cannot hide a package from either one.
+    /// The declared exceptions, both in the root Directory.Build.props: the PublicApiAnalyzers reference a project opts
+    /// into with ElsaTrackPublicApi, and the naming analyzer every production project compiles with. Neither condition
+    /// reads $(Configuration): one reads a property the project file sets unconditionally, the other the project's
+    /// location. The Release and Debug restore graphs this guard reads therefore resolve both identically, and
+    /// neither can hide a package or project from one of them. An exception matches on path, element, Include and the
+    /// exact condition text, so another reference placed under the same condition is still an offender.
     /// </summary>
-    private static readonly (string RelativePath, string ElementName, string Condition) AdmittedConditionalDependency =
-        ("Directory.Build.props", "PackageReference", "'$(ElsaVersionLine)' == 'A'");
+    private static readonly (string RelativePath, string ElementName, string Include, string Condition)[] AdmittedConditionalDependencies =
+    [
+        ("Directory.Build.props", "PackageReference", "Microsoft.CodeAnalysis.PublicApiAnalyzers", "'$(ElsaTrackPublicApi)' == 'true'"),
+        ("Directory.Build.props", "ProjectReference", "$(_ElsaNamingAnalyzerProject)", "'$(ElsaIsProductionProject)' == 'true'"),
+    ];
 
     private static bool IsAdmittedConditionalDependency(string relativePath, XElement element) =>
-        relativePath.Replace('\\', '/') == AdmittedConditionalDependency.RelativePath &&
-        element.Name.LocalName == AdmittedConditionalDependency.ElementName &&
-        element.AncestorsAndSelf()
-            .SelectMany(ancestor => ancestor.Attributes())
-            .Any(attribute => attribute.Name.LocalName == "Condition" && attribute.Value == AdmittedConditionalDependency.Condition);
+        AdmittedConditionalDependencies.Any(admitted =>
+            relativePath.Replace('\\', '/') == admitted.RelativePath &&
+            element.Name.LocalName == admitted.ElementName &&
+            element.Attribute("Include")?.Value == admitted.Include &&
+            element.AncestorsAndSelf()
+                .SelectMany(ancestor => ancestor.Attributes())
+                .Any(attribute => attribute.Name.LocalName == "Condition" && attribute.Value == admitted.Condition));
 
     [Theory]
     [InlineData("<Project><ItemGroup Condition=\"'$(Configuration)' == 'Debug'\"><PackageReference Include=\"Contoso.Persistence\" /></ItemGroup></Project>")]
@@ -634,34 +662,29 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// The allowlist admits exactly the Line A PublicApiAnalyzers reference - same path, element, and
-    /// condition text - and nothing else: a different path, a different element, or a different condition
-    /// on the same element all still count as an offender.
+    /// The allowlist admits exactly the two declared references - same path, element, Include and condition text - and
+    /// nothing else: a different path, element, Include or condition still counts as an offender.
     /// </summary>
     [Fact]
-    public void Only_the_declared_line_a_analyzer_reference_is_admitted_as_a_conditional_dependency()
+    public void Only_the_declared_analyzer_references_are_admitted_as_conditional_dependencies()
     {
-        var admitted = XDocument.Parse(
-            "<Project><ItemGroup Condition=\"'$(ElsaVersionLine)' == 'A'\">" +
-            "<PackageReference Include=\"Microsoft.CodeAnalysis.PublicApiAnalyzers\" /></ItemGroup></Project>")
-            .Descendants("PackageReference").Single();
+        const string trackingCondition = "'$(ElsaTrackPublicApi)' == 'true'";
+        const string productionCondition = "'$(ElsaIsProductionProject)' == 'true'";
+        const string analyzerProject = "$(_ElsaNamingAnalyzerProject)";
 
-        Assert.True(IsAdmittedConditionalDependency("Directory.Build.props", admitted));
-        Assert.False(IsAdmittedConditionalDependency("VersionLines.props", admitted));
+        Assert.True(IsAdmittedConditionalDependency("Directory.Build.props", Reference("PackageReference", "Microsoft.CodeAnalysis.PublicApiAnalyzers", trackingCondition)));
+        Assert.True(IsAdmittedConditionalDependency("Directory.Build.props", Reference("ProjectReference", analyzerProject, productionCondition)));
 
-        var otherElement = XDocument.Parse(
-            "<Project><ItemGroup Condition=\"'$(ElsaVersionLine)' == 'A'\">" +
-            "<ProjectReference Include=\"Contoso.csproj\" /></ItemGroup></Project>")
-            .Descendants("ProjectReference").Single();
+        Assert.False(IsAdmittedConditionalDependency("VersionLines.props", Reference("PackageReference", "Microsoft.CodeAnalysis.PublicApiAnalyzers", trackingCondition)));
+        Assert.False(IsAdmittedConditionalDependency("Directory.Build.props", Reference("ProjectReference", "Contoso.csproj", trackingCondition)));
+        Assert.False(IsAdmittedConditionalDependency("Directory.Build.props", Reference("PackageReference", "Contoso.Persistence", trackingCondition)));
+        Assert.False(IsAdmittedConditionalDependency("Directory.Build.props", Reference("ProjectReference", "Contoso.csproj", productionCondition)));
+        Assert.False(IsAdmittedConditionalDependency("Directory.Build.props", Reference("PackageReference", "Microsoft.CodeAnalysis.PublicApiAnalyzers", "'$(Configuration)' == 'Debug'")));
+        Assert.False(IsAdmittedConditionalDependency("Directory.Build.props", Reference("PackageReference", "Microsoft.CodeAnalysis.PublicApiAnalyzers", "'$(ElsaVersionLine)' == 'A'")));
 
-        Assert.False(IsAdmittedConditionalDependency("Directory.Build.props", otherElement));
-
-        var otherCondition = XDocument.Parse(
-            "<Project><ItemGroup Condition=\"'$(Configuration)' == 'Debug'\">" +
-            "<PackageReference Include=\"Microsoft.CodeAnalysis.PublicApiAnalyzers\" /></ItemGroup></Project>")
-            .Descendants("PackageReference").Single();
-
-        Assert.False(IsAdmittedConditionalDependency("Directory.Build.props", otherCondition));
+        static XElement Reference(string element, string include, string condition) =>
+            XDocument.Parse($"<Project><ItemGroup Condition=\"{condition}\"><{element} Include=\"{include}\" /></ItemGroup></Project>")
+                .Descendants(element).Single();
     }
 
     private static Dictionary<string, Project> LoadModuleProjects()
@@ -692,6 +715,8 @@ public sealed class EfCoreDependencyGuardTests
                     Adr0073WorkflowsDesignEf.IsProjectPath(relativePath) ||
                     Adr0073ActivitiesDesignEf.IsProjectPath(relativePath) ||
                     Adr0073Elsa3ImportEf.IsProjectPath(relativePath) ||
+                    Adr0087FiniteEtlEf.IsProjectPath(relativePath) ||
+                    Adr0088FiniteRulesEf.IsProjectPath(relativePath) ||
                     Adr0076ActivationGuardEf.IsProjectPath(relativePath) ||
                     Spec183ReadabilityEf.IsProjectPath(relativePath) ||
                     Adr0078ClusterMembershipEf.IsProjectPath(relativePath) ||
@@ -1198,6 +1223,47 @@ public sealed class EfCoreDependencyGuardTests
             "Microsoft.EntityFrameworkCore.Analyzers",
             "Microsoft.EntityFrameworkCore.Relational"
         ];
+    }
+
+    /// <summary>The narrow Rules runtime persistence admission for #3181 and ADR 0088.</summary>
+    internal static class Adr0088FiniteRulesEf
+    {
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["Extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj"] =
+                CorePackages(),
+                ["Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj"] =
+                [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"],
+                ["Extensions/Rules/src/Tooling/Elsa.Rules.Tooling.csproj"] =
+                [.. ProviderPackages(), "Microsoft.EntityFrameworkCore.Design"],
+                ["Extensions/Rules/tests/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Rules.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
+                ProviderPackages()
+            };
+
+        public static bool IsProjectPath(string relativePath) => ExpectedEfPackagesByProject.ContainsKey(relativePath);
+
+        private static string[] ProviderPackages() =>
+            [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core",
+                "Microsoft.EntityFrameworkCore.SqlServer", "Npgsql.EntityFrameworkCore.PostgreSQL", "MySql.EntityFrameworkCore"];
+
+        private static string[] CorePackages() =>
+            ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational"];
+    }
+
+    /// <summary>The scoped ETL design module admission for #3109 and ADR 0087.</summary>
+    internal static class Adr0087FiniteEtlEf
+    {
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj"] =
+                ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational"],
+                ["Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj"] =
+                ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational", "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"]
+            };
+
+        public static bool IsProjectPath(string relativePath) => ExpectedEfPackagesByProject.ContainsKey(relativePath);
     }
 
     /// <summary>

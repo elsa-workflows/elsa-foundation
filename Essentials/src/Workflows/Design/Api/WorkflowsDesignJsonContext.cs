@@ -67,6 +67,7 @@ internal static class WorkflowsDesignJsonOptions
 [JsonSerializable(typeof(ExpressionToolingCompletionRequest))]
 [JsonSerializable(typeof(ExpressionToolingHoverRequest))]
 [JsonSerializable(typeof(ExpressionToolingSourceRequest))]
+[JsonSerializable(typeof(WorkflowDefinitionView))]
 [JsonSerializable(typeof(WorkflowDefinitionDetailsView))]
 [JsonSerializable(typeof(WorkflowDefinitionListView))]
 [JsonSerializable(typeof(WorkflowDefinitionVersionDetailsView))]

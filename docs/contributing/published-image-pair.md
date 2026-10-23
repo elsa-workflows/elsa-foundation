@@ -6,7 +6,13 @@ The published stack is a local demo: it uses demo credentials and SQLite workflo
 
 ## Prepare an isolated, pinned stack
 
-You need Docker Engine and the Compose v2 plugin. Start from the [canonical Compose file](../../docker/compose/docker-compose.images.yml) at the same Foundation revision as this guide, and save a temporary copy as `pair-compose.yml`. Keep its configuration, including the Studio login-return origin, unchanged.
+You need Docker Engine and the Compose v2 plugin. Start from the canonical Compose file at the recorded Foundation revision [`48bfcea5f5bc8c05189e9b5f334064e8408ffcba`](https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/48bfcea5f5bc8c05189e9b5f334064e8408ffcba/docker/compose/docker-compose.images.yml), not the current-tree [canonical Compose file](../../docker/compose/docker-compose.images.yml), and save a temporary copy as `pair-compose.yml`:
+
+```bash
+curl -fLo pair-compose.yml https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/48bfcea5f5bc8c05189e9b5f334064e8408ffcba/docker/compose/docker-compose.images.yml
+```
+
+Keep its configuration, including the Studio login-return origin, unchanged.
 
 Choose a unique Compose project name. **Before starting anything**, check that host ports `13000` and `14000` are unused and that no existing containers, network, or volumes use that project name. If project resources already exist, choose another project name. If either port is occupied, wait until it is free; do not stop another process. Keep these ports because the browser URLs and login-return configuration depend on them.
 

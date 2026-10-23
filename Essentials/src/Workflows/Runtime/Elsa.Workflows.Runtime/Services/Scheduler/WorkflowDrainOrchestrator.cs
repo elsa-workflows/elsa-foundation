@@ -8,6 +8,8 @@ using Elsa.Workflows.Runtime.Services.Coalescing;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Incidents;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Workflows.Runtime.Services.Scheduler;
 
@@ -33,6 +35,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
     private readonly IPostCommitOutboxLookupStore _outboxLookupStore;
     private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
     private readonly TimeProvider _timeProvider;
+    private readonly ILogger<WorkflowDrainOrchestrator> _logger;
 
     /// <summary>
     /// Creates the orchestrator for a caller-owned ownership service. C1 (#1227): the six telescoping constructors
@@ -63,7 +66,8 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory = null,
         IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor = null,
         IRuntimePersistenceModeResolver? persistenceModeResolver = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        ILogger<WorkflowDrainOrchestrator>? logger = null)
         : this(
             schedulerDrainer,
             postCommitOutboxProcessor,
@@ -79,7 +83,8 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             liveDrainDeliveryAccessor,
             persistenceModeResolver,
             timeProvider,
-            heartbeatScopeFactory: null)
+            heartbeatScopeFactory: null,
+            logger)
     {
     }
 
@@ -102,7 +107,8 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory = null,
         IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor = null,
         IRuntimePersistenceModeResolver? persistenceModeResolver = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        ILogger<WorkflowDrainOrchestrator>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(heartbeatScopeFactory);
         return new WorkflowDrainOrchestrator(
@@ -120,7 +126,8 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             liveDrainDeliveryAccessor,
             persistenceModeResolver,
             timeProvider,
-            heartbeatScopeFactory);
+            heartbeatScopeFactory,
+            logger);
     }
 
     private WorkflowDrainOrchestrator(
@@ -138,7 +145,8 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor,
         IRuntimePersistenceModeResolver? persistenceModeResolver,
         TimeProvider? timeProvider,
-        IPersistenceOperationScopeFactory? heartbeatScopeFactory)
+        IPersistenceOperationScopeFactory? heartbeatScopeFactory,
+        ILogger<WorkflowDrainOrchestrator>? logger)
     {
         ArgumentNullException.ThrowIfNull(schedulerDrainer);
         ArgumentNullException.ThrowIfNull(postCommitOutboxProcessor);
@@ -174,6 +182,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         _outboxLookupStore = outboxLookupStore;
         _schedulerWorkQueue = schedulerWorkQueue;
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _logger = logger ?? NullLogger<WorkflowDrainOrchestrator>.Instance;
     }
 
     public async ValueTask<RuntimeSchedulerDrainResult> DrainAsync(
@@ -338,39 +347,29 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
                 "Call AddPersistenceModes() after the workflows runtime and its persistence provider are registered.");
         }
 
-        // The mode is resolved per execution: the mode the run recorded at start on later drains, otherwise the pinned
-        // workflow's choice, otherwise the host default. Without a resolver the host default is Durable, and whether the
-        // run has a record is unknown, so assuming it has one keeps its completion committed.
-        var resolved = _persistenceModeResolver is not null
-            ? await _persistenceModeResolver.ResolveAsync(envelope, cancellationToken)
-            : new ResolvedPersistenceMode(PersistenceMode.Durable, RunHasRecord: true);
+        // Nor can a run drain in a mode nothing resolved for it.
+        if (_persistenceModeResolver is null)
+        {
+            throw new InvalidOperationException(
+                $"Workflow execution '{request.WorkflowExecutionId}' cannot drain because this host has no persistence-mode resolver. " +
+                "AddWorkflowRuntime() registers one.");
+        }
 
-        // The session folds the run's checkpoints between commits: one activity's into each commit under Durable, up to
-        // the host's cap under Balanced, and until a boundary under Ephemeral. Establish it for the drain, then
-        // fold-and-flush the buffered segment at quiescence. The flush runs inside the active ownership scope so
-        // single-writer fencing gates the single durable write. If the drain throws, the flush is skipped and the scope
-        // is disposed with its buffer discarded, so a crash mid-segment replays from the last flushed state plus durable
-        // scheduler-queue redelivery.
-        await using var scope = _coalescingScopeFactory.Begin(request.WorkflowExecutionId, resolved);
-        // A session that stops folding part-way through the drain (at a boundary that ends it, or on a queue that cannot
-        // delete by identity) commits the rest of the drain checkpoint by checkpoint. This drain owns the execution, so
-        // those continuations are delivered in memory rather than through a durable claim; while the session folds, its
-        // overlay delivers them and the live-drain scope does not engage.
+        // The mode is resolved per execution: the mode the run recorded at its first commit, or before that the mode its
+        // start carries, whichever command starts this drain.
+        var resolved = await _persistenceModeResolver.ResolveAsync(envelope, cancellationToken);
+
+        // The scheduler loop owns each coalesced segment. A resume claim boundary ends one segment, dispatches
+        // its durable item, and starts a fresh segment for subsequent replayable work under the same ownership lease.
         using var liveDrainScope = _liveDrainDeliveryAccessor?.Push(new RuntimeLiveDrainDeliveryScope(request.WorkflowExecutionId));
-        scope.Session.BindDurableValuePageReuseCancellationToken(cancellationToken);
-        // Drain cancellation also covers ownership-lease loss. This callback fences only the memo's synchronized state;
-        // the existing overlay and session cancellation behavior remain on the normal drain path.
-        using var pageReuseCancellation = cancellationToken.Register(
-            static state => ((RuntimeCoalescingSession)state!).DisableDurableValuePageReuse(),
-            scope.Session);
-        var drainResult = await DrainSchedulerAndPostCommitWorkAsync(request, cancellationToken);
-        await scope.FlushAtQuiescenceAsync(cancellationToken);
+        var drainResult = await DrainSchedulerAndPostCommitWorkAsync(request, resolved, cancellationToken);
         await NotifyObserversAsync(envelope, drainResult, cancellationToken);
         return drainResult;
     }
 
     private async ValueTask<RuntimeSchedulerDrainResult> DrainSchedulerAndPostCommitWorkAsync(
         RuntimeSchedulerDrainRequest request,
+        ResolvedPersistenceMode resolved,
         CancellationToken cancellationToken)
     {
         RuntimeSchedulerDrainResult? firstDrainResult = null;
@@ -378,51 +377,130 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         var itemResults = new List<RuntimeSchedulerWorkItemResult>();
         var outboxDeliveryResults = new List<RuntimePostCommitOutboxProcessResult>();
         var stopReason = RuntimeSchedulerDrainStopReason.Quiesced;
-        var completed = false;
         var continuationWait = new ContinuationWaitDeadline(_options.ContinuationClaimWaitLimit);
+        var cycles = new DrainCycleBudget(_options, request.WorkflowExecutionId, _logger);
 
-        for (var cycle = 0; cycle < _options.MaxDrainCycles; cycle++)
+        var (coalescingScope, pageReuseCancellation) = BeginSegment(resolved);
+        var claimDurably = false;
+        try
         {
-            var drainResult = await _schedulerDrainer.DrainAsync(request, cancellationToken);
-            firstDrainResult ??= drainResult;
-            lastDrainResult = drainResult;
-            itemResults.AddRange(drainResult.Items);
-
-            if (drainResult.StoppedOnFault || drainResult.StoppedOnPause)
+            while (true)
             {
-                stopReason = drainResult.StoppedOnFault
-                    ? RuntimeSchedulerDrainStopReason.Faulted
-                    : RuntimeSchedulerDrainStopReason.Paused;
-                completed = true;
+                cycles.BeginCycle();
+                // After flushing at a resume boundary, dispatch only one durable item. Letting this call
+                // drain the remaining queue would commit every subsequent checkpoint individually.
+                var drainRequest = claimDurably
+                    ? new RuntimeSchedulerDrainRequest(request.WorkflowExecutionId, 1, request.AmbientServices)
+                    : request;
+                var drainResult = await _schedulerDrainer.DrainAsync(drainRequest, cancellationToken);
+                var durableClaimBoundary = coalescingScope.Session.ConsumeDurableSchedulerClaimBoundaryRequest();
+                cycles.RecordDispatched(drainResult, countEmptyAsNoProgress: !durableClaimBoundary);
+                firstDrainResult ??= drainResult;
+                lastDrainResult = drainResult;
+                itemResults.AddRange(drainResult.Items);
+
+                var restartCoalescing = claimDurably && drainResult.Items.Count == 1 &&
+                    drainResult.Items.Single().Status == RuntimeSchedulerWorkItemResultStatus.Completed &&
+                    !drainResult.StoppedOnTerminalStatus;
+                claimDurably = false;
+
+                // Flush before claiming the resume so a later visibility backoff updates the durable row. A deferral,
+                // pause, fault or empty claim never restarts coalescing; successful dispatch can start the next segment after its outbox settles.
+                if (durableClaimBoundary)
+                {
+                    await coalescingScope.FlushAtQuiescenceAsync(cancellationToken);
+                    claimDurably = true;
+                }
+
+                if (drainResult.StoppedOnDeferral)
+                {
+                    stopReason = RuntimeSchedulerDrainStopReason.Deferred;
+                    break;
+                }
+
+                if (drainResult.StoppedOnFault || drainResult.StoppedOnPause)
+                {
+                    stopReason = drainResult.StoppedOnFault
+                        ? RuntimeSchedulerDrainStopReason.Faulted
+                        : RuntimeSchedulerDrainStopReason.Paused;
+                    break;
+                }
+
+                ContinuationSettlement settlement;
+                var handoffDeliveredContinuation = false;
+                while (true)
+                {
+                    // A new overlay does not contain the resume's durable outbox. Finish delivering its batches and
+                    // settling competing claims while the old session is inactive, before starting the next segment.
+                    var outboxResult = await _postCommitOutboxProcessor.ProcessAsync(
+                        ContinuationDelivery(request.WorkflowExecutionId), cancellationToken);
+                    outboxDeliveryResults.Add(outboxResult);
+                    if (outboxResult.DeliveredCount > 0)
+                    {
+                        if (restartCoalescing)
+                        {
+                            handoffDeliveredContinuation = true;
+                            cycles.BeginContinuationOnlyCycle([outboxResult]);
+                            continue;
+                        }
+                        settlement = ContinuationSettlement.DrainAgain;
+                        break;
+                    }
+
+                    var resultsBeforeSettlement = outboxDeliveryResults.Count;
+                    HashSet<string>? settledDeliveryIds = restartCoalescing ? new(StringComparer.Ordinal) : null;
+                    settlement = await AnyOwnDeliveryStillFailedAsync(outboxDeliveryResults, cancellationToken)
+                        ? ContinuationSettlement.Undelivered
+                        : durableClaimBoundary
+                            ? ContinuationSettlement.DrainAgain
+                            : await SettleContinuationsAsync(request, drainResult, outboxResult, outboxDeliveryResults, continuationWait, settledDeliveryIds, cancellationToken);
+                    if (restartCoalescing && settlement == ContinuationSettlement.ConcurrentDeliverySettled)
+                    {
+                        handoffDeliveredContinuation = true;
+                        // The other deliverer may have held the batch's first row. Probe the durable outbox again
+                        // even when it finished elsewhere and this processor recorded no successful delivery itself.
+                        cycles.BeginContinuationOnlyCycle(outboxDeliveryResults.Skip(resultsBeforeSettlement), settledDeliveryIds);
+                        continue;
+                    }
+                    break;
+                }
+
+                // Delivery has always advanced the next scheduler cycle even when this cycle reached its item cap.
+                // Exhausting the handoff batches must not erase that signal and report an emitted next step settled.
+                if (restartCoalescing && handoffDeliveredContinuation && settlement == ContinuationSettlement.Quiesced)
+                    settlement = ContinuationSettlement.DrainAgain;
+
+                if (settlement is ContinuationSettlement.DrainAgain or ContinuationSettlement.ConcurrentDeliverySettled)
+                {
+                    if (restartCoalescing)
+                    {
+                        // Start with durable state and a fresh read memo; never reactivate the previous overlay.
+                        var nextMode = new ResolvedPersistenceMode(
+                            coalescingScope.Session.Mode, coalescingScope.Session.HasDurableRecord);
+                        pageReuseCancellation.Dispose();
+                        await coalescingScope.DisposeAsync();
+                        (coalescingScope, pageReuseCancellation) = BeginSegment(nextMode);
+                    }
+                    continue;
+                }
+
+                stopReason = settlement == ContinuationSettlement.Quiesced
+                    ? RuntimeSchedulerDrainStopReason.Quiesced
+                    : RuntimeSchedulerDrainStopReason.OutboxDeliveryFailed;
                 break;
             }
 
-            var outboxResult = await _postCommitOutboxProcessor.ProcessAsync(
-                ContinuationDelivery(request.WorkflowExecutionId),
-                cancellationToken);
-            outboxDeliveryResults.Add(outboxResult);
-
-            if (outboxResult.DeliveredCount > 0)
-                continue;
-
-            var settlement = await AnyOwnDeliveryStillFailedAsync(outboxDeliveryResults, cancellationToken)
-                ? ContinuationSettlement.Undelivered
-                : await SettleContinuationsAsync(request, drainResult, outboxResult, outboxDeliveryResults, continuationWait, cancellationToken);
-            if (settlement == ContinuationSettlement.DrainAgain)
-                continue;
-
-            stopReason = settlement == ContinuationSettlement.Quiesced
-                ? RuntimeSchedulerDrainStopReason.Quiesced
-                : RuntimeSchedulerDrainStopReason.OutboxDeliveryFailed;
-            completed = true;
-            break;
+            // Skip the flush when draining throws: replay starts from the last durable segment instead.
+            await coalescingScope.FlushAtQuiescenceAsync(cancellationToken);
+        }
+        finally
+        {
+            pageReuseCancellation.Dispose();
+            await coalescingScope.DisposeAsync();
         }
 
         if (lastDrainResult is null || firstDrainResult is null)
             throw new InvalidOperationException("Workflow execution draining did not produce a scheduler drain result.");
-
-        if (!completed)
-            throw new DrainCycleLimitExceededException(request.WorkflowExecutionId, _options.MaxDrainCycles);
 
         return new RuntimeSchedulerDrainResult(
             workflowExecutionId: request.WorkflowExecutionId,
@@ -431,6 +509,17 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             items: itemResults,
             outboxDeliveryResults: outboxDeliveryResults,
             stopReason: stopReason);
+
+        // Begin and replace in this async context so the ambient accessor frame is visible to the next dispatch.
+        (IRuntimeCoalescingDrainScope Scope, CancellationTokenRegistration Cancellation) BeginSegment(ResolvedPersistenceMode mode)
+        {
+            var scope = _coalescingScopeFactory!.Begin(request.WorkflowExecutionId, mode);
+            scope.Session.BindDurableValuePageReuseCancellationToken(cancellationToken);
+            var registration = cancellationToken.Register(
+                static state => ((RuntimeCoalescingSession)state!).DisableDurableValuePageReuse(),
+                scope.Session);
+            return (scope, registration);
+        }
     }
 
     private RuntimePostCommitOutboxProcessRequest ContinuationDelivery(string workflowExecutionId) =>
@@ -455,6 +544,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         RuntimePostCommitOutboxProcessResult outboxResult,
         List<RuntimePostCommitOutboxProcessResult> outboxDeliveryResults,
         ContinuationWaitDeadline continuationWait,
+        ICollection<string>? settledDeliveryIds,
         CancellationToken cancellationToken)
     {
         var workflowExecutionId = request.WorkflowExecutionId;
@@ -481,7 +571,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
                 if (delivery.FailedCount > 0)
                     return ContinuationSettlement.Undelivered;
                 if (delivery.DeliveredCount > 0)
-                    return ContinuationSettlement.DrainAgain;
+                    return ContinuationSettlement.ConcurrentDeliverySettled;
             }
 
             var deadline = continuationWait.StartOrGet(now);
@@ -496,9 +586,9 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         // The other deliverer finished. A delivery that failed for good is no longer listed, so the items are looked up: a
         // failure ends the drain as above, otherwise the work they queued is drained next.
         if (taken.Count > 0)
-            return await AnyDeliveryFailedAsync(taken, cancellationToken)
+            return await AnyDeliveryFailedAsync(taken, cancellationToken, settledDeliveryIds)
                 ? ContinuationSettlement.Undelivered
-                : ContinuationSettlement.DrainAgain;
+                : ContinuationSettlement.ConcurrentDeliverySettled;
 
         return await HasUndrainedWorkAsync(request, drainResult, cancellationToken)
             ? ContinuationSettlement.DrainAgain
@@ -569,13 +659,18 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         return false;
     }
 
-    private async ValueTask<bool> AnyDeliveryFailedAsync(IEnumerable<string> outboxItemIds, CancellationToken cancellationToken)
+    private async ValueTask<bool> AnyDeliveryFailedAsync(
+        IEnumerable<string> outboxItemIds,
+        CancellationToken cancellationToken,
+        ICollection<string>? settledDeliveryIds = null)
     {
         foreach (var outboxItemId in outboxItemIds)
         {
             var item = await _outboxLookupStore.FindAsync(outboxItemId, cancellationToken);
             if (item?.Status is RuntimePostCommitOutboxStatus.FailedRetryable or RuntimePostCommitOutboxStatus.FailedFinal)
                 return true;
+            if (item?.Status == RuntimePostCommitOutboxStatus.Delivered)
+                settledDeliveryIds?.Add(outboxItemId);
         }
 
         return false;
@@ -609,6 +704,9 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         /// <summary>Work for the execution may be queued that this drain has not run yet.</summary>
         DrainAgain,
 
+        /// <summary>A competing delivery settled; probe for more durable outbox work before replacing a segment.</summary>
+        ConcurrentDeliverySettled,
+
         /// <summary>
         /// A continuation was not delivered: another deliverer still held it when the wait limit passed, or failed it. The
         /// drain stops with <see cref="RuntimeSchedulerDrainStopReason.OutboxDeliveryFailed"/>, the status it reports for a
@@ -627,6 +725,82 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         private DateTimeOffset? _deadline;
 
         public DateTimeOffset StartOrGet(DateTimeOffset now) => _deadline ??= now + limit;
+    }
+
+    /// <summary>
+    /// Counts one drain request's cycles against the drain cycle limits (#2661). A cycle makes progress when it dispatched a
+    /// work item this drain had not dispatched before. Each follow-up work item id is derived from the hop that produced it
+    /// (<see cref="Checkpoints.RuntimeChainId"/>), so a run that advances dispatches new ids, while a drain that keeps
+    /// delivering work that dispatches nothing, or dispatches the same work item again, does not. Only consecutive cycles
+    /// without progress count toward <see cref="WorkflowDrainOrchestratorOptions.MaxCyclesWithoutProgress"/>, so that limit
+    /// stops a drain that cycles without new work and does not limit how long a workflow is. During the durable resume
+    /// handoff, delivery of a new outbox ID also advances the count because scheduler dispatch waits for that handoff.
+    /// <see cref="WorkflowDrainOrchestratorOptions.MaxTotalDrainCycles"/> counts every cycle.
+    /// </summary>
+    private sealed class DrainCycleBudget(WorkflowDrainOrchestratorOptions options, string workflowExecutionId, ILogger logger)
+    {
+        private readonly HashSet<string> _dispatchedWorkItemIds = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _deliveredHandoffOutboxIds = new(StringComparer.Ordinal);
+        private int _cycles;
+        private int _cyclesWithoutProgress;
+
+        /// <summary>
+        /// Throws when a limit forbids another cycle, and logs one warning when the drain starts its first cycle past
+        /// <see cref="WorkflowDrainOrchestratorOptions.DrainCycleWarningThreshold"/>.
+        /// </summary>
+        public void BeginCycle()
+        {
+            if (_cyclesWithoutProgress >= options.MaxCyclesWithoutProgress)
+                throw new DrainCycleLimitExceededException(workflowExecutionId, DrainCycleLimit.CyclesWithoutProgress, options.MaxCyclesWithoutProgress, _cycles);
+
+            if (options.MaxTotalDrainCycles is { } maxTotalDrainCycles && _cycles >= maxTotalDrainCycles)
+                throw new DrainCycleLimitExceededException(workflowExecutionId, DrainCycleLimit.TotalCycles, maxTotalDrainCycles, _cycles);
+
+            _cycles++;
+            if (_cycles == options.DrainCycleWarningThreshold + 1)
+            {
+                logger.LogWarning(
+                    new EventId(68117, "WorkflowDrainCycleWarningThresholdPassed"),
+                    "Workflow execution {WorkflowExecutionId} started cycle {Cycle} of one drain, past the warning threshold of {DrainCycleWarningThreshold} cycles. " +
+                    "The drain runs until it settles unless {MaxCyclesWithoutProgress} cycles in a row dispatch no new work item or it reaches MaxTotalDrainCycles ({MaxTotalDrainCycles}).",
+                    workflowExecutionId,
+                    _cycles,
+                    options.DrainCycleWarningThreshold,
+                    options.MaxCyclesWithoutProgress,
+                    options.MaxTotalDrainCycles);
+            }
+        }
+
+        // A handoff batch advances only when it durably delivers a new outbox ID. Repeated IDs cannot defeat the
+        // no-progress guard; all batches still count toward the total-cycle limit and share the wait deadline.
+        public void BeginContinuationOnlyCycle(
+            IEnumerable<RuntimePostCommitOutboxProcessResult> results,
+            IEnumerable<string>? settledDeliveryIds = null)
+        {
+            BeginCycle();
+            var progressed = false;
+            foreach (var id in settledDeliveryIds ?? [])
+                progressed |= _deliveredHandoffOutboxIds.Add(id);
+            foreach (var item in results.SelectMany(result => result.Items))
+                if (!item.IsSuperseded && item.RequestedDeliveryResultStatus == RuntimePostCommitOutboxStatus.Delivered)
+                    progressed |= _deliveredHandoffOutboxIds.Add(item.OutboxItemId);
+            if (progressed)
+                _cyclesWithoutProgress = 0;
+            else
+                _cyclesWithoutProgress++;
+        }
+
+        public void RecordDispatched(RuntimeSchedulerDrainResult drainResult, bool countEmptyAsNoProgress = true)
+        {
+            var progressed = false;
+            foreach (var item in drainResult.Items)
+                progressed |= _dispatchedWorkItemIds.Add(item.WorkItemId);
+
+            if (progressed)
+                _cyclesWithoutProgress = 0;
+            else if (countEmptyAsNoProgress)
+                _cyclesWithoutProgress++;
+        }
     }
 
     private async ValueTask NotifyObserversAsync(

@@ -4,6 +4,7 @@ using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
+using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.Api.Coalescing;
@@ -97,6 +98,7 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         services.TryAddScoped<IWorkflowExecutionStartService>(sp => sp.GetRequiredService<WorkflowExecutionStartService>());
         services.TryAddScoped<ActivityExecutionInspectionService>();
         services.TryAddScoped<IActivityExecutionInspectionService>(sp => sp.GetRequiredService<ActivityExecutionInspectionService>());
+        services.TryAddScoped<WorkflowInstanceDeletionService>();
         services.TryAddScoped<WorkflowInstanceDetailsService>();
         services.TryAddScoped<IWorkflowInstanceDetailsService>(sp => sp.GetRequiredService<WorkflowInstanceDetailsService>());
         services.TryAddScoped<WorkflowInstanceListService>();
@@ -107,14 +109,20 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         services.TryAddScoped<IWorkflowDispatchInspectionService>(sp => sp.GetRequiredService<WorkflowDispatchInspectionService>());
         services.TryAddScoped<RuntimeDiagnosticsSettingsService>();
         services.TryAddScoped<IRuntimeDiagnosticsSettingsService>(sp => sp.GetRequiredService<RuntimeDiagnosticsSettingsService>());
+        services.TryAddScoped<ActivityExecutionStateViewService>();
+        services.TryAddScoped<IActivityExecutionStateViewService>(sp => sp.GetRequiredService<ActivityExecutionStateViewService>());
+        services.TryAddSingleton<ActivityStateViewProjectorRegistry>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateActivityStateViewProjectorsStartupTask>());
+        services.TryAddScoped<HttpContextWorkflowRuntimeOperatorAccess>();
+        services.TryAddScoped<IWorkflowRuntimeOperatorAccess>(sp => sp.GetRequiredService<HttpContextWorkflowRuntimeOperatorAccess>());
         services.TryAddScoped<WorkflowAlterationPlanApiService>();
         services.TryAddScoped<IWorkflowAlterationPlanApiService>(sp => sp.GetRequiredService<WorkflowAlterationPlanApiService>());
 
         services.TryAddScoped<IActivityInspectionContextAsync>(sp => sp.GetRequiredService<HttpContextActivityExecutionInspectionAuthorizationContext>());
         services.EnsureReplacementContract<IActivityInspectionContextAsync, HttpContextActivityExecutionInspectionAuthorizationContext>();
-        // Resolves the persistence mode for the instance detail view. Reads the host options optionally (via
-        // IEnumerable), so a run that recorded no mode reports the host default, or Durable on a host that composes the
-        // runtime without the persistence modes.
+        // Resolves the persistence mode for the instance detail view: the mode a run recorded, otherwise the host default
+        // from the options the persistence modes register. It reads them only when it reports a default, so the view
+        // resolves on a host that has not added them yet.
         services.TryAddScoped<RuntimePersistenceModeInspector>();
         services.TryAddScoped<ActivityExecutionHierarchyReader>();
         services.TryAddScoped<IActivityExecutionDescendantsReader>(sp => sp.GetRequiredService<ActivityExecutionHierarchyReader>());
@@ -128,6 +136,8 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         services.AddApiCapability(RuntimeApiCapabilities.StaticDeclaration);
         services.AddApiCapabilitySource<RuntimeOperationalCapabilitySource>();
         services.AddApiCapabilitySource<RuntimeAlterationCapabilitySource>();
+        services.AddApiCapabilitySource<RuntimeRunDeletionCapabilitySource>();
+        services.AddApiCapabilitySource<RuntimeActivityStateViewCapabilitySource>();
         services.AddPermissionContributor<WorkflowRuntimePermissionContributor>();
     }
 

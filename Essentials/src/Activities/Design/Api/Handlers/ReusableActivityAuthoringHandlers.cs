@@ -257,6 +257,12 @@ public sealed class ReusableActivityAuthoringService(
             throw MigrationUnsupported(current.State.Provider, command.TargetProviderKey, command.TargetSchemaVersion, [], exception);
         }
 
+        if (!ActivityProviderMigrationCapabilities.SupportsAuthorableMigrationFrom(
+                targetProvider,
+                command.TargetSchemaVersion,
+                current.State.Provider))
+            throw MigrationUnsupported(current.State.Provider, command.TargetProviderKey, command.TargetSchemaVersion, []);
+
         ActivityManifestMigration migration;
         try
         {

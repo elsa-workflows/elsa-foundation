@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -20,7 +21,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
     private readonly IRuntimeActivityExecutionInspectionAccumulator? _inspectionAccumulator;
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
     private readonly IWorkflowExecutableStore? _workflowExecutableStore;
-    private readonly IRuntimePersistenceModeResolver? _persistenceModeResolver;
+    private readonly IRuntimeCoalescingSessionAccessor? _sessionAccessor;
     private readonly TimeProvider _timeProvider;
     private readonly IWorkflowExecutableReader? _executableReader;
 
@@ -28,7 +29,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
     /// Constructs the handler. <paramref name="workflowExecutionStateStore"/> is optional: when supplied (the
     /// DI default — it is a registered service), the handler preserves durable instance fields (correlation id,
     /// parent, tenant) across the workflow-started/completed transitions; when null it falls back to the prior
-    /// behaviour of rebuilding workflow state from the checkpoint payload alone.
+    /// behavior of rebuilding workflow state from the checkpoint payload alone. <paramref name="sessionAccessor"/>
+    /// gives the persistence mode the drain runs in, which the workflow-started checkpoint records on the run.
     /// </summary>
     public WorkflowCheckpointSchedulerWorkHandler(
         IActivityExecutionStateStore activityExecutionStateStore,
@@ -37,7 +39,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         TimeProvider timeProvider,
         IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
         IWorkflowExecutableStore? workflowExecutableStore = null,
-        IRuntimePersistenceModeResolver? persistenceModeResolver = null,
+        IRuntimeCoalescingSessionAccessor? sessionAccessor = null,
         IWorkflowExecutableReader? executableReader = null)
     {
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
@@ -49,7 +51,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         _inspectionAccumulator = inspectionAccumulator;
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _workflowExecutableStore = workflowExecutableStore;
-        _persistenceModeResolver = persistenceModeResolver;
+        _sessionAccessor = sessionAccessor;
         _timeProvider = timeProvider;
         _executableReader = executableReader;
     }
@@ -150,10 +152,12 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             ? await PinnedExecutableRead.FindAsync(_executableReader, _workflowExecutableStore, payload.PinnedExecutable.ArtifactId, cancellationToken)
             : null;
 
-        // At start, resolve the run's persistence mode (the workflow's choice over the host default) and record it on
-        // the durable instance. Later drains read it back so the run keeps its mode, and the read model reports the mode
-        // the run actually used. Other checkpoints carry it forward via PreserveSystemMetadata.
-        var persistenceMode = executable is not null ? _persistenceModeResolver?.Resolve(executable) : null;
+        // At start, record the mode this drain runs the run in on the durable instance. Later drains read it back so the
+        // run keeps its mode, and the read model reports the mode the run actually used. Other checkpoints carry it
+        // forward via PreserveSystemMetadata.
+        var persistenceMode = StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.WorkflowStarted)
+            ? DrainModeOf(workItem.WorkflowExecutionId)
+            : null;
 
         return new RuntimeCheckpointCommit(
             CommitId: commitId,
@@ -169,7 +173,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 scheduler: null,
                 activityExecutions: activityStateChanges.ToArray(),
                 bookmarks: [],
-                durableValues: BuildSeedDurableValueChanges(workItem, payload, occurredAt),
+                durableValues: BuildSeedDurableValueChanges(workItem, payload, occurredAt, priorWorkflowState),
                 incidents: [],
                 operational: [],
                 activityExecutionInspections: activityInspectionChanges.ToArray()),
@@ -184,11 +188,18 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
     private static IReadOnlyCollection<RuntimeStateChange<DurableValueState>> BuildSeedDurableValueChanges(
         RuntimeSchedulerWorkItem workItem,
         RuntimeCheckpointCommandPayload payload,
-        DateTimeOffset occurredAt)
+        DateTimeOffset occurredAt,
+        WorkflowExecutionState? priorWorkflowState)
     {
+        // Only the start seeds the correlation id; later checkpoints must not overwrite a Correlate assignment.
+        var correlationId = StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.WorkflowStarted)
+            ? priorWorkflowState?.CorrelationId ?? payload.CorrelationId
+            : null;
+
         // SeedVariables are NOT written to the durable-value channel (#972): caller-supplied variable
         // values overlay the root variable frame in CreateRootVariableFrame, the single runtime truth.
-        if (payload.SeedInputs.Count == 0 && payload.SeedStimulusInput is null && string.IsNullOrWhiteSpace(payload.SeedTriggerNodeId) && payload.SeedTriggerMetadata.Count == 0)
+        if (payload.SeedInputs.Count == 0 && payload.SeedStimulusInput is null && string.IsNullOrWhiteSpace(payload.SeedTriggerNodeId) && payload.SeedTriggerMetadata.Count == 0 &&
+            string.IsNullOrWhiteSpace(correlationId))
             return [];
 
         return RuntimeWorkflowStateSeed.BuildSeedChanges(
@@ -197,7 +208,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             occurredAt,
             stimulusInput: payload.SeedStimulusInput,
             triggerNodeId: payload.SeedTriggerNodeId,
-            triggerMetadata: payload.SeedTriggerMetadata);
+            triggerMetadata: payload.SeedTriggerMetadata,
+            correlationId: correlationId);
     }
 
     private static void ValidateTerminalCheckpointStatus(
@@ -270,10 +282,9 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         return NewWorkflowExecutionStateChange(workItem, payload, state);
     }
 
-    // Carries the workflow instance name (#260) forward across a checkpoint rebuild. The completion/running
-    // builders rebuild SystemMetadata from scratch, so without this a SetName assignment folded into an
-    // activity-completed checkpoint would be wiped by the subsequent workflow-completed checkpoint — mirroring
-    // how the dedicated CorrelationId field is carried forward via priorWorkflowState.
+    // Carries the durable system metadata that must survive a checkpoint rebuild. The completion/running builders
+    // rebuild SystemMetadata from scratch, so without this a SetName assignment, background cancellation marker
+    // or Test Drive delivery receipt could be wiped by the subsequent workflow-completed checkpoint.
     private static Dictionary<string, string> PreserveSystemMetadata(
         Dictionary<string, string> metadata,
         WorkflowExecutionState? priorWorkflowState,
@@ -292,11 +303,31 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             priorWorkflowState?.SystemMetadata.TryGetValue(RuntimeMetadataKeys.PersistenceMode, out var persistenceMode) == true)
             metadata[RuntimeMetadataKeys.PersistenceMode] = persistenceMode;
 
+        if (priorWorkflowState?.SystemMetadata.TryGetValue(RuntimeMetadataKeys.WorkflowHasBackgroundActivityWork, out var hasBackgroundActivityWork) == true)
+            metadata[RuntimeMetadataKeys.WorkflowHasBackgroundActivityWork] = hasBackgroundActivityWork;
+
+        // Manual Test Drive receipts are durable retry evidence. Workflow state is rebuilt for the started and
+        // completed checkpoints, so keep those bounded, reserved receipt keys when carrying a TestRun forward.
+        if (priorWorkflowState is { RunKind: WorkflowRunKind.TestRun })
+        {
+            foreach (var (key, value) in priorWorkflowState.SystemMetadata)
+            {
+                if (key.StartsWith(TestRunDeliveryReceipt.ReceiptPrefix, StringComparison.Ordinal))
+                    metadata[key] = value;
+            }
+        }
+
         return metadata;
     }
 
-    // Records the run's resolved persistence mode on the workflow-started system metadata. Absent when no resolver is
-    // registered, leaving the read model to fall back to the host default for that run.
+    // Every drain runs in a session for its run, whatever its mode, so the session's mode is the one the run runs in.
+    private PersistenceMode? DrainModeOf(string workflowExecutionId) =>
+        _sessionAccessor?.Current is { } session && StringComparer.Ordinal.Equals(session.WorkflowExecutionId, workflowExecutionId)
+            ? session.Mode
+            : null;
+
+    // Records the mode the drain runs the run in on the workflow-started system metadata. Absent only when the handler is
+    // driven outside a drain, where no session gives a mode.
     private static Dictionary<string, string> RecordPersistenceMode(
         Dictionary<string, string> metadata,
         PersistenceMode? persistenceMode)

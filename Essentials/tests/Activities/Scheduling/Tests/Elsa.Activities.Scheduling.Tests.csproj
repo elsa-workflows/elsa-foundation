@@ -24,6 +24,7 @@
     <ProjectReference Include="..\..\..\..\src\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="..\..\..\..\src\Primitives\Primitives\Elsa.Primitives.csproj" />
     <ProjectReference Include="..\..\Testing\Elsa.Activities.Testing.csproj" />
+    <ProjectReference Include="..\..\..\Serialization\Testing\Elsa.Serialization.Testing.csproj" />
   </ItemGroup>
 
   <ItemGroup>

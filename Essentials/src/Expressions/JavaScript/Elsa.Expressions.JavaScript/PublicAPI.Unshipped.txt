@@ -1,0 +1,4 @@
+#nullable enable
+Elsa.Expressions.JavaScript.JavaScriptFeature
+Elsa.Expressions.JavaScript.JavaScriptFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Expressions.JavaScript.JavaScriptFeature.JavaScriptFeature() -> void

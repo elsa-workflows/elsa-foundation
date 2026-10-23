@@ -18,7 +18,7 @@ public sealed class WorkflowStrategyOptions
     public Elsa.Primitives.Models.IncidentStrategyReference? IncidentStrategy { get; set; }
 
     /// <summary>
-    /// The persistence mode this workflow's runs use, by name (<c>"Durable"</c> or <c>"Balanced"</c>), or
+    /// The persistence mode this workflow's runs use, by name (<c>"Durable"</c>, <c>"Balanced"</c> or <c>"Ephemeral"</c>), or
     /// <see langword="null"/> to use the runtime host's default. Kept as a string so the authoring model does not
     /// depend on the runtime; publishing rejects a name it does not know. The mode is compiled into the executable and
     /// wins over the host default.

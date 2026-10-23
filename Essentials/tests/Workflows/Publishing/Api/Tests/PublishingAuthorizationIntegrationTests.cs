@@ -11,6 +11,7 @@ using Elsa.Workflows.Publishing.Api.Contracts;
 using Elsa.Workflows.Publishing.Api.Tests.Support;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Core.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Extensions;
@@ -46,8 +47,8 @@ public sealed class PublishingAuthorizationIntegrationTests
         ["ambiguous", "ambiguous", HttpStatusCode.Unauthorized],
         ["trusted-denied", "denied", HttpStatusCode.Forbidden],
         ["exact-read", "exact", HttpStatusCode.OK],
-        ["exact-manage-on-read", "manage", HttpStatusCode.Forbidden],
-        ["configured-implication", "implied", HttpStatusCode.OK],
+        ["manage-satisfies-read", "manage", HttpStatusCode.OK],
+        ["verb-wildcard", "implied", HttpStatusCode.OK],
         ["evaluator-wildcard", "wildcard", HttpStatusCode.OK],
         ["normalized", "normalized", HttpStatusCode.OK],
         ["normalized-external", "external", HttpStatusCode.OK],
@@ -74,7 +75,7 @@ public sealed class PublishingAuthorizationIntegrationTests
 
     [Theory]
     [InlineData("exact", HttpStatusCode.OK, HttpStatusCode.Forbidden)]
-    [InlineData("manage", HttpStatusCode.Forbidden, HttpStatusCode.OK)]
+    [InlineData("manage", HttpStatusCode.OK, HttpStatusCode.OK)]
     [InlineData("implied", HttpStatusCode.OK, HttpStatusCode.OK)]
     [InlineData("wildcard", HttpStatusCode.OK, HttpStatusCode.OK)]
     public async Task Read_and_manage_routes_preserve_exact_and_configured_permission_relationships(
@@ -107,6 +108,44 @@ public sealed class PublishingAuthorizationIntegrationTests
         Assert.Contains(
             PermissionKey.Normalize(WorkflowPublishingPermissions.Read),
             host.Observations.EvaluatedPermissions.Select(PermissionKey.Normalize));
+    }
+
+    [Fact]
+    public async Task Publishing_compilation_review_and_publish_use_the_trusted_identity_tenant()
+    {
+        await using var host = await PublishingAuthorizationHost.StartAsync();
+        host.Observations.Reset();
+
+        using var snapshotPreflight = await host.Client.SendAsync(PublishingAuthorizationRequests.Post(
+            "/publishing/workflows/preflight",
+            "multi-identity-tenant",
+            """{"definitionId":"definition-a","state":{"variables":[],"rootActivity":null,"inputs":[],"outputs":[],"strategyOptions":null},"layout":[]}"""));
+
+        Assert.Equal(HttpStatusCode.OK, snapshotPreflight.StatusCode);
+        Assert.Equal("tenant-a", host.Observations.LastCompiledTenantId);
+        using var snapshotDocument = System.Text.Json.JsonDocument.Parse(await snapshotPreflight.Content.ReadAsStringAsync());
+        var preflightToken = snapshotDocument.RootElement.GetProperty("preflightToken").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(preflightToken));
+
+        var reviewStore = host.Host.Services.GetRequiredService<IPublicationSnapshotReviewStore>();
+        var review = await reviewStore.FindAsync(preflightToken!);
+        Assert.Equal("tenant-a", review?.TenantId);
+
+        using var versionPreflight = await host.Client.SendAsync(PublishingAuthorizationRequests.Post(
+            "/publishing/workflows/version-1/preflight",
+            "multi-identity-tenant",
+            """{"versionId":"version-1"}"""));
+
+        Assert.Equal(HttpStatusCode.OK, versionPreflight.StatusCode);
+        Assert.Equal("tenant-a", host.Observations.LastCompiledTenantId);
+
+        using var publish = await host.Client.SendAsync(PublishingAuthorizationRequests.Post(
+            "/publishing/workflows/version-1/publish",
+            "multi-identity-tenant",
+            System.Text.Json.JsonSerializer.Serialize(new { versionId = "version-1", preflightToken })));
+
+        Assert.Equal(HttpStatusCode.OK, publish.StatusCode);
+        Assert.Equal("tenant-a", host.Observations.LastPublishedTenantId);
     }
 
     [Fact]
@@ -266,7 +305,6 @@ internal sealed class PublishingAuthorizationHost(IHost host) : IAsyncDisposable
                     new WorkflowsPublishingFeature().ConfigureServices(services);
                     new WorkflowsPublishingApiFeature().ConfigureServices(services);
                     Support.PublishingDomainSeams.Register(services);
-                    services.AddPermissionContributor<PublishingAuthorizationContributor>();
                     services.ReplacePermissionEvaluator<PublishingRecordingPermissionEvaluator>();
                     services.AddScoped<IPermissionResourceHandler, PublishingAuthorizationResourceHandler>();
                     services.AddSingleton<PublishingAuthorizationObservationState>();
@@ -358,6 +396,8 @@ internal sealed class PublishingAuthorizationObservationState
     public int NormalizerCalls => Volatile.Read(ref _normalizerCalls);
     public int CompilerCalls => Volatile.Read(ref _compilerCalls);
     public int ResourceCalls => Volatile.Read(ref _resourceCalls);
+    public string? LastCompiledTenantId { get; private set; }
+    public string? LastPublishedTenantId { get; private set; }
     public List<string> EvaluatedPermissions { get; } = [];
     public List<string> EvaluatorImplementations { get; } = [];
     public CancellationToken LastEvaluatorCancellation { get; set; }
@@ -369,6 +409,8 @@ internal sealed class PublishingAuthorizationObservationState
         Interlocked.Exchange(ref _normalizerCalls, 0);
         Interlocked.Exchange(ref _compilerCalls, 0);
         Interlocked.Exchange(ref _resourceCalls, 0);
+        LastCompiledTenantId = null;
+        LastPublishedTenantId = null;
         lock (EvaluatedPermissions)
             EvaluatedPermissions.Clear();
         lock (EvaluatorImplementations)
@@ -388,18 +430,21 @@ internal sealed class PublishingAuthorizationObservationState
 
     internal void RecordRequestSender() => Interlocked.Increment(ref _requestSenderCalls);
     internal void RecordNormalizer() => Interlocked.Increment(ref _normalizerCalls);
-    internal void RecordCompiler() => Interlocked.Increment(ref _compilerCalls);
+    internal void RecordCompiler(string? tenantId)
+    {
+        Interlocked.Increment(ref _compilerCalls);
+        LastCompiledTenantId = tenantId;
+    }
+    internal void RecordPublishedTenant(string? tenantId) => LastPublishedTenantId = tenantId;
     internal void RecordResource(string permission)
     {
         Interlocked.Increment(ref _resourceCalls);
     }
 }
 
-internal sealed class PublishingRecordingPermissionEvaluator(
-    PublishingAuthorizationObservationState observations,
-    IPermissionCatalog catalog) : IPermissionEvaluator
+internal sealed class PublishingRecordingPermissionEvaluator(PublishingAuthorizationObservationState observations) : IPermissionEvaluator
 {
-    private readonly ClaimsPermissionEvaluator _inner = new(catalog);
+    private readonly ClaimsPermissionEvaluator _inner = new();
 
     public ValueTask<PermissionEvaluationResult> EvaluateAsync(
         PermissionEvaluationContext context,
@@ -451,25 +496,6 @@ internal sealed class PublishingAuthorizationResourceHandler(
     }
 }
 
-internal sealed class PublishingAuthorizationContributor : IPermissionContributor
-{
-    public string OwnerId => "Elsa.Workflows.Publishing.Api.Tests.Authorization";
-
-    public IEnumerable<Permission> Contribute() =>
-    [
-        new(
-            "publishing.authorization.admin",
-            "Publishing authorization test administrator",
-            "Publishing authorization tests",
-            "Test-only configured implication for both catalog actions.",
-            new HashSet<string>(StringComparer.Ordinal)
-            {
-                WorkflowPublishingPermissions.Read,
-                WorkflowPublishingPermissions.Manage
-            })
-    ];
-}
-
 internal sealed class PublishingAuthorizationAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,
@@ -491,6 +517,16 @@ internal sealed class PublishingAuthorizationAuthenticationHandler(
             var first = CreateIdentity(SchemeName, "v1", "tenant-a", [WorkflowPublishingPermissions.Read]);
             var second = CreateIdentity(SchemeName, "v1", "tenant-a", [WorkflowPublishingPermissions.Read]);
             return AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal([first, second]), SchemeName));
+        }
+
+        if (fixture == "multi-identity-tenant")
+        {
+            // Keep the secondary identity first so raw ClaimsPrincipal.FindFirst tenant lookup would choose tenant-b.
+            var secondary = CreateIdentity("PublishingUntrusted", "v1", "tenant-b", []);
+            var trusted = CreateIdentity(SchemeName, "v1", "tenant-a",
+                [WorkflowPublishingPermissions.Read, WorkflowPublishingPermissions.Manage]);
+            return AuthenticateResult.Success(new AuthenticationTicket(
+                new ClaimsPrincipal([secondary, trusted]), SchemeName));
         }
 
         if (fixture is "external" or "external-resource-denied")
@@ -525,13 +561,13 @@ internal sealed class PublishingAuthorizationAuthenticationHandler(
             "exact" or "normalized" or "tenant-b" or "route-mismatch" or "no-tenant" =>
                 new[] { WorkflowPublishingPermissions.Read },
             "manage" => new[] { WorkflowPublishingPermissions.Manage },
-            "implied" or "implied-no-tenant" => new[] { "publishing.authorization.admin" },
+            "implied" or "implied-no-tenant" => new[] { "workflows/publishing:*" },
             "wildcard" or "wildcard-no-tenant" => new[] { PermissionKey.Wildcard },
             "cancel-evaluator" => new[] { WorkflowPublishingPermissions.Read },
-            _ => new[] { "workflow-publishing.other" }
+            _ => new[] { "workflows/publishing:other" }
         };
         if (fixture == "normalized")
-            permissions[0] = "WORKFLOW-PUBLISHING.READ";
+            permissions[0] = "WORKFLOWS/PUBLISHING:READ";
 
         var tenant = fixture == "no-tenant" || fixture.EndsWith("-no-tenant", StringComparison.Ordinal)
             ? null
@@ -562,6 +598,8 @@ internal sealed class PublishingAuthorizationRequestSender(PublishingAuthorizati
     public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
     {
         observations.RecordRequestSender();
+        if (request is PublishWorkflow publish)
+            observations.RecordPublishedTenant(publish.TenantId);
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult((T)CaptureResponseFactory.Create(typeof(T)));
     }
@@ -576,7 +614,7 @@ internal sealed class PublishingAuthorizationCompiler(PublishingAuthorizationObs
         WorkflowExecutableCompileRequest request,
         CancellationToken cancellationToken = default)
     {
-        observations.RecordCompiler();
+        observations.RecordCompiler(request.TenantId);
         return _inner.CompileAsync(request, cancellationToken);
     }
 }

@@ -1,0 +1,289 @@
+{
+  "id": "fixture-v1",
+  "definitionId": "fixture",
+  "name": "fixture",
+  "description": "Test-owned flowchart shape.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": false
+  },
+  "root": {
+    "id": "root",
+    "nodeId": "root",
+    "name": "root",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "size": {
+          "width": 100,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "first",
+        "nodeId": "first",
+        "name": "first",
+        "type": "Elsa.WriteLine",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "text": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "first"
+          }
+        }
+      },
+      {
+        "id": "check",
+        "nodeId": "check",
+        "name": "check",
+        "type": "Elsa.If",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "condition": {
+          "typeName": "Boolean",
+          "expression": {
+            "type": "JavaScript",
+            "value": "true"
+          }
+        },
+        "then": {
+          "id": "then-chart",
+          "nodeId": "then-chart",
+          "name": "then-chart",
+          "type": "Elsa.Flowchart",
+          "version": 1,
+          "customProperties": {
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+          },
+          "metadata": {
+            "designer": {
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "size": {
+                "width": 100,
+                "height": 50
+              }
+            }
+          },
+          "activities": [
+            {
+              "id": "inside-then",
+              "nodeId": "inside-then",
+              "name": "inside-then",
+              "type": "Elsa.WriteLine",
+              "version": 1,
+              "customProperties": {
+                "canStartWorkflow": false,
+                "runAsynchronously": false
+              },
+              "metadata": {
+                "designer": {
+                  "position": {
+                    "x": 0,
+                    "y": 0
+                  },
+                  "size": {
+                    "width": 100,
+                    "height": 50
+                  }
+                }
+              },
+              "text": {
+                "typeName": "String",
+                "expression": {
+                  "type": "Literal",
+                  "value": "inside-then"
+                }
+              }
+            }
+          ],
+          "connections": [],
+          "variables": []
+        }
+      },
+      {
+        "id": "loop",
+        "nodeId": "loop",
+        "name": "loop",
+        "type": "Elsa.For",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "end": {
+          "typeName": "Int32",
+          "expression": {
+            "type": "Literal",
+            "value": "2"
+          }
+        },
+        "step": {
+          "typeName": "Int32",
+          "expression": {
+            "type": "Literal",
+            "value": "1"
+          }
+        },
+        "body": {
+          "id": "body-chart",
+          "nodeId": "body-chart",
+          "name": "body-chart",
+          "type": "Elsa.Flowchart",
+          "version": 1,
+          "customProperties": {
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+          },
+          "metadata": {
+            "designer": {
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "size": {
+                "width": 100,
+                "height": 50
+              }
+            }
+          },
+          "activities": [
+            {
+              "id": "inside-body",
+              "nodeId": "inside-body",
+              "name": "inside-body",
+              "type": "Elsa.WriteLine",
+              "version": 1,
+              "customProperties": {
+                "canStartWorkflow": false,
+                "runAsynchronously": false
+              },
+              "metadata": {
+                "designer": {
+                  "position": {
+                    "x": 0,
+                    "y": 0
+                  },
+                  "size": {
+                    "width": 100,
+                    "height": 50
+                  }
+                }
+              },
+              "text": {
+                "typeName": "String",
+                "expression": {
+                  "type": "Literal",
+                  "value": "inside-body"
+                }
+              }
+            }
+          ],
+          "connections": [],
+          "variables": []
+        },
+        "start": {
+          "typeName": "Int32",
+          "expression": {
+            "type": "Literal",
+            "value": "0"
+          }
+        }
+      }
+    ],
+    "connections": [
+      {
+        "source": {
+          "activity": "first",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "check",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "check",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "loop",
+          "port": "In"
+        },
+        "vertices": []
+      }
+    ],
+    "variables": []
+  }
+}

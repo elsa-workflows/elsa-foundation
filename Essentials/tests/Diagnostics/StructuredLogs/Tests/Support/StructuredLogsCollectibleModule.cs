@@ -155,7 +155,7 @@ public static class StructuredLogsCollectibleModule
         var principal = new ClaimsPrincipal(new ClaimsIdentity(
             [
                 new Claim(IdentityClaimTypes.Normalized, "v1"),
-                new Claim(IdentityClaimTypes.Permission, "DIAGNOSTICS:STRUCTUREDLOGS")
+                new Claim(IdentityClaimTypes.Permission, "DIAGNOSTICS/STRUCTURED-LOGS:READ")
             ],
             "structured-logs-collectibility"));
         var authorization = scope.ServiceProvider.GetRequiredService<IAuthorizationService>();

@@ -112,6 +112,7 @@ public static class ActivitiesDesignEntityFrameworkCoreRegistration
             Alias<IActivityDependencyProjectionRebuilder>(services);
             Alias<IAddActivityDefinitionCommand>(services);
             Alias<IAddActivityDefinitionVersionCommand>(services);
+            Alias<IRefreshActivityDefinitionVersionCommand>(services);
             Alias<ICreateActivityDefinitionCommand>(services);
             Alias<ICreateActivityDraftCommand>(services);
             Alias<IUpdateActivityDefinitionPresentationCommand>(services);

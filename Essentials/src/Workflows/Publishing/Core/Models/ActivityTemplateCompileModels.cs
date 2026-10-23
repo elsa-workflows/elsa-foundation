@@ -40,7 +40,9 @@ public sealed record ActivityTemplateCompilation(
 public sealed record ActivityTemplateOccurrenceCompilation(
     string OccurrenceId,
     JsonElement InputBindings,
-    ActivityNodeStructure? Structure);
+    ActivityNodeStructure? Structure,
+    // Authored output captures of a closed-scope graph body node; null when it captures nothing.
+    JsonElement? OutputBindings = null);
 
 public sealed record ActivityTemplateDependencyDiscoveryRequest(
     string DefinitionId,

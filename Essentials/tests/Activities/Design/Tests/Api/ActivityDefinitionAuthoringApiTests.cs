@@ -8,6 +8,7 @@ using Elsa.Primitives.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using System.Net;
 using System.Reflection;
 using System.Text;
@@ -153,6 +154,95 @@ public sealed class ActivityDefinitionAuthoringApiTests
         Assert.IsType<ListRecommendedActivityDefinitions>(host.Seams.LastRequest);
     }
 
+    [Fact]
+    public async Task Definitions_add_draft_binds_omitted_clone_payload_fields_as_null()
+    {
+        await using var host = await ActivitiesDesignMinimalApiHost.StartAsync();
+        const string body = "{\"sourceVersionId\":\"version-1\",\"presentationLabel\":\"Clone\"}";
+        var jsonOptions = host.Host.Services.GetRequiredService<IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions>>().Value.SerializerOptions;
+        var directlyDeserialized = System.Text.Json.JsonSerializer.Deserialize<CreateReusableActivityDraftRequest>(body, jsonOptions);
+        Assert.NotNull(directlyDeserialized);
+        Assert.Null(directlyDeserialized.Layout);
+        Assert.Null(System.Text.Json.JsonSerializer.Deserialize<CreateReusableActivityDraftRequest>(
+            "{\"sourceVersionId\":\"version-1\",\"layout\":null}", jsonOptions)!.Layout);
+        Assert.Throws<JsonException>(() => System.Text.Json.JsonSerializer.Deserialize<CreateReusableActivityDraftRequest>(
+            "{\"sourceVersionId\":\"version-1\",\"layout\":{}}", jsonOptions));
+        Assert.Throws<JsonException>(() => System.Text.Json.JsonSerializer.Deserialize<CreateReusableActivityDraftRequest>(
+            "{\"sourceVersionId\":\"version-1\",\"layout\":[null]}", jsonOptions));
+        using var request = CreateAddDraftRequest(body);
+
+        using var response = await host.Client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var command = Assert.IsType<CreateReusableActivityDraft>(host.Seams.LastCommand);
+        Assert.Equal("definition-1", command.DefinitionId);
+        Assert.Equal("version-1", command.SourceVersionId);
+        Assert.Equal("Clone", command.PresentationLabel);
+        Assert.Null(command.Provider);
+        Assert.Null(command.Contract);
+        Assert.Null(command.Layout);
+
+        using var explicitEmptyRequest = CreateAddDraftRequest("{\"sourceVersionId\":\"version-1\",\"layout\":[]}");
+
+        using var explicitEmptyResponse = await host.Client.SendAsync(explicitEmptyRequest);
+
+        Assert.Equal(HttpStatusCode.Created, explicitEmptyResponse.StatusCode);
+        var explicitEmptyCommand = Assert.IsType<CreateReusableActivityDraft>(host.Seams.LastCommand);
+        Assert.Empty(explicitEmptyCommand.Layout!);
+
+        using var explicitNullRequest = CreateAddDraftRequest("{\"sourceVersionId\":\"version-1\",\"layout\":null}");
+
+        using var explicitNullResponse = await host.Client.SendAsync(explicitNullRequest);
+
+        Assert.Equal(HttpStatusCode.Created, explicitNullResponse.StatusCode);
+        var explicitNullCommand = Assert.IsType<CreateReusableActivityDraft>(host.Seams.LastCommand);
+        Assert.Null(explicitNullCommand.Layout);
+
+        using var validLayoutRequest = CreateAddDraftRequest(
+            "{\"sourceVersionId\":\"version-1\",\"layout\":[{\"nodeId\":\"node-1\",\"data\":{\"x\":1}}]}");
+
+        using var validLayoutResponse = await host.Client.SendAsync(validLayoutRequest);
+
+        Assert.Equal(HttpStatusCode.Created, validLayoutResponse.StatusCode);
+        var validLayoutCommand = Assert.IsType<CreateReusableActivityDraft>(host.Seams.LastCommand);
+        var record = Assert.Single(validLayoutCommand.Layout!);
+        Assert.Equal("node-1", record.NodeId);
+        Assert.Equal(JsonValueKind.Object, record.Data.ValueKind);
+        Assert.Equal(1, record.Data.GetProperty("x").GetInt32());
+
+        var lastCommand = host.Seams.LastCommand;
+        using var invalidLayoutRequest = CreateAddDraftRequest("{\"sourceVersionId\":\"version-1\",\"layout\":{}}");
+
+        using var invalidLayoutResponse = await host.Client.SendAsync(invalidLayoutRequest);
+
+        Assert.Equal(HttpStatusCode.BadRequest, invalidLayoutResponse.StatusCode);
+        Assert.Same(lastCommand, host.Seams.LastCommand);
+
+        using var document = System.Text.Json.JsonDocument.Parse(await host.GetOpenApiAsync());
+        var requestProperties = document.RootElement.GetProperty("components")
+            .GetProperty("schemas")
+            .GetProperty("CreateReusableActivityDraftRequest")
+            .GetProperty("properties");
+        var schema = requestProperties.GetProperty("layout");
+        var layoutTypes = schema.GetProperty("type").ValueKind == JsonValueKind.Array
+            ? schema.GetProperty("type").EnumerateArray().Select(item => item.GetString()).ToArray()
+            : [schema.GetProperty("type").GetString()];
+        Assert.Contains("array", layoutTypes);
+        Assert.True(layoutTypes.Contains("null") || schema.TryGetProperty("nullable", out var nullable) && nullable.GetBoolean(), schema.GetRawText());
+        var itemSchema = schema.GetProperty("items");
+        if (itemSchema.TryGetProperty("$ref", out var itemReference))
+            Assert.EndsWith("/ActivityLayoutRecord", itemReference.GetString(), StringComparison.Ordinal);
+        else
+        {
+            var itemProperties = itemSchema.GetProperty("properties");
+            Assert.Contains("nodeId", itemProperties.EnumerateObject().Select(property => property.Name));
+            Assert.Contains("data", itemProperties.EnumerateObject().Select(property => property.Name));
+        }
+        Assert.Equal(
+            new[] { "contract", "layout", "presentationLabel", "provider", "sourceVersionId" }.Order(StringComparer.Ordinal),
+            requestProperties.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
+    }
+
     private static string RouteBody(string routeId, string identifierProperty, bool includeIdentifier)
     {
         var body = JsonNode.Parse(ActivitiesDesignCompatibilityCases.RequestBodyFor(routeId) ?? "{}")!.AsObject();
@@ -162,6 +252,16 @@ public sealed class ActivityDefinitionAuthoringApiTests
         else
             body.Remove(jsonProperty);
         return body.ToJsonString();
+    }
+
+    private static HttpRequestMessage CreateAddDraftRequest(string body)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/design/activities/definitions/definition-1/drafts")
+        {
+            Content = new StringContent(body, Encoding.UTF8, "application/json")
+        };
+        request.Headers.TryAddWithoutValidation(ActivitiesDesignCompatibilityCases.IdentityHeader, "trusted-success");
+        return request;
     }
 
     [Fact]

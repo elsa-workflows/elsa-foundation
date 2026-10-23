@@ -18,7 +18,7 @@ public sealed class Elsa3ExpressionRewriterTests
 
         Assert.True(result.Succeeded);
         Assert.Equal(
-            "\"getVariable('total')\" + args.total + model.variables.total /* getVariable('total') */",
+            "(\"getVariable('total')\" + args.total + model.variables.total) ?? null /* getVariable('total') */",
             result.Definition!.Source);
         Assert.IsType<VariableExpressionParameterBinding>(result.Definition.Parameters["total"]);
     }

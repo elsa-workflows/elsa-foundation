@@ -4,28 +4,68 @@ Run the prebuilt Elsa Workbench + Elsa Studio images from Docker Hub with plain 
 no checkout, no build. For building the images yourself or the full PostgreSQL compose stack, see
 [Docker & compose](docker.md).
 
+For a digest-pinned Compose walkthrough with a recorded hosted result, use the
+[public Elsa 4 quickstart](https://v4.elsaworkflows.io/essentials/quickstart)
+([source](../website/docs/essentials/quickstart.md)). That page pins a verified image pair;
+the unpinned `:latest` commands here are not that recorded run.
+
 | Service        | Image                          | URL                    | Login                    |
 |----------------|--------------------------------|------------------------|--------------------------|
 | Elsa Workbench | `elsaworkflows/elsa-workbench` | http://localhost:13000 | —                        |
 | Elsa Studio    | `elsaworkflows/elsa-studio`    | http://localhost:14000 | `admin` / `Password123!` |
 
-Both images publish `latest`, `4.0.0-preview.<n>` and `sha-<short-commit>` on every push to `main`.
-There are no `4` / `4.0` / `4.0.0` release tags yet — to pin, use a preview or commit tag.
+> **Image tags.** Both images use `latest`, `4.0.0-preview.<n>` and `sha-<short-commit>`. Workbench
+> is published by `.github/workflows/docker.yml` after a successful Packages run on `main`, not on
+> every push, so Hub tags can lag `main`. Studio is published automatically after successful
+> `Studio CI` runs for pushes to `main` (`.github/workflows/studio-docker.yml`). Both chains start
+> after merges to `main`; neither publishes from a PR. Studio assigns the next available preview
+> image number from Docker Hub and also publishes a full-SHA tag. The counters are independent:
+> the same preview number does not identify a matching backend/Studio pair. `latest` is promoted
+> only while the source is still the main tip; rapid merges can supersede queued builds.
+> Studio NuGet/npm releases remain manual. There are no `4` / `4.0` / `4.0.0` release tags
+> yet; to pin a version, use a preview or commit tag.
 
-The login is the demo admin seeded by the image's built-in `shells.json` (Development posture).
-Demo credentials and API key throughout — do not expose this setup beyond your machine.
+> **Development posture.** The `docker run` examples below set `ASPNETCORE_ENVIRONMENT=Development`
+> so they can rely on the image's baked-in `shells.json` demo defaults. The canonical published-image
+> stack ([`docker-compose.images.yml`](../docker/compose/docker-compose.images.yml)) runs
+> `Production` instead, because `shells.Production.json` blanks `RecoveryContinuationSigningKey`,
+> `HierarchyCursorSigningKey`, Secrets `EncryptionKey`, and `SeedAdminPassword`. It turns OpenIddict
+> development mode off, so a `SigningKey` must be supplied as well. Development keeps the
+> code-default `AutoMigrate` policy. The published-image stack runs `Production` but overrides
+> `appsettings.Production.json`'s `Validate` setting with `AutoMigrate`. This page does not claim a
+> recorded runtime verification of the Development CLI path.
+
+> **Demo only.** The login is the demo admin seeded by the image's built-in `shells.json`
+> (`admin` / `Password123!`). The credentials and API key on this page are demo values: do not
+> expose this setup beyond your machine.
 
 ## Quickstart
 
 The examples on this page use Bash syntax (macOS/Linux). For the Compose path with macOS/Linux and Windows PowerShell instructions, use the
 [Compose quick start](../docker/compose/README.md#quick-start--published-images-no-clone-or-build).
 
-Before starting, confirm ports `13000` and `14000` are free; if either is occupied, wait until it is
-free without stopping another process. Check `docker container ls --all`,
-`docker network ls`, and `docker volume ls`: the container names `elsa-workbench` and `elsa-studio`,
-network `elsa-demo`, and volumes `elsa-workbench-packages` and `elsa-data` must be unused. If any of those resources already
-exist, use a separate, uniquely named Compose project instead (the same ports must still be free); do not reuse or remove someone
-else's resources. The cleanup below assumes these resources were created by this walkthrough.
+### Before you start
+
+This walkthrough creates the resources below. Make sure none of them is already in use:
+
+| Resource | Name | How to check |
+|---|---|---|
+| Ports | `13000`, `14000` | nothing listening on them |
+| Containers | `elsa-workbench`, `elsa-studio` | `docker container ls --all` |
+| Network | `elsa-demo` | `docker network ls` |
+| Volumes | `elsa-workbench-packages`, `elsa-data` | `docker volume ls` |
+
+Or check the Docker names in one go (no output means all are free):
+
+```bash
+docker container ls --all --format '{{.Names}}' | grep -xE 'elsa-workbench|elsa-studio'
+docker network ls --format '{{.Name}}' | grep -x elsa-demo
+docker volume ls --format '{{.Name}}' | grep -xE 'elsa-workbench-packages|elsa-data'
+```
+
+If a port is taken by something else, wait until it is free rather than stopping another process. If any of the names already exist, they belong to someone else: use a separate, uniquely named Compose project instead (the ports must still be free), and do not reuse or remove those resources. The clean-up below assumes this walkthrough created them.
+
+### Start the containers
 
 ```bash
 docker network create elsa-demo
@@ -39,7 +79,7 @@ docker run -d --name elsa-workbench \
   -e ASPNETCORE_ENVIRONMENT=Development \
   -e Elsa__ModuleManagement__ApiKey=elsa-docker-demo-key \
   -e Cors__AllowedOrigins__0=http://localhost:14000 \
-  -e CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentity__AllowedReturnUrlOrigins__0=http://localhost:14000 \
+  -e CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentity__AllowedReturnUrlOrigins__2=http://localhost:14000 \
   -e Elsa__DataProtection__EntityFrameworkCore__Enabled=true \
   -e "Elsa__DataProtection__EntityFrameworkCore__ConnectionString=Data Source=/app/data/data-protection.db" \
   -v elsa-workbench-packages:/app/packages \
@@ -68,8 +108,10 @@ The non-obvious settings:
 - `Studio__BackendModuleManagementApiKey` must equal the server's
   `Elsa__ModuleManagement__ApiKey`. It stays server-side (never sent to the browser) and gates the
   module *package* management API.
-- `Cors__AllowedOrigins__0` and `...AllowedReturnUrlOrigins__0` both point at the Studio origin so
-  the browser can call the API and the login flow can redirect back to Studio.
+- `Cors__AllowedOrigins__0` and `...AllowedReturnUrlOrigins__2` both point at the Studio origin so
+  the browser can call the API and the login flow can redirect back to Studio. Index `2` adds the
+  origin without replacing the image's baked-in `https://localhost:7030` and `http://localhost:5089`
+  entries, matching `docker-compose.images.yml`.
 - `elsa-workbench-packages:/app/packages` is the Nuplane directory feed: drop `.nupkg`
   activity/extension packages into that volume to load them.
 - `Elsa__DataProtection__EntityFrameworkCore__*` and `elsa-data:/app/data` keep the Data Protection key ring, which

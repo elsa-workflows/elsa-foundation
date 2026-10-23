@@ -44,7 +44,6 @@ public class DeferredEventPublisherTests
         services.AddSingleton(typeof(Microsoft.Extensions.Logging.ILogger<>), typeof(NullLogger<>));
         services.AddSingleton<IEventChannel, EventChannel>();
         services.AddSingleton<IEventPipeline, EventPipeline>();
-        services.AddSingleton<IEventPublishingStrategy>(Strategies.EventPublishingStrategy.Sequential);
         services.AddScoped<IEventPublisher, EventPublisher>();
         services.AddScoped<IInlineEventPublisher, InlineEventPublisher>();
         services.AddScoped<IDeferredEventPublisher, DeferredEventPublisher>();
@@ -120,7 +119,6 @@ public class DeferredEventPublisherTests
         services.AddSingleton(typeof(Microsoft.Extensions.Logging.ILogger<>), typeof(NullLogger<>));
         services.AddSingleton<IEventChannel, EventChannel>();
         services.AddSingleton<IEventPipeline, EventPipeline>();
-        services.AddSingleton<IEventPublishingStrategy>(Strategies.EventPublishingStrategy.Sequential);
         services.AddScoped<IEventPublisher, EventPublisher>();
         services.AddScoped<IDeferredEventPublisher, DeferredEventPublisher>();
         services.AddScoped<IEventHandler<IsolationEvent>, FirstHandler>();

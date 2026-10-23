@@ -4,7 +4,7 @@ namespace Elsa.Locking.Core;
 /// Runs one action if a distributed lock can be acquired, otherwise returns without throwing.
 /// Lock keys and logging stay with the caller so distinct reconcilers keep distinct keys.
 /// </summary>
-public static class DistributedLockRunner
+internal static class DistributedLockRunner
 {
     /// <summary>Runs <paramref name="action"/> under <paramref name="lockKey"/> if the lock can be taken.</summary>
     /// <param name="lockKey">The lock's identity. Distinct callers must pass distinct keys, or they serialize behind one another.</param>

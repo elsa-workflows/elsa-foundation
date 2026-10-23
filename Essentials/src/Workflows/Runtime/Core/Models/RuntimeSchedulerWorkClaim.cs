@@ -105,6 +105,9 @@ public sealed class RuntimeSchedulerWorkClaimOptions
     /// </summary>
     public TimeSpan VisibilityTimeout { get; set; } = TimeSpan.FromMinutes(1);
 
+    /// <summary>How long a claim is hidden after a handler explicitly reports temporary runtime unavailability.</summary>
+    public TimeSpan UnavailableRetryDelay { get; set; } = TimeSpan.FromSeconds(5);
+
     /// <summary>
     /// The maximum total wall time one dispatch may occupy before the drainer stops renewing its claim, cancels the
     /// dispatch, and records the item as poisoned.

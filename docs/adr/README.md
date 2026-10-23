@@ -73,6 +73,11 @@ A new ADR, Extension Builder ones included, takes the highest number in the main
 | 0081 | [Mediate agent harness capabilities through Elsa tools](0081-mediate-agent-harness-capabilities.md) | (none) |
 | 0082 | [Activity Presentation Is Source-Owned Metadata](0082-activity-presentation-is-source-owned-metadata.md) | Accepted |
 | 0083 | [JavaScript Binding Grammar Is Selected by Host Policy and Pinned at Publish](0083-javascript-binding-grammar-is-pinned-at-publish.md) | Proposed |
+| 0084 | [Runtime Commits Append One Journal Row And The Per-Activity Tables Become Read Models](0084-runtime-commit-journal.md) | Proposed |
+| 0085 | [Elsa 3.8/3.9 Parity: Identity Administration and Scope](0085-elsa-3-parity-identity-administration-and-scope.md) | Accepted |
+| 0086 | [Native And BPMN Compensation Stay Separate Semantics Over Shared Runtime Identity](0086-native-and-bpmn-compensation-stay-separate.md) | Accepted |
+| 0087 | [ETL owns its execution domain](0087-etl-owns-its-execution-domain.md) | Accepted |
+| 0088 | [Rules owns its execution domain](0088-rules-owns-its-execution-domain.md) | Accepted |
 | EB-0001 | [Extension Builder Git identity](EB-0001-extension-builder-git-identity.md) | Accepted |
 | EB-0002 | [Extension Builder managed repository remotes](EB-0002-extension-builder-managed-repository-remotes.md) | Accepted |
 | EB-0003 | [Extension Builder build and promotion source](EB-0003-extension-builder-build-and-promotion-source.md) | Accepted |

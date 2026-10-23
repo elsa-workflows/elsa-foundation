@@ -1,0 +1,99 @@
+/* Quiet authoring chrome must not override runtime incident, unavailable or ghost states. */
+html:not([data-theme-material]) .wf-node:not(.selected):not(.wf-node-runtime):not(.wf-node-unavailable):not(.wf-node-ghost) {
+  border-color: color-mix(in srgb, var(--studio-border) 82%, transparent);
+  background: var(--studio-surface);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--studio-text) 9%, transparent);
+}
+
+html:not([data-theme-material]) .wf-node:hover:not(.selected):not(.wf-node-runtime):not(.wf-node-unavailable):not(.wf-node-ghost) {
+  border-color: color-mix(in srgb, var(--studio-accent) 28%, var(--studio-border));
+  box-shadow: 0 3px 9px color-mix(in srgb, var(--studio-text) 12%, transparent);
+}
+
+html:not([data-theme-material]) .wf-node[data-icon] .wf-node-icon,
+html:not([data-theme-material]) .wf-node[data-tone] .wf-node-icon {
+  border: 0;
+  background: color-mix(in srgb, currentColor 13%, transparent);
+}
+
+html:not([data-theme-material]) .wf-activity-icon[data-icon],
+html:not([data-theme-material]) .wf-activity-icon[data-tone] {
+  border-color: transparent;
+  background: color-mix(in srgb, currentColor 11%, transparent);
+}
+
+.wf-node-context-toolbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface);
+  box-shadow: var(--studio-shadow-sm);
+}
+
+.wf-node-context-action {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: var(--studio-radius-sm);
+  background: transparent;
+  color: var(--studio-text-muted);
+  cursor: pointer;
+  padding: 0;
+}
+
+.wf-node-context-action:hover {
+  background: var(--studio-accent-soft);
+  color: var(--studio-accent);
+}
+
+.wf-node-context-action-delete:hover {
+  background: color-mix(in srgb, var(--studio-danger) 12%, transparent);
+  color: var(--studio-danger-fg);
+}
+
+.wf-node-context-action:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 2px;
+}
+
+.wf-node-outcomes-popover {
+  padding: 4px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface);
+  box-shadow: var(--studio-shadow-sm);
+}
+
+.wf-node-outcomes-menu {
+  display: grid;
+  gap: 2px;
+}
+
+.wf-node-outcomes-menu button {
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--studio-radius-sm);
+  background: transparent;
+  color: var(--studio-text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.wf-node-outcomes-menu button:hover,
+.wf-node-outcomes-menu button:focus-visible {
+  outline: 0;
+  background: var(--studio-accent-soft);
+  color: var(--studio-accent);
+}
+
+.wf-node-outcomes-menu button:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--studio-focus);
+}

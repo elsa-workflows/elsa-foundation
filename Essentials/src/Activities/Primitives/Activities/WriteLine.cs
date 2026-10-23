@@ -8,6 +8,9 @@ namespace Elsa.Activities.Primitives.Activities;
 /// </summary>
 // ReplaySafe (#2581): the body writes one console line from its materialized input and returns a constant
 // transition. A crash before the next commit runs it again and writes the line twice; no workflow state differs.
+// The text is written out of the workflow to the console, so a secret binding is refused there.
+[RefusesSecretBinding("text", SecretBindingRefusalReason.EchoedToOutput)]
+[Activity(Icon = "Terminal")]
 [ActivityOutcome("Done")]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
 public sealed class WriteLine : Activity<ActivityUnit>

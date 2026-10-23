@@ -1,12 +1,15 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -15,11 +18,13 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 public sealed class EfWorkflowExecutionStateStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    IRuntimeRecoveryContinuationCodec continuationCodec) : IWorkflowExecutionStateStore, IWorkflowHealthQuery
+    IRuntimeRecoveryContinuationCodec continuationCodec,
+    TimeProvider? timeProvider = null) : IWorkflowExecutionStateStore, IWorkflowHealthQuery
 {
     private const string HistoryCursorPurpose = "ef-runtime-workflow-execution-history-v1";
     private const string HealthCursorPurpose = "ef-runtime-workflow-execution-health-history-v1";
     private const string CaptureCursorPurpose = "ef-runtime-workflow-execution-capture-v1";
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     public async ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default)
     {
@@ -31,6 +36,11 @@ public sealed class EfWorkflowExecutionStateStore(
         context.ChangeTracker.Clear();
         try
         {
+            await using var transaction = context.Database.CurrentTransaction is null
+                ? await context.Database.BeginTransactionAsync(cancellationToken)
+                : null;
+            await LockWorkflowExecutionForWriteAsync(context, scope, state.WorkflowExecutionId, cancellationToken);
+            await EfExecutionLivenessStateStore.EnsureWorkflowExecutionNotDeletedAsync(context, scope, state.WorkflowExecutionId, cancellationToken);
             var row = await context.WorkflowExecutionStates.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
             if (row is null)
                 context.WorkflowExecutionStates.Add(ToEntity(state, scope, id, NewRevision()));
@@ -41,6 +51,8 @@ public sealed class EfWorkflowExecutionStateStore(
             }
 
             await context.SaveChangesAsync(cancellationToken);
+            if (transaction is not null)
+                await transaction.CommitAsync(cancellationToken);
             return state;
         }
         catch (DbUpdateConcurrencyException exception)
@@ -262,20 +274,306 @@ public sealed class EfWorkflowExecutionStateStore(
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
         var id = CreateId(scope, workflowExecutionId);
+        var result = await DeleteCoreAsync(
+            workflowExecutionId,
+            scope,
+            id,
+            expectedRevision: null,
+            expectedTenantId: null,
+            terminalOnly: false,
+            removeRunOwnedHistory: false,
+            cancellationToken);
+        return result == WorkflowExecutionDeletionResult.Deleted;
+    }
+
+    internal async ValueTask<WorkflowExecutionDeletionCandidate?> ReadDeletionCandidateAsync(
+        string workflowExecutionId,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateIdentity(workflowExecutionId, nameof(workflowExecutionId));
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = RequireScope();
         try
         {
-            var row = await context.WorkflowExecutionStates.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
-            if (row is null) return false;
-            _ = ReadChecked(row, scope, workflowExecutionId);
-            context.WorkflowExecutionStates.Remove(row);
-            await context.SaveChangesAsync(cancellationToken);
+            var row = await context.WorkflowExecutionStates.AsNoTracking().SingleOrDefaultAsync(x =>
+                x.Id == CreateId(scope, workflowExecutionId) &&
+                x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope) &&
+                x.WorkflowExecutionIdHash == Hash(workflowExecutionId) &&
+                x.WorkflowExecutionId == Encode(workflowExecutionId), cancellationToken);
+            if (row is null)
+                return null;
+
+            var state = ReadChecked(row, scope, workflowExecutionId);
+            accessContextAccessor.Current.EnsureTenantScope(state.TenantId);
+            return new WorkflowExecutionDeletionCandidate(
+                state,
+                row.Revision.ToString(CultureInfo.InvariantCulture));
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (InvalidDataException) { context.ChangeTracker.Clear(); throw; }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        {
+            throw Normalize("reading deletion candidate for", workflowExecutionId, exception);
+        }
+    }
+
+    internal async ValueTask<WorkflowExecutionDeletionResult> TryDeleteTerminalAsync(
+        WorkflowExecutionDeletionCandidate candidate,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+        ArgumentNullException.ThrowIfNull(candidate.State);
+        ValidateIdentity(candidate.State.WorkflowExecutionId, nameof(candidate));
+        cancellationToken.ThrowIfCancellationRequested();
+
+        accessContextAccessor.Current.EnsureTenantScope(candidate.State.TenantId);
+        if (!candidate.State.Status.IsTerminal())
+            return WorkflowExecutionDeletionResult.NotTerminal;
+        if (!long.TryParse(candidate.ConcurrencyToken, NumberStyles.None, CultureInfo.InvariantCulture, out var revision))
+            return WorkflowExecutionDeletionResult.Changed;
+
+        var scope = RequireScope();
+        var workflowExecutionId = candidate.State.WorkflowExecutionId;
+        return await DeleteCoreAsync(
+            workflowExecutionId,
+            scope,
+            CreateId(scope, workflowExecutionId),
+            revision,
+            candidate.State.TenantId,
+            terminalOnly: true,
+            removeRunOwnedHistory: true,
+            cancellationToken);
+    }
+
+    private async ValueTask<WorkflowExecutionDeletionResult> DeleteCoreAsync(
+        string workflowExecutionId,
+        string scope,
+        string id,
+        long? expectedRevision,
+        string? expectedTenantId,
+        bool terminalOnly,
+        bool removeRunOwnedHistory,
+        CancellationToken cancellationToken)
+    {
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            var ownershipTombstoneInserted = false;
+            try
+            {
+                context.ChangeTracker.Clear();
+                await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+                // Lock the root before touching any owned rows. Root saves and scheduler enqueue take this same
+                // lock, so a deletion cannot purge the queue and then lose the race to a late enqueue.
+                await LockWorkflowExecutionForWriteAsync(context, scope, workflowExecutionId, cancellationToken);
+                var row = await context.WorkflowExecutionStates.SingleOrDefaultAsync(x =>
+                    x.Id == id &&
+                    x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope) &&
+                    x.WorkflowExecutionIdHash == Hash(workflowExecutionId) &&
+                    x.WorkflowExecutionId == Encode(workflowExecutionId), cancellationToken);
+                if (row is null) return WorkflowExecutionDeletionResult.NotFound;
+                var state = ReadChecked(row, scope, workflowExecutionId);
+                accessContextAccessor.Current.EnsureTenantScope(state.TenantId);
+                if (!StringComparer.Ordinal.Equals(state.TenantId, expectedTenantId) && terminalOnly)
+                    return WorkflowExecutionDeletionResult.Changed;
+                if (terminalOnly && !state.Status.IsTerminal())
+                    return WorkflowExecutionDeletionResult.NotTerminal;
+                if (expectedRevision is { } revision && row.Revision != revision)
+                    return WorkflowExecutionDeletionResult.Changed;
+
+                ownershipTombstoneInserted = await RevokeExecutionOwnershipAsync(workflowExecutionId, scope, cancellationToken);
+                await CancelOutstandingBackgroundActivityWorkAsync(workflowExecutionId, scope, _timeProvider.GetUtcNow(), cancellationToken);
+
+                if (removeRunOwnedHistory)
+                    await DeleteRunOwnedHistoryAsync(workflowExecutionId, scope, cancellationToken);
+
+                context.WorkflowExecutionStates.Remove(row);
+                await context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return WorkflowExecutionDeletionResult.Deleted;
+            }
+            catch (DbUpdateConcurrencyException) when (attempt < 2)
+            {
+                // A worker claim/result write or a fenced checkpoint changed one of the rows this deletion owns.
+                // Retry from fresh projections so the transaction cancels the newly visible claim/receipt too.
+                context.ChangeTracker.Clear();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                context.ChangeTracker.Clear();
+                return terminalOnly ? WorkflowExecutionDeletionResult.Changed : WorkflowExecutionDeletionResult.NotFound;
+            }
+            catch (Exception exception) when (
+                ownershipTombstoneInserted &&
+                EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
+            {
+                // A first owner raced the tombstone insert. Retry against its persisted lease and revoke it in the
+                // same transaction that removes the execution and cancels outstanding background work.
+                context.ChangeTracker.Clear();
+                if (attempt == 2)
+                    throw Normalize("deleting", workflowExecutionId, exception);
+            }
+            catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Transient))
+            {
+                context.ChangeTracker.Clear();
+                throw Normalize("deleting", workflowExecutionId, exception);
+            }
+            catch (OperationCanceledException) { context.ChangeTracker.Clear(); throw; }
+            catch (InvalidDataException) { context.ChangeTracker.Clear(); throw; }
+            catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
+            {
+                context.ChangeTracker.Clear();
+                throw Normalize("deleting", workflowExecutionId, exception);
+            }
+        }
+
+        return terminalOnly ? WorkflowExecutionDeletionResult.Changed : WorkflowExecutionDeletionResult.NotFound;
+    }
+
+    private async ValueTask DeleteRunOwnedHistoryAsync(
+        string workflowExecutionId,
+        string scope,
+        CancellationToken cancellationToken)
+    {
+        var scopeHash = Hash(scope);
+        var scopeKey = Encode(scope);
+        var executionHash = Hash(workflowExecutionId);
+        var executionKey = Encode(workflowExecutionId);
+
+        await context.ActivityExecutionStates.Where(row =>
+            row.ScopeKeyHash == scopeHash && row.ScopeKey == scopeKey &&
+            row.WorkflowExecutionIdHash == executionHash && row.WorkflowExecutionId == executionKey)
+            .ExecuteDeleteAsync(cancellationToken);
+        await context.ActivityExecutionInspections.Where(row =>
+            row.ScopeKeyHash == scopeHash && row.ScopeKey == scopeKey &&
+            row.WorkflowExecutionIdHash == executionHash && row.WorkflowExecutionId == executionKey)
+            .ExecuteDeleteAsync(cancellationToken);
+        await context.ActivityExecutionHierarchies.Where(row =>
+            row.ScopeKeyHash == scopeHash && row.ScopeKey == scopeKey &&
+            row.WorkflowExecutionIdHash == executionHash && row.WorkflowExecutionId == executionKey)
+            .ExecuteDeleteAsync(cancellationToken);
+        await context.Bookmarks.Where(row =>
+            row.ScopeKeyHash == scopeHash && row.ScopeKey == scopeKey &&
+            row.WorkflowExecutionIdHash == executionHash && row.WorkflowExecutionId == executionKey)
+            .ExecuteDeleteAsync(cancellationToken);
+        await context.DurableValueStates.Where(row =>
+            row.ScopeKeyHash == scopeHash && row.ScopeKey == scopeKey &&
+            row.WorkflowExecutionIdHash == executionHash && row.WorkflowExecutionId == executionKey)
+            .ExecuteDeleteAsync(cancellationToken);
+        await context.SchedulerStates.Where(row =>
+            row.ScopeKeyHash == scopeHash && row.ScopeKey == scopeKey &&
+            row.WorkflowExecutionIdHash == executionHash && row.WorkflowExecutionId == executionKey)
+            .ExecuteDeleteAsync(cancellationToken);
+        await context.DurableTimers.Where(row =>
+            row.ScopeKeyHash == scopeHash && row.ScopeKey == scopeKey &&
+            row.WorkflowExecutionIdHash == executionHash && row.WorkflowExecutionId == executionKey)
+            .ExecuteDeleteAsync(cancellationToken);
+        await context.SchedulerWorkItems.Where(row =>
+            row.ScopeKeyHash == scopeHash && row.ScopeKey == scopeKey &&
+            row.WorkflowExecutionIdHash == executionHash && row.WorkflowExecutionId == executionKey)
+            .ExecuteDeleteAsync(cancellationToken);
+        await context.IncidentStates.Where(row =>
+            row.ScopeKeyHash == scopeHash && row.ScopeKey == scopeKey &&
+            row.WorkflowExecutionIdHash == executionHash && row.WorkflowExecutionId == executionKey)
+            .ExecuteDeleteAsync(cancellationToken);
+        await context.WorkflowRunHealthStates.Where(row =>
+            row.ScopeKeyHash == scopeHash && row.ScopeKey == scopeKey &&
+            row.WorkflowExecutionIdHash == executionHash && row.WorkflowExecutionId == executionKey)
+            .ExecuteDeleteAsync(cancellationToken);
+        await context.WorkflowSchedulerPoisonRecords.Where(row =>
+            row.ScopeKeyHash == scopeHash && row.ScopeKey == scopeKey &&
+            row.WorkflowExecutionIdHash == executionHash && row.WorkflowExecutionId == executionKey)
+            .ExecuteDeleteAsync(cancellationToken);
+        await EfWorkflowHoldStateStore.RemoveWorkflowExecutionHoldsAsync(context, scope, workflowExecutionId, cancellationToken);
+        await context.WorkflowHoldStates.Where(row =>
+            row.ScopeKeyHash == scopeHash && row.ScopeKey == scopeKey &&
+            row.WorkflowExecutionIdHash == executionHash && row.WorkflowExecutionId == executionKey)
+            .ExecuteDeleteAsync(cancellationToken);
+    }
+
+    private async ValueTask<bool> RevokeExecutionOwnershipAsync(
+        string workflowExecutionId,
+        string scope,
+        CancellationToken cancellationToken)
+    {
+        var stateId = RuntimeExecutionOwnershipStateId.For(workflowExecutionId);
+        var stateIdHash = EfRuntimeOperationalStoreSupport.Hash(stateId);
+        var row = await context.ExecutionLivenessStates.SingleOrDefaultAsync(candidate =>
+            candidate.Id == EfRuntimeOperationalStoreSupport.CompositeId(scope, workflowExecutionId, stateId) &&
+            candidate.ScopeKeyHash == EfRuntimeOperationalStoreSupport.Hash(scope) &&
+            candidate.ScopeKey == EfRuntimeOperationalStoreSupport.Encode(scope) &&
+            candidate.WorkflowExecutionIdHash == EfRuntimeOperationalStoreSupport.Hash(workflowExecutionId) &&
+            candidate.WorkflowExecutionId == EfRuntimeOperationalStoreSupport.Encode(workflowExecutionId) &&
+            candidate.OperationalStateIdHash == stateIdHash &&
+            candidate.OperationalStateId == EfRuntimeOperationalStoreSupport.Encode(stateId), cancellationToken);
+        if (row is null)
+        {
+            // Ownership is normally acquired before the first workflow checkpoint. A legacy or externally seeded
+            // execution can predate that invariant, so establish the identity row even when it has never been leased.
+            // This insert serializes deletion against a concurrent first-owner insert through the provider's unique key.
+            var tombstone = new ExecutionLivenessState(
+                stateId,
+                workflowExecutionId,
+                executionLease: null,
+                heartbeat: null,
+                drain: null,
+                interruptedExecution: null,
+                pendingPostCommitIntentIds: [],
+                metadata: new Dictionary<string, string>
+                {
+                    [RuntimeMetadataKeys.OwnershipFencingToken] = "0",
+                    [RuntimeMetadataKeys.WorkflowExecutionDeletionTombstone] = "true"
+                });
+            context.ExecutionLivenessStates.Add(EfExecutionLivenessStateStore.ToEntity(tombstone, scope, 1));
             return true;
         }
-        catch (DbUpdateConcurrencyException) { context.ChangeTracker.Clear(); return false; }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Transient)) { context.ChangeTracker.Clear(); throw Normalize("deleting", workflowExecutionId, exception); }
-        catch (OperationCanceledException) { context.ChangeTracker.Clear(); throw; }
-        catch (InvalidDataException) { context.ChangeTracker.Clear(); throw; }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { context.ChangeTracker.Clear(); throw Normalize("deleting", workflowExecutionId, exception); }
+
+        var current = EfExecutionLivenessStateStore.Read(row, scope, workflowExecutionId, stateId);
+        // Preserve the monotonic token and unrelated operational state. Clearing the lease makes every checkpoint
+        // carrying the deleted execution's fence fail, while the row revision makes an in-flight fenced commit
+        // conflict with this transaction.
+        var metadata = new Dictionary<string, string>(current.Metadata, StringComparer.Ordinal)
+        {
+            [RuntimeMetadataKeys.WorkflowExecutionDeletionTombstone] = "true"
+        };
+        var revoked = new ExecutionLivenessState(
+            stateId,
+            workflowExecutionId,
+            executionLease: null,
+            heartbeat: null,
+            current.Drain,
+            current.InterruptedExecution,
+            current.PendingPostCommitIntentIds,
+            metadata);
+        EfExecutionLivenessStateStore.Copy(row, revoked, scope, checked(row.Revision + 1));
+        return false;
+    }
+
+    private async ValueTask CancelOutstandingBackgroundActivityWorkAsync(
+        string workflowExecutionId,
+        string scope,
+        DateTimeOffset occurredAt,
+        CancellationToken cancellationToken)
+    {
+        var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
+        var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
+        var workflowHash = EfRuntimeOperationalStoreSupport.Hash(workflowExecutionId);
+        var pending = (int)BackgroundActivityWorkStatus.Pending;
+        var claimed = (int)BackgroundActivityWorkStatus.Claimed;
+        var resultReady = (int)BackgroundActivityWorkStatus.ResultReady;
+        var rows = await context.BackgroundActivityWorks.Where(candidate =>
+            candidate.ScopeKeyHash == scopeHash && candidate.ScopeKey == scopeKey &&
+            candidate.WorkflowExecutionIdHash == workflowHash && candidate.WorkflowExecutionId == workflowExecutionId &&
+            (candidate.Status == pending || candidate.Status == claimed || candidate.Status == resultReady))
+            .ToArrayAsync(cancellationToken);
+
+        foreach (var row in rows)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var item = EfBackgroundActivityWorkStore.ReadChecked(row, scope, workflowExecutionId, row.WorkId);
+            var cancelled = BackgroundActivityWorkLifecycle.Cancel(item, occurredAt);
+            if (!ReferenceEquals(item, cancelled))
+                EfBackgroundActivityWorkStore.Copy(row, cancelled, scope);
+        }
     }
 
     private IQueryable<WorkflowExecutionStateEntity> HistoryQuery(WorkflowExecutionStatePageQuery query, string scope)
@@ -374,6 +672,28 @@ public sealed class EfWorkflowExecutionStateStore(
         if (row.AuthorityPartitionKey != authorityKey)
             throw new InvalidDataException("The persisted workflow execution authority projection does not match its content.");
         return state;
+    }
+
+    /// <summary>
+    /// Takes the per-execution write lock used to serialize root saves, deletion, and late scheduler enqueue.
+    /// Keeping this update revision-neutral preserves snapshot tokens while the surrounding transaction holds the lock.
+    /// </summary>
+    internal static async ValueTask<int> LockWorkflowExecutionForWriteAsync(
+        RuntimeDbContext context,
+        string scope,
+        string workflowExecutionId,
+        CancellationToken cancellationToken)
+    {
+        var id = CreateId(scope, workflowExecutionId);
+        var scopeHash = Hash(scope);
+        var scopeKey = Encode(scope);
+        var executionHash = Hash(workflowExecutionId);
+        var executionKey = Encode(workflowExecutionId);
+        return await context.WorkflowExecutionStates
+            .Where(row => row.Id == id &&
+                          row.ScopeKeyHash == scopeHash && row.ScopeKey == scopeKey &&
+                          row.WorkflowExecutionIdHash == executionHash && row.WorkflowExecutionId == executionKey)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.Revision, row => row.Revision), cancellationToken);
     }
 
     private static void EnsureOptional(string? encoded, string? hash, string? value)

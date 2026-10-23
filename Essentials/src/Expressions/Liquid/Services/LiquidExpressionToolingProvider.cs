@@ -7,7 +7,7 @@ using Fluid;
 namespace Elsa.Expressions.Liquid.Services;
 
 /// <summary>Safe Liquid syntax and metadata assistance. It never constructs a Fluid context or renders a template.</summary>
-public sealed class LiquidExpressionToolingProvider : IExpressionToolingProvider
+internal sealed class LiquidExpressionToolingProvider : IExpressionToolingProvider
 {
     private static readonly string[] BuiltInFilters = new TemplateOptions().Filters
         .Select(filter => filter.Key)

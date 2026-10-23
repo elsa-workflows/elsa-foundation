@@ -35,6 +35,14 @@ import {
 
 const contractVersion = 1;
 const wireContractVersion = { major: 1, minor: 0 } as const;
+const outcomeStatesV1 = [
+  "Success", "SupportedEmpty", "Unavailable", "Unauthorized", "Incompatible", "Stale", "Canceled"
+] as const;
+const symbolKindsV1 = [
+  "Variable", "WorkflowInput", "ActivityResult", "Function", "Filter", "Tag", "Namespace", "Member", "Extension"
+] as const;
+const valueKindsV1 = ["Unknown", "Scalar", "Object", "Array", "Map", "Function", "Reference"] as const;
+const diagnosticSeveritiesV1 = ["Error", "Warning", "Information", "Hint"] as const;
 const valueShapesKey = Symbol("expression-value-shapes");
 
 type AuthoringContextWithShapes = StudioExpressionAuthoringContext & {
@@ -515,14 +523,14 @@ function parseSymbol(
   const record = asRecord(value);
   const name = readString(record, "name");
   if (!record || !name) return undefined;
-  const wireKind = readString(record, "kind") ?? "Value";
+  const wireKind = wireEnumName(record.kind, symbolKindsV1) ?? "Value";
   const id = `${wireKind}:${readString(record, "symbolId") ?? name}`;
   const shapeId = asRecord(record.valueShape) ? `symbol:${id}` : undefined;
   if (shapeId && shapes) parseValueShape(record.valueShape, shapeId, shapes);
   return {
     id,
     name,
-    kind: symbolKind(wireKind),
+    kind: symbolKind(record.kind),
     documentation: readString(record, "documentation"),
     shapeId,
     signatures: Array.isArray(record.signatures)
@@ -539,7 +547,7 @@ function parseValueShape(
   const record = asRecord(value);
   if (!record) return undefined;
   const displayName = readString(record, "displayName");
-  const kind = valueShapeKind(readString(record, "kind"));
+  const kind = valueShapeKind(record.kind);
   const item = asRecord(record.item);
   if (item) parseValueShape(item, `${id}:item`, shapes);
   const members = Array.isArray(record.members)
@@ -606,7 +614,7 @@ function parseCompletionItem(value: unknown): StudioExpressionCompletionItem | u
     detail: readString(record, "detail"),
     documentation: readString(record, "documentation"),
     insertText: readString(record, "insertText"),
-    kind: symbolKind(readString(record, "kind") ?? "Value")
+    kind: symbolKind(record.kind)
   };
 }
 
@@ -629,7 +637,7 @@ function parseDiagnostic(
   const range = parseRange(record?.range, true);
   if (!record || !message) return undefined;
   return {
-    severity: diagnosticSeverity(readString(record, "severity")),
+    severity: diagnosticSeverity(record.severity),
     code: readString(record, "code"),
     message,
     range,
@@ -659,8 +667,9 @@ function readSymbols(value: unknown, shapes?: Map<string, StudioExpressionValueS
   return Array.isArray(value) ? value.map(item => parseSymbol(item, shapes)).filter(isDefined) : [];
 }
 
-function symbolKind(value: string): StudioExpressionSymbol["kind"] {
-  switch (value.toLowerCase()) {
+function symbolKind(value: unknown): StudioExpressionSymbol["kind"] {
+  const name = wireEnumName(value, symbolKindsV1);
+  switch (name?.toLowerCase()) {
     case "function": return "function";
     case "filter": return "filter";
     case "tag": return "tag";
@@ -671,8 +680,9 @@ function symbolKind(value: string): StudioExpressionSymbol["kind"] {
   }
 }
 
-function valueShapeKind(value?: string): StudioExpressionValueShape["kind"] {
-  switch (value?.toLowerCase()) {
+function valueShapeKind(value: unknown): StudioExpressionValueShape["kind"] {
+  const name = wireEnumName(value, valueKindsV1);
+  switch (name?.toLowerCase()) {
     case "scalar": return "scalar";
     case "object":
     case "map":
@@ -683,8 +693,9 @@ function valueShapeKind(value?: string): StudioExpressionValueShape["kind"] {
   }
 }
 
-function diagnosticSeverity(value?: string): StudioExpressionValidationDiagnostic["severity"] {
-  switch (value?.toLowerCase()) {
+function diagnosticSeverity(value: unknown): StudioExpressionValidationDiagnostic["severity"] {
+  const name = wireEnumName(value, diagnosticSeveritiesV1);
+  switch (name?.toLowerCase()) {
     case "error": return "error";
     case "warning": return "warning";
     default: return "info";
@@ -692,8 +703,8 @@ function diagnosticSeverity(value?: string): StudioExpressionValidationDiagnosti
 }
 
 function parseState(value: unknown): StudioExpressionToolingState | undefined {
-  if (typeof value !== "string") return undefined;
-  switch (value.replaceAll("-", "").toLowerCase()) {
+  const name = wireEnumName(value, outcomeStatesV1);
+  switch (name?.replaceAll("-", "").toLowerCase()) {
     case "success": return "ready";
     case "supportedempty": return "supported-empty";
     case "unavailable": return "unavailable";
@@ -703,6 +714,13 @@ function parseState(value: unknown): StudioExpressionToolingState | undefined {
     case "canceled": return "canceled";
     default: return undefined;
   }
+}
+
+function wireEnumName(value: unknown, names: readonly string[]): string | undefined {
+  if (typeof value === "string") return value;
+  return typeof value === "number" && Number.isInteger(value) && value >= 0
+    ? names[value]
+    : undefined;
 }
 
 function result<T>(

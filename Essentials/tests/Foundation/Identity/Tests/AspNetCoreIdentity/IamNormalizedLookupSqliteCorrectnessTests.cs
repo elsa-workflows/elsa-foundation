@@ -44,7 +44,6 @@ public sealed class IamNormalizedLookupSqliteCorrectnessTests : IDisposable
     public void Dispose()
     {
         _db.Dispose();
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
         foreach (var file in new[] { _databasePath, $"{_databasePath}-wal", $"{_databasePath}-shm" })
             File.Delete(file);
     }

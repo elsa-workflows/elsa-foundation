@@ -2,7 +2,7 @@ using Elsa.Foundation.Identity.Core.Authorization;
 
 namespace Elsa.Expressions.Api.Authorization;
 
-public sealed class ExpressionsPermissionContributor : IPermissionContributor
+internal sealed class ExpressionsPermissionContributor : IPermissionContributor
 {
     public string OwnerId => "Elsa.Expressions.Api";
 

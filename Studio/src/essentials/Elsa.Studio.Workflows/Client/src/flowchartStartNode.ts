@@ -71,9 +71,12 @@ export function canStartWorkflow(activity: ActivityNode): boolean {
 }
 
 /**
- * The activities that say they can start a workflow but cannot: they are not the start node and nothing
- * connects into them, so execution can never arrive. This is the state the designer surfaces as soon as
- * it arises (with a one-click "set as start"), rather than only reporting unreachability at publish.
+ * The activities that say they can start a workflow but sit where no run can start at them: something
+ * connects into them and they are not the start node. Publishing refuses that placement (spec 238), so the
+ * designer surfaces it as soon as it arises (with a one-click "set as start").
+ *
+ * A start trigger that is not the start node and that nothing connects into is NOT misplaced. It is an
+ * entry point of its own: when it fires, the Flowchart starts there and runs that trigger's branch.
  */
 export function findMisplacedStartTriggers(activity: ActivityNode): ActivityNode[] {
   if (activity.structure?.kind !== flowchartStructureKind) return [];
@@ -82,7 +85,7 @@ export function findMisplacedStartTriggers(activity: ActivityNode): ActivityNode
   const startNodeId = readFlowchartStartNodeId(activity);
   const targets = new Set(readFlowchartConnectionTargets(activity));
   return activities.filter(child =>
-    canStartWorkflow(child) && child.nodeId !== startNodeId && !targets.has(child.nodeId));
+    canStartWorkflow(child) && child.nodeId !== startNodeId && targets.has(child.nodeId));
 }
 
 export function readFlowchartActivities(activity: ActivityNode): ActivityNode[] {

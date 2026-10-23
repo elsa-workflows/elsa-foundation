@@ -26,7 +26,8 @@ public sealed class PublishingApiContractCompatibilityTests
         // keeping PublicationSlotView for the unpublish/restore lifecycle commands. #1625 then added
         // GetPublicationRecord, the request for the Publishing-owned read of one journal record, and #1659 added
         // PublicationSlotOwnerView, the nullable targetSlotOwner both workflow preflight views now carry.
-        Assert.Equal(67, ContractTypes.Length);
+        // #2862 adds module-neutral Test Drive discovery, selection, status, stop and wait delivery contracts.
+        Assert.Equal(79, ContractTypes.Length);
 
         var apiAssembly = typeof(WorkflowsPublishingApiFeature).Assembly;
 
@@ -60,19 +61,20 @@ public sealed class PublishingApiContractCompatibilityTests
         // FullName embeds its arguments' assembly-qualified names, so the strings changed while the
         // JSON wire shape did not. #1659 moved both on purpose: the two workflow preflight views gained the
         // trailing nullable TargetSlotOwner and PublicationSlotOwnerView joined the surface, an additive wire change.
+        // #2862 adds optional start selection/action fields and twelve Test Drive wire contracts.
+        // #1407 adds the nullable Descriptor init property to trigger conflicts, preserving the positional contract.
         var legacyTypes = ContractTypes.Where(type => type != typeof(ActivityPublishingDiagnosticView) &&
                                                        type != typeof(ActivityPublishingProblemDetails) &&
                                                        type != typeof(ExpressionPublicationValidationDiagnosticView) &&
                                                        type != typeof(ExpressionPublicationValidationProblemDetails) &&
                                                        type != typeof(RuntimePreflightProblemDetails)).ToArray();
         var legacyHash = PublicShapeHash(legacyTypes);
-        Assert.Equal(
-            "ed180bec792b7e994966c0f57b3936520df0f9d78ff10f15e3f1dacc5e8f80ea",
-            legacyHash);
-
         var actualHash = PublicShapeHash(ContractTypes);
         Assert.True(
-            actualHash == "cab748e2899be96e66a7c74ad45765dfdb0fb417a1d884070b60aa45bf0be269",
+            legacyHash == "5fc3b46d8e356ae9057b60e70499351717a1dc1866ce2866996df50c8bcfbbca",
+            $"The Publishing API legacy public-shape hash changed to {legacyHash}; complete surface {actualHash}.");
+        Assert.True(
+            actualHash == "40880ecd14c21f1393d6fe682ac27a2ad2f1974d9e4ad1e3014b686f2153c829",
             $"The Publishing API public-shape hash changed to {actualHash}.");
     }
 

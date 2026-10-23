@@ -12,6 +12,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using static Elsa.Activities.Runtime.Tests.PersistenceModeTestRuns;
 using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
 
 namespace Elsa.Activities.Runtime.Tests;
@@ -27,7 +28,7 @@ public sealed class PersistenceModeFlushTests
     private const string WaitingNodeId = "node-waiting";
     private static readonly string[] ActivityExecutionIds = Enumerable.Range(0, 32).Select(index => $"actexec-{index}").ToArray();
 
-    public PersistenceModeFlushTests() => CountingReplaySafeActivity.Reset();
+    private readonly ActivityRunLog _runs = new();
 
     [Fact]
     public async Task Balanced_counts_MaxActivitiesPerCommit_in_activities_not_checkpoints()
@@ -107,9 +108,8 @@ public sealed class PersistenceModeFlushTests
 
         // Either way the queued start is consumed, so nothing is left that would run the workflow again, and the
         // activity ran exactly once.
-        Assert.Empty(await harness.Services.GetRequiredService<IWorkflowSchedulerWorkQueue>()
-            .ListAllAsync(new RuntimeSchedulerWorkQuery(harness.ExecutionId)));
-        Assert.Equal(1, CountingReplaySafeActivity.Executions);
+        await AssertNothingQueuedAsync(harness);
+        Assert.Equal(1, _runs.Executions);
     }
 
     [Fact]
@@ -126,7 +126,7 @@ public sealed class PersistenceModeFlushTests
 
         Assert.Equal(WorkflowExecutionStatus.Completed, run.WorkflowState?.Status);
         Assert.All(run.ActivityStates, state => Assert.Equal(ActivityExecutionStatus.Completed, state.Status));
-        Assert.Equal(1, CountingReplaySafeActivity.Executions);
+        Assert.Equal(1, _runs.Executions);
     }
 
     // ---- What every mode commits -------------------------------------------------------------------------------------
@@ -177,7 +177,7 @@ public sealed class PersistenceModeFlushTests
         Assert.Equal(WorkflowExecutionStatus.Completed, resumed.WorkflowState?.Status);
         Assert.Equal(ActivityExecutionStatus.Completed, resumed.State(WaitingNodeId).Status);
         Assert.Null(await bookmarks.FindAsync(harness.ExecutionId, bookmarkId));
-        Assert.Equal(1, CountingReplaySafeActivity.Executions);
+        Assert.Equal(1, _runs.Executions);
     }
 
     [Theory]
@@ -211,8 +211,7 @@ public sealed class PersistenceModeFlushTests
         var run = await harness.ReadRunAsync(harness.ExecutionId);
         Assert.Equal(WorkflowExecutionStatus.Cancelled, run.WorkflowState?.Status);
         Assert.Equal(ActivityExecutionStatus.Cancelled, run.State(WaitingNodeId).Status);
-        Assert.Empty(await harness.Services.GetRequiredService<IWorkflowSchedulerWorkQueue>()
-            .ListAllAsync(new RuntimeSchedulerWorkQuery(harness.ExecutionId)));
+        await AssertNothingQueuedAsync(harness);
     }
 
     [Theory]
@@ -225,7 +224,7 @@ public sealed class PersistenceModeFlushTests
         // observer then raises a blocking incident. Under the folding modes the activity before it is still only in
         // memory at that point, so the end of the pass must commit it, and the poisoned item must not stay queued to be
         // delivered again.
-        await using var harness = NewHarness(mode, recordCompletion, services => FailInvocationOf(services, PoisonedNodeId));
+        await using var harness = NewHarness(mode, recordCompletion, services => InvokeHandlerInterruptions.FailInvocationOf(services, PoisonedNodeId));
 
         var run = await harness.RunAsync(
             WorkflowExecutionHarness.NewExecutable(NewSequence(
@@ -242,9 +241,8 @@ public sealed class PersistenceModeFlushTests
         Assert.False(run.DidRun("node-never-reached"));
         Assert.Single(await harness.Services.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync(harness.ExecutionId));
         Assert.Single(await harness.Services.GetRequiredService<IIncidentStateStore>().ListBlockingAsync(harness.ExecutionId));
-        Assert.Empty(await harness.Services.GetRequiredService<IWorkflowSchedulerWorkQueue>()
-            .ListAllAsync(new RuntimeSchedulerWorkQuery(harness.ExecutionId)));
-        Assert.Equal(1, CountingReplaySafeActivity.Executions);
+        await AssertNothingQueuedAsync(harness);
+        Assert.Equal(1, _runs.Executions);
     }
 
     [Theory]
@@ -260,7 +258,6 @@ public sealed class PersistenceModeFlushTests
         // queued work stays for the new owner, which runs those activities again and completes the run once. That holds
         // for a completion Ephemeral would drop too: dropping it touches the durable queue, so it checks ownership first.
         // Durable commits the first activity before the steal, so it has a test of its own below.
-        LeaseStealingReplaySafeActivity.Reset();
         await using var harness = NewHarness(mode, recordCompletion);
         var executable = WorkflowExecutionHarness.NewExecutable(NewSequence(
             "node-sequence",
@@ -272,8 +269,7 @@ public sealed class PersistenceModeFlushTests
 
         var commits = harness.Services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>();
         Assert.Empty(commits.ListCommits());
-        Assert.NotEmpty(await harness.Services.GetRequiredService<IWorkflowSchedulerWorkQueue>()
-            .ListAllAsync(new RuntimeSchedulerWorkQuery(harness.ExecutionId)));
+        Assert.NotEmpty(await QueuedWorkAsync(harness));
 
         await DeliverAsync(harness, WorkflowExecutionCommandKind.RunSchedulerWork, WorkflowExecutionActorActivationReason.Recovery);
 
@@ -291,9 +287,8 @@ public sealed class PersistenceModeFlushTests
             Assert.Equal(0, completions);
         }
 
-        Assert.Empty(await harness.Services.GetRequiredService<IWorkflowSchedulerWorkQueue>()
-            .ListAllAsync(new RuntimeSchedulerWorkQuery(harness.ExecutionId)));
-        Assert.Equal(2, CountingReplaySafeActivity.Executions);
+        await AssertNothingQueuedAsync(harness);
+        Assert.Equal(2, _runs.Executions);
     }
 
     [Fact]
@@ -304,7 +299,6 @@ public sealed class PersistenceModeFlushTests
         // stealing activity is refused. That refusal is not a fault of the work this node was running: nothing is
         // recorded as poison, and the committed continuation is still pending, so the new owner delivers it, runs the
         // rest without running the committed activity again, and completes the run once.
-        LeaseStealingReplaySafeActivity.Reset();
         await using var harness = NewHarness(PersistenceMode.Durable, recordCompletion: true);
         var executable = WorkflowExecutionHarness.NewExecutable(NewSequence(
             "node-sequence",
@@ -333,9 +327,8 @@ public sealed class PersistenceModeFlushTests
         Assert.Equal(WorkflowExecutionStatus.Completed, run.WorkflowState?.Status);
         Assert.Equal(1, commits.ListCommits().Count(commit => commit.Commit.Checkpoint.Name == RuntimeCheckpointNames.WorkflowCompleted));
         Assert.Empty(await harness.Services.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync(harness.ExecutionId));
-        Assert.Empty(await harness.Services.GetRequiredService<IWorkflowSchedulerWorkQueue>()
-            .ListAllAsync(new RuntimeSchedulerWorkQuery(harness.ExecutionId)));
-        Assert.Equal(1, CountingReplaySafeActivity.Executions);
+        await AssertNothingQueuedAsync(harness);
+        Assert.Equal(1, _runs.Executions);
     }
 
     private static bool RecordsCompleted(RuntimeCheckpointCommit commit, string executableNodeId) =>
@@ -346,79 +339,23 @@ public sealed class PersistenceModeFlushTests
 
     private const string PoisonedNodeId = "node-poisoned";
 
-    // Makes the invoke handler throw for one node, the way a broken handler or an unreadable payload does.
-    private static void FailInvocationOf(IServiceCollection services, string executableNodeId)
-    {
-        var descriptor = services.Single(candidate =>
-            candidate.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
-            candidate.ImplementationType == typeof(WorkflowInvokeActivitySchedulerWorkHandler));
-        services.Remove(descriptor);
-        services.Add(ServiceDescriptor.Describe(
-            typeof(IWorkflowSchedulerWorkHandler),
-            serviceProvider => new FailingInvocationHandler(
-                ActivatorUtilities.CreateInstance<WorkflowInvokeActivitySchedulerWorkHandler>(serviceProvider),
-                executableNodeId),
-            descriptor.Lifetime));
-    }
+    // Nothing is left queued that would run the workflow again.
+    private static async Task AssertNothingQueuedAsync(WorkflowExecutionHarness harness) =>
+        Assert.Empty(await QueuedWorkAsync(harness));
 
-    private sealed class FailingInvocationHandler(IWorkflowSchedulerWorkHandler inner, string executableNodeId) : IWorkflowSchedulerWorkHandler
-    {
-        public string Name => inner.Name;
-
-        public bool CanHandle(RuntimeSchedulerWorkItem workItem) => inner.CanHandle(workItem);
-
-        public ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) =>
-            workItem.Payload is { } payload &&
-            payload.TryGetProperty(nameof(RuntimeInvokeActivityCommandPayload.ExecutableNodeId), out var nodeId) &&
-            nodeId.GetString() == executableNodeId
-                ? throw new InvalidOperationException($"The invoke handler failed for node '{executableNodeId}'.")
-                : inner.HandleAsync(workItem, cancellationToken);
-    }
-
-    // Delivers one command to the run's agent, the way an operator (Cancel) or the recovery sweep (RunSchedulerWork)
-    // reaches a run that is already started.
-    private static async Task DeliverAsync(
-        WorkflowExecutionHarness harness,
-        WorkflowExecutionCommandKind kind,
-        WorkflowExecutionActorActivationReason reason)
-    {
-        var agent = await harness.Services.GetRequiredService<IWorkflowExecutionActorProvider>().GetAgentAsync(
-            new WorkflowExecutionActorActivationRequest(
-                workflowExecutionId: harness.ExecutionId,
-                reason: reason,
-                requestedAt: WorkflowExecutionHarness.Timestamp,
-                requestedBy: "persistence-mode-test",
-                requiredCapabilities: WorkflowExecutionActorCapabilities.InProcessMailbox));
-        var envelopeId = $"envelope-{kind}";
-        var dispatch = await agent.EnqueueAsync(new WorkflowExecutionCommandEnvelope(
-            envelopeId: envelopeId,
-            workflowExecutionId: harness.ExecutionId,
-            command: new WorkflowExecutionCommand(
-                CommandId: $"command-{kind}",
-                WorkflowExecutionId: harness.ExecutionId,
-                Kind: kind,
-                EnqueuedAt: WorkflowExecutionHarness.Timestamp,
-                Payload: null,
-                Metadata: new Dictionary<string, string>()),
-            idempotencyKey: $"{harness.ExecutionId}:{envelopeId}",
-            deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
-            enqueuedAt: WorkflowExecutionHarness.Timestamp,
-            metadata: new Dictionary<string, string>()));
-        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, dispatch.Status);
-    }
-
-    private static WorkflowExecutionHarness NewHarness(
+    private WorkflowExecutionHarness NewHarness(
         PersistenceMode mode,
         bool recordCompletion,
         Action<IServiceCollection>? configure = null,
         int? maxActivitiesPerCommit = null) =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new Elsa.Activities.Sequence.ActivitiesSequenceFeature().ConfigureServices(services))
+            .WithFeature(services => services.AddSingleton(_runs))
             .WithFeature(services => configure?.Invoke(services))
             .WithPersistenceMode(mode, maxActivitiesPerCommit, recordCompletion)
             .Build(ActivityExecutionIds);
 
-    private static async Task<(int Activities, int Commits, IReadOnlyList<(string NodeId, ActivityExecutionStatus Status)> Snapshot)> RunStraightLineAsync(
+    private async Task<(int Activities, int Commits, IReadOnlyList<(string NodeId, ActivityExecutionStatus Status)> Snapshot)> RunStraightLineAsync(
         PersistenceMode mode,
         int maxActivitiesPerCommit)
     {
@@ -465,17 +402,6 @@ public sealed class PersistenceModeFlushTests
 
     private static ExecutableNode NewCountingNode() => NewClrNode(CountingNodeId, typeof(CountingReplaySafeActivity));
 
-    private static ExecutableNode NewClrNode(string nodeId, Type activityType) =>
-        new(
-            executableNodeId: nodeId,
-            authoredActivityId: $"authored-{nodeId}",
-            activityType: activityType.FullName!,
-            activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
-            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            metadata: new Dictionary<string, string>());
-
     private static ExecutableNode NewSequence(string nodeId, params ExecutableNode[] activities) =>
         new(
             executableNodeId: nodeId,
@@ -491,44 +417,4 @@ public sealed class PersistenceModeFlushTests
                 SequenceActivity.StructureKind,
                 SequenceActivity.StructureSchemaVersion,
                 JsonSerializer.SerializeToElement(new { activities = activities.Select(activity => activity.ExecutableNodeId).ToArray() })));
-}
-
-/// <summary>
-/// A ReplaySafe leaf that takes its run's ownership the first time it runs, the way another node does when it
-/// considers this node gone. The flag is process-wide; the one test class that uses it resets it per test.
-/// </summary>
-[ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
-public sealed class LeaseStealingReplaySafeActivity(IRuntimeExecutionOwnershipService ownership) : Activity<ActivityUnit>
-{
-    private static int _stolen;
-
-    public static void Reset() => Interlocked.Exchange(ref _stolen, 0);
-
-    protected override async ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context)
-    {
-        if (Interlocked.Exchange(ref _stolen, 1) == 0)
-            await ownership.AcquireAsync(context.WorkflowExecutionId);
-        return ActivityTransition.Complete(ActivityUnit.Value, ActivityOutcomes.Done);
-    }
-}
-
-/// <summary>
-/// A ReplaySafe leaf that counts how often it runs, so a test can tell a run that executed once from one that was
-/// started again. The count is process-wide; the one test class that uses it resets it per test and its tests run one
-/// at a time.
-/// </summary>
-[ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
-public sealed class CountingReplaySafeActivity : Activity<ActivityUnit>
-{
-    private static int _executions;
-
-    public static int Executions => Volatile.Read(ref _executions);
-
-    public static void Reset() => Interlocked.Exchange(ref _executions, 0);
-
-    protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context)
-    {
-        Interlocked.Increment(ref _executions);
-        return ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value, ActivityOutcomes.Done));
-    }
 }

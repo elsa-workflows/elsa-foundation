@@ -219,14 +219,33 @@ public sealed class ActivityDraftTestRunService(
                 exception.Diagnostics,
                 cancellationToken);
         }
-        var placement = await placer.PlaceAsync(new(
-            publication,
-            compilation.Template,
-            templateReference,
-            origin,
-            definition.ActivityTypeKey,
-            suppliedInputs,
-            NoOutputCaptures), cancellationToken);
+        ActivityTemplatePlacement placement;
+        try
+        {
+            placement = await placer.PlaceAsync(new(
+                publication,
+                compilation.Template,
+                templateReference,
+                origin,
+                definition.ActivityTypeKey,
+                suppliedInputs,
+                NoOutputCaptures), cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            // Placement runs before any wrapper artifact or Runtime dispatch exists. Persist only a safe summary:
+            // provider/consumer exception details can contain authored values and must not enter the receipt/API.
+            return await RejectValidationAsync(
+                receipt,
+                "activity.test-run.preparation-failed",
+                "The activity draft could not be prepared for a Test Run.",
+                [],
+                cancellationToken);
+        }
 
         var artifactHash = hasher.ComputeHash(placement.Root);
         var artifactId = hasher.CreateArtifactId("artifact-", artifactHash);
@@ -261,8 +280,9 @@ public sealed class ActivityDraftTestRunService(
             LayoutSidecar: placement.LayoutSidecar);
         await sourceReferences.SaveAsync(wrapperReference, cancellationToken);
 
-        receipt = await UpdateAsync(
+        receipt = await UpdateConditionallyAsync(
             receipt,
+            IsUndispatchedPreparing,
             x => x with
             {
                 ArtifactId = artifactId,
@@ -270,6 +290,9 @@ public sealed class ActivityDraftTestRunService(
                 Status = ActivityDraftTestRunReceiptStatus.Dispatching
             },
             cancellationToken);
+        if (receipt.Status != ActivityDraftTestRunReceiptStatus.Dispatching)
+            return await ProjectAsync(receipt, cancellationToken);
+
         return await DispatchPersistedAsync(receipt, request, cancellationToken);
     }
 
@@ -547,8 +570,9 @@ public sealed class ActivityDraftTestRunService(
         IReadOnlyList<ActivityDiagnostic> diagnostics,
         CancellationToken cancellationToken)
     {
-        receipt = await UpdateAsync(
+        receipt = await UpdateConditionallyAsync(
             receipt,
+            IsUndispatchedPreparing,
             x => x with
             {
                 Status = ActivityDraftTestRunReceiptStatus.ValidationRejected,
@@ -646,6 +670,17 @@ public sealed class ActivityDraftTestRunService(
         ActivityDraftTestRunReceipt receipt,
         Func<ActivityDraftTestRunReceipt, ActivityDraftTestRunReceipt> update,
         CancellationToken cancellationToken)
+        => await UpdateConditionallyAsync(
+            receipt,
+            _ => true,
+            update,
+            cancellationToken);
+
+    private async Task<ActivityDraftTestRunReceipt> UpdateConditionallyAsync(
+        ActivityDraftTestRunReceipt receipt,
+        Func<ActivityDraftTestRunReceipt, bool> canUpdate,
+        Func<ActivityDraftTestRunReceipt, ActivityDraftTestRunReceipt> update,
+        CancellationToken cancellationToken)
     {
         for (var attempt = 0; attempt < 8; attempt++)
         {
@@ -653,6 +688,9 @@ public sealed class ActivityDraftTestRunService(
                 ? receipt
                 : await testRuns.FindAsync(receipt.TestRunId, cancellationToken)
                   ?? throw new InvalidOperationException("The activity Test Run receipt disappeared during an update.");
+            if (!canUpdate(current))
+                return current;
+
             var next = update(current) with
             {
                 Revision = current.Revision + 1,
@@ -662,8 +700,18 @@ public sealed class ActivityDraftTestRunService(
                 return next;
         }
 
+        var latest = await testRuns.FindAsync(receipt.TestRunId, cancellationToken)
+                     ?? throw new InvalidOperationException("The activity Test Run receipt disappeared during an update.");
+        if (!canUpdate(latest))
+            return latest;
         throw new InvalidOperationException("The activity Test Run receipt could not be updated after repeated concurrency conflicts.");
     }
+
+    private static bool IsUndispatchedPreparing(ActivityDraftTestRunReceipt receipt) =>
+        receipt.Status == ActivityDraftTestRunReceiptStatus.Preparing &&
+        receipt.ArtifactId is null &&
+        receipt.SourceReferenceId is null &&
+        receipt.CommandDispatchStatus is null;
 
     private static ActivityDraftTestRunReceiptStatus MapDispatch(WorkflowExecutionCommandDispatchStatus status) =>
         status switch
@@ -734,8 +782,8 @@ public sealed class ActivityDraftTestRunService(
             if (!StringComparer.OrdinalIgnoreCase.Equals(value.State, "Present") || !value.Value.HasValue)
                 throw Reject("activity.test-run.input-state-invalid", $"Activity input '{input.ReferenceKey}' has an invalid state/value combination.");
             var targetType = new ValueTypeDescriptor(input.Type.Alias, input.Type.CollectionKind);
-            var policy = ValuePolicyCombiner.ToProtectionPolicy(
-                ValuePolicyCombiner.FromAuthoredStorage(input.StorageDriverKey));
+            // The contract driver encodes the boundary snapshot; it is not an external payload profile.
+            var policy = ValueProtectionPolicy.InstanceInline;
             var literal = value.Value.Value.ValueKind == JsonValueKind.Null
                 ? ValueEnvelope.Null(targetType, policy)
                 : ValueEnvelope.Inline(targetType, value.Value.Value, policy);

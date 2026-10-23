@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -19,6 +20,18 @@ namespace Elsa.Activities.Runtime.Services;
 /// </summary>
 internal static class ChildFaultParentEvaluation
 {
+    public static ActivityFaultIncidentRecordRequest MarkPendingOutcome(
+        ActivityFaultIncidentRecordRequest request,
+        RuntimeSchedulerWorkItem parentOutcomeWorkItem)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(parentOutcomeWorkItem);
+
+        var incidentMetadata = request.IncidentMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        incidentMetadata[RuntimeMetadataKeys.ParentOutcomeWorkItemId] = parentOutcomeWorkItem.WorkItemId;
+        return request with { IncidentMetadata = incidentMetadata };
+    }
+
     /// <summary>
     /// Builds the parent-fault evaluation work item for the parent of <paramref name="faultedChildState"/>,
     /// or <c>null</c> when the faulted activity has no parent (nothing to propagate to). The parent's opt-in
@@ -32,8 +45,14 @@ internal static class ChildFaultParentEvaluation
         WorkflowExecutableIdentity pinnedExecutable,
         ActivityExecutionState faultedChildState,
         string incidentId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ActivityFault? parentOutcomeFault = null,
+        IReadOnlyList<ActivityChildNotifiedContext>? parentOutcomeNotifications = null)
     {
+        parentOutcomeNotifications ??= [];
+        if (parentOutcomeNotifications.Count > 0 && parentOutcomeFault is null)
+            throw new ArgumentException("A combined child outcome requires the masked child fault.", nameof(parentOutcomeFault));
+
         if (faultedChildState.ParentActivityExecutionId is not { } parentActivityExecutionId)
             return null;
 
@@ -42,6 +61,25 @@ internal static class ChildFaultParentEvaluation
             return null;
 
         var faultedChildActivityExecutionId = faultedChildState.Execution.ActivityExecutionId;
+        RuntimeParentOutcome? parentOutcome = null;
+        if (parentOutcomeNotifications.Count > 0)
+        {
+            if (faultedChildState.Fault is not { } normalizedFault || !Matches(normalizedFault, parentOutcomeFault!))
+                throw new InvalidOperationException("A combined parent outcome must carry the exact masked fault recorded on the child activity state.");
+
+            if (parentOutcomeNotifications.Any(notification =>
+                    !StringComparer.Ordinal.Equals(notification.NotifyingChildActivityExecutionId, faultedChildActivityExecutionId) ||
+                    !StringComparer.Ordinal.Equals(notification.NotifyingChildExecutableNodeId, faultedChildState.Execution.ExecutableNodeId) ||
+                    !StringComparer.Ordinal.Equals(notification.NotifyingChildIterationId, faultedChildState.IterationId)))
+                throw new InvalidOperationException("Combined parent-outcome notifications must identify the faulted child activity execution, executable node, and iteration.");
+
+            parentOutcome = new RuntimeParentOutcome(
+                RuntimeParentOutcome.CurrentVersion,
+                parentOutcomeFault!,
+                incidentId,
+                parentOutcomeNotifications);
+        }
+
         var payload = new RuntimeCompleteActivityCommandPayload(
             pinnedExecutable,
             parentState.Execution.ExecutableNodeId,
@@ -49,18 +87,30 @@ internal static class ChildFaultParentEvaluation
             parentState.ParentActivityExecutionId,
             parentState.BranchId,
             outcomeNames: [],
-            RuntimeCompleteActivityCommandPayload.ParentCompletionEvaluationReason,
-            SchedulerCompletionKind.ParentCompletionEvaluation,
-            faultedChildActivityExecutionId);
+            parentOutcome is null
+                ? RuntimeCompleteActivityCommandPayload.ParentCompletionEvaluationReason
+                : RuntimeCompleteActivityCommandPayload.ParentOutcomeEvaluationReason,
+            parentOutcome is null
+                ? SchedulerCompletionKind.ParentCompletionEvaluation
+                : SchedulerCompletionKind.ParentOutcomeEvaluation,
+            faultedChildActivityExecutionId,
+            parentOutcome);
 
         var now = timeProvider.GetUtcNow();
-        var commandMetadata = sourceWorkItem.CommandMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        var commandMetadata = SchedulerWorkItems.WithSchedulingMetadata(sourceWorkItem.CommandMetadata, faultedChildState);
+        // A fault raised while evaluating a descendant-fault delivery is the receiver's own fault: its parent gets it as
+        // an ordinary child fault, not as a descendant's (spec 258 R-3).
+        commandMetadata.Remove(RuntimeMetadataKeys.DescendantFault);
+        commandMetadata.Remove(RuntimeMetadataKeys.DescendantFaultViaChildActivityExecutionId);
+        commandMetadata.Remove(RuntimeMetadataKeys.DescendantFaultViaChildExecutableNodeId);
         commandMetadata[RuntimeMetadataKeys.ChildFaulted] = bool.TrueString;
         commandMetadata[RuntimeMetadataKeys.IncidentId] = incidentId;
         commandMetadata[RuntimeMetadataKeys.ParentActivityExecutionId] = parentActivityExecutionId;
         commandMetadata[RuntimeMetadataKeys.CompletedChildActivityExecutionId] = faultedChildActivityExecutionId;
 
-        var suffix = $"child-fault-parent:{parentActivityExecutionId}:child:{faultedChildActivityExecutionId}";
+        var suffix = parentOutcome is null
+            ? $"child-fault-parent:{parentActivityExecutionId}:child:{faultedChildActivityExecutionId}"
+            : $"child-outcome-parent:{parentActivityExecutionId}:child:{faultedChildActivityExecutionId}";
         return new RuntimeSchedulerWorkItem(
             workItemId: RuntimeChainId.Derive(sourceWorkItem.WorkItemId, $"{suffix}"),
             workflowExecutionId: sourceWorkItem.WorkflowExecutionId,
@@ -76,5 +126,17 @@ internal static class ChildFaultParentEvaluation
             envelopeMetadata: sourceWorkItem.EnvelopeMetadata,
             executionScopeId: parentState.ExecutionScopeId ?? parentState.Provenance.ExecutionScopeId,
             attempt: parentState.Attempt ?? parentState.Provenance.Attempt);
+    }
+
+    internal static bool Matches(NormalizedActivityFault normalized, ActivityFault fault)
+    {
+        var projected = fault.ToNormalized();
+        return StringComparer.Ordinal.Equals(normalized.Code, projected.Code) &&
+               StringComparer.Ordinal.Equals(normalized.ExceptionType, projected.ExceptionType) &&
+               StringComparer.Ordinal.Equals(normalized.Message, projected.Message) &&
+               normalized.SanitizedStackTrace is null &&
+               normalized.IsRetryable == projected.IsRetryable &&
+               normalized.Metadata.Count == projected.Metadata.Count &&
+               normalized.Metadata.All(item => projected.Metadata.TryGetValue(item.Key, out var value) && StringComparer.Ordinal.Equals(item.Value, value));
     }
 }

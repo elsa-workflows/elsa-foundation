@@ -711,6 +711,7 @@ public sealed class RuntimeResumptionServiceTests
         services.AddWorkflowRuntime();
         services.RemoveAll<TimeProvider>();
         services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
+        services.AddPersistenceModes();
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         await using var scope = provider.CreateAsyncScope();
         var runtime = scope.ServiceProvider;
@@ -751,6 +752,7 @@ public sealed class RuntimeResumptionServiceTests
         services.AddWorkflowRuntime();
         services.RemoveAll<TimeProvider>();
         services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
+        services.AddPersistenceModes();
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         await using var scope = provider.CreateAsyncScope();
         var runtime = scope.ServiceProvider;

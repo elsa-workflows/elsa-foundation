@@ -172,7 +172,9 @@ public static class ActivityContractSurface
 
     private static JsonNode? BuildStructure(IReadOnlyCollection<ActivityDesignFacet> facets)
     {
-        var facet = facets.FirstOrDefault(facet => facet.Kind != "elsa.outcomes");
+        if (!ActivityStructureDesignFacetReader.TryReadSingle(facets, out var facet))
+            throw new InvalidOperationException("The activity contract surface cannot describe multiple structure facets.");
+
         if (facet is null)
             return null;
 

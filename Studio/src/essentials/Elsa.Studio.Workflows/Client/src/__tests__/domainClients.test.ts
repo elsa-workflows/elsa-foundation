@@ -72,6 +72,18 @@ const pagedDefinitionCapabilities = {
 };
 
 describe("canonical domain clients", () => {
+  it.each([
+    { name: "paged", discovery: pagedDefinitionCapabilities, path: "/design/workflows/definition-pages?state=active&pageSize=10" },
+    { name: "legacy", discovery: capabilities, path: "/design/workflows/definitions?state=active" }
+  ])("forwards cancellation to the advertised $name definition list", async ({ discovery, path }) => {
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? discovery : { items: [] });
+    const controller = new AbortController();
+
+    await listDefinitions(createContext({ getJson }), { search: "", page: 1, pageSize: 10 }, controller.signal);
+
+    expect(getJson).toHaveBeenLastCalledWith(path, { signal: controller.signal });
+  });
+
   it("discovers incident strategies only through the advertised publishing relation", async () => {
     const response = {
       items: [{
@@ -114,7 +126,58 @@ describe("canonical domain clients", () => {
 
     expect(result.definitions.map(item => item.id)).toEqual(["definition-6", "definition-7", "definition-8", "definition-9", "definition-10"]);
     expect(result).toMatchObject({ page: 2, pageSize: 5, totalCount: 12 });
-    expect(getJson).toHaveBeenLastCalledWith("/design/workflows/definitions?state=all&search=Definition");
+    expect(getJson).toHaveBeenLastCalledWith("/design/workflows/definitions?state=all&searchTerm=Definition");
+  });
+
+  it("returns the full unpaged Design response for one-shot name enrichment", async () => {
+    const items = Array.from({ length: 140 }, (_, index) => ({
+      id: `definition-${index + 1}`,
+      name: `Definition ${index + 1}`,
+      createdAt: "2026-07-13T00:00:00Z",
+      lastModifiedAt: "2026-07-13T00:00:00Z",
+      versionCount: 0
+    }));
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : { items });
+
+    const result = await listDefinitions(createContext({ getJson }), {
+      search: "",
+      state: "all",
+      page: 1,
+      pageSize: 100,
+      includeAllWhenUnpaged: true
+    });
+
+    expect(result.definitions).toHaveLength(140);
+    expect(result.definitions[139].id).toBe("definition-140");
+    expect(getJson).toHaveBeenCalledTimes(2);
+  });
+
+  it("sends searchTerm so the Design list binder can filter, not the client-only search alias", async () => {
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : { items: [] });
+
+    await listDefinitions(createContext({ getJson }), {
+      search: "golden",
+      state: "active",
+      page: 1,
+      pageSize: 10
+    });
+
+    const requested = new URL(String(getJson.mock.lastCall?.[0]), "https://server.example");
+    expect(requested.searchParams.get("searchTerm")).toBe("golden");
+    expect(requested.searchParams.has("search")).toBe(false);
+
+    const paged = vi.fn(async (url: string) => url === "/capabilities"
+      ? pagedDefinitionCapabilities
+      : { items: [], nextContinuationToken: null });
+    await listDefinitions(createContext({ getJson: paged }), {
+      search: "golden",
+      state: "active",
+      page: 1,
+      pageSize: 10
+    });
+    const pagedRequest = new URL(String(paged.mock.lastCall?.[0]), "https://server.example");
+    expect(pagedRequest.searchParams.get("searchTerm")).toBe("golden");
+    expect(pagedRequest.searchParams.has("search")).toBe(false);
   });
 
   it("uses the advertised bounded definition page without downloading the legacy collection", async () => {
@@ -146,7 +209,7 @@ describe("canonical domain clients", () => {
       isPaged: true
     });
     expect(getJson).toHaveBeenLastCalledWith(
-      "/design/workflows/definition-pages?state=all&search=Definition&pageSize=5&continuationToken=opaque-current-page"
+      "/design/workflows/definition-pages?state=all&searchTerm=Definition&pageSize=5&continuationToken=opaque-current-page"
     );
     expect(getJson).not.toHaveBeenCalledWith(expect.stringContaining("/design/workflows/definitions?"));
   });

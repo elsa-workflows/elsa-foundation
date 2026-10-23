@@ -1,6 +1,6 @@
 namespace Elsa.Primitives.Extensions;
 
-public static class CollectionExtensions
+internal static class CollectionExtensions
 {
     /// <summary>
     /// Removes all items from a collection that match the specified predicate.

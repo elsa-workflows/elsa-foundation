@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Elsa.ExtensionBuilder.Api.Authorization;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
@@ -8,7 +9,7 @@ namespace Elsa.Modularity.Tests;
 
 /// <summary>
 /// Verifies that the module-management and Extension Builder features contribute their coarse
-/// host-control permissions to the shared permission catalog, with <c>manage</c> implying
+/// host-control permissions to the shared permission catalog, that the evaluator lets <c>manage</c> satisfy
 /// <c>read</c>, and that the aggregated catalog resolves them alongside the default identity permissions.
 /// </summary>
 public sealed class HostControlPermissionContributionTests
@@ -23,26 +24,28 @@ public sealed class HostControlPermissionContributionTests
     [Theory]
     [InlineData(ModuleManagementPermissionKeys.Read, ModuleManagementPermissionKeys.Manage)]
     [InlineData(ExtensionBuilderPermissionKeys.Read, ExtensionBuilderPermissionKeys.Manage)]
-    public void FeatureContributesReadAndManageWithManageImplyingRead(string readKey, string manageKey)
+    public async Task FeatureContributesReadAndManageWithManageSatisfyingRead(string readKey, string manageKey)
     {
-        var read = _catalog.Find(readKey);
-        var manage = _catalog.Find(manageKey);
+        var evaluator = new ClaimsPermissionEvaluator();
 
-        Assert.NotNull(read);
-        Assert.NotNull(manage);
-        Assert.Empty(read!.Implies ?? new HashSet<string>());
-        Assert.Contains(readKey, manage!.Implies!);
+        Assert.NotNull(_catalog.Find(readKey));
+        Assert.NotNull(_catalog.Find(manageKey));
+        Assert.True((await evaluator.EvaluateAsync(new(Holding(manageKey), readKey))).Succeeded);
+        Assert.False((await evaluator.EvaluateAsync(new(Holding(readKey), manageKey))).Succeeded);
     }
+
+    private static ClaimsPrincipal Holding(string permission) =>
+        new(new ClaimsIdentity([new Claim(IdentityClaimTypes.Permission, permission)], "test"));
 
     [Fact]
     public void ContributedPermissionsUseExpectedCoarseKeys()
     {
         var keys = _catalog.List().Select(x => x.Key).ToHashSet();
 
-        Assert.Contains("module-management.read", keys);
-        Assert.Contains("module-management.manage", keys);
-        Assert.Contains("extension-builder.read", keys);
-        Assert.Contains("extension-builder.manage", keys);
+        Assert.Contains("module-management:read", keys);
+        Assert.Contains("module-management:manage", keys);
+        Assert.Contains("extension-builder:read", keys);
+        Assert.Contains("extension-builder:manage", keys);
     }
 
     [Fact]

@@ -43,9 +43,10 @@ export function ActivityDefinitionForkDialog({
     () => migrationProviderChoices(
       capabilitiesQuery.data,
       activityEditors,
+      recommendation.providerKey,
       recommendation.providerSchemaVersion
     ),
-    [activityEditors, capabilitiesQuery.data, recommendation.providerSchemaVersion]
+    [activityEditors, capabilitiesQuery.data, recommendation.providerKey, recommendation.providerSchemaVersion]
   );
   const [category, setCategory] = useState(definition.definition.category);
   const [displayName, setDisplayName] = useState(definition.definition.displayName);

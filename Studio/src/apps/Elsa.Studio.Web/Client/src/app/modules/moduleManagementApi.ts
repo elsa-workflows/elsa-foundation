@@ -170,7 +170,7 @@ export const moduleManagementKeys = {
 
 const backendRegistryPath = "/_elsa/module-management/registry";
 
-// `canManageStudioHost` reflects whether the signed-in user holds module-management.manage (from usePermissions).
+// `canManageStudioHost` reflects whether the signed-in user holds module-management:manage (from usePermissions).
 // It PROACTIVELY hides/disables the Studio host's mutation affordances a user can't use; the server-side manage gate
 // remains the authority (a stale session never grants a write). Defaults to true so demo/auth-disabled mode — where
 // permission checks do not apply and usePermissions reports no permissions — keeps full mutation access.
@@ -219,9 +219,9 @@ async function readStudioRegistry(host: StudioEndpointContext): Promise<HostRegi
 // surfaces as "unknown".
 async function readServerRegistryViaBridge(host: StudioEndpointContext): Promise<HostRegistryResult> {
   try {
-    const envelope = await host.http.getJson<StudioBackendManagementRegistryEnvelope<Partial<ModuleManagementRegistryResponse>>>(studioBackendManagementRegistryPath);
+    const envelope = await host.http.getJson<StudioBackendManagementRegistryEnvelope<unknown>>(studioBackendManagementRegistryPath);
     if (envelope.status === "available" && envelope.registry) {
-      return { kind: "ready", registry: normalizeModuleManagementRegistry(envelope.registry) };
+      return { kind: "ready", registry: normalizeServerModuleManagementRegistry(envelope.registry) };
     }
 
     return {
@@ -235,7 +235,7 @@ async function readServerRegistryViaBridge(host: StudioEndpointContext): Promise
 }
 
 // Maps a thrown registry read to an explicit unavailable result. A 403 is a Studio authorization failure (the user
-// lacks module-management.read), surfaced as the distinct "forbidden" state so the UI renders "you lack permission"
+// lacks module-management:read), surfaced as the distinct "forbidden" state so the UI renders "you lack permission"
 // rather than "backend unavailable". Any other throw is a Studio-origin failure reaching the bridge, surfaced as
 // "unknown".
 function registryFailureResult(error: unknown): Extract<HostRegistryResult, { kind: "unavailable" }> {
@@ -265,9 +265,9 @@ function defaultBackendRegistryDetail(status: BackendRegistryUnavailableKind): s
     case "unauthorized": return "The backend rejected the Studio management credential.";
     case "unreachable": return "The privileged host-management surface could not be reached.";
     case "degraded": return "The privileged host-management surface is degraded.";
-    // A Studio authorization failure (403): the signed-in user lacks the module-management.read permission. This is
+    // A Studio authorization failure (403): the signed-in user lacks the module-management:read permission. This is
     // "Studio denied you", not a backend problem.
-    case "forbidden": return "You do not have permission to read module management. This requires the module-management.read permission.";
+    case "forbidden": return "You do not have permission to read module management. This requires the module-management:read permission.";
     default: return "Privileged host-management status is unknown.";
   }
 }
@@ -295,6 +295,211 @@ export function normalizeModuleManagementRegistry(value?: Partial<ModuleManageme
     capabilities: normalizeCapabilities(registry.capabilities),
     diagnostics: asArray(registry.diagnostics).map(normalizeDiagnostic)
   };
+}
+
+// The Workbench host uses a package-oriented registry shape: built-in host features and active Nuplane packages are
+// module entries, with features nested under each entry. Keep the adapter at this Server bridge boundary so Studio's
+// own registry and older normalized Server registry payloads continue to use the existing contract unchanged.
+function normalizeServerModuleManagementRegistry(value: unknown): ModuleManagementRegistryResponse {
+  if (!isRecord(value))
+    return normalizeModuleManagementRegistry();
+
+  const registry = value as ServerModuleManagementRegistryInput;
+  const workbenchModules = asArray(registry.modules);
+  if (!workbenchModules.some(isWorkbenchRegistryModule))
+    return normalizeModuleManagementRegistry({
+      ...registry,
+      modules: workbenchModules.map(module => normalizeModule(module as Partial<ModuleManagementModule>)),
+      packages: asArray(registry.packages).map(normalizePackage)
+    });
+
+  const host = registry.host ?? normalizeHost(null);
+  const modules = workbenchModules.map(module => isWorkbenchRegistryModule(module)
+    ? normalizeWorkbenchRegistryModule(module, host)
+    : normalizeModule(module as Partial<ModuleManagementModule>));
+  const packagesByKey = new Map<string, ModuleManagementPackage>();
+
+  for (const pkg of asArray(registry.packages)) {
+    const normalized = normalizePackage(pkg);
+    const key = packageKey(normalized.id, normalized.version);
+    packagesByKey.set(key, mergePackageMetadata(packagesByKey.get(key), normalized));
+  }
+
+  for (const module of workbenchModules.filter(isWorkbenchRegistryModule)) {
+    if (module.sourceKind === "server" || !nonEmptyString(module.packageId))
+      continue;
+
+    const id = module.packageId;
+    const version = nonEmptyString(module.packageVersion) ? module.packageVersion : module.version ?? "";
+    const key = packageKey(id, version);
+    const modulePackage: ModuleManagementPackage = {
+      id,
+      version,
+      feedName: module.feedName ?? "",
+      sourceName: module.sourceName ?? "",
+      installPath: module.installPath ?? "",
+      manifest: module.manifest ?? null,
+      dependencies: asArray(module.dependencies)
+    };
+    packagesByKey.set(key, mergePackageMetadata(packagesByKey.get(key), modulePackage));
+  }
+
+  const adaptedRegistry: Partial<ModuleManagementRegistryResponse> = {
+    host: registry.host,
+    generatedAt: registry.generatedAt,
+    modules,
+    packages: [...packagesByKey.values()],
+    dropFolderPackages: registry.dropFolderPackages,
+    feeds: registry.feeds,
+    retentionPolicy: registry.retentionPolicy,
+    capabilities: registry.capabilities,
+    diagnostics: registry.diagnostics
+  };
+  return normalizeModuleManagementRegistry(adaptedRegistry);
+}
+
+function isWorkbenchRegistryModule(value: unknown): value is WorkbenchRegistryModule {
+  return isRecord(value) && ("features" in value || value.sourceKind === "server" || value.sourceKind === "package");
+}
+
+function normalizeWorkbenchRegistryModule(
+  module: WorkbenchRegistryModule,
+  host: ModuleManagementHost
+): ModuleManagementModule {
+  const isServerModule = module.sourceKind === "server";
+  const packageId = nonEmptyString(module.packageId) ? module.packageId : null;
+  const packageVersion = nonEmptyString(module.packageVersion) ? module.packageVersion : module.version ?? "";
+  const features = asRecords(module.features);
+
+  return normalizeModule({
+    id: module.id ?? "unknown-module",
+    displayName: module.displayName ?? module.id ?? "Unknown module",
+    surface: "Server",
+    runtime: host.runtime || "Elsa.Workbench",
+    sourceKind: module.sourceKind ?? "",
+    scope: "backend",
+    version: module.version ?? "",
+    status: module.status ?? "unknown",
+    compatibility: module.compatibility ?? "unknown",
+    // Workbench labels its built-in aggregate Elsa.Workbench, but it is part of the host deployment rather than a
+    // runtime package. Only real Nuplane package entries should land in the package view.
+    packageId: isServerModule ? null : packageId,
+    packageVersion: isServerModule ? null : packageVersion,
+    contributions: features.map(feature => ({
+      type: "feature",
+      id: typeof feature.id === "string" ? feature.id : "unknown-feature",
+      label: typeof feature.displayName === "string" ? feature.displayName : typeof feature.id === "string" ? feature.id : "Unknown feature",
+      status: typeof feature.enabled === "boolean"
+        ? feature.enabled ? "enabled" : "disabled"
+        : typeof feature.status === "string" ? feature.status : "unknown"
+    })),
+    diagnostics: normalizeWorkbenchDiagnostics(module.diagnostics, features, module.id),
+    manifest: null
+  });
+}
+
+function mergePackageMetadata(
+  existing: ModuleManagementPackage | undefined,
+  incoming: ModuleManagementPackage
+): ModuleManagementPackage {
+  if (!existing)
+    return incoming;
+
+  const dependencies = new Map<string, ModuleManagementPackageDependency>();
+  for (const dependency of [...existing.dependencies, ...incoming.dependencies]) {
+    const key = JSON.stringify([dependency.id, dependency.versionRange, dependency.group ?? "", dependency.source]);
+    dependencies.set(key, dependency);
+  }
+
+  return {
+    id: nonEmptyString(existing.id) ? existing.id : incoming.id,
+    version: nonEmptyString(existing.version) ? existing.version : incoming.version,
+    feedName: nonEmptyString(existing.feedName) ? existing.feedName : incoming.feedName,
+    sourceName: nonEmptyString(existing.sourceName) ? existing.sourceName : incoming.sourceName,
+    installPath: nonEmptyString(existing.installPath) ? existing.installPath : incoming.installPath,
+    manifest: existing.manifest && incoming.manifest ? {
+      kind: existing.manifest.kind || incoming.manifest.kind,
+      path: existing.manifest.path || incoming.manifest.path,
+      content: existing.manifest.content ?? incoming.manifest.content,
+      text: existing.manifest.text || incoming.manifest.text
+    } : existing.manifest ?? incoming.manifest,
+    dependencies: [...dependencies.values()]
+  };
+}
+
+function normalizeWorkbenchDiagnostics(
+  moduleDiagnostics: ModuleManagementDiagnostic[] | null | undefined,
+  features: Array<Record<string, unknown>>,
+  moduleId: string | undefined
+): ModuleManagementDiagnostic[] {
+  const moduleSource = nonEmptyString(moduleId) ? moduleId : "module-management";
+  const diagnostics = [
+    ...asRecords(moduleDiagnostics).map(diagnostic => normalizeWorkbenchDiagnostic(diagnostic, moduleSource)),
+    ...features.flatMap(feature => {
+      const featureSource = nonEmptyString(feature.id) ? feature.id : moduleSource;
+      return asRecords(feature.diagnostics).map(diagnostic => normalizeWorkbenchDiagnostic(diagnostic, featureSource));
+    })
+  ];
+  const seen = new Set<string>();
+
+  return diagnostics.filter(diagnostic => {
+    const key = JSON.stringify([diagnostic.source, diagnostic.status, diagnostic.reason]);
+    if (seen.has(key))
+      return false;
+
+    seen.add(key);
+    return true;
+  });
+}
+
+function normalizeWorkbenchDiagnostic(
+  diagnostic: Record<string, unknown>,
+  fallbackSource: string
+): ModuleManagementDiagnostic {
+  return {
+    source: nonEmptyString(diagnostic.source) ? diagnostic.source : fallbackSource,
+    status: typeof diagnostic.status === "string" ? diagnostic.status : "unknown",
+    reason: typeof diagnostic.reason === "string" ? diagnostic.reason : ""
+  };
+}
+
+interface WorkbenchRegistryModule extends Record<string, unknown> {
+  id?: string;
+  displayName?: string;
+  packageId?: string | null;
+  packageVersion?: string | null;
+  version?: string;
+  sourceKind?: string;
+  feedName?: string;
+  sourceName?: string;
+  installPath?: string;
+  status?: string;
+  compatibility?: string;
+  manifest?: ModuleManagementPackageManifest | null;
+  dependencies?: ModuleManagementPackageDependency[] | null;
+  features?: Array<Record<string, unknown>> | null;
+  diagnostics?: ModuleManagementDiagnostic[] | null;
+}
+
+interface ServerModuleManagementRegistryInput extends Omit<Partial<ModuleManagementRegistryResponse>, "modules" | "packages"> {
+  modules?: Array<Partial<ModuleManagementModule> | WorkbenchRegistryModule> | null;
+  packages?: Array<Partial<ModuleManagementPackage>> | null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function asRecords(value: unknown): Array<Record<string, unknown>> {
+  return Array.isArray(value) ? value.filter(isRecord) : [];
+}
+
+function nonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function packageKey(id: string, version: string) {
+  return `${id}@${version}`.toLowerCase();
 }
 
 export function formatFileSize(bytes: number) {

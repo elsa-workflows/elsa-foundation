@@ -3,7 +3,7 @@ using Elsa.Expressions.Core.Contracts;
 namespace Elsa.Expressions.Services;
 
 /// <summary>Deterministic expression-type router, intentionally separate from evaluator routing.</summary>
-public sealed class ExpressionToolingProviderResolver : IExpressionToolingProviderResolver
+internal sealed class ExpressionToolingProviderResolver : IExpressionToolingProviderResolver
 {
     private readonly IReadOnlyDictionary<string, IExpressionToolingProvider> _providers;
 
