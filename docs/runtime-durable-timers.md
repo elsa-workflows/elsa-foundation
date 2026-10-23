@@ -6,7 +6,7 @@
 
 A `Delay` of 5 seconds must suspend the workflow, survive a process restart, and resume on time. Surviving the restart is the hard part: an in-memory timer dies with the process.
 
-Durable timers solve it with a **saved timer record**, indexed by due time, plus a **background pump** that fires due timers through the **normal** bookmark-resume path. Nothing about resuming is special to timers.
+Durable timers solve it with a **saved timer record** plus a **background pump** that fires due timers through the **normal** bookmark-resume path. Nothing about resuming is special to timers. The EF store's composite index includes `DueTimeUtcTicks`; `ListDueAsync` filters due timers, orders them and `Take(limit)`s in the database.
 
 > *Good to know:* `Delay` survives a restart **only** in a shell with a durable timer store (EF Core). With the in-memory default it still suspends and resumes within one process, but a restart loses the timer.
 
@@ -36,6 +36,8 @@ await scheduler.ScheduleAsync(new DurableTimer(
 return Suspend(new DelayState(timerId), [registration]); // the runtime saves the bookmark
 ```
 
+Each `Delay` derives its timer id from its own `InvocationId`, so several Delays in one workflow each get their own timer.
+
 ## How a delay suspends and resumes
 
 ```mermaid
@@ -51,10 +53,11 @@ sequenceDiagram
     loop every tick
         P->>T: list due timers
         P->>M: resume bookmark (key "timer:{TimerId}")
+        M->>M: queue resume work durably
         M-->>P: Dispatched / Duplicate
         P->>T: delete timer
+        M->>M: drain queued resume work
     end
-    M->>M: queue resume work durably, then drain
 ```
 
 ## Why it is correct
@@ -71,12 +74,12 @@ The bookmark is saved with **no expiry**. If it expired at the due time, it woul
 
 ### 3. Firing twice cannot resume twice
 
-Timers are delivered at least once. The pump fires with the idempotency key `timer:{TimerId}`. A duplicate or late fire finds the single-use bookmark already used and gets *NotFound*:
+Timers are delivered at least once. The pump fires with the idempotency key `timer:{TimerId}`. *Duplicate* and *NotFound* are different outcomes:
 
-- **within** the grace window (`NotFoundGrace`), *NotFound* is treated as "a very short delay is still saving its bookmark", and the fire is retried;
-- **after** it, the pump deletes the timer.
+- ***Duplicate*** means the idempotency key was already processed. The resume is already in the queue, so the pump deletes the timer the same way it does for *Dispatched*.
+- ***NotFound*** is only for an already-consumed bookmark (or one that will never match). **Within** the grace window (`NotFoundGrace`) the pump treats that as "a very short delay is still saving its bookmark" and retries; **after** the window it deletes the timer.
 
-So a duplicate fire can never resume the workflow twice.
+A consumed single-use bookmark therefore cannot resume the workflow twice.
 
 ## Timer and Cron start triggers: at least once per occurrence
 
@@ -141,14 +144,10 @@ that runs the recurring-trigger pump before relying on the guarantee, or stop th
 
 ## Known limits
 
-- **Native due-time range index.** Without a range index on `DueTime`, `ListDueAsync` loads the whole
-  timer partition each tick and filters `DueTime` in memory. `MaxTimersPerTick` bounds the dispatch
-  burst, not the load. A native range index is the scale follow-up.
-- **Atomic timer registration.** Registering the timer via a post-commit
+- **Due-time lookup.** The EF timer store's composite index includes `DueTimeUtcTicks`. `ListDueAsync` filters due timers, orders them and `Take(limit)`s in the database. `MaxTimersPerTick` is that limit.
+- **Atomic timer registration (proposed).** Registering the timer via a post-commit
   `RegisterDurableTimer` intent would make the timer==bookmark lifecycle fully atomic, at the cost of
   editing the core create-bookmark handler and the single-implementation post-commit intent dispatcher.
-- **Node-scoped resume targets.** The executable compiler keys `ResumeTargets` by the `[ResumeTarget]`
-  attribute ID, so only one instance of a given resume-target activity is supported per workflow. Node-scoped IDs (keyed by node + attribute) would lift the single-`Delay`-per-workflow limit.
 
 ## How this is tested
 
@@ -175,4 +174,4 @@ Related: [Elsa glossary](glossary/elsa.md) · [Runtime extension points](../Esse
 
 ## Background
 
-This page was the worked reference for roadmap unit **W8** of the Elsa 4 review-remediation programme (finding **E3-2**). It builds on the durable resumption spine (**W2**) and the single-writer mailbox (**W5**). An earlier version said the timer store routed through "the runtime document serializer + `ElsaRuntimeDocumentVersions` with a v1 golden fixture, following the `schedulerWorkItem` pattern (W3)"; that type no longer exists on `main`, and runtime state now evolves through EF Core migrations and schema families (see [serialization](serialization.md)). Timer/Cron *start* triggers shipped with their own recurring schedule store and pump, not as a `start-trigger` variant of the timer record. "Atomic timer registration" was tracked as *Option B*.
+This page was the worked reference for roadmap unit **W8** of the Elsa 4 review-remediation programme (finding **E3-2**). It builds on the durable resumption spine (**W2**) and the single-writer mailbox (**W5**). An earlier version said the timer store routed through "the runtime document serializer + `ElsaRuntimeDocumentVersions` with a v1 golden fixture, following the `schedulerWorkItem` pattern (W3)"; that type no longer exists on `main`, and runtime state now evolves through EF Core migrations and schema families (see [serialization](serialization.md)). Timer/Cron *start* triggers shipped with their own recurring schedule store and pump, not as a `start-trigger` variant of the timer record. "Atomic timer registration" was tracked as *Option B*. An earlier version also stated a one-`Delay`-per-workflow limit; that was lifted by node-scoped resume targets (`WorkflowExecutableResumeTarget`, `StatefulSuspensionSupport.ResolveResumeTarget`).
