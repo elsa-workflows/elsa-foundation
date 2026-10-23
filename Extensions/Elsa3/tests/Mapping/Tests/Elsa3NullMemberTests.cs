@@ -127,6 +127,17 @@ public sealed class Elsa3NullMemberTests
             diagnostic.Code == Elsa3ActivityDiagnosticCodes.RequiredInputUnbound && diagnostic.Path.EndsWith($".{member}", StringComparison.Ordinal));
     }
 
+    [Theory]
+    [InlineData("Elsa.Correlate", "correlationId")]
+    [InlineData("Elsa.SetName", "value")]
+    public async Task A_blank_intrinsic_value_is_not_null_and_stays_refused(string type, string member)
+    {
+        // Only a null becomes the empty string Elsa 4 reads as clearing; a blank literal keeps its own rule (#3281).
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Root(type, member, Literal(""), "")));
+
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.RequiredInputUnbound);
+    }
+
     [Fact]
     public async Task A_null_ExecuteWorkflow_wait_keeps_spec_236s_mapping()
     {

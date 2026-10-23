@@ -413,6 +413,7 @@ internal sealed class Elsa3ActivityNormalizer(
                 return;
             case Elsa3NullRule.Emit:
                 Add(context, key, propertyName, Elsa3TypedValues.CreateLiteral(alias, LiteralNode(onNull.Value ?? string.Empty)), result, boundBy);
+                context.Node.NullEmits.Add(key);
                 return;
             case Elsa3NullRule.Refuse when onNull.WhenBound is { } other && !HasValue(context, other):
                 Add(context, key, propertyName, Elsa3TypedValues.CreateNull(alias), result, boundBy);
@@ -940,7 +941,7 @@ internal sealed class Elsa3ActivityNormalizer(
         foreach (var input in node.Resolved.Inputs.Where(input => input.IsRequired))
         {
             if (context.Activity.AdditionalProperties.TryGetValue(input.ReferenceKey, out var value) &&
-                (Elsa3TypedValues.IsBound(value) || IsEmittedDefault(node.Resolved.Entry, input.ReferenceKey, value)))
+                (Elsa3TypedValues.IsBound(value) || IsEmittedDefault(node, input.ReferenceKey, value)))
                 continue;
             context.Error(RequiredInputUnbound,
                 $"Required Elsa 4 input '{input.ReferenceKey}' of '{node.Resolved.ActivityTypeKey ?? node.Resolved.ActivityVersionId}' would stay unbound.",
@@ -952,15 +953,16 @@ internal sealed class Elsa3ActivityNormalizer(
     /// <summary>
     /// Whether the value is the literal the entry's R2 rule, or a null member's recorded conversion (spec 267), emits for
     /// the member. A blank value (WriteLine's empty line, a cleared correlation id) is bound although
-    /// <see cref="Elsa3TypedValues.IsBound"/> counts a blank literal as unbound.
+    /// <see cref="Elsa3TypedValues.IsBound"/> counts a blank literal as unbound. A null conversion counts only where the
+    /// member pass wrote it: an Elsa 3 blank literal is not null, and keeps its own rule (#3281).
     /// </summary>
-    private static bool IsEmittedDefault(Elsa3ActivityMapEntry? entry, string elsa4Key, JsonElement value)
+    private static bool IsEmittedDefault(Elsa3NodePlan node, string elsa4Key, JsonElement value)
     {
-        var rule = entry?.Members.FirstOrDefault(member => member.Kind == Elsa3MemberKind.Input &&
-                                                           StringComparer.Ordinal.Equals(member.Elsa4Key, elsa4Key));
+        var rule = node.Resolved?.Entry?.Members.FirstOrDefault(member => member.Kind == Elsa3MemberKind.Input &&
+                                                                          StringComparer.Ordinal.Equals(member.Elsa4Key, elsa4Key));
         var emitted = rule switch
         {
-            { OnNull: { Rule: Elsa3NullRule.Emit, Value: { } onNull } } => onNull,
+            { OnNull: { Rule: Elsa3NullRule.Emit, Value: { } onNull } } when node.NullEmits.Contains(elsa4Key) => onNull,
             { Rule: Elsa3MemberRuleKind.DefaultFlip, Elsa3Default: { ValueKind: JsonValueKind.String } elsa3Default } => elsa3Default.GetString(),
             _ => null
         };

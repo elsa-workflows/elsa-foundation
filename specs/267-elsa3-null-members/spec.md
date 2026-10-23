@@ -288,7 +288,8 @@ to set, or that the activity can be removed.
 - **FR-007**: The converter MUST NOT report a warning for a `null` member it converts under FR-002, FR-003 or FR-004.
 - **FR-008**: Each R1 (carried) and R5 (narrowed) input of a mapped Elsa 3 activity MUST have a recorded `null`
   conversion, or an Elsa 3 default it emits. A test fails when one has neither.
-- **FR-009**: The spec 236 member map document MUST record each member's `null` conversion next to the member.
+- **FR-009**: The spec 236 member map document MUST record each member's `null` conversion, in one section of its own
+  that names every member.
 - **FR-010**: Elsa 4 activity defaults, publication and the runtime MUST NOT change. Absent and blank members do not
   change in this spec (#3281).
 
