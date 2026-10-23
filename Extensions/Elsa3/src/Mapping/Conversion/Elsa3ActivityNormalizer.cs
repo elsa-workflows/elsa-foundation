@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elsa.Activities.Design.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
@@ -374,6 +375,8 @@ internal sealed class Elsa3ActivityNormalizer(
         {
             if (!isNull)
                 Add(context, inputs[0].ReferenceKey, propertyName, value, result, boundBy);
+            else if (resolved.Source != Elsa3ResolvedSource.Replacement)
+                WarnNullTakesElsa4Default(context, propertyName, inputs[0]);
             return;
         }
 
@@ -390,6 +393,26 @@ internal sealed class Elsa3ActivityNormalizer(
         context.Error(UnknownMember,
             $"Property '{propertyName}' is neither a mapped Elsa 3 member nor a member of Elsa 4 activity '{resolved.ActivityTypeKey}'.",
             "Rename the property to an Elsa 4 member of the activity, or remove it.",
+            propertyName);
+    }
+
+    /// <summary>
+    /// #3293: on an alias or a verbatim catalog key, Elsa 3 ran a null member with its own activity class's default, which
+    /// the conversion cannot see. Where the Elsa 4 input declares a default, the two can differ: say which value Elsa 4 runs
+    /// with and how to keep Elsa 3's.
+    /// </summary>
+    private static void WarnNullTakesElsa4Default(Elsa3RewriteContext context, string propertyName, InputDefinition input)
+    {
+        if (input.DefaultValue is not { ValueKind: not (JsonValueKind.Null or JsonValueKind.Undefined) } elsa4Default)
+            return;
+
+        var shown = elsa4Default.ValueKind == JsonValueKind.String ? elsa4Default.GetString() : elsa4Default.GetRawText();
+        context.Warning(NullTakesElsa4Default,
+            $"Member '{propertyName}' is null, so Elsa 4 runs input '{input.ReferenceKey}' with its default '{shown}'. Elsa 3 ran it " +
+            $"with the default of its own activity '{context.Activity.Type}', which the conversion cannot see.",
+            $"If Elsa 3 ran '{propertyName}' with another value, set '{propertyName}' to that value in the Elsa 3 workflow and " +
+            $"convert again, or set input '{input.ReferenceKey}' on the converted activity. If '{shown}' is what you want, nothing " +
+            "needs to change.",
             propertyName);
     }
 

@@ -160,9 +160,48 @@ public sealed class Elsa3NullMemberTests
     public async Task A_null_member_of_an_activity_resolved_by_name_gets_no_binding()
     {
         // A verbatim Elsa 4 catalog key binds members by name; Elsa 4's own default applies, as a reusable's did in Elsa 3.
-        var node = await ConvertAsync("Elsa.Activities.Primitives.Activities.Fault", "message", Null, "");
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(),
+            ConversionServices.Definition(Root("Elsa.Activities.Primitives.Activities.Fault", "message", Null, "")));
 
-        Assert.DoesNotContain(node.Inputs, input => input.ReferenceKey == "message");
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.DoesNotContain(Node(result.Value!.State, "subject").Inputs, input => input.ReferenceKey == "message");
+        // The Elsa 4 input declares no default, so there is nothing that could differ from Elsa 3.
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.NullTakesElsa4Default);
+    }
+
+    /// <summary>
+    /// #3293: by name, the converter cannot see the default Elsa 3's own activity ran a null with. Where the Elsa 4 input
+    /// declares one, it converts with a warning that names the Elsa 4 default and how to keep Elsa 3's value.
+    /// </summary>
+    [Theory]
+    [InlineData("Acme.RetryOrder", "retries", "Retries", "3")]
+    [InlineData("Elsa.Activities.Scheduling.Activities.Delay", "Duration", "Duration", "00:00:00")]
+    public async Task A_null_member_resolved_by_name_whose_Elsa_4_input_has_a_default_warns_how_to_keep_Elsa_3s_value(
+        string type, string member, string elsa4Key, string elsa4Default)
+    {
+        var catalog = RealActivityCatalog.CreateWith(typeof(RetryOrderActivity).Assembly);
+
+        var result = await ConversionServices.ConvertAsync(catalog, ConversionServices.Definition(Root(type, member, Null, "")));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.DoesNotContain(Node(result.Value!.State, "subject").Inputs, input => input.ReferenceKey == elsa4Key);
+        var warning = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.NullTakesElsa4Default);
+        Assert.Equal(Elsa3MigrationDiagnosticSeverity.Warning, warning.Severity);
+        Assert.EndsWith($".{member}", warning.Path, StringComparison.Ordinal);
+        Assert.Contains($"'{elsa4Default}'", warning.Message, StringComparison.Ordinal);
+        Assert.Contains($"set '{member}' to that value in the Elsa 3 workflow", warning.Guidance, StringComparison.Ordinal);
+        Assert.Contains($"set input '{elsa4Key}' on the converted activity", warning.Guidance, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_null_member_resolved_by_name_whose_Elsa_4_input_has_no_default_converts_silently()
+    {
+        var catalog = RealActivityCatalog.CreateWith(typeof(RetryOrderActivity).Assembly);
+
+        var result = await ConversionServices.ConvertAsync(catalog, ConversionServices.Definition(Root("Acme.RetryOrder", "note", Null, "")));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.NullTakesElsa4Default);
     }
 
     [Fact]
