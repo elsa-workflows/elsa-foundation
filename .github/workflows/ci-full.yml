@@ -49,10 +49,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      # BASE_SHA is the first parent of the merge commit GitHub tests, today's main, so both diffs below see only what
+      # the pull request changes; pull_request.base.sha can be days old on an open PR (see ci.yml).
       - name: Classify the change scope
         id: scope
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || '' }}
         run: >-
           python3 tools/ci/change_scope.py --base "$BASE_SHA" --head "$GITHUB_SHA"
           --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
@@ -60,7 +62,7 @@ jobs:
       - name: Decide whether the full tier runs
         id: decide
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || '' }}
           DRAFT: ${{ github.event.pull_request.draft }}
           DOCS_ONLY: ${{ steps.scope.outputs.docs_only }}
         run: |
