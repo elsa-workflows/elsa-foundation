@@ -1,12 +1,13 @@
 import "./workflowTestDrive.css";
 import type { StudioTestStimulusEditorProps, StudioTestStimulusResultProps } from "@elsa-workflows/studio-sdk";
+import { defaultHttpTestRequestDraft } from "./workflowTestRequestDefaults";
 import { asRecord } from "./workflowTestStimulusEditorUtils";
 
 export function HttpRequestEditorView({ option, mode, draft, disabled, controlProps, onChange }: StudioTestStimulusEditorProps) {
   const configuration = asRecord(mode.configuration) ?? asRecord(option.configuration) ?? {};
   const method = typeof configuration.method === "string" ? configuration.method : "HTTP";
   const template = typeof configuration.template === "string" ? configuration.template : "route resolved by the server";
-  const placeholder = JSON.stringify({ routeValues: {}, query: {}, headers: {}, body: "" }, null, 2);
+  const placeholder = defaultHttpTestRequestDraft;
   return (
     <div className="wf-test-drive-http">
       <dl><div><dt>Endpoint</dt><dd>{method} {template}</dd></div></dl>
