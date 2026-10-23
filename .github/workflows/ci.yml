@@ -176,6 +176,8 @@ jobs:
       - name: Select the PR-tier shards
         id: select
         env:
+          # select reads ruleset main-2 when a change turns integrationLeavesPrTier on (FR-011); gh needs a token for it.
+          GH_TOKEN: ${{ github.token }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           DISPATCH_TIER: ${{ inputs.tier }}
         run: |
