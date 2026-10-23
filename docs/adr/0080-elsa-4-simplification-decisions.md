@@ -114,6 +114,17 @@ merges once a review round leaves nothing actionable and CI is green, runtime an
 The separate Elsa 3 compensation program (elsa-workflows/elsa-core#8884) is paused until the Elsa 4 design
 packet #3043 is reviewed.
 
+**Owner amendment, 23 October 2026:** [Studio Expression Developer Experience #2310](../program-goals/studio-expression-developer-experience.md)
+is active again, by the owner's decision of 23 October to salvage its plan and start the program. Sequencing: the
+first two units are the program records (#2367) and the expression-tooling permission-hash fix ported from #2373,
+which runs as its own small PR on `main`. Milestones 2 and 3 (#2378 and #2380) are rebuilt only after the
+[#3204](https://github.com/elsa-workflows/elsa-foundation/issues/3204) ADR settles how scripts read variables
+(declared parameters or ambient variables, and the future of `get<Name>()`). That decision is now
+[ADR 0089](0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md), so the rebuild waits
+for ADR 0089 to be accepted. The program runs beside the
+other active programs, displaces none of them, and reactivates no other parked work. Releases and deployment
+are not included. The remaining decisions in this ADR apply to this work as to any other.
+
 ### D1 — Risk-based testing
 
 - Test observable behaviour at the cheapest level that proves it; unit-test logic that carries real risk.
