@@ -50,6 +50,7 @@ afterEach(() => {
   replaceDraftId = noRenderedPanel;
   replaceEditors = noRenderedPanel;
   unmountActivePanel();
+  vi.useRealTimers();
 });
 
 function renderPanel(
@@ -519,10 +520,12 @@ describe("activity property organization", () => {
     const disclosure = container.querySelector<HTMLElement>(".studio-advanced-section")!;
     const source = container.querySelector<HTMLInputElement>("input[aria-label='Semantic source']")!;
     flushSync(() => source.focus());
-    await vi.waitFor(() => expect(container.querySelector("[data-testid='semantic-validation-error']")?.textContent).toBe("Current semantic error"));
+    await vi.waitFor(() => {
+      expect(container.querySelector("[data-testid='semantic-validation-error']")?.textContent).toBe("Current semantic error");
+      expect(disclosure.querySelector(".studio-status-pill")?.getAttribute("data-tone")).toBe("danger");
+    });
     expect(validate).toHaveBeenCalled();
     expect(validate.mock.calls[0]?.[0].source).toBe("invalid");
-    expect(disclosure.querySelector(".studio-status-pill")?.getAttribute("data-tone")).toBe("danger");
 
     changeTextInput(source, "valid");
     flushSync(() => source.blur());
