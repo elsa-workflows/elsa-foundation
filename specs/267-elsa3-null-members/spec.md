@@ -123,9 +123,11 @@ JSON `null` members in the corpus, by activity: HttpEndpoint (10 members, up to 
 WriteHttpResponse.contentType (20), RunJavaScript.possibleOutcomes (17) and result (8), and a few on Dispatch,
 BulkDispatch, Switch, If and PublishEvent.
 
-## Measured after (JTest corpus, 2026-10-23, this branch on `main` at `9613cf4ad`)
+## Measured after (JTest corpus, 2026-10-23, this branch on `main` at `9613cf4ad`, and again merged with `d567a948d`)
 
-Same throwaway test as the baseline, deleted afterwards.
+Same throwaway test as the baseline, deleted afterwards. Both runs give the same numbers. The import host imports
+`storage-drivers-variables-sub-workflow` as a reusable activity, which still needs #3023, so it counts 8 conversions
+where the converter-only count in epic #3052 is 9.
 
 | Step | Baseline | After |
 |---|---|---|
