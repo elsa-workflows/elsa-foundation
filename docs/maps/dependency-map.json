@@ -380,6 +380,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Expressions.Liquid",
+          "path": "Essentials/src/Expressions/Liquid/Elsa.Expressions.Liquid.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Foundation.DataProtection.EntityFrameworkCore",
           "path": "Essentials/src/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj"
         },
