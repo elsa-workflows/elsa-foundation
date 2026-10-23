@@ -20,8 +20,10 @@ flowchart TB
     subgraph B["Path B: a handler throws"]
         B1[Caught by the drain loop] --> B2[Step removed from queue, poison record written]
         B2 --> B3[Drain stops]
-        B3 --> B4[Poison record shown as a blocking incident]
-        B4 --> B5["Default: workflow stays Running, needs an operator"]
+        B3 --> B4{Retry policy}
+        B4 -->|"RetryNow or RetryAfter"| B4r[RetryScheduled, not a blocking incident]
+        B4 -->|default DoNotRetry| B4p[Poison record shown as a blocking incident]
+        B4p --> B5["Default: workflow stays Running, needs an operator"]
     end
 ```
 
@@ -61,7 +63,10 @@ a handler fault never reaches the incident strategy.
 
 Inside the work handler, not in the drain loop.
 `WorkflowInvokeActivitySchedulerWorkHandler.InvokeActivityAsync` wraps activity work in three
-sequential fault boundaries, and each one funnels into the same private `RecordFaultAsync`:
+sequential fault boundaries — the first three rows of the table: input materialization, construction
+(attempt claim, activation, execution-context), and the activity's own execution — and each one
+funnels into the same private `RecordFaultAsync`. The last two rows are outcomes of those boundaries,
+not extra sequential catches:
 
 | Boundary | Recorded sub-status |
 | --- | --- |
@@ -108,7 +113,7 @@ if (result.StopReason != RuntimeSchedulerDrainStopReason.Quiesced)
 Quiescence is decided by `WorkflowDrainOrchestrator.DrainSchedulerAndPostCommitWorkAsync`: the drain
 plus post-commit outbox delivery cycle until a cycle delivers nothing and no continuation of the execution
 is left in another deliverer's hands or undrained in its queue (#2225, see
-[durable resumption](runtime-durable-resumption.md)).
+[When the sweep takes a live drain's continuation](runtime-durable-resumption.md#when-the-sweep-takes-a-live-drains-continuation)).
 The observer then collects
 blocking incidents that have no resolution outcome **and** carry an `ActivityExecutionId`, and hands
 them to `IncidentResolutionBatchExecutor`.
@@ -293,7 +298,7 @@ Resolved/Suppressed records remain history. The API advertises health filtering 
 capability relation; the filter applies before authorized total counts and cursor paging. Studio uses
 this current health to show intervention cues without rewriting workflow or activity lifecycle.
 
-> **Good to know: how this was found and how it is tested.** In the A1 revision (`e59c9393e6f2b01e6e43686cea04da9767b21aef`),
+> **Good to know: how this was found and how it is tested.** In the A1 revision,
 > `EfWorkflowExecutableStore.TryAcquireRootWriteLeaseAsync` read and rewrote the shared per-artifact
 > coordination row's lease dictionary. Concurrent starts of the same artifact competed on its revision;
 > exhausting the optimistic-concurrency retries threw `Runtime coordination changed concurrently.` before
@@ -313,8 +318,8 @@ this current health to show intervention cues without rewriting workflow or acti
 
 So the honest one-line answer to "what happens by default when a handler faults" is: **the work item
 is dropped from the queue, parked as poisoned with no retry, and surfaced as a blocking critical
-incident, while the workflow itself stays `Running` and needs an operator.** The one exception is a
-fault caused by a checkpoint rule, below.
+incident, while the workflow itself stays `Running` and needs an operator.** The two exceptions are a
+poisoned first checkpoint, above, and a fault caused by a checkpoint rule, below.
 
 ## When a checkpoint rule refuses a commit
 
@@ -460,8 +465,17 @@ Behavioral guards worth reading alongside the code:
 
 ## Not covered here
 
+- Retention, resolution APIs, and the operator surfaces that act on an incident once it exists.
+- The drain and claim protocol itself. See [durable resumption](runtime-durable-resumption.md) for
+  crash windows and redelivery, ADR 0029 for the execution pipeline, ADR 0031 for the burst drain, and
+  [persistence modes](../website/docs/essentials/persistence-modes.md) for when checkpoints are committed.
+- Cancellation. A cancel is not a fault on either path and is committed by its own checkpoint service.
+- Child-fault propagation to a parent fork/join. The invoke handler rides a parent-evaluation work item
+  on the incident checkpoint so a join resolves deterministically instead of waiting for a completion
+  that never arrives; the joining semantics belong with the container activities, not here.
+
 ## Background
 
-This page grew out of backlog item **D1** (issue #1226): three of the seven findings in the execution-model comparison that produced it reached the wrong conclusion by reading the drain loop instead of the observers. Related history: the required poison store (#1271), checkpoint-rule faulting (#1780, #1799), the poisoned first checkpoint (#2536, #2537, #2539, spec 200), drain/continuation settlement (#2225), secret masking (spec 188), and the planned registration inventory (#1230, backlog item C2). ADR 0029 covers the execution pipeline and ADR 0031 the burst drain.
+This page grew out of backlog item **D1** (issue #1226): three of the seven findings in the execution-model comparison that produced it reached the wrong conclusion by reading the drain loop instead of the observers. Related history: the required poison store (#1271), checkpoint-rule faulting (#1780, #1799), the poisoned first checkpoint (#2536, #2537, #2539, spec 200; A1 revision `e59c9393e6f2b01e6e43686cea04da9767b21aef`), drain/continuation settlement (#2225), secret masking (spec 188), and the planned registration inventory (#1230, backlog item C2). ADR 0029 covers the execution pipeline and ADR 0031 the burst drain.
 
 Related: [Elsa glossary](glossary/elsa.md) · [Runtime extension points](../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) · [How a workflow executes](how-a-workflow-executes.md) · [Durable resumption](runtime-durable-resumption.md)
