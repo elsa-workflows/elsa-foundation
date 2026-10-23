@@ -200,7 +200,9 @@ class UnreadableBase(Exception):
 def base_entries(sha: str, run: Callable[[list[str]], subprocess.CompletedProcess]) -> dict[str, int] | None:
     """The quarantine entries of the manifest at <sha>; None when the file is not in that commit."""
     if run(["git", "cat-file", "-e", f"{sha}^{{commit}}"]).returncode != 0:
-        raise UnreadableBase(f"commit {sha} is not in this clone; fetch it first (git fetch --depth=1 origin {sha})")
+        # The base may be a revision like <merge>^1; the fetch hint names the commit to fetch.
+        commit = sha.split("^", 1)[0]
+        raise UnreadableBase(f"commit {sha} is not in this clone; fetch its history first (git fetch origin {commit})")
     if run(["git", "cat-file", "-e", f"{sha}:{MANIFEST}"]).returncode != 0:
         return None
     shown = run(["git", "show", f"{sha}:{MANIFEST}"])

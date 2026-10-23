@@ -124,8 +124,14 @@ jobs:
         id: scope
         # Pull requests only; every other event is a full run. The classifier exits 0 whatever it finds, and a diff
         # it cannot read classifies as a full run.
+        #
+        # BASE_SHA is the first parent of the merge commit GitHub tests: today's main. The diff from it is exactly what
+        # the pull request would change. pull_request.base.sha is the base from when the PR was opened or last
+        # retargeted, so on an older PR it also counted everything merged into main since, and a documentation-only PR
+        # got a full run (#2683: one docs file, classified by an .editorconfig change on main). The same base serves
+        # the quarantine guard and the switch check below.
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || '' }}
         run: |
           python3 tools/ci/change_scope.py --self-test
           if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
@@ -158,16 +164,16 @@ jobs:
           python3 tools/ci/test_tiers.py check-workflows
           python3 tools/ci/test_tiers.py check-docs
 
-      # FR-013. On a pull request only the entries its diff adds or changes are checked, so closing a tracking issue
-      # never turns unrelated PRs red; the base commit is fetched explicitly so a shallow clone cannot silently widen the
-      # check. On main and nightly every entry is checked, and a closed issue fails the run and files "main is red".
+      # FR-013. On a pull request only the entries its diff adds or changes, against today's main, are checked, so
+      # closing a tracking issue never turns unrelated PRs red. The checkout has full history, so the base is always
+      # readable; check-quarantine exits 2 rather than widen the check if it is not. On main and nightly every entry is
+      # checked, and a closed issue fails the run and files "main is red".
       - name: Check the quarantine list's tracking issues
         env:
           GH_TOKEN: ${{ github.token }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || '' }}
         run: |
           if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
-            git fetch --no-tags --depth=1 origin "$BASE_SHA"
             python3 tools/ci/test_results.py check-quarantine --base "$BASE_SHA"
           else
             python3 tools/ci/test_results.py check-quarantine
@@ -178,7 +184,7 @@ jobs:
         env:
           # select reads ruleset main-2 when a change turns integrationLeavesPrTier on (FR-011); gh needs a token for it.
           GH_TOKEN: ${{ github.token }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || '' }}
           DISPATCH_TIER: ${{ inputs.tier }}
         run: |
           case "$GITHUB_EVENT_NAME" in
