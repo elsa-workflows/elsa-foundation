@@ -66,7 +66,7 @@ namespace Elsa.Activities.Http.IntegrationTests;
 /// the CLR construction descriptor depends on that type registration to resolve an activity's stable alias.
 /// </para>
 /// </remarks>
-public sealed class HttpEndpointHostFixture : IAsyncDisposable
+public sealed partial class HttpEndpointHostFixture : IAsyncDisposable
 {
     /// <summary>The status code the out-of-base-path sentinel terminal middleware returns (proves pass-through).</summary>
     public const int SentinelStatusCode = StatusCodes.Status418ImATeapot;
@@ -101,6 +101,9 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     public IServiceProvider Services => _host.Services;
 
     public static Task<HttpEndpointHostFixture> StartAsync() => StartAsync(null, null);
+
+    public static Task<HttpEndpointHostFixture> StartAsync(Action<IServiceCollection> configureServices) =>
+        StartAsync(configureServices, null);
 
     /// <summary>
     /// Starts the production HTTP runtime against an isolated EF Core SQLite database and applies the requested
@@ -225,6 +228,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                     // feature only registers the structure handler; construction goes through the primitives'
                     // ClrActivityConstructor, so the primitives feature must precede it (already does).
                     new ActivitiesSequenceFeature().ConfigureServices(services);
+                    // Composites only some consuming test projects compile (the Flowchart, for spec 238).
+                    ConfigureOptionalCompositeFeatures(services);
                     new ActivitiesHttpFeature().ConfigureServices(services);
 
                     // The real route-table stack. The REAL resolver, route-table startup task, and
@@ -513,6 +518,51 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         await PublishAsync(executable);
     }
 
+    /// <summary>
+    /// Registers composites that only some consuming test projects compile: the integration tests add the Flowchart
+    /// (<c>HttpEndpointHostFixture.Flowchart.cs</c>). The command-cost tests link this file without it.
+    /// </summary>
+    static partial void ConfigureOptionalCompositeFeatures(IServiceCollection services);
+
+    // ---- Start-path placement builders (spec 238) ----
+
+    /// <summary>A start-trigger <see cref="HttpEndpoint"/> (<c>CanStartWorkflow = true</c>, trigger-marked) on <paramref name="path"/>.</summary>
+    public ExecutableNode NewStartEndpointNode(string artifactId, string path, string method, string nodeId) =>
+        NewHttpEndpointNode($"{artifactId}-{nodeId}", path, $"{artifactId}-{nodeId}-result", [method],
+            authorize: null, policy: null, requestSizeLimit: null, canStartWorkflow: true, isTriggerNode: true, nodeId: nodeId);
+
+    /// <summary>A mid-flow <see cref="HttpEndpoint"/> wait (<c>CanStartWorkflow = false</c>, not trigger-marked).</summary>
+    public ExecutableNode NewWaitEndpointNode(string artifactId, string path, string method, string nodeId) =>
+        NewHttpEndpointNode($"{artifactId}-{nodeId}", path, $"{artifactId}-{nodeId}-result", [method],
+            authorize: null, policy: null, requestSizeLimit: null, canStartWorkflow: false, isTriggerNode: false, nodeId: nodeId);
+
+    /// <summary>A real Sequence node over <paramref name="children"/>, in order.</summary>
+    public ExecutableNode NewSequenceNode(string nodeId, IReadOnlyList<ExecutableNode> children)
+    {
+        var descriptorPayload = ClrConstruction.Payload(Services.GetRequiredService<IPayloadSerializer>(), typeof(SequenceActivity));
+        return new ExecutableNode(
+            executableNodeId: nodeId,
+            authoredActivityId: $"authored-{nodeId}",
+            activityType: typeof(SequenceActivity).FullName!,
+            activityTypeVersion: "1.0.0",
+            descriptor: ClrRuntimeDescriptor(descriptorPayload),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            metadata: new Dictionary<string, string>(),
+            childSlots: SequenceShape.ChildSlots(children),
+            structure: SequenceShape.Structure(children),
+            activityContract: UnitActivityContract(typeof(SequenceActivity), descriptorPayload, [], [ActivityOutcomes.Done, ActivityOutcomes.Break]));
+    }
+
+    /// <summary>Publishes and indexes a workflow whose root activity is <paramref name="root"/>.</summary>
+    public Task PublishRootAsync(string artifactId, ExecutableNode root) =>
+        PublishAsync(new WorkflowExecutable(
+            identity: NewIdentity(artifactId),
+            rootActivity: root,
+            resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            createdAt: DateTimeOffset.UtcNow,
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference));
+
     // ---- Synchronous response publish helpers ----
 
     /// <summary>
@@ -531,8 +581,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         string method,
         string resultValueId,
         int statusCode,
-        string body,
-        string contentType,
+        object? body,
+        string? contentType,
         (string Name, string Value)? header = null,
         ResponseMode responseMode = ResponseMode.Sync)
     {
@@ -580,7 +630,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         string path,
         string method,
         string resultValueId,
-        TimeSpan requestTimeout,
+        TimeSpan? requestTimeout,
         TimeSpan stallDuration)
     {
         var endpoint = NewHttpEndpointNode($"{artifactId}-endpoint", path, resultValueId, [method],
@@ -677,8 +727,11 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             activityContract: UnitActivityContract(typeof(SequenceActivity), descriptorPayload, [], [ActivityOutcomes.Done, ActivityOutcomes.Break]));
     }
 
-    /// <summary>Builds a <see cref="WriteHttpResponse"/> node authoring the given status/body/content-type and an optional header.</summary>
-    private ExecutableNode NewWriteHttpResponseNode(string nodeId, int statusCode, string body, string contentType, (string Name, string Value)? header)
+    /// <summary>
+    /// Builds a <see cref="WriteHttpResponse"/> node authoring the given status/body/content-type and an optional header.
+    /// A string body binds as text, as a Literal does; a <see cref="JsonElement"/> body binds as that JSON value.
+    /// </summary>
+    private ExecutableNode NewWriteHttpResponseNode(string nodeId, int statusCode, object? body, string? contentType, (string Name, string Value)? header)
     {
         var serializer = Services.GetRequiredService<IPayloadSerializer>();
         var descriptorPayload = ClrConstruction.Payload(serializer, typeof(WriteHttpResponse));
@@ -686,7 +739,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         var inputBindings = new Dictionary<string, RuntimeInputBinding>
         {
             [nameof(WriteHttpResponse.StatusCode)] = TypedLiteralBinding(nameof(WriteHttpResponse.StatusCode), statusCode, typeof(int)),
-            [nameof(WriteHttpResponse.Body)] = TypedLiteralBinding(nameof(WriteHttpResponse.Body), body, typeof(string)),
+            [nameof(WriteHttpResponse.Body)] = TypedLiteralBinding(nameof(WriteHttpResponse.Body), BodyElement(body), typeof(JsonElement?)),
             [nameof(WriteHttpResponse.ContentType)] = TypedLiteralBinding(nameof(WriteHttpResponse.ContentType), contentType, typeof(string)),
             [nameof(WriteHttpResponse.Headers)] = TypedLiteralBinding(nameof(WriteHttpResponse.Headers), null, typeof(IDictionary<string, string[]>))
         };
@@ -701,7 +754,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         var inputContracts = new[]
         {
             WriteResponseInputContract(nameof(WriteHttpResponse.StatusCode), typeof(int)),
-            WriteResponseInputContract(nameof(WriteHttpResponse.Body), typeof(string)),
+            WriteResponseInputContract(nameof(WriteHttpResponse.Body), typeof(JsonElement?)),
             WriteResponseInputContract(nameof(WriteHttpResponse.ContentType), typeof(string)),
             WriteResponseInputContract(nameof(WriteHttpResponse.Headers), typeof(IDictionary<string, string[]>))
         };
@@ -1098,6 +1151,13 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             outcomes,
             new ActivityActivationRequirement(ClrConstruction.DescriptorType, activityTypeAlias));
     }
+
+    private static JsonElement? BodyElement(object? body) => body switch
+    {
+        null => null,
+        JsonElement element => element,
+        _ => JsonSerializer.SerializeToElement(body, body.GetType())
+    };
 
     private static RuntimeInputBinding TypedLiteralBinding(string inputKey, object? value, Type type)
     {

@@ -24,11 +24,11 @@ public sealed class OpenTelemetryAuthorizationBoundaryTests
     [Theory]
     [InlineData(null, 401)]
     [InlineData("exact", 200)]
-    [InlineData("legacy", 200)]
+    [InlineData("subtree", 200)]
     [InlineData("wildcard", 200)]
     [InlineData("resource-allow", 200)]
     [InlineData("tenant-allow", 200)]
-    [InlineData("implied", 403)]
+    [InlineData("parent", 403)]
     [InlineData("untrusted", 401)]
     [InlineData("invalid-marker", 401)]
     [InlineData("ambiguous", 401)]
@@ -114,11 +114,11 @@ public sealed class OpenTelemetryAuthorizationBoundaryTests
             var permission = identity switch
             {
                 "exact" or "resource-deny" or "tenant-mismatch" or "tenant-allow" => OpenTelemetryPermissions.Read,
-                "legacy" => OpenTelemetryPermissions.LegacyPolicy,
+                "subtree" => "diagnostics/*:read",
                 "wildcard" => PermissionKey.Wildcard,
                 "resource-allow" or "tenant-allow" => string.Empty,
-                "implied" => "Diagnostics",
-                _ => "Diagnostics:Other"
+                "parent" => "diagnostics:read",
+                _ => "diagnostics/other:read"
             };
             var authenticationType = identity == "untrusted" ? "other-authentication" : Scheme.Name;
             var normalized = identity == "invalid-marker" ? "invalid" : "v1";

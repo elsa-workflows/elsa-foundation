@@ -64,7 +64,7 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
             request.WorkflowExecutionId,
             request.StimulusType,
             request.StimulusHash,
-            now), cancellationToken);
+            now, request.BookmarkId), cancellationToken);
 
         if (lookup.Status != BookmarkStimulusLookupStatus.Found)
             return new BookmarkResumeDispatchResult(
@@ -91,6 +91,12 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
                 bookmark: bookmark,
                 reason: $"Pinned executable artifact '{workflowExecution.PinnedExecutable.ArtifactId}' was not found.",
                 lookup: lookup);
+
+        if (request.TestRunDelivery is { } receipt &&
+            (workflowExecution.TestScope?.ScopeId != receipt.TestRunId || workflowExecution.RunKind != WorkflowRunKind.TestRun ||
+             receipt.WaitId != bookmark.BookmarkId || receipt.StimulusDigest != TestRunDeliveryReceipt.Digest(request.Input)))
+            return new BookmarkResumeDispatchResult(BookmarkResumeDispatchStatus.Rejected, request.WorkflowExecutionId,
+                reason: "Test delivery authority does not match the selected wait.");
 
         BookmarkResumeResolution resolution;
         try
@@ -130,7 +136,8 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
             stimulusHash: request.StimulusHash,
             input: request.Input,
             reason: RuntimeResumeBookmarkCommandPayload.StimulusMatchedReason,
-            triggerDelivery: triggerDelivery));
+            triggerDelivery: triggerDelivery,
+            testRunDelivery: request.TestRunDelivery));
         var command = new WorkflowExecutionCommand(
             CommandId: commandId,
             WorkflowExecutionId: request.WorkflowExecutionId,
@@ -191,7 +198,9 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
     }
 
     private static string CreateIdempotencyKey(BookmarkResumeDispatchRequest request, BookmarkState bookmark) =>
-        request.IdempotencyKey is not null
+        request.TestRunDelivery is { } receipt
+            ? $"{request.WorkflowExecutionId}:test-drive:{receipt.DeliveryId}"
+            : request.IdempotencyKey is not null
             ? $"{request.WorkflowExecutionId}:bookmark-resume:{bookmark.BookmarkId}:{request.StimulusType}:{request.StimulusHash}:{request.IdempotencyKey}"
             : $"{request.WorkflowExecutionId}:bookmark-resume:{bookmark.BookmarkId}:{request.StimulusType}:{request.StimulusHash}";
 

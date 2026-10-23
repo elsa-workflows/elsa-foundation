@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   StudioCodeEditor,
   type StudioCodeDiagnostic,
@@ -17,7 +17,8 @@ import {
   isRepeaterOptOut
 } from "./activityProperties";
 import { CollectionValueEditor } from "./CollectionValueEditor";
-import { DictionaryValueEditor } from "./DictionaryValueEditor";
+
+const DictionaryValueEditor = lazy(() => import("./DictionaryValueEditor").then(module => ({ default: module.DictionaryValueEditor })));
 
 const objectSyntax = "Object";
 const jsonLanguageAdapter: StudioCodeLanguageAdapter = { language: "json", displayName: "JSON" };
@@ -49,19 +50,21 @@ export function ObjectInlineEditor({
 
   if (dictionaryType) {
     return (
-      <DictionaryValueEditor
-        input={descriptor}
-        valueTypeName={dictionaryType.valueTypeName}
-        value={value}
-        editors={propertyEditors}
-        context={{
-          activity: context.activity,
-          expressionDescriptors: context.expressionDescriptors,
-          readOnly: disabled
-        }}
-        disabled={disabled}
-        onChange={onChange}
-      />
+      <Suspense fallback={<DictionaryEditorFallback variant="inline" />}>
+        <DictionaryValueEditor
+          input={descriptor}
+          valueTypeName={dictionaryType.valueTypeName}
+          value={value}
+          editors={propertyEditors}
+          context={{
+            activity: context.activity,
+            expressionDescriptors: context.expressionDescriptors,
+            readOnly: disabled
+          }}
+          disabled={disabled}
+          onChange={onChange}
+        />
+      </Suspense>
     );
   }
 
@@ -110,20 +113,22 @@ export function ObjectExpandedEditor({
     : null;
   if (dictionaryType) {
     return (
-      <DictionaryValueEditor
-        input={descriptor}
-        valueTypeName={dictionaryType.valueTypeName}
-        value={value}
-        editors={propertyEditors}
-        context={{
-          activity: context.activity,
-          expressionDescriptors: context.expressionDescriptors,
-          readOnly: disabled
-        }}
-        disabled={disabled}
-        variant="expanded"
-        onChange={onChange}
-      />
+      <Suspense fallback={<DictionaryEditorFallback variant="expanded" />}>
+        <DictionaryValueEditor
+          input={descriptor}
+          valueTypeName={dictionaryType.valueTypeName}
+          value={value}
+          editors={propertyEditors}
+          context={{
+            activity: context.activity,
+            expressionDescriptors: context.expressionDescriptors,
+            readOnly: disabled
+          }}
+          disabled={disabled}
+          variant="expanded"
+          onChange={onChange}
+        />
+      </Suspense>
     );
   }
   return (
@@ -278,6 +283,19 @@ function writeDraft(activity: unknown, propertyName: string, draft: string | nul
   const drafts = objectDrafts.get(activity) ?? new Map<string, string>();
   drafts.set(propertyName, draft);
   objectDrafts.set(activity, drafts);
+}
+
+function DictionaryEditorFallback({ variant }: { variant: "inline" | "expanded" }) {
+  return (
+    <div
+      className={`wf-dictionary-editor wf-dictionary-editor-loading ${variant}`}
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      Loading dictionary editor…
+    </div>
+  );
 }
 
 export function createObjectExpressionEditorContribution(

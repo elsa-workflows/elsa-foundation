@@ -14,7 +14,7 @@ The package registers the Secrets application services plus `SecretsPermissionCo
 |---|---|---|---|
 | GET | `/secrets` | `secrets:read` or `*` | List tenant-visible secret metadata. |
 | POST | `/secrets` | `secrets:write` or `*` | Create a secret and return safe metadata. |
-| GET | `/secrets/descriptors` | `secrets:read` or `*` | Discover supported types and stores. |
+| GET | `/secrets/descriptors` | `secrets:read` or `*` | Discover supported types, stores, and advisory contributed scope suggestions. |
 | POST | `/secrets/picker` | `secrets:read` or `*` | Query bounded picker metadata. |
 | GET | `/secrets/{name}` | `secrets:read` or `*` | Read one tenant-visible metadata record. |
 | PUT | `/secrets/{name}` | `secrets:write` or `*` | Update metadata; the route name is authoritative. |
@@ -23,11 +23,11 @@ The package registers the Secrets application services plus `SecretsPermissionCo
 | POST | `/secrets/{name}/rotate` | `secrets:update-value` or `*` | Rotate sensitive value material. |
 | POST | `/secrets/{name}/test` | `secrets:test` or `*` | Test availability and return a safe result. |
 
-All routes use the Foundation Identity policy provider and evaluator. The module catalogs `secrets:read`, `secrets:write`, `secrets:update-value`, `secrets:delete`, `secrets:test`, `secrets:use`, `secrets:import`, and `secrets:export` under owner `Elsa.Secrets.Api`; only `secrets:write` implies `secrets:read`. The administrative wildcard remains a grant and is not cataloged as a module permission.
+All routes use the Foundation Identity policy provider and evaluator. The module catalogs `secrets:read`, `secrets:write`, `secrets:update-value`, `secrets:delete`, `secrets:test`, `secrets:use`, `secrets:import`, and `secrets:export` under owner `Elsa.Secrets.Api`. None of them implies another, so a writer who also reads needs both `secrets:write` and `secrets:read`. The administrative wildcard remains a grant and is not cataloged as a module permission.
 
 ## Tenant and disclosure boundaries
 
-The authenticated normalized principal's tenant claim is authoritative for every data route. A request body cannot select a tenant or override a route name. Descriptor discovery intentionally remains tenant-independent for compatibility.
+The authenticated normalized principal's tenant claim is authoritative for every data route. A request body cannot select a tenant or override a route name. Descriptor discovery intentionally remains tenant-independent for compatibility. Scope suggestions are static metadata for a guided picker; they are not an allowlist, tenant boundary, or permission rule. Callers may continue to create secrets with any optional scope string.
 
 Responses expose metadata only. Raw values, configuration keys, protected payloads, and provider-private details must not appear in responses, errors, headers, OpenAPI response schemas, or audit records.
 

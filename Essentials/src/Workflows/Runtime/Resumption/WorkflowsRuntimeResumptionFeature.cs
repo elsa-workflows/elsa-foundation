@@ -77,6 +77,8 @@ public sealed class WorkflowsRuntimeResumptionFeature : IShellFeature
         });
 
         services.TryAddScoped<IRuntimeResumptionService, RuntimeResumptionService>();
+        // The sweep delivers outbox items once they are due, so this host can honour delayed child schedules (R-7).
+        services.TryAddSingleton<IRuntimeDelayedScheduleCapability, OutboxSweepDelayedScheduleCapability>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowDispatchDurabilityEvidence, DurableResumptionEvidence>());
         services.AddSingleton<IRecurringTask>(sp => new RuntimeResumptionPumpTask(
             sp.GetRequiredService<IPersistenceScopeRunner>(),
@@ -84,6 +86,8 @@ public sealed class WorkflowsRuntimeResumptionFeature : IShellFeature
             sp.GetRequiredService<TimeProvider>(),
             sp.GetRequiredService<ILogger<RuntimeResumptionPumpTask>>()));
     }
+
+    private sealed class OutboxSweepDelayedScheduleCapability : IRuntimeDelayedScheduleCapability;
 
     private sealed class DurableResumptionEvidence : IWorkflowDispatchDurabilityEvidence
     {

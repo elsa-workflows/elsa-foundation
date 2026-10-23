@@ -17,8 +17,8 @@ namespace Elsa.Foundation.Identity.Tests;
 public sealed class AuthorizationContractsTests
 {
     [Theory]
-    [InlineData("read", "Elsa.Permission:v1:s:UkVBRA")]
-    [InlineData("re\u0301ad", "Elsa.Permission:v1:s:UsOJQUQ")]
+    [InlineData("orders:read", "Elsa.Permission:v1:s:T1JERVJTOlJFQUQ")]
+    [InlineData("re\u0301sumes:read", "Elsa.Permission:v1:s:UsOJU1VNRVM6UkVBRA")]
     [InlineData("*", "Elsa.Permission:v1:s:Kg")]
     public void PermissionPolicyCodecFormatsCanonicalSingleFixtures(string permission, string expected)
     {
@@ -34,11 +34,11 @@ public sealed class AuthorizationContractsTests
     {
         var codec = new PermissionPolicyCodec();
 
-        var any = codec.Format(PermissionPolicyDescriptor.Any("write", "read", "READ"));
-        var all = codec.Format(PermissionPolicyDescriptor.All("write", "read"));
+        var any = codec.Format(PermissionPolicyDescriptor.Any("orders:write", "orders:read", "ORDERS:READ"));
+        var all = codec.Format(PermissionPolicyDescriptor.All("orders:write", "orders:read"));
 
-        Assert.Equal("Elsa.Permission:v1:a:UkVBRA.V1JJVEU", any);
-        Assert.Equal("Elsa.Permission:v1:l:UkVBRA.V1JJVEU", all);
+        Assert.Equal("Elsa.Permission:v1:a:T1JERVJTOlJFQUQ.T1JERVJTOldSSVRF", any);
+        Assert.Equal("Elsa.Permission:v1:l:T1JERVJTOlJFQUQ.T1JERVJTOldSSVRF", all);
     }
 
     [Theory]
@@ -68,8 +68,12 @@ public sealed class AuthorizationContractsTests
     [Theory]
     [InlineData(null)]
     [InlineData("")]
-    [InlineData(" read")]
-    [InlineData("read ")]
+    [InlineData(" orders:read")]
+    [InlineData("orders:read ")]
+    [InlineData("read")]
+    [InlineData("orders.read")]
+    [InlineData("orders/*:read")]
+    [InlineData("orders:*")]
     public void PermissionPolicyDescriptorRejectsInvalidMembers(string? permission)
     {
         Assert.ThrowsAny<ArgumentException>(() => PermissionPolicyDescriptor.Single(permission!));
@@ -78,13 +82,15 @@ public sealed class AuthorizationContractsTests
     [Fact]
     public void PermissionPolicyDescriptorsAndSetRequirementsAreImmutableAndRejectInvalidShapes()
     {
-        var descriptor = PermissionPolicyDescriptor.Any("write", "read");
-        var requirement = new PermissionSetAuthorizationRequirement(PermissionRequirementMode.Any, ["write", "read"]);
+        var descriptor = PermissionPolicyDescriptor.Any("orders:write", "orders:read");
+        var requirement = new PermissionSetAuthorizationRequirement(PermissionRequirementMode.Any, ["orders:write", "orders:read"]);
 
-        Assert.Throws<NotSupportedException>(() => ((IList<string>)descriptor.Permissions).Add("DELETE"));
-        Assert.Throws<NotSupportedException>(() => ((IList<string>)requirement.Permissions).Add("DELETE"));
+        Assert.Throws<NotSupportedException>(() => ((IList<string>)descriptor.Permissions).Add("ORDERS:DELETE"));
+        Assert.Throws<NotSupportedException>(() => ((IList<string>)requirement.Permissions).Add("ORDERS:DELETE"));
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new PermissionSetAuthorizationRequirement(PermissionRequirementMode.Single, ["read"]));
+            new PermissionSetAuthorizationRequirement(PermissionRequirementMode.Single, ["orders:read"]));
+        Assert.Throws<ArgumentException>(() =>
+            new PermissionSetAuthorizationRequirement(PermissionRequirementMode.Any, ["orders.read"]));
         Assert.Throws<ArgumentException>(() =>
             new PermissionSetAuthorizationRequirement(PermissionRequirementMode.All, []));
     }
@@ -95,10 +101,11 @@ public sealed class AuthorizationContractsTests
         var builder = new TestEndpointConventionBuilder();
 
         Assert.Throws<ArgumentException>(() => builder.RequirePermission(" "));
+        Assert.Throws<ArgumentException>(() => builder.RequirePermission("identity.users.read"));
         Assert.Throws<ArgumentException>(() => builder.RequireAnyPermission());
         Assert.Throws<ArgumentException>(() => builder.RequireAllPermissions());
         Assert.Throws<ArgumentNullException>(() =>
-            PermissionEndpointConventionBuilderExtensions.RequirePermission<TestEndpointConventionBuilder>(null!, "read"));
+            PermissionEndpointConventionBuilderExtensions.RequirePermission<TestEndpointConventionBuilder>(null!, "orders:read"));
     }
 
     [Fact]
@@ -110,7 +117,7 @@ public sealed class AuthorizationContractsTests
         var policyProvider = provider.GetRequiredService<IAuthorizationPolicyProvider>();
         var codec = provider.GetRequiredService<IPermissionPolicyCodec>();
 
-        var policy = await policyProvider.GetPolicyAsync(codec.Format(PermissionPolicyDescriptor.Any("write", "read")));
+        var policy = await policyProvider.GetPolicyAsync(codec.Format(PermissionPolicyDescriptor.Any("orders:write", "orders:read")));
 
         Assert.NotNull(policy);
         Assert.Contains(policy.Requirements, requirement => requirement is DenyAnonymousAuthorizationRequirement);
@@ -118,7 +125,7 @@ public sealed class AuthorizationContractsTests
             requirement.GetType().Name == "NormalizedPermissionPrincipalRequirement");
         var requirement = Assert.Single(policy.Requirements.OfType<PermissionSetAuthorizationRequirement>());
         Assert.Equal(PermissionRequirementMode.Any, requirement.Mode);
-        Assert.Equal(["READ", "WRITE"], requirement.Permissions);
+        Assert.Equal(["ORDERS:READ", "ORDERS:WRITE"], requirement.Permissions);
     }
 
     [Fact]
@@ -142,13 +149,28 @@ public sealed class AuthorizationContractsTests
     {
         var builder = new TestEndpointConventionBuilder();
 
-        var returned = builder.RequireAnyPermission("write", "read");
+        var returned = builder.RequireAnyPermission("orders:write", "orders:read");
         var endpointBuilder = new RouteEndpointBuilder(_ => Task.CompletedTask, RoutePatternFactory.Parse("/test"), 0);
         Assert.Single(builder.Conventions)(endpointBuilder);
 
         Assert.Same(builder, returned);
         var authorize = Assert.Single(endpointBuilder.Metadata.OfType<AuthorizeAttribute>());
-        Assert.Equal("Elsa.Permission:v1:a:UkVBRA.V1JJVEU", authorize.Policy);
+        Assert.Equal("Elsa.Permission:v1:a:T1JERVJTOlJFQUQ.T1JERVJTOldSSVRF", authorize.Policy);
+    }
+
+    [Fact]
+    public void RequireAllPermissionsAttributeCarriesTheAllModePolicyItsConventionApplies()
+    {
+        var attribute = new RequireAllPermissionsAttribute("orders:read", "orders:write");
+        var builder = new TestEndpointConventionBuilder();
+        attribute.Apply(builder);
+        var endpointBuilder = new RouteEndpointBuilder(_ => Task.CompletedTask, RoutePatternFactory.Parse("/test"), 0);
+        foreach (var convention in builder.Conventions)
+            convention(endpointBuilder);
+
+        Assert.Equal(new PermissionPolicyCodec().Format(PermissionPolicyDescriptor.All("orders:read", "orders:write")), attribute.Policy);
+        Assert.Equal(["orders:read", "orders:write"], attribute.Permissions);
+        Assert.Contains(endpointBuilder.Metadata.OfType<AuthorizeAttribute>(), authorize => authorize.Policy == attribute.Policy);
     }
 
     [Fact]
@@ -167,9 +189,9 @@ public sealed class AuthorizationContractsTests
     }
 
     [Fact]
-    public async Task PermissionEvaluatorTreatsGrantedPermissionImplicationsAsEffectivePermissions()
+    public async Task PermissionEvaluatorLetsManageSatisfyReadOnTheSameIdentityResource()
     {
-        var evaluator = new ClaimsPermissionEvaluator(new DefaultIdentityPermissionCatalog());
+        var evaluator = new ClaimsPermissionEvaluator();
         var principal = new ClaimsPrincipal(new ClaimsIdentity(
         [
             new(IdentityClaimTypes.Permission, DefaultIdentityPermissionKeys.IdentityUsersManage)
@@ -183,7 +205,7 @@ public sealed class AuthorizationContractsTests
     [Fact]
     public async Task PermissionEvaluatorDoesNotExpandRequestedPermission()
     {
-        var evaluator = new ClaimsPermissionEvaluator(new DefaultIdentityPermissionCatalog());
+        var evaluator = new ClaimsPermissionEvaluator();
         var principal = new ClaimsPrincipal(new ClaimsIdentity(
         [
             new(IdentityClaimTypes.Permission, DefaultIdentityPermissionKeys.IdentityUsersRead)
@@ -218,15 +240,14 @@ public sealed class AuthorizationContractsTests
 
         Assert.NotNull(read);
         Assert.NotNull(manage);
-        Assert.Contains(HostControlContributor.ReadKey, manage!.Implies!);
         // Existing identity permissions remain listed alongside the contributions.
         Assert.NotNull(composite.Find(DefaultIdentityPermissionKeys.IdentityUsersRead));
     }
 
     [Fact]
-    public async Task PermissionEvaluatorHonorsContributedImpliedPermissions()
+    public async Task PermissionEvaluatorLetsManageSatisfyReadForContributedPermissions()
     {
-        var evaluator = new ClaimsPermissionEvaluator(BuildCompositeCatalog(new HostControlContributor()));
+        var evaluator = new ClaimsPermissionEvaluator();
         var principal = PrincipalWithPermissions(HostControlContributor.ManageKey);
 
         var result = await evaluator.EvaluateAsync(new(principal, HostControlContributor.ReadKey));
@@ -269,23 +290,17 @@ public sealed class AuthorizationContractsTests
         Assert.NotNull(catalog.Find(DefaultIdentityPermissionKeys.IdentityUsersRead));
     }
 
-    [Fact]
-    public async Task PermissionEvaluatorExpandsGrantedPermissionsTransitively()
+    [Theory]
+    [InlineData("identity.admin")]
+    [InlineData("test-feature")]
+    [InlineData("test-feature/*:read")]
+    [InlineData("test-feature:*")]
+    [InlineData("test feature:read")]
+    public void CompositePermissionCatalogRejectsKeysThatAreNotConcreteResourceVerbPermissions(string key)
     {
-        var evaluator = new ClaimsPermissionEvaluator(new TestPermissionCatalog(
-        [
-            new("identity.admin", "Admin", "Identity", "All identity permissions.", new HashSet<string> { DefaultIdentityPermissionKeys.IdentityUsersManage }),
-            new(DefaultIdentityPermissionKeys.IdentityUsersManage, "Manage users", "Identity", "Manage users.", new HashSet<string> { DefaultIdentityPermissionKeys.IdentityUsersRead }),
-            new(DefaultIdentityPermissionKeys.IdentityUsersRead, "Read users", "Identity", "Read users.")
-        ]));
-        var principal = new ClaimsPrincipal(new ClaimsIdentity(
-        [
-            new(IdentityClaimTypes.Permission, "identity.admin")
-        ]));
+        var exception = Assert.Throws<InvalidOperationException>(() => BuildCompositeCatalog(new SingleKeyContributor(key)));
 
-        var result = await evaluator.EvaluateAsync(new(principal, DefaultIdentityPermissionKeys.IdentityUsersRead));
-
-        Assert.True(result.Succeeded);
+        Assert.Contains(key, exception.Message);
     }
 
     [Fact]
@@ -319,11 +334,11 @@ public sealed class AuthorizationContractsTests
         var evaluator = new AlwaysGrantPermissionEvaluator();
         var handler = new PermissionAuthorizationHandler(
             new PermissionAuthorizationService(evaluator, [], validator: null, httpContextAccessor: null));
-        var requirement = new PermissionAuthorizationRequirement("read");
+        var requirement = new PermissionAuthorizationRequirement("orders:read");
         var context = new AuthorizationHandlerContext(
             [requirement],
             new ClaimsPrincipal(new ClaimsIdentity(
-                [new Claim(IdentityClaimTypes.Permission, "read")],
+                [new Claim(IdentityClaimTypes.Permission, "orders:read")],
                 "raw-provider")),
             resource: null);
 
@@ -377,14 +392,19 @@ public sealed class AuthorizationContractsTests
 
     private sealed class HostControlContributor : IPermissionContributor
     {
-        public const string ReadKey = "test-feature.read";
-        public const string ManageKey = "test-feature.manage";
+        public const string ReadKey = "test-feature:read";
+        public const string ManageKey = "test-feature:manage";
 
         public IEnumerable<Permission> Contribute()
         {
             yield return new(ReadKey, "Read test feature", "Test feature", "Read.");
-            yield return new(ManageKey, "Manage test feature", "Test feature", "Manage.", new HashSet<string> { ReadKey });
+            yield return new(ManageKey, "Manage test feature", "Test feature", "Manage.");
         }
+    }
+
+    private sealed class SingleKeyContributor(string key) : IPermissionContributor
+    {
+        public IEnumerable<Permission> Contribute() => [new(key, "Test", "Test feature", "A single test permission.")];
     }
 
     private sealed class ShadowingContributor : IPermissionContributor
@@ -393,13 +413,6 @@ public sealed class AuthorizationContractsTests
         {
             yield return new(DefaultIdentityPermissionKeys.IdentityUsersRead, "Shadow", "Test feature", "Attempts to shadow an identity permission.");
         }
-    }
-
-    private sealed class TestPermissionCatalog(IReadOnlyCollection<Permission> permissions) : IPermissionCatalog
-    {
-        public IReadOnlyCollection<Permission> List() => permissions;
-
-        public Permission? Find(string key) => permissions.FirstOrDefault(x => string.Equals(x.Key, key, StringComparison.OrdinalIgnoreCase));
     }
 
     private sealed record TenantResource(string TenantId);

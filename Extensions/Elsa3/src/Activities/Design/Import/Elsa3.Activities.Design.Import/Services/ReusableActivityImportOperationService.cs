@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Primitives.Exceptions;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
@@ -29,12 +30,19 @@ public sealed class ReusableActivityImportOptions
 /// uploaded document verbatim, literal credentials included, so it lives until its apply is decided or its lifetime
 /// runs out, whichever comes first, and is then deleted from the import ledger. The store only removes rows.
 /// </summary>
+/// <remarks>
+/// A replay and a status read return the stored receipt with each imported reusable version's publication state read
+/// live from <paramref name="publications"/> (spec 246 R-6). The upload is gone by then, so finishing a partly published
+/// import is a new apply of the same export under a new idempotency key: its commit reuses the rows, and its publish
+/// phase publishes only the versions still missing.
+/// </remarks>
 public sealed class ReusableActivityImportOperationService(
     IReusableActivityImportOperationStore store,
     IReusableActivityCollectionImporter importer,
     IOptions<ReusableActivityImportOptions> options,
     TimeProvider timeProvider,
-    ILogger<ReusableActivityImportOperationService> logger) : IReusableActivityImportOperationService
+    ILogger<ReusableActivityImportOperationService> logger,
+    IActivityDefinitionVersionPublicationStore? publications = null) : IReusableActivityImportOperationService
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private readonly ReusableActivityImportOptions _options = ValidateOptions(options.Value);
@@ -250,7 +258,7 @@ public sealed class ReusableActivityImportOperationService(
             // The apply this receipt records consumed its upload. Repeating the delete covers an apply that
             // committed and stopped before its delete ran.
             await DiscardCollectionAsync(collectionHandle, accessScope);
-            return prior with { Status = ReusableActivityImportReceiptStatus.AlreadyImported };
+            return await WithPublicationsAsync(prior with { Status = ReusableActivityImportReceiptStatus.AlreadyImported }, cancellationToken);
         }
 
         var collection = await LoadCollectionAsync(collectionHandle, accessScope, cancellationToken);
@@ -284,8 +292,30 @@ public sealed class ReusableActivityImportOperationService(
     {
         ValidateAccessScope(accessScope);
         ValidateIdempotencyKey(idempotencyKey);
-        return await store.FindReceiptAsync(idempotencyKey, accessScope, cancellationToken)
-               ?? throw new ReusableActivityImportNotFoundException("The Elsa 3 import receipt was not found.");
+        var receipt = await store.FindReceiptAsync(idempotencyKey, accessScope, cancellationToken)
+                      ?? throw new ReusableActivityImportNotFoundException("The Elsa 3 import receipt was not found.");
+        return await WithPublicationsAsync(receipt, cancellationToken);
+    }
+
+    /// <summary>Each imported reusable version's publication state as the publication store holds it now.</summary>
+    private async ValueTask<ReusableActivityImportReceipt> WithPublicationsAsync(
+        ReusableActivityImportReceipt receipt,
+        CancellationToken cancellationToken)
+    {
+        if (publications is null)
+            return receipt;
+
+        var states = new List<ReusableActivityPublicationState>();
+        foreach (var source in receipt.Sources.Where(source => source.ActivityDefinitionVersionId is not null))
+        {
+            var published = await publications.FindAsync(source.ActivityDefinitionVersionId!, cancellationToken) is not null;
+            states.Add(new(
+                source.ActivityDefinitionVersionId!,
+                source.SourceVersionId,
+                published ? ReusableActivityPublicationStatus.AlreadyPublished : ReusableActivityPublicationStatus.NotPublished));
+        }
+
+        return states.Count == 0 ? receipt : receipt with { Publications = states };
     }
 
     private async ValueTask<ReusableActivityImportCollectionHandle> LoadCollectionAsync(

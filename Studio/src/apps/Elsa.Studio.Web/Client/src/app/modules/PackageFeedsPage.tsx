@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { PackagePlus, Pencil, RefreshCcw, Scissors, Trash2, X } from "lucide-react";
+import { useDialogFocus } from "../../sdk";
 import type { ElsaStudioModuleApi } from "../../sdk";
 import { SkeletonRows, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
 import {
@@ -337,26 +338,33 @@ function FeedDialog({
   onSubmit(feedDraft: FeedDraft): void;
 }) {
   const [feedDraft, setFeedDraft] = useState<FeedDraft>(() => createFeedDraft(feed));
+  const dialogRef = useRef<HTMLElement>(null);
   const title = mode === "edit" ? "Edit Feed" : "Add Feed";
   const submitLabel = mode === "edit" ? "Save feed" : "Add feed";
+  useDialogFocus(dialogRef, busy ? null : onClose);
+
+  function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!busy && feedDraft.name.trim()) onSubmit(feedDraft);
+  }
 
   return (
     <div className="modules-dialog-backdrop" role="presentation">
-      <section className="modules-upload-dialog" role="dialog" aria-modal="true" aria-labelledby="package-feed-dialog-title">
+      <section ref={dialogRef} className="modules-upload-dialog" role="dialog" aria-modal="true" aria-labelledby="package-feed-dialog-title" tabIndex={-1}>
         <div className="modules-upload-dialog-heading">
           <div>
             <h3 id="package-feed-dialog-title">{title}</h3>
             {feedChangesRequireRestart ? <p>Feed registration changes require a host restart before Nuplane can use them.</p> : null}
           </div>
-          <button type="button" className="studio-icon-button" aria-label={`Close ${mode} feed`} onClick={onClose}>
+          <button type="button" className="studio-icon-button" aria-label={`Close ${mode} feed`} onClick={onClose} disabled={busy}>
             <X size={14} />
           </button>
         </div>
 
-        <div className="modules-form">
+        <form id="package-feed-form" className="modules-form" onSubmit={submit}>
           <label>
             <span>Name</span>
-            <input aria-label="Feed name" placeholder="internal-packages" value={feedDraft.name} readOnly={mode === "edit"} onChange={event => setFeedDraft({ ...feedDraft, name: event.target.value })} />
+            <input data-dialog-initial-focus aria-label="Feed name" placeholder="internal-packages" value={feedDraft.name} readOnly={mode === "edit"} onChange={event => setFeedDraft({ ...feedDraft, name: event.target.value })} />
           </label>
           <label>
             <span>Service index</span>
@@ -379,11 +387,11 @@ function FeedDialog({
             />
             Include all packages
           </label>
-        </div>
+        </form>
 
         <div className="modules-dialog-actions">
-          <button type="button" className="studio-button" onClick={onClose}>Cancel</button>
-          <button type="button" className="studio-button" disabled={busy || !feedDraft.name.trim()} onClick={() => onSubmit(feedDraft)}>
+          <button type="button" className="studio-button" onClick={onClose} disabled={busy}>Cancel</button>
+          <button type="submit" form="package-feed-form" className="studio-button" disabled={busy || !feedDraft.name.trim()}>
             <PackagePlus size={15} />
             {submitLabel}
           </button>

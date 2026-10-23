@@ -48,6 +48,11 @@ Under `IsDevelopmentOrDemo`:
   username `admin`, password `Password123!` (logged prominently at startup). There are no credential
   constants in code; the values come entirely from configuration. The administrator role is granted the
   all-access permission (`*`), so it can reach every `ConfigurePermissions()`-secured endpoint.
+
+Permissions are named `{resource}:{verb}`, as in Elsa 3.9 (`identity/users:manage`, `workflows/runtime:read`), and a
+trailing `*` grants a whole subtree (`workflows/*:read`). At startup the host logs one warning for each role grant that
+matches no registered permission, naming the role and the grant; such a grant authorizes nothing. See
+[Elsa 3.9 to Elsa 4 permission mapping](elsa3-permission-mapping.md) for the rules and the Elsa 3.9 names.
 - **The sign-in cookie relaxes to `SameAsRequest`** so a plain-HTTP `localhost` host can establish a session.
 
 ## Configuration surface (production)

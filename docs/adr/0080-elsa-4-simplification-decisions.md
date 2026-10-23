@@ -75,6 +75,45 @@ exceptions, by [owner decision on valence-works/strategy#8](https://github.com/v
 (maintainers only). Its decisions are recorded in [ADR 0085](0085-elsa-3-parity-identity-administration-and-scope.md);
 its first units are Phase 1, users and roles. The remaining decisions in this ADR apply to that work as to any other.
 
+**Owner amendment, 18 October 2026:** [Unified Execution #2892](../program-goals/unified-execution.md)
+is authorized for end-to-end implementation as a named exception to D0's parking and two-program cap.
+The [approved continuation](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6249319967)
+and [BPMN authority amendment](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6249325156)
+record the scope: native/BPMN lifecycle integration, extensible hosting, ETL, agent collaboration and shared tooling,
+including necessary BPMN-library changes and releases. Reuse the existing #2892 hierarchy and #2735 adoption work;
+keep one active implementation leaf and do not reactivate unrelated parked objectives. The remaining decisions
+in this ADR continue to apply within the current owner-authorized scope.
+
+**Owner amendment, 19 October 2026:** [Native Compensation and Saga Recovery #3035](../program-goals/native-compensation.md)
+is authorized for program establishment and planning as a named exception to D0's parking and two-program cap.
+The owner approved the proposed program with "This sounds great. Let's proceed and create a program."
+Its [PRD #3036](https://github.com/elsa-workflows/elsa-foundation/issues/3036) includes native compensation and
+integrated Elsa Studio visual authoring and recovery inspection from the first durable slice. BPMN is semantic
+inspiration only, with no implementation reuse, shared compensation abstraction or dependency. Elsa 3
+implementation follows separately. This amendment authorizes the program records and prepared design work;
+the establishment task does not authorize production implementation, releases, deployment or reactivation of
+other parked programs. The remaining decisions in this ADR continue to apply.
+
+**Owner amendment, 19 October 2026 (later that day): the two-program cap is replaced.** Five named exceptions
+in nine days show that the cap no longer describes how programs are approved. The owner retired it instead of
+adding another exception. From this amendment on:
+
+- The active programs are exactly the rows of the Active table in the
+  [program-goal registry](../program-goals/README.md#registry). There is no numeric cap.
+- A program becomes active only through an owner amendment to this section that names it and states its
+  sequencing against the active programs: what it waits on, what it displaces, or why it can run beside them.
+- Parking of every unlisted program and the 2026-11-21 parked-work review remain. The cap of 20
+  `ready-for-agent` issues remains.
+
+The same amendment widens #3035 from establishment to **end-to-end delivery of its M0–M5 milestones** ("Yes
+clean it up, then deliver the program end to end"). Sequencing: it runs beside #2892 and consumes existing
+runtime contracts instead of waiting on #2892; see
+[its relationship to other programs](../program-goals/native-compensation.md#relationship-to-other-programs).
+Releases and deployment are not included. Merging follows D7 as amended on 15 October: the Code Review app
+merges once a review round leaves nothing actionable and CI is green, runtime and persistence PRs included.
+The separate Elsa 3 compensation program (elsa-workflows/elsa-core#8884) is paused until the Elsa 4 design
+packet #3043 is reviewed.
+
 ### D1 — Risk-based testing
 
 - Test observable behaviour at the cheapest level that proves it; unit-test logic that carries real risk.
@@ -241,6 +280,23 @@ analyzer-only, which NuGet leaves out of the consumers' restore graphs, so no ex
   If fewer than half of the filed issues are promoted after four weeks, or the metrics do not move, the routines are
   paused and their prompts revised.
 
+**Owner amendment, 15 October 2026:** merging under D7 follows the review loop of the org-wide
+[Issue Bus Lite][org-agents-review] protocol, by
+[owner decision quoted on #2766](https://github.com/elsa-workflows/elsa-foundation/pull/2766#issuecomment-6183395119)
+and recorded for the org in [elsa-workflows/.github#6](https://github.com/elsa-workflows/.github/pull/6). The Code
+Review app (`elsa-workflows-review-bot[bot]`) merges every PR, including the runtime, persistence and public-rename
+PRs and the UX QA fix PRs that D7 sent to a human merge, once a review round leaves nothing actionable and CI is
+green on the exact head commit. Actionable findings are fixed in new commits and reviewed again, for at most 6
+rounds; if blocking findings remain after the sixth, the PR is escalated to the maintainer with
+`blocked: review loop exhausted` and `needs:decision`. D7's human-merge cases are dropped, and so is the 14 October
+note's reference to D7's human merge. D7's pause after a reverted auto-merge is kept for now, pending owner confirmation (see
+[this comment](https://github.com/elsa-workflows/elsa-foundation/pull/2766#issuecomment-6199163408)): while #2559
+carries `auto-merge-paused`, routine PRs request no Code Review. The fixer routine never merges
+its own PRs and no longer merges through `elsa-auto-review-merge`; it requests review and stops. Routine PRs carry
+the `auto-fix` label, which replaces the `claude/auto-fix-*` branch prefix as the way the routine finds its own PRs
+and their reverts.
+D7's routines, caps and labels are otherwise unchanged.
+
 ## Consequences
 
 - Framework constitution 4.0.1 → 5.0.0 (MAJOR: §2.5, §2.21.1 and §2.23 rules removed or redefined). Elsa
@@ -249,3 +305,5 @@ analyzer-only, which NuGet leaves out of the consumers' restore graphs, so no ex
 - Breaking changes (renames, internalization, migration squash, mode names) are accepted because nothing has
   shipped. They become far more expensive after GA, so they come first.
 - Existing tests that assert on documentation or source text are deleted, not migrated.
+
+[org-agents-review]: https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#review-and-merge-rules

@@ -21,6 +21,12 @@ public sealed class InMemoryIdentityStore : IUserStore, IRoleStore, IExternalIde
     public ValueTask SaveAsync(UserRecord user, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
 
+    public ValueTask<bool> SetStatusAsync(string tenantId, string userId, UserStatus status, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public ValueTask<bool> DeleteAsync(string tenantId, string userId, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
     ValueTask<RoleRecord?> IRoleStore.FindAsync(string tenantId, string roleId, CancellationToken cancellationToken) =>
         throw new NotSupportedException();
 

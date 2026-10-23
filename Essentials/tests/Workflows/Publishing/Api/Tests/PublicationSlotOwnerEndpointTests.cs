@@ -12,10 +12,12 @@ using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Options;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using Xunit;
 using static Elsa.Workflows.Publishing.Api.Tests.Support.CodedProblemAssertions;
 
@@ -45,6 +47,8 @@ public sealed class PublicationSlotOwnerEndpointTests : IAsyncLifetime
     private static readonly WorkflowActivationSource ImportOwner = WorkflowActivationSource.ArtifactReconciliation("mounted-artifacts");
 
     private readonly TriggerConflictSupport.StubTriggerExtractor _triggers = new();
+    private readonly ActivationChannelOptions _channels = new();
+    private RecordingCompiler _compiler = null!;
     private PublishingMinimalApiScenarioHost _host = null!;
     private IWorkflowActivationAuthority _authority = null!;
 
@@ -57,10 +61,13 @@ public sealed class PublicationSlotOwnerEndpointTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
+        _compiler = new RecordingCompiler();
         _host = await PublishingMinimalApiScenarioHost.StartAsync(
             requestSenderFactory: services => new PublishHandlerSender(services.GetRequiredService<IHttpContextAccessor>()),
+            compiler: _compiler,
             configureServices: services =>
             {
+                services.AddSingleton<IOptions<ActivationChannelOptions>>(Options.Create(_channels));
                 services.RemoveAll<IWorkflowTriggerBindingExtractor>();
                 services.AddSingleton<IWorkflowTriggerBindingExtractor>(_triggers);
                 // Normally contributed by the runtime triggers feature, which this host does not mount. Without it the
@@ -79,6 +86,53 @@ public sealed class PublicationSlotOwnerEndpointTests : IAsyncLifetime
     }
 
     public async Task DisposeAsync() => await _host.DisposeAsync();
+
+    [Theory]
+    [InlineData(VersionPreflightRoute)]
+    [InlineData(SnapshotPreflightRoute)]
+    [InlineData(PublishRoute)]
+    public async Task An_undeclared_channel_is_rejected_before_publication_writes(string route)
+    {
+        _channels.AllowAdHocChannels = false;
+        _channels.Channels = [new() { Name = "canary" }];
+
+        using var response = await PostAsync(route, PreflightBody(route));
+        var raw = await response.Content.ReadAsStringAsync();
+
+        AssertCodedProblem(response, raw, HttpStatusCode.BadRequest, "channel_not_declared");
+        Assert.Contains("default", raw, StringComparison.Ordinal);
+        await AssertNoPublicationWritesAsync();
+        Assert.Empty(await _authority.ListByDefinitionAsync(DefinitionId));
+    }
+
+    [Theory]
+    [InlineData(VersionPreflightRoute)]
+    [InlineData(SnapshotPreflightRoute)]
+    public async Task A_declared_channel_can_be_previewed_when_ad_hoc_channels_are_disabled(string route)
+    {
+        _channels.AllowAdHocChannels = false;
+        _channels.Channels = [new() { Name = "default", DisplayName = "Production" }];
+
+        var preflight = await PreflightAsync(route);
+
+        Assert.True(preflight.GetProperty("canActivate").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData(VersionPreflightRoute, "tenant-a")]
+    [InlineData(VersionPreflightRoute, "tenant-b")]
+    [InlineData(SnapshotPreflightRoute, "tenant-a")]
+    [InlineData(SnapshotPreflightRoute, "tenant-b")]
+    public async Task Preflight_compiles_in_the_authenticated_tenant_scope_without_publication_writes(
+        string route,
+        string tenantId)
+    {
+        using var response = await PostAsync(route, PreflightBody(route), tenantId);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(tenantId, Assert.Single(_compiler.Requests).TenantId);
+        await AssertNoPublicationWritesAsync();
+    }
 
     [Theory]
     [InlineData(VersionPreflightRoute)]
@@ -122,6 +176,7 @@ public sealed class PublicationSlotOwnerEndpointTests : IAsyncLifetime
         if (foreignOwned)
             await ActivateAsync("default", "import:artifact-1", ImportOwner);
         await ClaimExclusiveTriggerInAnotherSlotAsync("blue", "publication-blue");
+        _triggers.DisplayDescriptor = "GET /orders";
 
         var preflight = await PreflightAsync(route);
 
@@ -129,6 +184,8 @@ public sealed class PublicationSlotOwnerEndpointTests : IAsyncLifetime
         var conflict = Assert.Single(preflight.GetProperty("conflicts").EnumerateArray().ToArray());
         Assert.Equal("publication-blue", conflict.GetProperty("publicationId").GetString());
         Assert.Equal("blue", conflict.GetProperty("slotName").GetString());
+        Assert.Equal("http:get:/orders", conflict.GetProperty("key").GetString());
+        Assert.Equal("GET /orders", conflict.GetProperty("descriptor").GetString());
         if (foreignOwned)
             AssertImportOwner(preflight);
         else
@@ -147,6 +204,11 @@ public sealed class PublicationSlotOwnerEndpointTests : IAsyncLifetime
         AssertCodedProblem(response, raw, HttpStatusCode.Conflict, "slot_owner_conflict");
         using var problem = JsonDocument.Parse(raw);
         Assert.Contains(ImportOwner.Describe(), problem.RootElement.GetProperty("detail").GetString(), StringComparison.Ordinal);
+        await AssertNoPublicationWritesAsync();
+    }
+
+    private async Task AssertNoPublicationWritesAsync()
+    {
         Assert.Empty(await _host.Services.GetRequiredService<IWorkflowExecutableStore>().ListAllAsync());
         Assert.Empty(await _host.Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().ListAllAsync());
         Assert.Empty(await _host.Services.GetRequiredService<IPublicationRecordStore>()
@@ -194,23 +256,41 @@ public sealed class PublicationSlotOwnerEndpointTests : IAsyncLifetime
 
     private async Task<JsonElement> PreflightAsync(string route)
     {
-        using var response = await PostAsync(route, route == SnapshotPreflightRoute
-            ? $$"""{"definitionId":"{{DefinitionId}}","state":{},"layout":[]}"""
-            : "{}");
+        using var response = await PostAsync(route, PreflightBody(route));
         var raw = await response.Content.ReadAsStringAsync();
         Assert.True(response.StatusCode == HttpStatusCode.OK, $"{(int)response.StatusCode}: {raw}");
         using var document = JsonDocument.Parse(raw);
         return document.RootElement.Clone();
     }
 
-    private async Task<HttpResponseMessage> PostAsync(string route, string body)
+    private static string PreflightBody(string route) => route == SnapshotPreflightRoute
+        ? $$"""{"definitionId":"{{DefinitionId}}","state":{},"layout":[]}"""
+        : "{}";
+
+    private async Task<HttpResponseMessage> PostAsync(string route, string body, string tenantId = "capture-tenant")
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, route)
         {
             Content = new StringContent(body, Encoding.UTF8, "application/json")
         };
         request.Headers.TryAddWithoutValidation(PublishingCompatibilityCases.IdentityHeader, "trusted-success");
+        request.Headers.TryAddWithoutValidation(PublishingCompatibilityCases.TenantHeader, tenantId);
         return await _host.Client.SendAsync(request);
+    }
+
+    private sealed class RecordingCompiler : IWorkflowExecutableCompiler
+    {
+        private readonly CaptureWorkflowExecutableCompiler _inner = new();
+
+        public List<WorkflowExecutableCompileRequest> Requests { get; } = [];
+
+        public ValueTask<WorkflowExecutable> CompileAsync(
+            WorkflowExecutableCompileRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            Requests.Add(request);
+            return _inner.CompileAsync(request, cancellationToken);
+        }
     }
 
     /// <summary>Hands the publish request to the real handler, as the mediator would; the capture sender would answer it.</summary>

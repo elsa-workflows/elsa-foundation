@@ -1,17 +1,37 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 
 namespace Elsa.Workflows.Runtime.Services.Scheduler;
 
 [RuntimeDefaultRegistration]
-public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQueue, IWorkflowSchedulerWorkClaimInspection
+public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQueue, IWorkflowSchedulerWorkClaimInspection, IWorkflowSchedulerWorkVisibilityReader
 {
     private readonly object _syncRoot = new();
+    private readonly HashSet<string> _deletedWorkflowExecutionIds = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Queue<RuntimeSchedulerWorkItem>> _queuesByWorkflowExecutionId = new(StringComparer.Ordinal);
     private readonly Dictionary<SchedulerWorkItemKey, RuntimeSchedulerWorkItem> _workItemsByScopedId = new();
     private readonly Dictionary<SchedulerWorkItemKey, ClaimState> _claimsByScopedId = new();
+    private long _nextInsertionOrdinal;
+
+    internal void DeleteForWorkflowExecution(string workflowExecutionId)
+    {
+        lock (_syncRoot)
+        {
+            _deletedWorkflowExecutionIds.Add(workflowExecutionId);
+            _queuesByWorkflowExecutionId.Remove(workflowExecutionId);
+            foreach (var key in _workItemsByScopedId.Keys
+                         .Where(key => StringComparer.Ordinal.Equals(key.WorkflowExecutionId, workflowExecutionId))
+                         .ToArray())
+                _workItemsByScopedId.Remove(key);
+            foreach (var key in _claimsByScopedId.Keys
+                         .Where(key => StringComparer.Ordinal.Equals(key.WorkflowExecutionId, workflowExecutionId))
+                         .ToArray())
+                _claimsByScopedId.Remove(key);
+        }
+    }
 
     public bool SupportsClaimTransitions => true;
 
@@ -26,6 +46,10 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
 
         lock (_syncRoot)
         {
+            // A retained post-commit continuation may settle after manual history deletion. Acknowledge its
+            // idempotent delivery without recreating scheduler work for the fenced execution.
+            if (_deletedWorkflowExecutionIds.Contains(workItem.WorkflowExecutionId))
+                return ValueTask.FromResult(workItem);
             var scopedWorkItemKey = new SchedulerWorkItemKey(workItem.WorkflowExecutionId, workItem.WorkItemId);
             if (_workItemsByScopedId.TryGetValue(scopedWorkItemKey, out var existing))
                 return new ValueTask<RuntimeSchedulerWorkItem>(existing);
@@ -36,9 +60,11 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
                 _queuesByWorkflowExecutionId.Add(workItem.WorkflowExecutionId, queue);
             }
 
+            var insertionOrdinal = checked(_nextInsertionOrdinal + 1);
             queue.Enqueue(workItem);
             _workItemsByScopedId.Add(scopedWorkItemKey, workItem);
-            _claimsByScopedId.Add(scopedWorkItemKey, new ClaimState());
+            _claimsByScopedId.Add(scopedWorkItemKey, new ClaimState(insertionOrdinal));
+            _nextInsertionOrdinal = insertionOrdinal;
 
             return new ValueTask<RuntimeSchedulerWorkItem>(workItem);
         }
@@ -50,35 +76,60 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_syncRoot)
-        {
-            if (!_queuesByWorkflowExecutionId.TryGetValue(query.WorkflowExecutionId, out var queue))
-                return ValueTask.FromResult(
-                    new RuntimeStorePage<RuntimeSchedulerWorkItem>(query, []));
+            return ValueTask.FromResult(ListPage(
+                query,
+                $"scheduler-work:workflow:{query.WorkflowExecutionId}",
+                OrderKey,
+                item => item));
+    }
 
-            var queryBinding = $"scheduler-work:workflow:{query.WorkflowExecutionId}";
-            var lastOrderKey = InMemoryRuntimeStoreContinuation.Decode(
-                query.ContinuationToken,
-                queryBinding,
-                nameof(query));
-            var remaining = queue
-                .Select(item => (Item: item, OrderKey: OrderKey(item)))
-                .Where(entry =>
-                    lastOrderKey is null ||
-                    StringComparer.Ordinal.Compare(entry.OrderKey, lastOrderKey) > 0)
-                .OrderBy(entry => entry.OrderKey, StringComparer.Ordinal)
-                .Take(query.Limit + 1)
-                .ToArray();
-            var page = remaining.Take(query.Limit).ToArray();
-            var nextContinuation = remaining.Length > page.Length
-                ? InMemoryRuntimeStoreContinuation.Encode(queryBinding, page[^1].OrderKey)
-                : null;
+    public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkVisibility>> ListWithVisibilityAsync(
+        RuntimeSchedulerWorkQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
 
-            return ValueTask.FromResult(
-                new RuntimeStorePage<RuntimeSchedulerWorkItem>(
-                    query,
-                    page.Select(entry => entry.Item).ToArray(),
-                    nextContinuation));
-        }
+        lock (_syncRoot)
+            return ValueTask.FromResult(ListPage(
+                query,
+                $"scheduler-work-visibility:workflow:{query.WorkflowExecutionId}",
+                InsertionOrderKey,
+                item => new RuntimeSchedulerWorkVisibility(
+                    item,
+                    _claimsByScopedId[new SchedulerWorkItemKey(item.WorkflowExecutionId, item.WorkItemId)].VisibleAfter)));
+    }
+
+    private RuntimeStorePage<TResult> ListPage<TResult>(
+        RuntimeSchedulerWorkQuery query,
+        string queryBinding,
+        Func<RuntimeSchedulerWorkItem, string> orderKey,
+        Func<RuntimeSchedulerWorkItem, TResult> project)
+    {
+        if (!_queuesByWorkflowExecutionId.TryGetValue(query.WorkflowExecutionId, out var queue))
+            return new RuntimeStorePage<TResult>(query, []);
+
+        var lastOrderKey = InMemoryRuntimeStoreContinuation.Decode(
+            query.ContinuationToken,
+            queryBinding,
+            nameof(query));
+        var remaining = queue
+            .Select(item => (Item: item, OrderKey: orderKey(item)))
+            .Where(entry =>
+                lastOrderKey is null ||
+                StringComparer.Ordinal.Compare(entry.OrderKey, lastOrderKey) > 0)
+            .OrderBy(entry => entry.OrderKey, StringComparer.Ordinal)
+            .Take(query.Limit + 1)
+            .ToArray();
+        var page = remaining.Take(query.Limit).ToArray();
+        var nextContinuation = remaining.Length > page.Length
+            ? InMemoryRuntimeStoreContinuation.Encode(queryBinding, page[^1].OrderKey)
+            : null;
+
+        return new RuntimeStorePage<TResult>(
+            query,
+            page.Select(entry => project(entry.Item)).ToArray(),
+            nextContinuation);
     }
 
     public ValueTask<RuntimeSchedulerWorkItem?> DequeueAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
@@ -214,6 +265,10 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
     // separate tie-break is needed.
     private static string OrderKey(RuntimeSchedulerWorkItem item) =>
         $"{item.RecordedAt.UtcTicks:D19}.{item.Sequence ?? long.MaxValue:D20}.{StableHash(item.WorkItemId)}";
+
+    private string InsertionOrderKey(RuntimeSchedulerWorkItem item) =>
+        _claimsByScopedId[new SchedulerWorkItemKey(item.WorkflowExecutionId, item.WorkItemId)]
+            .InsertionOrdinal.ToString("D20", CultureInfo.InvariantCulture);
 
     private static string StableHash(string value) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
@@ -424,8 +479,9 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
 
     private readonly record struct SchedulerWorkItemKey(string WorkflowExecutionId, string WorkItemId);
 
-    private sealed class ClaimState
+    private sealed class ClaimState(long insertionOrdinal)
     {
+        public long InsertionOrdinal { get; } = insertionOrdinal;
         public string? OwnerId { get; set; }
         public long FencingToken { get; set; }
         public long Revision { get; set; } = 1;

@@ -12,15 +12,15 @@ Enable `StudioPreferences` for the core store, namespaces, service, and permissi
 
 | Method | Route | Permission | Purpose |
 |---|---|---|---|
-| GET | `/_elsa/studio/preferences/{namespace}` | `studio.preferences.read` or `*` | Read one scoped preference document. |
-| PUT | `/_elsa/studio/preferences/{namespace}` | `studio.preferences.write` or `*` | Create or conditionally update one scoped preference document. |
-| GET | `/_elsa/studio/home-layout` | `studio.preferences.read` or `*` | Read the current user's Home layout. Falls back to the admin default, then the built-in layout. |
-| PUT | `/_elsa/studio/home-layout` | `studio.preferences.write` or `*` | Create or update the current user's Home layout. |
-| DELETE | `/_elsa/studio/home-layout` | `studio.preferences.write` or `*` | Reset: delete the user's layout so the admin default (or built-in) applies. |
-| GET | `/_elsa/studio/home-layout/default` | `studio-preferences.manage-defaults` or `*` | Read the admin default Home layout. |
-| PUT | `/_elsa/studio/home-layout/default` | `studio-preferences.manage-defaults` or `*` | Save the admin default Home layout. |
+| GET | `/_elsa/studio/preferences/{namespace}` | `studio/preferences:read` or `*` | Read one scoped preference document. |
+| PUT | `/_elsa/studio/preferences/{namespace}` | `studio/preferences:write` or `*` | Create or conditionally update one scoped preference document. |
+| GET | `/_elsa/studio/home-layout` | `studio/preferences:read` or `*` | Read the current user's Home layout. Falls back to the admin default, then the built-in layout. |
+| PUT | `/_elsa/studio/home-layout` | `studio/preferences:write` or `*` | Create or update the current user's Home layout. |
+| DELETE | `/_elsa/studio/home-layout` | `studio/preferences:write` or `*` | Reset: delete the user's layout so the admin default (or built-in) applies. |
+| GET | `/_elsa/studio/home-layout/default` | `studio/preferences/defaults:manage` or `*` | Read the admin default Home layout. |
+| PUT | `/_elsa/studio/home-layout/default` | `studio/preferences/defaults:manage` or `*` | Save the admin default Home layout. |
 
-Both routes use the Foundation Identity policy provider and evaluator. `studio.preferences.write` implies `studio.preferences.read`. `studio-preferences.manage-defaults` is a separate Studio-preferences permission (wildcard still grants it); it is not `module-management`. The authenticated subject and tenant plus `X-Elsa-Studio-Host-Id` form the scope; the reserved subject `__admin_default__` is rejected on the per-user route. PUT requires either `If-None-Match: *` for creation or one quoted `If-Match` revision for update.
+Both routes use the Foundation Identity policy provider and evaluator. `studio/preferences:write` does not imply `studio/preferences:read`; a user who edits their layout needs both. `studio/preferences/defaults:manage` is a separate Studio-preferences permission (wildcard still grants it); it is not `module-management`. The authenticated subject and tenant plus `X-Elsa-Studio-Host-Id` form the scope; the reserved subject `__admin_default__` is rejected on the per-user route. PUT requires either `If-None-Match: *` for creation or one quoted `If-Match` revision for update.
 
 GET `/home-layout` returns the fallback document's `ETag` when the source is `default`. That ETag identifies the admin default, not a user revision: the first user PUT must still send `If-None-Match: *`. A builtin fallback has no ETag. PUT rejects malformed values, duplicate ids, more than 50 widgets, and widget ids that do not match `^[a-z0-9][a-z0-9._-]{0,63}(:[a-z0-9._-]{1,64})?$` with 422. Extension `registerHomeWidget` ids that match the pattern are stored; the client skips widgets that are not registered (for example when the module is disabled) and keeps them in the saved layout.
 

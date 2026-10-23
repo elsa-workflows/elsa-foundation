@@ -17,6 +17,8 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
     private readonly IWorkflowExecutableStore? _workflowExecutableStore;
     private readonly TimeProvider _timeProvider;
     private readonly IWorkflowExecutableReader? _executableReader;
+    private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
+    private readonly IRuntimeConsumedSchedulerWorkClaimAccessor? _consumedWorkClaimAccessor;
 
     public WorkflowCompleteActivitySchedulerWorkHandler(
         IActivityExecutionStateStore activityExecutionStateStore,
@@ -32,6 +34,24 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
         IWorkflowExecutableStore? workflowExecutableStore,
         TimeProvider timeProvider,
         IWorkflowExecutableReader? executableReader = null)
+        : this(
+            activityExecutionStateStore,
+            schedulerWorkQueue,
+            workflowExecutableStore,
+            timeProvider,
+            workflowExecutionStateStore: null,
+            executableReader: executableReader)
+    {
+    }
+
+    public WorkflowCompleteActivitySchedulerWorkHandler(
+        IActivityExecutionStateStore activityExecutionStateStore,
+        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
+        IWorkflowExecutableStore? workflowExecutableStore,
+        TimeProvider timeProvider,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore,
+        IWorkflowExecutableReader? executableReader = null,
+        IRuntimeConsumedSchedulerWorkClaimAccessor? consumedWorkClaimAccessor = null)
     {
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
@@ -42,6 +62,8 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
         _workflowExecutableStore = workflowExecutableStore;
         _timeProvider = timeProvider;
         _executableReader = executableReader;
+        _workflowExecutionStateStore = workflowExecutionStateStore;
+        _consumedWorkClaimAccessor = consumedWorkClaimAccessor;
     }
 
     public string Name => HandlerName;
@@ -60,7 +82,7 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
         {
             // Reuse the single per-work-item parse rather than deserializing the payload again.
             var completionPayload = RuntimeCompleteActivityPayloadMemo.Deserialize(workItem);
-            return completionPayload?.CompletionKind != SchedulerCompletionKind.ParentCompletionEvaluation;
+            return completionPayload?.CompletionKind is not (SchedulerCompletionKind.ParentCompletionEvaluation or SchedulerCompletionKind.ParentOutcomeEvaluation);
         }
         catch (Exception exception) when (
             exception is JsonException or NotSupportedException ||
@@ -76,6 +98,24 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
         cancellationToken.ThrowIfCancellationRequested();
 
         var payload = DeserializeCompletePayload(workItem);
+
+        // A delayed completion cascade can be redelivered after its queue rows were consumed. Its deterministic
+        // successor IDs then re-enter the queue as new rows, and the final checkpoint would be rebuilt with a new
+        // occurrence time and conflict with the already committed completion. The checkpoint is authoritative for
+        // this guard: once it has made the workflow terminal, every later completion stage is a no-op. Before that
+        // commit, the first legitimate completion still proceeds (even though its activity is already Completed).
+        // A matching claimed dispatch has just passed the drainer's terminal guard in this same single-writer
+        // scope. Direct calls and unclaimed dispatches still need their own guard; do not add a second database
+        // read to each normal completion stage or use a claim belonging to another item as evidence.
+        var consume = _consumedWorkClaimAccessor?.PendingConsume;
+        var checkedByDrainer = consume is not null &&
+            StringComparer.Ordinal.Equals(consume.WorkflowExecutionId, workItem.WorkflowExecutionId) &&
+            StringComparer.Ordinal.Equals(consume.WorkItemId, workItem.WorkItemId);
+        if (!checkedByDrainer && _workflowExecutionStateStore is not null &&
+            await _workflowExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken) is { Status: var status } &&
+            status.IsTerminal())
+            return;
+
         switch (payload.CompletionKind)
         {
             case SchedulerCompletionKind.ActivityCompleted:
@@ -261,7 +301,17 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
             "outcomeNames" or
             "reason" or
             "completionKind" or
-            "completedChildActivityExecutionId";
+            "completedChildActivityExecutionId" or
+            "parentOutcome" or
+            "version" or
+            "fault" or
+            "incidentId" or
+            "notifications" or
+            "notifyingChildActivityExecutionId" or
+            "notifyingChildExecutableNodeId" or
+            "code" or
+            "notifyingChildIterationId" or
+            "message";
 
     private sealed record DownstreamSchedulingResult(
         bool IsTerminal,

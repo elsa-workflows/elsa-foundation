@@ -94,6 +94,22 @@ The observer then collects
 blocking incidents that have no resolution outcome **and** carry an `ActivityExecutionId`, and hands
 them to `IncidentResolutionBatchExecutor`.
 
+An intentional child fault with outward notifications has one further recovery boundary
+([spec 126 D6](../specs/126-runtime-child-parent-notification/spec.md#d6--one-intentional-fault-and-its-ordered-notifications-2967)).
+Its incident and combined parent work item commit together. If dispatch fails, the durable work may
+still await delivery while the local queue is empty. The executor and the backstop both defer
+ordinary incident decisions while that exact parent evaluation is pending. The incident's work-item
+ID, the child's processed marker and the parent's execution status establish this condition without
+a separate pending store. The whole batch waits, because a bubbling ancestor may still decide an
+earlier descendant incident. Once the evaluation commits or the parent is no longer `Running`,
+ordinary incident policy resumes for any unabsorbed incidents. Poisoned work remains visible for
+intervention; this guard does not acknowledge or retry poison records. The hold also survives
+exhausted enqueue retries (`FailedFinal`): the original incident stays blocking until a parent
+decision commits or the parent ceases to be eligible. Automatic recovery is then exhausted; the
+retained failed outbox row and event 68103 are diagnostic evidence, not a generic redrive API.
+The [existing final-delivery limitation](runtime-durable-resumption.md#when-the-sweep-takes-a-live-drains-continuation)
+still applies.
+
 The executor resolves the incident strategy pinned on the executable (`WorkflowExecutable.IncidentStrategy`,
 fixed at publish, not read from live configuration), asks it for an action, and applies the whole batch
 in one `IncidentResolutionBatchApplied` checkpoint:
@@ -135,6 +151,7 @@ It returns without doing anything when any of these hold:
 - the workflow is missing or already terminal;
 - no blocking incident has a null `ResolutionOutcome` (so anything the strategy observer already
   decided is left alone, including a deliberate `ContinueWithIncidents`);
+- a combined parent evaluation is still pending under the durable condition above;
 - every remaining blocking incident is an `ArtifactActivationFailed` incident. A missing consumer,
   schema, durable-value storage driver or runtime secret resolver is a deployment problem, so the run is
   kept recoverable while deployment is corrected.

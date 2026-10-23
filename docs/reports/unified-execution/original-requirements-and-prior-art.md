@@ -1,0 +1,17 @@
+# Original ETL intent and prior art
+
+Refreshed 17 October 2026. These sources motivate product/modeling boundaries; they are not evidence that Elsa's distributed substrate already implements them.
+
+[Elsa Core #4809](https://github.com/elsa-workflows/elsa-core/issues/4809) proposes dataset references, connected services, source/sink bindings, chunked background processing and user-visible dataset output selection. Carry those concepts into the ETL authoring model instead of exposing worker leases or queue internals as the main user experience. Dataset identity and connection/secret authority should remain separate. A pipeline invocation should return a dataset/result reference that an ordinary workflow can consume; a designer should offer schema-aware source/transform/sink ports alongside explicit workflow control outcomes. This is a proposed Elsa mapping, not a claim that the issue was implemented.
+
+[Orchard Core Data Pipelines documentation](https://docs.orchardcore.net/en/main/reference/modules/DataPipelines/) describes sources, transforms, file steps and destinations connected by typed ports, with a pipeline designer and run history. Its workflow integration queues a published pipeline and can await completion. This supports an integrated product experience while keeping data-pipeline semantics distinct from workflow composition. For Elsa, reuse the separation of shared data capabilities from pipeline-specific authoring; do not infer a distributed recovery contract from these product features. Its combined failure/cancellation workflow outcome is also a useful comparison: Elsa should explicitly decide whether preserving that distinction is required.
+
+[Orchard Core Data Sources documentation](https://docs.orchardcore.net/en/latest/reference/modules/DataSources/) describes shared typed tabular sources, formats, formulas and memory-bounded data operations used by pipelines and other consumers. This suggests a reusable data-services layer for datasets, schemas, readers/writers and transformations. It does not require forcing ordinary workflow activities into a row-stream contract.
+
+The user-supplied [Orchard ETL video](https://youtu.be/PP8oz3GGaM0) resolves to “Data Pipelines (ETL) in Orchard Core | Extract, Transform & Load Data.” The accessible page did not expose a transcript during this refresh. No video-specific mechanism or implementation claim is treated as verified from watching it.
+
+## Concrete product example to preserve
+
+An ordinary Sequence requests an export, optionally awaits human approval, invokes an ETL pipeline and sends a download notification. The pipeline reads an externally identified dataset, transforms bounded partitions, writes through a connected destination and returns a dataset reference plus a semantic outcome. The Sequence owns its order; the pipeline owns partition/checkpoint meaning; shared work handles dispatch/results. A BPMN service task can invoke the same pipeline through a child-execution adapter. Agent collaboration can produce a proposed transformation or tool request, but approval must bind the exact accepted request before effects. This example connects the product surfaces without conflating their execution semantics.
+
+The experiments currently cover control/recovery boundaries using deterministic local fixtures. Production dataset discovery, connector catalogs, schema previews, transformations, credential resolution and designer interaction remain product work, linked to Program #2892's later epics.

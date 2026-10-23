@@ -179,6 +179,7 @@ internal sealed class RuntimePortableExpressionEvaluator(
                     context.VariableEnvelopes.GetValueOrDefault(
                         new RuntimeVariableValueAddress(variable.DeclaringScopeNodeId, variable.VariableKey))?.Policy,
                 ActivityResultExpressionParameterBinding result => DetermineActivityResultPolicy(result, context, name, nodeId, inputName),
+                WorkflowInstanceExpressionParameterBinding => null,
                 _ => null
             };
             if (parameterPolicy is null)
@@ -209,6 +210,15 @@ internal sealed class RuntimePortableExpressionEvaluator(
             .Completion.Result.Policy;
     }
 
+    /// <summary>Instance metadata comes from the resolution context, which reads it from committed state.</summary>
+    private static JsonElement ReadWorkflowInstanceParameter(
+        WorkflowInstanceExpressionParameterBinding binding,
+        RuntimeInputBindingResolutionContext context) => binding.Member switch
+    {
+        WorkflowInstanceExpressionParameterBinding.Members.InstanceId => JsonSerializer.SerializeToElement(context.WorkflowExecutionId),
+        _ => JsonSerializer.SerializeToElement(context.CorrelationId),
+    };
+
     private async ValueTask<PortableExpressionParameters> MaterializeParametersAsync(
         RuntimeExpressionBinding expression,
         RuntimeInputBindingResolutionContext context,
@@ -226,6 +236,7 @@ internal sealed class RuntimePortableExpressionEvaluator(
                 WorkflowRequestExpressionParameterBinding request => await ReadWorkflowRequestParameterAsync(request, context, name, nodeId, inputName, cancellationToken),
                 VariableExpressionParameterBinding variable => await ReadVariableParameterAsync(variable, context, name, nodeId, inputName, cancellationToken),
                 ActivityResultExpressionParameterBinding result => await ReadActivityResultParameterAsync(result, context, name, nodeId, inputName, cancellationToken),
+                WorkflowInstanceExpressionParameterBinding instance => new PortableExpressionParameter(ReadWorkflowInstanceParameter(instance, context), null),
                 _ => throw new InvalidOperationException($"Portable expression parameter '{name}' on input '{inputName}' uses unsupported binding type '{binding.GetType().Name}'.")
             };
             var materialized = ApplyParameterConversionPlan(expression, name, parameter, nodeId, inputName);

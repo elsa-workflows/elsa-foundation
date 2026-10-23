@@ -5,12 +5,12 @@ test("activity Inspector tabs keep fixed context, scroll independently, and surv
   await page.goto("/?theme=light&mode=activity-inspector-tabs");
 
   const inspector = page.getByRole("complementary", { name: "Activity inspector" });
-  const innerTabs = inspector.getByRole("tab");
-  const inputs = inspector.getByRole("tab", { name: "Inputs" });
-  const outputs = inspector.getByRole("tab", { name: "Outputs" });
-  const version = inspector.getByRole("tab", { name: "Version" });
-  const context = inspector.locator(".wf-inspector-context");
   const tablist = inspector.locator(".wf-inspector-tabs");
+  const innerTabs = tablist.getByRole("tab");
+  const inputs = tablist.getByRole("tab", { name: "Inputs" });
+  const outputs = tablist.getByRole("tab", { name: "Outputs" });
+  const version = tablist.getByRole("tab", { name: "Version" });
+  const context = inspector.locator(".wf-inspector-context");
 
   await expect(inspector).toBeVisible();
   await expect(context).toContainText("Long running browser activity");
@@ -57,10 +57,40 @@ test("activity Inspector tabs keep fixed context, scroll independently, and surv
   await expect(inputs).toHaveAttribute("aria-selected", "true");
 
   await outputs.click();
-  await page.getByRole("button", { name: "Runtime", exact: true }).click();
+  const outerTabs = page.getByRole("tablist", { name: "Inspector panel tabs" });
+  await expect(outerTabs.getByRole("tab", { name: "Inspector" })).toBeVisible();
+  await expect(outerTabs.getByRole("tab", { name: "Runtime" })).toBeVisible();
+  await expect(outerTabs.getByRole("tab", { name: "Artifacts" })).toBeVisible();
+  for (const name of ["Inspector", "Runtime", "Artifacts"] as const) {
+    const tab = outerTabs.getByRole("tab", { name });
+    await expect(tab).toHaveAttribute("title", name);
+    const label = tab.locator("span").last();
+    expect(await label.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  }
+  await outerTabs.getByRole("tab", { name: "Runtime" }).click();
   await expect(inspector.getByLabel("runtime panel")).toBeVisible();
-  await page.getByRole("button", { name: "Inspector", exact: true }).click();
+  await outerTabs.getByRole("tab", { name: "Runtime" }).press("Home");
+  await expect(outerTabs.getByRole("tab", { name: "Inspector" })).toBeFocused();
+  await expect(outerTabs.getByRole("tab", { name: "Inspector" })).toHaveAttribute("aria-selected", "true");
   await expect(outputs).toHaveAttribute("aria-selected", "true");
+});
+
+test("inspector source links stay in-app without a full reload", async ({ page }) => {
+  await page.goto("/?theme=light&mode=activity-inspector-tabs");
+  const inspector = page.getByRole("complementary", { name: "Activity inspector" });
+  await inspector.getByRole("tab", { name: "Version" }).click();
+  const sourceLink = inspector.getByRole("link", { name: "Open exact source definition" });
+  await expect(sourceLink).toHaveAttribute("href", "/workflows/activity-definitions?definition=browser-definition&section=versions&version=browser-long-running-v1");
+  await expect(inspector.getByRole("link", { name: "Create a separate draft" })).toHaveAttribute(
+    "href",
+    "/workflows/activity-definitions?definition=browser-definition&section=versions&version=browser-long-running-v1&createDraftFrom=browser-long-running-v1"
+  );
+  await page.evaluate(() => {
+    (window as Window & { __elsaStudioNoReload?: string }).__elsaStudioNoReload = "present";
+  });
+  await sourceLink.click();
+  expect(await page.evaluate(() => (window as Window & { __elsaStudioNoReload?: string }).__elsaStudioNoReload)).toBe("present");
+  await expect(page).toHaveURL(/\/workflows\/activity-definitions\?definition=browser-definition/);
 });
 
 for (const theme of ["light", "dark"] as const) {

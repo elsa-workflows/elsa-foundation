@@ -29,6 +29,7 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
     [
         typeof(IUserStore),
         typeof(IRevisionAwareUserStore),
+        typeof(IPagedUserStore),
         typeof(IRoleStore),
         typeof(IRevisionAwareRoleStore),
         typeof(IPagedRoleStore),
@@ -42,9 +43,9 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
         typeof(IRevisionAwareTenantMembershipStore)
     ];
 
-    // Kept beside the composition test: replacement contract, exactly the seventeen IAM contracts, scoped, by factory.
+    // Kept beside the composition test: replacement contract, exactly the eighteen IAM contracts, scoped, by factory.
     [Fact]
-    public void Registration_replaces_exactly_the_seventeen_IAM_contracts()
+    public void Registration_replaces_exactly_the_eighteen_IAM_contracts()
     {
         var services = new ServiceCollection();
 
@@ -52,7 +53,7 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
 
         var replacementContracts = ApplicationCredentialContracts.Concat(AuthorityContracts).ToArray();
 
-        Assert.Equal(17, services.Count(descriptor => replacementContracts.Contains(descriptor.ServiceType)));
+        Assert.Equal(18, services.Count(descriptor => replacementContracts.Contains(descriptor.ServiceType)));
         Assert.All(replacementContracts, contract =>
         {
             Assert.True(contract.IsDefined(typeof(ReplacementContractAttribute), inherit: false));
@@ -82,7 +83,7 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
 
     // Kept beside the composition test: forwarding and scope, one scoped EF store per contract family, shared by its contracts.
     [Fact]
-    public async Task Registration_resolves_all_seventeen_contracts_to_one_scoped_EF_store_each()
+    public async Task Registration_resolves_all_eighteen_contracts_to_one_scoped_EF_store_each()
     {
         var services = new ServiceCollection();
         services.AddIdentityIamEntityFrameworkCore(SqliteOptions());
@@ -105,6 +106,7 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
         var user = firstScope.ServiceProvider.GetRequiredService<IUserStore>();
         Assert.IsType<EfUserStore>(user);
         Assert.Same(user, firstScope.ServiceProvider.GetRequiredService<IRevisionAwareUserStore>());
+        Assert.Same(user, firstScope.ServiceProvider.GetRequiredService<IPagedUserStore>());
         var role = firstScope.ServiceProvider.GetRequiredService<IRoleStore>();
         Assert.IsType<EfRoleStore>(role);
         Assert.Same(role, firstScope.ServiceProvider.GetRequiredService<IRevisionAwareRoleStore>());
@@ -583,6 +585,12 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
             throw new NotSupportedException();
 
         public ValueTask SaveAsync(UserRecord user, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<bool> SetStatusAsync(string tenantId, string userId, UserStatus status, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<bool> DeleteAsync(string tenantId, string userId, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }
 

@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Events.Core.Extensions;
 using Elsa.Mediator.Core.Extensions;
@@ -118,6 +119,9 @@ public class WorkflowsPublishingFeature : IShellFeature
         // It is also the publication check permanent deletion requires, so a host that does not compose this
         // feature refuses the operation outright instead of deleting unverified (#1283).
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDefinitionPermanentDeletionGuard, PublishedWorkflowDeletionGuard>());
+        // Design.Api registers a null-object so NativeEndpoints can resolve the lookup on a design-only
+        // host. Replace it here so a composed Publishing host actually distinguishes Retracted/Retired.
+        services.Replace(ServiceDescriptor.Scoped<IWorkflowDefinitionPublicationStateLookup, WorkflowDefinitionPublicationStateLookup>());
         // #418: WorkflowExecutableCompiler decomposition collaborators. Registered at the compiler's own
         // scoped lifetime so each is independently resolvable, replaceable, and unit-testable.
         services.TryAddSingleton<IValueConversionProfileRegistry>(BuiltInValueConversionProfileRegistry.Instance);
@@ -129,6 +133,8 @@ public class WorkflowsPublishingFeature : IShellFeature
         services.TryAddScoped<ActivityTreeProjector>();
         services.TryAddScoped<WorkflowExecutableAuthoredInputsSidecar>();
         services.TryAddScoped<ExecutableNodeCompiler>();
+        // Spec 261 FR-513: the side-effect profile the compiler would compile, for design-time validators.
+        services.TryAddScoped<IActivitySideEffectProfileReader, ActivitySideEffectProfileReader>();
         services.TryAddScoped<WorkflowExecutablePlacementSidecarContext>();
         services.TryAddSingleton<IActivityTemplateProviderCompilerRegistry, ActivityTemplateProviderCompilerRegistry>();
         services.TryAddSingleton<IActivityTemplateDependencyDiscovererRegistry, ActivityTemplateDependencyDiscovererRegistry>();

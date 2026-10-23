@@ -1,0 +1,13 @@
+{
+  "htmlSha256": "7e1879c8770a88c778994755c6649ec8eb67199296cb9b37fa1bae8796b5e5ae",
+  "browser": "155.0.8059.82",
+  "expected": {
+    "breadcrumbs": 1,
+    "normalScenario": 1
+  },
+  "actual": {
+    "breadcrumbs": 0,
+    "normalScenario": 0
+  },
+  "status": "failed"
+}

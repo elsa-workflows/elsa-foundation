@@ -555,6 +555,8 @@ public sealed partial class ArchitectureGuardTests
     [
         ("Elsa3.", "Elsa3"),
         ("Elsa.Agent.", "Agent"),
+        ("Elsa.Etl.", "Etl"),
+        ("Elsa.Rules.", "Rules"),
         ("Elsa.ExtensionBuilder.", "ExtensionBuilder"),
     ];
 
@@ -696,6 +698,7 @@ internal static class PersistenceProviderNeutralityBoundary
         "Elsa.Foundation.Identity.Core",
         "Elsa.Foundation.Identity",
         "Elsa.Secrets.Core",
+        "Elsa.Connections.Core",
         "Elsa.Workflows.Runtime.Distributed"
     ];
 

@@ -89,6 +89,7 @@ for the interactive contributor route.
 >   server runs from its own temporary content root with its own SQLite files. To reuse a port, stop your
 >   server yourself.
 > - **The platform source harness also owns its server** and uses the same lifecycle helper and free-port rules.
+> - **`http/Test-HttpResponseFlowchart.ps1` owns an isolated server** and takes no `-BaseUrl` argument.
 > - **Every other server-dependent script only sends HTTP requests** to `-BaseUrl` (default `http://localhost:5095`).
 > - **Do not add `Stop-Process`, `kill`, or a port lookup that feeds one, to a script.** Use
 >   `Start-OwnedElsaServer` / `Restart-OwnedElsaServer` / `Remove-OwnedElsaServer`. `Test-ServerLifecycleGuard.ps1`
@@ -123,14 +124,21 @@ take no server argument and can run while yours is up:
 # In another terminal, wait until http://localhost:5295/health/ready reports ready, then use the same $base for each script.
 $base = 'http://localhost:5295'
 $selfHosted = 'Test-RestartRecovery.ps1', 'Test-AlterationReplayAndRestart.ps1', 'Test-FileBasedDeployment.ps1',
-              'Test-SharedPersistence.ps1', 'Test-SharedDiagnosticsPersistence.ps1', 'Test-ServerLifecycleGuard.ps1'
+              'Test-SharedPersistence.ps1', 'Test-SharedDiagnosticsPersistence.ps1', 'Test-ServerLifecycleGuard.ps1',
+              'Test-JsonSourceComposition.ps1', 'Test-UnknownFeatures.ps1', 'Test-HttpResponseFlowchart.ps1'
+# Package-backed Rules is qualified separately with an immutable feed and deployment receipt.
+$packageQualified = 'Test-DurableRules.ps1', 'Test-NativeRulesInstallation.ps1', 'Test-RulesAdmissionRecovery.ps1'
 $failed = @()
 Get-ChildItem ./e2e-tests -Recurse -Filter 'Test-*.ps1' | Sort-Object FullName | ForEach-Object {
+    if ($_.Name -in $packageQualified) {
+        Write-Host "Separate package qualification required: $($_.Name) (not counted as passed)"
+        return
+    }
     if ($_.Name -in $selfHosted) { pwsh -NoProfile -File $_.FullName }
     else { pwsh -NoProfile -File $_.FullName -BaseUrl $base }
     if ($LASTEXITCODE -ne 0) { $failed += $_.Name }
 }
-if ($failed) { "FAILED: $($failed -join ', ')" } else { 'all scripts passed' }
+if ($failed) { "FAILED: $($failed -join ', ')" } else { 'all source-suite scripts passed; package qualification remains separate' }
 ```
 
 Each script runs in its own process, so one failure does not end the loop. The two `Test-Shared*` journeys need
@@ -204,6 +212,7 @@ The former `get-endpoints` and `write-endpoints` suites (GET / CRUD status-and-s
 | `javascript/Test-JavaScriptExpressions.ps1` | pure-ES JS in a Sync HTTP response body (array/object/json/optional-chaining/nullish/flat/replaceAll) |
 | `http/Test-HttpMethods.ps1` | one HttpEndpoint accepting GET/POST/PUT/DELETE, each returning a sync response |
 | `http/Test-HttpEcho.ps1` | capture request data (`ParsedContent`/`RouteData`/`Request`) into workflow variables and echo it back in a sync response (request-body, route-parameter, query-parameter, header; #972/#984) |
+| `http/Test-HttpResponseFlowchart.ps1` | imports the corrected [HTTP demo export](http/fixtures/test-http.json), resolves activity versions from the local catalog, publishes, and asserts HTTP 200 with the authored JSON body through `HttpEndpoint → SetCorrelationId → WriteHttpResponse`. Owns an isolated Workbench with fresh SQLite databases; build Workbench first. `-WorkflowPath <original-export>` reproduces the missing-`ResponseMode: Sync` failure. |
 | `http/Test-RuntimeConcurrencyCorrectness.ps1` | the #2392 reference HTTP workflow under concurrent clients (default 16 × 4, `-PersistenceMode Durable`/`Balanced`): every request ends in HTTP 200 `Alice Smith`, one Completed instance per request, zero incidents. A 429 is admission backpressure: it is retried per `Retry-After` (`-MaxShedRetries`, default 30) and reported, and fails only if still shed after the last retry (#2548). Correctness only; no timings (#2532) |
 | `http/Test-SendHttpRequestStatusOutcomes.ps1` | the per-status outcome ports the compiler pins from `SendHttpRequest.ExpectedStatusCodes` are connectable on the PUBLISHED node and route correctly, including the `Unmatched status code` catch-all (#1119) |
 | `bpmn/Test-BpmnCallActivity.ps1` | BPMN `callActivity` bound to a REAL waited `DispatchWorkflow` child (spec 133): child completes -> parent resumes via `Completed`; child faults -> the error boundary routes (no parent incident) |
@@ -220,6 +229,8 @@ The former `get-endpoints` and `write-endpoints` suites (GET / CRUD status-and-s
 | `_WriteCommon.ps1`          | shared mutation harness (dot-sourced): `Invoke-Write` / `Assert-Write` / `Complete-WriteSuite` for status-and-shape assertions on writes |
 | `workflow-version-override/Test-WorkflowVersionOverride.ps1` | automatic/exact promotion preflight, exact SemVer promotion, immutable version read |
 | `file-deployment/Test-FileBasedDeployment.ps1` | file-based deployment at startup (spec 147) on a server the script owns: definitions folder composed via env vars (`JsonWorkflowReconciliation` + `PublishOnReconcile`), `/health/ready` gate, imported + published + executable, idempotent restart |
+| `file-deployment/Test-JsonSourceComposition.ps1` | fresh owned Workbench: two independent JSON catalogs import at readiness through exactly one workflow reconcile startup pass |
+| `composition/Test-UnknownFeatures.ps1` | owned Workbench with an unknown requested feature: readiness stays lenient and the feature catalog reports its missing runtime descriptor explicitly |
 
 **Events note:** Foundation has no classic `PublishEvent` activity. An `Event` activity is a start trigger;
 you publish an event by POSTing a stimulus `{ stimulusType:"Event", stimulusHash:"sha256:"+hex(SHA256(eventName)), mode:"StartOnly" }`
@@ -393,3 +404,24 @@ These are genuine defects surfaced by the tests and fixed in the source (candida
    "non-literal" and threw - contradicting its own documented contract that unauthored options apply defaults.
    Fix: `HttpEndpointTriggerStimulusProvider` now rejects only genuinely non-`Literal` sources and treats an
    omitted/null literal as unauthored (applies the default).
+
+## Durable Rules package-backed journey
+
+The three scripts under `rules/` each own their Workbench process and fresh content root. They require a
+published host whose six Rules modules are real PackageReferences and a verified deployment receipt;
+the ordinary source-built host cannot establish that package identity. Run them through
+`tools/rules/verify-packaged-rules.py --stage workbench` with the immutable inputs documented in the
+[Rules acceptance quickstart](../specs/999-durable-rules/quickstart.md). The harness publishes the
+package-backed host, verifies its selected package assets, then supplies `-AssemblyPath`,
+`-DeploymentReceiptPath` and `-EvidencePath` to the REST suite. The generic source-suite loop above
+explicitly excludes this separate qualification and does not count it as passed.
+
+`Test-DurableRules.ps1` covers Sequence/Flowchart completion, a held Event sibling and join across
+restart, duplicate stimulus, budget fault and refusal. `Test-RulesAdmissionRecovery.ps1` publishes
+with admissions enabled, disables new admission across restarts, cancels one waiting invocation
+and recovers another when admission returns. It also verifies invalid input without a Rules row.
+Its read-only SQLite snapshots distinguish persisted attempts from public inspection summaries.
+
+The installation journey first persists native work with Rules features disabled, then adds Rules to
+the same database and verifies unchanged state/schema and the original continuation. It additionally
+requires Python 3 for read-only SQLite snapshots; its evidence is distinct from the ordinary REST journeys.

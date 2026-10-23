@@ -28,6 +28,25 @@ public sealed class InMemoryWorkflowActivationAuthority : IWorkflowActivationAut
                 .OrderBy(slot => slot.SlotName, StringComparer.Ordinal).ToArray());
     }
 
+    public ValueTask<IReadOnlyCollection<WorkflowActivationSlot>> ListByDefinitionIdsAsync(
+        IReadOnlyCollection<string> workflowDefinitionIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(workflowDefinitionIds);
+        cancellationToken.ThrowIfCancellationRequested();
+        var ids = workflowDefinitionIds
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .ToHashSet(StringComparer.Ordinal);
+        if (ids.Count == 0)
+            return ValueTask.FromResult<IReadOnlyCollection<WorkflowActivationSlot>>([]);
+        lock (gate)
+            return ValueTask.FromResult<IReadOnlyCollection<WorkflowActivationSlot>>(slots.Values
+                .Where(slot => ids.Contains(slot.WorkflowDefinitionId))
+                .OrderBy(slot => slot.WorkflowDefinitionId, StringComparer.Ordinal)
+                .ThenBy(slot => slot.SlotName, StringComparer.Ordinal)
+                .ToArray());
+    }
+
     public ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

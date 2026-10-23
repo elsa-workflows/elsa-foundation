@@ -1,3 +1,5 @@
+using System.Transactions;
+using IsolationLevel = System.Data.IsolationLevel;
 using Elsa.Persistence.EntityFramework;
 using System.Text;
 using System.Text.Json;
@@ -6,10 +8,17 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>EF adapter for durable activity execution inspection projections and summaries.</summary>
+/// <remarks>
+/// Summary count and page reads share a short Serializable transaction. A caller-owned Serializable or Snapshot
+/// transaction is reused without committing or disposing it; weaker, ambient and externally enlisted transactions
+/// are refused. Owned read transactions finish before projection decoding. Lock or serialization failures surface
+/// through the persistence boundary without retrying the page or changing its exact-count invariant.
+/// </remarks>
 public sealed class EfActivityExecutionInspectionStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
@@ -84,27 +93,24 @@ public sealed class EfActivityExecutionInspectionStore(
         cancellationToken.ThrowIfCancellationRequested();
         var scope = ActivityExecutionEfSupport.RequireScope(accessContextAccessor);
         var cursor = DecodeCursor(query.ContinuationToken, scope, query.WorkflowExecutionId);
-        var scopeHash = ActivityExecutionEfSupport.Hash(scope);
-        var workflowHash = ActivityExecutionEfSupport.Hash(query.WorkflowExecutionId);
-        var source = context.ActivityExecutionInspections.AsNoTracking()
-            .Where(row => row.ScopeKeyHash == scopeHash && row.WorkflowExecutionIdHash == workflowHash);
-        var totalCount = await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "counting", query.WorkflowExecutionId,
-            () => source.LongCountAsync(cancellationToken));
-        if (cursor is not null)
+        var callerTransaction = context.Database.CurrentTransaction;
+        if (System.Transactions.Transaction.Current is not null || context.Database.GetEnlistedTransaction() is not null)
+            throw new InvalidOperationException("Activity summary paging does not support ambient or externally enlisted transactions.");
+        if (callerTransaction is not null && callerTransaction.GetDbTransaction().IsolationLevel is not (IsolationLevel.Serializable or IsolationLevel.Snapshot))
+            throw new InvalidOperationException("Activity summary paging requires a Serializable or Snapshot caller transaction.");
+
+        // Count and bounded page must observe the same predicate, including rows inserted or deleted between reads.
+        // A single statement is insufficient on providers using lock-based ReadCommitted isolation.
+        var (rows, totalCount) = await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "listing", query.WorkflowExecutionId, async () =>
         {
-            source = source.Where(row => row.SummaryExecutionSequence > cursor.ExecutionSequence ||
-                                         row.SummaryExecutionSequence == cursor.ExecutionSequence && (row.SummaryScheduledAtUtcTicks > cursor.ScheduledAtUtcTicks ||
-                                         row.SummaryScheduledAtUtcTicks == cursor.ScheduledAtUtcTicks && (row.ActivityExecutionIdOrderKey.CompareTo(cursor.OrderKey) > 0 ||
-                                         row.ActivityExecutionIdOrderKey == cursor.OrderKey && row.Id.CompareTo(cursor.Id) > 0)));
-        }
-        var rows = await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "listing", query.WorkflowExecutionId,
-            () => source
-                .OrderBy(row => row.SummaryExecutionSequence)
-                .ThenBy(row => row.SummaryScheduledAtUtcTicks)
-                .ThenBy(row => row.ActivityExecutionIdOrderKey)
-                .ThenBy(row => row.Id)
-                .Take(query.Limit + 1)
-                .ToArrayAsync(cancellationToken));
+            await using var transaction = callerTransaction is null
+                ? await context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
+                : null;
+            var result = await ReadSummaryRowsAsync(query, cursor, scope, cancellationToken);
+            if (transaction is not null)
+                await transaction.CommitAsync(cancellationToken);
+            return result;
+        });
         var hasMore = rows.Length > query.Limit;
         if (hasMore)
             rows = rows[..query.Limit];
@@ -115,6 +121,31 @@ public sealed class EfActivityExecutionInspectionStore(
                 items[^1].ExecutionSequence, items[^1].ScheduledAt.UtcTicks, items[^1].ActivityExecutionId, rows[^1].ActivityExecutionIdOrderKey, rows[^1].Id))
             : null;
         return new ActivityExecutionInspectionSummaryPage(query, items, totalCount, next);
+    }
+
+    private async Task<(ActivityExecutionInspectionEntity[] Rows, long TotalCount)> ReadSummaryRowsAsync(
+        ActivityExecutionInspectionSummaryPageQuery query, InspectionCursor? cursor, string scope, CancellationToken cancellationToken)
+    {
+        var scopeHash = ActivityExecutionEfSupport.Hash(scope);
+        var workflowHash = ActivityExecutionEfSupport.Hash(query.WorkflowExecutionId);
+        var source = context.ActivityExecutionInspections.AsNoTracking()
+            .Where(row => row.ScopeKeyHash == scopeHash && row.WorkflowExecutionIdHash == workflowHash);
+        var totalCount = await source.LongCountAsync(cancellationToken);
+        if (cursor is not null)
+        {
+            source = source.Where(row => row.SummaryExecutionSequence > cursor.ExecutionSequence ||
+                                         row.SummaryExecutionSequence == cursor.ExecutionSequence && (row.SummaryScheduledAtUtcTicks > cursor.ScheduledAtUtcTicks ||
+                                         row.SummaryScheduledAtUtcTicks == cursor.ScheduledAtUtcTicks && (row.ActivityExecutionIdOrderKey.CompareTo(cursor.OrderKey) > 0 ||
+                                         row.ActivityExecutionIdOrderKey == cursor.OrderKey && row.Id.CompareTo(cursor.Id) > 0)));
+        }
+        var rows = await source
+            .OrderBy(row => row.SummaryExecutionSequence)
+            .ThenBy(row => row.SummaryScheduledAtUtcTicks)
+            .ThenBy(row => row.ActivityExecutionIdOrderKey)
+            .ThenBy(row => row.Id)
+            .Take(query.Limit + 1)
+            .ToArrayAsync(cancellationToken);
+        return (rows, totalCount);
     }
 
     internal static ActivityExecutionInspectionEntity ToEntity(ActivityExecutionInspectionProjection projection, string scope, string id, long revision)

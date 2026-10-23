@@ -11,6 +11,7 @@ structure:
 redirects:
   contributing/contributing: contributing/README.md
   essentials/essentials: essentials/README.md
+  essentials/essentials/compensation: essentials/compensation.md
   essentials/essentials/first-workflow: essentials/first-workflow.md
   essentials/essentials/persistence-modes: essentials/persistence-modes.md
   essentials/essentials/quickstart: essentials/quickstart.md

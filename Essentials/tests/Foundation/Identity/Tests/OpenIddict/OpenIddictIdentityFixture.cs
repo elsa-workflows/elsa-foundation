@@ -43,7 +43,7 @@ public sealed class OpenIddictIdentityFixture : IAsyncDisposable
 
     public ValueTask<TokenIssueResult> IssueAsync(
         string subject = "user-1", string tenant = "tenant-a", params string[] scopes) =>
-        TokenService.IssueAsync(new TokenIssueRequest(subject, tenant, scopes.Length is 0 ? ["identity.users.read"] : scopes));
+        TokenService.IssueAsync(new TokenIssueRequest(subject, tenant, scopes.Length is 0 ? ["identity/users:read"] : scopes));
 
     internal static void ConfigureInMemoryStore(DbContextOptionsBuilder builder, string databaseName) =>
         builder.UseInMemoryDatabase(databaseName);

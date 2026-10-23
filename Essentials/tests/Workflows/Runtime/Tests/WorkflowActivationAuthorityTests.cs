@@ -69,6 +69,21 @@ public sealed class WorkflowActivationAuthorityTests
         Assert.Equal("zulu", slots.Single().SlotName);
     }
 
+    [Fact]
+    public async Task Batch_listing_returns_each_definition_slots_and_skips_unknown_ids()
+    {
+        var authority = new InMemoryWorkflowActivationAuthority();
+        Assert.True((await authority.TryActivateAsync(Request("a", WorkflowActivationSource.Publishing))).Succeeded);
+        Assert.True((await authority.TryActivateAsync(new("definition-2", "canary", "b", WorkflowActivationSource.Publishing, 0, Now))).Succeeded);
+
+        var slots = await authority.ListByDefinitionIdsAsync(["definition-1", "definition-2", "missing", " ", "definition-1"]);
+
+        Assert.Equal(2, slots.Count);
+        Assert.Equal(["definition-1", "definition-2"], slots.Select(slot => slot.WorkflowDefinitionId).Distinct(StringComparer.Ordinal));
+        Assert.Equal("default", slots.Single(slot => slot.WorkflowDefinitionId == "definition-1").SlotName);
+        Assert.Equal("canary", slots.Single(slot => slot.WorkflowDefinitionId == "definition-2").SlotName);
+    }
+
     private static WorkflowActivationSlotRequest Request(string id, WorkflowActivationSource source, long revision = 0, string slotName = "default", WorkflowActivationOwnershipIntent intent = WorkflowActivationOwnershipIntent.RespectExistingOwner) =>
         new("definition-1", slotName, id, source, revision, Now, intent);
 }

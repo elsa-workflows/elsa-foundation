@@ -12,7 +12,7 @@ namespace Elsa.Studio.Tests.ExtensionBuilder;
 /// <summary>
 /// Exercises the Extension Builder capabilities read of the Studio management bridge (#247, ADR 0037) at its HTTP
 /// boundary: the same TestServer wiring the <see cref="ExtensionBuilderStudioFeature"/> maps, with a recording stub
-/// standing in for the backend host so the status mapping, the <c>extension-builder.read</c> gate, and the "zero
+/// standing in for the backend host so the status mapping, the <c>extension-builder:read</c> gate, and the "zero
 /// outbound calls when unconfigured" fail-closed guarantee are asserted against the wire.
 /// </summary>
 public sealed class StudioExtensionBuilderCapabilitiesTests : IAsyncDisposable
@@ -94,7 +94,7 @@ public sealed class StudioExtensionBuilderCapabilitiesTests : IAsyncDisposable
     [Fact]
     public async Task AllowsAuthenticatedBrowserCapabilitiesRequestWithExtensionBuilderReadWhenStudioAuthEnabled()
     {
-        // The capabilities read is gated by extension-builder.read (not module-management): a holder passes (#249).
+        // The capabilities read is gated by extension-builder:read (not module-management): a holder passes (#249).
         var (client, _) = await StartAuthenticatedHostWithBackendAsync(ExtensionBuilderPermissions.Read);
 
         var result = await GetCapabilitiesAsync(client);
@@ -105,7 +105,7 @@ public sealed class StudioExtensionBuilderCapabilitiesTests : IAsyncDisposable
     [Fact]
     public async Task ForbidsAuthenticatedBrowserCapabilitiesRequestMissingExtensionBuilderReadWhenStudioAuthEnabled()
     {
-        // module-management.read does NOT satisfy the Extension Builder capabilities gate — the surfaces are gated
+        // module-management:read does NOT satisfy the Extension Builder capabilities gate — the surfaces are gated
         // independently, so a module-only holder is forbidden (403).
         var (client, backend) = await StartAuthenticatedHostWithBackendAsync(StudioBridgeAuth.ModuleManagementReadPermission);
 

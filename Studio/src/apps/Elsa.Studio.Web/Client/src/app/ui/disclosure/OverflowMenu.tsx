@@ -1,4 +1,4 @@
-import React, { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useId, useMemo, useRef, useState } from "react";
 import { AnchoredPopover } from "../overlay/AnchoredPopover";
 import { enabledMenuIndexes, focusIndexedItem, stepEnabledIndex } from "./menuNavigation";
 import { type DisclosureControlProps, type OverflowMenuItem } from "./types";
@@ -41,11 +41,6 @@ export function OverflowMenu({
     [ordered]
   );
 
-  useLayoutEffect(() => {
-    if (!open) return;
-    focusIndexedItem(menuId, activeIndex);
-  }, [open, activeIndex, menuId]);
-
   function close() {
     setOpen(false);
     triggerRef.current?.focus();
@@ -54,6 +49,11 @@ export function OverflowMenu({
   function openAt(index: number) {
     setActiveIndex(index);
     setOpen(true);
+  }
+
+  function focusMenuItem(index: number) {
+    setActiveIndex(index);
+    focusIndexedItem(menuId, index);
   }
 
   function activate(item: Extract<OverflowMenuItem, { id: string }>) {
@@ -77,12 +77,15 @@ export function OverflowMenu({
           else openAt(actionIndexes[0] ?? 0);
         }}
         onKeyDown={event => {
-          if (event.key === "ArrowDown" && !open) {
+          if (event.key === "ArrowDown") {
             event.preventDefault();
-            openAt(actionIndexes[0] ?? 0);
-          } else if (event.key === "ArrowUp" && !open) {
+            if (open) focusMenuItem(actionIndexes[0] ?? 0);
+            else openAt(actionIndexes[0] ?? 0);
+          } else if (event.key === "ArrowUp") {
             event.preventDefault();
-            openAt(actionIndexes[actionIndexes.length - 1] ?? 0);
+            const lastIndex = actionIndexes[actionIndexes.length - 1] ?? 0;
+            if (open) focusMenuItem(lastIndex);
+            else openAt(lastIndex);
           }
         }}
       >
@@ -95,6 +98,7 @@ export function OverflowMenu({
         className="studio-overflow-menu-popover"
         minWidth={176}
         onDismiss={close}
+        onPositioned={() => focusIndexedItem(menuId, activeIndex)}
       >
         <div
           className="studio-overflow-menu-list"
@@ -106,16 +110,16 @@ export function OverflowMenu({
               close();
             } else if (event.key === "ArrowDown") {
               event.preventDefault();
-              setActiveIndex(current => stepEnabledIndex(actionIndexes, current, 1));
+              focusMenuItem(stepEnabledIndex(actionIndexes, activeIndex, 1));
             } else if (event.key === "ArrowUp") {
               event.preventDefault();
-              setActiveIndex(current => stepEnabledIndex(actionIndexes, current, -1));
+              focusMenuItem(stepEnabledIndex(actionIndexes, activeIndex, -1));
             } else if (event.key === "Home") {
               event.preventDefault();
-              setActiveIndex(actionIndexes[0] ?? 0);
+              focusMenuItem(actionIndexes[0] ?? 0);
             } else if (event.key === "End") {
               event.preventDefault();
-              setActiveIndex(actionIndexes[actionIndexes.length - 1] ?? 0);
+              focusMenuItem(actionIndexes[actionIndexes.length - 1] ?? 0);
             }
           }}
         >

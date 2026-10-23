@@ -3,6 +3,7 @@ using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Design.Api.Services;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Microsoft.Extensions.DependencyInjection;
 using NativeEndpoints;
@@ -43,5 +44,18 @@ public sealed class WorkflowsDesignApiFeatureRegistrationTests
         var source = scope.ServiceProvider.GetRequiredService<IExpressionAuthoringContextSource>();
 
         Assert.IsType<PersistedExpressionAuthoringContextSource>(source);
+    }
+
+    [Fact]
+    public void Feature_registers_a_null_publication_state_lookup_that_native_endpoints_can_require()
+    {
+        var services = new ServiceCollection();
+        new WorkflowsDesignApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        Assert.IsType<NullWorkflowDefinitionPublicationStateLookup>(
+            scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionPublicationStateLookup>());
     }
 }

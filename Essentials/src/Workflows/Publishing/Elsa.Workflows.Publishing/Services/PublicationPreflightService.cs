@@ -1,5 +1,6 @@
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Services;
 
@@ -35,7 +36,10 @@ public sealed class PublicationPreflightService : IPublicationPreflightService
                 existing.Claim.StimulusType,
                 existing.Claim.StimulusHash,
                 existing.Claim.Cardinality,
-                existing.Claim.ClaimId))
+                existing.Claim.ClaimId)
+            {
+                Descriptor = ResolveDescriptor(existing.Claim, candidateClaims)
+            })
             .ToArray();
 
         return new PublicationPreflightResult(conflicts.Length == 0, changes, conflicts);
@@ -72,6 +76,21 @@ public sealed class PublicationPreflightService : IPublicationPreflightService
     private static bool HasSameStimulus(PublicationTriggerClaim left, PublicationTriggerClaim right) =>
         StringComparer.Ordinal.Equals(left.StimulusType, right.StimulusType) &&
         StringComparer.Ordinal.Equals(left.StimulusHash, right.StimulusHash);
+
+    private static string? ResolveDescriptor(
+        PublicationTriggerClaim existingClaim,
+        IReadOnlyCollection<PublicationTriggerClaim> candidateClaims) =>
+        SafeDisplayDescriptor(existingClaim) ?? candidateClaims
+            .Where(candidate => HasSameStimulus(candidate, existingClaim))
+            .OrderBy(candidate => candidate.ClaimId, StringComparer.Ordinal)
+            .Select(SafeDisplayDescriptor)
+            .FirstOrDefault(descriptor => descriptor is not null);
+
+    private static string? SafeDisplayDescriptor(PublicationTriggerClaim claim) =>
+        claim.Metadata.TryGetValue(TriggerStimulusDescriptor.SafeDisplayDescriptorMetadataKey, out var descriptor) &&
+        !string.IsNullOrWhiteSpace(descriptor)
+            ? descriptor
+            : null;
 
     private readonly record struct StimulusKey(string StimulusType, string StimulusHash)
     {

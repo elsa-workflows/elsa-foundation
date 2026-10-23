@@ -1,3 +1,7 @@
+using System.Security.Claims;
+using Elsa.Foundation.Identity;
+using Elsa.Foundation.Identity.Authorization;
+using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -5,6 +9,9 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Executions;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
@@ -13,10 +20,15 @@ namespace Elsa.Workflows.Runtime.Tests;
 public sealed class WorkflowExecutionStartServiceTests : IAsyncLifetime
 {
     private readonly InMemoryWorkflowExecutableStore _store = new();
+    private readonly HttpContextAccessor _httpContextAccessor = new();
 
     public async Task InitializeAsync() => await _store.SaveAsync(NewExecutable());
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public Task DisposeAsync()
+    {
+        _httpContextAccessor.HttpContext = null;
+        return Task.CompletedTask;
+    }
 
     [Fact]
     public async Task RejectsUnknownArtifactId()
@@ -56,6 +68,108 @@ public sealed class WorkflowExecutionStartServiceTests : IAsyncLifetime
         Assert.Equal(
             WorkflowExecutableProvenanceRequirement.RequireLiveReference,
             Assert.Single(dispatcher.Requests).ProvenanceRequirement);
+    }
+
+    [Fact]
+    public async Task CopiesNormalizedTenantToDispatchWithoutInferringPersistencePartition()
+    {
+        var dispatcher = new CapturingStartDispatcher(await NewDispatcherAsync());
+        var handler = HttpHandler(dispatcher,
+        [
+            new Claim(IdentityClaimTypes.Normalized, "v1"),
+            new Claim(IdentityClaimTypes.TenantId, "tenant-from-identity")
+        ]);
+
+        await handler.ExecuteAsync(new ExecuteWorkflow("artifact-1"), CancellationToken.None);
+
+        var request = Assert.Single(dispatcher.Requests);
+        Assert.Equal("tenant-from-identity", request.TenantId);
+        Assert.Null(request.Partition);
+    }
+
+    [Fact]
+    public async Task AllowsAnExplicitNormalizedGlobalIdentityWithoutTenantClaim()
+    {
+        var dispatcher = new CapturingStartDispatcher(await NewDispatcherAsync());
+        var handler = HttpHandler(dispatcher, [new Claim(IdentityClaimTypes.Normalized, "v1")]);
+
+        await handler.ExecuteAsync(new ExecuteWorkflow("artifact-1"), CancellationToken.None);
+
+        Assert.Null(Assert.Single(dispatcher.Requests).TenantId);
+    }
+
+    [Theory]
+    [InlineData("untrusted-authentication-type", true)]
+    [InlineData("trusted", false)]
+    public async Task RefusesHttpStartWithoutOneTrustedNormalizedPrincipal(string authenticationType, bool hasMarker)
+    {
+        var dispatcher = new CapturingStartDispatcher(await NewDispatcherAsync());
+        var claims = new List<Claim> { new(IdentityClaimTypes.TenantId, "tenant-a") };
+        if (hasMarker)
+            claims.Add(new Claim(IdentityClaimTypes.Normalized, "v1"));
+        var handler = HttpHandler(dispatcher, claims, authenticationType);
+
+        await AssertHttpIdentityRefusedAsync(handler, dispatcher);
+    }
+
+    [Fact]
+    public async Task RefusesHttpStartWithDuplicateTenantClaims()
+    {
+        var dispatcher = new CapturingStartDispatcher(await NewDispatcherAsync());
+        var handler = HttpHandler(dispatcher,
+        [
+            new Claim(IdentityClaimTypes.Normalized, "v1"),
+            new Claim(IdentityClaimTypes.TenantId, "tenant-a"),
+            new Claim(IdentityClaimTypes.TenantId, "tenant-a")
+        ]);
+
+        await AssertHttpIdentityRefusedAsync(handler, dispatcher);
+    }
+
+    [Fact]
+    public async Task RefusesHttpStartWithBlankTenantClaim()
+    {
+        var dispatcher = new CapturingStartDispatcher(await NewDispatcherAsync());
+        var handler = HttpHandler(dispatcher,
+        [
+            new Claim(IdentityClaimTypes.Normalized, "v1"),
+            new Claim(IdentityClaimTypes.TenantId, " ")
+        ]);
+
+        await AssertHttpIdentityRefusedAsync(handler, dispatcher);
+    }
+
+    [Fact]
+    public async Task TwoArgumentEmbeddedConstructionKeepsTenantUnspecified()
+    {
+        var dispatcher = new CapturingStartDispatcher(await NewDispatcherAsync());
+        var handler = new WorkflowExecutionStartService(dispatcher, _store);
+
+        await handler.ExecuteAsync(new ExecuteWorkflow("artifact-1"), CancellationToken.None);
+
+        Assert.Null(Assert.Single(dispatcher.Requests).TenantId);
+    }
+
+    [Fact]
+    public async Task HttpContextFailsClosedWhenValidatorIsMissingFromDependencyInjection()
+    {
+        var dispatcher = new CapturingStartDispatcher(await NewDispatcherAsync());
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim(IdentityClaimTypes.Normalized, "v1"),
+            new Claim(IdentityClaimTypes.TenantId, "tenant-a")
+        ], "trusted"));
+        _httpContextAccessor.HttpContext = new DefaultHttpContext { User = principal };
+        var services = new ServiceCollection();
+        services.AddSingleton<IHttpContextAccessor>(_httpContextAccessor);
+        services.AddScoped<IWorkflowStartDispatcher>(_ => dispatcher);
+        services.AddScoped<IWorkflowExecutableStore>(_ => _store);
+        services.AddScoped<WorkflowExecutionStartService>();
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var handler = scope.ServiceProvider.GetRequiredService<WorkflowExecutionStartService>();
+
+        await AssertHttpIdentityRefusedAsync(handler, dispatcher);
     }
 
     [Fact]
@@ -146,6 +260,31 @@ public sealed class WorkflowExecutionStartServiceTests : IAsyncLifetime
             new RecordingAgentProvider(),
             new FixedRuntimeExecutionIdGenerator(),
             new FakeTimeProvider(new DateTimeOffset(2026, 6, 11, 12, 0, 0, TimeSpan.Zero)));
+    }
+
+    private WorkflowExecutionStartService HttpHandler(
+        IWorkflowStartDispatcher dispatcher,
+        IEnumerable<Claim> claims,
+        string authenticationType = "trusted")
+    {
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, authenticationType));
+        _httpContextAccessor.HttpContext = new DefaultHttpContext { User = principal };
+        var validator = new NormalizedPrincipalValidator(Options.Create(new FoundationIdentityOptions
+        {
+            NormalizedAuthenticationTypes = new HashSet<string>(["trusted"], StringComparer.Ordinal)
+        }));
+        return new WorkflowExecutionStartService(dispatcher, _store, _httpContextAccessor, validator);
+    }
+
+    private static async Task AssertHttpIdentityRefusedAsync(
+        WorkflowExecutionStartService handler,
+        CapturingStartDispatcher dispatcher)
+    {
+        var exception = await Assert.ThrowsAnyAsync<Exception>(() =>
+            handler.ExecuteAsync(new ExecuteWorkflow("artifact-1"), CancellationToken.None));
+
+        Assert.Equal("Elsa.Workflows.Runtime.Api.Endpoints.RuntimeResourceMissingSignal", exception.GetType().FullName);
+        Assert.Empty(dispatcher.Requests);
     }
 
     private static WorkflowExecutable NewExecutable() =>

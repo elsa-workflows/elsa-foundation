@@ -139,7 +139,7 @@ public abstract record ActivityTransition<TResult, TState> : ActivityTransition<
                 throw new ArgumentOutOfRangeException(nameof(stateSchemaVersion), stateSchemaVersion, "An activity state schema version must be positive.");
 
             StatePayload = PersistableActivityValue.Snapshot(state, "private state");
-            _state = PersistableActivityValue.SnapshotAndMaterialize(state, "private state");
+            _state = PersistableActivityValue.Materialize<TState>(StatePayload, "private state");
             StateValueType = PersistableActivityValue.Descriptor(typeof(TState), stateSchemaVersion);
             Registrations = Array.AsReadOnly<IActivityTriggerRegistration>(registrations.Cast<IActivityTriggerRegistration>().ToArray());
             Triggers = Array.AsReadOnly(registrations

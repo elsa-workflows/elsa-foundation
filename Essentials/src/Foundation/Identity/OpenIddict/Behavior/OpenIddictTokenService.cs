@@ -24,7 +24,7 @@ namespace Elsa.Foundation.Identity.OpenIddict;
 /// <item><b>Refresh</b> redeems the stored refresh entry (single use; reuse after redemption or revocation
 /// fails) and issues a fresh access/refresh pair.</item>
 /// <item><b>Revoke</b> revokes the matching token entry, for access JWTs (via their embedded entry id) and
-/// opaque refresh tokens alike.</item>
+/// opaque refresh tokens alike. <b>RevokeSubject</b> revokes every entry issued to a subject, which sign-out uses.</item>
 /// </list>
 /// Tokens are minted directly with the server's <see cref="OpenIddictServerOptions.JsonWebTokenHandler"/> and
 /// credentials rather than through the HTTP <c>/connect/token</c> pipeline, because issuance here is a
@@ -105,6 +105,35 @@ public sealed class OpenIddictTokenService(
 
         if (entry is not null)
             await tokenManager.TryRevokeAsync(entry, cancellationToken);
+    }
+
+    public async ValueTask RevokeSubjectAsync(string subjectId, CancellationToken cancellationToken = default)
+    {
+        // Entry by entry, not RevokeBySubjectAsync: that bulk path needs ExecuteUpdate, which the in-memory store
+        // (Workbench development/demo mode) refuses. Materialized first so no reader stays open across the updates.
+        var entries = new List<object>();
+        await foreach (var entry in tokenManager.FindBySubjectAsync(subjectId, cancellationToken))
+            entries.Add(entry);
+
+        // Live entries only: an expired or no-longer-valid entry is already dead, so it is left unwritten. Filtered
+        // here: the untyped token manager has no store-agnostic subject + expiry query (its ListAsync is over object).
+        var now = DateTimeOffset.UtcNow;
+        var unrevoked = 0;
+        foreach (var entry in entries)
+        {
+            if (await tokenManager.GetExpirationDateAsync(entry, cancellationToken) is { } expiresAt && expiresAt <= now)
+                continue;
+
+            // TryRevokeAsync answers false on a non-fatal update failure (a concurrency conflict, for one), leaving
+            // the entry valid. Not retried here: the rest are still revoked, then the throw fails the sign-out so
+            // the caller can retry the whole revocation with the session intact.
+            if (await tokenManager.HasStatusAsync(entry, OpenIddictConstants.Statuses.Valid, cancellationToken) &&
+                !await tokenManager.TryRevokeAsync(entry, cancellationToken))
+                unrevoked++;
+        }
+
+        if (unrevoked > 0)
+            throw new InvalidOperationException($"{unrevoked} of the subject's live tokens could not be revoked.");
     }
 
     private string CreateAccessTokenJwt(TokenIssueRequest request, string entryId, DateTimeOffset now, DateTimeOffset expiresAt)

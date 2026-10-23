@@ -16,6 +16,8 @@
           "LiquidExpressionEditorStudio": {},
           "OpenTelemetryStudio": {},
           "SecretsStudio": {},
+          "ConnectionsStudio": {},
+          "EtlStudio": {},
           "StructuredLogsStudio": {},
           "StudioApi": {},
           "ThemeManagement": {},

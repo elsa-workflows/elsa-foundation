@@ -36,6 +36,7 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
     public DbSet<IncidentStateEntity> IncidentStates => Set<IncidentStateEntity>();
     public DbSet<WorkflowRunHealthStateEntity> WorkflowRunHealthStates => Set<WorkflowRunHealthStateEntity>();
     public DbSet<RuntimeCheckpointCommitEntity> RuntimeCheckpointCommits => Set<RuntimeCheckpointCommitEntity>();
+    public DbSet<BackgroundActivityWorkEntity> BackgroundActivityWorks => Set<BackgroundActivityWorkEntity>();
     public DbSet<RuntimePostCommitOutboxEntity> RuntimePostCommitOutbox => Set<RuntimePostCommitOutboxEntity>();
     public DbSet<WorkflowDispatchEntity> WorkflowDispatches => Set<WorkflowDispatchEntity>();
     public DbSet<WorkflowSchedulerPoisonEntity> WorkflowSchedulerPoisonRecords => Set<WorkflowSchedulerPoisonEntity>();
@@ -72,6 +73,7 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
         modelBuilder.ApplyConfiguration(new IncidentStateEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowRunHealthStateEntityConfiguration());
         modelBuilder.ApplyConfiguration(new RuntimeCheckpointCommitEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new BackgroundActivityWorkEntityConfiguration());
         modelBuilder.ApplyConfiguration(new RuntimePostCommitOutboxEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowDispatchEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowSchedulerPoisonEntityConfiguration());

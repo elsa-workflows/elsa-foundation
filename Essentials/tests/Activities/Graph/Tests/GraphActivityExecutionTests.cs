@@ -7,6 +7,11 @@ using Elsa.Activities.Graph.Runtime.Services;
 using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Expressions;
+using Elsa.Expressions.JavaScript;
+using Elsa.Expressions.JavaScript.Jint;
+using Elsa.Serialization.Core;
+using Elsa.Serialization.SystemText;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -141,6 +146,97 @@ public sealed class GraphActivityExecutionTests : IDisposable
             new ActivityChildCompletedContext(context, "entry-execution", "entry", outcomes)).AsTask());
 
         Assert.Contains("exactly one mapped outcome", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Descriptor_WithoutCompleteOutcomesDeserializesEmpty()
+    {
+        var json = JsonSerializer.SerializeToElement(Descriptor(), WebJson);
+        var withoutField = JsonSerializer.Deserialize<JsonElement>(
+            json.GetRawText().Replace(",\"completeOutcomes\":[]", "", StringComparison.Ordinal));
+
+        var descriptor = withoutField.Deserialize<GraphActivityDescriptor>(WebJson)!;
+
+        Assert.False(withoutField.TryGetProperty("completeOutcomes", out _));
+        Assert.Empty(descriptor.CompleteOutcomes);
+    }
+
+    [Fact]
+    public void Descriptor_RejectsDuplicateCompleteOutcomeReferenceKeys()
+    {
+        Assert.Throws<ArgumentException>(() => Descriptor(completeOutcomes: [new("fail", "Failed"), new("fail", "Other")]));
+    }
+
+    [Fact]
+    public async Task CompleteNotification_SelectsTheOutcomeAndCancelsTheEntrySubtree()
+    {
+        var descriptor = Descriptor(completeOutcomes: [new("fail", "Failed"), new("succeed", "Succeeded")]);
+        var graph = NewGraph(descriptor);
+        var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("outer-execution"),
+            [new RuntimeLiveChildActivity("entry-execution", "entry", ActivityExecutionStatus.Running)]);
+
+        var continuation = await graph.OnChildNotifiedAsync(context, CompleteNotification("fail"));
+        var preparation = await graph.PrepareCompletionCheckpointAsync(context, [], DateTimeOffset.UnixEpoch);
+
+        Assert.Equal("Failed", continuation.OutcomeName);
+        Assert.Equal("Failed", Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Outcome);
+        var cancellation = Assert.Single(context.GetChildSubtreeCancellationRequests());
+        Assert.Equal("entry-execution", cancellation.ChildActivityExecutionId);
+    }
+
+    [Fact]
+    public async Task CompleteNotification_SelectsTheOutcomeAlongsideOutcomeMappings()
+    {
+        var descriptor = Descriptor(
+            outcomeMappings: [new("Approved", "Accepted")],
+            completeOutcomes: [new("fail", "Failed")]);
+        var graph = NewGraph(descriptor);
+        var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("outer-execution"));
+
+        await graph.OnChildNotifiedAsync(context, CompleteNotification("fail"));
+        var preparation = await graph.PrepareCompletionCheckpointAsync(context, [], DateTimeOffset.UnixEpoch);
+
+        Assert.Equal("Failed", Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Outcome);
+    }
+
+    [Fact]
+    public async Task CompleteNotification_FaultsOnAnUndeclaredReferenceKey()
+    {
+        var descriptor = Descriptor(completeOutcomes: [new("fail", "Failed")]);
+        var graph = NewGraph(descriptor);
+        var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("outer-execution"));
+
+        var continuation = await graph.OnChildNotifiedAsync(context, CompleteNotification("unknown"));
+
+        Assert.Equal(GraphActivity.CompleteOutcomeUnknownFaultCode, continuation.Fault!.Code);
+        Assert.Empty(context.GetChildSubtreeCancellationRequests());
+    }
+
+    [Fact]
+    public async Task OtherNotificationCodes_LeaveTheBoundaryDeferred()
+    {
+        var descriptor = Descriptor(completeOutcomes: [new("fail", "Failed")]);
+        var graph = NewGraph(descriptor);
+        var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("outer-execution"));
+
+        var continuation = await graph.OnChildNotifiedAsync(
+            context,
+            new ActivityChildNotifiedContext("child-execution", "child", "something-else"));
+
+        Assert.True(continuation.IsDeferred);
+    }
+
+    [Fact]
+    public async Task NaturalCompletion_FaultsWhenOnlyCompleteNodesSelectOutcomes()
+    {
+        var descriptor = Descriptor(completeOutcomes: [new("fail", "Failed")]);
+        var graph = NewGraph(descriptor);
+        var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("outer-execution"));
+
+        var continuation = await graph.OnChildCompletedAsync(
+            new ActivityChildCompletedContext(context, "entry-execution", "entry", [ActivityOutcomes.Done]));
+
+        Assert.Equal(GraphActivity.EntryCompletedWithoutMappingFaultCode, continuation.Fault!.Code);
     }
 
     [Fact]
@@ -301,6 +397,115 @@ public sealed class GraphActivityExecutionTests : IDisposable
     }
 
     [Fact]
+    public async Task PrepareCompletion_EvaluatesPortableJavaScriptAgainstCapturedPublicInputs()
+    {
+        var descriptor = Descriptor(
+            inputs:
+            [
+                Input("a") with { Name = "A" },
+                Input("b") with { Name = "B" }
+            ],
+            outputs: [new GraphActivityOutputDescriptor("sum", Type("Int32"), WellKnownRuntimeDurableValueStorageDrivers.Json)],
+            outputMappings:
+            [
+                Mapping("sum", new GraphActivityExpression("JavaScript", JsonSerializer.SerializeToElement("args.A + args.B")))
+            ],
+            requiredOutputReferenceKeys: ["sum"],
+            outcomeMappings: [new("Calculated", "Calculated")]);
+        var preparation = await PrepareGraphCompletionAsync(
+            descriptor,
+            new Dictionary<string, object?> { ["A"] = 19, ["B"] = 23 },
+            ["Calculated"]);
+
+        var completion = Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition);
+        var result = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(completion.Result);
+        Assert.Equal(42, Assert.IsType<JsonElement>(result["sum"]).GetInt32());
+        Assert.Equal("Calculated", completion.Outcome);
+    }
+
+    [Fact]
+    public async Task PrepareCompletion_ResolvesNativeInputMappingsFromCapturedPublicInputs()
+    {
+        var descriptor = Descriptor(
+            inputs: [Input("a", name: "A")],
+            outputs: [new GraphActivityOutputDescriptor("copy", Type("Int32"), WellKnownRuntimeDurableValueStorageDrivers.Json)],
+            outputMappings:
+            [
+                Mapping("copy", new GraphActivityExpression("Input", JsonSerializer.SerializeToElement(new { referenceKey = "a" })))
+            ],
+            requiredOutputReferenceKeys: ["copy"]);
+        var preparation = await PrepareGraphCompletionAsync(
+            descriptor,
+            new Dictionary<string, object?> { ["A"] = 42 });
+
+        var result = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
+            Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Result);
+        Assert.Equal(42, Assert.IsType<JsonElement>(result["copy"]).GetInt32());
+    }
+
+    [Fact]
+    public async Task PrepareCompletion_DoesNotRequireAnUnreferencedOptionalInput()
+    {
+        var descriptor = Descriptor(
+            inputs: [Input("optional", name: "Optional")],
+            outputs: [new GraphActivityOutputDescriptor("result", Type("Int32"), WellKnownRuntimeDurableValueStorageDrivers.Json)],
+            outputMappings: [Mapping("result", new GraphActivityExpression("JavaScript", JsonSerializer.SerializeToElement("40 + 2")))],
+            requiredOutputReferenceKeys: ["result"]);
+        var preparation = await PrepareGraphCompletionAsync(descriptor, new Dictionary<string, object?>());
+
+        var result = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
+            Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Result);
+        Assert.Equal(42, Assert.IsType<JsonElement>(result["result"]).GetInt32());
+    }
+
+    [Fact]
+    public async Task PrepareCompletion_ExposesCapturedGraphVariablesToPortableJavaScript()
+    {
+        var descriptor = Descriptor(
+            variables: [new GraphActivityVariableDescriptor(
+                "running-total",
+                "RunningTotal",
+                Type("Int32"),
+                WellKnownRuntimeDurableValueStorageDrivers.Json,
+                new GraphActivityExpression("Literal", JsonSerializer.SerializeToElement(40)))],
+            outputs: [new GraphActivityOutputDescriptor("result", Type("Int32"), WellKnownRuntimeDurableValueStorageDrivers.Json)],
+            outputMappings: [Mapping("result", new GraphActivityExpression("JavaScript", JsonSerializer.SerializeToElement("variables.RunningTotal + 2")))],
+            requiredOutputReferenceKeys: ["result"]);
+        var preparation = await PrepareGraphCompletionAsync(descriptor, new Dictionary<string, object?>());
+
+        var result = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
+            Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Result);
+        Assert.Equal(42, Assert.IsType<JsonElement>(result["result"]).GetInt32());
+    }
+
+    [Fact]
+    public async Task PrepareCompletion_RejectsDuplicatePublicNames()
+    {
+        var duplicateNameDescriptor = Descriptor(
+            inputs: [Input("a", name: "A"), Input("b", name: "A")],
+            outputs: [new GraphActivityOutputDescriptor("result", Type("Int32"), WellKnownRuntimeDurableValueStorageDrivers.Json)],
+            outputMappings: [Mapping("result", new GraphActivityExpression("JavaScript", JsonSerializer.SerializeToElement("args.A")))],
+            requiredOutputReferenceKeys: ["result"]);
+        var duplicateException = await Assert.ThrowsAsync<InvalidOperationException>(() => PrepareGraphCompletionAsync(
+            duplicateNameDescriptor,
+            new Dictionary<string, object?> { ["A"] = 1 }));
+        Assert.Contains("declared more than once", duplicateException.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task PrepareCompletion_RejectsMismatchedResultTypes()
+    {
+        var mismatchDescriptor = Descriptor(
+            outputs: [new GraphActivityOutputDescriptor("result", Type("Int32"), WellKnownRuntimeDurableValueStorageDrivers.Json)],
+            outputMappings: [Mapping("result", new GraphActivityExpression("JavaScript", JsonSerializer.SerializeToElement("'not-an-int'")))],
+            requiredOutputReferenceKeys: ["result"]);
+        var typeException = await Assert.ThrowsAsync<InvalidOperationException>(() => PrepareGraphCompletionAsync(
+            mismatchDescriptor,
+            new Dictionary<string, object?>()));
+        Assert.Contains("does not match declared type 'Int32'", typeException.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ExternalDriver_RehydratesAndReadsANonSerializableInputAfterSuspension()
     {
         var externalDriver = new TestExternalStorageDriver();
@@ -412,7 +617,13 @@ public sealed class GraphActivityExecutionTests : IDisposable
         var services = new ServiceCollection();
         services.AddWorkflowRuntime();
         new GraphActivitiesRuntimeFeature().ConfigureServices(services);
-        return services.BuildServiceProvider();
+        new ExpressionsFeature().ConfigureServices(services);
+        new JavaScriptFeature().ConfigureServices(services);
+        new JintFeature().ConfigureServices(services);
+        new SerializationFeature().ConfigureServices(services);
+        var provider = services.BuildServiceProvider();
+        provider.GetRequiredService<IWellKnownTypeRegistry>().RegisterType(typeof(int), "Int32");
+        return provider;
     }
 
     private GraphActivityScope Scope() =>
@@ -426,7 +637,8 @@ public sealed class GraphActivityExecutionTests : IDisposable
     private SimpleActivityExecutionContext Context(
         GraphActivity graph,
         ExecutableNode node,
-        ActivityExecutionState state) =>
+        ActivityExecutionState state,
+        IReadOnlyCollection<RuntimeLiveChildActivity>? liveChildActivities = null) =>
         new(
             graph,
             CancellationToken.None,
@@ -434,14 +646,54 @@ public sealed class GraphActivityExecutionTests : IDisposable
             new WorkflowExecutableIdentity("artifact", "workflow", "workflow-version", "1", "sha256:workflow"),
             schedulerWorkItem: null,
             executableNode: node,
-            activityExecutionState: state);
+            activityExecutionState: state,
+            liveChildActivities: liveChildActivities);
+
+    private static ActivityChildNotifiedContext CompleteNotification(string referenceKey) =>
+        new(
+            "complete-execution",
+            "complete",
+            "elsa.graph.complete",
+            payload: JsonSerializer.SerializeToElement(new Dictionary<string, string> { ["outcome"] = referenceKey }));
 
     private GraphActivity NewGraph(GraphActivityDescriptor descriptor) =>
         new(
             descriptor,
             _serviceProvider.GetRequiredService<GraphActivityScopeFactory>(),
             _serviceProvider.GetRequiredService<GraphActivityRecovery>(),
-            _serviceProvider.GetRequiredService<IDurableValueStateStore>());
+            _serviceProvider.GetRequiredService<IDurableValueStateStore>(),
+            _serviceProvider.GetService<Elsa.Expressions.Core.Contracts.IPortableExpressionEvaluator>(),
+            _serviceProvider.GetService<IWellKnownTypeRegistry>());
+
+    private async Task<RuntimeActivityCompletionCheckpointPreparation> PrepareGraphCompletionAsync(
+        GraphActivityDescriptor descriptor,
+        IReadOnlyDictionary<string, object?> effectiveInputs,
+        IReadOnlyCollection<string>? childOutcomeNames = null)
+    {
+        await using var lease = await ActivateGraphAsync(descriptor);
+        var graph = Assert.IsType<GraphActivity>(lease.Activity);
+        var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("outer-execution"));
+        var inputChanges = await graph.PrepareEntryCheckpointAsync(context, effectiveInputs, DateTimeOffset.UnixEpoch);
+        await graph.OnChildCompletedAsync(new ActivityChildCompletedContext(
+            context,
+            "entry-execution",
+            "entry",
+            childOutcomeNames ?? [ActivityOutcomes.Done]));
+
+        return await graph.PrepareCompletionCheckpointAsync(
+            context,
+            inputChanges.Select(change => change.State).ToArray(),
+            DateTimeOffset.UnixEpoch);
+    }
+
+    private async ValueTask<ActivityActivationLease> ActivateGraphAsync(GraphActivityDescriptor descriptor)
+    {
+        var runtimeDescriptor = RuntimeDescriptor(descriptor);
+        var strategy = Assert.Single(
+            _serviceProvider.GetServices<IActivityActivationStrategy>(),
+            item => item is GraphActivityActivationStrategy);
+        return await strategy.ActivateAsync(new ActivityActivationStrategyRequest(RuntimeContract(runtimeDescriptor), runtimeDescriptor));
+    }
 
     private static ExecutableNode BoundaryNode(
         GraphActivityDescriptor descriptor,
@@ -526,10 +778,12 @@ public sealed class GraphActivityExecutionTests : IDisposable
 
     private static GraphActivityDescriptor Descriptor(
         IReadOnlyList<GraphActivityInputDescriptor>? inputs = null,
+        IReadOnlyList<GraphActivityVariableDescriptor>? variables = null,
         IReadOnlyList<GraphActivityOutputDescriptor>? outputs = null,
         IReadOnlyList<GraphActivityOutputMappingDescriptor>? outputMappings = null,
         IReadOnlyCollection<string>? requiredOutputReferenceKeys = null,
-        IReadOnlyList<GraphActivityOutcomeMappingDescriptor>? outcomeMappings = null) =>
+        IReadOnlyList<GraphActivityOutcomeMappingDescriptor>? outcomeMappings = null,
+        IReadOnlyList<GraphActivityCompleteOutcomeDescriptor>? completeOutcomes = null) =>
         new(
             "definition-1",
             "definition-version-1",
@@ -538,18 +792,20 @@ public sealed class GraphActivityExecutionTests : IDisposable
             "entry",
             entryOccurrenceId: null,
             inputs ?? [],
-            variables: [],
+            variables: variables ?? [],
             outputs: outputs ?? [],
             outputMappings: outputMappings ?? [],
             requiredInputReferenceKeys: [],
             requiredOutputReferenceKeys: requiredOutputReferenceKeys?.ToArray() ?? [],
-            outcomeMappings: outcomeMappings);
+            outcomeMappings: outcomeMappings,
+            completeOutcomes: completeOutcomes);
 
     private static GraphActivityInputDescriptor Input(
         string referenceKey,
         GraphActivityExpression? @default = null,
-        string storageDriverKey = WellKnownRuntimeDurableValueStorageDrivers.Json) =>
-        new(referenceKey, Type(), storageDriverKey, @default);
+        string storageDriverKey = WellKnownRuntimeDurableValueStorageDrivers.Json,
+        string? name = null) =>
+        new(referenceKey, Type(), storageDriverKey, @default, name);
 
     private static GraphActivityVariableDescriptor Variable(string referenceKey, GraphActivityExpression? initialValue) =>
         new(referenceKey, referenceKey, Type(), WellKnownRuntimeDurableValueStorageDrivers.Json, initialValue);
@@ -563,7 +819,7 @@ public sealed class GraphActivityExecutionTests : IDisposable
     private static GraphActivityExpression Default(string value) =>
         new("Literal", JsonSerializer.SerializeToElement(value));
 
-    private static JsonElement Type() => JsonSerializer.SerializeToElement(new { alias = "object" });
+    private static JsonElement Type(string alias = "object") => JsonSerializer.SerializeToElement(new { alias });
 
     private static ValueTask<object?> FailOnSentinel(
         GraphActivityExpression expression,

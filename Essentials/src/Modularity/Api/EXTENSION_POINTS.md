@@ -2,6 +2,18 @@
 
 The Modularity API feature owns the shell feature-management surface.
 
+## Requested and runtime features
+
+`GET /modularity/features` keeps configured feature IDs in the catalog even when their assemblies are
+not loaded or their names are unknown. `enabled` describes the requested configuration; `runtimeAvailable`
+reports whether the runtime catalog supplied a live descriptor, including for known but disabled features.
+An enabled row with `runtimeAvailable: false` identifies a request that the lenient shell composition
+skipped. Package-manifest metadata alone does not make a feature available at runtime.
+
+This is distinct from `availability`, which reports schema dormancy for enabled runtime features. A live
+descriptor does not prove successful activation or readable schema. The ordinary readiness endpoint can
+still return 200 for a shell with skipped feature requests; use the catalog flags to detect that degradation.
+
 ## Overridable contracts
 
 | Contract | Default impl | Override when |

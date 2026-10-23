@@ -15,6 +15,8 @@ public static class RuntimeCheckpointCommitEntityFrameworkCoreRegistration
         var snapshot = services.ToArray();
         try
         {
+            // Admissions, results and cancellation tombstones must share the native checkpoint transaction.
+            services.AddRuntimeBackgroundActivityWorkEntityFrameworkCore();
             RequireEfParticipants(services);
             RuntimeEfContractBackendRegistration.EnsureSharedContext(services, "Runtime checkpoint EF persistence");
 
@@ -79,6 +81,9 @@ public static class RuntimeCheckpointCommitEntityFrameworkCoreRegistration
         RuntimeWorkflowDispatchStoreBackend.Find(services)!.EnsureOwnsRegisteredContracts(services);
         Require("post-commit outbox", RuntimePostCommitOutboxStoreBackend.Find(services)?.Name, RuntimePostCommitOutboxStoreBackend.EntityFramework);
         RuntimePostCommitOutboxStoreBackend.Find(services)!.EnsureOwnsRegisteredContracts(services);
+        var backgroundWork = RuntimeBackgroundActivityWorkEfRegistration.Find(services)
+            ?? throw new InvalidOperationException("Runtime checkpoint EF persistence requires the EF background activity work ledger.");
+        backgroundWork.EnsureOwnsRegisteredContract(services);
     }
 
     private static void Require(string participant, string? selected, string expected)

@@ -19,7 +19,10 @@ export function FallbackCodeEditor({
   const tabEscapeArmed = useRef(false);
 
   useEffect(() => {
+    const root = inputRef.current?.closest("[data-studio-code-editor]");
+    root?.setAttribute("data-studio-code-editor-ready", "true");
     if (autoFocus) inputRef.current?.focus();
+    return () => root?.removeAttribute("data-studio-code-editor-ready");
   }, [autoFocus]);
 
   const handleChange = (event: ChangeEvent<HTMLTextAreaElement>) => {

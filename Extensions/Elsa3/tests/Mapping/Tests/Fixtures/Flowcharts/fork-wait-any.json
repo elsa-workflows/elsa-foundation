@@ -1,0 +1,347 @@
+{
+  "id": "fixture-v1",
+  "definitionId": "fixture",
+  "name": "fixture",
+  "description": "Test-owned flowchart shape.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": false
+  },
+  "root": {
+    "id": "root",
+    "nodeId": "root",
+    "name": "root",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "size": {
+          "width": 100,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "endpoint",
+        "nodeId": "endpoint",
+        "name": "endpoint",
+        "type": "Elsa.HttpEndpoint",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": true,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "path": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "/fork"
+          }
+        }
+      },
+      {
+        "id": "fork",
+        "nodeId": "fork",
+        "name": "fork",
+        "type": "Elsa.FlowFork",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "branches": {
+          "typeName": "String[]",
+          "expression": {
+            "type": "Object",
+            "value": "[\"subBranch1\",\"subBranch2\",\"subBranch3\"]"
+          }
+        }
+      },
+      {
+        "id": "b1",
+        "nodeId": "b1",
+        "name": "b1",
+        "type": "Elsa.WriteLine",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "text": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "b1"
+          }
+        }
+      },
+      {
+        "id": "b2",
+        "nodeId": "b2",
+        "name": "b2",
+        "type": "Elsa.WriteLine",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "text": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "b2"
+          }
+        }
+      },
+      {
+        "id": "b3",
+        "nodeId": "b3",
+        "name": "b3",
+        "type": "Elsa.WriteLine",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "text": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "b3"
+          }
+        }
+      },
+      {
+        "id": "join",
+        "nodeId": "join",
+        "name": "join",
+        "type": "Elsa.FlowJoin",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "mode": {
+          "typeName": "Elsa.Workflows.Activities.Flowchart.Models.FlowJoinMode",
+          "expression": {
+            "type": "Literal",
+            "value": "WaitAny"
+          }
+        }
+      },
+      {
+        "id": "after",
+        "nodeId": "after",
+        "name": "after",
+        "type": "Elsa.WriteLine",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "text": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "after"
+          }
+        }
+      }
+    ],
+    "connections": [
+      {
+        "source": {
+          "activity": "endpoint",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "fork",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "fork",
+          "port": "subBranch1"
+        },
+        "target": {
+          "activity": "b1",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "fork",
+          "port": "subBranch2"
+        },
+        "target": {
+          "activity": "b2",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "fork",
+          "port": "subBranch3"
+        },
+        "target": {
+          "activity": "b3",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "b1",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "join",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "b2",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "join",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "b3",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "join",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "join",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "after",
+          "port": "In"
+        },
+        "vertices": []
+      }
+    ],
+    "variables": []
+  }
+}

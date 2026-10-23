@@ -27,18 +27,27 @@ public sealed class ReusableActivityImportHttpContractTests
             .ToArray();
 
         Assert.Equal(5, endpoints.Length);
-        AssertEndpoint(endpoints, "POST", "migration/elsa3/reusable-activities/collections", "elsa3-import.manage");
-        AssertEndpoint(endpoints, "GET", "migration/elsa3/reusable-activities/collections/{collectionHandle}/analysis", "elsa3-import.read");
-        AssertEndpoint(endpoints, "POST", "migration/elsa3/reusable-activities/collections/{collectionHandle}/selection", "elsa3-import.read");
-        AssertEndpoint(endpoints, "POST", "migration/elsa3/reusable-activities/collections/{collectionHandle}/apply", "elsa3-import.manage");
-        AssertEndpoint(endpoints, "GET", "migration/elsa3/reusable-activities/imports/{idempotencyKey}", "elsa3-import.read");
+        AssertEndpoint(endpoints, "POST", "migration/elsa3/reusable-activities/collections", "elsa3-import:manage");
+        AssertEndpoint(endpoints, "GET", "migration/elsa3/reusable-activities/collections/{collectionHandle}/analysis", "elsa3-import:read");
+        AssertEndpoint(endpoints, "POST", "migration/elsa3/reusable-activities/collections/{collectionHandle}/selection", "elsa3-import:read");
+        // Applying publishes, so it also needs the publish permission (spec 246 D-4).
+        AssertEndpoint(endpoints, "POST", "migration/elsa3/reusable-activities/collections/{collectionHandle}/apply",
+            PermissionPolicyDescriptor.All("elsa3-import:manage", "workflows/publishing:manage"));
+        AssertEndpoint(endpoints, "GET", "migration/elsa3/reusable-activities/imports/{idempotencyKey}", "elsa3-import:read");
     }
 
     private static void AssertEndpoint(
         IReadOnlyCollection<RouteEndpoint> endpoints,
         string verb,
         string route,
-        string permission)
+        string permission) =>
+        AssertEndpoint(endpoints, verb, route, PermissionPolicyDescriptor.Single(permission));
+
+    private static void AssertEndpoint(
+        IReadOnlyCollection<RouteEndpoint> endpoints,
+        string verb,
+        string route,
+        PermissionPolicyDescriptor policy)
     {
         var endpoint = Assert.Single(endpoints, endpoint =>
             endpoint.RoutePattern.RawText == route &&
@@ -46,9 +55,9 @@ public sealed class ReusableActivityImportHttpContractTests
         var disposition = endpoint.Metadata.GetMetadata<EndpointSecurityDispositionMetadata>();
         Assert.NotNull(disposition);
         Assert.Equal(EndpointSecurityDispositionKind.Permission, disposition!.Kind);
-        Assert.Equal(new PermissionPolicyCodec().Format(PermissionPolicyDescriptor.Single(permission)), disposition.Value);
+        Assert.Equal(new PermissionPolicyCodec().Format(policy), disposition.Value);
         Assert.Equal(
-            new PermissionPolicyCodec().Format(PermissionPolicyDescriptor.Single(permission)),
+            new PermissionPolicyCodec().Format(policy),
             endpoint.Metadata.GetMetadata<Microsoft.AspNetCore.Authorization.IAuthorizeData>()?.Policy);
     }
 

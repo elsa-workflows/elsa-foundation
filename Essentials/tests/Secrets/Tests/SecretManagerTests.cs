@@ -1,6 +1,9 @@
 using Elsa.Secrets.Core.Contracts;
+using Elsa.Secrets.Core.Exceptions;
 using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Extensions;
+using Elsa.Secrets.Tests.Support;
+using Elsa.Secrets.Types;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
@@ -135,6 +138,73 @@ public sealed class SecretManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task Create_After_Delete_Starts_An_Independent_Secret_And_Keeps_The_Deleted_One_As_History()
+    {
+        var original = await CreateEncryptedAsync("payments.api", value: "first-value");
+        await _manager.RotateAsync(TenantId, "payments.api", new RotateSecretRequest { Value = "second-value" });
+        Assert.True(await _manager.DeleteAsync(TenantId, "payments.api"));
+
+        var recreated = await CreateEncryptedAsync("payments.api", value: "third-value");
+
+        Assert.NotEqual(original.Id, recreated.Id);
+        Assert.Equal(1, recreated.CurrentVersion);
+        Assert.Equal(recreated.Id, (await _manager.FindAsync(TenantId, "payments.api"))!.Id);
+        Assert.Equal("third-value", (await _resolver.ResolveAsync(TenantId, new SecretReference("payments.api"))).Value);
+        // Nothing of the deleted secret shows through: the new one rotates on from its own first version.
+        Assert.Equal(2, (await _manager.RotateAsync(TenantId, "payments.api", new RotateSecretRequest { Value = "fourth-value" })).CurrentVersion);
+        Assert.Single((await _manager.ListAsync(TenantId, new SecretQuery())).Items);
+
+        var deleted = Assert.Single((await _repository.ListPageAsync(
+            TenantId,
+            new SecretRepositoryListRequest(status: SecretStatus.Deleted))).Items);
+        Assert.Equal(original.Id, deleted.Id);
+        Assert.Equal([1, 2], deleted.Versions.Select(version => version.Version));
+
+        Assert.True(await _manager.DeleteAsync(TenantId, "payments.api"));
+        Assert.Null(await _manager.FindAsync(TenantId, "payments.api"));
+        Assert.Equal(2, (await _repository.ListPageAsync(
+            TenantId,
+            new SecretRepositoryListRequest(status: SecretStatus.Deleted))).TotalCount);
+    }
+
+    /// <summary>
+    /// A store keys a deleted secret by its tenant id, name and id, so the manager refuses a name that leaves that key no
+    /// room within <see cref="SecretNameConstraints.MaximumKeyLength"/>, whatever the store, and says how long a name the
+    /// tenant can have. One at the limit is created and deleted.
+    /// </summary>
+    [Fact]
+    public async Task Create_Refuses_A_Name_Whose_Deleted_Secret_Would_Not_Fit_The_Key()
+    {
+        var tenantId = SecretKeyLimit.TenantId;
+        var limit = SecretKeyLimit.NameLength;
+        var atLimit = await CreateEncryptedAsync(new string('a', limit), tenantId: tenantId);
+        SecretKeyLimit.AssertFillsKey(atLimit.Name, atLimit.Id);
+        Assert.True(await _manager.DeleteAsync(tenantId, atLimit.Name));
+
+        var refused = await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await CreateEncryptedAsync(new string('b', limit + 1), tenantId: tenantId));
+
+        Assert.Contains($"Secret name cannot exceed {limit} characters in this tenant", refused.Message, StringComparison.Ordinal);
+        Assert.Null(await _repository.FindAsync(tenantId, new string('b', limit + 1)));
+    }
+
+    [Fact]
+    public async Task Create_Is_Still_Refused_While_A_Revoked_Secret_Holds_The_Name()
+    {
+        var original = await CreateEncryptedAsync("payments.api", value: "first-value");
+        await _manager.RevokeAsync(TenantId, "payments.api");
+
+        var refused = await Assert.ThrowsAsync<SecretNameInUseException>(async () =>
+            await CreateEncryptedAsync("payments.api", value: "replacement-value"));
+
+        Assert.Equal("A secret with the same name already exists.", refused.Message);
+        Assert.Equal("payments.api", refused.SecretName);
+        var holder = (await _manager.FindAsync(TenantId, "payments.api"))!;
+        Assert.Equal(original.Id, holder.Id);
+        Assert.Equal(SecretStatus.Revoked, holder.Status);
+    }
+
+    [Fact]
     public async Task Configuration_Store_Resolves_Host_Configuration_Value()
     {
         await _manager.CreateAsync(TenantId, new CreateSecretRequest
@@ -243,6 +313,42 @@ public sealed class SecretManagerTests : IDisposable
         Assert.True(await _manager.DeleteAsync("tenant-alpha", "shared.name"));
         Assert.Null(await _manager.FindAsync("tenant-alpha", "shared.name"));
         Assert.Equal(SecretStatus.Revoked, (await _manager.FindAsync("tenant-beta", "shared.name"))!.Status);
+    }
+
+    [Theory]
+    [InlineData("missing-store", SecretTypeNames.Text, "Secret store not found.")]
+    [InlineData(SecretStoreNames.Encrypted, "missing-type", "Secret type not found.")]
+    [InlineData(SecretStoreNames.Encrypted, ConfigurationOnlyType.Name, "Secret type is not compatible with the selected store.")]
+    public async Task Create_Reports_A_Store_Or_Type_It_Cannot_Use_As_A_Configuration_Fault(string storeName, string typeName, string message)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Elsa:Secrets:EncryptionKey"] = "tests-only-secret-key" })
+            .Build();
+        await using var provider = new ServiceCollection()
+            .AddSingleton<IConfiguration>(configuration)
+            .AddSecrets(configuration)
+            .AddSingleton<ISecretTypeProvider, ConfigurationOnlyType>()
+            .BuildServiceProvider();
+        var manager = provider.GetRequiredService<ISecretManager>();
+
+        var refused = await Assert.ThrowsAsync<SecretStoreConfigurationException>(async () => await manager.CreateAsync(TenantId, new CreateSecretRequest
+        {
+            Name = "payments.api",
+            TypeName = typeName,
+            StoreName = storeName,
+            Value = "secret-value"
+        }));
+
+        // The message is unchanged from the plain InvalidOperationException this used to be.
+        Assert.Equal(message, refused.Message);
+        Assert.IsAssignableFrom<InvalidOperationException>(refused);
+        Assert.Null(await manager.FindAsync(TenantId, "payments.api"));
+    }
+
+    private sealed class ConfigurationOnlyType() : DelegatingSecretTypeProvider(new(
+        Name, "Configuration-only text", "A type no encrypted store can hold.", "text", [SecretStoreNames.Configuration]))
+    {
+        public const string Name = "configuration-only-text";
     }
 
     private ValueTask<SecretMetadata> CreateEncryptedAsync(

@@ -27,7 +27,9 @@ public abstract class Entity
     /// Gets or sets the timestamp at which this row was last persisted.
     /// Timestamp assignment is owned by the persistence implementation.
     /// On rows that are supposed to be immutable (e.g. Version entities), a value greater than
-    /// <see cref="CreatedAt"/> is a forensic signal that something bypassed the immutability guard.
+    /// <see cref="CreatedAt"/> is a forensic signal that something rewrote the row. The only
+    /// sanctioned rewrite is the activity-catalog tier-only refresh, which stamps this field
+    /// together with a new concurrency token.
     /// </summary>
     public DateTimeOffset LastModifiedAt { get; set; }
 }

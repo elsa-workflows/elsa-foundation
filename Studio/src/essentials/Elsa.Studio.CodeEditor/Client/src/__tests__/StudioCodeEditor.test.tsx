@@ -2,8 +2,9 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { StudioCodeEditor } from "../StudioCodeEditor";
+import { FallbackCodeEditor } from "../engines/FallbackCodeEditor";
 import { javaScriptLanguageAdapter } from "../languages/javascript";
-import type { StudioCodeDocument, StudioCodeEditorProps } from "../types";
+import type { StudioCodeDocument, StudioCodeEditorEngineProps, StudioCodeEditorProps } from "../types";
 
 beforeEach(() => {
   window.dispatchEvent(new Event("elsa:auth-session-started"));
@@ -25,6 +26,36 @@ describe("StudioCodeEditor", () => {
     expect(onChange).toHaveBeenCalledWith({ ...document, value: "{{ subtotal }}" });
     expect(container.querySelector(".studio-code-editor-rich")).toBeNull();
     unmount();
+  });
+
+  it("clears the ready flag on a surviving code-editor root when FallbackCodeEditor unmounts", () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const wrapper = document.createElement("section");
+    wrapper.dataset.studioCodeEditor = "true";
+    host.appendChild(wrapper);
+    const mount = document.createElement("div");
+    wrapper.appendChild(mount);
+    const root = createRoot(mount);
+    const props: StudioCodeEditorEngineProps = {
+      document: codeDocument({ language: "liquid", value: "{{ total }}" }),
+      profile: "expanded",
+      session: { id: "fallback-unmount" },
+      readOnly: false,
+      theme: "studio",
+      minHeight: "220px",
+      ariaLabel: "Expression",
+      diagnostics: [],
+      onChange: vi.fn()
+    };
+
+    flushSync(() => root.render(<FallbackCodeEditor {...props} />));
+    expect(wrapper.getAttribute("data-studio-code-editor-ready")).toBe("true");
+
+    flushSync(() => root.unmount());
+    expect(wrapper.isConnected).toBe(true);
+    expect(wrapper.hasAttribute("data-studio-code-editor-ready")).toBe(false);
+    host.remove();
   });
 
   it("keeps readonly documents selectable without emitting changes", () => {
@@ -256,6 +287,7 @@ describe("StudioCodeEditor", () => {
     expect(container.querySelector(".studio-code-editor-header")?.textContent).toContain("JavaScript");
     expect(container.querySelector(".studio-code-editor")?.getAttribute("data-theme")).toBe("dark");
     expect(container.querySelector(".studio-code-editor")?.getAttribute("data-studio-code-editor")).toBe("true");
+    expect(container.querySelector(".studio-code-editor")?.getAttribute("data-studio-code-editor-ready")).toBe("true");
     expect(container.querySelector(".cm-gutters")).toBeTruthy();
     unmount();
   }, 20000);
@@ -468,6 +500,28 @@ describe("StudioCodeEditor", () => {
     expect(escapeTab.defaultPrevented).toBe(false);
     unmount();
   }, 20000);
+
+  it("inserts a newline in an expanded rich editor", async () => {
+    const onChange = vi.fn();
+    const onExpand = vi.fn();
+    const { container, unmount } = renderEditor({
+      document: codeDocument({ value: "hello" }),
+      languageAdapter: javaScriptLanguageAdapter,
+      profile: "expanded",
+      onChange,
+      onExpand
+    });
+    try {
+      await waitFor(() => !!container.querySelector<HTMLElement>(".cm-content"));
+      const content = container.querySelector<HTMLElement>(".cm-content")!;
+      const enter = key(content, "Enter");
+      expect(enter.defaultPrevented).toBe(true);
+      expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ value: "\nhello" }));
+      expect(onExpand).not.toHaveBeenCalled();
+    } finally {
+      unmount();
+    }
+  });
 
   it("uses the documented Control M shortcut to let Tab leave an expanded editor", async () => {
     const { container, unmount } = renderEditor({

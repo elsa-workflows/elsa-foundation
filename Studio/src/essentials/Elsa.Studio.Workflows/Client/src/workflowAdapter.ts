@@ -7,15 +7,23 @@ import {
   readFlowchartStartNodeId
 } from "./flowchartStartNode";
 import { bpmnStructureKind } from "./bpmn/bpmnTypes";
+import { compensationScopeChildSlots, compensationScopeStructureKind, replaceCompensationScopeActivities } from "./compensationScope";
 import { buildIntrinsicWireBlock, readIntrinsicDescriptor } from "./intrinsicActivities";
 import { getActivityDisplay } from "./activityDisplay";
 import { indexActivityPresentation, resolveActivityLabel } from "./activityPresentation";
+import { getHttpEndpointResponseMode, type HttpEndpointResponseMode } from "./httpEndpointResponseMode";
 import type { ActivityIconTone, WorkflowNodeIcon } from "./activityIcons";
 
 export { getActivityDisplay } from "./activityDisplay";
 export type { ActivityIconTone, WorkflowNodeIcon } from "./activityIcons";
 
 export const sequenceStructureKind = "elsa.sequence.structure";
+export {
+  compensationScopeStructureKind,
+  compensationStepsSlotId,
+  readCompensationSteps,
+  type CompensationStep
+} from "./compensationScope";
 export {
   flowchartStructureKind,
   normalizeFlowchartStartNode,
@@ -53,6 +61,8 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   isStartNode?: boolean;
   /** True when this activity can start a workflow (its `CanStartWorkflow` input is a literal true). */
   canStartWorkflow?: boolean;
+  /** Authored HTTP Endpoint response behavior, surfaced as a canvas badge. */
+  httpEndpointResponseMode?: HttpEndpointResponseMode;
   // Set by the Executable Inspector for activity-catalog misses: the node renders as an honest
   // ghost ("not available in this environment") instead of pretending the activity resolves.
   ghost?: boolean;
@@ -84,6 +94,8 @@ export interface WorkflowRuntimeNodeOverlay {
   containedAffectedActivityCount?: number;
   containedPrimaryIncidentId?: string;
   containsBlockingIncident?: boolean;
+  /** The latest execution completed through compensation (a compensation scope's `Compensated` outcome). */
+  compensated?: boolean;
   selected: boolean;
 }
 
@@ -92,7 +104,7 @@ export interface ChildSlot {
   label: string;
   property: string;
   cardinality: "single" | "many";
-  mode: "sequence" | "flowchart" | "bpmn" | "generic";
+  mode: "sequence" | "flowchart" | "bpmn" | "compensation" | "generic";
   activities: ActivityNode[];
   collectionProperty?: string;
   childProperty?: string;
@@ -409,6 +421,9 @@ export function getChildSlots(activity: ActivityNode, catalog?: ActivityCatalogL
   if (!structure || !structure.payload || typeof structure.payload !== "object") return [];
 
   const payload = structure.payload;
+  // A compensation scope's slots come from its steps, two per step, plus the "Steps" slot its designer opens.
+  if (structure.kind === compensationScopeStructureKind) return compensationScopeChildSlots(structure);
+
   const structureFacet = readStructureDesignFacet(resolveCatalogItem(activity, catalog));
   if (structureFacet?.kind === structure.kind) return getFacetChildSlots(structure, structureFacet);
 
@@ -464,7 +479,7 @@ export function readStructureDesignFacet(activity: ActivityCatalogItem | null | 
 
 function readStructureDesignFacetPayload(payload: Record<string, unknown>): StructureDesignFacetPayload | null {
   const mode = payload.mode;
-  if (mode !== "sequence" && mode !== "flowchart" && mode !== "bpmn" && mode !== "generic") return null;
+  if (mode !== "sequence" && mode !== "flowchart" && mode !== "bpmn" && mode !== "compensation" && mode !== "generic") return null;
   if (typeof payload.supportsScopedVariables !== "boolean") return null;
   if (!Array.isArray(payload.slots) || !isRecord(payload.initialPayload)) return null;
 
@@ -713,6 +728,8 @@ export function updateActivity(root: ActivityNode, nodeId: string, update: (acti
 
 export function replaceSlotActivities(activity: ActivityNode, slot: ChildSlot, activities: ActivityNode[]): ActivityNode {
   if (!activity.structure) return activity;
+  if (activity.structure.kind === compensationScopeStructureKind && !slot.collectionProperty)
+    return replaceCompensationScopeActivities(activity, activities);
   const nextValue = slot.cardinality === "single" ? activities[0] ?? null : activities;
 
   if (slot.collectionProperty && slot.childProperty) {
@@ -762,13 +779,7 @@ export function syncCanvasToScope(scope: CanvasScope, nodes: Node<WorkflowNodeDa
   }
   const activities = nodes.map(node => existing.get(node.id)).filter((activity): activity is ActivityNode => !!activity);
 
-  if (scope.slot.mode === "sequence") {
-    activities.sort((left, right) => {
-      const leftNode = nodes.find(node => node.id === left.nodeId);
-      const rightNode = nodes.find(node => node.id === right.nodeId);
-      return (leftNode?.position.x ?? 0) - (rightNode?.position.x ?? 0);
-    });
-  }
+  // Sequence execution follows authored child order, never saved diagram coordinates.
 
   return replaceSlotActivities(scope.owner, scope.slot, activities);
 }
@@ -868,12 +879,16 @@ function createWorkflowNode(
       activityDefinitionId: catalogItem?.activityDefinitionId,
       catalogIcon: catalogItem?.icon,
       catalogIconName: catalogItem?.iconName,
-      childSlots: getChildSlots(activity, catalogItem),
+      // A compensation scope is entered through its one "Steps" slot; its per-step slots are reached from its designer.
+      childSlots: activity.structure?.kind === compensationScopeStructureKind
+        ? getChildSlots(activity, catalogItem).slice(0, 1)
+        : getChildSlots(activity, catalogItem),
       acceptsInbound: activityAcceptsInbound(activity, catalogItem),
       sourcePorts: options.suppressFlowPorts ? [] : getActivitySourcePorts(activity, catalogItem),
       suppressFlowPorts: options.suppressFlowPorts,
       isStartNode: options.isStartNode,
-      canStartWorkflow: activityCanStartWorkflow(activity)
+      canStartWorkflow: activityCanStartWorkflow(activity),
+      httpEndpointResponseMode: getHttpEndpointResponseMode(activity, catalogItem) ?? undefined
     }
   };
 }

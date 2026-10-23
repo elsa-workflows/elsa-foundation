@@ -12,22 +12,25 @@ using Elsa.Activities.Design.Persistence.Core.Stores;
 namespace Elsa.Activities.Design.Api.Tests;
 
 /// <summary>
-/// Drives the real <see cref="ActivityAuthoringCatalogReader"/> over an in-memory catalog in which every activity is
-/// addable, with the built-in engine-intrinsic descriptors composed.
+/// Drives the real <see cref="ActivityAuthoringCatalogReader"/> over an in-memory catalog, with the built-in
+/// engine-intrinsic descriptors composed. Unless a test passes its own resolver, availability evaluator and settings
+/// store, no feature is attributed and every activity is addable.
 /// </summary>
 internal static class CatalogReaderFixture
 {
     public static Task<ActivityAuthoringCatalogView> ListAsync(
         IReadOnlyList<ActivityDefinition> definitions,
         IReadOnlyList<ActivityDefinitionVersion> versions,
-        IActivityFeatureAttributionResolver resolver) =>
+        IActivityFeatureAttributionResolver? resolver = null,
+        IActivityAvailabilityEvaluator? availabilityEvaluator = null,
+        IActivityAvailabilitySettingsStore? settingsStore = null) =>
         new ActivityAuthoringCatalogReader(
                 new InMemoryDefinitionStore(definitions),
                 new InMemoryVersionStore(versions),
-                new AllAddableEvaluator(),
-                new NullSettingsStore(),
+                availabilityEvaluator ?? new AllAddableEvaluator(),
+                settingsStore ?? new NullSettingsStore(),
                 [new IntrinsicAuthoringDescriptorProvider()],
-                resolver)
+                resolver ?? new NoFeatureAttribution())
             .ListAsync(new ListActivityAuthoringCatalog(), CancellationToken.None);
 
     private sealed class InMemoryDefinitionStore(IReadOnlyList<ActivityDefinition> definitions) : IActivityDefinitionStore
@@ -47,6 +50,12 @@ internal static class CatalogReaderFixture
         public Task<IReadOnlyList<ActivityDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<ActivityDefinitionVersion>> ListByDefinitionIdsAsync(IEnumerable<string> definitionIds, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<ActivityDefinitionVersion>> ListAsync(CancellationToken cancellationToken = default) => Task.FromResult(versions);
+    }
+
+    private sealed class NoFeatureAttribution : IActivityFeatureAttributionResolver
+    {
+        public ValueTask<string?> ResolveProvidingFeatureAsync(string activityTypeKey, CancellationToken cancellationToken) =>
+            ValueTask.FromResult<string?>(null);
     }
 
     private sealed class AllAddableEvaluator : IActivityAvailabilityEvaluator

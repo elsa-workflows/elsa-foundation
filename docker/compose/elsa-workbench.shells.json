@@ -10,6 +10,7 @@
       "default": {
         "Name": "default",
         "Features": {
+          "ActivitiesCompensation": {},
           "ActivitiesControlFlow": {},
           "ActivitiesDesignApi": {},
           "ActivitiesGraphDesign": {},
@@ -124,6 +125,10 @@
           "Secrets": {},
           "SecretsApi": {},
           "SecretsWorkflows": {},
+          "Connections": {},
+          "ConnectionsApi": {},
+          "ConnectionsDesign": {},
+          "ConnectionsWorkflows": {},
           "SecretsEntityFrameworkCore": {
             "Provider": "PostgreSql"
           },

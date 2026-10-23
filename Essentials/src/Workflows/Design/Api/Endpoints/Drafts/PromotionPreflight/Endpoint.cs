@@ -9,6 +9,7 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Validations.Core;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using NativeEndpoints;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Drafts.PromotionPreflight;
@@ -32,7 +33,11 @@ public sealed class Endpoint(
     {
         var draft = await draftStore.FindByIdAsync(request.DraftId, cancellationToken)
             ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionDraft), request.DraftId);
-        var errors = await inlineEventPublisher.TryDeriveValidationErrorsAsync(draft, cancellationToken);
+        // Only errors block promotion; warnings do not (as promotion itself filters them), and Studio reads them from the
+        // validations endpoint, so the preflight neither counts nor lists them (spec 261 FR-515).
+        var errors = (await inlineEventPublisher.TryDeriveValidationErrorsAsync(draft, cancellationToken))
+            .Where(error => !string.Equals(error.Severity, ValidationSeverities.Warning, StringComparison.Ordinal))
+            .ToArray();
         var latest = await versionStore.FindLatestVersionAsync(draft.WorkflowDefinitionId, cancellationToken);
         var initialAssessment = WorkflowVersionNumbering.AssessPromotion(
             latest?.Version,
@@ -53,7 +58,7 @@ public sealed class Endpoint(
             .Concat(assessment.Issues.Select(issue => new PromotionPreflightIssueView(issue.Code, issue.Message)))
             .ToArray();
         return new PromotionPreflightAssessmentView(
-            errors.Count == 0 && assessment.IsReady,
+            errors.Length == 0 && assessment.IsReady,
             assessment.AssignmentMode,
             assessment.RequestedVersion,
             assessment.ResolvedVersion,

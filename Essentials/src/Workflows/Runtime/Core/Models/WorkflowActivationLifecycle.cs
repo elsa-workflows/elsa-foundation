@@ -18,7 +18,8 @@ public enum WorkflowActivationOutcome
     Conflict,
     Failed,
     Deactivated,
-    AlreadyInactive
+    AlreadyInactive,
+    ChannelNotAllowed
 }
 
 /// <summary>Which step of the activation lifecycle failed.</summary>
@@ -29,7 +30,8 @@ public enum WorkflowActivationStep
     ProjectionPreparation,
     SlotTransition,
     ProjectionActivation,
-    TriggerObserverNotification
+    TriggerObserverNotification,
+    ChannelValidation
 }
 
 /// <summary>Where one activation's serving projection stands in a projection store.</summary>

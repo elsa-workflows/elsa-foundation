@@ -179,7 +179,7 @@ public sealed class OrdinalCollationProviderTests
     {
         string[] columns =
         [
-            "TenantId", "NormalizedName", "NameSearchKey", "DisplayNameSearchKey",
+            "TenantId", "NormalizedName", "Tombstone", "NameSearchKey", "DisplayNameSearchKey",
             "TypeNameLookupKey", "StoreNameLookupKey", "Status", "HasNonExpiringActiveVersion",
             "Payload", "SchemaVersion", "ConcurrencyToken"
         ];
@@ -187,8 +187,8 @@ public sealed class OrdinalCollationProviderTests
             await ExecuteAsync(
                 connection,
                 $"INSERT INTO {quote("elsa_secrets")} ({string.Join(", ", columns.Select(quote))}) " +
-                $"VALUES (@tenant, @key, @key, @key, @key, @key, @status, @active, {payload}, @schemaVersion, @token)",
-                ("@tenant", "t"), ("@key", key), ("@status", "Active"),
+                $"VALUES (@tenant, @key, @tombstone, @key, @key, @key, @key, @status, @active, {payload}, @schemaVersion, @token)",
+                ("@tenant", "t"), ("@key", key), ("@tombstone", ""), ("@status", "Active"),
                 ("@active", false), ("@payload", "{}"), ("@schemaVersion", SecretsEfModule.SchemaVersion), ("@token", new byte[] { 0 }));
 
         var column = quote("NormalizedName");

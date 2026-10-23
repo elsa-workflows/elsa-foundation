@@ -5,6 +5,7 @@ using CShells.Features;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Tests.ClrFixture;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Services;
 using Elsa.Activities.Runtime.Tasks;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
@@ -82,6 +83,32 @@ public sealed class ActivityIoTypeRegistrationTests
         // Regression guard: the enum/complex inputs must not silently degrade to object.
         Assert.NotEqual(typeof(object), Resolve(registry, payloadRef));
         Assert.NotEqual(typeof(object), Resolve(registry, modeRef));
+    }
+
+    [Fact]
+    public void RuntimeHandlerNestedTypes_DoNotEnterActivityCatalog()
+    {
+        var handlerTypePrefix = typeof(WorkflowInvokeActivitySchedulerWorkHandler).FullName + "+";
+        var models = CreateScanner().Scan(AppContext.BaseDirectory);
+
+        Assert.Contains(models, model => model.ActivityTypeKey == typeof(ComplexInputFixtureActivity).FullName);
+        Assert.DoesNotContain(models, model => model.ActivityTypeKey.StartsWith(handlerTypePrefix, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task RuntimeHandlerNestedTypes_DoNotEnterActivityTypeRegistry()
+    {
+        var handlerType = typeof(WorkflowInvokeActivitySchedulerWorkHandler);
+        var handlerTypePrefix = handlerType.FullName + "+";
+        var registry = SeedPrimitives(SerializationServices.TypeRegistry());
+        await CreateTask(
+            registry,
+            baseAssemblies: () => [handlerType.Assembly, typeof(ComplexInputFixtureActivity).Assembly])
+            .ExecuteAsync(CancellationToken.None);
+
+        var registeredTypes = registry.ListTypes().ToArray();
+        Assert.Contains(typeof(ComplexInputFixtureActivity), registeredTypes);
+        Assert.DoesNotContain(registeredTypes, type => type.FullName?.StartsWith(handlerTypePrefix, StringComparison.Ordinal) == true);
     }
 
     [Fact]

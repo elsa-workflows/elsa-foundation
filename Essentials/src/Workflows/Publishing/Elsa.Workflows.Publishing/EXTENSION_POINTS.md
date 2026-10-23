@@ -53,9 +53,17 @@ accepting the receipt.
   definition. Publishing requests activation through `IWorkflowActivationCoordinator` and retains only its
   publication record attempt journal; that journal never decides serving.
 - `IPublicationRecordStore` retains publication lifecycle and failure facts and supports conditional status
-  transitions.
+  transitions. `FindByIdsAsync(publicationIds)` resolves exact publication identities in a bounded batch;
+  providers without this lookup may return no records, leaving the published source version unavailable.
+  Override `ListByDefinitionIdsAsync(definitionIds)` and set `SupportsDefinitionIdLookup` to true only when
+  the provider can completely resolve a bounded definition set without scanning the journal. The default
+  capability is false: absent records cannot establish Draft instead of Retired. In-memory storage supports
+  it; EF does not. See the [Design lookup contract](../../Design/Api/EXTENSION_POINTS.md#iworkflowdefinitionpublicationstatelookup-contract--elsaworkflowsdesignpersistencecore)
+  for how these facts enrich definition views.
 - `IPublicationPolicyStore` stores the host policy under a null workflow ID and optional workflow overrides;
-  writes are revision-checked.
+  writes are revision-checked. `FindByDefinitionIdsAsync(definitionIds)` resolves workflow overrides in a
+  bounded batch when `SupportsBatchDefinitionLookup` is true; otherwise readers treat the configured primary
+  slot as unknown. In-memory and EF providers support this capability.
 - `IPublicationProjectionIntentStore` durably transitions idempotent prepare/activate/remove intents. Providers
   must preserve deterministic intent IDs, attempt state, retry timing, and failure details across restart. It has
   no writer: its only one, `PublicationProjectionReconciler`, had not been registered since activation moved to the
@@ -178,6 +186,20 @@ feature's `IActivityDraftTestRunStore`.
   `IExecutableCompilationSource`. `ExecutableNodeMetadataEnricher` publishes the paired
   `ExecutableNodeMetadataCollecting` event, and this engine owns the single active `CollectExecutableNodeMetadata`
   handler. New contributors register the generalized compilation source instead.
+
+## Design-time side-effect profile
+
+### `IActivitySideEffectProfileReader` *(Core — `Elsa.Activities.Runtime.Core`, spec 261 FR-513)*
+
+- **Kind:** Replacement contract with one implementation, `ActivitySideEffectProfileReader`, registered by
+  `WorkflowsPublishingFeature` (`TryAddScoped`).
+- **Usage:** `ReadAsync(activityVersionId)` returns the `SideEffectProfile` the executable compiler would pin for an
+  activity version: a CLR activity's `[ActivitySideEffectProfile]` (`External` when unmarked) and `External` for any
+  other consumer, such as a reusable graph activity; null when the version does not exist or its CLR type is not loaded.
+  The attribute rule lives in one internal helper, `ActivitySideEffectProfiles`, which `ExecutableNodeCompiler` uses too,
+  so a design-time validator and publication cannot disagree.
+- **Consumer:** `CompensationReplaySafeValidator` *(cross-domain — Activities.Compensation)*, which treats a missing
+  reader as "no warning".
 
 ## Activity-template provider contributors
 

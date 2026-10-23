@@ -41,6 +41,7 @@ public sealed class ActivitiesDesignPersistenceBackend
         typeof(IActivityDependencyProjectionRebuilder),
         typeof(IAddActivityDefinitionCommand),
         typeof(IAddActivityDefinitionVersionCommand),
+        typeof(IRefreshActivityDefinitionVersionCommand),
         typeof(ICreateActivityDefinitionCommand),
         typeof(ICreateActivityDraftCommand),
         typeof(IUpdateActivityDefinitionPresentationCommand),

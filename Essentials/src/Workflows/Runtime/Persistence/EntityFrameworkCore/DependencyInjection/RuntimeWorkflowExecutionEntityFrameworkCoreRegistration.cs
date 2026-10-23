@@ -2,6 +2,7 @@ using Elsa.Persistence.EntityFramework;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Recovery;
@@ -38,7 +39,10 @@ public static class RuntimeWorkflowExecutionEntityFrameworkCoreRegistration
             else
             {
                 var explicitStore = services.Where(x => x.ServiceType == typeof(IWorkflowExecutionStateStore)).ToArray();
-                if (explicitStore.Any(x => x.ImplementationType != typeof(Elsa.Workflows.Runtime.Services.Executions.InMemoryWorkflowExecutionStateStore))) throw new InvalidOperationException("Runtime workflow execution EF persistence refuses to replace an unowned execution-state store.");
+                if (explicitStore.Any(x =>
+                        x.ImplementationType != typeof(Elsa.Workflows.Runtime.Services.Executions.InMemoryWorkflowExecutionStateStore) &&
+                        !IsCoreFactory(x)))
+                    throw new InvalidOperationException("Runtime workflow execution EF persistence refuses to replace an unowned execution-state store.");
             }
             RuntimeEfContextRegistration.EnsureRecoveryContinuationSigningKeyCompatible(services, options.RecoveryContinuationSigningKey, "Runtime workflow executions");
             RuntimeEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling);
@@ -72,6 +76,7 @@ public static class RuntimeWorkflowExecutionEntityFrameworkCoreRegistration
     }
 
     private static bool OptionsEqual(RuntimeWorkflowExecutionEntityFrameworkCoreOptions a, RuntimeWorkflowExecutionEntityFrameworkCoreOptions b) => StringComparer.Ordinal.Equals(EfRelationalProviderBinding.Normalize(a.Provider), EfRelationalProviderBinding.Normalize(b.Provider)) && a.ConnectionString == b.ConnectionString && a.ConnectionName == b.ConnectionName && a.RecoveryContinuationSigningKey == b.RecoveryContinuationSigningKey;
+    private static bool IsCoreFactory(ServiceDescriptor descriptor) => descriptor.ImplementationFactory is { } factory && (factory.Method.DeclaringType == typeof(RuntimeCoreServiceCollectionExtensions) || factory.Method.DeclaringType?.DeclaringType == typeof(RuntimeCoreServiceCollectionExtensions));
     private static void RemoveOwned(IServiceCollection services, IReadOnlyCollection<ServiceDescriptor> owned) { foreach (var descriptor in owned.Where(x => services.Contains(x) && RuntimeArtifactStoreBackend.Find(services)?.Owns(x) != true && RuntimeActivityExecutionStoreBackend.Find(services)?.Owns(x) != true && BookmarkStateStoreBackend.Find(services)?.Owns(x) != true && RuntimeWorkflowAlterationStoreBackend.Find(services)?.Owns(x) != true && WorkflowTestScopeStoreBackend.Find(services)?.Owns(x) != true && RuntimeOperationalStateStoreBackend.Find(services)?.Owns(x) != true)) services.Remove(descriptor); }
 }
 

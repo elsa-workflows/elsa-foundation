@@ -81,6 +81,10 @@ The engine registers one independent event subscriber for a Design-side event (s
 
 ## Publication lifecycle
 
+Activity output bindings are optional captures into workflow variables, including outputs whose result contract
+marks them as required. The compiler validates each authored capture target; an omitted capture produces no
+variable write. Required result values remain enforced when the activity or reusable boundary completes.
+
 The authority transition is one coordinated operation (identical to what the API drives, minus HTTP):
 
 1. Resolve intent using `explicit request > workflow policy > host policy`. With no override, publishing

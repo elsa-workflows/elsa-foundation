@@ -44,6 +44,6 @@ internal sealed record BpmnInterchangeError(
 
 internal static class BpmnInterchangePermissions
 {
-    public const string Read = "bpmn-interchange.read";
-    public const string Manage = "bpmn-interchange.manage";
+    public const string Read = "bpmn-interchange:read";
+    public const string Manage = "bpmn-interchange:manage";
 }

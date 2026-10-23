@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "requiredProviders": [
+    "Sqlite",
+    "PostgreSql",
+    "SqlServer",
+    "MySql"
+  ],
+  "requireAll": true,
+  "sourceBefore": {
+    "head": "6557ace50173b491d3a8ffde1ec61de752d7ff36",
+    "dirty": true,
+    "fingerprint": "a6bcd9ff87df6f8dd3cbd0aa108dd0e002efeb0bf8948c565fbe9b349c260526"
+  },
+  "command": [
+    "dotnet",
+    "test",
+    "Extensions/Rules/tests/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Rules.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+    "--logger",
+    "trx;LogFileName=rules-providers.trx",
+    "--results-directory",
+    "/private/tmp/rules-pr3192-providers/run-0118b39aee4b4366b29182dda21d2dbc"
+  ],
+  "qualified": true,
+  "exitCode": 0,
+  "counts": {
+    "total": "8",
+    "executed": "8",
+    "passed": "8",
+    "failed": "0",
+    "error": "0",
+    "timeout": "0",
+    "aborted": "0",
+    "inconclusive": "0",
+    "passedButRunAborted": "0",
+    "notRunnable": "0",
+    "notExecuted": "0",
+    "disconnected": "0",
+    "warning": "0",
+    "completed": "0",
+    "inProgress": "0",
+    "pending": "0"
+  },
+  "providers": {
+    "Sqlite": {
+      "total": 2,
+      "passed": 2
+    },
+    "PostgreSql": {
+      "total": 2,
+      "passed": 2
+    },
+    "SqlServer": {
+      "total": 2,
+      "passed": 2
+    },
+    "MySql": {
+      "total": 2,
+      "passed": 2
+    }
+  },
+  "sourceAfter": {
+    "head": "6557ace50173b491d3a8ffde1ec61de752d7ff36",
+    "dirty": true,
+    "fingerprint": "a6bcd9ff87df6f8dd3cbd0aa108dd0e002efeb0bf8948c565fbe9b349c260526"
+  },
+  "sourceUnchanged": true,
+  "evidenceScope": "Current-source real-engine store contracts, including stored invocation passed to a synthetic delivery-proof validator; not installed packages, process replacement or native continuation.",
+  "rawArtifacts": {
+    "receipt.json": {
+      "path": "/tmp/rules-pr3192-providers/run-0118b39aee4b4366b29182dda21d2dbc/receipt.json",
+      "sha256": "42179c0ec976d326eec2715bb5f7690f890b99830b2a920afbee0af23e13b457"
+    },
+    "rules-providers.trx": {
+      "path": "/tmp/rules-pr3192-providers/run-0118b39aee4b4366b29182dda21d2dbc/rules-providers.trx",
+      "sha256": "a0de48c77bb8146aba19717f2b53211aceeff5bf073f4a020fadc2191459bd7f"
+    },
+    "command.log": {
+      "path": "/tmp/rules-pr3192-providers/run-0118b39aee4b4366b29182dda21d2dbc/command.log",
+      "sha256": "5f0a9d56e8a222bbf44a7fa0e2e5ed26c6d421c9412c1a629957cb3a4963ea27"
+    }
+  },
+  "engineVersions": {
+    "MySql": [
+      "8.4.11"
+    ],
+    "PostgreSql": [
+      "16.15"
+    ],
+    "SqlServer": [
+      "16.00.4185"
+    ],
+    "Sqlite": [
+      "3.50.4"
+    ]
+  }
+}

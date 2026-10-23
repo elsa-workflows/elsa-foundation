@@ -66,6 +66,18 @@ public static class EfIdentityStoreSupport
     public static string Lookup(string tenantId, string? value) =>
         string.IsNullOrWhiteSpace(value) ? "" : IdentityEntityFrameworkKey.TenantRecordId(tenantId, value);
 
+    /// <summary>The normalized user name a save stores and a lookup compares, or <c>null</c> for a blank name.</summary>
+    public static string? NormalizedUserName(IIdentityUserLookupNormalizer normalizer, string? userName) =>
+        string.IsNullOrWhiteSpace(userName) ? null : normalizer.NormalizeUserName(userName);
+
+    /// <summary>The normalized email a save stores and a lookup compares, or <c>null</c> for a blank email.</summary>
+    public static string? NormalizedEmail(IIdentityUserLookupNormalizer normalizer, string? email) =>
+        string.IsNullOrWhiteSpace(email) ? null : normalizer.NormalizeEmail(email);
+
+    /// <summary>The user-name or email lookup key for an already normalized value, or <c>null</c> for a blank one.</summary>
+    public static string? LookupKey(string tenantId, string? normalizedValue) =>
+        string.IsNullOrWhiteSpace(normalizedValue) ? null : Lookup(tenantId, normalizedValue);
+
     public static string RecordId(string tenantId, string recordId) =>
         IdentityEntityFrameworkKey.TenantRecordId(tenantId, recordId);
 

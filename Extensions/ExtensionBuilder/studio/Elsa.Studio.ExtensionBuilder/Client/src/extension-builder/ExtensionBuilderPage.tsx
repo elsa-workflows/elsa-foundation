@@ -136,7 +136,7 @@ function backendManagementUnavailableMessage(unavailable: BackendManagementUnava
     case "unauthorized": return "The backend rejected the Studio management credential.";
     case "unreachable": return "The privileged host-management surface could not be reached.";
     case "degraded": return "The privileged host-management surface is degraded.";
-    case "forbidden": return "This requires the extension-builder.read permission.";
+    case "forbidden": return "This requires the extension-builder:read permission.";
     default: return "Privileged host-management status is unknown.";
   }
 }

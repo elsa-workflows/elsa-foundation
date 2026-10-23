@@ -1,0 +1,13 @@
+{
+  "control": "PostgreSQL transaction-start clock cannot authorize live leases",
+  "beforeSha256": "8e5973665020529fac44ec25773165b13b1c32cc25f148906d453d2105683db4",
+  "exitCode": 1,
+  "restoredSha256": "8e5973665020529fac44ec25773165b13b1c32cc25f148906d453d2105683db4",
+  "failed": 2,
+  "passed": 0,
+  "skipped": 0,
+  "failure": "The provider clock must advance inside a transaction.",
+  "log": "/tmp/3181-providers-clock-control.log",
+  "logSha256": "c1cb01d177f83672e651c24b4be3c34e820dca90aee14f7b1b156a17e6b01765",
+  "restoredRun": "provider-qualification.json"
+}

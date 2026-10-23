@@ -38,9 +38,13 @@ export interface HomeLayoutDocument {
 export const builtInHomeLayout: HomeLayoutValue = {
   widgets: [
     { id: homeWidgetIds.getStarted, size: "full", visible: true },
-    { id: homeWidgetIds.recentWorkflows, size: "medium", visible: true },
+    { id: "workflows.run-health", size: "full", visible: true },
+    { id: "workflows.portfolio", size: "medium", visible: true },
+    { id: homeWidgetIds.quickActions, size: "medium", visible: true },
     { id: homeWidgetIds.needsAttention, size: "medium", visible: true },
-    { id: homeWidgetIds.recentRuns, size: "full", visible: true }
+    { id: homeWidgetIds.recentRuns, size: "medium", visible: true },
+    { id: homeWidgetIds.recentWorkflows, size: "medium", visible: true },
+    { id: homeWidgetIds.tasks, size: "medium", visible: true }
   ]
 };
 
@@ -56,9 +60,36 @@ export function isHomeWidgetFeatureEnabled(
     ? [widget.requiresFeature]
     : [...(widget.requiresFeature ?? [])];
   if (required.length === 0) return true;
-  if (!enabledFeatures) return true;
-  const available = new Set([...enabledFeatures]);
-  return required.every(feature => available.has(feature));
+  if (!enabledFeatures) return false;
+  const available = [...enabledFeatures];
+  return required.every(feature => available.some(enabled => homeFeatureTokensMatch(feature, enabled)));
+}
+
+const studioModulePrefix = "elsa.studio.";
+
+/** Slugs match only `Elsa.Studio.*` assembly ids. `workflows` matches `Elsa.Studio.Workflows`, not `Contoso.Workflows`. */
+export function homeFeatureTokensMatch(required: string, enabled: string): boolean {
+  const want = required.trim();
+  const have = enabled.trim();
+  if (!want || !have) return false;
+  if (want.toLowerCase() === have.toLowerCase()) return true;
+  const wantSlug = studioFeatureSlug(want);
+  const haveSlug = studioFeatureSlug(have);
+  return wantSlug != null && haveSlug != null && wantSlug === haveSlug;
+}
+
+function studioFeatureSlug(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (!trimmed.includes(".")) return kebabToken(trimmed);
+  if (!trimmed.toLowerCase().startsWith(studioModulePrefix)) return null;
+  const rest = trimmed.slice(studioModulePrefix.length);
+  if (!rest || rest.includes(".")) return null;
+  return kebabToken(rest);
+}
+
+function kebabToken(value: string): string {
+  return value.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
 }
 
 export function defaultHomeLayoutDocument(): HomeLayoutDocument {
@@ -149,8 +180,8 @@ export class HomeLayoutStore {
   }
 
   async saveDefault(document: HomeLayoutDocument): Promise<HomeLayoutDocument> {
-    const revision = document.source === "default" ? document.revision : undefined;
-    const headers = { ...this.headers(), ...(revision ? { "If-Match": `"${revision}"` } : { "If-None-Match": "*" }) };
+    const currentDefault = normalizeDocument(await this.api.backend.http.getJson<HomeLayoutDocument>(homeLayoutDefaultRoute, { headers: this.headers() }));
+    const headers = { ...this.headers(), ...preconditionHeaders(currentDefault.revision) };
     const saved = await this.api.backend.http.putJson<HomeLayoutDocument>(homeLayoutDefaultRoute, {
       schemaVersion: homeLayoutSchemaVersion,
       value: document.value
@@ -160,7 +191,7 @@ export class HomeLayoutStore {
 
   private async saveNow(document: HomeLayoutDocument): Promise<HomeLayoutDocument> {
     const revision = this.revision ?? document.revision;
-    const headers = { ...this.headers(), ...(revision ? { "If-Match": `"${revision}"` } : { "If-None-Match": "*" }) };
+    const headers = { ...this.headers(), ...preconditionHeaders(revision) };
     try {
       const saved = await this.api.backend.http.putJson<HomeLayoutDocument>(homeLayoutRoute, {
         schemaVersion: homeLayoutSchemaVersion,
@@ -195,6 +226,10 @@ export class HomeLayoutStore {
     } catch { /* fall through to builtin */ }
     return defaultHomeLayoutDocument();
   }
+}
+
+function preconditionHeaders(revision?: string): Record<string, string> {
+  return revision ? { "If-Match": `"${revision}"` } : { "If-None-Match": "*" };
 }
 
 function normalizeDocument(document: HomeLayoutDocument): HomeLayoutDocument {

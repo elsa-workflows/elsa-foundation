@@ -11,11 +11,15 @@ name: CI
 # on each branch but not when combined (HashMismatchTests.cs referenced
 # ActivityVersionHashMismatchException.Version, removed by #539).
 #
-# This workflow builds the FULL solution -- including test projects, which is what
-# catches semantic-merge compile breaks -- then runs the fast unit tests only.
-# The Testcontainers-based tests (which need Docker) are excluded from that job so no
-# containers start (#544). They run in the EF container jobs below, on the nightly schedule
-# and on manual dispatch only (#2632), never on a pull request or a push to main.
+# TIERS (spec 263)
+# tools/ci/test-tiers.json assigns every test project to the PR tier or the integration tier and groups them into
+# shards. This workflow is the PR tier: "Plan tiers" reads the manifest, every "PR shard (n)" builds the FULL solution
+# -- including test projects, which is what catches semantic-merge compile breaks -- and runs its projects or test-class
+# groups in parallel, and "Build & test" is their aggregate. Each failing test is re-run once; a pass on retry is
+# reported, a quarantined test's failure is reported without failing the run (tools/ci/test_results.py). The full tier
+# (integration-tier projects and the EF container suites) is ci-full.yml's required "Full tier" check on ready PRs.
+# Until the manifest's integrationLeavesPrTier switch is on, the PR shards also run the integration-tier projects, so
+# no test stops gating merges before "Full tier" is required (FR-011). See docs/contributing/merging.md#ci-tiers.
 #
 # "Build & test" IS a required status check on main. Branch protection matches the context
 # by JOB name, not by workflow file, so the job names below are load-bearing and must not be
@@ -23,33 +27,40 @@ name: CI
 # admin rather than a wall -- which is the hole the push trigger below covers.
 #
 # TRIGGERS
-#   - pull_request: the merge gate. Unchanged behavior.
+#   - pull_request: the merge gate.
 #   - push to main: reports post-merge breakage AGAINST MAIN. Until PR #1302 this ran on
 #     pull_request only, so nothing ever evaluated main itself. On 2026-08-12 PR #1270 was
 #     force-merged at 00:20Z with three checks red and this very job still pending; main was
 #     then left unable to activate the Workbench at all, with HistoricalSchemaUpgradeTests
 #     failing 8 of 8, and showed all-green for about nine hours because every workflow that
 #     did run on push (Maps, Packages, Docker Images, Code Quality) is blind to test results.
-#     That test project references no Testcontainers, so it sits inside the container-free
-#     filter below and this job would have gone red on the merge commit within ~13 minutes.
-#   - workflow_dispatch: re-run on demand after a fix, without pushing an empty commit.
-#   - schedule: once a night, every job above plus the EF container jobs: the full matrix, each suite run
-#     whole with its required-provider mode armed where it has one, and the Secrets EF composition proof. By owner
-#     decision (#2632) those are not a required check and run only here and on workflow_dispatch. This
-#     run replaced integration.yml (Integration (nightly)), which tested the same Testcontainers projects
-#     without arming any required-provider mode, so an engine that failed to start there skipped instead
-#     of failing; the one other test project it ran, Elsa.Workbench.Tests, is in "Build & test".
+#   - workflow_dispatch: re-run on demand, without pushing an empty commit. Input `tier`: `full` (the default) runs
+#     both tiers, the EF container suites included; `pr` runs the PR tier only.
+#   - schedule: once a night, both tiers: the PR shards, the integration shards once the switch is on, and every EF
+#     container suite, each run whole with its required-provider mode armed where it has one, plus the Secrets EF
+#     composition proof (full-tier.yml).
 #
-# The push run is deliberately the SAME job, not a scoped-down variant. Scoping it would mean
+# A push to main runs the PR tier and, once the switch is on, the integration shards: the same tests "Build & test" ran
+# on main before spec 263 (FR-010). The EF container suites stay nightly and on dispatch on main.
+#
+# The push run is deliberately the SAME jobs, not a scoped-down variant. Scoping it would mean
 # a second job name (the required-check context is tied to this one) and a second thing to
-# keep in step with the PR gate, in exchange for saving one run per merge. This workflow takes
-# ~13 minutes end to end, measured over its recent successful runs; every push to main already
-# pays ~8-10 for Docker Images, which builds two multi-platform images, and ~3 for Packages.
-# Those run in parallel with this one, so the answer to "is main broken" arrives ~13 minutes
-# after a merge and the merge itself is not held up by any of it.
+# keep in step with the PR gate, in exchange for saving one run per merge. Docker Images and Packages run in parallel;
+# post-merge verification waits for the actual results rather than treating their completion as test evidence.
 #
 # Blocking is not available on push: the commit has already landed. A red run on main is a
 # request to fix forward or revert; the alert job at the bottom makes sure someone is told.
+#
+# DOCUMENTATION-ONLY FAST PATH (spec 257)
+# A pull request whose every changed path is documentation, specs or agent instructions skips the .NET
+# build and tests: tools/ci/change_scope.py classifies the diff as the first step of "Plan tiers", which
+# still runs the Python guards and the catalog link check (the files CatalogLinkGuardTests reads). The shards,
+# Architecture guards and Core-only build & test skip on that output, and "Build & test" reports success under its own
+# name, so the required context is a real result, never "skipped" or pending. Any path a build or test reads
+# (EXTENSION_POINTS.md, spec contracts, build and analyzer config) forces the
+# full run, and so does anything the classifier cannot read. Push, schedule and dispatch are always full
+# runs, so main itself is never judged by the fast path. "Generated maps fresh" always runs in full; it
+# builds only the generator.
 
 on:
   pull_request:
@@ -59,6 +70,14 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      # FR-008: the one way to run the full tier early, on any branch, a draft's head included. The literals "tier"
+      # and "full" are what docs/contributing/merging.md#ci-tiers documents; test_tiers.py check-docs keeps them in step.
+      tier:
+        description: Which tier to run
+        type: choice
+        options: [full, pr]
+        default: full
   schedule:
     # 02:41 UTC daily. Odd minute to avoid the top-of-hour scheduler surge.
     - cron: '41 2 * * *'
@@ -79,15 +98,42 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
-  build-and-test:
-    name: Build & test
+  # Python only, so the shards start within a minute: the change scope, the cheap guards, and the shard matrix.
+  plan-tiers:
+    name: Plan tiers
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: read  # check-quarantine reads each tracking issue's state
+    outputs:
+      docs_only: ${{ steps.scope.outputs.docs_only }}
+      pr_matrix: ${{ steps.select.outputs.pr_matrix }}
+      pr_count: ${{ steps.select.outputs.pr_count }}
+      integration_matrix: ${{ steps.select.outputs.integration_matrix }}
+      integration_count: ${{ steps.select.outputs.integration_count }}
+      container_matrix: ${{ steps.select.outputs.container_matrix }}
+      container_count: ${{ steps.select.outputs.container_count }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Classify the change scope
+        id: scope
+        # Pull requests only; every other event is a full run. The classifier exits 0 whatever it finds, and a diff
+        # it cannot read classifies as a full run.
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          python3 tools/ci/change_scope.py --self-test
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            python3 tools/ci/change_scope.py --base "$BASE_SHA" --head "$GITHUB_SHA" \
+              --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
+          else
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Check contributor checkpoint workflow guards
         run: python3 tools/contributor-checkpoints/test_workflow_guards.py
@@ -95,8 +141,67 @@ jobs:
       - name: Check Studio asset gate
         run: python3 tools/ci/verify-studio-assets.py --self-test
 
-      - name: Check Studio image tag generation
-        run: python3 tools/ci/studio_image_tags.py --self-test
+      - name: Check Studio image publishing guards
+        run: |
+          python3 tools/ci/studio_image_tags.py --self-test
+          python3 tools/ci/test_studio_docker_publish.py
+
+      # Same files and rules as CatalogLinkGuardTests, without the build. It is the documentation-reading check a
+      # documentation-only PR can still break (by moving or deleting a doc a catalog or module README links to).
+      - name: Check catalog and module README links
+        run: python3 tools/maps/check-catalog-links.py
+
+      - name: Exercise the tier tooling
+        run: |
+          python3 tools/ci/test_tiers.py --self-test
+          python3 tools/ci/test_results.py --self-test
+          python3 tools/ci/test_tiers.py check-workflows
+          python3 tools/ci/test_tiers.py check-docs
+
+      # FR-013. On a pull request only the entries its diff adds or changes are checked, so closing a tracking issue
+      # never turns unrelated PRs red; the base commit is fetched explicitly so a shallow clone cannot silently widen the
+      # check. On main and nightly every entry is checked, and a closed issue fails the run and files "main is red".
+      - name: Check the quarantine list's tracking issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            git fetch --no-tags --depth=1 origin "$BASE_SHA"
+            python3 tools/ci/test_results.py check-quarantine --base "$BASE_SHA"
+          else
+            python3 tools/ci/test_results.py check-quarantine
+          fi
+
+      - name: Select the PR-tier shards
+        id: select
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          DISPATCH_TIER: ${{ inputs.tier }}
+        run: |
+          case "$GITHUB_EVENT_NAME" in
+            pull_request) tier=pr ;;
+            schedule) tier=nightly ;;
+            workflow_dispatch) [[ "$DISPATCH_TIER" == pr ]] && tier=pr || tier=nightly ;;
+            *) tier=push ;;
+          esac
+          python3 tools/ci/test_tiers.py select --tier "$tier" ${BASE_SHA:+--base "$BASE_SHA" --head "$GITHUB_SHA"} \
+            --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
+
+  # One shard of the PR tier. Each shard rebuilds the solution rather than downloading a shared build: the 4.2 GB
+  # output takes about 6 minutes to download against a 3-minute build (spec 263 research R4).
+  pr-shard:
+    name: PR shard (${{ matrix.shard }})
+    needs: plan-tiers
+    if: ${{ needs.plan-tiers.outputs.docs_only != 'true' && needs.plan-tiers.outputs.pr_count != '0' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan-tiers.outputs.pr_matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -110,51 +215,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      - name: Generate container-free test solution filter
-        # Run the fast unit tests only. Any test project that reaches Testcontainers spins up
-        # Docker containers, so exclude those by reference -- the shared solution-filter generator
-        # parses PackageReference elements rather than matching comments or other raw text, and
-        # follows ProjectReference edges so a project that only inherits the package from another
-        # test project is excluded too. The integration profile is read, not a committed file (#2577);
-        # the projects it names run in the nightly EF container jobs below.
-        run: |
-          container_roots_file=$(mktemp)
-          trap 'rm -f "$container_roots_file"' EXIT
-          dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -p:RestoreLockedMode=true -v:q -- \
-            solution-filter-roots Elsa.Server.Persistence.Integration.slnf \
-            > "$container_roots_file"
-
-          declare -A container_tests=()
-          while IFS= read -r p; do
-            container_tests["$p"]=1
-          done < "$container_roots_file"
-          if (( ${#container_tests[@]} == 0 )); then
-            echo "::error::No Testcontainers roots found; refusing to build an unsafe fast-test filter."
-            exit 1
-          fi
-
-          keep=()
-          while IFS= read -r p; do
-            if [[ -z "${container_tests[$p]+x}" ]]; then
-              keep+=("$p")
-            fi
-          done < <({ find Essentials/tests -name '*.csproj'
-                     find Extensions -path '*/tests/*' -not -path '*/studio/*' -name '*.csproj'; } | sort)
-          if (( ${#keep[@]} == 0 )); then
-            echo "::error::No container-free test projects found; refusing to run an empty fast-test filter."
-            exit 1
-          fi
-          projects=$(printf '"%s",' "${keep[@]}" | sed 's/,$//')
-          printf '{"solution":{"path":"Elsa.Server.slnx","projects":[%s]}}' "$projects" > Elsa.Server.test.slnf
-          echo "Kept ${#keep[@]} test project(s) in the container-free filter."
-
       - name: Restore
-        # Includes the isolated Debug dependency graph required by the Architecture
-        # tests in the container-free filter while preserving ordinary Release assets.
-        # Every restore in CI is locked (#2122): it restores exactly the versions the committed
-        # packages.lock.json files name and fails when one no longer matches its project, so a
-        # dependency change lands only as a reviewed lock-file diff. See
-        # docs/reference/nuget-lock-files.md.
+        # Includes the isolated Debug dependency graph required by the Architecture tests while preserving ordinary
+        # Release assets. Every restore in CI is locked (#2122): it restores exactly the versions the committed
+        # packages.lock.json files name and fails when one no longer matches its project, so a dependency change lands
+        # only as a reviewed lock-file diff. See docs/reference/nuget-lock-files.md.
         run: bash tools/architecture/restore-ci-project-graph.sh --locked-mode -p:WarningsNotAsErrors=NU1603
 
       - name: Restore repository-local .NET tools
@@ -162,172 +227,103 @@ jobs:
 
       - name: Build (full solution, including test projects)
         # Building the whole solution -- test projects included -- is what catches
-        # semantic-merge compile breaks like #543.
+        # semantic-merge compile breaks like #543. Every shard builds it, so every shard gates on it.
         run: dotnet build Elsa.Server.slnx -c Release --no-restore -p:WarningsNotAsErrors=NU1603
 
-      # The IAM native-query-plan capture and its artifact upload were retired with performance
-      # measurement (#1668, ADR 0073); the upload's if-no-files-found: error would otherwise fail
-      # this job now that no test writes a plan.
-      - name: Test (fast unit tests, no containers)
-        run: dotnet test Elsa.Server.test.slnf -c Release --no-build -p:WarningsNotAsErrors=NU1603
-
-  # The EF container jobs below run on the nightly schedule and on manual dispatch only (#2632): they are not
-  # a required check, and a pull request or a push to main skips all four. Every run is the full matrix.
-  #
-  # The manifest is the single suite list. The selector proves it still names every Testcontainers test
-  # project of the solution (plus the Secrets EF composition project, which has its own job), so a new
-  # container suite that nobody added to the manifest fails this run instead of running nowhere.
-  select-ef-suites:
-    name: Select EF suites
-    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.select.outputs.matrix }}
-      count: ${{ steps.select.outputs.count }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.x
-
-      - name: Verify selector contract
-        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -p:RestoreLockedMode=true -v:q -- ef-suites-self-test
-
-      - name: Read the EF suite matrix
-        id: select
-        run: |
-          set -euo pipefail
-          selection=$(dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- ef-suites-select)
-          {
-            echo "matrix=$(jq -c '.matrix' <<< "$selection")"
-            echo "count=$(jq -r '.count' <<< "$selection")"
-          } >> "$GITHUB_OUTPUT"
-          {
-            echo "### EF container suites"
-            jq -r '.matrix.include[] | "- " + .suite + (if .require == "" then "" else " (" + .require + ")" end)' <<< "$selection"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-  ef-container-suites:
-    name: EF container suites (${{ matrix.suite }})
-    needs: select-ef-suites
-    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.select-ef-suites.outputs.matrix) }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.x
-
-      - name: Cache NuGet packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-
-
-      - name: Arm the suite's required-provider mode
-        if: ${{ matrix.require != '' }}
-        run: echo "${{ matrix.require }}=1" >> "$GITHUB_ENV"
-
-      - name: Restore
-        run: dotnet restore ${{ matrix.project }} --locked-mode -p:WarningsNotAsErrors=NU1603
-
-      - name: Test
-        run: dotnet test ${{ matrix.project }} -c Release --no-restore -p:WarningsNotAsErrors=NU1603
-
-  # One result for the whole matrix and the Secrets EF composition proof, which the alert job needs.
-  ef-container-result:
-    name: EF container suites
-    # !cancelled() rather than always(): a cancelled leg must not turn into a red aggregate, which would file a
-    # "main is red" issue for a run that never failed.
-    if: ${{ !cancelled() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
-    needs: [select-ef-suites, ef-container-suites, secrets-ef-composition]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Verify every EF suite passed
+      - name: Test the shard, retrying each failure once
         env:
-          SELECT_RESULT: ${{ needs.select-ef-suites.result }}
-          SUITES_RESULT: ${{ needs.ef-container-suites.result }}
-          SECRETS_RESULT: ${{ needs.secrets-ef-composition.result }}
-          COUNT: ${{ needs.select-ef-suites.outputs.count }}
-        run: |
-          if [[ "$SELECT_RESULT" != success ]]; then
-            echo "::error::Reading the EF suite matrix failed."
-            exit 1
-          fi
-          if [[ "$SECRETS_RESULT" != success ]]; then
-            echo "::error::The Secrets EF host proof did not pass."
-            exit 1
-          fi
-          if [[ "$COUNT" =~ ^[1-9][0-9]*$ && "$SUITES_RESULT" == success ]]; then
-            echo "All $COUNT EF suites passed."
-            exit 0
-          fi
-          echo "::error::EF suites did not pass (count=$COUNT, result=$SUITES_RESULT)."
-          exit 1
-
-  # Secrets EF composition on a native PostgreSQL: configuration-driven CShells composition,
-  # migration/validation, CRUD/OCC, runtime resolution, restart persistence and the packed-module
-  # child-host proof. Kept separate from the provider matrix because it boots a real shell.
-  secrets-ef-composition:
-    name: Secrets EF composition
-    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.x
-
-      - name: Cache NuGet packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-
-
-      - name: Start PostgreSQL for the Secrets EF shell proof
-        run: |
-          docker run --detach --name secrets-ef-postgresql --publish 5432:5432 \
-            --env POSTGRES_HOST_AUTH_METHOD=trust postgres:17.6-alpine3.22
-          for attempt in {1..60}; do
-            if docker exec secrets-ef-postgresql pg_isready -U postgres > /dev/null; then
-              exit 0
-            fi
-            if [ "$attempt" -eq 60 ]; then
-              docker logs secrets-ef-postgresql
-              exit 1
-            fi
-            sleep 1
-          done
-
-      - name: Restore the Secrets EF PostgreSQL shell proof
-        run: dotnet restore Essentials/tests/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj --locked-mode -p:WarningsNotAsErrors=NU1603
-
-      # Configuration-driven CShells composition, migration/validation, CRUD/OCC, runtime
-      # resolution, restart persistence, and the packed-module child-host proof. Npgsql is
-      # the only relational provider package in this project.
-      - name: Prove Secrets EF composition on PostgreSQL
-        env:
-          ELSA_SECRETS_EF_POSTGRESQL_TEST_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Username=postgres;Database=postgres
+          SHARD: ${{ toJSON(matrix) }}
         run: >-
-          dotnet test
-          Essentials/tests/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj
-          -c Release --no-restore
-          -p:WarningsNotAsErrors=NU1603
+          python3 tools/ci/run_shard.py --entry "$SHARD" --out "$RUNNER_TEMP/shard" --head "$GITHUB_SHA"
+          --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the shard outcome
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-outcomes-${{ matrix.shard }}
+          path: ${{ runner.temp }}/shard/test-outcomes.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # Kept for tools/maps/Elsa.Maps.Generator test-tiers-rebalance, which takes medians over several runs.
+      - name: Upload the shard TRX files
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: trx-${{ matrix.shard }}
+          path: ${{ runner.temp }}/shard/try*/**/*.trx
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # The required context. It reports one result for the PR tier: the plan, every shard, the architecture guards and the
+  # core-only leg. !cancelled() rather than always(): a superseded run must not turn into a red aggregate.
+  build-and-test:
+    name: Build & test
+    needs: [plan-tiers, pr-shard, architecture-guards, core-only]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      docs_only: ${{ needs.plan-tiers.outputs.docs_only }}
+    steps:
+      - name: Verify the PR tier passed
+        env:
+          PLAN: ${{ needs.plan-tiers.result }}
+          DOCS_ONLY: ${{ needs.plan-tiers.outputs.docs_only }}
+          SHARDS: ${{ needs.pr-shard.result }}
+          ARCHITECTURE: ${{ needs.architecture-guards.result }}
+          CORE: ${{ needs.core-only.result }}
+        run: |
+          if [[ "$PLAN" != success ]]; then
+            echo "::error::Plan tiers did not succeed ($PLAN)."; exit 1
+          fi
+          if [[ "$DOCS_ONLY" == true ]]; then
+            echo "Documentation-only change: the .NET build and tests were skipped (spec 257)."; exit 0
+          fi
+          failed=0
+          for pair in "PR shards:$SHARDS" "Architecture guards:$ARCHITECTURE" "Core-only build & test:$CORE"; do
+            if [[ "${pair##*:}" != success ]]; then
+              echo "::error::${pair%%:*} did not succeed (${pair##*:})."; failed=1
+            fi
+          done
+          exit "$failed"
+
+  # The full tier outside pull requests: on a push to main the integration shards once the switch is on; nightly and on
+  # a `tier: full` dispatch also the EF container suites. Pull requests get it from ci-full.yml.
+  full-tier-shards:
+    needs: plan-tiers
+    if: >-
+      ${{ github.event_name != 'pull_request'
+      && (needs.plan-tiers.outputs.integration_count != '0' || needs.plan-tiers.outputs.container_count != '0') }}
+    uses: ./.github/workflows/full-tier.yml
+    with:
+      integration_matrix: ${{ needs.plan-tiers.outputs.integration_matrix }}
+      integration_count: ${{ needs.plan-tiers.outputs.integration_count }}
+      container_matrix: ${{ needs.plan-tiers.outputs.container_matrix }}
+      container_count: ${{ needs.plan-tiers.outputs.container_count }}
+
+  # One result for the alert job. Deliberately not named "Full tier": that is ci-full.yml's required context on PRs.
+  # !cancelled() rather than always(): a cancelled run must not turn into a red aggregate that files a "main is red" issue.
+  full-tier-result:
+    name: Full tier result
+    needs: [plan-tiers, full-tier-shards]
+    if: ${{ !cancelled() && github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify the full-tier shards passed
+        env:
+          PLAN: ${{ needs.plan-tiers.result }}
+          SHARDS: ${{ needs.full-tier-shards.result }}
+        run: |
+          if [[ "$PLAN" != success ]]; then
+            echo "::error::Plan tiers did not succeed ($PLAN)."; exit 1
+          fi
+          if [[ "$SHARDS" != success && "$SHARDS" != skipped ]]; then
+            echo "::error::The full-tier shards did not succeed ($SHARDS)."; exit 1
+          fi
+          echo "Full-tier shards: $SHARDS."
 
   # Container-free architecture guards (dependency direction, endpoint security, feature
   # composition, the EF dependency allowlist, and the fail-closed guard that keeps the retired
@@ -337,7 +333,8 @@ jobs:
   # measurement (#1668).
   architecture-guards:
     name: Architecture guards
-    needs: build-and-test
+    needs: plan-tiers
+    if: needs.plan-tiers.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -361,8 +358,23 @@ jobs:
       - name: Restore the evaluated source dependency graphs
         run: bash tools/architecture/restore-ci-project-graph.sh --locked-mode -p:WarningsNotAsErrors=NU1603
 
+      - name: Build the architecture guards
+        run: dotnet build Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
+
+      # Through the shard runner, so a failure gets the same single retry and quarantine as every PR-tier test (FR-004).
       - name: Run the architecture guards
-        run: dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
+        run: |
+          entry=$(python3 tools/ci/test_tiers.py entry --shard architecture-guards --project Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj)
+          python3 tools/ci/run_shard.py --entry "$entry" --out "$RUNNER_TEMP/shard" --head "$GITHUB_SHA" --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the outcome
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-outcomes-architecture-guards
+          path: ${{ runner.temp }}/shard/test-outcomes.json
+          if-no-files-found: ignore
+          retention-days: 7
 
   # Issue #1815 separates required modules from optional ones. This leg is what makes that
   # separation mean something: it builds and tests ONLY the core, so a dependency from core into
@@ -370,8 +382,8 @@ jobs:
   #
   # The filter is generated from tools/solution-filters/profiles.json by expanding the dependency
   # closure of the named core roots, so it cannot drift: add a core-to-extension reference and the
-  # closure grows, the committed .slnf stops matching, and the "Generated maps fresh" job goes red
-  # alongside this one.
+  # closure grows, the committed .slnf stops matching, and the "Generated maps fresh" job's solution
+  # filter check goes red alongside this one.
   #
   # The ExtensionBoundary guard that enforces the rule directly also runs inside "Build & test",
   # because it lives under tests/ and references no Testcontainers, so it is already covered by a
@@ -379,7 +391,8 @@ jobs:
   # actually compiles and passes its tests with every optional module absent.
   core-only:
     name: Core-only build & test
-    needs: build-and-test
+    needs: plan-tiers
+    if: needs.plan-tiers.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -404,8 +417,21 @@ jobs:
       - name: Build (core only)
         run: dotnet build Elsa.Server.Core.slnf -c Release --no-restore -p:WarningsNotAsErrors=NU1603
 
+      # The core filter's test projects, through the shard runner: the same single retry and quarantine as every
+      # PR-tier test (FR-004), so a quarantined core test cannot fail "Build & test" through this job.
       - name: Test (core only)
-        run: dotnet test Elsa.Server.Core.slnf -c Release --no-build -p:WarningsNotAsErrors=NU1603
+        run: |
+          entry=$(python3 tools/ci/test_tiers.py entry --shard core-only --slnf Elsa.Server.Core.slnf)
+          python3 tools/ci/run_shard.py --entry "$entry" --out "$RUNNER_TEMP/shard" --head "$GITHUB_SHA" --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the outcome
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-outcomes-core-only
+          path: ${{ runner.temp }}/shard/test-outcomes.json
+          if-no-files-found: ignore
+          retention-days: 7
 
   # A red main has to reach a human. GitHub's own failure notification for a push does go to
   # whoever pushed, which is a better channel than the one the nightly uses -- but on
@@ -415,13 +441,13 @@ jobs:
     name: Alert on a red main
     needs:
       - build-and-test
-      - ef-container-result
+      - full-tier-result
       - architecture-guards
       - core-only
     # A cancelled run (superseded by a newer push) is not a failure and files nothing. The nightly schedule
-    # files too: its failure mail goes to whoever last edited the cron, which is nobody watching, and it is the
-    # only automatic run of the EF container jobs. On a pull request or a push those are skipped, and a skipped
-    # need is not a failure, so ef-container-result can only turn this red on the schedule or a manual run.
+    # files too: its failure mail goes to whoever last edited the cron, which is nobody watching, and on main it is the
+    # only automatic run of the EF container suites. full-tier-result is skipped on pull requests, where ci-full.yml
+    # reports the full tier, and a skipped need is not a failure.
     if: ${{ failure() && !cancelled() && (github.event_name == 'push' || github.event_name == 'schedule') }}
     permissions:
       contents: read
@@ -430,32 +456,30 @@ jobs:
     with:
       gate: CI
 
-  # Freshness gate for the committed maps under docs/maps/, the generated findings reports and the generated
-  # solution filters (Elsa.Server.*.slnf). It regenerates each into a scratch directory and byte-compares the
-  # result with what is committed. Generation itself stays manually initiated (docs/contributing/generated-maps.md); this job only
-  # reports. It exists because the committed maps once went three projects stale and carried 25 corrupted
-  # rows with nothing objecting.
+  # Freshness gate for the one generated output that IS committed: the solution filters (Elsa.Server.*.slnf),
+  # regenerated into a scratch directory and byte-compared with what is committed. It also runs the generator's own
+  # contract self-tests, including the shared project-discovery rule, the publish link rewrite and the generated-maps
+  # branch writer, and generates the full published set, so a tree the project-graph scan refuses fails here too.
+  #
+  # The documentation maps, their manifest and the findings reports are not committed (spec 257): every PR changed
+  # them, so concurrent PRs conflicted on them and this job turned unrelated PRs red. docs/maps/dependency-map.json
+  # is not committed either (spec 259): the versioning calculator derives it from each commit's tree with the same scan
+  # (tools/maps/Elsa.Maps.Projects). All of them are generated locally with `-- all` and published after every push to
+  # main by the "Publish generated maps" job below. Before #1274 this job ran on pull_request only and PR #1202 left
+  # main stale for the next three PRs (#1243, #1247, #1248).
   #
   # "Generated maps fresh" is a required status check on main, matched by JOB name, so the name below is
   # load-bearing and must not be renamed. Until #2622 it lived in maps.yml and the filter check in
   # solution-filters.yml ("Solution filters fresh"); both were folded in here to cut the workflows a push
-  # queues. It runs on the same events as before, pull_request and push to main, plus this workflow's
-  # schedule. Until issue #1274 the maps check ran on pull_request only, so nothing evaluated main: PR #1202
-  # added a spec directory without regenerating, main went stale silently, and the next three unrelated PRs
-  # (#1243, #1247, #1248) went red on a check none of them had broken.
-  #
-  # Notify rather than auto-regenerate. Auto-regenerating and opening a PR would contradict docs/contributing/generated-maps.md
-  # ("Generated maps are committed snapshots and are never refreshed automatically"), would skip the
-  # findings-report review a refresh is supposed to trigger, and would need a third-party pull-request
-  # action, which the org Actions allow-list gates (see the POLICY DEPENDENCY note in docker.yml).
+  # queues. It runs on pull_request, push to main and this workflow's schedule, on every PR including
+  # documentation-only ones.
   #
   # This job is deliberately NOT among the alert job's needs, as it was never wired to main-red-alert.yml in
-  # maps.yml either: a stale map is a request to open a refresh PR, not a broken main, and the actionable
-  # output is the refresh command in the run summary. Add it to the alert's needs if stale maps start
-  # surviving on main the way they did before issue #1274.
+  # maps.yml either: stale filters are a request to open a refresh PR, and the actionable output is the refresh
+  # command in the run summary.
   #
-  # The generator is built once and each check runs whenever that build succeeded, so stale maps do not
-  # hide stale solution filters or the reverse, just as when these were two workflows.
+  # The generator is built once and each check runs whenever that build succeeded, so one failing check does not
+  # hide another.
   generated-maps:
     name: Generated maps fresh
     runs-on: ubuntu-latest
@@ -477,15 +501,38 @@ jobs:
         id: generator
         run: dotnet build tools/maps/Elsa.Maps.Generator -c Release -p:RestoreLockedMode=true
 
-      - name: Check generated maps against the tree
-        id: maps
+      - name: Exercise publish link rewrite contract
+        id: publish-self-test
         if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
-        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- check
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- publish-self-test
+
+      # Publishing into a scratch directory must succeed on every PR and leave the working tree untouched, so a
+      # generator change that would break the post-merge publication fails here, before it merges.
+      - name: Publish the documentation maps into a scratch directory
+        id: publish-dry-run
+        if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
+        run: |
+          dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- \
+            publish "$RUNNER_TEMP/maps" --source-commit "$GITHUB_SHA" --repo-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "::error::publish wrote into the working tree:"; git status --porcelain; exit 1
+          fi
+
+      - name: Exercise the generated-maps branch writer
+        id: branch-writer
+        if: ${{ !cancelled() }}
+        run: bash tools/maps/test-publish-generated-maps.sh
 
       - name: Exercise project facts contract
         id: project-facts
         if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
         run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- project-facts-self-test
+
+      # The one project-discovery rule the generator and the versioning calculator share (spec 259).
+      - name: Exercise project graph contract
+        id: project-graph
+        if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- project-graph-self-test
 
       - name: Exercise feature facts contract
         id: feature-facts
@@ -502,12 +549,42 @@ jobs:
         if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
         run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- solution-filters-self-test
 
-      # Cheap, container-free: a new Testcontainers project missing from tools/ci/ef-suites.json fails here on the PR,
+      # Cheap, container-free: a new Testcontainers project missing from containerSuites in tools/ci/test-tiers.json fails here on the PR,
       # instead of silently running nowhere until the nightly EF matrix notices.
       - name: Check every Testcontainers project is in the nightly EF suite manifest
         id: ef-suites-self-test
         if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
         run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- ef-suites-self-test
+
+      # Spec 263: every test project is in tools/ci/test-tiers.json exactly once; Testcontainers, or a child host in a
+      # project of 2 minutes or more, is integration tier; split classes exist and no xUnit collection is split; every unit
+      # runs in exactly one shard of its tier.
+      - name: Check the test tier manifest
+        id: test-tiers-check
+        if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- test-tiers-check
+
+      - name: Exercise test tier check contract
+        id: test-tiers-self-test
+        if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- test-tiers-self-test
+
+      - name: Explain a failed test tier check
+        if: ${{ failure() && (steps.test-tiers-check.outcome == 'failure' || steps.test-tiers-self-test.outcome == 'failure') }}
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## Test tier manifest does not match the tree
+
+          The step log names each problem. `tools/ci/test-tiers.json` must list every test project once, in the
+          `pr` or `integration` tier, and every unit in one shard of its tier. A project that reaches Testcontainers,
+          or that launches a child host and takes 2 minutes or more, is integration tier. Check locally with:
+
+          ```bash
+          dotnet run --project tools/maps/Elsa.Maps.Generator -- test-tiers-check
+          ```
+
+          The tier rule: `docs/contributing/merging.md#ci-tiers`.
+          EOF
 
       - name: Validate filters with the .NET CLI
         id: filters-cli
@@ -519,31 +596,25 @@ jobs:
             dotnet sln "$filter" list >/dev/null
           done
 
-      - name: Explain how to refresh the maps
+      - name: Explain a failed generator check
         if: >-
-          ${{ failure() && (steps.generator.outcome == 'failure' || steps.maps.outcome == 'failure'
-          || steps.project-facts.outcome == 'failure' || steps.feature-facts.outcome == 'failure') }}
+          ${{ failure() && (steps.generator.outcome == 'failure'
+          || steps.project-facts.outcome == 'failure' || steps.project-graph.outcome == 'failure'
+          || steps.feature-facts.outcome == 'failure' || steps.publish-self-test.outcome == 'failure'
+          || steps.publish-dry-run.outcome == 'failure' || steps.branch-writer.outcome == 'failure') }}
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
-          ## Generated maps are stale
+          ## Generated maps check failed
 
-          The committed maps no longer describe the tree. The failing step above lists
-          the files that would change. To fix it:
+          No map is committed: the documentation maps (spec 257) and `docs/maps/dependency-map.json`
+          (spec 259) are generated and published, never staged. The versioning calculator derives the
+          dependency map from each commit's tree with the same scan this job runs.
 
-          ```bash
-          dotnet run --project tools/maps/Elsa.Maps.Generator -- all
-          ```
-
-          If the generator refuses a lock file, the tree's dependencies changed without it: run
+          If the scan refuses a lock file, the tree's dependencies changed without it: run
           `dotnet restore Elsa.Server.slnx`, review and commit the changed `packages.lock.json`
-          files, then generate again.
-
-          Then stage every changed map file by explicit path, `docs/maps/manifest.json`
-          included. The manifest carries no per-commit provenance, so it changes only when
-          the tree did, and this check compares it like any other generated file.
-
-          If this run is on `main`, main is already stale: open a PR with the refreshed
-          maps. Review the generated findings reports before merging.
+          files, then run `dotnet run --project tools/maps/Elsa.Maps.Generator -- dependency-map` to
+          confirm the map derives. Any other failing step is a generator or `tools/maps` change to fix;
+          see `docs/contributing/generated-maps.md`.
           EOF
 
       - name: Explain how to refresh the solution filters
@@ -563,3 +634,51 @@ jobs:
 
           Commit every changed `.slnf` file together with any manifest or generator change.
           EOF
+
+  # Publishes the documentation maps for every push to main (spec 257): a build artifact of this run and a commit on
+  # the generated-maps branch, the stable home that AGENTS.md and docs/maps/README.md link to. Links into the source
+  # tree are pinned to this commit. Only this job writes that branch (the publish-state convention); ruleset
+  # generated-maps blocks its deletion and force pushes, and tools/repo-hygiene exempts it from the branch sweep.
+  #
+  # It needs no other job: the maps describe the tree whether or not its tests pass. The branch only moves forward
+  # along main (publish-generated-maps.sh skips an older commit), and a newer push supersedes a pending older one.
+  # Pushes made with GITHUB_TOKEN start no workflow run. Like generated-maps it is not among the alert job's needs:
+  # a failed publication leaves the previous set in place, and the next push to main catches the branch up.
+  publish-maps:
+    name: Publish generated maps
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    concurrency:
+      group: generated-maps
+      cancel-in-progress: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Build the generator
+        run: dotnet build tools/maps/Elsa.Maps.Generator -c Release -p:RestoreLockedMode=true
+
+      - name: Generate the documentation maps
+        run: |
+          dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- \
+            publish "$RUNNER_TEMP/maps" --source-commit "$GITHUB_SHA" --repo-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+
+      - name: Upload the maps as a build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-maps-${{ github.sha }}
+          path: ${{ runner.temp }}/maps
+          if-no-files-found: error
+
+      - name: Commit the maps to the generated-maps branch
+        run: bash tools/maps/publish-generated-maps.sh "$RUNNER_TEMP/maps" "$GITHUB_SHA"

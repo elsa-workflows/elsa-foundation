@@ -21,6 +21,7 @@ namespace Elsa.Activities.Http.IntegrationTests;
 public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
 {
     private const string BasePath = "/workflows/http/";
+    private static readonly TimeSpan TimeoutTestDeadline = TimeSpan.FromSeconds(10);
 
     private HttpEndpointHostFixture _fixture = null!;
 
@@ -60,6 +61,32 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task SyncEndpoint_StructuredBodyWithoutContentType_IsSentAsJson_AndRecordedAsStructure()
+    {
+        // Spec 256 (#3050): an object body with no content type is sent as JSON with application/json, as in Elsa 3.
+        using var body = JsonDocument.Parse("""{ "Name": "Zoë", "items": [1, 2] }""");
+        await _fixture.PublishSyncEndpointWithWriteResponseWorkflowAsync(
+            artifactId: "artifact-sync-structured",
+            path: "sync/structured",
+            method: "POST",
+            resultValueId: "sync-structured-result",
+            statusCode: 200,
+            body: body.RootElement.Clone(),
+            contentType: null);
+
+        var response = await _fixture.Client.PostAsync($"{BasePath}sync/structured",
+            new StringContent("{}", Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("""{"Name":"Zoë","items":[1,2]}""", await response.Content.ReadAsStringAsync());
+        Assert.Equal("application/json", response.Content.Headers.ContentType!.MediaType);
+
+        var artifact = await ReadArtifactForSingleRunAsync();
+        Assert.Equal(JsonValueKind.Object, artifact.GetProperty("body").ValueKind);
+        Assert.Equal("Zoë", artifact.GetProperty("body").GetProperty("Name").GetString());
+    }
+
+    [Fact]
     public async Task SyncEndpoint_SuspendsBeforeWritingResponse_DegradesTo202WithExecutionId()
     {
         // A sync endpoint whose run suspends at a mid-flow endpoint BEFORE any WriteHttpResponse. No
@@ -83,12 +110,22 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task SyncEndpoint_RequestTimeoutExceeded_Replies408_AndTheInstanceRemainsValid()
+    public Task SyncEndpoint_RequestTimeoutExceeded_Replies408_AndTheInstanceRemainsValid() =>
+        AssertTimeoutLeavesValidInstanceAsync(_fixture, TimeoutTestDeadline);
+
+    [Fact]
+    public async Task SyncEndpoint_HostDeadlineWithoutAuthoredTimeout_Replies408_AndTheInstanceRemainsValid()
     {
-        // A sync endpoint with a short RequestTimeout whose workflow stalls past it. The inline drain
-        // stalls on the timeout token; the middleware maps the OperationCanceledException to 408. The instance's
-        // durable state remains valid (the run was persisted before the stall and stays inspectable).
-        await _fixture.PublishSyncStallThenResponseWorkflowAsync(
+        await using var fixture = await HttpEndpointHostFixture.StartAsync(services =>
+            services.Configure<Elsa.Activities.Http.Options.HttpEndpointOptions>(options =>
+                options.SyncRequestTimeout = TimeoutTestDeadline));
+
+        await AssertTimeoutLeavesValidInstanceAsync(fixture, requestTimeout: null);
+    }
+
+    private static async Task AssertTimeoutLeavesValidInstanceAsync(HttpEndpointHostFixture fixture, TimeSpan? requestTimeout)
+    {
+        await fixture.PublishSyncStallThenResponseWorkflowAsync(
             artifactId: "artifact-sync-timeout",
             path: "sync/slow",
             method: "POST",
@@ -96,17 +133,17 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
             // Leave enough headroom for a cold TestServer/runtime start to commit the endpoint result before
             // cancellation reaches the deliberately long-running child. The 30-second stall still proves the
             // endpoint timeout rather than a naturally completed dispatch.
-            requestTimeout: TimeSpan.FromSeconds(2),
+            requestTimeout: requestTimeout,
             stallDuration: TimeSpan.FromSeconds(30));
 
-        var response = await _fixture.Client.PostAsync($"{BasePath}sync/slow",
+        var response = await fixture.Client.PostAsync($"{BasePath}sync/slow",
             new StringContent("""{"n":1}""", Encoding.UTF8, "application/json"));
 
         if (response.StatusCode != HttpStatusCode.RequestTimeout)
         {
-            var executions = await _fixture.Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAllAsync();
+            var executions = await fixture.Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAllAsync();
             var states = executions.Count == 1
-                ? await _fixture.Services.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(executions.Single().WorkflowExecutionId)
+                ? await fixture.Services.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(executions.Single().WorkflowExecutionId)
                 : [];
             Assert.Fail(
                 $"Expected 408, received {(int)response.StatusCode}. " +
@@ -117,7 +154,7 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
         // Durable state remains valid (review-fix strengthening): the run persisted, its state row loads, and the
         // endpoint's captured result survived the aborted wait — the instance continues per normal runtime
         // semantics rather than merely still being counted.
-        var (_, capturedResult) = await _fixture.WaitForSingleWorkflowExecutionWithResultProjectionAsync(
+        var (_, capturedResult) = await fixture.WaitForSingleWorkflowExecutionWithResultProjectionAsync(
             "Request",
             "sync-slow-result",
             TimeSpan.FromSeconds(5));

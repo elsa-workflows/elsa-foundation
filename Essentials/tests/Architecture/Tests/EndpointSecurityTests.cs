@@ -6,10 +6,13 @@ using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities;
 using Elsa.Api.Compatibility.Testing.Manifests;
 using Elsa.Api.Compatibility.Testing.Security;
+using Elsa.Connections.Api;
+using Elsa.Connections.Core.Permissions;
 using Elsa.Expressions.Api;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Workflows.Design.Api;
+using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Api.Authorization;
 using Elsa.Workflows.Runtime.Api;
@@ -77,27 +80,27 @@ public sealed class EndpointSecurityTests
         // real sources rather than a copy of them.
         var expected = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["Elsa.Workflows.Design.Api.Authorization.WorkflowDesignPermissions.Read"] = "workflow-design.read",
-            ["Elsa.Workflows.Design.Api.Authorization.WorkflowDesignPermissions.Manage"] = "workflow-design.manage",
-            ["Elsa.Activities.Design.Api.Authorization.ActivityDesignPermissions.Read"] = "activity-design.read",
-            ["Elsa.Activities.Design.Api.Authorization.ActivityDesignPermissions.Manage"] = "activity-design.manage",
-            ["Elsa.Expressions.Api.Authorization.ExpressionsPermissions.Read"] = "expressions.read",
-            ["Elsa.Workflows.Publishing.Api.Authorization.WorkflowPublishingPermissions.Read"] = "workflow-publishing.read",
-            ["Elsa.Workflows.Publishing.Api.Authorization.WorkflowPublishingPermissions.Manage"] = "workflow-publishing.manage",
-            ["Elsa.Workflows.Runtime.Api.Authorization.WorkflowRuntimePermissions.WorkflowRuntimeRead"] = "workflow-runtime.read",
-            ["Elsa.Workflows.Runtime.Api.Authorization.WorkflowRuntimePermissions.WorkflowRuntimeExecute"] = "workflow-runtime.execute",
-            ["Elsa.Workflows.Runtime.Api.Authorization.WorkflowRuntimePermissions.WorkflowRuntimeManage"] = "workflow-runtime.manage",
-            ["Elsa.Api.Capabilities.Authorization.ApiCapabilitiesPermissions.Read"] = "api-capabilities.read",
-            ["Elsa3.Activities.Design.Import.Endpoints.Elsa3ImportPermissions.Read"] = "elsa3-import.read",
-            ["Elsa3.Activities.Design.Import.Endpoints.Elsa3ImportPermissions.Manage"] = "elsa3-import.manage",
-            ["Elsa.Activities.Bpmn.Interchange.Endpoints.BpmnInterchangePermissions.Read"] = "bpmn-interchange.read",
-            ["Elsa.Activities.Bpmn.Interchange.Endpoints.BpmnInterchangePermissions.Manage"] = "bpmn-interchange.manage"
+            ["Elsa.Workflows.Design.Api.Authorization.WorkflowDesignPermissions.Read"] = "workflows/design:read",
+            ["Elsa.Workflows.Design.Api.Authorization.WorkflowDesignPermissions.Manage"] = "workflows/design:manage",
+            ["Elsa.Activities.Design.Api.Authorization.ActivityDesignPermissions.Read"] = "activities/design:read",
+            ["Elsa.Activities.Design.Api.Authorization.ActivityDesignPermissions.Manage"] = "activities/design:manage",
+            ["Elsa.Expressions.Api.Authorization.ExpressionsPermissions.Read"] = "expressions:read",
+            ["Elsa.Workflows.Publishing.Api.Authorization.WorkflowPublishingPermissions.Read"] = "workflows/publishing:read",
+            ["Elsa.Workflows.Publishing.Api.Authorization.WorkflowPublishingPermissions.Manage"] = "workflows/publishing:manage",
+            ["Elsa.Workflows.Runtime.Api.Authorization.WorkflowRuntimePermissions.WorkflowRuntimeRead"] = "workflows/runtime:read",
+            ["Elsa.Workflows.Runtime.Api.Authorization.WorkflowRuntimePermissions.WorkflowRuntimeExecute"] = "workflows/runtime:execute",
+            ["Elsa.Workflows.Runtime.Api.Authorization.WorkflowRuntimePermissions.WorkflowRuntimeManage"] = "workflows/runtime:manage",
+            ["Elsa.Api.Capabilities.Authorization.ApiCapabilitiesPermissions.Read"] = "api-capabilities:read",
+            ["Elsa3.Activities.Design.Import.Endpoints.Elsa3ImportPermissions.Read"] = "elsa3-import:read",
+            ["Elsa3.Activities.Design.Import.Endpoints.Elsa3ImportPermissions.Manage"] = "elsa3-import:manage",
+            ["Elsa.Activities.Bpmn.Interchange.Endpoints.BpmnInterchangePermissions.Read"] = "bpmn-interchange:read",
+            ["Elsa.Activities.Bpmn.Interchange.Endpoints.BpmnInterchangePermissions.Manage"] = "bpmn-interchange:manage"
         };
         var actual = expected.Keys.ToDictionary(key => key, ReadDeclaredPermission, StringComparer.Ordinal);
 
         Assert.Equal(expected.OrderBy(x => x.Key), actual.OrderBy(x => x.Key));
         Assert.Equal(actual.Count, actual.Values.Distinct(StringComparer.Ordinal).Count());
-        Assert.All(actual.Values, value => Assert.Matches("^[a-z][a-z0-9-]*\\.(read|manage|execute)$", value));
+        Assert.All(actual.Values, value => Assert.Matches("^[a-z][a-z0-9-]*(/[a-z][a-z0-9-]*)*:(read|manage|execute)$", value));
         Assert.NotEqual(
             actual["Elsa.Api.Capabilities.Authorization.ApiCapabilitiesPermissions.Read"],
             actual["Elsa.Workflows.Design.Api.Authorization.WorkflowDesignPermissions.Read"]);
@@ -195,14 +198,14 @@ public sealed class EndpointSecurityTests
     }
 
     [Fact]
-    public void Publishing_minimal_api_declares_23_owned_secure_routes_with_one_catalog_action_each()
+    public void Publishing_minimal_api_declares_28_owned_secure_routes_with_one_catalog_action_each()
     {
         using var serviceProvider = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(serviceProvider);
         WorkflowsPublishingApi.MapWorkflowsPublishingApi(routes);
         var endpoints = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
 
-        Assert.Equal(23, endpoints.Length);
+        Assert.Equal(28, endpoints.Length);
         foreach (var endpoint in endpoints)
         {
             var authorization = Assert.Single(endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>());
@@ -232,6 +235,45 @@ public sealed class EndpointSecurityTests
             Assert.Equal(PermissionPolicyParseStatus.Valid, dispositionPolicy.Status);
             Assert.Equal([permission], dispositionPolicy.Descriptor!.Permissions);
         }
+    }
+
+    [Fact]
+    public void Connections_minimal_api_lists_under_workflow_design_read_or_connections_manage_and_administers_under_its_own_rights()
+    {
+        // Connections does not reference the Workflow Design API, so it names that domain's read permission itself.
+        // This compares against the owner's declaration, which keeps the mirrored name honest.
+        string[] listing = [WorkflowDesignPermissions.Read, ConnectionsPermissions.Manage];
+        var expected = new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["GET /connections"] = listing,
+            ["GET /connections/descriptors"] = listing,
+            ["POST /connections/picker"] = listing,
+            ["GET /connections/{name}"] = listing,
+            ["POST /connections"] = [ConnectionsPermissions.Manage],
+            ["PUT /connections/{name}"] = [ConnectionsPermissions.Manage],
+            ["DELETE /connections/{name}"] = [ConnectionsPermissions.Manage],
+            ["POST /connections/{name}/revoke"] = [ConnectionsPermissions.Manage],
+            ["GET /connections/{name}/oauth-redirect-uri"] = [ConnectionsPermissions.Manage],
+            ["POST /connections/{name}/test"] = [ConnectionsPermissions.Test]
+        };
+        using var serviceProvider = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
+        var routes = new TestEndpointRouteBuilder(serviceProvider);
+        ConnectionsApi.MapConnectionsApi(routes);
+
+        var actual = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>()
+            .Where(endpoint => endpoint.Metadata.GetMetadata<IAllowAnonymous>() is null)
+            .ToDictionary(
+                endpoint => $"{endpoint.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods.Single()} {endpoint.RoutePattern.RawText}",
+                endpoint => new PermissionPolicyCodec()
+                    .Parse(Assert.Single(endpoint.Metadata.GetOrderedMetadata<EndpointSecurityDispositionMetadata>()).Value!)
+                    .Descriptor!.Permissions.Order(StringComparer.Ordinal).ToArray(),
+                StringComparer.Ordinal);
+
+        Assert.Equal(expected.Keys.Order(StringComparer.Ordinal), actual.Keys.Order(StringComparer.Ordinal));
+        foreach (var (route, permissions) in expected)
+            Assert.True(
+                permissions.Select(PermissionKey.Normalize).Append(PermissionKey.Wildcard).Order(StringComparer.Ordinal).SequenceEqual(actual[route]),
+                $"{route} accepts [{string.Join(", ", actual[route])}], not [{string.Join(", ", permissions)}].");
     }
 
     [Fact]

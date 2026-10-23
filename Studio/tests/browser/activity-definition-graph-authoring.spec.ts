@@ -30,8 +30,22 @@ test("Activity Definition graph authoring shares the designer without workflow l
   await create.getByRole("textbox", { name: "Display name" }).fill("Payment decision");
   const category = create.getByRole("combobox", { name: "Category" });
   await category.fill("Financial controls");
-  await expect(create.getByRole("radio", { name: /Flowchart/ })).toBeChecked();
-  await create.getByRole("radio", { name: /Sequence/ }).check({ force: true });
+  const flowchartRadio = create.getByRole("radio", { name: "Flowchart" });
+  const sequenceRadio = create.getByRole("radio", { name: "Sequence" });
+  const rootCardFor = (radio: typeof flowchartRadio) => radio.locator("xpath=ancestor::label[contains(concat(' ', normalize-space(@class), ' '), ' wf-root-card ')]");
+  const flowchartCard = rootCardFor(flowchartRadio);
+  const sequenceCard = rootCardFor(sequenceRadio);
+  const cardBackground = (card: typeof flowchartCard) => card.evaluate(async element => {
+    await Promise.all(element.getAnimations().map(animation => animation.finished));
+    return getComputedStyle(element).backgroundColor;
+  });
+  await expect(flowchartRadio).toBeEnabled();
+  await expect(sequenceRadio).toBeEnabled();
+  await expect(flowchartRadio).toBeChecked();
+  expect(await cardBackground(flowchartCard)).not.toBe(await cardBackground(sequenceCard));
+  await sequenceCard.click();
+  await expect(sequenceRadio).toBeChecked();
+  expect(await cardBackground(sequenceCard)).not.toBe(await cardBackground(flowchartCard));
   await create.getByRole("button", { name: "Create definition" }).click();
   await expect(page.getByText("Created Payment decision.")).toBeVisible();
   expect(requests).toHaveLength(1);
@@ -51,15 +65,15 @@ test("Activity Definition graph authoring shares the designer without workflow l
   });
 
   await page.getByRole("tab", { name: "Public Interface" }).click();
-  await expect(page.getByRole("tabpanel", { name: "Public Interface" })).toContainText("Several sources may converge on one public outcome");
-  const source = page.getByRole("combobox", { name: "Root outcome reference key" });
-  const target = page.getByRole("combobox", { name: "Boundary outcome reference key" });
+  await expect(page.getByRole("tabpanel", { name: "Public Interface" })).toContainText("Choose the activity outcome for each way the designer can finish.");
+  const source = page.getByRole("combobox", { name: "Designer outcome" });
+  const target = page.getByRole("combobox", { name: "Activity outcome" });
   await source.selectOption("completed");
   await target.selectOption("accepted");
-  await page.getByRole("button", { name: "Add mapping" }).click();
+  await page.getByRole("button", { name: "Connect", exact: true }).click();
   await source.selectOption("faulted");
   await target.selectOption("accepted");
-  await page.getByRole("button", { name: "Add mapping" }).click();
+  await page.getByRole("button", { name: "Connect", exact: true }).click();
   await expect(page.getByText("Completed → Accepted")).toBeVisible();
   await expect(page.getByText("Faulted → Accepted")).toBeVisible();
 
@@ -83,6 +97,7 @@ test("Activity Definition graph authoring shares the designer without workflow l
 
   await page.getByRole("button", { name: "Preview legacy schema" }).click();
   await page.getByRole("tab", { name: "Public Interface" }).click();
+  await page.getByText("Compatibility details", { exact: true }).click();
   await expect(page.getByText(/Schema 1 retains its historical single/)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Add mapping" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Connect", exact: true })).toHaveCount(0);
 });

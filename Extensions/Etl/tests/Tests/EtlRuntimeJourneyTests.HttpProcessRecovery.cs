@@ -1,0 +1,537 @@
+using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
+using Elsa.Etl.Core;
+using Elsa.Etl.Core.Runtime;
+using Elsa.Etl.Persistence.EntityFrameworkCore;
+using Elsa.Etl.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Etl.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Etl.Runtime;
+using Elsa.Etl.Runtime.Hosting;
+using Elsa.Etl.Runtime.Http;
+using Elsa.Etl.Tests.Support;
+using Elsa.Persistence.EntityFramework;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+
+namespace Elsa.Etl.Tests;
+
+public sealed partial class EtlRuntimeJourneyTests
+{
+    private const string ProcessHttpPage = "{\"records\":[{\"id\":1,\"name\":\"Ada\"},{\"id\":99,\"name\":\"unknown\"}],\"next\":null}";
+
+    [Theory]
+    [InlineData("BeforeCapture")]
+    [InlineData("AfterReservation")]
+    [InlineData("AfterMainAcknowledgement")]
+    [InlineData("AfterErrorAcknowledgement")]
+    [InlineData("BeforeAcceptance")]
+    public async Task Two_http_worker_processes_recover_each_durable_boundary(string boundaryName)
+    {
+        var boundary = Enum.Parse<EtlConnectorWorkerGate>(boundaryName);
+        await using var files = new RuntimeFiles("id,name\n");
+        await using var endpoint = await EtlHttpLoopbackServer.StartAsync((request, _) =>
+            ValueTask.FromResult(new EtlHttpLoopbackResponse(request.Method == "GET" ? 200 : 204,
+                request.Method == "GET" ? ProcessHttpPage : "")));
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        var (host, invocation, bindings) = await PrepareHttpProcessRunAsync(files, endpoint, deadline.Token);
+        var predecessor = await files.StartWorkerAsync("http-predecessor", deadline.Token,
+            httpBindings: bindings, connectorGate: boundary);
+        var stopped = await predecessor.WaitForConnectorCheckpointAsync(deadline.Token);
+        Assert.Equal(boundary, stopped.Gate);
+        Assert.Equal(predecessor.ProcessId, stopped.ProcessId);
+        Assert.NotEqual(Environment.ProcessId, stopped.ProcessId);
+        var before = await ReadHttpProcessStateAsync(host.Services, deadline.Token);
+        Assert.Equal(0, before.Run.AcceptedRecords);
+        Assert.Equal(0, before.Run.RejectedRecords);
+        Assert.False(before.Partition.Completed);
+        Assert.Equal(boundary == EtlConnectorWorkerGate.BeforeCapture ? 0 : 2, before.Run.OutstandingRecords);
+        Assert.Equal(boundary == EtlConnectorWorkerGate.BeforeCapture, before.Batch is null);
+        var expectedPosts = boundary switch
+        {
+            EtlConnectorWorkerGate.AfterMainAcknowledgement => 1,
+            EtlConnectorWorkerGate.AfterErrorAcknowledgement or EtlConnectorWorkerGate.BeforeAcceptance => 2,
+            _ => 0
+        };
+        Assert.Equal(expectedPosts, endpoint.Requests.Count(request => request.Method == "POST"));
+        var cached = await ReadProcessPageAsync(host.Services, files, invocation, deadline.Token);
+        Assert.Equal(Encoding.UTF8.GetBytes(ProcessHttpPage), cached.RawBody.ToArray());
+        if (boundary == EtlConnectorWorkerGate.BeforeCapture)
+        {
+            Assert.Equal(stopped.Page, cached.Descriptor);
+            Assert.Null(before.Page);
+            Assert.Null(Assert.IsType<EtlConnectorHttpPosition>(stopped.Lease.Position).Page);
+            var fetch = EtlConnectorRecordCodec.Read<EtlConnectorHttpSourceFetch>(before.Request.FetchJson!);
+            Assert.Equal(EtlConnectorHttpSourceFetchPhase.InFlight, fetch.Phase);
+            Assert.Null(fetch.Capture); // The manifest exists, but no SQL capture receipt has committed.
+            Assert.Equal(cached.Provenance.AttemptId, Assert.Single(fetch.Attempts).Attempt.RequestId);
+        }
+        else
+        {
+            Assert.NotNull(before.Page);
+            Assert.Equal(before.Batch!.BatchId, stopped.BatchId);
+            Assert.False(before.Batch.Settled);
+            if (boundary == EtlConnectorWorkerGate.AfterReservation)
+            {
+                Assert.Null(before.Batch.OutputJson);
+                Assert.Null(before.Batch.HttpDeliveryJson);
+            }
+            if (expectedPosts > 0)
+            {
+                var acknowledgements = EtlConnectorRecordCodec.Read<EtlConnectorHttpDeliveries>(before.Batch.HttpDeliveryJson!);
+                Assert.Equal(EtlHttpDeliveryPhase.Acknowledged, acknowledgements.Main!.Phase);
+                if (expectedPosts == 2)
+                    Assert.Equal(EtlHttpDeliveryPhase.Acknowledged, acknowledgements.Errors!.Phase);
+                else
+                    Assert.Null(acknowledgements.Errors);
+            }
+        }
+
+        await predecessor.CrashAsync();
+        Assert.True(predecessor.HasExited);
+        var survivor = await files.StartWorkerAsync("http-survivor", deadline.Token,
+            httpBindings: bindings, connectorGate: EtlConnectorWorkerGate.BeforeAcceptance);
+        var recovered = await survivor.WaitForConnectorCheckpointAsync(deadline.Token);
+        AssertReplacementWorker(stopped, recovered, survivor);
+        var pending = await ReadHttpProcessStateAsync(host.Services, deadline.Token);
+        Assert.Equal(2, pending.Run.OutstandingRecords);
+        Assert.Equal(0, pending.Run.AcceptedRecords);
+        Assert.Equal(0, pending.Run.RejectedRecords);
+        Assert.False(pending.Batch!.Settled);
+        var recoveredPage = await ReadProcessPageAsync(host.Services, files, invocation, deadline.Token);
+        Assert.Equal(cached.Descriptor, recoveredPage.Descriptor);
+        Assert.Equal(cached.Provenance, recoveredPage.Provenance);
+        if (before.Batch is not null)
+        {
+            Assert.Equal(before.Batch.DescriptorJson, pending.Batch.DescriptorJson);
+            Assert.Equal(before.Batch.DescriptorDigest, pending.Batch.DescriptorDigest);
+            Assert.Equal(before.Run.OutstandingBytes, pending.Run.OutstandingBytes);
+            if (before.Batch.OutputJson is not null)
+            {
+                Assert.Equal(before.Batch.OutputJson, pending.Batch.OutputJson);
+                Assert.Equal(before.Batch.OutputDigest, pending.Batch.OutputDigest);
+            }
+        }
+        // Acknowledged routes are skipped by the survivor; the page is never fetched a second time.
+        Assert.Single(endpoint.Requests, request => request.Method == "GET");
+        Assert.Single(endpoint.Requests, request => request.Method == "POST" && request.RawTarget == "/output");
+        Assert.Single(endpoint.Requests, request => request.Method == "POST" && request.RawTarget == "/errors");
+        AssertRecordedRequestsMatchRetainedOutput(endpoint, pending.Batch);
+        await survivor.ReleaseAsync(deadline.Token);
+        await AssertHttpProcessTerminalAsync(files, host, invocation, deadline.Token);
+    }
+
+    [Fact]
+    public async Task Two_http_worker_processes_retry_error_route_after_main_ack_without_early_dispatch_or_double_accounting()
+    {
+        var errorRequests = 0;
+        var errorRequestTimes = new ConcurrentQueue<DateTimeOffset>();
+        await using var files = new RuntimeFiles("id,name\n");
+        await using var endpoint = await EtlHttpLoopbackServer.StartAsync((request, _) =>
+        {
+            if (request.Method == "GET")
+                return ValueTask.FromResult(new EtlHttpLoopbackResponse(200, ProcessHttpPage));
+            if (request.RawTarget == "/output")
+                return ValueTask.FromResult(new EtlHttpLoopbackResponse(204, ""));
+            if (request.RawTarget == "/errors")
+            {
+                errorRequestTimes.Enqueue(DateTimeOffset.UtcNow);
+                var status = Interlocked.Increment(ref errorRequests) == 1 ? 429 : 204;
+                var headers = status == 429
+                    ? new Dictionary<string, string> { ["Retry-After"] = "10" }
+                    : null;
+                return ValueTask.FromResult(new EtlHttpLoopbackResponse(status, "", headers));
+            }
+            throw new InvalidOperationException("Unexpected connector request.");
+        });
+
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        var (host, invocation, bindings) = await PrepareHttpProcessRunAsync(files, endpoint, deadline.Token);
+        var predecessor = await files.StartWorkerAsync("error-retry-predecessor", deadline.Token, httpBindings: bindings);
+
+        HttpProcessState waiting;
+        EtlConnectorHttpDeliveries deliveries;
+        while (errorRequestTimes.IsEmpty)
+            await Task.Delay(TimeSpan.FromMilliseconds(25), deadline.Token);
+        while (true)
+        {
+            waiting = await ReadHttpProcessStateAsync(host.Services, deadline.Token);
+            if (waiting.Batch?.HttpDeliveryJson is { } deliveryJson && endpoint.Requests.Any(request => request.RawTarget == "/errors"))
+            {
+                deliveries = EtlConnectorRecordCodec.Read<EtlConnectorHttpDeliveries>(deliveryJson);
+                if (deliveries.Errors?.Phase == EtlHttpDeliveryPhase.Waiting && waiting.Partition.Owner is null)
+                    break;
+            }
+            await Task.Delay(TimeSpan.FromMilliseconds(25), deadline.Token);
+        }
+
+        var main = Assert.IsType<EtlConnectorHttpDelivery>(deliveries.Main);
+        var errors = Assert.IsType<EtlConnectorHttpDelivery>(deliveries.Errors);
+        var waitingBatch = Assert.IsType<EtlConnectorBatchRecord>(waiting.Batch);
+        Assert.Equal(EtlHttpDeliveryPhase.Acknowledged, main.Phase);
+        Assert.Equal(204, Assert.Single(main.Attempts).Response!.StatusCode);
+        Assert.Equal(EtlHttpDeliveryPhase.Waiting, errors.Phase);
+        Assert.Equal(429, Assert.Single(errors.Attempts).Response!.StatusCode);
+        Assert.Null(waiting.Partition.Owner);
+        Assert.Equal(2, waiting.Run.OutstandingRecords);
+        Assert.True(waiting.Run.OutstandingBytes > 0);
+        Assert.False(waitingBatch.Settled);
+        Assert.Equal(0, waiting.Run.AcceptedRecords);
+        Assert.Equal(0, waiting.Run.RejectedRecords);
+        Assert.Single(endpoint.Requests, request => request.Method == "GET");
+        Assert.Single(endpoint.Requests, request => request.RawTarget == "/output");
+        Assert.Single(endpoint.Requests, request => request.RawTarget == "/errors");
+
+        var notBefore = Assert.IsType<DateTimeOffset>(errors.NotBefore);
+        await predecessor.CrashAsync();
+        Assert.True(predecessor.HasExited);
+
+        var successor = await files.StartWorkerAsync("error-retry-successor", deadline.Token,
+            httpBindings: bindings, connectorGate: EtlConnectorWorkerGate.BeforeAcceptance);
+        var remaining = notBefore - DateTimeOffset.UtcNow - TimeSpan.FromSeconds(1);
+        Assert.True(remaining > TimeSpan.Zero,
+            "The successor must start while the persisted error-route retry is still delayed.");
+        await Task.Delay(remaining, deadline.Token);
+        Assert.True(DateTimeOffset.UtcNow < notBefore);
+        Assert.Single(endpoint.Requests, request => request.RawTarget == "/output");
+        Assert.Single(endpoint.Requests, request => request.RawTarget == "/errors");
+
+        var recovered = await successor.WaitForConnectorCheckpointAsync(deadline.Token);
+        Assert.Equal(EtlConnectorWorkerGate.BeforeAcceptance, recovered.Gate);
+        Assert.Equal(successor.ProcessId, recovered.ProcessId);
+        Assert.NotEqual(predecessor.ProcessId, recovered.ProcessId);
+        Assert.NotEqual(Environment.ProcessId, recovered.ProcessId);
+        Assert.True(recovered.Lease.Fence > waiting.Partition.Fence);
+        Assert.Equal(waiting.Partition.PartitionOrdinal, recovered.Lease.PartitionOrdinal);
+        Assert.Equal(waitingBatch.BatchId, recovered.BatchId);
+
+        var pending = await ReadHttpProcessStateAsync(host.Services, deadline.Token);
+        var pendingBatch = Assert.IsType<EtlConnectorBatchRecord>(pending.Batch);
+        var retried = EtlConnectorRecordCodec.Read<EtlConnectorHttpDeliveries>(pendingBatch.HttpDeliveryJson!);
+        var retriedMain = Assert.IsType<EtlConnectorHttpDelivery>(retried.Main);
+        var retriedErrors = Assert.IsType<EtlConnectorHttpDelivery>(retried.Errors);
+        Assert.Equal(EtlHttpDeliveryPhase.Acknowledged, retriedMain.Phase);
+        Assert.Single(retriedMain.Attempts);
+        Assert.Equal(204, retriedMain.Attempts[0].Response!.StatusCode);
+        Assert.Equal(EtlHttpDeliveryPhase.Acknowledged, retriedErrors.Phase);
+        Assert.Equal(2, retriedErrors.Attempts.Count);
+        Assert.Equal(429, retriedErrors.Attempts[0].Response!.StatusCode);
+        Assert.Equal(204, retriedErrors.Attempts[1].Response!.StatusCode);
+        Assert.Equal(retriedErrors.Attempts[0].Attempt.EffectId, retriedErrors.Attempts[1].Attempt.EffectId);
+        Assert.NotEqual(retriedErrors.Attempts[0].Attempt.RequestId, retriedErrors.Attempts[1].Attempt.RequestId);
+        Assert.True(retriedErrors.Attempts[1].Attempt.StartedAt >= notBefore);
+        Assert.True(errorRequestTimes.ToArray()[1] >= notBefore);
+        Assert.Equal(2, pending.Run.OutstandingRecords);
+        Assert.Equal(waiting.Run.OutstandingBytes, pending.Run.OutstandingBytes);
+        Assert.Equal(0, pending.Run.AcceptedRecords);
+        Assert.Equal(0, pending.Run.RejectedRecords);
+        Assert.False(pendingBatch.Settled);
+        Assert.Equal(waitingBatch.OutputJson, pendingBatch.OutputJson);
+        Assert.Equal(waitingBatch.OutputDigest, pendingBatch.OutputDigest);
+        Assert.Single(endpoint.Requests, request => request.Method == "GET");
+        Assert.Single(endpoint.Requests, request => request.RawTarget == "/output");
+        Assert.Equal(2, endpoint.Requests.Count(request => request.RawTarget == "/errors"));
+        AssertRecordedRequestsMatchRetainedOutput(endpoint, pendingBatch);
+
+        await successor.ReleaseAsync(deadline.Token);
+        await AssertHttpProcessTerminalAsync(files, host, invocation, deadline.Token);
+        Assert.Single(endpoint.Requests, request => request.RawTarget == "/output");
+        Assert.Equal(2, endpoint.Requests.Count(request => request.RawTarget == "/errors"));
+    }
+
+    [Fact]
+    public async Task Two_http_worker_processes_honor_source_retry_after_before_capturing_the_page()
+    {
+        var sourceRequests = 0;
+        var sourceResponses = new ConcurrentQueue<(DateTimeOffset At, int Status)>();
+        await using var files = new RuntimeFiles("id,name\n");
+        await using var endpoint = await EtlHttpLoopbackServer.StartAsync((request, _) =>
+        {
+            if (request.Method == "GET")
+            {
+                var status = Interlocked.Increment(ref sourceRequests) == 1 ? 429 : 200;
+                var at = DateTimeOffset.UtcNow;
+                sourceResponses.Enqueue((at, status));
+                var headers = status == 429
+                    ? new Dictionary<string, string> { ["Retry-After"] = "10" }
+                    : null;
+                return ValueTask.FromResult(new EtlHttpLoopbackResponse(status,
+                    status == 200 ? ProcessHttpPage : "", headers));
+            }
+            if (request.RawTarget is "/output" or "/errors")
+                return ValueTask.FromResult(new EtlHttpLoopbackResponse(204, ""));
+            throw new InvalidOperationException("Unexpected connector request.");
+        });
+
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        var (host, invocation, bindings) = await PrepareHttpProcessRunAsync(files, endpoint, deadline.Token);
+        var predecessor = await files.StartWorkerAsync("source-retry-predecessor", deadline.Token, httpBindings: bindings);
+
+        HttpProcessState waiting;
+        EtlConnectorHttpSourceFetch fetch;
+        while (sourceResponses.IsEmpty)
+            await Task.Delay(TimeSpan.FromMilliseconds(25), deadline.Token);
+        while (true)
+        {
+            waiting = await ReadHttpProcessStateAsync(host.Services, deadline.Token);
+            if (waiting.Request.FetchJson is { } fetchJson && sourceRequests > 0)
+            {
+                fetch = EtlConnectorRecordCodec.Read<EtlConnectorHttpSourceFetch>(fetchJson);
+                if (fetch.Phase == EtlConnectorHttpSourceFetchPhase.Waiting && waiting.Partition.Owner is null)
+                    break;
+            }
+            await Task.Delay(TimeSpan.FromMilliseconds(25), deadline.Token);
+        }
+
+        Assert.Null(waiting.Partition.Owner);
+        Assert.Null(waiting.Page);
+        Assert.Null(waiting.Batch);
+        Assert.Equal(0, waiting.Run.OutstandingRecords);
+        Assert.Equal(0, waiting.Run.AcceptedRecords);
+        Assert.Equal(0, waiting.Run.RejectedRecords);
+        var firstAttempt = Assert.Single(fetch.Attempts);
+        Assert.Equal(429, firstAttempt.Outcome!.StatusCode);
+        Assert.Equal(429, Assert.Single(sourceResponses).Status);
+        Assert.Single(endpoint.Requests, request => request.Method == "GET");
+        Assert.DoesNotContain(endpoint.Requests, request => request.Method == "POST");
+        var notBefore = Assert.IsType<DateTimeOffset>(fetch.NotBefore);
+
+        await predecessor.CrashAsync();
+        Assert.True(predecessor.HasExited);
+        var successor = await files.StartWorkerAsync("source-retry-successor", deadline.Token,
+            httpBindings: bindings, connectorGate: EtlConnectorWorkerGate.BeforeAcceptance);
+        var remaining = notBefore - DateTimeOffset.UtcNow - TimeSpan.FromSeconds(1);
+        Assert.True(remaining > TimeSpan.Zero,
+            "The successor must start while the persisted source retry is still delayed.");
+        await Task.Delay(remaining, deadline.Token);
+        Assert.True(DateTimeOffset.UtcNow < notBefore);
+        Assert.Single(endpoint.Requests, request => request.Method == "GET");
+        Assert.DoesNotContain(endpoint.Requests, request => request.Method == "POST");
+
+        var recovered = await successor.WaitForConnectorCheckpointAsync(deadline.Token);
+        Assert.Equal(EtlConnectorWorkerGate.BeforeAcceptance, recovered.Gate);
+        Assert.Equal(successor.ProcessId, recovered.ProcessId);
+        Assert.NotEqual(predecessor.ProcessId, recovered.ProcessId);
+        Assert.NotEqual(Environment.ProcessId, recovered.ProcessId);
+        Assert.True(recovered.Lease.Fence > waiting.Partition.Fence);
+        Assert.Equal(waiting.Partition.PartitionOrdinal, recovered.Lease.PartitionOrdinal);
+
+        var pending = await ReadHttpProcessStateAsync(host.Services, deadline.Token);
+        var pendingBatch = Assert.IsType<EtlConnectorBatchRecord>(pending.Batch);
+        var captured = EtlConnectorRecordCodec.Read<EtlConnectorHttpSourceFetch>(pending.Request.FetchJson!);
+        Assert.Equal(EtlConnectorHttpSourceFetchPhase.Captured, captured.Phase);
+        Assert.Equal(2, captured.Attempts.Count);
+        Assert.Equal(429, captured.Attempts[0].Outcome!.StatusCode);
+        Assert.Null(captured.Attempts[1].Outcome);
+        Assert.All(captured.Attempts, attempt => Assert.Equal(captured.RequestHash, attempt.Attempt.RequestHash));
+        Assert.NotEqual(captured.Attempts[0].Attempt.RequestId, captured.Attempts[1].Attempt.RequestId);
+        Assert.Equal(captured.Attempts[1].Attempt.RequestId, captured.Capture!.RequestId);
+        Assert.Equal(captured.Attempts[1].Attempt.Fence, captured.Capture.Fence);
+        Assert.Equal(captured.Attempts[1].Attempt.Fence, recovered.Lease.Fence);
+        Assert.True(captured.Attempts[1].Attempt.StartedAt >= notBefore);
+        Assert.True(captured.Capture.ResponseReceivedAtUtc >= captured.Attempts[1].Attempt.StartedAt);
+        Assert.True(captured.Capture.ResponseReceivedAtUtc < captured.Attempts[1].Attempt.ExpiresAt);
+        Assert.True(captured.Capture.ResponseReceivedAtUtc < captured.Deadline);
+        Assert.Equal(2, sourceResponses.Count);
+        Assert.Equal(429, sourceResponses.ToArray()[0].Status);
+        Assert.Equal(200, sourceResponses.ToArray()[1].Status);
+        Assert.True(sourceResponses.ToArray()[1].At >= notBefore);
+        var cached = await ReadProcessPageAsync(host.Services, files, invocation, deadline.Token);
+        Assert.Equal(Encoding.UTF8.GetBytes(ProcessHttpPage), cached.RawBody.ToArray());
+        Assert.Equal(captured.Capture.Page,
+            EtlConnectorRecordCodec.Read<EtlRetainedHttpPage>(pending.Page!.PageJson!));
+        Assert.Equal(captured.Capture.Page, cached.Descriptor);
+        Assert.Equal(captured.Capture.RequestId, cached.Provenance.AttemptId);
+        Assert.Equal(captured.Capture.Fence, cached.Provenance.Fence);
+        Assert.Equal(captured.Capture.ResponseReceivedAtUtc, cached.Provenance.ResponseReceivedAtUtc);
+        Assert.Equal(2, pending.Run.OutstandingRecords);
+        Assert.True(pending.Run.OutstandingBytes > 0);
+        Assert.Equal(0, pending.Run.AcceptedRecords);
+        Assert.Equal(0, pending.Run.RejectedRecords);
+        Assert.False(pendingBatch.Settled);
+        var deliveries = EtlConnectorRecordCodec.Read<EtlConnectorHttpDeliveries>(pendingBatch.HttpDeliveryJson!);
+        Assert.Equal(EtlHttpDeliveryPhase.Acknowledged, deliveries.Main!.Phase);
+        Assert.Equal(EtlHttpDeliveryPhase.Acknowledged, deliveries.Errors!.Phase);
+        Assert.Equal(2, endpoint.Requests.Count(request => request.Method == "GET"));
+        Assert.Single(endpoint.Requests, request => request.RawTarget == "/output");
+        Assert.Single(endpoint.Requests, request => request.RawTarget == "/errors");
+        AssertRecordedRequestsMatchRetainedOutput(endpoint, pendingBatch);
+
+        await successor.ReleaseAsync(deadline.Token);
+        await AssertHttpProcessTerminalAsync(files, host, invocation, deadline.Token);
+        Assert.Equal(2, endpoint.Requests.Count(request => request.Method == "GET"));
+        Assert.Single(endpoint.Requests, request => request.RawTarget == "/output");
+        Assert.Single(endpoint.Requests, request => request.RawTarget == "/errors");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Two_http_worker_processes_replay_a_lost_response_with_stable_body_and_effect(bool deduplicatingReceiver)
+    {
+        await using var files = new RuntimeFiles("id,name\n");
+        var observed = new TaskCompletionSource<EtlHttpLoopbackRequest>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseResponse = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var appliedEffects = new ConcurrentDictionary<string, int>(StringComparer.Ordinal);
+        var mainRequests = 0;
+        await using var endpoint = await EtlHttpLoopbackServer.StartAsync(async (request, token) =>
+        {
+            if (request.Method == "GET") return new(200, ProcessHttpPage);
+            var key = request.Headers["Idempotency-Key"];
+            appliedEffects.AddOrUpdate(key, 1, (_, count) => deduplicatingReceiver ? count : count + 1);
+            if (request.RawTarget == "/output" && Interlocked.Increment(ref mainRequests) == 1)
+            {
+                observed.TrySetResult(request);
+                // The receiver applied the effect, but the worker never receives this response.
+                await releaseResponse.Task.WaitAsync(token);
+            }
+            return new(204, "");
+        });
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        var (host, invocation, bindings) = await PrepareHttpProcessRunAsync(files, endpoint, deadline.Token);
+        var predecessor = await files.StartWorkerAsync("lost-response-predecessor", deadline.Token, httpBindings: bindings);
+        var firstRequest = await observed.Task.WaitAsync(deadline.Token);
+        var before = await ReadHttpProcessStateAsync(host.Services, deadline.Token);
+        var firstDelivery = EtlConnectorRecordCodec.Read<EtlConnectorHttpDeliveries>(before.Batch!.HttpDeliveryJson!);
+        Assert.Equal(EtlHttpDeliveryPhase.InFlight, firstDelivery.Main!.Phase);
+        Assert.Null(firstDelivery.Main.Attempts[0].Response);
+        Assert.Equal(2, before.Run.OutstandingRecords);
+        Assert.False(before.Batch.Settled);
+        AssertRecordedRequestsMatchRetainedOutput(endpoint, before.Batch);
+        await predecessor.CrashAsync();
+        Assert.True(predecessor.HasExited);
+        releaseResponse.TrySetResult();
+
+        var survivor = await files.StartWorkerAsync("lost-response-survivor", deadline.Token,
+            httpBindings: bindings, connectorGate: EtlConnectorWorkerGate.BeforeAcceptance);
+        var recovered = await survivor.WaitForConnectorCheckpointAsync(deadline.Token);
+        Assert.Equal(survivor.ProcessId, recovered.ProcessId);
+        Assert.NotEqual(predecessor.ProcessId, recovered.ProcessId);
+        Assert.NotEqual(Environment.ProcessId, recovered.ProcessId);
+        Assert.True(recovered.Lease.Fence > before.Partition.Fence);
+        var pending = await ReadHttpProcessStateAsync(host.Services, deadline.Token);
+        Assert.Equal(before.Batch.DescriptorJson, pending.Batch!.DescriptorJson);
+        Assert.Equal(before.Batch.OutputJson, pending.Batch.OutputJson);
+        Assert.Equal(before.Batch.OutputDigest, pending.Batch.OutputDigest);
+        Assert.Equal(before.Run.OutstandingRecords, pending.Run.OutstandingRecords);
+        Assert.Equal(before.Run.OutstandingBytes, pending.Run.OutstandingBytes);
+        Assert.False(pending.Batch.Settled);
+        var attempts = EtlConnectorRecordCodec.Read<EtlConnectorHttpDeliveries>(pending.Batch.HttpDeliveryJson!).Main!;
+        Assert.Equal(EtlHttpDeliveryPhase.Acknowledged, attempts.Phase);
+        Assert.Equal(2, attempts.Attempts.Count);
+        Assert.Equal(firstDelivery.Main.Attempts[0].Attempt, attempts.Attempts[0].Attempt);
+        Assert.Null(attempts.Attempts[0].Response);
+        Assert.NotNull(attempts.Attempts[0].CompletedAt);
+        Assert.Equal(204, attempts.Attempts[1].Response!.StatusCode);
+        Assert.Equal(attempts.Attempts[0].Attempt.EffectId, attempts.Attempts[1].Attempt.EffectId);
+        Assert.NotEqual(attempts.Attempts[0].Attempt.RequestId, attempts.Attempts[1].Attempt.RequestId);
+        var requests = endpoint.Requests.Where(request => request.RawTarget == "/output").ToArray();
+        Assert.Equal(2, requests.Length);
+        Assert.Equal(firstRequest.Body, requests[1].Body);
+        Assert.Equal(firstRequest.Headers["Idempotency-Key"], requests[1].Headers["Idempotency-Key"]);
+        Assert.Equal(deduplicatingReceiver ? 1 : 2, appliedEffects[firstRequest.Headers["Idempotency-Key"]]);
+        Assert.Single(endpoint.Requests, request => request.Method == "GET");
+        Assert.Single(endpoint.Requests, request => request.RawTarget == "/errors");
+        AssertRecordedRequestsMatchRetainedOutput(endpoint, pending.Batch);
+        await survivor.ReleaseAsync(deadline.Token);
+        await AssertHttpProcessTerminalAsync(files, host, invocation, deadline.Token);
+    }
+
+    private static async Task<(IHost Host, EtlInvocation Invocation, List<EtlHostHttpBindingOptions> Bindings)>
+        PrepareHttpProcessRunAsync(RuntimeFiles files, EtlHttpLoopbackServer endpoint, CancellationToken cancellationToken)
+    {
+        List<EtlHostHttpBindingOptions> bindings =
+        [
+            HttpBinding(files.Scope, endpoint, "source", "Source", "/page", ["/page"],
+                [new() { Id = "page", SeedUri = endpoint.CreateUri("/page").AbsoluteUri }]),
+            HttpBinding(files.Scope, endpoint, "output", "MainOutput", "/output"),
+            HttpBinding(files.Scope, endpoint, "errors", "ErrorOutput", "/errors")
+        ];
+        var host = await files.StartHostAsync(EfMigratePolicy.AutoMigrate, configureRuntime: runtime =>
+        {
+            runtime.HttpBindings = bindings;
+            runtime.FileBindings.RemoveAll(binding => bindings.Any(http => http.Role == binding.Role));
+        });
+        await host.Services.GetRequiredService<EtlRuntimeWorker>().StopAsync(cancellationToken);
+        var pipeline = EtlV2TestPipelines.Create() with
+        {
+            Lookup = new("lookup", EtlTestPipelines.Create().LookupSchema, "id", "id")
+        };
+        var invocation = ConnectorInvocation(files.Scope, "http-process-recovery", pipeline);
+        await files.AdmitAsync(host, invocation);
+        return (host, invocation, bindings);
+    }
+
+    private static void AssertReplacementWorker(EtlConnectorWorkerCheckpoint previous,
+        EtlConnectorWorkerCheckpoint recovered, EtlWorkerProcess survivor)
+    {
+        Assert.Equal(EtlConnectorWorkerGate.BeforeAcceptance, recovered.Gate);
+        Assert.Equal(survivor.ProcessId, recovered.ProcessId);
+        Assert.NotEqual(previous.ProcessId, recovered.ProcessId);
+        Assert.NotEqual(Environment.ProcessId, recovered.ProcessId);
+        Assert.Equal(previous.Lease.Scope, recovered.Lease.Scope);
+        Assert.Equal(previous.Lease.RunId, recovered.Lease.RunId);
+        Assert.Equal(previous.Lease.PartitionOrdinal, recovered.Lease.PartitionOrdinal);
+        Assert.NotEqual(previous.Lease.Owner, recovered.Lease.Owner);
+        Assert.True(recovered.Lease.Fence > previous.Lease.Fence);
+    }
+
+    private static async Task<EtlCachedHttpPage> ReadProcessPageAsync(IServiceProvider services, RuntimeFiles files,
+        EtlInvocation invocation, CancellationToken cancellationToken)
+    {
+        await using var operation = services.CreateAsyncScope();
+        var run = Assert.IsType<EtlConnectorRunView>(await operation.ServiceProvider.GetRequiredService<IEtlConnectorRuntimeStore>()
+            .FindConnectorRunAsync(files.Scope, invocation.RunId, cancellationToken));
+        var cache = new EtlHttpPageCache(files.SnapshotRoot, new(invocation, run.Bindings), 0);
+        return Assert.IsType<EtlCachedHttpPage>(await cache.ReadAsync(0, new("page", null), cancellationToken));
+    }
+
+    private static async Task<HttpProcessState> ReadHttpProcessStateAsync(IServiceProvider services, CancellationToken cancellationToken)
+    {
+        await using var operation = services.CreateAsyncScope();
+        var db = operation.ServiceProvider.GetRequiredService<EtlRuntimeDbContext>();
+        return new(await db.Runs.AsNoTracking().SingleAsync(cancellationToken),
+            await db.ConnectorPartitions.AsNoTracking().SingleAsync(cancellationToken),
+            await db.ConnectorBatches.AsNoTracking().SingleOrDefaultAsync(cancellationToken),
+            await db.ConnectorHttpPages.AsNoTracking().SingleOrDefaultAsync(cancellationToken),
+            await db.ConnectorHttpRequests.AsNoTracking().SingleAsync(cancellationToken));
+    }
+
+    private static void AssertRecordedRequestsMatchRetainedOutput(EtlHttpLoopbackServer endpoint, EtlConnectorBatchRecord batch)
+    {
+        var output = EtlConnectorRecordCodec.Read<EtlConnectorBatchOutput>(batch.OutputJson!);
+        foreach (var request in endpoint.Requests.Where(request => request.Method == "POST"))
+        {
+            Assert.Contains(request.RawTarget, new[] { "/output", "/errors" });
+            var route = request.RawTarget == "/output" ? output.Main! : output.Errors!;
+            Assert.Equal(route.EffectId, request.Headers["Idempotency-Key"]);
+            Assert.Equal(route.Body.ContentHash, Convert.ToHexStringLower(SHA256.HashData(request.Body)));
+            Assert.Equal(route.Body.ByteLength, request.Body.LongLength);
+        }
+    }
+
+    private static async Task AssertHttpProcessTerminalAsync(RuntimeFiles files, IHost host, EtlInvocation invocation,
+        CancellationToken cancellationToken)
+    {
+        var terminal = await files.WaitForTerminalAsync(host, invocation.RunId);
+        Assert.Equal(EtlRunStatus.BusinessError, terminal.Status);
+        Assert.Equal(1, terminal.AcceptedRecords);
+        Assert.Equal(1, terminal.RejectedRecords);
+        Assert.Equal(0, terminal.FilteredRecords);
+        Assert.Equal(0, terminal.OutstandingRecords);
+        Assert.Equal(0, terminal.OutstandingBytes);
+        var state = await ReadHttpProcessStateAsync(host.Services, cancellationToken);
+        Assert.True(state.Batch!.Settled);
+        Assert.True(state.Partition.Completed);
+        Assert.Equal(1, state.Partition.AcceptedBatchCount);
+        Assert.Equal(2, state.Page!.AcceptedItemCount);
+        var outbox = Assert.IsType<EtlRuntimeOutboxRecord>(await files.ReadOutboxAsync(host.Services, invocation.RunId));
+        Assert.Null(outbox.Disposition);
+        Assert.Null(outbox.AcknowledgedAtUtcTicks);
+        Assert.Equal(0, outbox.Attempts); // No native consumer is installed in this process fixture.
+    }
+
+    private sealed record HttpProcessState(EtlRuntimeRunRecord Run, EtlConnectorPartitionRecord Partition,
+        EtlConnectorBatchRecord? Batch, EtlConnectorHttpPageRecord? Page, EtlConnectorHttpRequestRecord Request);
+}

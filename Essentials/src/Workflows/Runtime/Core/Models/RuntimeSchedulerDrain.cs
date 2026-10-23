@@ -65,6 +65,9 @@ public sealed class RuntimeSchedulerDrainResult
     public int OutboxDeliveredCount => OutboxDeliveryResults.Sum(result => result.DeliveredCount);
     public int OutboxFailedCount => OutboxDeliveryResults.Sum(result => result.FailedCount);
     public RuntimeSchedulerDrainStopReason StopReason { get; }
+    public bool StoppedOnDeferral =>
+        StopReason == RuntimeSchedulerDrainStopReason.Deferred ||
+        Items.Any(item => item.Status == RuntimeSchedulerWorkItemResultStatus.Deferred);
 
     private static RuntimeSchedulerDrainStopReason InferStopReason(IReadOnlyCollection<RuntimeSchedulerWorkItemResult> items)
     {
@@ -73,6 +76,9 @@ public sealed class RuntimeSchedulerDrainResult
 
         if (items.Any(item => item.Status == RuntimeSchedulerWorkItemResultStatus.Paused))
             return RuntimeSchedulerDrainStopReason.Paused;
+
+        if (items.Any(item => item.Status == RuntimeSchedulerWorkItemResultStatus.Deferred))
+            return RuntimeSchedulerDrainStopReason.Deferred;
 
         return RuntimeSchedulerDrainStopReason.Quiesced;
     }
@@ -85,7 +91,8 @@ public enum RuntimeSchedulerDrainStopReason
     Faulted,
     OutboxDeliveryFailed,
     CycleCapExhausted,
-    WorkflowTerminated
+    WorkflowTerminated,
+    Deferred
 }
 
 public sealed class RuntimeSchedulerWorkItemResult
@@ -105,7 +112,7 @@ public sealed class RuntimeSchedulerWorkItemResult
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(handlerName);
 
-        if (status is RuntimeSchedulerWorkItemResultStatus.Faulted or RuntimeSchedulerWorkItemResultStatus.Paused)
+        if (status is RuntimeSchedulerWorkItemResultStatus.Faulted or RuntimeSchedulerWorkItemResultStatus.Paused or RuntimeSchedulerWorkItemResultStatus.Deferred)
             ArgumentException.ThrowIfNullOrWhiteSpace(error);
 
         if (status == RuntimeSchedulerWorkItemResultStatus.Completed && error is not null)
@@ -145,5 +152,6 @@ public enum RuntimeSchedulerWorkItemResultStatus
 {
     Completed,
     Faulted,
-    Paused
+    Paused,
+    Deferred
 }

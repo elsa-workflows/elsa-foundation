@@ -100,6 +100,64 @@ public sealed class IncidentResolutionOutcomePersistenceTests
         Assert.Null(await bookmarks.FindAsync("wf-1", "bookmark-1"));
     }
 
+    [Fact]
+    public async Task An_operator_retry_resolves_an_incident_waiting_for_intervention_once()
+    {
+        var store = new InMemoryIncidentStateStore();
+        await store.SaveAsync(Incident(InterventionOutcome()));
+        var retried = Incident(RetryOutcome(), IncidentStatus.Resolved, Now.AddMinutes(2));
+
+        await store.SaveAsync(retried);
+        await store.SaveAsync(Incident(RetryOutcome(), IncidentStatus.Resolved, Now.AddMinutes(2)));
+
+        var persisted = (await store.FindAsync("wf-1", "incident-1"))!;
+        Assert.Equal(IncidentStatus.Resolved, persisted.Status);
+        Assert.Equal(IncidentResolutionActionKinds.OperatorRetry, persisted.ResolutionOutcome!.ActionKind);
+        // Once resolved, the outcome is write-once again: neither a second retry nor a return to waiting is accepted.
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.SaveAsync(Incident(RetryOutcome(Now.AddMinutes(3)), IncidentStatus.Resolved, Now.AddMinutes(3))).AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.SaveAsync(Incident(InterventionOutcome())).AsTask());
+    }
+
+    [Theory]
+    [InlineData(IncidentResolutionActionKinds.FaultWorkflow, IncidentStatus.Blocking)]
+    [InlineData(IncidentResolutionActionKinds.ContinueWithIncidents, IncidentStatus.Open)]
+    public async Task An_operator_retry_cannot_replace_any_other_committed_outcome(string actionKind, IncidentStatus status)
+    {
+        var store = new InMemoryIncidentStateStore();
+        await store.SaveAsync(Incident(Outcome(actionKind), status));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.SaveAsync(Incident(RetryOutcome(), IncidentStatus.Resolved, Now.AddMinutes(2))).AsTask());
+    }
+
+    [Fact]
+    public async Task Only_an_operator_retry_resolution_may_replace_a_wait_for_intervention()
+    {
+        var store = new InMemoryIncidentStateStore();
+        await store.SaveAsync(Incident(InterventionOutcome()));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.SaveAsync(Incident(Outcome("Contoso.Resolve"), IncidentStatus.Resolved, Now.AddMinutes(2))).AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.SaveAsync(Incident(RetryOutcome(), IncidentStatus.Blocking)).AsTask());
+    }
+
+    private static IncidentResolutionOutcome InterventionOutcome() =>
+        new(
+            IncidentResolutionActionKinds.WaitForIntervention,
+            Now.AddMinutes(1),
+            strategy: null,
+            systemSource: IncidentResolutionSystemSources.StructuralIntervention);
+
+    private static IncidentResolutionOutcome RetryOutcome(DateTimeOffset? appliedAt = null) =>
+        new(
+            IncidentResolutionActionKinds.OperatorRetry,
+            appliedAt ?? Now.AddMinutes(2),
+            strategy: null,
+            systemSource: IncidentResolutionSystemSources.OperatorRetryAlteration,
+            metadata: new Dictionary<string, string> { ["runtime.alteration.jobId"] = "job-1" });
+
     private static readonly RuntimeCheckpointPersistenceDecision Decision =
         new(RuntimeCheckpointPersistenceMode.Immediate);
 

@@ -104,6 +104,39 @@ public sealed class EfRelationalExceptionClassifierTests
         Assert.Equal(expected, EfRelationalExceptionClassifier.IsTransientWriteConflict(exception));
     }
 
+    /// <summary>
+    /// The number decides, not the text: SQL Server localizes its messages, so a server running in another language
+    /// must still be recognized.
+    /// </summary>
+    [Theory]
+    [InlineData(1946, true)]
+    [InlineData(2627, false)]
+    [InlineData(1205, false)]
+    public void Classifies_sql_server_key_too_long_errors_by_number(int number, bool expected)
+    {
+        var exception = new DbUpdateException("write failed", new SqlException(number, "Die Länge des Indexeintrags überschreitet die maximale Länge."));
+
+        Assert.Equal(expected, EfRelationalExceptionClassifier.IsKeyTooLong(exception));
+    }
+
+    [Fact]
+    public void Finds_a_key_too_long_error_however_deeply_it_is_wrapped()
+    {
+        var exception = new InvalidOperationException("store boundary",
+            new DbUpdateException("write failed", new InvalidOperationException("statement failed", new SqlException(1946))));
+
+        Assert.True(EfRelationalExceptionClassifier.IsKeyTooLong(exception));
+    }
+
+    [Fact]
+    public void Only_a_sql_server_error_is_a_key_too_long_error()
+    {
+        Assert.False(EfRelationalExceptionClassifier.IsKeyTooLong(new DbUpdateException("write failed", new MySqlException(1946))));
+        Assert.False(EfRelationalExceptionClassifier.IsKeyTooLong(new DbUpdateException("write failed", new SqliteException(1946, 1946))));
+        Assert.False(EfRelationalExceptionClassifier.IsKeyTooLong(
+            new DbUpdateException("write failed", new InvalidOperationException("Operation failed. The index entry exceeds the maximum length of 900 bytes."))));
+    }
+
     [Fact]
     public void A_save_conflict_is_recognized_however_its_report_was_wrapped()
     {
@@ -208,7 +241,7 @@ public sealed class EfRelationalExceptionClassifierTests
         public string SqlState { get; } = sqlState;
     }
 
-    private sealed class SqlException(int number) : Exception
+    private sealed class SqlException(int number, string? message = null) : Exception(message)
     {
         public int Number { get; } = number;
     }

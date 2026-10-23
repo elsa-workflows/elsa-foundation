@@ -33,7 +33,7 @@ CShells__Shells__default__Features__WorkflowsRuntimeApi__WorkflowAlterationPaylo
 | Diagnostics | `GET/PUT /runtime/workflows/diagnostics/settings` |
 | Alteration plans | `POST /runtime/workflows/alteration-plans`, `GET /runtime/workflows/alteration-plans/{planId}`, `GET /runtime/workflows/alteration-plans/{planId}/jobs/page`, `GET /runtime/workflows/alteration-plans/{planId}/jobs/{jobId}`, `POST /runtime/workflows/alteration-plans/{planId}/cancel` |
 
-Executable, provenance, instance, and diagnostics reads use `workflow-runtime.read`; execution/stimulus operations use `workflow-runtime.execute`; diagnostics mutation uses `workflow-runtime.manage`. The shared wildcard permission remains supported. Foundation Identity policy authorization and the host's ASP.NET Core authentication middleware establish the principal and challenges; the module mapper emits the RFC 7807 error contract.
+Executable, provenance, instance, and diagnostics reads use `workflows/runtime:read`; execution/stimulus operations use `workflows/runtime:execute`; diagnostics mutation uses `workflows/runtime:manage`. The shared wildcard permission remains supported. Foundation Identity policy authorization and the host's ASP.NET Core authentication middleware establish the principal and challenges; the module mapper emits the RFC 7807 error contract.
 
 `POST .../execute` and `POST .../stimuli` are **synchronous to quiescence**: the in-process actor drains the run inline (ADR 0031 sticky single-writer drain) before the response is written, so the workflow has already reached completion, a fault, or its first durable suspension by the time the caller responds. The response is not an async hand-off acknowledgement — it returns `200 OK` and the body's `commandDispatchStatus` reflects the actual drain outcome (`Accepted`, `AcceptedButFaulted`, `Duplicate`, or `Deferred`). A `Rejected` dispatch returns `409 Conflict`. `AcceptedButFaulted` still returns `200` with a body: the drain completed but the drain encountered a failure; a `WaitForIntervention` policy can preserve a Running workflow with a blocking incident, which callers detect from `commandDispatchStatus`, not the HTTP code. `GET .../instances/{workflowExecutionId}` remains the polling surface for later state.
 
@@ -43,11 +43,19 @@ Dispatch inspection is allowlist-only: it exposes lifecycle/linkage, child artif
 
 Provenance is deliberately read-only here. Publishing owns creation and retirement of publication/test-run references, while Runtime owns artifact retention and garbage collection.
 
+When a read names a source-reference ID, Runtime preserves that exact historical view only while a retained execution pins both the same artifact and source reference. This keeps a replaced or unpublished Published reference's frozen layout and source available for its execution history without substituting the current publication. Expired TestRun references follow the same exact-pin rule; retired TestRun references remain unavailable, and unpinned retired or expired references are not inspectable by their ID.
+
 Executable detail includes a compact BPMN graph projection only for the persisted `elsa.bpmn.structure` schema `1.0.0`: `bpmnStructure.elements` carries element IDs, element types, bound child-node IDs, and names; `bpmnStructure.sequenceFlows` carries flow IDs, source/target references, names, outcome conditions, and default-flow flags. The API reads these fields directly from the versioned JSON payload without loading the BPMN activity module. It omits arbitrary properties, expressions, event definitions, and diagram data; other structure kinds or BPMN schemas return `bpmnStructure: null`.
 
 Activation slots are the runtime-owned ledger for the live activation of a `(definitionId, slotName)` pair.
 The read-only views expose the slot identity, active activation, source ownership, revision, and update time;
 they do not join to publishing records. Runtime deliberately exposes no deactivation endpoint.
+
+The list response also exposes the shell's declared `channels` (name, display name and description) and
+`allowAdHocChannels`, including when `items` is empty. A slot's optional `channel` carries its matching declaration.
+Declarations are global to the shell; the slot identity remains `(definitionId, slotName)`. Clients can therefore
+offer channels before the first publication without presenting a per-definition slot as a global entity.
+See [channel configuration](../Elsa.Workflows.Runtime/README.md#activation-channels).
 
 ## Withheld and protected values
 
@@ -85,13 +93,13 @@ that Studio's typing of this view does not expect, so the wire shape stays as is
 ## Alteration plan API
 
 `POST /runtime/workflows/alteration-plans` is the sole submission path. It requires
-`workflow-runtime.manage`, an `Idempotency-Key` header, and one explicit execution-ID selector or a frozen query
+`workflows/runtime:manage`, an `Idempotency-Key` header, and one explicit execution-ID selector or a frozen query
 selector. A new or idempotent replay returns `202 Accepted`; reusing the same tenant-scoped key with different
 canonical content returns `409`. Submission validates known exact alteration kind/schema-version pairs and static
 composition, but Runtime preflight conflicts are durable job outcomes rather than synchronous failures. Admission
 backpressure occurs before plan creation and returns `429` with `Retry-After`.
 
-Plan/job polling requires `workflow-runtime.read`; cancellation requires `workflow-runtime.manage`. The capability
+Plan/job polling requires `workflows/runtime:read`; cancellation requires `workflows/runtime:manage`. The capability
 relations are `workflow-alteration-plans`, `workflow-alteration-plan`, `workflow-alteration-plan-jobs-page`,
 `workflow-alteration-job`, and `workflow-alteration-plan-cancel`. Jobs page through a server-issued cursor. A caller
 outside the sealed tenant/authority scope receives the same safe `404` as for a missing resource.

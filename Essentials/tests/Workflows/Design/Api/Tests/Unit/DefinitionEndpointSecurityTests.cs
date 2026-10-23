@@ -13,13 +13,13 @@ namespace Elsa.Workflows.Design.Api.Tests.Unit;
 public sealed class DefinitionEndpointSecurityTests
 {
     [Theory]
-    [InlineData("GET", "design/workflows/definitions", "workflow-design.read")]
-    [InlineData("POST", "design/workflows/definitions", "workflow-design.manage")]
-    [InlineData("GET", "design/workflows/definitions/{definitionId}", "workflow-design.read")]
-    [InlineData("PATCH", "design/workflows/definitions/{definitionId}", "workflow-design.manage")]
-    [InlineData("DELETE", "design/workflows/definitions/{definitionId}", "workflow-design.manage")]
-    [InlineData("POST", "design/workflows/versions/ingest", "workflow-design.manage")]
-    [InlineData("GET", "design/workflows/versions/{versionId}", "workflow-design.read")]
+    [InlineData("GET", "design/workflows/definitions", "workflows/design:read")]
+    [InlineData("POST", "design/workflows/definitions", "workflows/design:manage")]
+    [InlineData("GET", "design/workflows/definitions/{definitionId}", "workflows/design:read")]
+    [InlineData("PATCH", "design/workflows/definitions/{definitionId}", "workflows/design:manage")]
+    [InlineData("DELETE", "design/workflows/definitions/{definitionId}", "workflows/design:manage")]
+    [InlineData("POST", "design/workflows/versions/ingest", "workflows/design:manage")]
+    [InlineData("GET", "design/workflows/versions/{versionId}", "workflows/design:read")]
     public void Definition_and_version_endpoints_require_the_expected_permission(string method, string route, string permission)
     {
         var endpoint = WorkflowDesignEndpointTestSupport.Find(WorkflowDesignEndpointTestSupport.MapEndpoints(), route, method);

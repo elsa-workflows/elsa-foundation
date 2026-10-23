@@ -23,7 +23,7 @@ public sealed class ModulePayloadColumnTests
     {
         ["RuntimeDbContext"] = new(StringComparer.Ordinal)
         {
-            ["ContentJson"] = 30,
+            ["ContentJson"] = 31,
             ["PayloadJson"] = 1,
             ["MetadataJson"] = 1,
             ["CleanupSafeFailureJson"] = 1

@@ -442,6 +442,36 @@ public sealed class WorkflowsDesignApiContractTests
         Assert.Null(host.Domain.LastSubmittedState);
     }
 
+    /// <summary>
+    /// Binding a connection in a workflow is authorized by <c>workflows/design:manage</c> alone: the connection
+    /// validator asks no one, so every viewer sees the same findings. Every Workflow Design route that writes drafts or
+    /// versions, or promotes a draft, and so could carry a connection binding, must therefore refuse a reader before it
+    /// dispatches.
+    /// </summary>
+    [Theory]
+    [InlineData("POST", "/design/workflows/definitions")]
+    [InlineData("POST", "/design/workflows/definitions/submit")]
+    [InlineData("PUT", "/design/workflows/drafts/route-draft")]
+    [InlineData("POST", "/design/workflows/drafts/route-draft/promote")]
+    [InlineData("POST", "/design/workflows/drafts/route-draft/promotion-preflight")]
+    [InlineData("POST", "/design/workflows/versions/ingest")]
+    public async Task A_reader_cannot_write_or_promote_workflow_state(string method, string route)
+    {
+        await using var host = await AuthorizationHost.StartAsync();
+        using var request = LifecycleRequest(new HttpMethod(method), route, "{}");
+        request.Headers.Remove(AuthorizationHost.IdentityHeader);
+        request.Headers.TryAddWithoutValidation(AuthorizationHost.IdentityHeader, "trusted-read");
+
+        using var response = await host.Client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Null(host.Domain.LastSavedDefinition);
+        Assert.Null(host.Domain.LastSubmittedState);
+        Assert.Null(host.Domain.LastDraftUpdate);
+        Assert.Null(host.Domain.LastDraftReadId);
+        Assert.Null(host.Domain.LastPromoteDraftId);
+    }
+
     [Fact]
     public async Task Submit_round_trips_every_schema_intrinsic_and_conversion_enum_value()
     {
@@ -692,12 +722,12 @@ public sealed class WorkflowsDesignApiContractTests
             {
                 claims.Add(new Claim(IdentityClaimTypes.Normalized, "v1"));
                 claims.Add(new Claim(IdentityClaimTypes.Provider, "external"));
-                claims.Add(new Claim(IdentityClaimTypes.Permission, "external.workflow-design.read"));
+                claims.Add(new Claim(IdentityClaimTypes.Permission, "external/workflows/design:read"));
             }
             else if (identity == "trusted-denied")
             {
                 claims.Add(new Claim(IdentityClaimTypes.Normalized, "v1"));
-                claims.Add(new Claim(IdentityClaimTypes.Permission, "workflow-design.other"));
+                claims.Add(new Claim(IdentityClaimTypes.Permission, "workflows/design:other"));
             }
             else if (identity is "trusted" or "trusted-read" or "trusted-manage" or "trusted-delete-409" or "tenant-allowed" or "tenant-denied" or "resource-denied" or "trusted-no-tenant" or "wildcard-tenant-denied" or "wildcard-no-tenant" or "manage-tenant-denied" or "manage-no-tenant" or "manage-resource-denied" or "wildcard-resource-denied")
             {
@@ -726,9 +756,9 @@ internal sealed class AuthorizationProbe
     public int ResourceCalls { get; set; }
 }
 
-internal sealed class RecordingPermissionEvaluator(IPermissionCatalog catalog, AuthorizationProbe probe) : IPermissionEvaluator
+internal sealed class RecordingPermissionEvaluator(AuthorizationProbe probe) : IPermissionEvaluator
 {
-    private readonly ClaimsPermissionEvaluator inner = new(catalog);
+    private readonly ClaimsPermissionEvaluator inner = new();
 
     public ValueTask<PermissionEvaluationResult> EvaluateAsync(
         PermissionEvaluationContext context,

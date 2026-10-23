@@ -1,0 +1,42 @@
+[
+  {
+    "name": "child-provenance",
+    "source": "Essentials/src/Activities/Compensation/Activities/CompensationScope.cs",
+    "restoredSha256": "f4e18dddf251c200be6f0739141340461c1716930692464f2677131daa33c671",
+    "changedSha256": "66946683975f950cf94c4c304a34514d1b0783ed0824277d25d900f1258ab5da",
+    "command": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Activities/Compensation/Tests/Elsa.Activities.Compensation.Tests.csproj",
+      "--configuration",
+      "Release",
+      "--no-restore",
+      "--filter",
+      "FullyQualifiedName~CompensationScopeRepeatDeliveryTests",
+      "--logger",
+      "console;verbosity=normal"
+    ],
+    "changedExitCode": 1,
+    "restoredExitCode": 0
+  },
+  {
+    "name": "landed-fault-category",
+    "source": "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowParentActivityCompletionSchedulerWorkHandler.cs",
+    "restoredSha256": "45a70627b480c15019c2d098c90cde52ee82f5681ad24074bb94f9f4b933d008",
+    "changedSha256": "774f8467181398c155e8e3f794177aa5d71eb024a31d65be43d7d21b1ec264e3",
+    "command": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Activities/Compensation/Tests/Elsa.Activities.Compensation.Tests.csproj",
+      "--configuration",
+      "Release",
+      "--no-restore",
+      "--filter",
+      "FullyQualifiedName~CompensationScopeRuntimeTests.A_lost_response_is_undone_as_an_uncertain_step_and_leaves_no_reservation",
+      "--logger",
+      "console;verbosity=normal"
+    ],
+    "changedExitCode": 1,
+    "restoredExitCode": 0
+  }
+]
