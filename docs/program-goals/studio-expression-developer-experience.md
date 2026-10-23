@@ -33,7 +33,7 @@ The incoming lead progressively elaborates these milestones into one cross-repos
 - [Executable milestone validation](studio-expression-developer-experience/milestone-validation.md).
 - [Assessment and staged delivery plan](../reports/studio-expression-editing/assessment.md).
 - [Independent source-audit findings](../reports/studio-expression-editing/source-audit.md).
-- [Fresh-session implementation handoff](../reports/studio-expression-editing/implementation-handoff.md).
+- [Restart checkpoint and current sequencing](#restart-checkpoint--2026-10-23).
 - [Studio spec 094](../../Studio/specs/094-expression-code-intelligence/spec.md).
 - [Foundation spec 143](../../specs/143-expression-code-intelligence/spec.md).
 - [Existing host-discovery fix, Studio #546](https://github.com/elsa-workflows/elsa-foundation-studio/pull/546).
@@ -54,7 +54,7 @@ The requirements-interrogation gate passes for milestone 1. The product outcome,
 
 The owner requests end-to-end delivery of all four milestones and explicitly removes only actual current-head Chrome+VoiceOver and Safari+VoiceOver observation from acceptance. Both remain **SKIPPED BY OWNER DECISION — NEVER PASSED**; native screen-reader behavior is a delivery limitation, not a passing result. See the [canonical decision](studio-expression-developer-experience/decision-log.md#2026-10-06--remove-native-voiceover-verification-from-delivery-acceptance).
 
-Resume the existing Foundation/Studio specs, tasks and PR stack, preserving historical exact-head proof and avoiding competing implementations. Resolve stack integration and reverify affected heads; keep all other technical, review, keyboard, automated accessibility and runtime gates. Keep PRs draft until required gates and the owner's explicit final acceptance; then merge in dependency order, verify required green post-merge main and synchronize public completion records. No package publication or deployment is included. The program issue holds live evidence and ownership; earlier bootstrap checkpoints above remain historical.
+Resume the existing Foundation/Studio specs, tasks and PR stack, preserving historical exact-head proof and avoiding competing implementations. Resolve stack integration and reverify affected heads; keep all other technical, review, keyboard, automated accessibility and runtime gates. Merge in dependency order, verify required green post-merge main and synchronize public completion records. (The earlier rule to keep PRs draft until explicit final owner acceptance is superseded; see the 2026-10-23 restart checkpoint.) No package publication or deployment is included. The program issue holds live evidence and ownership; earlier bootstrap checkpoints above remain historical.
 
 ## Restart checkpoint — 2026-10-23
 
@@ -70,5 +70,6 @@ records point there.
   scripts read variables: declared parameters or ambient variables, and whether `get<Name>()` stays. See the
   [decision log](studio-expression-developer-experience/decision-log.md#2026-10-23--gate-milestones-2-and-3-on-the-3204-read-model-adr).
 - **Milestone 1.** The rest of #2373 is rebased separately onto the new layout; it is not part of this restart.
+- **Review and merge.** Review and merge follow the [ADR 0080 D7](../adr/0080-elsa-4-simplification-decisions.md#d7--recurring-review-and-fix-routines) review loop as amended on 15 October (org-wide Issue Bus Lite): the Code Review app merges once a review round leaves nothing actionable and CI is green on the exact head. There is no separate owner acceptance before Ready or merge.
 - The 6 October delivery-scope checkpoint above is historical. Its PR stack and evidence predate the move into
   `Essentials/` and `Studio/`, and its heads must be reverified before any gate is claimed.

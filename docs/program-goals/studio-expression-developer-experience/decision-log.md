@@ -56,7 +56,7 @@
 
 **Rationale:** The owner chooses to deliver the remaining scope without waiting for hands-on native announcement observation after repeated observation limitations. The existing automated and native-preparation checkpoints retain their original evidence boundaries.
 
-**Consequences:** Current-head screen-reader behavior remains unverified and must be a final delivery limitation. Historical July baseline evidence is not current program acceptance. Keyboard, automated scoped accessibility, source/cursor/undo, runtime parity, technical/review/integration and required post-merge main gates remain mandatory. Final explicit owner acceptance precedes Ready and dependency-ordered merging; no deployment or package publication is authorized.
+**Consequences:** Current-head screen-reader behavior remains unverified and must be a final delivery limitation. Historical July baseline evidence is not current program acceptance. Keyboard, automated scoped accessibility, source/cursor/undo, runtime parity, technical/review/integration and required post-merge main gates remain mandatory. Dependency-ordered merging follows the review protocol in the 2026-10-23 entry below; no deployment or package publication is authorized.
 
 **Revisit:** A later owner-approved native accessibility verification task. Do not relabel the skipped gate as passed when closing this program.
 
@@ -66,7 +66,7 @@
 
 **Rationale:** Required main merges normally trigger preview package and image publication. The clarification removes the prior publication-scope blocker without changing technical gates or requiring Feedz to provide a Docker/OCI endpoint.
 
-**Consequences:** This amends the earlier no-publication boundary for preview artifacts only. Stable releases, deployments, manual publisher bootstrap/forceadvance and Azure provisioning are not being performed. Final explicit owner acceptance still precedes Ready and dependency-ordered merging; required resulting-main gates and public completion records remain mandatory. Native VoiceOver stays skipped by owner decision and never passed.
+**Consequences:** This amends the earlier no-publication boundary for preview artifacts only. Stable releases, deployments, manual publisher bootstrap/forceadvance and Azure provisioning are not being performed. Merging follows the review protocol in the 2026-10-23 entry below; required resulting-main gates and public completion records remain mandatory. Native VoiceOver stays skipped by owner decision and never passed.
 
 **Revisit:** A separately scoped registry migration or stable release/deployment requires its own approval and verification.
 
@@ -135,3 +135,17 @@ offers.
 milestone 1 and fixes such as the permission hash that do not depend on the read model.
 
 **Revisit:** When the #3204 ADR is accepted.
+
+## 2026-10-23 — The ADR 0080 D7 review protocol governs merging
+
+**Decision:** Program PRs are reviewed and merged under the [ADR 0080 D7](../../adr/0080-elsa-4-simplification-decisions.md#d7--recurring-review-and-fix-routines)
+review loop as amended on 15 October, which follows the org-wide Issue Bus Lite protocol. The Code Review app
+merges a PR once a review round leaves nothing actionable and CI is green on the exact head commit. The earlier
+rule that explicit final owner acceptance precedes Ready and merging is dropped.
+
+**Rationale:** The owner does not review PRs personally; the review app is the review gate for all Elsa 4 work.
+
+**Consequences:** The 2026-10-06 entries above keep their scope decisions, but their owner-acceptance step no
+longer applies. Every other technical, review and resulting-main gate remains.
+
+**Revisit:** If ADR 0080 D7 changes.
