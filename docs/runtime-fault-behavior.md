@@ -21,11 +21,14 @@ flowchart TB
         B1[Caught by the drain loop] --> B2[Step removed from queue, poison record written]
         B2 --> B3[Drain stops]
         B3 --> B4{Retry policy}
-        B4 -->|"RetryNow or RetryAfter"| B4r[RetryScheduled, not a blocking incident]
+        B4 -->|RetryNow| B4n[RetryScheduled, re-enqueued immediately]
+        B4 -->|RetryAfter| B4a["RetryScheduled, parked: no automatic re-drive, no incident"]
         B4 -->|default DoNotRetry| B4p[Poison record shown as a blocking incident]
         B4p --> B5["Default: workflow stays Running, needs an operator"]
     end
 ```
+
+RetryAfter records `RetryScheduled` with `NextRetryAt`, but the item is parked: nothing re-drives it automatically and no incident is raised ([#3275](https://github.com/elsa-workflows/elsa-foundation/issues/3275)).
 
 ## Words you will meet
 
@@ -228,7 +231,7 @@ also lands here, via the internal `FaultingMissingSchedulerWorkHandler`.
 | Retry mode | Disposition | Requeue |
 | --- | --- | --- |
 | `RetryNow` | `RetryScheduled` | re-enqueued immediately through the queue contract |
-| `RetryAfter` | `RetryScheduled` | not re-enqueued; `NextRetryAt` is left for the durable resumption pump (see [durable resumption](runtime-durable-resumption.md)) |
+| `RetryAfter` | `RetryScheduled` | not re-enqueued; records `NextRetryAt`, but the item is parked: nothing re-drives it automatically and no incident is raised ([#3275](https://github.com/elsa-workflows/elsa-foundation/issues/3275)) |
 | `DoNotRetry`, `Fault`, or no policy | `Poisoned` | none |
 
 4. Returns a `Faulted` work-item result. `DrainAsync` breaks out of its loop, and the orchestrator's
