@@ -230,8 +230,8 @@ to set, or that the activity can be removed.
 - A `null` member on an activity resolved by name (an alias, a catalog key or a workflow-as-activity reference) has no
   recorded Elsa 3 default. It gets no binding, and the Elsa 4 contract's default applies, as the reusable's did in
   Elsa 3.
-- A `null` member of a mapped activity that the table above does not list is a gap in the table: the conversion fails
-  the activity-map coverage test rather than guessing.
+- A `null` member of a mapped activity that the table above does not list is a gap in the table. The activity-map
+  coverage test fails on it (FR-008); at run time such a member gets no binding.
 
 ## Requirements *(mandatory)*
 
