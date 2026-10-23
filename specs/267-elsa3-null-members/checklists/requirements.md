@@ -1,4 +1,4 @@
-# Specification Quality Checklist: Elsa 3 converter: unset activity members keep Elsa 3's value
+# Specification Quality Checklist: Elsa 3 converter: a null activity member converts to what Elsa 3 ran with
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-10-22
@@ -34,3 +34,5 @@
 - The spec names Elsa 3 and Elsa 4 activity members, because they are the domain the converter's users work in (as in
   specs 236, 248 and 264). It names no code, class or service of the converter.
 - All decisions were settled with the maintainer before specification (see Clarifications).
+- 2026-10-23: reframed after Frans van Ek's review (PR #3264). The rule is now stated per member from the Elsa 3
+  runtime, the absent-member changes moved to #3281, and the null intrinsic gap is #3280. Re-validated: all items pass.
