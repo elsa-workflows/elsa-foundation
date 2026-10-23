@@ -12,7 +12,7 @@ You need Docker Engine and the Compose v2 plugin. Start from the canonical Compo
 curl -fLo pair-compose.yml https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/48bfcea5f5bc8c05189e9b5f334064e8408ffcba/docker/compose/docker-compose.images.yml
 ```
 
-Keep its configuration, including the Studio login-return origin, unchanged.
+Keep its configuration, including the Studio login-return origin, unchanged. The pinned Compose file is only valid with the recorded image digests.
 
 Choose a unique Compose project name. **Before starting anything**, check that host ports `13000` and `14000` are unused and that no existing containers, network, or volumes use that project name. If project resources already exist, choose another project name. If either port is occupied, wait until it is free; do not stop another process. Keep these ports because the browser URLs and login-return configuration depend on them.
 

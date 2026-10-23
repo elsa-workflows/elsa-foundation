@@ -78,6 +78,7 @@ A new ADR, Extension Builder ones included, takes the highest number in the main
 | 0086 | [Native And BPMN Compensation Stay Separate Semantics Over Shared Runtime Identity](0086-native-and-bpmn-compensation-stay-separate.md) | Accepted |
 | 0087 | [ETL owns its execution domain](0087-etl-owns-its-execution-domain.md) | Accepted |
 | 0088 | [Rules owns its execution domain](0088-rules-owns-its-execution-domain.md) | Accepted |
+| 0089 | [Scripts Read Variables By Name And Publish Pins Them As Declared Parameters](0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md) | Proposed |
 | EB-0001 | [Extension Builder Git identity](EB-0001-extension-builder-git-identity.md) | Accepted |
 | EB-0002 | [Extension Builder managed repository remotes](EB-0002-extension-builder-managed-repository-remotes.md) | Accepted |
 | EB-0003 | [Extension Builder build and promotion source](EB-0003-extension-builder-build-and-promotion-source.md) | Accepted |
