@@ -35,7 +35,7 @@ flowchart TB
 | Resolution outcome | What was decided about an incident. *Empty (null)* means nobody has decided yet; everything downstream keys off that. |
 | Incident strategy | The per-workflow rule that decides what an activity fault does to the run. It is fixed into the executable when you publish. |
 | Drain | Working through a run's queued steps until none are left. |
-| Quiescence | The point where the drain and outbox delivery have nothing left to do for this run. |
+| Quiescence | The point where the drain and outbox delivery have nothing left to do for this run (as reported; see the budget note below). |
 | Drain observer | A component that runs after a drain finishes and reacts to its result. Fault outcomes are decided here, not in the loop. |
 | Poison record | A saved note that one queued step made its handler fail. |
 | Ack | Removing a finished step from the queue. |
@@ -48,7 +48,7 @@ flowchart TB
 | Recorded as | a blocking `IncidentState` (severity `Error`), plus the activity state moved to `Faulted` | a `RuntimeSchedulerPoisonRecord` in the poison store |
 | Dispatch result | `Completed`, so the drain loop keeps going | `Faulted`, so the drain loop breaks |
 | Decided by | the workflow's authored `IIncidentStrategy`, applied at quiescence | `IRuntimeDomainRetryPolicy`, applied immediately |
-| Default outcome | workflow status becomes `Faulted` (default strategy is `Fault/1`) | item parked as `Poisoned`, projected into a blocking incident; **the workflow stays `Running`** (a poisoned first checkpoint is the exception, below) |
+| Default outcome | workflow status becomes `Faulted` (default strategy is `Fault/1`) | item parked as `Poisoned`, projected into a blocking incident; **the workflow stays `Running`** (the exceptions are a poisoned first checkpoint and a checkpoint-rule refusal, below) |
 | Activity state | `Faulted` with a fault sub-status | untouched, it stays whatever it was |
 | Retried by default | no | no (`NoopRuntimeDomainRetryPolicy` returns an explicit `DoNotRetry`) |
 
@@ -63,8 +63,8 @@ a handler fault never reaches the incident strategy.
 
 Inside the work handler, not in the drain loop.
 `WorkflowInvokeActivitySchedulerWorkHandler.InvokeActivityAsync` wraps activity work in three
-sequential fault boundaries — the first three rows of the table: input materialization, construction
-(attempt claim, activation, execution-context), and the activity's own execution — and each one
+sequential fault boundaries, the first three rows of the table: input materialization, construction
+(attempt claim, activation, execution-context), and the activity's own execution. Each one
 funnels into the same private `RecordFaultAsync`. The last two rows are outcomes of those boundaries,
 not extra sequential catches:
 
@@ -273,7 +273,7 @@ and an inspection projection in the same `IncidentRecorded` checkpoint.
 
 ### Exception: a poisoned first checkpoint
 
-A poisoned first checkpoint is the one case where Path B does fault the workflow (#2537). The execution never reached a checkpoint, so it
+A poisoned first checkpoint is one of two cases where Path B faults the workflow (the other is a checkpoint-rule refusal, below) (#2537). The execution never reached a checkpoint, so it
 has no workflow to leave non-terminal, and a durable provider refuses an incident without its workflow and
 run-health projection. Before this, such a run appeared nowhere: not in the instance list, not as an
 incident. When the drain ran this execution's start command, the observer now builds the execution from
