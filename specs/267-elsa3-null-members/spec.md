@@ -44,8 +44,9 @@ member, from the Elsa 3 source (release/3.6.3, checked against the 3.5.3 tag), n
   reference type as `null` (`ActivityExecutionContextExtensions.InputEvaluation.cs`, `EvaluateInputPropertyCoreAsync`).
 - A *deliberate* null is a different JSON shape: an input that holds a literal null,
   `{"typeName": …, "expression": {"type": "Literal", "value": null}}`. It runs as an explicit null, with no default.
-  The export therefore does tell a deliberate null from a bare JSON `null`. The deliberate shape keeps converting as an
-  explicit null (FR-005).
+  The export therefore does tell a deliberate null from a bare JSON `null`. Elsa 3 ran the two the same, except for a
+  member with a declared default. The converter already reads the deliberate shape as unbound, like a JSON `null`, and
+  keeps doing so (FR-005); the declared-default exception is #3281. No corpus definition has a deliberate null.
 - A workflow-as-activity input that is JSON `null` is skipped when loading, so it runs with the reusable's own default.
 - A JSON `null` output means nothing captures it.
 
@@ -222,7 +223,7 @@ to set, or that the activity can be removed.
 
 ### Edge Cases
 
-- An input holding a literal null (the deliberate-null shape) keeps converting as an explicit null (FR-005).
+- An input holding a literal null (the deliberate-null shape) converts by the same table as a JSON `null` (FR-005).
 - An empty string or an empty JSON array or object is not `null`. It converts by the existing rules; blank strings are
   #3281.
 - A member that is absent converts by the existing rules; absent members whose value differs from Elsa 3's are #3281.
@@ -244,7 +245,8 @@ to set, or that the activity can be removed.
   value as a literal (the table's "emit" rows). The activity map is the one record of those values; it gains
   FlowSendHttpRequest `[200]` and the Correlate / SetName empty string.
 - **FR-004**: A `null` output MUST get no binding (nothing is captured).
-- **FR-005**: An input holding a literal null MUST keep converting as an explicit null.
+- **FR-005**: An input holding a literal null MUST convert as a JSON `null` member does, by the same table. (Corrected
+  in planning: the converter already reads it as unbound; research R-5.)
 - **FR-006**: A `null` member whose Elsa 3 behaviour Elsa 4 cannot reproduce or represent MUST be refused with one new
   stable diagnostic code (the table's "refuse" rows). The message names the member and the reason; the guidance says
   to set a value in the Elsa 3 workflow, or to remove the activity.
