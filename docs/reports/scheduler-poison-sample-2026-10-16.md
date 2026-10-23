@@ -90,7 +90,7 @@ The [incident observer](https://github.com/elsa-workflows/elsa-foundation/blob/6
 projects `Poisoned` records after a faulted drain; `RetryScheduled` records are not projected as poison
 incidents. Projection is best-effort, so a crash or incident-persistence failure can leave a poison
 record without an incident. Default capture retains type/message and optionally a stack trace, not
-the complete inner-exception chain.
+the complete inner-exception chain. A custom `IRuntimeDomainRetryPolicy` can return `RetryAfter`, which records `RetryScheduled` with `NextRetryAt` and leaves the retry to the durable resumption pump rather than re-enqueueing it; see [what it does](../runtime-fault-behavior.md#what-it-does) and [durable resumption](../runtime-durable-resumption.md).
 
 ### Historical running-QA observations
 
