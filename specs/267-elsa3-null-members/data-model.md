@@ -16,8 +16,10 @@ No persisted data changes. The model is the activity map's member rule.
 Gains `OnNull` (`Elsa3NullConversion?`, default null).
 - Required for an input rule of kind R1 Carry or R5 Narrowed contract, unless the rule carries an Elsa 3 default it
   emits.
-- Ignored for every other rule kind; outputs, removed inputs, restrictions, structure and graph members keep their
-  existing null handling.
+- Set on an R2 default flip only where its null converts otherwise than its default: SendHttpRequest.ContentType, whose
+  default applies only when Content is bound.
+- Unset on every other rule kind; outputs, removed inputs, restrictions, structure and graph members keep their existing
+  null handling.
 
 ## Conversion of a null member
 
