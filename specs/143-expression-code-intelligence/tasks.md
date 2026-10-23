@@ -61,5 +61,5 @@ Tasks T001-T025 describe the implemented baseline. Program #2310 adds T026-T031;
 - T026 is the first executable implementation leaf and owns the end-to-end real-host cases.
 - T027 follows T026 and remains architecture-only so it does not duplicate the real-host harness.
 - T028-T029 remain Not Ready until T026 passes; T030 depends on T029.
-- T028-T030 also wait for the ADR requested by #3204 (declared or ambient variable reads, and the future of `get<Name>()`); see the Program #2310 decision log entry of 2026-10-23.
+- T028-T030 also wait for the ADR requested by #3204, now [ADR 0089](../../docs/adr/0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md), to be accepted; it removes `get<Name>()` completions and sources `variables` completions from the publish visible-scope list; see the Program #2310 decision log entry of 2026-10-23.
 - T031 closes the Foundation contribution only after T027-T030 and the coordinated Studio consumer checks pass.

@@ -104,6 +104,6 @@ The program succeeds only when all four executable demonstrations pass on review
 
 ## Open product decisions
 
-- **How scripts read variables** ([#3204](https://github.com/elsa-workflows/elsa-foundation/issues/3204)): declared parameters or ambient `variables`, and whether `get<Name>()` stays. This gates the rebuild of milestones 2 and 3; see the [decision log](decision-log.md#2026-10-23--gate-milestones-2-and-3-on-the-3204-read-model-adr).
+- **How scripts read variables** ([#3204](https://github.com/elsa-workflows/elsa-foundation/issues/3204)): declared parameters or ambient `variables`, and whether `get<Name>()` stays. Decided in [ADR 0089](../../adr/0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md) (proposed): read variables by name, publish pins them as declared parameters, and `get<Name>()` leaves the runtime and tooling. ADR 0089 governs milestones 2 and 3, and their rebuild waits for its acceptance; see the [decision log](decision-log.md#2026-10-23--gate-milestones-2-and-3-on-the-3204-read-model-adr).
 
 None other for milestone 1. The only deferred technical decision is whether a deeper JavaScript language service earns adoption; its spike must prove worker isolation, runtime-specific declarations, bundle/loading cost, cancellation, accessibility and fallback before it can affect milestone 3.

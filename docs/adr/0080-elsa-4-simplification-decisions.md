@@ -119,7 +119,9 @@ is active again, by the owner's decision of 23 October to salvage its plan and s
 first two units are the program records (#2367) and the expression-tooling permission-hash fix ported from #2373,
 which runs as its own small PR on `main`. Milestones 2 and 3 (#2378 and #2380) are rebuilt only after the
 [#3204](https://github.com/elsa-workflows/elsa-foundation/issues/3204) ADR settles how scripts read variables
-(declared parameters or ambient variables, and the future of `get<Name>()`). The program runs beside the
+(declared parameters or ambient variables, and the future of `get<Name>()`). That decision is now
+[ADR 0089](0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md), so the rebuild waits
+for ADR 0089 to be accepted. The program runs beside the
 other active programs, displaces none of them, and reactivates no other parked work. Releases and deployment
 are not included. The remaining decisions in this ADR apply to this work as to any other.
 

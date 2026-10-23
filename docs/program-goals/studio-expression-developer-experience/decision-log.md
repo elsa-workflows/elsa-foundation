@@ -134,7 +134,15 @@ offers.
 **Consequences:** The gate is met only when the ADR is accepted. Until then, milestone work is limited to
 milestone 1 and fixes such as the permission hash that do not depend on the read model.
 
-**Revisit:** When the #3204 ADR is accepted.
+**Update, 2026-10-23:** the #3204 decision is recorded as
+[ADR 0089](../../adr/0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md)
+(proposed, merged in #3276). Authors read variables by name (`variables.X`, with `getVariable('X')` as an alias),
+publish resolves each name to its nearest declaring scope and pins it as a declared parameter, and `get<Name>()`
+leaves the runtime and the JavaScript tooling. ADR 0089 now governs milestones 2 and 3: #2378 and #2380 are rebuilt
+without generated-getter naming, and `variables` completions come from the same visible-scope list publish uses.
+The gate is met when ADR 0089 is accepted.
+
+**Revisit:** When ADR 0089 is accepted.
 
 ## 2026-10-23 — The ADR 0080 D7 review protocol governs merging
 

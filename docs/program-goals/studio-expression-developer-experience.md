@@ -67,7 +67,10 @@ records point there.
   is broken on `main` today.
 - **Gate for milestones 2 and 3.** #2378 (JavaScript tooling) and #2380 (Liquid help) are rebuilt on current
   `main` only after the [#3204](https://github.com/elsa-workflows/elsa-foundation/issues/3204) ADR decides how
-  scripts read variables: declared parameters or ambient variables, and whether `get<Name>()` stays. See the
+  scripts read variables: declared parameters or ambient variables, and whether `get<Name>()` stays. That ADR is
+  [ADR 0089](../adr/0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md), which now governs
+  milestones 2 and 3: authors read variables by name (`variables.X`), publish pins each read as a declared
+  parameter, and `get<Name>()` leaves the runtime and the tooling. The rebuild starts once ADR 0089 is accepted. See the
   [decision log](studio-expression-developer-experience/decision-log.md#2026-10-23--gate-milestones-2-and-3-on-the-3204-read-model-adr).
 - **Milestone 1.** The rest of #2373 is rebased separately onto the new layout; it is not part of this restart.
 - **Review and merge.** Review and merge follow the [ADR 0080 D7](../adr/0080-elsa-4-simplification-decisions.md#d7--recurring-review-and-fix-routines) review loop as amended on 15 October (org-wide Issue Bus Lite): the Code Review app merges once a review round leaves nothing actionable and CI is green on the exact head. There is no separate owner acceptance before Ready or merge.
