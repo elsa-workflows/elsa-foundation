@@ -3,7 +3,7 @@
 **Feature Branch**: `agent/claude/263-ci-tiering-merge-queue`
 **Created**: 2026-10-21
 **Revised**: 2026-10-22, after review by Sipke Schoorstra and CodeRabbit on #3179 (see [Revision history](#revision-history))
-**Status**: Draft
+**Status**: Implemented
 **Input**: Joey Barten: "Whenever a merge arrived before my PR is merged, GitHub tells me to update this branch. [...] We are waiting a long time on the CI build and test runs. [...] Tests should much more run in parallel. [...] Tests should only run when code has changed, not documentation. [...] The regression/integration tests should likely run right before the merge completes, and could block the merge. But perhaps these more expensive regression tests should not run with every commit made during the PR." The objective, as confirmed on 2026-10-22, is **shorter waiting time**: from a push to a result, and from "ready" to "merged". The machine time of individual tests is not the objective.
 
 ## Evidence and Context
@@ -21,7 +21,7 @@ All findings were verified against `main` and the GitHub API on 2026-10-21 and 2
   - Next are `Elsa.Cluster.EntityFrameworkCore.Tests` (16 min; it starts child host processes), `Elsa.Activities.Compensation.Tests` (9), `Elsa.Activities.Http.IntegrationTests` (8), `Elsa.Cli.Tests` (6), `Elsa.Architecture.Tests` (4.5), `Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests` (4), `Elsa.Secrets.Workflows.Tests` (4) and `Elsa3.Activities.Design.Import.Integration.Tests` (3).
   - The job's budget was raised from 30 to 45 minutes (#3056) and on 2026-10-21 to 60 minutes.
 - **Flaky tests are the largest measured waste.**
-  - Failed `Build & test` runs since 2026-10-15 fail intermittently on at least five different Workbench native-hosting tests (`NativeHostingConformanceTests`, `NativeHostingGracefulHandoffTests`, `WorkbenchBackgroundActivityRecoveryTests`), on `Http.IntegrationTests.ResponseReplaySafetyProcessTests`, and on the sample test above.
+  - Failed `Build & test` runs since 2026-10-15 fail intermittently on at least five different Workbench native-hosting tests (`NativeHostingConformanceTests`, `NativeHostingGracefulHandoffTests`, `WorkbenchBackgroundActivityRecoveryTests`) and on the sample test above. A failure in `Http.IntegrationTests.ResponseReplaySafetyProcessTests` was first counted here too; implementation found it a real failure, not a flake (research R2).
   - The open `main is red: CI` issue (#2293) records a Workbench failure that passed on the second attempt.
   - Since 2026-10-08, CI runs on pushes to `main`: 50 green, 3 red, 46 cancelled because a newer push superseded them.
 - **Merge rate.** `main` took 22, 26 and 24 merges on 2026-10-19, 20 and 21 (35 on 2026-10-18).
@@ -287,6 +287,7 @@ Settled with Joey Barten on 2026-10-21 and revised on 2026-10-22 after review.
 - **2026-10-22 (planning)**: two factual corrections from research R5 and R6, with no change to any requirement. Workbench has 17 classes and two shared collections (four classes and two), not 13 classes and one collection of three; `Elsa3.Activities.Design.Import.Integration.Tests` starts no child process.
 - **2026-10-22 (planning, Joey Barten)**: FR-017 and Decision 5 narrowed so the PR tier loses as little as possible. A child host process is a hard trait only in a project with a median of 2 minutes or more, and `git` or `bash` launches never are. `Elsa.Etl.Tests`, `Elsa.Secrets.Persistence.EntityFrameworkCore.Tests` and `Elsa.Workflows.Publishing.Tests` stay in the PR tier.
 - **2026-10-22 (planning, Joey Barten)**: the `ci:full` label is dropped from FR-008, FR-023, FR-025 and Story 2 scenario 4, and the manual run is the one way to run the full tier early. This follows Sipke's review point 4 ("Agents won't add `ci:full`"): the label was never the safety net once the full tier became required on ready PRs. Keeping it would have cost a third workflow and a second check name (research R8).
+- **2026-10-22 (implementation)**: Evidence corrected. `ResponseReplaySafetyProcessTests` failed on a semantic assertion on PRs that changed what it guards, so it is not flaky and FR-014 does not quarantine it (research R2). Six tests are quarantined, not seven.
 - **2026-10-22 (Code Review round 1)**: each point and its resolution:
 
 | Review point | Resolution |

@@ -110,6 +110,7 @@
 		<ProjectReference Include="..\..\src\Expressions\JavaScript\Elsa.Expressions.JavaScript\Elsa.Expressions.JavaScript.csproj" />
 		<ProjectReference Include="..\..\src\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
 		<ProjectReference Include="..\..\src\Expressions\JavaScript\Rendering\Elsa.Expressions.JavaScript.Rendering\Elsa.Expressions.JavaScript.Rendering.csproj" />
+		<ProjectReference Include="..\..\src\Expressions\Liquid\Elsa.Expressions.Liquid.csproj" />
 		<ProjectReference Include="..\..\src\Expressions\Api\Elsa.Expressions.Api.csproj" />
 		<ProjectReference Include="..\..\src\Http\Elsa.Http\Elsa.Http.csproj" />
 		<ProjectReference Include="..\..\src\Http\JavaScript\Elsa.Http.JavaScript.csproj" />

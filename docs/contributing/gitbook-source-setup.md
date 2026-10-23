@@ -30,6 +30,8 @@ Link to canonical source guides instead of copying their explanations. Current-d
 
 GitBook's [content configuration](https://gitbook.com/docs/docs-as-code/git-sync/content-configuration) explains YAML mapping and `SUMMARY.md` navigation.
 
+Published page URLs follow the `SUMMARY.md` navigation tree, not the Git Sync folder layout. A `##` heading creates a page group whose slug prefixes every child URL. Do not add group headings whose slugs match a child folder or page slug: `## Studio` plus `studio/README.md` published as `/studio/studio`, and listing the space README first under `## Essentials` made `/essentials` redirect to `/`. Nest guide pages under the section landing file instead, so `/essentials` is that landing and `/essentials/quickstart` is the guide. `.gitbook.yaml` `redirects` keep the former doubled paths working.
+
 ## Contribution and publishing boundary
 
 Contributors edit Foundation Markdown and submit a GitHub pull request. Each public page includes **Edit this page on GitHub**, pointing to its owning file on `main`. GitHub may require sign-in or a fork; editing a file is not permission to commit directly to the live branch. Opening a PR does not require a GitBook editor seat. Review claims, links, navigation and the exact preview revision before accepting a change.

@@ -17,6 +17,16 @@ It replaces `tools/ci/ef-suites.json` and is the single list that both tiers and
   "shardTargetMinutes": 6,          // PR-tier target per shard (research R6)
   "slowTestSeconds": 10,            // FR-019 threshold
   "slowTestMode": "report",         // "report" | "fail"; "fail" needs FR-020's owner approval
+  "flakeTrackerIssue": 3263,        // the standing issue ci-flake-record.yml comments on (FR-004)
+
+  // Projects that run in a job of their own rather than a shard.
+  "ownJobs": { "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj": "Architecture guards" },
+
+  // Projects whose dotnet launches are SDK commands, not hosts; each needs a reason, and a stale entry fails.
+  "hostLaunchExemptions": [
+    { "project": "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+      "reason": "Runs SDK commands (dotnet build, dotnet msbuild) through Support/ChildProcess.cs, never a host process." }
+  ],
 
   "projects": [
     { "project": "Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj",
@@ -46,8 +56,11 @@ It replaces `tools/ci/ef-suites.json` and is the single list that both tiers and
     { "suite": "migrations",
       "project": "Essentials/tests/Persistence/EntityFrameworkCore/Migrations/ProviderTests/Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests.csproj",
       "require": "ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX" }
-    // ... the 23 suites moved from ef-suites.json, unchanged
+    // ... the 25 suites moved from ef-suites.json, unchanged
   ],
+
+  // The Secrets EF composition proof: a container suite of its own, run against the job's PostgreSQL.
+  "secretsCompositionSuite": { "suite": "secrets-ef-composition", "project": "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj" },
 
   "slowAllowList": [
     { "test": "Elsa.Cli.Tests.SomeClass.Some_test", "reason": "starts a real host" }
@@ -67,7 +80,11 @@ It replaces `tools/ci/ef-suites.json` and is the single list that both tiers and
 | `projects[].project` | Repo-relative path of a test project: a project under `Essentials/tests/**` or `Extensions/*/tests/**`, outside `studio/`, that references `Microsoft.NET.Test.Sdk` | `test-tiers-check`: each test project appears exactly once, and every entry exists and is a test project (FR-016) |
 | `projects[].tier` | `pr` or `integration`; the whole project is one tier (FR-018) | `test-tiers-check` |
 | `projects[].trait` | `testcontainers`, `child-process` or absent. It is never trusted: the check recomputes it. | `test-tiers-check`: a recorded trait must match the detected one. A project with Testcontainers must be `integration`; so must a project with a child host and `medianMinutes` ≥ 2 (FR-017). |
-| `projects[].medianMinutes` | Median duration from the latest rebalance. It is informational and drives `rebalance`. | none (data) |
+| `projects[].medianMinutes` | Median duration, recorded by `test-tiers-rebalance --write` over several runs, or `null` for a project not yet measured. It decides whether a child-host project reaches the 2-minute bar. | `test-tiers-check` (the 2-minute rule) |
+| `ownJobs` | Projects that run in a job of their own; they must be `pr` tier and in no shard | `test-tiers-check` |
+| `hostLaunchExemptions` | Projects whose `dotnet` launches are SDK commands, not hosts, each with a reason | `test-tiers-check`: the reason is not empty, and the project still launches `dotnet` (else the entry is stale) |
+| `secretsCompositionSuite` | The Secrets EF composition proof, as one more container suite | `ef-suites-self-test`; every container shard suite exists |
+| `flakeTrackerIssue` | The standing flake-tracking issue | none (data; `ci-flake-record.yml` reads it) |
 | `splits` | Class groups for projects above the shard target. Exactly one group per split project has `rest: true`. | `test-tiers-check`: every class named exists in the project, no class is named twice, and classes sharing an `[Collection]` are in the same group |
 | `shards.pr` / `shards.integration` | The committed shard grouping. A unit is a project path, or `<project>#<group>` for a split project. | `test-tiers-check`: every unit of the tier appears in exactly one shard of that tier. A split project appears only through its groups. While `integrationLeavesPrTier` is false, `shards.pr` also covers the integration units. |
 | `shards.containers` | Container suites per EF job | every `containerSuites[].suite` appears in exactly one shard |

@@ -3,9 +3,27 @@ name: Studio CI
 # Active root-level validation for Studio after its source was imported beneath Studio/
 # and its extension UIs beneath Extensions/*/studio/. The preserved nested .github copy
 # is source history only; this workflow owns validation in the consolidated repository.
+#
+# Pull requests run it only when they change Studio, a Studio extension, the Weaver extension the Studio solution
+# references, shared build configuration, or this workflow and its tooling (spec 263, FR-026). None of its checks is a
+# required status check, so the path filter cannot leave a required check waiting. Every push to main runs it in full.
+# That a backend change can still break the Studio API clients is tracked separately (#3177).
 on:
   pull_request:
     branches: [main]
+    paths:
+      - 'Studio/**'
+      - 'Extensions/*/studio/**'
+      - 'Extensions/Weaver/**'
+      - 'global.json'
+      - 'NuGet.config'
+      - 'Directory.Packages.props'
+      - 'Directory.Build.props'
+      - '.editorconfig'
+      - '.github/workflows/studio-ci.yml'
+      - 'tools/ci/verify-studio-assets.py'
+      - 'tools/ci/verify_studio_nuget_packages.py'
+      - 'tools/ci/studio*'
   push:
     branches: [main]
 
