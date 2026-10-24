@@ -1,0 +1,10 @@
+{
+  "extends": "../browser/tsconfig.json",
+  // Local `types: ["node"]` (see typings/node). The npm @types/node package is not installed:
+  // Vite and Vitest take it as an optional peer and leak Node globals into browser packages.
+  "compilerOptions": {
+    "types": ["node"],
+    "typeRoots": ["./typings"]
+  },
+  "include": ["./*.ts", "./support/**/*.ts"]
+}
