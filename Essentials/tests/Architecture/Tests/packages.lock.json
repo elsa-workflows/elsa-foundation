@@ -1638,6 +1638,15 @@
           "Elsa.Http.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.integrations.sdk": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Activities.Http": "[4.0.0-dev, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Secrets.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.locking.core": {
         "type": "Project"
       },

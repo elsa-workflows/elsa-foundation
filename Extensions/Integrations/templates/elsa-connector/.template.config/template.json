@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Elsa Workflows",
+  "classifications": ["Elsa", "Integrations", "Connector"],
+  "identity": "Elsa.Integrations.Connector",
+  "groupIdentity": "Elsa.Integrations",
+  "name": "Elsa Connector",
+  "shortName": "elsa-connector",
+  "description": "An Elsa 4 connector package: IActivity types discovered by CLR reconciliation, using Elsa.Integrations.Sdk.",
+  "sourceName": "Company.Connector",
+  "preferNameDirectory": true,
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  }
+}

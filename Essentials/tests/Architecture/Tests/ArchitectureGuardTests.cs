@@ -558,6 +558,7 @@ public sealed partial class ArchitectureGuardTests
         ("Elsa.Etl.", "Etl"),
         ("Elsa.Rules.", "Rules"),
         ("Elsa.ExtensionBuilder.", "ExtensionBuilder"),
+        ("Elsa.Integrations.", "Integrations"),
     ];
 
     /// <summary>
