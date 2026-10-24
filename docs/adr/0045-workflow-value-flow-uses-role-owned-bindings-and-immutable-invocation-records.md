@@ -141,11 +141,10 @@ and commit under [ADR 0048](0048-container-output-captures-resolve-through-produ
 The capture's frame mutation participates in the producing completion checkpoint; unbound activity
 completion and activity transitions still cannot write variables.
 
-**Proposed amendment ([ADR 0090](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md), not yet accepted).** RunJavaScript and C# activities may change
-variables they read, as a unit of work: changes are tracked during the step and applied in the step's checkpoint
-commit, beside its captures, and nothing is saved if the step faults. This would be a third graph-visible write
-form, visible through the published may-write set or the `[AccessesUndeclaredVariables]` marker. Until ADR 0090 is
-accepted, this section stands as written.
+**Proposed amendment.**
+[ADR 0090](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md) (proposed)
+would add a third, declared variable-write form: changes an activity step makes, committed with the step. Until it
+is accepted, this section stands as written.
 
 Potentially concurrent ordinary writes to the same variable fail validation unless an explicit,
 deterministic merge or reduction governs them. This refines ADR 0027's previously open concurrent
@@ -174,7 +173,9 @@ mutating host functions.
 Stateful scripts are activities that receive inputs and return typed results. Their results can feed
 an explicit `Set` operation. This decision supersedes the canonical-model portion of ADR 0030 that
 kept JavaScript variable write-back and ambient output accessors: those surfaces may remain only as
-isolated migration compatibility while the new model is introduced.
+isolated migration compatibility while the new model is introduced. (Proposed amendment:
+[ADR 0090](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md)
+would let RunJavaScript change variables as a declared write form; input-binding expressions stay pure.)
 
 Time, randomness, and other nondeterministic data enter an expression as explicit pinned parameters
 or through a separately specified deterministic runtime capability. Merely marking an expression
@@ -214,8 +215,9 @@ fields and injected services never survive a suspension.
 
 The activity transition algebra distinguishes complete, suspend, fault, and cancel. An activity
 transition does not contain hidden variable mutations; explicit `Set` nodes remain the only normal
-variable-write mechanism. ([ADR 0090](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md), proposed, would add a step's tracked variable changes as a
-declared write form; see the proposed amendment in §4.) The activity invocation contract returns that transition directly; it does
+variable-write mechanism. (Proposed amendment:
+[ADR 0090](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md) would add a
+third write form; see §4.) The activity invocation contract returns that transition directly; it does
 not publish successful values or outcomes through mutable execution-context `Set` methods.
 
 ### 7. Provide a generated method-call authoring facade
