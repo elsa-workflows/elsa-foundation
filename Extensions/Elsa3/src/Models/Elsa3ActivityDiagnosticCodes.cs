@@ -34,6 +34,12 @@ public static class Elsa3ActivityDiagnosticCodes
     /// <summary>A variable's starting value cannot be converted to the variable's own type by Elsa 3's rule.</summary>
     public const string VariableValueUnconvertible = "ELS3-ACTIVITY-VARIABLE-VALUE-UNCONVERTIBLE";
 
+    /// <summary>
+    /// A member is null, and what Elsa 3 ran it with cannot be reproduced or represented in Elsa 4 (spec 267): Elsa 3
+    /// hung, faulted, dropped data or rejected the activity, or Elsa 4 cannot publish the null.
+    /// </summary>
+    public const string NullUnconvertible = "ELS3-ACTIVITY-NULL-UNCONVERTIBLE";
+
     /// <summary>A captured output has no Elsa 4 counterpart and no exact projection.</summary>
     public const string OutputNotRepresentable = "ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE";
 
@@ -121,6 +127,12 @@ public static class Elsa3ActivityDiagnosticCodes
 
     /// <summary>RunJavaScript.PossibleOutcomes: routing is by return value.</summary>
     public const string ScriptOutcomeRouting = "ELS3-BEHAVIOUR-SCRIPT-OUTCOME-ROUTING";
+
+    /// <summary>
+    /// A null member of an alias or a verbatim catalog key gets the Elsa 4 input's default; Elsa 3 ran it with its own
+    /// activity's default, which the conversion cannot see (#3293).
+    /// </summary>
+    public const string NullTakesElsa4Default = "ELS3-BEHAVIOUR-NULL-TAKES-ELSA4-DEFAULT";
 
     /// <summary>A reusable workflow's Complete names an outcome the definition does not declare; it is declared anyway.</summary>
     public const string OutcomeUndeclared = "ELS3-BEHAVIOUR-OUTCOME-UNDECLARED";

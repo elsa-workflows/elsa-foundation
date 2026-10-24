@@ -35,22 +35,22 @@ internal sealed partial class Elsa3BuiltInActivityMap
     private static IEnumerable<Elsa3ActivityMapEntry> ControlFlow() =>
     [
         Catalog("If", If,
-            [Carry("Condition", "Condition"), Slot("Then", "If.Then"), Slot("Else", "If.Else"), Lost("Result")],
+            [Carry("Condition", "Condition") with { OnNull = NullUnbound }, Slot("Then", "If.Then"), Slot("Else", "If.Else"), Lost("Result")],
             [Outcome("Done", "True", "False")]),
         Catalog("While", While,
-            [Carry("Condition", "Condition", WhilePersistedCondition), Slot("Body", "While.Body")]),
+            [Carry("Condition", "Condition", WhilePersistedCondition) with { OnNull = NullUnbound }, Slot("Body", "While.Body")]),
         Catalog("For", For,
             [
-                Carry("Start", "Start"),
-                Carry("End", "End"),
-                Carry("Step", "Step", ForZeroStepFaults),
+                Carry("Start", "Start") with { OnNull = NullUnbound },
+                Carry("End", "End") with { OnNull = NullUnbound },
+                Carry("Step", "Step", ForZeroStepFaults) with { OnNull = NullRefused("Elsa 3 ran the loop with a step of 0, so it never advanced.") },
                 DefaultFlip("OuterBoundInclusive", "EndInclusive", "true"),
                 Slot("Body", "For.Body"),
                 Lost("CurrentValue")
             ],
             rewrite: Elsa3NodeRewriteKind.LoopVariableReferences),
         Catalog("ForEach", ForEach,
-            [Carry("Items", "Collection"), Slot("Body", "ForEach.Body"), Lost("CurrentValue")],
+            [Carry("Items", "Collection") with { OnNull = NullRefused("Elsa 3 faults on a null collection.") }, Slot("Body", "ForEach.Body"), Lost("CurrentValue")],
             rewrite: Elsa3NodeRewriteKind.LoopVariableReferences),
         NoCounterpart("ParallelForEach", "Elsa 4 has no parallel for-each.",
             Removed("Items"), Removed("Body", kind: Elsa3MemberKind.Port)),
@@ -75,7 +75,7 @@ internal sealed partial class Elsa3BuiltInActivityMap
     private static IEnumerable<Elsa3ActivityMapEntry> FlowModel() =>
     [
         Catalog("FlowDecision", If,
-            [Carry("Condition", "Condition")],
+            [Carry("Condition", "Condition") with { OnNull = NullUnbound }],
             [Outcome("True", "True"), Outcome("False", "False")]),
         Catalog("FlowSwitch", Switch,
             [Structure("Cases"), Structure("Mode", Elsa3MemberKind.Input)],
@@ -96,21 +96,28 @@ internal sealed partial class Elsa3BuiltInActivityMap
                 DefaultFlip("Code", "code", "0"),
                 DefaultFlip("Category", "category", "General"),
                 DefaultFlip("FaultType", "faultType", "System"),
-                Carry("Message", "message")
+                Carry("Message", "message") with { OnNull = NullAsNull }
             ]),
         Intrinsic("SetVariable", Elsa3IntrinsicContracts.Set,
-            [Structure("Variable", Elsa3MemberKind.Input), Carry("Value", Elsa3IntrinsicContracts.ValueKey)],
+            [Structure("Variable", Elsa3MemberKind.Input), Carry("Value", Elsa3IntrinsicContracts.ValueKey) with
+                {
+                    OnNull = NullRefused("Elsa 3 sets the variable to null, which Elsa 4 cannot publish as a value (#3280).")
+                }
+            ],
             Elsa3NodeRewriteKind.VariableReference),
         Intrinsic("SetOutput", Elsa3IntrinsicContracts.SetOutput,
             [
-                Narrow("OutputName", Elsa3IntrinsicContracts.NameKey, Elsa3ValueContract.LiteralOnly),
-                Carry("OutputValue", Elsa3IntrinsicContracts.ValueKey)
+                Narrow("OutputName", Elsa3IntrinsicContracts.NameKey, Elsa3ValueContract.LiteralOnly) with { OnNull = NullRequired },
+                Carry("OutputValue", Elsa3IntrinsicContracts.ValueKey) with
+                {
+                    OnNull = NullRefused("Elsa 3 sets the workflow output to null, which Elsa 4 cannot publish as a value (#3280).")
+                }
             ],
             Elsa3NodeRewriteKind.ReusableOutputWrite),
         Intrinsic("Correlate", Elsa3IntrinsicContracts.SetCorrelationId,
-            [Carry("CorrelationId", Elsa3IntrinsicContracts.ValueKey)]),
+            [Carry("CorrelationId", Elsa3IntrinsicContracts.ValueKey) with { OnNull = NullEmits("") }]),
         Intrinsic("SetName", Elsa3IntrinsicContracts.SetInstanceName,
-            [Carry("Value", Elsa3IntrinsicContracts.ValueKey)]),
+            [Carry("Value", Elsa3IntrinsicContracts.ValueKey) with { OnNull = NullEmits("") }]),
         Intrinsic("Finish", Elsa3IntrinsicContracts.Finish,
             [Synthetic(Elsa3IntrinsicContracts.OutcomeKey, "Done")]),
         Intrinsic("Complete", Elsa3IntrinsicContracts.Finish,
@@ -129,12 +136,12 @@ internal sealed partial class Elsa3BuiltInActivityMap
     [
         Catalog("HttpEndpoint", Http + "HttpEndpoint",
             [
-                Narrow("Path", "Path", Elsa3ValueContract.LiteralOnly),
-                Carry("SupportedMethods", "SupportedMethods"),
-                Carry("Authorize", "Authorize"),
-                Carry("Policy", "Policy"),
-                Carry("RequestTimeout", "RequestTimeout"),
-                Carry("RequestSizeLimit", "RequestSizeLimit", RequestSizeNoOutcome),
+                Narrow("Path", "Path", Elsa3ValueContract.LiteralOnly) with { OnNull = NullRefused("Elsa 3 cannot route an endpoint without a path.") },
+                Carry("SupportedMethods", "SupportedMethods") with { OnNull = NullAsNull },
+                Carry("Authorize", "Authorize") with { OnNull = NullUnbound },
+                Carry("Policy", "Policy") with { OnNull = NullAsNull },
+                Carry("RequestTimeout", "RequestTimeout") with { OnNull = NullAsNull },
+                Carry("RequestSizeLimit", "RequestSizeLimit", RequestSizeNoOutcome) with { OnNull = NullAsNull },
                 Removed("FileSizeLimit"),
                 Removed("AllowedFileExtensions"),
                 Removed("BlockedFileExtensions"),
@@ -164,10 +171,10 @@ internal sealed partial class Elsa3BuiltInActivityMap
         SendHttpRequest("FlowSendHttpRequest", flow: true),
         Catalog("WriteHttpResponse", Http + "WriteHttpResponse",
             [
-                Narrow("StatusCode", "StatusCode", Elsa3ValueContract.EnumNameToInt),
-                Narrow("Content", "Body", Elsa3ValueContract.HttpResponseBody) with { BehaviourWarning = HttpResponseJsonVariant },
-                Narrow("ContentType", "ContentType", Elsa3ValueContract.HttpResponseContentType),
-                Carry("ResponseHeaders", "Headers")
+                Narrow("StatusCode", "StatusCode", Elsa3ValueContract.EnumNameToInt) with { OnNull = NullUnbound },
+                Narrow("Content", "Body", Elsa3ValueContract.HttpResponseBody) with { BehaviourWarning = HttpResponseJsonVariant, OnNull = NullAsNull },
+                Narrow("ContentType", "ContentType", Elsa3ValueContract.HttpResponseContentType) with { OnNull = NullAsNull },
+                Carry("ResponseHeaders", "Headers") with { OnNull = NullRefused("Elsa 3 faults on null response headers.") }
             ]),
         NoCounterpart("DownloadHttpFile", "Elsa 4 has no file download activity."),
         NoCounterpart("WriteFileHttpResponse", "Elsa 4 has no file response activity."),
@@ -177,13 +184,16 @@ internal sealed partial class Elsa3BuiltInActivityMap
     {
         var members = new List<Elsa3MemberRule>
         {
-            Carry("Url", "Url"),
-            Narrow("Method", "Method", Elsa3ValueContract.HttpMethodSupported),
-            Narrow("Content", "Content", Elsa3ValueContract.StringOnly),
-            DefaultFlip("ContentType", "ContentType", "application/json", whenBound: "Content"),
+            Carry("Url", "Url") with { OnNull = NullRequired },
+            Narrow("Method", "Method", Elsa3ValueContract.HttpMethodSupported) with { OnNull = NullUnbound },
+            Narrow("Content", "Content", Elsa3ValueContract.StringOnly) with { OnNull = NullAsNull },
+            DefaultFlip("ContentType", "ContentType", "application/json", whenBound: "Content") with
+            {
+                OnNull = NullRefused("Elsa 3 sends no body when the content type is null.", whenBound: "Content")
+            },
             Removed("Authorization", warning: HttpAuthorizationUseConnection),
             Removed("DisableAuthorizationHeaderValidation", "true", warning: AuthHeaderUnvalidated),
-            Narrow("RequestHeaders", "RequestHeaders", Elsa3ValueContract.SingleHeaderValue),
+            Narrow("RequestHeaders", "RequestHeaders", Elsa3ValueContract.SingleHeaderValue) with { OnNull = NullRefused("Elsa 3 faults on null request headers.") },
             Removed("EnableResiliency", "false"),
             CarryOutput("StatusCode", "StatusCode"),
             SemanticsChanged("ParsedContent"),
@@ -192,7 +202,7 @@ internal sealed partial class Elsa3BuiltInActivityMap
         };
         if (flow)
         {
-            members.Add(Carry("ExpectedStatusCodes", "ExpectedStatusCodes"));
+            members.Add(Carry("ExpectedStatusCodes", "ExpectedStatusCodes") with { OnNull = NullEmits("[200]") });
         }
         else
         {
@@ -220,7 +230,13 @@ internal sealed partial class Elsa3BuiltInActivityMap
         Catalog("Timer", Scheduling + "Timer",
             [Narrow("Interval", "Interval", Elsa3ValueContract.LiteralTimeSpanToString, "00:01:00"), StartOnly()]),
         Catalog("Cron", Scheduling + "Cron",
-            [Narrow("CronExpression", "Expression", Elsa3ValueContract.LiteralOnly), StartOnly()]),
+            [
+                Narrow("CronExpression", "Expression", Elsa3ValueContract.LiteralOnly) with
+                {
+                    OnNull = NullRefused("Elsa 3 runs a Cron without an expression as a disabled trigger, which Elsa 4 has no counterpart for.")
+                },
+                StartOnly()
+            ]),
         NoCounterpart("StartAt", "Elsa 4 has no start-at trigger."),
     ];
 
@@ -228,17 +244,17 @@ internal sealed partial class Elsa3BuiltInActivityMap
     [
         Catalog("Event", Primitives + "Event",
             [
-                Carry("EventName", "EventName"),
+                Carry("EventName", "EventName") with { OnNull = NullRequired },
                 // Elsa 3's Result is the event payload; Elsa 4's Result is the event name, its payload output Payload (#3107).
                 CarryOutput("Result", "Payload"),
                 new Elsa3MemberRule("CanStartWorkflow", Elsa3MemberKind.CustomProperty, Elsa3MemberRuleKind.DefaultFlip, "CanStartWorkflow", Literal("false"))
             ]),
         Catalog("PublishEvent", Primitives + "PublishEvent",
             [
-                Carry("EventName", "EventName"),
-                Carry("CorrelationId", "CorrelationId"),
-                Carry("IsLocalEvent", "IsLocalEvent"),
-                Narrow("Payload", "Payload", Elsa3ValueContract.JsonOnly)
+                Carry("EventName", "EventName") with { OnNull = NullRequired },
+                Carry("CorrelationId", "CorrelationId") with { OnNull = NullAsNull },
+                Carry("IsLocalEvent", "IsLocalEvent") with { OnNull = NullUnbound },
+                Narrow("Payload", "Payload", Elsa3ValueContract.JsonOnly) with { OnNull = NullAsNull }
             ]),
         Catalog("DispatchWorkflow", DispatchWorkflow, DispatchMembers(executeWorkflow: false),
             [Outcome("Done", "Dispatched", "Completed")]),
@@ -254,9 +270,9 @@ internal sealed partial class Elsa3BuiltInActivityMap
     {
         var members = new List<Elsa3MemberRule>
         {
-            Narrow("WorkflowDefinitionId", "WorkflowDefinitionId", Elsa3ValueContract.LiteralOnly),
-            Carry("CorrelationId", "CorrelationId"),
-            Narrow("Input", "Inputs", Elsa3ValueContract.JsonOnly),
+            Narrow("WorkflowDefinitionId", "WorkflowDefinitionId", Elsa3ValueContract.LiteralOnly) with { OnNull = NullRequired },
+            Carry("CorrelationId", "CorrelationId") with { OnNull = NullAsNull },
+            Narrow("Input", "Inputs", Elsa3ValueContract.JsonOnly) with { OnNull = NullAsNull },
             Lost("Result"),
             Synthetic("CancelChildOnParentCancellation", "false")
         };
@@ -266,7 +282,7 @@ internal sealed partial class Elsa3BuiltInActivityMap
         }
         else
         {
-            members.Add(Carry("WaitForCompletion", "WaitForCompletion"));
+            members.Add(Carry("WaitForCompletion", "WaitForCompletion") with { OnNull = NullUnbound });
             members.Add(Removed("StartNewTrace", "false"));
             members.Add(Removed("ChannelName"));
         }
@@ -278,8 +294,8 @@ internal sealed partial class Elsa3BuiltInActivityMap
     [
         Catalog("RunJavaScript", RunJavaScript,
             [
-                Narrow("Script", "script", Elsa3ValueContract.ScriptBody),
-                Carry("PossibleOutcomes", "possibleOutcomes", ScriptOutcomeRouting),
+                Narrow("Script", "script", Elsa3ValueContract.ScriptBody) with { OnNull = NullRefused("Elsa 3 runs nothing without a script, and Elsa 4 requires one.") },
+                Carry("PossibleOutcomes", "possibleOutcomes", ScriptOutcomeRouting) with { OnNull = NullAsNull },
                 CarryOutput("Result", "result")
             ],
             // Elsa 3 completes with Done unless the script calls setOutcome (refused, #2717); Elsa 4 completes with
