@@ -66,6 +66,8 @@ describe("resolveActivityIcon", () => {
     expect(toActivityIconAssetUrl("asset:Acme.Slack/icons/slack.svg", "https://host.example/studio/workflows"))
       .toBe("/_content/Acme.Slack/icons/slack.svg");
     expect(resolveStudioHostBase("https://host.example/elsa/studio/workflows")).toBe("https://host.example/elsa/");
+    expect(resolveStudioHostBase("https://host.example/studios/workspace")).toBe("https://host.example/studios/workspace/");
+    expect(resolveStudioHostBase("https://host.example/workflows/executables/studio-demo")).toBe("https://host.example/workflows/executables/studio-demo/");
   });
 
   it("rejects an oversize, dot-segment, or parent-segment asset iconName", () => {

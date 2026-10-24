@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { studioNavigationRequestedEvent } from "@elsa-workflows/studio-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { StudioLink } from "../StudioLink";
+import { isStudioInAppHref, StudioLink, studioBasePath } from "../StudioLink";
 
 let active: { root: Root; container: HTMLElement } | null = null;
 
@@ -19,7 +19,7 @@ afterEach(() => {
 function renderLink(
   navigateToStudioPath?: (path: string) => void,
   href = "/workflows/activity-definitions?definition=invoice",
-  extra?: Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "children" | "onClick">
+  extra?: Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "children">
 ) {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -108,6 +108,28 @@ describe("StudioLink", () => {
     expect(navigateToStudioPath).not.toHaveBeenCalled();
   });
 
+  it("honours a consumer onClick that calls preventDefault", () => {
+    const navigateToStudioPath = vi.fn();
+    const link = renderLink(navigateToStudioPath, "/workflows/activity-definitions", {
+      onClick: event => event.preventDefault()
+    });
+    const event = dispatchClick(link, {});
+    expect(event.defaultPrevented).toBe(true);
+    expect(navigateToStudioPath).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { name: "a protocol-relative host", href: "//example.com/docs" },
+    { name: "a hash-only href", href: "#stay" },
+    { name: "a query-only href", href: "?definition=invoice" }
+  ])("leaves $name to the browser", ({ href }) => {
+    const navigateToStudioPath = vi.fn();
+    const link = renderLink(navigateToStudioPath, href);
+    const event = dispatchClick(link, {});
+    expect(event.defaultPrevented).toBe(false);
+    expect(navigateToStudioPath).not.toHaveBeenCalled();
+  });
+
   it("honours the unsaved-changes guard and does not navigate", () => {
     const navigateToStudioPath = vi.fn();
     const link = renderLink(navigateToStudioPath);
@@ -121,5 +143,44 @@ describe("StudioLink", () => {
     } finally {
       window.removeEventListener(studioNavigationRequestedEvent, block);
     }
+  });
+});
+
+describe("studioBasePath", () => {
+  it("treats /studio as a whole path segment", () => {
+    expect(studioBasePath("https://host.example/elsa/studio/workflows")).toBe("/elsa");
+    expect(studioBasePath("https://host.example/studio/workflows")).toBe("/");
+    expect(studioBasePath("https://host.example/tenant/studio")).toBe("/tenant");
+  });
+
+  it("does not treat /studios or studio-demo as a Studio mount", () => {
+    expect(studioBasePath("https://host.example/studios/workspace")).toBe("/");
+    expect(studioBasePath("https://host.example/workflows/executables/studio-demo")).toBe("/");
+  });
+});
+
+describe("isStudioInAppHref", () => {
+  const tenantStudio = "https://host.example/tenant/studio/workflows";
+
+  it("intercepts the root-relative paths callers pass, including under a PathBase", () => {
+    expect(isStudioInAppHref("/workflows/instances")).toBe(true);
+    expect(isStudioInAppHref("/workflows/instances", tenantStudio)).toBe(true);
+    expect(isStudioInAppHref("/workflows/activity-definitions?definition=invoice")).toBe(true);
+  });
+
+  it("still treats caller paths as in-app when the location contains studio-demo", () => {
+    expect(isStudioInAppHref("/workflows/instances", "https://host.example/workflows/executables/studio-demo")).toBe(true);
+  });
+
+  it("leaves hash-only, query-only, protocol-relative, and outside-base absolute hrefs to the browser", () => {
+    expect(isStudioInAppHref("#stay")).toBe(false);
+    expect(isStudioInAppHref("?definition=invoice")).toBe(false);
+    expect(isStudioInAppHref("//example.com/docs")).toBe(false);
+    expect(isStudioInAppHref(`${window.location.origin}/admin`)).toBe(false);
+    expect(isStudioInAppHref("https://host.example/admin", tenantStudio)).toBe(false);
+  });
+
+  it("treats an absolute URL inside a non-root PathBase as in-app", () => {
+    expect(isStudioInAppHref("https://host.example/tenant/workflows", tenantStudio)).toBe(true);
   });
 });

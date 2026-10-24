@@ -50,7 +50,6 @@ afterEach(() => {
   replaceDraftId = noRenderedPanel;
   replaceEditors = noRenderedPanel;
   unmountActivePanel();
-  vi.useRealTimers();
 });
 
 function renderPanel(
