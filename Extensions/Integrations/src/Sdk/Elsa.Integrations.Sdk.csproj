@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Minimal STUB for elsa-workflows/elsa-foundation#2726 / PR #2825.
+    Not packable. Delete this project and PackageReference the real SDK when #2825 merges.
+  -->
+
+  <PropertyGroup>
+    <Description>Non-packable STUB of Elsa.Integrations.Sdk until #2726 / PR #2825 lands. Not a NuGet package.</Description>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Integrations.Connectors.OAuth2.Tests" />
+  </ItemGroup>
+
+</Project>

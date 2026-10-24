@@ -8,7 +8,7 @@ internal sealed class HttpConnectionTypeProvider : IConnectionTypeProvider
     public ConnectionTypeDescriptor Descriptor { get; } = new(
         ConnectionTypeNames.Http,
         "HTTP",
-        [HttpAuthSchemes.ApiKey, HttpAuthSchemes.Basic, HttpAuthSchemes.Bearer],
+        [HttpAuthSchemes.ApiKey, HttpAuthSchemes.Basic, HttpAuthSchemes.Bearer, HttpAuthSchemes.OAuth2],
         [
             new ConnectionSettingField(HttpConnectionSettingKeys.BaseUrl, "Base URL", "url"),
             new ConnectionSettingField(HttpConnectionSettingKeys.AllowedHosts, "Allowed hosts", "text"),

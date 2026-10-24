@@ -1638,6 +1638,16 @@
           "Elsa.Http.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.integrations.connectors.oauth2": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Activities.Http": "[4.0.0-dev, )",
+          "Elsa.Connections": "[4.0.0-dev, )",
+          "Elsa.Connections.Core": "[4.0.0-dev, )",
+          "Elsa.Secrets.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.locking.core": {
         "type": "Project"
       },

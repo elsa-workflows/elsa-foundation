@@ -19,8 +19,8 @@ Extensions/
     tests/   the module's test projects
 ```
 
-`<Name>` is the capability bucket, not a project name. Agent, Elsa3 and ExtensionBuilder retain their
-existing backend classification. Studio components occupy their named capability buckets; the two
+`<Name>` is the capability bucket, not a project name. Agent, Elsa3, ExtensionBuilder and
+Integrations retain their existing backend classification. Studio components occupy their named capability buckets; the two
 Weaver projects share `Weaver/studio/`. This consolidation does not reclassify all optional backend
 features or move backend essentials merely because a Studio component has a matching name.
 
