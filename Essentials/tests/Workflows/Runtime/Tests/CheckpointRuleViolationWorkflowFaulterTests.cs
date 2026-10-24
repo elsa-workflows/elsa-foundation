@@ -195,6 +195,8 @@ public sealed class CheckpointRuleViolationWorkflowFaulterTests
         Assert.Equal(3, execution.DispatchNestingDepth);
         Assert.Equal("system-child", execution.Authority?.SystemIdentity);
         Assert.Equal(PinnedSource, execution.PinnedSource);
+        // It keeps the mode it was started in, as its first commit would have recorded it.
+        Assert.Equal(nameof(PersistenceMode.Ephemeral), execution.SystemMetadata[RuntimeMetadataKeys.PersistenceMode]);
 
         var incident = Assert.Single(await _incidents.ListBlockingAsync(WorkflowExecutionId));
         Assert.Equal(CheckpointRuleViolationWorkflowFaulter.IncidentId(WorkflowExecutionId), incident.IncidentId);
@@ -345,7 +347,8 @@ public sealed class CheckpointRuleViolationWorkflowFaulterTests
             Kind: kind,
             EnqueuedAt: Now,
             Payload: payloadElement ?? JsonSerializer.SerializeToElement(payload),
-            Metadata: new Dictionary<string, string>());
+            // The mode the start dispatcher decided for the run.
+            Metadata: new Dictionary<string, string> { [RuntimeMetadataKeys.PersistenceMode] = nameof(PersistenceMode.Ephemeral) });
         return new WorkflowExecutionCommandEnvelope(
             envelopeId: "envelope-start",
             workflowExecutionId: executionId,

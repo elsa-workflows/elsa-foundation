@@ -64,10 +64,6 @@ public sealed partial class ArchitectureGuardTests
             "Elsa.Attention.Core.AttentionContributorRegistration",
             "Elsa.Attention.Core.AttentionContributorRegistry"
         ],
-        ["Elsa.Mediator.Core"] =
-        [
-            "Elsa.Mediator.Core.Models.MessageContext`1"
-        ],
         ["Elsa.Pipelines.Core"] =
         [
             "Elsa.Pipelines.Core.PipelineBuilder`1"
@@ -117,7 +113,7 @@ public sealed partial class ArchitectureGuardTests
             "Elsa.Workflows.Runtime.Core.Services.PersistenceOperationScopeFactory",
             "Elsa.Workflows.Runtime.Core.Services.PersistenceScopeRunner",
             "Elsa.Workflows.Runtime.Core.Services.SinglePersistenceScopeSource",
-            // Empty slot-placement markers; ADR 0033 keeps the pipeline contract, including its slots, in Core.
+            // Empty slot-placement markers; the pipeline contract, including its slots, stays in Core.
             "Elsa.Workflows.Runtime.Core.Middleware.RuntimeActivityInputEvaluationMiddleware",
             "Elsa.Workflows.Runtime.Core.Middleware.RuntimeActivityLoadStateMiddleware",
             "Elsa.Workflows.Runtime.Core.Middleware.RuntimeActivityOutputCaptureMiddleware",

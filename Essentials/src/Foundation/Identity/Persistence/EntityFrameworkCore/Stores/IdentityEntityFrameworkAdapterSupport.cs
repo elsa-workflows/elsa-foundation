@@ -28,7 +28,7 @@ public static class IdentityEntityFrameworkAdapterSupport
     /// <summary>
     /// An id-set content column of a user row, read from the row's content columns upcast together through the family's
     /// one chain before any is parsed, so an adapter outside the owning module reads an older row exactly as the module's
-    /// own stores do (spec 180, FR-010; #2144).
+    /// own stores do (#2144).
     /// </summary>
     public static IReadOnlySet<string> ReadSet(UserEntity user, string column) => EfIdentityStoreSupport.ReadSet(user, column);
 

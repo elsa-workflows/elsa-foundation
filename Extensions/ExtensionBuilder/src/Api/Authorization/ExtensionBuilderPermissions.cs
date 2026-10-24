@@ -3,7 +3,7 @@ using Elsa.Foundation.Identity.Core.Authorization;
 namespace Elsa.ExtensionBuilder.Api.Authorization;
 
 /// <summary>
-/// Permission keys owned by the Extension Builder feature. Per ADR 0037, host-control permissions are
+/// Permission keys owned by the Extension Builder feature. Host-control permissions are
 /// first-class identity permissions but their ownership stays with the feature that owns the host-control
 /// surface, so they are contributed here rather than hard-coded into the identity domain.
 /// </summary>
@@ -11,9 +11,9 @@ public static class ExtensionBuilderPermissionKeys
 {
     public const string OwnerId = "elsa.extension-builder";
 
-    public const string Read = "extension-builder.read";
+    public const string Read = "extension-builder:read";
 
-    public const string Manage = "extension-builder.manage";
+    public const string Manage = "extension-builder:manage";
 }
 
 /// <summary>
@@ -37,7 +37,6 @@ public sealed class ExtensionBuilderPermissionContributor : IPermissionContribut
             ExtensionBuilderPermissionKeys.Manage,
             "Manage Extension Builder",
             Category,
-            "Edit repositories, run builds, and promote or roll back extension packages on the backend host.",
-            new HashSet<string> { ExtensionBuilderPermissionKeys.Read });
+            "Edit repositories, run builds, and promote or roll back extension packages on the backend host.");
     }
 }

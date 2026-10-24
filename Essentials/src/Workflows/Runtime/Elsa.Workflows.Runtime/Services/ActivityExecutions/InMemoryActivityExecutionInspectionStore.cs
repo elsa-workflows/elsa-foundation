@@ -8,6 +8,18 @@ public sealed class InMemoryActivityExecutionInspectionStore : IActivityExecutio
     private readonly object _syncRoot = new();
     private readonly Dictionary<ActivityExecutionInspectionProjectionKey, ActivityExecutionInspectionProjection> _projections = new();
 
+    internal void DeleteForWorkflowExecution(string workflowExecutionId)
+    {
+        lock (_syncRoot)
+        {
+            var keys = _projections.Keys
+                .Where(key => StringComparer.Ordinal.Equals(key.WorkflowExecutionId, workflowExecutionId))
+                .ToArray();
+            foreach (var key in keys)
+                _projections.Remove(key);
+        }
+    }
+
     public ValueTask SaveAsync(ActivityExecutionInspectionProjection projection, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(projection);

@@ -32,13 +32,17 @@ namespace Elsa.Activities.Runtime.Tests;
 [Collection("ConsoleCapture")]
 public sealed class WriteLineJavaScriptInputEndToEndTests
 {
-    [Fact]
-    public async Task WriteLine_with_javascript_bound_text_input_evaluates_and_completes()
+    [Theory]
+    [InlineData("\"a \" + 1")]
+    [InlineData("return \"a \" + 1;")]
+    [InlineData("const prefix = \"a \"; return prefix + 1;")]
+    [InlineData("const prefix = \"a \"; prefix + 1")]
+    public async Task WriteLine_with_javascript_bound_text_input_evaluates_and_completes(string source)
     {
         await using var harness = NewHarness("wl-exec");
 
         var run = await harness.RunAsync(
-            WorkflowExecutionHarness.NewExecutable(WriteLineNode("node-wl", "\"a \" + 1")));
+            WorkflowExecutionHarness.NewExecutable(WriteLineNode("node-wl", source)));
 
         run.AssertWorkflowCompleted();
         var state = run.AssertCompleted("node-wl");

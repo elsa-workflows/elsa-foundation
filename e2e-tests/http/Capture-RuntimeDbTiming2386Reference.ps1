@@ -3,7 +3,7 @@
     Manually captures one finite low-logging T02 timing case against an already-owned Workbench.
 .DESCRIPTION
     This script is a measurement fixture only. It never builds, configures, starts, stops, or cleans up a
-    host/container/database. The owner supplies the loopback BaseUrl, candidate SHA, effective cadence, and
+    host/container/database. The owner supplies the loopback BaseUrl, candidate SHA, expected persistence mode, and
     one bounded case. Every case performs one unmeasured preflight, exactly 25 warm-ups, then exactly 60
     measured requests. Failures remain in the 60-sample set; no retry or replacement sample is made.
 
@@ -18,14 +18,14 @@
     incomplete artifact before measurement.
 
     The bounded case set is intentionally finite: Http4Sequential, Http16Sequential, Http4Concurrency4, and
-    RestCompanionCoalesced (Coalesced only). This file is named Capture-*.ps1 and is not discovered by Test-*.ps1.
+    RestCompanionBalanced (Balanced only). This file is named Capture-*.ps1 and is not discovered by Test-*.ps1.
 #>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string] $BaseUrl,
     [Parameter(Mandatory)][ValidatePattern('^[0-9a-fA-F]{40}$')][string] $CandidateSha,
-    [Parameter(Mandatory)][ValidateSet('Immediate', 'Coalesced')][string] $ExpectedCadence,
-    [Parameter(Mandatory)][ValidateSet('Http4Sequential', 'Http16Sequential', 'Http4Concurrency4', 'RestCompanionCoalesced')][string] $Case,
+    [Parameter(Mandatory)][ValidateSet('Durable', 'Balanced')][string] $ExpectedPersistenceMode,
+    [Parameter(Mandatory)][ValidateSet('Http4Sequential', 'Http16Sequential', 'Http4Concurrency4', 'RestCompanionBalanced')][string] $Case,
     [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string] $OutputPath,
     [string] $Username = 'admin',
     [string] $Password = 'Password123!',
@@ -42,8 +42,8 @@ $MeasuredCount = 60
 $InstanceCountExpected = 1 + $WarmupCount + $MeasuredCount
 $requireStableLoadEnabled = [bool]$RequireStableLoad
 
-if ($Case -eq 'RestCompanionCoalesced' -and $ExpectedCadence -ne 'Coalesced') {
-    throw 'RestCompanionCoalesced is selected only for ExpectedCadence=Coalesced.'
+if ($Case -eq 'RestCompanionBalanced' -and $ExpectedPersistenceMode -ne 'Balanced') {
+    throw 'RestCompanionBalanced is selected only for ExpectedPersistenceMode=Balanced.'
 }
 if (-not [System.IO.Path]::IsPathRooted($OutputPath)) {
     throw 'OutputPath must be absolute and point to the owner-selected private capture directory.'
@@ -58,8 +58,7 @@ if (-not [Uri]::TryCreate($BaseUrl, [UriKind]::Absolute, [ref]$BaseUri) -or
 }
 $BaseUri = [Uri]($BaseUrl.TrimEnd('/') + '/')
 
-$ExpectedMaxSegment = if ($ExpectedCadence -eq 'Coalesced') { 50 } else { $null }
-$ExpectedInspection = if ($ExpectedCadence -eq 'Coalesced') { 'boundary-level' } else { 'activity-level' }
+$ExpectedInspection = if ($ExpectedPersistenceMode -eq 'Durable') { 'activity-level' } else { 'boundary-level' }
 $RepoRoot = (git -C (Join-Path $PSScriptRoot '../..') rev-parse --show-toplevel).Trim()
 $FixtureHead = (git -C $RepoRoot rev-parse HEAD).Trim()
 $FixtureScriptSha256 = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -111,10 +110,9 @@ function Get-ObjectField {
     [pscustomobject]@{ Exists = $false; Value = $null }
 }
 
-function Test-ExpectedCadence {
-    param([AllowNull()] $Cadence, [AllowNull()] $MaxSegment, [AllowNull()] $Inspection)
-    $maxSegmentMatches = if ($ExpectedCadence -eq 'Coalesced') { [string]$MaxSegment -eq '50' } else { $null -eq $MaxSegment }
-    return ($Cadence -eq $ExpectedCadence -and $Inspection -eq $ExpectedInspection -and $maxSegmentMatches)
+function Test-ExpectedPersistenceMode {
+    param([AllowNull()] $PersistenceMode, [AllowNull()] $Inspection)
+    return ($PersistenceMode -eq $ExpectedPersistenceMode -and $Inspection -eq $ExpectedInspection)
 }
 
 function Write-TimingArtifact {
@@ -419,8 +417,7 @@ function Get-HttpVerification {
         try {
             $escapedId = [Uri]::EscapeDataString([string]$executionId)
             $detail = Invoke-RestMethod "$($BaseUri)runtime/workflows/instances/$escapedId" -WebSession $Session -TimeoutSec 10
-            $cadence = Get-DetailSetting -Detail $detail -Name 'checkpointCadence'
-            $maxSegment = Get-DetailSetting -Detail $detail -Name 'maxSegmentCheckpoints'
+            $persistenceMode = Get-DetailSetting -Detail $detail -Name 'persistenceMode'
             $inspection = Get-DetailSetting -Detail $detail -Name 'inspectionGranularity'
             $status = [string](Get-DetailSetting -Detail $detail -Name 'status')
             $incidentCount = Get-DetailSetting -Detail $detail -Name 'incidentCount'
@@ -429,20 +426,19 @@ function Get-HttpVerification {
                 workflowExecutionId = [string]$executionId
                 status = $status
                 incidentCount = [int]$incidentCount
-                checkpointCadence = $cadence
-                maxSegmentCheckpoints = $maxSegment
+                persistenceMode = $persistenceMode
                 inspectionGranularity = $inspection
-                matchesExpectedCadence = Test-ExpectedCadence -Cadence $cadence -MaxSegment $maxSegment -Inspection $inspection
+                matchesExpectedPersistenceMode = Test-ExpectedPersistenceMode -PersistenceMode $persistenceMode -Inspection $inspection
             })
         } catch { $readbackErrors.Add($_.Exception.GetType().Name) }
     }
     $badDetail = @($executionReadbacks | Where-Object {
-        $_.status -notin @('Completed', 'Finished') -or $_.incidentCount -ne 0 -or -not $_.matchesExpectedCadence
+        $_.status -notin @('Completed', 'Finished') -or $_.incidentCount -ne 0 -or -not $_.matchesExpectedPersistenceMode
     })
     $allExecutionIdsPresentAndUnique = ($items.Count -eq $ExpectedInstanceCount -and $ids.Count -eq $ExpectedInstanceCount -and $uniqueIds.Count -eq $ExpectedInstanceCount)
     $allSummariesTerminalAndIncidentFree = ($badSummary.Count -eq 0 -and $items.Count -eq $ExpectedInstanceCount)
     $allDetailsTerminalAndIncidentFree = ($executionReadbacks.Count -eq $ExpectedInstanceCount -and $badDetail.Count -eq 0)
-    $effectiveSettingsMatched = ($executionReadbacks.Count -eq $ExpectedInstanceCount -and @($executionReadbacks | Where-Object { -not $_.matchesExpectedCadence }).Count -eq 0)
+    $effectiveSettingsMatched = ($executionReadbacks.Count -eq $ExpectedInstanceCount -and @($executionReadbacks | Where-Object { -not $_.matchesExpectedPersistenceMode }).Count -eq 0)
     [pscustomobject]@{
         endpoint = 'GET /runtime/workflows/instances/page?definitionId=...&take=100'
         expectedInstanceCount = $ExpectedInstanceCount
@@ -502,24 +498,22 @@ function Get-RestVerification {
             $count = Get-DetailSetting -Detail $detail -Name 'incidentCount'
             if ($null -ne $count) { [int]$count } else { @($detail.incidents).Count }
         } else { -1 }
-        $cadence = if ($null -ne $detail) { Get-DetailSetting -Detail $detail -Name 'checkpointCadence' } else { $null }
-        $maxSegment = if ($null -ne $detail) { Get-DetailSetting -Detail $detail -Name 'maxSegmentCheckpoints' } else { $null }
+        $persistenceMode = if ($null -ne $detail) { Get-DetailSetting -Detail $detail -Name 'persistenceMode' } else { $null }
         $inspection = if ($null -ne $detail) { Get-DetailSetting -Detail $detail -Name 'inspectionGranularity' } else { $null }
         $runDetails.Add([pscustomobject]@{
             workflowExecutionId = [string]$executionId
             status = $status
             incidentCount = $incidentCount
             outputMatched = ([string]$output -ceq $ExpectedText)
-            checkpointCadence = $cadence
-            maxSegmentCheckpoints = $maxSegment
+            persistenceMode = $persistenceMode
             inspectionGranularity = $inspection
-            matchesExpectedCadence = Test-ExpectedCadence -Cadence $cadence -MaxSegment $maxSegment -Inspection $inspection
+            matchesExpectedPersistenceMode = Test-ExpectedPersistenceMode -PersistenceMode $persistenceMode -Inspection $inspection
             readbackAvailable = ($null -ne $detail)
         })
     }
     $bad = @($runDetails | Where-Object {
         -not $_.readbackAvailable -or $_.status -notin @('Completed', 'Finished') -or $_.incidentCount -ne 0 -or -not $_.outputMatched -or
-        -not $_.matchesExpectedCadence
+        -not $_.matchesExpectedPersistenceMode
     })
     if ($readbackWatch.Elapsed -ge $readbackBudget -and $runDetails.Count -lt $uniqueIds.Count -and 'ReadbackBudgetExceeded' -notin $errors) { $errors.Add('ReadbackBudgetExceeded') }
     [pscustomobject]@{
@@ -562,11 +556,11 @@ function Get-TimingStatistics {
 function New-HttpFixtureSetup {
     param([Parameter(Mandatory)][string] $FixtureCase)
     $nonce = [Guid]::NewGuid().ToString('N').Substring(0, 10)
-    $workflowName = "RuntimeDbTiming2386-$FixtureCase-$ExpectedCadence-$nonce"
+    $workflowName = "RuntimeDbTiming2386-$FixtureCase-$ExpectedPersistenceMode-$nonce"
     $route = "runtime-db-timing-2386/$($FixtureCase.ToLowerInvariant())-$nonce/transform"
     . "$PSScriptRoot/Capture-RuntimeDbPaging2392Reference.ps1" `
         -HostCandidateSha $CandidateSha -BaseUrl $BaseUrl -Username $Username -Password $Password `
-        -ExpectedCadence $ExpectedCadence -WorkflowName $workflowName -RoutePath $route -SetupOnly
+        -ExpectedPersistenceMode $ExpectedPersistenceMode -WorkflowName $workflowName -RoutePath $route -SetupOnly
 }
 
 function New-SixteenNodeFixtureSetup {
@@ -575,7 +569,7 @@ function New-SixteenNodeFixtureSetup {
     $httpEndpoint = Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Http.Activities.HttpEndpoint'
     $writeResponse = Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Http.Activities.WriteHttpResponse'
     $nonce = [Guid]::NewGuid().ToString('N').Substring(0, 10)
-    $workflowName = "RuntimeDbTiming2386-Http16-$ExpectedCadence-$nonce"
+    $workflowName = "RuntimeDbTiming2386-Http16-$ExpectedPersistenceMode-$nonce"
     $route = "runtime-db-timing-2386/http16-$nonce/transform"
     $httpNode = New-ActivityNode -NodeId 'http-in' -VersionId $httpEndpoint -Inputs @(
         (New-LiteralInput -ReferenceKey 'Path' -Value $route),
@@ -617,7 +611,7 @@ function New-SixteenNodeFixtureSetup {
         SourceReferenceId = [string]$published.sourceReferenceId
         WorkflowName = $workflowName
         RoutePath = $route
-        ExpectedCadence = $ExpectedCadence
+        ExpectedPersistenceMode = $ExpectedPersistenceMode
         CandidateSourceSha = $CandidateSha.ToLowerInvariant()
         Context = $ctx
         ExecutableExport = $export
@@ -652,7 +646,7 @@ $batchEnd = $null
 $loadBefore = $null
 $loadAfter = $null
 $terminalVerification = $null
-$fixtureKind = if ($Case -eq 'RestCompanionCoalesced') { 'rest' } else { 'http' }
+$fixtureKind = if ($Case -eq 'RestCompanionBalanced') { 'rest' } else { 'http' }
 
 if ($Case -eq 'Http4Sequential' -or $Case -eq 'Http4Concurrency4') {
     $setup = New-HttpFixtureSetup -FixtureCase $Case
@@ -668,7 +662,7 @@ if ($Case -eq 'Http4Sequential' -or $Case -eq 'Http4Concurrency4') {
 if ($null -eq $setup -or [string]::IsNullOrWhiteSpace([string]$setup.DefinitionId) -or [string]::IsNullOrWhiteSpace([string]$setup.ArtifactId)) {
     throw 'Fixture setup did not return the definition/artifact identity needed for the bounded capture.'
 }
-$exportExpectedSetCount = switch ($Case) { 'Http4Sequential' { 1 }; 'Http4Concurrency4' { 1 }; 'Http16Sequential' { 13 }; 'RestCompanionCoalesced' { 2 } }
+$exportExpectedSetCount = switch ($Case) { 'Http4Sequential' { 1 }; 'Http4Concurrency4' { 1 }; 'Http16Sequential' { 13 }; 'RestCompanionBalanced' { 2 } }
 $exportExpectedNodeCount = if ($Case -eq 'Http16Sequential') { 16 } else { 4 }
 if ($profileEvidence.setIntrinsicCount -ne $exportExpectedSetCount) { throw 'Pinned executable export Set count did not match the selected fixture.' }
 if ($profileEvidence.exportedNodeCount -ne $exportExpectedNodeCount) { throw "Pinned executable export had $($profileEvidence.exportedNodeCount) actual nodes; expected $exportExpectedNodeCount." }
@@ -867,8 +861,7 @@ try {
                 source = $sourceEvidence
                 fixture = $fixtureEvidence
                 settings = [ordered]@{
-                    expectedCadence = $ExpectedCadence
-                    expectedMaxSegmentCheckpoints = $ExpectedMaxSegment
+                    expectedPersistenceMode = $ExpectedPersistenceMode
                     expectedInspectionGranularity = $ExpectedInspection
                     expectedEfCoreLogLevel = 'Warning'
                     hostLoggingLevelVerifiedByScript = $false
@@ -971,12 +964,12 @@ $successCount = if ($fixtureKind -eq 'http') {
 }
 $failureCount = $MeasuredCount - $successCount
 $timingCaseName = switch ($Case) {
-    'Http4Sequential' { "4-node HTTP sequential $ExpectedCadence" }
-    'Http16Sequential' { "16-node HTTP sequential $ExpectedCadence" }
-    'Http4Concurrency4' { "4-node HTTP concurrency 4 $ExpectedCadence; 60 total" }
-    'RestCompanionCoalesced' { 'ordinary REST companion execute admission Coalesced' }
+    'Http4Sequential' { "4-node HTTP sequential $ExpectedPersistenceMode" }
+    'Http16Sequential' { "16-node HTTP sequential $ExpectedPersistenceMode" }
+    'Http4Concurrency4' { "4-node HTTP concurrency 4 $ExpectedPersistenceMode; 60 total" }
+    'RestCompanionBalanced' { 'ordinary REST companion execute admission Balanced' }
 }
-$cadenceReadbacks = if ($fixtureKind -eq 'http') { @($terminalVerification.executionReadbacks) } else { @($terminalVerification.runReadbacks) }
+$modeReadbacks = if ($fixtureKind -eq 'http') { @($terminalVerification.executionReadbacks) } else { @($terminalVerification.runReadbacks) }
 $settingsMatch = [bool]$terminalVerification.effectiveSettingsMatched
 $bodyMatchesAll = if ($fixtureKind -eq 'http') {
     $preflightRecord.outputMatched -and @($warmupRecords | Where-Object { -not $_.outputMatched }).Count -eq 0 -and @($measuredRecords | Where-Object { -not $_.outputMatched }).Count -eq 0
@@ -1000,10 +993,9 @@ $result = [ordered]@{
     source = $sourceEvidence
     fixture = $fixtureEvidence
     settings = [ordered]@{
-        expectedCadence = $ExpectedCadence
-        expectedMaxSegmentCheckpoints = $ExpectedMaxSegment
+        expectedPersistenceMode = $ExpectedPersistenceMode
         expectedInspectionGranularity = $ExpectedInspection
-        effectiveSettingsReadback = $cadenceReadbacks
+        effectiveSettingsReadback = $modeReadbacks
         effectiveSettingsMatched = $settingsMatch
         expectedEfCoreLogLevel = 'Warning'
         hostLoggingLevelVerifiedByScript = $false
@@ -1062,8 +1054,8 @@ $result = [ordered]@{
 }
 
 Write-TimingArtifact -Artifact $result
-Write-Host ("[timing-result] case={0}; cadence={1}; samples={2}; successes={3}; failures={4}; p95-nearest-rank-ms={5}; output={6}" -f `
-    $timingCaseName, $ExpectedCadence, $measuredRecords.Count, $successCount, $failureCount, $result.measuredStatistics.p95NearestRankMilliseconds, $OutputPath)
+Write-Host ("[timing-result] case={0}; persistenceMode={1}; samples={2}; successes={3}; failures={4}; p95-nearest-rank-ms={5}; output={6}" -f `
+    $timingCaseName, $ExpectedPersistenceMode, $measuredRecords.Count, $successCount, $failureCount, $result.measuredStatistics.p95NearestRankMilliseconds, $OutputPath)
 
 $verificationPassed = if ($fixtureKind -eq 'http') { [bool]$terminalVerification.allHttpRunsVerified } else { [bool]$terminalVerification.allRunsVerified }
 if (-not $bodyMatchesAll -or -not $settingsMatch -or -not $verificationPassed) {

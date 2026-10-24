@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -10,9 +11,10 @@ using Microsoft.Extensions.Options;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Authentication;
 
-/// <summary>Rejects first-party cookies whose tenant or security stamp no longer resolves.</summary>
+/// <summary>Rejects first-party cookies whose tenant or security stamp no longer resolves, or whose user is disabled.</summary>
 public sealed class EfCoreIdentityCookieEvents(
     UserManager<AspNetCoreIdentityUser> userManager,
+    IUserStore users,
     IPersistenceAccessContextAccessor accessContextAccessor,
     IPersistenceAccessContextBinder accessContextBinder,
     IOptions<IdentityOptions> identityOptions) : CookieAuthenticationEvents
@@ -39,7 +41,8 @@ public sealed class EfCoreIdentityCookieEvents(
 
         var user = await userManager.FindByIdAsync(subject);
         if (user is null || !string.Equals(user.TenantId, tenantId, StringComparison.Ordinal) ||
-            !string.Equals(await userManager.GetSecurityStampAsync(user), stamp, StringComparison.Ordinal))
+            !string.Equals(await userManager.GetSecurityStampAsync(user), stamp, StringComparison.Ordinal) ||
+            (await users.FindAsync(user.TenantId, user.Id, context.HttpContext.RequestAborted))?.Status == UserStatus.Disabled)
             await RejectAsync(context);
     }
 

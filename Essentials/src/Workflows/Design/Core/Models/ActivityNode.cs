@@ -36,6 +36,12 @@ public sealed record ActivityNode(
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public AuthoredWorkflowIntrinsic? Intrinsic { get; init; }
+
+    /// <summary>
+    /// Selects where this invocation is executed. Inline is omitted to preserve existing authored JSON.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public ActivityExecutionPlacement ExecutionPlacement { get; init; }
 }
 
 /// <summary>

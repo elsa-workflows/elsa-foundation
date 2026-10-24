@@ -8,13 +8,14 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Pipelines.Core` �
 
 ### `IMiddleware` *(Core — `Elsa.Pipelines.Core`)*
 - **Kind:** Contributor (pipeline middleware step).
-- **Signature:** `ValueTask InvokeAsync(TContext context, Func<TContext, ValueTask> next);` (generic per pipeline context).
-- **Register:** via `UseMiddleware<TContext, TMiddleware>()` on the pipeline builder (not DI-registered directly). Pipelines are built at startup via `MiddlewareExtensions.BuildMiddlewareDelegate()`.
-- **Consumed by:** the pipeline delegate chain built by `BuildMiddlewareDelegate`. There is no single aggregating `IEventHandler`; the pipeline is a composed delegate, not an event-driven fan-in.
+- **Signature:** a marker with no members. The engine binds the middleware's one public `Invoke` or `InvokeAsync(TContext context)` method, which returns `ValueTask`, and hands the next step, `PipelineDelegate<TContext> next`, to its constructor.
+- **Register:** via `UseMiddleware<TContext, TMiddleware>()` on the pipeline builder (not DI-registered directly). The engine behind it, which finds the `Invoke` method and activates the middleware, is internal.
+- **Consumed by:** the pipeline delegate chain `UseMiddleware` composes. There is no single aggregating `IEventHandler`; the pipeline is a composed delegate, not an event-driven fan-in.
 
 **Sub-interfaces (domain-specific pipeline shapes):**
-- `IMessageMiddleware` *(Core — `Elsa.Mediator.Core`)* — middleware step in the unified Mediator command/request pipeline; see [`Elsa.Mediator/EXTENSION_POINTS.md`](../Elsa.Mediator/EXTENSION_POINTS.md). (Replaces the former separate `ICommandMiddleware`/`IRequestMiddleware`.)
-- `IEventMiddleware` *(Core — `Elsa.Events.Core`)* — middleware step in the event pipeline; see [`Elsa.Events/EXTENSION_POINTS.md`](../Elsa.Events/EXTENSION_POINTS.md).
+- `IEventMiddleware` *(Core, `Elsa.Events.Core`)*: a middleware step in front of event handler dispatch; see [`Events/Elsa.Events/EXTENSION_POINTS.md`](../../Events/Elsa.Events/EXTENSION_POINTS.md).
+
+The Mediator command and request pipeline also builds on `IMiddleware`, through `IMessageMiddleware`, but it is internal to `Elsa.Mediator` and not an extension point; see [`Mediator/Elsa.Mediator/EXTENSION_POINTS.md`](../../Mediator/Elsa.Mediator/EXTENSION_POINTS.md).
 
 **Known implementations (shipped):** see each domain-specific sub-interface's owning feature catalog.
 
@@ -36,5 +37,5 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Pipelines.Core` �
 
 ## Cross-references
 
-- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
+- Repo-wide index: [`EXTENSION_POINTS.md`](../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.22.1.

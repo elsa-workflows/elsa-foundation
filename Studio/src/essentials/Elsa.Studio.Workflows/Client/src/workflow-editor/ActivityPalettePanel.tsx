@@ -1,8 +1,10 @@
 import React, { useId, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, GripVertical, Search } from "lucide-react";
 import type { ActivityCatalogItem } from "../workflowTypes";
-import { getActivityDisplay, resolveActivityIcon } from "../workflowAdapter";
-import { formatActivityVersion, renderActivityIcon } from "../workflowFormatting";
+import { resolveActivityIcon, resolveActivityIconFallback, resolveActivityIconTone } from "../activityIcons";
+import { renderActivityIcon } from "../activityIconView";
+import { getActivityDisplay } from "../workflowAdapter";
+import { formatActivityVersion } from "../workflowFormatting";
 import type { ActivityPaletteGroup } from "./editorTypes";
 
 interface ActivityPalettePanelProps {
@@ -37,9 +39,14 @@ export function ActivityPalettePanel({
   const treeRef = useRef<HTMLDivElement | null>(null);
   const [focusedItemKey, setFocusedItemKey] = useState<string | null>(null);
   const activityChoiceCounts = new Map<string, number>();
+  const versionsByActivityAndLabel = new Map<string, Map<string, string[]>>();
   for (const activity of groups.flatMap(group => group.activities)) {
     const identity = activity.activityDefinitionId ?? activity.activityTypeKey;
     activityChoiceCounts.set(identity, (activityChoiceCounts.get(identity) ?? 0) + 1);
+    const version = formatActivityVersion(activity.activityDefinitionVersion ?? activity.version);
+    const versionsByLabel = versionsByActivityAndLabel.get(identity) ?? new Map<string, string[]>();
+    versionsByLabel.set(version.short, [...(versionsByLabel.get(version.short) ?? []), version.full]);
+    versionsByActivityAndLabel.set(identity, versionsByLabel);
   }
   const visibleItemKeys = groups.flatMap(group => {
     const categoryKey = `category:${group.category}`;
@@ -134,12 +141,26 @@ export function ActivityPalettePanel({
                   const descriptionId = description ? `wf-palette-description-${activity.activityVersionId}` : undefined;
                   const displayName = getActivityDisplay(activity);
                   const icon = resolveActivityIcon(activity);
+                  const tone = resolveActivityIconTone(activity);
                   const activityKey = `activity:${activity.activityVersionId}`;
                   const version = formatActivityVersion(
                     activity.activityDefinitionVersion ?? activity.version);
                   const activityIdentity = activity.activityDefinitionId ?? activity.activityTypeKey;
                   const showVersion = (activityChoiceCounts.get(activityIdentity) ?? 0) > 1;
+                  const versionLabel = `Version ${version.short}`;
                   const exactVersionLabel = `Exact version ${version.full}`;
+                  const collidingVersions = versionsByActivityAndLabel.get(activityIdentity)?.get(version.short) ?? [];
+                  const hash = version.hasHash ? version.full.slice(version.short.length + 1) : "";
+                  const distinctHashes = collidingVersions
+                    .filter(candidate => candidate.startsWith(`${version.short}+`))
+                    .map(candidate => candidate.slice(version.short.length + 1));
+                  let hashPrefixLength = Math.min(7, hash.length);
+                  while (hashPrefixLength < hash.length && distinctHashes.some(candidate => candidate !== hash && candidate.startsWith(hash.slice(0, hashPrefixLength)))) {
+                    hashPrefixLength += 1;
+                  }
+                  const chipVersion = collidingVersions.length > 1 && version.hasHash
+                    ? `${version.short}+${hash.slice(0, hashPrefixLength)}`
+                    : version.short;
                   return (
                     <button
                       type="button"
@@ -151,7 +172,7 @@ export function ActivityPalettePanel({
                       key={activity.activityVersionId}
                       disabled={disabled}
                       draggable={!disabled}
-                      title={[description || getActivityDisplay(activity), exactVersionLabel].filter(Boolean).join(" — ")}
+                      title={[description || getActivityDisplay(activity), versionLabel].filter(Boolean).join(" — ")}
                       aria-label={`${displayName}, ${exactVersionLabel}`}
                       aria-describedby={descriptionId}
                       onClick={() => onActivityClick(activity)}
@@ -165,16 +186,16 @@ export function ActivityPalettePanel({
                         onActivityClick(activity);
                       }}
                     >
-                      <span className="wf-activity-icon" data-icon={icon} aria-hidden="true">
-                        {renderActivityIcon(icon)}
+                      <span className="wf-activity-icon" data-icon={icon} data-tone={tone} aria-hidden="true">
+                        {renderActivityIcon(icon, resolveActivityIconFallback(activity))}
                       </span>
                       <span className="wf-palette-activity-text">
                         <strong>{displayName}</strong>
                         {description ? <small id={descriptionId}>{description}</small> : null}
                       </span>
                       {showVersion ? (
-                        <span className="wf-palette-version" title={`Exact version ${version.full}`} aria-label={`Exact version ${version.full}`}>
-                          v{version.short}
+                        <span className="wf-palette-version" title={collidingVersions.length > 1 ? exactVersionLabel : versionLabel} aria-label={exactVersionLabel}>
+                          v{chipVersion}
                         </span>
                       ) : null}
                       <GripVertical className="wf-palette-activity-grip" size={14} aria-hidden="true" />

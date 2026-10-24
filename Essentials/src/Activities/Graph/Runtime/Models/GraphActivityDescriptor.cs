@@ -38,7 +38,6 @@ public sealed class GraphActivityDescriptor
     {
     }
 
-    [JsonConstructor]
     public GraphActivityDescriptor(
         string definitionId,
         string definitionVersionId,
@@ -53,6 +52,40 @@ public sealed class GraphActivityDescriptor
         IReadOnlyList<string>? requiredInputReferenceKeys,
         IReadOnlyList<string>? requiredOutputReferenceKeys,
         IReadOnlyList<GraphActivityOutcomeMappingDescriptor>? outcomeMappings)
+        : this(
+            definitionId,
+            definitionVersionId,
+            version,
+            templateHash,
+            entryNodeId,
+            entryOccurrenceId,
+            inputs,
+            variables,
+            outputs,
+            outputMappings,
+            requiredInputReferenceKeys,
+            requiredOutputReferenceKeys,
+            outcomeMappings,
+            null)
+    {
+    }
+
+    [JsonConstructor]
+    public GraphActivityDescriptor(
+        string definitionId,
+        string definitionVersionId,
+        string version,
+        string templateHash,
+        string? entryNodeId,
+        string? entryOccurrenceId,
+        IReadOnlyList<GraphActivityInputDescriptor>? inputs,
+        IReadOnlyList<GraphActivityVariableDescriptor>? variables,
+        IReadOnlyList<GraphActivityOutputDescriptor>? outputs,
+        IReadOnlyList<GraphActivityOutputMappingDescriptor>? outputMappings,
+        IReadOnlyList<string>? requiredInputReferenceKeys,
+        IReadOnlyList<string>? requiredOutputReferenceKeys,
+        IReadOnlyList<GraphActivityOutcomeMappingDescriptor>? outcomeMappings,
+        IReadOnlyList<GraphActivityCompleteOutcomeDescriptor>? completeOutcomes)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(definitionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(definitionVersionId);
@@ -73,6 +106,7 @@ public sealed class GraphActivityDescriptor
         Outputs = Snapshot(outputs);
         OutputMappings = Snapshot(outputMappings);
         OutcomeMappings = SnapshotOutcomeMappings(outcomeMappings);
+        CompleteOutcomes = SnapshotCompleteOutcomes(completeOutcomes);
         RequiredInputReferenceKeys = SnapshotKeys(requiredInputReferenceKeys);
         RequiredOutputReferenceKeys = SnapshotKeys(requiredOutputReferenceKeys);
     }
@@ -88,6 +122,12 @@ public sealed class GraphActivityDescriptor
     public IReadOnlyList<GraphActivityOutputDescriptor> Outputs { get; }
     public IReadOnlyList<GraphActivityOutputMappingDescriptor> OutputMappings { get; }
     public IReadOnlyList<GraphActivityOutcomeMappingDescriptor> OutcomeMappings { get; }
+
+    /// <summary>
+    /// The boundary outcomes a <c>Complete</c> node in this body may select, keyed by the reference key the node
+    /// carries. Empty when the body has no <c>Complete</c> node.
+    /// </summary>
+    public IReadOnlyList<GraphActivityCompleteOutcomeDescriptor> CompleteOutcomes { get; }
     public IReadOnlyList<string> RequiredInputReferenceKeys { get; }
     public IReadOnlyList<string> RequiredOutputReferenceKeys { get; }
 
@@ -112,6 +152,17 @@ public sealed class GraphActivityDescriptor
             throw new ArgumentException("Graph outcome mapping names cannot be blank.", nameof(values));
         if (snapshot.Select(x => x.SourceOutcomeName).Distinct(StringComparer.Ordinal).Count() != snapshot.Length)
             throw new ArgumentException("Graph outcome mapping source names cannot contain duplicates.", nameof(values));
+        return Array.AsReadOnly(snapshot);
+    }
+
+    private static IReadOnlyList<GraphActivityCompleteOutcomeDescriptor> SnapshotCompleteOutcomes(
+        IReadOnlyList<GraphActivityCompleteOutcomeDescriptor>? values)
+    {
+        var snapshot = (values ?? []).ToArray();
+        if (snapshot.Any(x => string.IsNullOrWhiteSpace(x.ReferenceKey) || string.IsNullOrWhiteSpace(x.BoundaryOutcomeName)))
+            throw new ArgumentException("Graph complete outcome reference keys and names cannot be blank.", nameof(values));
+        if (snapshot.Select(x => x.ReferenceKey).Distinct(StringComparer.Ordinal).Count() != snapshot.Length)
+            throw new ArgumentException("Graph complete outcome reference keys cannot contain duplicates.", nameof(values));
         return Array.AsReadOnly(snapshot);
     }
 }
@@ -142,6 +193,11 @@ public sealed record GraphActivityOutputMappingDescriptor(
 
 public sealed record GraphActivityOutcomeMappingDescriptor(
     string SourceOutcomeName,
+    string BoundaryOutcomeName);
+
+/// <summary>Maps the boundary outcome reference key a <c>Complete</c> node names to the runtime boundary outcome name.</summary>
+public sealed record GraphActivityCompleteOutcomeDescriptor(
+    string ReferenceKey,
     string BoundaryOutcomeName);
 
 public sealed record GraphActivityExpression(string Syntax, JsonElement Value);

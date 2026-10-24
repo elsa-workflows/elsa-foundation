@@ -7,9 +7,9 @@ using Xunit;
 namespace Elsa.Expressions.Tests.Unit;
 
 /// <summary>
-/// FR-001/FR-003/SC-001: authored argument types serialize as exactly { alias, collectionKind } —
+/// Authored argument types serialize as exactly { alias, collectionKind } —
 /// no decomposed CLR identity (typeName/namespace/assemblyName/assemblyVersion). TypeReference is plain
-/// data, so the configured camelCase policy applies without a custom converter (FR-020).
+/// data, so the configured camelCase policy applies without a custom converter.
 /// </summary>
 public sealed class ArgumentDefinitionSerializationTests
 {

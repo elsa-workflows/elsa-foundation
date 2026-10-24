@@ -12,7 +12,7 @@ using Microsoft.Extensions.Time.Testing;
 namespace Elsa.Cluster.Tests.InProcess;
 
 /// <summary>What the in-process provider promises beyond the conformance suite: it costs nothing, needs no
-/// configuration, and is one member per process however many containers ask for it (FR-017, FR-018).</summary>
+/// configuration, and is one member per process however many containers ask for it.</summary>
 public sealed class InProcessClusterMembershipTests : IAsyncDisposable
 {
     private readonly CountingClock _clock = new();

@@ -4,7 +4,7 @@ using Elsa.Persistence.Schema;
 namespace Elsa.Cluster.Readability.Tests;
 
 /// <summary>
-/// Spec 180's FR-001: a family declaration names the family, its owning EF module and the version this build reads, and
+/// A family declaration names the family, its owning EF module and the version this build reads, and
 /// is readable as metadata without composing a shell or a container, or running any of the declaring assembly's code.
 /// </summary>
 public sealed class EfSchemaFamilyCatalogTests : IDisposable
@@ -29,7 +29,7 @@ public sealed class EfSchemaFamilyCatalogTests : IDisposable
         Assert.Equal(["3"], Assert.Single(EfSchemaFamilyCatalog.Discover([Declare("Sales", ["Sales"], new SyntheticFamily("Orders", "Sales", "3"))])).ReadableVersions);
 
     /// <summary>
-    /// FR-001 and FR-004: the chain is part of the declaration, read from metadata alone, each step's versions off its
+    /// The chain is part of the declaration, read from metadata alone, each step's versions off its
     /// upcaster's own attribute, and the build reads the current version and every predecessor the chain reaches.
     /// </summary>
     [Fact]
@@ -136,7 +136,7 @@ public sealed class EfSchemaFamilyCatalogTests : IDisposable
 
     /// <summary>
     /// An assembly that owns an <c>[EfModule]</c> must name it as the family's owner; declaring the family shared
-    /// instead would let it escape the "exactly one EF module" rule FR-001 states for an owned family.
+    /// instead would let it escape the "exactly one EF module" rule for an owned family.
     /// </summary>
     [Fact]
     public void A_shared_family_in_an_assembly_that_also_declares_a_module_is_refused()
@@ -149,7 +149,7 @@ public sealed class EfSchemaFamilyCatalogTests : IDisposable
     }
 
     /// <summary>
-    /// Spec 180, FR-009 and FR-008: a family's content and integrity columns are declared beside it and read, from metadata
+    /// A family's content and integrity columns are declared beside it and read, from metadata
     /// alone, onto its descriptor, which is what the guards and the model test hold every read and write to.
     /// </summary>
     [Fact]
@@ -173,7 +173,7 @@ public sealed class EfSchemaFamilyCatalogTests : IDisposable
     }
 
     /// <summary>
-    /// Spec 186, FR-004 and FR-010b: a family's content-addressed tables and its rewriter are read from the declaration's
+    /// A family's content-addressed tables and its rewriter are read from the declaration's
     /// named arguments as metadata alone, by name, since the catalog names the attribute rather than referencing it; a
     /// family that names neither reads as none.
     /// </summary>

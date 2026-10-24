@@ -19,6 +19,7 @@ public static class ActivityContractInventory
     private static readonly Type[] Anchors =
     [
         typeof(Bpmn.Activities.BpmnProcess),
+        typeof(Compensation.Activities.CompensationScope),
         typeof(If.Activities.If),
         typeof(DispatchWorkflow.Runtime.Activities.DispatchWorkflow),
         typeof(Flowchart.Activities.Flowchart),

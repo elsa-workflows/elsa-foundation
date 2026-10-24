@@ -8,7 +8,7 @@ namespace Elsa.Primitives.Hosting.Tests;
 
 public sealed class IdentityGeneratorRegistrationTests
 {
-    // Kept beside the composition test (§2.23.1): conditional registration, the configured kind selects the generator.
+    // Kept beside the composition test: conditional registration, the configured kind selects the generator.
     [Theory]
     [InlineData(IdentityGeneratorKind.UuidV7, typeof(UuidV7IdentityGenerator))]
     [InlineData(IdentityGeneratorKind.Short, typeof(ShortIdentityGenerator))]
@@ -22,7 +22,7 @@ public sealed class IdentityGeneratorRegistrationTests
         Assert.IsType(expected, scope.ServiceProvider.GetRequiredService<IIdentityGenerator>());
     }
 
-    // Kept beside the composition test (§2.23.1): replacement, the integrator's generator replaces a prior default.
+    // Kept beside the composition test: replacement, the integrator's generator replaces a prior default.
     [Fact]
     public void ReplacesAnyPreviouslyRegisteredGenerator()
     {

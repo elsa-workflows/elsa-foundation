@@ -22,8 +22,8 @@ a single module and its tests instead.
 `tools/solution-filters/profiles.json` also holds one profile that is never committed:
 `Elsa.Server.Persistence.Integration.slnf`, every Testcontainers-backed test project plus its
 project-reference closure. The fast CI lane reads its roots to leave those suites out, and the EF
-suite selector checks that `tools/ci/ef-suites.json` names every one of them, so CI's nightly EF
-container matrix runs them all (#2632). To run every Testcontainers suite locally in one go:
+suite selector checks that `containerSuites` in `tools/ci/test-tiers.json` names every one of them, so CI's EF container
+matrix runs them all: in the full tier, nightly and on dispatch (spec 263). To run every Testcontainers suite locally in one go:
 
 ```bash
 dotnet run --project tools/maps/Elsa.Maps.Generator -- solution-filter Elsa.Server.Persistence.Integration.slnf
@@ -108,8 +108,8 @@ CI runs the same check and asks `dotnet sln` to parse every committed filter. A 
 or changed dependency therefore makes the check fail until the generated profiles are refreshed.
 The fast CI lane also asks the generator for the integration profile's explicit roots, ensuring each
 test that reaches Testcontainers -- directly or through a `ProjectReference` -- leaves fast CI while
-comment-only mentions remain in it. The nightly EF container matrix reads the same roots through
-`ef-suites-self-test` and fails when `tools/ci/ef-suites.json` misses one, so the two lanes stay
+comment-only mentions remain in it. The EF container matrix reads the same roots through
+`ef-suites-self-test` and fails when `containerSuites` in `tools/ci/test-tiers.json` misses one, so the two lanes stay
 complementary.
 
 ## Completion gate
@@ -122,3 +122,6 @@ dotnet build Elsa.Server.slnx
 dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj
 dotnet run --project tools/maps/Elsa.Maps.Generator -- check
 ```
+
+`-- check` checks the same committed filters as `-- solution-filters-check`; the dependency map is derived per commit and
+not committed (spec 259).

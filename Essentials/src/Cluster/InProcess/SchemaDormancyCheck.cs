@@ -8,13 +8,13 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Cluster.InProcess;
 
 /// <summary>
-/// The default shared dormancy check (spec 182, FR-003): <see cref="SchemaDormancyRule"/> over what this container's
+/// The default shared dormancy check: <see cref="SchemaDormancyRule"/> over what this container's
 /// <see cref="IObservedSchemaFinalization"/> has observed. Without a source it has observed nothing, so every requirement
 /// is unmet rather than assumed met.
 /// </summary>
 /// <remarks>
 /// Every answer comes from memory. Only an unmet requirement whose observation is older than
-/// <see cref="SchemaDormancyOptions.RefreshBound"/> makes the observation be refreshed before the answer is given (FR-014).
+/// <see cref="SchemaDormancyOptions.RefreshBound"/> makes the observation be refreshed before the answer is given.
 /// </remarks>
 public sealed class SchemaDormancyCheck(IOptions<SchemaDormancyOptions>? options = null, IObservedSchemaFinalization? observed = null) : ISchemaDormancyCheck
 {
@@ -31,7 +31,7 @@ public sealed class SchemaDormancyCheck(IOptions<SchemaDormancyOptions>? options
         if (availability.IsAvailable || observed is null)
             return availability;
 
-        // FR-014: a stale view must not refuse what finalization already allows. The source refreshes only what it read
+        // A stale view must not refuse what finalization already allows. The source refreshes only what it read
         // longer ago than the bound, so this costs nothing when the view is fresh.
         foreach (var family in availability.Unmet.Select(unmet => unmet.Requirement.Family).Distinct(StringComparer.Ordinal))
             await observed.RefreshAsync(family, _refreshBound, cancellationToken);

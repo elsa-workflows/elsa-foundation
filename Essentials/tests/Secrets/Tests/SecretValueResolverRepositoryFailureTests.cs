@@ -17,7 +17,7 @@ namespace Elsa.Secrets.Tests;
 
 /// <summary>
 /// When reading the secret's metadata fails, the resolver reports a result rather than a throw, with none of the
-/// repository's exception text, classified by what failed (spec 188, FR-003, User Story 2): an outage of the repository
+/// repository's exception text, classified by what failed: an outage of the repository
 /// is <see cref="SecretResolutionFailureCode.StoreUnavailable"/>, transient, and a row or identity the repository
 /// cannot serve is <see cref="SecretResolutionFailureCode.CorruptState"/>, permanent. A canceled resolution stays a
 /// cancellation, and a name the validator refuses never reaches the repository.

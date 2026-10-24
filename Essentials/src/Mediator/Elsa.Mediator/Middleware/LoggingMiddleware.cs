@@ -1,4 +1,4 @@
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Mediator.Pipeline;
 using Elsa.Mediator.Core.Models;
 using Elsa.Pipelines.Core.Contracts;
 using JetBrains.Annotations;
@@ -8,10 +8,10 @@ namespace Elsa.Mediator.Middleware;
 
 /// <summary>
 /// Logs the message being dispatched and its completion. Applied to the command pipeline (preserving
-/// the prior command-logging behaviour); the request pipeline does not compose it.
+/// the prior command-logging behavior); the request pipeline does not compose it.
 /// </summary>
 [UsedImplicitly]
-public sealed class LoggingMiddleware(PipelineDelegate<IMessageContext> next, ILogger<LoggingMiddleware> logger) : IMessageMiddleware
+internal sealed class LoggingMiddleware(PipelineDelegate<IMessageContext> next, ILogger<LoggingMiddleware> logger) : IMessageMiddleware
 {
     /// <inheritdoc />
     public async ValueTask Invoke(IMessageContext context)

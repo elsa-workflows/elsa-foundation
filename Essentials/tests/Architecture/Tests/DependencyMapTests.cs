@@ -1,20 +1,22 @@
 using System.Diagnostics;
 using System.Text.Json;
 using System.Xml.Linq;
+using Elsa.Maps.Projects;
 using Xunit;
 using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// Holds the committed dependency map (<c>docs/maps/dependency-map.json</c>, spec 149) to what its consumers rely
-/// on, reading the JSON alone as they do and never the generator that writes it (SC-005).
+/// Holds the dependency-map dataset to what its consumers rely on, reading the JSON the shared project-graph scan
+/// produces for this checkout (<see cref="DependencyMapJson"/>) as the versioning calculator reads it for a commit.
 /// </summary>
 /// <remarks>
-/// Freshness is the maps check's concern: it byte-compares the committed dataset with a regeneration. This class
-/// pins that the dataset answers correctly: ownership by the longest matching project directory (FR-006, SC-001),
-/// a package id and version line on every packable node (FR-003, FR-004), and pinned-transitive edges that carry the
-/// pins they name (FR-012).
+/// The dataset is not committed (spec 259): the calculator derives it from each commit's tree with this same scan, so
+/// there is no copy to keep fresh, and a tree the scan cannot read fails here, on the pull request, rather than at
+/// publish time. This class pins that the dataset answers correctly: ownership by the longest matching project
+/// directory, a package id and version line on every packable node, and pinned-transitive edges that carry the pins
+/// they name. Its oracles walk the filesystem and the project files and never read the scan's internals.
 /// </remarks>
 public sealed class DependencyMapTests
 {
@@ -23,7 +25,7 @@ public sealed class DependencyMapTests
     private static IReadOnlyList<Node> Nodes { get; } = ReadNodes();
 
     /// <summary>
-    /// SC-001: for every tracked file under the backend Essentials and extension roots, the owner resolved from the dataset alone
+    /// For every tracked file under the backend Essentials and extension roots, the owner resolved from the dataset alone
     /// is the project whose directory is nearest above the file on disk. The oracle walks the filesystem and never
     /// reads the dataset, so a node missing from it, or a resolver that is not longest-prefix, disagrees.
     /// </summary>
@@ -84,7 +86,7 @@ public sealed class DependencyMapTests
             string.Concat(nested.Select(entry => $"{Environment.NewLine}  {entry}")));
     }
 
-    /// <summary>FR-006 on paths that need no file to exist: the deeper project owns its subtree, and nothing is guessed.</summary>
+    /// <summary>Ownership on paths that need no file to exist: the deeper project owns its subtree, and nothing is guessed.</summary>
     [Theory]
     [InlineData("Essentials/src/Workflows/Runtime/Core/Services/Foo.cs", "Elsa.Workflows.Runtime.Core")]
     [InlineData("Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Foo.cs", "Elsa.Workflows.Runtime")]
@@ -111,7 +113,7 @@ public sealed class DependencyMapTests
     }
 
     /// <summary>
-    /// FR-004: Line A is exactly the reviewed list, matched by whole name as <c>Directory.Build.props</c> matches it,
+    /// Line A is exactly the reviewed list, matched by whole name as <c>Directory.Build.props</c> matches it,
     /// so a project whose name merely extends a member's (Elsa.Tasks beside Elsa.Tasks.Core) stays Line B.
     /// </summary>
     [Fact]
@@ -123,7 +125,7 @@ public sealed class DependencyMapTests
     }
 
     /// <summary>
-    /// FR-012, as spec 150's calculator relies on it: a pinned-transitive edge sits on a packable node, names a package
+    /// As the version calculator relies on it: a pinned-transitive edge sits on a packable node, names a package
     /// <c>Directory.Packages.props</c> pins, at that pin, and never a package the node references directly.
     /// </summary>
     [Fact]
@@ -143,7 +145,7 @@ public sealed class DependencyMapTests
         Assert.True(violations.Length == 0, string.Join(Environment.NewLine, violations));
     }
 
-    /// <summary>FR-006 as a consumer implements it: the node whose directory is the longest prefix of the path.</summary>
+    /// <summary>Ownership as a consumer resolves it: the node whose directory is the longest prefix of the path.</summary>
     private static Node? OwningProject(string relativePath) =>
         Nodes.Where(node => relativePath.StartsWith(node.Directory, StringComparison.Ordinal)).MaxBy(node => node.Directory.Length);
 
@@ -208,15 +210,15 @@ public sealed class DependencyMapTests
         return output.Split('\0', StringSplitOptions.RemoveEmptyEntries);
     }
 
-    /// <summary>Reads the dataset, checking the schema version at read time as every consumer should.</summary>
+    /// <summary>Scans the dataset for this checkout, checking the schema version at read time as every consumer should.</summary>
     private static IReadOnlyList<Node> ReadNodes()
     {
-        var dataset = JsonSerializer.Deserialize<Dataset>(File.ReadAllText(Path.Join(RepoRoot, "docs", "maps", "dependency-map.json")), JsonOptions)
-                      ?? throw new InvalidOperationException("docs/maps/dependency-map.json is empty.");
+        var dataset = JsonSerializer.Deserialize<Dataset>(DependencyMapJson.Serialize(RepoContext.Discover(RepoRoot)), JsonOptions)
+                      ?? throw new InvalidOperationException("The scanned dependency map is empty.");
 
         return dataset.SchemaVersion == 2
             ? dataset.Nodes
-            : throw new InvalidOperationException($"docs/maps/dependency-map.json has schema version {dataset.SchemaVersion}; these tests read version 2.");
+            : throw new InvalidOperationException($"The scanned dependency map has schema version {dataset.SchemaVersion}; these tests read version 2.");
     }
 
     private sealed record Dataset(int SchemaVersion, IReadOnlyList<Node> Nodes);

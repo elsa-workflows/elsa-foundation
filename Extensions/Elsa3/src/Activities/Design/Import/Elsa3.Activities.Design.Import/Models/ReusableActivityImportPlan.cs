@@ -1,8 +1,10 @@
+using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa3.Models;
 using System.Buffers;
+using System.Text.Json;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -75,13 +77,18 @@ public sealed record ReusableActivityImportApplyRequest(
     ReusableActivityImportAccessScope? AccessScope = null,
     string? IdempotencyKey = null);
 
+/// <param name="Warnings">Conversion warnings of the applied items (runtime differences); the receipt stores them too.</param>
 public sealed record ReusableActivityImportApplyResult(
     string PlanId,
     IReadOnlyList<string> AppliedSourceVersionIds,
     bool NoOp,
-    ReusableActivityImportReceipt? Receipt = null);
+    ReusableActivityImportReceipt? Receipt = null,
+    IReadOnlyList<Elsa3MigrationDiagnostic>? Warnings = null);
 
-/// <summary>Complete Design mutation handed to the atomic adapter.</summary>
+/// <summary>
+/// Complete Design mutation handed to the atomic adapter. <see cref="Activities"/> are in publish order: dependencies
+/// first, then ascending version within one definition.
+/// </summary>
 public sealed record ReusableActivityImportMutation(
     string PlanId,
     string CollectionId,
@@ -89,17 +96,43 @@ public sealed record ReusableActivityImportMutation(
     IReadOnlyList<ImportedReusableActivity> Activities,
     IReadOnlyList<ImportedWorkflow> Workflows,
     ReusableActivityImportAccessScope? AccessScope = null,
-    string? IdempotencyKey = null);
+    string? IdempotencyKey = null,
+    IReadOnlyList<Elsa3MigrationDiagnostic>? Warnings = null);
 
 /// <summary>
-/// One reusable Elsa 3 workflow mapped to a graph activity. <paramref name="Body"/> is the mapped workflow state the
-/// version's descriptor payload carries, kept so the import can admit it before the commit (spec 188, FR-008).
+/// One reusable Elsa 3 workflow version mapped to a graph activity. <paramref name="Body"/> is the mapped workflow state
+/// the version's graph manifest carries, kept so the import can admit it before the commit. The commit writes the
+/// definition and its authoring state; the version itself is published afterwards through a draft (spec 246 D-1).
 /// </summary>
 public sealed record ImportedReusableActivity(
     ActivityDefinition Definition,
-    ActivityDefinitionVersion Version,
+    ImportedReusableActivityVersion Version,
     ActivityDefinitionAuthoringState AuthoringState,
     WorkflowDefinitionState Body);
+
+/// <summary>
+/// What the publish phase publishes for one imported reusable version: the plan's deterministic id, which wrappers and
+/// callers already reference, its SemVer and the draft content.
+/// </summary>
+/// <param name="Version">The SemVer, <c>{n}.0.0</c> for Elsa 3 version n.</param>
+/// <param name="GraphManifest">The schema-2 graph manifest the draft carries as its provider payload.</param>
+/// <param name="DependsOn">The ids of the imported versions this one uses; each is published before it.</param>
+public sealed record ImportedReusableActivityVersion(
+    string Id,
+    string DefinitionId,
+    string Version,
+    string SourceVersionId,
+    ActivityContract Contract,
+    JsonElement GraphManifest,
+    IReadOnlyList<string> DependsOn,
+    DateTimeOffset CreatedAt)
+{
+    /// <summary>The import's tenant, stamped by the importer before the commit.</summary>
+    public string? TenantId { get; set; }
+
+    /// <summary>The draft the publish phase publishes this version from; deterministic, so a resumed apply finds it.</summary>
+    public string DraftId => ReusableActivityImportIdentity.Create("activity-draft", SourceVersionId);
+}
 
 public sealed record ImportedWorkflow(
     string SourceDefinitionId,
@@ -169,8 +202,29 @@ public sealed record ReusableActivityImportReceipt(
     ReusableActivityImportAccessScope AccessScope,
     ReusableActivityImportReceiptStatus Status,
     DateTimeOffset CompletedAt,
-    IReadOnlyList<ReusableActivityImportSourceReceipt> Sources);
+    IReadOnlyList<ReusableActivityImportSourceReceipt> Sources)
+{
+    /// <summary>
+    /// The conversion warnings of the apply that produced this receipt (runtime differences, spec 236 R-7). Stored with
+    /// the receipt, so a replay and a status read return the same warnings (spec 246 D-3).
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<Elsa3MigrationDiagnostic>? Warnings { get; init; }
 
+    /// <summary>
+    /// The publication state of each selected reusable version, in publish order (spec 246 R-6). Filled by the apply, a
+    /// replay and a status read from the publication store; never persisted.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ReusableActivityPublicationState>? Publications { get; init; }
+}
+
+/// <summary>What the commit made or reused for one selected Elsa 3 source version.</summary>
+/// <remarks>
+/// <c>ActivityVersionDisposition</c> describes the commit, not publication: <c>Created</c> means the version was not yet
+/// published when the commit ran, so the publish phase was to publish it. Whether it is published now, and why not, is
+/// the receipt's <c>Publications</c> (spec 246 R-6).
+/// </remarks>
 public sealed record ReusableActivityImportSourceReceipt(
     string SourceDefinitionId,
     string SourceVersionId,
@@ -242,6 +296,24 @@ public static class ReusableActivityImportDiagnosticCodes
     public const string CollectionExpired = "ELS3-REUSABLE-COLLECTION-EXPIRED";
     public const string IdempotencyConflict = "ELS3-REUSABLE-IDEMPOTENCY-CONFLICT";
     public const string IdentityCollision = "ELS3-REUSABLE-IDENTITY-COLLISION";
+
+    /// <summary>
+    /// A reusable workflow starts from a leaf trigger. Elsa 4 cannot start a reusable activity from a trigger, so the
+    /// import refuses it rather than leave the trigger in the graph body (spec 246 D-6).
+    /// </summary>
+    public const string UnsupportedStartTrigger = "ELS3-REUSABLE-UNSUPPORTED-START-TRIGGER";
+
+    /// <summary>
+    /// The selection holds a reusable workflow but the host cannot publish imported activities: no
+    /// <c>IReusableActivityImportPublisher</c> is registered (spec 246 R-1).
+    /// </summary>
+    public const string PublishingUnavailable = "ELS3-REUSABLE-PUBLISHING-UNAVAILABLE";
+
+    /// <summary>
+    /// An imported reusable version was not published because a version it uses was not published; publishing that one
+    /// first publishes this one on the next apply (spec 246 R-5).
+    /// </summary>
+    public const string DependencyNotPublished = "ELS3-REUSABLE-DEPENDENCY-NOT-PUBLISHED";
 }
 
 public static class ReusableActivityImportIdentity

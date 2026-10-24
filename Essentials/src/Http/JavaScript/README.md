@@ -7,4 +7,4 @@ Bridges the HTTP domain and the JavaScript expression engine. Contributes HTTP-s
 This feature implements contributor interfaces from other domains:
 
 - **`IJavaScriptDeclarationContributor`** *(Core — `Elsa.Expressions.JavaScript.Rendering.Core`)* — `HttpTypeDeclarationContributor` pushes HTTP-domain type declarations (request/response types, etc.) onto the declarations context. Aggregated by `BuildDeclarationsDocument` in `Elsa.Expressions.JavaScript.Rendering`.
-  - Catalog: [`Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md`](../Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md)
+  - Catalog: [`Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md`](../../Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md)

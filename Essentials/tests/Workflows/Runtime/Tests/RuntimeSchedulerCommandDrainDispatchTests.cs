@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Scheduler;
@@ -289,8 +290,10 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
     [Fact]
     public async Task ProcessAsync_ThrowsDomainExceptionWhenCycleCapIsExceeded()
     {
+        // The outbox reports a delivery every cycle while nothing new is dispatched after the first: a drain that never
+        // settles. Two cycles without progress are allowed after the first cycle's dispatch; the drain needs a fourth.
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var options = new WorkflowDrainOrchestratorOptions(maxDrainCycles: 2, outboxDeliveryBatchSize: 1);
+        var options = new WorkflowDrainOrchestratorOptions(maxCyclesWithoutProgress: 2, outboxDeliveryBatchSize: 1);
         var processor = NewProcessor(
             queue,
             new DequeuingSchedulerDrainer(queue, _now),
@@ -303,7 +306,38 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         var exception = await Assert.ThrowsAsync<DrainCycleLimitExceededException>(() => processor.ProcessAsync(NewEnvelope(1)).AsTask());
 
         Assert.Equal("wfexec-1", exception.WorkflowExecutionId);
-        Assert.Equal(2, exception.MaxDrainCycles);
+        Assert.Equal(DrainCycleLimit.CyclesWithoutProgress, exception.Limit);
+        Assert.Equal(2, exception.MaxCycles);
+        Assert.Equal(3, exception.Cycles);
+        Assert.Contains("cycles without progress", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_BoundsTheCyclesOfEachCommandsDrain_SoAResumedRunStartsAFreshCount()
+    {
+        // Each command drains on its own: here the same work item is processed twice, as a redelivered command is. Each
+        // drain dispatches it in its first cycle, its outbox reports a delivery in each of its first three cycles, and its
+        // cycles two to four dispatch nothing: the three cycles without progress the limit allows, after which it
+        // quiesces. A count carried from the first drain into the second would exceed the limit before the second's first
+        // cycle, and a carried set of dispatched work items would make that first cycle's dispatch not new either.
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var drainer = new DequeuingSchedulerDrainer(queue, _now);
+        var outbox = new CountdownPostCommitOutboxProcessor();
+        var processor = NewProcessor(
+            queue,
+            drainer,
+            new ImmediateWorkflowSchedulerDrainPolicy(),
+            [],
+            new FakeTimeProvider(_now),
+            outbox,
+            new WorkflowDrainOrchestratorOptions(maxCyclesWithoutProgress: 3, outboxDeliveryBatchSize: 1));
+
+        outbox.Deliver(3);
+        await processor.ProcessAsync(NewEnvelope(1));
+        outbox.Deliver(3);
+        await processor.ProcessAsync(NewEnvelope(1));
+
+        Assert.Equal(8, drainer.Requests.Count);
     }
 
     [Fact]
@@ -358,6 +392,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
     {
         var services = new ServiceCollection();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        services.AddPersistenceModes();
         await using var provider = services.BuildServiceProvider();
         var agentProvider = provider.GetRequiredService<IWorkflowExecutionActorProvider>();
         var queue = provider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
@@ -378,6 +413,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         var services = new ServiceCollection();
         services.AddSingleton<IWorkflowSchedulerWorkHandler>(new AlwaysFaultingSchedulerWorkHandler(refusedByCheckpointRule));
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        services.AddPersistenceModes();
         await using var provider = services.BuildServiceProvider();
         var agentProvider = provider.GetRequiredService<IWorkflowExecutionActorProvider>();
         var poisonStore = provider.GetRequiredService<IWorkflowSchedulerPoisonStore>();
@@ -402,6 +438,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         var services = new ServiceCollection();
         services.AddSingleton<IWorkflowSchedulerDrainObserver>(observer);
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        services.AddPersistenceModes();
         await using var provider = services.BuildServiceProvider();
         var store = provider.GetRequiredService<IWorkflowExecutableStore>();
         var activityStateStore = provider.GetRequiredService<IActivityExecutionStateStore>();
@@ -555,7 +592,9 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
                 outbox,
                 outbox,
                 new InMemoryWorkflowSchedulerWorkQueue(),
-                options),
+                options,
+                NonFoldingDrainScopeFactory.Instance,
+                persistenceModeResolver: NonFoldingDrainScopeFactory.Resolver),
             timeProvider);
     }
 
@@ -813,6 +852,25 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
                     RequestedDeliveryResultStatus: RuntimePostCommitOutboxStatus.Delivered,
                     FailureMessage: null)
             ]));
+    }
+
+    // Delivers one continuation per call until the count it was given runs out.
+    private sealed class CountdownPostCommitOutboxProcessor : IRuntimePostCommitOutboxProcessor
+    {
+        private int _remaining;
+
+        public void Deliver(int count) => _remaining = count;
+
+        public ValueTask<RuntimePostCommitOutboxProcessResult> ProcessAsync(
+            RuntimePostCommitOutboxProcessRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            if (_remaining == 0)
+                return EmptyPostCommitOutboxProcessor.Instance.ProcessAsync(request, cancellationToken);
+
+            _remaining--;
+            return AlwaysDeliveringPostCommitOutboxProcessor.Instance.ProcessAsync(request, cancellationToken);
+        }
     }
 
     private sealed class EmptyPostCommitOutboxProcessor : IRuntimePostCommitOutboxProcessor

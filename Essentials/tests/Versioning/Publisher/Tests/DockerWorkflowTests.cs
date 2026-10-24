@@ -5,7 +5,7 @@ namespace Elsa.Versioning.Publisher.Tests;
 /// <summary>
 /// <c>.github/workflows/docker.yml</c> takes a main image build's package versions from the Packages workflow run
 /// that produced them, never from a plan it computes itself, so it cannot race that run's plan and write-back to
-/// <c>publish-state</c> (spec 150 FR-020, #2084). It also never joins the <c>publish-state</c> concurrency group -
+/// <c>publish-state</c> (#2084). It also never joins the <c>publish-state</c> concurrency group -
 /// GitHub keeps only one pending run per group and would silently drop a queued Packages run.
 /// </summary>
 public sealed class DockerWorkflowTests
@@ -37,9 +37,25 @@ public sealed class DockerWorkflowTests
         Assert.False(on.ContainsKey("push"));
     }
 
-    /// <summary>Admission gates version resolution, which plans only on PRs and otherwise consumes a Packages artifact.</summary>
+    /// <summary>
+    /// Images are built only after a merge into main or on manual dispatch (#2751). A pull request builds no image, so a
+    /// change that breaks an image build is caught by the post-merge build instead.
+    /// </summary>
     [Fact]
-    public void The_versions_job_only_plans_for_itself_on_a_pull_request()
+    public void Images_build_only_after_a_merge_into_main_or_on_manual_dispatch()
+    {
+        var on = Map(Workflow, "on");
+
+        Assert.False(on.ContainsKey("pull_request"), "docker.yml must not build images on pull requests (#2751); found an 'on: pull_request' trigger.");
+        // The workflow_run trigger's shape (Packages, completed, main) is pinned by the test above.
+        Assert.Equal(["workflow_dispatch", "workflow_run"], on.Keys.Cast<string>().Order(StringComparer.Ordinal));
+        Assert.All(new[] { "build-and-push", "build-and-push-foundation-host" },
+            job => Assert.Equal("true", (string)Map(Jobs[job], "with")["push"]));
+    }
+
+    /// <summary>Admission gates version resolution, which always consumes a Packages artifact and never plans for itself.</summary>
+    [Fact]
+    public void The_versions_job_never_plans_for_itself()
     {
         var admission = Jobs["admission"];
         var admissionSteps = ((List<object>)admission["steps"]).Cast<Dictionary<object, object>>().ToList();
@@ -61,11 +77,11 @@ public sealed class DockerWorkflowTests
         Assert.Equal("versions", (string)Jobs["build-and-push-foundation-host"]["needs"]);
 
         var steps = ((List<object>)versions["steps"]).Cast<Dictionary<object, object>>().ToList();
-        var planStep = steps.Single(step => step.TryGetValue("name", out var name) && (string)name == "Plan");
-        Assert.Equal("github.event_name == 'pull_request'", (string)planStep["if"]);
+        Assert.DoesNotContain(steps, step => step.TryGetValue("name", out var name) && (string)name == "Plan");
+        Assert.DoesNotContain(steps, step => step.ContainsKey("run") && ((string)step["run"]).Contains("Elsa.Versioning.Publisher", StringComparison.Ordinal));
 
         var downloadStep = steps.Single(step => step.TryGetValue("uses", out var uses) && ((string)uses).StartsWith("actions/download-artifact", StringComparison.Ordinal));
-        Assert.Equal("github.event_name != 'pull_request'", (string)downloadStep["if"]);
+        Assert.False(downloadStep.ContainsKey("if"));
         Assert.Equal("elsa-foundation-nuget-packages", (string)Map(downloadStep, "with")["name"]);
     }
 

@@ -20,7 +20,7 @@ public interface IEfModuleAssemblySource
 /// <c>HostIntegrated</c> package graph loads into a context of its own rather than the default one, so
 /// <c>AppDomain.CurrentDomain.GetAssemblies()</c> would silently miss exactly the modules a package
 /// installed later, which is the case the guard exists for — less every assembly the host's
-/// <see cref="ISupersededAssemblySource"/> says a newer generation replaced (spec 183, FR-021, amended 2026-09-29).
+/// <see cref="ISupersededAssemblySource"/> says a newer generation replaced.
 /// </summary>
 /// <remarks>
 /// <para>

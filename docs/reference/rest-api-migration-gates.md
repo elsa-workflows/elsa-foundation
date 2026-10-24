@@ -33,7 +33,7 @@ The collectible harness compiles an isolated endpoint type with Roslyn, loads it
 ```bash
 dotnet test Essentials/tests/Api/Compatibility/Tests/Elsa.Api.Compatibility.Testing.Tests.csproj --no-restore
 dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj --no-restore
-dotnet run --project tools/maps/Elsa.Maps.Generator -- check
+dotnet run --project tools/maps/Elsa.Maps.Generator -- check   # committed solution filters
 ```
 
 Review baseline diffs deliberately. A migration removes its matching transition exceptions; it does not regenerate the registry to accept a broader legacy surface.

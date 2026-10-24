@@ -4,6 +4,7 @@ using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
+using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.Api.Coalescing;
@@ -34,7 +35,7 @@ namespace Elsa.Workflows.Runtime.Api;
     Description = "Runtime workflow execution endpoints for published WorkflowExecutable artifacts.",
     DependsOn = new object[] { "ApiCapabilities" }
 )]
-public class WorkflowsRuntimeApiFeature : IWebShellFeature
+public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellServices
 {
     /// <summary>
     /// Persistent HMAC key for restart- and multi-instance-stable hierarchy cursors. Configure at least 32 UTF-8 bytes
@@ -97,6 +98,7 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature
         services.TryAddScoped<IWorkflowExecutionStartService>(sp => sp.GetRequiredService<WorkflowExecutionStartService>());
         services.TryAddScoped<ActivityExecutionInspectionService>();
         services.TryAddScoped<IActivityExecutionInspectionService>(sp => sp.GetRequiredService<ActivityExecutionInspectionService>());
+        services.TryAddScoped<WorkflowInstanceDeletionService>();
         services.TryAddScoped<WorkflowInstanceDetailsService>();
         services.TryAddScoped<IWorkflowInstanceDetailsService>(sp => sp.GetRequiredService<WorkflowInstanceDetailsService>());
         services.TryAddScoped<WorkflowInstanceListService>();
@@ -107,14 +109,21 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature
         services.TryAddScoped<IWorkflowDispatchInspectionService>(sp => sp.GetRequiredService<WorkflowDispatchInspectionService>());
         services.TryAddScoped<RuntimeDiagnosticsSettingsService>();
         services.TryAddScoped<IRuntimeDiagnosticsSettingsService>(sp => sp.GetRequiredService<RuntimeDiagnosticsSettingsService>());
+        services.TryAddScoped<ActivityExecutionStateViewService>();
+        services.TryAddScoped<IActivityExecutionStateViewService>(sp => sp.GetRequiredService<ActivityExecutionStateViewService>());
+        services.TryAddSingleton<ActivityStateViewProjectorRegistry>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateActivityStateViewProjectorsStartupTask>());
+        services.TryAddScoped<HttpContextWorkflowRuntimeOperatorAccess>();
+        services.TryAddScoped<IWorkflowRuntimeOperatorAccess>(sp => sp.GetRequiredService<HttpContextWorkflowRuntimeOperatorAccess>());
         services.TryAddScoped<WorkflowAlterationPlanApiService>();
         services.TryAddScoped<IWorkflowAlterationPlanApiService>(sp => sp.GetRequiredService<WorkflowAlterationPlanApiService>());
 
         services.TryAddScoped<IActivityInspectionContextAsync>(sp => sp.GetRequiredService<HttpContextActivityExecutionInspectionAuthorizationContext>());
         services.EnsureReplacementContract<IActivityInspectionContextAsync, HttpContextActivityExecutionInspectionAuthorizationContext>();
-        // Resolves the host's effective checkpoint cadence for the instance detail view. Reads the
-        // coalescing options optionally (via IEnumerable), so it is Immediate unless the persistence feature enabled Coalesced.
-        services.TryAddScoped<RuntimeCheckpointCadenceInspector>();
+        // Resolves the persistence mode for the instance detail view: the mode a run recorded, otherwise the host default
+        // from the options the persistence modes register. It reads them only when it reports a default, so the view
+        // resolves on a host that has not added them yet.
+        services.TryAddScoped<RuntimePersistenceModeInspector>();
         services.TryAddScoped<ActivityExecutionHierarchyReader>();
         services.TryAddScoped<IActivityExecutionDescendantsReader>(sp => sp.GetRequiredService<ActivityExecutionHierarchyReader>());
         services.TryAddScoped<ActivityExecutionLayoutReader>();
@@ -127,8 +136,18 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature
         services.AddApiCapability(RuntimeApiCapabilities.StaticDeclaration);
         services.AddApiCapabilitySource<RuntimeOperationalCapabilitySource>();
         services.AddApiCapabilitySource<RuntimeAlterationCapabilitySource>();
+        services.AddApiCapabilitySource<RuntimeRunDeletionCapabilitySource>();
+        services.AddApiCapabilitySource<RuntimeActivityStateViewCapabilitySource>();
         services.AddPermissionContributor<WorkflowRuntimePermissionContributor>();
     }
+
+    /// <summary>
+    /// Adds the services that run every persistence mode, so a shell runs Balanced by default without listing another
+    /// feature, and a workflow that chooses a mode always gets it. This runs after every feature's ConfigureServices
+    /// because it wraps the runtime stores the shell's persistence provider registered, and it keeps the options the
+    /// WorkflowsRuntimeCheckpointPersistence feature registered, whichever of the two features CShells composes first.
+    /// </summary>
+    public virtual void PostConfigureServices(IServiceCollection services) => services.AddPersistenceModes();
 
     public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
         WorkflowsRuntimeApi.MapWorkflowsRuntimeApi(endpoints);

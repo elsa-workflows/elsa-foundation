@@ -31,11 +31,11 @@ namespace Elsa.Tasks.Services;
 /// that the task ran.
 /// </para>
 /// </remarks>
-public sealed class TaskExecutor(
+internal sealed class TaskExecutor(
     IDistributedLockProvider distributedLockProvider,
     ILogger<TaskExecutor> logger,
     ShellSettings shellSettings,
-    ISchemaDormancyCheck? dormancyCheck = null) : ITaskExecutor, IBackgroundTaskStarter
+    ISchemaDormancyCheck? dormancyCheck = null) : ITaskExecutor
 {
     /// <summary>The start of every <c>[SingleNodeTask]</c> lock key; the shell's name and the task's type name follow it.</summary>
     private const string SingleNodeLockKeyPrefix = "elsa:single-node-task:";
@@ -64,8 +64,8 @@ public sealed class TaskExecutor(
 
     public async Task StopAsync(IBackgroundTask task, CancellationToken cancellationToken)
     {
-        // For callers of IBackgroundTaskStarter: a task that started is stopped even if this node has since gone dormant,
-        // and a task whose start was skipped has nothing to stop. (TaskStateManager stops tasks directly, not through here.)
+        // A task that started is stopped even if this node has since gone dormant, and a task whose start was skipped has
+        // nothing to stop. (TaskStateManager stops tasks directly, not through here.)
         if (_skippedStarts.TryRemove(task, out _))
             return;
 
@@ -170,7 +170,7 @@ public sealed class TaskExecutor(
     /// <summary>
     /// Whether the schema requirements <paramref name="taskType"/> declares are met here, asked before any lock is taken. A
     /// shell that composes no dormancy check has observed nothing, so a declared requirement is unmet there, never assumed
-    /// met (spec 182, FR-003): the task is skipped, with a warning, because it can never run in that composition.
+    /// met: the task is skipped, with a warning, because it can never run in that composition.
     /// </summary>
     private async ValueTask<bool> IsAvailableAsync(Type taskType, CancellationToken cancellationToken)
     {

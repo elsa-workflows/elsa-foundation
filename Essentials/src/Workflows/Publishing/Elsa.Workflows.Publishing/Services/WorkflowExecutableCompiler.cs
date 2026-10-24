@@ -214,14 +214,14 @@ public sealed class WorkflowExecutableCompiler(
 
             var inputContract = BuildInputContract(state.Inputs);
             var dependencies = BuildDependencies(dependencyClaims);
-            var checkpointCadence = CompileCheckpointCadence(state.StrategyOptions);
+            var persistenceMode = CompilePersistenceMode(state.StrategyOptions);
             var workflowVariables = executableNodeCompiler.CompileWorkflowVariables(state.Variables);
             var incidentStrategy = ResolveIncidentStrategy(state.StrategyOptions, incidentStrategyCatalog);
             var artifactHash = hasher.ComputeHash(
                 compiledRoot,
                 inputContract,
                 dependencies,
-                checkpointCadence,
+                persistenceMode,
                 workflowVariables,
                 incidentStrategy);
             var artifactId = hasher.CreateArtifactId(request.ArtifactIdPrefix, artifactHash);
@@ -264,7 +264,7 @@ public sealed class WorkflowExecutableCompiler(
                 storageDriverRequirements: storageDriverRequirements,
                 inputContract: inputContract,
                 dependencies: dependencies,
-                checkpointCadence: checkpointCadence,
+                persistenceMode: persistenceMode,
                 workflowVariables: workflowVariables,
                 incidentStrategy: incidentStrategy);
             placementSidecars?.Set(source.DefinitionVersionId, placedLayoutSegments);
@@ -294,7 +294,7 @@ public sealed class WorkflowExecutableCompiler(
                 throw new ArgumentException($"Activity node '{activity.NodeId}' input '{input.ReferenceKey}' does not match the published activity contract.");
 
         var authoredByKey = authored.ToDictionary(x => x.ReferenceKey, StringComparer.Ordinal);
-        var inputStates = new List<(Elsa.Activities.Design.Core.Models.ActivityInputContract Input, ArgumentState State)>();
+        var inputStates = new List<(Elsa.Activities.Design.Core.Models.ActivityInputContract Input, ArgumentState? State)>();
         foreach (var input in contract.Inputs.OrderBy(x => x.ReferenceKey, StringComparer.Ordinal))
         {
             ArgumentState? inputState = authoredByKey.TryGetValue(input.ReferenceKey, out var state)
@@ -306,7 +306,6 @@ public sealed class WorkflowExecutableCompiler(
             {
                 if (input.IsRequired)
                     throw new ArgumentException($"Activity node '{activity.NodeId}' is missing required input '{input.ReferenceKey}'.");
-                continue;
             }
 
             inputStates.Add((input, inputState));
@@ -315,27 +314,15 @@ public sealed class WorkflowExecutableCompiler(
         // A reusable boundary is activated by its template root, which for a graph template captures its inputs
         // outside CLR activation; the check covers contract defaults as well as authored inputs, and runs once for the
         // whole node before any input is compiled.
-        compiler.EnsureSecretBindingsAdmissible(activity.NodeId, boundaryDescriptor, inputStates.Select(x => x.State));
+        compiler.EnsureSecretBindingsAdmissible(
+            activity.NodeId,
+            boundaryDescriptor,
+            inputStates.Where(x => x.State is not null).Select(x => x.State!));
         var result = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase);
         foreach (var (input, inputState) in inputStates)
-        {
-            var definition = new InputDefinition(
-                input.ReferenceKey,
-                input.Name,
-                input.Type,
-                input.StorageDriverKey,
-                input.DisplayName ?? input.Name,
-                input.Category,
-                input.IsNullable,
-                Description: input.Description,
-                Order: input.Order,
-                UiHint: input.UiHint,
-                UISpecifications: input.UiSpecifications,
-                IsRequired: input.IsRequired,
-                DefaultValue: input.Default?.Value,
-                DefaultSyntax: input.Default?.Syntax);
-            result[input.ReferenceKey] = compiler.Compile(activity.NodeId, definition, inputState);
-        }
+            result[input.ReferenceKey] = inputState is null
+                ? compiler.CompileUnboundPublishedBoundaryInput(activity.NodeId, input)
+                : compiler.CompilePublishedBoundaryInput(activity.NodeId, input, inputState);
         return result;
     }
 
@@ -455,31 +442,22 @@ public sealed class WorkflowExecutableCompiler(
         }
     }
 
-    // Compile the authored per-workflow checkpoint cadence into the executable. The mode is a stable
-    // string alias validated here (fail-fast at publish, mirroring the contract gate discipline); an unauthored cadence
-    // compiles to null so the host default applies and the artifact hash is unchanged from before this field existed.
-    private static WorkflowExecutableCheckpointCadence? CompileCheckpointCadence(WorkflowStrategyOptions? strategyOptions)
+    // Compile the workflow's chosen persistence mode into the executable. The authored value is a mode name, matched
+    // exactly so a typo or a numeric string fails here at publish instead of running under a mode nobody chose. No
+    // choice compiles to null: the host default applies and the artifact hash is the same as for an executable compiled
+    // before the field existed.
+    private static PersistenceMode? CompilePersistenceMode(WorkflowStrategyOptions? strategyOptions)
     {
-        var authored = strategyOptions?.CheckpointCadence;
-        if (authored is null || string.IsNullOrWhiteSpace(authored.Mode))
+        var authored = strategyOptions?.PersistenceMode;
+        if (string.IsNullOrWhiteSpace(authored))
             return null;
 
-        if (StringComparer.Ordinal.Equals(authored.Mode, WorkflowExecutableCheckpointCadence.ImmediateMode))
-            return new WorkflowExecutableCheckpointCadence(WorkflowExecutableCheckpointCadence.ImmediateMode);
-
-        if (StringComparer.Ordinal.Equals(authored.Mode, WorkflowExecutableCheckpointCadence.CoalescedMode))
-        {
-            if (authored.MaxSegmentCheckpoints is { } maxSegmentCheckpoints && maxSegmentCheckpoints <= 0)
-                throw new ArgumentException(
-                    $"Authored checkpoint cadence 'MaxSegmentCheckpoints' must be greater than zero, but was {maxSegmentCheckpoints}.");
-
-            return new WorkflowExecutableCheckpointCadence(
-                WorkflowExecutableCheckpointCadence.CoalescedMode,
-                authored.MaxSegmentCheckpoints);
-        }
+        var names = Enum.GetNames<PersistenceMode>();
+        if (names.Contains(authored, StringComparer.Ordinal))
+            return Enum.Parse<PersistenceMode>(authored);
 
         throw new ArgumentException(
-            $"Authored checkpoint cadence mode '{authored.Mode}' is not a recognised alias. Use '{WorkflowExecutableCheckpointCadence.ImmediateMode}' or '{WorkflowExecutableCheckpointCadence.CoalescedMode}'.");
+            $"Persistence mode '{authored}' is not recognized. Use one of: {string.Join(", ", names.Select(name => $"'{name}'"))}.");
     }
 
     private static IncidentStrategyReference ResolveIncidentStrategy(

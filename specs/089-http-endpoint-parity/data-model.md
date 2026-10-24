@@ -55,9 +55,11 @@ Remains the durable artifact recorded under well-known output `HttpResponse`. Su
 ## State transitions (sync mode, E)
 
 ```
-request → [auth C] → dispatch(ambient services) → inline drain
+request → route and endpoint settings selected → [Sync host deadline starts]
+   → [auth C] → [bounded body read] → dispatch(ambient services) → inline drain
    ├─ WriteHttpResponse executed → live response written → drain completes → exchange ends with workflow-authored response
    ├─ durable boundary reached first → drain completes (suspended) → 202 + execution id
-   ├─ timeout (linked CTS) → 408 via fault handler; instance continues per runtime semantics
+   ├─ Sync deadline (host-wide, optionally shortened by endpoint timeout; covers auth, body, dispatch, and response delivery) → cooperative cancellation → 408 if response has not started
+   ├─ Async authored dispatch timeout → 408 via fault handler; instance continues per runtime semantics
    └─ fault → 400/500 via fault handler
 ```

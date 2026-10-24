@@ -1,23 +1,32 @@
-import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import React, { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
+  Blocks,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
+  Ellipsis,
   ExternalLink,
   FileText,
   Gauge,
   GitBranch,
   Github,
-  LayoutDashboard,
+  House,
+  ListChecks,
   Maximize2,
   Minimize2,
   Paintbrush,
+  PackageCheck,
   PackagePlus,
   PackageSearch,
   PanelLeftClose,
   PanelLeftOpen,
+  PlayCircle,
   RefreshCw,
-  Search
+  Search,
+  Server,
+  Settings,
+  SlidersHorizontal
 } from "lucide-react";
 import type {
   ElsaStudioModuleApi,
@@ -26,10 +35,11 @@ import type {
   StudioDiagnosticsWidgetState,
   StudioModulesResponse,
   StudioNavigationContribution,
+  StudioNavigationPlacement,
   StudioNavigationSection,
   StudioPanelContribution
 } from "../sdk";
-import { requestStudioNavigation } from "../sdk";
+import { isHomeRunDetailPath, recordHomeRunDetailOpened, requestStudioNavigation } from "../sdk";
 import { createStudioRegistry, findFeatureAreaForPath } from "./registry";
 import type { AuthProviderManager } from "../sdk";
 import { getStudioRuntimeConfig, getStudioRuntimeSettings } from "./runtime";
@@ -37,6 +47,7 @@ import { StudioAuthBoundary, createStudioAuthManager, createStudioEndpointContex
 import { loadStudioModules } from "./loader";
 import { ThemeProvider, useNavMode } from "./components/ThemeProvider";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
+import { UserMenu } from "./components/UserMenu";
 import { defaultThemeStoreCapabilities, getThemeStoreCapabilities, type ThemeStoreCapabilities } from "./themes/themeStoreApi";
 import { QueryProvider } from "./providers/QueryProvider";
 import { useStudioManifest } from "./hooks/useStudioManifest";
@@ -49,12 +60,40 @@ import { ModuleManagementPage } from "./modules/ModuleManagementPage";
 import { PackageFeedsPage } from "./modules/PackageFeedsPage";
 import { ThemeBuilderPage } from "./modules/ThemeBuilderPage";
 import { registerBuiltInPropertyEditors } from "./propertyEditors";
+import {
+  compareNavigationItems,
+  filterAccessibleNavigation,
+  getChildNavigationItems,
+  getNavigationPlacement,
+  getNavigationSection as resolveNavigationSection,
+  getTopLevelNavigationItems as resolveTopLevelNavigationItems,
+  getTopLevelNavigationItemsByPlacement,
+  readMoreToolsOpen,
+  writeMoreToolsOpen
+} from "./navigation/placement";
+import { useShellNavigationAccess } from "./navigation/useShellNavigationAccess";
+import {
+  appearanceChromeStorageKeys,
+  appearanceResetEventName
+} from "./themes/appearance";
+import {
+  getSettingsSectionGroups,
+  hasSettingsSections,
+  isSettingsSurfacePath,
+  resolveSettingsSection
+} from "./settings/settingsSections";
+import { isDashboardPath, isNavigationItemActive } from "./navigation/active";
 import elsaLogo from "../assets/images/icon.png";
 import { AgentLauncher, createAgentClient, createWorkflowAgentContextProvider, type AgentSessionIndicatorSession, workflowAgentCapabilities, workflowPromptStarters } from "./agent";
 import { WeaverSurface } from "./weaver";
 import "./styles.css";
 import "./agent/agent.css";
 import "./weaver/weaver.css";
+
+const DevDisclosurePage = import.meta.env.DEV
+  ? lazy(() => import("./ui/disclosure/DisclosureFixturePage").then(module => ({ default: module.DisclosureFixturePage })))
+  : null;
+const SettingsRoute = lazy(() => import("./settings/SettingsRoute").then(module => ({ default: module.SettingsRoute })));
 
 type LoadState = "loading" | "ready" | "failed";
 type NavigationSection = StudioNavigationSection;
@@ -82,25 +121,37 @@ const navIconColors = {
 } as const;
 
 const builtInNavigation: StudioNavigationContribution[] = [
-  { id: "modules", label: "Modules", path: "/modules", order: 80, iconColor: navIconColors.modules },
-  { id: "package-feeds", label: "Package feeds", path: "/package-feeds", order: 90, iconColor: navIconColors.feeds },
-  { id: "diagnostics", label: "Diagnostics", path: "/diagnostics", activePathPrefix: "/diagnostics", order: 900, iconColor: navIconColors.diagnostics }
+  { id: "modules", label: "Modules", path: "/modules", activePathPrefix: "/modules", order: 10, iconColor: navIconColors.modules, placement: "admin" },
+  { id: "package-feeds", label: "Package feeds", path: "/package-feeds", activePathPrefix: "/package-feeds", order: 30, iconColor: navIconColors.feeds, placement: "admin" },
+  { id: "diagnostics", label: "Diagnostics", path: "/diagnostics", activePathPrefix: "/diagnostics", order: 60, iconColor: navIconColors.diagnostics, placement: "more" }
 ];
 
 const themeBuilderNavigation: StudioNavigationContribution = {
   id: "theme-builder",
-  label: "Theme Builder",
+  label: "Theme builder",
   path: "/theme-builder",
-  order: 85,
-  iconColor: navIconColors.themes
+  activePathPrefix: "/theme-builder",
+  order: 20,
+  iconColor: navIconColors.themes,
+  placement: "admin"
+};
+
+const appearanceNavigation: StudioNavigationContribution = {
+  id: "appearance",
+  label: "Appearance",
+  path: "/settings/appearance",
+  activePathPrefix: "/settings/appearance",
+  order: 10,
+  iconColor: navIconColors.themes,
+  placement: "settings"
 };
 
 const ModulesChangedEventName = "elsa-studio:modules-changed";
-const sidebarCollapsedStorageKey = "elsa-studio-sidebar-collapsed";
-const bottomPanelHeightStorageKey = "elsa-studio-bottom-panel-height";
-const activeBottomPanelStorageKey = "elsa-studio-active-bottom-panel";
-const bottomPanelCollapsedStorageKey = "elsa-studio-bottom-panel-collapsed";
-const bottomPanelMaximizedStorageKey = "elsa-studio-bottom-panel-maximized";
+const sidebarCollapsedStorageKey = appearanceChromeStorageKeys.sidebarCollapsed;
+const bottomPanelHeightStorageKey = appearanceChromeStorageKeys.bottomPanelHeight;
+const activeBottomPanelStorageKey = appearanceChromeStorageKeys.activeBottomPanel;
+const bottomPanelCollapsedStorageKey = appearanceChromeStorageKeys.bottomPanelCollapsed;
+const bottomPanelMaximizedStorageKey = appearanceChromeStorageKeys.bottomPanelMaximized;
 const defaultBottomPanelHeight = 260;
 const minBottomPanelHeight = 140;
 const maxBottomPanelHeight = 560;
@@ -141,6 +192,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
       acceptedPathRef.current = nextPath;
       acceptedLocationRef.current = nextLocation;
       setPath(nextPath);
+      if (isHomeRunDetailPath(nextPath)) recordHomeRunDetailOpened();
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
@@ -152,6 +204,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
     acceptedPathRef.current = normalizePath(window.location.pathname);
     acceptedLocationRef.current = currentRelativeLocation();
     setPath(acceptedPathRef.current);
+    if (isHomeRunDetailPath(acceptedPathRef.current)) recordHomeRunDetailOpened();
     window.dispatchEvent(new PopStateEvent("popstate"));
   }, []);
 
@@ -242,6 +295,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
         // (through the same authenticated shell context) by useStudioManifest; here we only turn it into
         // a loaded registry.
         const backendContext = createStudioEndpointContext(backendBaseUrl, authManager);
+        const enabledFeatures = [...new Set((manifest.modules ?? []).flatMap(module => [module.id, ...(module.capabilities ?? [])]))];
         const registry = createStudioRegistry({
           hostVersion: manifest.hostVersion,
           sdkVersion: manifest.sdkVersion,
@@ -252,7 +306,10 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
         }, {
           backendBaseUrl,
           backendHttp: backendContext.http,
-          runtime: getStudioRuntimeSettings(runtimeConfig, authManager?.getSession())
+          runtime: {
+            ...getStudioRuntimeSettings(runtimeConfig, authManager?.getSession()),
+            enabledFeatures
+          }
         });
         registerBuiltInSettingEditors(registry);
 
@@ -289,6 +346,16 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
   }, [authManager, backendBaseUrl, manifestQuery.data, manifestQuery.isError, manifestQuery.error, manifestQuery.isPending, moduleRegistryRevision, shellBaseUrl]);
 
   const routes = useMemo(() => api?.routes.list() ?? [], [api, state]);
+  const enabledFeatures = useMemo(() => {
+    const features = new Set<string>();
+    for (const module of manifestQuery.data?.modules ?? []) {
+      features.add(module.id);
+      for (const capability of module.capabilities ?? []) {
+        features.add(capability);
+      }
+    }
+    return features;
+  }, [manifestQuery.data]);
   const navigation = useMemo(
     () => getStudioNavigation(api?.navigation.list() ?? [], { includeThemeBuilder: themeCapabilities.managementEnabled }),
     [api, state, themeCapabilities.managementEnabled]
@@ -301,11 +368,14 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
     () => (api?.featureAreas.list() ?? []).sort((a, b) => (a.order ?? 500) - (b.order ?? 500)),
     [api, state]
   );
+  const access = useShellNavigationAccess(enabledFeatures);
+  const settingsGroups = getSettingsSectionGroups(navigation, access);
+  const settingsSurface = isSettingsSurfacePath(path, navigation);
 
   if (state === "loading") {
     return (
       <ThemeProvider storeContext={shellContext}>
-        <ShellFrame navigation={navigation} panels={[]} path={path} title="Loading modules" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl}>
+        <ShellFrame navigation={navigation} panels={[]} path={path} title="Loading modules" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl} enabledFeatures={enabledFeatures} accountAction={<UserMenu />}>
           <SkeletonRows rows={8} label="Loading Studio modules" />
         </ShellFrame>
       </ThemeProvider>
@@ -315,18 +385,22 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
   if (state === "failed") {
     return (
       <ThemeProvider storeContext={shellContext}>
-        <ShellFrame navigation={navigation} panels={[]} path={path} title="Startup failed" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl}>
+        <ShellFrame navigation={navigation} panels={[]} path={path} title="Startup failed" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl} enabledFeatures={enabledFeatures} accountAction={<UserMenu />}>
           <div className="error-state">{error}</div>
         </ShellFrame>
       </ThemeProvider>
     );
   }
 
-  const themeBuilderPath = themeCapabilities.managementEnabled && path === "/theme-builder";
   const activeRoute = findRouteForPath(routes, path);
   const ActiveComponent = activeRoute?.component;
   const owningFeatureArea = findFeatureAreaForPath(featureAreas, path);
-  const pageTitle = navigation.find(item => isNavigationItemActive(item, path))?.label ?? activeRoute?.label ?? owningFeatureArea?.title ?? "Studio";
+  const settingsSection = settingsSurface ? resolveSettingsSection(path, settingsGroups) : undefined;
+  const pageTitle = settingsSection?.label
+    ?? navigation.find(item => isNavigationItemActive(item, path, navigation))?.label
+    ?? activeRoute?.label
+    ?? owningFeatureArea?.title
+    ?? (settingsSurface ? "Settings" : "Studio");
 
   return (
     <ThemeProvider storeContext={shellContext}>
@@ -337,16 +411,32 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
         title={pageTitle}
         onNavigate={navigateTo}
         backendBaseUrl={backendBaseUrl}
+        enabledFeatures={enabledFeatures}
         assistantAction={<AgentLauncher open={assistantOpen} sessions={agentSessions} onClick={() => setAssistantOpen(current => !current)} />}
         themeAction={themeCapabilities.pickerEnabled ? <ThemeSwitcher /> : null}
+        accountAction={<UserMenu />}
       >
-        {path === "/modules" ? <ModuleManagementPage api={api!} /> : null}
-        {themeBuilderPath ? <ThemeBuilderPage api={api!} /> : null}
-        {path === "/package-feeds" ? <PackageFeedsPage api={api!} /> : null}
-        {path === "/diagnostics" ? <Diagnostics api={api!} /> : null}
+        {settingsSurface ? (
+          <Suspense fallback={<SkeletonRows rows={8} label="Loading settings" />}>
+            {/* Legacy /modules, /package-feeds and /theme-builder URLs must stay on this surface so the host-control gate applies. */}
+            <SettingsRoute
+              path={path}
+              navigation={navigation}
+              enabledFeatures={enabledFeatures}
+              onNavigate={navigateTo}
+              renderSection={section => renderHostSettingsSection(section, api!, routes, navigateTo, themeCapabilities.managementEnabled)}
+            />
+          </Suspense>
+        ) : null}
+        {path === "/diagnostics" ? <Diagnostics api={api!} navigation={filterAccessibleNavigation(navigation, access)} onNavigate={navigateTo} /> : null}
         {path === "/diagnostics/modules" ? <ModuleDiagnostics api={api!} /> : null}
-        {ActiveComponent ? <ActiveComponent navigate={navigateTo} /> : null}
-        {!ActiveComponent && path !== "/modules" && !themeBuilderPath && path !== "/package-feeds" && path !== "/diagnostics" && path !== "/diagnostics/modules" ? (
+        {DevDisclosurePage && path === "/dev/disclosure" ? (
+          <Suspense fallback={null}>
+            <DevDisclosurePage />
+          </Suspense>
+        ) : null}
+        {!settingsSurface && ActiveComponent ? <ActiveComponent navigate={navigateTo} /> : null}
+        {!settingsSurface && !ActiveComponent && path !== "/diagnostics" && path !== "/diagnostics/modules" && !(DevDisclosurePage && path === "/dev/disclosure") ? (
           <div className="empty-state">
             {owningFeatureArea
               ? `${owningFeatureArea.title} owns ${path}, but no route component is registered for it.`
@@ -382,6 +472,8 @@ export function ShellFrame({
   backendBaseUrl,
   assistantAction,
   themeAction,
+  accountAction,
+  enabledFeatures,
   onNavigate,
   children
 }: {
@@ -392,19 +484,38 @@ export function ShellFrame({
   backendBaseUrl: string;
   assistantAction?: React.ReactNode;
   themeAction?: React.ReactNode;
+  accountAction?: React.ReactNode;
+  enabledFeatures?: ReadonlySet<string> | readonly string[];
   onNavigate: (path: string) => void;
   children: React.ReactNode;
 }) {
   const [navQuery, setNavQuery] = useState("");
   const [navCollapsed, setNavCollapsed] = useState(() => getInitialBoolean(sidebarCollapsedStorageKey, false));
+  const [moreToolsOpen, setMoreToolsOpen] = useState(() => readMoreToolsOpen());
+  const [topMoreToolsOpen, setTopMoreToolsOpen] = useState(false);
+  const [dismissedMoreToolsQuery, setDismissedMoreToolsQuery] = useState<string | null>(null);
+  const moreToolsSectionRef = useRef<HTMLElement>(null);
+  const moreToolsButtonRef = useRef<HTMLButtonElement>(null);
   // The top navigation mode turns the sidebar into a menubar and moves backend status into a
   // status bar; the icon-rail collapse has no meaning there, so it is ignored (not forgotten).
   const topNav = useNavMode() === "top";
   const backendHost = new URL(backendBaseUrl).host;
+  const access = useShellNavigationAccess(enabledFeatures);
+  const visibleNavigation = filterAccessibleNavigation(navigation, access);
 
   useEffect(() => {
     window.localStorage.setItem(sidebarCollapsedStorageKey, String(navCollapsed));
   }, [navCollapsed]);
+
+  useEffect(() => {
+    writeMoreToolsOpen(moreToolsOpen);
+  }, [moreToolsOpen]);
+
+  useEffect(() => {
+    const onAppearanceReset = () => setNavCollapsed(false);
+    window.addEventListener(appearanceResetEventName, onAppearanceReset);
+    return () => window.removeEventListener(appearanceResetEventName, onAppearanceReset);
+  }, []);
 
   function toggleNavCollapsed() {
     setNavCollapsed(current => {
@@ -419,7 +530,7 @@ export function ShellFrame({
   }
 
   const childrenByParentId = new Map<string, StudioNavigationContribution[]>();
-  for (const item of navigation) {
+  for (const item of visibleNavigation) {
     if (!item.parentId) {
       continue;
     }
@@ -430,23 +541,71 @@ export function ShellFrame({
   }
 
   const query = navQuery.trim().toLowerCase();
+  const previousPathRef = useRef(path);
+  useLayoutEffect(() => {
+    if (previousPathRef.current === path) return;
+    previousPathRef.current = path;
+    setTopMoreToolsOpen(false);
+    setDismissedMoreToolsQuery(query || null);
+  }, [path, query]);
+
+  const navigateFromTopNavigation = (destination: string) => {
+    setTopMoreToolsOpen(false);
+    setDismissedMoreToolsQuery(null);
+    setNavQuery("");
+    onNavigate(destination);
+  };
+  const navigateFromMainNavigation = topNav ? navigateFromTopNavigation : onNavigate;
   const matchesQuery = (item: StudioNavigationContribution) => item.label.toLowerCase().includes(query);
   // A parent stays visible when it matches directly or when any of its children match, so a filtered
   // child never becomes orphaned. Children are filtered independently in the render below.
   const itemVisible = (item: StudioNavigationContribution) =>
     !query || matchesQuery(item) || (childrenByParentId.get(item.id) ?? []).some(matchesQuery);
 
-  const navigationSections = [
-    { id: "workspace", label: "Workspace", items: getTopLevelNavigationItems(navigation, "workspace").filter(itemVisible) },
-    { id: "settings", label: "Settings", items: getTopLevelNavigationItems(navigation, "settings").filter(itemVisible) }
-  ].filter(section => section.items.length > 0);
-  const hasNavResults = navigationSections.length > 0;
+  const mainItems = getTopLevelNavigationItemsByPlacement(visibleNavigation, "main").filter(itemVisible);
+  const moreItems = getTopLevelNavigationItemsByPlacement(visibleNavigation, "more").filter(itemVisible);
+  const settingsItems = getTopLevelNavigationItemsByPlacement(visibleNavigation, "settings").filter(itemVisible);
+  const adminItems = getTopLevelNavigationItemsByPlacement(visibleNavigation, "admin").filter(itemVisible);
+  const settingsGroups = getSettingsSectionGroups(visibleNavigation);
+  const searchableSettingsItems = [...settingsItems, ...adminItems];
+  const showSettingsEntry = hasSettingsSections(settingsGroups) && (!query || "settings".includes(query));
+  const settingsActive = isSettingsSurfacePath(path, navigation);
+  const moreToolsExpanded = topNav
+    ? topMoreToolsOpen || Boolean(query && query !== dismissedMoreToolsQuery)
+    : moreToolsOpen || Boolean(query);
+  const dismissTopMoreTools = useCallback((returnFocus = false) => {
+    setTopMoreToolsOpen(false);
+    if (query) setDismissedMoreToolsQuery(query);
+    if (returnFocus) moreToolsButtonRef.current?.focus();
+  }, [query]);
+  const hasNavResults = mainItems.length + moreItems.length + searchableSettingsItems.length + (showSettingsEntry ? 1 : 0) > 0;
+
+  useEffect(() => {
+    if (!topNav || !moreToolsExpanded) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.key !== "Escape") return;
+      event.preventDefault();
+      dismissTopMoreTools(true);
+    };
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && moreToolsSectionRef.current?.contains(event.target)) return;
+      dismissTopMoreTools();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [dismissTopMoreTools, moreToolsExpanded, topNav]);
 
   return (
     <div className={navCollapsed && !topNav ? "studio-shell sidebar-collapsed" : "studio-shell"}>
       <aside className="sidebar">
         <div className="sidebar-top">
-          <a className="brand" href="/" onClick={event => { event.preventDefault(); onNavigate("/"); }}>
+          <a className="brand" href="/" onClick={event => { event.preventDefault(); navigateFromMainNavigation("/"); }}>
             <span className="brand-mark" aria-hidden="true">
               <img src={elsaLogo} alt="" />
             </span>
@@ -474,9 +633,16 @@ export function ShellFrame({
             aria-label="Search modules"
             placeholder="Search modules"
             value={navQuery}
-            onChange={event => setNavQuery(event.target.value)}
+            onChange={event => {
+              setDismissedMoreToolsQuery(null);
+              setNavQuery(event.target.value);
+            }}
             onKeyDown={event => {
-              if (event.key === "Escape" && navQuery) {
+              if (event.key !== "Escape") return;
+              if (topNav && moreToolsExpanded) {
+                event.preventDefault();
+                dismissTopMoreTools(true);
+              } else if (navQuery) {
                 event.preventDefault();
                 setNavQuery("");
               }
@@ -488,66 +654,122 @@ export function ShellFrame({
           <p className="sidebar-search-empty" role="status">No modules match "{navQuery.trim()}".</p>
         ) : null}
 
-        {navigationSections.map(section => (
-          <nav key={section.id} className="nav-section" aria-label={section.label}>
-            <span className="nav-heading">{section.label}</span>
-            {section.items.map(item => {
-              const childItems = (childrenByParentId.get(item.id) ?? [])
-                .filter(child => getNavigationSection(child) === section.id)
-                // When the parent matched the search directly, keep all of its children; otherwise only
-                // the children that match, so a filtered group doesn't reveal unrelated siblings.
-                .filter(child => !query || matchesQuery(item) || matchesQuery(child));
-              const hasActiveChild = childItems.some(child => isNavigationItemActive(child, path));
-              const itemActive = isNavigationItemActive(item, path);
-              return (
-                <div className="nav-item-group" key={item.id}>
-                  <a
-                    className={[itemActive ? "active" : "", hasActiveChild ? "has-active-child" : ""].filter(Boolean).join(" ")}
-                    href={item.path}
-                    aria-current={itemActive ? "page" : undefined}
-                    aria-label={item.label}
-                    title={navCollapsed ? item.label : undefined}
-                    onClick={event => {
-                      event.preventDefault();
-                      onNavigate(item.path);
-                    }}
-                  >
-                    <NavIconTile item={item} />
-                    <span className="nav-label">{item.label}</span>
-                  </a>
-                  {childItems.length > 0 ? (
-                    <div className="nav-children">
-                      {childItems.map(child => {
-                        const childActive = isNavigationItemActive(child, path);
-                        return (
-                          <a
-                            key={child.id}
-                            className={childActive ? "active nav-child" : "nav-child"}
-                            href={child.path}
-                            aria-current={childActive ? "page" : undefined}
-                            onClick={event => {
-                              event.preventDefault();
-                              onNavigate(child.path);
-                            }}
-                          >
-                            {child.label}
-                          </a>
-                        );
-                      })}
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
+        {mainItems.length > 0 ? (
+          <nav className="nav-section" aria-label="Main">
+            {mainItems.map(item => (
+              <NavItemGroup
+                key={item.id}
+                item={item}
+                childItems={childItemsFor(item, visibleNavigation, query, matchesQuery)}
+                items={visibleNavigation}
+                path={path}
+                collapsed={navCollapsed}
+                onNavigate={navigateFromMainNavigation}
+              />
+            ))}
           </nav>
-        ))}
+        ) : null}
 
-        <div className="sidebar-footer" aria-label="Backend API status">
-          <span className="sidebar-status-dot" aria-hidden="true" />
-          <span>
-            <strong>Backend API</strong>
-            <small>{backendHost}</small>
-          </span>
+        {moreItems.length > 0 ? (
+          <nav
+            ref={moreToolsSectionRef}
+            className="nav-section nav-section-more"
+            aria-label="More tools"
+            onBlur={event => {
+              if (!topNav) return;
+              const nextTarget = event.relatedTarget;
+              if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+              dismissTopMoreTools();
+            }}
+          >
+            <button
+              ref={moreToolsButtonRef}
+              type="button"
+              className={["nav-disclosure", moreToolsExpanded ? "open" : ""].filter(Boolean).join(" ")}
+              aria-expanded={moreToolsExpanded}
+              aria-controls="studio-nav-more-tools"
+              title={navCollapsed ? "More tools" : undefined}
+              onClick={() => {
+                if (!topNav) {
+                  setMoreToolsOpen(current => !current);
+                  return;
+                }
+                if (moreToolsExpanded) dismissTopMoreTools();
+                else {
+                  setTopMoreToolsOpen(true);
+                  setDismissedMoreToolsQuery(null);
+                }
+              }}
+            >
+              <span className="nav-icon-tile" aria-hidden="true">
+                <Ellipsis size={18} />
+              </span>
+              <span className="nav-label">More tools</span>
+              {moreToolsExpanded ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
+            </button>
+            {moreToolsExpanded ? (
+              <div id="studio-nav-more-tools" className="nav-disclosure-panel">
+                {moreItems.map(item => (
+                  <NavItemGroup
+                    key={item.id}
+                    item={item}
+                    childItems={childItemsFor(item, visibleNavigation, query, matchesQuery)}
+                    items={visibleNavigation}
+                    path={path}
+                    collapsed={navCollapsed}
+                    onNavigate={topNav ? navigateFromTopNavigation : onNavigate}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </nav>
+        ) : null}
+
+        {query && searchableSettingsItems.length > 0 ? (
+          <nav className="nav-section" aria-label="Settings">
+            <span className="nav-heading">Settings</span>
+            {searchableSettingsItems.map(item => (
+              <NavItemGroup
+                key={item.id}
+                item={item}
+                childItems={childItemsFor(item, visibleNavigation, query, matchesQuery)}
+                items={visibleNavigation}
+                path={path}
+                collapsed={navCollapsed}
+                onNavigate={navigateFromMainNavigation}
+              />
+            ))}
+          </nav>
+        ) : showSettingsEntry ? (
+          <nav className="nav-section" aria-label="Settings">
+            <a
+              className={settingsActive ? "active" : ""}
+              href="/settings"
+              aria-current={settingsActive ? "page" : undefined}
+              aria-label="Settings"
+              title={navCollapsed ? "Settings" : undefined}
+              onClick={event => {
+                event.preventDefault();
+                navigateFromMainNavigation("/settings");
+              }}
+            >
+              <span className="nav-icon-tile" style={{ "--nav-icon-color": navIconColors.themes } as NavIconTileStyle} aria-hidden="true">
+                <Settings size={18} />
+              </span>
+              <span className="nav-label">Settings</span>
+            </a>
+          </nav>
+        ) : null}
+
+        <div className="sidebar-footer" role="group" aria-label="Environment and account">
+          <div className="sidebar-environment" role="group" aria-label={`Configured backend endpoint: ${backendHost}`} title="Configured backend endpoint; connectivity is not measured">
+            <span className="sidebar-environment-icon" aria-hidden="true"><Server size={16} /></span>
+            <span className="sidebar-environment-copy">
+              <strong>Backend API</strong>
+              <small>{backendHost}</small>
+            </span>
+          </div>
+          <div className="sidebar-account">{topNav ? null : accountAction}</div>
         </div>
       </aside>
 
@@ -566,14 +788,15 @@ export function ShellFrame({
               <ExternalLink size={18} />
             </a>
             {themeAction}
+            {accountAction}
           </div>
         </header>
         <main className="content">{children}</main>
       </div>
       {panels.length > 0 ? <BottomPanel panels={panels} /> : null}
       {topNav ? (
-        <footer className="studio-statusbar" aria-label="Status">
-          <span><span className="sidebar-status-dot" aria-hidden="true" />Backend API · {backendHost}</span>
+        <footer className="studio-statusbar" aria-label="Environment status">
+          <span title="Configured backend endpoint; connectivity is not measured"><span className="sidebar-status-dot" aria-hidden="true" />Backend API · {backendHost}</span>
           <span>Studio / {title}</span>
         </footer>
       ) : null}
@@ -596,7 +819,7 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   const initialMaximized = getInitialBoolean(bottomPanelMaximizedStorageKey, false);
   const [height, setHeight] = useState(getInitialBottomPanelHeight);
   const [activePanelId, setActivePanelId] = useState(getInitialActiveBottomPanelId);
-  const [collapsed, setCollapsed] = useState(() => !initialMaximized && getInitialBottomPanelCollapsed());
+  const [collapsed, setCollapsed] = useState(() => !initialMaximized && getInitialBoolean(bottomPanelCollapsedStorageKey, true));
   const [maximized, setMaximized] = useState(() => initialMaximized);
   const activePanel = panels.find(panel => panel.id === activePanelId) ?? panels[0];
   // `activePanel` is `panels.find(...) ?? panels[0]`, so it is always a member of `panels`.
@@ -635,6 +858,17 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   useEffect(() => {
     window.localStorage.setItem(bottomPanelMaximizedStorageKey, String(maximized));
   }, [maximized]);
+
+  useEffect(() => {
+    const onAppearanceReset = () => {
+      setCollapsed(true);
+      setMaximized(false);
+      setHeight(defaultBottomPanelHeight);
+      setActivePanelId("");
+    };
+    window.addEventListener(appearanceResetEventName, onAppearanceReset);
+    return () => window.removeEventListener(appearanceResetEventName, onAppearanceReset);
+  }, []);
 
   useEffect(() => {
     document.body.classList.toggle("bottom-panel-maximized", maximized);
@@ -811,31 +1045,112 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   );
 }
 
-export function Diagnostics({ api }: { api: ElsaStudioModuleApi }) {
+export function Diagnostics({
+  api,
+  navigation,
+  onNavigate
+}: {
+  api: ElsaStudioModuleApi;
+  navigation: StudioNavigationContribution[];
+  onNavigate: (path: string) => void;
+}) {
   const widgets = api.diagnosticsWidgets.list().sort(compareOrderedContributions);
+  const destinations = getDiagnosticDestinations(navigation);
 
   return (
     <section className="diagnostics-view">
-      <div className="section-header">
-        <div>
-          <h2>Diagnostics</h2>
-          <p>Runtime and operational widgets contributed through the Studio SDK.</p>
-        </div>
-      </div>
+      <section className="diagnostics-index" aria-labelledby="diagnostics-index-heading">
+        <header className="diagnostics-section-heading">
+          <h2 id="diagnostics-index-heading">Diagnostic tasks</h2>
+          <p>Choose a tool for the task you need to complete.</p>
+        </header>
+        {destinations.length === 0 ? (
+          <p className="diagnostics-index-empty" role="status">No diagnostic tool links are available to you in this app.</p>
+        ) : (
+          <ul className="diagnostics-task-list">
+            {destinations.map(destination => (
+              <li key={destination.id}>
+                <a
+                  className="diagnostics-task-link"
+                  href={destination.path}
+                  onClick={event => {
+                    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                    event.preventDefault();
+                    onNavigate(destination.path);
+                  }}
+                >
+                  <span className="diagnostics-task-content">
+                    <span className="diagnostics-task-title">{destination.label}</span>
+                    <span className="diagnostics-task-description">{describeDiagnosticDestination(destination)}</span>
+                  </span>
+                  <ChevronRight size={16} aria-hidden="true" />
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
-      <div className="widget-grid">
-        {widgets.length === 0 ? (
-          <div className="empty-state">
-            <FileText size={22} />
-            <span>No diagnostics widgets are registered.</span>
-          </div>
-        ) : null}
-        {widgets.map(widget => (
-          <DiagnosticsWidgetHost widget={widget} key={widget.id} />
-        ))}
-      </div>
+      <section className="diagnostics-widgets" aria-labelledby="diagnostics-widgets-heading">
+        <header className="diagnostics-section-heading">
+          <h2 id="diagnostics-widgets-heading">Diagnostics widgets</h2>
+          <p>Runtime and operational widgets contributed through the Studio SDK.</p>
+        </header>
+        <div className="widget-grid">
+          {widgets.length === 0 ? (
+            <div className="empty-state">
+              <FileText size={22} />
+              <span>No diagnostics widgets are registered.</span>
+            </div>
+          ) : null}
+          {widgets.map(widget => (
+            <DiagnosticsWidgetHost widget={widget} key={widget.id} />
+          ))}
+        </div>
+      </section>
     </section>
   );
+}
+
+function getDiagnosticDestinations(navigation: StudioNavigationContribution[]) {
+  const navigationById = new Map(navigation.map(item => [item.id, item]));
+  const diagnosticsRegistered = navigationById.has("diagnostics");
+
+  function isDiagnosticsDescendant(item: StudioNavigationContribution) {
+    if (!diagnosticsRegistered) return false;
+
+    const visited = new Set([item.id]);
+    let parentId = item.parentId;
+    while (parentId) {
+      if (parentId === "diagnostics") return true;
+      if (visited.has(parentId)) return false;
+      visited.add(parentId);
+      parentId = navigationById.get(parentId)?.parentId;
+    }
+    return false;
+  }
+
+  return navigation.filter(item => {
+    if (item.id === "diagnostics" || item.path === "/diagnostics") return false;
+    const isRuntimeEvidenceSettings = item.id === "workflows-runtime-diagnostics" && item.path === "/workflows/runtime-diagnostics";
+    return isRuntimeEvidenceSettings || isDiagnosticsDescendant(item);
+  });
+}
+
+function describeDiagnosticDestination(item: StudioNavigationContribution) {
+  if (item.id === "open-telemetry" && item.path === "/diagnostics/open-telemetry") {
+    return "Inspect distributed traces. Metrics and OpenTelemetry Logs are not available in this experience.";
+  }
+  if (item.id === "structured-logs" && item.path === "/diagnostics/structured-logs") {
+    return "Inspect application logs and follow the live structured log stream.";
+  }
+  if (item.id === "console" && item.path === "/diagnostics/console") {
+    return "Inspect live console output.";
+  }
+  if (item.id === "workflows-runtime-diagnostics" && item.path === "/workflows/runtime-diagnostics") {
+    return "Review runtime evidence capture policy settings.";
+  }
+  return "Open this destination.";
 }
 
 function DiagnosticsWidgetHost({ widget }: { widget: StudioDiagnosticsWidgetContribution }) {
@@ -946,14 +1261,82 @@ function compareOrderedContributions(a: { id: string; title?: string; order?: nu
   return (a.title ?? a.id).localeCompare(b.title ?? b.id) || a.id.localeCompare(b.id);
 }
 
+function childItemsFor(
+  item: StudioNavigationContribution,
+  navigation: StudioNavigationContribution[],
+  query: string,
+  matchesQuery: (item: StudioNavigationContribution) => boolean
+) {
+  return getChildNavigationItems(navigation, item)
+    .filter(child => !query || matchesQuery(item) || matchesQuery(child));
+}
+
+function NavItemGroup({
+  item,
+  childItems,
+  items,
+  path,
+  collapsed,
+  onNavigate
+}: {
+  item: StudioNavigationContribution;
+  childItems: StudioNavigationContribution[];
+  items: readonly StudioNavigationContribution[];
+  path: string;
+  collapsed: boolean;
+  onNavigate: (path: string) => void;
+}) {
+  const hasActiveChild = childItems.some(child => isNavigationItemActive(child, path, items));
+  const itemActive = isNavigationItemActive(item, path, items);
+  return (
+    <div className="nav-item-group">
+      <a
+        className={[itemActive ? "active" : "", hasActiveChild ? "has-active-child" : ""].filter(Boolean).join(" ")}
+        href={item.path}
+        aria-current={itemActive ? "page" : undefined}
+        aria-label={item.label}
+        title={collapsed ? item.label : undefined}
+        onClick={event => {
+          event.preventDefault();
+          onNavigate(item.path);
+        }}
+      >
+        <NavIconTile item={item} />
+        <span className="nav-label">{item.label}</span>
+      </a>
+      {childItems.length > 0 ? (
+        <div className="nav-children">
+          {childItems.map(child => {
+            const childActive = isNavigationItemActive(child, path, items);
+            return (
+              <a
+                key={child.id}
+                className={childActive ? "active nav-child" : "nav-child"}
+                href={child.path}
+                aria-current={childActive ? "page" : undefined}
+                onClick={event => {
+                  event.preventDefault();
+                  onNavigate(child.path);
+                }}
+              >
+                {child.label}
+              </a>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function NavIcon({ id, icon: Icon }: Pick<StudioNavigationContribution, "id" | "icon">) {
   // A contribution that names its own icon wins; the id-substring matches below are the host's defaults.
   if (Icon) {
     return <Icon size={18} />;
   }
 
-  if (id.includes("dashboard")) {
-    return <LayoutDashboard size={18} />;
+  if (id === "home" || id.includes("dashboard")) {
+    return <House size={18} />;
   }
 
   if (id.includes("weather")) {
@@ -964,11 +1347,31 @@ function NavIcon({ id, icon: Icon }: Pick<StudioNavigationContribution, "id" | "
     return <FileText size={18} />;
   }
 
+  if (id.includes("run") || id.includes("instance")) {
+    return <PlayCircle size={18} />;
+  }
+
+  if (id.includes("task")) {
+    return <ListChecks size={18} />;
+  }
+
+  if (id === "workflows-executables") {
+    return <PackageCheck size={18} />;
+  }
+
+  if (id === "workflows-activity-definitions") {
+    return <Blocks size={18} />;
+  }
+
+  if (id === "workflows-activity-availability") {
+    return <SlidersHorizontal size={18} />;
+  }
+
   if (id.includes("workflow")) {
     return <GitBranch size={18} />;
   }
 
-  if (id.includes("theme")) {
+  if (id.includes("theme") || id.includes("appearance")) {
     return <Paintbrush size={18} />;
   }
 
@@ -1005,41 +1408,53 @@ function getDefaultNavIconColor(id: string) {
   return "var(--primary)";
 }
 
-function isNavigationItemActive(item: StudioNavigationContribution, path: string) {
-  if (item.id === "dashboard" && isDashboardPath(path)) return true;
-  if (path === item.path) return true;
-  if (!item.activePathPrefix) return false;
-  return path === item.activePathPrefix || path.startsWith(`${item.activePathPrefix}/`);
-}
-
-export function isDashboardPath(path: string) {
-  return path === "/" || path === "/dashboard" || path === "/overview";
-}
+export { isDashboardPath, isExactSegmentPrefix, isNavigationItemActive } from "./navigation/active";
 
 export function getStudioNavigation(moduleNavigation: StudioNavigationContribution[], options: { includeThemeBuilder?: boolean } = {}) {
-  const hostNavigation = options.includeThemeBuilder ? [...builtInNavigation, themeBuilderNavigation] : builtInNavigation;
+  const hostNavigation = [
+    appearanceNavigation,
+    ...(options.includeThemeBuilder ? [themeBuilderNavigation] : []),
+    ...builtInNavigation
+  ];
   return [...hostNavigation, ...moduleNavigation]
     .filter((item, index, items) => items.findIndex(candidate => candidate.id === item.id) === index)
-    .sort((a, b) => (a.order ?? 500) - (b.order ?? 500));
+    .sort(compareNavigationItems);
+}
+
+function renderHostSettingsSection(
+  section: StudioNavigationContribution,
+  api: ElsaStudioModuleApi,
+  routes: Array<{ path: string; component: React.ComponentType<{ navigate: (path: string) => void }> }>,
+  navigate: (path: string) => void,
+  themeBuilderEnabled: boolean
+) {
+  if (section.id === "modules" || section.path === "/modules") {
+    return <ModuleManagementPage api={api} />;
+  }
+  if ((section.id === "theme-builder" || section.path === "/theme-builder") && themeBuilderEnabled) {
+    return <ThemeBuilderPage api={api} />;
+  }
+  if (section.id === "package-feeds" || section.path === "/package-feeds") {
+    return <PackageFeedsPage api={api} />;
+  }
+  const route = findRouteForPath(routes, section.path);
+  if (route?.component) {
+    const Component = route.component;
+    return <Component navigate={navigate} />;
+  }
+  return null;
 }
 
 export function getNavigationSection(item: Pick<StudioNavigationContribution, "id" | "path" | "section">): NavigationSection {
-  // A contribution that declares its section wins; the path/id matches below are the host's own settings pages.
-  if (item.section) {
-    return item.section;
-  }
+  return resolveNavigationSection(item);
+}
 
-  const settingsPaths = new Set(["/modules", "/theme-builder", "/package-feeds", "/features"]);
-  if (settingsPaths.has(item.path) || item.id === "modules" || item.id === "theme-builder" || item.id === "package-feeds" || item.id === "feature-management") {
-    return "settings";
-  }
-
-  return "workspace";
+export function getNavigationPlacementForItem(item: Pick<StudioNavigationContribution, "id" | "path" | "section" | "placement">): StudioNavigationPlacement {
+  return getNavigationPlacement(item);
 }
 
 export function getTopLevelNavigationItems(navigation: StudioNavigationContribution[], section: NavigationSection) {
-  const ids = new Set(navigation.map(item => item.id));
-  return navigation.filter(item => getNavigationSection(item) === section && (!item.parentId || !ids.has(item.parentId)));
+  return resolveTopLevelNavigationItems(navigation, section);
 }
 
 function normalizePath(path: string) {
@@ -1089,15 +1504,6 @@ function getInitialActiveBottomPanelId() {
   }
 
   return window.localStorage.getItem(activeBottomPanelStorageKey) ?? "";
-}
-
-function getInitialBottomPanelCollapsed() {
-  if (typeof window === "undefined") {
-    return false;
-  }
-
-  const value = window.localStorage.getItem(bottomPanelCollapsedStorageKey);
-  return value === null ? window.innerWidth <= 640 : value === "true";
 }
 
 function getInitialBoolean(storageKey: string, fallback: boolean) {

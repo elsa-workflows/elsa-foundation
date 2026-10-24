@@ -3,7 +3,7 @@ using Elsa.Cluster.Core.Models;
 
 namespace Elsa.Cluster.Testing;
 
-/// <summary>A runnability source whose entries a test sets, for fixtures to register on each member (spec 184, FR-010).</summary>
+/// <summary>A runnability source whose entries a test sets, for fixtures to register on each member.</summary>
 public sealed class ConformanceRunnabilitySource(IEnumerable<RunnabilityEntry> entries) : IMemberReportSource<RunnabilitySection>
 {
     private RunnabilitySection _section = new(entries);

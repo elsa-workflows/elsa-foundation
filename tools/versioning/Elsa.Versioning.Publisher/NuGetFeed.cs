@@ -54,12 +54,50 @@ public interface IPackageFeed
 /// took the package, 409 that the version exists. Every other answer, and a request that never got one, is a failure:
 /// a push that timed out may still have landed, and the next run settles that through FR-018. Reads are anonymous.
 /// </remarks>
-public sealed class NuGetFeed(HttpClient http, Uri serviceIndex, string apiKey) : IPackageFeed
+public sealed class NuGetFeed(HttpClient http, Uri serviceIndex, string apiKey, bool requireFeedzResourceHost = false, bool suppressResponseBodies = false) : IPackageFeed
 {
     private const string PublishResource = "PackagePublish/2.0.0";
     private const string ContentResource = "PackageBaseAddress/3.0.0";
+    private const int MaximumIndexBytes = 2 * 1024 * 1024;
 
+    private readonly Uri validatedServiceIndex = ValidateServiceIndex(serviceIndex, requireFeedzResourceHost);
     private (Uri Publish, Uri Content)? endpoints;
+
+    internal async Task<Exact20PackageResponse> GetPackageAsync(string packageId, string version, int maximumBytes, CancellationToken cancellationToken)
+    {
+        var (_, content) = await EndpointsAsync(cancellationToken);
+        var (id, lowerVersion) = (packageId.ToLowerInvariant(), version.ToLowerInvariant());
+        var url = new Uri(content, $"{id}/{lowerVersion}/{id}.{lowerVersion}.nupkg");
+        using var response = await GetAsync(url, cancellationToken);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+            return new Exact20PackageResponse((int)response.StatusCode, null);
+        if (requireFeedzResourceHost ? response.StatusCode != HttpStatusCode.OK : !response.IsSuccessStatusCode)
+            return new Exact20PackageResponse((int)response.StatusCode, null);
+
+        try
+        {
+            if (response.Content.Headers.ContentLength is long length && length > maximumBytes)
+                throw new FeedException($"{url} exceeds the bounded package response size.");
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var bytes = new MemoryStream();
+            var buffer = new byte[32 * 1024];
+            while (true)
+            {
+                var read = await stream.ReadAsync(buffer, cancellationToken);
+                if (read == 0)
+                    break;
+                if (bytes.Length + read > maximumBytes)
+                    throw new FeedException($"{url} exceeds the bounded package response size.");
+                await bytes.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+            }
+
+            return new Exact20PackageResponse((int)response.StatusCode, bytes.ToArray());
+        }
+        catch (Exception exception) when (exception is HttpRequestException or IOException or TaskCanceledException)
+        {
+            throw new FeedException($"{url} could not be read.", exception);
+        }
+    }
 
     public async Task<PushResult> PushAsync(string packagePath, CancellationToken cancellationToken)
     {
@@ -75,17 +113,17 @@ public sealed class NuGetFeed(HttpClient http, Uri serviceIndex, string apiKey) 
             request.Headers.Add("X-NuGet-Protocol-Version", "4.1.0");
 
             using var response = await http.SendAsync(request, cancellationToken);
-            var detail = $"{(int)response.StatusCode} {response.ReasonPhrase}";
+            var detail = suppressResponseBodies ? $"HTTP {(int)response.StatusCode}" : $"{(int)response.StatusCode} {response.ReasonPhrase}";
             return response.StatusCode switch
             {
                 HttpStatusCode.OK or HttpStatusCode.Created or HttpStatusCode.Accepted => new PushResult(PushStatus.Pushed, detail),
                 HttpStatusCode.Conflict => new PushResult(PushStatus.AlreadyExists, detail),
-                _ => new PushResult(PushStatus.Failed, $"{detail}: {Excerpt(await response.Content.ReadAsStringAsync(cancellationToken))}")
+                _ => new PushResult(PushStatus.Failed, suppressResponseBodies ? detail : $"{detail}: {Excerpt(await response.Content.ReadAsStringAsync(cancellationToken))}")
             };
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or IOException or FeedException)
         {
-            return new PushResult(PushStatus.Failed, $"no answer: {exception.Message}");
+            return new PushResult(PushStatus.Failed, suppressResponseBodies ? "no answer; response details omitted" : $"no answer: {exception.Message}");
         }
     }
 
@@ -97,7 +135,7 @@ public sealed class NuGetFeed(HttpClient http, Uri serviceIndex, string apiKey) 
         if (response.StatusCode == HttpStatusCode.NotFound)
             return [];
 
-        using var document = await ReadJsonAsync(response, url, cancellationToken);
+        using var document = await ReadJsonAsync(response, url, MaximumIndexBytes, cancellationToken);
         try
         {
             return document.RootElement.GetProperty("versions").EnumerateArray().Select(version => version.GetString()!).ToArray();
@@ -140,15 +178,15 @@ public sealed class NuGetFeed(HttpClient http, Uri serviceIndex, string apiKey) 
         if (endpoints is { } known)
             return known;
 
-        using var response = await GetAsync(serviceIndex, cancellationToken);
-        using var document = await ReadJsonAsync(response, serviceIndex, cancellationToken);
+        using var response = await GetAsync(validatedServiceIndex, cancellationToken);
+        using var document = await ReadJsonAsync(response, validatedServiceIndex, MaximumIndexBytes, cancellationToken);
         Uri Resource(string type) =>
             document.RootElement.TryGetProperty("resources", out var resources) &&
             resources.EnumerateArray().FirstOrDefault(resource => resource.TryGetProperty("@type", out var name) && name.GetString() == type) is
                 { ValueKind: JsonValueKind.Object } found &&
             found.TryGetProperty("@id", out var id) && id.GetString() is { } address
-                ? new Uri(type == ContentResource ? address.TrimEnd('/') + "/" : address)
-                : throw new FeedException($"The service index {serviceIndex} names no {type} resource.");
+                ? ValidateResource(new Uri(type == ContentResource ? address.TrimEnd('/') + "/" : address), type)
+                : throw new FeedException($"The service index {validatedServiceIndex} names no {type} resource.");
 
         return (endpoints = (Resource(PublishResource), Resource(ContentResource))).Value;
     }
@@ -157,22 +195,45 @@ public sealed class NuGetFeed(HttpClient http, Uri serviceIndex, string apiKey) 
     {
         try
         {
-            return await http.GetAsync(url, cancellationToken);
+            if (!requireFeedzResourceHost)
+                return await http.GetAsync(url, cancellationToken);
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            return await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
         {
-            throw new FeedException($"{url} did not answer: {exception.Message}", exception);
+            throw new FeedException(suppressResponseBodies ? "The fixed Feedz endpoint did not answer; response details omitted." : $"{url} did not answer: {exception.Message}", exception);
         }
     }
 
-    private static async Task<JsonDocument> ReadJsonAsync(HttpResponseMessage response, Uri url, CancellationToken cancellationToken)
+    private async Task<JsonDocument> ReadJsonAsync(HttpResponseMessage response, Uri url, int maximumBytes, CancellationToken cancellationToken)
     {
-        if (!response.IsSuccessStatusCode)
+        if (requireFeedzResourceHost ? response.StatusCode != HttpStatusCode.OK : !response.IsSuccessStatusCode)
             throw new FeedException($"{url} answered {(int)response.StatusCode} {response.ReasonPhrase}.");
 
         try
         {
-            return await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+            if (!requireFeedzResourceHost)
+                return await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+
+            if (response.Content.Headers.ContentLength is long length && length > maximumBytes)
+                throw new FeedException($"{url} exceeds the bounded feed response size.");
+
+            await using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var bytes = new MemoryStream();
+            var buffer = new byte[16 * 1024];
+            while (true)
+            {
+                var read = await source.ReadAsync(buffer.AsMemory(), cancellationToken);
+                if (read == 0)
+                    break;
+                if (bytes.Length + read > maximumBytes)
+                    throw new FeedException($"{url} exceeds the bounded feed response size.");
+                await bytes.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+            }
+
+            return JsonDocument.Parse(bytes.ToArray());
         }
         catch (Exception exception) when (exception is JsonException or HttpRequestException or IOException or TaskCanceledException)
         {
@@ -181,4 +242,24 @@ public sealed class NuGetFeed(HttpClient http, Uri serviceIndex, string apiKey) 
     }
 
     private static string Excerpt(string body) => body.Length <= 300 ? body.Trim() : body[..300].Trim() + "...";
+
+    private Uri ValidateResource(Uri resource, string type)
+    {
+        var expected = type == PublishResource
+            ? "https://f.feedz.io/elsa-workflows/elsa-4/nuget"
+            : "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/";
+        if (requireFeedzResourceHost && !string.Equals(resource.AbsoluteUri, expected, StringComparison.Ordinal))
+            throw new FeedException("The Feedz service index did not name the exact pinned incident resource URI.");
+        return resource;
+    }
+
+    private static Uri ValidateServiceIndex(Uri index, bool recoveryMode)
+    {
+        if (recoveryMode &&
+            (!string.Equals(index.AbsoluteUri, Exact20RecoveryPins.FeedIndex, StringComparison.Ordinal) ||
+             !string.Equals(index.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal) || index.UserInfo.Length != 0 ||
+             index.Query.Length != 0 || index.Fragment.Length != 0))
+            throw new ArgumentException("Exact20 recovery is pinned to the fixed Feedz service index.", nameof(index));
+        return index;
+    }
 }

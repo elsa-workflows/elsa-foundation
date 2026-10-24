@@ -65,6 +65,31 @@ public sealed class FlowchartExecutionEngineTests
     }
 
     [Fact]
+    public async Task PublishedBoundary_ChildrenUseTheBoundaryScopeAndKeepFlowchartLocalScopeMetadata()
+    {
+        await using var fixture = await FlowchartRuntimeFixture.CreateAsync(["actexec-flowchart", "actexec-a"]);
+        var executable = fixture.NewExecutable(
+            children: [fixture.NewProbeNode("node-a")],
+            connections: [],
+            startNodeId: "node-a",
+            opensActivityBoundary: true);
+
+        await fixture.ExecuteAsync(executable);
+
+        var states = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("wfexec-1");
+        var flowchart = Assert.Single(states, state => state.Execution.ExecutableNodeId == "node-flowchart");
+        var child = Assert.Single(states, state => state.Execution.ExecutableNodeId == "node-a");
+        Assert.Equal(flowchart.Execution.ActivityExecutionId, flowchart.ExecutionScopeId);
+        Assert.Equal(flowchart.Execution.ActivityExecutionId, child.ExecutionScopeId);
+        Assert.Equal(flowchart.Execution.ActivityExecutionId, child.Provenance.ExecutionScopeId);
+        var childScheduleCommit = Assert.Single(fixture.CheckpointCommits, commit => SchedulesChild(commit, "node-a"));
+        var scheduledChild = Assert.Single(childScheduleCommit.PostCommitIntents)
+            .Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        Assert.Equal(flowchart.Execution.ActivityExecutionId, scheduledChild.ExecutionScopeId);
+        Assert.Equal("scope:root", scheduledChild.CommandMetadata[FlowchartExecutionEngine.ExecutionScopeIdMetadataKey]);
+    }
+
+    [Fact]
     public async Task Start_CommitsInitialStateAndChildIntentAtomically_AndReplayDoesNotDuplicateChild()
     {
         await using var fixture = await FlowchartRuntimeFixture.CreateAsync(["actexec-flowchart", "actexec-a"]);
@@ -75,9 +100,9 @@ public sealed class FlowchartExecutionEngineTests
 
         await fixture.ExecuteAsync(executable);
 
-        var writer = Assert.IsType<InMemoryRuntimeCheckpointCommitStore>(fixture.Provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
-        Assert.DoesNotContain(writer.ListCommits(), write => write.Commit.Checkpoint.CheckpointId.Contains("flowchart-state", StringComparison.Ordinal));
-        var atomicCommit = Assert.Single(writer.ListCommits(), write => SchedulesChild(write.Commit, "node-a")).Commit;
+        var commits = fixture.CheckpointCommits;
+        Assert.DoesNotContain(commits, commit => commit.Checkpoint.CheckpointId.Contains("flowchart-state", StringComparison.Ordinal));
+        var atomicCommit = Assert.Single(commits, commit => SchedulesChild(commit, "node-a"));
         var activityStateChange = Assert.Single(atomicCommit.StateChanges.ActivityExecutions);
         var serialized = activityStateChange.State.PrivateState!.Value.InlineValue!.Value.GetRawText();
         var initialState = JsonSerializer.Deserialize<FlowchartExecutionState>(serialized, new JsonSerializerOptions(JsonSerializerDefaults.Web))
@@ -121,9 +146,9 @@ public sealed class FlowchartExecutionEngineTests
 
         await fixture.ExecuteAsync(executable);
 
-        var writer = Assert.IsType<InMemoryRuntimeCheckpointCommitStore>(fixture.Provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
-        Assert.DoesNotContain(writer.ListCommits(), write => write.Commit.Checkpoint.CheckpointId.Contains("flowchart-state", StringComparison.Ordinal));
-        var nextChildCommit = Assert.Single(writer.ListCommits(), write => SchedulesChild(write.Commit, "node-b")).Commit;
+        var commits = fixture.CheckpointCommits;
+        Assert.DoesNotContain(commits, commit => commit.Checkpoint.CheckpointId.Contains("flowchart-state", StringComparison.Ordinal));
+        var nextChildCommit = Assert.Single(commits, commit => SchedulesChild(commit, "node-b"));
         var parentChange = Assert.Single(
             nextChildCommit.StateChanges.ActivityExecutions,
             change => change.State.Execution.ExecutableNodeId == "node-flowchart");
@@ -134,7 +159,7 @@ public sealed class FlowchartExecutionEngineTests
         var activeChild = Assert.Single(state.ActiveChildren);
         Assert.Equal("node-b", activeChild.NodeId);
         Assert.Contains(state.ExecutionPaths, path => path.CurrentNodeId == "node-b" && path.Status == ExecutionPathStatus.Active);
-        Assert.Single(writer.ListCommits().SelectMany(write => write.Commit.PostCommitIntents), intent => SchedulesChild(intent, "node-b"));
+        Assert.Single(commits.SelectMany(commit => commit.PostCommitIntents), intent => SchedulesChild(intent, "node-b"));
     }
 
     [Fact]

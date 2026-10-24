@@ -3,9 +3,9 @@ using YamlDotNet.Serialization;
 namespace Elsa.Versioning.Publisher.Tests;
 
 /// <summary>
-/// <c>.github/workflows/packages.yml</c> stays a thin shell over the publisher, and keeps spec 150's workflow-level
-/// requirements: no global <c>/p:Version</c> (FR-005), no <c>--skip-duplicate</c> (FR-011), serialized runs from main that
-/// are never cancelled in progress (FR-020), and pushes from main alone (FR-008).
+/// <c>.github/workflows/packages.yml</c> stays a thin shell over the publisher, and keeps its workflow-level
+/// requirements: no global <c>/p:Version</c>, no <c>--skip-duplicate</c>, serialized runs from main that
+/// are never cancelled in progress, and pushes from main alone.
 /// </summary>
 public sealed class PackagesWorkflowTests
 {
@@ -21,7 +21,7 @@ public sealed class PackagesWorkflowTests
             .Where(step => step.ContainsKey("run"))
             .Select(step => (job.Key, (string)step["run"])));
 
-    /// <summary>FR-005 and FR-011: versions come from the computation, and a duplicate is settled, never skipped.</summary>
+    /// <summary>Versions come from the computation, and a duplicate is settled, never skipped.</summary>
     [Theory]
     [InlineData("p:Version")]
     [InlineData("p:PackageVersion")]
@@ -39,7 +39,7 @@ public sealed class PackagesWorkflowTests
                                            script.Script.Contains(" publish ", StringComparison.Ordinal));
     }
 
-    /// <summary>FR-020: every run from main shares one group, the one the repair workflow joins, and none is cancelled in progress.</summary>
+    /// <summary>Every run from main shares one group, the one the repair workflow joins, and none is cancelled in progress.</summary>
     [Fact]
     public void Runs_from_main_are_serialized_and_never_cancelled_in_progress()
     {
@@ -51,7 +51,7 @@ public sealed class PackagesWorkflowTests
     }
 
     /// <summary>
-    /// FR-008 and FR-017: only the publish job holds the feed's key or may write to the repository, and it runs only for
+    /// Only the publish job holds the feed's key or may write to the repository, and it runs only for
     /// a build of main that planned a publish or the bootstrap.
     /// </summary>
     [Fact]

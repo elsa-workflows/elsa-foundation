@@ -17,6 +17,11 @@ using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Activities.Design.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Clr;
 using Elsa.Activities.Http;
+using Elsa.Connections.Core.Contracts;
+using Elsa.Connections.Core.Models;
+using Elsa.Connections.Design.Features;
+using Elsa.Connections.Features;
+using Elsa.Connections.Workflows.Features;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
 using Elsa.Api.Capabilities;
@@ -74,12 +79,15 @@ namespace Elsa.Secrets.Workflows.Tests.Support;
 /// <summary>How the runtime runs a canary activity's schedule, start and invoke stages.</summary>
 public enum CanaryStartMode
 {
-    /// <summary>Immediate checkpoint persistence: each stage is its own dispatch and its own commit.</summary>
+    /// <summary>
+    /// The Durable persistence mode with ReplaySafe fusion turned off, so each stage is its own dispatch, as every stage
+    /// of an activity that is not ReplaySafe is.
+    /// </summary>
     Discrete,
 
     /// <summary>
-    /// Coalesced checkpoint persistence, under which the runtime fuses a ReplaySafe leaf's schedule, start and invoke
-    /// stages into one dispatch (ADR 0047 D1).
+    /// The Balanced persistence mode, under which the runtime fuses a ReplaySafe leaf's schedule, start and invoke
+    /// stages into one dispatch.
     /// </summary>
     Fused
 }
@@ -98,7 +106,7 @@ public enum CanaryCaller
 public sealed record CanaryPublication(string DefinitionId, string VersionId, string ArtifactId, string SourceReferenceId);
 
 /// <summary>
-/// The canary host (spec 188, T079): one CShells web host on a test server whose one shell composes what the canary
+/// The canary host: one CShells web host on a test server whose one shell composes what the canary
 /// reads its eight surfaces from. Workflow design, its validations and its EF persistence and the activity catalog
 /// with CLR reconciliation, on SQLite files under <see cref="DesignDirectory"/>; publishing; the runtime, its EF
 /// persistence on a SQLite file under <see cref="RuntimeDirectory"/>, its engine tracing, its triggers and its API with
@@ -222,7 +230,10 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
                     // features by name gets none of their services.
                     typeof(HttpFeature).Assembly,
                     typeof(WorkflowsRuntimeHttpFeature).Assembly,
-                    typeof(ActivitiesHttpFeature).Assembly)
+                    typeof(ActivitiesHttpFeature).Assembly,
+                    typeof(ConnectionsFeature).Assembly,
+                    typeof(ConnectionsWorkflowsFeature).Assembly,
+                    typeof(ConnectionsDesignFeature).Assembly)
                 .WithConfigurationProvider(configuration));
 
             var app = builder.Build();
@@ -261,8 +272,11 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
             [$"{features}WorkflowsDesignGitReconciliation:Role"] = "Writer",
             [$"{features}Secrets:EncryptionKey"] = GeneratedKey()
         };
-        if (mode == CanaryStartMode.Fused)
-            settings[$"{features}WorkflowsRuntimeCheckpointPersistence:Mode"] = "Coalesced";
+        // A shell runs Balanced unless told otherwise, so the discrete host names Durable explicitly, and turns fusion off
+        // so the canary's stages are their own dispatches.
+        settings[$"{features}WorkflowsRuntimeCheckpointPersistence:Mode"] = mode == CanaryStartMode.Fused ? "Balanced" : "Durable";
+        settings[$"{features}{SecretsCanaryInjectionFeature.Name}:{nameof(SecretsCanaryInjectionFeature.FuseReplaySafeStages)}"] =
+            mode == CanaryStartMode.Fused ? "true" : "false";
 
         foreach (var feature in Features.Concat(withHttpActivities ? HttpFeatures : []))
             settings.TryAdd($"{features}{feature}", null);
@@ -305,7 +319,14 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
     ];
 
     /// <summary>The features a host with the HTTP activities adds: the activities, and the canary's endpoint standing in for the network.</summary>
-    private static readonly string[] HttpFeatures = ["ActivitiesHttp", SecretsCanaryHttpTransportFeature.Name];
+    private static readonly string[] HttpFeatures =
+    [
+        "ActivitiesHttp",
+        SecretsCanaryHttpTransportFeature.Name,
+        "Connections",
+        "ConnectionsWorkflows",
+        "ConnectionsDesign"
+    ];
 
     // ---- Secrets -------------------------------------------------------------------------------------------------
 
@@ -332,6 +353,36 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
 
     public static JsonObject SecretReference(string referenceKey, string secretName) =>
         Input(referenceKey, new JsonObject { ["name"] = secretName, ["typeName"] = SecretTypeNames.Text }, "Secret");
+
+    public static JsonObject ConnectionReference(string referenceKey, string connectionName, string type = ConnectionTypeNames.Http) =>
+        Input(referenceKey, new JsonObject { ["connection"] = connectionName, ["type"] = type }, "Connection");
+
+    /// <summary>Creates an http bearer connection whose token field is the named existing secret.</summary>
+    public async Task CreateHttpBearerConnectionAsync(string connectionName, string tokenSecretName)
+    {
+        await using var scope = Shell.ServiceProvider.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<IConnectionManager>().CreateAsync(
+            TenantId,
+            new CreateConnectionRequest
+            {
+                Name = connectionName,
+                TypeName = ConnectionTypeNames.Http,
+                AuthScheme = HttpAuthSchemes.Bearer,
+                Settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    [HttpConnectionSettingKeys.AllowedHosts] = "canary-endpoint.test",
+                    [HttpConnectionSettingKeys.AllowInsecureHttp] = "true"
+                },
+                SecretFields = new Dictionary<string, ConnectionSecretFieldInput>(StringComparer.Ordinal)
+                {
+                    [HttpConnectionSecretFields.Token] = new()
+                    {
+                        SourceKind = ConnectionCredentialSourceKinds.Secret,
+                        ExistingSecretName = tokenSecretName
+                    }
+                }
+            });
+    }
 
     private static JsonObject Input(string referenceKey, JsonNode? value, string expressionType) => new()
     {
@@ -692,7 +743,6 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
         finally
         {
             Spans.Dispose();
-            SqliteConnection.ClearAllPools();
             DeleteQuietly(_root);
         }
     }

@@ -242,8 +242,14 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
             LibInterchange.BpmnWorkBinding.SignalWait signal => EventCatch(binding.BindingRef, signal.SignalName),
             LibInterchange.BpmnWorkBinding.MessagePublish publish =>
                 new(binding.BindingRef, DefaultPublishEventActivityVersionId, [Literal("EventName", publish.MessageName)], []),
+            // A nested process never starts the workflow: its parent process starts it and listens on its behalf.
+            // Its CanStartWorkflow is therefore authored false, so it produces no start bindings, which the
+            // start-path rule would refuse below the parent process (spec 238).
             LibInterchange.BpmnWorkBinding.NestedProcess nested =>
-                BuildProcessNode(nested.Definition, binding.BindingRef, diagram: null, collaboration: null),
+                BuildProcessNode(nested.Definition, binding.BindingRef, diagram: null, collaboration: null) with
+                {
+                    Inputs = [Literal(nameof(BpmnProcessActivity.CanStartWorkflow), false)]
+                },
             LibInterchange.BpmnWorkBinding.CallProcess call => MaterializeCall(call, source),
             _ => null
         };

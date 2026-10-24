@@ -9,14 +9,17 @@ using Elsa.Activities.Runtime.Core;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Executions;
@@ -37,10 +40,13 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
     private readonly ServiceProvider _provider;
     private readonly FakeTimeProvider _timeProvider;
 
-    private DispatchWorkflowRuntimeTestFixture(ServiceProvider provider, FakeTimeProvider timeProvider)
+    private readonly Type _childActivityType;
+
+    private DispatchWorkflowRuntimeTestFixture(ServiceProvider provider, FakeTimeProvider timeProvider, Type childActivityType)
     {
         _provider = provider;
         _timeProvider = timeProvider;
+        _childActivityType = childActivityType;
     }
 
     internal IServiceProvider Services => _provider;
@@ -50,16 +56,22 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
     internal RecordingDispatchBookmarkObserver BookmarkObserver => _provider.GetRequiredService<RecordingDispatchBookmarkObserver>();
     internal void AdvanceTime(TimeSpan duration) => _timeProvider.Advance(duration);
 
+    /// <param name="maxNestingDepth">The dispatch nesting limit.</param>
+    /// <param name="failDispatchCommit">Fails the commit that records a dispatch.</param>
+    /// <param name="persistenceModes">Adds the persistence modes with these host settings; without it every run is Durable.</param>
+    /// <param name="replaySafeChild">Makes the child's only activity ReplaySafe, so nothing commits the child before it completes.</param>
     internal static async ValueTask<DispatchWorkflowRuntimeTestFixture> CreateAsync(
         int maxNestingDepth = DispatchWorkflowOptions.DefaultMaxNestingDepth,
-        bool failDispatchCommit = false)
+        bool failDispatchCommit = false,
+        Action<PersistenceModeOptions>? persistenceModes = null,
+        bool replaySafeChild = false)
     {
         var services = new ServiceCollection();
         var timeProvider = new FakeTimeProvider(Now);
         services.AddSingleton<TimeProvider>(timeProvider);
         services.AddSingleton<CheckpointRecorder>();
         services.AddSingleton<ChildExecutionProbe>();
-        var typeRegistry = new WellKnownTypeRegistry();
+        var typeRegistry = SerializationServices.TypeRegistry();
         typeRegistry.RegisterType(typeof(string), "String");
         typeRegistry.RegisterType(typeof(int), "Int32");
         services.AddSingleton<IWellKnownTypeRegistry>(typeRegistry);
@@ -83,10 +95,14 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                 serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>(),
                 serviceProvider.GetRequiredService<CheckpointRecorder>(),
                 failDispatchCommit)));
+        services.AddPersistenceModes(persistenceModes ?? (options => options.Mode = PersistenceMode.Durable));
 
         RegisterActivityTypes(typeRegistry);
         var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
-        var fixture = new DispatchWorkflowRuntimeTestFixture(provider, timeProvider);
+        var fixture = new DispatchWorkflowRuntimeTestFixture(
+            provider,
+            timeProvider,
+            replaySafeChild ? typeof(ReplaySafeChildProbeActivity) : typeof(ChildProbeActivity));
         await fixture.SeedChildAsync();
         return fixture;
     }
@@ -282,7 +298,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             "version-child-replacement",
             "4.0.0",
             "sha256:child-replacement");
-        await _provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(NewChildExecutable(replacementIdentity));
+        await _provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(NewChildExecutable(replacementIdentity, _childActivityType));
         await references.SaveAsync(NewSourceReference(
             "source-child-replacement",
             replacementIdentity,
@@ -301,19 +317,19 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
 
     private async ValueTask SeedChildAsync()
     {
-        await _provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(NewChildExecutable());
+        await _provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(NewChildExecutable(activityType: _childActivityType));
         await _provider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(ChildSourceReference());
     }
 
     internal static WorkflowExecutableSourceReference ChildSourceReference() =>
         NewSourceReference("source-child", ChildIdentity, "publication-child", "slot-child");
 
-    private static WorkflowExecutable NewChildExecutable(WorkflowExecutableIdentity? identity = null) =>
+    private static WorkflowExecutable NewChildExecutable(WorkflowExecutableIdentity? identity = null, Type? activityType = null) =>
         new(
             identity: identity ?? ChildIdentity,
             rootActivity: NewNode(
                 executableNodeId: "node-child-probe",
-                activityType: typeof(ChildProbeActivity),
+                activityType: activityType ?? typeof(ChildProbeActivity),
                 inputBindings: new Dictionary<string, RuntimeInputBinding>
                 {
                     [nameof(ChildProbeActivity.Message)] = WorkflowInputBinding(
@@ -562,7 +578,10 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                 .Select(attribute => attribute.Key)
                 .DefaultIfEmpty(ActivityOutcomes.Done)
                 .ToArray(),
-            new ActivityActivationRequirement(descriptorType, alias));
+            new ActivityActivationRequirement(descriptorType, alias),
+            activityType.GetCustomAttributes(typeof(ActivitySideEffectProfileAttribute), inherit: true)
+                .Cast<ActivitySideEffectProfileAttribute>()
+                .SingleOrDefault()?.Profile ?? SideEffectProfile.External);
     }
 
     private static IReadOnlyDictionary<string, RuntimeInputBinding> CompleteInputBindings(
@@ -639,7 +658,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             ? values.Single()
             : throw new InvalidOperationException($"Expected one value but found {values.Count}.");
 
-    private static void RegisterActivityTypes(WellKnownTypeRegistry registry)
+    private static void RegisterActivityTypes(IWellKnownTypeRegistry registry)
     {
         var types = new[]
         {
@@ -649,6 +668,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             typeof(WorkflowDispatchParentResumePayload),
             typeof(DispatchWorkflowResult),
             typeof(ChildProbeActivity),
+            typeof(ReplaySafeChildProbeActivity),
             typeof(ActivityUnit),
             typeof(JsonElement),
             typeof(IReadOnlyDictionary<string, JsonElement>)
@@ -657,7 +677,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             registry.RegisterType(type, TypeAliasConvention.CanonicalAlias(type));
     }
 
-    private sealed class ChildProbeActivity(ChildExecutionProbe probe) : Activity<ActivityUnit>
+    private class ChildProbeActivity(ChildExecutionProbe probe) : Activity<ActivityUnit>
     {
         [ActivityInput]
         [Required]
@@ -689,6 +709,8 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         }
     }
 
+    [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
+    private sealed class ReplaySafeChildProbeActivity(ChildExecutionProbe probe) : ChildProbeActivity(probe);
 }
 
 internal sealed record ParentDispatchRun(
@@ -748,7 +770,7 @@ internal sealed class CheckpointRecorder
     internal RuntimeCheckpointCommit SingleIntentCommit(string intentKind)
     {
         lock (_gate)
-            return _commits.Single(commit => commit.PostCommitIntents.Any(intent => intent.Kind == intentKind));
+            return _commits.Single(commit => CheckpointCommitIntents.IntentsOf(commit).Any(intent => intent.Kind == intentKind));
     }
 }
 

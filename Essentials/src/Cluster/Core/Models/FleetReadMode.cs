@@ -1,6 +1,6 @@
 namespace Elsa.Cluster.Core.Models;
 
-/// <summary>How current a fleet view must be (FR-010).</summary>
+/// <summary>How current a fleet view must be.</summary>
 public enum FleetReadMode
 {
     /// <summary>

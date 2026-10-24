@@ -6,9 +6,9 @@ namespace Elsa.Cluster.InProcess;
 public static class SchemaDormancyCheckServiceCollectionExtensions
 {
     /// <summary>
-    /// Adds the default <see cref="SchemaDormancyCheck"/> unless a check is already composed (spec 182, FR-003), so asking
+    /// Adds the default <see cref="SchemaDormancyCheck"/> unless a check is already composed, so asking
     /// the check never depends on who composed it. A check registered before this one is the one used; two already
-    /// registered are a replacement-contract conflict (framework constitution §2.6.2) and fail here.
+    /// registered are a replacement-contract conflict and fail here.
     /// </summary>
     public static IServiceCollection TryAddSchemaDormancyCheck(this IServiceCollection services)
     {

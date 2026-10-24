@@ -2,7 +2,7 @@ using Elsa.Cluster.Core.Models;
 
 namespace Elsa.Cluster.Core.Exceptions;
 
-/// <summary>The base of every failure the membership contract reports; providers wrap store failures in one (§2.23.5).</summary>
+/// <summary>The base of every failure the membership contract reports; providers wrap store failures in one.</summary>
 public abstract class ClusterMembershipException : Exception
 {
     protected ClusterMembershipException(string message, Exception? innerException = null) : base(message, innerException)
@@ -15,22 +15,22 @@ public abstract class ClusterMembershipException : Exception
 public sealed class ClusterMembershipConfigurationException(string message) : ClusterMembershipException(message);
 
 /// <summary>
-/// A fresh read could not return every member, so it returned none (FR-012). The caller must not treat the failure as
+/// A fresh read could not return every member, so it returned none. The caller must not treat the failure as
 /// an empty or smaller fleet.
 /// </summary>
 public sealed class ClusterMembershipReadException(string message, Exception? innerException = null)
     : ClusterMembershipException(message, innerException);
 
 /// <summary>
-/// A join was refused because another live process holds the host id (FR-004b). The live incarnation is left
+/// A join was refused because another live process holds the host id. The live incarnation is left
 /// undisturbed; the operator must configure a distinct host id.
 /// </summary>
 /// <remarks>
-/// The caller retries this refusal (FR-004b), so it recurs once per attempt while the wait lasts. This exception
+/// The caller retries this refusal, so it recurs once per attempt while the wait lasts. This exception
 /// carries the incarnation it is waiting on so each attempt can be reported, but it does not log anything itself:
-/// whichever caller owns the retry loop — B2's hosted join, or any other shipped retry — MUST log a warning per
-/// refused attempt naming the host id and this incarnation (#2097 review). The retry loop in this contract's own
-/// conformance test is a test helper, not shipped code, and does not log.
+/// whichever caller owns the retry loop — the durable provider's hosted join, or any other shipped retry — MUST log a
+/// warning per refused attempt naming the host id and this incarnation (#2097 review). The retry loop in this
+/// contract's own conformance test is a test helper, not shipped code, and does not log.
 /// </remarks>
 public sealed class ClusterMembershipJoinRefusedException(string hostId, MemberIncarnation incarnation, DateTimeOffset lastHeartbeatAt)
     : ClusterMembershipException(
@@ -47,9 +47,9 @@ public sealed class ClusterMembershipJoinRefusedException(string hostId, MemberI
 }
 
 /// <summary>
-/// A join was refused throughout one full liveness window (heartbeat, expiry and skew, FR-006), because the live
-/// incumbent kept renewing the whole time: a live duplicate process holds the host id, not a crash to wait out
-/// (FR-004b, FR-039). Unlike <see cref="ClusterMembershipJoinRefusedException"/>, the caller MUST NOT keep retrying;
+/// A join was refused throughout one full liveness window (heartbeat, expiry and skew), because the live
+/// incumbent kept renewing the whole time: a live duplicate process holds the host id, not a crash to wait out.
+/// Unlike <see cref="ClusterMembershipJoinRefusedException"/>, the caller MUST NOT keep retrying;
 /// retrying forever would hide an operator mistake instead of surfacing it.
 /// </summary>
 public sealed class ClusterMembershipDuplicateHostIdException(string hostId, MemberCondition condition)
@@ -60,6 +60,6 @@ public sealed class ClusterMembershipDuplicateHostIdException(string hostId, Mem
 {
     public string HostId { get; } = hostId;
 
-    /// <summary>The FR-039 condition this failure reports.</summary>
+    /// <summary>The <see cref="MemberConditionKind.DuplicateHostId"/> condition this failure reports.</summary>
     public MemberCondition Condition { get; } = condition;
 }

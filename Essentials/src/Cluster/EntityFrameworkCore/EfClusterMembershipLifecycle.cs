@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Cluster.EntityFrameworkCore;
 
 /// <summary>
-/// Drives the host's member through the host's own lifecycle (spec 183, FR-005, FR-027, FR-030): it joins while the host
+/// Drives the host's member through the host's own lifecycle: it joins while the host
 /// starts, becomes active once the host has started, heartbeats on a fixed interval, drains as the host begins to stop,
 /// and leaves once it has stopped. Registered after the module's migrator, so the table exists before the join.
 /// </summary>
@@ -15,19 +15,19 @@ namespace Elsa.Cluster.EntityFrameworkCore;
 /// <para>
 /// The join waits while another incarnation of the host id is still live, one heartbeat interval between attempts, each
 /// refusal logged as a warning naming the incarnation it waits on. If that incarnation renews in the meantime, it is a
-/// live duplicate: the join throws, and so the host refuses to start rather than retrying forever (FR-004b, FR-039).
+/// live duplicate: the join throws, and so the host refuses to start rather than retrying forever.
 /// </para>
 /// <para>
 /// The heartbeat never backs off. A failed one is followed by the next one a heartbeat interval later, so a store outage
-/// can never stretch the interval past the expiry period the way a widening backoff would (FR-027). The member keeps
+/// can never stretch the interval past the expiry period the way a widening backoff would. The member keeps
 /// heartbeating while it drains, so it stays counted until it has really stopped.
 /// </para>
 /// <para>
-/// A member that finds itself displaced stops the host (FR-007). Another process now holds its host id, so it never
+/// A member that finds itself displaced stops the host. Another process now holds its host id, so it never
 /// rejoins and is never counted again once its entry expires, yet every loop of the host would go on working under its
 /// identity: claiming and renewing work, writing at write versions it no longer advances, and serving requests nobody in
 /// the fleet accounts for. Stopping is what a restart would decide anyway: the new incarnation either joins once the
-/// other has gone, or refuses to start as a live duplicate (FR-004b, FR-039). It records why in
+/// other has gone, or refuses to start as a live duplicate. It records why in
 /// <see cref="ClusterMembershipHostStop"/> first, so the host app exits non-zero and a supervisor restarts it. A member
 /// that only lapsed, and so rejoins as a new incarnation, keeps the host running; what it must not do meanwhile, each
 /// loop checks for itself.
@@ -131,7 +131,7 @@ internal sealed class EfClusterMembershipLifecycle(
         logger.LogCritical(
             "Cluster member {Member} was displaced ({Reason}): another process holds host id {HostId}, so this one never rejoins the fleet. " +
             "The host stops, so nothing goes on working under an identity the fleet no longer counts; start it again under a host id of its own, " +
-            "or after the other process has stopped (spec 183, FR-007).",
+            "or after the other process has stopped.",
             standing.Identity, lapse.Reason, standing.Identity.HostId);
         hostStop.Record(lapse);
         if (lifetime is null)

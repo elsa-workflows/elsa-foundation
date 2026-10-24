@@ -5,7 +5,7 @@ namespace Elsa.Architecture.Tests;
 
 /// <summary>
 /// Proves how <c>PackageVersioning.props</c> chooses each project's version, and the checks it runs on every build and
-/// pack (spec 150, #2080), against small SDK-less fixture projects under the backend source roots of a copy of the root build files.
+/// pack (#2080), against small SDK-less fixture projects under the backend source roots of a copy of the root build files.
 /// Computed input is the calculator's pack-properties file, which the fixture imports ahead of
 /// <c>Directory.Build.props</c> as MSBuild's <c>CustomBeforeDirectoryBuildProps</c> hook does;
 /// <see cref="PackageVersioningPackTests"/> proves the hook itself, with real packs.
@@ -38,7 +38,7 @@ public sealed class PackageVersionBuildCheckTests : IDisposable
     }
 
     /// <summary>
-    /// FR-005 covers backend package roots. A project elsewhere - a test fixture pinning an
+    /// Computed versioning covers backend package roots. A project elsewhere - a test fixture pinning an
     /// assembly version, a sample package - is left exactly as its own properties have it.
     /// </summary>
     [Fact]

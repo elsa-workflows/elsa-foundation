@@ -2,6 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
+import { flowchartActivity } from "./fixtures/workflowCatalog";
 import { authSessionEndedEvent, type StudioRuntimeIdentity } from "@elsa-workflows/studio-sdk";
 import { register, type WorkflowDesignerPanelContext } from "../module";
 import { activationSlotReadsUnavailableReason, type Publication } from "../api/publishing";
@@ -87,13 +88,12 @@ describe("workflows module", () => {
       expect.objectContaining({ id: "workflows", title: "Workflows", ownedPaths: ["/workflows"], required: true, defaultEnabled: true })
     ]);
     expect(api.navigation.list()).toEqual([
-      expect.objectContaining({ id: "workflows", path: "/workflows/definitions", activePathPrefix: "/workflows" }),
-      expect.objectContaining({ id: "workflows-definitions", label: "Workflow Definitions", path: "/workflows/definitions", parentId: "workflows" }),
-      expect.objectContaining({ id: "workflows-activity-definitions", label: "Activity Definitions", path: "/workflows/activity-definitions", parentId: "workflows" }),
-      expect.objectContaining({ id: "workflows-executables", path: "/workflows/executables", parentId: "workflows" }),
-      expect.objectContaining({ id: "workflows-runs", label: "Runs", path: "/workflows/instances", parentId: "workflows" }),
-      expect.objectContaining({ id: "workflows-runtime diagnostics", label: "Runtime Diagnostics", path: "/workflows/runtime-diagnostics", parentId: "workflows" }),
-      expect.objectContaining({ id: "workflows-activity availability", label: "Activity Availability", path: "/workflows/activity-availability", parentId: "workflows" })
+      expect.objectContaining({ id: "workflows", path: "/workflows/definitions", activePathPrefix: "/workflows", placement: "main" }),
+      expect.objectContaining({ id: "workflows-runs", label: "Runs", path: "/workflows/instances", placement: "main", parentId: undefined }),
+      expect.objectContaining({ id: "workflows-executables", path: "/workflows/executables", placement: "more", parentId: undefined }),
+      expect.objectContaining({ id: "workflows-activity-definitions", label: "Activity definitions", path: "/workflows/activity-definitions", placement: "more", parentId: undefined }),
+      expect.objectContaining({ id: "workflows-runtime-diagnostics", label: "Runtime evidence settings", path: "/workflows/runtime-diagnostics", placement: "more", parentId: undefined }),
+      expect.objectContaining({ id: "workflows-activity-availability", label: "Activity availability", path: "/workflows/activity-availability", placement: "more", parentId: undefined })
     ]);
     expect(api.routes.list()).toEqual([
       expect.objectContaining({ id: "workflows-elsa3-import", path: "/workflows/activity-definitions/import-elsa3" }),
@@ -105,7 +105,7 @@ describe("workflows module", () => {
       expect.objectContaining({ id: "workflows-instances", label: "Workflow runs", path: "/workflows/instances" }),
       expect.objectContaining({ id: "workflows-instance-detail", label: "Workflow run", path: "/workflows/instances/:workflowExecutionId" }),
       expect.objectContaining({ id: "workflows-activity-availability", label: "Activity availability", path: "/workflows/activity-availability" }),
-      expect.objectContaining({ id: "workflows-runtime-diagnostics", label: "Runtime diagnostics", path: "/workflows/runtime-diagnostics" })
+      expect.objectContaining({ id: "workflows-runtime-diagnostics", label: "Runtime evidence settings", path: "/workflows/runtime-diagnostics" })
     ]);
     expect(api.expressionEditors.list()).toEqual([
       expect.objectContaining({ id: "studio.workflows.variable-reference", createDefaultValue: expect.any(Function) }),
@@ -193,6 +193,34 @@ describe("workflows module", () => {
     }
   });
 
+  it("passes built-in and host-registered Test Run stimulus editors into the designer route", () => {
+    const api = testApi();
+    register(api);
+    const customEditor = {
+      id: "contoso.test-drive.custom-start",
+      supports: ({ option }: { option: { driverId?: string | null } }) => option.driverId === "Contoso.CustomStart",
+      component: () => null,
+      validate: () => undefined,
+      serialize: ({ draft }: { draft: string }) => JSON.parse(draft)
+    };
+    api.workflowTestStimulusEditors?.add(customEditor);
+
+    const route = api.routes.list().find(candidate => candidate.id === "workflows-definitions")!;
+    const renderRoute = route.component as (props: { navigate(path: string): void }) => React.ReactElement<{ children: React.ReactNode }>;
+    const boundary = renderRoute({ navigate: vi.fn() });
+    const surface = React.Children.only(boundary.props.children) as React.ReactElement<{ testStimulusEditors: unknown[] }>;
+
+    expect(surface.props.testStimulusEditors).toContain(customEditor);
+    const editorIds = (surface.props.testStimulusEditors as { id: string }[]).map(editor => editor.id);
+    expect(editorIds).toHaveLength(4);
+    expect(editorIds).toEqual(expect.arrayContaining([
+      "elsa.workflows.test-stimulus.http-request",
+      "elsa.workflows.test-stimulus.event",
+      "elsa.workflows.test-stimulus.schedule-fire-now",
+      customEditor.id
+    ]));
+  });
+
   it("keeps the JSON fallback when hosted by a pre-slot SDK registry", () => {
     const { workflowRunInputEditors: _unsupportedSlot, ...api } = testApi();
 
@@ -205,24 +233,57 @@ describe("workflows module", () => {
     expect(surface.props.runInputEditors).toEqual([]);
   });
 
-  it("renders active definition actions and soft-deletes with confirmation", async () => {
+  it("runs active definition actions from the row menu and soft-deletes with confirmation", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (init?.method === "DELETE") return response(null, 204);
       expect(url).toContain("state=active");
       return response({ items: [definition()] });
     });
+    const dispatchPrompt = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    const { api, container, unmount } = await renderRegisteredRoute();
+    const { api, container, unmount } = await renderRegisteredRoute("/workflows/definitions", testApi => {
+      testApi.ai.promptActions.add({
+        id: "weaver.workflows.explain-definition",
+        label: "Explain workflow definition",
+        placement: "selection",
+        contextKind: "workflow-definition",
+        createPrompt: context => ({
+          message: "Explain this workflow definition.",
+          mode: "enqueue",
+          attachments: [{ kind: "workflow-definition", referenceId: (context as { id: string }).id }]
+        })
+      });
+      testApi.ai.dispatchPrompt = dispatchPrompt;
+    });
 
     await waitForText(container, "Latest version");
 
     expect(container.textContent).toContain("Latest version");
-    expect(container.textContent).toContain("Open");
-    expect(container.textContent).toContain("Artifacts");
-    expect(container.textContent).toContain("Delete");
+    const row = rowByLabel(container, "Open workflow definition Hello World");
+    expect(row).not.toBeNull();
+    expect(buttonByText(row!, "Artifacts")).toBeNull();
+    expect(buttonByText(row!, "Delete")).toBeNull();
 
-    await click(buttonByText(container, "Delete"));
+    await click(checkboxByLabel(row!, "Select workflow definition Hello World"));
+    expect(row?.getAttribute("aria-selected")).toBe("true");
+    expect(new URLSearchParams(window.location.search).has("definition")).toBe(false);
+
+    let menu = await openDefinitionActions(container, "Hello World");
+    expect(menu.textContent).toContain("Artifacts");
+    expect(menu.textContent).toContain("Explain");
+    expect(menu.textContent).toContain("Delete");
+    expect(menu.textContent).not.toContain("Open");
+
+    await click(buttonByText(menu, "Explain"));
+    expect(dispatchPrompt).toHaveBeenCalledWith(expect.objectContaining({
+      message: "Explain this workflow definition.",
+      attachments: [expect.objectContaining({ kind: "workflow-definition", referenceId: "definition-1" })]
+    }));
+    expect(new URLSearchParams(window.location.search).has("definition")).toBe(false);
+
+    menu = await openDefinitionActions(container, "Hello World");
+    await click(buttonByText(menu, "Delete"));
     await flushPromises();
 
     expect(api.dialogs.confirm).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("Delete workflow definition") }));
@@ -230,11 +291,72 @@ describe("workflows module", () => {
       "https://server.example/design/workflows/definitions/definition-1",
       expect.objectContaining({ method: "DELETE" })
     );
+    expect(new URLSearchParams(window.location.search).has("definition")).toBe(false);
 
     await unmount();
   });
 
-  it("renders deleted definition actions and calls restore and permanent delete endpoints", async () => {
+  it("opens an opaque definition from its name link while preserving encoded browse query parameters", async () => {
+    const opaqueId = "definition/opaque ?&=value";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/definitions/")) return response({ definition: definition({ id: opaqueId, name: "Opaque workflow" }), draft: workflowDraft(), versions: [] });
+      if (url.includes("/activities/availability/diagnostics")) return response({ items: [], sets: [] });
+      if (url.includes("/activities")) return response({ activities: [] });
+      return response({ items: [definition({ id: opaqueId, name: "Opaque workflow" })] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute(
+      "/workflows/definitions?folderId=folder%2Froot&state=all&search=approval"
+    );
+
+    await waitForText(container, "Opaque workflow");
+    const row = rowByLabel(container, "Open workflow definition Opaque workflow");
+    const nameLink = row!.querySelector<HTMLAnchorElement>("a");
+    expect(nameLink).not.toBeNull();
+    const destination = new URL(nameLink!.href);
+    expect(destination.pathname).toBe("/workflows/definitions");
+    expect(destination.searchParams.get("definition")).toBe(opaqueId);
+    expect(destination.searchParams.get("folderId")).toBe("folder/root");
+    expect(destination.searchParams.get("state")).toBe("all");
+    expect(destination.searchParams.get("search")).toBe("approval");
+
+    await click(nameLink);
+    await waitForEditor(container);
+    const current = new URL(window.location.href);
+    expect(current.searchParams.get("definition")).toBe(opaqueId);
+    expect(current.searchParams.get("folderId")).toBe("folder/root");
+    expect(current.searchParams.get("state")).toBe("all");
+    expect(current.searchParams.get("search")).toBe("approval");
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes(encodeURIComponent(opaqueId)))).toBe(true);
+
+    await unmount();
+  });
+
+  it("keeps selection local and opens Artifacts from the row menu without opening the definition", async () => {
+    const opaqueId = "definition/opaque ?&=value";
+    vi.stubGlobal("fetch", vi.fn(async () => response({ items: [definition({ id: opaqueId, name: "Opaque workflow" })] })));
+    const { container, unmount } = await renderRegisteredRoute(
+      "/workflows/definitions?folderId=folder%2Froot&state=all&search=approval"
+    );
+
+    await waitForText(container, "Opaque workflow");
+    const row = rowByLabel(container, "Open workflow definition Opaque workflow");
+
+    await click(checkboxByLabel(row!, "Select workflow definition Opaque workflow"));
+    expect(new URLSearchParams(window.location.search).has("definition")).toBe(false);
+    expect(container.querySelector(".wf-editor")).toBeNull();
+
+    const menu = await openDefinitionActions(container, "Opaque workflow");
+    await click(buttonByText(menu, "Artifacts"));
+    await vi.waitFor(() => expect(window.location.pathname).toBe("/workflows/executables"));
+    expect(new URLSearchParams(window.location.search).get("definition")).toBe(opaqueId);
+    expect(container.querySelector(".wf-editor")).toBeNull();
+
+    await unmount();
+  });
+
+  it("renders deleted definition actions in the row menu and calls restore and permanent delete endpoints", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (init?.method === "POST" || init?.method === "DELETE") return response(null, 204);
@@ -245,21 +367,28 @@ describe("workflows module", () => {
 
     await waitForText(container, "No active workflow definitions");
     await click(buttonByText(container, "Deleted"));
-    await waitForText(container, "Delete permanently");
+    await waitForText(container, "Hello World");
+    const row = rowByLabel(container, "Open workflow definition Hello World");
+    expect(row).not.toBeNull();
+    let menu = await openDefinitionActions(container, "Hello World");
+    expect(menu.textContent).toContain("Restore");
+    expect(menu.textContent).toContain("Delete permanently");
+    expect(menu.textContent).not.toContain("Artifacts");
 
-    expect(container.textContent).toContain("Restore");
-    expect(container.textContent).toContain("Delete permanently");
-
-    await click(buttonByText(container, "Restore"));
+    await click(buttonByText(menu, "Restore"));
     await flushPromises();
+    expect(new URLSearchParams(window.location.search).has("definition")).toBe(false);
 
     expect(fetchMock).toHaveBeenCalledWith(
       "https://server.example/design/workflows/definitions/definition-1/restore",
       expect.objectContaining({ method: "POST" })
     );
 
-    await click(buttonByText(container, "Delete permanently"));
+    await waitForText(container, "Hello World");
+    menu = await openDefinitionActions(container, "Hello World");
+    await click(buttonByText(menu, "Delete permanently"));
     await flushPromises();
+    expect(new URLSearchParams(window.location.search).has("definition")).toBe(false);
 
     expect(api.dialogs.confirm).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("Permanently delete workflow definition") }));
     expect(fetchMock).toHaveBeenCalledWith(
@@ -270,10 +399,10 @@ describe("workflows module", () => {
     await unmount();
   });
 
-  it("shows lifecycle-correct actions for mixed rows in All states", async () => {
+  it("shows lifecycle-correct menus and version semantics for mixed rows in All states", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => response({
       items: [
-        definition({ id: "definition-active", name: "Active workflow", deletedAt: null }),
+        definition({ id: "definition-active", name: "Active workflow", deletedAt: null, latestVersion: "3.0.0", draftSourceVersion: "2.0.0", publicationState: "published", publishedVersion: "1.0.0" }),
         definition({ id: "definition-deleted", name: "Deleted workflow", deletedAt: "2026-06-18T01:00:00Z" })
       ]
     })));
@@ -282,14 +411,96 @@ describe("workflows module", () => {
     await waitForText(container, "Active workflow");
     const activeRow = rowByLabel(container, "Open workflow definition Active workflow");
     const deletedRow = rowByLabel(container, "Open workflow definition Deleted workflow");
+    expect(deletedRow).not.toBeNull();
 
-    expect(activeRow?.textContent).toContain("Open");
-    expect(activeRow?.textContent).toContain("Delete");
-    expect(activeRow?.textContent).not.toContain("Restore");
-    expect(deletedRow?.textContent).toContain("Restore");
-    expect(deletedRow?.textContent).toContain("Delete permanently");
-    expect(deletedRow?.textContent).not.toContain("Artifacts");
-    expect(container.querySelector(".wf-grid-head")?.textContent).toContain("State");
+    const activeMenu = await openDefinitionActions(container, "Active workflow");
+    expect(activeMenu.textContent).toContain("Artifacts");
+    expect(activeMenu.textContent).toContain("Delete");
+    expect(activeMenu.textContent).not.toContain("Restore");
+    await click(buttonByLabel(activeRow!, "Actions for Active workflow"));
+
+    const activeCells = activeRow?.querySelectorAll<HTMLElement>("[role='cell']");
+    const latestCell = activeCells?.[2];
+    const draftDetails = latestCell?.querySelector<HTMLDetailsElement>("details");
+    const draftSummary = draftDetails?.querySelector<HTMLElement>("summary");
+    expect(latestCell?.querySelector(".wf-definition-version-number")?.textContent).toBe("3.0.0");
+    expect(draftDetails?.open).toBe(false);
+    expect(draftSummary?.textContent).toBe("Draft");
+    await click(draftSummary ?? null);
+    expect(draftDetails?.open).toBe(true);
+    expect(draftDetails?.textContent).toContain("Draft based on version 2.0.0.");
+    expect(draftDetails?.textContent).toContain("Latest saved version is 3.0.0.");
+    expect(new URLSearchParams(window.location.search).has("definition")).toBe(false);
+
+    const deletedMenu = await openDefinitionActions(container, "Deleted workflow");
+    expect(deletedMenu.textContent).toContain("Restore");
+    expect(deletedMenu.textContent).toContain("Delete permanently");
+    expect(deletedMenu.textContent).not.toContain("Artifacts");
+    expect(container.querySelector(".wf-grid-head")?.textContent).toContain("Published version");
+    expect(activeCells?.[3].textContent).toContain("1.0.0");
+    expect(activeCells?.[3].textContent).not.toContain("2.0.0");
+    await unmount();
+  });
+
+  it("shows Retracted and Retired from the server publication state even when a version remains", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => response({
+      items: [
+        definition({ id: "retracted", name: "Retracted workflow", draftId: "draft-r", latestVersionId: "version-r", latestVersion: "1.0.0", versionCount: 1, publicationState: "retracted" }),
+        definition({ id: "retired", name: "Retired workflow", draftId: null, latestVersionId: "version-t", latestVersion: "2.0.0", versionCount: 1, publicationState: "retired" })
+      ]
+    })));
+    const { container, unmount } = await renderRegisteredRoute();
+
+    await waitForText(container, "Retracted workflow");
+    const retractedRow = rowByLabel(container, "Open workflow definition Retracted workflow");
+    const retiredRow = rowByLabel(container, "Open workflow definition Retired workflow");
+
+    await waitForStatusBadge(retractedRow, "Retracted");
+    expect(retractedRow?.textContent).not.toContain("Published");
+    await waitForStatusBadge(retiredRow, "Retired");
+    expect(retiredRow?.textContent).not.toContain("Published");
+    await unmount();
+  });
+
+  it("shows the active published version separately from a mutable draft", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => response({
+      items: [
+        definition({ id: "draft-only", name: "Unpublished workflow", draftId: "draft-a", draftSourceVersion: "0.9.0", latestVersionId: null, latestVersion: null, versionCount: 0, publicationState: "draft" }),
+        definition({ id: "published-clean", name: "Published workflow", draftId: null, latestVersionId: "version-1", latestVersion: "1.0.0", versionCount: 1, publicationState: "published", publishedVersion: "1.0.0" }),
+        definition({ id: "published-dirty", name: "Published with draft", draftId: "draft-b", latestVersionId: "version-3", latestVersion: "3.0.0", draftSourceVersion: "2.0.0", versionCount: 3, publicationState: "published", publishedVersion: "1.0.0" })
+      ]
+    })));
+    const { container, unmount } = await renderRegisteredRoute();
+
+    await waitForText(container, "Unpublished workflow");
+    const draftRow = rowByLabel(container, "Open workflow definition Unpublished workflow");
+    const publishedRow = rowByLabel(container, "Open workflow definition Published workflow");
+    const newerDraftRow = rowByLabel(container, "Open workflow definition Published with draft");
+
+    expect(container.querySelector(".wf-grid-head")?.textContent).toContain("Published version");
+    const firstDraftCell = draftRow?.querySelectorAll<HTMLElement>("[role='cell']")[2];
+    const firstDraftDetails = firstDraftCell?.querySelector<HTMLDetailsElement>("details");
+    expect(firstDraftDetails?.querySelector("summary")?.textContent).toBe("Draft");
+    expect(draftRow?.textContent).not.toContain("Published");
+    expect(firstDraftDetails?.open).toBe(false);
+    expect(firstDraftDetails?.textContent).toContain("Draft based on saved version 0.9.0.");
+    expect(firstDraftCell?.querySelector(".wf-definition-version-number")).toBeNull();
+    expect(draftRow?.querySelectorAll<HTMLElement>("[role='cell']")[3].textContent).toContain("Not published");
+    expect(draftRow?.querySelector("a")?.textContent).toContain("Unpublished workflow");
+    await click(firstDraftDetails?.querySelector("summary") ?? null);
+    expect(firstDraftDetails?.open).toBe(true);
+    expect(firstDraftDetails?.textContent).toContain("Draft based on saved version 0.9.0.");
+    expect(new URLSearchParams(window.location.search).has("definition")).toBe(false);
+    await waitForStatusBadge(publishedRow, "1.0.0");
+    expect(publishedRow?.textContent).not.toContain("Newer draft");
+    const cells = newerDraftRow?.querySelectorAll<HTMLElement>("[role='cell']");
+    const newerDraftDetails = cells?.[2].querySelector<HTMLDetailsElement>("details");
+    expect(newerDraftDetails?.querySelector("summary")?.textContent).toBe("Draft");
+    expect(newerDraftDetails?.open).toBe(false);
+    expect(cells?.[2].querySelector(".wf-definition-version-number")?.textContent).toBe("3.0.0");
+    expect(cells?.[3].textContent).toContain("1.0.0");
+    expect(cells?.[3].textContent).not.toContain("2.0.0");
+    expect(newerDraftRow?.textContent).not.toContain("Newer draft");
     await unmount();
   });
 
@@ -438,7 +649,7 @@ describe("workflows module", () => {
     expect(new URLSearchParams(window.location.search).get("state")).toBe("all");
     expect(new URLSearchParams(window.location.search).get("search")).toBe("approval");
     expect(fetchMock.mock.calls.map(([url]) => String(url)).at(-1)).toBe(
-      "https://server.example/design/workflows/definition-pages?state=all&search=approval&pageSize=10"
+      "https://server.example/design/workflows/definition-pages?state=all&searchTerm=approval&pageSize=10"
     );
     await unmount();
   });
@@ -458,19 +669,53 @@ describe("workflows module", () => {
     await waitForText(container, "1 selected");
 
     await fill(container.querySelector<HTMLInputElement>('input[placeholder="Search definitions"]'), "Hello");
-    await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("search=Hello"))).toBe(true));
+    await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("searchTerm=Hello"))).toBe(true));
+    // Request start can precede the current response; previous rows have no selection controls.
+    await waitForText(container, "1 selected");
     expect(container.textContent).toContain("1 selected");
     expect(checkboxByLabel(container, "Select workflow definition Hello World")?.checked).toBe(true);
 
     await select(container.querySelector<HTMLSelectElement>(".wf-page-size select"), "25");
     await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("pageSize=25"))).toBe(true));
+    await waitForText(container, "1 selected");
     expect(container.textContent).toContain("1 selected");
     expect(checkboxByLabel(container, "Select workflow definition Hello World")?.checked).toBe(true);
 
     await click(buttonByText(container, "Deleted"));
     await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("state=deleted"))).toBe(true));
+    await vi.waitFor(() => expect(checkboxByLabel(container, "Select workflow definition Hello World")).not.toBeNull());
     expect(container.textContent).not.toContain("1 selected");
     expect(checkboxByLabel(container, "Select workflow definition Hello World")?.checked).toBe(false);
+
+    await unmount();
+  });
+
+  it("filters the definitions table through the server-bound searchTerm query", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const query = new URL(url, "https://server.example").searchParams;
+      if (query.get("searchTerm") === "zzzz-nothing-matches") {
+        return response({ items: [] });
+      }
+      return response({
+        items: [
+          definition({ name: "UX QA golden path" }),
+          definition({ id: "definition-2", name: "Another workflow" })
+        ]
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute();
+
+    await waitForText(container, "UX QA golden path");
+    await waitForText(container, "Another workflow");
+    await fill(container.querySelector<HTMLInputElement>('input[placeholder="Search definitions"]'), "zzzz-nothing-matches");
+    await waitForText(container, "No workflows match “zzzz-nothing-matches”");
+
+    const requested = fetchMock.mock.calls
+      .map(([url]) => new URL(String(url), "https://server.example"))
+      .find(url => url.searchParams.get("searchTerm") === "zzzz-nothing-matches");
+    expect(requested?.searchParams.has("search")).toBe(false);
 
     await unmount();
   });
@@ -590,7 +835,7 @@ describe("workflows module", () => {
       .find(button => button.textContent?.includes("Write Line"));
     expect(writeLine?.getAttribute("role")).toBe("treeitem");
     expect(writeLine?.getAttribute("title")).toBe(
-      "Writes a line to the console. — Exact version 1.0.0");
+      "Writes a line to the console. — Version 1.0.0");
     expect(writeLine?.textContent).toContain("Writes a line to the console.");
     expect(writeLine?.querySelector(".wf-activity-icon")).toBeTruthy();
     expect(writeLine?.querySelector(".wf-palette-activity-grip")).toBeTruthy();
@@ -941,7 +1186,7 @@ describe("workflows module", () => {
     await unmount();
   });
 
-  it("makes Sequence output handles available for drag-to-add gestures", async () => {
+  it("renders Sequence insertion boundaries instead of manual connection handles", async () => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}
       unobserve() {}
@@ -994,10 +1239,12 @@ describe("workflows module", () => {
     }));
     const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
 
-    await waitForCanvasNode(container, "Write Line");
-
-    const outputHandle = container.querySelector(".wf-canvas .react-flow__handle.source");
-    expect(outputHandle?.classList.contains("connectablestart")).toBe(true);
+    await waitForButtonByLabel(container, "Insert step after Write Line");
+    expect(container.querySelector(".react-flow__handle.source")).toBeNull();
+    await click(buttonByLabel(container, "Insert step after Write Line"));
+    await click(optionByText(container, "Write Line"));
+    await flushPromises();
+    expect(container.querySelectorAll(".wf-sequence-step")).toHaveLength(2);
 
     await unmount();
   });
@@ -1428,7 +1675,8 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute();
 
     await waitForText(container, "Hello World");
-    await click(buttonByText(container, "Artifacts"));
+    const menu = await openDefinitionActions(container, "Hello World");
+    await click(buttonByText(menu, "Artifacts"));
 
     expect(window.location.pathname).toBe("/workflows/executables");
     expect(new URLSearchParams(window.location.search).get("definition")).toBe("definition-1");
@@ -1778,7 +2026,7 @@ describe("workflows module", () => {
     expect(container.textContent).toContain("Executables");
     expect(container.querySelector("nav[aria-label='Workflow views']")).toBeNull();
     expect(container.textContent).toContain("Flowchart");
-    expect(container.textContent).toContain("Definition version");
+    expect(container.querySelector(".wf-artifact-cell [title^='Definition version']")).not.toBeNull();
     expect(container.textContent).not.toContain("WorkflowDefinitionVersion / version-1 / 1.0.0");
     expect(container.textContent).not.toContain("Elsa.Activities.Flowchart.Activities.Flowchart");
 
@@ -1815,6 +2063,62 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("shows every originating workflow name, filters by name or reference ID, and labels definition choices", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes("/runtime/workflows/executables")) return response({ executables: [
+        executable({ references: [executableReference({ definitionId: "definition-2", sourceReferenceId: "invoice-reference" })] }),
+        executable({ artifactId: "artifact-2", definitionId: "definition-3", sourceId: "definition-3" })
+      ] });
+      return response({ items: [
+        definition({ name: "Order processing" }),
+        definition({ id: "definition-2", name: "Invoice archive" }),
+        definition({ id: "definition-3", name: "Order processing" })
+      ] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
+    await waitForText(container, "Invoice archive");
+
+    const table = container.querySelector('table[aria-label="Workflow executables"]')!;
+    expect(Array.from(table.querySelectorAll("thead th"), cell => cell.textContent)).toEqual(["Workflow", "Artifact", "Version", "Root", "Published", "Actions"]);
+    expect(Array.from(table.querySelectorAll("tbody tr"), row => row.children.length)).toEqual([6, 6]);
+    expect(table.querySelector("tbody tr td")?.textContent).toContain("Order processing");
+    expect(table.querySelector("tbody tr td")?.textContent).toContain("Invoice archive");
+    expect(Array.from(container.querySelectorAll("datalist option"), option => [option.getAttribute("value"), option.getAttribute("label")])).toEqual([
+      ["definition-2", "Invoice archive · definition-2"],
+      ["definition-1", "Order processing · definition-1"],
+      ["definition-3", "Order processing · definition-3"]
+    ]);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/design/workflows/definitions"))).toHaveLength(1);
+
+    await fill(inputByLabel(container, "Filter executables by workflow definition"), "INVOICE");
+    expect(container.textContent).toContain("artifact-1");
+    expect(container.textContent).not.toContain("artifact-2");
+    await fill(inputByLabel(container, "Filter executables by workflow definition"), "invoice-reference");
+    expect(container.textContent).toContain("artifact-1");
+    await click(buttonByLabel(container, "Show references of artifact-1"));
+    expect(container.querySelector(".wf-reference-list")?.textContent).toContain("Invoice archive");
+    expect(container.querySelector(".wf-reference-list")?.textContent).toContain("invoice-reference");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(table.querySelector(".wf-executable-reference-row td")?.getAttribute("colspan")).toBe("6");
+    await unmount();
+  });
+
+  it("keeps runtime artifacts usable when workflow names cannot be read", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => String(input).includes("/runtime/workflows/executables")
+      ? response({ executables: [executable({ sourceId: null })] })
+      : response(null, 403)));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
+    await waitForText(container, "artifact-1");
+    expect(buttonByLabel(container, "Open source definition definition-1: Workflow definition")).not.toBeNull();
+    expect(buttonByLabel(container, "Inspect executable artifact-1")).not.toBeNull();
+    expect(buttonByLabel(container, "Copy source ID version-1")).not.toBeNull();
+    expect(container.textContent).not.toContain("Something went wrong");
+    await fill(inputByLabel(container, "Filter executables by workflow definition"), "version-1");
+    expect(container.textContent).toContain("artifact-1");
+    await unmount();
+  });
+
   it("opens the source definition from the executables grid", async () => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -1825,7 +2129,7 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
 
     await waitForText(container, "artifact-1");
-    await click(buttonByLabel(container, "Open source definition definition-1"));
+    await click(buttonByLabel(container, "Open source definition definition-1: Hello World"));
 
     expect(window.location.pathname).toBe("/workflows/definitions");
     expect(window.location.search).toBe("?definition=definition-1");
@@ -1901,11 +2205,11 @@ describe("workflows module", () => {
 
     await select(selectByLabel(container, "Executable reference scope"), "test-runs");
     await waitForText(container, "artifact-1");
-    expect(String(fetchMock.mock.calls.at(-1)?.[0])).toContain("/executables?scope=TestRuns");
+    expect(String(fetchMock.mock.calls.filter(([url]) => String(url).includes("/runtime/workflows/executables?")).at(-1)?.[0])).toContain("/executables?scope=TestRuns");
 
     await click(checkboxByLabel(container, "Include retired references"));
     await waitForText(container, "Retired");
-    expect(String(fetchMock.mock.calls.at(-1)?.[0])).toContain("/executables?scope=TestRuns&includeRetired=true");
+    expect(String(fetchMock.mock.calls.filter(([url]) => String(url).includes("/runtime/workflows/executables?")).at(-1)?.[0])).toContain("/executables?scope=TestRuns&includeRetired=true");
 
     // Runtime artifacts are read-only; lifecycle actions belong to Publishing slots.
     expect(container.textContent).toContain("Retained for inspection");
@@ -2513,6 +2817,21 @@ describe("workflows module", () => {
     });
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
+      if (url.includes("/capabilities")) return response(capabilityDocument());
+      if (init?.method === "POST" && urlPath(url) === "/publishing/workflows/drafts/test-run-options") return response({ options: [
+        {
+          optionId: "http-start",
+          driverId: "Elsa.HttpEndpoint",
+          label: "HTTP endpoint",
+          modes: [{ modeId: "http-request", label: "Send HTTP request", isDefault: true }]
+        },
+        {
+          optionId: "custom-start",
+          driverId: "Contoso.CustomStart",
+          label: "Custom start",
+          modes: [{ modeId: "custom-start", label: "Deliver custom data", isDefault: true }]
+        }
+      ] });
       if (init?.method === "POST" && urlPath(url) === "/publishing/workflows/drafts/test-runs") return response(testRunView());
       if (init?.method === "POST" && urlPath(url) === "/_elsa/publishing/workflows/drafts/test-runs") return response(null, 404);
       if (init?.method === "POST" && url.includes("/drafts/draft-1/promote")) throw new Error("Designer Run must not promote drafts.");
@@ -2530,19 +2849,35 @@ describe("workflows module", () => {
       return response({ items: [definition()] });
     });
     vi.stubGlobal("fetch", fetchMock);
-    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1", api => {
+      api.workflowTestStimulusEditors?.add({
+        id: "contoso.test-drive.custom-start",
+        supports: ({ option, mode }) => option.driverId === "Contoso.CustomStart" && mode.modeId === "custom-start",
+        component: ({ draft, controlProps, onChange, disabled }) => <input {...controlProps} aria-label="Custom stimulus" value={draft} disabled={disabled} onChange={event => onChange(event.currentTarget.value)} />,
+        validate: () => undefined,
+        serialize: ({ draft }) => JSON.parse(draft || "{}")
+      });
+    });
 
     await waitForText(container, "Add activity");
     await click(buttonByText(container, "Add activity"));
     await click(optionByText(container, "Write Line"));
     await click(Array.from(container.querySelectorAll<HTMLButtonElement>(".wf-palette-activity"))
       .find(button => button.textContent?.includes("Write Line")) ?? null);
-    await click(buttonByText(container, "Run"));
-    await waitForText(container, "Provide the workflow inputs for this run.");
+    await click(buttonByText(container, "Test Run"));
+    await waitForText(container, "Workflow inputs");
+    const startSelector = container.querySelector<HTMLSelectElement>(".wf-test-drive-panel select")!;
+    await waitForText(container, "HTTP endpoint");
+    await select(startSelector, "trigger:http-start");
+    await vi.waitFor(() => expect(container.querySelector("textarea[aria-label='Send HTTP request data']")).toBeTruthy());
+    await select(startSelector, "trigger:custom-start");
+    await vi.waitFor(() => expect(container.querySelector("input[aria-label='Custom stimulus']")).toBeTruthy());
+    await select(startSelector, "direct");
     expect(fetchMock.mock.calls.some(([url, init]) => init?.method === "POST" && urlPath(String(url)) === "/publishing/workflows/drafts/test-runs")).toBe(false);
     await fill(inputByLabel(container, "Greeting"), "Hello from test run");
-    await click(buttonByText(container, "Run workflow"));
-    await waitForText(container, "Test run dispatched");
+    await waitForEnabledButton(container, "Start Test Run");
+    await click(buttonByText(container, "Start Test Run"));
+    await waitForText(container, "Test Run dispatched");
 
     const calls = fetchMock.mock.calls.map(([url, init]) => ({ url: String(url), method: init?.method ?? "GET", body: String(init?.body ?? "") }));
     const testRunCall = calls.find(call => call.method === "POST" && urlPath(call.url) === "/publishing/workflows/drafts/test-runs");
@@ -2573,7 +2908,7 @@ describe("workflows module", () => {
     expect(container.querySelector(".wf-test-run-capsule")).toBeNull();
     expect(container.querySelector(".wf-test-run-popover")).toBeNull();
     expect(container.querySelector("[aria-label='Inspector panel tabs'] [role='tab'][aria-selected='true']")?.textContent).toContain("Runtime");
-    await click(buttonByText(container, "Test run dispatched"));
+    await click(buttonByText(container, "Test Run dispatched"));
     await waitForText(container, "test-run-1");
     expect(container.textContent).toContain("Runtime");
     expect(container.textContent).toContain("Ephemeral - not saved, promoted, or published.");
@@ -2616,12 +2951,14 @@ describe("workflows module", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
 
-    await waitForText(container, "Run");
-    await click(buttonByText(container, "Run"));
+    await waitForText(container, "Test Run");
+    await click(buttonByText(container, "Test Run"));
+    await waitForEnabledButton(container, "Start Test Run");
+    await click(buttonByText(container, "Start Test Run"));
     await waitForText(container, "Expression validation is unavailable");
     expect(testRunAttempts).toBe(1);
     await click(buttonByText(container, "Proceed with Test Run"));
-    await waitForText(container, "Test run dispatched");
+    await waitForText(container, "Test Run dispatched");
 
     const requests = fetchMock.mock.calls
       .filter(([url, init]) => init?.method === "POST" && urlPath(String(url)) === "/publishing/workflows/drafts/test-runs")
@@ -2678,9 +3015,11 @@ describe("workflows module", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
 
-    await waitForText(container, "Run");
-    await click(buttonByText(container, "Run"));
-    await waitForText(container, "Test run dispatched");
+    await waitForText(container, "Test Run");
+    await click(buttonByText(container, "Test Run"));
+    await waitForEnabledButton(container, "Start Test Run");
+    await click(buttonByText(container, "Start Test Run"));
+    await waitForText(container, "Test Run dispatched");
     expect(container.querySelector("[aria-label='Inspector panel tabs'] [role='tab'][aria-selected='true']")?.textContent).toContain("Runtime");
     await waitForText(container, "test-run-1");
     expect(container.textContent).toContain("artifact-transient-1");
@@ -2691,9 +3030,11 @@ describe("workflows module", () => {
     await waitForText(container, "Text");
     await fill(container.querySelector<HTMLInputElement>(".wf-property-row input[type='text']"), "Stale capsule clearing");
 
-    await waitForTextToDisappear(container, "test-run-1");
-    expect(container.textContent).not.toContain("artifact-transient-1");
-    expect(container.textContent).not.toContain("wfexec-1");
+    await click(buttonByText(container, "Runtime"));
+    await waitForText(container, "Earlier draft");
+    expect(container.textContent).toContain("test-run-1");
+    expect(container.textContent).toContain("artifact-transient-1");
+    expect(container.textContent).toContain("wfexec-1");
 
     await unmount();
   });
@@ -2729,13 +3070,15 @@ describe("workflows module", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
 
-    await waitForText(container, "Run");
-    await click(buttonByText(container, "Run"));
-    await waitForText(container, "Test run rejected");
+    await waitForText(container, "Test Run");
+    await click(buttonByText(container, "Test Run"));
+    await waitForEnabledButton(container, "Start Test Run");
+    await click(buttonByText(container, "Start Test Run"));
+    await waitForText(container, "Test Run rejected");
     expect(container.querySelector("[aria-label='Inspector panel tabs'] [role='tab'][aria-selected='true']")?.textContent).toContain("Runtime");
     await waitForText(container, "Workflow version has no root activity to publish.");
 
-    expect(container.textContent).toContain("Test run rejected");
+    expect(container.textContent).toContain("Test Run rejected");
     expect(container.textContent).toContain("Ephemeral - not saved, promoted, or published.");
     expect(fetchMock.mock.calls.some(([url, init]) => init?.method === "POST" && String(url).includes("/drafts/draft-1/promote"))).toBe(false);
 
@@ -2797,7 +3140,7 @@ describe("workflows module", () => {
     expect(container.textContent).toContain("Test Run");
     expect(container.textContent).toContain("2 activities");
     expect(container.textContent).toContain("1 incidents");
-    await click(rowByLabel(container, "Inspect workflow run wfexec-test · Completed · Current health unavailable"));
+    await click(rowByLabel(container, "Inspect workflow run wfexec-test · definition-1 · Completed · Current health unavailable"));
 
     expect(window.location.pathname).toBe("/workflows/instances/wfexec-test");
     expect(fetchMock).toHaveBeenCalledWith(
@@ -2808,6 +3151,42 @@ describe("workflows module", () => {
       "https://server.example/runtime/workflows/instances?runKind=TestRun&take=25",
       expect.any(Object)
     );
+
+    await unmount();
+  });
+
+  it("shows definition and version ids in the runs list before and after the name loads", async () => {
+    let resolveDefinitions!: (value: Response) => void;
+    const definitions = new Promise<Response>(done => { resolveDefinitions = done; });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith("https://server.example/runtime/workflows/instances")) {
+        return response([workflowInstance({ definitionId: "definition-1" })]);
+      }
+      if (url.startsWith("https://server.example/design/workflows/definitions")) {
+        return definitions;
+      }
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/instances");
+
+    await waitForText(container, "wfexec-1");
+    const expectRunIdentity = (name: string) => {
+      const row = container.querySelector(".wf-grid-row");
+      expect(row?.querySelector(".wf-run-inspect strong")?.textContent).toBe(name);
+      expect(row?.querySelector(".wf-run-inspect")?.getAttribute("aria-label")).toBe(`Inspect workflow run wfexec-1 · ${name}`);
+      expect(row?.getAttribute("aria-label")).toContain(`wfexec-1 · ${name} ·`);
+      for (const [label, value] of [["Execution ID", "wfexec-1"], ["Definition ID", "definition-1"], ["Definition version ID", "version-1"]]) {
+        expect(row?.querySelector(`.studio-copyable-identifier__value[aria-label="${label}: ${value}"]`)?.getAttribute("title")).toBe(value);
+        expect([...row?.querySelectorAll("button") ?? []].some(button => button.getAttribute("aria-label") === `Copy ${label}`)).toBe(true);
+      }
+    };
+    expectRunIdentity("definition-1");
+
+    resolveDefinitions(response({ items: [definition({ id: "definition-1", name: "Order fulfillment" })] }));
+    await waitForText(container, "Order fulfillment");
+    expectRunIdentity("Order fulfillment");
 
     await unmount();
   });
@@ -2841,12 +3220,21 @@ describe("workflows module", () => {
         })] });
       }
 
+      if (url === "https://server.example/design/workflows/definitions/definition-1") {
+        return response({ definition: definition({ id: "definition-1", name: "Order fulfillment" }), draft: null, versions: [] });
+      }
+
+      if (url.startsWith("https://server.example/design/workflows/definitions")) {
+        return response({ items: [definition({ id: "definition-1", name: "Order fulfillment" })] });
+      }
+
       throw new Error(`Unexpected request ${url}`);
     });
     vi.stubGlobal("fetch", fetchMock);
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1");
 
     await waitForText(container, "Pinned Runtime executable");
+    await waitForText(container, "Review workflow definition");
     expect(container.textContent).toContain("Run");
     expect(container.textContent).toContain("Workflow Instance ID");
     expect(container.querySelector(".wf-page-header .wf-page-context")?.textContent).toContain("wfexec-1");
@@ -2854,7 +3242,7 @@ describe("workflows module", () => {
     expect(runInspector).not.toBeNull();
     expect(runInspector?.textContent).not.toContain("Workflow Instance ID");
     expect([...runInspector!.querySelectorAll("button")].filter(button => button.textContent?.includes("Explain"))).toHaveLength(0);
-    await click(buttonByText(container, "Designer"));
+    await click(buttonByText(container, "Review workflow definition"));
     expect(window.location.pathname).toBe("/workflows/definitions");
     expect(new URLSearchParams(window.location.search).get("definition")).toBe("definition-1");
     window.history.replaceState({}, "", "/workflows/instances/wfexec-1");
@@ -2881,6 +3269,10 @@ describe("workflows module", () => {
     // Run metadata moved to the Details tab.
     await click(buttonByText(container, "Details"));
     expect(container.textContent).toContain("Published Run");
+    const definitionCell = container.querySelector(".wf-instance-inspector .wf-identity-cell");
+    expect(definitionCell?.querySelector("strong")?.textContent).toBe("Order fulfillment");
+    expect(definitionCell?.querySelector("small")?.textContent).toBe("definition-1 · version-1");
+    expect(definitionCell?.getAttribute("title")).toBe("Order fulfillment (definition-1 · version-1)");
     // Incidents live under the Issues tab.
     await click(buttonByText(container, "Issues"));
     expect(container.textContent).toContain("No incidents recorded.");
@@ -2911,12 +3303,12 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1", undefined, true);
 
     await waitForText(container, "Pinned Runtime executable");
-    await click(buttonByText(container, "Designer"));
-    await waitForText(container, "Hello World");
+    await waitForText(container, "Review workflow definition");
+    await click(buttonByText(container, "Review workflow definition"));
+    await waitForEditor(container);
 
     expect(window.location.pathname).toBe("/workflows/definitions");
     expect(new URLSearchParams(window.location.search).get("definition")).toBe("definition-1");
-    expect(container.querySelector(".wf-editor")).toBeTruthy();
     expect(container.querySelector(".wf-instance-detail-workbench")).toBeNull();
 
     window.history.back();
@@ -2925,9 +3317,8 @@ describe("workflows module", () => {
     expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy();
 
     window.history.forward();
-    await waitForText(container, "Hello World");
+    await waitForEditor(container);
     expect(window.location.pathname).toBe("/workflows/definitions");
-    expect(container.querySelector(".wf-editor")).toBeTruthy();
 
     window.history.back();
     await waitForText(container, "Pinned Runtime executable");
@@ -2943,10 +3334,10 @@ describe("workflows module", () => {
 
     for (const tab of ["Activity", "Issues", "Details"] as const) {
       await openTab(tab);
-      await click(buttonByText(container, "Designer"));
-      await waitForText(container, "Hello World");
+      await waitForText(container, "Review workflow definition");
+      await click(buttonByText(container, "Review workflow definition"));
+      await waitForEditor(container);
       expect(window.location.pathname).toBe("/workflows/definitions");
-      expect(container.querySelector(".wf-editor")).toBeTruthy();
       expect(container.querySelector(".wf-instance-detail-workbench")).toBeNull();
 
       window.history.back();
@@ -3303,7 +3694,7 @@ describe("workflows module", () => {
     );
     expect(new URLSearchParams(window.location.search).get("folderId")).toBe("opaque-folder");
     expect(definitionRequests).toEqual([
-      "https://server.example/design/workflows/definition-pages?state=active&search=approval&pageSize=10"
+      "https://server.example/design/workflows/definition-pages?state=active&searchTerm=approval&pageSize=10"
     ]);
     expect(fetchMock.mock.calls.map(([url]) => String(url)).some(url => url.includes("/folders"))).toBe(false);
     await unmount();
@@ -3342,8 +3733,8 @@ describe("workflows module", () => {
     await waitForText(container, "Recovered workflow");
 
     expect(definitionRequests).toEqual([
-      "https://server.example/design/workflows/definition-pages?state=deleted&search=approval&pageSize=10&folderId=folder-retry",
-      "https://server.example/design/workflows/definition-pages?state=deleted&search=approval&pageSize=10&folderId=folder-retry"
+      "https://server.example/design/workflows/definition-pages?state=deleted&searchTerm=approval&pageSize=10&folderId=folder-retry",
+      "https://server.example/design/workflows/definition-pages?state=deleted&searchTerm=approval&pageSize=10&folderId=folder-retry"
     ]);
     expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).toContain("Retry folder");
     expect(window.location.search).toBe("?folderId=folder-retry&state=deleted&search=approval");
@@ -3379,10 +3770,10 @@ describe("workflows module", () => {
 
     await waitForText(container, "Restored workflow");
     expect(definitionPageRequests).toEqual([
-      "https://server.example/design/workflows/definition-pages?state=all&search=invoice+approval&pageSize=10&folderId=folder%2Fopaque"
+      "https://server.example/design/workflows/definition-pages?state=all&searchTerm=invoice+approval&pageSize=10&folderId=folder%2Fopaque"
     ]);
     expect(container.querySelector<HTMLInputElement>(".wf-search input")?.value).toBe("invoice approval");
-    expect(buttonByText(container, "All states")?.getAttribute("aria-selected")).toBe("true");
+    expect(buttonByText(container, "All states")?.getAttribute("aria-pressed")).toBe("true");
     expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).toContain("Operations");
     await unmount();
   });
@@ -3830,7 +4221,7 @@ describe("workflows module", () => {
       if (init?.method === "POST" && url.endsWith("/definitions")) { definitionPost = JSON.parse(String(init.body)); return response({ definition: definition({ id: "new-definition" }), draft: null, versions: [] }); }
       if (url.includes("/folders/folder-root")) return response({ folder, ancestors: [] });
       if (url.includes("/folders?pageSize=100")) return response({ items: [folder], nextContinuationToken: null });
-      if (url.includes("/activities")) return response({ activities: [] });
+      if (url.includes("/activities")) return response({ activities: [flowchartActivity()] });
       if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null });
       throw new Error(`Unexpected request ${url}`);
     });
@@ -4125,7 +4516,7 @@ describe("workflows module", () => {
     expect(container.textContent).toContain("Current B workflow");
     expect(container.textContent).not.toContain("Stale A workflow");
     expect(container.querySelector<HTMLInputElement>(".wf-search input")?.value).toBe("current");
-    expect(buttonByText(container, "All states")?.getAttribute("aria-selected")).toBe("true");
+    expect(buttonByText(container, "All states")?.getAttribute("aria-pressed")).toBe("true");
     expect(new URLSearchParams(window.location.search).get("folderId")).toBe("folder-b");
     await unmount();
   });
@@ -4133,13 +4524,21 @@ describe("workflows module", () => {
   it("rebases definitions once when deleting the selected folder chooses its survivor", async () => {
     const folder = workflowFolder("folder-delete", "Delete me");
     let globalDefinitionRequests = 0;
+    let rootFolderRequests = 0;
+    let resolveDeletedRootRefresh: ((value: Response) => void) | undefined;
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/folders/folder-delete") && init?.method === "DELETE") {
         return new Response(null, { status: 204 });
       }
       if (url.includes("/folders/folder-delete")) return response({ folder, ancestors: [] });
-      if (url.includes("/folders?pageSize=100")) return response({ items: [folder], nextContinuationToken: null });
+      if (url.includes("/folders?pageSize=100")) {
+        rootFolderRequests += 1;
+        if (rootFolderRequests === 2) {
+          return new Promise<Response>(resolve => { resolveDeletedRootRefresh = resolve; });
+        }
+        return response({ items: [folder], nextContinuationToken: null });
+      }
       if (url.includes("definition-pages")) {
         if (!url.includes("folderId=")) globalDefinitionRequests += 1;
         return response({
@@ -4161,6 +4560,14 @@ describe("workflows module", () => {
     await click(container.querySelector<HTMLElement>("[data-folder-id='folder-delete']"));
     await waitForText(container, "Folder workflow");
     await click(buttonByText(container, "Delete"));
+    try {
+      await vi.waitFor(() => expect(rootFolderRequests).toBe(2));
+      // Hold the folder refresh open so the selection-change request is observable before the
+      // mutation callback runs. This makes a duplicate rebase deterministic instead of timing-based.
+      await vi.waitFor(() => expect(globalDefinitionRequests).toBe(2));
+    } finally {
+      resolveDeletedRootRefresh?.(response({ items: [], nextContinuationToken: null }));
+    }
     await waitForText(container, "Deleted folder Delete me");
     await waitForText(container, "All workflow");
 
@@ -4985,7 +5392,7 @@ function incidentState(overrides: Partial<Record<string, unknown>> = {}) {
     executableNodeId: "write-line-1",
     severity: "Error",
     status: "Blocking",
-    resolutionAction: "None",
+    resolutionOutcome: null,
     failureType: "InputMaterializationFailed",
     message: "Input failed.",
     createdAt: "2026-06-18T01:00:02Z",
@@ -5347,6 +5754,13 @@ async function waitForDialog(container: HTMLElement) {
   return dialog(container);
 }
 
+async function waitForEnabledButton(container: HTMLElement, text: string) {
+  await vi.waitFor(() => {
+    const button = buttonByText(container, text);
+    expect(button instanceof HTMLButtonElement && !button.disabled).toBe(true);
+  });
+}
+
 function optionByText(container: HTMLElement, text: string) {
   return Array.from(container.querySelectorAll<HTMLElement>("[role='option']"))
     .find(option => option.textContent?.includes(text)) ?? null;
@@ -5355,6 +5769,21 @@ function optionByText(container: HTMLElement, text: string) {
 function rowByLabel(container: HTMLElement, label: string) {
   return Array.from(container.querySelectorAll<HTMLElement>("[role='row']"))
     .find(row => row.getAttribute("aria-label") === label) ?? null;
+}
+
+async function openDefinitionActions(container: HTMLElement, workflowName: string) {
+  const accessibleName = `Actions for ${workflowName}`;
+  const row = rowByLabel(container, `Open workflow definition ${workflowName}`);
+  if (!row) throw new Error(`Workflow definition row not found: ${workflowName}`);
+  await click(buttonByLabel(row, accessibleName));
+
+  let menu: HTMLElement | undefined;
+  await vi.waitFor(() => {
+    menu = Array.from(document.body.querySelectorAll<HTMLElement>("[role='menu']"))
+      .find(candidate => candidate.getAttribute("aria-label") === accessibleName);
+    expect(menu).toBeDefined();
+  });
+  return menu!;
 }
 
 function urlPath(url: string) {
@@ -5447,6 +5876,22 @@ async function waitForText(container: HTMLElement, text: string) {
   await vi.waitFor(() => {
     if (!container.textContent?.includes(text)) {
       throw new Error(`Timed out waiting for text: ${text}. Rendered: ${container.textContent}`);
+    }
+  }, { timeout: 5_000, interval: 20 });
+}
+
+async function waitForStatusBadge(row: Element | null, text: string) {
+  await vi.waitFor(() => {
+    if (!Array.from(row?.querySelectorAll(".wf-status-badge") ?? []).some(badge => badge.textContent === text)) {
+      throw new Error(`Timed out waiting for status badge '${text}'.`);
+    }
+  }, { timeout: 5_000, interval: 20 });
+}
+
+async function waitForEditor(container: HTMLElement) {
+  await vi.waitFor(() => {
+    if (!container.querySelector(".wf-editor")) {
+      throw new Error("Timed out waiting for the workflow editor.");
     }
   }, { timeout: 5_000, interval: 20 });
 }

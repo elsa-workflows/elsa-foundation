@@ -11,10 +11,10 @@ namespace Elsa.Architecture.Tests;
 /// <summary>
 /// Real <c>dotnet build</c> and <c>dotnet pack</c> runs, through the real SDK and NuGet, of a two-project fixture laid
 /// out like this repository, under <c>Essentials/src/</c> beside a copy of the root build files: proof that a packed nupkg carries
-/// what spec 150 asks of it (#2080). With the calculator's pack-properties file, passed the way a pipeline passes it,
-/// its range on its own project reference is bounded below the next major (FR-007), a third party's range is left
+/// what computed versioning asks of it (#2080). With the calculator's pack-properties file, passed the way a pipeline
+/// passes it, its range on its own project reference is bounded below the next major, a third party's range is left
 /// exactly as central package management restored it, and the package carries the computed version, the input
-/// fingerprint and the source commit (FR-018). Without that file - a dev pack, or a local pack with only a global
+/// fingerprint and the source commit. Without that file - a dev pack, or a local pack with only a global
 /// <c>/p:Version</c> - every range and the package's contents match what packing has always produced: no bounding,
 /// no fingerprint. Each way a pack could silently carry something else
 /// fails it instead, leaving no package behind.
@@ -63,8 +63,8 @@ public sealed class PackageVersioningPackTests : IDisposable
     private string Output => Path.Join(root.FullName, "out");
 
     /// <summary>
-    /// Without computed input, packing is unaffected by spec 150: no range is bounded, whatever it is a range on, and
-    /// no fingerprint travels in the package - the same shape a dev pack, and a pack with only a global
+    /// Without computed input, packing is unaffected by computed versioning: no range is bounded, whatever it is a
+    /// range on, and no fingerprint travels in the package - the same shape a dev pack, and a pack with only a global
     /// <c>/p:Version</c>, has always had.
     /// </summary>
     [Fact]
@@ -97,7 +97,7 @@ public sealed class PackageVersioningPackTests : IDisposable
     /// <summary>
     /// The pipeline's shape: build, then pack without building, both with the same pack-properties file. The package
     /// takes its computed version; its range on an unpublished reference starts at that reference's recorded version.
-    /// A third party's range is left exactly as central package management restored it (spec 150 Decisions, FR-007) -
+    /// A third party's range is left exactly as central package management restored it -
     /// here, the plain version Directory.Packages.props names, with no upper bound.
     /// </summary>
     [Fact]
@@ -144,8 +144,8 @@ public sealed class PackageVersioningPackTests : IDisposable
     }
 
     /// <summary>
-    /// A third party's range is never checked here, however it is shaped: only this repository's own ranges are
-    /// (spec 150 Decisions, FR-007). <see cref="PackageRangesBuildCheckTests"/> proves ElsaVerifyNuspecRanges rejects
+    /// A third party's range is never checked here, however it is shaped: only this repository's own ranges are.
+    /// <see cref="PackageRangesBuildCheckTests"/> proves ElsaVerifyNuspecRanges rejects
     /// an unbounded range on one of this repository's own packages the same way; a real pack cannot manufacture that
     /// case, because every other check here refuses a version that is not what the computation - or the dev fallback -
     /// says it should be, project references included.

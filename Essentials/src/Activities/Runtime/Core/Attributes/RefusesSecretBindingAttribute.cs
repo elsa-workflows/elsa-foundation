@@ -2,8 +2,8 @@ namespace Elsa.Activities.Runtime.Core.Attributes;
 
 /// <summary>
 /// Declares that an activity input cannot take a <c>Secret</c> binding, because the activity would carry the
-/// resolved value somewhere the runtime persists or because a publish-time reader needs the input as a literal.
-/// Publication refuses a secret reference on the named input with <c>VF-ACT-012</c>.
+/// resolved value somewhere the runtime persists or out of the workflow, or because a publish-time reader needs
+/// the input as a literal. Publication refuses a secret reference on the named input with <c>VF-ACT-012</c>.
 /// </summary>
 /// <remarks>
 /// This is the way an activity author opts an input out of secret binding. It is read at publish time by
@@ -33,6 +33,9 @@ public enum SecretBindingRefusalReason
     /// <summary>A publish-time reader needs the input as a literal, before any value could be resolved.</summary>
     FixedAtPublish,
 
-    /// <summary>The activity returns the input's value in its result or copies it into a fault it reports.</summary>
+    /// <summary>
+    /// The activity returns the input's value in its result, writes it out of the workflow (for example to the
+    /// console or an HTTP response) or copies it into a fault it reports.
+    /// </summary>
     EchoedToOutput
 }

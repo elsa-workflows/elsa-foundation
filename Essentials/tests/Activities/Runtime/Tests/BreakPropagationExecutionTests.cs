@@ -10,7 +10,7 @@ using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
@@ -132,6 +132,35 @@ public sealed class BreakPropagationExecutionTests
         run.AssertDidNotRun("node-d"); // the join after the broken fork never fired, regardless of fork order.
         run.AssertOutcomes("node-flowchart", ActivityOutcomes.Break); // Flowchart bubbled Break up.
         run.AssertOutcomes("node-for", ActivityOutcomes.Done);         // For ended cleanly after one pass.
+        run.AssertWorkflowCompleted();
+    }
+
+    [Fact]
+    public async Task FlowchartTriggerStart_ForLoopFlowchartBody_RestartsAtTriggerEachPass()
+    {
+        // Spec 238 (D3): the trigger id is workflow-wide, so a Flowchart started again by each For pass begins at
+        // the trigger child on every pass, never at its start node. Publishing refuses a start trigger in a loop body
+        // (the start-path rule); this pins the runtime for artifacts published before it.
+        await using var harness = NewHarness(Enumerable.Range(1, 12).Select(index => $"actexec-{index}").ToArray());
+
+        var body = NewFlowchartNode("node-flowchart",
+            children:
+            [
+                WorkflowExecutionHarness.NewProbeNode("node-start"),
+                WorkflowExecutionHarness.NewProbeNode("node-trigger"),
+                WorkflowExecutionHarness.NewProbeNode("node-after-trigger")
+            ],
+            connections: [NewConnection("node-trigger", "node-after-trigger")],
+            startNodeId: "node-start");
+
+        var run = await harness.RunAsync(
+            WorkflowExecutionHarness.NewExecutable(NewForNode("node-for", start: 0, end: 3, body: body)),
+            JsonSerializer.SerializeToElement(new { }),
+            triggerNodeId: "node-trigger");
+
+        Assert.Equal(3, run.States("node-after-trigger").Count);
+        run.AssertDidNotRun("node-start");
+        run.AssertOutcomes("node-for", ActivityOutcomes.Done);
         run.AssertWorkflowCompleted();
     }
 
@@ -294,7 +323,7 @@ public sealed class BreakPropagationExecutionTests
             literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline));
     }
 
-    private static IPayloadSerializer Serializer => new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
+    private static readonly IPayloadSerializer Serializer = SerializationServices.PayloadSerializer();
 
     /// <summary>
     /// Deterministic condition evaluator that returns <c>true</c> for its first <c>passes</c> evaluations

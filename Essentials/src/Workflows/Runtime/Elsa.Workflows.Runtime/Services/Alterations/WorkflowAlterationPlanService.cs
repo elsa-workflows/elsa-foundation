@@ -31,11 +31,18 @@ public sealed class WorkflowAlterationPlanService
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
+    /// <param name="authorizedExecutionIds">
+    /// For an explicit target, the runs the caller authorized the submitting operator to manage, run by run, before
+    /// admission. Capture records every other explicit target as <c>TargetNotFound</c> without reading it.
+    /// <see langword="null"/> skips per-run authorization, for query targets and trusted in-process callers. The set is
+    /// not part of the idempotency hash, so a replay returns the plan as first admitted.
+    /// </param>
     public async ValueTask<WorkflowAlterationPlanAdmissionResult> SubmitAsync(
         WorkflowAlterationSubmission submission,
         WorkflowAlterationOperatorProvenance submittedBy,
         string idempotencyKey,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlyCollection<string>? authorizedExecutionIds = null)
     {
         ArgumentNullException.ThrowIfNull(submission);
         ArgumentNullException.ThrowIfNull(submittedBy);
@@ -59,7 +66,8 @@ public sealed class WorkflowAlterationPlanService
             protectedPayload,
             submission.Target,
             _timeProvider.GetUtcNow(),
-            descriptors);
+            descriptors,
+            authorizedExecutionIds);
 
         return await _store.AdmitAsync(plan, cancellationToken);
     }

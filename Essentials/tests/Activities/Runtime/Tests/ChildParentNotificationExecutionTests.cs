@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -116,7 +117,7 @@ public sealed class ChildParentNotificationExecutionTests
     }
 
     [Fact]
-    public async Task FaultContinuationWithStagedNotification_FaultsTheEvaluation()
+    public async Task FaultContinuationWithStagedNotification_PreservesChildFaultAndRefusesLegacyNotificationConsumer()
     {
         var recorder = new ParentNotificationRecorder();
         await using var harness = NewHarness(
@@ -128,8 +129,20 @@ public sealed class ChildParentNotificationExecutionTests
 
         var child = run.State("node-child");
         Assert.Equal(ActivityExecutionStatus.Faulted, child.Status);
-        Assert.Contains("cannot also notify its parent", child.Fault!.Message, StringComparison.Ordinal);
+        Assert.Equal("test.notify.fault", child.Fault!.Code);
+        Assert.Equal("fault with staged notification", child.Fault.Message);
+        var parent = run.State("node-consumer");
+        Assert.Equal(ActivityExecutionStatus.Faulted, parent.Status);
+        Assert.Equal("runtime.parent-outcome.handler-required", parent.Fault!.Code);
         Assert.Empty(recorder.Notifications);
+
+        var incidents = await harness.Services.GetRequiredService<IIncidentStateStore>()
+            .ListAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+        var childIncident = Assert.Single(incidents, incident => incident.ActivityExecutionId == child.Execution.ActivityExecutionId);
+        Assert.Equal(IncidentStatus.Blocking, childIncident.Status);
+        Assert.Equal(IncidentResolutionActionKinds.FaultWorkflow, childIncident.ResolutionOutcome?.ActionKind);
+        Assert.Contains(childIncident.IncidentId, child.IncidentIds);
+        Assert.Equal(WorkflowExecutionStatus.Faulted, run.WorkflowState?.Status);
     }
 
     [Fact]
@@ -218,7 +231,8 @@ public sealed class ChildParentNotificationExecutionTests
     }
 
     // Both evaluations share one builder for the completed parent's checkpoint metadata; only the notification
-    // evaluation adds keys of its own. A key the builder silently dropped would leave every other assertion green.
+    // evaluation adds keys of its own. A key the builder silently dropped would leave every other assertion green. The
+    // checkpoint is read as the committer received it, because a persistence mode may fold it into a later commit.
     private static void AssertConsumerCompletionCheckpointMetadata(
         WorkflowExecutionHarness harness,
         WorkflowExecutionRun run,
@@ -228,8 +242,8 @@ public sealed class ChildParentNotificationExecutionTests
         var consumer = run.AssertCompleted("node-consumer");
         var evaluatingWorkItemId = consumer.Metadata[RuntimeMetadataKeys.InvokeSchedulerWorkItemId];
         var checkpoint = Assert.Single(
-            harness.Services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits(),
-            record => record.Commit.Checkpoint.CheckpointId == $"checkpoint:{evaluatingWorkItemId}:parent-activity-completed:actexec-consumer").Commit.Checkpoint;
+            harness.Services.GetRequiredService<CommittedCheckpointRecorder>().Checkpoints,
+            candidate => candidate.CheckpointId == $"checkpoint:{evaluatingWorkItemId}:parent-activity-completed:actexec-consumer");
         var pinned = run.WorkflowState!.PinnedExecutable;
         var expected = new Dictionary<string, string>(evaluationMetadata)
         {
@@ -261,8 +275,24 @@ public sealed class ChildParentNotificationExecutionTests
                 services.AddSingleton(childDirective);
                 services.AddSingleton(consumerDirective);
                 services.AddSingleton(recorder);
+                services.AddSingleton<CommittedCheckpointRecorder>();
+                services.AddSingleton<IRuntimeCheckpointCommitEnricher>(serviceProvider => serviceProvider.GetRequiredService<CommittedCheckpointRecorder>());
             })
             .Build(ids);
+    }
+
+    // Records every checkpoint the committer is asked to commit, after the other enrichers have run.
+    private sealed class CommittedCheckpointRecorder : IRuntimeCheckpointCommitEnricher
+    {
+        public int Order => int.MaxValue;
+
+        public ConcurrentQueue<RuntimeCheckpoint> Checkpoints { get; } = new();
+
+        public ValueTask<RuntimeCheckpointCommit> EnrichAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken = default)
+        {
+            Checkpoints.Enqueue(commit.Checkpoint);
+            return ValueTask.FromResult(commit);
+        }
     }
 
     private static WorkflowExecutable NewGraph() =>

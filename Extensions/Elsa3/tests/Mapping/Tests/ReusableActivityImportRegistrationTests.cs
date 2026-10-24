@@ -29,7 +29,7 @@ public sealed class ReusableActivityImportRegistrationTests
         services.AddScoped<IReusableActivityImportMaterializer, StubMaterializer>();
         services.AddScoped<IReusableActivityImportCommand, StubCommand>();
         services.AddScoped<IReusableActivityImportOperationStore, StubOperationStore>();
-        // Registered by WorkflowDesignValidations, on which the feature depends (spec 188, FR-008).
+        // Registered by WorkflowDesignValidations, on which the feature depends.
         services.AddScoped(_ => ReusableActivityImportFixtures.Validator());
 
         new Elsa3ImportActivitiesFeature().ConfigureServices(services);
@@ -78,8 +78,7 @@ public sealed class ReusableActivityImportRegistrationTests
     [Fact]
     public async Task Single_definition_importer_routes_reusable_sources_to_collection_import()
     {
-        var mapper = new Elsa3WorkflowDefinitionToWorkflowDefinitionVersion(null!, null!, null!);
-        var importer = new Elsa3WorkflowDefinitionImporter(mapper, null!, null!);
+        var importer = new Elsa3WorkflowDefinitionImporter(null!, null!);
         var source = ReusableActivityImportFixtures.Workflow(
             "reusable",
             "reusable-v1",

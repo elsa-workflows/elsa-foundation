@@ -18,7 +18,7 @@ namespace Elsa.Serialization.SystemText.JsonConverters;
 /// System.Text.Json reject it for the other shapes with a converter-incompatibility exception. Every shape is
 /// materialized as a <see cref="Dictionary{TKey,TValue}"/> on read, which is assignable to all three.
 /// </remarks>
-public sealed class DeterministicDictionaryConverter<TDictionary, TValue> : JsonConverter<TDictionary>
+internal sealed class DeterministicDictionaryConverter<TDictionary, TValue> : JsonConverter<TDictionary>
     where TDictionary : IEnumerable<KeyValuePair<string, TValue>>
 {
     /// <inheritdoc />
@@ -48,7 +48,7 @@ public sealed class DeterministicDictionaryConverter<TDictionary, TValue> : Json
         writer.WriteStartObject();
 
         // Ordinal by key. Keys are written verbatim (DictionaryKeyPolicy is unset), so the key is the
-        // serialized property name and sorting by key equals sorting by serialized name (FR-001).
+        // serialized property name and sorting by key equals sorting by serialized name.
         foreach (var entry in value.InCanonicalOrder(entry => entry.Key))
         {
             writer.WritePropertyName(entry.Key);

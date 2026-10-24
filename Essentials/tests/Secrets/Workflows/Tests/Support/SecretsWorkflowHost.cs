@@ -23,6 +23,7 @@ using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Microsoft.Data.Sqlite;
@@ -47,7 +48,7 @@ public enum SecretsWorkflowHostStore
 }
 
 /// <summary>
-/// An embedded workflow runtime host for the Secrets bridge (spec 188, slice 4), dedicated to one tenant: the in-process
+/// An embedded workflow runtime host for the Secrets bridge, dedicated to one tenant: the in-process
 /// runtime, the Secrets module with its encrypted store and, unless a test leaves it out, the <c>SecretsWorkflows</c>
 /// bridge.
 /// </summary>
@@ -168,6 +169,11 @@ public sealed class SecretsWorkflowHost : IAsyncDisposable
             new SecretsWorkflowsFeature().ConfigureServices(services);
         services.AddSingleton(values);
         configure?.Invoke(services);
+        // What a composed shell does once every feature is registered: add the persistence-mode services, which every
+        // run drains through, over the stores registered by then. Without a configured mode the host runs Durable.
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(PersistenceModeOptions)))
+            services.AddPersistenceModeOptions(new PersistenceModeOptions { Mode = PersistenceMode.Durable });
+        services.AddPersistenceModes();
 
         var provider = services.BuildServiceProvider();
         // A plain host has no CShells activation phase: install the runtime schema and register the activity types here.
@@ -384,7 +390,6 @@ public sealed class SecretsWorkflowHost : IAsyncDisposable
         if (_databasePath is null)
             return;
 
-        SqliteConnection.ClearAllPools();
         foreach (var path in new[] { _databasePath, $"{_databasePath}-wal", $"{_databasePath}-shm" })
             File.Delete(path);
     }

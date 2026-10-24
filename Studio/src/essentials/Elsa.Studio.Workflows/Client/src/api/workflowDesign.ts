@@ -32,6 +32,8 @@ export interface DefinitionListRequest {
   state?: DefinitionListState;
   page: number;
   pageSize: number;
+  /** Name enrichment on legacy hosts can reuse their single full-list response instead of paging it again. */
+  includeAllWhenUnpaged?: boolean;
   continuationToken?: string;
   folderId?: string | null;
   unfiled?: boolean;
@@ -208,12 +210,13 @@ export async function moveWorkflowDefinitions(
   await context.http.postJson<unknown>(path, request);
 }
 
-export async function listDefinitions(context: StudioEndpointContext, request: DefinitionListRequest) {
+export async function listDefinitions(context: StudioEndpointContext, request: DefinitionListRequest, signal?: AbortSignal) {
+  const requestOptions: [options?: { signal: AbortSignal }] = signal ? [{ signal }] : [];
   const parameters = new URLSearchParams({
     state: request.state ?? "active"
   });
   const search = request.search.trim();
-  if (search) parameters.set("search", search);
+  if (search) parameters.set("searchTerm", search);
 
   const pagedPath = await definitionPagePath(context);
   if (pagedPath) {
@@ -224,7 +227,7 @@ export async function listDefinitions(context: StudioEndpointContext, request: D
     const response = await context.http.getJson<{
       items: WorkflowDefinitionsResponse["definitions"];
       nextContinuationToken?: string | null;
-    }>(`${pagedPath}?${parameters.toString()}`);
+    }>(`${pagedPath}?${parameters.toString()}`, ...requestOptions);
     return {
       definitions: response.items ?? [],
       page: request.page,
@@ -235,19 +238,21 @@ export async function listDefinitions(context: StudioEndpointContext, request: D
   }
 
   const response = await context.http.getJson<{ items: WorkflowDefinitionsResponse["definitions"] }>(
-    `${await definitionsPath(context)}?${parameters.toString()}`);
+    `${await definitionsPath(context)}?${parameters.toString()}`, ...requestOptions);
   const offset = Math.max(0, request.page - 1) * request.pageSize;
+  const definitions = response.items ?? [];
   return {
-    definitions: (response.items ?? []).slice(offset, offset + request.pageSize),
+    definitions: request.includeAllWhenUnpaged ? definitions : definitions.slice(offset, offset + request.pageSize),
     page: request.page,
     pageSize: request.pageSize,
-    totalCount: response.items?.length ?? 0
+    totalCount: definitions.length
   } satisfies WorkflowDefinitionsResponse;
 }
 
-export async function getDefinition(context: StudioEndpointContext, definitionId: string) {
+export async function getDefinition(context: StudioEndpointContext, definitionId: string, signal?: AbortSignal) {
   const details = await context.http.getJson<WorkflowDefinitionDetailsResponse>(
-    `${await definitionsPath(context)}/${encodeURIComponent(definitionId)}`);
+    `${await definitionsPath(context)}/${encodeURIComponent(definitionId)}`,
+    ...(signal ? [{ signal }] as const : []));
   return normalizeDefinitionDetails(details);
 }
 

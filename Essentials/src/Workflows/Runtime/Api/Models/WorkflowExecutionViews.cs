@@ -87,23 +87,21 @@ public sealed record WorkflowInstanceSummaryView(
 }
 
 /// <summary>
-/// Instance detail read model. Beyond the per-instance projections it also surfaces two host-configuration-derived
-/// checkpoint-cadence properties: <paramref name="CheckpointCadence"/>
-/// (<c>Immediate</c>/<c>Coalesced</c>, with <paramref name="MaxSegmentCheckpoints"/> when Coalesced) and the
-/// <paramref name="InspectionGranularity"/> that cadence implies (<c>activity-level</c> vs <c>boundary-level</c>). They
-/// let an inspection consumer know whether per-activity evidence is exact or folded to a coalesced boundary, rather than
-/// assuming activity-level fidelity. See <see cref="Coalescing.RuntimeCheckpointCadenceInspector"/> for the host-vs-run
-/// projection limitation.
+/// Instance detail read model. Beyond the per-instance projections it also surfaces the run's
+/// <paramref name="PersistenceMode"/> (<c>Durable</c>, <c>Balanced</c> or <c>Ephemeral</c>) and the
+/// <paramref name="InspectionGranularity"/> that mode implies (<c>activity-level</c> vs <c>boundary-level</c>). They let
+/// an inspection consumer know whether per-activity evidence is exact or folded to a commit boundary, rather than
+/// assuming activity-level fidelity. See <see cref="Coalescing.RuntimePersistenceModeInspector"/>.
 /// </summary>
 public sealed record WorkflowInstanceDetailsView(
     WorkflowInstanceSummaryView Instance,
     IReadOnlyCollection<ActivityExecutionInspectionSummaryView> Activities,
     IReadOnlyCollection<IncidentStateView> Incidents,
     IReadOnlyDictionary<string, WorkflowOutputView> Outputs,
-    string CheckpointCadence,
-    int? MaxSegmentCheckpoints,
+    string PersistenceMode,
     string InspectionGranularity,
-    string? ActivityNextContinuationToken = null);
+    string? ActivityNextContinuationToken = null,
+    WorkflowInstancePermissionsView? Permissions = null);
 
 /// <summary>
 /// A named workflow output on the instance details view (#254 Seam R1): the durably captured value a

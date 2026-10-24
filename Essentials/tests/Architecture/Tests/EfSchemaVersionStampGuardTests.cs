@@ -7,9 +7,9 @@ using static Elsa.Architecture.Tests.RepoPaths;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// #2119 (spec 180 FR-026): every table an EF module maps carries a required schema-version stamp, so a row a newer
+/// #2119: every table an EF module maps carries a required schema-version stamp, so a row a newer
 /// module version wrote reads as skew instead of as a row this build understands. A table without one could only
-/// treat an unstamped row as some baseline, and there is no such rule: a missing version is skew (ADR 0077).
+/// treat an unstamped row as some baseline, and there is no such rule: a missing version is skew.
 /// <para>
 /// The guard reads each module's model snapshots, the per-provider record of the schema its migrations create,
 /// because that is what a database gets. Which snapshots it must read comes independently from the
@@ -18,7 +18,7 @@ namespace Elsa.Architecture.Tests;
 /// context, which maps OpenIddict's own entity types, are outside the rule.
 /// </para>
 /// <para>
-/// Owner decision Q27 on #2119: every stamp also carries a non-unique index of its own, so the rows still at a given
+/// An owner decision on #2119: every stamp also carries a non-unique index of its own, so the rows still at a given
 /// version are found without scanning the table. The index rule reads the same snapshots.
 /// </para>
 /// </summary>
@@ -105,13 +105,13 @@ public sealed class EfSchemaVersionStampGuardTests
             Assert.Equal(4, indexedBySnapshot.Count(tables => tables.Contains(table)));
     }
 
-    /// <summary>The two tables spec 181 puts beside every module's migrations-history table, by name prefix.</summary>
+    /// <summary>The two finalization tables beside every module's migrations-history table, by name prefix.</summary>
     private static readonly string[] FinalizationTablePrefixes = ["__ElsaSchemaFinalization_", "__ElsaDatabaseIdentity_"];
 
     private static readonly Regex ProviderContextSuffix = new("(?:Sqlite|SqlServer|PostgreSql|MySql)DbContext$", RegexOptions.Compiled);
 
     /// <summary>
-    /// Spec 181, FR-002 (#2120): every provider context an EF module declares creates both finalization tables through its
+    /// #2120: every provider context an EF module declares creates both finalization tables through its
     /// own migrations, stamped with the stamp indexed like every other table. A module's four providers name the same
     /// table, and no two modules name the same one, since modules share databases.
     /// </summary>

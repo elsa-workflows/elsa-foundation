@@ -52,6 +52,7 @@ describe("StudioTabs keyboard navigation", () => {
     render(<ControlledTabs />);
     expect(tabs().map(tab => tab.tabIndex)).toEqual([0, -1, -1]);
     expect(tabs()[0].getAttribute("aria-selected")).toBe("true");
+    expect(tabs().map(tab => tab.title)).toEqual(["One", "Two", "Three"]);
   });
 
   it("links each tab to its panel via aria-controls / id", () => {
@@ -214,10 +215,10 @@ describe("StudioDataGrid semantics", () => {
 
 describe("sidebar search filtering", () => {
   const navigation = [
-    { id: "dashboard", label: "Dashboard", path: "/dashboard" },
+    { id: "home", label: "Home", path: "/dashboard", placement: "main" as const },
     { id: "extension-builder", label: "Extension Builder", path: "/extension-builder" },
-    { id: "modules", label: "Modules", path: "/modules" },
-    { id: "package-feeds", label: "Package feeds", path: "/package-feeds" }
+    { id: "modules", label: "Modules", path: "/modules", placement: "admin" as const },
+    { id: "package-feeds", label: "Package feeds", path: "/package-feeds", placement: "admin" as const }
   ];
 
   function renderShell() {
@@ -263,7 +264,7 @@ describe("sidebar search filtering", () => {
 
       expect(container.querySelector(".studio-shell.sidebar-collapsed")).not.toBeNull();
       expect(searchInput()).not.toBeNull();
-      expect(navLinkLabels()).toContain("Dashboard");
+      expect(navLinkLabels()).toContain("Home");
     } finally {
       if (previous === null) localStorage.removeItem(key);
       else localStorage.setItem(key, previous);
@@ -273,9 +274,33 @@ describe("sidebar search filtering", () => {
   it("marks the active nav link with aria-current=page", () => {
     renderShell();
     const active = container.querySelector('.nav-section a[aria-current="page"]');
-    expect(active?.textContent).toContain("Dashboard");
+    expect(active?.textContent).toContain("Home");
     // Exactly one current link.
     expect(container.querySelectorAll('.nav-section a[aria-current="page"]')).toHaveLength(1);
+  });
+
+  it("marks only the most specific sibling when Workflows and Runs share a /workflows prefix", () => {
+    render(
+      <ThemeProvider>
+        <ShellFrame
+          navigation={[
+            { id: "home", label: "Home", path: "/dashboard", placement: "main" },
+            { id: "workflows", label: "Workflows", path: "/workflows/definitions", activePathPrefix: "/workflows", placement: "main" },
+            { id: "workflows-runs", label: "Runs", path: "/workflows/instances", activePathPrefix: "/workflows/instances", placement: "main" }
+          ]}
+          panels={[]}
+          path="/workflows/instances"
+          title="Runs"
+          backendBaseUrl="https://backend.example/"
+          onNavigate={() => {}}
+        >
+          <div>content</div>
+        </ShellFrame>
+      </ThemeProvider>
+    );
+    const current = Array.from(container.querySelectorAll('.nav-section a[aria-current="page"]')).map(link => link.textContent?.trim());
+    expect(current).toEqual(["Runs"]);
+    expect(container.querySelector('a[aria-label="Workflows"]')?.className).not.toContain("active");
   });
 
   it("filters nav items by case-insensitive label substring", () => {
@@ -283,7 +308,7 @@ describe("sidebar search filtering", () => {
     type("mod");
     const labels = navLinkLabels();
     expect(labels.some(label => label?.includes("Modules"))).toBe(true);
-    expect(labels.some(label => label?.includes("Dashboard"))).toBe(false);
+    expect(labels.some(label => label?.includes("Home"))).toBe(false);
     expect(labels.some(label => label?.includes("Extension Builder"))).toBe(false);
   });
 
@@ -294,13 +319,22 @@ describe("sidebar search filtering", () => {
     expect(container.querySelectorAll(".nav-section").length).toBe(0);
   });
 
+  it("keeps More tools items reachable from search while the group is collapsed", () => {
+    renderShell();
+    expect(navLinkLabels().some(label => label?.includes("Extension Builder"))).toBe(false);
+
+    type("ext");
+    expect(navLinkLabels().some(label => label?.includes("Extension Builder"))).toBe(true);
+    expect(container.querySelector("[aria-controls='studio-nav-more-tools']")?.getAttribute("aria-expanded")).toBe("true");
+  });
+
   it("clears the query when Escape is pressed", () => {
     renderShell();
     type("mod");
-    expect(navLinkLabels().some(label => label?.includes("Dashboard"))).toBe(false);
+    expect(navLinkLabels().some(label => label?.includes("Home"))).toBe(false);
 
     fireKey(searchInput(), "Escape");
     expect(searchInput().value).toBe("");
-    expect(navLinkLabels().some(label => label?.includes("Dashboard"))).toBe(true);
+    expect(navLinkLabels().some(label => label?.includes("Home"))).toBe(true);
   });
 });

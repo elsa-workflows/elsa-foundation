@@ -1,5 +1,5 @@
 ﻿using Elsa.Expressions.Core.Contracts;
-using Elsa.Expressions.JavaScript.Core.Models;
+using Elsa.Expressions.JavaScript.Models;
 
 namespace Elsa.Expressions.JavaScript.Services;
 

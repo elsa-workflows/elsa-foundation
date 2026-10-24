@@ -1,20 +1,20 @@
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Coalescing;
 
 namespace Elsa.Workflows.Runtime.Contracts;
 
 /// <summary>
-/// Establishes a checkpoint-coalescing session for the duration of a single workflow-execution drain.
-/// Registered only when coalescing is opted in; when absent the drain coordinator runs its existing path unchanged, so
-/// the default (Immediate) behavior is byte-for-byte preserved.
+/// Establishes a checkpoint-folding session for the duration of a single workflow-execution drain. Registered by
+/// <c>AddPersistenceModes</c>; every drain runs in such a session, so when it is absent the drain coordinator refuses
+/// to drain.
 /// </summary>
 public interface IRuntimeCoalescingDrainScopeFactory
 {
     /// <summary>
-    /// Begins a coalescing session scope for the supplied workflow execution. When <paramref name="maxSegmentCheckpoints"/>
-    /// is supplied it overrides the host-configured segment cap for this run (per-workflow authored cadence);
-    /// when null the host default applies.
+    /// Begins a folding session scope for the supplied workflow execution in its resolved mode, using the host's
+    /// settings.
     /// </summary>
-    IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, int? maxSegmentCheckpoints = null);
+    IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, ResolvedPersistenceMode mode);
 }
 
 /// <summary>

@@ -38,16 +38,17 @@ public sealed class ClrReconciliationTests
         // Inherited [Version] on a base class is honoured (issue #417 item 3): no own [Version], so 4.0.0
         // comes from VersionedBaseActivity rather than the assembly's 2.1.0.
         Assert.Equal("4.0.0", VersionFor<InheritedVersionFixtureActivity>(store));
-        // The fixture assembly carries eighteen concrete activities, including the typed result fixture,
+        // The fixture assembly carries nineteen concrete activities, including the typed result fixture,
         // the C# required-member fixture, the display-name fixture, three input-options fixtures, two
-        // outcome-attribute fixtures, the secret binding declaration pair and the sensitivity declaration fixture
-        // (abstract bases and the abstract invalid credential fixtures are excluded).
-        Assert.Equal(18, store.Versions.Count);
+        // outcome-attribute fixtures, the secret binding declaration pair, the sensitivity declaration fixture
+        // and the closed generic subclass (abstract bases, the abstract invalid credential fixtures and the
+        // open generic fixtures are excluded).
+        Assert.Equal(19, store.Versions.Count);
 
         // Re-run: same content + same versions → zero new rows (idempotency, DuplicateHandling.Skip).
         var idsBeforeRerun = store.Versions.Select(v => v.Id).OrderBy(id => id).ToArray();
         await reconciler.Reconcile(CancellationToken.None);
-        Assert.Equal(18, store.Versions.Count);
+        Assert.Equal(19, store.Versions.Count);
         Assert.Equal(idsBeforeRerun, store.Versions.Select(v => v.Id).OrderBy(id => id).ToArray());
     }
 
@@ -57,16 +58,16 @@ public sealed class ClrReconciliationTests
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
         var store = new InMemoryReconcilerHarness.CatalogStore();
 
-        // First pass via the real CLR source persists all eighteen concrete fixture activities.
+        // First pass via the real CLR source persists all nineteen concrete fixture activities.
         await InMemoryReconcilerHarness.BuildReconciler(store, FolderSource(folder.Path)).Reconcile(CancellationToken.None);
-        Assert.Equal(18, store.Versions.Count);
+        Assert.Equal(19, store.Versions.Count);
 
         // Author bumps the versioned activity to 4.0.0 (new content + new version). The reconciler
         // matches the existing definition by ActivityTypeKey and appends the new version row.
         var bumped = StubSource("4.0.0");
         await InMemoryReconcilerHarness.BuildReconciler(store, bumped).Reconcile(CancellationToken.None);
 
-        Assert.Equal(19, store.Versions.Count);
+        Assert.Equal(20, store.Versions.Count);
         var versioned = store.Definitions.Single(d => d.ActivityTypeKey == typeof(VersionedFixtureActivity).FullName);
         var versionsForVersioned = store.Versions.Where(v => v.DefinitionId == versioned.Id).Select(v => v.Version).OrderBy(v => v).ToList();
         Assert.Equal(new List<string> { "3.0.0", "4.0.0" }, versionsForVersioned);

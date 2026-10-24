@@ -11,10 +11,10 @@ namespace Elsa.Serialization.SystemText.Services;
 /// Serializes simple DTOs from and to JSON. Reads its <see cref="JsonConverter"/> set
 /// from <see cref="JsonPayloadConverterRegistry"/> — populated once at startup by
 /// <see cref="JsonPayloadConvertersInitializingStartupTask"/> dispatching the
-/// <see cref="JsonPayloadConvertersInitializing"/> domain event (framework §2.6.1
-/// Registry + StartUp Task sub-pattern; Elsa §E3.3 worked example).
+/// <see cref="JsonPayloadConvertersInitializing"/> domain event (the
+/// Registry + StartUp Task sub-pattern).
 /// </summary>
-public sealed class JsonPayloadSerializer(JsonPayloadConverterRegistry converterRegistry) : IPayloadSerializer
+internal sealed class JsonPayloadSerializer(JsonPayloadConverterRegistry converterRegistry) : IPayloadSerializer
 {
     // System.Text.Json caches reflected JsonTypeInfo/converter metadata per JsonSerializerOptions
     // instance. Rebuilding options on every Serialize/Deserialize call (this is a hot path —
@@ -108,16 +108,16 @@ public sealed class JsonPayloadSerializer(JsonPayloadConverterRegistry converter
             PropertyNameCaseInsensitive = true,
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
 
-            // Deterministic serialization (spec 086; ADR 0034 D3/D8): equal graphs must serialize to
+            // Deterministic serialization: equal graphs must serialize to
             // byte-identical JSON so the output can be content-hashed. SortObjectMembers fixes object member
             // order; DeterministicDictionaryConverterFactory sorts every string-keyed dictionary shape,
-            // including object-valued ones (formerly the retired polymorphic converter's job — ADR 0035 D2).
+            // including object-valued ones (formerly the retired polymorphic converter's job).
             // These target the real cross-process nondeterminism — per-process string-hash-seeded dictionary
             // enumeration and unfixed reflection member order.
             // Embedded opaque JSON (a JsonElement such as ActivityNode.Structure.Payload) is deliberately NOT
             // rewritten: it re-emits verbatim in parse order with no hashing, so it is already byte-stable
             // across processes, and reordering an opaque blob would assert a semantic equality Elsa does not
-            // own (ADR 0035 D3 — opaque JSON stays verbatim). Baked into the per-revision options GetOptions
+            // own (opaque JSON stays verbatim). Baked into the per-revision options GetOptions
             // caches — no per-call cost.
             TypeInfoResolver = new DefaultJsonTypeInfoResolver
             {

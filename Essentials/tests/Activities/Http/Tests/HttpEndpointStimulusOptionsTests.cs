@@ -38,9 +38,14 @@ public sealed class HttpEndpointStimulusOptionsTests
     }
 
     [Fact]
-    public void Defaults_ContributeNoMetadata()
+    public void Defaults_StampResponseModeOnly()
     {
-        Assert.Empty(HttpEndpointStimulusOptions.None.ToMetadata());
+        var metadata = HttpEndpointStimulusOptions.None.ToMetadata();
+
+        Assert.Equal(new Dictionary<string, string>
+        {
+            [Elsa.Http.Core.HttpEndpointRouting.ResponseModeMetadataKey] = "Async"
+        }, metadata);
     }
 
     [Fact]
@@ -81,18 +86,17 @@ public sealed class HttpEndpointStimulusOptionsTests
         Assert.False(metadata.ContainsKey(Elsa.Http.Core.HttpEndpointRouting.PolicyMetadataKey));
         Assert.False(metadata.ContainsKey(Elsa.Http.Core.HttpEndpointRouting.RequestTimeoutMetadataKey));
         Assert.False(metadata.ContainsKey(Elsa.Http.Core.HttpEndpointRouting.RequestSizeLimitMetadataKey));
+        Assert.Equal("Async", metadata[Elsa.Http.Core.HttpEndpointRouting.ResponseModeMetadataKey]);
     }
 
     // ---- Response-mode round-trip ----
 
     [Fact]
-    public void ResponseModeAsync_ContributesNoMetadataKey()
+    public void ResponseModeAsync_EmitsKey_AsEnumName()
     {
-        // Async is the default and omitted, so an async endpoint's metadata is byte-for-byte the pre-E shape.
-        Assert.Empty(new HttpEndpointStimulusOptions(ResponseMode: ResponseMode.Async).ToMetadata());
-        Assert.DoesNotContain(
-            Elsa.Http.Core.HttpEndpointRouting.ResponseModeMetadataKey,
-            new HttpEndpointStimulusOptions(Authorize: true).ToMetadata().Keys);
+        var metadata = new HttpEndpointStimulusOptions(ResponseMode: ResponseMode.Async).ToMetadata();
+
+        Assert.Equal("Async", metadata[Elsa.Http.Core.HttpEndpointRouting.ResponseModeMetadataKey]);
     }
 
     [Fact]
@@ -224,6 +228,20 @@ public sealed class HttpEndpointStimulusOptionsTests
         [
             new HttpEndpointStimulusOptions(ResponseMode: ResponseMode.Async).ToMetadata(),
             new HttpEndpointStimulusOptions(Authorize: true).ToMetadata()
+        ]);
+
+        Assert.Equal(ResponseMode.Async, merged.ResponseMode);
+    }
+
+    [Fact]
+    public void MergeForResume_ResponseMode_IsAsyncForLegacyBookmarkWithoutModeMetadata()
+    {
+        var merged = HttpEndpointStimulusOptions.MergeForResume(
+        [
+            new Dictionary<string, string>
+            {
+                [Elsa.Http.Core.HttpEndpointRouting.TemplateMetadataKey] = "callbacks/{id}"
+            }
         ]);
 
         Assert.Equal(ResponseMode.Async, merged.ResponseMode);

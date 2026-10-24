@@ -40,7 +40,7 @@ public class ExpressionsFeature : IShellFeature
 
         // Contributes the Variable<T> converter to the JSON payload serializer by registering an
         // IJsonConverterSource; the Serialization feature's single
-        // RegisterJsonConverters handler aggregates all sources (Elsa §E3.3).
+        // RegisterJsonConverters handler aggregates all sources.
         services.AddScoped<IJsonConverterSource, ExpressionsJsonConverterSource>();
     }
 }

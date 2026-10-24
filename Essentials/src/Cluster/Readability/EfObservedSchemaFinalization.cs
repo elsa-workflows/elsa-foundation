@@ -5,11 +5,11 @@ using Elsa.Persistence.Schema.SchemaFinalization;
 namespace Elsa.Cluster.Readability;
 
 /// <summary>
-/// What this container's EF finalization gates have observed (spec 181), as the shared dormancy check reads it (spec
-/// 182, FR-003): each family's write version, its record as last read, with holds, intent and finish record, what the
-/// module's post-finalization backfill reports of it (spec 186, FR-021), and a way to refresh it or read its status on
+/// What this container's EF finalization gates have observed, as the shared dormancy check reads it:
+/// each family's write version, its record as last read, with holds, intent and finish record, what the
+/// module's post-finalization backfill reports of it, and a way to refresh it or read its status on
 /// demand. It reads the gates live, so it follows every refresh without a restart or a
-/// shell reload (FR-019).
+/// shell reload.
 /// </summary>
 /// <remarks>
 /// <para>

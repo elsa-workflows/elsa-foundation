@@ -7,8 +7,8 @@ namespace Elsa.Http.Core.Contracts;
 /// selecting behaviour by content type. This is the request-side counterpart to the response-side
 /// <see cref="IHttpContentParser"/> strategy set (used by SendHttpRequest): it shares the same
 /// content-type dispatch intent but operates on an in-memory body string rather than an
-/// <see cref="HttpResponseMessage"/>/stream, and it always yields wire-safe output (<see cref="JsonElement"/>)
-/// per ADR 0035/0036 — never a CLR object graph or <c>ExpandoObject</c>.
+/// <see cref="HttpResponseMessage"/>/stream, and it always yields wire-safe output (<see cref="JsonElement"/>),
+/// never a CLR object graph or <c>ExpandoObject</c>.
 /// </summary>
 /// <remarks>
 /// Semantics:

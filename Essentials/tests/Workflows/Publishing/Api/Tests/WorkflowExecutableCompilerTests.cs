@@ -262,6 +262,243 @@ public sealed class WorkflowExecutableCompilerTests
                 new ActivityActivationRequirement("test", "test.activity"));
     }
 
+    [Fact]
+    public void Background_execution_capability_is_opt_in_fingerprinted_and_omitted_when_false()
+    {
+        var inlineContract = BackgroundContract(supportsBackgroundExecution: false);
+        var backgroundContract = BackgroundContract(supportsBackgroundExecution: true);
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var inlineJson = JsonSerializer.Serialize(inlineContract, options);
+        var backgroundJson = JsonSerializer.Serialize(backgroundContract, options);
+        var restored = JsonSerializer.Deserialize<Elsa.Activities.Runtime.Core.Models.ActivityContract>(backgroundJson, options)!;
+
+        Assert.False(inlineContract.SupportsBackgroundExecution);
+        Assert.DoesNotContain("supportsBackgroundExecution", inlineJson, StringComparison.Ordinal);
+        Assert.True(backgroundContract.SupportsBackgroundExecution);
+        Assert.Contains("supportsBackgroundExecution", backgroundJson, StringComparison.Ordinal);
+        Assert.NotEqual(inlineContract.SchemaFingerprint, backgroundContract.SchemaFingerprint);
+        Assert.Equal(backgroundContract.SchemaFingerprint, restored.SchemaFingerprint);
+        Assert.True(restored.SupportsBackgroundExecution);
+
+        static Elsa.Activities.Runtime.Core.Models.ActivityContract BackgroundContract(bool supportsBackgroundExecution) => new(
+            "test.activity",
+            "1.0.0",
+            "test",
+            JsonSerializer.SerializeToElement(new { type = "test" }),
+            [],
+            new ActivityResultContract(
+                new ValueTypeDescriptor("Elsa.Unit"),
+                isRequired: true,
+                ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result },
+                []),
+            [ActivityOutcomes.Done],
+            new ActivityActivationRequirement("test", "test.activity"),
+            Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External,
+            supportsBackgroundExecution: supportsBackgroundExecution);
+    }
+
+    [Fact]
+    public async Task Background_safe_unit_activity_compiles_and_only_nondefault_placement_changes_artifact_hashes()
+    {
+        var inline = await CompileBackgroundActivityAsync(
+            typeof(BackgroundSafeUnitActivity),
+            "activity-background-safe-unit",
+            ActivityExecutionPlacement.Inline);
+        var background = await CompileBackgroundActivityAsync(
+            typeof(BackgroundSafeUnitActivity),
+            "activity-background-safe-unit",
+            ActivityExecutionPlacement.Background);
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var inlineAuthoredJson = JsonSerializer.Serialize(Node("authored", Text("hello")), options);
+        var backgroundAuthoredJson = JsonSerializer.Serialize(
+            Node("authored", Text("hello")) with { ExecutionPlacement = ActivityExecutionPlacement.Background },
+            options);
+        var inlineNodeJson = JsonSerializer.Serialize(inline.RootActivity, options);
+        var backgroundNodeJson = JsonSerializer.Serialize(background.RootActivity, options);
+        using var backgroundAuthoredDocument = JsonDocument.Parse(backgroundAuthoredJson);
+        using var backgroundJson = JsonDocument.Parse(backgroundNodeJson);
+        var restoredNode = JsonSerializer.Deserialize<ExecutableNode>(backgroundNodeJson, options)!;
+        var hasher = new WorkflowExecutableHasher();
+
+        Assert.Equal(ActivityExecutionPlacement.Inline, inline.RootActivity.ExecutionPlacement);
+        Assert.Equal(ActivityExecutionPlacement.Background, background.RootActivity.ExecutionPlacement);
+        Assert.True(background.RootActivity.ActivityContract!.SupportsBackgroundExecution);
+        Assert.DoesNotContain("executionPlacement", inlineAuthoredJson, StringComparison.Ordinal);
+        Assert.Equal((int)ActivityExecutionPlacement.Background, backgroundAuthoredDocument.RootElement.GetProperty("executionPlacement").GetInt32());
+        Assert.DoesNotContain("executionPlacement", inlineNodeJson, StringComparison.Ordinal);
+        Assert.Equal((int)ActivityExecutionPlacement.Background, backgroundJson.RootElement.GetProperty("executionPlacement").GetInt32());
+        Assert.Equal(ActivityExecutionPlacement.Background, restoredNode.ExecutionPlacement);
+        Assert.NotEqual(hasher.ComputeHash(inline.RootActivity), hasher.ComputeHash(background.RootActivity));
+        Assert.NotEqual(
+            hasher.ComputeHash(inline.RootActivity, inline.InputContract!, inline.Dependencies),
+            hasher.ComputeHash(background.RootActivity, background.InputContract!, background.Dependencies));
+        Assert.NotEqual(inline.Identity.ArtifactHash, background.Identity.ArtifactHash);
+
+        var scalar = await CompileBackgroundActivityAsync(
+            typeof(BackgroundSafeScalarActivity),
+            "activity-background-safe-scalar",
+            ActivityExecutionPlacement.Background);
+        var dto = await CompileBackgroundActivityAsync(
+            typeof(BackgroundSafeDtoActivity),
+            "activity-background-safe-dto",
+            ActivityExecutionPlacement.Background);
+        Assert.Equal("Int32", scalar.RootActivity.ActivityContract!.Result.Type.Alias);
+        Assert.Equal(TypeAliasConvention.CanonicalAlias(typeof(BackgroundSafeResult)), dto.RootActivity.ActivityContract!.Result.Type.Alias);
+    }
+
+    [Fact]
+    public async Task Background_placement_survives_real_metadata_enrichment_during_publication()
+    {
+        var executable = await BackgroundCompiler(
+                typeof(BackgroundSafeUnitActivity),
+                "activity-background-safe-unit",
+                ActivityExecutionPlacement.Background,
+                metadataEnricher: MetadataEnricher(new FixedMetadataSource("background-node", "runtime.pin", "pinned-value")))
+            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Equal(ActivityExecutionPlacement.Background, executable.RootActivity.ExecutionPlacement);
+        Assert.Equal("pinned-value", executable.RootActivity.Metadata["runtime.pin"]);
+        Assert.True(executable.RootActivity.ActivityContract!.SupportsBackgroundExecution);
+    }
+
+    [Fact]
+    public async Task Background_placement_refuses_an_outcome_only_consumer_even_when_marked_safe()
+    {
+        var inline = await CompileBackgroundActivityAsync(typeof(BackgroundSafeOutcomeConsumer), "outcome-consumer", ActivityExecutionPlacement.Inline);
+        Assert.Equal(ActivityExecutionPlacement.Inline, inline.RootActivity.ExecutionPlacement);
+
+        var refusal = await AssertBackgroundRefusedAsync(BackgroundCompiler(
+            typeof(BackgroundSafeOutcomeConsumer), "outcome-consumer", ActivityExecutionPlacement.Background));
+        Assert.Contains("structural activities and nodes with children", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Background_placement_refuses_unmarked_structural_intrinsic_object_and_sensitive_result_nodes()
+    {
+        var unmarked = await AssertBackgroundRefusedAsync(
+            Compiler(WorkflowVersion(Node("write-one", Text("hello")) with { ExecutionPlacement = ActivityExecutionPlacement.Background })));
+        Assert.Contains("does not declare BackgroundExecutionSafe", unmarked.Message, StringComparison.Ordinal);
+
+        var structuralCompiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(SequenceNode("sequence", []) with { ExecutionPlacement = ActivityExecutionPlacement.Background })),
+            new FakeActivityVersionStore([_sequenceActivity]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create());
+        var structural = await AssertBackgroundRefusedAsync(structuralCompiler);
+        Assert.Contains("structural activities and nodes with children", structural.Message, StringComparison.Ordinal);
+
+        var intrinsicCompiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("intrinsic", "", [], [])
+            {
+                Intrinsic = new AuthoredWorkflowIntrinsic(
+                    AuthoredWorkflowIntrinsicKind.Return,
+                    new TypeReference("String")),
+                ExecutionPlacement = ActivityExecutionPlacement.Background
+            })),
+            new FakeActivityVersionStore([]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create());
+        var intrinsic = await AssertBackgroundRefusedAsync(intrinsicCompiler);
+        Assert.Contains("engine intrinsics cannot run as background activities", intrinsic.Message, StringComparison.Ordinal);
+
+        var untyped = await AssertBackgroundRefusedAsync(BackgroundCompiler(
+            typeof(BackgroundSafeObjectActivity),
+            "activity-background-object",
+            ActivityExecutionPlacement.Background));
+        Assert.Contains("untyped object results are not supported", untyped.Message, StringComparison.Ordinal);
+
+        var transient = await AssertBackgroundRefusedAsync(BackgroundCompiler(
+            typeof(BackgroundSafeStreamActivity),
+            "activity-background-stream",
+            ActivityExecutionPlacement.Background));
+        Assert.Contains("transient result values are not supported", transient.Message, StringComparison.Ordinal);
+
+        var sensitive = await AssertBackgroundRefusedAsync(BackgroundCompiler(
+            typeof(BackgroundSafeResultActivity),
+            "activity-background-sensitive-result",
+            ActivityExecutionPlacement.Background,
+            authoredOutputs:
+            [
+                new ArgumentState(
+                    "value",
+                    new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "result-value" }), "Variable"),
+                    null,
+                    null,
+                    null,
+                    IsSensitive: true)
+            ],
+            variables: [new("result-value", "Result Value", new TypeReference("String"), null, null)]));
+        Assert.Contains("sensitive or encryption-required result values are not supported", sensitive.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Background_placement_rejects_unknown_enum_values_before_compilation()
+    {
+        var compiler = Compiler(WorkflowVersion(Node("write-one", Text("hello")) with
+        {
+            ExecutionPlacement = (ActivityExecutionPlacement)999
+        }));
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("VF-BG-001", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("is not defined", exception.Message, StringComparison.Ordinal);
+    }
+
+    private async Task<WorkflowExecutable> CompileBackgroundActivityAsync(
+        Type activityType,
+        string activityVersionId,
+        ActivityExecutionPlacement placement) =>
+        await BackgroundCompiler(activityType, activityVersionId, placement)
+            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+    private WorkflowExecutableCompiler BackgroundCompiler(
+        Type activityType,
+        string activityVersionId,
+        ActivityExecutionPlacement placement,
+        IReadOnlyCollection<ArgumentState>? authoredOutputs = null,
+        IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition>? variables = null,
+        IExecutableNodeMetadataEnricher? metadataEnricher = null)
+    {
+        var typeAlias = TypeAliasConvention.CanonicalAlias(activityType);
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(activityType, typeAlias);
+        var activityVersion = ClrActivityVersion(activityVersionId, $"test.{activityType.Name}", typeAlias);
+        if (activityType == typeof(BackgroundSafeResultActivity))
+        {
+            activityVersion.Outputs =
+            [
+                new OutputDefinition(
+                    "value",
+                    "Value",
+                    new TypeReference("String"),
+                    null,
+                    "Value",
+                    null,
+                    IsNullable: false,
+                    IsRequired: true)
+            ];
+        }
+
+        return TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(
+                new ActivityNode("background-node", activityVersionId, [], authoredOutputs ?? [])
+                {
+                    ExecutionPlacement = placement
+                },
+                variables: variables)),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            registry,
+            metadataEnricher: metadataEnricher);
+    }
+
+    private static async Task<WorkflowExecutableCompilationException> AssertBackgroundRefusedAsync(
+        WorkflowExecutableCompiler compiler) =>
+        await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
     private static async Task<ExecutableNode> CompileDeclaredInputAsync(string inputKey, string? binding, bool? authoredIsSensitive)
     {
         WorkflowArgumentState[] inputs = binding switch
@@ -305,31 +542,25 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
-    public async Task Compiles_authored_checkpoint_cadence_onto_the_executable_and_into_the_behavioral_hash()
+    public async Task Compiles_the_chosen_persistence_mode_onto_the_executable_and_into_the_behavioral_hash()
     {
-        // The authored cadence flows design → publish → executable and is behavioral content — a cadence
-        // change is a distinct artifact identity, never a silent alias of the same graph.
+        // The chosen mode flows design → publish → executable and is behavioral content: a mode change is a distinct
+        // artifact identity, never a silent alias of the same graph.
         var now = new DateTimeOffset(2026, 7, 20, 12, 0, 0, TimeSpan.Zero);
         var node = Node("write-one", Text("hello"));
-        var unauthored = await Compiler(WorkflowVersion(node)).CompileAsync(NewRequest(now));
-        var coalesced = await Compiler(WorkflowVersionWithCadence(node, new WorkflowCheckpointCadenceOptions
-        {
-            Mode = "Coalesced",
-            MaxSegmentCheckpoints = 8
-        })).CompileAsync(NewRequest(now));
-        var immediate = await Compiler(WorkflowVersionWithCadence(node, new WorkflowCheckpointCadenceOptions
-        {
-            Mode = "Immediate"
-        })).CompileAsync(NewRequest(now));
+        var unchosen = await Compiler(WorkflowVersion(node)).CompileAsync(NewRequest(now));
+        var balanced = await Compiler(WorkflowVersionWithPersistenceMode(node, "Balanced")).CompileAsync(NewRequest(now));
+        var durable = await Compiler(WorkflowVersionWithPersistenceMode(node, "Durable")).CompileAsync(NewRequest(now));
+        var ephemeral = await Compiler(WorkflowVersionWithPersistenceMode(node, "Ephemeral")).CompileAsync(NewRequest(now));
 
-        Assert.Null(unauthored.CheckpointCadence);
-        Assert.Equal(new WorkflowExecutableCheckpointCadence("Coalesced", 8), coalesced.CheckpointCadence);
-        Assert.Equal(new WorkflowExecutableCheckpointCadence("Immediate"), immediate.CheckpointCadence);
+        Assert.Null(unchosen.PersistenceMode);
+        Assert.Equal(PersistenceMode.Balanced, balanced.PersistenceMode);
+        Assert.Equal(PersistenceMode.Durable, durable.PersistenceMode);
+        Assert.Equal(PersistenceMode.Ephemeral, ephemeral.PersistenceMode);
 
-        // Distinct behavior ⇒ distinct content hash; unauthored stays byte-identical to the pre-cadence payload.
-        Assert.NotEqual(unauthored.Identity.ArtifactHash, coalesced.Identity.ArtifactHash);
-        Assert.NotEqual(unauthored.Identity.ArtifactHash, immediate.Identity.ArtifactHash);
-        Assert.NotEqual(coalesced.Identity.ArtifactHash, immediate.Identity.ArtifactHash);
+        // Distinct behavior ⇒ distinct content hash; no choice stays byte-identical to the payload without the field.
+        var hashes = new[] { unchosen, balanced, durable, ephemeral }.Select(executable => executable.Identity.ArtifactHash).ToArray();
+        Assert.Equal(hashes.Length, hashes.Distinct(StringComparer.Ordinal).Count());
     }
 
     [Fact]
@@ -371,41 +602,36 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Contains("example.custom/42", exception.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task Blank_authored_cadence_mode_compiles_as_unauthored()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("  ")]
+    public async Task No_chosen_persistence_mode_compiles_to_the_host_default(string? persistenceMode)
     {
         var now = new DateTimeOffset(2026, 7, 20, 12, 0, 0, TimeSpan.Zero);
         var node = Node("write-one", Text("hello"));
-        var unauthored = await Compiler(WorkflowVersion(node)).CompileAsync(NewRequest(now));
-        var blank = await Compiler(WorkflowVersionWithCadence(node, new WorkflowCheckpointCadenceOptions()))
-            .CompileAsync(NewRequest(now));
+        var unchosen = await Compiler(WorkflowVersion(node)).CompileAsync(NewRequest(now));
+        var blank = await Compiler(WorkflowVersionWithPersistenceMode(node, persistenceMode)).CompileAsync(NewRequest(now));
 
-        Assert.Null(blank.CheckpointCadence);
-        Assert.Equal(unauthored.Identity.ArtifactHash, blank.Identity.ArtifactHash);
+        Assert.Null(blank.PersistenceMode);
+        Assert.Equal(unchosen.Identity.ArtifactHash, blank.Identity.ArtifactHash);
     }
 
-    [Fact]
-    public async Task Unrecognised_checkpoint_cadence_alias_fails_publication()
+    [Theory]
+    [InlineData("EveryOtherTuesday")]
+    [InlineData("balanced")]
+    [InlineData("ephemeral")]
+    [InlineData("1")]
+    [InlineData("Immediate")]
+    [InlineData("Coalesced")]
+    public async Task Unrecognized_persistence_mode_fails_publication(string persistenceMode)
     {
-        var compiler = Compiler(WorkflowVersionWithCadence(
-            Node("write-one", Text("hello")),
-            new WorkflowCheckpointCadenceOptions { Mode = "EveryOtherTuesday" }));
+        var compiler = Compiler(WorkflowVersionWithPersistenceMode(Node("write-one", Text("hello")), persistenceMode));
 
         var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
             () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
 
-        Assert.Contains("EveryOtherTuesday", exception.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task Non_positive_authored_segment_cap_fails_publication()
-    {
-        var compiler = Compiler(WorkflowVersionWithCadence(
-            Node("write-one", Text("hello")),
-            new WorkflowCheckpointCadenceOptions { Mode = "Coalesced", MaxSegmentCheckpoints = 0 }));
-
-        await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
-            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+        Assert.Contains($"'{persistenceMode}'", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -423,7 +649,7 @@ public sealed class WorkflowExecutableCompilerTests
                 "local-child", "local-child", "test.child", "1",
                 new("test.child", "1", JsonSerializer.SerializeToElement(new { plan = 2 })),
                 new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>())])],
-            activityContract: BoundaryRuntimeContract(hasValueInput: true));
+            activityContract: BoundaryRuntimeContract(hasValueInput: true, outputProjectionKey: "result"));
         var template = new ExecutableActivityTemplate(
             "template-reusable", "hash-reusable", root, new Dictionary<string, WorkflowExecutableResumeTarget>(),
             [], [], [], "fingerprint", new Dictionary<string, string>(), DateTimeOffset.UnixEpoch);
@@ -478,7 +704,7 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
         Assert.Equal("JavaScript", binding.Expression!.Language);
         Assert.Equal("40 + 2", binding.Expression.Expression);
-        var capture = executable.RootActivity.OutputCaptures["Result"];
+        var capture = executable.RootActivity.OutputCaptures["result"];
         Assert.Equal("variable:CallerResult", capture.ValueId);
         Assert.Equal("CallerResult", capture.Metadata[RuntimeMetadataKeys.VariableName]);
         Assert.True(capture.CaptureOnSuccessfulCompletion);
@@ -507,6 +733,144 @@ public sealed class WorkflowExecutableCompilerTests
         var binding = executable.RootActivity.InputBindings["value"];
         Assert.Equal(RuntimeInputBindingSource.Literal, binding.Source);
         Assert.Equal(42, binding.LiteralValue!.Value.GetInt32());
+    }
+
+    [Fact]
+    public async Task Placed_reusable_activity_rejects_an_omitted_optional_nonnullable_reference_input_during_compile()
+    {
+        var compiler = PlacedReusableCompiler(
+            authoredInput: null,
+            valueTypeAlias: "String",
+            primaryInputIsRequired: false);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains(
+            "VF-ACT-003: Optional input 'value' with non-nullable type alias 'String' requires an authored binding or pinned default.",
+            exception.Message,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Placed_reusable_activity_accepts_an_authored_value_for_an_optional_nonnullable_reference_input()
+    {
+        var compiler = PlacedReusableCompiler(
+            new WorkflowArgumentState("value", new ArgumentValue(JsonSerializer.SerializeToElement("hello"), "Literal"), null, null, null, null),
+            valueTypeAlias: "String",
+            primaryInputIsRequired: false);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Equal("hello", executable.RootActivity.InputBindings["value"].LiteralValue!.Value.GetString());
+    }
+
+    [Fact]
+    public async Task Placed_reusable_activity_materializes_an_omitted_optional_nullable_reference_input_as_absent()
+    {
+        var executable = await PlacedReusableCompiler(
+                authoredInput: null,
+                valueTypeAlias: "String",
+                primaryInputIsRequired: false,
+                primaryInputIsNullable: true)
+            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+        var materializer = new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), TestWellKnownTypeRegistry.Create());
+
+        var snapshot = await materializer.MaterializeSnapshotAsync(
+            executable.RootActivity,
+            "consumer-execution",
+            new RuntimeInputBindingResolutionContext("workflow-execution", "consumer-execution", executable: executable),
+            DateTimeOffset.UnixEpoch);
+
+        Assert.Equal(ValuePresence.Absent, snapshot.Values["value"].Presence);
+    }
+
+    [Fact]
+    public async Task Placed_reusable_activity_pins_the_clr_default_for_an_omitted_optional_nonnullable_value_input()
+    {
+        var executable = await PlacedReusableCompiler(
+                authoredInput: null,
+                valueTypeAlias: "Int32",
+                primaryInputIsRequired: false)
+            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+        var materializer = new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), TestWellKnownTypeRegistry.Create());
+
+        var snapshot = await materializer.MaterializeSnapshotAsync(
+            executable.RootActivity,
+            "consumer-execution",
+            new RuntimeInputBindingResolutionContext("workflow-execution", "consumer-execution", executable: executable),
+            DateTimeOffset.UnixEpoch);
+
+        Assert.Equal(0, snapshot.Values["value"].InlineValue!.Value.GetInt32());
+    }
+
+    [Fact]
+    public async Task Placed_reusable_activity_still_rejects_an_omitted_required_input()
+    {
+        var compiler = PlacedReusableCompiler(authoredInput: null, valueTypeAlias: "String");
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("missing required input 'value'", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Background_placement_refuses_a_reusable_activity_boundary()
+    {
+        var compiler = PlacedReusableCompiler(
+            new WorkflowArgumentState("value", new ArgumentValue(JsonSerializer.SerializeToElement(42), "Literal"), null, null, null, null),
+            executionPlacement: ActivityExecutionPlacement.Background);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("VF-BG-001", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("reusable activity boundaries are not supported", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Placed_reusable_activity_materializes_codec_backed_inputs_inline_without_an_external_payload_store()
+    {
+        var compiler = PlacedReusableCompiler(
+            new WorkflowArgumentState("A", new ArgumentValue(JsonSerializer.SerializeToElement(19), "Literal"), null, null, null, null),
+            extraInputs:
+            [
+                ("Int32", new WorkflowArgumentState("B", new ArgumentValue(JsonSerializer.SerializeToElement(23), "Literal"), null, null, null, null))
+            ]);
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+        var boundary = executable.RootActivity;
+        var materializer = new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), TestWellKnownTypeRegistry.Create());
+
+        var snapshot = await materializer.MaterializeSnapshotAsync(
+            boundary,
+            "consumer-execution",
+            new RuntimeInputBindingResolutionContext("workflow-execution", "consumer-execution", executable: executable),
+            DateTimeOffset.UnixEpoch);
+
+        Assert.Equal(19, snapshot.Values["A"].InlineValue!.Value.GetInt32());
+        Assert.Equal(23, snapshot.Values["B"].InlineValue!.Value.GetInt32());
+        Assert.Equal(DurableValueStorage.Inline, boundary.InputBindings["A"].EffectivePolicy.Storage);
+        Assert.Equal(DurableValueStorage.Inline, boundary.InputBindings["B"].EffectivePolicy.Storage);
+    }
+
+    [Fact]
+    public async Task Placed_reusable_activity_preserves_an_explicit_external_input_profile()
+    {
+        var authoredInput = new WorkflowArgumentState(
+            "value",
+            new ArgumentValue(JsonSerializer.SerializeToElement(19), "Literal"),
+            null,
+            null,
+            "external-input-profile",
+            null);
+        var executable = await PlacedReusableCompiler(authoredInput).CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+        var binding = executable.RootActivity.InputBindings["value"];
+
+        Assert.Equal(DurableValueStorage.External, binding.EffectivePolicy.Storage);
+        Assert.Equal(
+            "external-input-profile",
+            binding.EffectivePolicy.Metadata[ValuePolicyCombiner.StorageProfileMetadataKey]);
     }
 
     [Fact]
@@ -568,10 +932,13 @@ public sealed class WorkflowExecutableCompilerTests
             SecretInput("value"),
             "String",
             Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External,
-            ("Int32", new WorkflowArgumentState(
-                "aaa",
-                new ArgumentValue(JsonSerializer.SerializeToElement("not-a-number"), "Literal"),
-                null, null, null, null)));
+            extraInputs:
+            [
+                ("Int32", new WorkflowArgumentState(
+                    "aaa",
+                    new ArgumentValue(JsonSerializer.SerializeToElement("not-a-number"), "Literal"),
+                    null, null, null, null))
+            ]);
 
         var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
             () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
@@ -589,7 +956,7 @@ public sealed class WorkflowExecutableCompilerTests
             SecretInput("value"),
             "String",
             Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External,
-            ("String", SecretInput("beta")));
+            extraInputs: [("String", SecretInput("beta"))]);
 
         var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
             () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
@@ -606,22 +973,32 @@ public sealed class WorkflowExecutableCompilerTests
         null, null, null, null);
 
     /// <summary>
-    /// A workflow that places one design-owned reusable activity whose boundary has a contract input <c>value</c>
-    /// (Int32 unless <paramref name="valueTypeAlias"/> says otherwise), authored as <paramref name="authoredInput"/>, plus
-    /// one contract input per <paramref name="extraInputs"/> entry, authored as its state and typed by its alias.
+    /// A workflow that places one design-owned reusable activity with a primary boundary contract input <c>value</c>
+    /// (Int32 unless <paramref name="valueTypeAlias"/> says otherwise), optionally authored as <paramref name="authoredInput"/>,
+    /// plus one required contract input per <paramref name="extraInputs"/> entry, authored as its state and typed by its alias.
     /// </summary>
     private WorkflowExecutableCompiler PlacedReusableCompiler(
-        WorkflowArgumentState authoredInput,
+        WorkflowArgumentState? authoredInput,
         string valueTypeAlias = "Int32",
         Elsa.Activities.Runtime.Core.Models.SideEffectProfile templateRootProfile = Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External,
+        ActivityExecutionPlacement executionPlacement = ActivityExecutionPlacement.Inline,
+        bool primaryInputIsRequired = true,
+        bool primaryInputIsNullable = false,
         params (string TypeAlias, WorkflowArgumentState State)[] extraInputs)
     {
+        var primaryInputKey = authoredInput?.ReferenceKey ?? "value";
+        var primaryInputName = StringComparer.Ordinal.Equals(primaryInputKey, "value")
+            ? "Value"
+            : primaryInputKey;
         var contract = new DesignActivityContract("1", [new DesignActivityInputContract(
-            "value", "Value", new TypeReference(valueTypeAlias), true,
-            false, null, "elsa.json"), ..extraInputs.Select(extra => new DesignActivityInputContract(
+            primaryInputKey, primaryInputName, new TypeReference(valueTypeAlias), primaryInputIsRequired,
+            primaryInputIsNullable, null, "elsa.json"), ..extraInputs.Select(extra => new DesignActivityInputContract(
             extra.State.ReferenceKey, extra.State.ReferenceKey, new TypeReference(extra.TypeAlias), true,
             false, null, "elsa.json"))], [new ActivityOutputContract(
             "result", "Result", new TypeReference("Int32"), true, false, "elsa.json")], []);
+        var authoredInputs = extraInputs.Select(extra => extra.State).ToList();
+        if (authoredInput is not null)
+            authoredInputs.Insert(0, authoredInput);
         var root = new ExecutableNode(
             "local-root", "local-root", "test.boundary", "1",
             new("test.boundary", "1", JsonSerializer.SerializeToElement(new { plan = 1 })),
@@ -633,7 +1010,20 @@ public sealed class WorkflowExecutableCompilerTests
             activityContract: BoundaryRuntimeContract(
                 hasValueInput: true,
                 valueTypeAlias: valueTypeAlias,
-                sideEffectProfile: templateRootProfile));
+                sideEffectProfile: templateRootProfile,
+                inputKey: primaryInputKey,
+                inputName: primaryInputName,
+                inputIsRequired: primaryInputIsRequired,
+                inputIsNullable: primaryInputIsNullable,
+                additionalInputs: extraInputs.Select(extra => new Elsa.Activities.Runtime.Core.Models.ActivityInputContract(
+                    extra.State.ReferenceKey,
+                    extra.State.ReferenceKey,
+                    new ValueTypeDescriptor(extra.TypeAlias),
+                    isRequired: true,
+                    isNullable: false,
+                    hasDefault: false,
+                    defaultValue: null,
+                    policy: ActivityValuePolicy.Default)).ToArray()));
         var template = new ExecutableActivityTemplate(
             "template-greet", "hash-greet", root, new Dictionary<string, WorkflowExecutableResumeTarget>(),
             [], [], [], "fingerprint", new Dictionary<string, string>(), DateTimeOffset.UnixEpoch);
@@ -669,7 +1059,10 @@ public sealed class WorkflowExecutableCompilerTests
             null, null, null, null);
         return TestCompiler.Create(
             new FakeVersionStore(WorkflowVersion(
-                new ActivityNode("use-greet", publication.DefinitionVersionId, [authoredInput, ..extraInputs.Select(extra => extra.State)], [outputTarget]),
+            new ActivityNode("use-greet", publication.DefinitionVersionId, authoredInputs, [outputTarget])
+            {
+                ExecutionPlacement = executionPlacement
+            },
                 variables: [new("caller-result", "CallerResult", new TypeReference("Int32"), null, null)])),
             new FakeActivityVersionStore([]),
             _activityStructureService,
@@ -1023,10 +1416,10 @@ public sealed class WorkflowExecutableCompilerTests
         var contract = new DesignActivityContract(
             "1",
             [],
-            [new("result", "Result", new TypeReference("Object"), true, false, driver.DriverKey)],
+            [new("sum", "Sum", new TypeReference("Object"), true, false, driver.DriverKey)],
             []);
         var outputTarget = new WorkflowArgumentState(
-            "result",
+            "sum",
             new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "caller-result" }), "Variable"),
             null, null, null, null);
         var captures = new RuntimeOutputCaptureCompiler(storageDrivers).CompileBoundaryOutputs(
@@ -1042,7 +1435,7 @@ public sealed class WorkflowExecutableCompilerTests
                 "local-child", "local-child", "test.child", "1",
                 new("test.child", "1", JsonSerializer.SerializeToElement(new { plan = 2 })),
                 new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>())])],
-            activityContract: BoundaryRuntimeContract(hasValueInput: false));
+            activityContract: BoundaryRuntimeContract(hasValueInput: false, outputProjectionKey: "sum"));
         var template = new ExecutableActivityTemplate(
             "template-custom", "hash-custom", root, new Dictionary<string, WorkflowExecutableResumeTarget>(),
             [], [], [], "fingerprint", new Dictionary<string, string>(), DateTimeOffset.UnixEpoch);
@@ -1076,7 +1469,8 @@ public sealed class WorkflowExecutableCompilerTests
             new ReusableSourceReader(sourceReference),
             new Sha256ActivityPlacementHasher(),
             _activityStructureService,
-            new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create()));
+            new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create()),
+            new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()])));
         var placed = await placer.PlaceAsync(new(
             publication,
             template,
@@ -1098,7 +1492,7 @@ public sealed class WorkflowExecutableCompilerTests
 
         // #972: the externalized payload lands in the root variable frame as an External envelope — the
         // custom driver's encoding (storage profile + locator) is preserved end-to-end.
-        Assert.Equal(driver.DriverKey, placed.Root.OutputCaptures["Result"].StorageDriverKey);
+        Assert.Equal(driver.DriverKey, placed.Root.OutputCaptures["sum"].StorageDriverKey);
         Assert.NotNull(captured.ExternalReference);
         Assert.Equal(driver.DriverKey, captured.ExternalReference!.StorageProfile);
         Assert.Equal(DurableValueStorage.External, captured.Policy.Storage);
@@ -1139,14 +1533,16 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.NotNull(capture.ConversionPlan);
     }
 
-    [Fact]
-    public void Leaf_result_projection_without_an_authored_target_produces_no_capture()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Leaf_result_projection_without_an_authored_target_produces_no_capture(bool isRequired)
     {
         var projection = new ActivityResultProjectionContract(
             "Value",
             "value",
             new ValueTypeDescriptor("String"),
-            isRequired: false,
+            isRequired: isRequired,
             policy: ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result });
 
         var captures = LeafOutputCompiler().CompileResultProjectionOutputs(
@@ -1154,6 +1550,19 @@ public sealed class WorkflowExecutableCompilerTests
             [projection],
             [],
             [new("orderId", "OrderId", new TypeReference("String"), null, null)]);
+
+        Assert.Empty(captures);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Reusable_output_without_an_authored_target_produces_no_capture(bool isRequired)
+    {
+        var output = new ActivityOutputContract(
+            "result", "Result", new TypeReference("String"), isRequired, false, "elsa.json");
+
+        var captures = LeafOutputCompiler().CompileBoundaryOutputs("use-reusable", [output], [], []);
 
         Assert.Empty(captures);
     }
@@ -1793,6 +2202,79 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal("Trigger", executable.RootActivity.Metadata[TriggerNodeMetadata.ExecutionTypeKey]);
     }
 
+    public static TheoryData<Type, string?> StructuralFaultHandlingCases => new()
+    {
+        { typeof(ChildFaultHandlingProbe), RuntimeMetadataKeys.StructuralFaultHandlingChild },
+        { typeof(DescendantFaultHandlingProbe), RuntimeMetadataKeys.StructuralFaultHandlingDescendant },
+        { typeof(LegacyTriggerActivity), null }
+    };
+
+    [Theory]
+    [MemberData(nameof(StructuralFaultHandlingCases))]
+    public async Task The_node_carries_how_it_handles_faults_below_it_only_when_it_handles_them(Type activityType, string? expected)
+    {
+        var activityVersion = LegacyTriggerActivityVersion(activityType);
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(activityType, TypeAliasConvention.CanonicalAlias(activityType));
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("node", activityVersion.Id, [], []))),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            registry);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        // Spec 258 R-3: read by the runtime when a fault passes a composite that does not handle it.
+        Assert.Equal(expected, executable.RootActivity.Metadata.GetValueOrDefault(RuntimeMetadataKeys.StructuralFaultHandling));
+    }
+
+    public static TheoryData<Type, string?> AcceptsRescheduledFaultedChildCases => new()
+    {
+        { typeof(RescheduledFaultedChildProbe), "true" },
+        { typeof(ChildFaultHandlingProbe), null },
+        { typeof(LegacyTriggerActivity), null }
+    };
+
+    [Theory]
+    [MemberData(nameof(AcceptsRescheduledFaultedChildCases))]
+    public async Task The_node_says_it_accepts_a_rescheduled_faulted_child_only_when_its_type_opts_in(Type activityType, string? expected)
+    {
+        var activityVersion = LegacyTriggerActivityVersion(activityType);
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(activityType, TypeAliasConvention.CanonicalAlias(activityType));
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("node", activityVersion.Id, [], []))),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            registry);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        // #3135: read by the RescheduleActivity preflight for a faulted child this node already evaluated.
+        Assert.Equal(expected, executable.RootActivity.Metadata.GetValueOrDefault(RuntimeMetadataKeys.AcceptsRescheduledFaultedChild));
+    }
+
+    private sealed class RescheduledFaultedChildProbe : IActivityResult<ActivityUnit>, IRuntimeActivityChildCompletionHandler, IRuntimeAcceptsRescheduledFaultedChild
+    {
+        public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
+    }
+
+    private sealed class ChildFaultHandlingProbe : IActivityResult<ActivityUnit>, IRuntimeActivityChildFaultHandler
+    {
+        public ValueTask<RuntimeStructuralContinuation> OnChildFaultedAsync(ActivityChildFaultedContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+    }
+
+    private sealed class DescendantFaultHandlingProbe : IActivityResult<ActivityUnit>, IRuntimeActivityChildFaultHandler, IRuntimeActivityDescendantFaultHandler
+    {
+        public ValueTask<RuntimeStructuralContinuation> OnChildFaultedAsync(ActivityChildFaultedContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+
+        public ValueTask<RuntimeStructuralContinuation> OnDescendantFaultedAsync(ActivityDescendantFaultedContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+    }
+
     public static TheoryData<Type, string> FirstPartyClrTriggers => new()
     {
         { typeof(EventActivity), EventActivity.ActivityType },
@@ -2179,7 +2661,30 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal("var-message", setNode.IntrinsicVariable?.VariableKey);
     }
 
-    private static ActivityNode SetIntrinsicNode(string nodeId, string variableKey) =>
+    [Fact]
+    public async Task Set_intrinsic_with_an_empty_scope_targets_the_workflow_variable()
+    {
+        var message = new Elsa.Expressions.Core.Models.VariableDefinition(
+            ReferenceKey: "var-message",
+            Name: "Message",
+            Type: new TypeReference("String"),
+            StorageDriverType: null,
+            Default: null);
+        var compiler = Compiler(WorkflowVersion(
+            SequenceNode("sequence", [SetIntrinsicNode("set-1", "var-message", declaringScopeId: "")]),
+            variables: [message]));
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Equal(
+            Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId,
+            executable.NodesById["set-1"].IntrinsicVariable?.DeclaringScopeId);
+    }
+
+    private static ActivityNode SetIntrinsicNode(
+        string nodeId,
+        string variableKey,
+        string? declaringScopeId = Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId) =>
         new(
             nodeId,
             "$intrinsic",
@@ -2192,9 +2697,7 @@ public sealed class WorkflowExecutableCompilerTests
             Intrinsic = new AuthoredWorkflowIntrinsic(
                 AuthoredWorkflowIntrinsicKind.Set,
                 new TypeReference("String"),
-                new Elsa.Expressions.Core.Models.VariableReference(
-                    variableKey,
-                    Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId))
+                new Elsa.Expressions.Core.Models.VariableReference(variableKey, declaringScopeId))
         };
 
     [Fact]
@@ -2595,7 +3098,8 @@ public sealed class WorkflowExecutableCompilerTests
                 references,
                 new Sha256ActivityPlacementHasher(),
                 _activityStructureService,
-                inputCompiler),
+                inputCompiler,
+                outputCompiler),
             inputCompiler,
             outputCompiler,
             new WorkflowExecutableHasher(),
@@ -2638,6 +3142,60 @@ public sealed class WorkflowExecutableCompilerTests
     private static ActivityNode ResumeNode(string nodeId) => new(nodeId, "activity-probe", Inputs: [], Outputs: []);
 
     private readonly ActivityDefinitionVersion _resumeProbeActivity = ActivityVersion("activity-probe", typeof(ResumeProbeActivity).FullName!);
+
+    [BackgroundExecutionSafe]
+    private sealed class BackgroundSafeOutcomeConsumer : Activity, IRuntimeActivityChildOutcomeHandler
+    {
+        protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition<ActivityUnit>.Complete(ActivityUnit.Value));
+
+        public ValueTask<RuntimeStructuralContinuation> OnChildOutcomeAsync(ActivityChildOutcomeContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+    }
+
+    [BackgroundExecutionSafe]
+    private sealed class BackgroundSafeUnitActivity : Activity
+    {
+        protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition<ActivityUnit>.Complete(ActivityUnit.Value));
+    }
+
+    [BackgroundExecutionSafe]
+    private sealed class BackgroundSafeObjectActivity : Activity<object>
+    {
+        protected override ValueTask<ActivityTransition<object>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition<object>.Complete(new object()));
+    }
+
+    [BackgroundExecutionSafe]
+    private sealed class BackgroundSafeScalarActivity : Activity<int>
+    {
+        protected override ValueTask<ActivityTransition<int>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition<int>.Complete(42));
+    }
+
+    private sealed record BackgroundSafeResult([property: Output(Key = "value")] string Value);
+
+    [BackgroundExecutionSafe]
+    private sealed class BackgroundSafeResultActivity : Activity<BackgroundSafeResult>
+    {
+        protected override ValueTask<ActivityTransition<BackgroundSafeResult>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition<BackgroundSafeResult>.Complete(new BackgroundSafeResult("result")));
+    }
+
+    [BackgroundExecutionSafe]
+    private sealed class BackgroundSafeDtoActivity : Activity<BackgroundSafeResult>
+    {
+        protected override ValueTask<ActivityTransition<BackgroundSafeResult>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition<BackgroundSafeResult>.Complete(new BackgroundSafeResult("result")));
+    }
+
+    [BackgroundExecutionSafe]
+    private sealed class BackgroundSafeStreamActivity : Activity<System.IO.Stream>
+    {
+        protected override ValueTask<ActivityTransition<System.IO.Stream>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete<System.IO.Stream>(new System.IO.MemoryStream()));
+    }
 
     // A minimal type carrying a [ResumeTarget] handler plus the typed-result marker the publish-time
     // contract gate requires of every resolvable CLR activity.
@@ -2706,9 +3264,9 @@ public sealed class WorkflowExecutableCompilerTests
             _descriptors.TryGetValue(reference, out descriptor!);
     }
 
-    private static WorkflowDefinitionVersion WorkflowVersionWithCadence(
+    private static WorkflowDefinitionVersion WorkflowVersionWithPersistenceMode(
         ActivityNode? rootActivity,
-        WorkflowCheckpointCadenceOptions checkpointCadence) =>
+        string? persistenceMode) =>
         new("definition-1", "1.0.0")
         {
             Id = "version-1",
@@ -2718,7 +3276,7 @@ public sealed class WorkflowExecutableCompilerTests
                 rootActivity,
                 [],
                 [],
-                new WorkflowStrategyOptions { CheckpointCadence = checkpointCadence })
+                new WorkflowStrategyOptions { PersistenceMode = persistenceMode })
         };
 
     private static InputDefinition WorkflowInput(
@@ -2795,24 +3353,32 @@ public sealed class WorkflowExecutableCompilerTests
     private static Elsa.Activities.Runtime.Core.Models.ActivityContract BoundaryRuntimeContract(
         bool hasValueInput,
         string valueTypeAlias = "Int32",
-        Elsa.Activities.Runtime.Core.Models.SideEffectProfile sideEffectProfile = Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External)
+        Elsa.Activities.Runtime.Core.Models.SideEffectProfile sideEffectProfile = Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External,
+        string outputProjectionKey = "Result",
+        string inputKey = "value",
+        string? inputName = null,
+        bool inputIsRequired = true,
+        bool inputIsNullable = false,
+        IReadOnlyCollection<Elsa.Activities.Runtime.Core.Models.ActivityInputContract>? additionalInputs = null)
     {
         var descriptor = JsonSerializer.SerializeToElement(new { plan = 1 });
         var valueType = new ValueTypeDescriptor("Object");
-        var inputs = hasValueInput
-            ? new[]
-            {
-                new Elsa.Activities.Runtime.Core.Models.ActivityInputContract(
-                    "value",
-                    "Value",
-                    new ValueTypeDescriptor(valueTypeAlias),
-                    isRequired: true,
-                    isNullable: false,
-                    hasDefault: false,
-                    defaultValue: null,
-                    policy: ActivityValuePolicy.Default)
-            }
-            : [];
+        var inputs = (hasValueInput
+                ? new[]
+                {
+                    new Elsa.Activities.Runtime.Core.Models.ActivityInputContract(
+                        inputKey,
+                        inputName ?? "Value",
+                        new ValueTypeDescriptor(valueTypeAlias),
+                        isRequired: inputIsRequired,
+                        isNullable: inputIsNullable,
+                        hasDefault: false,
+                        defaultValue: null,
+                        policy: ActivityValuePolicy.Default)
+                }
+                : [])
+            .Concat(additionalInputs ?? [])
+            .ToArray();
         return new Elsa.Activities.Runtime.Core.Models.ActivityContract(
             "test.boundary",
             "1",
@@ -2824,7 +3390,7 @@ public sealed class WorkflowExecutableCompilerTests
                 isRequired: true,
                 policy: ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result },
                 projections: [new ActivityResultProjectionContract(
-                    "Result",
+                    outputProjectionKey,
                     "$",
                     valueType,
                     isRequired: true,

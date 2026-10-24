@@ -528,6 +528,23 @@ public sealed class EfCoreIdentityFrameworkContractTests
     }
 
     [Fact]
+    public async Task Cookie_of_a_user_disabled_after_sign_in_is_rejected_and_signed_out()
+    {
+        await using var scenario = await EfCoreIdentityScenario.CreateAsync();
+        var user = await scenario.CreateUserAsync("CookieDisabled");
+        var events = scenario.Services.GetRequiredService<EfCoreIdentityCookieEvents>();
+        var beforeDisable = CreateCookieContext(scenario.Services, user.Id, scenario.TenantId, user.SecurityStamp);
+        await events.ValidatePrincipal(beforeDisable);
+
+        Assert.True(await scenario.Services.GetRequiredService<IUserStore>().SetStatusAsync(scenario.TenantId, user.Id, UserStatus.Disabled));
+        var afterDisable = CreateCookieContext(scenario.Services, user.Id, scenario.TenantId, user.SecurityStamp);
+        await events.ValidatePrincipal(afterDisable);
+
+        Assert.NotNull(beforeDisable.Principal);
+        Assert.Null(afterDisable.Principal);
+    }
+
+    [Fact]
     public async Task Cookie_missing_security_stamp_is_rejected_and_signed_out()
     {
         await using var scenario = await EfCoreIdentityScenario.CreateAsync();
@@ -624,7 +641,7 @@ public sealed class EfCoreIdentityFrameworkContractTests
         Assert.Single(schemes, scheme => scheme.Name == AspNetCoreIdentityDefaults.CookieScheme);
     }
 
-    // Kept beside the composition test (§2.23.1): idempotence, an equivalent seeded composition registers one seeder.
+    // Kept beside the composition test: idempotence, an equivalent seeded composition registers one seeder.
     [Fact]
     public void Equivalent_seeded_composition_registers_one_seeder()
     {
@@ -656,7 +673,8 @@ public sealed class EfCoreIdentityFrameworkContractTests
 
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfCoreIdentitySeeder));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IOptions<IdentitySeedOptions>));
-        Assert.Equal(2, services.Count(descriptor => descriptor.ServiceType == typeof(IShellInitializer)));
+        // The persistence authority, the seeder and the unknown role grant reporter, each once.
+        Assert.Equal(3, services.Count(descriptor => descriptor.ServiceType == typeof(IShellInitializer)));
     }
 
     [Fact]
@@ -936,7 +954,7 @@ public sealed class EfCoreIdentityFrameworkContractTests
             iterations: 10);
     }
 
-    // Kept beside the composition test (§2.23.1): conditional registration, no seed options without a configured seed, one authority marker.
+    // Kept beside the composition test: conditional registration, no seed options without a configured seed, one authority marker.
     [Fact]
     public void Feature_can_be_configured_without_adding_a_second_authority_marker()
     {
@@ -961,6 +979,7 @@ public sealed class EfCoreIdentityFrameworkContractTests
             typeof(IdentityIamDbContext),
             typeof(IUserStore),
             typeof(IRevisionAwareUserStore),
+            typeof(IPagedUserStore),
             typeof(IRoleStore),
             typeof(IRevisionAwareRoleStore),
             typeof(IPagedRoleStore),

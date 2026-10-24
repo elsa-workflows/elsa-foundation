@@ -1,3 +1,4 @@
+using System.Text.Json;
 using CShells.Features;
 using Elsa.Modularity.Core.Models;
 using Elsa.Modularity.Nuplane.Services;
@@ -73,6 +74,8 @@ public sealed class RuntimeFeatureCatalogTests
         await contributor.ContributeAsync(context);
 
         Assert.Equal(FeatureSourceKinds.Manifest, context.Items["ManifestFeature"].SourceKind);
+        var item = JsonSerializer.SerializeToElement(context.Items["ManifestFeature"].ToItem(), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.True(item.GetProperty("runtimeAvailable").GetBoolean());
     }
 
     [Fact]

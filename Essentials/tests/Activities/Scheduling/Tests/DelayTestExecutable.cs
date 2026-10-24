@@ -4,7 +4,7 @@ using Elsa.Activities.Scheduling.Activities;
 using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -20,7 +20,7 @@ internal static class DelayTestExecutable
 
     public static WorkflowExecutable Create(TimeSpan duration, DateTimeOffset createdAt)
     {
-        var serializer = new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
+        var serializer = SerializationServices.PayloadSerializer();
         var alias = TypeAliasConvention.CanonicalAlias(typeof(Delay));
         var descriptor = serializer.SerializeToElement(new ClrActivityDescriptor(alias));
         var contract = new ActivityContract(

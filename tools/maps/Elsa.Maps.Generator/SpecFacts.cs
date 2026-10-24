@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace Elsa.Maps.Generator;
 
 /// <summary>Status clues read from one <c>specs/&lt;id&gt;/</c> folder. Textual, not authoritative workflow state.</summary>
@@ -11,10 +13,8 @@ public sealed record SpecFacts(
     string Notes);
 
 /// <summary>Reads the spec folders for the spec-status map.</summary>
-public static class SpecScanner
+public static partial class SpecScanner
 {
-    private static readonly string[] NoteKeywords = ["superseded", "retained", "deferred", "out of scope", "construct-only"];
-
     /// <summary>Every spec folder, in ordinal id order.</summary>
     public static IReadOnlyList<SpecFacts> Read(RepoContext repo)
     {
@@ -43,18 +43,14 @@ public static class SpecScanner
             var text = File.ReadAllText(specFile);
             var lines = text.Split('\n');
 
-            var titleLine = lines.FirstOrDefault(line => line.StartsWith("# Feature Specification:", StringComparison.Ordinal));
-            if (titleLine is not null)
-            {
-                var separator = titleLine.IndexOf(": ", StringComparison.Ordinal);
-                if (separator >= 0) title = titleLine[(separator + 2)..].TrimEnd('\r');
-            }
+            title = ReadTitle(lines, id);
 
             var statusLine = lines.FirstOrDefault(line => line.StartsWith("**Status**:", StringComparison.Ordinal));
             if (statusLine is not null) status = statusLine["**Status**: ".Length..].TrimEnd('\r');
 
-            var lower = text.ToLowerInvariant();
-            notes = string.Join(", ", NoteKeywords.Where(keyword => lower.Contains(keyword, StringComparison.Ordinal)));
+            const string notesMarker = "**Notes**:";
+            var notesLine = lines.FirstOrDefault(line => line.StartsWith(notesMarker, StringComparison.Ordinal));
+            if (notesLine is not null) notes = notesLine[notesMarker.Length..].Trim();
         }
 
         var verdict = "-";
@@ -70,6 +66,25 @@ public static class SpecScanner
 
         return new SpecFacts(id, title, status, verdict, done, open, notes.Length > 0 ? notes : "-");
     }
+
+    private static string ReadTitle(string[] lines, string id)
+    {
+        var speckitTitle = lines.FirstOrDefault(line => line.StartsWith("# Feature Specification:", StringComparison.Ordinal));
+        if (speckitTitle is not null)
+        {
+            var separator = speckitTitle.IndexOf(": ", StringComparison.Ordinal);
+            return separator >= 0 ? speckitTitle[(separator + 2)..].TrimEnd('\r') : id;
+        }
+
+        var heading = lines.FirstOrDefault(line => line.StartsWith("# ", StringComparison.Ordinal));
+        if (heading is null) return id;
+
+        var title = SpecNumberPrefixPattern().Replace(heading[2..].Trim(), string.Empty).Trim();
+        return title.Length > 0 ? title : id;
+    }
+
+    [GeneratedRegex(@"^[0-9]+\s+[—-](?:\s+|$)")]
+    private static partial Regex SpecNumberPrefixPattern();
 
     private static (int Done, int Open) CountTasks(string tasksFile)
     {

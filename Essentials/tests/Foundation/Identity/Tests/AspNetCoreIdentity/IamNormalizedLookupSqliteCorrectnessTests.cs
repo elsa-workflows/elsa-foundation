@@ -12,7 +12,7 @@ namespace Elsa.Foundation.Identity.Tests.AspNetCoreIdentity;
 /// <summary>
 /// The timing-free IAM normalized-lookup scenario over the EF Core SQLite-backed ASP.NET Core Identity stores. It
 /// used to run the retired store-performance workload and compare a ratified result digest; performance measurement
-/// was retired by owner decision (#1668, ADR 0073), so the scenario's observable results are asserted directly and the
+/// was retired by owner decision (#1668), so the scenario's observable results are asserted directly and the
 /// native-plan acceptance test that shared this file is retired with it.
 /// </summary>
 [Trait("Category", "Sqlite")]
@@ -44,7 +44,6 @@ public sealed class IamNormalizedLookupSqliteCorrectnessTests : IDisposable
     public void Dispose()
     {
         _db.Dispose();
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
         foreach (var file in new[] { _databasePath, $"{_databasePath}-wal", $"{_databasePath}-shm" })
             File.Delete(file);
     }

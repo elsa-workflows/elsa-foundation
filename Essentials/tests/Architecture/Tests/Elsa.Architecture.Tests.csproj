@@ -33,7 +33,33 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <!--
+    Built, never referenced: the production projects the references below do not already build. The InternalsVisibleTo
+    guard reads the grants compiled into every production assembly, so each must be built before this suite runs;
+    ArchitectureGuardTests.Every_production_project_is_built_before_the_architecture_tests keeps this list complete.
+  -->
   <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Cli\Elsa.Cli\Elsa.Cli.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\apps\Elsa.Workbench\Elsa.Workbench.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\apps\Elsa.Foundation.Host\Elsa.Foundation.Host.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\src\Cli\Worker\Elsa.Cli.Worker.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\src\Workflows\Design\CodeGeneration\Elsa.Workflows.Design.CodeGeneration.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../../Extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj" />
+    <ProjectReference Include="../../../../Extensions/Rules/src/Workflows/Design/Elsa.Rules.Workflows.Design.csproj" />
+    <ProjectReference Include="../../../../Extensions/Rules/src/Workflows/Runtime/Elsa.Rules.Workflows.Runtime.csproj" />
+    <ProjectReference Include="../../../../Extensions/Rules/src/Tooling/Elsa.Rules.Tooling.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../../../Extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../Extensions/Etl/src/Core/Elsa.Etl.Core.csproj" />
+    <ProjectReference Include="../../../../Extensions/Etl/src/Design/Elsa.Etl.Design/Elsa.Etl.Design.csproj" />
+    <ProjectReference Include="../../../../Extensions/Etl/src/Design/Api/Elsa.Etl.Design.Api.csproj" />
+    <ProjectReference Include="../../../../Extensions/Etl/src/Runtime/Api/Elsa.Etl.Runtime.Api.csproj" />
+    <ProjectReference Include="../../../../Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Elsa.Etl.Runtime.csproj" />
+    <ProjectReference Include="../../../../Extensions/Etl/src/Workflows/Runtime/Elsa.Etl.Workflows.Runtime.csproj" />
+    <ProjectReference Include="../../../../Extensions/Etl/src/Workflows/Design/Elsa.Etl.Workflows.Design.csproj" />
+    <ProjectReference Include="../../../../Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Api\Elsa.Agent.Api.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Core\Elsa.Agent.Core.csproj" />
@@ -72,6 +98,7 @@
     <!-- Structured Logs composes into the representative host in DomainManagementApiCompositionTests, so its endpoints appear in the committed endpoint-manifest baseline (#1455). -->
     <ProjectReference Include="..\..\..\src\Diagnostics\StructuredLogs\Elsa.Diagnostics.StructuredLogs\Elsa.Diagnostics.StructuredLogs.csproj" />
     <ProjectReference Include="..\..\..\src\Secrets\Core\Elsa.Secrets.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\Connections\Core\Elsa.Connections.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Studio\Preferences\Core\Elsa.Studio.Preferences.Core.csproj" />
     <!-- Studio Preferences composes into the representative host in DomainManagementApiCompositionTests, so its endpoints appear in the committed endpoint-manifest baseline (#1455). -->
     <ProjectReference Include="..\..\..\src\Studio\Preferences\Api\Elsa.Studio.Preferences.Api.csproj" />
@@ -80,6 +107,7 @@
     <ProjectReference Include="..\..\..\src\Workflows\ExecutionEvidence\Elsa.Workflows.ExecutionEvidence.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Dashboard\Elsa.Workflows.Dashboard\Elsa.Workflows.Dashboard.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Elsa3\src\Activities\Design\Import\Elsa3.Activities.Design.Import\Elsa3.Activities.Design.Import.csproj" />
+    <ProjectReference Include="..\..\..\..\Extensions\Elsa3\src\Activities\Design\Import\Publishing\Elsa3.Activities.Design.Import.Publishing.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Elsa3\src\Mapping\Elsa3.Mapping.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Elsa3\src\Models\Elsa3.Models.csproj" />
     <!-- PinnedTransitivePackTests runs the maps generator's own pinned-transitive reader over a real fixture,
@@ -91,6 +119,7 @@
        loadable here. These are the ones no reference above already reaches; the test fails, naming the project, for a
        packable library that is missing from this closure. -->
   <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Activities\Compensation\Elsa.Activities.Compensation.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Design\Reconciliation\Elsa.Activities.Design.Reconciliation\Elsa.Activities.Design.Reconciliation.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Design\Reconciliation\Clr\Elsa.Activities.Design.Reconciliation.Clr.csproj" />
@@ -127,6 +156,10 @@
     <ProjectReference Include="..\..\..\src\Secrets\Nuplane\Elsa.Secrets.Nuplane.csproj" />
     <ProjectReference Include="..\..\..\src\Secrets\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\src\Secrets\Workflows\Elsa.Secrets.Workflows.csproj" />
+    <ProjectReference Include="..\..\..\src\Connections\Elsa.Connections\Elsa.Connections.csproj" />
+    <ProjectReference Include="..\..\..\src\Connections\Api\Elsa.Connections.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Connections\Design\Elsa.Connections.Design.csproj" />
+    <ProjectReference Include="..\..\..\src\Connections\Workflows\Elsa.Connections.Workflows.csproj" />
     <ProjectReference Include="..\..\..\src\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="..\..\..\src\Studio\Preferences\Persistence\EntityFrameworkCore\Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Dashboard\Persistence\EntityFrameworkCore\Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj" />

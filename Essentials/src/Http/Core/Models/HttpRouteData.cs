@@ -42,7 +42,7 @@ public class HttpRouteData
     public IReadOnlyCollection<object> Metadata { get; set; } = [];
 
     /// <summary>
-    /// An opaque, precompiled matcher for <see cref="Route"/> (spec 089 follow-up, issue #592 item 6). The route
+    /// An opaque, precompiled matcher for <see cref="Route"/> (issue #592 item 6). The route
     /// table populates this at refresh time with the parsed <c>TemplateMatcher</c> so per-request matching is a
     /// lookup, not a per-template parse+allocate. Typed as <see cref="object"/> because the concrete matcher type
     /// lives in <c>Microsoft.AspNetCore.Routing</c> (referenced by <c>Elsa.Http</c>, not this contracts package);

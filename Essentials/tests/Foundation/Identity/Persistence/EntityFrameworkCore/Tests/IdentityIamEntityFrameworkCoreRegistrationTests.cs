@@ -29,6 +29,7 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
     [
         typeof(IUserStore),
         typeof(IRevisionAwareUserStore),
+        typeof(IPagedUserStore),
         typeof(IRoleStore),
         typeof(IRevisionAwareRoleStore),
         typeof(IPagedRoleStore),
@@ -42,9 +43,9 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
         typeof(IRevisionAwareTenantMembershipStore)
     ];
 
-    // Kept beside the composition test (§2.23.1): replacement contract, exactly the seventeen IAM contracts, scoped, by factory.
+    // Kept beside the composition test: replacement contract, exactly the eighteen IAM contracts, scoped, by factory.
     [Fact]
-    public void Registration_replaces_exactly_the_seventeen_IAM_contracts()
+    public void Registration_replaces_exactly_the_eighteen_IAM_contracts()
     {
         var services = new ServiceCollection();
 
@@ -52,7 +53,7 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
 
         var replacementContracts = ApplicationCredentialContracts.Concat(AuthorityContracts).ToArray();
 
-        Assert.Equal(17, services.Count(descriptor => replacementContracts.Contains(descriptor.ServiceType)));
+        Assert.Equal(18, services.Count(descriptor => replacementContracts.Contains(descriptor.ServiceType)));
         Assert.All(replacementContracts, contract =>
         {
             Assert.True(contract.IsDefined(typeof(ReplacementContractAttribute), inherit: false));
@@ -80,9 +81,9 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
                 .Name);
     }
 
-    // Kept beside the composition test (§2.23.1): forwarding and scope, one scoped EF store per contract family, shared by its contracts.
+    // Kept beside the composition test: forwarding and scope, one scoped EF store per contract family, shared by its contracts.
     [Fact]
-    public async Task Registration_resolves_all_seventeen_contracts_to_one_scoped_EF_store_each()
+    public async Task Registration_resolves_all_eighteen_contracts_to_one_scoped_EF_store_each()
     {
         var services = new ServiceCollection();
         services.AddIdentityIamEntityFrameworkCore(SqliteOptions());
@@ -105,6 +106,7 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
         var user = firstScope.ServiceProvider.GetRequiredService<IUserStore>();
         Assert.IsType<EfUserStore>(user);
         Assert.Same(user, firstScope.ServiceProvider.GetRequiredService<IRevisionAwareUserStore>());
+        Assert.Same(user, firstScope.ServiceProvider.GetRequiredService<IPagedUserStore>());
         var role = firstScope.ServiceProvider.GetRequiredService<IRoleStore>();
         Assert.IsType<EfRoleStore>(role);
         Assert.Same(role, firstScope.ServiceProvider.GetRequiredService<IRevisionAwareRoleStore>());
@@ -128,7 +130,7 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
         Assert.NotSame(role, secondScope.ServiceProvider.GetRequiredService<IRoleStore>());
     }
 
-    // Kept beside the composition test (§2.23.1): replacement-contract validation of the authority stores.
+    // Kept beside the composition test: replacement-contract validation of the authority stores.
     [Fact]
     public void Authority_registration_validator_reports_valid_and_replaced_contract_ownership()
     {
@@ -148,7 +150,7 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
         Assert.Contains(typeof(IUserStore).FullName!, rejected.FailureMessage!, StringComparison.Ordinal);
     }
 
-    // Kept beside the composition test (§2.23.1): replacement contract, accepts the known in-memory authority shape.
+    // Kept beside the composition test: replacement contract, accepts the known in-memory authority shape.
     [Fact]
     public void Registration_accepts_the_known_in_memory_authority_factory_shape()
     {
@@ -162,7 +164,7 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
         provider.GetRequiredService<IStartupValidator>().Validate();
     }
 
-    // Kept beside the composition test (§2.23.1): idempotence, an equivalent registration changes nothing.
+    // Kept beside the composition test: idempotence, an equivalent registration changes nothing.
     [Fact]
     public void Equivalent_registration_is_idempotent()
     {
@@ -183,7 +185,7 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
         Assert.Equal(before, services.ToArray());
     }
 
-    // Kept beside the composition test (§2.23.1): rejection without partial mutation.
+    // Kept beside the composition test: rejection without partial mutation.
     [Fact]
     public void Invalid_or_conflicting_registration_does_not_partially_mutate_services()
     {
@@ -210,7 +212,7 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
         Assert.Equal(before, services.ToArray());
     }
 
-    // Kept beside the composition test (§2.23.1): replacement-contract rejection before EF, without mutation.
+    // Kept beside the composition test: replacement-contract rejection before EF, without mutation.
     [Fact]
     public void Unowned_application_and_credential_registrations_before_EF_are_rejected_without_mutation()
     {
@@ -225,7 +227,7 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
         Assert.Equal(before, services.ToArray());
     }
 
-    // Kept beside the composition test (§2.23.1): replacement-contract rejection at startup validation.
+    // Kept beside the composition test: replacement-contract rejection at startup validation.
     [Fact]
     public void Unowned_application_and_credential_registrations_after_EF_fail_startup_validation()
     {
@@ -243,7 +245,7 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
         Assert.Contains(typeof(IRevisionAwareCredentialStore).FullName!, exception.Message, StringComparison.Ordinal);
     }
 
-    // Kept beside the composition test (§2.23.1): replacement-contract rejection before EF, without mutation.
+    // Kept beside the composition test: replacement-contract rejection before EF, without mutation.
     [Fact]
     public void Unowned_authority_registration_before_EF_is_rejected_without_mutation()
     {
@@ -280,7 +282,7 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
         Assert.Equal(before, services.ToArray());
     }
 
-    // Kept beside the composition test (§2.23.1): replacement-contract rejection at startup validation.
+    // Kept beside the composition test: replacement-contract rejection at startup validation.
     [Fact]
     public void Unowned_authority_registration_after_EF_fails_startup_validation()
     {
@@ -295,7 +297,7 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
         Assert.Contains(typeof(IUserStore).FullName!, exception.Message, StringComparison.Ordinal);
     }
 
-    // Kept beside the composition test (§2.23.1): conditional registration, the provider selects the one IAM context.
+    // Kept beside the composition test: conditional registration, the provider selects the one IAM context.
     [Theory]
     [InlineData("Sqlite", typeof(IdentityIamSqliteDbContext))]
     [InlineData("SqlServer", typeof(IdentityIamSqlServerDbContext))]
@@ -583,6 +585,12 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
             throw new NotSupportedException();
 
         public ValueTask SaveAsync(UserRecord user, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<bool> SetStatusAsync(string tenantId, string userId, UserStatus status, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<bool> DeleteAsync(string tenantId, string userId, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }
 

@@ -4,8 +4,7 @@ namespace Elsa.Primitives.Models;
 /// The single, shared alias convention applied identically by the runtime resolution registry
 /// (<c>Elsa.Serialization.SystemText.WellKnownTypeRegistry</c>) and the reflection-only activity scanner
 /// (<c>Elsa.Activities.Design.Reconciliation.Clr.ClrAssemblyScanner</c>). It is the one place that decides
-/// "what stored token represents this CLR type" so the two call sites cannot drift (FR-004 / FR-004a / FR-004b,
-/// research D8 revised).
+/// "what stored token represents this CLR type" so the two call sites cannot drift.
 /// </summary>
 /// <remarks>
 /// <para>

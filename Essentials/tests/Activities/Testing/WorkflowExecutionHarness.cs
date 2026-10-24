@@ -17,6 +17,7 @@ using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -50,13 +51,19 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
     private readonly ServiceProvider _provider;
     private readonly string _workflowExecutionId;
     private readonly WorkflowExecutableIdentity _identity;
+    private readonly PersistenceMode? _workflowPersistenceMode;
     private bool _activityTypesRegistered;
 
-    private WorkflowExecutionHarness(ServiceProvider provider, string workflowExecutionId, WorkflowExecutableIdentity identity)
+    private WorkflowExecutionHarness(
+        ServiceProvider provider,
+        string workflowExecutionId,
+        WorkflowExecutableIdentity identity,
+        PersistenceMode? workflowPersistenceMode)
     {
         _provider = provider;
         _workflowExecutionId = workflowExecutionId;
         _identity = identity;
+        _workflowPersistenceMode = workflowPersistenceMode;
     }
 
     /// <summary>The configured service provider (escape hatch for advanced assertions).</summary>
@@ -144,7 +151,8 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         JsonElement? stimulusInput = null,
         string? triggerNodeId = null,
         IReadOnlyDictionary<string, string>? triggerMetadata = null,
-        bool allowAcceptedButFaulted = false)
+        bool allowAcceptedButFaulted = false,
+        string? correlationId = null)
     {
         // Register the loaded activity CLR types into the well-known type registry now, not at Build() time.
         // The CLR construction descriptor resolves an activity's stable alias back to its type through this
@@ -163,7 +171,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         var agent = await _provider.GetRequiredService<IWorkflowExecutionActorProvider>()
             .GetAgentAsync(NewActivationRequest());
 
-        var dispatch = await agent.EnqueueAsync(NewStartEnvelope(executable.Identity, inputs, stimulusInput, triggerNodeId, triggerMetadata));
+        var dispatch = await agent.EnqueueAsync(NewStartEnvelope(executable.Identity, inputs, stimulusInput, triggerNodeId, triggerMetadata, correlationId));
         if (dispatch.Status != WorkflowExecutionCommandDispatchStatus.Accepted &&
             !(allowAcceptedButFaulted && dispatch.Status == WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted))
             throw new InvalidOperationException($"Start command was not accepted (status: {dispatch.Status}). Reason: {dispatch.Reason}");
@@ -396,10 +404,12 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
     /// <remarks>
     /// Activates the agent on <see cref="Partition"/>, so this pairs with executions started by
     /// <see cref="StartPublishedAsync"/> (or dispatched beneath one). A run started by
-    /// <see cref="RunAsync(WorkflowExecutable)"/> carries no partition at all and is not what this targets.
+    /// <see cref="RunAsync(WorkflowExecutable)"/> carries no partition at all and is not what this targets. Pass the
+    /// <paramref name="partition"/> a run was started on when it is not <see cref="Partition"/>.
     /// </remarks>
-    public async Task CancelAsync(string workflowExecutionId)
+    public async Task CancelAsync(string workflowExecutionId, WorkflowExecutionPartition? partition = null)
     {
+        partition ??= Partition;
         var agent = await _provider.GetRequiredService<IWorkflowExecutionActorProvider>().GetAgentAsync(
             new WorkflowExecutionActorActivationRequest(
                 workflowExecutionId: workflowExecutionId,
@@ -407,7 +417,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
                 requestedAt: Now,
                 requestedBy: "activity-behavioural-drive",
                 requiredCapabilities: WorkflowExecutionActorCapabilities.None,
-                partition: Partition));
+                partition: partition));
 
         var command = new WorkflowExecutionCommand(
             CommandId: $"command-cancel-{workflowExecutionId}",
@@ -425,7 +435,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
             enqueuedAt: Now,
             metadata: new Dictionary<string, string>(),
-            partition: Partition));
+            partition: partition));
         if (dispatch.Status != WorkflowExecutionCommandDispatchStatus.Accepted)
             throw new InvalidOperationException($"Cancel command was not accepted (status: {dispatch.Status}). Reason: {dispatch.Reason}");
     }
@@ -489,7 +499,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             runtimeRequirements: null,
             storageDriverRequirements: null,
             incidentStrategy: IncidentStrategyBuiltIns.FaultReference,
-            checkpointCadence: null,
+            persistenceMode: null,
             workflowVariables: workflowVariables);
 
     /// <summary>Builds a leaf probe node that records execution and emits the given outcomes (default <c>Done</c>).</summary>
@@ -572,7 +582,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             runtimeRequirements: null,
             storageDriverRequirements: null,
             incidentStrategy: executable.IncidentStrategy,
-            checkpointCadence: executable.CheckpointCadence,
+            persistenceMode: _workflowPersistenceMode ?? executable.PersistenceMode,
             workflowVariables: executable.WorkflowVariables);
 
     private ExecutableNode PinClrActivityContract(ExecutableNode node)
@@ -610,7 +620,22 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         var outcomes = ResolveOutcomes(node, activityType);
         var contract = NewActivityContract(activityType, descriptor, inputs, outcomes);
 
-        return CopyNode(node, childSlots, descriptor.Payload, bindings, contract);
+        return CopyNode(node, childSlots, descriptor.Payload, bindings, contract, WithStructuralFaultHandling(node.Metadata, activityType));
+    }
+
+    // Mirrors ExecutableNodeCompiler: the node carries how it handles faults below it (spec 258 R-3).
+    private static IReadOnlyDictionary<string, string> WithStructuralFaultHandling(IReadOnlyDictionary<string, string> metadata, Type activityType)
+    {
+        var faultHandling = typeof(IRuntimeActivityDescendantFaultHandler).IsAssignableFrom(activityType)
+            ? RuntimeMetadataKeys.StructuralFaultHandlingDescendant
+            : typeof(IRuntimeActivityChildFaultHandler).IsAssignableFrom(activityType) ||
+              typeof(IRuntimeActivityChildOutcomeHandler).IsAssignableFrom(activityType)
+                ? RuntimeMetadataKeys.StructuralFaultHandlingChild
+                : null;
+        if (faultHandling is null || metadata.ContainsKey(RuntimeMetadataKeys.StructuralFaultHandling))
+            return metadata;
+
+        return new Dictionary<string, string>(metadata, StringComparer.Ordinal) { [RuntimeMetadataKeys.StructuralFaultHandling] = faultHandling };
     }
 
     private static bool IsNullable(PropertyInfo property)
@@ -627,7 +652,8 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         IReadOnlyCollection<ExecutableChildSlot> childSlots,
         JsonElement descriptorPayload,
         IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
-        ActivityContract? contract)
+        ActivityContract? contract,
+        IReadOnlyDictionary<string, string>? metadata = null)
     {
         var consumerKey = StringComparer.Ordinal.Equals(
             contract?.DescriptorKind,
@@ -642,7 +668,8 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             new RuntimeActivityDescriptor(consumerKey, node.DescriptorSchemaVersion, descriptorPayload),
             inputBindings,
             node.OutputCaptures,
-            node.Metadata,
+            metadata ?? node.Metadata,
+            node.ExecutionPlacement,
             childSlots,
             node.Structure,
             contract,
@@ -814,7 +841,8 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             new ActivityActivationRequirement(descriptor.Kind, alias),
             // Mirror ExecutableNodeCompiler.ResolveSideEffectProfile: unmarked ⇒ External.
             sideEffectProfile: activityType.GetCustomAttribute<ActivitySideEffectProfileAttribute>(inherit: true)?.Profile
-                ?? SideEffectProfile.External);
+                ?? SideEffectProfile.External,
+            supportsBackgroundExecution: activityType.IsDefined(typeof(BackgroundExecutionSafeAttribute), inherit: true));
     }
 
     private static (string Kind, JsonElement Payload) NewClrDescriptor(Type activityType)
@@ -842,16 +870,33 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         IReadOnlyDictionary<string, JsonElement>? inputs = null,
         JsonElement? stimulusInput = null,
         string? triggerNodeId = null,
-        IReadOnlyDictionary<string, string>? triggerMetadata = null)
+        IReadOnlyDictionary<string, string>? triggerMetadata = null,
+        string? correlationId = null)
     {
-        var payload = new WorkflowExecutionStartCommandPayload(pinnedExecutable, pinnedExecutable.ArtifactId, inputs: inputs, stimulusInput: stimulusInput, triggerNodeId: triggerNodeId, triggerMetadata: triggerMetadata);
+        var payload = new WorkflowExecutionStartCommandPayload(
+            pinnedExecutable,
+            pinnedExecutable.ArtifactId,
+            variables: null,
+            inputs,
+            stimulusInput,
+            triggerNodeId,
+            WorkflowRunKind.Unknown,
+            pinnedSource: null,
+            parentWorkflowExecutionId: null,
+            correlationId,
+            tenantId: null,
+            partition: null,
+            authority: null,
+            triggerMetadata);
+        // The artifact id rides on the command and the envelope, as WorkflowStartDispatcher puts it there.
+        var metadata = new Dictionary<string, string> { ["runtime.artifactId"] = pinnedExecutable.ArtifactId };
         var command = new WorkflowExecutionCommand(
             CommandId: "command-start",
             WorkflowExecutionId: _workflowExecutionId,
             Kind: WorkflowExecutionCommandKind.Start,
             EnqueuedAt: Now,
             Payload: JsonSerializer.SerializeToElement(payload),
-            Metadata: new Dictionary<string, string>());
+            Metadata: metadata);
 
         return new WorkflowExecutionCommandEnvelope(
             envelopeId: "envelope-start",
@@ -861,13 +906,14 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
             enqueuedAt: Now,
             sequence: 1,
-            metadata: new Dictionary<string, string>());
+            metadata: metadata);
     }
 
     /// <summary>Fluent configuration for a <see cref="WorkflowExecutionHarness"/>.</summary>
     public sealed class Builder
     {
         private readonly List<Action<IServiceCollection>> _featureConfigurators = [];
+        private PersistenceMode? _workflowPersistenceMode;
 
         internal Builder()
         {
@@ -886,19 +932,36 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         }
 
         /// <summary>
-        /// Drives the harness under the opt-in burst-coalescing checkpoint persistence policy
-        /// instead of the default Immediate cadence, so intra-drain checkpoints fold into one atomic commit at
-        /// quiescence — the mode a ReplaySafe hop-fusion pass engages inside. Applied after the
-        /// runtime feature registration (which the ctor seeds first), so the coalescing decorators capture the runtime
-        /// stores. Optionally caps the per-segment checkpoint count (models a mid-drain fold-and-flush).
+        /// Sets the host's persistence-mode options, with <paramref name="hostMode"/> as the default for workflows that
+        /// choose none. Applied after the runtime feature registration (which the ctor seeds first), so the folding
+        /// decorators capture the runtime stores. Without this the host default is Durable.
+        /// <paramref name="maxActivitiesPerCommit"/> lowers the cap to model an
+        /// intermediate commit mid-drain; <paramref name="recordCompletion"/> off lets an Ephemeral run that was never
+        /// committed finish without a record.
         /// </summary>
-        public Builder WithCoalescing(int? maxSegmentCheckpoints = null)
+        public Builder WithPersistenceMode(
+            PersistenceMode hostMode = PersistenceMode.Balanced,
+            int? maxActivitiesPerCommit = null,
+            bool recordCompletion = true)
         {
-            _featureConfigurators.Add(services => services.AddCoalescingRuntimeCheckpointPersistence(options =>
+            _featureConfigurators.Add(services => services.AddPersistenceModes(options =>
             {
-                if (maxSegmentCheckpoints is { } cap)
-                    options.MaxSegmentCheckpoints = cap;
+                options.Mode = hostMode;
+                options.RecordCompletion = recordCompletion;
+                if (maxActivitiesPerCommit is { } cap)
+                    options.MaxActivitiesPerCommit = cap;
             }));
+            return this;
+        }
+
+        /// <summary>
+        /// Makes every workflow this harness runs choose <paramref name="mode"/>, as an author does in the workflow's
+        /// settings. The choice is compiled into the executable and wins over the host default that
+        /// <see cref="WithPersistenceMode"/> sets.
+        /// </summary>
+        public Builder WithWorkflowPersistenceMode(PersistenceMode mode)
+        {
+            _workflowPersistenceMode = mode;
             return this;
         }
 
@@ -950,12 +1013,18 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             foreach (var configurator in _featureConfigurators)
                 configurator(services);
 
+            // Every drain runs in a persistence-mode session, so the stores are wrapped last, after anything a test
+            // registered. A harness that chose no mode runs every workflow Durable.
+            if (!services.Any(descriptor => descriptor.ServiceType == typeof(PersistenceModeOptions)))
+                services.AddPersistenceModeOptions(new PersistenceModeOptions { Mode = PersistenceMode.Durable });
+            services.AddPersistenceModes();
+
             var provider = services.BuildServiceProvider();
 
             // Activity CLR types are registered into the well-known type registry lazily, on first RunAsync (see
             // EnsureActivityTypesRegistered), not here — the caller loads the activity assemblies via its graph
             // builders after Build() returns, so scanning them at Build() time would be order-dependent.
-            return new WorkflowExecutionHarness(provider, workflowExecutionId, identity);
+            return new WorkflowExecutionHarness(provider, workflowExecutionId, identity, _workflowPersistenceMode);
         }
     }
 }

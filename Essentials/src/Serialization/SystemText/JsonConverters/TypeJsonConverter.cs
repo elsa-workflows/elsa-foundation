@@ -7,7 +7,7 @@ using System.Text.Json.Serialization;
 namespace Elsa.Serialization.SystemText.JsonConverters;
 
 /// <summary>
-/// Serializes <see cref="Type"/> objects to a stable alias (FR-004 / FR-004a, research D8 revised).
+/// Serializes <see cref="Type"/> objects to a stable alias.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -18,11 +18,11 @@ namespace Elsa.Serialization.SystemText.JsonConverters;
 /// <para>
 /// Read: the element/type alias is resolved via the registry only — there is NO <c>Type.GetType</c> fallback.
 /// An unresolved alias resolves to <c>typeof(object)</c> (logged at warning level) rather than throwing, so a
-/// definition referencing an unknown alias still loads (FR-018 spirit; mirrors <c>WorkflowExecutableCompiler</c>
+/// definition referencing an unknown alias still loads (mirrors <c>WorkflowExecutableCompiler</c>
 /// and <c>VariableMapper</c>).
 /// </para>
 /// </remarks>
-public sealed class TypeJsonConverter(IWellKnownTypeRegistry wellKnownTypeRegistry, ILogger<TypeJsonConverter> logger) : JsonConverter<Type>
+internal sealed class TypeJsonConverter(IWellKnownTypeRegistry wellKnownTypeRegistry, ILogger<TypeJsonConverter> logger) : JsonConverter<Type>
 {
     // Parameterless-logger overload keeps existing test/DI call sites that construct the converter with only the
     // registry working without each having to thread a logger through.
@@ -57,7 +57,7 @@ public sealed class TypeJsonConverter(IWellKnownTypeRegistry wellKnownTypeRegist
         return ResolveElement(typeAlias);
     }
 
-    // Registry-only resolution (FR-004a). Unknown alias → object (logged), never Type.GetType, never throw.
+    // Registry-only resolution. Unknown alias → object (logged), never Type.GetType, never throw.
     private Type ResolveElement(string alias)
     {
         if (wellKnownTypeRegistry.TryGetType(alias, out var type))

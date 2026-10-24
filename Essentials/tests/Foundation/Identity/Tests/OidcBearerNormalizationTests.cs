@@ -332,7 +332,7 @@ public sealed class OidcBearerNormalizationTests
             new Claim(IdentityClaimTypes.TenantId, "tenant-forged"),
             new Claim(IdentityClaimTypes.Provider, "provider-forged"),
             new Claim(IdentityClaimTypes.Role, "admin"),
-            new Claim(IdentityClaimTypes.Permission, "worker.admin"));
+            new Claim(IdentityClaimTypes.Permission, "worker:admin"));
 
         using var response = await host.SendBearerAsync(token);
 
@@ -597,7 +597,7 @@ public sealed class OidcBearerNormalizationTests
             new Claim(IdentityClaimTypes.TenantId, "tenant-forged"),
             new Claim(IdentityClaimTypes.Provider, "provider-forged"),
             new Claim(IdentityClaimTypes.Role.ToUpperInvariant(), "admin"),
-            new Claim(IdentityClaimTypes.Permission, "worker.admin")
+            new Claim(IdentityClaimTypes.Permission, "worker:admin")
         ], "validated-token"));
         var context = CreateTokenValidatedContext(unit.Options, original);
 
@@ -999,7 +999,7 @@ public sealed class OidcBearerNormalizationTests
         Assert.Empty(httpContext.Response.Headers);
     }
 
-    // Kept beside the composition test (§2.23.1): ordering, OIDC and OpenIddict compose in either registration order.
+    // Kept beside the composition test: ordering, OIDC and OpenIddict compose in either registration order.
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -1042,7 +1042,7 @@ public sealed class OidcBearerNormalizationTests
         }
     }
 
-    // Kept beside the composition test (§2.23.1): rejection, a repeated opt-in adds no second events adapter.
+    // Kept beside the composition test: rejection, a repeated opt-in adds no second events adapter.
     [Fact]
     public void Repeated_opt_in_registration_is_refused_without_adding_a_second_events_adapter()
     {
@@ -1070,7 +1070,7 @@ public sealed class OidcBearerNormalizationTests
         Assert.Contains("oidc-normalization-configuration-invalid", exception.Message, StringComparison.Ordinal);
     }
 
-    // Kept beside the composition test (§2.23.1): options validation, a late scheme rename is refused.
+    // Kept beside the composition test: options validation, a late scheme rename is refused.
     [Fact]
     public void Late_scheme_rename_is_refused_by_the_frozen_registration()
     {

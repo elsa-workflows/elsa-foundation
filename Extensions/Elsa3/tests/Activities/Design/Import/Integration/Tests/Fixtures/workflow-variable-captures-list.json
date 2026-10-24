@@ -1,0 +1,35 @@
+{
+  "id": "workflow-variable-captures-list-v1",
+  "definitionId": "workflow-variable-captures-list",
+  "name": "workflow-variable-captures-list",
+  "description": "Test-owned regular workflow (spec 264): a List<String> workflow variable with no starting value receives the array payload of the event 'list.ready'.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [
+    { "id": "names", "name": "names", "typeName": "List<String>" }
+  ],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": { "usableAsActivity": false },
+  "root": {
+    "id": "workflow-variable-captures-list-root", "nodeId": "workflow-variable-captures-list-root", "name": "workflow-variable-captures-list-root", "type": "Elsa.Flowchart", "version": 1, "customProperties": { "canStartWorkflow": false, "runAsynchronously": false },
+    "metadata": { "designer": { "position": { "x": 0, "y": 0 }, "size": { "width": 100, "height": 50 } } },
+    "activities": [
+      {
+        "id": "wait", "nodeId": "wait", "name": "wait", "type": "Elsa.Event", "version": 1, "customProperties": { "canStartWorkflow": false, "runAsynchronously": false },
+        "metadata": { "designer": { "position": { "x": 0, "y": 0 }, "size": { "width": 100, "height": 50 } } },
+        "eventName": { "typeName": "String", "expression": { "type": "Literal", "value": "list.ready" } },
+        "result": { "typeName": "Object", "memoryReference": { "id": "names" } }
+      }
+    ],
+    "connections": [],
+    "variables": []
+  }
+}

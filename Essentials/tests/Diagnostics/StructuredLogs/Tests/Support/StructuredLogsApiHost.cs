@@ -36,7 +36,7 @@ public sealed class StructuredLogsApiHost : IAsyncDisposable
     public const string AdjacentIdentity = "adjacent";
     public const string UntrustedIdentity = "untrusted";
     public const string ResourceDeniedIdentity = "resource-denied";
-    public const string Permission = "Diagnostics:StructuredLogs";
+    public const string Permission = "diagnostics/structured-logs:read";
 
     private const string SchemeName = "structured-logs-canary";
     private readonly IHost host;
@@ -352,10 +352,10 @@ public sealed class StructuredLogsApiHost : IAsyncDisposable
         }
     }
 
-    private sealed class RecordingPermissionEvaluator(IPermissionCatalog catalog) : IPermissionEvaluator
+    private sealed class RecordingPermissionEvaluator : IPermissionEvaluator
     {
         private static readonly ConcurrentDictionary<string, int> Calls = new(StringComparer.Ordinal);
-        private readonly ClaimsPermissionEvaluator inner = new(catalog);
+        private readonly ClaimsPermissionEvaluator inner = new();
 
         public async ValueTask<PermissionEvaluationResult> EvaluateAsync(
             PermissionEvaluationContext context,
@@ -394,7 +394,7 @@ public sealed class StructuredLogsApiHost : IAsyncDisposable
             {
                 ExactIdentity => Permission,
                 WildcardIdentity => PermissionKey.Wildcard,
-                AdjacentIdentity => "Diagnostics:StructuredLog",
+                AdjacentIdentity => "diagnostics/structured-log:read",
                 ResourceDeniedIdentity => Permission,
                 _ => null
             };

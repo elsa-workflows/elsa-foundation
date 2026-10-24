@@ -4,6 +4,8 @@ public static class RuntimeMetadataKeys
 {
     public const string WorkflowExecutionOrigin = "runtime.workflowExecutionOrigin";
     public const string WorkflowStartedAt = "runtime.workflowStartedAt";
+    /// <summary>Monotonic workflow marker indicating that native background work was admitted for this execution.</summary>
+    public const string WorkflowHasBackgroundActivityWork = "runtime.hasBackgroundActivityWork";
     public const string CompletionOutcomeNames = "runtime.completionOutcomeNames";
     public const string CheckpointRequirement = "runtime.checkpointRequirement";
     public const string CheckpointRequirementMandatory = "Mandatory";
@@ -40,6 +42,11 @@ public static class RuntimeMetadataKeys
     /// which owns exactly one parent-completion notification, instead of in an append-only parent history.
     /// </summary>
     public const string ParentCompletionProcessedWorkItemId = "runtime.parentCompletionProcessedWorkItemId";
+    /// <summary>
+    /// Combined parent-outcome work item committed with a child fault incident. Incident policy waits until
+    /// the parent evaluation commits its processed marker or the parent can no longer consume the outcome.
+    /// </summary>
+    public const string ParentOutcomeWorkItemId = "runtime.parentOutcomeWorkItemId";
     /// <summary>Highest activity-attempt ordinal allocated before bounded diagnostic-history compaction.</summary>
     public const string ActivityAttemptOrdinalHighWatermark = "runtime.activityAttemptOrdinalHighWatermark";
     public const string BookmarkId = "runtime.bookmarkId";
@@ -47,6 +54,30 @@ public static class RuntimeMetadataKeys
     public const string CancellationReason = "runtime.cancellationReason";
     public const string ChildExecutableNodeId = "runtime.childExecutableNodeId";
     public const string ChildFaulted = "runtime.childFaulted";
+    /// <summary>
+    /// Executable-node capability compiled from the node's activity type: <see cref="StructuralFaultHandlingChild"/>
+    /// when it handles its children's faults, <see cref="StructuralFaultHandlingDescendant"/> when it also opted into
+    /// descendant faults (spec 258 R-3). Absent for every other node.
+    /// </summary>
+    public const string StructuralFaultHandling = "runtime.structuralFaultHandling";
+    public const string StructuralFaultHandlingChild = "child";
+    public const string StructuralFaultHandlingDescendant = "descendant";
+    /// <summary>
+    /// Executable-node capability compiled from the node's activity type when it implements
+    /// <c>IRuntimeAcceptsRescheduledFaultedChild</c>; value <c>true</c>, absent for every other node (#3135).
+    /// </summary>
+    public const string AcceptsRescheduledFaultedChild = "runtime.acceptsRescheduledFaultedChild";
+    /// <summary>Marks a child-fault evaluation work item that delivers a descendant's fault (spec 258 R-3).</summary>
+    public const string DescendantFault = "runtime.descendantFault";
+    /// <summary>The receiver's direct child the delivered descendant fault passed through.</summary>
+    public const string DescendantFaultViaChildActivityExecutionId = "runtime.descendantFault.viaChildActivityExecutionId";
+    /// <summary>The executable node id of <see cref="DescendantFaultViaChildActivityExecutionId"/>.</summary>
+    public const string DescendantFaultViaChildExecutableNodeId = "runtime.descendantFault.viaChildExecutableNodeId";
+    /// <summary>
+    /// Descendant-fault work item that durably processed the faulted activity's fault, stored on the faulted activity
+    /// beside <see cref="ParentCompletionProcessedWorkItemId"/>, which its direct parent already set.
+    /// </summary>
+    public const string DescendantFaultProcessedWorkItemId = "runtime.descendantFaultProcessedWorkItemId";
     public const string CausalActivityExecutionId = "runtime.causalActivityExecutionId";
     public const string CausalExecutableNodeId = "runtime.causalExecutableNodeId";
     public const string CausalIncidentId = "runtime.causalIncidentId";
@@ -110,6 +141,12 @@ public static class RuntimeMetadataKeys
     public const string OwnershipFencingToken = "runtime.ownership.fencingToken";
 
     /// <summary>
+    /// Durable tombstone on execution-ownership metadata. Preserved when ownership is reacquired so a stale
+    /// workflow-execution identity cannot be recreated after its workflow state was deleted.
+    /// </summary>
+    public const string WorkflowExecutionDeletionTombstone = "runtime.workflowExecutionDeletionTombstone";
+
+    /// <summary>
     /// System-metadata key on a workflow execution carrying the workflow instance name (#260). The compiled
     /// <c>SetInstanceName</c> workflow intrinsic folds it into the intrinsic-completed checkpoint's
     /// workflow-execution state change. Absent when no name has been assigned.
@@ -117,19 +154,12 @@ public static class RuntimeMetadataKeys
     public const string InstanceName = "runtime.instanceName";
 
     /// <summary>
-    /// System-metadata key on a workflow execution recording the effective checkpoint cadence the run executes under:
-    /// the <see cref="Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableCheckpointCadence"/> mode
-    /// alias (<c>"Immediate"</c> or <c>"Coalesced"</c>), resolved at start from the pinned executable's authored cadence
-    /// over the host default. This per-run stamp is what the instance read model reports, so an instance shows the
-    /// cadence it actually ran under even after the host default is later reconfigured. Absent for runs predating it.
+    /// System-metadata key on a workflow execution recording the persistence mode the run executes under, as the name of
+    /// a <see cref="Elsa.Workflows.Runtime.Core.Models.PersistenceMode"/> value. Resolved at start from the workflow's
+    /// chosen mode over the host default. Later drains read it back, so a run keeps its mode after the host default is
+    /// reconfigured, and the instance read model reports the mode the run actually used.
     /// </summary>
-    public const string CheckpointCadence = "runtime.checkpointCadence";
-
-    /// <summary>
-    /// System-metadata key on a workflow execution recording the effective bounded segment cap for a
-    /// <c>"Coalesced"</c> <see cref="CheckpointCadence"/> stamp. Absent under an Immediate stamp.
-    /// </summary>
-    public const string CheckpointMaxSegmentCheckpoints = "runtime.checkpointMaxSegmentCheckpoints";
+    public const string PersistenceMode = "runtime.persistenceMode";
 
     /// <summary>
     /// Metadata key on a durable value carrying a workflow identity slot (correlation id / instance name) for the
@@ -225,6 +255,9 @@ public static class RuntimeMetadataKeys
     /// <summary>Inspection metadata naming the secret reference behind a withheld input. A name is not a value.</summary>
     public const string SecretReferenceName = "runtime.secretReferenceName";
 
+    /// <summary>The background coordinator's admitted-work marker on an activity execution.</summary>
+    public const string BackgroundActivityWorkId = "runtime.backgroundActivityWorkId";
+
     public const string ParentActivityExecutionId = "runtime.parentActivityExecutionId";
 
     /// <summary>
@@ -276,8 +309,61 @@ public static class RuntimeMetadataKeys
     public const string BoundaryExecutionScopeId = "runtime.boundaryExecutionScopeId";
     public const string BoundaryValueRole = "runtime.boundaryValueRole";
     public const string BoundaryReferenceKey = "runtime.boundaryReferenceKey";
+    /// <summary>Name of a graph variable row, so the runtime can expose it by name without the graph descriptor.</summary>
+    public const string BoundaryVariableName = "runtime.boundaryVariableName";
+    /// <summary>
+    /// Executable-node metadata marking a boundary whose body is a closed value scope. Placement stamps it
+    /// only from the boundary's hashed descriptor (<c>scopeModel: closed</c>), so two executables with the same artifact
+    /// hash never differ in it. Below such a boundary the request inputs and the root variable frame are the
+    /// boundary's own, and the caller's are not visible.
+    /// </summary>
+    public const string ActivityExecutionScope = "runtime.activityExecutionScope";
+    public const string ActivityExecutionScopeClosed = "closed";
+    /// <summary>Placed boundary node id a capture into a graph variable writes into.</summary>
+    public const string CaptureTargetScopeId = "runtime.captureTargetScopeId";
     public const string RetrySourceActivityExecutionId = "runtime.retrySourceActivityExecutionId";
     public const string RetryReason = "runtime.retryReason";
+    /// <summary>
+    /// Logical operation key a structural parent assigns to a child in its scheduling metadata. The runtime surfaces it
+    /// as <c>ActivityExecutionContext.OperationKey</c>; without it the key falls back to the first-attempt identity and
+    /// then the invocation id. It is copied to boundary-retry and operator-retry successors.
+    /// </summary>
+    public const string OperationKey = "runtime.operationKey";
+    /// <summary>Operation key of the effect a child acts on, assigned by its structural parent like <see cref="OperationKey"/>.</summary>
+    public const string TargetOperationKey = "runtime.targetOperationKey";
+    /// <summary>
+    /// Set by the runtime on a <c>ScheduleActivity</c> work item that a structural parent staged with a due time (R-7,
+    /// spec 261): the round-trip ("O") UTC time before which it must not be delivered. Its post-commit intent becomes
+    /// available at that time, and on delivery the schedule handler acknowledges it without scheduling the child when
+    /// the run is gone or terminal or the scheduling parent is no longer running. Never inherited by derived work.
+    /// </summary>
+    public const string ScheduleNotBefore = "runtime.scheduleNotBefore";
+    /// <summary>Set on a successor that replaced a source activity execution through an alteration.</summary>
+    public const string SupersedesActivityExecutionId = "runtime.supersedesActivityExecutionId";
+    /// <summary>Set on the successor a <c>RetryFaultedActivity</c> alteration scheduled for a faulted source.</summary>
+    public const string RetryOfActivityExecutionId = "runtime.retryOfActivityExecutionId";
+    /// <summary>Activity execution id of the structural parent that kept a child fault's incident blocking for intervention.</summary>
+    public const string InterventionRequestedBy = "runtime.interventionRequestedBy";
+    /// <summary>Author-supplied reason a structural parent kept a child fault's incident blocking for intervention.</summary>
+    public const string InterventionReason = "runtime.interventionReason";
+    /// <summary>
+    /// The decision codes a structural parent offered when it requested intervention (spec 260 R-5), as a JSON array in
+    /// offer order, on the <c>WaitForIntervention</c> outcome metadata. Opaque to the runtime.
+    /// </summary>
+    public const string InterventionDecisions = "runtime.interventionDecisions";
+    /// <summary>The decision code an operator chose, on the <c>OperatorDecision</c> outcome metadata.</summary>
+    public const string InterventionDecision = "runtime.interventionDecision";
+    /// <summary>
+    /// Decision-delivery work item that durably processed an operator decision, stored on the requesting structural
+    /// parent, so a repeated delivery of the same item is acknowledged without a second callback.
+    /// </summary>
+    public const string InterventionDecisionProcessedWorkItemId = "runtime.interventionDecisionProcessedWorkItemId";
+    /// <summary>Provenance of a decision-delivery evaluation: the work item that delivered the operator's decision.</summary>
+    public const string InterventionDecisionSchedulerWorkItemId = "runtime.interventionDecisionSchedulerWorkItemId";
+    /// <summary>Action kind of the wait-for-intervention outcome an operator retry replaced on an incident.</summary>
+    public const string PriorResolutionActionKind = "runtime.priorResolutionActionKind";
+    /// <summary>System source of the wait-for-intervention outcome an operator retry replaced on an incident.</summary>
+    public const string PriorResolutionSystemSource = "runtime.priorResolutionSystemSource";
     public const string ScopeCancellationReason = "runtime.scopeCancellationReason";
     /// <summary>Activity execution id of the structural parent that staged a child-subtree cancellation.</summary>
     public const string SubtreeCancellationRequestedBy = "runtime.subtreeCancellationRequestedBy";

@@ -6,17 +6,17 @@ using Xunit;
 namespace Elsa.Cluster.Testing;
 
 /// <summary>
-/// The invariant tier's tests that run over the distributed runtime composed on the provider (spec 183, FR-057 and
-/// FR-059): each member runs <see cref="DistributedRuntimeNode"/> over its own membership, and the members share one
+/// The invariant tier's tests that run over the distributed runtime composed on the provider:
+/// each member runs <see cref="DistributedRuntimeNode"/> over its own membership, and the members share one
 /// durable runtime state. Leases outlive the membership liveness window here, so what frees a member's work is the
-/// provider's departure verdict and placement's reclaim (spec 184, FR-023), never a lease's own timeout.
+/// provider's departure verdict and placement's reclaim, never a lease's own timeout.
 /// </summary>
 public abstract partial class ClusterMembershipConformanceTests
 {
     private const string RuntimeExecutionId = "conformance-execution";
 
     /// <summary>
-    /// Invariant 2 (FR-057), with the reclaim interleaving of spec 184's FR-032: a member cut off from the membership
+    /// The commit fence, with placement's reclaim interleaving: a member cut off from the membership
     /// store while it drains is judged departed by the others, which reclaim its leases and re-drive the execution; the
     /// cut-off member then reaches its commit after the re-drive's, and the fence refuses it. Exactly one commit lands.
     /// </summary>
@@ -67,7 +67,7 @@ public abstract partial class ClusterMembershipConformanceTests
     }
 
     /// <summary>
-    /// Invariant 4 (FR-059): work routed to a member that then dies is still delivered from the durable queue, by a
+    /// Durable delivery: work routed to a member that then dies is still delivered from the durable queue, by a
     /// survivor, once the member's departure lets it reclaim the dead member's leases.
     /// </summary>
     [SkippableFact]

@@ -18,7 +18,7 @@ namespace Elsa.Architecture.Tests;
 /// property that still matters is total absence.
 /// </para>
 /// <para>
-/// It reads project, package, feed, build, container and CI files, never C# source (framework §2.23.2). Every file
+/// It reads project, package, feed, build, container and CI files, never C# source. Every file
 /// kind that can carry a package or project reference is scanned, including the repository-root build files and
 /// Dockerfiles. A source-only reintroduction (a type or string that names a retired family without a reference) is
 /// left to code review.

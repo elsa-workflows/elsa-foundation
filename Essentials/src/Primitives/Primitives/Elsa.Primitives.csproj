@@ -1,3 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Primitives.Hosting" />
+    <InternalsVisibleTo Include="Elsa.Primitives.Tests" />
+    <InternalsVisibleTo Include="Elsa.Primitives.Hosting.Tests" />
+  </ItemGroup>
+
 </Project>

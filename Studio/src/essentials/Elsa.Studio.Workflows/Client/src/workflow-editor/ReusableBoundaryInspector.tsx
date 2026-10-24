@@ -1,10 +1,10 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent
 } from "react";
 import {
@@ -16,18 +16,20 @@ import {
   RotateCcw
 } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import "./boundaryInspector.css";
+import { getActivityDefinitionVersion } from "../api/activityDesign";
 import {
   getActivityExecutionDescendants,
   getActivityExecutionInspection,
   getActivityExecutionLayout
 } from "../api/runtime";
+import { StudioLink } from "../StudioLink";
 import { observeReusableActivity } from "../reusableActivityObservability";
 import { runtimeValueTypeLabel } from "../runtimeValueFormatting";
-import { RuntimeValueEvidenceContent, RuntimeValueEvidenceResolutionProvider } from "./RuntimeValueEvidence";
+import { RuntimeValueEvidenceContent, RuntimeValueEvidenceResolutionProvider, runtimeValueContextId } from "./RuntimeValueEvidence";
 import {
   classifyBoundaryCursorProblem,
   emptyBoundaryEvidenceSnapshot,
-  executionOccurrenceLabel,
   markBoundaryEvidenceStale,
   mergeBoundaryEvidencePage,
   runtimeEvidencePresentation,
@@ -69,13 +71,16 @@ const evidenceSummaryLimit = 25;
 
 export function ReusableBoundaryInspector({
   context,
-  inspection
+  inspection,
+  activityLabel
 }: {
   context: StudioEndpointContext;
   inspection: ActivityExecutionInspection;
+  activityLabel?: string;
 }) {
   const rootKey = frameKey(inspection);
-  const [frames, setFrames] = useState<BoundaryFrame[]>(() => [createFrame(inspection)]);
+  const rootLabel = activityLabel ?? boundaryLabel(inspection);
+  const [frames, setFrames] = useState<BoundaryFrame[]>(() => [createFrame(inspection, activityLabel)]);
   const [openState, setOpenState] = useState<{ activityExecutionId: string | null; error: string }>({
     activityExecutionId: null,
     error: ""
@@ -86,7 +91,11 @@ export function ReusableBoundaryInspector({
   const selectionControllerRef = useRef<AbortController | null>(null);
   const layoutControllerRef = useRef<AbortController | null>(null);
   const evidenceControllerRef = useRef<AbortController | null>(null);
+  const instanceId = useId();
   const activeFrame = frames.at(-1)!;
+  const paneId = `${instanceId}-boundary-pane`;
+  const stepsTabId = `${instanceId}-steps-tab`;
+  const definitionTabId = `${instanceId}-definition-tab`;
 
   useEffect(() => {
     setFrames([createFrame(inspection)]);
@@ -96,6 +105,11 @@ export function ReusableBoundaryInspector({
     layoutControllerRef.current?.abort();
     evidenceControllerRef.current?.abort();
   }, [rootKey, inspection]);
+
+  useEffect(() => {
+    setFrames(current => current.map((frame, index) =>
+      index === 0 && frame.label !== rootLabel ? { ...frame, label: rootLabel } : frame));
+  }, [rootKey, rootLabel, inspection]);
 
   const updateFrame = useCallback((key: string, update: (frame: BoundaryFrame) => BoundaryFrame) => {
     setFrames(current => current.map(frame => frame.key === key ? update(frame) : frame));
@@ -272,6 +286,7 @@ export function ReusableBoundaryInspector({
     const key = activeFrame.key;
     updateFrame(key, frame => ({
       ...frame,
+      activePane: "evidence",
       selectedActivityExecutionId: activityExecutionId,
       selectedStatus: "loading",
       selectedInspection: null,
@@ -351,67 +366,77 @@ export function ReusableBoundaryInspector({
 
   const boundary = activeFrame.inspection.boundary!;
   return (
-    <section className="wf-instance-section wf-boundary-evidence wf-boundary-inspector" style={boundaryStyles.inspector} aria-label="Reusable boundary Runtime Evidence">
-      <header className="wf-boundary-inspector-heading" style={boundaryStyles.splitHeader}>
-        <div>
-          <span className="wf-boundary-eyebrow">Reusable activity boundary</span>
-          <h4>{activeFrame.label}</h4>
+    <section
+      className="wf-boundary-inspector"
+      aria-label="Activity internals"
+    >
+      {frames.length > 1 ? (
+        <nav className="wf-boundary-breadcrumbs" aria-label="Activity boundary path">
+          {frames.map((frame, index) => (
+            <span key={frame.key} className="wf-boundary-breadcrumb">
+              {index > 0 ? <ChevronRight size={13} aria-hidden="true" /> : null}
+              <button
+                type="button"
+                aria-current={index === frames.length - 1 ? "page" : undefined}
+                onClick={() => navigateToFrame(index)}
+              >
+                {frame.label}
+              </button>
+            </span>
+          ))}
+          <WorkflowStatusBadge status={activeFrame.inspection.status} subStatus={activeFrame.inspection.subStatus} />
+        </nav>
+      ) : null}
+
+      <div className="wf-boundary-controls">
+        <div className="wf-boundary-pane-tabs" role="tablist" aria-label="Activity details">
+          <button
+            type="button"
+            role="tab"
+            id={stepsTabId}
+            aria-controls={paneId}
+            aria-label="Steps"
+            aria-selected={activeFrame.activePane === "evidence"}
+            data-selected={activeFrame.activePane === "evidence"}
+            tabIndex={activeFrame.activePane === "evidence" ? 0 : -1}
+            onClick={() => setPane("evidence")}
+            onKeyDown={event => moveBoundaryTab(event, activeFrame.activePane, setPane)}
+          >
+            <span>Steps</span>
+            {activeFrame.evidence.committedThroughSequence !== null
+              ? <small aria-hidden="true">{activeFrame.evidence.items.length}</small>
+              : null}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id={definitionTabId}
+            aria-controls={paneId}
+            aria-label="Definition"
+            aria-selected={activeFrame.activePane === "structure"}
+            data-selected={activeFrame.activePane === "structure"}
+            tabIndex={activeFrame.activePane === "structure" ? 0 : -1}
+            onClick={() => setPane("structure")}
+            onKeyDown={event => moveBoundaryTab(event, activeFrame.activePane, setPane)}
+          >
+            Definition
+          </button>
         </div>
-        <WorkflowStatusBadge
-          status={activeFrame.inspection.status}
-          subStatus={activeFrame.inspection.subStatus}
+        <AuthorizedBoundaryDefinitionLink
+          context={context}
+          definitionId={boundary.definitionId}
+          versionId={boundary.definitionVersionId}
+          linkText="View activity definition"
         />
-      </header>
-
-      <nav className="wf-boundary-breadcrumbs" style={boundaryStyles.breadcrumbs} aria-label="Reusable boundary occurrence breadcrumbs">
-        {frames.map((frame, index) => (
-          <span key={frame.key} style={boundaryStyles.inlineCluster}>
-            {index > 0 ? <ChevronRight size={12} aria-hidden="true" /> : null}
-            <button
-              type="button"
-              aria-current={index === frames.length - 1 ? "page" : undefined}
-              onClick={() => navigateToFrame(index)}
-            >
-              {frame.label}
-              <small>Execution {frame.inspection.activityExecutionId}</small>
-            </button>
-          </span>
-        ))}
-      </nav>
-
-      <div className="wf-boundary-summary" style={boundaryStyles.responsiveGrid}>
-        <BoundaryLifecycle inspection={activeFrame.inspection} />
-        <DescendantAggregate inspection={activeFrame.inspection} />
-      </div>
-
-      <div className="wf-boundary-pane-tabs" style={boundaryStyles.twoColumnTabs} role="tablist" aria-label="Boundary inspector panes">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeFrame.activePane === "structure"}
-          style={paneButtonStyle(activeFrame.activePane === "structure")}
-          onClick={() => setPane("structure")}
-        >
-          Pinned structure
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeFrame.activePane === "evidence"}
-          style={paneButtonStyle(activeFrame.activePane === "evidence")}
-          onClick={() => setPane("evidence")}
-        >
-          Runtime Evidence
-          {activeFrame.evidence.committedThroughSequence !== null
-            ? ` (${activeFrame.evidence.items.length})`
-            : ""}
-        </button>
       </div>
 
       <div
         ref={scrollRef}
         className="wf-boundary-pane-scroll"
-        style={boundaryStyles.paneScroll}
+        id={paneId}
+        role="tabpanel"
+        tabIndex={0}
+        aria-labelledby={activeFrame.activePane === "evidence" ? stepsTabId : definitionTabId}
         onScroll={event => {
           const scrollTop = event.currentTarget.scrollTop;
           updateFrame(activeFrame.key, frame => ({ ...frame, scrollTop }));
@@ -444,66 +469,79 @@ export function ReusableBoundaryInspector({
         )}
       </div>
 
+      <BoundaryTechnicalDetails
+        inspection={activeFrame.inspection}
+        evidence={activeFrame.evidence}
+        layout={activeFrame.layout}
+        selectedActivityExecutionId={activeFrame.selectedActivityExecutionId}
+        selectedInspection={activeFrame.selectedInspection}
+        onSelect={activityExecutionId => {
+          selectExecution(activityExecutionId);
+          requestAnimationFrame(() => scrollRef.current?.focus());
+        }}
+      />
+
       {isCancelling(activeFrame.inspection) ? (
         <p className="wf-boundary-nonterminal" role="status">
-          Cancellation cleanup is still committing. This boundary remains nonterminal until cleanup completes.
+          Cancellation is still finishing. This activity has not finished yet.
         </p>
       ) : null}
-      <span className="wf-sr-only" style={boundaryStyles.visuallyHidden} aria-live="polite">
+      <span className="wf-boundary-announcement" aria-live="polite">
         {activeFrame.evidenceStatus === "loading"
-          ? "Loading boundary Runtime Evidence."
+          ? "Loading activity steps."
           : activeFrame.evidenceStatus === "ready"
-            ? `${activeFrame.evidence.items.length} committed descendant occurrences loaded.`
+            ? `${activeFrame.evidence.items.length} activity steps loaded.`
             : ""}
       </span>
-      <span className="wf-sr-only" style={boundaryStyles.visuallyHidden}>
-        Exact boundary {boundary.definitionId}, version {boundary.version}, execution {activeFrame.inspection.activityExecutionId}.
-      </span>
     </section>
   );
 }
 
-function BoundaryLifecycle({ inspection }: { inspection: ActivityExecutionInspection }) {
-  const boundary = inspection.boundary!;
-  return (
-    <section className="wf-boundary-layout wf-boundary-summary-card" aria-label="Boundary lifecycle">
-      <h5>Boundary lifecycle</h5>
-      <dl>
-        <dt>Status</dt>
-        <dd>{[inspection.status, inspection.subStatus].filter(Boolean).join(" · ")}</dd>
-        <dt>Definition</dt>
-        <dd>{boundary.definitionId}</dd>
-        <dt>Exact version</dt>
-        <dd>{boundary.version} <small>{boundary.definitionVersionId}</small></dd>
-        <dt>Execution scope</dt>
-        <dd>{boundary.executionScopeId}</dd>
-        <dt>Attempt</dt>
-        <dd>{inspection.attempt ? `${inspection.attempt.attemptNumber} of ${inspection.attempt.totalAttempts ?? "?"}` : "1"}</dd>
-      </dl>
-    </section>
-  );
-}
+function AuthorizedBoundaryDefinitionLink({
+  context,
+  definitionId,
+  versionId,
+  linkText = "View activity definition"
+}: {
+  context: StudioEndpointContext;
+  definitionId: string;
+  versionId: string;
+  linkText?: string;
+}) {
+  const contextIdentity = runtimeValueContextId(context);
+  const [resolved, setResolved] = useState<{ contextIdentity: number | string; definitionId: string; versionId: string } | null>(null);
+  const [status, setStatus] = useState<"loading" | "ready" | "unavailable">("loading");
 
-function DescendantAggregate({ inspection }: { inspection: ActivityExecutionInspection }) {
-  const boundary = inspection.boundary!;
-  const aggregate = boundary.aggregate;
-  return (
-    <section className="wf-boundary-layout wf-boundary-summary-card" aria-label="Descendant aggregate">
-      <h5>Descendant aggregate</h5>
-      <dl>
-        <dt>Status</dt>
-        <dd>{aggregate.status}</dd>
-        <dt>Committed</dt>
-        <dd>{boundary.committedDescendantCount}</dd>
-        <dt>Completed / faulted</dt>
-        <dd>{aggregate.completed} / {aggregate.faulted}</dd>
-        <dt>Incidents / retries</dt>
-        <dd>{aggregate.blockingIncidentCount} / {aggregate.retryCount}</dd>
-        <dt>Last sequence</dt>
-        <dd>{aggregate.lastExecutionSequence}</dd>
-      </dl>
-    </section>
-  );
+  useEffect(() => {
+    const controller = new AbortController();
+    setResolved(null);
+    setStatus("loading");
+
+    void Promise.resolve()
+      .then(() => getActivityDefinitionVersion(context, versionId, controller.signal))
+      .then(version => {
+        if (controller.signal.aborted) return;
+        if (version.versionId !== versionId || version.definition.definitionId !== definitionId) {
+          setStatus("unavailable");
+          return;
+        }
+        setResolved({ contextIdentity, definitionId: version.definition.definitionId, versionId: version.versionId });
+        setStatus("ready");
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setStatus("unavailable");
+      });
+
+    return () => controller.abort();
+  }, [context, contextIdentity, definitionId, versionId]);
+
+  if (status === "unavailable") return <span className="wf-boundary-source-unavailable">Activity definition link unavailable.</span>;
+  if (status === "loading" || !resolved || resolved.contextIdentity !== contextIdentity || resolved.definitionId !== definitionId || resolved.versionId !== versionId) {
+    return <span className="wf-boundary-source-pending" role="status">Resolving activity definition…</span>;
+  }
+
+  const href = `/workflows/activity-definitions?definition=${encodeURIComponent(resolved.definitionId)}&section=versions&version=${encodeURIComponent(resolved.versionId)}`;
+  return <StudioLink href={href}>{linkText}</StudioLink>;
 }
 
 function BoundaryStructurePane({
@@ -514,11 +552,11 @@ function BoundaryStructurePane({
   onRetry(): void;
 }) {
   if (frame.layoutStatus === "loading" || frame.layoutStatus === "idle") {
-    return <p className="wf-muted" role="status">Loading pinned historical layout independently...</p>;
+    return <p className="wf-muted" role="status">Loading the saved activity layout…</p>;
   }
   if (frame.layoutStatus === "failed") {
     return (
-      <div className="wf-boundary-panel-message" style={boundaryStyles.panel} role="alert">
+      <div className="wf-boundary-panel-message" role="alert">
         <p>Authorized historical structure is unavailable. {frame.layoutError}</p>
         <button type="button" onClick={onRetry}><RotateCcw size={13} /> Retry structure</button>
       </div>
@@ -526,9 +564,9 @@ function BoundaryStructurePane({
   }
   if (!frame.layout) {
     return (
-      <div className="wf-boundary-panel-message" style={boundaryStyles.panel}>
-        <strong>No Layout Sidecar was captured.</strong>
-        <p>The exact Executable remains inspectable with automatic layout; no Design version was substituted.</p>
+      <div className="wf-boundary-panel-message">
+        <strong>No saved layout was captured for this run.</strong>
+        <p>The pinned activity definition remains available. No newer version has been substituted.</p>
       </div>
     );
   }
@@ -541,14 +579,12 @@ function HistoricalBoundaryLayout({ layout }: { layout: ActivityExecutionLayout 
   if (positioned.length === 0) {
     return (
       <div className="wf-boundary-layout wf-boundary-layout-list">
-        <header style={boundaryStyles.stack}>
-          <strong>Automatic historical structure</strong>
-          <small>{layout.sourceReferenceId}</small>
+        <header className="wf-boundary-layout-heading">
+          <strong>Activity structure</strong>
         </header>
         {layout.nodes.map(node => (
-          <div key={node.executableNodeId}>
+          <div className="wf-boundary-layout-list-row" key={node.executableNodeId}>
             <span>{historicalNodeLabel(node)}</span>
-            <code>{node.executableNodeId}</code>
           </div>
         ))}
       </div>
@@ -567,11 +603,10 @@ function HistoricalBoundaryLayout({ layout }: { layout: ActivityExecutionLayout 
   const translateY = padding - minY;
 
   return (
-    <figure className="wf-boundary-layout-canvas" style={{ ...boundaryStyles.stack, margin: 0 }}>
-      <figcaption style={boundaryStyles.splitHeader}>
-        <span style={boundaryStyles.stack}>
-          <strong>Pinned historical layout</strong>
-          <small>{layout.selection} · {layout.sourceReferenceId}</small>
+    <figure className="wf-boundary-layout-canvas">
+      <figcaption className="wf-boundary-layout-caption">
+        <span className="wf-boundary-layout-heading">
+          <strong>Saved activity layout</strong>
         </span>
         <small>{layout.nodes.length} nodes · {layout.connections.length} connections</small>
       </figcaption>
@@ -579,7 +614,6 @@ function HistoricalBoundaryLayout({ layout }: { layout: ActivityExecutionLayout 
         viewBox={`0 0 ${width} ${height}`}
         role="img"
         aria-label={`Pinned historical boundary layout with ${layout.nodes.length} nodes`}
-        style={boundaryStyles.layoutCanvas}
       >
         <g transform={`translate(${translateX} ${translateY})`}>
           {layout.connections.map((connection, index) => {
@@ -595,9 +629,6 @@ function HistoricalBoundaryLayout({ layout }: { layout: ActivityExecutionLayout 
                 key={`${connection.source.executableNodeId}:${connection.target.executableNodeId}:${index}`}
                 className="wf-boundary-layout-edge"
                 d={`M ${sourceX} ${sourceY} C ${sourceX + 44} ${sourceY}, ${targetX - 44} ${targetY}, ${targetX} ${targetY}`}
-                fill="none"
-                stroke="var(--wf-border-strong)"
-                strokeWidth="2"
               />
             );
           })}
@@ -611,11 +642,8 @@ function HistoricalBoundaryLayout({ layout }: { layout: ActivityExecutionLayout 
                 transform={`translate(${node.x} ${node.y})`}
               >
                 <title>{historicalNodeLabel(node)}</title>
-                <rect width={nodeWidth} height={nodeHeight} rx="8" fill="var(--wf-panel)" stroke="var(--wf-border-strong)" />
-                <text x="12" y="25" fill="var(--wf-text)" fontSize="11">{truncate(historicalNodeLabel(node), 24)}</text>
-                <text className="wf-boundary-layout-node-id" x="12" y="45" fill="var(--wf-muted-text)" fontSize="8">
-                  {truncate(node.executableNodeId, 28)}
-                </text>
+                <rect className="wf-boundary-layout-node-shape" width={nodeWidth} height={nodeHeight} rx="8" />
+                <text className="wf-boundary-layout-node-label" x="12" y="25">{truncate(historicalNodeLabel(node), 24)}</text>
               </g>
             );
           })}
@@ -623,7 +651,7 @@ function HistoricalBoundaryLayout({ layout }: { layout: ActivityExecutionLayout 
       </svg>
       {layout.nestedBoundaries.length > 0 ? (
         <p className="wf-muted">
-          {layout.nestedBoundaries.length} nested boundary occurrence{layout.nestedBoundaries.length === 1 ? "" : "s"} represented as one node each. Open one from Runtime Evidence to inspect it.
+          {layout.nestedBoundaries.length} nested boundary occurrence{layout.nestedBoundaries.length === 1 ? "" : "s"} represented as one node each. Open one from Steps to inspect it.
         </p>
       ) : null}
     </figure>
@@ -655,43 +683,40 @@ function BoundaryEvidencePane({
   const hasLoadedEvidence = evidence.committedThroughSequence !== null;
 
   return (
-    <div className="wf-boundary-evidence-pane" style={boundaryStyles.stack}>
-      <header className="wf-boundary-evidence-toolbar" style={boundaryStyles.splitHeader}>
-        <span style={boundaryStyles.stack}>
-          <strong>Committed descendants</strong>
-          <small>
-            {hasLoadedEvidence
-              ? `Committed through sequence ${evidence.committedThroughSequence}`
-              : "Waiting for the first committed snapshot"}
-          </small>
-        </span>
-        <button type="button" onClick={onRestart} disabled={frame.evidenceStatus === "loading"}>
-          <RefreshCw size={13} /> Refresh snapshot
+    <div className="wf-boundary-evidence-pane">
+      <header className="wf-boundary-evidence-toolbar">
+        <small>
+          {hasLoadedEvidence
+            ? `${evidence.items.length} recorded step${evidence.items.length === 1 ? "" : "s"}`
+            : "Waiting for recorded steps"}
+        </small>
+        <button type="button" aria-label="Refresh activity steps" onClick={onRestart} disabled={frame.evidenceStatus === "loading"}>
+          <RefreshCw size={13} /> Refresh
         </button>
       </header>
 
       {evidence.staleReason ? (
-        <div className="wf-boundary-stale" style={boundaryStyles.warningPanel} role="alert">
+        <div className="wf-boundary-stale" role="alert">
           <AlertTriangle size={15} aria-hidden="true" />
-          <span style={boundaryStyles.stack}>
-            <strong>Loaded evidence is stale; it has not been mixed with a new snapshot.</strong>
-            <small>{evidence.staleMessage}</small>
+          <span>
+            <strong>This steps view is out of date.</strong>
+            <small>Refresh from the first page to load a new snapshot. Steps from different snapshots are kept separate.</small>
           </span>
-          <button type="button" onClick={onRestart}>Restart from first page</button>
+          <button type="button" onClick={onRestart}>Refresh steps</button>
         </div>
       ) : null}
       {openError ? <p className="wf-boundary-error" role="alert">{openError}</p> : null}
       {frame.evidenceStatus === "failed" ? (
-        <div className="wf-boundary-panel-message" style={boundaryStyles.panel} role="alert">
-          <p>Descendant Runtime Evidence is unavailable. {frame.evidenceError}</p>
+        <div className="wf-boundary-panel-message" role="alert">
+          <p>Activity steps are unavailable. {frame.evidenceError}</p>
           <button type="button" onClick={onRestart}><RotateCcw size={13} /> Retry evidence</button>
         </div>
       ) : null}
       {!hasLoadedEvidence && frame.evidenceStatus === "loading"
-        ? <p className="wf-muted" role="status">Loading the first descendant snapshot...</p>
+        ? <p className="wf-muted" role="status">Loading the first activity steps...</p>
         : null}
       {hasLoadedEvidence && evidence.items.length === 0
-        ? <p className="wf-muted">No committed descendant occurrences are present in this snapshot.</p>
+        ? <p className="wf-muted">No steps have been recorded yet.</p>
         : null}
       {evidence.items.length > 0 ? (
         <VirtualizedHierarchy
@@ -711,7 +736,7 @@ function BoundaryEvidencePane({
           disabled={frame.evidenceStatus === "loading"}
           onClick={onLoadMore}
         >
-          {frame.evidenceStatus === "loading" ? "Loading next committed page..." : "Load next committed page"}
+          {frame.evidenceStatus === "loading" ? "Loading more steps..." : "Load more steps"}
         </button>
       ) : null}
       {frame.selectedActivityExecutionId ? (
@@ -720,16 +745,14 @@ function BoundaryEvidencePane({
           status={frame.selectedStatus}
           inspection={frame.selectedInspection}
           error={frame.selectedError}
-          loadedItems={evidence.items}
-          onSelect={onSelect}
         />
       ) : null}
     </div>
   );
 }
 
-const hierarchyRowHeight = 104;
-const hierarchyViewportHeight = 416;
+const hierarchyRowHeight = 88;
+const hierarchyViewportHeight = 380;
 const hierarchyOverscan = 3;
 
 function VirtualizedHierarchy({
@@ -752,8 +775,9 @@ function VirtualizedHierarchy({
   const [scrollTop, setScrollTop] = useState(restoredScrollTop);
   const [activeIndex, setActiveIndex] = useState(() => Math.max(0, items.findIndex(item => item.activityExecutionId === selectedActivityExecutionId)));
   const viewportRef = useRef<HTMLDivElement>(null);
+  const viewportHeight = Math.min(hierarchyViewportHeight, items.length * hierarchyRowHeight);
   const start = Math.max(0, Math.floor(scrollTop / hierarchyRowHeight) - hierarchyOverscan);
-  const count = Math.ceil(hierarchyViewportHeight / hierarchyRowHeight) + hierarchyOverscan * 2;
+  const count = Math.ceil(viewportHeight / hierarchyRowHeight) + hierarchyOverscan * 2;
   const visible = items.slice(start, start + count);
 
   useEffect(() => {
@@ -773,8 +797,8 @@ function VirtualizedHierarchy({
     const viewport = viewportRef.current;
     if (!viewport) return;
     if (nextTop < viewport.scrollTop) viewport.scrollTop = nextTop;
-    else if (nextTop + hierarchyRowHeight > viewport.scrollTop + hierarchyViewportHeight) {
-      viewport.scrollTop = nextTop + hierarchyRowHeight - hierarchyViewportHeight;
+    else if (nextTop + hierarchyRowHeight > viewport.scrollTop + viewport.clientHeight) {
+      viewport.scrollTop = nextTop + hierarchyRowHeight - viewport.clientHeight;
     }
     requestAnimationFrame(() => {
       viewport.querySelector<HTMLElement>(`[data-hierarchy-index="${bounded}"]`)?.focus();
@@ -804,15 +828,15 @@ function VirtualizedHierarchy({
       ref={viewportRef}
       className="wf-boundary-hierarchy-viewport"
       role="tree"
-      aria-label="Committed descendant execution occurrences"
-      style={{ ...boundaryStyles.hierarchyViewport, height: hierarchyViewportHeight }}
+      aria-label="Activity steps"
+      style={{ height: viewportHeight }}
       onScroll={event => {
         const nextScrollTop = event.currentTarget.scrollTop;
         setScrollTop(nextScrollTop);
         onScroll(nextScrollTop);
       }}
     >
-      <div className="wf-boundary-hierarchy-spacer" style={{ ...boundaryStyles.hierarchySpacer, height: items.length * hierarchyRowHeight }}>
+      <div className="wf-boundary-hierarchy-spacer" style={{ height: items.length * hierarchyRowHeight }}>
         {visible.map((item, visibleIndex) => {
           const index = start + visibleIndex;
           const selected = selectedActivityExecutionId === item.activityExecutionId;
@@ -827,39 +851,41 @@ function VirtualizedHierarchy({
               aria-selected={selected}
               tabIndex={index === activeIndex ? 0 : -1}
               style={{
-                ...boundaryStyles.hierarchyRow,
                 height: hierarchyRowHeight,
-                transform: `translateY(${index * hierarchyRowHeight}px)`,
-                background: selected ? "var(--wf-accent-soft)" : "var(--wf-panel)"
+                transform: `translateY(${index * hierarchyRowHeight}px)`
               }}
               onFocus={() => setActiveIndex(index)}
               onClick={() => onSelect(item.activityExecutionId)}
               onKeyDown={event => onKeyDown(event, index)}
             >
-              <span className="wf-boundary-hierarchy-sequence">{item.executionSequence}</span>
-              <span className="wf-boundary-hierarchy-identity" style={boundaryStyles.stack}>
+              <span className="wf-boundary-hierarchy-identity">
                 <strong>{historicalActivityLabel(item.activityType)}</strong>
-                <small>{executionOccurrenceLabel(item)}</small>
-                <small>{item.activityType} · {item.activityTypeVersion}</small>
+                {item.relativeDepth > 1 ? <small>Nested step</small> : null}
+                {item.boundary ? (
+                  <button
+                    type="button"
+                    className="wf-boundary-open"
+                    disabled={openingActivityExecutionId !== null}
+                    onClick={event => {
+                      event.stopPropagation();
+                      onOpenBoundary(item);
+                    }}
+                  >
+                    <CornerDownRight size={13} />
+                    {openingActivityExecutionId === item.activityExecutionId ? "Opening…" : "View steps"}
+                  </button>
+                ) : null}
               </span>
-              <span className="wf-boundary-hierarchy-state" style={boundaryStyles.stack}>
+              <span className="wf-boundary-hierarchy-state">
                 <WorkflowStatusBadge status={item.status} subStatus={item.subStatus} />
-                <small>{item.bookmarkCount} bookmarks · {item.incidentCount} incidents</small>
+                {item.bookmarkCount > 0 || item.incidentCount > 0 ? (
+                  <small>
+                    {item.bookmarkCount > 0 ? `${item.bookmarkCount} bookmark${item.bookmarkCount === 1 ? "" : "s"}` : ""}
+                    {item.bookmarkCount > 0 && item.incidentCount > 0 ? " · " : ""}
+                    {item.incidentCount > 0 ? `${item.incidentCount} incident${item.incidentCount === 1 ? "" : "s"}` : ""}
+                  </small>
+                ) : null}
               </span>
-              {item.boundary ? (
-                <button
-                  type="button"
-                  className="wf-boundary-open"
-                  disabled={openingActivityExecutionId !== null}
-                  onClick={event => {
-                    event.stopPropagation();
-                    onOpenBoundary(item);
-                  }}
-                >
-                  <CornerDownRight size={13} />
-                  {openingActivityExecutionId === item.activityExecutionId ? "Opening..." : "Open boundary"}
-                </button>
-              ) : null}
             </div>
           );
         })}
@@ -868,115 +894,168 @@ function VirtualizedHierarchy({
   );
 }
 
-function SelectedExecutionEvidence({
-  context,
-  status,
+function BoundaryTechnicalDetails({
   inspection,
-  error,
-  loadedItems,
+  evidence,
+  layout,
+  selectedActivityExecutionId,
+  selectedInspection,
   onSelect
 }: {
-  context: StudioEndpointContext;
-  status: LoadStatus;
-  inspection: ActivityExecutionInspection | null;
-  error: string;
-  loadedItems: ActivityExecutionHierarchyItem[];
+  inspection: ActivityExecutionInspection;
+  evidence: BoundaryEvidenceSnapshot;
+  layout: ActivityExecutionLayout | null;
+  selectedActivityExecutionId: string | null;
+  selectedInspection: ActivityExecutionInspection | null;
   onSelect(activityExecutionId: string): void;
 }) {
-  const workflowExecutionId = inspection?.workflowExecutionId;
-  const activityExecutionId = inspection?.activityExecutionId;
-  const resolutionScope = useMemo(
-    () => workflowExecutionId && activityExecutionId
-      ? {
-          context,
-          workflowExecutionId,
-          activityExecutionId
-        }
+  const boundary = inspection.boundary!;
+  const aggregate = boundary.aggregate;
+  const selectedLinks = selectedInspection ? [
+    selectedInspection.attempt?.previousAttemptActivityExecutionId
+      ? { label: "Previous attempt", id: selectedInspection.attempt.previousAttemptActivityExecutionId }
       : null,
-    [context, workflowExecutionId, activityExecutionId]);
-
-  if (status === "loading") {
-    return <section className="wf-boundary-selected" role="status">Loading canonical execution detail...</section>;
-  }
-  if (status === "failed") {
-    return <section className="wf-boundary-selected" role="alert">Canonical execution detail is unavailable. {error}</section>;
-  }
-  if (!inspection) return null;
-
-  const attempts = [
-    inspection.attempt?.previousAttemptActivityExecutionId
-      ? { label: "Previous attempt", id: inspection.attempt.previousAttemptActivityExecutionId }
+    selectedInspection.attempt?.nextAttemptActivityExecutionId
+      ? { label: "Next attempt", id: selectedInspection.attempt.nextAttemptActivityExecutionId }
       : null,
-    inspection.attempt?.nextAttemptActivityExecutionId
-      ? { label: "Next attempt", id: inspection.attempt.nextAttemptActivityExecutionId }
+    selectedInspection.provenance.parentActivityExecutionId
+      ? { label: "Parent execution", id: selectedInspection.provenance.parentActivityExecutionId }
+      : null,
+    selectedInspection.provenance.schedulingActivityExecutionId
+      ? { label: "Scheduling execution", id: selectedInspection.provenance.schedulingActivityExecutionId }
       : null
-  ].filter((item): item is { label: string; id: string } => !!item);
-  const causal = [
-    inspection.provenance.parentActivityExecutionId
-      ? { label: "Parent execution", id: inspection.provenance.parentActivityExecutionId }
-      : null,
-    inspection.provenance.schedulingActivityExecutionId
-      ? { label: "Scheduling execution", id: inspection.provenance.schedulingActivityExecutionId }
-      : null
-  ].filter((item): item is { label: string; id: string } => !!item);
-  const loadedIds = new Set(loadedItems.map(item => item.activityExecutionId));
+  ].filter((item): item is { label: string; id: string } => !!item) : [];
+  const loadedIds = new Set(evidence.items.map(item => item.activityExecutionId));
 
   return (
-    <section className="wf-boundary-selected" style={{ ...boundaryStyles.panel, ...boundaryStyles.stack }} aria-label="Selected descendant canonical detail">
-      <header style={boundaryStyles.splitHeader}>
-        <span style={boundaryStyles.stack}>
-          <strong>{historicalActivityLabel(inspection.activityType)}</strong>
-          <small>Canonical execution {inspection.activityExecutionId}</small>
-        </span>
-        <WorkflowStatusBadge status={inspection.status} subStatus={inspection.subStatus} />
-      </header>
-      <dl>
-        <dt>Execution sequence</dt>
-        <dd>{inspection.executionSequence}</dd>
-        <dt>Exact activity type</dt>
-        <dd>{inspection.activityType} · {inspection.activityTypeVersion}</dd>
+    <details key={selectedActivityExecutionId ?? "unselected"} className="wf-boundary-technical">
+      <summary>Technical details</summary>
+      <dl className="wf-boundary-technical-grid">
+        <dt>Definition ID</dt>
+        <dd>{boundary.definitionId}</dd>
+        <dt>Definition version</dt>
+        <dd>{boundary.version} · {boundary.definitionVersionId}</dd>
+        <dt>Boundary execution</dt>
+        <dd>{inspection.activityExecutionId}</dd>
+        <dt>Execution scope</dt>
+        <dd>{boundary.executionScopeId}</dd>
         <dt>Attempt</dt>
         <dd>{inspection.attempt ? `${inspection.attempt.attemptNumber} of ${inspection.attempt.totalAttempts ?? "?"}` : "1"}</dd>
-        <dt>Last committed</dt>
-        <dd>{inspection.lastCommittedAt ?? "Not committed"}</dd>
+        <dt>Descendant aggregate</dt>
+        <dd>{aggregate.status} · {boundary.committedDescendantCount} committed · {aggregate.completed} completed · {aggregate.faulted} faulted</dd>
+        <dt>Incidents / retries</dt>
+        <dd>{aggregate.blockingIncidentCount} / {aggregate.retryCount}</dd>
+        <dt>Last descendant sequence</dt>
+        <dd>{aggregate.lastExecutionSequence}</dd>
+        <dt>Snapshot through sequence</dt>
+        <dd>{evidence.committedThroughSequence ?? "Not loaded"}</dd>
+        {layout ? (
+          <>
+            <dt>Layout source</dt>
+            <dd>{layout.selection} · {layout.sourceReferenceId}</dd>
+          </>
+        ) : null}
+        {selectedActivityExecutionId ? (
+          <>
+            <dt>Selected activity execution</dt>
+            <dd>{selectedActivityExecutionId}</dd>
+          </>
+        ) : null}
+        {selectedInspection ? (
+          <>
+            <dt>Selected executable node</dt>
+            <dd>{selectedInspection.executableNodeId}</dd>
+            <dt>Selected activity type</dt>
+            <dd>{selectedInspection.activityType} · {selectedInspection.activityTypeVersion}</dd>
+            <dt>Selected sequence</dt>
+            <dd>{selectedInspection.executionSequence}</dd>
+            <dt>Selected attempt</dt>
+            <dd>{selectedInspection.attempt ? `${selectedInspection.attempt.attemptNumber} of ${selectedInspection.attempt.totalAttempts ?? "?"}` : "1"}</dd>
+            <dt>Last committed</dt>
+            <dd>{selectedInspection.lastCommittedAt ?? "Not committed"}</dd>
+            {selectedInspection.incidents.length > 0 ? (
+              <>
+                <dt>Incident IDs</dt>
+                <dd>
+                  {selectedInspection.incidents.slice(0, evidenceSummaryLimit).map(incident => incident.incidentId).join(", ")}
+                  {selectedInspection.incidents.length > evidenceSummaryLimit
+                    ? ` · ${selectedInspection.incidents.length - evidenceSummaryLimit} more`
+                    : ""}
+                </dd>
+              </>
+            ) : null}
+          </>
+        ) : null}
       </dl>
 
-      {attempts.length > 0 || causal.length > 0 ? (
-        <div className="wf-boundary-causal-links" style={boundaryStyles.responsiveGrid} aria-label="Attempt and causal execution links">
-          {[...attempts, ...causal].map(link => (
+      {selectedLinks.length > 0 ? (
+        <div className="wf-boundary-causal-links" aria-label="Related execution links">
+          {selectedLinks.map(link => (
             <button type="button" key={`${link.label}:${link.id}`} onClick={() => onSelect(link.id)}>
-              <GitBranch size={12} />
-              {link.label}
-              <small>{link.id}{loadedIds.has(link.id) ? " · loaded occurrence" : ""}</small>
+              <GitBranch size={12} aria-hidden="true" />
+              <span>{link.label}</span>
+              <small>{link.id}{loadedIds.has(link.id) ? " · loaded step" : ""}</small>
             </button>
           ))}
         </div>
       ) : null}
 
-      <BoundedEvidenceSummary
-        title="Bookmarks"
-        total={inspection.bookmarks.length}
-        items={inspection.bookmarks.slice(0, evidenceSummaryLimit).map(bookmark => ({
-          id: bookmark.bookmarkId,
-          title: bookmark.stimulusType,
-          detail: `Resume target ${bookmark.resumeTargetId} · created ${bookmark.createdAt}`
-        }))}
-      />
-      <BoundedEvidenceSummary
-        title="Incidents"
-        total={inspection.incidents.length}
-        items={inspection.incidents.slice(0, evidenceSummaryLimit).map(incident => ({
-          id: incident.incidentId,
-          title: `${incident.failureType} · ${incident.status}`,
-          detail: incident.message
-        }))}
-      />
+      {selectedInspection?.bookmarks.length ? (
+        <div className="wf-boundary-technical-evidence">
+          <BoundedEvidenceSummary
+            title="Bookmarks"
+            total={selectedInspection.bookmarks.length}
+            items={selectedInspection.bookmarks.slice(0, evidenceSummaryLimit).map(bookmark => ({
+              id: bookmark.bookmarkId,
+              title: bookmark.stimulusType,
+              detail: `Resume target ${bookmark.resumeTargetId} · created ${bookmark.createdAt}`
+            }))}
+          />
+        </div>
+      ) : null}
+    </details>
+  );
+}
+
+function SelectedExecutionEvidence({
+  context,
+  status,
+  inspection,
+  error
+}: {
+  context: StudioEndpointContext;
+  status: LoadStatus;
+  inspection: ActivityExecutionInspection | null;
+  error: string;
+}) {
+  const workflowExecutionId = inspection?.workflowExecutionId;
+  const activityExecutionId = inspection?.activityExecutionId;
+  const resolutionScope = useMemo(
+    () => workflowExecutionId && activityExecutionId
+      ? { context, workflowExecutionId, activityExecutionId }
+      : null,
+    [context, workflowExecutionId, activityExecutionId]);
+
+  if (status === "loading") {
+    return <section className="wf-boundary-selected" role="status">Loading selected step…</section>;
+  }
+  if (status === "failed") {
+    return <section className="wf-boundary-selected" role="alert">Selected step detail is unavailable. {error}</section>;
+  }
+  if (!inspection) return null;
+
+  return (
+    <section className="wf-boundary-selected" aria-label="Selected activity step">
+      <header className="wf-boundary-selected-heading">
+        <strong>{historicalActivityLabel(inspection.activityType)}</strong>
+        <WorkflowStatusBadge status={inspection.status} subStatus={inspection.subStatus} />
+      </header>
 
       <RuntimeValueEvidenceResolutionProvider scope={resolutionScope}>
-        <section className="wf-boundary-value-evidence" style={boundaryStyles.sectionDivider} aria-label="Selected execution Runtime Evidence values">
-          <h6>Runtime Evidence values</h6>
+        <section className="wf-boundary-value-evidence" aria-label="Selected step values">
+          <h5>Values</h5>
           {inspection.valueSnapshots.length === 0
-            ? <p>No value evidence was captured for this execution.</p>
+            ? <p>No value evidence was captured for this step.</p>
             : inspection.valueSnapshots.map((snapshot, index) => (
               <SelectedValueEvidence
                 key={`${snapshot.subject}:${snapshot.name}:${snapshot.capturedAt}:${index}`}
@@ -987,14 +1066,15 @@ function SelectedExecutionEvidence({
       </RuntimeValueEvidenceResolutionProvider>
       {inspection.boundary ? (
         <p className="wf-muted">
-          This occurrence is a nested reusable boundary. Its descendants remain collapsed until “Open boundary” is used on its row.
+          This is a nested activity. Select View steps to inspect it.
         </p>
       ) : null}
       {isCancelling(inspection) ? (
-        <p className="wf-boundary-nonterminal">
-          Cancelling is nonterminal; cleanup has not committed completion yet.
+        <p className="wf-boundary-nonterminal" role="status">
+          Cancellation is still finishing. This activity has not finished yet.
         </p>
       ) : null}
+      {inspection.incidents.length > 0 ? <VisibleIncidentEvidence incidents={inspection.incidents} /> : null}
     </section>
   );
 }
@@ -1009,12 +1089,12 @@ function BoundedEvidenceSummary({
   items: Array<{ id: string; title: string; detail: string }>;
 }) {
   return (
-    <section className="wf-boundary-bounded-summary" style={boundaryStyles.sectionDivider}>
+    <section className="wf-boundary-bounded-summary">
       <h6>{title} <small>{total}</small></h6>
       {items.length === 0 ? <p>No {title.toLowerCase()} on this attempt.</p> : (
         <ul>
           {items.map(item => (
-            <li key={item.id} style={boundaryStyles.panel}>
+            <li key={item.id}>
               <strong>{item.title}</strong>
               <small>{item.id}</small>
               <span>{item.detail}</span>
@@ -1039,17 +1119,44 @@ function SelectedValueEvidence({ snapshot }: { snapshot: ActivityExecutionInspec
     "payload-reference": "Payload reference"
   } as const;
   return (
-    <article className="wf-boundary-value-card" style={boundaryStyles.panel} data-presentation={presentation}>
-      <header style={boundaryStyles.splitHeader}>
-        <span style={boundaryStyles.stack}>
+    <article className="wf-boundary-value-card" data-presentation={presentation}>
+      <header className="wf-boundary-value-heading">
+        <span>
           <strong>{snapshot.name}</strong>
-          <small>{snapshot.subject} · {runtimeValueTypeLabel(snapshot.type) || "Unknown type"}</small>
+          <small>{valueSubjectLabel(snapshot.subject)} · {runtimeValueTypeLabel(snapshot.type) || "Unknown type"}</small>
         </span>
-        <span style={boundaryStyles.badge}>{labels[presentation]}</span>
+        <span className="wf-boundary-value-state">{labels[presentation]}</span>
       </header>
       <RuntimeValueEvidenceContent snapshot={snapshot} />
     </article>
   );
+}
+
+function VisibleIncidentEvidence({ incidents }: { incidents: ActivityExecutionInspection["incidents"] }) {
+  return (
+    <section className="wf-boundary-visible-incidents" aria-label="Activity incidents">
+      <h5>Incidents <small>{incidents.length}</small></h5>
+      <ul>
+        {incidents.slice(0, evidenceSummaryLimit).map(incident => (
+          <li key={incident.incidentId}>
+            <strong>{incident.failureType} · {incident.status}</strong>
+            <p>{incident.message}</p>
+          </li>
+        ))}
+      </ul>
+      {incidents.length > evidenceSummaryLimit
+        ? <p>Showing the first {evidenceSummaryLimit} of {incidents.length} incidents.</p>
+        : null}
+    </section>
+  );
+}
+
+function valueSubjectLabel(subject: string) {
+  switch (subject.toLowerCase()) {
+    case "activityinput": return "Input";
+    case "activityoutput": return "Output";
+    default: return subject.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
+  }
 }
 
 function createFrame(inspection: ActivityExecutionInspection, label?: string): BoundaryFrame {
@@ -1057,7 +1164,7 @@ function createFrame(inspection: ActivityExecutionInspection, label?: string): B
     key: frameKey(inspection),
     label: label ?? boundaryLabel(inspection),
     inspection,
-    activePane: "structure",
+    activePane: "evidence",
     scrollTop: 0,
     hierarchyScrollTop: 0,
     layoutStatus: "idle",
@@ -1098,26 +1205,25 @@ function frameKey(inspection: ActivityExecutionInspection) {
 }
 
 function boundaryLabel(inspection: ActivityExecutionInspection) {
-  const name = historicalActivityLabel(inspection.activityType);
-  return `${name} · attempt ${inspection.attempt?.attemptNumber ?? 1}`;
+  return historicalActivityLabel(inspection.activityType);
 }
 
 function hierarchyItemLabel(item: ActivityExecutionHierarchyItem) {
-  return `${historicalActivityLabel(item.activityType)} · attempt ${item.attempt?.attemptNumber ?? 1}`;
+  return historicalActivityLabel(item.activityType);
 }
 
 function historicalActivityLabel(activityType: string) {
-  return activityType.split(".").filter(Boolean).at(-1) || activityType || "Historical activity";
+  if (!activityType || activityType.toLowerCase().startsWith("elsa.user.")) return "Reusable activity";
+  const typeName = activityType.split(".").filter(Boolean).at(-1);
+  return typeName?.replace(/([a-z0-9])([A-Z])/g, "$1 $2") || "Activity";
 }
 
 function historicalNodeLabel(node: {
   activityType?: string | null;
-  activityTypeVersion?: string | null;
-  authoredActivityId: string;
 }) {
   return node.activityType
-    ? `${historicalActivityLabel(node.activityType)}${node.activityTypeVersion ? ` ${node.activityTypeVersion}` : ""}`
-    : `${node.authoredActivityId} · historical descriptor unavailable`;
+    ? historicalActivityLabel(node.activityType)
+    : "Historical activity descriptor unavailable";
 }
 
 function isCancelling(inspection: ActivityExecutionInspection) {
@@ -1129,140 +1235,28 @@ function truncate(value: string, length: number) {
   return value.length > length ? `${value.slice(0, Math.max(0, length - 1))}…` : value;
 }
 
-
-
-const boundaryStyles = {
-  inspector: {
-    display: "grid",
-    gap: 12,
-    overflow: "hidden"
-  },
-  splitHeader: {
-    display: "flex",
-    minWidth: 0,
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 10
-  },
-  stack: {
-    display: "grid",
-    minWidth: 0,
-    gap: 4
-  },
-  breadcrumbs: {
-    display: "flex",
-    minWidth: 0,
-    alignItems: "center",
-    gap: 4,
-    overflowX: "auto"
-  },
-  inlineCluster: {
-    display: "inline-flex",
-    minWidth: "max-content",
-    alignItems: "center",
-    gap: 4
-  },
-  responsiveGrid: {
-    display: "grid",
-    gap: 8,
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))"
-  },
-  twoColumnTabs: {
-    display: "grid",
-    gap: 4,
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))"
-  },
-  paneScroll: {
-    maxHeight: "min(68vh, 760px)",
-    minHeight: 150,
-    overflow: "auto",
-    overscrollBehavior: "contain"
-  },
-  panel: {
-    border: "1px solid var(--wf-border)",
-    borderRadius: "var(--wf-radius)",
-    background: "var(--wf-panel-muted)",
-    padding: 10
-  },
-  warningPanel: {
-    display: "grid",
-    alignItems: "start",
-    gap: 8,
-    border: "1px solid var(--wf-warning)",
-    borderRadius: "var(--wf-radius)",
-    background: "var(--wf-warning-soft)",
-    padding: 10,
-    gridTemplateColumns: "auto minmax(0, 1fr)"
-  },
-  layoutCanvas: {
-    display: "block",
-    width: "100%",
-    minHeight: 220,
-    maxHeight: 420,
-    border: "1px solid var(--wf-border)",
-    borderRadius: "var(--wf-radius)",
-    background: "var(--wf-canvas)"
-  },
-  hierarchyViewport: {
-    position: "relative",
-    overflow: "auto",
-    overscrollBehavior: "contain",
-    border: "1px solid var(--wf-border)",
-    borderRadius: "var(--wf-radius)",
-    background: "var(--wf-panel-muted)"
-  },
-  hierarchySpacer: {
-    position: "relative",
-    minWidth: 620
-  },
-  hierarchyRow: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    left: 0,
-    display: "grid",
-    minWidth: 0,
-    alignItems: "center",
-    gap: 8,
-    borderBottom: "1px solid var(--wf-border)",
-    cursor: "pointer",
-    gridTemplateColumns: "36px minmax(190px, 1fr) minmax(130px, auto) auto",
-    padding: 8
-  },
-  sectionDivider: {
-    display: "grid",
-    gap: 6,
-    borderTop: "1px solid var(--wf-border)",
-    paddingTop: 9
-  },
-  badge: {
-    flex: "0 0 auto",
-    borderRadius: 999,
-    background: "var(--wf-accent-soft)",
-    color: "var(--wf-accent)",
-    fontSize: 9,
-    fontWeight: 800,
-    padding: "3px 7px"
-  },
-  visuallyHidden: {
-    position: "absolute",
-    width: 1,
-    height: 1,
-    overflow: "hidden",
-    clipPath: "inset(50%)",
-    whiteSpace: "nowrap"
-  }
-} satisfies Record<string, CSSProperties>;
-
-function paneButtonStyle(selected: boolean): CSSProperties {
-  return {
-    border: 0,
-    borderRadius: "var(--wf-radius)",
-    background: selected ? "var(--wf-accent-soft)" : "var(--wf-panel-muted)",
-    color: selected ? "var(--wf-accent)" : "var(--wf-muted-text)",
-    fontWeight: 700,
-    padding: 7
-  };
+function moveBoundaryTab(
+  event: ReactKeyboardEvent<HTMLButtonElement>,
+  activePane: BoundaryPane,
+  selectPane: (pane: BoundaryPane) => void
+) {
+  const panes: BoundaryPane[] = ["evidence", "structure"];
+  const currentIndex = panes.indexOf(activePane);
+  const nextIndex = event.key === "ArrowRight" || event.key === "ArrowDown"
+    ? (currentIndex + 1) % panes.length
+    : event.key === "ArrowLeft" || event.key === "ArrowUp"
+      ? (currentIndex + panes.length - 1) % panes.length
+      : event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? panes.length - 1
+          : null;
+  const nextPane = nextIndex === null ? null : panes[nextIndex];
+  if (!nextPane) return;
+  event.preventDefault();
+  if (nextPane !== activePane) selectPane(nextPane);
+  const tabIndex = nextPane === "evidence" ? 0 : 1;
+  event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>("[role='tab']")[tabIndex]?.focus();
 }
 
 function errorMessage(error: unknown) {

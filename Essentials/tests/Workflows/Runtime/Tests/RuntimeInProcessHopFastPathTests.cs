@@ -235,7 +235,7 @@ public sealed class RuntimeInProcessHopFastPathTests
         var committer = NewCommitter(store, liveDrain, enabled: true, coalescing: coalescing);
         var scope = new RuntimeLiveDrainDeliveryScope(Wfid);
         var (intent, commit) = NewCommitWithContinuation("work-next");
-        var session = new RuntimeCoalescingSession(Wfid, new InMemoryWorkflowSchedulerWorkQueue(), new CoalescingRuntimeCheckpointPersistenceOptions());
+        var session = new RuntimeCoalescingSession(Wfid, new InMemoryWorkflowSchedulerWorkQueue(), new PersistenceModeOptions());
 
         using (liveDrain.Push(scope))
         using (coalescing.Push(session))

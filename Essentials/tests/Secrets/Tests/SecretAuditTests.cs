@@ -1,5 +1,6 @@
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Events;
+using Elsa.Secrets.Core.Exceptions;
 using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Extensions;
 using Elsa.Secrets.Options;
@@ -59,11 +60,12 @@ public sealed class SecretAuditTests : IDisposable
         await _manager.CreateAsync(TenantId, new CreateSecretRequest { Name = "dup.secret", Value = "audit-secret-value" });
         _auditSink.Records.Clear();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        await Assert.ThrowsAsync<SecretNameInUseException>(async () =>
             await _manager.CreateAsync(TenantId, new CreateSecretRequest { Name = "dup.secret", Value = "audit-secret-value" }));
 
         var failure = Assert.Single(_auditSink.Records.Where(x => x.Operation == "create" && x.Outcome == "failed"));
         Assert.Equal("dup.secret", failure.SecretName);
+        Assert.Equal(nameof(SecretNameInUseException), failure.Reason);
         Assert.DoesNotContain("audit-secret-value", failure.Reason ?? "", StringComparison.Ordinal);
         Assert.DoesNotContain("audit-secret-value", failure.SecretName, StringComparison.Ordinal);
     }

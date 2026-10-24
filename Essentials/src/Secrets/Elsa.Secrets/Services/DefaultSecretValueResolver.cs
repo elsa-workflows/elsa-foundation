@@ -14,7 +14,7 @@ namespace Elsa.Secrets.Services;
 /// <remarks>
 /// A failure to read the secret, from <see cref="ISecretRepository"/> (its metadata) or from its <see cref="ISecretStore"/>
 /// (its payload), is a result rather than a throw, with a fixed error that carries none of the exception's text,
-/// classified by what failed (spec 188, FR-003). An outage, a condition that may clear on its own, is
+/// classified by what failed. An outage, a condition that may clear on its own, is
 /// <see cref="SecretResolutionFailureCode.StoreUnavailable"/>, transient: a <see cref="TimeoutException"/>,
 /// <see cref="IOException"/>, <see cref="SocketException"/> or a cancellation the caller did not request (a provider
 /// timeout) in the chain, or a <see cref="DbException"/> that is an outage (<see cref="IsProviderOutage"/>); the first

@@ -95,7 +95,7 @@ public sealed class ApiCapabilityCatalogTests
         Assert.Equal(["scoped-variable-analysis", "workflow-definitions"], capability.Links.Select(link => link.Rel));
     }
 
-    /// <summary>Spec 182, FR-007 and SC-008: a dormant feature's capability is listed, marked dormant, never simply absent.</summary>
+    /// <summary>A dormant feature's capability is listed, marked dormant, never simply absent.</summary>
     [Fact]
     public async Task A_capability_a_source_contributes_while_its_feature_is_dormant_is_listed_as_dormant_with_its_reason()
     {

@@ -129,7 +129,7 @@ public static class FoundationIdentityServiceCollectionExtensions
         TClaimMappingStore,
         TExternalIdentityStore,
         TTenantMembershipStore>(this IServiceCollection services)
-        where TUserStore : class, IUserStore, IRevisionAwareUserStore
+        where TUserStore : class, IUserStore, IRevisionAwareUserStore, IPagedUserStore
         where TRoleStore : class, IRoleStore, IRevisionAwareRoleStore, IPagedRoleStore
         where TClaimMappingStore : class, IClaimMappingStore, IRevisionAwareClaimMappingStore, IPagedClaimMappingStore
         where TExternalIdentityStore : class, IExternalIdentityStore, IRevisionAwareExternalIdentityStore, IPagedExternalIdentityStore
@@ -137,6 +137,7 @@ public static class FoundationIdentityServiceCollectionExtensions
     {
         services.EnsureReplacementContract<IUserStore, TUserStore>();
         services.EnsureReplacementContract<IRevisionAwareUserStore, TUserStore>();
+        services.EnsureReplacementContract<IPagedUserStore, TUserStore>();
         services.EnsureReplacementContract<IRoleStore, TRoleStore>();
         services.EnsureReplacementContract<IRevisionAwareRoleStore, TRoleStore>();
         services.EnsureReplacementContract<IPagedRoleStore, TRoleStore>();
@@ -173,7 +174,7 @@ public static class FoundationIdentityServiceCollectionExtensions
 
     /// <summary>
     /// Registers a feature-owned <see cref="IPermissionContributor"/> so the feature can additively
-    /// contribute permissions to the shared catalog without replacing it (per ADR 0037). Safe to call
+    /// contribute permissions to the shared catalog without replacing it. Safe to call
     /// from a feature's own service-registration home; the identity abstractions do not need to be
     /// initialized first because <see cref="CompositePermissionCatalog"/> aggregates every registered
     /// contributor.

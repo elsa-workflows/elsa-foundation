@@ -11,7 +11,7 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Cluster.Tests.Core;
 
 /// <summary>
-/// Spec 182's shared dormancy check (FR-003 to FR-005, FR-008, FR-011 to FR-014): a requirement on family F at version V
+/// The shared dormancy check: a requirement on family F at version V
 /// is met only once this host writes F at V or later and, for a completeness requirement, once the finish record it
 /// observed names V or later. Each case is tested both ways, since the dangerous direction is the one that answers
 /// "available" too early.
@@ -156,7 +156,7 @@ public sealed class SchemaDormancyCheckTests
         Assert.Equal(0, _observed.Refreshes);
     }
 
-    /// <summary>FR-014: a stale view does not refuse a request that finalization already allows.</summary>
+    /// <summary>A stale view does not refuse a request that finalization already allows.</summary>
     [Fact]
     public async Task Before_refusing_the_check_refreshes_a_stale_observation_and_serves_what_it_then_allows()
     {
@@ -190,7 +190,7 @@ public sealed class SchemaDormancyCheckTests
         Assert.Equal(("(none)", null), (refusal.WriteVersion, refusal.FeatureId));
     }
 
-    /// <summary>FR-011: members and hold reasons reach operators, never callers.</summary>
+    /// <summary>Members and hold reasons reach operators, never callers.</summary>
     [Fact]
     public void The_operator_reason_carries_the_gates_status_and_the_caller_reason_names_no_host()
     {
@@ -231,7 +231,7 @@ public sealed class SchemaDormancyCheckTests
         Assert.Same(provider.GetRequiredService<IObservedSchemaFinalization>(), provider.GetRequiredService<IObservedSchemaFinalization>());
     }
 
-    /// <summary>§2.6.2: a second source fails where it is composed, and the same one again is a no-op.</summary>
+    /// <summary>A second source fails where it is composed, and the same one again is a no-op.</summary>
     [Fact]
     public void A_second_source_is_refused_where_it_is_composed_and_the_same_one_again_is_not()
     {
@@ -242,7 +242,7 @@ public sealed class SchemaDormancyCheckTests
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IObservedSchemaFinalization));
     }
 
-    /// <summary>§2.6.2: the default yields to a check composed before it, and two composed checks fail when it is asked for.</summary>
+    /// <summary>The default yields to a check composed before it, and two composed checks fail when it is asked for.</summary>
     [Fact]
     public void The_default_check_yields_to_one_already_composed_and_refuses_to_join_two()
     {

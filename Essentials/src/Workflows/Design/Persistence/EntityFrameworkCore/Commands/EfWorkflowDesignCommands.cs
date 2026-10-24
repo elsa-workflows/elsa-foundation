@@ -429,8 +429,11 @@ public sealed class EfPromoteDraftToVersionCommand(WorkflowsDesignDbContext db, 
                     if (inlineEvents is not null)
                     {
                         var errors = await inlineEvents.DeriveValidationErrorsAsync(draft, token);
-                        if (errors.Count > 0)
-                            throw new DraftHasValidationErrorsException(draftId, errors);
+                        var blocking = errors
+                            .Where(error => !string.Equals(error.Severity, ValidationSeverities.Warning, StringComparison.Ordinal))
+                            .ToArray();
+                        if (blocking.Length > 0)
+                            throw new DraftHasValidationErrorsException(draftId, blocking);
                     }
 
                     var latest = await versionStore.FindLatestVersionAsync(draft.WorkflowDefinitionId, token);

@@ -103,7 +103,7 @@ internal sealed class EfSchemaBackfillFinish(
             {
                 if (!(await store.RecordCompletionAsync(family, record.Revision, run.Target, verification.StartedAt, verification.EndedAt, readable, member, _worker, cancellationToken)).Applied)
                     return Attempt<string?>.Again;
-                logger.LogInformation("Schema family {Family} of EF module {Module} is complete at {Version}: no row below it remains (spec 186, FR-014).", family, gate.Module, run.Target);
+                logger.LogInformation("Schema family {Family} of EF module {Module} is complete at {Version}: no row below it remains.", family, gate.Module, run.Target);
                 return Attempt<string?>.Done(null);
             }
             catch (SchemaFinalizationRefusedException refusal) when (refusal.Refusal == SchemaFinalizationRefusal.NotForward)
@@ -186,7 +186,7 @@ internal sealed class EfSchemaBackfillFinish(
 
             logger.LogCritical(
                 "Schema family {Family} of EF module {Module} is no longer complete at {Version}: {Reason} The completion is withdrawn until a new " +
-                "verification pass succeeds, and features that need it are dormant meanwhile (spec 186, FR-018).",
+                "verification pass succeeds, and features that need it are dormant meanwhile.",
                 family, gate.Module, standing.CompletionVersion, reason);
             return Attempt<Withdrawal>.Done(new Withdrawal(null));
         }, () => throw new InvalidOperationException(
@@ -288,7 +288,7 @@ internal sealed class EfSchemaBackfillFinish(
         EfSchemaBackfillClaimOutcome Unclaimable(string why)
         {
             logger.LogError(
-                "The backfill of EF module {Module} skips this round: {Why}, so no claim can be held in it (spec 186, FR-008). Nothing the " +
+                "The backfill of EF module {Module} skips this round: {Why}, so no claim can be held in it. Nothing the " +
                 "finalization store writes leaves a record so; inspect it with the persistence tool's status command.",
                 gate.Module, why);
             status.Update(family, current => current with { State = EfSchemaBackfillState.Idle, ClaimedBy = null, Detail = $"Skipped: {why}, so no claim can be held in it." });

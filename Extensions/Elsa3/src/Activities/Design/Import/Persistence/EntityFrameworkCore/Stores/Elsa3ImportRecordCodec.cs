@@ -11,7 +11,7 @@ namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Stores;
 /// material: the canonical JSON must hash to the stored content hash, and every lookup projection must agree
 /// with the decoded residual and with the JSON. Any disagreement is corruption and fails closed.
 /// <para>
-/// A row's schema version is proved first and separately (ADR 0077). A version this build does not read is
+/// A row's schema version is proved first and separately. A version this build does not read is
 /// a deployment-sequencing problem rather than damaged data, so it is reported as skew, not as corruption.
 /// </para>
 /// </summary>
@@ -78,7 +78,9 @@ internal static class Elsa3ImportRecordCodec
         EnsureScope(receipt.AccessScope);
         if (!StringComparer.Ordinal.Equals(receipt.ReceiptId, ReusableActivityImportIdentity.Receipt(receipt.IdempotencyKey, receipt.AccessScope)))
             throw new ArgumentException("The Elsa 3 import receipt identity is not derived from its key and scope.", nameof(receipt));
-        var json = JsonSerializer.Serialize(new ReceiptDocument(receipt), Json);
+        // The stored receipt is what a replay and a status read return: it keeps the conversion warnings (spec 246 D-3).
+        // Publication states are read from the publication store each time and never stored (R-6).
+        var json = JsonSerializer.Serialize(new ReceiptDocument(receipt with { Publications = null }), Json);
         return new Elsa3ImportReceiptRecord
         {
             TenantKey = TenantKey(receipt.AccessScope.TenantId),

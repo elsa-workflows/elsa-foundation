@@ -145,7 +145,7 @@ public sealed class MemberQueryTests
     }
 
     /// <summary>
-    /// Spec 186, FR-012 and MR-001, both ways: the backfill's settle condition holds only once every counted member that
+    /// The backfill's settle condition, both ways: it holds only once every counted member that
     /// speaks for the database reports an observed finalized version among the target and later; a member that observed
     /// an older one, or none at all, or whose report is unknown, holds it back, and one that does not declare the family
     /// or speaks for another database does not.
@@ -170,7 +170,7 @@ public sealed class MemberQueryTests
         Assert.True(Evaluate(MemberQuery.Counting(settled), atTarget, later, unrelated, elsewhere, expired).EveryConsideredMemberMatches);
     }
 
-    /// <summary>A member that loads the family's declaration without activating its module writes none of its rows (spec 186, FR-012).</summary>
+    /// <summary>A member that loads the family's declaration without activating its module writes none of its rows.</summary>
     [Fact]
     public void The_settle_condition_leaves_out_a_member_whose_module_is_not_active_and_still_waits_for_one_that_is()
     {
@@ -189,7 +189,7 @@ public sealed class MemberQueryTests
         Assert.Same(activeAndBehind, Assert.Single(answer.Failures).Member);
     }
 
-    /// <summary>What "loaded" means for readability is unchanged: an inactive module's declaration still counts (spec 183, FR-022).</summary>
+    /// <summary>What "loaded" means for readability is unchanged: an inactive module's declaration still counts.</summary>
     [Fact]
     public void An_inactive_module_still_counts_for_what_the_member_can_read_and_for_placement()
     {

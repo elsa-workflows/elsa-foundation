@@ -6,7 +6,7 @@ using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Publishing.Api.Authorization;
 using Elsa.Workflows.Publishing.Api.Capabilities;
 using Elsa.Workflows.Publishing.Api.Services;
@@ -364,7 +364,7 @@ public sealed class WorkflowExecutableExportEndpointTests
         private static readonly DateTimeOffset CreatedAt = new(2026, 8, 17, 9, 0, 0, TimeSpan.Zero);
 
         public static IWorkflowArtifactClosureSerializer Codec() =>
-            new WorkflowArtifactClosureSerializer(new JsonPayloadSerializer(new JsonPayloadConverterRegistry()));
+            new WorkflowArtifactClosureSerializer(SerializationServices.PayloadSerializer());
 
         public static WorkflowArtifactClosure Closure(
             string definitionId = DefinitionId,
@@ -396,7 +396,7 @@ public sealed class WorkflowExecutableExportEndpointTests
                 rootActivity,
                 inputContract,
                 [],
-                checkpointCadence: null,
+                persistenceMode: null,
                 workflowVariables: [],
                 incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
@@ -416,7 +416,7 @@ public sealed class WorkflowExecutableExportEndpointTests
                 runtimeRequirements: null,
                 storageDriverRequirements: null,
                 incidentStrategy: IncidentStrategyBuiltIns.FaultReference,
-                checkpointCadence: null,
+                persistenceMode: null,
                 workflowVariables: []);
         }
     }

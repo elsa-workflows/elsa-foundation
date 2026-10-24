@@ -1,0 +1,19 @@
+#nullable enable
+abstract Elsa.Tasks.Schedules.BackoffSweepWorkerTask.MaxBackoffInterval.get -> System.TimeSpan
+abstract Elsa.Tasks.Schedules.BackoffSweepWorkerTask.OnSweepFailed(System.Exception! exception, int consecutiveFailures, System.TimeSpan backoffInterval) -> void
+abstract Elsa.Tasks.Schedules.BackoffSweepWorkerTask.SweepAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+abstract Elsa.Tasks.Schedules.BackoffSweepWorkerTask.SweepInterval.get -> System.TimeSpan
+Elsa.Tasks.Schedules.BackoffSweepWorkerTask
+Elsa.Tasks.Schedules.BackoffSweepWorkerTask.BackoffSweepWorkerTask(Microsoft.Extensions.Logging.ILogger! logger) -> void
+Elsa.Tasks.Schedules.BackoffSweepWorkerTask.CurrentSweepInterval.get -> System.TimeSpan
+Elsa.Tasks.Schedules.BackoffSweepWorkerTask.ExecuteAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Elsa.Tasks.Schedules.BackoffSweepWorkerTask.GetSchedule() -> Elsa.Tasks.Core.ITaskSchedule!
+Elsa.Tasks.Schedules.BackoffSweepWorkerTask.Logger.get -> Microsoft.Extensions.Logging.ILogger!
+Elsa.Tasks.Schedules.BackoffSweepWorkerTask.StartAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Elsa.Tasks.Schedules.BackoffSweepWorkerTask.StopAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Elsa.Tasks.Schedules.TaskSchedule
+static Elsa.Tasks.Schedules.BackoffSweepWorkerTask.ComputeBackoff(System.TimeSpan baseInterval, System.TimeSpan maxInterval, int failures) -> System.TimeSpan
+static Elsa.Tasks.Schedules.TaskSchedule.Cron(string! expression, Elsa.Primitives.Contracts.ISystemClock! systemClock, Microsoft.Extensions.Logging.ILogger! logger) -> Elsa.Tasks.Core.ITaskSchedule!
+static Elsa.Tasks.Schedules.TaskSchedule.Every(System.TimeSpan interval, Microsoft.Extensions.Logging.ILogger! logger) -> Elsa.Tasks.Core.ITaskSchedule!
+virtual Elsa.Tasks.Schedules.BackoffSweepWorkerTask.IsHandledSweepException(System.Exception! exception) -> bool
+virtual Elsa.Tasks.Schedules.BackoffSweepWorkerTask.ShouldRethrowCancellation(System.OperationCanceledException! exception, System.Threading.CancellationToken cancellationToken) -> bool

@@ -34,6 +34,8 @@ export interface AnchoredPopoverProps extends AnchoredPopoverOptions {
   className?: string;
   id?: string;
   onDismiss?(reason: AnchoredPopoverDismissReason): void;
+  /** Called after an open popover receives its first measured position. */
+  onPositioned?(): void;
 }
 
 const defaultOptions: Required<AnchoredPopoverOptions> = {
@@ -74,6 +76,7 @@ export function AnchoredPopover({
   className,
   id,
   onDismiss,
+  onPositioned,
   ...options
 }: AnchoredPopoverProps) {
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -81,8 +84,15 @@ export function AnchoredPopover({
   const [position, setPosition] = useState<AnchoredPopoverPosition | null>(null);
   const optionsRef = useRef(options);
   const onDismissRef = useRef(onDismiss);
+  const onPositionedRef = useRef(onPositioned);
   optionsRef.current = options;
   onDismissRef.current = onDismiss;
+  onPositionedRef.current = onPositioned;
+  const positioned = open && position !== null;
+
+  useLayoutEffect(() => {
+    if (positioned) onPositionedRef.current?.();
+  }, [positioned]);
 
   const updatePosition = useCallback(() => {
     const anchor = anchorRef.current;
@@ -165,7 +175,8 @@ export function AnchoredPopover({
     left: position?.left ?? 0,
     width: position?.width,
     maxHeight: position?.maxHeight,
-    visibility: position ? "visible" : "hidden"
+    opacity: position ? 1 : 0,
+    pointerEvents: position ? undefined : "none"
   };
 
   return createPortal(
@@ -175,6 +186,8 @@ export function AnchoredPopover({
       className={["studio-anchored-popover", className].filter(Boolean).join(" ")}
       data-placement={position?.placement}
       style={style}
+      inert={!position}
+      aria-hidden={!position}
     >
       {children}
     </div>,

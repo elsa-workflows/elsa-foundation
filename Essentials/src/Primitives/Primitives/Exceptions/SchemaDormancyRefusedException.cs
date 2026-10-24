@@ -1,10 +1,10 @@
 namespace Elsa.Primitives.Exceptions;
 
 /// <summary>
-/// Spec 182's dormancy refusal (FR-013): an operation needs data that only a schema version this host may not use yet
+/// A dormancy refusal: an operation needs data that only a schema version this host may not use yet
 /// can hold, so it is refused whole, before any write or other side effect, and nothing it carried is dropped to make it
-/// fit. The shared dormancy check raises it; it carries the feature when known and the reason on top of spec 180's write
-/// refusal, whose type, family and versions it keeps, and it carries its own stable code (Q17): <see cref="RefusalCode"/>,
+/// fit. The shared dormancy check raises it; it carries the feature when known and the reason on top of the schema write
+/// refusal, whose type, family and versions it keeps, and it carries its own stable code: <see cref="RefusalCode"/>,
 /// never the store-level <see cref="SchemaWriteRefusedException.RefusalCode"/>.
 /// </summary>
 /// <remarks>
@@ -17,13 +17,13 @@ namespace Elsa.Primitives.Exceptions;
 /// <para>
 /// <see cref="SchemaWriteRefusedException.WriteVersion"/> is the version this host observes as finalized for the family,
 /// the version it may write; <see cref="SchemaWriteRefusedException.RequiredVersion"/> the version the operation needs.
-/// <see cref="Reason"/> is caller-neutral: it names no host and says nothing about the fleet's topology (spec 182,
-/// FR-011), because a domain API returns it to whoever sent the request.
+/// <see cref="Reason"/> is caller-neutral: it names no host and says nothing about the fleet's topology, because a
+/// domain API returns it to whoever sent the request.
 /// </para>
 /// </remarks>
 public sealed class SchemaDormancyRefusedException : SchemaWriteRefusedException
 {
-    /// <summary>The stable code every problem envelope that reports a dormancy refusal carries (spec 182, Q17), distinct
+    /// <summary>The stable code every problem envelope that reports a dormancy refusal carries, distinct
     /// from the store-level <see cref="SchemaWriteRefusedException.RefusalCode"/>.</summary>
     public new const string RefusalCode = "schema-version-not-finalized";
 

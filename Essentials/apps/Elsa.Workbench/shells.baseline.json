@@ -20,6 +20,10 @@
           },
           "SecretsApi": {},
           "SecretsWorkflows": {},
+          "Connections": {},
+          "ConnectionsApi": {},
+          "ConnectionsDesign": {},
+          "ConnectionsWorkflows": {},
           "WorkflowsDesignApi": {},
           "WorkflowDesignValidations": {},
           "ActivitiesDesignApi": {},
@@ -27,6 +31,7 @@
           "ActivitiesGraphRuntime": {},
           "ActivitiesRuntime": {},
           "ActivitiesBpmn": {},
+          "ActivitiesCompensation": {},
           "ActivitiesControlFlow": {},
           "ActivitiesFlowchart": {},
           "ActivitiesHttp": {},
@@ -49,8 +54,8 @@
           },
           "WorkflowsRuntimeResumption": {},
           "WorkflowsRuntimeCheckpointPersistence": {
-            "Mode": "Coalesced",
-            "MaxSegmentCheckpoints": 50
+            "Mode": "Balanced",
+            "MaxActivitiesPerCommit": 50
           },
           "WorkflowsRuntimeTriggers": {},
           "WorkflowsRuntimeEntityFrameworkCore": {

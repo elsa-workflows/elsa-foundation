@@ -25,7 +25,15 @@ public sealed record FeatureCatalogItem(
     IReadOnlyList<FeatureDependency> Dependencies)
 {
     /// <summary>
-    /// Whether an enabled feature is available or dormant, and why (spec 182, FR-009), or <see langword="null"/> for a
+    /// Whether the runtime catalog supplied a live descriptor for this feature, independently of
+    /// <see cref="Enabled"/>. An enabled feature without a descriptor is requested but skipped by
+    /// lenient shell composition. Manifest metadata alone does not establish runtime availability.
+    /// This does not assert successful activation or schema readability; see <see cref="Availability"/>.
+    /// </summary>
+    public bool RuntimeAvailable { get; init; }
+
+    /// <summary>
+    /// Whether an enabled feature is available or dormant, and why, or <see langword="null"/> for a
     /// feature that is not enabled: dormancy is reported only for enabled features. Distinct from <see cref="ReadError"/>,
     /// which means a manifest could not be read.
     /// </summary>
@@ -35,7 +43,7 @@ public sealed record FeatureCatalogItem(
 public sealed record FeatureDependency(string Id, bool Optional);
 
 /// <summary>
-/// An enabled feature's availability (spec 182, FR-008 and FR-009): <see cref="AvailableStatus"/>, or
+/// An enabled feature's availability: <see cref="AvailableStatus"/>, or
 /// <see cref="DormantStatus"/> with one reason per unmet dormancy requirement. A dormant feature is composed and running,
 /// and listed as enabled; only its operations that need data a newer schema version holds are refused until then.
 /// </summary>
@@ -52,7 +60,7 @@ public sealed record FeatureAvailability(string Status, IReadOnlyList<FeatureAva
 /// <summary>
 /// Why a dormant feature is not available yet, for one unmet requirement: the schema family and version it needs, the
 /// kind of wait (for instance <c>WaitingForHosts</c>, <c>Held</c> or <c>WaitingForCompleteness</c>), and the reason as an
-/// operator reads it, which may name the hosts that cannot read the version yet (FR-011).
+/// operator reads it, which may name the hosts that cannot read the version yet.
 /// </summary>
 public sealed record FeatureAvailabilityReason(string Family, string Version, string Kind, string Reason);
 
@@ -83,13 +91,16 @@ public sealed class FeatureCatalogItemBuilder
     // info available" instead of treating an empty list as an unknown sentinel. Not part of ToItem().
     public bool DependenciesResolved { get; set; }
 
+    /// <inheritdoc cref="FeatureCatalogItem.RuntimeAvailable" />
+    public bool RuntimeAvailable { get; set; }
+
     /// <summary>
     /// The feature's class, set by the runtime contributor when a live descriptor exists, so a later contributor can read
     /// what the class declares, such as its dormancy requirements. Not part of <see cref="ToItem"/>.
     /// </summary>
     public Type? FeatureType { get; set; }
 
-    /// <summary>The enabled feature's availability (spec 182, FR-009); see <see cref="FeatureCatalogItem.Availability"/>.</summary>
+    /// <summary>The enabled feature's availability; see <see cref="FeatureCatalogItem.Availability"/>.</summary>
     public FeatureAvailability? Availability { get; set; }
 
     public FeatureCatalogItem ToItem() =>
@@ -111,7 +122,8 @@ public sealed class FeatureCatalogItemBuilder
             Settings,
             Dependencies)
         {
-            // Dormancy is reported only for enabled features (spec 182, Edge Cases).
+            RuntimeAvailable = RuntimeAvailable,
+            // Dormancy is reported only for enabled features.
             Availability = Enabled ? Availability : null
         };
 }

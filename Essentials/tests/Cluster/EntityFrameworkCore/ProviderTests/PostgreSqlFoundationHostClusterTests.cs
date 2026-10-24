@@ -22,7 +22,7 @@ public sealed class PostgreSqlFoundationHostCollection : ICollectionFixture<Foun
 /// <remarks>
 /// It also writes down which engine assemblies each host has loaded and from where, because the host carries Npgsql and the
 /// EF provider for its membership while Nuplane injects the engine package the <c>ef-provider</c> selection names into the
-/// module's graph (ADR 0076, amended 2026-09-29).
+/// module's graph.
 /// </remarks>
 [Collection(PostgreSqlFoundationHostCollection.Name)]
 public sealed class PostgreSqlFoundationHostClusterTests(FoundationHostFeed feed, PostgreSqlMembershipDatabase database, ITestOutputHelper output)
@@ -82,7 +82,7 @@ public sealed class PostgreSqlFoundationHostClusterTests(FoundationHostFeed feed
 
         // One copy each of the driver, EF Core and the EF persistence package. The engine assembly is the exception: Nuplane
         // injects the engine package the ef-provider selection names into the module's graph, so a second copy of it is
-        // mapped beside the host's, and the module binds the host's by name (ADR 0076, amended 2026-09-29). That the two
+        // mapped beside the host's, and the module binds the host's by name. That the two
         // hosts finalize and serve with it is what shows the second copy does no harm.
         Assert.All(
             new[] { "Npgsql.dll", "Microsoft.EntityFrameworkCore.dll", "Microsoft.EntityFrameworkCore.Relational.dll", "Elsa.Persistence.EntityFramework.dll" },

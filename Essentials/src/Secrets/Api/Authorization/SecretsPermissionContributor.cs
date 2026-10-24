@@ -15,11 +15,7 @@ public sealed class SecretsPermissionContributor : IPermissionContributor
     public IEnumerable<Permission> Contribute() =>
     [
         Permission(SecretsPermissions.Read, "Read secrets", "Read secret metadata and descriptors."),
-        Permission(
-            SecretsPermissions.Write,
-            "Write secrets",
-            "Create and update secret metadata and values.",
-            new HashSet<string>(StringComparer.Ordinal) { SecretsPermissions.Read }),
+        Permission(SecretsPermissions.Write, "Write secrets", "Create and update secret metadata and values."),
         Permission(SecretsPermissions.UpdateValue, "Update secret values", "Rotate secret values and configurations."),
         Permission(SecretsPermissions.Delete, "Delete secrets", "Revoke and delete secrets."),
         Permission(SecretsPermissions.Test, "Test secrets", "Test secret-store resolution without disclosing values."),
@@ -28,8 +24,8 @@ public sealed class SecretsPermissionContributor : IPermissionContributor
         Permission(SecretsPermissions.Export, "Export secrets", "Export safe secret references.")
     ];
 
-    private Permission Permission(string key, string displayName, string description, IReadOnlySet<string>? implies = null) =>
-        new(key, displayName, "Secrets", description, implies)
+    private Permission Permission(string key, string displayName, string description) =>
+        new(key, displayName, "Secrets", description)
         {
             OwnerId = OwnerId,
             ContributorType = ContributorType

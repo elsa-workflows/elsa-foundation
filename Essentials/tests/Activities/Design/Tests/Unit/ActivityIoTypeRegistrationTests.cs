@@ -5,10 +5,11 @@ using CShells.Features;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Tests.ClrFixture;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Services;
 using Elsa.Activities.Runtime.Tasks;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -71,7 +72,7 @@ public sealed class ActivityIoTypeRegistrationTests
         // 2. Run the runtime registration pass over a fresh registry. It reflects the runtime-loaded activity
         //    types (the ClrFixture assembly is loaded in this test process) and registers each I/O element type
         //    under the SAME convention the scanner used.
-        var registry = SeedPrimitives(new WellKnownTypeRegistry());
+        var registry = SeedPrimitives(SerializationServices.TypeRegistry());
         await CreateTask(registry).ExecuteAsync(CancellationToken.None);
 
         // 3. The compiler's resolution now yields the REAL CLR types, not object.
@@ -85,9 +86,35 @@ public sealed class ActivityIoTypeRegistrationTests
     }
 
     [Fact]
+    public void RuntimeHandlerNestedTypes_DoNotEnterActivityCatalog()
+    {
+        var handlerTypePrefix = typeof(WorkflowInvokeActivitySchedulerWorkHandler).FullName + "+";
+        var models = CreateScanner().Scan(AppContext.BaseDirectory);
+
+        Assert.Contains(models, model => model.ActivityTypeKey == typeof(ComplexInputFixtureActivity).FullName);
+        Assert.DoesNotContain(models, model => model.ActivityTypeKey.StartsWith(handlerTypePrefix, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task RuntimeHandlerNestedTypes_DoNotEnterActivityTypeRegistry()
+    {
+        var handlerType = typeof(WorkflowInvokeActivitySchedulerWorkHandler);
+        var handlerTypePrefix = handlerType.FullName + "+";
+        var registry = SeedPrimitives(SerializationServices.TypeRegistry());
+        await CreateTask(
+            registry,
+            baseAssemblies: () => [handlerType.Assembly, typeof(ComplexInputFixtureActivity).Assembly])
+            .ExecuteAsync(CancellationToken.None);
+
+        var registeredTypes = registry.ListTypes().ToArray();
+        Assert.Contains(typeof(ComplexInputFixtureActivity), registeredTypes);
+        Assert.DoesNotContain(registeredTypes, type => type.FullName?.StartsWith(handlerTypePrefix, StringComparison.Ordinal) == true);
+    }
+
+    [Fact]
     public async Task RegistrationPass_IsIdempotent()
     {
-        var registry = SeedPrimitives(new WellKnownTypeRegistry());
+        var registry = SeedPrimitives(SerializationServices.TypeRegistry());
         var task = CreateTask(registry);
 
         await task.ExecuteAsync(CancellationToken.None);
@@ -102,7 +129,7 @@ public sealed class ActivityIoTypeRegistrationTests
     {
         // Exclude the host AppDomain (baseAssemblies → empty) so the ONLY source is the provider-supplied
         // assembly — i.e. the dynamically-loaded package activity path, not the framework scan.
-        var registry = SeedPrimitives(new WellKnownTypeRegistry());
+        var registry = SeedPrimitives(SerializationServices.TypeRegistry());
         var provider = new StubFeatureAssemblyProvider(typeof(ComplexInputFixtureActivity).Assembly);
         var task = CreateTask(registry, providers: [provider], baseAssemblies: static () => []);
 
@@ -123,7 +150,7 @@ public sealed class ActivityIoTypeRegistrationTests
     public Task ShellFeatureAssembly_WinsOverAPreviousReleaseStillLoadedInTheAppDomain() =>
         WithPreviousRelease(async (current, previous) =>
         {
-            var registry = SeedPrimitives(new WellKnownTypeRegistry());
+            var registry = SeedPrimitives(SerializationServices.TypeRegistry());
 
             await CreateTask(registry, baseAssemblies: () => [previous, current], shellServices: ShellComposing(current)).ExecuteAsync(CancellationToken.None);
 
@@ -134,7 +161,7 @@ public sealed class ActivityIoTypeRegistrationTests
     public Task ProviderAssembly_WinsOverAPreviousReleaseStillLoadedInTheAppDomain() =>
         WithPreviousRelease(async (current, previous) =>
         {
-            var registry = SeedPrimitives(new WellKnownTypeRegistry());
+            var registry = SeedPrimitives(SerializationServices.TypeRegistry());
 
             await CreateTask(registry, providers: [new StubFeatureAssemblyProvider(current)], baseAssemblies: () => [previous, current])
                 .ExecuteAsync(CancellationToken.None);
@@ -149,7 +176,7 @@ public sealed class ActivityIoTypeRegistrationTests
     public Task PreviousReleaseOfAShellFeatureAssembly_ClaimsNoAlias_NotEvenOneTheCurrentReleaseNoLongerDeclares() =>
         WithPreviousRelease(async (current, previous) =>
         {
-            var registry = SeedPrimitives(new WellKnownTypeRegistry());
+            var registry = SeedPrimitives(SerializationServices.TypeRegistry());
 
             await CreateTask(registry, baseAssemblies: () => [previous, current], shellServices: ShellComposing(current)).ExecuteAsync(CancellationToken.None);
 
@@ -163,7 +190,7 @@ public sealed class ActivityIoTypeRegistrationTests
     public Task PreviousRelease_IsScannedLikeAnyLoadedAssembly_WhenNoShellFeatureNamesItsPackage() =>
         WithPreviousRelease(async (current, previous) =>
         {
-            var registry = SeedPrimitives(new WellKnownTypeRegistry());
+            var registry = SeedPrimitives(SerializationServices.TypeRegistry());
 
             await CreateTask(registry, baseAssemblies: () => [previous, current]).ExecuteAsync(CancellationToken.None);
 
@@ -237,7 +264,7 @@ public sealed class ActivityIoTypeRegistrationTests
     [Fact]
     public async Task FaultingFeatureAssemblyProvider_IsTolerated_AndDoesNotAbortRegistration()
     {
-        var registry = SeedPrimitives(new WellKnownTypeRegistry());
+        var registry = SeedPrimitives(SerializationServices.TypeRegistry());
         var providers = new IFeatureAssemblyProvider[]
         {
             new ThrowingFeatureAssemblyProvider(),
@@ -251,7 +278,7 @@ public sealed class ActivityIoTypeRegistrationTests
         Assert.Equal(typeof(FixturePayload), payload);
     }
 
-    private static WellKnownTypeRegistry SeedPrimitives(WellKnownTypeRegistry registry)
+    private static IWellKnownTypeRegistry SeedPrimitives(IWellKnownTypeRegistry registry)
     {
         registry.RegisterType(typeof(string), "String");
         registry.RegisterType(typeof(object), "Object");

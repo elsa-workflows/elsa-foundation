@@ -5,6 +5,7 @@
         "Name": "default",
         "Features": {
           "ActivitiesBpmn": {},
+          "ActivitiesCompensation": {},
           "ActivitiesControlFlow": {},
           "ActivitiesDispatchWorkflowRuntime": {},
           "ActivitiesDispatchWorkflowDesign": {},
@@ -152,6 +153,7 @@
           },
           "JavaScriptJintEngine": {},
           "JavaScriptWorkflowsDesign": {},
+          "Liquid": {},
           "Mediator": {},
           "MemoryCache": {},
           "ModularityApi": {},
@@ -162,6 +164,10 @@
           "SecretsApi": {},
           "SecretsWorkflows": {},
           "SecretsEntityFrameworkCore": {},
+          "Connections": {},
+          "ConnectionsApi": {},
+          "ConnectionsDesign": {},
+          "ConnectionsWorkflows": {},
           "Serialization": {},
           "AttentionApi": {},
           "ModularityAttention": {},
@@ -187,8 +193,8 @@
           "WorkflowsRuntimeRecurringTriggers": {},
           "WorkflowsRuntimeHttp": {},
           "WorkflowsRuntimeCheckpointPersistence": {
-            "Mode": "Coalesced",
-            "MaxSegmentCheckpoints": 50
+            "Mode": "Balanced",
+            "MaxActivitiesPerCommit": 50
           },
           "WorkflowsRuntimeTracing": {},
           "WorkflowsRuntimeTriggers": {},

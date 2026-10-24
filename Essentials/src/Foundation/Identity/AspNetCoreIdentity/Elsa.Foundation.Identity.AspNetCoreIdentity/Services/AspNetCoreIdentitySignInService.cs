@@ -1,4 +1,5 @@
 using Elsa.Foundation.Identity.Core.Authentication;
+using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -19,6 +20,7 @@ public sealed class AspNetCoreIdentitySignInService(
     SignInManager<AspNetCoreIdentityUser> signInManager,
     UserManager<AspNetCoreIdentityUser> userManager,
     IUserClaimsPrincipalFactory<AspNetCoreIdentityUser> principalFactory,
+    IUserStore users,
     IPasswordHasher<AspNetCoreIdentityUser> passwordHasher,
     IAuthSessionService sessionService,
     IHttpContextAccessor httpContextAccessor,
@@ -50,6 +52,11 @@ public sealed class AspNetCoreIdentitySignInService(
 
         var result = await signInManager.CheckPasswordSignInAsync(user, password, lockoutOnFailure: true);
         if (!result.Succeeded)
+            return SignInOutcome.Failure;
+
+        // A disabled account fails like a wrong password. The check runs only after the password check, so a caller
+        // without the password goes through the same path for a disabled account as for an active one.
+        if ((await users.FindAsync(user.TenantId, user.Id, cancellationToken))?.Status == UserStatus.Disabled)
             return SignInOutcome.Failure;
 
         // Build the principal through the Elsa claims-principal factory so tenant/role/permission claims are

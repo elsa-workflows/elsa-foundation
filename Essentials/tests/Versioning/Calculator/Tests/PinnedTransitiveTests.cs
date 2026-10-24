@@ -3,8 +3,8 @@ using Elsa.Versioning.Calculator.Tests.Support;
 namespace Elsa.Versioning.Calculator.Tests;
 
 /// <summary>
-/// Spec 150 FR-003: a pin a package reaches only transitively is in its nuspec all the same, so a change to it, or to
-/// which pins a package reaches, advances exactly the packages whose nuspec changes (spec 149's pinned-transitive edges).
+/// A pin a package reaches only transitively is in its nuspec all the same, so a change to it, or to
+/// which pins a package reaches, advances exactly the packages whose nuspec changes (the dependency map's pinned-transitive edges).
 /// </summary>
 public sealed class PinnedTransitiveTests : SyntheticHistory
 {
@@ -36,7 +36,7 @@ public sealed class PinnedTransitiveTests : SyntheticHistory
         Assert.Empty(CommitAndCompute("Bump a pin no package reaches").Affected);
     }
 
-    /// <summary>A Line A member whose nuspec a pin reaches moves, and Line A moves as one with it (FR-002).</summary>
+    /// <summary>A Line A member whose nuspec a pin reaches moves, and Line A moves as one with it.</summary>
     [Fact]
     public void A_pin_reaching_a_line_a_member_moves_the_whole_line()
     {
@@ -74,7 +74,7 @@ public sealed class PinnedTransitiveTests : SyntheticHistory
     }
 
     /// <summary>
-    /// A pinned-transitive edge is in the fingerprint as it is in change detection (FR-018): the two are one input set,
+    /// A pinned-transitive edge is in the fingerprint as it is in change detection: the two are one input set,
     /// so a pin bump changes the fingerprint of exactly the packages it advances.
     /// </summary>
     [Fact]

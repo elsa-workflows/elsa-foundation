@@ -61,7 +61,7 @@ internal sealed class EfSchemaBackfillSettle(
         {
             status.Blocked(family, [new EfSchemaBackfillBlocker(EfSchemaBackfillBlockerKind.NoFleet, null, 0,
                 "This host composes no fleet, so it cannot tell whether every counted member has observed the finalized version, " +
-                "and it never records completion (spec 186, FR-012).")]);
+                "and it never records completion.")]);
             return (Outcome.Blocked, 0);
         }
 
@@ -129,7 +129,7 @@ internal sealed class EfSchemaBackfillSettle(
             {
                 _raisedMarginLogged = true;
                 logger.LogWarning(
-                    "The backfill's settle margin {Configured} is shorter than the {Floor} this fleet needs to see a member stop writing (its membership expiry plus the skew allowance), so the fleet's is used (spec 186, FR-012).",
+                    "The backfill's settle margin {Configured} is shorter than the {Floor} this fleet needs to see a member stop writing (its membership expiry plus the skew allowance), so the fleet's is used.",
                     configured, floor);
             }
         }

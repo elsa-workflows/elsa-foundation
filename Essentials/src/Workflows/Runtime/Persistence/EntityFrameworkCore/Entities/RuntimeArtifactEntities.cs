@@ -2,7 +2,7 @@ using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 
-[EfSchemaContentAddressed("Keyed by scope and artifact id, and the artifact id is the hash of the executable's content (ADR 0038).")]
+[EfSchemaContentAddressed("Keyed by scope and artifact id, and the artifact id is the hash of the executable's content.")]
 public sealed class WorkflowExecutableEntity
 {
     public string Id { get; set; } = null!;
@@ -49,7 +49,7 @@ public sealed class WorkflowExecutableRootWriteLeaseEntity
     public string SchemaVersion { get; set; } = null!;
 }
 
-[EfSchemaContentAddressed("An executable activity template is identified by the hash of its content (ADR 0038), which its row projects as TemplateHash.")]
+[EfSchemaContentAddressed("An executable activity template is identified by the hash of its content, which its row projects as TemplateHash.")]
 public sealed class ExecutableActivityTemplateEntity
 {
     public string Id { get; set; } = null!;

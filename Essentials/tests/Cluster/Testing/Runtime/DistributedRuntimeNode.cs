@@ -1,7 +1,7 @@
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Cluster.Core.Contracts;
 using Elsa.Serialization.Core;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -43,7 +43,7 @@ public sealed class DistributedRuntimeNodeSetup
     public HashSet<string> StorageDrivers { get; } = new(StringComparer.Ordinal);
 
     /// <summary>The type registry the member resolves activity type aliases through.</summary>
-    public IWellKnownTypeRegistry TypeRegistry { get; set; } = new WellKnownTypeRegistry();
+    public IWellKnownTypeRegistry TypeRegistry { get; set; } = SerializationServices.TypeRegistry();
 
     /// <summary>The placement and transport lease duration. Longer than a membership liveness window by default, so a
     /// test proves that reclaim, not a lease's own expiry, freed a lease.</summary>
@@ -108,11 +108,12 @@ public sealed class DistributedRuntimeNode : IAsyncDisposable
             services.AddSingleton(consumer);
         services.AddSingleton<IRuntimeDurableValueStorageDriverRegistry>(new FixedDriverRegistry(setup.StorageDrivers));
         services.AddSingleton(setup.TypeRegistry);
+        var serializer = SerializationServices.PayloadSerializer();
         services.AddScoped<IRuntimeRequirementChecker>(sp => new RuntimeRequirementChecker(
             sp.GetServices<IRuntimeActivityConsumerCapability>(),
             sp.GetRequiredService<IRuntimeDurableValueStorageDriverRegistry>(),
             sp.GetRequiredService<IWellKnownTypeRegistry>(),
-            new JsonPayloadSerializer(new JsonPayloadConverterRegistry())));
+            serializer));
         services.AddSingleton(sp => new FencedCommandExecutor(
             new RuntimeExecutionOwnershipService(shared.Liveness, clock, sp.GetRequiredService<RuntimeExecutionOwnershipOptions>()),
             shared.Executions));
@@ -136,7 +137,7 @@ public sealed class DistributedRuntimeNode : IAsyncDisposable
         return await actor.EnqueueAsync(envelope);
     }
 
-    /// <summary>The recovery candidates this member's reclaims supplied to the recovery sweep (spec 184, FR-027).</summary>
+    /// <summary>The recovery candidates this member's reclaims supplied to the recovery sweep.</summary>
     public async ValueTask<IReadOnlyCollection<RuntimeRecoveryCandidate>> ReclaimedCandidatesAsync()
     {
         await using var scope = Services.CreateAsyncScope();
@@ -144,14 +145,14 @@ public sealed class DistributedRuntimeNode : IAsyncDisposable
         return await source.ListAsync(RuntimeStorePageRequest.MaximumLimit);
     }
 
-    /// <summary>The unplaceable work this member reports to Attention (spec 184, FR-017).</summary>
+    /// <summary>The unplaceable work this member reports to Attention.</summary>
     public async ValueTask<IReadOnlyCollection<UnplaceableWorkReport>> UnplaceableWorkAsync()
     {
         await using var scope = Services.CreateAsyncScope();
         return await scope.ServiceProvider.GetServices<IWorkflowRuntimePlacementAttention>().Single().ListUnplaceableWorkAsync();
     }
 
-    /// <summary>Stops the member's placement pump as the task runner does when the shell or host stops (FR-021).</summary>
+    /// <summary>Stops the member's placement pump as the task runner does when the shell or host stops.</summary>
     public Task StopAsync() => ((IRecurringTask)Pump).StopAsync(CancellationToken.None);
 
     public ValueTask DisposeAsync() => Services.DisposeAsync();

@@ -21,7 +21,7 @@ public sealed class UpgradedModuleCollection
 }
 
 /// <summary>
-/// Spec 183's FR-021, amended 2026-09-29, as the activation guard reads it: a module upgraded in place leaves its previous
+/// Superseded package generations, as the activation guard reads them: a module upgraded in place leaves its previous
 /// generation loaded in a load context Nuplane never unloads, so reading every load context finds the module declared
 /// twice and the catalog refuses every apply until the host restarts. The guard judges the shell generation an apply is
 /// about to build, which composes the active package set, so a replaced generation stops counting for it at once.

@@ -3,7 +3,7 @@ using Elsa.Expressions;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JavaScript;
-using Elsa.Expressions.JavaScript.Jint.Services;
+using Elsa.Expressions.JavaScript.Core.Exceptions;
 using Elsa.Primitives.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;

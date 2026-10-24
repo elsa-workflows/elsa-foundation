@@ -18,6 +18,10 @@
       operator runs it, so nothing from the host is loaded into the test process.
     -->
     <ProjectReference Include="..\..\..\apps\Elsa.Workbench\Elsa.Workbench.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../Fixtures/BackgroundActivities/BackgroundActivities.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../Fixtures/Reservations/Reservations.csproj" ReferenceOutputAssembly="false" />
+    <!-- The compensation sample package, which WorkbenchCompensationSampleTests drops into the feed as its README says. -->
+    <ProjectReference Include="..\..\..\..\samples\Elsa.Samples.Compensation\Elsa.Samples.Compensation.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>

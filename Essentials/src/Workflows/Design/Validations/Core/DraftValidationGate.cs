@@ -21,7 +21,7 @@ namespace Elsa.Workflows.Design.Validations.Core;
 /// <para>
 /// The gate depends on <see cref="IInlineEventPublisher"/> — inline delivery awaits every handler,
 /// so the errors are fully aggregated by the time we read them back. Depending on the inline face
-/// (rather than <see cref="IEventPublisher"/> plus a caller-supplied strategy) makes the wrong
+/// (rather than on <see cref="IDeferredEventPublisher"/>) makes the wrong
 /// semantics unrepresentable AT THE GATE: nobody can hand it a fire-and-forget publisher that would
 /// return before validators run and leave the error set silently empty. <c>.Core</c> depends only
 /// on <see cref="IInlineEventPublisher"/> (an <c>Elsa.Events.Core</c> abstraction), keeping it

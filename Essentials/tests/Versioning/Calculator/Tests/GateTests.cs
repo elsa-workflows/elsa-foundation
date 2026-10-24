@@ -2,11 +2,11 @@ using Elsa.Versioning.Calculator.Tests.Support;
 
 namespace Elsa.Versioning.Calculator.Tests;
 
-/// <summary>The publish gates: monotonicity (spec 150 FR-012, SC-011) and forward-only (FR-021, SC-014).</summary>
+/// <summary>The publish gates: monotonicity and forward-only.</summary>
 public sealed class GateTests : SyntheticHistory
 {
     /// <summary>
-    /// SC-011: a changed package whose computed version is not above its last published one fails, naming the package,
+    /// A changed package whose computed version is not above its last published one fails, naming the package,
     /// both versions and the paths that marked it changed.
     /// </summary>
     [Fact]
@@ -36,7 +36,7 @@ public sealed class GateTests : SyntheticHistory
         Assert.Contains("Elsa.Primitives: computed 3.9.0, last published 4.0.3-preview", exception.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>SC-014: a re-run for a commit older than the record's latest publish refuses.</summary>
+    /// <summary>A re-run for a commit older than the record's latest publish refuses.</summary>
     [Fact]
     public void A_commit_older_than_the_latest_publish_is_refused()
     {
@@ -48,7 +48,7 @@ public sealed class GateTests : SyntheticHistory
         Assert.Contains("FR-021", exception.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>FR-021: the latest publish itself and every descendant of it are accepted.</summary>
+    /// <summary>The latest publish itself and every descendant of it are accepted.</summary>
     [Fact]
     public void The_latest_publish_and_its_descendants_are_accepted()
     {
@@ -76,7 +76,7 @@ public sealed class GateTests : SyntheticHistory
 
     /// <summary>
     /// A rewritten <c>main</c>: the record's latest publish is no longer an ancestor of the rebuilt history, even with
-    /// identical content, so publishing stops until the record is settled (FR-019) rather than renumbering silently.
+    /// identical content, so publishing stops until the record is settled rather than renumbering silently.
     /// </summary>
     [Fact]
     public void A_rewritten_main_is_refused()

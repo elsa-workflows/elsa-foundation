@@ -6,8 +6,8 @@ namespace Elsa.Versioning.Publisher.Tests;
 
 /// <summary>
 /// The NuGet V3 client under the publisher: how each answer of a feed maps to what the publisher does. Getting a 409, or a
-/// failed read, wrong is the silent direction: a duplicate taken for a success would skip FR-018, and an unanswered
-/// listing taken for an empty one would let the bootstrap past old previews.
+/// failed read, wrong is the silent direction: a duplicate taken for a success would skip the fingerprint check, and an
+/// unanswered listing taken for an empty one would let the bootstrap past old previews.
 /// </summary>
 public sealed class NuGetFeedTests : IDisposable
 {

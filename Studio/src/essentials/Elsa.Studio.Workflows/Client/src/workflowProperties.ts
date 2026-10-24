@@ -3,6 +3,7 @@ import type {
   ArgumentValue,
   CollectionKind,
   IncidentStrategyReference,
+  PersistenceMode,
   VariableDefinition,
   VariableTypeDescriptor,
   WorkflowInput,
@@ -50,8 +51,35 @@ export function updateIncidentStrategyReference(
   };
 }
 
+export const persistenceModes: readonly PersistenceMode[] = ["Durable", "Balanced", "Ephemeral"];
+
+export function isPersistenceMode(value: unknown): value is PersistenceMode {
+  return typeof value === "string" && (persistenceModes as readonly string[]).includes(value);
+}
+
+// The stored value as authored, recognized or not, so a value this Studio does not know can be shown and kept until
+// the author picks another. Publishing accepts only the exact mode names.
+export function readStoredPersistenceMode(strategyOptions: unknown): string | null {
+  if (!isPlainRecord(strategyOptions)) return null;
+  const { persistenceMode } = strategyOptions;
+  return typeof persistenceMode === "string" && persistenceMode.trim().length > 0 ? persistenceMode : null;
+}
+
+// Choosing the host default removes the field rather than storing null, so the workflow carries no choice at all.
+export function updatePersistenceMode(strategyOptions: unknown, mode: PersistenceMode | null): WorkflowStrategyOptions {
+  const { persistenceMode: _previous, ...others } = isPlainRecord(strategyOptions) ? strategyOptions : {};
+  return mode ? { ...others, persistenceMode: mode } : others;
+}
+
 export function isCollectionKind(value: unknown): value is CollectionKind {
   return value === "Single" || value === "Array" || value === "List" || value === "HashSet";
+}
+
+export function normalizeCollectionKind(value: unknown): CollectionKind {
+  if (typeof value !== "string") return "Single";
+  const normalized = value.toLowerCase();
+  const kinds: readonly CollectionKind[] = ["Single", "Array", "List", "HashSet"];
+  return kinds.find(kind => kind.toLowerCase() === normalized) ?? "Single";
 }
 
 // Build an ArgumentType from a picker alias; collection kind defaults to a scalar.
@@ -67,7 +95,7 @@ export function readArgumentType(record: Record<string, unknown>): ArgumentType 
   const raw = record.type ?? record.Type;
   if (isPlainRecord(raw)) {
     const alias = typeof raw.alias === "string" ? raw.alias : typeof raw.typeName === "string" ? raw.typeName : "";
-    return { alias, collectionKind: isCollectionKind(raw.collectionKind) ? raw.collectionKind : "Single" };
+    return { alias, collectionKind: normalizeCollectionKind(raw.collectionKind) };
   }
   const legacy = record.typeInformation ?? record.TypeInformation;
   if (isPlainRecord(legacy)) {

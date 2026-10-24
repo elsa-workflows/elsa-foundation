@@ -136,7 +136,8 @@ public static partial class HttpEndpointStimulus
                 var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
                 {
                     [HttpEndpointRouting.TemplateMetadataKey] = template,
-                    [HttpEndpointRouting.MethodMetadataKey] = method
+                    [HttpEndpointRouting.MethodMetadataKey] = method,
+                    [TriggerStimulusDescriptor.SafeDisplayDescriptorMetadataKey] = $"{method.ToUpperInvariant()} /{template}"
                 };
 
                 foreach (var (key, value) in optionMetadata)

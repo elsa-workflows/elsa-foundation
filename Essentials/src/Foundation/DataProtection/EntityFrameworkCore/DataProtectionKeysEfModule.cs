@@ -4,7 +4,7 @@ namespace Elsa.Foundation.DataProtection.EntityFrameworkCore;
 
 public static class DataProtectionKeysEfModule
 {
-    /// <summary>The module name operators select it by in the persistence tool (ADR 0076 D3).</summary>
+    /// <summary>The module name operators select it by in the persistence tool.</summary>
     public const string Name = "DataProtection.Keys";
 
     public const string HistoryModuleName = "ElsaDataProtectionKeys";
@@ -17,7 +17,7 @@ public static class DataProtectionKeysEfModule
     public const string SchemaFamily = "DataProtectionKeys";
 
     /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
-    /// upcasts through (spec 180, FR-010).</summary>
+    /// upcasts through.</summary>
     public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(DataProtectionKeysEfModule).Assembly, SchemaFamily);
 
     public static string HistoryTableName => EfMigrationsHistory.TableName(HistoryModuleName);

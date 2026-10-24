@@ -32,7 +32,7 @@
 param(
     [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string] $BaseUrl,
     [Parameter(Mandatory)][ValidatePattern('^[0-9a-fA-F]{40}$')][string] $CandidateSha,
-    [Parameter(Mandatory)][ValidateSet('Immediate', 'Coalesced')][string] $Cadence,
+    [Parameter(Mandatory)][ValidateSet('Durable', 'Balanced')][string] $PersistenceMode,
     [Parameter(Mandatory)][ValidateSet('Http4', 'Http16')][string] $Fixture,
     [Parameter(Mandatory)][ValidateSet('On', 'Off')][string] $PersistedDiagnostics,
     [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string] $OutputPath,
@@ -63,11 +63,11 @@ $baseUri = [Uri]($BaseUrl.TrimEnd('/') + '/')
 
 # ---------------------------------------------------------------- fixture setup (shape pinned to #2392 / T02)
 $nonce = [Guid]::NewGuid().ToString('N').Substring(0, 10)
-$workflowName = "RuntimeThroughput2534-$Fixture-$Cadence-$nonce"
+$workflowName = "RuntimeThroughput2534-$Fixture-$PersistenceMode-$nonce"
 $route = "runtime-throughput-2534/$($Fixture.ToLowerInvariant())-$nonce/transform"
 if ($Fixture -eq 'Http4') {
     $setup = & "$PSScriptRoot/Capture-RuntimeDbPaging2392Reference.ps1" -HostCandidateSha $CandidateSha -BaseUrl $BaseUrl `
-        -Username $Username -Password $Password -ExpectedCadence $Cadence -AuthoredCadence $Cadence `
+        -Username $Username -Password $Password -ExpectedPersistenceMode $PersistenceMode -AuthoredPersistenceMode $PersistenceMode `
         -WorkflowName $workflowName -RoutePath $route -SetupOnly | Select-Object -Last 1
     $ctx = $setup.Context
     $definitionId = [string]$setup.DefinitionId
@@ -102,7 +102,7 @@ if ($Fixture -eq 'Http4') {
         (New-VariableDef -Key 'referenceText' -Alias 'String')
     )
     $definition = Submit-Workflow -Ctx $ctx -Name $workflowName -Description '#2534 sixteen-node throughput reference (T02 shape).' `
-        -RootActivity $root -Variables $variables -StrategyOptions @{ checkpointCadence = @{ mode = $Cadence } }
+        -RootActivity $root -Variables $variables -StrategyOptions @{ persistenceMode = $PersistenceMode }
     $null = Publish-WorkflowVersion -Ctx $ctx -VersionId $definition.version.id
     $definitionId = [string]$definition.definition.id
     $versionId = [string]$definition.version.id
@@ -274,7 +274,7 @@ $requestsSent = 0
 $previousThroughput = $null
 $stopReason = 'AllLevelsCompleted'
 
-Write-Host "== Throughput ramp #2534: $Fixture / $Cadence / diagnostics $PersistedDiagnostics == -> $BaseUrl" -ForegroundColor Cyan
+Write-Host "== Throughput ramp #2534: $Fixture / $PersistenceMode / diagnostics $PersistedDiagnostics == -> $BaseUrl" -ForegroundColor Cyan
 foreach ($level in $Levels) {
     $client = New-DriverClient -Clients $level
     try {
@@ -369,7 +369,7 @@ $artifact = [ordered]@{
     candidateSha = $CandidateSha.ToLowerInvariant()
     baseUrl = $BaseUrl
     fixture = $Fixture
-    cadence = $Cadence
+    persistenceMode = $PersistenceMode
     persistedDiagnosticsLabel = $PersistedDiagnostics
     definitionId = $definitionId
     versionId = $versionId

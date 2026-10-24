@@ -10,7 +10,7 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests;
 /// upcasts a row's registries from its own stamp before restamping it, so a row this ever receives with a prior
 /// stamp - not a shape any production caller passes today, since <c>MutateMembershipAsync</c> always builds a fresh,
 /// unstamped row - restamps completely on its own instead of trusting the caller's registries as already current
-/// (spec 180, FR-014; #2144). No production caller exercises that branch, so it is proven directly here, through
+/// (#2144). No production caller exercises that branch, so it is proven directly here, through
 /// reflection, to keep it from rotting unseen.
 /// </summary>
 public sealed class EfIdentityAuthorityRelationshipCoordinatorPrepareTests
@@ -30,7 +30,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinatorPrepareTests
         {
             SchemaVersion = IdentityIamEfModule.SchemaVersion,
             RoleIdsJson = """["role-a","role-b"]""",
-            DirectPermissionsJson = """["identity.users.read"]""",
+            DirectPermissionsJson = """["identity/users:read"]""",
             Status = 1,
             Revision = 3
         };
@@ -39,7 +39,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinatorPrepareTests
 
         Assert.Equal(IdentityIamEfModule.SchemaVersion, row.SchemaVersion);
         Assert.Equal("""["role-a","role-b"]""", row.RoleIdsJson);
-        Assert.Equal("""["identity.users.read"]""", row.DirectPermissionsJson);
+        Assert.Equal("""["identity/users:read"]""", row.DirectPermissionsJson);
         Assert.Equal(tenant, row.TenantId);
         Assert.Equal(EfIdentityStoreSupport.TenantLookup(tenant), row.TenantLookupKey);
         Assert.Equal(user, row.UserId);

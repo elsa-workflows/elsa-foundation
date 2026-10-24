@@ -1,11 +1,11 @@
 using System.Text.Json;
 using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Exceptions;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JsonConverters;
 using Elsa.Expressions.Models;
 using Elsa.Expressions.Services;
-using Elsa.Serialization.Core.Exceptions;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -13,8 +13,8 @@ using Xunit;
 namespace Elsa.Expressions.Tests.Unit;
 
 /// <summary>
-/// FR-018 / SC-005 (research D7): an unregistered alias is graceful — the persisted definition round-trips the
-/// alias string verbatim and the mapper resolves it to <c>object</c> without throwing. T037: a malformed
+/// An unregistered alias is graceful — the persisted definition round-trips the
+/// alias string verbatim and the mapper resolves it to <c>object</c> without throwing. And a malformed
 /// argument payload surfaces a domain exception, not a raw <see cref="JsonException"/>.
 /// </summary>
 public sealed class UnknownAliasRoundTripTests
@@ -24,7 +24,7 @@ public sealed class UnknownAliasRoundTripTests
     public UnknownAliasRoundTripTests()
     {
         var registry = TestRegistry.SeededWithPrimitives();
-        var objectConverter = new ObjectConverter(new ServiceCollection().BuildServiceProvider());
+        var objectConverter = SerializationServices.ObjectConverter();
         IVariableMapper mapper = new VariableMapper(registry, objectConverter, new VariableDefaultValueFormatter(), NullLogger<VariableMapper>.Instance);
 
         // Mirror the production payload serializer: camelCase + string enum names (CollectionKind serializes by name).

@@ -9,6 +9,8 @@ using Elsa.Studio.ExpressionEditors.JavaScript;
 using Elsa.Studio.ExpressionEditors.Liquid;
 using Elsa.Studio.ExtensionBuilder;
 using Elsa.Studio.FeatureManagement;
+using Elsa.Studio.Connections;
+using Elsa.Studio.Etl;
 using Elsa.Studio.Secrets;
 using Elsa.Studio.Weaver.Workflows;
 using Elsa.Studio.Workflows;
@@ -39,6 +41,8 @@ internal static class StudioFeatureAssemblies
                 typeof(WeaverWorkflowsStudioFeature).Assembly,
                 typeof(WorkflowsStudioFeature).Assembly,
                 typeof(SecretsStudioFeature).Assembly,
+                typeof(ConnectionsStudioFeature).Assembly,
+                typeof(EtlStudioFeature).Assembly,
                 typeof(JavaScriptExpressionEditorStudioFeature).Assembly,
                 typeof(LiquidExpressionEditorStudioFeature).Assembly,
                 typeof(ThemeStoreCoreStudioFeature).Assembly);

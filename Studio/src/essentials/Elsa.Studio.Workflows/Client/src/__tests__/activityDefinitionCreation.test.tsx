@@ -4,6 +4,7 @@ import type { ActivityProviderAuthoringCapability } from "../activityDefinitionT
 import type { ActivityCatalogItem } from "../workflowTypes";
 import {
   createGraphInitialImplementation,
+  createGraphInitialState,
   createProviderChoices,
   defaultProviderChoice,
   isActivityGraphOnlyChoice
@@ -21,12 +22,16 @@ describe("Activity Definition creation choices", () => {
     expect(choices.map(choice => choice.label)).toEqual(["Activity Graph", "Script"]);
   });
 
-  it("automatically selects Activity Graph only when it is the sole meaningful implementation type", () => {
+  it("selects the sole usable provider without choosing among multiple usable providers", () => {
     const graphOnly = createProviderChoices([provider("elsa.activity-graph", "Activity Graph", ["1", "2"])], [contribution("elsa.activity-graph", "2")]);
+    const scriptOnly = createProviderChoices([provider("contoso.script", "Script", ["1"])], [contribution("contoso.script", "1")]);
+    const unavailable = createProviderChoices([provider("contoso.missing", "Missing editor", ["1"])], []);
 
     expect(isActivityGraphOnlyChoice(graphOnly)).toBe(true);
     expect(defaultProviderChoice(graphOnly)).toMatchObject({ providerKey: "elsa.activity-graph", schemaVersion: "2" });
-    expect(defaultProviderChoice(createProviderChoices([provider("contoso.script", "Script", ["1"])], [contribution("contoso.script", "1")]))).toBeNull();
+    expect(defaultProviderChoice(scriptOnly)).toMatchObject({ providerKey: "contoso.script", schemaVersion: "1" });
+    expect(defaultProviderChoice([...graphOnly, ...scriptOnly])).toBeNull();
+    expect(defaultProviderChoice(unavailable)).toBeNull();
   });
 
   it.each([
@@ -37,8 +42,54 @@ describe("Activity Definition creation choices", () => {
     const implementation = createGraphInitialImplementation(emptyImplementation(), catalog(), expectedVersion);
 
     expect(implementation?.payload).toMatchObject({
-      rootActivity: { nodeId: "root", activityVersionId: expectedVersion }
+      rootActivity: { nodeId: "root", activityVersionId: expectedVersion, inputs: [], outputs: [] }
     });
+  });
+
+  it("preserves canonical template bindings when initializing the graph", () => {
+    const descriptor = catalog()[1];
+    const binding = { referenceKey: "option", value: { expressionType: "Literal", value: true }, vendorMetadata: "keep" };
+    descriptor.authoringTemplate!.inputs = [binding];
+    const initialized = createGraphInitialState(emptyImplementation(), [descriptor], descriptor.activityVersionId, []);
+    expect((initialized?.implementation.payload as { rootActivity: { inputs: unknown[] } }).rootActivity.inputs).toEqual([binding]);
+    expect(createGraphInitialState(emptyImplementation(), [descriptor], "missing-exact-version", [])).toBeNull();
+  });
+
+  it("seeds only an advertised Done outcome and maps its exact root key", () => {
+    const initialized = createGraphInitialState(emptyImplementation(), catalog(), "sequence-v1", []);
+
+    expect(initialized?.outcomes).toEqual([
+      { referenceKey: "sequence.done.source-key", name: "Done", isEmitted: true, description: null }
+    ]);
+    expect((initialized?.implementation.payload as { outcomeMappings: unknown[] }).outcomeMappings).toEqual([
+      { sourceOutcomeReferenceKey: "sequence.done.source-key", boundaryOutcomeReferenceKey: "sequence.done.source-key" }
+    ]);
+  });
+
+  it("derives the exact public identity and mapping when the root exposes one noncanonical outcome", () => {
+    const root = activity("single-outcome-v1", "Acme.SingleOutcome", "Single outcome", [
+      { type: "outcome", referenceKey: "opaque/vendor-complete/v2", displayName: "Finished" }
+    ]);
+    const initialized = createGraphInitialState(emptyImplementation(), [root], root.activityVersionId, []);
+
+    expect(initialized?.outcomes).toEqual([
+      { referenceKey: "opaque/vendor-complete/v2", name: "Finished", isEmitted: true, description: null }
+    ]);
+    expect((initialized?.implementation.payload as { outcomeMappings: unknown[] }).outcomeMappings).toEqual([
+      { sourceOutcomeReferenceKey: "opaque/vendor-complete/v2", boundaryOutcomeReferenceKey: "opaque/vendor-complete/v2" }
+    ]);
+  });
+
+  it("does not guess between multiple root outcomes when Done is not advertised", () => {
+    const root = activity("ambiguous-outcomes-v1", "Acme.Decision", "Decision", [
+      { type: "outcome", referenceKey: "approved-source", displayName: "Approved" },
+      { type: "outcome", referenceKey: "rejected-source", displayName: "Rejected" }
+    ]);
+
+    const initialized = createGraphInitialState(emptyImplementation(), [root], root.activityVersionId, []);
+
+    expect(initialized?.outcomes).toEqual([]);
+    expect((initialized?.implementation.payload as { outcomeMappings: unknown[] }).outcomeMappings).toEqual([]);
   });
 });
 
@@ -68,12 +119,15 @@ function emptyImplementation() {
 function catalog(): ActivityCatalogItem[] {
   return [
     activity("flowchart-v1", "Elsa.Flowchart", "Flowchart"),
-    activity("sequence-v1", "Elsa.Sequence", "Sequence"),
+    activity("sequence-v1", "Elsa.Sequence", "Sequence", [
+      { type: "outcome", referenceKey: "sequence.done.source-key", displayName: "Done" },
+      { type: "outcome", referenceKey: "sequence.break.source-key", displayName: "Break" }
+    ]),
     activity("bpmn-v1", "Elsa.BpmnProcess", "BPMN Process")
   ];
 }
 
-function activity(activityVersionId: string, activityTypeKey: string, displayName: string): ActivityCatalogItem {
+function activity(activityVersionId: string, activityTypeKey: string, displayName: string, ports: unknown[] = []): ActivityCatalogItem {
   return {
     activityVersionId,
     activityTypeKey,
@@ -83,6 +137,7 @@ function activity(activityVersionId: string, activityTypeKey: string, displayNam
     executionType: "Action",
     inputs: [],
     outputs: [],
+    ports,
     authoringTemplate: { nodeId: "template", activityVersionId, inputs: [], outputs: [], structure: null }
   };
 }

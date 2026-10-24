@@ -117,7 +117,7 @@ public sealed class WhileRuntimeTests
             .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
             .WithProbeLeaf();
         if (coalescing)
-            builder = builder.WithCoalescing();
+            builder = builder.WithPersistenceMode();
         return builder.Build(activityExecutionIds);
     }
 

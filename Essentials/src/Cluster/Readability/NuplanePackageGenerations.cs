@@ -14,10 +14,10 @@ using Nuplane.Loading;
 namespace Elsa.Cluster.Readability;
 
 /// <summary>
-/// Which generations of this host's Nuplane packages an in-place upgrade has superseded (spec 183, FR-021, amended
-/// 2026-09-29). Nuplane loads a host-integrated package graph into a load context it never unloads, so after an upgrade
-/// the old generation's assemblies stay in <see cref="AssemblyLoadContext.All"/> for the life of the process; this is
-/// what tells the readability report and the EF activation guard to stop reading them, and when.
+/// Which generations of this host's Nuplane packages an in-place upgrade has superseded. Nuplane loads a
+/// host-integrated package graph into a load context it never unloads, so after an upgrade the old generation's
+/// assemblies stay in <see cref="AssemblyLoadContext.All"/> for the life of the process; this is what tells the
+/// readability report and the EF activation guard to stop reading them, and when.
 /// </summary>
 /// <remarks>
 /// <para>

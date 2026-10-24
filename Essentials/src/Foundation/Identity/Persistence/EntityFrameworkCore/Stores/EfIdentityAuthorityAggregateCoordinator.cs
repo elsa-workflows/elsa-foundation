@@ -15,9 +15,14 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 public sealed class EfIdentityAuthorityAggregateCoordinator(
     IdentityIamDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    EfIdentityAtomicWrite? atomicWrite = null)
+    EfIdentityAtomicWrite? atomicWrite = null,
+    IIdentityUserLookupNormalizer? lookupNormalizer = null)
 {
     private readonly EfIdentityAtomicWrite atomicWrite = atomicWrite ?? new EfIdentityAtomicWrite(context, accessContextAccessor: accessContextAccessor);
+
+    /// <summary>The normalizer user saves key their name and email on; lookups must derive their keys through it too.</summary>
+    internal IIdentityUserLookupNormalizer LookupNormalizer { get; } = lookupNormalizer ?? IdentityUserLookupNormalizer.Invariant;
+
     public async Task<EfIdentityAuthorityWriteResult> SaveUserAsync(
         UserRecord user,
         long? expectedVersion,
@@ -57,7 +62,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                 else
                 {
                     // Apply carries the registries it does not overwrite forward from the row's own upcast values, so
-                    // it restamps the row completely on its own (spec 180, FR-014; #2144).
+                    // it restamps the row completely on its own (#2144).
                     existing.Revision = checked(existing.Revision + 1);
                 }
 
@@ -126,7 +131,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                 }
                 else
                 {
-                    // As for a user: Apply carries the claim and user-link registries forward itself (spec 180, FR-014; #2144).
+                    // As for a user: Apply carries the claim and user-link registries forward itself (#2144).
                     existing.Revision = checked(existing.Revision + 1);
                 }
                 Apply(existing, role);
@@ -149,12 +154,53 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
         return new EfIdentityAuthorityWriteResult(result, conflict == EfIdentityAuthorityConflict.None ? MapConflict(result.FailedUnitId) : conflict);
     }
 
+    /// <summary>Deletes the user aggregate; a <c>null</c> <paramref name="expectedVersion"/> deletes whatever revision is current.</summary>
     public Task<EfIdentityWriteResult> DeleteUserAsync(
         string tenantId,
         string userId,
-        long expectedVersion,
+        long? expectedVersion,
         CancellationToken cancellationToken = default) =>
         DeleteUserCoreAsync(tenantId, userId, expectedVersion, cancellationToken);
+
+    /// <summary>
+    /// Writes only the user's status, so no other field of a concurrently edited row is overwritten. Setting the
+    /// status the row already has changes nothing, so its revision stays put. The write is conditional on the
+    /// revision it read: a write that commits in between surfaces as <see cref="EfIdentityWriteStatus.Conflict"/>
+    /// (or, where the provider reports it as transient, the atomic write retries on the new row).
+    /// </summary>
+    public async Task<EfIdentityWriteResult> SetUserStatusAsync(
+        string tenantId,
+        string userId,
+        UserStatus status,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateIdentity(tenantId, nameof(tenantId));
+        ValidateIdentity(userId, nameof(userId));
+        EfIdentityStoreSupport.EnsureTenant(accessContextAccessor, tenantId);
+        return await ExecuteAsync(
+            "set-user-status",
+            EfIdentityStoreSupport.Fingerprint(tenantId, userId, ((int)status).ToString(CultureInfo.InvariantCulture)),
+            async token =>
+            {
+                var id = EfIdentityStoreSupport.RecordId(tenantId, userId);
+                var user = await context.Users.SingleOrDefaultAsync(x => x.Id == id, token);
+                if (user is null)
+                    return NotFound(id);
+                if (EfSchemaVersion.NotReadable(IdentityIamEfModule.Chain, user.SchemaVersion))
+                    return Conflict(id);
+
+                EfIdentityStoreSupport.EnsureUserIdentity(user, tenantId, userId);
+                if (user.Status == (int)status)
+                    return Updated(id, user.Revision);
+                EfIdentityStoreSupport.Upgrade(user);
+                user.Status = (int)status;
+                user.Revision = checked(user.Revision + 1);
+                return Updated(id, user.Revision);
+            },
+            cancellationToken,
+            tenantId,
+            replayByFingerprint: false);
+    }
 
     public Task<EfIdentityWriteResult> DeleteRoleAsync(
         string tenantId,
@@ -163,21 +209,21 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
         CancellationToken cancellationToken = default) =>
         DeleteRoleCoreAsync(tenantId, roleId, expectedVersion, cancellationToken);
 
-    private async Task<EfIdentityWriteResult> DeleteUserCoreAsync(string tenantId, string userId, long expectedVersion, CancellationToken cancellationToken)
+    private async Task<EfIdentityWriteResult> DeleteUserCoreAsync(string tenantId, string userId, long? expectedVersion, CancellationToken cancellationToken)
     {
         ValidateIdentity(tenantId, nameof(tenantId));
         ValidateIdentity(userId, nameof(userId));
         EfIdentityStoreSupport.EnsureTenant(accessContextAccessor, tenantId);
         return await ExecuteAsync(
             "delete-user-authority-aggregate",
-            EfIdentityStoreSupport.Fingerprint(tenantId, userId, expectedVersion.ToString(CultureInfo.InvariantCulture)),
+            EfIdentityStoreSupport.Fingerprint(tenantId, userId, expectedVersion?.ToString(CultureInfo.InvariantCulture)),
             async token =>
             {
                 var id = EfIdentityStoreSupport.RecordId(tenantId, userId);
                 var user = await context.Users.SingleOrDefaultAsync(x => x.Id == id, token);
                 if (user is null)
                     return NotFound(id);
-                if (EfSchemaVersion.NotReadable(IdentityIamEfModule.Chain, user.SchemaVersion) || user.Revision != expectedVersion)
+                if (EfSchemaVersion.NotReadable(IdentityIamEfModule.Chain, user.SchemaVersion) || !CanWrite(user.Revision, expectedVersion))
                     return Conflict(id);
 
                 EfIdentityStoreSupport.EnsureUserIdentity(user, tenantId, userId);
@@ -273,10 +319,10 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                 }
 
                 context.Users.Remove(user);
-                return Deleted(id, expectedVersion);
+                return Deleted(id, user.Revision);
             }, cancellationToken,
             tenantId,
-            replayByFingerprint: true);
+            replayByFingerprint: expectedVersion is not null);
     }
 
     private async Task<EfIdentityWriteResult> DeleteRoleCoreAsync(string tenantId, string roleId, long expectedVersion, CancellationToken cancellationToken)
@@ -503,12 +549,8 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
 
     private static void CanonicalizeLookupKeys(UserEntity entity)
     {
-        entity.NormalizedUserNameKey = string.IsNullOrWhiteSpace(entity.NormalizedUserName)
-            ? null
-            : EfIdentityStoreSupport.Lookup(entity.TenantId, entity.NormalizedUserName);
-        entity.NormalizedEmailKey = string.IsNullOrWhiteSpace(entity.NormalizedEmail)
-            ? null
-            : EfIdentityStoreSupport.Lookup(entity.TenantId, entity.NormalizedEmail);
+        entity.NormalizedUserNameKey = EfIdentityStoreSupport.LookupKey(entity.TenantId, entity.NormalizedUserName);
+        entity.NormalizedEmailKey = EfIdentityStoreSupport.LookupKey(entity.TenantId, entity.NormalizedEmail);
     }
 
     private static void CanonicalizeLookupKeys(RoleEntity entity) =>
@@ -516,22 +558,22 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
             ? null
             : EfIdentityStoreSupport.Lookup(entity.TenantId, entity.NormalizedName);
 
-    private static void Apply(UserEntity entity, UserRecord user)
+    private void Apply(UserEntity entity, UserRecord user)
     {
         // A fresh row (no prior SchemaVersion) carries only current-format registries already; an existing row's own
         // are upcast from its own prior stamp, so this write restamps the row completely on its own rather than
-        // depending on a caller that upgraded it first (spec 180, FR-014; #2144).
+        // depending on a caller that upgraded it first (#2144).
         var content = entity.SchemaVersion is null ? null : EfIdentityStoreSupport.Content(entity);
         entity.TenantId = user.TenantId;
         entity.TenantLookupKey = EfIdentityStoreSupport.TenantLookup(user.TenantId);
         entity.UserId = user.Id;
         entity.UserIdOrderKey = EfIdentityStoreSupport.SortableOrderKey(user.Id, nameof(user.Id));
         entity.UserName = user.UserName;
-        entity.NormalizedUserName = string.IsNullOrWhiteSpace(user.UserName) ? null : EfIdentityStoreSupport.Normalize(user.UserName);
-        entity.NormalizedUserNameKey = string.IsNullOrWhiteSpace(entity.NormalizedUserName) ? null : EfIdentityStoreSupport.Lookup(user.TenantId, entity.NormalizedUserName);
+        entity.NormalizedUserName = EfIdentityStoreSupport.NormalizedUserName(LookupNormalizer, user.UserName);
+        entity.NormalizedUserNameKey = EfIdentityStoreSupport.LookupKey(user.TenantId, entity.NormalizedUserName);
         entity.Email = user.Email;
-        entity.NormalizedEmail = string.IsNullOrWhiteSpace(user.Email) ? null : EfIdentityStoreSupport.Normalize(user.Email);
-        entity.NormalizedEmailKey = string.IsNullOrWhiteSpace(entity.NormalizedEmail) ? null : EfIdentityStoreSupport.Lookup(user.TenantId, entity.NormalizedEmail);
+        entity.NormalizedEmail = EfIdentityStoreSupport.NormalizedEmail(LookupNormalizer, user.Email);
+        entity.NormalizedEmailKey = EfIdentityStoreSupport.LookupKey(user.TenantId, entity.NormalizedEmail);
         entity.DisplayName = user.DisplayName;
         entity.Status = (int)user.Status;
         entity.Ownership = (int)user.Ownership;
@@ -551,7 +593,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
     private static void Apply(RoleEntity entity, RoleRecord role)
     {
         // As for a user: a fresh row needs nothing carried over, and an existing row's claim and user-link registries
-        // are upcast from its own prior stamp (spec 180, FR-014; #2144).
+        // are upcast from its own prior stamp (#2144).
         var content = entity.SchemaVersion is null ? null : EfIdentityStoreSupport.Content(entity);
         entity.TenantId = role.TenantId;
         entity.TenantLookupKey = EfIdentityStoreSupport.TenantLookup(role.TenantId);
@@ -573,7 +615,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
 
     /// <summary>
     /// A registry of the row being deleted, from its content columns upcast together through the family's chain from the
-    /// row's stamp (spec 180, FR-009; #2144). The row is removed rather than written, so it is read as stored and never
+    /// row's stamp (#2144). The row is removed rather than written, so it is read as stored and never
     /// upgraded.
     /// </summary>
     private static IReadOnlyList<string> ReadRegistry(EfSchemaRowContent registries, string column, string owner)

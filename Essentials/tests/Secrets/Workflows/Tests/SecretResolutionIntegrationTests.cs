@@ -9,7 +9,7 @@ namespace Elsa.Secrets.Workflows.Tests;
 
 /// <summary>
 /// A <c>Secret</c> binding, compiled as publish compiles it, resolves end to end through the bridge and the Secrets module
-/// on the embedded SQLite runtime host (spec 188, T026; FR-001, FR-002, FR-005; SC-002): the activity receives the
+/// on the embedded SQLite runtime host: the activity receives the
 /// tenant's current value converted with the pinned plan, a rotation takes effect at the next activation without a
 /// republish, and no persisted row of the run holds a resolved value.
 /// </summary>

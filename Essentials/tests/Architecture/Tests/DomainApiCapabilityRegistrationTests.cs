@@ -3,10 +3,12 @@ using CShells.Features;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Api.Capabilities;
 using Elsa.Api.Capabilities.Models;
+using Elsa.Expressions;
 using Elsa.Expressions.Api;
-using Elsa.Expressions.Api.Capabilities;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
+using Elsa.Expressions.JavaScript;
+using Elsa.Expressions.Liquid;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Design.Api.Capabilities;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -29,7 +31,15 @@ public sealed class DomainApiCapabilityRegistrationTests
     {
         { typeof(WorkflowsDesignApiFeature), WorkflowDesignApiCapabilities.StaticDeclaration },
         { typeof(ActivitiesDesignApiFeature), ActivityDesignApiCapabilities.StaticDeclaration },
-        { typeof(ExpressionsApiFeature), ExpressionsApiCapabilities.StaticDeclaration },
+        // The expressions declaration is internal to its API, so its wire values are stated here.
+        {
+            typeof(ExpressionsApiFeature),
+            new ApiCapabilityDeclaration(
+                "elsa.api.expressions",
+                1,
+                [new("expression-descriptors", "expressions/descriptors"), new("variable-types", "expressions/variable-types")],
+                "ExpressionsApi")
+        },
         { typeof(WorkflowsPublishingApiFeature), PublishingApiCapabilities.StaticDeclaration },
         { typeof(WorkflowsRuntimeApiFeature), RuntimeApiCapabilities.StaticDeclaration }
     };
@@ -50,7 +60,7 @@ public sealed class DomainApiCapabilityRegistrationTests
                 .Select(descriptor => descriptor.ImplementationInstance)
                 .OfType<ApiCapabilityDeclaration>());
 
-        Assert.Equal(expected, declaration);
+        Assert.Equivalent(expected, declaration, strict: true);
         Assert.All(declaration.Links, link =>
         {
             Assert.False(link.Href.StartsWith('/'));
@@ -102,6 +112,48 @@ public sealed class DomainApiCapabilityRegistrationTests
         Assert.Equal(
             ["expression-tooling-completions", "expression-tooling-context", "expression-tooling-descriptors", "expression-tooling-hover", "expression-tooling-symbols", "expression-tooling-validate"],
             tooling.Links.Select(link => link.Rel).Order(StringComparer.Ordinal));
+    }
+
+    public static TheoryData<string[]> ExpressionLanguageCompositions => new()
+    {
+        Array.Empty<string>(),
+        new[] { "JavaScript" },
+        new[] { "Liquid" },
+        new[] { "JavaScript", "Liquid" }
+    };
+
+    [Theory]
+    [MemberData(nameof(ExpressionLanguageCompositions))]
+    public async Task Expression_language_features_compose_their_tooling_providers_independently(string[] languages)
+    {
+        var services = new ServiceCollection();
+        new ExpressionsFeature().ConfigureServices(services);
+        if (languages.Contains("JavaScript"))
+            new JavaScriptFeature().ConfigureServices(services);
+        if (languages.Contains("Liquid"))
+            new LiquidExpressionsFeature().ConfigureServices(services);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var toolingProviders = serviceProvider.GetServices<IExpressionToolingProvider>().ToList();
+        var resolver = serviceProvider.GetRequiredService<IExpressionToolingProviderResolver>();
+
+        Assert.Equal(languages, toolingProviders.Select(provider => provider.ExpressionType).Order(StringComparer.Ordinal));
+        foreach (var language in new[] { "JavaScript", "Liquid" })
+        {
+            if (languages.Contains(language))
+                Assert.Same(Assert.Single(toolingProviders, provider => provider.ExpressionType == language), resolver.Find(language));
+            else
+                Assert.Null(resolver.Find(language));
+        }
+
+        // The expression-tooling capability is advertised only when at least one language provider is composed.
+        var context = (IExpressionAuthoringContextService)RuntimeHelpers.GetUninitializedObject(typeof(ExpressionAuthoringContextService));
+        var capabilities = await new WorkflowDesignOperationalCapabilitySource(
+            expressionTooling: context,
+            expressionToolingProviders: toolingProviders,
+            expressionToolingResolver: resolver).GetCapabilitiesAsync();
+
+        Assert.Equal(languages.Length > 0, capabilities.Any(declaration => declaration.CapabilityId == "expressions.tooling.v1"));
     }
 
     [Fact]

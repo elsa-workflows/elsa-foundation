@@ -34,6 +34,40 @@ public sealed class RuntimeWorkflowStateSeedTests
     }
 
     [Fact]
+    public void BuildSeedChanges_SeedsTheStartCorrelationIdIntoTheIdentityProjection()
+    {
+        // Spec 247: an expression's WorkflowInstance binding reads the correlation id from committed state, so the
+        // start value must be there before any Correlate runs.
+        var changes = RuntimeWorkflowStateSeed.BuildSeedChanges("wfexec-1", inputs: null, capturedAt: _now, correlationId: "order-42");
+
+        var identity = Assert.Single(changes);
+        Assert.Equal(
+            $"{RuntimeWorkflowStateSeed.IdentityValueIdPrefix}{RuntimeWorkflowStateSeed.IdentityCorrelationIdName}",
+            identity.State!.ValueId);
+        Assert.Equal("order-42", RuntimeIdentityStateProjection.ProjectCorrelationId(changes.Select(change => change.State!)));
+    }
+
+    [Fact]
+    public void BuildSeedChanges_SeedsNoIdentityWithoutACorrelationId()
+    {
+        var changes = RuntimeWorkflowStateSeed.BuildSeedChanges("wfexec-1", inputs: null, capturedAt: _now, correlationId: " ");
+
+        Assert.Empty(changes);
+    }
+
+    [Fact]
+    public void A_later_correlate_replaces_the_seeded_correlation_id()
+    {
+        var seeded = RuntimeWorkflowStateSeed.BuildSeedChanges("wfexec-1", inputs: null, capturedAt: _now, correlationId: "order-42");
+        var correlated = RuntimeWorkflowStateSeed.BuildIdentityChanges(
+            "wfexec-1", correlationIdAssignmentRequested: true, "order-43", instanceNameAssignmentRequested: false, null, _now.AddMinutes(1));
+
+        Assert.Equal(
+            "order-43",
+            RuntimeIdentityStateProjection.ProjectCorrelationId(seeded.Concat(correlated).Select(change => change.State!)));
+    }
+
+    [Fact]
     public void BuildSeedChanges_TreatsNullCollectionsAsEmpty()
     {
         var changes = RuntimeWorkflowStateSeed.BuildSeedChanges("wfexec-1", inputs: null, capturedAt: _now);

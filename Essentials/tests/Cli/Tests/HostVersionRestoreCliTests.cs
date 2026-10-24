@@ -4,7 +4,7 @@ using Xunit;
 namespace Elsa.Cli.Tests;
 
 /// <summary>
-/// A module whose floor the host cannot satisfy (issue #1951, ADR 0077), as <c>--restore</c> reports it: the
+/// A module whose floor the host cannot satisfy (issue #1951), as <c>--restore</c> reports it: the
 /// module depends on a package the host declares it provides, the host's own deps file carries that package
 /// at a version outside the range, and Nuplane refuses the module with <c>host-version-unsatisfied</c>
 /// rather than installing it to fail later at a missing member.

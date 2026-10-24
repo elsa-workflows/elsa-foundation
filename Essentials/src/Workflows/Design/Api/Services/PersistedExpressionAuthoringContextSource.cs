@@ -241,18 +241,25 @@ public sealed class PersistedExpressionAuthoringContextSource(
 
         var target = locations.FirstOrDefault(location =>
             string.Equals(location.Node.NodeId, targetNodeId, StringComparison.Ordinal));
-        return target is null
-            ? []
-            : locations
-                .Where(candidate => IsDefinitelyAvailable(candidate, target))
-                .Select(candidate => candidate.Node)
-                .ToArray();
+        if (target is null)
+            return [];
+
+        // Producers a structure ranks (a compensation handler's own step first) lead, in that rank; Sequence
+        // producers follow in document order. OrderBy is stable.
+        return locations
+            .Select(candidate => (candidate.Node, Rank: AvailabilityRank(candidate, target)))
+            .Where(candidate => candidate.Rank is not null)
+            .OrderBy(candidate => candidate.Rank)
+            .Select(candidate => candidate.Node)
+            .ToArray();
     }
 
-    private static bool IsDefinitelyAvailable(NodeLocation producer, NodeLocation consumer)
+    // Null when the producer's result is not guaranteed before the consumer runs. Sequence keeps its document-order
+    // rule; any other common ancestor answers through its structure handler.
+    private int? AvailabilityRank(NodeLocation producer, NodeLocation consumer)
     {
         if (ReferenceEquals(producer, consumer))
-            return false;
+            return null;
 
         var producerAncestors = new HashSet<NodeLocation>();
         for (var current = producer.Parent; current is not null; current = current.Parent)
@@ -265,12 +272,20 @@ public sealed class PersistedExpressionAuthoringContextSource(
             common = current;
             break;
         }
-        if (common is null || !string.Equals(common.Node.Structure?.Kind, SequenceStructureKind, StringComparison.Ordinal))
-            return false;
+        if (common is null)
+            return null;
 
         var producerChild = ChildBelow(producer, common);
         var consumerChild = ChildBelow(consumer, common);
-        return !ReferenceEquals(producerChild, consumerChild) && producerChild.Order < consumerChild.Order;
+        if (ReferenceEquals(producerChild, consumerChild))
+            return null;
+
+        if (string.Equals(common.Node.Structure?.Kind, SequenceStructureKind, StringComparison.Ordinal))
+            return producerChild.Order < consumerChild.Order ? int.MaxValue : null;
+
+        var completedBefore = structures.ChildrenCompletedBefore(common.Node, consumerChild.Node.NodeId);
+        var rank = completedBefore?.ToList().IndexOf(producerChild.Node.NodeId) ?? -1;
+        return rank < 0 ? null : rank;
     }
 
     private static NodeLocation ChildBelow(NodeLocation node, NodeLocation ancestor)

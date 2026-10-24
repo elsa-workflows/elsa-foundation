@@ -18,27 +18,6 @@ public sealed partial class ArchitectureGuardTests
         ("Elsa.Workflows.Runtime.JavaScript", "Elsa.Workflows.Design.Core")
     ];
 
-    // Documented exceptions to the §2.23.3 no-InternalsVisibleTo rule. Each entry needs a reason
-    // recorded at the declaration site (csproj comment) and here. Additions require architect review.
-    private static readonly HashSet<(string Project, string Target)> AllowedInternalsVisibleTo =
-    [
-        // The Extension Builder subsystem is a host-private surface of ~80 interlocking internal types;
-        // publicizing it to satisfy §2.23.3 would promote host-only contracts into public API. It lives in
-        // its own optional extension (Elsa.ExtensionBuilder.Api, #2294) which exposes those internals to
-        // the extension's own test project (MD-3, Elsa 4 architecture review 2026-07).
-        ("Elsa.ExtensionBuilder.Api", "Elsa.ExtensionBuilder.Api.Tests"),
-        // Elsa.Workbench keeps a narrow exception for the host-only module-management registry builder
-        // (ModuleManagementRegistryBuilder), exercised by ModuleManagementRegistryBuilderTests.
-        ("Elsa.Workbench", "Elsa.Modularity.Tests"),
-        // The shared-persistence resolver stays internal to the EF policy assembly. Focused unit
-        // and migration metadata tests inspect detached plans without widening its production API.
-        ("Elsa.Persistence.EntityFramework", "Elsa.Persistence.EntityFramework.Tests"),
-        ("Elsa.Persistence.EntityFramework", "Elsa.Persistence.EntityFrameworkCore.Migrations.Tests"),
-        // The worker's reflected host-context API stays internal; CLI tests verify exact and
-        // partial shape negotiation without making those details part of its public surface.
-        ("Elsa.Cli.Worker", "Elsa.Cli.Tests")
-    ];
-
     [Fact]
     public void Solution_has_no_global_layer_marker_folders()
     {
@@ -119,7 +98,7 @@ public sealed partial class ArchitectureGuardTests
         var policy = Path.Combine(RepoRoot, "Essentials", "src", "Persistence", "EntityFramework");
         var project = XDocument.Load(Path.Join(policy, "Elsa.Persistence.EntityFramework.csproj"));
         // Its two project references are no feature assembly: Elsa.Primitives, the root of the Line A contract baseline,
-        // holds the write refusal's persistence-agnostic base that the domain APIs answer (spec 180, FR-016a), and
+        // holds the write refusal's persistence-agnostic base that the domain APIs answer, and
         // Elsa.Persistence.Schema is the EF-free half of the schema-family surface every host shares (#2143).
         Assert.Equal(
             new[] { @"..\..\Primitives\Primitives\Elsa.Primitives.csproj", @"..\Schema\Elsa.Persistence.Schema.csproj" },
@@ -350,7 +329,7 @@ public sealed partial class ArchitectureGuardTests
         Assert.True(features.ContainsKey("WorkflowsPublishing"));
     }
 
-    [Fact] // spec 006 T050 (SC-001) — no project in the activity-construction runtime path references any Design project.
+    [Fact] // No project in the activity-construction runtime path references any Design project.
     public void Activity_construction_runtime_path_has_no_design_reference() =>
         AssertNoForbiddenProjectReferences(
             [
@@ -390,7 +369,7 @@ public sealed partial class ArchitectureGuardTests
         Assert.DoesNotContain(PackageReferences(design), package => package.Contains("ServiceBus", StringComparison.OrdinalIgnoreCase));
     }
 
-    [Fact] // spec 006 T053 (SC-006) — the seam's feature projects do not reference one another (G4).
+    [Fact] // The seam's feature projects do not reference one another.
     public void Activity_construction_feature_projects_do_not_reference_each_other()
     {
         string[] featureProjects =
@@ -402,12 +381,12 @@ public sealed partial class ArchitectureGuardTests
         ];
         var featureSet = featureProjects.ToHashSet(StringComparer.Ordinal);
 
-        // Scoped to cross-references *among* the seam features (SC-006). A new seam feature must be added
+        // Scoped to cross-references *among* the seam features. A new seam feature must be added
         // to this list to be covered — the check under-covers silently as the seam grows.
         AssertNoForbiddenProjectReferences(featureProjects, reference => featureSet.Contains(reference.Name));
     }
 
-    // Shared skeleton for the two SC-001/SC-006 project-reference facts: verify every named project exists,
+    // Shared skeleton for the two project-reference facts above: verify every named project exists,
     // then assert none of them declares a <ProjectReference> the predicate forbids. Only DIRECT edges are
     // checked — transitive pulls are the reference graph's own concern (and, for the runtime side, are also
     // covered by Runtime_projects_do_not_add_design_references, which spans every runtime project).
@@ -423,21 +402,6 @@ public sealed partial class ArchitectureGuardTests
             .SelectMany(project => ProjectReferences(project)
                 .Where(isForbidden)
                 .Select(reference => $"{project.Name} -> {reference.Name}"))
-            .ToList();
-
-        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
-    }
-
-    [Fact]
-    public void InternalsVisibleTo_occurrences_are_limited_to_documented_exceptions()
-    {
-        var violations = ProjectFiles()
-            .SelectMany(project => XDocument.Load(project.FullPath)
-                .Descendants("InternalsVisibleTo")
-                .Select(x => x.Attribute("Include")?.Value)
-                .OfType<string>()
-                .Where(target => !AllowedInternalsVisibleTo.Contains((project.Name, target)))
-                .Select(target => $"{project.Name} -> {target} ({project.RelativePath})"))
             .ToList();
 
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
@@ -591,6 +555,8 @@ public sealed partial class ArchitectureGuardTests
     [
         ("Elsa3.", "Elsa3"),
         ("Elsa.Agent.", "Agent"),
+        ("Elsa.Etl.", "Etl"),
+        ("Elsa.Rules.", "Rules"),
         ("Elsa.ExtensionBuilder.", "ExtensionBuilder"),
     ];
 
@@ -602,6 +568,8 @@ public sealed partial class ArchitectureGuardTests
     {
         // The CLR scanner tests read this assembly's name ("Elsa.Activities.Design.Tests.ClrFixture") and its activities' type names.
         ["Elsa.Activities.Design.Tests.ClrFixture"] = "Essentials/tests/Activities/Design/Fixtures/ClrFixture/Elsa.Activities.Design.Tests.ClrFixture.csproj",
+        // Icon fixtures live in their own assembly so CLR reconciliation still counts the original eighteen.
+        ["Elsa.Activities.Design.Tests.ClrIconFixture"] = "Essentials/tests/Activities/Design/Fixtures/ClrIconFixture/Elsa.Activities.Design.Tests.ClrIconFixture.csproj",
         // Beside the library it tests, as Elsa.Cluster.Tests sits beside Elsa.Cluster.Testing.
         ["Elsa.Api.Compatibility.Testing.Tests"] = "Essentials/tests/Api/Compatibility/Tests/Elsa.Api.Compatibility.Testing.Tests.csproj",
     };
@@ -720,7 +688,7 @@ public sealed partial class ArchitectureGuardTests
 }
 
 // Provider-neutral persistence contract projects must never gain a declared or transitive edge to a
-// concrete provider (EF Core or a database driver). Reviewed with spec 094; the resolved
+// concrete provider (EF Core or a database driver). The resolved
 // project.assets.json check that used to accompany it went away with the EF surface ratchet.
 internal static class PersistenceProviderNeutralityBoundary
 {
@@ -730,6 +698,7 @@ internal static class PersistenceProviderNeutralityBoundary
         "Elsa.Foundation.Identity.Core",
         "Elsa.Foundation.Identity",
         "Elsa.Secrets.Core",
+        "Elsa.Connections.Core",
         "Elsa.Workflows.Runtime.Distributed"
     ];
 

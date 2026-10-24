@@ -241,6 +241,7 @@ public sealed class PublicationActivator(
 
     private static string MapFailedStep(WorkflowActivationStep step) => step switch
     {
+        WorkflowActivationStep.ChannelValidation => PublicationFailureCodes.ChannelNotDeclared,
         WorkflowActivationStep.ProjectionPreparation => PublicationFailureCodes.ProjectionPreparationFailed,
         WorkflowActivationStep.ProjectionActivation or WorkflowActivationStep.TriggerObserverNotification =>
             PublicationFailureCodes.ProjectionActivationFailed,

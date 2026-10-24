@@ -4,14 +4,14 @@
 .DESCRIPTION
     This is a scoped fixture, not a host/database harness. It reuses _ElsaCommon.ps1 for authoring and inspection,
     starts the workflow through its synchronous HttpEndpoint, verifies its response and terminal instance state,
-    and prints the published intrinsic classification and effective per-run cadence. Run only against the task-owned
+    and prints the published intrinsic classification and the run's persistence mode. Run only against the task-owned
     disposable PostgreSQL 16 Workbench described in specs/193-bounded-coalesced-pagination/quickstart.md.
 
     The SetVariable node is the compiler intrinsic `elsa.intrinsic.set@1` (IntrinsicKind=Set, fusable); it is not the
     historical custom CLR transform. Treat output as a representative, non-equivalent reference.
-    ExpectedCadence and ExpectedMaxSegmentCheckpoints check per-run readback; configure the task-owned host separately.
-    AuthoredCadence and AuthoredMaxSegmentCheckpoints submit the supported strategyOptions.checkpointCadence draft
-    input before publishing. Defaults preserve the prior no-authored-override, Coalesced/50 expectation.
+    ExpectedPersistenceMode checks the run's reported mode; configure the task-owned host separately.
+    AuthoredPersistenceMode submits strategyOptions.persistenceMode with the draft before publishing. With neither, the
+    fixture expects the host default, Balanced.
 #>
 [CmdletBinding()]
 param(
@@ -20,39 +20,18 @@ param(
     [string] $Username = "admin",
     [string] $Password = "Password123!",
     [string] $TraceParent = "",
-    [ValidateSet("Coalesced", "Immediate")][string] $ExpectedCadence = "Coalesced",
-    [int] $ExpectedMaxSegmentCheckpoints = 0,
-    [ValidateSet("Immediate", "Coalesced")][string] $AuthoredCadence,
-    [int] $AuthoredMaxSegmentCheckpoints = 0,
+    [ValidateSet("Balanced", "Durable")][string] $ExpectedPersistenceMode = "Balanced",
+    [ValidateSet("Durable", "Balanced")][string] $AuthoredPersistenceMode,
     [string] $WorkflowName = "RuntimeDbPaging2392Reference",
     [string] $RoutePath = "runtime-db-paging-2392/transform",
     [switch] $SetupOnly
 )
-$authoredCadenceWasBound = $PSBoundParameters.ContainsKey("AuthoredCadence")
-$expectedMaxWasBound = $PSBoundParameters.ContainsKey("ExpectedMaxSegmentCheckpoints")
-$authoredMaxWasBound = $PSBoundParameters.ContainsKey("AuthoredMaxSegmentCheckpoints")
+$authoredModeWasBound = $PSBoundParameters.ContainsKey("AuthoredPersistenceMode")
 . "$PSScriptRoot/../_ElsaCommon.ps1"
 
-if ($expectedMaxWasBound -and $ExpectedMaxSegmentCheckpoints -le 0) {
-    throw "ExpectedMaxSegmentCheckpoints must be positive when specified."
-}
-if ($authoredMaxWasBound -and $AuthoredCadence -ne "Coalesced") {
-    throw "AuthoredMaxSegmentCheckpoints is valid only with -AuthoredCadence Coalesced."
-}
-if ($authoredMaxWasBound -and $AuthoredMaxSegmentCheckpoints -le 0) {
-    throw "AuthoredMaxSegmentCheckpoints must be positive when specified."
-}
-if ($expectedMaxWasBound -and $ExpectedCadence -ne "Coalesced") {
-    throw "ExpectedMaxSegmentCheckpoints can only be specified when -ExpectedCadence Coalesced."
-}
-
 $strategyOptions = $null
-if ($authoredCadenceWasBound) {
-    $authoredCheckpointCadence = @{ mode = $AuthoredCadence }
-    if ($authoredMaxWasBound) {
-        $authoredCheckpointCadence.maxSegmentCheckpoints = $AuthoredMaxSegmentCheckpoints
-    }
-    $strategyOptions = @{ checkpointCadence = $authoredCheckpointCadence }
+if ($authoredModeWasBound) {
+    $strategyOptions = @{ persistenceMode = $AuthoredPersistenceMode }
 }
 
 if ([string]::IsNullOrWhiteSpace($TraceParent)) {
@@ -72,24 +51,13 @@ $workflowName = $WorkflowName
 $path = $RoutePath
 $payload = '{"firstName":"Alice","lastName":"Smith"}'
 
-Write-Host "== #2392 $ExpectedCadence HTTP reference (non-equivalent) == -> $BaseUrl" -ForegroundColor Cyan
+Write-Host "== #2392 $ExpectedPersistenceMode HTTP reference (non-equivalent) == -> $BaseUrl" -ForegroundColor Cyan
 Write-Host ("[scriptHead] {0}" -f (git -C (Join-Path $PSScriptRoot '../..') rev-parse HEAD).Trim())
 Write-Host ("[hostCandidateInput] {0} (operator supplied; verify against the independent host build record)" -f $HostCandidateSha.ToLowerInvariant())
 Write-Host ("[traceparent] {0}" -f $TraceParent)
-$authoredCadenceText = if (-not $authoredCadenceWasBound) { "<host default>" } else { $AuthoredCadence }
-$authoredCapText = if ($authoredMaxWasBound) { [string]$AuthoredMaxSegmentCheckpoints } else { "<host default>" }
-Write-Host ("[authored]   checkpointCadence={0}; maxSegmentCheckpoints={1}" -f $authoredCadenceText, $authoredCapText)
-$expectedMaxSegment = if ($expectedMaxWasBound) {
-    $ExpectedMaxSegmentCheckpoints
-} elseif ($ExpectedCadence -eq "Coalesced" -and $authoredMaxWasBound) {
-    $AuthoredMaxSegmentCheckpoints
-} elseif ($ExpectedCadence -eq "Coalesced") {
-    50
-} else {
-    $null
-}
-$effectiveCapText = if ($null -eq $expectedMaxSegment) { "<null>" } else { [string]$expectedMaxSegment }
-Write-Host ("[expected]   checkpointCadence={0}; maxSegmentCheckpoints={1}" -f $ExpectedCadence, $effectiveCapText)
+$authoredModeText = if (-not $authoredModeWasBound) { "<host default>" } else { $AuthoredPersistenceMode }
+Write-Host ("[authored]   persistenceMode={0}" -f $authoredModeText)
+Write-Host ("[expected]   persistenceMode={0}" -f $ExpectedPersistenceMode)
 
 $ctx = Connect-Elsa -BaseUrl $BaseUrl -Username $Username -Password $Password
 $sequence = Invoke-Step "resolve Sequence" { Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Sequence.Activities.Sequence' }
@@ -123,7 +91,7 @@ $variables = @(
 
 $definition = Invoke-Step "submit reference workflow" {
     Submit-Workflow -Ctx $ctx -Name $workflowName `
-        -Description "Task #2392 current-head $ExpectedCadence HTTP reference; non-equivalent to historical custom transform." `
+        -Description "Task #2392 current-head $ExpectedPersistenceMode HTTP reference; non-equivalent to historical custom transform." `
         -RootActivity $root -Variables $variables -StrategyOptions $strategyOptions
 }
 $publication = Invoke-Step "publish reference workflow" {
@@ -132,7 +100,7 @@ $publication = Invoke-Step "publish reference workflow" {
 Write-Host ("[published]  version={0} artifact={1}" -f $definition.version.id, $publication.artifactId)
 
 # Inspect the exact published executable rather than inferring profile/fusion information from the authoring node.
-$export = Invoke-Step "read published executable export (workflow-publishing.read)" {
+$export = Invoke-Step "read published executable export (workflows/publishing:read)" {
     Invoke-RestMethod "$BaseUrl/publishing/workflows/$($definition.version.id)/executable-export" -WebSession $ctx.Session
 }
 function Find-SetIntrinsic($value) {
@@ -186,10 +154,8 @@ if ($SetupOnly) {
         SourceReferenceId  = [string]$publication.sourceReferenceId
         WorkflowName       = $workflowName
         RoutePath          = $path
-        ExpectedCadence    = $ExpectedCadence
-        ExpectedMaxSegmentCheckpoints = $expectedMaxSegment
-        AuthoredCadence    = if ($authoredCadenceWasBound) { $AuthoredCadence } else { $null }
-        AuthoredMaxSegmentCheckpoints = if ($authoredMaxWasBound) { $AuthoredMaxSegmentCheckpoints } else { $null }
+        ExpectedPersistenceMode = $ExpectedPersistenceMode
+        AuthoredPersistenceMode = if ($authoredModeWasBound) { $AuthoredPersistenceMode } else { $null }
         CandidateSourceSha = $HostCandidateSha.ToLowerInvariant()
         Context            = $ctx
         ExecutableExport   = $export
@@ -222,7 +188,7 @@ if ($executionIds.Count -ne 1) {
 $executionId = $executionIds[0]
 Write-Host ("[instance]   workflowExecutionId={0}" -f $executionId)
 
-$detail = Invoke-Step "read per-run instance detail (workflow-runtime.read)" {
+$detail = Invoke-Step "read per-run instance detail (workflows/runtime:read)" {
     Wait-WorkflowInstance -Ctx $ctx -ExecutionId $executionId -TimeoutSeconds 30
 }
 if ($detail.instance.status -notin @("Completed", "Finished")) {
@@ -234,13 +200,11 @@ function Get-DetailValue($detailValue, [string] $name) {
     if ($null -eq $value) { $value = $detailValue.instance.$name }
     return $value
 }
-$cadence = Get-DetailValue $detail "checkpointCadence"
-$maxSegment = Get-DetailValue $detail "maxSegmentCheckpoints"
+$persistenceMode = Get-DetailValue $detail "persistenceMode"
 $inspection = Get-DetailValue $detail "inspectionGranularity"
 Write-Host ("[terminal]   status={0}" -f $detail.instance.status)
-Write-Host ("[effective]  checkpointCadence={0}; maxSegmentCheckpoints={1}; inspectionGranularity={2}" -f $cadence, $maxSegment, $inspection)
-$expectedInspection = if ($ExpectedCadence -eq "Coalesced") { "boundary-level" } else { "activity-level" }
-$expectedMaxSegmentText = if ($null -eq $expectedMaxSegment) { "<null>" } else { [string]$expectedMaxSegment }
-if ("$cadence" -ne $ExpectedCadence -or $maxSegment -ne $expectedMaxSegment -or "$inspection" -ne $expectedInspection) {
-    throw "Expected effective checkpointCadence=$ExpectedCadence, maxSegmentCheckpoints=$expectedMaxSegmentText, and inspectionGranularity=$expectedInspection; got cadence='$cadence', maxSegmentCheckpoints='$maxSegment', inspectionGranularity='$inspection'."
+Write-Host ("[effective]  persistenceMode={0}; inspectionGranularity={1}" -f $persistenceMode, $inspection)
+$expectedInspection = if ($ExpectedPersistenceMode -eq "Durable") { "activity-level" } else { "boundary-level" }
+if ("$persistenceMode" -ne $ExpectedPersistenceMode -or "$inspection" -ne $expectedInspection) {
+    throw "Expected persistenceMode=$ExpectedPersistenceMode and inspectionGranularity=$expectedInspection; got persistenceMode='$persistenceMode', inspectionGranularity='$inspection'."
 }

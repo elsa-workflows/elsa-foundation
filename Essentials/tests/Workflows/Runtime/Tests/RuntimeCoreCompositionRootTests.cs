@@ -86,6 +86,24 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<WorkflowIntrinsicExecutor>());
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AddWorkflowRuntime_requires_child_execution_evidence_for_checkpoint_composition(bool registerNullStore)
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        services.RemoveAll<IWorkflowExecutionStateStore>();
+        if (registerNullStore)
+            services.AddSingleton<IWorkflowExecutionStateStore>(_ => null!);
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            scope.ServiceProvider.GetRequiredService<IRuntimePostCommitOutboxClaimCompletionStore>());
+
+        Assert.Contains(nameof(IWorkflowExecutionStateStore), exception.Message);
+    }
+
     [Fact]
     public void AddWorkflowRuntime_partition_accessor_refuses_privileged_access_to_a_partition()
     {
@@ -292,6 +310,7 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
         services.AddSingleton(observations);
         services.RemoveAll<IWorkflowSchedulerWorkQueue>();
         services.AddScoped<IWorkflowSchedulerWorkQueue, ScopeTrackingSchedulerWorkQueue>();
+        services.AddPersistenceModes();
 
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions
         {

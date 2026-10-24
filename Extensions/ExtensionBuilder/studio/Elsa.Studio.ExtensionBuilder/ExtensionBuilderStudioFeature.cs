@@ -11,7 +11,7 @@ namespace Elsa.Studio.ExtensionBuilder;
 /// <summary>
 /// The optional Extension Builder Studio module (#535). It contributes the Extension Builder page (navigation + route)
 /// and relays the page's calls to the backend Elsa host's Extension Builder surface through the Studio management
-/// bridge (#256, ADR 0037), nested under the host's bridge route group. A Studio that does not enable this feature
+/// bridge (#256), nested under the host's bridge route group. A Studio that does not enable this feature
 /// has no Extension Builder navigation item, route, or bridge endpoint.
 ///
 /// <para>The feature relies on the host's bridge infrastructure: the <c>StudioBackendManagementOptions</c> singleton

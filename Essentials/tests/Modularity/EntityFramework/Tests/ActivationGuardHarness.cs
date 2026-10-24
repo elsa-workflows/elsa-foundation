@@ -29,7 +29,7 @@ internal sealed class FixedEfModuleAssemblySource(params Assembly[] assemblies) 
 
 /// <summary>
 /// Every log line written through the container the guard resolves from, so a test can assert that a
-/// credential reached none of them (FR-061) rather than assuming it did not.
+/// credential reached none of them rather than assuming it did not.
 /// </summary>
 internal sealed class CapturedLogs : ILoggerProvider
 {
@@ -144,7 +144,7 @@ internal sealed class ActivationGuardHarness : IDisposable
     public static FeatureApplyItem Disabled(string feature, string provider = "Sqlite", string? connection = null) =>
         new(feature, false, Configuration(provider, connection, connectionName: null));
 
-    /// <summary>A feature with no persistence settings of its own: the dashboard shape (FR-065).</summary>
+    /// <summary>A feature with no persistence settings of its own: the dashboard shape.</summary>
     public static FeatureApplyItem EnabledWithoutSettings(string feature) =>
         new(feature, true, JsonSerializer.SerializeToElement(new Dictionary<string, string?>()));
 
@@ -164,7 +164,7 @@ internal sealed class ActivationGuardHarness : IDisposable
     /// <summary>
     /// Applies <paramref name="module"/>'s migrations, then records its family <paramref name="family"/> as a build whose
     /// chain is <paramref name="chain"/> would: created at the chain's first version and finalized at
-    /// <paramref name="finalized"/> (spec 181).
+    /// <paramref name="finalized"/>.
     /// </summary>
     public static async Task FinalizeAsync(string module, string connection, string family, string[] chain, string finalized)
     {
@@ -179,8 +179,10 @@ internal sealed class ActivationGuardHarness : IDisposable
 
     public void Dispose()
     {
-        // The pool holds the files open, and a pooled handle outlives the context that opened it.
-        SqliteConnection.ClearAllPools();
+        // The pool holds the files open, and a pooled handle outlives the context that opened it. Only this harness's
+        // pools: clearing every pool can dispose a connection another test is opening (#2185).
+        foreach (var database in Directory.EnumerateFiles(_root.FullName, "*.db", SearchOption.AllDirectories))
+            SqliteConnection.ClearPool(new SqliteConnection(ConnectionTo(database)));
         try
         {
             _root.Delete(recursive: true);

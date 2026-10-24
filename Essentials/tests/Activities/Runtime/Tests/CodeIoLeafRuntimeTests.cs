@@ -7,7 +7,7 @@ using Elsa.Expressions.Core.Constants;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
@@ -225,5 +225,5 @@ public sealed class CodeIoLeafRuntimeTests
             source: RuntimeInputBindingSource.Expression,
             expression: new RuntimeExpressionBinding(WellKnownExpressionDescriptorTypes.Object, JsonSerializer.Serialize(value)));
 
-    private static IPayloadSerializer Serializer => new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
+    private static readonly IPayloadSerializer Serializer = SerializationServices.PayloadSerializer();
 }

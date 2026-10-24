@@ -28,7 +28,7 @@ namespace Elsa3.Activities.Design.Import;
     DisplayName = "Elsa 3 Import Activities",
     Description = "Imports Elsa 3 JSON workflow activities into the design reconciliation pipeline.",
     // The Tasks feature runs the recurring sweep that deletes expired collection uploads. The importer judges every
-    // activity node it maps through the credential-literal rule (spec 188, FR-008), which WorkflowDesignValidations
+    // activity node it maps through the credential-literal rule, which WorkflowDesignValidations
     // registers.
     DependsOn = new object[] { "Elsa3Mapping", "Tasks", "WorkflowDesignValidations" }
 )]
@@ -53,7 +53,15 @@ public class Elsa3ImportActivitiesFeature : IWebShellFeature
         }
 
         services.AddScoped<IReusableActivityCollectionAnalyzer, ReusableActivityCollectionAnalyzer>();
-        services.AddScoped<IReusableActivityCollectionImporter, ReusableActivityCollectionImporter>();
+        // The publish phase that publishes imported reusable versions after the commit comes from the
+        // Elsa3ImportActivitiesPublishing feature (spec 246); without it, an apply that selects one is refused.
+        services.AddScoped<IReusableActivityCollectionImporter>(provider => new ReusableActivityCollectionImporter(
+            provider.GetRequiredService<IReusableActivityCollectionAnalyzer>(),
+            provider.GetRequiredService<IReusableActivityImportMaterializer>(),
+            provider.GetRequiredService<IReusableActivityImportCommand>(),
+            provider.GetRequiredService<Elsa.Workflows.Design.Validations.Core.Contracts.ICredentialLiteralValidator>(),
+            provider.GetService<ReusableActivityImportPublishPhase>(),
+            requirePublishing: true));
         services.TryAddSingleton(TimeProvider.System);
         services.AddOptions<ReusableActivityImportOptions>().Configure(options =>
         {

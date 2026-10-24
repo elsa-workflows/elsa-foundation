@@ -27,7 +27,7 @@ using Xunit;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// The composition test of framework constitution §2.23.1: shells composed from every feature, in which every service type
+/// The composition test: shells composed from every feature, in which every service type
 /// each feature registers resolves.
 /// </summary>
 /// <remarks>
@@ -422,6 +422,7 @@ public sealed class FeatureCompositionTests
                 ["JsonWorkflowReconciliation"] = new() { ["Options:SourceId"] = "composition", ["Options:FolderPath"] = workflows },
                 ["JsonWorkflowArtifactReconciliation"] = new() { ["Options:SourceId"] = "composition", ["Options:FolderPath"] = workflows },
                 ["FileSystemDistributedLocking"] = new() { ["LocksFolderPath"] = Path.Join(directory, "locks") },
+                ["EtlRuntime"] = new() { ["SnapshotRoot"] = Path.Join(directory, "etl-snapshots") },
                 // Medallion's providers connect when a lock is taken, not when they are constructed, and nothing takes one here.
                 ["DatabaseDistributedLocking"] = new() { ["Provider"] = "PostgreSql", ["ConnectionString"] = "Host=127.0.0.1;Database=elsa" },
                 // Activation clones the remote, so the remote is a local repository and the clone stays in the directory.
@@ -596,7 +597,7 @@ public sealed class FeatureCompositionTests
             }
 
             factory.Recordings.SingleOrDefault(recording => recording.Shell == shell)?.Complete();
-            if (_active.GetValueOrDefault(shell)?.ServiceProvider.GetService<ITaskManager>() is IStoppableTaskManager tasks)
+            if (_active.GetValueOrDefault(shell)?.ServiceProvider.GetService<ITaskManager>() is { } tasks)
                 await tasks.StopExecutingRegisteredTasks();
         }
 

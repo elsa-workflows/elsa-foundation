@@ -58,6 +58,7 @@ namespace Elsa.Activities.Parallel.Activities;
 /// <c>ParallelStructureHandler</c> references <c>Elsa.Workflows.Design.Core</c>.
 /// </para>
 /// </remarks>
+[Activity(Icon = "GitFork")]
 [ActivityStructure("elsa.parallel.structure", "1.0.0")]
 [ActivityChildSlot(
     "Parallel.Branch",
@@ -69,7 +70,9 @@ namespace Elsa.Activities.Parallel.Activities;
     LabelProperty = "name",
     SlotNameTemplate = "Parallel.Branch[{name}]")]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
-public sealed class Parallel(IActivityExecutionStateStore activityExecutionStateStore) : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler, IRuntimeActivityChildFaultHandler
+// The join is decided from the durable branch states, where a superseded branch does not count and its successor's
+// completion counts as that branch's success, so a rescheduled faulted branch can rejoin a deferred join (#3135).
+public sealed class Parallel(IActivityExecutionStateStore activityExecutionStateStore) : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler, IRuntimeActivityChildFaultHandler, IRuntimeAcceptsRescheduledFaultedChild
 {
     public const string BranchSlotPrefix = "Parallel.Branch[";
     public const string BranchSlotSuffix = "]";
@@ -81,7 +84,7 @@ public sealed class Parallel(IActivityExecutionStateStore activityExecutionState
 
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
-        var navigator = ParallelNavigator.From(runtimeContext.ExecutableNode);
+        var navigator = runtimeContext.ExecutableNode.GetOrAddRoutingStructure(ParallelNavigator.From);
         var branches = navigator.RunnableBranches;
 
         // No runnable branch short-circuits straight to Done without forking. (When there are no runnable
@@ -107,7 +110,7 @@ public sealed class Parallel(IActivityExecutionStateStore activityExecutionState
         ArgumentNullException.ThrowIfNull(context);
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
-        var navigator = ParallelNavigator.From(runtimeContext.ExecutableNode);
+        var navigator = runtimeContext.ExecutableNode.GetOrAddRoutingStructure(ParallelNavigator.From);
 
         if (!navigator.IsBranch(context.CompletedChildExecutableNodeId))
             throw new ControlFlowExecutionException($"Completed child executable node '{context.CompletedChildExecutableNodeId}' is not a Parallel branch.");
@@ -120,7 +123,7 @@ public sealed class Parallel(IActivityExecutionStateStore activityExecutionState
         ArgumentNullException.ThrowIfNull(context);
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
-        var navigator = ParallelNavigator.From(runtimeContext.ExecutableNode);
+        var navigator = runtimeContext.ExecutableNode.GetOrAddRoutingStructure(ParallelNavigator.From);
 
         if (!navigator.IsBranch(context.FaultedChildExecutableNodeId))
             throw new ControlFlowExecutionException($"Faulted child executable node '{context.FaultedChildExecutableNodeId}' is not a Parallel branch.");

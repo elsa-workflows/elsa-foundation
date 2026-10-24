@@ -2,8 +2,8 @@ using Elsa.Activities.Design.Reconciliation.Json.Exceptions;
 using Elsa.Activities.Design.Reconciliation.Json.Options;
 using Elsa.Activities.Design.Reconciliation.Json.Services;
 using Elsa.Serialization.Core;
-using Elsa.Serialization.SystemText.Services;
 using System.Text.Json;
+using Elsa.Serialization.Testing;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -137,7 +137,7 @@ public sealed class JsonReconciliationTests : IDisposable
     private static JsonActivityReconciliationSource BuildSource(IOptions<JsonReconciliationOptions> options)
     {
         var reader = new JsonActivityCatalogReader(
-            new JsonPayloadSerializer(new JsonPayloadConverterRegistry()),
+            SerializationServices.PayloadSerializer(),
             NullLogger<JsonActivityCatalogReader>.Instance);
         return new JsonActivityReconciliationSource(reader, options);
     }

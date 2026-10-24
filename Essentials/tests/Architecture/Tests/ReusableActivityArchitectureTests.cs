@@ -17,10 +17,13 @@ public sealed class ReusableActivityArchitectureTests
     }
 
     [Fact]
-    public void Graph_runtime_references_only_runtime_core_contracts() =>
+    public void Graph_runtime_references_only_stable_runtime_and_expression_contracts() =>
         AssertProjectReferences(
             "Essentials/src/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj",
             "Elsa.Activities.Runtime.Core",
+            // Boundary expressions use portable evaluator/type contracts, never a concrete language engine.
+            "Elsa.Expressions.Core",
+            "Elsa.Serialization.Core",
             "Elsa.Workflows.Runtime.Core");
 
     [Fact]
@@ -32,12 +35,14 @@ public sealed class ReusableActivityArchitectureTests
             // The provider uses the provider-neutral Design structure projector to preserve
             // authored parent/slot/order. This remains Design -> Design; Graph Runtime stays clean.
             "Elsa.Workflows.Design.Core",
+            // CompleteOutsideGraphDraftValidator (spec 237) contributes an IDraftValidator; Design -> Design .Core.
+            "Elsa.Workflows.Design.Validations.Core",
             "Elsa.Workflows.Publishing.Core",
             "Elsa.Workflows.Runtime.Core");
 
     /// <summary>
-    /// The EF counterpart commits the publication in ADR 0066 order through the Activities Design and Runtime
-    /// EF modules' own staging seams, each in its own context. It also owns the A12/A13 activity-upgrade
+    /// The EF counterpart commits the publication in order through the Activities Design and Runtime
+    /// EF modules' own staging seams, each in its own context. It also owns the activity-upgrade
     /// bridge, whose apply commits both Design catalogs as one act, so it reaches the Workflows Design EF lane
     /// as well — exactly three EF modules, and never another persistence family.
     /// </summary>

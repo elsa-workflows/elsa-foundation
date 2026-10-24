@@ -15,8 +15,8 @@ public sealed class PermissionCatalogOwnershipLifecycleTests
         using var provider = BuildProvider(includeModuleManagement: true, includeStudioPreferences: true);
         var catalog = provider.GetRequiredService<IPermissionCatalog>();
 
-        var modulePermissions = catalog.List().Where(x => x.Key.StartsWith("module-management.", StringComparison.Ordinal)).ToArray();
-        var studioPermissions = catalog.List().Where(x => x.Key.StartsWith("studio.preferences.", StringComparison.Ordinal)).ToArray();
+        var modulePermissions = catalog.List().Where(x => x.Key.StartsWith("module-management:", StringComparison.Ordinal)).ToArray();
+        var studioPermissions = catalog.List().Where(x => x.Key.StartsWith("studio/preferences:", StringComparison.Ordinal)).ToArray();
 
         Assert.Equal(2, modulePermissions.Length);
         Assert.Equal(2, studioPermissions.Length);
@@ -30,6 +30,10 @@ public sealed class PermissionCatalogOwnershipLifecycleTests
             Assert.Equal(StudioPreferencesPermissions.OwnerId, permission.OwnerId);
             Assert.Equal(typeof(StudioPreferencesPermissionContributor).FullName, permission.ContributorType);
         });
+        var manageDefaults = catalog.Find(StudioPreferencesPermissions.ManageDefaults);
+        Assert.NotNull(manageDefaults);
+        Assert.Equal(StudioPreferencesPermissions.OwnerId, manageDefaults.OwnerId);
+        Assert.Equal(typeof(StudioPreferencesPermissionContributor).FullName, manageDefaults.ContributorType);
     }
 
     [Fact]
@@ -53,7 +57,7 @@ public sealed class PermissionCatalogOwnershipLifecycleTests
             new SecondDuplicateContributor()
         ]));
 
-        Assert.Contains("READ", exception.Message);
+        Assert.Contains("TESTS:READ", exception.Message);
         Assert.Contains(typeof(FirstDuplicateContributor).FullName!, exception.Message);
         Assert.Contains(typeof(SecondDuplicateContributor).FullName!, exception.Message);
         Assert.Contains(FirstDuplicateContributor.Owner, exception.Message);
@@ -62,28 +66,23 @@ public sealed class PermissionCatalogOwnershipLifecycleTests
 
     [Theory]
     [InlineData("*")]
-    [InlineData(" read ")]
+    [InlineData(" tests:read ")]
     [InlineData("")]
+    [InlineData("tests.read")]
+    [InlineData("tests/*:read")]
     public void InvalidCatalogKeysFailActivation(string key)
     {
         Assert.Throws<InvalidOperationException>(() => new CompositePermissionCatalog(
-            [new InvalidContributor(key, null)]));
-    }
-
-    [Fact]
-    public void WildcardImplicationTargetFailsActivation()
-    {
-        Assert.Throws<InvalidOperationException>(() => new CompositePermissionCatalog(
-            [new InvalidContributor("read", new HashSet<string> { "*" })]));
+            [new InvalidContributor(key)]));
     }
 
     [Fact]
     public void CanonicalIndexRetainsTheContributorPresentationSpelling()
     {
-        const string presentation = "réad";
-        var catalog = new CompositePermissionCatalog([new InvalidContributor(presentation, null)]);
+        const string presentation = "tests:réad";
+        var catalog = new CompositePermissionCatalog([new InvalidContributor(presentation)]);
 
-        var permission = catalog.Find("RE\u0301AD");
+        var permission = catalog.Find("TESTS:RE\u0301AD");
 
         Assert.NotNull(permission);
         Assert.Equal(presentation, permission!.Key);
@@ -146,7 +145,7 @@ public sealed class PermissionCatalogOwnershipLifecycleTests
     private sealed class LegacyContributor : IPermissionContributor
     {
         public IEnumerable<Permission> Contribute() =>
-            [new("legacy.read", "Legacy", "Tests", "Legacy contributor.")];
+            [new("legacy:read", "Legacy", "Tests", "Legacy contributor.")];
     }
 
     private sealed class FirstDuplicateContributor : IPermissionContributor
@@ -156,7 +155,7 @@ public sealed class PermissionCatalogOwnershipLifecycleTests
         public string OwnerId => Owner;
 
         public IEnumerable<Permission> Contribute() =>
-            [new("read", "First", "Tests", "First duplicate.")];
+            [new("tests:read", "First", "Tests", "First duplicate.")];
     }
 
     private sealed class SecondDuplicateContributor : IPermissionContributor
@@ -166,18 +165,18 @@ public sealed class PermissionCatalogOwnershipLifecycleTests
         public string OwnerId => Owner;
 
         public IEnumerable<Permission> Contribute() =>
-            [new("READ", "Second", "Tests", "Second duplicate.")];
+            [new("TESTS:READ", "Second", "Tests", "Second duplicate.")];
     }
 
-    private sealed class InvalidContributor(string key, IReadOnlySet<string>? implies) : IPermissionContributor
+    private sealed class InvalidContributor(string key) : IPermissionContributor
     {
         public IEnumerable<Permission> Contribute() =>
-            [new(key, "Invalid", "Tests", "Invalid catalog entry.", implies)];
+            [new(key, "Invalid", "Tests", "Invalid catalog entry.")];
     }
 
     private sealed class ReplacementContributor : IPermissionContributor
     {
-        public const string Key = "replacement.read";
+        public const string Key = "replacement:read";
         public const string Owner = "tests.replacement-owner";
 
         public string OwnerId => Owner;

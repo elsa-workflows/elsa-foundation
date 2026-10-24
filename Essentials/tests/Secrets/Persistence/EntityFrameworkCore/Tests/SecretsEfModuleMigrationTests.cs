@@ -145,7 +145,7 @@ public sealed class SecretsEfModuleMigrationTests
 
     /// <summary>
     /// The migrator reads the host-wide key, never a Secrets-only setting: an unset key keeps the
-    /// <see cref="EfMigratePolicy.AutoMigrate"/> default (FR-058).
+    /// <see cref="EfMigratePolicy.AutoMigrate"/> default.
     /// </summary>
     [Fact]
     public async Task The_policy_comes_from_the_host_wide_key_and_defaults_to_AutoMigrate()
@@ -210,7 +210,7 @@ public sealed class SecretsEfModuleMigrationTests
         public async ValueTask DisposeAsync()
         {
             await Provider.DisposeAsync();
-            TemporarySqliteDatabase.ClearPoolAndDeleteFiles(Path);
+            TemporarySqliteDatabase.ClearPoolAndDeleteFiles(ConnectionString);
         }
     }
 }

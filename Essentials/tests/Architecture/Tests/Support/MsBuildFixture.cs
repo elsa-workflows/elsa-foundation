@@ -56,7 +56,8 @@ internal static class MsBuildFixture
 
     /// <summary>
     /// Copies the root build files into <paramref name="destination"/>, passing <c>VersionLines.props</c> through
-    /// <paramref name="rewriteVersionLines"/>, for <see cref="Run"/>'s <c>repositoryRoot</c>.
+    /// <paramref name="rewriteVersionLines"/>, for <see cref="Run"/>'s <c>repositoryRoot</c>, with a stand-in for the
+    /// naming analyzer the root build files reference.
     /// </summary>
     internal static string CopyRootBuildFiles(string destination, Func<string, string>? rewriteVersionLines = null)
     {
@@ -64,6 +65,24 @@ internal static class MsBuildFixture
         {
             var content = File.ReadAllText(Path.Join(RepoRoot, file));
             File.WriteAllText(Path.Join(destination, file), file == "VersionLines.props" && rewriteVersionLines is not null ? rewriteVersionLines(content) : content);
+        }
+
+        // Directory.Build.props gives every production project the naming analyzer and fails the build when it is
+        // missing. The analyzer is not what these fixtures test, and its Roslyn packages would change the package graph
+        // they pin, so an empty project that builds stands in for it at the same path.
+        foreach (var analyzer in ProjectGraph.BuildWideProjectReferences(RepoRoot))
+        {
+            var standIn = Path.Join(destination, Path.GetRelativePath(RepoRoot, analyzer));
+            Directory.CreateDirectory(Path.GetDirectoryName(standIn)!);
+            File.WriteAllText(standIn, """
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <PropertyGroup>
+                    <TargetFramework>netstandard2.0</TargetFramework>
+                    <LangVersion>latest</LangVersion>
+                    <IsPackable>false</IsPackable>
+                  </PropertyGroup>
+                </Project>
+                """);
         }
 
         return destination;

@@ -1,8 +1,7 @@
 using Elsa.Workflows.Design.CodeGeneration;
-using Elsa.Activities.Design.Reconciliation.Handlers;
+using Elsa.Activities.Design.Core.Reconciliation;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using System.Reflection;
 using System.Text.RegularExpressions;
 using Xunit;
 
@@ -343,8 +342,7 @@ public sealed class ActivityCallGeneratorTests
         var diagnostic = GetSingleGeneratorDiagnostic(result);
         Assert.Equal(ActivityCallGenerator.UnsupportedShapeDiagnosticId, diagnostic.Id);
         Assert.Contains("activity version id must not be empty", diagnostic.GetMessage(), StringComparison.Ordinal);
-        var canonicalException = Assert.Throws<TargetInvocationException>(() => CanonicalVersionId(typeKey, version));
-        Assert.IsType<ArgumentException>(canonicalException.InnerException);
+        Assert.Throws<ArgumentException>(() => CanonicalVersionId(typeKey, version));
     }
 
     private static GeneratorResult RunGenerator(string source, IReadOnlyCollection<MetadataReference>? additionalReferences = null)
@@ -392,14 +390,8 @@ public sealed class ActivityCallGeneratorTests
         return match.Groups["id"].Value;
     }
 
-    private static string CanonicalVersionId(string activityTypeKey, string version)
-    {
-        var canonicalType = typeof(CollectActivityVersions).Assembly.GetType(
-            "Elsa.Activities.Design.Reconciliation.Services.ActivityCatalogStableIds",
-            throwOnError: true)!;
-        var method = canonicalType.GetMethod("VersionId", BindingFlags.Public | BindingFlags.Static)!;
-        return (string)method.Invoke(null, [activityTypeKey, version])!;
-    }
+    private static string CanonicalVersionId(string activityTypeKey, string version) =>
+        ActivityCatalogStableIds.VersionId(activityTypeKey, version)!;
 
     private static string VersionedActivitySource(string activityTypeKey, string version)
     {

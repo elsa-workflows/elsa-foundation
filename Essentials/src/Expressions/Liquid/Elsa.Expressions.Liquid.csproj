@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="Fluid.Core" />
@@ -11,6 +15,11 @@
     <ProjectReference Include="..\Core\Elsa.Expressions.Core.csproj" />
     <ProjectReference Include="..\..\Events\Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\..\Serialization\Core\Elsa.Serialization.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Expressions.Tests" />
+    <InternalsVisibleTo Include="Elsa.Expressions.JavaScript.Jint.Tests" />
   </ItemGroup>
 
 </Project>

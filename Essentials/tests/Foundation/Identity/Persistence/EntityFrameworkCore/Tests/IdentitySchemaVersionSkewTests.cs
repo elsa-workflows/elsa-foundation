@@ -26,7 +26,7 @@ public sealed class IdentitySchemaVersionSkewTests : IAsyncLifetime
     private const string Tenant = "tenant-a";
     private const string UserId = "user-a";
     private const string RoleId = "role-a";
-    private readonly string databasePath = Path.Join(Path.GetTempPath(), $"elsa-identity-skew-{Guid.NewGuid():N}.db");
+    private readonly string connectionString = $"Data Source={Path.Join(Path.GetTempPath(), $"elsa-identity-skew-{Guid.NewGuid():N}.db")};Default Timeout=5";
     private ServiceProvider provider = null!;
     private AsyncServiceScope scope;
 
@@ -39,15 +39,15 @@ public sealed class IdentitySchemaVersionSkewTests : IAsyncLifetime
         services.AddIdentityIamEntityFrameworkCore(new()
         {
             Provider = "Sqlite",
-            ConnectionString = $"Data Source={databasePath};Default Timeout=5"
+            ConnectionString = connectionString
         });
         provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         scope = provider.CreateAsyncScope();
         await Context.Database.EnsureCreatedAsync();
 
         // Unique email is what writes an email reservation, so every IAM table holds at least one row.
-        await new EfUserStore(Context, Get<IPersistenceAccessContextAccessor>(), emailUniquenessPolicy: IdentityEmailUniquenessPolicy.Unique).SaveAsync(new UserRecord(UserId, Tenant, "Ada", "ada@example.test", "Ada", UserStatus.Active, ResourceOwnership.Foundation, Set(), Set("identity.users.read")));
-        await Get<IRoleStore>().SaveAsync(new RoleRecord(RoleId, Tenant, "Operators", "Operators", Set("identity.users.read"), System: false));
+        await new EfUserStore(Context, Get<IPersistenceAccessContextAccessor>(), emailUniquenessPolicy: IdentityEmailUniquenessPolicy.Unique).SaveAsync(new UserRecord(UserId, Tenant, "Ada", "ada@example.test", "Ada", UserStatus.Active, ResourceOwnership.Foundation, Set(), Set("identity/users:read")));
+        await Get<IRoleStore>().SaveAsync(new RoleRecord(RoleId, Tenant, "Operators", "Operators", Set("identity/users:read"), System: false));
         await Get<IClaimMappingStore>().SaveAsync(new ClaimMappingRule("rule-a", Tenant, "google", "groups", "admins", Set(RoleId), Set(), 10, StopOnMatch: true));
         await Get<IApplicationStore>().SaveAsync(new ApplicationRecord("app-a", Tenant, "client-a", "App", ApplicationType.Confidential, ResourceOwnership.Foundation, Set("client_credentials"), Set("openid")));
         await Get<ICredentialStore>().SaveAsync(new CredentialRecord("credential-a", Tenant, CredentialSubjectType.Application, "app-a", CredentialKind.ClientSecret, "hash", "Argon2id", CredentialStatus.Active, null));
@@ -65,7 +65,7 @@ public sealed class IdentitySchemaVersionSkewTests : IAsyncLifetime
     {
         await scope.DisposeAsync();
         await provider.DisposeAsync();
-        TemporarySqliteDatabase.ClearPoolAndDeleteFiles(databasePath);
+        TemporarySqliteDatabase.ClearPoolAndDeleteFiles(connectionString);
     }
 
     [Fact]

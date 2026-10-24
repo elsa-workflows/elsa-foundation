@@ -2,9 +2,15 @@ import type {
   StudioActivityDescriptor,
   StudioActivityInputOption,
   StudioExpressionDescriptor,
+  StudioTestRunDriverAction,
+  StudioTestRunOptionDescriptor,
+  StudioTestRunModeDescriptor,
+  StudioTestRunWaitDescriptor,
   StudioWorkflowRunInputDescriptor,
   StudioWorkflowRunInputTypeMetadata
 } from "@elsa-workflows/studio-sdk";
+
+export type WorkflowDefinitionPublicationState = "draft" | "published" | "retracted" | "retired";
 
 export interface WorkflowDefinitionsResponse {
   definitions: WorkflowDefinitionSummary[];
@@ -29,7 +35,15 @@ export interface WorkflowDefinitionSummary {
   draftId?: string | null;
   latestVersionId?: string | null;
   latestVersion?: string | null;
+  /** Exact source of the mutable draft; a draft has no assigned version of its own. */
+  draftSourceVersionId?: string | null;
+  draftSourceVersion?: string | null;
+  /** Version currently published by the host, independent of the latest saved version. */
+  publishedVersionId?: string | null;
+  publishedVersion?: string | null;
   versionCount: number;
+  /** Server publication lifecycle. Omitted on design-only hosts. */
+  publicationState?: WorkflowDefinitionPublicationState | null;
   /** Organizational placement, intentionally separate from the authored workflow state. */
   folderId?: string | null;
   /** Root-to-containing-folder projection for result navigation; IDs are opaque. */
@@ -103,8 +117,12 @@ export interface IncidentStrategiesResponse {
   defaultStrategy: IncidentStrategyReference;
 }
 
+/** When a run's state is committed, and therefore what a crash costs. Unset means the host's default applies. */
+export type PersistenceMode = "Durable" | "Balanced" | "Ephemeral";
+
 export interface WorkflowStrategyOptions {
   incidentStrategy?: IncidentStrategyReference | null;
+  persistenceMode?: PersistenceMode | null;
   [key: string]: unknown;
 }
 
@@ -169,6 +187,11 @@ export interface ValidationError {
   type?: string | null;
   code?: string | null;
   message?: string | null;
+  /**
+   * Backend `ValidationError.Severity`: `Error` blocks publication, `Warning` is reported and does not block. A missing
+   * value reads as `Error` (spec 261 FR-515).
+   */
+  severity?: "Error" | "Warning" | string | null;
   [key: string]: unknown;
 }
 
@@ -537,8 +560,63 @@ export interface StartWorkflowDraftTestRunRequest {
   activityPresentation?: ActivityPresentationRecord[];
   artifactVersion?: string | null;
   inputs?: WorkflowExecutionInputs;
+  start?: WorkflowTestRunStart;
   acknowledgeUnavailableExpressionValidation?: boolean;
 }
+
+export interface GetWorkflowDraftTestRunOptionsRequest {
+  definitionId: string;
+  snapshotId: string;
+  state: WorkflowDefinitionState;
+}
+
+export interface WorkflowDraftTestRunOptionsView {
+  artifactHash?: string;
+  inputContract?: WorkflowTestRunInputContract | null;
+  options: WorkflowTestRunOption[];
+  diagnostics?: TestRunOptionsDiagnostic[];
+}
+
+export interface WorkflowTestRunInputContract {
+  version: number;
+  inputs: Array<{
+    name: string;
+    type: ArgumentType;
+    isRequired: boolean;
+    defaultValue?: unknown | null;
+  }>;
+}
+
+export interface TestRunOptionsDiagnostic {
+  code: string;
+  message: string;
+  nodeId?: string | null;
+}
+
+export type WorkflowTestRunWait = StudioTestRunWaitDescriptor;
+
+export interface WorkflowTestRunWaitsView {
+  waits: WorkflowTestRunWait[];
+}
+
+export interface WorkflowTestRunWaitEventRequest {
+  waitId: string;
+  deliveryId: string;
+  modeId: string;
+  data?: unknown;
+}
+
+export interface WorkflowTestRunWaitEventView {
+  status: "Delivered" | "AlreadyDelivered" | "Pending" | "NoLongerWaiting" | "Rejected" | string;
+  reason?: string | null;
+}
+
+export type WorkflowTestRunOption = StudioTestRunOptionDescriptor;
+export type WorkflowTestRunMode = StudioTestRunModeDescriptor;
+
+export type WorkflowTestRunStart =
+  | { kind: "direct" }
+  | { kind: "trigger"; optionId: string; modeId: string; data?: unknown };
 
 export type WorkflowExecutionInputs = Record<string, unknown>;
 
@@ -555,6 +633,7 @@ export interface WorkflowTestRunView {
   reason?: string | null;
   expiresAt?: string | null;
   metadata?: Record<string, string>;
+  driverAction?: StudioTestRunDriverAction | null;
 }
 
 // An artifact row in the executables list (backend WorkflowExecutableRowView, elsa-foundation#598 P1).
@@ -801,6 +880,31 @@ export interface WorkflowInstanceDetails {
   /** Present when Runtime bounded the activity summaries and another page is available. */
   activityNextContinuationToken?: string | null;
   incidents?: IncidentStateSummary[] | null;
+  /** The caller's permissions for this run (spec 260 FR-416); an older host omits it, which reads as "may not manage". */
+  permissions?: WorkflowInstancePermissions | null;
+}
+
+/** A display hint: the endpoints still enforce every permission. */
+export interface WorkflowInstancePermissions {
+  canManage: boolean;
+  canInspectValues: boolean;
+}
+
+/**
+ * A module's read-only projection of a live structural activity's private state (spec 260 R-6), such as a compensation
+ * scope's journal. `view` is null when `available` is false; `unavailableReason` then says why.
+ */
+export interface ActivityStateView {
+  workflowExecutionId: string;
+  activityExecutionId: string;
+  executableNodeId: string;
+  activityStatus: string;
+  available: boolean;
+  unavailableReason?: "StateCleared" | "NoProjector" | string | null;
+  viewKind?: string | null;
+  viewVersion?: number | null;
+  canInspectValues: boolean;
+  view?: unknown;
 }
 
 export interface ActivityExecutionInspection {
@@ -980,11 +1084,20 @@ export interface ActivityExecutionBookmarkSummary {
   payload?: unknown;
 }
 
+/** The action applied to an incident, with its provenance (the API's `resolutionOutcome`). */
+export interface IncidentResolutionOutcomeSummary {
+  actionKind: string;
+  appliedAt?: string | null;
+  strategy?: { alias: string; version: number } | null;
+  systemSource?: string | null;
+  metadata?: Record<string, string>;
+}
+
 export interface ActivityExecutionIncidentSummary {
   incidentId: string;
   severity: string;
   status: string;
-  resolutionAction: string;
+  resolutionOutcome?: IncidentResolutionOutcomeSummary | null;
   failureType: string;
   message: string;
   stackTrace?: string | null;
@@ -1146,7 +1259,19 @@ export interface ActivityExecutionStateSummary {
   incidentIds?: string[] | null;
   faultCount?: number;
   aggregateFaultCount?: number;
+  /** Outcomes of a completed execution, when the runtime reports them. */
+  outcomeNames?: string[] | null;
+  /** How the execution was scheduled. `schedulingCause` is "compensation" for a compensation handler. */
+  provenance?: ActivityExecutionSchedulingProvenance | null;
   metadata: Record<string, string>;
+}
+
+export interface ActivityExecutionSchedulingProvenance {
+  parentActivityExecutionId?: string | null;
+  schedulingActivityExecutionId?: string | null;
+  iterationId?: string | null;
+  schedulingCause?: string | null;
+  metadata?: Record<string, string> | null;
 }
 
 export interface IncidentStateSummary {
@@ -1156,7 +1281,7 @@ export interface IncidentStateSummary {
   executableNodeId?: string | null;
   severity: string;
   status: string;
-  resolutionAction: string;
+  resolutionOutcome?: IncidentResolutionOutcomeSummary | null;
   failureType: string;
   message: string;
   stackTrace?: string | null;

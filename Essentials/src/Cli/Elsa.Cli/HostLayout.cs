@@ -7,7 +7,7 @@ namespace Elsa.Cli;
 /// files that state how it resolves assemblies.
 /// </summary>
 /// <remarks>
-/// Both files are required before anything else happens (FR-011). A self-contained or single-file publish
+/// Both files are required before anything else happens. A self-contained or single-file publish
 /// produces neither, and a tool that discovered that only when the worker failed to start would report a
 /// host that cannot be inspected as a tooling fault.
 /// </remarks>

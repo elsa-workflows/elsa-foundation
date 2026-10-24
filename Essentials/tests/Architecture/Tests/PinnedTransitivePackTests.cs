@@ -1,23 +1,23 @@
 using System.IO.Compression;
 using System.Text.Json;
 using System.Xml.Linq;
-using Elsa.Maps.Generator;
+using Elsa.Maps.Projects;
 using Xunit;
 using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// A real restore and <c>dotnet pack</c>, through the real SDK and NuGet, of the premises spec 149's pinned-transitive
-/// edges rest on: with <c>CentralPackageTransitivePinningEnabled</c>, pack writes into the nuspec exactly the packages
-/// restore lists under <c>centralTransitiveDependencyGroups</c> in <c>obj/project.assets.json</c>, at the pinned version;
-/// and the lock file lists those same packages as <c>CentralTransitive</c>, together with the pinned packages the project
-/// reaches only through a <c>PrivateAssets="all"</c> reference, which pack leaves out. The maps generator reads the lock
-/// file for the dependency map and leaves those out as pack does, and the calculator versions packages from the map; were
-/// NuGet to write something else, the map would stop describing the nuspecs, and this fails instead. The production
-/// reader, <see cref="PinnedTransitiveDependencies.Attach"/>, runs over the same fixture's committed lock file, so a
-/// reading that drifted from NuGet's own output would fail here too, not only against the live tree in
-/// <c>NuGetLockFileTests</c>.
+/// A real restore and <c>dotnet pack</c>, through the real SDK and NuGet, of the premises the dependency map's
+/// pinned-transitive edges rest on: with <c>CentralPackageTransitivePinningEnabled</c>, pack writes into the nuspec
+/// exactly the packages restore lists under <c>centralTransitiveDependencyGroups</c> in <c>obj/project.assets.json</c>,
+/// at the pinned version; and the lock file lists those same packages as <c>CentralTransitive</c>, together with the
+/// pinned packages the project reaches only through a <c>PrivateAssets="all"</c> reference, which pack leaves out. The
+/// maps generator reads the lock file for the dependency map and leaves those out as pack does, and the calculator
+/// versions packages from the map; were NuGet to write something else, the map would stop describing the nuspecs, and
+/// this fails instead. The production reader, <see cref="PinnedTransitiveDependencies.Attach"/>, runs over the same
+/// fixture's committed lock file, so a reading that drifted from NuGet's own output would fail here too, not only
+/// against the live tree in <c>NuGetLockFileTests</c>.
 /// </summary>
 /// <remarks>
 /// <c>Fixture.App</c> references <c>Fixture.Lib</c>, which references <c>Microsoft.Extensions.Options</c>, so App reaches
@@ -101,7 +101,7 @@ public sealed class PinnedTransitivePackTests : IDisposable
         Assert.Empty(restored.Except(locked));
         Assert.Equal(ReachedOnlyPrivately, locked.Except(restored).Select(pin => pin.Id));
 
-        // The production reader (spec 149 FR-012) reads the same committed lock file, tracing reachability itself to
+        // The production reader reads the same committed lock file, tracing reachability itself to
         // leave out the privately reached pin, as pack does: it must equal what pack actually wrote, not the lock
         // file's own superset.
         var repo = RepoContext.Discover(root.FullName);

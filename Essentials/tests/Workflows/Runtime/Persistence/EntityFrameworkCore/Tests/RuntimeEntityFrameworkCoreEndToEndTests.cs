@@ -8,7 +8,6 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -54,7 +53,7 @@ public sealed class RuntimeEntityFrameworkCoreEndToEndTests : IDisposable
                     workflowExecutionId: second.ExecutionId,
                     stimulusType: bookmark.StimulusType,
                     stimulusHash: bookmark.StimulusHash,
-                    input: JsonSerializer.SerializeToElement(new EventReceived(EventName))));
+                    input: JsonSerializer.SerializeToElement(new { eventName = EventName })));
 
             Assert.Equal(BookmarkResumeDispatchStatus.Dispatched, resumed.Status);
         }
@@ -73,7 +72,6 @@ public sealed class RuntimeEntityFrameworkCoreEndToEndTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
         foreach (var file in new[] { databasePath, $"{databasePath}-wal", $"{databasePath}-shm" })
             File.Delete(file);
     }
@@ -116,8 +114,8 @@ public sealed class RuntimeEntityFrameworkCoreEndToEndTests : IDisposable
     private static async Task<WorkflowExecutionStatus?> WorkflowStatusAsync(WorkflowExecutionHarness harness)
     {
         await using var scope = harness.Services.CreateAsyncScope();
-        var store = scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>();
-        Assert.IsType<EfWorkflowExecutionStateStore>(store);
+        // Read the EF store itself, under the persistence-mode wrapper every run drains through.
+        var store = scope.ServiceProvider.GetRequiredService<EfWorkflowExecutionStateStore>();
         return (await store.FindAsync(harness.ExecutionId))?.Status;
     }
 

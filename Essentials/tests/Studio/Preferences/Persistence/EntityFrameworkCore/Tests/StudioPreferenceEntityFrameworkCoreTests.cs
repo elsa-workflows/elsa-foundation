@@ -437,7 +437,7 @@ public sealed class StudioPreferenceEntityFrameworkCoreTests
         }
     }
 
-    // Kept beside the composition test (§2.23.1): what a feature must not register (no in-memory store) and the backend it selects.
+    // Kept beside the composition test: what a feature must not register (no in-memory store) and the backend it selects.
     [Fact]
     public void EF_module_registers_a_store_and_carries_no_foreign_persistence_dependency()
     {
@@ -520,7 +520,7 @@ public sealed class StudioPreferenceEntityFrameworkCoreTests
     private static string TemporaryDatabasePath() =>
         Path.Join(Path.GetTempPath(), $"elsa-studio-preferences-{Guid.NewGuid():N}.db");
 
-    private static void DeleteDatabaseFiles(string databasePath) => TemporarySqliteDatabase.ClearPoolAndDeleteFiles(databasePath);
+    private static void DeleteDatabaseFiles(string databasePath) => TemporarySqliteDatabase.ClearPoolAndDeleteFiles($"Data Source={databasePath}");
 
     private sealed class SqliteFixture : IAsyncDisposable
     {

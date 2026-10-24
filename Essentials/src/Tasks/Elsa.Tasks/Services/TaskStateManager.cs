@@ -4,8 +4,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Tasks.Services;
 
-public sealed class TaskStateManager(ILogger<TaskStateManager> logger, CancellationTokenSource cancellationTokenSource)
-    : ITaskStateManager
+internal sealed class TaskStateManager(ILogger<TaskStateManager> logger, CancellationTokenSource cancellationTokenSource)
 {
     // SemaphoreSlim only allocates a kernel handle when AvailableWaitHandle is accessed.
     // Since we exclusively use WaitAsync(), no kernel handle is ever created and disposal is a no-op.
@@ -19,12 +18,6 @@ public sealed class TaskStateManager(ILogger<TaskStateManager> logger, Cancellat
     public CancellationTokenSource? CancellationTokenSource { get; internal set; } = cancellationTokenSource;
 
     internal CancellationToken GetCancellationToken() => CancellationTokenSource?.Token ?? CancellationToken.None;
-
-    IEnumerable<IRecurringTask> ITaskStateManager.RecurringTasks => RecurringTasks;
-
-    IEnumerable<IScheduledTaskExecution> ITaskStateManager.ScheduledTaskExecutions => ScheduledTaskExecutions;
-
-    IEnumerable<Task> ITaskStateManager.RunningBackgroundTasks => RunningBackgroundTasks;
 
     public async ValueTask Stop()
     {
@@ -100,21 +93,20 @@ public sealed class TaskStateManager(ILogger<TaskStateManager> logger, Cancellat
 
     private async ValueTask DisposeBackgroundRunningTasks()
     {
+        var backgroundTasks = Task.WhenAll(RunningBackgroundTasks);
         try
         {
-            await Task.WhenAll(RunningBackgroundTasks);
+            await backgroundTasks;
         }
         catch (OperationCanceledException)
         {
             // Expected when cancellation is requested.
         }
-        catch (AggregateException e)
+        catch (Exception e) when (!e.IsFatal() &&
+                                  (backgroundTasks.Exception is null || backgroundTasks.Exception.Flatten().InnerExceptions.All(exception => !exception.IsFatal())))
         {
-            logger.LogError(e, "One or more background tasks failed while stopping tenant tasks");
-        }
-        catch (InvalidOperationException e)
-        {
-            logger.LogError(e, "Background task collection was in an invalid state while stopping tenant tasks");
+            // Await unwraps worker faults; log them without skipping lifetime cancellation and recurring cleanup.
+            logger.LogError(backgroundTasks.Exception ?? e, "One or more background tasks failed while stopping tenant tasks");
         }
 
         RunningBackgroundTasks.Clear();

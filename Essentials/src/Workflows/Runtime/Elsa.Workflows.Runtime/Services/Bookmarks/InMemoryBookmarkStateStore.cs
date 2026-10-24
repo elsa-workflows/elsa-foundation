@@ -9,6 +9,17 @@ public sealed class InMemoryBookmarkStateStore : IBookmarkStateStore, IBookmarkS
     private readonly object _syncRoot = new();
     private readonly Dictionary<BookmarkStateKey, BookmarkState> _states = new();
 
+    internal void DeleteForWorkflowExecution(string workflowExecutionId)
+    {
+        lock (_syncRoot)
+        {
+            foreach (var key in _states.Keys
+                         .Where(key => StringComparer.Ordinal.Equals(key.WorkflowExecutionId, workflowExecutionId))
+                         .ToArray())
+                _states.Remove(key);
+        }
+    }
+
     public ValueTask<BookmarkState> SaveAsync(BookmarkState state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);

@@ -61,7 +61,8 @@ public sealed class SendHttpRequestAuthorizationLoggingTests
             }))
             .Build(ActivityExecutionId);
 
-        return await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(NewSendNode(authorization: _authorizationValue)));
+        return await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(NewSendNode(
+            requestHeaders: new Dictionary<string, string> { ["Authorization"] = _authorizationValue })));
     }
 
     private void AssertLogsDoNotContainTheValue()

@@ -39,6 +39,24 @@ public sealed class WorkflowMigrationCompatibilityValidatorTests
     }
 
     [Fact]
+    public void Validate_RejectsChangingAResumableNodeFromBackgroundToInline()
+    {
+        var source = Executable("source", "definition", "1", "1", nodes:
+        [
+            Node("node", contract: Contract(), executionPlacement: ActivityExecutionPlacement.Background)
+        ]);
+        var target = Executable("target", "definition", "1", "1", nodes:
+        [
+            Node("node", contract: Contract(), executionPlacement: ActivityExecutionPlacement.Inline)
+        ]);
+
+        var report = _validator.Validate(Workflow(source.Identity), source, target, [], [], []);
+
+        Assert.False(report.IsCompatible);
+        Assert.Contains(report.Findings, finding => finding.Code == "NodeConsumerOrContractMismatch" && finding.SubjectId == "node");
+    }
+
+    [Fact]
     public void Validate_ReportsOnlyStructuralFindingsForDefinitionNodeVariableAndBookmarkMismatch()
     {
         var source = Executable("source", "definition-a", "1", "1");
@@ -99,9 +117,14 @@ public sealed class WorkflowMigrationCompatibilityValidatorTests
             workflowVariables: null);
     }
 
-    private static ExecutableNode Node(string id, string activityType = "original", ActivityContract? contract = null) => new(
+    private static ExecutableNode Node(
+        string id,
+        string activityType = "original",
+        ActivityContract? contract = null,
+        ActivityExecutionPlacement executionPlacement = ActivityExecutionPlacement.Inline) => new(
         id, id, activityType, "1", "consumer", JsonSerializer.SerializeToElement(new { }),
-        new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), activityContract: contract, descriptorSchemaVersion: "1");
+        new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), executionPlacement,
+        activityContract: contract, descriptorSchemaVersion: "1");
 
     private static ActivityContract Contract() => new(
         "original",

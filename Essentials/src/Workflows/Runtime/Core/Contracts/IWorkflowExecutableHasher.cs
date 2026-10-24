@@ -33,12 +33,12 @@ public interface IWorkflowExecutableHasher
     /// <summary>Hashes the node tree alone.</summary>
     string ComputeHash(ExecutableNode rootActivity);
 
-    /// <summary>Hashes the full behavioural payload — node tree, input contract, dependencies, cadence, variables and incident strategy.</summary>
+    /// <summary>Hashes the full behavioural payload — node tree, input contract, dependencies, persistence mode, variables and incident strategy.</summary>
     string ComputeHash(
         ExecutableNode rootActivity,
         WorkflowExecutableInputContract inputContract,
         IReadOnlyCollection<WorkflowExecutableDependency> dependencies,
-        WorkflowExecutableCheckpointCadence? checkpointCadence = null,
+        PersistenceMode? persistenceMode = null,
         IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables = null,
         IncidentStrategyReference? incidentStrategy = null);
 

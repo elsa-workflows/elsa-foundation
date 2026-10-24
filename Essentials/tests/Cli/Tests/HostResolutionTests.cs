@@ -5,7 +5,7 @@ namespace Elsa.Cli.Tests;
 
 /// <summary>
 /// Resolving the host is the first thing every command does, and the refusals here all happen before a
-/// worker is started or a byte is written (FR-011).
+/// worker is started or a byte is written.
 /// </summary>
 public sealed class HostResolutionTests : IDisposable
 {

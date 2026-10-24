@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+  </PropertyGroup>
+
 	<ItemGroup>
 		<PackageReference Include="Cronos" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
@@ -8,6 +12,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
     <ProjectReference Include="..\Core\Elsa.Tasks.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Tasks.Tests" />
   </ItemGroup>
 
 </Project>

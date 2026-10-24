@@ -62,11 +62,20 @@ def _verify_pinned_layout(root: Path, inventory: dict) -> None:
         for item in manifest["projects"]
         if item.get("product") == "studio"
     }
+    # The consolidation manifest is historical. New modules belong in the current
+    # inventory without inventing source paths in that frozen snapshot.
+    additions = {
+        item["project"] for item in inventory["packable_projects"] + inventory["non_packable_projects"]
+        if item.get("introduced_after_consolidation", False)
+    }
+    if additions & set(actual):
+        raise ValueError("A consolidated Studio project cannot be declared a later addition.")
     expected = {
         item["project"]: (item["id"], None)
-        for item in inventory["packable_projects"]
+        for item in inventory["packable_projects"] if item["project"] not in additions
     }
-    expected.update({item["project"]: (item["id"], "false") for item in inventory["non_packable_projects"]})
+    expected.update({item["project"]: (item["id"], "false")
+                     for item in inventory["non_packable_projects"] if item["project"] not in additions})
     if actual != expected:
         missing = sorted(set(expected) - set(actual))
         unexpected = sorted(set(actual) - set(expected))
@@ -88,8 +97,8 @@ def verify_project_inventory(root: Path) -> dict:
         raise ValueError(f"Studio project inventory mismatch; missing={missing}, unexpected={unexpected}.")
 
     ids = [item["id"] for item in packable]
-    if len(ids) != len(set(ids)) or len(ids) != 17:
-        raise ValueError("The declared Studio packable package IDs must contain exactly 17 unique IDs.")
+    if not ids or len(ids) != len(set(ids)):
+        raise ValueError("The declared Studio packable package IDs must be nonempty and unique.")
 
     for item in packable + non_packable:
         project_path = root / item["project"]
@@ -208,11 +217,20 @@ def _write_test_package(path: Path, package_id: str, version: str, icon: str) ->
 def self_test(root: Path) -> None:
     inventory = json.loads(IDENTITY_FILE.read_text())
     ids = [item["id"] for item in inventory["packable_projects"]]
+    for index, item in enumerate(inventory["packable_projects"]):
+        changed = json.loads(json.dumps(inventory))
+        changed["packable_projects"][index]["introduced_after_consolidation"] = not item.get("introduced_after_consolidation", False)
+        try:
+            _verify_pinned_layout(root, changed)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"Incorrect consolidation provenance accepted for {item['id']}.")
     with tempfile.TemporaryDirectory() as temp:
         package_dir = Path(temp)
         for package_id in ids:
             _write_test_package(package_dir / f"{package_id}.nupkg", package_id, "4.0.0-preview.1", inventory["package_icon"])
-        if len(verify_packages(root, package_dir, "4.0.0-preview.1")) != 17:
+        if verify_packages(root, package_dir, "4.0.0-preview.1") != sorted(ids):
             raise AssertionError("Complete package fixture was not accepted.")
         (package_dir / f"{ids[-1]}.nupkg").unlink()
         try:

@@ -119,7 +119,7 @@ public class HttpFeature : IShellFeature
             .AddScoped<IDownloadableContentHandler, HttpFileDownloadableContentHandler>()
             ;
 
-        // Request-side body parser (spec 089 sub-unit C, research D6): stateless content-type dispatch
+        // Request-side body parser: stateless content-type dispatch
         // yielding wire-safe JsonElement. Replaceable via TryAdd — register a custom impl before this feature.
         services.TryAddSingleton<IHttpRequestBodyParser, HttpRequestBodyParser>();
     }

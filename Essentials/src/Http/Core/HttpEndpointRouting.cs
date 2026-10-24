@@ -1,7 +1,7 @@
 namespace Elsa.Http.Core;
 
 /// <summary>
-/// The shared identity vocabulary of workflow HTTP endpoint routing (spec 089 B). Lives in the lower HTTP
+/// The shared identity vocabulary of workflow HTTP endpoint routing. Lives in the lower HTTP
 /// contracts package because two co-equal modules speak it: <c>Elsa.Activities.Http</c> writes these values
 /// when the trigger provider describes an endpoint's stimuli, and <c>Elsa.Workflows.Runtime.Http</c> reads
 /// them from trigger-binding metadata to maintain the per-shell route table. Neither module references the
@@ -42,9 +42,9 @@ public static class HttpEndpointRouting
 
     /// <summary>
     /// Trigger-binding metadata key carrying the endpoint's <see cref="ResponseMode"/> (the <c>Enum.ToString()</c>
-    /// name, e.g. <c>"Sync"</c>) — spec 089 sub-unit E, E-D1. NON-IDENTITY: the mode rides the binding metadata but
-    /// does not participate in <c>HttpEndpointStimulus.Hash</c>. Omitted from metadata when the endpoint is
-    /// <see cref="ResponseMode.Async"/> (the default), keeping bindings lean.
+    /// name, e.g. <c>"Sync"</c>). NON-IDENTITY: the mode rides the binding metadata but
+    /// does not participate in <c>HttpEndpointStimulus.Hash</c>. Async may be omitted for legacy compatibility;
+    /// new publications stamp their selected mode explicitly.
     /// </summary>
     public const string ResponseModeMetadataKey = "http:responseMode";
 }

@@ -37,7 +37,12 @@ Literal(value)
 WorkflowRequest(memberKey)
 Variable(declaringScopeNodeId, variableKey)
 ActivityResult(producerNodeId, projectionKey)
+WorkflowInstance(member)        // member: correlationId | instanceId
 ```
+
+`WorkflowInstance` was added by the ADR 0045 amendment for issue #2717 (spec 247). It reads the running
+instance's correlation ID or instance ID from committed runtime state as a declared parameter, so it satisfies
+the "instance identity declared as a parameter" rule below.
 
 Nested expressions are not an implicit parameter kind. Authors compose expressions explicitly or
 bind one expression result as the enclosing activity input. Every dynamic parameter is resolved and
@@ -235,7 +240,7 @@ object.
 Expression conformance MUST run the same fixture set for JavaScript and Liquid where the language can
 represent the operation:
 
-1. literal, workflow request, variable, and causal result parameters round-trip and evaluate;
+1. literal, workflow request, variable, causal result, and workflow-instance parameters round-trip and evaluate;
 2. parameter order does not change the artifact hash;
 3. parameter binding, options, result type, source, or capability change does change the hash;
 4. restart/retry uses the pinned value without reevaluation;

@@ -51,6 +51,66 @@ Known host-owned Slot IDs:
 - `studio.ai.proposal-renderers`
 - `studio.ai.surfaces`
 
+## Activity icons
+
+Third-party activity packages can supply a designer icon without growing the Workflows
+entry bundle. The catalog field is `iconName`, written from `[Activity(Icon = …)]` on the
+CLR activity. Accepted values:
+
+`iconName` takes precedence over historical `icon` values and the generic reusable icon.
+Recommended activities retain their module icon when the catalog assigns them definition
+IDs. Use a vendor-prefixed extension name such as `ext:acme-slack` to avoid name collisions.
+
+| Value | Renders as |
+|---|---|
+| A lucide export or kebab name (`Rocket`, `git-branch`) | That lucide glyph, loaded on demand when it is not already in the shared table. An unknown name shows the category placeholder briefly while the lazy import resolves, then the glyph or the fallback. |
+| `asset:<package>/<path>` | An `<img>` of the package's static web asset at `{studio-base}/_content/<package>/<path>`. Images do not follow `--studio-wf-activity-*` tone tokens. |
+| `ext:<name>` | The React component registered under that name. Names match case-insensitively. |
+
+Register `ext:` icons from the extension module's `register()`. A late registration
+re-renders mounted glyphs, so the icon appears without a remount. Use `currentColor` on
+lucide and `ext:` icons so they follow `--studio-wf-activity-*` tone tokens
+(`asset:` `<img>` values cannot):
+
+```ts
+import { registerActivityIcons, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
+import { SlackIcon } from "./SlackIcon";
+
+export function register(api: ElsaStudioModuleApi) {
+  registerActivityIcons({ slack: SlackIcon });
+  // Prefer the standalone export. The host alias is optional:
+  // api.workflowDesigner.registerActivityIcons?.({ slack: SlackIcon });
+}
+```
+
+Then declare `[Activity(Icon = "ext:slack")]` on the activity. An unknown, invalid or
+failed value uses the semantic type/category fallback (or placeholder) and never crashes the
+palette or canvas. `Icon` is presentation only: the `elsa.activity-icon` facet is excluded
+from the descriptor hash, so adding or changing it does not throw
+`ActivityVersionHashMismatchException`.
+
+Existing persisted versions retain their icon facets during duplicate reconciliation.
+Changing the attribute alone does not refresh an already stored version's icon metadata;
+a newly contributed version carries the declaration. Older entries without metadata use
+the semantic type/category fallback. No workflow or executable identity changes for icons.
+
+### Module navigation icons
+
+Sidebar navigation uses the module contribution's own component, independently of
+activity catalog metadata. Register it with the existing navigation slot:
+
+```ts
+api.navigation.add({
+  id: "acme-slack",
+  label: "Slack",
+  path: "/acme/slack",
+  icon: SlackIcon
+});
+```
+
+Both forms keep icon code and assets in the contributing module; neither needs a Studio
+source change. Use `currentColor` and accept the `size` prop on navigation components too.
+
 ## Expression editor Contributions
 
 Expression descriptors carry one required semantic `editingMode`: `literal`,
@@ -105,6 +165,30 @@ The Workflows module exports `createEnumWorkflowRunInputEditorContribution`
 for scalar enums. The registering module supplies the stable type match and
 either a static option catalog or an input-derived option callback. Unsupported
 custom types continue to use JSON entry.
+
+## Workflow Test Run stimulus editor Contributions
+
+Modules register one-off trigger controls through
+`api.workflowTestStimulusEditors`. Match on the backend's stable `driverId` and
+`modeId`; do not inspect activity types or depend on module-private configuration
+fields. The mode's `configurationSchema` describes the user-supplied stimulus
+value. Its `configuration` is readonly context returned by the backend, such as
+a prepared route or authored schedule.
+
+A Contribution owns its editor, validation, serialization, optional prepared
+action, and optional action-result view. Prepared actions use
+`context.backend.http.request` when they need to preserve a non-JSON protocol
+response; this request uses the configured authenticated transport and returns
+the unparsed `Response`, including non-2xx status, headers, and body. Contributions
+must treat the action URL as untrusted and restrict it to the backend origin.
+The workflow designer only resolves Contributions from the selected backend
+driver/mode and never selects editors by activity type.
+
+The Runtime panel reuses the same Contribution for API-reported supported waits
+by adapting each wait to the `option` shape with its wait ID, authored node ID,
+driver ID, and modes. This lets a module own both initial trigger data and later
+logical delivery without adding a workflow-activity switch to Studio. The host
+keeps retry IDs stable when a delivery response is uncertain.
 
 ## Weaver Contributions
 

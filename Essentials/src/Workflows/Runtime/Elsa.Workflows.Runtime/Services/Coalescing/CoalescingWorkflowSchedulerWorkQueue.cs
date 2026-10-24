@@ -81,7 +81,22 @@ public sealed class CoalescingWorkflowSchedulerWorkQueue(
         CancellationToken cancellationToken = default)
     {
         if (sessionAccessor.Current is { } session && session.AppliesTo(request.WorkflowExecutionId))
+        {
+            var head = await session.ListOverlayAsync(
+                new RuntimeSchedulerWorkQuery(request.WorkflowExecutionId, limit: 1),
+                cancellationToken);
+            if (!session.SupportsDeferredOverlayRelease &&
+                head.Items.FirstOrDefault()?.CommandKind == WorkflowExecutionCommandKind.ResumeBookmark)
+            {
+                // The resume handler may explicitly defer while its dependency is unavailable. Flush the current
+                // coalesced segment before claiming this item so the drainer's later release updates the real durable
+                // queue row rather than only an overlay that disappears at quiescence.
+                session.RequestDurableSchedulerClaimBoundary();
+                return null;
+            }
+
             return await session.ClaimOverlayAsync(request, cancellationToken);
+        }
 
         return await _inner.ClaimAsync(request, cancellationToken);
     }
@@ -119,9 +134,9 @@ public sealed class CoalescingWorkflowSchedulerWorkQueue(
         return await _inner.ReleaseClaimAsync(claim, visibleAt, cancellationToken);
     }
 
-    // Atomic checkpoint consumption only reaches the durable queue on the Immediate path: the committer
-    // suppresses the consume-fold while a coalescing session owns the execution, so this is always a pass-through to the
-    // durable inner queue.
+    // Atomic checkpoint consumption only reaches the durable queue when no session folds the execution's checkpoints:
+    // the committer suppresses the consume-fold while a coalescing session owns the execution, so this is always a
+    // pass-through to the durable inner queue.
     public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> ConsumeClaimedAsync(
         ConsumedSchedulerWorkItem consumed,
         CancellationToken cancellationToken = default) =>

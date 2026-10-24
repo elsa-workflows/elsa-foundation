@@ -9,7 +9,7 @@ namespace Elsa.Events.Services;
 /// their effects on the event are observable on return. The wrapper IS the whole implementation; it
 /// owns no pipeline logic of its own (that lives in <see cref="IEventPublisher"/>).
 /// </summary>
-public sealed class InlineEventPublisher(IEventPublisher eventPublisher) : IInlineEventPublisher
+internal sealed class InlineEventPublisher(IEventPublisher eventPublisher) : IInlineEventPublisher
 {
     public Task Publish(IEvent @event, CancellationToken cancellationToken = default) =>
         eventPublisher.Publish(@event, EventPublishingStrategy.Sequential, cancellationToken);

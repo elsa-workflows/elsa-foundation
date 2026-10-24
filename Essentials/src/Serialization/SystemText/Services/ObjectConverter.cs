@@ -19,7 +19,7 @@ namespace Elsa.Serialization.SystemText.Services;
 /// <summary>
 /// A helper that attempts many strategies to try and convert the source value into the destination type. 
 /// </summary>
-public sealed class ObjectConverter(IServiceProvider serviceProvider) : IObjectConverter
+internal sealed class ObjectConverter(IServiceProvider serviceProvider) : IObjectConverter
 {
     private static JsonSerializerOptions? _defaultSerializerOptions;
     private static JsonSerializerOptions? _internalSerializerOptions;

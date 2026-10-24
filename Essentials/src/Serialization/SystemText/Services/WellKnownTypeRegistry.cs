@@ -5,7 +5,7 @@ using Elsa.Serialization.Core.Exceptions;
 namespace Elsa.Serialization.SystemText.Services;
 
 /// <inheritdoc />
-public sealed class WellKnownTypeRegistry : IWellKnownTypeRegistry
+internal sealed class WellKnownTypeRegistry : IWellKnownTypeRegistry
 {
     /// <summary>
     /// The canonical set of bare (non-dotted) aliases the framework owns. These are the BCL primitive
@@ -31,13 +31,13 @@ public sealed class WellKnownTypeRegistry : IWellKnownTypeRegistry
     /// <inheritdoc />
     public void RegisterType(Type type, string alias)
     {
-        // Reserved-namespace guard (FR-011/FR-012/FR-013): a bare (non-dotted) alias that is not a framework
+        // Reserved-namespace guard: a bare (non-dotted) alias that is not a framework
         // primitive is rejected. Dotted aliases are always allowed (subject to the duplicate check below).
         // Applied only to the incoming alias, never to the derived nullable.
         if (!alias.Contains('.') && !ReservedBareAliases.Contains(alias))
             throw new ReservedAliasNamespaceException(alias);
 
-        // Fail-fast on duplicate registration (FR-010/FR-013/SC-004): a repeat alias, or the same CLR type
+        // Fail-fast on duplicate registration: a repeat alias, or the same CLR type
         // mapped to a different alias, would silently resolve to the wrong type. Refuse instead of overwriting.
         if (_aliasTypeDictionary.TryGetValue(alias, out var existingType))
         {
@@ -86,7 +86,7 @@ public sealed class WellKnownTypeRegistry : IWellKnownTypeRegistry
 
     /// <inheritdoc />
     /// <remarks>
-    /// FR-004 / FR-004a: NEVER emits an assembly-qualified name. Returns the registered alias if present,
+    /// NEVER emits an assembly-qualified name. Returns the registered alias if present,
     /// else the deterministic <see cref="TypeAliasConvention.CanonicalAlias"/> (a bare primitive alias or the
     /// dotted <c>FullName</c>). This is a PURE computation — it does NOT mutate the dictionaries (registration
     /// stays startup-only), so an unregistered type still serializes alias-only without runtime mutation.
@@ -99,14 +99,14 @@ public sealed class WellKnownTypeRegistry : IWellKnownTypeRegistry
     }
 
     /// <inheritdoc />
-    /// <remarks>FR-004a: registry lookup only — no <c>Type.GetType</c> fallback. Unknown → <c>object</c>.</remarks>
+    /// <remarks>Registry lookup only — no <c>Type.GetType</c> fallback. Unknown → <c>object</c>.</remarks>
     public Type GetTypeOrDefault(string alias)
     {
         return TryGetType(alias, out var type) ? type : typeof(object);
     }
 
     /// <inheritdoc />
-    /// <remarks>FR-004a: registry lookup only — no <c>Type.GetType</c> fallback. Unknown → false.</remarks>
+    /// <remarks>Registry lookup only — no <c>Type.GetType</c> fallback. Unknown → false.</remarks>
     public bool TryGetTypeOrDefault(string alias, out Type type)
     {
         return TryGetType(alias, out type);

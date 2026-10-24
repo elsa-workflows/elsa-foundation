@@ -30,8 +30,8 @@ def is_metadata_only_checkpoint(action: str, prerelease: str, tag_name: str) -> 
 
 
 def docker_event_admitted(event_name: str, source_event: str, conclusion: str) -> bool:
-    """Keep direct PR/manual builds and admit only successful push/manual Packages runs."""
-    if event_name in {"pull_request", "workflow_dispatch"}:
+    """Keep direct manual builds and admit only successful push/manual Packages runs."""
+    if event_name == "workflow_dispatch":
         return True
     return (
         event_name == "workflow_run"

@@ -59,6 +59,7 @@ public sealed class ActivityForkService(
         EnsureVisible(source.TenantId);
 
         var targetProvider = ResolveProvider(source.Provider, command.TargetProviderKey, command.TargetProviderSchemaVersion);
+        EnsureMigrationDeclared(source.Provider, targetProvider, command.TargetProviderSchemaVersion);
         var migration = await targetProvider.MigrateAsync(
             new(source.Provider, command.TargetProviderSchemaVersion),
             cancellationToken);
@@ -330,6 +331,10 @@ public sealed class ActivityForkService(
             source.Provider,
             candidate.ReservedDraft.State.Provider.ProviderKey,
             candidate.ReservedDraft.State.Provider.SchemaVersion);
+        EnsureMigrationDeclared(
+            source.Provider,
+            targetProvider,
+            candidate.ReservedDraft.State.Provider.SchemaVersion);
         var migration = await targetProvider.MigrateAsync(
             new(source.Provider, candidate.ReservedDraft.State.Provider.SchemaVersion),
             cancellationToken);
@@ -433,6 +438,15 @@ public sealed class ActivityForkService(
         {
             throw MigrationUnsupported(source, targetProviderKey, targetSchemaVersion, [], exception);
         }
+    }
+
+    private static void EnsureMigrationDeclared(
+        ActivityProviderManifest source,
+        IActivityProvider targetProvider,
+        string targetSchemaVersion)
+    {
+        if (!ActivityProviderMigrationCapabilities.SupportsAuthorableMigrationFrom(targetProvider, targetSchemaVersion, source))
+            throw MigrationUnsupported(source, targetProvider.ProviderKey, targetSchemaVersion, []);
     }
 
     private static ActivityProviderManifest RequireMigration(

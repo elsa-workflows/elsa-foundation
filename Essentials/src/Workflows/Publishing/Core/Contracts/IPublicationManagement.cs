@@ -9,7 +9,35 @@ public interface IPublicationRecordStore
 {
     ValueTask SaveAsync(PublicationRecord publication, CancellationToken cancellationToken = default);
     ValueTask<PublicationRecord?> FindAsync(string publicationId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Finds publication records by their exact identities in a bounded batch. Providers without a
+    /// batch identity lookup may return an empty collection; publication lifecycle state remains
+    /// available while the summary omits the source version.
+    /// </summary>
+    ValueTask<IReadOnlyCollection<PublicationRecord>> FindByIdsAsync(
+        IReadOnlyCollection<string> publicationIds,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult<IReadOnlyCollection<PublicationRecord>>([]);
+
     ValueTask<IReadOnlyCollection<PublicationRecord>> ListBySlotAsync(string slotId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Whether <see cref="ListByDefinitionIdsAsync"/> can completely resolve journal records for a bounded set
+    /// of definition ids. A false value means an empty result cannot establish that no retired record exists.
+    /// </summary>
+    bool SupportsDefinitionIdLookup => false;
+
+    /// <summary>
+    /// Bounded, complete batch of publication records for the supplied definition ids when
+    /// <see cref="SupportsDefinitionIdLookup"/> is true. The default is empty: providers without a
+    /// definition-keyed index must not scan the journal, and callers must treat absent results as unknown.
+    /// </summary>
+    ValueTask<IReadOnlyCollection<PublicationRecord>> ListByDefinitionIdsAsync(
+        IReadOnlyCollection<string> workflowDefinitionIds,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult<IReadOnlyCollection<PublicationRecord>>([]);
+
     ValueTask<bool> TryTransitionAsync(
         PublicationRecord publication,
         PublicationStatus expectedStatus,
@@ -21,6 +49,20 @@ public sealed record PublicationPolicyWriteResult(bool Succeeded, PublicationPol
 public interface IPublicationPolicyStore
 {
     ValueTask<PublicationPolicy?> FindAsync(string? workflowDefinitionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Whether this store can answer <see cref="FindByDefinitionIdsAsync"/> completely in a bounded batch.
+    /// Readers must treat the default slot as unknown when this is false.
+    /// </summary>
+    bool SupportsBatchDefinitionLookup => false;
+
+    /// <summary>Finds the workflow-scoped policies for a bounded set of definition ids.</summary>
+    ValueTask<IReadOnlyDictionary<string, PublicationPolicy>> FindByDefinitionIdsAsync(
+        IReadOnlyCollection<string> workflowDefinitionIds,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult<IReadOnlyDictionary<string, PublicationPolicy>>(
+            new Dictionary<string, PublicationPolicy>(StringComparer.Ordinal));
+
     ValueTask<PublicationPolicyWriteResult> TrySaveAsync(
         PublicationPolicy policy,
         long expectedRevision,

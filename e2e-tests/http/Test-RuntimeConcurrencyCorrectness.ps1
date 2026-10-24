@@ -7,14 +7,14 @@
     looping concurrently. It asserts correctness only:
       - every request ends in HTTP 200 with body `Alice Smith` (any 202, 500, timeout or transport error fails);
       - exactly one durable instance exists per request, each Completed/Finished with zero incidents;
-      - every instance carries the effective cadence the run was authored with.
+      - every instance reports the persistence mode the run was authored with.
     ADR 0073 D7 treats concurrency and SQLite contention as correctness requirements, not performance gates. This
     script records no elapsed time and enforces no budget. Failed requests stay in the result and are never retried,
     with one exception: HTTP 429 is admission backpressure (nothing was written, #2548), so the client waits for its
     Retry-After and resends, up to -MaxShedRetries times. Shed attempts are counted and reported, never failed; a
     request still shed after the last retry is lost work and fails.
-    Requires the server from source (see ../README.md). Run once per cadence, e.g. -Cadence Immediate and
-    -Cadence Coalesced, and at -Clients 16 and -Clients 32.
+    Requires the server from source (see ../README.md). Run once per persistence mode, e.g. -PersistenceMode Durable
+    and -PersistenceMode Balanced, and at -Clients 16 and -Clients 32.
 #>
 [CmdletBinding()]
 param(
@@ -23,7 +23,7 @@ param(
     [string] $Password = "Password123!",
     [ValidateRange(1, 64)][int] $Clients = 16,
     [ValidateRange(1, 50)][int] $RequestsPerClient = 4,
-    [ValidateSet("Coalesced", "Immediate")][string] $Cadence = "Coalesced",
+    [ValidateSet("Balanced", "Durable")][string] $PersistenceMode = "Balanced",
     [ValidateRange(10, 600)][int] $SettleTimeoutSeconds = 120,
     [ValidateRange(0, 100)][int] $MaxShedRetries = 30
 )
@@ -31,11 +31,11 @@ $ErrorActionPreference = "Stop"
 $ExpectedText = "Alice Smith"
 $Payload = '{"firstName":"Alice","lastName":"Smith"}'
 $ExpectedTotal = $Clients * $RequestsPerClient
-$suffix = "{0}-{1}" -f $Cadence.ToLowerInvariant(), ([Guid]::NewGuid().ToString("N").Substring(0, 8))
+$suffix = "{0}-{1}" -f $PersistenceMode.ToLowerInvariant(), ([Guid]::NewGuid().ToString("N").Substring(0, 8))
 $workflowName = "RuntimeConcurrency2532-$suffix"
 $route = "runtime-concurrency-2532/$suffix"
 
-Write-Host "== Concurrency correctness ($Cadence, $Clients clients x $RequestsPerClient) == -> $BaseUrl" -ForegroundColor Cyan
+Write-Host "== Concurrency correctness ($PersistenceMode, $Clients clients x $RequestsPerClient) == -> $BaseUrl" -ForegroundColor Cyan
 
 # Reuse the approved reference fixture for authoring/publication so the workflow shape cannot drift from #2392.
 $setupArgs = @{
@@ -43,8 +43,8 @@ $setupArgs = @{
     BaseUrl          = $BaseUrl
     Username         = $Username
     Password         = $Password
-    ExpectedCadence  = $Cadence
-    AuthoredCadence  = $Cadence
+    ExpectedPersistenceMode = $PersistenceMode
+    AuthoredPersistenceMode = $PersistenceMode
     WorkflowName     = $workflowName
     RoutePath        = $route
     SetupOnly        = $true
@@ -194,23 +194,23 @@ foreach ($bad in ($notCompleted + $withIncidents | Select-Object -First 10)) {
     Write-Host ("  execution={0} status={1} incidents={2}" -f $bad.workflowExecutionId, $bad.status, $bad.incidentCount) -ForegroundColor Yellow
 }
 
-# Effective cadence on a bounded sample of details (the list summary does not carry it).
-$cadenceMismatches = [System.Collections.Generic.List[string]]::new()
+# Reported persistence mode on a bounded sample of details (the list summary does not carry it).
+$modeMismatches = [System.Collections.Generic.List[string]]::new()
 foreach ($executionId in ($uniqueIds | Select-Object -First 5)) {
     $detail = Invoke-RestMethod "$($baseUri)runtime/workflows/instances/$([Uri]::EscapeDataString($executionId))" -WebSession $ctx.Session -TimeoutSec 30
-    $effective = if ($null -ne $detail.checkpointCadence) { $detail.checkpointCadence } else { $detail.instance.checkpointCadence }
-    if ("$effective" -ne $Cadence) { $cadenceMismatches.Add("$executionId=$effective") }
+    $effective = if ($null -ne $detail.persistenceMode) { $detail.persistenceMode } else { $detail.instance.persistenceMode }
+    if ("$effective" -ne $PersistenceMode) { $modeMismatches.Add("$executionId=$effective") }
 }
-Write-Host ("[cadence]   sampled={0}; mismatches={1}" -f [Math]::Min(5, $uniqueIds.Count), $cadenceMismatches.Count)
+Write-Host ("[mode]      sampled={0}; mismatches={1}" -f [Math]::Min(5, $uniqueIds.Count), $modeMismatches.Count)
 
 Write-Host ""
 $ok = $results.Count -eq $ExpectedTotal -and $badResponses.Count -eq 0 -and
     $instances.Count -eq $ExpectedTotal -and $uniqueIds.Count -eq $ExpectedTotal -and
-    $notCompleted.Count -eq 0 -and $withIncidents.Count -eq 0 -and $cadenceMismatches.Count -eq 0
+    $notCompleted.Count -eq 0 -and $withIncidents.Count -eq 0 -and $modeMismatches.Count -eq 0
 if ($ok) {
-    Write-Host ("SUCCESS - {0} concurrent requests ({1} clients, {2}): all HTTP 200 '{3}', {0} distinct Completed instances, zero incidents ({4} shed attempt(s) retried)." -f $ExpectedTotal, $Clients, $Cadence, $ExpectedText, $shedAttempts) -ForegroundColor Green
+    Write-Host ("SUCCESS - {0} concurrent requests ({1} clients, {2}): all HTTP 200 '{3}', {0} distinct Completed instances, zero incidents ({4} shed attempt(s) retried)." -f $ExpectedTotal, $Clients, $PersistenceMode, $ExpectedText, $shedAttempts) -ForegroundColor Green
 } else {
-    Write-Host ("FAIL - responses ok={0}/{1}; instances={2} unique={3} notCompleted={4} incidents={5}; cadence mismatches={6} ({7})" -f `
-        ($results.Count - $badResponses.Count), $ExpectedTotal, $instances.Count, $uniqueIds.Count, $notCompleted.Count, $withIncidents.Count, $cadenceMismatches.Count, ($cadenceMismatches -join ', ')) -ForegroundColor Red
+    Write-Host ("FAIL - responses ok={0}/{1}; instances={2} unique={3} notCompleted={4} incidents={5}; mode mismatches={6} ({7})" -f `
+        ($results.Count - $badResponses.Count), $ExpectedTotal, $instances.Count, $uniqueIds.Count, $notCompleted.Count, $withIncidents.Count, $modeMismatches.Count, ($modeMismatches -join ', ')) -ForegroundColor Red
     exit 1
 }

@@ -15,7 +15,8 @@ public sealed class WorkflowInstanceDetailsService(
     IDurableValueStateStore durableValueStateStore,
     IRuntimePayloadCapturePolicy payloadCapturePolicy,
     IActivityInspectionContextAsync authorization,
-    RuntimeCheckpointCadenceInspector checkpointCadenceInspector) : IWorkflowInstanceDetailsService
+    RuntimePersistenceModeInspector persistenceModeInspector,
+    IWorkflowRuntimeOperatorAccess? operatorAccess = null) : IWorkflowInstanceDetailsService
 {
     public async Task<WorkflowInstanceDetailsView?> GetAsync(GetWorkflowInstance request, CancellationToken cancellationToken)
     {
@@ -56,9 +57,9 @@ public sealed class WorkflowInstanceDetailsService(
                 : WorkflowOutputView.Redacted(output.CapturedAt),
             StringComparer.Ordinal);
 
-        // Checkpoint cadence + inspection granularity: prefer the run's own per-run cadence stamp so an
-        // instance reports the cadence it actually executed under, falling back to the host projection for legacy runs.
-        var cadence = checkpointCadenceInspector.Resolve(state);
+        // Persistence mode + inspection granularity: prefer the mode the run recorded at start so an instance reports
+        // the mode it actually ran under, falling back to the host default for a run that recorded none.
+        var persistenceMode = persistenceModeInspector.Resolve(state);
 
         return new WorkflowInstanceDetailsView(
             WorkflowInstanceSummaryView.From(state, activityPage.TotalCount, incidents.Length, canInspectSensitiveValues,
@@ -66,10 +67,14 @@ public sealed class WorkflowInstanceDetailsService(
             activities,
             incidents,
             outputs,
-            cadence.CheckpointCadence,
-            cadence.MaxSegmentCheckpoints,
-            cadence.InspectionGranularity,
-            activityPage.NextContinuationToken);
+            persistenceMode.PersistenceMode,
+            persistenceMode.InspectionGranularity,
+            activityPage.NextContinuationToken,
+            // Spec 260 FR-416: a display hint for Studio. Without an operator-access service the run reads as not
+            // manageable (fail closed).
+            new WorkflowInstancePermissionsView(
+                operatorAccess is not null && await operatorAccess.CanManageAsync(state, cancellationToken),
+                canInspectSensitiveValues));
     }
 }
 

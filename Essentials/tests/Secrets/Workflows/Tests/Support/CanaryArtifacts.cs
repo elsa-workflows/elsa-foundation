@@ -14,7 +14,7 @@ using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
 namespace Elsa.Secrets.Workflows.Tests.Support;
 
 /// <summary>
-/// The canary's hand-built runtime artifacts, imported without publish (spec 188, research R13): the structural run
+/// The canary's hand-built runtime artifacts, imported without publish: the structural run
 /// shapes of S4 and S4b, whose child slot no published design can carry for a test activity, and the literal of S5 and S6 on an
 /// input whose pinned policy requires encryption, which publish refuses.
 /// </summary>

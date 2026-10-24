@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
+import axe from "axe-core";
 
-async function mockInputEvidence(page: Page, longText = "") {
+async function mockInputEvidence(page: Page, longText = "", outputEvidence: "none" | "uniform" | "mixed" = "none") {
   await page.route("**/capabilities", route => route.fulfill({ json: { capabilities: [{
     id: "elsa.api.runtime", contractVersion: "1", links: [
       { rel: "activity-execution", href: "/evidence-inspection/{workflowExecutionId}/{activityExecutionId}" },
@@ -13,8 +14,24 @@ async function mockInputEvidence(page: Page, longText = "") {
     phase: "invoke", sequence: 1, evaluationId: `${inputKey}-1`,
     capturedAt: "2026-10-04T10:00:00Z", isSensitive: false, metadata: {}, ...extra
   });
+  const outputSnapshots = outputEvidence !== "none" ? [
+    snapshot("total", "Total", {
+      subject: "ActivityOutput", type: { typeName: "System.Decimal" },
+      ...(outputEvidence === "mixed"
+        ? { captureMode: "Payload", captureState: "payloadCaptured", payload: 42, snapshot: null }
+        : { snapshot: { kind: "number", value: 42 } })
+    }),
+    snapshot("response", "Response", {
+      subject: "ActivityOutput", type: { typeName: "System.Object" },
+      snapshot: { kind: "object", typeName: "Response", properties: [
+        { name: "status", value: { kind: "string", preview: "Accepted" } },
+        { name: "reference", value: { kind: "string", preview: "INV-1042" } }
+      ] }
+    })
+  ] : [];
   await page.route("**/evidence-inspection/**", route => route.fulfill({ json: {
     activityExecutionId: "renewal-execution", workflowExecutionId: "renewal-run",
+    outcomeNames: outputEvidence !== "none" ? ["Succeeded", "NeedsReview"] : [],
     valueSnapshots: [
       snapshot("policy", "PolicyReference", { accessState: "resolutionAvailable", snapshot: null }),
       snapshot("premium", "Premium", { snapshot: { kind: "number", value: 1250.75 } }),
@@ -24,12 +41,105 @@ async function mockInputEvidence(page: Page, longText = "") {
       ] } }),
       snapshot("notes", "Notes", { snapshot: { kind: "string", preview: longText, length: longText.length } }),
       snapshot("token", "Token", { snapshot: { kind: "string", preview: "HIDDEN_RUNTIME_VALUE" } }),
-      snapshot("discount", "Discount", { captureState: "captureFailed", failure: { code: "ExpressionFailed", message: "The discount rate is unavailable.", incidentId: "incident-discount" } })
+      snapshot("discount", "Discount", { captureState: "captureFailed", failure: { code: "ExpressionFailed", message: "The discount rate is unavailable.", incidentId: "incident-discount" } }),
+      ...outputSnapshots
     ]
   } }));
   await page.route("**/evidence-payload/policy", route => route.fulfill({ json: {
     evidenceId: "policy", captureMode: "DiagnosticSnapshot", payload: { kind: "string", preview: "POL-1042", length: 8, truncated: false }
   } }));
+}
+
+test("mixed output provenance keeps names readable in a narrow inspector", async ({ page }) => {
+  await mockInputEvidence(page, "", "mixed");
+  await page.setViewportSize({ width: 360, height: 1000 });
+  await page.goto("/?mode=input-evidence&theme=dark");
+  await page.getByRole("button", { name: "Select activity" }).click();
+
+  const outputs = page.locator(".wf-instance-section").filter({ has: page.getByRole("heading", { name: /Outputs/ }) });
+  await expect(outputs.locator(".wf-runtime-evidence-heading .wf-runtime-capture-mode")).toHaveText("Mixed evidence");
+  for (const name of ["Total", "Response"]) {
+    const row = outputs.locator(".wf-runtime-input").filter({ hasText: name });
+    const label = row.locator("header strong");
+    await expect(label).toBeVisible();
+    const size = await label.evaluate(element => ({ width: element.clientWidth, contentWidth: element.scrollWidth }));
+    expect(size.width).toBeGreaterThan(0);
+    expect(size.width).toBeGreaterThanOrEqual(size.contentWidth);
+    await expect(row.locator("header .wf-runtime-capture-mode")).toHaveCount(1);
+  }
+  const inspector = page.getByRole("complementary", { name: "Run details" });
+  expect(await inspector.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+});
+
+for (const theme of ["light", "dark"]) {
+  test(`outputs and outcomes stay compact and keyboard-disclosable in ${theme} theme`, async ({ page }) => {
+    await mockInputEvidence(page, "", "uniform");
+
+    for (const width of [1440, 360]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.goto(`/?mode=input-evidence&theme=${theme}`);
+      if (width < 1000) await page.getByRole("button", { name: "Select activity" }).click();
+
+      const inspector = page.getByRole("complementary", { name: "Run details" });
+      await expect(inspector).toBeVisible();
+      const outputs = page.locator(".wf-instance-section").filter({ has: page.getByRole("heading", { name: /Outputs/ }) });
+      const outputRows = outputs.locator(".wf-runtime-input");
+      const total = outputRows.filter({ hasText: "Total" });
+      const response = outputRows.filter({ hasText: "Response" });
+
+      await expect(total.locator(".wf-runtime-input-value")).toHaveText("42");
+      await expect(total.locator("header strong")).toHaveCSS("text-transform", "none");
+      await expect(total.locator("header span small")).toHaveCSS("text-transform", "none");
+      await expect(total.locator("header")).toHaveCSS("border-bottom-width", "0px");
+      await expect(total.locator("header")).toHaveCSS("padding-bottom", "0px");
+      await expect(outputs.locator(".wf-runtime-evidence-heading .wf-runtime-capture-mode")).toHaveText("Diagnostic Snapshot");
+      await expect(outputs.locator(".wf-runtime-capture-mode")).toHaveCount(1);
+
+      const responseTree = response.locator(".wf-runtime-snapshot-node").first();
+      await expect(responseTree).not.toHaveAttribute("open", "");
+      await expect(response.getByText("Accepted", { exact: true })).toBeHidden();
+      await responseTree.locator("summary").focus();
+      await page.keyboard.press("Enter");
+      await expect(response.getByText("Accepted", { exact: true })).toBeVisible();
+
+      const outcomes = page.locator(".wf-instance-section").filter({ has: page.getByRole("heading", { name: /Outcomes/ }) });
+      await expect(outcomes.getByText("Succeeded", { exact: true })).toBeVisible();
+      await expect(outcomes.getByText("NeedsReview", { exact: true })).toBeVisible();
+      await expect(outcomes.getByRole("listitem")).toHaveCount(2);
+      await expect(outcomes.getByText("Outcome", { exact: true })).toHaveCount(0);
+
+      expect(await inspector.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+
+      if (width === 1440) {
+        const workbench = page.getByTestId("run-workbench");
+        await expect(workbench).toHaveAttribute("data-layout-mode", "desktop");
+        await page.getByRole("button", { name: "Maximize run details panel" }).click();
+        await expect(page.getByRole("button", { name: "Restore run details panel" })).toBeVisible();
+        await expect(workbench).toHaveClass(/inspector-maximized/);
+        await expect(total.locator(".wf-runtime-input-value")).toHaveText("42");
+        expect(await inspector.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+
+        await page.addScriptTag({ content: axe.source });
+        const violations = await page.evaluate(async () => {
+          const root = document.querySelector('[aria-label="Run details"]');
+          if (!root) return [{ id: "missing-run-details", impact: "critical", help: "Run details inspector is missing." }];
+          const result = await (window as Window & { axe: typeof axe }).axe.run(root, { resultTypes: ["violations"] });
+          return result.violations
+            .filter(violation => violation.impact === "critical" || violation.impact === "serious")
+            .map(({ id, impact, help }) => ({ id, impact, help }));
+        });
+        await test.info().attach("activity-evidence-axe-critical-serious.json", {
+          body: JSON.stringify(violations, null, 2),
+          contentType: "application/json"
+        });
+        expect(violations).toEqual([]);
+        await page.getByRole("button", { name: "Restore run details panel" }).click();
+        await expect(workbench).not.toHaveClass(/inspector-maximized/);
+      }
+    }
+  });
 }
 
 for (const theme of ["light", "dark"]) {

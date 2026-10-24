@@ -118,7 +118,8 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         Entries(
             IntentionallyPerShell + "holds no state; a shell's startup validation runs the host's options checks again, in the shell's own container (#2331)",
             "Nuplane.Feeds.Configuration.FeedCredentialOptionsValidator",
-            "Nuplane.Loading.LoadingOptionsValidator"),
+            "Nuplane.Loading.LoadingOptionsValidator",
+            "Nuplane.Store.Maintenance.PackageStoreMaintenanceOptionsValidator"),
         Entries(
             "unreachable from shell code: a hosted service the host starts once, and a shell container never starts its copy (a disposable one could not be shared in any case)",
             "Elsa.Persistence.EntityFramework.EfModuleMigrator<Elsa.Cluster.EntityFrameworkCore.ClusterMembershipDbContext>",
@@ -129,6 +130,31 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         Entries(
             IntentionallyPerShell + "records what its own container's options pipeline resolved the store's AutoMigrate to, for the host's migrator, which a shell never starts",
             "Elsa.Workbench.WorkbenchOpenIddictMigrationSwitch"),
+        Entries(
+            UnreachableFromShells + "; these registrations support the host's reconciliation/loading route, which shells reach only through the shared adapter",
+            "Nuplane.Abstractions.PackageStoreProtection.IPackageStoreAdmission",
+            "Nuplane.Feeds.MultiFeedPackageResolver",
+            "Nuplane.Feeds.NuGetRemotePackageAcquirer",
+            "Nuplane.Loading.IScopedPackageLoader",
+            "Nuplane.Reconciliation.ILeasedPackageGraphLoadingObserver",
+            "Nuplane.Reconciliation.ILeasedPackageGraphRecoveryLoadingObserver"),
+        Entries(
+            UnreachableFromShells + "; native store coordination belongs to the host package runtime and has no shell consumer",
+            "Nuplane.Store.Coordination.IPackageGraphUseLifetimeObserver",
+            "Nuplane.Store.Coordination.IPhysicalStoreFileSystem",
+            "Nuplane.Store.Coordination.IResolvedPackageGraphUseLeaseAcquisition",
+            "Nuplane.Store.Coordination.ITrustedPackageStoreMemberDeclarationCatalog",
+            "Nuplane.Store.Coordination.ITrustedPackageStoreRootCatalog",
+            "Nuplane.Store.Coordination.PackageGraphUseLeaseAcquisition",
+            "Nuplane.Store.Coordination.PackageGraphUseLifetimeObserver",
+            "Nuplane.Store.Coordination.TrustedPackageStoreMemberDeclarationCatalog",
+            "Nuplane.Store.Coordination.TrustedPackageStoreRootCatalog"),
+        Entries(
+            UnreachableFromShells + "; optional enrollment-preview helpers are not consumed by Foundation's ordinary AddNuplaneAdmin composition",
+            "Nuplane.Store.Maintenance.IPackageStoreEnrollmentPreviewService",
+            "Nuplane.Store.Maintenance.IPackageStoreRootResolver",
+            "Nuplane.Store.Maintenance.PackageStoreEnrollmentPreviewService",
+            "Nuplane.Store.Maintenance.PackageStoreRootResolver"),
         Entries(
             UnreachableFromShells,
         "Nuplane.Abstractions.IActivePackageCatalog", "Nuplane.Abstractions.ICycleFailureContributor", "Nuplane.Abstractions.IDesiredPackageSource", "Nuplane.Abstractions.IDesiredStateContributor", "Nuplane.Abstractions.INuplaneObserver", "Nuplane.Abstractions.IPackageResolver",
@@ -258,7 +284,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
     /// feature), and has run the validator of its own container, the host's checks copied into it included, by the time it
     /// is active.
     /// </summary>
-    // Kept beside the composition test (§2.23.1): ordering, startup validation runs ahead of every host initializer.
+    // Kept beside the composition test: ordering, startup validation runs ahead of every host initializer.
     [Theory]
     [InlineData("Elsa.Foundation.Host")]
     [InlineData("Elsa.Workbench")]
@@ -284,7 +310,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
     /// ahead of the vendor registration, is caught here and nowhere else: the policy's hosted service must be registered, and after
     /// the vendor initializer, which turns its own migration off for it and creates the demo store (#2196).
     /// </summary>
-    // Kept beside the composition test (§2.23.1): ordering, the migration policy registers after the vendor initializer.
+    // Kept beside the composition test: ordering, the migration policy registers after the vendor initializer.
     [Fact]
     public void Workbench_registers_the_openiddict_migration_policy_after_the_vendor_initializer()
     {
@@ -304,7 +330,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
     /// Nuplane calls observers in registration order, so each host registers CShells.Nuplane after its auto-loader. The
     /// coordinator is root-owned and the shell's borrowed observer resolves to that same object.
     /// </summary>
-    // Kept beside the composition test (§2.23.1): discovery follows the package auto-loader.
+    // Kept beside the composition test: discovery follows the package auto-loader.
     [Theory(DisplayName = "Both host compositions register and borrow one root-owned Nuplane coordinator")]
     [InlineData("Elsa.Foundation.Host")]
     [InlineData("Elsa.Workbench")]

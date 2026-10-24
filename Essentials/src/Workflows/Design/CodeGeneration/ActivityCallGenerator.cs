@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Text;
+using Elsa.Activities.Design.Core.Reconciliation;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
@@ -549,12 +549,7 @@ public sealed class ActivityCallGenerator : IIncrementalGenerator
             return string.Empty;
 
         var activityTypeKey = activityType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
-        var bytes = Encoding.UTF8.GetBytes(activityTypeKey + '\u001f' + sortKey);
-        byte[] hash;
-        using (var algorithm = SHA256.Create())
-            hash = algorithm.ComputeHash(bytes);
-        var encoded = Convert.ToBase64String(hash).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-        return "actver_" + encoded;
+        return ActivityStableIdFormula.VersionId(activityTypeKey, sortKey);
     }
 
     private static string ResolveActivityVersion(INamedTypeSymbol activityType)

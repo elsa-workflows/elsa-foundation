@@ -69,6 +69,9 @@ public sealed class RuntimeEngineTracingTests : RuntimePipelineTestSupport
         Assert.Equal(nameof(StagingHandler), dispatch.GetTagItem(WorkflowEngineTelemetry.HandlerNameTag));
         Assert.Equal(WorkflowEngineTelemetry.OutcomeCompleted, dispatch.GetTagItem(WorkflowEngineTelemetry.OutcomeTag));
         Assert.Equal("cp-1", commit.GetTagItem(WorkflowEngineTelemetry.CheckpointIdTag));
+        // The policy's decision for the checkpoint, under a name that cannot be read as the run's persistence mode.
+        Assert.Equal("Immediate", commit.GetTagItem("elsa.checkpoint.persistence_decision"));
+        Assert.Null(commit.GetTagItem("elsa.checkpoint.persistence_mode"));
         Assert.Equal(1, drain.GetTagItem(WorkflowEngineTelemetry.DrainItemsProcessedTag));
     }
 

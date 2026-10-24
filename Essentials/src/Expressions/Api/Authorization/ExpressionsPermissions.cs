@@ -1,6 +1,6 @@
 namespace Elsa.Expressions.Api.Authorization;
 
-public static class ExpressionsPermissions
+internal static class ExpressionsPermissions
 {
-    public const string Read = "expressions.read";
+    public const string Read = "expressions:read";
 }

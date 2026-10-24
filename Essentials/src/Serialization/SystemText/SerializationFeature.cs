@@ -17,10 +17,10 @@ namespace Elsa.Serialization.SystemText;
 [ShellFeature(
     name: "Serialization",
     DisplayName = "Serialization",
-    Description = "Provides JSON-based payload serialization. Pluggable JsonConverter contributions flow through the JsonPayloadConvertersInitializing domain event (framework §2.6.1 Registry + StartUp Task sub-pattern; Elsa §E3.3 worked example).")]
+    Description = "Provides JSON-based payload serialization. Features contribute JsonConverters through IJsonConverterSource, collected once at startup.")]
 public class SerializationFeature : IShellFeature
 {
-    public void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
         services
             .AddSingleton<IPayloadSerializer, JsonPayloadSerializer>()
@@ -30,7 +30,7 @@ public class SerializationFeature : IShellFeature
         // The type discriminator converter (the go-forward alias-registry mechanism) needs a concrete DI
         // registration so BuiltInJsonConverterSource can request it via constructor injection. Open-object
         // polymorphism (PolymorphicObjectConverterFactory) and the System.Text.Json JSON-island handler are
-        // retired: type identity is a registry alias only, and JsonNode serializes natively (ADR 0035 D2/D5).
+        // retired: type identity is a registry alias only, and JsonNode serializes natively.
         services.AddSingleton<TypeJsonConverter>();
 
         // The converter registry is a singleton populated once at startup; the serializer
@@ -43,7 +43,7 @@ public class SerializationFeature : IShellFeature
         services.AddScoped<IStartupTask, JsonPayloadConvertersInitializingStartupTask>();
 
         // Startup bridge: seed the well-known type registry from the contributed type descriptors so
-        // authored argument aliases (e.g. "String", "Int32") resolve to their CLR types (research D5).
+        // authored argument aliases (e.g. "String", "Int32") resolve to their CLR types.
         services.AddScoped<IStartupTask, SeedWellKnownTypesStartupTask>();
 
         services.AddEventHandler<JsonPayloadConvertersInitializing, RegisterJsonConverters>();

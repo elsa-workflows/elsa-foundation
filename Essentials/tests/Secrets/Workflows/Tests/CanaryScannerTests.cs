@@ -10,7 +10,7 @@ namespace Elsa.Secrets.Workflows.Tests;
 /// <summary>
 /// The canary's encoded scanner finds a planted value in every form a surface can store it in, at every byte alignment,
 /// in a SQLite database's write-ahead log as well as in its main file, and reports nothing for content that does not
-/// hold the value (spec 188, T080).
+/// hold the value.
 /// </summary>
 public sealed class CanaryScannerTests : IDisposable
 {
@@ -97,7 +97,6 @@ public sealed class CanaryScannerTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
         _directory.Delete(recursive: true);
     }
 

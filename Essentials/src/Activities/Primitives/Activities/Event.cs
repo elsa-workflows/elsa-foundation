@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -15,10 +17,12 @@ namespace Elsa.Activities.Primitives.Activities;
 /// <remarks>
 /// <para>
 /// Deliberately minimal: the trigger is keyed by event name plus an optional authored
-/// correlation value, with no payload schema or filters. On a mid-flow wait, a nonblank correlation is retained
+/// correlation value, with no payload schema or filters. Whatever arrives with the event (a Publish Event payload, the
+/// stimulus API's input, a test-run delivery, or nothing) is its payload: any JSON shape is accepted and handed on as
+/// the <see cref="EventResult.Payload"/> output (#3107). On a mid-flow wait, a nonblank correlation is retained
 /// as bookmark metadata so correlated delivery narrows resume fan-in; null or blank preserves broadcast behavior.
-/// When a workflow is started by the event, the activity returns the event name in one atomic result so the run
-/// is observable.
+/// When a workflow is started by the event, the activity returns the event name and payload in one atomic result so
+/// the run is observable.
 /// </para>
 /// <para>
 /// Role selection mirrors <c>HttpEndpoint</c>: the activity completes when the run's start trigger delivery
@@ -31,6 +35,7 @@ namespace Elsa.Activities.Primitives.Activities;
 [RefusesSecretBinding(nameof(EventName), SecretBindingRefusalReason.FixedAtPublish)]
 [RefusesSecretBinding(nameof(CorrelationId), SecretBindingRefusalReason.FixedAtPublish)]
 [RefusesSecretBinding(nameof(CanStartWorkflow), SecretBindingRefusalReason.FixedAtPublish)]
+[Activity(Icon = "Bell")]
 [TriggerActivity]
 public sealed class Event : StatefulTriggerActivity<EventResult, EventWaitState, EventReceived>
 {
@@ -64,7 +69,7 @@ public sealed class Event : StatefulTriggerActivity<EventResult, EventWaitState,
         ActivityStartContext<EventReceived> context)
     {
         if (ShouldComplete(context))
-            return ValueTask.FromResult(Complete(new EventResult(EventName)));
+            return ValueTask.FromResult(Complete(new EventResult(EventName, context.TryGetTrigger(out var trigger) ? trigger.Payload : null)));
 
         var correlationId = string.IsNullOrWhiteSpace(CorrelationId) ? null : CorrelationId.Trim();
         var metadata = correlationId is null
@@ -84,7 +89,7 @@ public sealed class Event : StatefulTriggerActivity<EventResult, EventWaitState,
     [ResumeTarget(ResumeTargetId)]
     protected override ValueTask<ActivityTransition<EventResult, EventWaitState>> ResumeAsync(
         ActivityResumeContext<EventWaitState, EventReceived> context) =>
-        ValueTask.FromResult(Complete(new EventResult(context.State.EventName)));
+        ValueTask.FromResult(Complete(new EventResult(context.State.EventName, context.Trigger.Payload)));
 
     private bool ShouldComplete(ActivityStartContext<EventReceived> context)
     {
@@ -98,15 +103,51 @@ public sealed class Event : StatefulTriggerActivity<EventResult, EventWaitState,
 /// <summary>The atomic result produced when a named event starts or resumes a workflow.</summary>
 public sealed record EventResult
 {
-    public EventResult(string eventName) => EventName = eventName;
+    public EventResult(string eventName, JsonElement? payload = null)
+    {
+        EventName = eventName;
+        Payload = payload;
+    }
 
     /// <summary>The routed event name.</summary>
     [Output(Key = "Result", Path = "eventName")]
     public string EventName { get; }
+
+    /// <summary>The payload delivered with the event, unchanged; null when the event carried none.</summary>
+    [Output(Key = "Payload", Path = "payload", IsRequired = false)]
+    public JsonElement? Payload { get; }
 }
 
 /// <summary>The complete private state of a mid-flow event wait.</summary>
 public sealed record EventWaitState(string EventName);
 
-/// <summary>The typed payload delivered when a matching named event resumes a waiting <see cref="Event"/>.</summary>
-public sealed record EventReceived(string? EventName = null);
+/// <summary>
+/// The typed trigger delivered when a matching named event resumes a waiting <see cref="Event"/> or starts a workflow
+/// at one: the event's payload. Its JSON form is the payload itself, so any delivered JSON value, <c>null</c> included,
+/// reads as a trigger. The event's name is not part of it; a wait keeps its own in <see cref="EventWaitState"/>.
+/// </summary>
+[JsonConverter(typeof(EventReceivedJsonConverter))]
+public sealed record EventReceived(JsonElement? Payload = null);
+
+/// <summary>Reads any JSON value as an <see cref="EventReceived"/> payload and writes the payload back unchanged.</summary>
+internal sealed class EventReceivedJsonConverter : JsonConverter<EventReceived>
+{
+    public override bool HandleNull => true;
+
+    public override EventReceived Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Null)
+            return new EventReceived();
+
+        using var document = JsonDocument.ParseValue(ref reader);
+        return new EventReceived(document.RootElement.Clone());
+    }
+
+    public override void Write(Utf8JsonWriter writer, EventReceived value, JsonSerializerOptions options)
+    {
+        if (value?.Payload is { ValueKind: not (JsonValueKind.Undefined or JsonValueKind.Null) } payload)
+            payload.WriteTo(writer);
+        else
+            writer.WriteNullValue();
+    }
+}

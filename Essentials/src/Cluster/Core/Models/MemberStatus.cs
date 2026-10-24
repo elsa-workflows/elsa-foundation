@@ -1,7 +1,7 @@
 namespace Elsa.Cluster.Core.Models;
 
 /// <summary>
-/// A member's status. It only moves forward within an incarnation, in declaration order (FR-005). A crashed member
+/// A member's status. It only moves forward within an incarnation, in declaration order. A crashed member
 /// never writes <see cref="Left"/>; it expires instead.
 /// </summary>
 public enum MemberStatus

@@ -6,14 +6,14 @@ using static Elsa.Architecture.Tests.RepoPaths;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// ADR 0073 selects EF Core as the destination persistence family, but each implementation still enters
+/// EF Core is the destination persistence family, but each implementation still enters
 /// through an explicitly reviewed program issue. This ratchet therefore keeps the currently admitted
 /// surface at the vendor-owned OpenIddict host boundary plus the repository implementations explicitly
-/// admitted by ADR 0072 and ADR 0073 / Program #1665. It reads
+/// admitted by the reviewed records below. It reads
 /// each source project's evaluated Release and Debug restore graphs, so imported, conditional, transitive,
 /// and provider-only EF edges anywhere else under <c>src/</c> fail and name the offender. Each host exception also
 /// validates its exact resolved EF package set. Each replacement changes this guard deliberately with its own
-/// architecture evidence; the destination ADR alone is not a repository-wide exemption.
+/// architecture evidence; the destination decision alone is not a repository-wide exemption.
 /// </summary>
 public sealed class EfCoreDependencyGuardTests
 {
@@ -21,7 +21,7 @@ public sealed class EfCoreDependencyGuardTests
     private static readonly string[] AllowedEfConsumers = ["Elsa.Foundation.Host", "Elsa.Workbench"];
 
     /// <summary>
-    /// ADR 0076, amended 2026-09-29 (#2151) and 2026-10-01 (#2191): <c>Elsa.Foundation.Host</c> carries EF Core for its opt-in
+    /// <c>Elsa.Foundation.Host</c> carries EF Core (#2151, #2191) for its opt-in
     /// cluster membership provider and its opt-in Data Protection key store and nothing else, so its closure is theirs - EF
     /// Core and Relational - plus the four engines their tables can live in. No design-time package, no in-memory provider
     /// and no vendor EF store: every feature's EF module still arrives from a feed.
@@ -103,6 +103,27 @@ public sealed class EfCoreDependencyGuardTests
         "Elsa.Workbench" => AllowedWorkbenchEfPackages,
         _ => throw new ArgumentOutOfRangeException(nameof(host), host, "An admitted EF consumer needs a reviewed EF closure of its own.")
     };
+
+    [Fact]
+    public void Every_admitted_Rules_project_resolves_only_its_reviewed_EF_closure() =>
+        AssertReviewedModuleClosure(Adr0088FiniteRulesEf.ExpectedEfPackagesByProject, "finite Rules");
+
+    [Fact]
+    public void Every_admitted_ETL_project_resolves_only_its_reviewed_EF_closure() =>
+        AssertReviewedModuleClosure(Adr0087FiniteEtlEf.ExpectedEfPackagesByProject, "finite ETL");
+
+    private static void AssertReviewedModuleClosure(IReadOnlyDictionary<string, string[]> projects, string module)
+    {
+        var offenders = projects.SelectMany(project => RestoreConfigurations.SelectMany(configuration =>
+        {
+            var resolved = ReadProjectEfPackages(project.Key, configuration);
+            return FindUnexpectedEfPackages(resolved, project.Value)
+                .Select(package => $"{project.Key} ({configuration}) unexpectedly resolves {package}")
+                .Concat(FindUnexpectedEfPackages(project.Value, resolved)
+                    .Select(package => $"{project.Key} ({configuration}) no longer resolves reviewed package {package}"));
+        })).ToArray();
+        Assert.True(offenders.Length == 0, Report($"drift from the reviewed {module} EF closure", offenders));
+    }
 
     [Fact]
     public void Every_admitted_Secrets_pilot_project_resolves_only_its_reviewed_EF_closure()
@@ -401,7 +422,7 @@ public sealed class EfCoreDependencyGuardTests
     /// <summary>
     /// The adapter's reviewed closure is exact, so a provider engine appearing in it is flagged rather than
     /// absorbed — proved here against the record itself, because a passing guard cannot show what it would
-    /// refuse (FR-063).
+    /// refuse.
     /// </summary>
     [Fact]
     public void The_activation_guard_closure_rejects_a_provider_engine()
@@ -609,20 +630,27 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// Directory.Build.props's Line A PublicApiAnalyzers wiring (#2078) is the one declared exception. Its
-    /// Condition reads $(ElsaVersionLine), a property that same file computes from $(MSBuildProjectName)
-    /// alone (VersionLines.props) - never from $(Configuration) - so the Release and Debug restore graphs
-    /// this guard reads already resolve it identically. It cannot hide a package from either one.
+    /// The declared exceptions, both in the root Directory.Build.props: the PublicApiAnalyzers reference a project opts
+    /// into with ElsaTrackPublicApi, and the naming analyzer every production project compiles with. Neither condition
+    /// reads $(Configuration): one reads a property the project file sets unconditionally, the other the project's
+    /// location. The Release and Debug restore graphs this guard reads therefore resolve both identically, and
+    /// neither can hide a package or project from one of them. An exception matches on path, element, Include and the
+    /// exact condition text, so another reference placed under the same condition is still an offender.
     /// </summary>
-    private static readonly (string RelativePath, string ElementName, string Condition) AdmittedConditionalDependency =
-        ("Directory.Build.props", "PackageReference", "'$(ElsaVersionLine)' == 'A'");
+    private static readonly (string RelativePath, string ElementName, string Include, string Condition)[] AdmittedConditionalDependencies =
+    [
+        ("Directory.Build.props", "PackageReference", "Microsoft.CodeAnalysis.PublicApiAnalyzers", "'$(ElsaTrackPublicApi)' == 'true'"),
+        ("Directory.Build.props", "ProjectReference", "$(_ElsaNamingAnalyzerProject)", "'$(ElsaIsProductionProject)' == 'true'"),
+    ];
 
     private static bool IsAdmittedConditionalDependency(string relativePath, XElement element) =>
-        relativePath.Replace('\\', '/') == AdmittedConditionalDependency.RelativePath &&
-        element.Name.LocalName == AdmittedConditionalDependency.ElementName &&
-        element.AncestorsAndSelf()
-            .SelectMany(ancestor => ancestor.Attributes())
-            .Any(attribute => attribute.Name.LocalName == "Condition" && attribute.Value == AdmittedConditionalDependency.Condition);
+        AdmittedConditionalDependencies.Any(admitted =>
+            relativePath.Replace('\\', '/') == admitted.RelativePath &&
+            element.Name.LocalName == admitted.ElementName &&
+            element.Attribute("Include")?.Value == admitted.Include &&
+            element.AncestorsAndSelf()
+                .SelectMany(ancestor => ancestor.Attributes())
+                .Any(attribute => attribute.Name.LocalName == "Condition" && attribute.Value == admitted.Condition));
 
     [Theory]
     [InlineData("<Project><ItemGroup Condition=\"'$(Configuration)' == 'Debug'\"><PackageReference Include=\"Contoso.Persistence\" /></ItemGroup></Project>")]
@@ -634,34 +662,29 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// The allowlist admits exactly the Line A PublicApiAnalyzers reference - same path, element, and
-    /// condition text - and nothing else: a different path, a different element, or a different condition
-    /// on the same element all still count as an offender.
+    /// The allowlist admits exactly the two declared references - same path, element, Include and condition text - and
+    /// nothing else: a different path, element, Include or condition still counts as an offender.
     /// </summary>
     [Fact]
-    public void Only_the_declared_line_a_analyzer_reference_is_admitted_as_a_conditional_dependency()
+    public void Only_the_declared_analyzer_references_are_admitted_as_conditional_dependencies()
     {
-        var admitted = XDocument.Parse(
-            "<Project><ItemGroup Condition=\"'$(ElsaVersionLine)' == 'A'\">" +
-            "<PackageReference Include=\"Microsoft.CodeAnalysis.PublicApiAnalyzers\" /></ItemGroup></Project>")
-            .Descendants("PackageReference").Single();
+        const string trackingCondition = "'$(ElsaTrackPublicApi)' == 'true'";
+        const string productionCondition = "'$(ElsaIsProductionProject)' == 'true'";
+        const string analyzerProject = "$(_ElsaNamingAnalyzerProject)";
 
-        Assert.True(IsAdmittedConditionalDependency("Directory.Build.props", admitted));
-        Assert.False(IsAdmittedConditionalDependency("VersionLines.props", admitted));
+        Assert.True(IsAdmittedConditionalDependency("Directory.Build.props", Reference("PackageReference", "Microsoft.CodeAnalysis.PublicApiAnalyzers", trackingCondition)));
+        Assert.True(IsAdmittedConditionalDependency("Directory.Build.props", Reference("ProjectReference", analyzerProject, productionCondition)));
 
-        var otherElement = XDocument.Parse(
-            "<Project><ItemGroup Condition=\"'$(ElsaVersionLine)' == 'A'\">" +
-            "<ProjectReference Include=\"Contoso.csproj\" /></ItemGroup></Project>")
-            .Descendants("ProjectReference").Single();
+        Assert.False(IsAdmittedConditionalDependency("VersionLines.props", Reference("PackageReference", "Microsoft.CodeAnalysis.PublicApiAnalyzers", trackingCondition)));
+        Assert.False(IsAdmittedConditionalDependency("Directory.Build.props", Reference("ProjectReference", "Contoso.csproj", trackingCondition)));
+        Assert.False(IsAdmittedConditionalDependency("Directory.Build.props", Reference("PackageReference", "Contoso.Persistence", trackingCondition)));
+        Assert.False(IsAdmittedConditionalDependency("Directory.Build.props", Reference("ProjectReference", "Contoso.csproj", productionCondition)));
+        Assert.False(IsAdmittedConditionalDependency("Directory.Build.props", Reference("PackageReference", "Microsoft.CodeAnalysis.PublicApiAnalyzers", "'$(Configuration)' == 'Debug'")));
+        Assert.False(IsAdmittedConditionalDependency("Directory.Build.props", Reference("PackageReference", "Microsoft.CodeAnalysis.PublicApiAnalyzers", "'$(ElsaVersionLine)' == 'A'")));
 
-        Assert.False(IsAdmittedConditionalDependency("Directory.Build.props", otherElement));
-
-        var otherCondition = XDocument.Parse(
-            "<Project><ItemGroup Condition=\"'$(Configuration)' == 'Debug'\">" +
-            "<PackageReference Include=\"Microsoft.CodeAnalysis.PublicApiAnalyzers\" /></ItemGroup></Project>")
-            .Descendants("PackageReference").Single();
-
-        Assert.False(IsAdmittedConditionalDependency("Directory.Build.props", otherCondition));
+        static XElement Reference(string element, string include, string condition) =>
+            XDocument.Parse($"<Project><ItemGroup Condition=\"{condition}\"><{element} Include=\"{include}\" /></ItemGroup></Project>")
+                .Descendants(element).Single();
     }
 
     private static Dictionary<string, Project> LoadModuleProjects()
@@ -692,6 +715,8 @@ public sealed class EfCoreDependencyGuardTests
                     Adr0073WorkflowsDesignEf.IsProjectPath(relativePath) ||
                     Adr0073ActivitiesDesignEf.IsProjectPath(relativePath) ||
                     Adr0073Elsa3ImportEf.IsProjectPath(relativePath) ||
+                    Adr0087FiniteEtlEf.IsProjectPath(relativePath) ||
+                    Adr0088FiniteRulesEf.IsProjectPath(relativePath) ||
                     Adr0076ActivationGuardEf.IsProjectPath(relativePath) ||
                     Spec183ReadabilityEf.IsProjectPath(relativePath) ||
                     Adr0078ClusterMembershipEf.IsProjectPath(relativePath) ||
@@ -836,8 +861,8 @@ public sealed class EfCoreDependencyGuardTests
     private sealed record Project(string Name, IReadOnlyDictionary<string, string[]> EfPackagesByConfiguration, bool IsAdmittedRepository);
 
     /// <summary>
-    /// ADR 0072's accepted, now-superseded Secrets EF surface. ADR 0073 preserves this as the only currently
-    /// admitted first-party implementation while later Program #1665 replacements remain evidence-gated.
+    /// The Secrets EF pilot surface. The pilot's bounded policy is superseded, but its implementation stays
+    /// admitted as the reviewed starting surface while later Program #1665 replacements remain evidence-gated.
     /// <see cref="SecretsEfPersistencePilotArchitectureTests"/> owns the exact package and source inventory.
     /// </summary>
     internal static class Adr0072SecretsEfPilot
@@ -897,7 +922,7 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// ADR 0073's first repository-first admission beyond the Secrets pilot. Provider engines remain
+    /// The first repository-first admission beyond the Secrets pilot. Provider engines remain
     /// confined to the focused test project; the production adapter owns only EF Core relational APIs.
     /// </summary>
     internal static class Adr0073RepositoryFirstEf
@@ -935,7 +960,10 @@ public sealed class EfCoreDependencyGuardTests
         ];
     }
 
-    /// <summary>Activities Design EF replacement admitted by the audited A01-A21 implementation slice.</summary>
+    /// <summary>
+    /// Activities Design EF replacement, admitted by its audited implementation slice: the provider-neutral
+    /// adapter plus its SQLite and provider test projects.
+    /// </summary>
     internal static class Adr0073ActivitiesDesignEf
     {
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
@@ -954,7 +982,7 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// ADR 0073's Runtime D01 repository-first admission for issue #1717. The production
+    /// The Runtime repository-first admission for issue #1717. The production
     /// adapter is provider-neutral; provider engines remain in focused test projects.
     /// </summary>
     internal static class Adr0073RuntimePlacementEf
@@ -995,7 +1023,7 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// ADR 0073's Runtime R01 bookmark-state admission for issue #1723. The production
+    /// The Runtime bookmark-state admission for issue #1723. The production
     /// adapter is provider-neutral; provider engines remain in focused test projects.
     /// </summary>
     internal static class Adr0073RuntimeBookmarksEf
@@ -1031,7 +1059,7 @@ public sealed class EfCoreDependencyGuardTests
         ];
     }
 
-    /// <summary>ADR 0073's opt-in Dashboard run-health reader, backed by the admitted Runtime EF projection.</summary>
+    /// <summary>The opt-in Dashboard run-health reader, backed by the admitted Runtime EF projection.</summary>
     internal static class Adr0073DashboardRunHealthEf
     {
         private const string Prefix = "Essentials/src/Workflows/Dashboard/Persistence/EntityFrameworkCore/";
@@ -1051,7 +1079,7 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// ADR 0073's opt-in Publishing ledger (P01-P06, issues #1748, #1751 and #1737). Its ordered activity-publication
+    /// The opt-in Publishing ledger (issues #1748, #1751 and #1737). Its ordered activity-publication
     /// commands reach the Activities Design and Runtime EF projects, whose closures are the same core packages.
     /// </summary>
     internal static class Adr0073PublishingSnapshotReviewEf
@@ -1085,7 +1113,7 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// ADR 0073's Diagnostics Structured Logs repository-first admission for issue #1695. The
+    /// The Diagnostics Structured Logs repository-first admission for issue #1695. The
     /// production adapter is provider-neutral; SQLite belongs to the behavioral test project and
     /// SQL Server, PostgreSQL, and MySQL packages belong only to the live-provider test project.
     /// </summary>
@@ -1121,7 +1149,7 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// ADR 0073's Diagnostics OpenTelemetry repository-first admission for issue #1697. The
+    /// The Diagnostics OpenTelemetry repository-first admission for issue #1697. The
     /// production adapter is provider-neutral; SQLite belongs to the behavioral test project and
     /// SQL Server, PostgreSQL, and MySQL packages belong only to the live-provider test project.
     /// </summary>
@@ -1159,7 +1187,7 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// ADR 0073's repository-first Identity EF admissions for issues #1708, #1710, and #1712.
+    /// The repository-first Identity EF admissions for issues #1708, #1710, and #1712.
     /// The production repository and ASP.NET Identity adapters stay provider-neutral; engines remain
     /// in focused test projects.
     /// </summary>
@@ -1197,8 +1225,49 @@ public sealed class EfCoreDependencyGuardTests
         ];
     }
 
+    /// <summary>The narrow Rules runtime persistence admission for #3181 and ADR 0088.</summary>
+    internal static class Adr0088FiniteRulesEf
+    {
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["Extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj"] =
+                CorePackages(),
+                ["Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj"] =
+                [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"],
+                ["Extensions/Rules/src/Tooling/Elsa.Rules.Tooling.csproj"] =
+                [.. ProviderPackages(), "Microsoft.EntityFrameworkCore.Design"],
+                ["Extensions/Rules/tests/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Rules.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
+                ProviderPackages()
+            };
+
+        public static bool IsProjectPath(string relativePath) => ExpectedEfPackagesByProject.ContainsKey(relativePath);
+
+        private static string[] ProviderPackages() =>
+            [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core",
+                "Microsoft.EntityFrameworkCore.SqlServer", "Npgsql.EntityFrameworkCore.PostgreSQL", "MySql.EntityFrameworkCore"];
+
+        private static string[] CorePackages() =>
+            ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational"];
+    }
+
+    /// <summary>The scoped ETL design module admission for #3109 and ADR 0087.</summary>
+    internal static class Adr0087FiniteEtlEf
+    {
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj"] =
+                ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational"],
+                ["Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj"] =
+                ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational", "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"]
+            };
+
+        public static bool IsProjectPath(string relativePath) => ExpectedEfPackagesByProject.ContainsKey(relativePath);
+    }
+
     /// <summary>
-    /// ADR 0073's Elsa 3 import ledger admission for issue #1738 (L01-L03). The production adapter is
+    /// The Elsa 3 import ledger admission for issue #1738. The production adapter is
     /// provider-neutral; SQLite and the SQL Server provider-mismatch binding belong to the behavioral test
     /// project, and SQL Server, PostgreSQL, and MySQL engines only to the live-provider smoke.
     /// </summary>
@@ -1229,7 +1298,7 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// ADR 0073's Workflows Design repository-first admission for issue #1727 (W01-W05). The
+    /// The Workflows Design repository-first admission for issue #1727. The
     /// production adapter is provider-neutral; SQLite belongs only to its focused behavioral test project.
     /// </summary>
     internal static class Adr0073WorkflowsDesignEf
@@ -1259,10 +1328,10 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// ADR 0076 D9's activation-guard adapter: the one project that bridges Modularity to EF, so that
+    /// The activation-guard adapter: the one project that bridges Modularity to EF, so that
     /// Elsa.Modularity.Core and Elsa.Modularity.Nuplane keep no EF edge of their own. Admitted through its
     /// own record rather than through <c>AllowedEfConsumers</c>, which licenses a host to carry provider
-    /// engines — the opposite of what this adapter may have (FR-063).
+    /// engines — the opposite of what this adapter may have.
     /// </summary>
     internal static class Adr0076ActivationGuardEf
     {
@@ -1296,14 +1365,13 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// Spec 183's readability source (B3, #2099) reads schema-family declarations and reports them through the membership
+    /// The readability source (#2099) reads schema-family declarations and reports them through the membership
     /// contract. Since #2143 it reads them through <c>Elsa.Persistence.Schema</c>, which references no EF Core, so the
     /// source itself is no longer admitted here: it resolves no EF package, and
     /// <see cref="Only_admitted_consumers_and_pilot_projects_resolve_ef_core_packages"/> keeps it that way, which is what
-    /// lets a host compose it without EF (ADR 0076); <c>Elsa.Foundation.Host</c> carries EF only for its opt-in durable
-    /// membership provider and its opt-in Data Protection key store (ADR 0076, amended 2026-09-29 and 2026-10-01; #2151,
-    /// #2191). Its tests read the declarations of two first-party module assemblies, which resolve EF Core and Relational
-    /// and never a provider engine.
+    /// lets a host compose it without EF; <c>Elsa.Foundation.Host</c> carries EF only for its opt-in durable
+    /// membership provider and its opt-in Data Protection key store (#2151, #2191). Its tests read the declarations of
+    /// two first-party module assemblies, which resolve EF Core and Relational and never a provider engine.
     /// </summary>
     internal static class Spec183ReadabilityEf
     {
@@ -1339,7 +1407,7 @@ public sealed class EfCoreDependencyGuardTests
     ];
 
     /// <summary>
-    /// The opt-in EF Core cluster membership provider (spec 183, B2, #2098; ADR 0078). The module is provider-neutral:
+    /// The opt-in EF Core cluster membership provider (#2098). The module is provider-neutral:
     /// a host composes it once on its own container and brings the engine; provider engines stay in its focused tests,
     /// SQLite in the fast suite and the three container engines in its provider legs.
     /// </summary>
@@ -1364,7 +1432,7 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// The host's Data Protection composition and its opt-in EF key store (ADR 0076, amended 2026-10-01: Elsa.Foundation.Host
+    /// The host's Data Protection composition and its opt-in EF key store (Elsa.Foundation.Host
     /// may also carry it). Like cluster membership, a host composes it once on its own container and brings the engine;
     /// provider engines stay in its focused tests, SQLite in the fast suite and the three container engines in its provider
     /// legs.

@@ -2,6 +2,8 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JavaScript.Core.Contracts;
+using Elsa.Expressions.JavaScript.Core.Exceptions;
+using Elsa.Expressions.JavaScript.Services;
 using Elsa.Expressions.JavaScript.Jint.Options;
 using Jint;
 using Jint.Native;
@@ -37,6 +39,15 @@ internal sealed class JintPortableJavaScriptEvaluator(IOptions<FeatureOptions> f
         if (definition.Options.EnumerateObject().Any())
             throw new InvalidOperationException("The JavaScript binding-pure-v1 evaluator does not support evaluator options.");
 
+        var isExpression = JavaScriptBindingSyntax.IsExpression(definition.Source);
+        var prepared = Engine.PrepareScript(
+            isExpression ? $"(\n{definition.Source}\n)" : definition.Source,
+            strict: true,
+            options: new ScriptPreparationOptions
+            {
+                ParsingOptions = new() { AllowReturnOutsideFunction = !isExpression }
+            });
+
         var engine = IsolatedJintEngine.Create(featureOptions.Value, request.CancellationToken);
         IsolatedJintEngine.SetReadOnlyArgs(engine, request.ParameterValues, featureOptions.Value);
         IsolatedJintEngine.SetReadOnlyVariables(engine, request.AmbientVariables, featureOptions.Value);
@@ -44,7 +55,7 @@ internal sealed class JintPortableJavaScriptEvaluator(IOptions<FeatureOptions> f
         JsValue result;
         try
         {
-            result = engine.Evaluate($"\"use strict\"; ({definition.Source})");
+            result = engine.Evaluate(prepared);
         }
         catch (JavaScriptException exception)
         {
@@ -66,7 +77,7 @@ internal sealed class JintPortableJavaScriptEvaluator(IOptions<FeatureOptions> f
         }
 
         if (result.IsUndefined())
-            throw new InvalidOperationException("A portable JavaScript expression cannot return undefined.");
+            throw new InvalidOperationException("A JavaScript binding must produce a value. Use an expression or return a value from the statement block; undefined is not supported.");
 
         return ValueTask.FromResult(JintResultMaterializer.Materialize(engine, result, featureOptions.Value));
     }
@@ -81,11 +92,3 @@ internal sealed class JintPortableJavaScriptEvaluator(IOptions<FeatureOptions> f
     private static Regex IdentifierReference(string capability) =>
         new($@"(?<![\w$.]){Regex.Escape(capability)}(?![\w$])", RegexOptions.CultureInvariant);
 }
-
-/// <summary>
-/// Raised when a portable JavaScript binding expression fails because it reached for an ambient capability the
-/// deterministic binding sandbox withholds. Carries the actionable message; the original Jint error is the inner
-/// exception.
-/// </summary>
-public sealed class JavaScriptBindingEvaluationException(string message, Exception innerException)
-    : InvalidOperationException(message, innerException);

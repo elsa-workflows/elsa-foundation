@@ -18,6 +18,6 @@ The workflow-specific labels currently defined are:
 | `auto-qa` | Filed by elsa-foundation's [UX QA routine](https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/skills/catalog.md#ux-qa-routine) |
 | `size:S` / `size:M` / `size:L` | One small PR / one larger PR / needs splitting first |
 
-The UX QA routine files a defect as `ready-for-agent` + `auto-qa` only when a second agent reproduced it and the fix needs no design choice. It files everything else as `needs-triage` + `auto-qa`. The [UX fix routine](ux-fix-routine.md) works the `ready-for-agent` + `auto-qa` issues.
+The UX QA routine files a defect as `ready-for-agent` + `auto-qa` only when a second agent reproduced it and the fix needs no design choice. It files everything else as `needs-triage` + `auto-qa`. Foundation's [Quality Fix Routine](../../../docs/skills/catalog.md#quality-fix-routine) works the `ready-for-agent` + `auto-qa` issues.
 
 There are no dedicated `needs-info` or `ready-for-human` labels. Do not invent or apply missing labels when a skill uses one of those canonical roles; describe the state in a comment and use an existing standard label only when its meaning is an exact fit.

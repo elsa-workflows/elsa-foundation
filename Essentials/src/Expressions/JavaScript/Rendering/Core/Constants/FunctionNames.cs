@@ -1,6 +1,6 @@
 ﻿namespace Elsa.Expressions.JavaScript.Rendering.Core.Constants;
 
-public static class FunctionNames
+internal static class FunctionNames
 {
     public const string IsNullOrWhiteSpace = "isNullOrWhiteSpace";
     public const string IsNullOrEmpty = "isNullOrEmpty";

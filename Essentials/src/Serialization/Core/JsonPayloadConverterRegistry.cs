@@ -8,14 +8,13 @@ namespace Elsa.Serialization.Core;
 /// its <see cref="System.Text.Json.JsonSerializerOptions"/> — sync access is required because
 /// <see cref="System.Text.Json"/> converter callbacks can't await async dispatch.
 ///
-/// Population happens once at startup via the Registry + StartUp Task sub-pattern from
-/// framework §2.6.1 (Elsa-side worked example: §E3.3). The startup task publishes
+/// Population happens once at startup via the Registry + StartUp Task sub-pattern. The startup task publishes
 /// <see cref="JsonPayloadConvertersInitializing"/>; the single <c>RegisterJsonConverters</c>
 /// handler aggregates every <see cref="IJsonConverterSource"/>; the startup task then flushes the
 /// accumulated contributions into this registry via <see cref="Register"/>. After startup,
 /// <see cref="Converters"/> is read directly.
 /// </summary>
-public sealed class JsonPayloadConverterRegistry
+internal sealed class JsonPayloadConverterRegistry
 {
     private readonly List<JsonConverter> _converters = new();
     private int _revision;

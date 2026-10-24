@@ -43,87 +43,146 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
     private const string HierarchySigningKey = "replaysafe-cap-recovery-hierarchy-signing-key-32-bytes";
     private const string InjectedInnerCheckpointFailureMessage = "Injected inner checkpoint failure after Schedule anchor verification.";
 
+    private const string SequenceNodeId = "node-replaysafe-cap-sequence";
+    private const string ChildA = "node-replaysafe-cap-a";
+    private const string ChildB = "node-replaysafe-cap-b";
+    private const string ChildC = "node-replaysafe-cap-c";
+    private const string SetOutputNodeId = "node-set-output-cap";
+
     public EfReplaySafeFusionCapRecoveryTests(ITestOutputHelper output) => _output = output;
 
+    // A cap fold lands on the checkpoint that brings another activity into a segment that already holds
+    // MaxActivitiesPerCommit activities, so every run below is a Sequence: a lone leaf never has a second activity to
+    // trip the cap. The inner gate counts durable commits; the outer gate also counts commits the segment buffered, so
+    // the same cut has a different occurrence on each side.
+
+    // Durable's cap is always one activity, so every cap-1 case runs under Durable as well as under Balanced at that cap.
+    public static TheoryData<CheckpointCommitGatePlacement, int, PersistenceMode> CapOfOneCuts() => new()
+    {
+        { CheckpointCommitGatePlacement.InnerStoreReturn, 1, PersistenceMode.Balanced },
+        { CheckpointCommitGatePlacement.CoalescingDecoratorReturn, 2, PersistenceMode.Balanced },
+        { CheckpointCommitGatePlacement.InnerStoreReturn, 1, PersistenceMode.Durable },
+        { CheckpointCommitGatePlacement.CoalescingDecoratorReturn, 2, PersistenceMode.Durable }
+    };
+
+    // With a cap of one, the child's ActivityScheduled trips the fold. It is the first checkpoint of the child's fused
+    // span, so the fold must make the in-flight Schedule anchor durable before it lands.
     [Theory]
-    [InlineData(CheckpointCommitGatePlacement.InnerStoreReturn)]
-    [InlineData(CheckpointCommitGatePlacement.CoalescingDecoratorReturn)]
-    public Task ActivityStarted_cap_fold_can_recover_from_a_fresh_provider_without_manual_work_injection(
-        CheckpointCommitGatePlacement gatePlacement) =>
+    [MemberData(nameof(CapOfOneCuts))]
+    public Task ActivityScheduled_cap_fold_can_recover_a_typed_replaysafe_schedule(
+        CheckpointCommitGatePlacement gatePlacement,
+        int targetOccurrence,
+        PersistenceMode mode) =>
         RunCutAndRecoverAsync(
             _output,
-            RuntimeCheckpointNames.ActivityStarted,
-            maxSegmentCheckpoints: 2,
-            NewReplaySafeExecutable,
-            expectedActivityStatus: ActivityExecutionStatus.Running,
-            gatePlacement: gatePlacement);
+            CutPoint.At(RuntimeCheckpointNames.ActivityScheduled),
+            mode,
+            maxActivitiesPerCommit: 1,
+            () => NewSequenceExecutable(WorkflowExecutionHarness.NewReplaySafeProbeNode(ChildA)),
+            new CutExpectation(
+                StatusesAtCut: Statuses((SequenceNodeId, ActivityExecutionStatus.Running), (ChildA, ActivityExecutionStatus.Scheduled)),
+                DurableAnchorNodeIds: [SequenceNodeId, ChildA],
+                PendingSchedulerOutboxCount: 0,
+                RecoveredNodeIds: [ChildA, SequenceNodeId]),
+            targetOccurrence,
+            gatePlacement);
 
     [Theory]
-    [InlineData(CheckpointCommitGatePlacement.InnerStoreReturn)]
-    [InlineData(CheckpointCommitGatePlacement.CoalescingDecoratorReturn)]
-    public Task ActivityAttemptClaimed_cap_one_can_recover_from_a_fresh_provider_without_manual_work_injection(
-        CheckpointCommitGatePlacement gatePlacement) =>
+    [MemberData(nameof(CapOfOneCuts))]
+    public Task ActivityScheduled_cap_fold_can_recover_a_fusable_intrinsic_schedule(
+        CheckpointCommitGatePlacement gatePlacement,
+        int targetOccurrence,
+        PersistenceMode mode) =>
         RunCutAndRecoverAsync(
             _output,
-            RuntimeCheckpointNames.ActivityAttemptClaimed,
-            maxSegmentCheckpoints: 1,
-            NewReplaySafeExecutable,
-            expectedActivityStatus: ActivityExecutionStatus.Running,
-            gatePlacement: gatePlacement);
-
-    [Theory]
-    [InlineData(CheckpointCommitGatePlacement.InnerStoreReturn)]
-    [InlineData(CheckpointCommitGatePlacement.CoalescingDecoratorReturn)]
-    public Task ActivityScheduled_cap_one_can_recover_a_typed_replaysafe_schedule(
-        CheckpointCommitGatePlacement gatePlacement) =>
-        RunCutAndRecoverAsync(
-            _output,
-            RuntimeCheckpointNames.ActivityScheduled,
-            maxSegmentCheckpoints: 1,
-            NewReplaySafeExecutable,
-            expectedActivityStatus: ActivityExecutionStatus.Scheduled,
-            gatePlacement: gatePlacement);
-
-    [Theory]
-    [InlineData(CheckpointCommitGatePlacement.InnerStoreReturn)]
-    [InlineData(CheckpointCommitGatePlacement.CoalescingDecoratorReturn)]
-    public Task ActivityScheduled_cap_one_can_recover_a_fusable_intrinsic_schedule(
-        CheckpointCommitGatePlacement gatePlacement) =>
-        RunCutAndRecoverAsync(
-            _output,
-            RuntimeCheckpointNames.ActivityScheduled,
-            maxSegmentCheckpoints: 1,
-            NewFusableIntrinsicExecutable,
-            expectedActivityStatus: ActivityExecutionStatus.Scheduled,
+            CutPoint.At(RuntimeCheckpointNames.ActivityScheduled),
+            mode,
+            maxActivitiesPerCommit: 1,
+            () => NewSequenceExecutable(NewSetOutputIntrinsicNode()),
+            new CutExpectation(
+                StatusesAtCut: Statuses((SequenceNodeId, ActivityExecutionStatus.Running), (SetOutputNodeId, ActivityExecutionStatus.Scheduled)),
+                DurableAnchorNodeIds: [SequenceNodeId, SetOutputNodeId],
+                PendingSchedulerOutboxCount: 0,
+                RecoveredNodeIds: [SequenceNodeId, SetOutputNodeId]),
+            targetOccurrence,
+            gatePlacement,
             expectedOutputName: "result",
-            expectedOutputValue: "recovered",
-            gatePlacement: gatePlacement);
+            expectedOutputValue: "recovered");
 
+    // A claim is taken just before the claimed work runs. When a parent is re-claimed to evaluate its finished child,
+    // that evaluation runs from a work item that exists only in memory, so a durable commit at the claim would leave
+    // nothing that runs it again: recovery found the child Completed, the parent Running and nothing queued, and
+    // stopped there without a fault. The first durable commit that records the finished child must be one recovery
+    // continues from, cut before the durable queue is advanced and after. On the decorator side the child's own
+    // buffered completion is the first match, so the durable one is the second.
     [Theory]
-    [InlineData(CheckpointCommitGatePlacement.InnerStoreReturn)]
-    [InlineData(CheckpointCommitGatePlacement.CoalescingDecoratorReturn)]
-    public Task Nested_D2_cap_fold_preserves_active_anchors_across_multiple_successors(
-        CheckpointCommitGatePlacement gatePlacement) =>
+    [MemberData(nameof(CapOfOneCuts))]
+    public Task The_first_durable_commit_recording_a_finished_child_can_be_recovered_from(
+        CheckpointCommitGatePlacement gatePlacement,
+        int targetOccurrence,
+        PersistenceMode mode) =>
         RunCutAndRecoverAsync(
             _output,
-            RuntimeCheckpointNames.ActivityCompleted,
-            maxSegmentCheckpoints: 2,
-            NewReplaySafeSequenceExecutable,
-            expectedActivityStatus: ActivityExecutionStatus.Running,
-            expectMultipleActivities: true,
-            targetOccurrence: 2,
-            enableSequence: true,
-            activityExecutionIds: Enumerable.Range(1, 8).Select(index => $"actexec-replaysafe-cap-recovery-{index}").ToArray(),
-            recoveryActivityExecutionIds: Enumerable.Range(1, 8).Select(index => $"actexec-replaysafe-cap-recovered-{index}").ToArray(),
-            recoveryIdentityNamespace: "replaysafe-cap-recovered",
-            gatePlacement: gatePlacement);
+            new CutPoint("commit recording the first child Completed", commit => RecordsCompleted(commit, ChildA)),
+            mode,
+            maxActivitiesPerCommit: 1,
+            NewTwoChildSequenceExecutable,
+            new CutExpectation(
+                StatusesAtCut: Statuses((SequenceNodeId, ActivityExecutionStatus.Running), (ChildA, ActivityExecutionStatus.Completed)),
+                DurableAnchorNodeIds: null,
+                PendingSchedulerOutboxCount: null,
+                RecoveredNodeIds: [ChildA, ChildB, SequenceNodeId]),
+            targetOccurrence,
+            gatePlacement,
+            assertCut: commit => Assert.NotEqual(RuntimeCheckpointNames.ActivityAttemptClaimed, commit.Checkpoint.Name));
 
-    [Fact]
-    public async Task Persisted_outbox_delivery_between_anchor_enqueue_and_session_refresh_is_reconciled()
+    private static WorkflowExecutable NewTwoChildSequenceExecutable() =>
+        NewSequenceExecutable(
+            WorkflowExecutionHarness.NewReplaySafeProbeNode(ChildA),
+            WorkflowExecutionHarness.NewReplaySafeProbeNode(ChildB));
+
+    private static bool RecordsCompleted(RuntimeCheckpointCommit commit, string executableNodeId) =>
+        commit.StateChanges.ActivityExecutions.Any(change =>
+            change.Operation == RuntimeStateChangeOperation.Upsert &&
+            change.State.Status == ActivityExecutionStatus.Completed &&
+            StringComparer.Ordinal.Equals(change.State.Execution.ExecutableNodeId, executableNodeId));
+
+    // With a cap of two, the third child's ActivityScheduled trips the second fold while the parent and that child are
+    // both active recovery anchors. Before the decorator advances the durable queue the completed second child's anchor
+    // is still there too.
+    [Theory]
+    [InlineData(CheckpointCommitGatePlacement.InnerStoreReturn, 2, new[] { SequenceNodeId, ChildB, ChildC })]
+    [InlineData(CheckpointCommitGatePlacement.CoalescingDecoratorReturn, 4, new[] { SequenceNodeId, ChildC })]
+    public Task Nested_cap_fold_preserves_active_anchors_across_multiple_successors(
+        CheckpointCommitGatePlacement gatePlacement,
+        int targetOccurrence,
+        string[] durableAnchorNodeIds) =>
+        RunCutAndRecoverAsync(
+            _output,
+            CutPoint.At(RuntimeCheckpointNames.ActivityScheduled),
+            PersistenceMode.Balanced,
+            maxActivitiesPerCommit: 2,
+            NewReplaySafeSequenceExecutable,
+            new CutExpectation(
+                StatusesAtCut: Statuses(
+                    (SequenceNodeId, ActivityExecutionStatus.Running),
+                    (ChildA, ActivityExecutionStatus.Completed),
+                    (ChildB, ActivityExecutionStatus.Completed),
+                    (ChildC, ActivityExecutionStatus.Scheduled)),
+                DurableAnchorNodeIds: durableAnchorNodeIds,
+                PendingSchedulerOutboxCount: 0,
+                RecoveredNodeIds: [ChildA, ChildB, ChildC, SequenceNodeId]),
+            targetOccurrence,
+            gatePlacement);
+
+    [Theory]
+    [InlineData(PersistenceMode.Balanced)]
+    [InlineData(PersistenceMode.Durable)]
+    public async Task Persisted_outbox_delivery_between_anchor_enqueue_and_session_refresh_is_reconciled(PersistenceMode mode)
     {
         var databasePath = Path.Join(Path.GetTempPath(), $"elsa-replaysafe-cap-outbox-interleave-{Guid.NewGuid():N}.db");
         var queueOperations = new QueueOperationRecorder();
-        var gate = new CheckpointCommitGate(RuntimeCheckpointNames.ActivityCompleted, targetOccurrence: 2, queueOperations);
+        var gate = new CheckpointCommitGate(commit => RecordsCompleted(commit, ChildA), targetOccurrence: 1, queueOperations);
         var completed = false;
         var overlapObserved = false;
         var deleteCallsAtInterleave = 0;
@@ -133,12 +192,18 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
             await using (var source = await StartGenerationAsync(
                              databasePath,
                              gate,
-                             maxSegmentCheckpoints: 2,
-                             enableSequence: true,
+                             mode: mode,
+                             maxActivitiesPerCommit: 1,
                              activityExecutionIds: Enumerable.Range(1, 8).Select(index => $"actexec-replaysafe-cap-interleave-{index}").ToArray(),
                              schedulerQueueDecorator: inner => new CountingSchedulerWorkQueue(inner, queueOperations)))
             {
-                var sourceRun = source.RunAsync(NewReplaySafeSequenceExecutable());
+                // With a cap of one, the parent's decision after the first child completed is the fold. It schedules the
+                // External middle child outside fusion, so it carries that child's continuation, and the parent is the
+                // active anchor.
+                var sourceRun = source.RunAsync(NewSequenceExecutable(
+                    WorkflowExecutionHarness.NewReplaySafeProbeNode(ChildA),
+                    WorkflowExecutionHarness.NewProbeNode(ChildB),
+                    WorkflowExecutionHarness.NewReplaySafeProbeNode(ChildC)));
                 try
                 {
                     var capture = gate.WaitForTargetCheckpointAsync(TimeSpan.FromSeconds(45));
@@ -149,7 +214,7 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
                     }
 
                     var (commit, _) = await capture;
-                    Assert.Equal(RuntimeCheckpointNames.ActivityCompleted, commit.Checkpoint.Name);
+                    Assert.NotEqual(RuntimeCheckpointNames.ActivityAttemptClaimed, commit.Checkpoint.Name);
                     Assert.True(gate.WasCaptured);
 
                     // The InnerStoreReturn gate is after the durable checkpoint/outbox write and anchor enqueue, but
@@ -161,7 +226,7 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
                     var queueBefore = await durableQueue.ListAllAsync(WorkflowExecutionId);
                     Assert.Contains(queueBefore, item =>
                         item.CommandKind == WorkflowExecutionCommandKind.ScheduleActivity &&
-                        StringComparer.Ordinal.Equals(ReadScheduleNodeId(item), "node-replaysafe-cap-b"));
+                        StringComparer.Ordinal.Equals(ReadScheduleNodeId(item), SequenceNodeId));
 
                     var durableOutbox = provider.GetRequiredService<CoalescingInner<IRuntimePostCommitOutboxStore>>().Value;
                     var now = provider.GetRequiredService<TimeProvider>().GetUtcNow();
@@ -197,7 +262,7 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
                         StringComparer.Ordinal.Equals(item.WorkItemId, pendingWorkItem.WorkItemId));
                     Assert.Contains(queueDuringInterleave, item =>
                         item.CommandKind == WorkflowExecutionCommandKind.ScheduleActivity &&
-                        StringComparer.Ordinal.Equals(ReadScheduleNodeId(item), "node-replaysafe-cap-b"));
+                        StringComparer.Ordinal.Equals(ReadScheduleNodeId(item), SequenceNodeId));
                     deleteCallsAtInterleave = queueOperations.Snapshot().DeleteCalls;
                     Assert.Equal(deleteCallsBeforeDelivery, deleteCallsAtInterleave);
                     Assert.False(sourceRun.IsCompleted, "The source must remain paused during outbox delivery.");
@@ -234,7 +299,6 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
         finally
         {
             gate.Release();
-            SqliteConnection.ClearAllPools();
             if (completed)
                 DeleteDatabaseFiles(databasePath);
             else
@@ -260,7 +324,7 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
             var session = new RuntimeCoalescingSession(
                 WorkflowExecutionId,
                 queue,
-                new CoalescingRuntimeCheckpointPersistenceOptions());
+                new PersistenceModeOptions());
             await session.EnsureQueueSeededAsync(CancellationToken.None);
             Assert.Equal("seeded-first", (await session.DequeueOverlayAsync(CancellationToken.None))?.WorkItemId);
             await session.EnqueueOverlayAsync(NewQueueWorkItem("continuation-early", 5, timestamp), CancellationToken.None);
@@ -293,7 +357,6 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
             if (completed)
                 DeleteDatabaseFiles(databasePath);
             else
@@ -312,7 +375,7 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
             await using var harness = await StartGenerationAsync(
                 databasePath,
                 gate: null,
-                maxSegmentCheckpoints: 50,
+                maxActivitiesPerCommit: 50,
                 schedulerQueueDecorator: inner => new CountingSchedulerWorkQueue(inner, operations));
             var run = await harness.RunAsync(NewReplaySafeExecutable());
 
@@ -328,7 +391,6 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
             if (completed)
                 DeleteDatabaseFiles(databasePath);
             else
@@ -347,29 +409,29 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
             await using var harness = await StartGenerationAsync(
                 databasePath,
                 gate: null,
-                maxSegmentCheckpoints: 2,
+                maxActivitiesPerCommit: 1,
                 innerCheckpointStoreDecorator: (services, inner) => new AnchorVerifiedCheckpointCommitFailureStore(
                     inner,
                     services.GetRequiredService<CoalescingInner<IWorkflowSchedulerWorkQueue>>().Value,
                     checkpointFailure,
-                    RuntimeCheckpointNames.ActivityStarted,
+                    RuntimeCheckpointNames.ActivityScheduled,
                     WorkflowExecutionId,
-                    "node-replaysafe-cap"),
+                    ChildA),
                 outerCheckpointStoreDecorator: (services, inner) => new CheckpointCommitFailureBoundaryObserverStore(
                     inner,
                     services.GetRequiredService<CoalescingInner<IWorkflowSchedulerWorkQueue>>().Value,
                     services.GetRequiredService<CoalescingInner<IActivityExecutionStateStore>>().Value,
                     checkpointFailure,
-                    RuntimeCheckpointNames.ActivityStarted,
+                    RuntimeCheckpointNames.ActivityScheduled,
                     WorkflowExecutionId,
-                    "node-replaysafe-cap",
+                    ChildA,
                     InjectedInnerCheckpointFailureMessage));
 
             Exception? observedFailure = null;
             WorkflowExecutionStatus? returnedStatus = null;
             try
             {
-                returnedStatus = (await harness.RunAsync(NewReplaySafeExecutable())
+                returnedStatus = (await harness.RunAsync(NewSequenceExecutable(WorkflowExecutionHarness.NewReplaySafeProbeNode(ChildA)))
                     .WaitAsync(TimeSpan.FromSeconds(45))).WorkflowState?.Status;
             }
             catch (Exception exception)
@@ -377,10 +439,13 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
                 observedFailure = exception;
             }
 
-            Assert.Equal(1, checkpointFailure.MatchingAttemptCount);
+            // The parent's fused span pumps the child's ScheduleActivity inline; when that fails the item stays queued and
+            // the drain loop redelivers it discretely, which fails the same way. So the write is attempted, and unwound,
+            // twice.
+            Assert.Equal(2, checkpointFailure.MatchingAttemptCount);
             Assert.True(checkpointFailure.AnchorWasPresentAtAttempt,
-                "The original ScheduleActivity must already be durable when the later inner checkpoint write is attempted.");
-            Assert.Equal(1, checkpointFailure.FailureUnwindCaptureCount);
+                "The original ScheduleActivity must already be durable whenever the later inner checkpoint write is attempted.");
+            Assert.Equal(2, checkpointFailure.FailureUnwindCaptureCount);
             Assert.Null(checkpointFailure.BoundaryObservationFailure);
             Assert.True(checkpointFailure.AnchorWasPresentAfterUnwind,
                 "The ScheduleActivity anchor must still be durable after the coalescing commit unwinds and before scheduler fault handling acknowledges it.");
@@ -401,16 +466,16 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
             Assert.Equal(RuntimeSchedulerPoisonDisposition.Poisoned, poison.Disposition);
             Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, poison.CommandKind);
 
+            // The parent may have become durable at the drain's quiescence flush; the child never started.
             var activities = await provider.GetRequiredService<CoalescingInner<IActivityExecutionStateStore>>().Value
                 .ListAllAsync(WorkflowExecutionId);
-            Assert.DoesNotContain(activities, activity => activity.Status == ActivityExecutionStatus.Running);
-            Assert.DoesNotContain(activities, activity => activity.Status == ActivityExecutionStatus.Completed);
-            Assert.All(activities, activity => Assert.Equal(ActivityExecutionStatus.Scheduled, activity.Status));
+            Assert.All(
+                activities.Where(activity => activity.Execution.ExecutableNodeId == ChildA),
+                activity => Assert.Equal(ActivityExecutionStatus.Scheduled, activity.Status));
             completed = true;
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
             if (completed)
                 DeleteDatabaseFiles(databasePath);
             else
@@ -425,19 +490,19 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
     {
         var databasePath = Path.Join(Path.GetTempPath(), $"elsa-replaysafe-cap-anchor-fault-{Guid.NewGuid():N}.db");
         var completed = false;
-        var gate = new CheckpointCommitGate(RuntimeCheckpointNames.ActivityStarted, targetOccurrence: 1);
+        var gate = new CheckpointCommitGate(RuntimeCheckpointNames.ActivityScheduled, targetOccurrence: 2);
         var enqueueFault = new AnchorEnqueueFault(cancel);
         try
         {
             await using var harness = await StartGenerationAsync(
                 databasePath,
                 gate,
-                maxSegmentCheckpoints: 2,
+                maxActivitiesPerCommit: 1,
                 schedulerQueueDecorator: inner => new CountingSchedulerWorkQueue(inner, enqueueFault: enqueueFault));
             Exception? observedFailure = null;
             try
             {
-                await harness.RunAsync(NewReplaySafeExecutable()).WaitAsync(TimeSpan.FromSeconds(45));
+                await harness.RunAsync(NewSequenceExecutable(WorkflowExecutionHarness.NewReplaySafeProbeNode(ChildA))).WaitAsync(TimeSpan.FromSeconds(45));
             }
             catch (Exception exception)
             {
@@ -445,7 +510,10 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
             }
 
             Assert.True(enqueueFault.WasAttempted, "The cap boundary must attempt to persist the active child Schedule anchor.");
-            Assert.Equal(1, gate.MatchingAttemptCount);
+            // The parent's ActivityScheduled was buffered; the child's is the cap fold whose anchor persistence failed. A
+            // failure in the parent's inline pump leaves the child's ScheduleActivity for the drain loop, which redelivers
+            // it discretely and fails again; a cancellation is not retried.
+            Assert.Equal(cancel ? 2 : 3, gate.MatchingAttemptCount);
             Assert.False(gate.WasCaptured, "The checkpoint cannot advance to the durable store when anchor persistence fails or is cancelled.");
             Assert.NotNull(observedFailure);
             if (cancel)
@@ -453,16 +521,18 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
             else
                 Assert.Contains("Injected fused-anchor persistence failure", observedFailure!.ToString(), StringComparison.Ordinal);
 
+            // The parent may have become durable at the drain's quiescence flush; the child whose anchor could not be
+            // persisted must never have started.
             var persistedActivities = await harness.Services.GetRequiredService<IActivityExecutionStateStore>()
                 .ListAllAsync(WorkflowExecutionId);
-            Assert.DoesNotContain(persistedActivities, activity => activity.Status == ActivityExecutionStatus.Running);
-            Assert.All(persistedActivities, activity => Assert.Equal(ActivityExecutionStatus.Scheduled, activity.Status));
+            Assert.All(
+                persistedActivities.Where(activity => activity.Execution.ExecutableNodeId == ChildA),
+                activity => Assert.Equal(ActivityExecutionStatus.Scheduled, activity.Status));
             completed = true;
         }
         finally
         {
             gate.Release();
-            SqliteConnection.ClearAllPools();
             if (completed)
                 DeleteDatabaseFiles(databasePath);
             else
@@ -472,30 +542,27 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
 
     private static async Task RunCutAndRecoverAsync(
         ITestOutputHelper output,
-        string checkpointName,
-        int maxSegmentCheckpoints,
+        CutPoint cutPoint,
+        PersistenceMode mode,
+        int maxActivitiesPerCommit,
         Func<WorkflowExecutable> executableFactory,
-        ActivityExecutionStatus expectedActivityStatus,
-        bool expectMultipleActivities = false,
-        int targetOccurrence = 1,
-        bool enableSequence = false,
-        IReadOnlyCollection<string>? activityExecutionIds = null,
-        IReadOnlyCollection<string>? recoveryActivityExecutionIds = null,
-        string? recoveryIdentityNamespace = null,
+        CutExpectation expected,
+        int targetOccurrence,
+        CheckpointCommitGatePlacement gatePlacement,
         string? expectedOutputName = null,
         string? expectedOutputValue = null,
-        CheckpointCommitGatePlacement gatePlacement = CheckpointCommitGatePlacement.InnerStoreReturn)
+        Action<RuntimeCheckpointCommit>? assertCut = null)
     {
-        var sourceActivityExecutionIds = (activityExecutionIds ?? [ActivityExecutionId]).ToArray();
-        var recoveryIds = (recoveryActivityExecutionIds ?? sourceActivityExecutionIds).ToArray();
-        if (recoveryActivityExecutionIds is not null)
-            Assert.Empty(sourceActivityExecutionIds.Intersect(recoveryIds, StringComparer.Ordinal));
-        Assert.Equal(recoveryActivityExecutionIds is not null, recoveryIdentityNamespace is not null);
+        // Recovery allocates fresh identities for children the source never scheduled, so it draws from a namespace the
+        // source never used and the test can tell recovered executions from copied ones.
+        const string recoveryIdentityNamespace = "replaysafe-cap-recovered";
+        var sourceActivityExecutionIds = Enumerable.Range(1, 8).Select(index => $"actexec-replaysafe-cap-recovery-{index}").ToArray();
+        var recoveryIds = Enumerable.Range(1, 8).Select(index => $"actexec-replaysafe-cap-recovered-{index}").ToArray();
 
         var sourceDatabasePath = Path.Join(Path.GetTempPath(), $"elsa-replaysafe-cap-source-{Guid.NewGuid():N}.db");
         var recoveryDatabasePath = Path.Join(Path.GetTempPath(), $"elsa-replaysafe-cap-recovery-{Guid.NewGuid():N}.db");
         var queueOperations = new QueueOperationRecorder();
-        var gate = new CheckpointCommitGate(checkpointName, targetOccurrence, queueOperations);
+        var gate = new CheckpointCommitGate(cutPoint.Matches, targetOccurrence, queueOperations);
         var capturedActivityExecutionIds = new HashSet<string>(StringComparer.Ordinal);
         var completed = false;
 
@@ -504,8 +571,8 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
             await using (var source = await StartGenerationAsync(
                              sourceDatabasePath,
                              gate,
-                             maxSegmentCheckpoints: maxSegmentCheckpoints,
-                             enableSequence: enableSequence,
+                             mode: mode,
+                             maxActivitiesPerCommit: maxActivitiesPerCommit,
                              activityExecutionIds: sourceActivityExecutionIds,
                              gatePlacement: gatePlacement,
                              schedulerQueueDecorator: inner => new CountingSchedulerWorkQueue(inner, queueOperations)))
@@ -517,11 +584,13 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
                     if (await Task.WhenAny(capture, sourceRun) != capture)
                     {
                         await sourceRun;
-                        throw new InvalidOperationException($"The source run completed before checkpoint '{checkpointName}' was captured.");
+                        throw new InvalidOperationException($"The source run completed before the cut at '{cutPoint.Description}' was captured.");
                     }
 
                     var captured = await capture;
-                    Assert.Equal(checkpointName, captured.Commit.Checkpoint.Name);
+                    Assert.True(cutPoint.Matches(captured.Commit));
+                    output.WriteLine($"Cut at a '{captured.Commit.Checkpoint.Name}' commit.");
+                    assertCut?.Invoke(captured.Commit);
                     if (captured.Claim is { } claimedWork)
                         Assert.Equal(WorkflowExecutionId, claimedWork.WorkflowExecutionId);
 
@@ -535,7 +604,7 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
                         Assert.Equal(0, queueDelta.DeleteCalls);
                     }
                     output.WriteLine(
-                        $"{checkpointName} {gatePlacement}: enqueue={queueDelta.EnqueueCalls}, " +
+                        $"{cutPoint.Description} {gatePlacement}: enqueue={queueDelta.EnqueueCalls}, " +
                         $"ListAsync page calls={queueDelta.ListPageCalls}, dequeue={queueDelta.DequeueCalls}, " +
                         $"DeleteAsync calls={queueDelta.DeleteCalls}. " +
                         "These are scheduler-queue API/page counts, not SQL command counts.");
@@ -547,28 +616,17 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
                             .ListAllAsync(WorkflowExecutionId);
                         capturedActivityExecutionIds.UnionWith(
                             activities.Select(activity => activity.Execution.ActivityExecutionId));
-                        if (expectMultipleActivities)
-                        {
-                            Assert.True(activities.Count > 1, "The D2 fixture must have parent and successor executions.");
-                            Assert.Contains(activities, activity =>
-                                activity.Execution.ExecutableNodeId == "node-replaysafe-cap-sequence" &&
-                                activity.Status == ActivityExecutionStatus.Running);
-                            Assert.Contains(activities, activity =>
-                                activity.Execution.ExecutableNodeId == "node-replaysafe-cap-a" &&
-                                activity.Status == ActivityExecutionStatus.Completed);
-                            Assert.Contains(activities, activity =>
-                                activity.Execution.ExecutableNodeId == "node-replaysafe-cap-b" &&
-                                activity.Status == ActivityExecutionStatus.Completed);
-                            foreach (var activity in activities.Where(activity => activity.Status == ActivityExecutionStatus.Running))
-                                Assert.NotNull(activity.InputSnapshot);
-                        }
-                        else
-                        {
-                            var activity = Assert.Single(activities);
-                            Assert.Equal(expectedActivityStatus, activity.Status);
-                            if (expectedActivityStatus == ActivityExecutionStatus.Running)
-                                Assert.NotNull(activity.InputSnapshot);
-                        }
+                        var statusesAtCut = activities.ToDictionary(
+                            activity => activity.Execution.ExecutableNodeId,
+                            activity => activity.Status,
+                            StringComparer.Ordinal);
+                        output.WriteLine($"Durable statuses at the cut: {string.Join(", ", statusesAtCut.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => $"{pair.Key}={pair.Value}"))}.");
+                        if (expected.StatusesAtCut is { } expectedStatuses)
+                            Assert.Equal(
+                                expectedStatuses.OrderBy(pair => pair.Key, StringComparer.Ordinal),
+                                statusesAtCut.OrderBy(pair => pair.Key, StringComparer.Ordinal));
+                        foreach (var activity in activities.Where(activity => activity.Status == ActivityExecutionStatus.Running))
+                            Assert.NotNull(activity.InputSnapshot);
 
                         var context = scope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
                         Assert.NotEmpty(await context.RuntimeCheckpointCommits.AsNoTracking().ToArrayAsync());
@@ -593,23 +651,25 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
                             .Where(item => item.CommandKind == WorkflowExecutionCommandKind.ScheduleActivity)
                             .Select(ReadScheduleNodeId)
                             .ToArray();
-                        if (expectMultipleActivities)
-                        {
-                            // Child a's fused dispatch finished before the preceding durable boundary and its
-                            // consumed identity has been removed. Parent and child b are still active recovery anchors.
-                            Assert.Equal(
-                                new[] { "node-replaysafe-cap-sequence", "node-replaysafe-cap-b" },
-                                durableAnchorNodeIds);
-                        }
-                        else
-                        {
-                            Assert.Single(durableAnchorNodeIds);
-                        }
+                        output.WriteLine($"Durable Schedule anchors at the cut: {string.Join(", ", durableAnchorNodeIds)}.");
+                        if (expected.DurableAnchorNodeIds is { } expectedAnchors)
+                            Assert.Equal(expectedAnchors, durableAnchorNodeIds);
                         var pendingSchedulerOutboxCount = await context.RuntimePostCommitOutbox.AsNoTracking()
                             .CountAsync(item => item.WorkflowExecutionIdHash == workflowIdHash &&
                                                 item.IntentKind == RuntimePostCommitIntentKinds.EnqueueSchedulerWork &&
                                                 item.Status == (int)RuntimePostCommitOutboxStatus.Pending);
-                        Assert.Equal(expectMultipleActivities ? 1 : 0, pendingSchedulerOutboxCount);
+                        output.WriteLine($"Pending scheduler outbox items at the cut: {pendingSchedulerOutboxCount}.");
+
+                        // A continuation persisted at the cut can already name an activity the source minted, so that
+                        // activity is durable evidence the recovery may build on, not a copy from the source.
+                        var outboxContent = await context.RuntimePostCommitOutbox.AsNoTracking()
+                            .Where(item => item.WorkflowExecutionIdHash == workflowIdHash)
+                            .Select(item => item.ContentJson)
+                            .ToArrayAsync();
+                        capturedActivityExecutionIds.UnionWith(sourceActivityExecutionIds.Where(id =>
+                            outboxContent.Any(content => content.Contains(id, StringComparison.Ordinal))));
+                        if (expected.PendingSchedulerOutboxCount is { } expectedPending)
+                            Assert.Equal(expectedPending, pendingSchedulerOutboxCount);
                     }
 
                     await BackupDatabaseAsync(sourceDatabasePath, recoveryDatabasePath);
@@ -644,12 +704,10 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
                 recoveryDatabasePath,
                 gate: null,
                 timeProvider: new FixedTimeProvider(DateTimeOffset.UtcNow.AddMinutes(10)),
-                maxSegmentCheckpoints: maxSegmentCheckpoints,
-                enableSequence: enableSequence,
+                mode: mode,
+                maxActivitiesPerCommit: maxActivitiesPerCommit,
                 activityExecutionIds: recoveryIds,
-                executionIdGenerator: recoveryIdentityNamespace is null
-                    ? null
-                    : new NamespacedRuntimeExecutionIdGenerator(WorkflowExecutionId, recoveryIds, recoveryIdentityNamespace));
+                executionIdGenerator: new NamespacedRuntimeExecutionIdGenerator(WorkflowExecutionId, recoveryIds, recoveryIdentityNamespace));
             await recovery.SweepUntilQuietAsync();
 
             await using var recoveryScope = recovery.Services.CreateAsyncScope();
@@ -662,35 +720,14 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
             var recoveredActivities = await recoveryScope.ServiceProvider
                 .GetRequiredService<IActivityExecutionStateStore>()
                 .ListAllAsync(WorkflowExecutionId);
-            if (recoveryActivityExecutionIds is not null)
-            {
-                var recoveredIds = recoveredActivities.Select(activity => activity.Execution.ActivityExecutionId).ToArray();
-                var newlyGeneratedRecoveryIds = recoveredIds
-                    .Where(activityExecutionId => !capturedActivityExecutionIds.Contains(activityExecutionId))
-                    .ToArray();
-                Assert.NotEmpty(newlyGeneratedRecoveryIds);
-                Assert.All(newlyGeneratedRecoveryIds, activityExecutionId => Assert.Contains(activityExecutionId, recoveryIds));
-                Assert.Empty(capturedActivityExecutionIds.Intersect(newlyGeneratedRecoveryIds, StringComparer.Ordinal));
-            }
-            if (expectMultipleActivities)
-            {
-                Assert.Equal(4, recoveredActivities.Count);
-                Assert.Equal(
-                    new[]
-                    {
-                        "node-replaysafe-cap-a",
-                        "node-replaysafe-cap-b",
-                        "node-replaysafe-cap-c",
-                        "node-replaysafe-cap-sequence"
-                    },
-                    recoveredActivities.Select(activity => activity.Execution.ExecutableNodeId).Order(StringComparer.Ordinal));
-                Assert.All(recoveredActivities, activity => Assert.Equal(ActivityExecutionStatus.Completed, activity.Status));
-            }
-            else
-            {
-                var recoveredActivity = Assert.Single(recoveredActivities);
-                Assert.Equal(ActivityExecutionStatus.Completed, recoveredActivity.Status);
-            }
+            var recoveredIds = recoveredActivities.Select(activity => activity.Execution.ActivityExecutionId).ToArray();
+            Assert.All(
+                recoveredIds.Where(activityExecutionId => !capturedActivityExecutionIds.Contains(activityExecutionId)),
+                activityExecutionId => Assert.Contains(activityExecutionId, recoveryIds));
+            Assert.Equal(
+                expected.RecoveredNodeIds,
+                recoveredActivities.Select(activity => activity.Execution.ExecutableNodeId).Order(StringComparer.Ordinal));
+            Assert.All(recoveredActivities, activity => Assert.Equal(ActivityExecutionStatus.Completed, activity.Status));
             Assert.Empty(await recoveryScope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
                 .ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)));
             await AssertQueueAndOutboxSettledAsync(recovery.Services);
@@ -701,7 +738,6 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
         finally
         {
             gate.Release();
-            SqliteConnection.ClearAllPools();
             if (completed)
             {
                 DeleteDatabaseFiles(sourceDatabasePath);
@@ -719,8 +755,8 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
         string databasePath,
         CheckpointCommitGate? gate,
         TimeProvider? timeProvider = null,
-        int maxSegmentCheckpoints = 2,
-        bool enableSequence = false,
+        PersistenceMode mode = PersistenceMode.Balanced,
+        int maxActivitiesPerCommit = 2,
         IReadOnlyCollection<string>? activityExecutionIds = null,
         IRuntimeExecutionIdGenerator? executionIdGenerator = null,
         Func<IWorkflowSchedulerWorkQueue, IWorkflowSchedulerWorkQueue>? schedulerQueueDecorator = null,
@@ -743,10 +779,8 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
                 if (timeProvider is not null)
                     services.AddSingleton(timeProvider);
             })
-            .WithCoalescing(maxSegmentCheckpoints: maxSegmentCheckpoints);
-
-        if (enableSequence)
-            builder = builder.WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services));
+            .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
+            .WithPersistenceMode(mode, maxActivitiesPerCommit: maxActivitiesPerCommit);
 
         if (gate is not null)
             builder = builder.ConfigureServices(services => AddCheckpointCommitGate(services, gate, gatePlacement));
@@ -762,7 +796,7 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
         var harness = builder.Build(
             WorkflowExecutionHarness.Identity,
             WorkflowExecutionId,
-            activityExecutionIds ?? [ActivityExecutionId]);
+            activityExecutionIds ?? Enumerable.Range(1, 8).Select(index => $"{ActivityExecutionId}-{index}").ToArray());
 
         var initializers = harness.Services.GetServices<IShellInitializer>().ToArray();
         Assert.Contains(initializers, initializer => initializer is EfModuleMigrator<RuntimeDbContext>);
@@ -897,17 +931,17 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
         WorkflowExecutionHarness.NewExecutable(
             WorkflowExecutionHarness.NewReplaySafeProbeNode("node-replaysafe-cap"));
 
-    private static WorkflowExecutable NewReplaySafeSequenceExecutable()
+    private static WorkflowExecutable NewReplaySafeSequenceExecutable() =>
+        NewSequenceExecutable(
+            WorkflowExecutionHarness.NewReplaySafeProbeNode(ChildA),
+            WorkflowExecutionHarness.NewReplaySafeProbeNode(ChildB),
+            WorkflowExecutionHarness.NewReplaySafeProbeNode(ChildC));
+
+    private static WorkflowExecutable NewSequenceExecutable(params ExecutableNode[] children)
     {
-        var children = new[]
-        {
-            WorkflowExecutionHarness.NewReplaySafeProbeNode("node-replaysafe-cap-a"),
-            WorkflowExecutionHarness.NewReplaySafeProbeNode("node-replaysafe-cap-b"),
-            WorkflowExecutionHarness.NewReplaySafeProbeNode("node-replaysafe-cap-c")
-        };
         var sequenceContract = ClrActivityContractTestBuilder.BuildContract(typeof(SequenceActivity));
         var root = new ExecutableNode(
-            executableNodeId: "node-replaysafe-cap-sequence",
+            executableNodeId: SequenceNodeId,
             authoredActivityId: "authored-replaysafe-cap-sequence",
             activityType: typeof(SequenceActivity).FullName!,
             activityTypeVersion: "1.0.0",
@@ -930,7 +964,26 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
             incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
     }
 
-    private static WorkflowExecutable NewFusableIntrinsicExecutable()
+    private static IReadOnlyDictionary<string, ActivityExecutionStatus> Statuses(
+        params (string NodeId, ActivityExecutionStatus Status)[] statuses) =>
+        statuses.ToDictionary(entry => entry.NodeId, entry => entry.Status, StringComparer.Ordinal);
+
+    /// <summary>What the durable store holds at a cut, and what recovery from it must reach.</summary>
+    // A null field is not checked at the cut: the cut point is chosen by what the commit records, not by its name.
+    private sealed record CutExpectation(
+        IReadOnlyDictionary<string, ActivityExecutionStatus>? StatusesAtCut,
+        IReadOnlyList<string>? DurableAnchorNodeIds,
+        int? PendingSchedulerOutboxCount,
+        IReadOnlyList<string> RecoveredNodeIds);
+
+    /// <summary>Where the source run is cut: the target occurrence of the commits this matches.</summary>
+    private sealed record CutPoint(string Description, Func<RuntimeCheckpointCommit, bool> Matches)
+    {
+        public static CutPoint At(string checkpointName) =>
+            new(checkpointName, commit => StringComparer.Ordinal.Equals(commit.Checkpoint.Name, checkpointName));
+    }
+
+    private static ExecutableNode NewSetOutputIntrinsicNode()
     {
         var stringType = new ValueTypeDescriptor("String");
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal)
@@ -954,8 +1007,8 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
                     JsonSerializer.SerializeToElement("recovered"),
                     ValueProtectionPolicy.InstanceInline))
         };
-        var node = new ExecutableNode(
-            executableNodeId: "node-set-output-cap",
+        return new ExecutableNode(
+            executableNodeId: SetOutputNodeId,
             authoredActivityId: "authored-set-output-cap",
             activityType: "elsa.intrinsic.setoutput",
             activityTypeVersion: "1.0.0",
@@ -964,7 +1017,6 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
             inputBindings: bindings,
             metadata: new Dictionary<string, string>(),
             intrinsicKind: WorkflowIntrinsicKind.SetOutput);
-        return WorkflowExecutionHarness.NewExecutable(node);
     }
 
     private static string ReadScheduleNodeId(RuntimeSchedulerWorkItem workItem)
@@ -1053,23 +1105,23 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
         private string? _boundaryObservationFailure;
 
         public int MatchingAttemptCount => Volatile.Read(ref _matchingAttemptCount);
-        public bool AnchorWasPresentAtAttempt => Volatile.Read(ref _anchorWasPresentAtAttempt) != 0;
+        public bool AnchorWasPresentAtAttempt => Volatile.Read(ref _anchorWasPresentAtAttempt) == MatchingAttemptCount;
         public int FailureUnwindCaptureCount => Volatile.Read(ref _failureUnwindCaptureCount);
-        public bool AnchorWasPresentAfterUnwind => Volatile.Read(ref _anchorWasPresentAfterUnwind) != 0;
+        public bool AnchorWasPresentAfterUnwind => Volatile.Read(ref _anchorWasPresentAfterUnwind) == FailureUnwindCaptureCount;
         public ActivityExecutionStatus[]? ActivityStatusesAfterUnwind => Volatile.Read(ref _activityStatusesAfterUnwind);
         public string? BoundaryObservationFailure => Volatile.Read(ref _boundaryObservationFailure);
 
         public void Record(bool anchorWasPresent)
         {
             if (anchorWasPresent)
-                Volatile.Write(ref _anchorWasPresentAtAttempt, 1);
+                Interlocked.Increment(ref _anchorWasPresentAtAttempt);
             Interlocked.Increment(ref _matchingAttemptCount);
         }
 
         public void RecordFailureUnwind(bool anchorWasPresent, IEnumerable<ActivityExecutionStatus> activityStatuses)
         {
             if (anchorWasPresent)
-                Volatile.Write(ref _anchorWasPresentAfterUnwind, 1);
+                Interlocked.Increment(ref _anchorWasPresentAfterUnwind);
             Volatile.Write(ref _activityStatusesAfterUnwind, activityStatuses.ToArray());
             Interlocked.Increment(ref _failureUnwindCaptureCount);
         }
@@ -1318,10 +1370,15 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
     }
 
     private sealed class CheckpointCommitGate(
-        string checkpointName,
+        Func<RuntimeCheckpointCommit, bool> matches,
         int targetOccurrence,
         QueueOperationRecorder? queueOperations = null)
     {
+        public CheckpointCommitGate(string checkpointName, int targetOccurrence, QueueOperationRecorder? queueOperations = null)
+            : this(commit => StringComparer.Ordinal.Equals(commit.Checkpoint.Name, checkpointName), targetOccurrence, queueOperations)
+        {
+        }
+
         private readonly TaskCompletionSource<(RuntimeCheckpointCommit Commit, ConsumedSchedulerWorkItem? Claim)> _captured =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1344,12 +1401,14 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
 
         public void RecordAttempt(RuntimeCheckpointCommit commit)
         {
-            if (StringComparer.Ordinal.Equals(commit.Checkpoint.Name, checkpointName))
-            {
-                var matchingAttempt = Interlocked.Increment(ref _matchingAttempts);
-                if (matchingAttempt == targetOccurrence && queueOperations is not null)
-                    _queueOperationsBeforeTarget = queueOperations.Snapshot();
-            }
+            if (!matches(commit))
+                return;
+
+            Interlocked.Increment(ref _matchingAttempts);
+            // Buffered commits with the same name come before the fold that reaches the durable store, so the snapshot is
+            // retaken at every matching attempt: the last one before the pause is the fold's own.
+            if (queueOperations is not null)
+                _queueOperationsBeforeTarget = queueOperations.Snapshot();
         }
 
         public async ValueTask PauseAfterCommitAsync(
@@ -1357,7 +1416,7 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
             ConsumedSchedulerWorkItem? claim,
             CancellationToken cancellationToken)
         {
-            if (!StringComparer.Ordinal.Equals(commit.Checkpoint.Name, checkpointName) ||
+            if (!matches(commit) ||
                 Interlocked.Increment(ref _matchingCheckpoints) != targetOccurrence ||
                 Interlocked.CompareExchange(ref _entered, 1, 0) != 0)
                 return;

@@ -127,6 +127,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         _admissionLoadSignal = admissionLoadSignal;
         if (_claimOptions.VisibilityTimeout <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(claimOptions), "Scheduler work visibility timeout must be greater than zero.");
+        if (_claimOptions.UnavailableRetryDelay <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(claimOptions), "Scheduler work unavailable retry delay must be greater than zero.");
     }
 
     public async ValueTask<RuntimeSchedulerDrainResult> DrainAsync(RuntimeSchedulerDrainRequest request, CancellationToken cancellationToken = default)
@@ -180,7 +182,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             results.Add(result);
             remaining--;
 
-            if (result.Status == RuntimeSchedulerWorkItemResultStatus.Faulted)
+            if (result.Status is RuntimeSchedulerWorkItemResultStatus.Faulted or RuntimeSchedulerWorkItemResultStatus.Deferred)
                 break;
 
             // The dispatched item may have committed a terminal status (e.g. the Finish path). Re-check so the
@@ -306,6 +308,39 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // The atomic commit's fence-checked consume failed: a successor reclaimed the item. Treat it
             // exactly like a lost claim — the commit rolled back and persisted nothing, so never acknowledge or poison it.
             throw;
+        }
+        catch (RuntimeStaleFencingTokenException)
+        {
+            // A commit was refused because another node now owns the run. The work is the new owner's to run, so this
+            // node neither acknowledges it nor records it as poison, which would leave the new owner nothing to run.
+            throw;
+        }
+        catch (RuntimeSchedulerWorkUnavailableException exception)
+        {
+            // Bookmark resumes preserve their retry delay either through a durable claim or through a visibility-aware
+            // overlay whose drain flush persists the release before returning. Other command kinds retain their source.
+            if (workItem.CommandKind != WorkflowExecutionCommandKind.ResumeBookmark ||
+                renewal is null || _consumedWorkClaimAccessor?.WasConsumedDurably == true)
+                throw;
+
+            var activeClaim = renewal;
+            var visibleAt = _timeProvider.GetUtcNow().Add(_claimOptions.UnavailableRetryDelay);
+            var release = await _schedulerWorkQueue.ReleaseClaimAsync(activeClaim.Current, visibleAt, cancellationToken);
+            if (!release.Succeeded)
+                throw NewClaimLost(activeClaim.Current, "release after temporary unavailability", release.Status);
+
+            if (activity is not null)
+                activity.SetTag(WorkflowEngineTelemetry.OutcomeTag, "deferred");
+
+            return new RuntimeSchedulerWorkItemResult(
+                workItemId: workItem.WorkItemId,
+                workflowExecutionId: workItem.WorkflowExecutionId,
+                commandKind: workItem.CommandKind,
+                status: RuntimeSchedulerWorkItemResultStatus.Deferred,
+                handlerName: handler?.Name ?? nameof(WorkflowSchedulerDrainer),
+                startedAt: startedAt,
+                completedAt: _timeProvider.GetUtcNow(),
+                error: exception.SafeSummary);
         }
         catch (Exception exception)
         {
@@ -474,6 +509,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             or WorkflowExecutionCommandKind.StartActivity
             or WorkflowExecutionCommandKind.InvokeActivity
             or WorkflowExecutionCommandKind.NotifyParentActivity
+            or WorkflowExecutionCommandKind.DeliverInterventionDecision
             or WorkflowExecutionCommandKind.RetryActivityBoundary
             or WorkflowExecutionCommandKind.CancelActivityScope;
 

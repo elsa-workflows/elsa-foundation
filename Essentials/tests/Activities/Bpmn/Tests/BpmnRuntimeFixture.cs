@@ -408,8 +408,7 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
 
     /// <summary>The staged durable-first publish intents committed across the run: the sends that route post-commit. The harness composes <c>ActivitiesPrimitivesFeature</c>, so the staging buffer + handler are already wired.</summary>
     public IReadOnlyList<RuntimePostCommitIntent> PublishStimulusIntents() =>
-        Provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits()
-            .SelectMany(record => record.Commit.PostCommitIntents)
+        CheckpointCommitIntents.IntentsOf(Provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits().Select(record => record.Commit))
             .Where(intent => StringComparer.Ordinal.Equals(intent.Kind, PublishStimulusConstants.PublishStimulusIntentKind))
             .ToList();
 

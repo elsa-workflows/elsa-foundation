@@ -14,7 +14,8 @@ import {
   type StudioActivityPropertyEditorContribution,
   type StudioActivityPropertyEditorContext,
   type StudioExpressionEditorContribution,
-  type StudioFeatureAreaContribution
+  type StudioFeatureAreaContribution,
+  type StudioTestStimulusEditorContribution
 } from "../sdk";
 
 describe("studio registry", () => {
@@ -60,13 +61,40 @@ describe("studio registry", () => {
     expect(api.routes.slot.id).toBe(studioSlotIds.routes);
     expect(api.dashboardWidgets.slot.id).toBe(studioSlotIds.dashboardWidgets);
     expect(api.workflowDesigner.panels.slot.id).toBe(studioSlotIds.workflowDesignerPanels);
+    expect(typeof api.workflowDesigner.registerActivityIcons).toBe("function");
+    api.workflowDesigner.registerActivityIcons?.({});
     expect(api.propertyEditors.slot.id).toBe(studioSlotIds.propertyEditors);
     expect(api.workflowRunInputEditors?.slot.id).toBe(studioSlotIds.workflowRunInputEditors);
+    expect(api.workflowTestStimulusEditors?.slot.id).toBe(studioSlotIds.workflowTestStimulusEditors);
     expect(api.agent.promptStarters.slot.id).toBe(studioSlotIds.agentPromptStarters);
     expect(api.agent.toolSlots.slot.id).toBe(studioSlotIds.agentToolSlots);
     expect(api.agent.toolContracts.slot.id).toBe(studioSlotIds.agentToolContracts);
     expect(api.agent.resultRenderers.slot.id).toBe(studioSlotIds.agentResultRenderers);
     expect(api.ai.tools.slot.id).toBe(studioSlotIds.aiTools);
+  });
+
+  it("lets third-party modules register driver-specific Test Run stimulus editors", () => {
+    const api = createStudioRegistry({ hostVersion: "1.0.0", sdkVersion: "1.0.0", ...createEndpointContext("https://studio.example/") });
+    const editor: StudioTestStimulusEditorContribution = {
+      id: "custom.events.configuration-v1",
+      supports: ({ option, mode }) => option.driverId === "custom.events" && mode.configurationVersion === 1,
+      component: () => null,
+      validate: () => undefined,
+      serialize: ({ draft }) => JSON.parse(draft)
+    };
+    const mode = { modeId: "event", label: "Event", configurationVersion: 1 };
+    const option = {
+      optionId: "custom-event",
+      driverId: "custom.events",
+      nodeId: "event-node",
+      label: "Custom event",
+      modes: [mode]
+    };
+
+    api.workflowTestStimulusEditors?.add(editor);
+
+    expect(api.workflowTestStimulusEditors?.list()).toEqual([editor]);
+    expect(editor.supports({ option, mode })).toBe(true);
   });
 
   it("registers host-framed Dashboard Widgets with loaders, sizes, permissions, and settings", () => {
@@ -85,6 +113,7 @@ describe("studio registry", () => {
     });
 
     expect(api.dashboardWidgets.list()[0]).toMatchObject({ moduleId: "Elsa.Studio.Workflows.Dashboard", defaultSize: "wide", permissions: ["workflows:read"] });
+    expect(api.homeWidgets).toBe(api.dashboardWidgets);
   });
 
   it("supports module-owned nested Slots", () => {
@@ -340,11 +369,43 @@ describe("studio registry", () => {
     ]);
     expect(api.navigation.list()).toEqual([
       expect.objectContaining({ id: "workflows", path: "/workflows/definitions", activePathPrefix: "/workflows" }),
-      expect.objectContaining({ id: "workflows-definitions", path: "/workflows/definitions", parentId: "workflows" }),
       expect.objectContaining({ id: "workflows-instances", path: "/workflows/instances", parentId: "workflows" })
     ]);
     expect(api.routes.list().map(route => route.id)).toEqual(["workflows-definitions", "workflows-instances"]);
     expect(findFeatureAreaForPath(api.featureAreas.list(), "/workflows/instances/42")?.id).toBe("workflows");
+  });
+
+  it("copies placement metadata and lifts children that declare their own placement", () => {
+    const api = createStudioRegistry({
+      hostVersion: "1.0.0",
+      sdkVersion: "1.0.0",
+      ...createEndpointContext("https://studio.example/")
+    });
+
+    api.featureAreas.add({
+      id: "workflows",
+      title: "Workflows",
+      ownedPaths: ["/workflows"],
+      order: 20,
+      nav: {
+        title: "Workflows",
+        path: "/workflows/definitions",
+        placement: "main",
+        items: [
+          { title: "Definitions", path: "/workflows/definitions", placement: "main", order: 20 },
+          { title: "Runs", path: "/workflows/instances", placement: "main", order: 30 },
+          { title: "Executables", path: "/workflows/executables", placement: "more", order: 10, requiresFeature: "executables" }
+        ]
+      },
+      routes: []
+    });
+
+    expect(api.navigation.list()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "workflows", placement: "main", path: "/workflows/definitions" }),
+      expect.objectContaining({ id: "workflows-runs", placement: "main", parentId: undefined }),
+      expect.objectContaining({ id: "workflows-executables", placement: "more", requiresFeature: "executables", parentId: undefined })
+    ]));
+    expect(api.navigation.list()).toHaveLength(3);
   });
 
   it("tracks AI contributions and dispatches prompts", () => {

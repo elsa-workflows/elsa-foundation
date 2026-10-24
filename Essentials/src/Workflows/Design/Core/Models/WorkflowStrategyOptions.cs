@@ -1,4 +1,4 @@
-﻿namespace Elsa.Workflows.Design.Core.Models;
+namespace Elsa.Workflows.Design.Core.Models;
 
 /// <summary>
 /// Workflow strategy selections. Extension identities use durable aliases/references, never
@@ -18,14 +18,10 @@ public sealed class WorkflowStrategyOptions
     public Elsa.Primitives.Models.IncidentStrategyReference? IncidentStrategy { get; set; }
 
     /// <summary>
-    /// The alias of the strategy for committing workflow state.
+    /// The persistence mode this workflow's runs use, by name (<c>"Durable"</c>, <c>"Balanced"</c> or <c>"Ephemeral"</c>), or
+    /// <see langword="null"/> to use the runtime host's default. Kept as a string so the authoring model does not
+    /// depend on the runtime; publishing rejects a name it does not know. The mode is compiled into the executable and
+    /// wins over the host default.
     /// </summary>
-    public string? CommitStrategyType { get; set; }
-
-    /// <summary>
-    /// The authored per-workflow checkpoint-persistence cadence. Null means the workflow authors no
-    /// cadence and the host default applies. When set, it is compiled into the executable and overrides the host
-    /// default at runtime; the mandatory-boundary set is never relaxable by any cadence.
-    /// </summary>
-    public WorkflowCheckpointCadenceOptions? CheckpointCadence { get; set; }
+    public string? PersistenceMode { get; set; }
 }

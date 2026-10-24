@@ -13,7 +13,7 @@ using Microsoft.Extensions.Time.Testing;
 namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>
-/// A live Immediate-mode drain delivers EnqueueSchedulerWork intents
+/// A live drain whose session is not folding delivers EnqueueSchedulerWork intents
 /// in-memory — idempotent enqueue + a direct Delivered mark, skipping the durable claim round-trip — while the durable
 /// outbox item remains the crash backstop the resumption sweep re-drives idempotently.
 /// </summary>
@@ -131,7 +131,9 @@ public sealed class RuntimeLiveDrainDeliveryTests
             outboxLookupStore: store,
             schedulerWorkQueue: queue,
             options: new WorkflowDrainOrchestratorOptions(),
+            coalescingScopeFactory: NonFoldingDrainScopeFactory.Instance,
             liveDrainDeliveryAccessor: liveDrain,
+            persistenceModeResolver: NonFoldingDrainScopeFactory.Resolver,
             timeProvider: new FakeTimeProvider(Now));
 
     private static RuntimeSchedulerWorkItem NewWorkItem(string workItemId) =>

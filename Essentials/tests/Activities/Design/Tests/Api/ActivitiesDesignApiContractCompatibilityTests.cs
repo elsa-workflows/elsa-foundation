@@ -32,14 +32,11 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         typeof(ActivityContractProposalView),
         typeof(ActivityContractTypeCapabilityView),
         typeof(ActivityContractView),
-        typeof(ActivityDefinitionDetailsView),
         typeof(ActivityDefinitionIdentityView),
         typeof(ActivityDefinitionLifecycleSummaryView),
         typeof(ActivityDefinitionRecommendationView),
         typeof(ActivityDefinitionReferenceView),
-        typeof(ActivityDefinitionVersionDetailsView),
         typeof(ActivityDefinitionVersionReferenceView),
-        typeof(ActivityDefinitionView),
         typeof(ActivityDependencyConsistencyView),
         typeof(ActivityDependencyItemView),
         typeof(ActivityDependencyOccurrenceView),
@@ -60,6 +57,7 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         typeof(ActivityInputContractView),
         typeof(ActivityInputDefaultView),
         typeof(ActivityInputDescriptorView),
+        typeof(ActivityLayoutRecordsPayload),
         typeof(ActivityManagementPageView<>),
         typeof(ActivityManagementSnapshotView),
         typeof(ActivityOutcomeContractView),
@@ -69,6 +67,7 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         typeof(ActivityProblemDetailsView),
         typeof(ActivityProviderAuthoringCapabilityView),
         typeof(ActivityProviderManifestSchemaCapabilityView),
+        typeof(ActivityProviderManifestSourceView),
         typeof(ActivityProviderManifestView),
         typeof(ActivityPublishedTemplateView),
         typeof(ActivityRecoveryView),
@@ -84,8 +83,6 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         typeof(ActivityVersionDiffSummaryView),
         typeof(ActivityVersionDiffView),
         typeof(ActivityVersionProviderDiffView),
-        typeof(AddDefinition),
-        typeof(AddVersion),
         typeof(ApplyActivityUpgradePlan),
         typeof(ApplyReusableActivityContractProposal),
         typeof(ApplyReusableActivityFork),
@@ -93,6 +90,7 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         typeof(CreateActivityUpgradePlan),
         typeof(CreateReusableActivityDefinition),
         typeof(CreateReusableActivityDraft),
+        typeof(CreateReusableActivityDraftRequest),
         typeof(CreateReusableActivityDraftConflictCopy),
         typeof(DiscardReusableActivityDraft),
         typeof(GetActivityAuthoringCapabilities),
@@ -100,16 +98,12 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         typeof(GetActivityDependencies),
         typeof(GetActivityUpgradeApplyReceipt),
         typeof(GetActivityUpgradePlan),
-        typeof(GetDefinition),
         typeof(GetReusableActivityDefinition),
         typeof(GetReusableActivityDraft),
         typeof(GetReusableActivityForkStatus),
         typeof(GetReusableActivityVersion),
-        typeof(GetVersion),
         typeof(ListActivityAuthoringCatalog),
         typeof(ListActivityAvailabilityDiagnostics),
-        typeof(ListDefinitionVersions),
-        typeof(ListDefinitions),
         typeof(ListRecommendedActivityDefinitions),
         typeof(ListReusableActivityDefinitions),
         typeof(ListReusableActivityDrafts),
@@ -162,7 +156,7 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
     [Fact]
     public void Every_contract_type_is_publicly_exported_by_the_api_assembly()
     {
-        Assert.Equal(120, ContractTypes.Length);
+        Assert.Equal(114, ContractTypes.Length);
 
         var apiAssembly = typeof(ActivitiesDesignApiFeature).Assembly;
 
@@ -199,7 +193,22 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         // It moved once when the contracts left the Api.Core assembly: a constructed generic type's
         // FullName embeds its arguments' assembly-qualified names, so the strings changed while the
         // JSON wire shape did not. It moved again when ActivityInputDescriptorView gained IsSensitive and IsCredential.
-        Assert.Equal("65a2e201710a9485fd2db5898d629568818a06fc95feca44fc87448ff3332847", PublicShapeHash(ContractTypes));
+        // It moved again when ActivityAuthoringDescriptorView gained IconName, the catalog field projected
+        // from the presentation-only elsa.activity-icon facet (ActivityIconName).
+        // It moved when ActivityProviderManifestSchemaCapabilityView gained an optional exact source-pair
+        // wire property; the existing positional constructor and deconstructor remain unchanged.
+        // It moved again when ActivityInputDescriptorView gained Tier, the presentation-only disclosure
+        // group (essential / optional / setting) projected from InputDefinition.Tier.
+        // It moved again when ActivityInputDescriptorView gained ConnectionType, the required connection
+        // type projected from [ActivityConnection] (#2729).
+        // It moved again when the six legacy mediator requests and commands with no endpoint (GetDefinition,
+        // GetVersion, ListDefinitions, ListDefinitionVersions, AddDefinition, AddVersion) and the three views
+        // only they returned were deleted (#2785).
+        // It moved again for #2886: the AddDraft transport request and its layout wrapper are public JSON
+        // contracts because NativeEndpoints otherwise binds an omitted optional array as an empty query value.
+        // The wrapper serializes to the same nullable layout array, while ActivityOutputDescriptorView now
+        // exposes its contract reference key explicitly as a body init property, retaining its prior positional API.
+        Assert.Equal("33b3cd367c3c09caa8fabcb895fb66179e03ad24b229055e1edcd9f692405755", PublicShapeHash(ContractTypes));
     }
 
     [Fact]

@@ -6,15 +6,15 @@ namespace Elsa.Serialization.SystemText.JsonConverters;
 /// <summary>
 /// Emits string-keyed dictionary entries in a stable ordinal-by-key order so equal maps serialize to
 /// byte-identical JSON regardless of insertion order or per-process hash-seed randomization of
-/// <see cref="string"/> iteration (spec 086 FR-001/FR-003; ADR 0034 D3/D8). System.Text.Json's built-in
+/// <see cref="string"/> iteration. System.Text.Json's built-in
 /// dictionary writer emits entries in enumeration order, which is non-deterministic across processes.
 /// </summary>
 /// <remarks>
 /// Scope is deliberately narrow and precise: the exact generic <see cref="Dictionary{TKey,TValue}"/>,
 /// <see cref="IDictionary{TKey,TValue}"/> and <see cref="IReadOnlyDictionary{TKey,TValue}"/> shapes with a
 /// <see cref="string"/> key — <em>including</em> an <see cref="object"/> value. Object-valued string-keyed
-/// dictionaries used to be sorted by the retired open-object polymorphic converter; now that it is gone
-/// (ADR 0035 D2), this factory owns them too so the determinism guarantee (ADR 0034's content hash) still
+/// dictionaries used to be sorted by the retired open-object polymorphic converter; now that it is gone,
+/// this factory owns them too so the determinism guarantee (and the content hash built on it) still
 /// holds. An <see cref="object"/> value is written by its runtime type through the full options (no
 /// <c>_type</c> discriminator) and read back as a <see cref="JsonElement"/>. Non-string keys and bespoke
 /// dictionary implementations fall through to the built-in converter — none appear in serialized workflow
@@ -35,7 +35,7 @@ namespace Elsa.Serialization.SystemText.JsonConverters;
 /// <see cref="Dictionary{TKey,TValue}"/>.</item>
 /// </list>
 /// </remarks>
-public sealed class DeterministicDictionaryConverterFactory : JsonConverterFactory
+internal sealed class DeterministicDictionaryConverterFactory : JsonConverterFactory
 {
     /// <inheritdoc />
     public override bool CanConvert(Type typeToConvert)

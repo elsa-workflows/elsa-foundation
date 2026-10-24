@@ -4,9 +4,9 @@ using Elsa.Versioning.Publisher.Tests.Support;
 namespace Elsa.Versioning.Publisher.Tests;
 
 /// <summary>
-/// Publishing from <c>main</c> once the record exists (#2082): only the affected set is pushed (FR-006), no push skips
-/// a duplicate (FR-011), a rejected push is settled by fingerprint (FR-018), what landed is written back to
-/// <c>publish-state</c> (FR-014, FR-017), and a publish only moves forward (FR-021). Every test starts from the bootstrap.
+/// Publishing from <c>main</c> once the record exists (#2082): only the affected set is pushed, no push skips
+/// a duplicate, a rejected push is settled by fingerprint, what landed is written back to
+/// <c>publish-state</c>, and a publish only moves forward. Every test starts from the bootstrap.
 /// </summary>
 public sealed class SelectivePublishTests : PublishingHistory, IAsyncLifetime
 {
@@ -19,8 +19,8 @@ public sealed class SelectivePublishTests : PublishingHistory, IAsyncLifetime
     public Task DisposeAsync() => Task.CompletedTask;
 
     /// <summary>
-    /// Spec 150 US1 scenario 1, SC-001, and #2082's acceptance: a commit touching one module pushes that module's package
-    /// alone, one patch on; the record moves for it alone; and nothing on <c>main</c> changes (SC-012).
+    /// #2082's acceptance: a commit touching one module pushes that module's package
+    /// alone, one patch on; the record moves for it alone; and nothing on <c>main</c> changes.
     /// </summary>
     [Fact]
     public async Task A_commit_touching_one_module_publishes_only_that_module()
@@ -43,7 +43,7 @@ public sealed class SelectivePublishTests : PublishingHistory, IAsyncLifetime
         Assert.Equal((commit, commit), (GitProcess.Run(OriginPath, ["rev-parse", "main"]).Text, Repo.Head));
     }
 
-    /// <summary>SC-009: a commit that changes no package pushes nothing and writes no record revision.</summary>
+    /// <summary>A commit that changes no package pushes nothing and writes no record revision.</summary>
     [Fact]
     public async Task A_commit_that_changes_no_package_publishes_nothing()
     {
@@ -106,9 +106,9 @@ public sealed class SelectivePublishTests : PublishingHistory, IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-018's other direction: the feed holds the computed version built from other inputs — a lost record, a rewritten
-    /// history. The publish fails naming the package, the version and both fingerprints, keeps the feed's copy, records
-    /// nothing, and pushes nothing that depends on it.
+    /// Settling by fingerprint, the other direction: the feed holds the computed version built from other inputs — a
+    /// lost record, a rewritten history. The publish fails naming the package, the version and both fingerprints, keeps
+    /// the feed's copy, records nothing, and pushes nothing that depends on it.
     /// </summary>
     [Fact]
     public async Task A_version_on_the_feed_built_from_other_inputs_fails_the_publish_and_is_never_overwritten()
@@ -135,7 +135,7 @@ public sealed class SelectivePublishTests : PublishingHistory, IAsyncLifetime
         Assert.Equal(tip, OriginStateTip);
     }
 
-    /// <summary>A copy on the feed whose fingerprint cannot be read proves nothing, so it fails the publish the same way (FR-018).</summary>
+    /// <summary>A copy on the feed whose fingerprint cannot be read proves nothing, so it fails the publish the same way.</summary>
     [Fact]
     public async Task A_version_on_the_feed_without_a_readable_fingerprint_fails_the_publish()
     {
@@ -183,7 +183,7 @@ public sealed class SelectivePublishTests : PublishingHistory, IAsyncLifetime
             (RecordedVersions["Elsa.Tasks"], RecordedVersions["Elsa.Tasks.Schedules"], RecordedVersions["dotnet-elsa"]));
     }
 
-    /// <summary>SC-014, FR-021: a run for a commit older than the record's latest publish refuses to plan, and so to push.</summary>
+    /// <summary>A run for a commit older than the record's latest publish refuses to plan, and so to push.</summary>
     [Fact]
     public async Task A_commit_older_than_the_latest_publish_is_refused()
     {
@@ -201,8 +201,9 @@ public sealed class SelectivePublishTests : PublishingHistory, IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-020's reason: two runs computed against the same record would publish the same version twice. A run whose record
-    /// moved while it waited — here, overtaken by a newer run — refuses before pushing anything.
+    /// Why runs from main are serialized: two runs computed against the same record would publish the same version
+    /// twice. A run whose record moved while it waited — here, overtaken by a newer run — refuses before pushing
+    /// anything.
     /// </summary>
     [Fact]
     public async Task A_run_whose_record_moved_since_it_was_planned_pushes_nothing()
@@ -224,7 +225,7 @@ public sealed class SelectivePublishTests : PublishingHistory, IAsyncLifetime
 
     /// <summary>
     /// A write-back rejected because <c>publish-state</c> moved under it — it is never forced — fails the run, and the pushed
-    /// packages are recorded by the next run through FR-018.
+    /// packages are recorded by the next run, which settles them by fingerprint.
     /// </summary>
     [Fact]
     public async Task A_rejected_write_back_fails_the_run_and_the_next_run_records_the_packages()
@@ -268,7 +269,7 @@ public sealed class SelectivePublishTests : PublishingHistory, IAsyncLifetime
         Assert.Equal(pushes, Feed.Pushes.Count);
     }
 
-    /// <summary>FR-003's force-advance at publish time: the plan carries it, and the publish job recomputes with it.</summary>
+    /// <summary>The force-advance at publish time: the plan carries it, and the publish job recomputes with it.</summary>
     [Fact]
     public async Task A_force_advance_publishes_the_named_package()
     {

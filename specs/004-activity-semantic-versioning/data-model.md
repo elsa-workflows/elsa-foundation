@@ -9,7 +9,7 @@ The unit's core data change is `int → string` (SemVer 2.0.0) for the activity 
 |---|---|---|---|
 | `Version` | `int` | `string` | Author semver. `[Immutable]` retained; constructor-supplied. Persisted as string column. |
 | `SemVerSortKey` | — | `string` **(NEW)** | Persistence-only normalised sort key (R1). Real CLR property, `[Immutable]`, **omitted from `IActivityDefinitionVersion`** (§2.9.1). Computed once at creation from `Version`. |
-| `ReconcilliationHash` | `string?` | `string?` | Unchanged (double-l spelling intentional). |
+| `Hash` | `string?` | `string?` | Unchanged. |
 
 ### `IActivityDefinitionVersion` (read contract — `Elsa.Activities.Design.Core`)
 | Member | Before | After |
@@ -54,7 +54,7 @@ The unit's core data change is `int → string` (SemVer 2.0.0) for the activity 
 - **Natural key:** `ActivityTypeKey` = CLR type full name (FR-022). Model X identity = `(SourceKind, SourceId, ActivityTypeKey)`; row identity = `(DefinitionId, Version)`.
 - **One row per `(DefinitionId, semver)`** (FR-014). Versions never deleted (Model X).
 - **Equality** (FR-013): `(DefinitionId, Version)` compared by semver precedence (build metadata ignored) — implemented via `SemVerSortKey`.
-- **Immutability:** `Version`, `SemVerSortKey`, `ReconcilliationHash` are `[Immutable]` (§E2.8 Model X).
+- **Immutability:** `Version`, `SemVerSortKey`, `Hash` are `[Immutable]` (§E2.8 Model X). The one pre-GA exception is the tier-only activity-version refresh: when the only content difference is input `tier`, reconciliation rewrites `Hash` and `InputsSource` in place.
 
 ## Migration
 - Fresh SQLite migration for the activities-design context (FR-015). No int→semver backfill (Unit B no-preserved-production-data convention).

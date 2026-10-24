@@ -6,12 +6,18 @@ import type {
   StudioActivityDescriptor,
   StudioActivityInputDescriptor,
   StudioActivityPropertyEditorContribution,
+  StudioExpressionAuthoringContext,
+  StudioExpressionDocument,
   StudioExpressionDescriptor,
-  StudioExpressionEditorContribution
+  StudioExpressionEditorContribution,
+  StudioExpressionToolingClient,
+  StudioExpressionToolingResult,
+  StudioExpressionValidationResult
 } from "@elsa-workflows/studio-sdk";
+import { builtInPropertyEditors } from "../../../../../apps/Elsa.Studio.Web/Client/src/app/propertyEditors";
 import { ActivityPropertiesPanel } from "../ActivityPropertiesPanel";
 import { createObjectExpressionEditorContribution } from "../objectExpressionEditor";
-import type { ActivityNode } from "../workflowTypes";
+import type { ActivityNode, WorkflowDefinitionState } from "../workflowTypes";
 
 let active: { root: Root; container: HTMLElement } | null = null;
 // Replaces the rendered activity from outside the panel, as an undo or selecting another activity does.
@@ -19,6 +25,8 @@ const noRenderedPanel = () => {
   throw new Error("No panel is rendered.");
 };
 let replaceActivity: (next: ActivityNode) => void = noRenderedPanel;
+let replaceDraftId: (next: string) => void = noRenderedPanel;
+let replaceEditors: (next: StudioActivityPropertyEditorContribution[]) => void = noRenderedPanel;
 
 const backendExpressionDescriptors: StudioExpressionDescriptor[] = [
   { type: "Literal", displayName: "Literal", editingMode: "literal" },
@@ -29,12 +37,19 @@ const backendExpressionDescriptors: StudioExpressionDescriptor[] = [
   { type: "Input", displayName: "Input", editingMode: "reference" }
 ];
 
+function unmountActivePanel() {
+  if (!active) return;
+  const mounted = active;
+  flushSync(() => mounted.root.unmount());
+  mounted.container.remove();
+  active = null;
+}
+
 afterEach(() => {
   replaceActivity = noRenderedPanel;
-  if (!active) return;
-  flushSync(() => active!.root.unmount());
-  active.container.remove();
-  active = null;
+  replaceDraftId = noRenderedPanel;
+  replaceEditors = noRenderedPanel;
+  unmountActivePanel();
 });
 
 function renderPanel(
@@ -44,11 +59,15 @@ function renderPanel(
     activity?: ActivityNode;
     editors?: StudioActivityPropertyEditorContribution[];
     expressionEditors?: StudioExpressionEditorContribution[];
+    expressionTooling?: StudioExpressionToolingClient;
+    workflowState?: WorkflowDefinitionState;
     expressionDescriptors?: StudioExpressionDescriptor[];
     expressionDescriptorStatus?: "loading" | "ready" | "failed";
     draftId?: string;
+    strictMode?: boolean;
     onRetryDescriptors?(): void;
     onChange?(activity: ActivityNode): void;
+    updateActivity?: boolean;
   } = {}
 ) {
   const container = document.createElement("div");
@@ -65,18 +84,24 @@ function renderPanel(
 
   function Harness() {
     const [currentActivity, setCurrentActivity] = React.useState(initialActivity);
+    const [currentDraftId, setCurrentDraftId] = React.useState(options.draftId);
+    const [currentEditors, setCurrentEditors] = React.useState(options.editors ?? []);
     replaceActivity = setCurrentActivity;
+    replaceDraftId = setCurrentDraftId;
+    replaceEditors = setCurrentEditors;
     const handleChange = (nextActivity: ActivityNode) => {
       options.onChange?.(nextActivity);
-      setCurrentActivity(nextActivity);
+      if (options.updateActivity !== false) setCurrentActivity(nextActivity);
     };
-    return (
+    const panel = (
       <ActivityPropertiesPanel
-        draftId={options.draftId}
+        draftId={currentDraftId}
         activity={currentActivity}
         descriptor={descriptor}
-        editors={options.editors ?? []}
+        editors={currentEditors}
         expressionEditors={options.expressionEditors ?? []}
+        expressionTooling={options.expressionTooling}
+        workflowState={options.workflowState}
         expressionDescriptors={options.expressionDescriptors ?? backendExpressionDescriptors}
         expressionDescriptorStatus={options.expressionDescriptorStatus ?? "ready"}
         onRetryDescriptors={options.onRetryDescriptors}
@@ -86,6 +111,7 @@ function renderPanel(
         onChange={handleChange}
       />
     );
+    return options.strictMode ? <React.StrictMode>{panel}</React.StrictMode> : panel;
   }
 
   flushSync(() => root.render(<Harness />));
@@ -136,9 +162,7 @@ describe("activity property organization", () => {
     });
     expect(loading.textContent).toContain("Loading expression types...");
 
-    flushSync(() => active!.root.unmount());
-    active!.container.remove();
-    active = null;
+    unmountActivePanel();
 
     const failed = renderPanel([input("Message", { isWrapped: true })], {
       expressionDescriptorStatus: "failed",
@@ -216,6 +240,636 @@ describe("activity property organization", () => {
     expect([...container.querySelectorAll(".wf-property-group h4")].map(heading => heading.textContent))
       .toEqual(["General", "Advanced settings", "Zebra"]);
     expect(propertyLabels(container)).toEqual(["GeneralValue", "AdvancedValue", "ZebraValue"]);
+  });
+
+  it("shows primary HTTP request inputs directly and keeps one More options section mounted", () => {
+    const onChange = vi.fn();
+    const container = renderPanel([
+      input("Url", { tier: "essential", isRequired: true }),
+      input("Method", { tier: "essential", defaultValue: "GET" }),
+      input("Content", { tier: "essential" }),
+      input("Connection", { tier: "essential", isRequired: false }),
+      input("ContentType", { tier: "optional", defaultValue: "text/plain" }),
+      input("RequestHeaders", { tier: "optional" }),
+      input("ExpectedStatusCodes", { tier: "optional" }),
+      input("Timeout", { tier: "optional" })
+    ], { onChange });
+
+    const advanced = container.querySelector<HTMLElement>(".studio-advanced-section");
+    expect(advanced).not.toBeNull();
+    expect(advanced!.querySelector(".studio-disclosure-fold-label")?.textContent).toBe("More options");
+    expect(advanced!.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("false");
+    expect([...container.querySelectorAll(".wf-properties > .wf-property-group .wf-property-row-header label")]
+      .map(label => label.textContent)).toEqual(["Url", "Method", "Content", "Connection"]);
+    expect([...advanced!.querySelectorAll(".wf-property-row-header label")]
+      .map(label => label.textContent)).toEqual(["ContentType", "RequestHeaders", "ExpectedStatusCodes", "Timeout"]);
+    expect(advanced!.querySelectorAll(".wf-property-row")).toHaveLength(4);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("keeps legacy, unknown, setting, case-mismatched, and required optional inputs directly visible", () => {
+    const container = renderPanel([
+      input("Legacy"),
+      input("NullTier", { tier: null }),
+      input("UnknownTier", { tier: "experimental" }),
+      input("SettingTier", { tier: "setting" }),
+      input("CaseMismatch", { tier: "Optional" }),
+      input("RequiredOptional", { tier: "optional", isRequired: true }),
+      input("Optional", { tier: "optional", isRequired: false })
+    ]);
+
+    const advanced = container.querySelector<HTMLElement>(".studio-advanced-section")!;
+    expect([...container.querySelectorAll(".wf-properties > .wf-property-group .wf-property-row-header label")]
+      .map(label => label.textContent)).toEqual([
+      "Legacy", "NullTier", "UnknownTier", "SettingTier", "CaseMismatch", "RequiredOptional"
+    ]);
+    expect([...advanced.querySelectorAll(".wf-property-row-header label")].map(label => label.textContent))
+      .toEqual(["Optional"]);
+  });
+
+  it("keeps optional fields visible without an error badge when an editor cannot report private errors", async () => {
+    const unknownEditor: StudioActivityPropertyEditorContribution = {
+      id: "test.unreported-editor",
+      supports: descriptor => descriptor.name === "UnknownEditor",
+      component: ({ descriptor, value, onChange }) => (
+        <input aria-label={descriptor.displayName ?? descriptor.name} value={String(value ?? "")} onChange={event => onChange(event.target.value)} />
+      )
+    };
+    const container = renderPanel([input("UnknownEditor", { tier: "optional" })], { editors: [unknownEditor] });
+
+    await nextFrame();
+    const disclosure = container.querySelector<HTMLElement>(".studio-advanced-section")!;
+    expect(disclosure.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("true");
+    expect(disclosure.querySelector(".studio-status-pill")).toBeNull();
+  });
+
+  it("keeps the actual mounted option editor visible when dynamic options change editor selection", async () => {
+    const capableFallback: StudioActivityPropertyEditorContribution = {
+      id: "test.capable-option-fallback",
+      supportsValidationReporting: true,
+      supports: (descriptor, context) => descriptor.name === "DynamicEditor" &&
+        descriptor.uiSpecifications?.options === undefined && context.readOnly !== true,
+      component: ({ descriptor }) => <input aria-label={descriptor.name} value="capable fallback" readOnly />
+    };
+    const unreportedOptionEditor: StudioActivityPropertyEditorContribution = {
+      id: "test.unreported-option-editor",
+      supports: (descriptor, context) => descriptor.name === "DynamicEditor" &&
+        Array.isArray(descriptor.uiSpecifications?.options) && context.readOnly === true,
+      component: ({ descriptor }) => <input aria-label={descriptor.name} value="unreported actual editor" readOnly />
+    };
+    const container = renderPanel([input("DynamicEditor", {
+      tier: "optional",
+      uiSpecifications: { optionsProvider: { key: "catalog.dynamic-editor", dependsOn: [] } }
+    })], { editors: [capableFallback, unreportedOptionEditor] });
+
+    const disclosure = container.querySelector<HTMLElement>(".studio-advanced-section")!;
+    await nextFrame();
+    expect(disclosure.querySelector<HTMLInputElement>("input[aria-label='DynamicEditor']")?.value).toBe("unreported actual editor");
+    expect(disclosure.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("true");
+    expect(disclosure.querySelector(".studio-status-pill")).toBeNull();
+  });
+
+  it("keeps the row and editor draft mounted when validation-reporting capability changes", async () => {
+    const DraftEditor: StudioActivityPropertyEditorContribution["component"] = ({ descriptor }) => {
+      const [draft, setDraft] = React.useState("initial draft");
+      return <input aria-label={descriptor.name} value={draft} onChange={event => setDraft(event.target.value)} />;
+    };
+    const reportingEditor: StudioActivityPropertyEditorContribution = {
+      id: "test.capability-change",
+      supportsValidationReporting: true,
+      supports: descriptor => descriptor.name === "OptionalDraft",
+      component: DraftEditor
+    };
+    const container = renderPanel([input("OptionalDraft", { tier: "optional" })], { editors: [reportingEditor] });
+    const row = container.querySelector<HTMLElement>(".wf-property-row")!;
+    const editorInput = container.querySelector<HTMLInputElement>("input[aria-label='OptionalDraft']")!;
+    changeTextInput(editorInput, "unfinished private draft");
+
+    const { supportsValidationReporting: _supportsValidationReporting, ...unreportedEditor } = reportingEditor;
+    flushSync(() => replaceEditors([unreportedEditor]));
+
+    await nextFrame();
+    const disclosure = container.querySelector<HTMLElement>(".studio-advanced-section")!;
+    expect(container.querySelector(".wf-property-row")).toBe(row);
+    expect(disclosure.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("true");
+    expect(container.querySelector<HTMLInputElement>("input[aria-label='OptionalDraft']")?.value).toBe("unfinished private draft");
+    expect(disclosure.querySelector(".studio-status-pill")).toBeNull();
+  });
+
+  it("keeps a selected inline expression editor directly visible without assuming diagnostics are complete", async () => {
+    const expressionEditor: StudioExpressionEditorContribution = {
+      id: "test.unreported-expression-editor",
+      supports: context => context.syntax === "Liquid",
+      surfaces: { inline: EchoExpressionEditor }
+    };
+    const container = renderPanel([input("OptionalExpression", {
+      isWrapped: true,
+      defaultSyntax: "Liquid",
+      tier: "optional"
+    })], { expressionEditors: [expressionEditor] });
+
+    await nextFrame();
+    const disclosure = container.querySelector<HTMLElement>(".studio-advanced-section")!;
+    expect(disclosure.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("true");
+    expect(disclosure.querySelector(".studio-status-pill")).toBeNull();
+  });
+
+  it("distinguishes an authored default from a synthesized default and recognizes opaque top-level and wire keys", () => {
+    const authored = {
+      typeName: "System.String",
+      expression: { type: "Literal", value: "text/plain" },
+      conversion: { mode: "force" },
+      argumentExtras: { future: { keep: true } }
+    };
+    const descriptor = input("ContentType", {
+      referenceKey: "http-content-type",
+      isWrapped: true,
+      defaultSyntax: "Literal",
+      defaultValue: "text/plain",
+      tier: "optional"
+    });
+    const authoredContainer = renderPanel([descriptor], {
+      activity: activity({ "http-content-type": authored })
+    });
+    const authoredDisclosure = authoredContainer.querySelector<HTMLElement>(".studio-advanced-section")!;
+    expect(authoredDisclosure.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("true");
+    expect(authoredDisclosure.querySelector(".studio-disclosure-fold-body")?.hasAttribute("hidden")).toBe(false);
+
+    unmountActivePanel();
+
+    const synthesizedContainer = renderPanel([descriptor]);
+    const synthesizedDisclosure = synthesizedContainer.querySelector<HTMLElement>(".studio-advanced-section")!;
+    expect(synthesizedDisclosure.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("false");
+
+    unmountActivePanel();
+
+    const wireContainer = renderPanel([input("RequestHeaders", {
+      referenceKey: "opaque-header-key",
+      isWrapped: true,
+      tier: "optional"
+    })], {
+      activity: activity({ inputs: [{
+        referenceKey: "opaque-header-key",
+        value: { expressionType: "Literal", value: { Accept: "application/json" } },
+        conversion: { mode: "force" },
+        futureArgumentField: "keep"
+      }] })
+    });
+    const wireDisclosure = wireContainer.querySelector<HTMLElement>(".studio-advanced-section")!;
+    expect(wireDisclosure.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("opens optional fields for host errors, but not warnings, and drops a stale activity error", async () => {
+    const editor: StudioExpressionEditorContribution = {
+      id: "test.disclosure-diagnostics",
+      supports: context => context.syntax === "Literal",
+      surfaces: {},
+      diagnostics: context => (context.activity as ActivityNode).nodeId === "node-1"
+        ? [{ severity: "error", message: "Host-owned validation error" }]
+        : [{ severity: "warning", message: "Host-owned warning" }]
+    };
+    const container = renderPanel([input("Timeout", {
+      isWrapped: true,
+      defaultSyntax: "Literal",
+      tier: "optional"
+    })], { expressionEditors: [editor] });
+    await nextFrame();
+
+    const previousDisclosure = container.querySelector<HTMLElement>(".studio-advanced-section")!;
+    expect(container.textContent).toContain("Host-owned validation error");
+    expect(previousDisclosure.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("true");
+
+    flushSync(() => replaceActivity(activity({ nodeId: "node-2" })));
+    await nextFrame();
+    const currentDisclosure = container.querySelector<HTMLElement>(".studio-advanced-section")!;
+    expect(currentDisclosure).not.toBe(previousDisclosure);
+    expect(previousDisclosure.isConnected).toBe(false);
+    expect(currentDisclosure.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("false");
+    expect(container.textContent).not.toContain("Host-owned validation error");
+    expect(container.textContent).toContain("Host-owned warning");
+  });
+
+  it("opens the Error badge for current semantic validation and clears it when source changes", async () => {
+    const validate = vi.fn(async (document: StudioExpressionDocument): Promise<StudioExpressionToolingResult<StudioExpressionValidationResult>> => {
+      const diagnostics = document.source === "invalid"
+        ? [{
+          severity: "error" as const,
+          message: "Current semantic error",
+          documentId: document.id,
+          sourceVersion: document.sourceVersion,
+          contextVersion: "context-current"
+        }]
+        : [];
+      return {
+        state: diagnostics.length ? "ready" : "supported-empty",
+        contractVersion: 1,
+        expressionType: "JavaScript",
+        contextVersion: "context-current",
+        data: {
+          documentId: document.id,
+          sourceVersion: document.sourceVersion,
+          contextVersion: "context-current",
+          diagnostics
+        }
+      };
+    });
+    const expressionTooling = {
+      getAuthoringContext: async (): Promise<StudioExpressionToolingResult<StudioExpressionAuthoringContext>> => ({
+        state: "ready",
+        contractVersion: 1,
+        expressionType: "JavaScript",
+        contextVersion: "context-current",
+        data: { version: "context-current", workflowInputs: [], visibleVariables: [], visibleActivityOutputs: [] }
+      }),
+      validate
+    } as unknown as StudioExpressionToolingClient;
+    const workflowState = {} as WorkflowDefinitionState;
+    const expressionEditor: StudioExpressionEditorContribution = {
+      id: "test.semantic-validation-expression",
+      supports: context => context.syntax === "JavaScript",
+      surfaces: {
+        inline: ({ context, value, onChange }) => (
+          <>
+            <input
+              aria-label="Semantic source"
+              value={String(value ?? "")}
+              onFocus={context.onFocus}
+              onBlur={context.onBlur}
+              onChange={event => onChange(event.target.value)}
+            />
+          <output data-testid="semantic-validation-state">{context.validation?.state ?? "none"}</output>
+          <output data-testid="semantic-validation-error">{context.validation?.data?.diagnostics.find(diagnostic => diagnostic.severity === "error")?.message ?? "none"}</output>
+          </>
+        )
+      }
+    };
+    const container = renderPanel([input("OptionalSemantic", {
+      tier: "optional",
+      isWrapped: true,
+      defaultSyntax: "JavaScript"
+    })], {
+      activity: activity({ optionalSemantic: {
+        typeName: "System.String",
+        expression: { type: "JavaScript", value: "invalid" }
+      } }),
+      expressionTooling,
+      workflowState,
+      expressionEditors: [expressionEditor]
+    });
+    const disclosure = container.querySelector<HTMLElement>(".studio-advanced-section")!;
+    const source = container.querySelector<HTMLInputElement>("input[aria-label='Semantic source']")!;
+    flushSync(() => source.focus());
+    await vi.waitFor(() => {
+      expect(container.querySelector("[data-testid='semantic-validation-error']")?.textContent).toBe("Current semantic error");
+      expect(disclosure.querySelector(".studio-status-pill")?.getAttribute("data-tone")).toBe("danger");
+    });
+    expect(validate).toHaveBeenCalled();
+    expect(validate.mock.calls[0]?.[0].source).toBe("invalid");
+
+    changeTextInput(source, "valid");
+    flushSync(() => source.blur());
+    await vi.waitFor(() => {
+      expect(validate.mock.calls.at(-1)?.[0].source).toBe("valid");
+      expect(disclosure.querySelector(".studio-status-pill")?.getAttribute("data-tone")).toBe("accent");
+    });
+  });
+
+  it("keeps a private TimeSpan validation error discoverable and clears it after recovery", async () => {
+    const container = renderPanel([input("Timeout", {
+      typeName: "System.TimeSpan",
+      defaultValue: "00:00:30",
+      tier: "optional"
+    })], { editors: builtInPropertyEditors });
+    const disclosure = container.querySelector<HTMLElement>(".studio-advanced-section")!;
+    const trigger = disclosure.querySelector<HTMLButtonElement>(".studio-disclosure-fold-trigger")!;
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+
+    flushSync(() => trigger.click());
+    const timeout = container.querySelector<HTMLInputElement>("input[aria-label='Timeout']")!;
+    changeTextInput(timeout, "not a duration");
+    await nextFrame();
+    expect(timeout.getAttribute("aria-invalid")).toBe("true");
+
+    flushSync(() => trigger.click());
+    await nextFrame();
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+
+    changeTextInput(timeout, "00:01:15");
+    await nextFrame();
+    expect(timeout.hasAttribute("aria-invalid")).toBe(false);
+    expect(disclosure.querySelector(".studio-status-pill")?.getAttribute("data-tone")).toBe("accent");
+  });
+
+  it("reports an initial private validation error under StrictMode", async () => {
+    const initialErrorEditor: StudioActivityPropertyEditorContribution = {
+      id: "test.strict-mode-initial-error",
+      supportsValidationReporting: true,
+      supports: descriptor => descriptor.name === "StrictError",
+      component: function InitialErrorEditor({ descriptor, onValidationChange }) {
+        React.useEffect(() => {
+          onValidationChange?.(true);
+        }, [onValidationChange]);
+        return <input aria-label={descriptor.name} />;
+      }
+    };
+    const container = renderPanel([input("StrictError", { tier: "optional" })], {
+      editors: [initialErrorEditor],
+      strictMode: true
+    });
+    const disclosure = container.querySelector<HTMLElement>(".studio-advanced-section")!;
+    await nextFrame();
+
+    expect(disclosure.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("true");
+    expect(disclosure.querySelector(".studio-status-pill")?.getAttribute("data-tone")).toBe("danger");
+  });
+
+  it("ignores stale private editor callbacks after activity, draft, and editor scope changes", async () => {
+    const staleCallbacks: Array<(hasError: boolean) => void> = [];
+    const reportingEditor = (id: string): StudioActivityPropertyEditorContribution => ({
+      id,
+      supportsValidationReporting: true,
+      supports: descriptor => descriptor.name === "ReportedOptional",
+      component: ({ onValidationChange }) => {
+        if (onValidationChange) staleCallbacks.push(onValidationChange);
+        return <button type="button" onClick={() => onValidationChange?.(true)}>Report local error</button>;
+      }
+    });
+    const container = renderPanel([input("ReportedOptional", { tier: "optional" })], {
+      editors: [reportingEditor("test.reporting-editor.v1")],
+      draftId: "draft-1"
+    });
+    const currentDisclosure = () => container.querySelector<HTMLElement>(".studio-advanced-section")!;
+    const reportError = () => {
+      if (currentDisclosure().querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded") !== "true") {
+        flushSync(() => currentDisclosure().querySelector<HTMLButtonElement>(".studio-disclosure-fold-trigger")!.click());
+      }
+      const button = [...container.querySelectorAll<HTMLButtonElement>("button")]
+        .find(candidate => candidate.textContent?.includes("Report local error"))!;
+      flushSync(() => button.click());
+    };
+    const hasError = () => currentDisclosure().querySelector(".studio-status-pill")?.getAttribute("data-tone") === "danger";
+
+    reportError();
+    await nextFrame();
+    expect(hasError()).toBe(true);
+    const beforeActivityChange = staleCallbacks.at(-1)!;
+
+    flushSync(() => replaceActivity(activity({ nodeId: "node-2" })));
+    await nextFrame();
+    expect(hasError()).toBe(false);
+    flushSync(() => beforeActivityChange(true));
+    expect(hasError()).toBe(false);
+
+    reportError();
+    await nextFrame();
+    expect(hasError()).toBe(true);
+    const beforeRevisionChange = staleCallbacks.at(-1)!;
+
+    flushSync(() => replaceActivity(activity({ nodeId: "node-2", activityVersionId: "activity-v2" })));
+    await nextFrame();
+    expect(hasError()).toBe(false);
+    flushSync(() => beforeRevisionChange(true));
+    expect(hasError()).toBe(false);
+
+    reportError();
+    await nextFrame();
+    expect(hasError()).toBe(true);
+    const beforeDraftChange = staleCallbacks.at(-1)!;
+
+    flushSync(() => replaceDraftId("draft-2"));
+    await nextFrame();
+    expect(hasError()).toBe(false);
+    flushSync(() => beforeDraftChange(true));
+    expect(hasError()).toBe(false);
+
+    reportError();
+    await nextFrame();
+    expect(hasError()).toBe(true);
+    const beforeEditorChange = staleCallbacks.at(-1)!;
+
+    flushSync(() => replaceEditors([{
+      id: "test.reporting-editor.v2",
+      supportsValidationReporting: true,
+      supports: descriptor => descriptor.name === "ReportedOptional",
+      component: () => <input aria-label="ReportedOptional" />
+    }]));
+    await nextFrame();
+    expect(hasError()).toBe(false);
+    flushSync(() => beforeEditorChange(true));
+    expect(hasError()).toBe(false);
+  });
+
+  it("aggregates numeric collection editor errors by mounted item and releases removed items", async () => {
+    const statusCodes = {
+      typeName: "System.Int32",
+      expression: { type: "Literal", value: [200, 204] }
+    };
+    const container = renderPanel([input("ExpectedStatusCodes", {
+      typeName: "System.Int32",
+      collectionKind: "List",
+      isWrapped: true,
+      tier: "optional"
+    })], {
+      editors: builtInPropertyEditors,
+      activity: activity({ expectedStatusCodes: statusCodes })
+    });
+    const disclosure = container.querySelector<HTMLElement>(".studio-advanced-section")!;
+    const tone = () => disclosure.querySelector(".studio-status-pill")?.getAttribute("data-tone");
+    const entries = () => [...container.querySelectorAll<HTMLInputElement>(".wf-collection-editor input[type='text']")];
+
+    changeTextInput(entries()[0]!, "invalid first");
+    changeTextInput(entries()[1]!, "invalid second");
+    await nextFrame();
+    expect(tone()).toBe("danger");
+
+    flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Remove ExpectedStatusCodes item 1']")!.click());
+    await nextFrame();
+    expect(tone()).toBe("danger");
+    expect(entries()).toHaveLength(1);
+
+    changeTextInput(entries()[0]!, "205");
+    await nextFrame();
+    expect(tone()).toBe("accent");
+    expect(entries()[0]!.hasAttribute("aria-invalid")).toBe(false);
+
+    flushSync(() => container.querySelector<HTMLButtonElement>(".wf-collection-add")!.click());
+    changeTextInput(entries()[0]!, "invalid before reorder");
+    await nextFrame();
+    expect(tone()).toBe("danger");
+    flushSync(() => clickButton(container, "Move ExpectedStatusCodes item 1 down"));
+    await nextFrame();
+    expect(entries()[1]!.value).toBe("invalid before reorder");
+    expect(tone()).toBe("danger");
+
+    flushSync(() => clickButton(container, "Remove ExpectedStatusCodes item 2"));
+    await nextFrame();
+    expect(entries()).toHaveLength(1);
+    expect(tone()).toBe("accent");
+  });
+
+  it("aggregates dictionary value errors independently and clears a removed dictionary row", async () => {
+    const statusCodes = {
+      typeName: "System.Int32",
+      expression: { type: "Literal", value: { first: 200, second: 204 } }
+    };
+    const container = renderPanel([input("ExpectedStatusCodeMap", {
+      typeName: "System.Int32",
+      collectionKind: "Dictionary",
+      isWrapped: true,
+      tier: "optional"
+    })], {
+      editors: builtInPropertyEditors,
+      activity: activity({ expectedStatusCodeMap: statusCodes })
+    });
+    const disclosure = container.querySelector<HTMLElement>(".studio-advanced-section")!;
+    const tone = () => disclosure.querySelector(".studio-status-pill")?.getAttribute("data-tone");
+    const entries = () => [...container.querySelectorAll<HTMLInputElement>(".wf-dictionary-cell.value input[type='text']")];
+
+    changeTextInput(entries()[0]!, "invalid first");
+    changeTextInput(entries()[1]!, "invalid second");
+    await nextFrame();
+    expect(tone()).toBe("danger");
+
+    flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Remove first']")!.click());
+    await nextFrame();
+    expect(tone()).toBe("danger");
+    expect(entries()).toHaveLength(1);
+
+    changeTextInput(entries()[0]!, "205");
+    await nextFrame();
+    expect(tone()).toBe("accent");
+    expect(entries()[0]!.hasAttribute("aria-invalid")).toBe(false);
+  });
+
+  it("keeps a new dictionary's blank-key error visible after opening and closing its expanded editor", async () => {
+    const container = renderPanel([input("Headers", {
+      typeName: "System.String",
+      collectionKind: "Dictionary",
+      isWrapped: true,
+      tier: "optional"
+    })]);
+    const disclosure = container.querySelector<HTMLElement>(".studio-advanced-section")!;
+    flushSync(() => container.querySelector<HTMLButtonElement>(".wf-dictionary-actions button[data-dictionary-add]")!.click());
+    await nextFrame();
+
+    const trigger = disclosure.querySelector<HTMLButtonElement>(".studio-disclosure-fold-trigger")!;
+    expect(container.textContent).toContain("Key cannot be blank.");
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(disclosure.querySelector(".studio-status-pill")?.getAttribute("data-tone")).toBe("danger");
+
+    flushSync(() => container.querySelector<HTMLButtonElement>(".wf-dictionary-open-expanded")!.click());
+    await nextFrame();
+    expect(container.querySelector("button[aria-label='Close Headers editor']")).not.toBeNull();
+
+    flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Close Headers editor']")!.click());
+    await nextFrame();
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(disclosure.querySelector(".studio-status-pill")?.getAttribute("data-tone")).toBe("danger");
+    expect(container.querySelector<HTMLInputElement>(".wf-dictionary-cell.key input")?.getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("does not let a valid simultaneous dictionary editor instance clear its sibling error", async () => {
+    const callbacks = new Map<string, (hasError: boolean) => void>();
+    const ReportingValueEditor: StudioActivityPropertyEditorContribution["component"] = ({ descriptor, onValidationChange }) => {
+      const instanceId = React.useId();
+      React.useEffect(() => {
+        if (!onValidationChange) return;
+        callbacks.set(instanceId, onValidationChange);
+        return () => { callbacks.delete(instanceId); };
+      }, [instanceId, onValidationChange]);
+      return <input aria-label={descriptor.name} data-validation-instance={instanceId} />;
+    };
+    const reportingEditor: StudioActivityPropertyEditorContribution = {
+      id: "test.reporting-dictionary-value",
+      supportsValidationReporting: true,
+      supports: (descriptor, context) => descriptor.name === "Headers.Value" && context.scope === "element",
+      component: ReportingValueEditor
+    };
+    const container = renderPanel([input("Headers", {
+      typeName: "System.String",
+      collectionKind: "Dictionary",
+      isWrapped: true,
+      tier: "optional"
+    })], {
+      editors: [reportingEditor],
+      activity: activity({ headers: {
+        typeName: "System.String",
+        expression: { type: "Literal", value: { Accept: "application/json" } }
+      } })
+    });
+    const disclosure = container.querySelector<HTMLElement>(".studio-advanced-section")!;
+    await nextFrame();
+    expect(callbacks.size).toBe(1);
+
+    flushSync(() => container.querySelector<HTMLButtonElement>(".wf-dictionary-open-expanded")!.click());
+    await nextFrame();
+    expect(callbacks.size).toBe(2);
+    expect(container.querySelectorAll(".wf-dictionary-editor input[data-validation-instance]")).toHaveLength(2);
+
+    const [first, second] = [...callbacks.values()];
+    first!(true);
+    await nextFrame();
+    expect(disclosure.querySelector(".studio-status-pill")?.getAttribute("data-tone")).toBe("danger");
+
+    second!(false);
+    await nextFrame();
+    expect(disclosure.querySelector(".studio-status-pill")?.getAttribute("data-tone")).toBe("danger");
+  });
+
+  it.each([
+    { syntax: "JavaScript", value: "headers()" },
+    { syntax: "Variable", value: "request-headers" }
+  ])("preserves $syntax binding, body, defaults, conversions and extras through HTTP methods and disclosure", ({ syntax, value }) => {
+    const contentType = {
+      typeName: "System.String",
+      expression: { type: "Literal", value: "text/plain" },
+      conversion: { mode: "profile", profile: { id: "body-conversion", version: "1" } },
+      argumentExtras: { unknown: { preserve: true } }
+    };
+    const headers = {
+      typeName: "System.String",
+      expression: { type: syntax, value },
+      argumentExtras: { source: "foreign-template" }
+    };
+    const changes: ActivityNode[] = [];
+    const initial = activity({
+      method: "GET",
+      content: { typeName: "System.String", expression: { type: "Literal", value: "request body" } },
+      contentType,
+      requestHeaders: headers,
+      unrelatedExtra: { preserve: true }
+    });
+    const container = renderPanel([
+      input("Method", { isWrapped: false, tier: "essential", defaultValue: "GET" }),
+      input("Content", { isWrapped: true, tier: "essential" }),
+      input("ContentType", { isWrapped: true, tier: "optional", defaultValue: "text/plain" }),
+      input("RequestHeaders", { isWrapped: true, tier: "optional" })
+    ], { activity: initial, onChange: next => changes.push(next) });
+
+    const methodRow = [...container.querySelectorAll<HTMLElement>(".wf-property-row")]
+      .find(row => row.querySelector(".wf-property-row-header label")?.textContent === "Method")!;
+    const methodInput = methodRow.querySelector<HTMLInputElement>("input")!;
+    for (const method of ["HEAD", "POST", "GET"]) {
+      changeTextInput(methodInput, method);
+      expect(changes.at(-1)).toEqual({ ...initial, method });
+    }
+
+    expect(changes.at(-1)?.content).toEqual(initial.content);
+    expect(changes.at(-1)?.contentType).toEqual(contentType);
+    expect(changes.at(-1)?.requestHeaders).toEqual(headers);
+    expect(changes.at(-1)?.unrelatedExtra).toEqual({ preserve: true });
+    const section = container.querySelector<HTMLElement>(".studio-advanced-section")!;
+    const trigger = section.querySelector<HTMLButtonElement>(".studio-disclosure-fold-trigger")!;
+    const rows = [...section.querySelectorAll(".wf-property-row")];
+    flushSync(() => trigger.click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(section.querySelector(".studio-status-pill")?.textContent).toBe("2 set");
+    expect(section.querySelector(".studio-disclosure-fold-body")?.hasAttribute("hidden")).toBe(true);
+    flushSync(() => trigger.click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect([...section.querySelectorAll(".wf-property-row")]).toEqual(rows);
+    expect(changes).toHaveLength(3);
+    expect(changes.at(-1)).toEqual({ ...initial, method: "GET" });
   });
 
   it("places the syntax picker inline with the checkbox contribution", () => {
@@ -296,10 +950,12 @@ describe("activity property organization", () => {
     });
 
     const fields = [...container.querySelectorAll(".wf-expression-field")];
-    expect(fields).toHaveLength(2);
+    expect(fields).toHaveLength(1);
     expect(fields.every(field => !field.classList.contains("wf-expression-field--toggle"))).toBe(true);
     expect(fields[0]?.querySelector("textarea[aria-label='JavaScript expression']")).not.toBeNull();
-    expect(fields[1]?.textContent).toContain("current value is preserved and read-only");
+    const referenceRow = container.querySelector(".wf-syntax-picker-trigger.compact[aria-label^='VariableValue expression syntax']")?.closest(".wf-property-row");
+    expect(referenceRow?.querySelector(".wf-expression-field")).toBeNull();
+    expect(referenceRow?.textContent).toContain("current value is preserved and read-only");
   });
 
   it("does not steal focus for pre-existing text expressions and still expands regardless of property type", () => {
@@ -375,6 +1031,45 @@ describe("activity property organization", () => {
     expect(expandedContext.document?.source).toBe(inlineContext.document?.source);
   });
 
+  it("edits only the source of a portable expression on inline and expanded surfaces", () => {
+    const definition = {
+      language: "JavaScript",
+      source: "args.response.status",
+      resultType: { alias: "String", collectionKind: "Single" },
+      parameters: {
+        response: {
+          kind: "ActivityResult",
+          isOptional: true,
+          producerNodeId: "customer-lookup",
+          projectionKey: "status"
+        }
+      },
+      options: { strict: true },
+      capabilityProfile: "binding-pure-v1",
+      metadata: { origin: "seeded-workflow" }
+    };
+    const changes: ActivityNode[] = [];
+    const container = renderPanel([input("Template", { isWrapped: true })], {
+      onChange: next => changes.push(next),
+      activity: activity({
+        template: { typeName: "System.String", expression: { type: "JavaScript", value: definition } }
+      })
+    });
+
+    const inline = container.querySelector<HTMLInputElement>("input[aria-label='Template expression']")!;
+    expect(inline.value).toBe(definition.source);
+    changeTextInput(inline, "args.response.message");
+    expect((changes.at(-1)?.template as { expression: { value: unknown } }).expression.value)
+      .toEqual({ ...definition, source: "args.response.message" });
+
+    clickButton(container, "Open expanded Template editor");
+    const expanded = container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Template expanded value']")!;
+    expect(expanded.value).toBe("args.response.message");
+    changeTextArea(expanded, "args.response.code");
+    expect((changes.at(-1)?.template as { expression: { value: unknown } }).expression.value)
+      .toEqual({ ...definition, source: "args.response.code" });
+  });
+
   // Regression: ticking a checklist box saved fine, but autosave promoted the structured Literal to an
   // "Object" expression on the wire and nothing reversed it, so the row reopened with the picker reading
   // "Object" and the checklist replaced by the raw JSON summary.
@@ -395,7 +1090,7 @@ describe("activity property organization", () => {
       })
     });
 
-    expect(container.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger")?.textContent).toContain("Literal");
+    expect(container.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger")?.title).toBe("Literal");
     expect(container.querySelector(".test-checklist")?.textContent).toBe("GET");
     expect(container.textContent).not.toContain("Open the expanded editor to edit JSON.");
   });
@@ -440,6 +1135,25 @@ describe("activity property organization", () => {
       typeName: "System.Int32",
       expression: { type: "JavaScript", value: "42" }
     });
+  });
+
+  it("preserves rapid edits to separate inputs while the parent draft update is pending", () => {
+    const changes: ActivityNode[] = [];
+    const container = renderPanel([
+      input("A", { referenceKey: "a", typeName: "System.Int32" }),
+      input("B", { referenceKey: "b", typeName: "System.Int32" })
+    ], {
+      activity: activity({ a: "", b: "" }),
+      onChange: next => changes.push(next),
+      updateActivity: false
+    });
+    const [inputA, inputB] = container.querySelectorAll<HTMLInputElement>(".wf-property-row input");
+
+    changeTextInput(inputA!, "7");
+    changeTextInput(inputB!, "5");
+
+    expect(changes).toHaveLength(2);
+    expect(changes[1]).toMatchObject({ a: "7", b: "5" });
   });
 
   it("prompts before replacing an incompatible value and mutates syntax and value atomically", async () => {
@@ -724,7 +1438,7 @@ describe("secret-only inputs", () => {
   it("defaults to the secret picker ahead of the descriptor's default syntax and offers no literal editor", () => {
     const row = rowOf(renderSecretOnly(), "Authorization");
 
-    expect(row.querySelector(".wf-syntax-picker-trigger")?.textContent).toBe("Secret");
+    expect(row.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger")?.title).toBe("Secret");
     expect(row.querySelector("[aria-label='Secret picker']")).not.toBeNull();
     expect(row.querySelector("[aria-label='Literal editor']")).toBeNull();
     expect(row.querySelector("input[type='text'], textarea")).toBeNull();
@@ -739,11 +1453,11 @@ describe("secret-only inputs", () => {
     expect(rowOf(container, "Url").querySelector("[aria-label='Literal editor']")).not.toBeNull();
   });
 
-  // Each layout has its own syntax picker. A dictionary layout is reached only when the Secret descriptor
-  // reports literal mode, since a secret-only input's syntax is always Secret.
+  // Reference and multiline rows use the property heading; inline and dictionary layouts keep their own controls.
   const layouts: Array<[string, string, Partial<StudioActivityInputDescriptor>, StudioExpressionDescriptor["editingMode"]]> = [
-    ["inline", ".wf-expression-field .wf-syntax-picker-trigger", {}, "reference"],
-    ["block", ".wf-syntax-picker-trigger:not(.inline)", { uiHint: "multiline" }, "reference"],
+    ["reference", ".wf-syntax-picker-trigger.compact", {}, "reference"],
+    ["inline", ".wf-expression-field .wf-syntax-picker-trigger", {}, "literal"],
+    ["multiline heading", ".wf-syntax-picker-trigger.compact", { uiHint: "multiline" }, "reference"],
     ["dictionary", ".wf-dictionary-expression-toolbar .wf-syntax-picker-trigger", { typeName: "System.Collections.Generic.IDictionary`2[System.String,System.String]" }, "literal"]
   ];
 
@@ -753,6 +1467,10 @@ describe("secret-only inputs", () => {
 
     expect(row.querySelectorAll(".wf-syntax-picker-trigger")).toHaveLength(1);
     expect(row.querySelector(picker)).not.toBeNull();
+    if (_layout === "reference" || _layout === "multiline heading") {
+      expect(row.querySelector(".wf-property-row-header-meta > .wf-syntax-picker.compact")).not.toBeNull();
+      expect(row.querySelector(":scope > .wf-syntax-picker")).toBeNull();
+    }
     expect(syntaxOptions(row)).toEqual(["Secret"]);
   });
 
@@ -763,7 +1481,7 @@ describe("secret-only inputs", () => {
     const row = rowOf(container, "Authorization");
 
     expect(container.innerHTML).not.toContain(legacyLiteral);
-    expect(row.querySelector(".wf-syntax-picker-trigger")?.textContent).toBe("Secret");
+    expect(row.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger")?.title).toBe("Secret");
     expect(row.querySelector("[aria-label='Literal editor']")).toBeNull();
     expect(row.querySelector("[aria-label='Secret picker']")?.getAttribute("data-value")).toBe("null");
   });
@@ -1184,6 +1902,13 @@ async function nextFrame() {
 function changeTextArea(input: HTMLTextAreaElement, value: string) {
   flushSync(() => {
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+function changeTextInput(input: HTMLInputElement, value: string) {
+  flushSync(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }

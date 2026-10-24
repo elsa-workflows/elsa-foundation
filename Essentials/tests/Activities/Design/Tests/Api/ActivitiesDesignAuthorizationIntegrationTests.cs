@@ -111,9 +111,9 @@ public sealed class ActivitiesDesignAuthorizationIntegrationTests
             {
                 Assert.True(minimalResourceCalls > 0, "Minimal API authorization did not invoke the shared resource handler.");
                 Assert.True(fastEndpointsResourceCalls > 0, "FastEndpoints authorization did not invoke the shared resource handler.");
-                Assert.Contains(PermissionKey.Normalize("activity-design.read"), minimalPermissions.Select(PermissionKey.Normalize));
+                Assert.Contains(PermissionKey.Normalize("activities/design:read"), minimalPermissions.Select(PermissionKey.Normalize));
                 Assert.True(
-                    fastPermissions.Select(PermissionKey.Normalize).Contains(PermissionKey.Normalize("activity-design.read"), StringComparer.Ordinal) ||
+                    fastPermissions.Select(PermissionKey.Normalize).Contains(PermissionKey.Normalize("activities/design:read"), StringComparer.Ordinal) ||
                     fastPermissions.Contains(PermissionKey.Wildcard),
                     $"The retained FastEndpoints canary did not evaluate read or wildcard: {string.Join(",", fastPermissions)}");
             }
@@ -141,10 +141,10 @@ public sealed class ActivitiesDesignAuthorizationIntegrationTests
             fastEndpoints.Metadata.GetMetadata<EndpointSecurityDispositionMetadata>());
         var fastPermissionPolicy = new PermissionPolicyCodec().Parse(fastSecurity.Value!);
         Assert.Equal(PermissionRequirementMode.Any, fastPermissionPolicy.Descriptor!.Mode);
-        Assert.Contains(PermissionKey.Normalize("activity-design.read"), fastPermissionPolicy.Descriptor.Permissions);
+        Assert.Contains(PermissionKey.Normalize("activities/design:read"), fastPermissionPolicy.Descriptor.Permissions);
         Assert.IsType<RequirePermissionPolicyProvider>(host.Host.Services.GetRequiredService<IAuthorizationPolicyProvider>());
         Assert.Equal(
-            PermissionKey.Normalize("activity-design.read"),
+            PermissionKey.Normalize("activities/design:read"),
             new PermissionPolicyCodec().Parse(minimalPolicy!).Descriptor!.Permissions.Single());
     }
 

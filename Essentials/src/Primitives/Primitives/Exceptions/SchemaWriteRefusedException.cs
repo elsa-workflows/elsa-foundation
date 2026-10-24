@@ -1,11 +1,11 @@
 namespace Elsa.Primitives.Exceptions;
 
 /// <summary>
-/// A write refused because its value needs a schema version later than the one this host may write for the family
-/// (spec 180, FR-016a). Nothing was saved. Every first-party domain API answers it with HTTP 409 in its own problem
+/// A write refused because its value needs a schema version later than the one this host may write for the family.
+/// Nothing was saved. Every first-party domain API answers it with HTTP 409 in its own problem
 /// envelope, carrying <see cref="Code"/>, the family and both versions. <see cref="Code"/> is <see cref="RefusalCode"/>
-/// for a store-level refusal; a derived refusal that owns a stable code of its own, such as spec 182's dormancy
-/// refusal (Q17), carries that code instead.
+/// for a store-level refusal; a derived refusal that owns a stable code of its own, such as the dormancy
+/// refusal <see cref="SchemaDormancyRefusedException"/>, carries that code instead.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -29,7 +29,7 @@ public abstract class SchemaWriteRefusedException : Exception
     {
     }
 
-    /// <summary>For a derived refusal that owns a stable code of its own, such as spec 182's dormancy refusal (Q17).</summary>
+    /// <summary>For a derived refusal that owns a stable code of its own, such as <see cref="SchemaDormancyRefusedException"/>.</summary>
     protected SchemaWriteRefusedException(string family, string writeVersion, string requiredVersion, string message, string code)
         : base(message)
     {
@@ -40,7 +40,7 @@ public abstract class SchemaWriteRefusedException : Exception
     }
 
     /// <summary>The stable code every problem envelope that reports the refusal carries: <see cref="RefusalCode"/> unless
-    /// the concrete refusal owns its own (spec 182, Q17).</summary>
+    /// the concrete refusal owns its own.</summary>
     public string Code { get; }
 
     /// <summary>The schema family the write belongs to.</summary>

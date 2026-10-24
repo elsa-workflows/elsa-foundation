@@ -7,7 +7,7 @@ namespace Elsa.Activities.Runtime.Core.Attributes;
 /// <see cref="SideEffectProfile.External"/> — the fail-safe default that keeps the mandatory pre-activation
 /// durability boundary. Apply <c>[ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]</c> only to an
 /// activity that is pure/deterministic between checkpoint boundaries (in-workflow routing, compute, variable
-/// transforms), so its attempt-claim checkpoint may be deferred under a coalescing cadence. The declared value
+/// transforms), so its attempt-claim checkpoint may be deferred into a later commit in every persistence mode. The declared value
 /// is folded into the pinned, fingerprinted <see cref="ActivityContract"/> at publish time.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = true)]

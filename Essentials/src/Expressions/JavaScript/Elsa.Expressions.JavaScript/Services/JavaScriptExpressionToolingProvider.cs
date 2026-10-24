@@ -2,13 +2,13 @@ using Acornima;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.Core.Services;
-using Elsa.Expressions.JavaScript.Core.Models;
+using Elsa.Expressions.JavaScript.Models;
 using System.Text.RegularExpressions;
 
 namespace Elsa.Expressions.JavaScript.Services;
 
 /// <summary>Metadata-only JavaScript authoring assistance; it parses source but never loads Jint or evaluates it.</summary>
-public sealed partial class JavaScriptExpressionToolingProvider : IExpressionToolingProvider
+internal sealed partial class JavaScriptExpressionToolingProvider : IExpressionToolingProvider
 {
     public ExpressionToolingCapabilities DeclaredCapabilities { get; } = new(
         SupportsCompletions: true,
@@ -177,10 +177,8 @@ public sealed partial class JavaScriptExpressionToolingProvider : IExpressionToo
     {
         try
         {
-            // Runtime evaluates the authored source as a parenthesized strict-mode expression.
-            // Parse in the same grammar so the consequential-operation gate cannot approve a
-            // statement body that Jint will reject (or reject a valid anonymous expression).
-            new Parser().ParseExpression(source, strict: true);
+            // Share grammar selection with runtime without evaluating authored code.
+            JavaScriptBindingSyntax.IsExpression(source);
             return [];
         }
         catch (ParseErrorException exception)

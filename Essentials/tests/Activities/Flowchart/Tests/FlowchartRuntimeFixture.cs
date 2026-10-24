@@ -24,10 +24,21 @@ public sealed class FlowchartRuntimeFixture : IAsyncDisposable
 
     public IServiceProvider Provider { get; }
 
+    /// <summary>
+    /// Every checkpoint commit the engine built, in order, as the committer received it: a persistence mode may fold
+    /// several of them into one durable commit.
+    /// </summary>
+    public IReadOnlyList<RuntimeCheckpointCommit> CheckpointCommits => Provider.GetRequiredService<CheckpointCommitRecorder>().Commits;
+
     public static ValueTask<FlowchartRuntimeFixture> CreateAsync(IEnumerable<string> activityExecutionIds, Action<IServiceCollection>? configureServices = null)
     {
         var builder = WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .ConfigureServices(services =>
+            {
+                services.AddSingleton<CheckpointCommitRecorder>();
+                services.AddSingleton<IRuntimeCheckpointCommitEnricher>(provider => provider.GetRequiredService<CheckpointCommitRecorder>());
+            })
             .WithProbeLeaf();
         if (configureServices is not null)
             builder.ConfigureServices(configureServices);
@@ -37,10 +48,39 @@ public sealed class FlowchartRuntimeFixture : IAsyncDisposable
 
     public ValueTask DisposeAsync() => _harness.DisposeAsync();
 
+    // Runs after the other enrichers, so it records each commit exactly as the committer goes on to persist it.
+    private sealed class CheckpointCommitRecorder : IRuntimeCheckpointCommitEnricher
+    {
+        private readonly Lock _gate = new();
+        private readonly List<RuntimeCheckpointCommit> _commits = [];
+
+        public int Order => int.MaxValue;
+
+        public IReadOnlyList<RuntimeCheckpointCommit> Commits
+        {
+            get
+            {
+                lock (_gate)
+                    return _commits.ToArray();
+            }
+        }
+
+        public ValueTask<RuntimeCheckpointCommit> EnrichAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken = default)
+        {
+            lock (_gate)
+                _commits.Add(commit);
+            return ValueTask.FromResult(commit);
+        }
+    }
+
     public async Task ExecuteAsync(WorkflowExecutable executable)
     {
         await _harness.RunAsync(executable);
     }
+
+    /// <summary>Runs as a trigger-started run whose matched trigger is <paramref name="triggerNodeId"/>.</summary>
+    public Task<WorkflowExecutionRun> ExecuteAsync(WorkflowExecutable executable, string triggerNodeId) =>
+        _harness.RunAsync(executable, JsonSerializer.SerializeToElement(new { }), triggerNodeId);
 
     public async Task<FlowchartExecutionState> GetFlowchartStateAsync() =>
         JsonSerializer.Deserialize<FlowchartExecutionState>(await GetRawFlowchartStateAsync(), new JsonSerializerOptions(JsonSerializerDefaults.Web))
@@ -66,7 +106,8 @@ public sealed class FlowchartRuntimeFixture : IAsyncDisposable
         IReadOnlyCollection<FlowchartConnection> connections,
         string? startNodeId = null,
         IReadOnlyDictionary<string, FlowchartNodeMetadata>? nodeMetadata = null,
-        IReadOnlyDictionary<string, FlowchartConnectionMetadata>? connectionMetadata = null)
+        IReadOnlyDictionary<string, FlowchartConnectionMetadata>? connectionMetadata = null,
+        bool opensActivityBoundary = false)
     {
         var root = new ExecutableNode(
             executableNodeId: "node-flowchart",
@@ -76,7 +117,9 @@ public sealed class FlowchartRuntimeFixture : IAsyncDisposable
             descriptorType: typeof(FlowchartDescriptor).FullName!,
             descriptorPayload: JsonSerializer.SerializeToElement(new FlowchartDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            metadata: new Dictionary<string, string>(),
+            metadata: opensActivityBoundary
+                ? new Dictionary<string, string> { ["activity.definitionVersionId"] = "activity-version" }
+                : new Dictionary<string, string>(),
             childSlots:
             [
                 new ExecutableChildSlot(

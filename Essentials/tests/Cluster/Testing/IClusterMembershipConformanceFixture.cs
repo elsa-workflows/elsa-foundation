@@ -5,7 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Cluster.Testing;
 
 /// <summary>
-/// What a membership provider supplies to run <see cref="ClusterMembershipConformanceTests"/> (FR-044): members it can
+/// What a membership provider supplies to run <see cref="ClusterMembershipConformanceTests"/>: members it can
 /// start, stop, kill, isolate and restart, over one store, on clocks the suite controls.
 /// </summary>
 /// <remarks>
@@ -75,7 +75,7 @@ public interface IConformanceMember
     void SetReadability(params ReadabilityEntry[] entries);
 
     /// <summary>
-    /// Sets what the member's runnability source reports from its next publish (spec 184, FR-010). A fixture that
+    /// Sets what the member's runnability source reports from its next publish. A fixture that
     /// registers no runnability source leaves this unimplemented, and the runnability tests fail for it: a provider that
     /// drops the section is not a supported provider.
     /// </summary>
@@ -99,8 +99,8 @@ public interface IConformanceMember
 }
 
 /// <summary>How to start a member. <paramref name="Readability"/> <see langword="null"/> means the member has no
-/// readability source at all, and <paramref name="Runnability"/> <see langword="null"/> that it has no runnability source
-/// (spec 184, FR-008).</summary>
+/// readability source at all, and <paramref name="Runnability"/> <see langword="null"/> that it has no runnability source.
+/// </summary>
 public sealed record ConformanceMemberSetup(
     string HostId,
     IReadOnlyList<ReadabilityEntry>? Readability,

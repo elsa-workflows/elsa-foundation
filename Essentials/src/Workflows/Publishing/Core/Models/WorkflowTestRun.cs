@@ -1,4 +1,6 @@
 using Elsa.Workflows.Design.Core.Models;
+using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Core.Models;
 
@@ -13,7 +15,9 @@ public sealed record WorkflowTestRun(
     DateTimeOffset RequestedAt,
     DateTimeOffset? ExpiresAt,
     string? Reason,
-    IReadOnlyDictionary<string, string> Metadata);
+    IReadOnlyDictionary<string, string> Metadata,
+    TestRunDriverAction? DriverAction = null,
+    JsonElement? DriverDetails = null);
 
 public sealed record WorkflowTestRunDraftSnapshot(
     string DefinitionId,
@@ -29,5 +33,8 @@ public enum WorkflowTestRunStatus
     DispatchAccepted,
     DispatchDuplicate,
     DispatchRejected,
-    DispatchDeferred
+    DispatchDeferred,
+    Prepared,
+    Stopped,
+    StopRequested
 }

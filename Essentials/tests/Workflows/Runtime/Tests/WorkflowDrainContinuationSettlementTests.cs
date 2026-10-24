@@ -342,7 +342,9 @@ public sealed class WorkflowDrainContinuationSettlementTests
             outboxLookupStore: _observed,
             schedulerWorkQueue: _queue,
             options: options,
+            coalescingScopeFactory: NonFoldingDrainScopeFactory.Instance,
             liveDrainDeliveryAccessor: _liveDrain,
+            persistenceModeResolver: NonFoldingDrainScopeFactory.Resolver,
             timeProvider: _clock);
         return DriveAsync(orchestrator.DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(Wfid, maxWorkItems), cancellationToken).AsTask());
     }

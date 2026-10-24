@@ -69,7 +69,7 @@ public sealed class ReplaySafeFusionDriver
     /// <summary>
     /// Whether a fresh <c>ScheduleActivity</c> targeting <paramref name="node"/> should fuse: the toggle is on, a live
     /// coalescing session owns this execution (fusion is a burst-only locality optimization; outside a burst the
-    /// in-process-hop carrier / Immediate path stands and every hop is discrete), and the node is one of
+    /// in-process-hop carrier stands and every hop is discrete), and the node is one of
     /// <list type="bullet">
     /// <item>a ReplaySafe typed CLR leaf (the original population), or</item>
     /// <item>an engine intrinsic whose kind is fusable per <see cref="WorkflowIntrinsicFusion"/>. An intrinsic has no
@@ -83,7 +83,7 @@ public sealed class ReplaySafeFusionDriver
     {
         ArgumentNullException.ThrowIfNull(node);
 
-        if (!_options.Enabled)
+        if (!_options.Enabled || node.ExecutionPlacement != Elsa.Primitives.Models.ActivityExecutionPlacement.Inline)
             return false;
 
         var nodeIsFusable = node.IntrinsicKind is { } intrinsicKind
@@ -333,6 +333,10 @@ public sealed class ReplaySafeFusionDriver
                     ? PumpDecision.Fusable
                     : PumpDecision.Fallback;
             }
+
+            case SchedulerCompletionKind.ParentOutcomeEvaluation:
+                // Combined fault/notification outcomes must remain a single discrete durable parent evaluation.
+                return PumpDecision.Fallback;
 
             default:
                 // ContinuationScheduling → Checkpoint is the workflow tail: it commits mandatory (possibly terminal)
