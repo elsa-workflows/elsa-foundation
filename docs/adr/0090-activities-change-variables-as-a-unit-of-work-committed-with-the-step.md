@@ -134,9 +134,9 @@ spec 266 lands), but it never misses a write.
 *Why.* Bound references keep the workflow author in control of what an activity reads and writes, and keep both sets
 static, like captures; declaring the direction is what tells publish which references can be written. Free-name
 reads hide the read set just as free-name writes hide the write set, and spec 266 and policy taint need both, so
-reads and writes follow one rule. Free names serve Elsa 3 habits and generic module activities; the marker makes the loss of static knowledge visible instead of hidden. *Rejected:* free names only
-(static analysis would be blind to every C# access); bound references only (unlike Elsa 3, and too strict for
-generic module activities).
+reads and writes follow one rule. Free names serve Elsa 3 habits and generic module activities; the marker makes
+the loss of static knowledge visible instead of hidden. *Rejected:* free names only (static analysis would be blind
+to every C# access); bound references only (unlike Elsa 3, and too strict for generic module activities).
 
 ### 5. Undeclared variables are refused
 
