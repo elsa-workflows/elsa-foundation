@@ -34,7 +34,7 @@ analysis exact. It also costs authors:
 - A script or activity that updates several variables must return an object and add a capture or a `Set` per
   variable.
 - Reading an object and changing one property, which is ordinary in C#, is impossible: there is nothing to change.
-- Elsa 3's JavaScript `setVariable` and generated `set{Name}()` are refused by the converter (spec 247), and Elsa 3's
+- Elsa 3's JavaScript `setVariable` and generated `set<Name>()` are refused by the converter (spec 247), and Elsa 3's
   C# `context.SetVariable` has no Elsa 4 equivalent.
 - Module authors cannot hand a script a live .NET object, such as a service or a client, to call methods on.
 
@@ -46,8 +46,10 @@ safe: atomic commits, replay, and a graph that shows who writes what.
 
 - **Step**: one invocation attempt of one activity, from its invoke (or resume) to its next transition: complete,
   suspend, fault or cancel.
-- **Variable session**: what a step holds for each variable it touches: the value it read (its *base*) and, unless the
-  read was read-only, a *tracked* instance.
+- **Variable session**: what a step holds for each variable it touches: the value it read (its *base*; a variable the
+  step assigns without reading has none) and, unless the read was read-only, a *tracked* instance.
+- **Committed value**: a value applied to the workflow instance's working state by a checkpoint commit, so later
+  steps see it. When it becomes durable follows the persistence mode (ADR 0032).
 - **May-write set**: the variables publish determines a step can change.
 
 ## Decision
@@ -76,8 +78,10 @@ change is saved when the step commits, and nothing is saved if the step faults o
   functions) are both changes.
 - Later reads in the same step see the step's own changes (read-your-writes).
 - A *read-only read* skips tracking, like EF Core's `AsNoTracking()`, for large values the step does not change.
-- Loop items and indexes (ADR 0028) and withheld secret values are never tracked. Loop items are frozen, so mutating
-  one throws. A withheld value is refused with `VF-ACT-010`, as `IRuntimeScopedVariableReader` refuses it.
+- Loop items and indexes (ADR 0028) and withheld secret values are never tracked. In a script a loop item is frozen,
+  so mutating it throws. In C# a read of a loop item returns an untracked copy whose changes are discarded, and `Set`
+  on it throws. A withheld value is refused with `VF-ACT-010`, as `IRuntimeScopedVariableReader` refuses it.
+- In C#, changes to the result of a read-only read are discarded, as with `AsNoTracking()`.
 
 *Why.* This is what a .NET developer already expects from EF Core's `DbContext` and `SaveChanges`, so there is no new
 rule to learn, and it gives "change now, apply at the right time" without partial writes. It is feasible because a
@@ -90,7 +94,7 @@ pinned input snapshot, keeps a step from building on a base another branch has a
 This gives RunJavaScript a variable surface it does not have today. `variables.x`, `variables['x']` (a string
 literal) and `getVariable('x')` read; assigning to them, `setVariable('x', v)` and mutating a read value write.
 Compound forms (`variables.n += 1`, `variables.n++`) are a read and a write. The runtime does not provide generated
-`set{Name}()`; the converter rewrites it to `variables.Name = v`, as ADR 0089 decision 6 does for `get{Name}()`.
+`set<Name>()`; the converter rewrites it to `variables.Name = v`, as ADR 0089 decision 6 does for `get<Name>()`.
 
 At publish, the same parser and nearest-scope rule as ADR 0089 resolves every touched name to its declaring scope and
 pins that target (scope and key). The value itself comes from the session at run time (decision 2), not from a
@@ -99,31 +103,38 @@ pinned parameter snapshot. Publish refuses:
 - a computed name in any form (`variables[k]`, `getVariable(k)`, `setVariable(k, v)`, or passing `variables`,
   `getVariable` or `setVariable` around as a value), as ADR 0089 decision 5 does;
 - an undeclared name (decision 5);
+- a transient variable, except in host-interop mode (decision 8);
 - an assignment to, or a direct nested assignment into, a read-only target (a loop item or index).
 
 The may-write set is every variable the script assigns, mutates, or lets escape into a local, a function argument or
 a closure, because each of those can mutate it. Read-only targets are frozen, so their escapes are not writes.
 
 *Why.* Resolving at publish keeps one resolver for reads and writes, keeps "which nodes touch this variable?" exact,
-and gives spec 266 a sound write set. Counting escapes as possible writes is conservative: it can add warnings for a
-script that only passes a variable to a helper, but it never misses a write.
+and gives spec 266 a sound write set. Counting escapes as possible writes is conservative: it can add concurrent-write
+diagnostics for a script that only passes a variable to a helper (a refusal under ADR 0045 §4 today, a warning if
+spec 266 lands), but it never misses a write.
 
 ### 4. C# activities use bound variable references by default and free names by opt-in
 
-- **Bound references (default).** An activity declares an input of type `VariableReference`, which the workflow
-  author binds in Studio as they bind a capture target. `context.Variables.Get<T>(target)` returns a tracked copy;
-  `Set(target, value)` assigns; `GetReadOnly<T>(target)` is the read-only read. Publish refuses a reference that is
-  unbound, bound to an undeclared variable, or used for writing while bound to a read-only target.
+- **Bound references (default).** An activity declares an input of type `VariableReference<T>` (read and write) or
+  `ReadOnlyVariableReference<T>` (read only), which the workflow author binds in Studio as they bind a capture target.
+  `context.Variables.Get<T>(target)` returns a tracked copy, or an untracked one for a read-only reference;
+  `Set(target, value)` assigns, and throws on a read-only reference; `GetReadOnly<T>(target)` is the read-only read.
+  The may-write set is every writable bound reference. Publish refuses a reference that is unbound, bound to an
+  undeclared variable, or writable and bound to a read-only target.
 - **Free names (opt-in).** `Get<T>("name")`, `GetReadOnly<T>("name")` and `Set("name", value)` work only on an
   activity type marked `[AccessesUndeclaredVariables]`, as by-name reads today work only for activities marked
   `IRuntimeScopedVariableReader`. The marker is part of the activity descriptor, so publish, Studio and inspection
   show it. Names resolve at run time to the nearest visible scope. On an unmarked activity a free-name call throws,
-  which faults the step. Spec 266's rule must treat a marked activity as touching every visible variable.
+  which faults the step. Spec 266's rule must treat a marked activity as touching every visible variable, so under
+  ADR 0045 §4's refusal today a marked activity cannot share a concurrent branch with a write of a visible variable.
+- **Transient variables.** A transient variable is never tracked or saved: `Get` returns the live instance and `Set`
+  replaces it in memory only. Neither is committed.
 
 *Why.* Bound references keep the workflow author in control of what an activity reads and writes, and keep both sets
-static, like captures. Free-name reads hide the read set just as free-name writes hide the write set, and spec 266
-and policy taint need both, so reads and writes follow one rule. Free names serve Elsa 3 habits and generic module
-activities; the marker makes the loss of static knowledge visible instead of hidden. *Rejected:* free names only
+static, like captures; declaring the direction is what tells publish which references can be written. Free-name
+reads hide the read set just as free-name writes hide the write set, and spec 266 and policy taint need both, so
+reads and writes follow one rule. Free names serve Elsa 3 habits and generic module activities; the marker makes the loss of static knowledge visible instead of hidden. *Rejected:* free names only
 (static analysis would be blind to every C# access); bound references only (unlike Elsa 3, and too strict for
 generic module activities).
 
@@ -149,7 +160,7 @@ validation that ADR 0048 asks `Set` and captures to share.
   interrupted". A coalesced burst that is re-driven after a crash re-runs only steps whose commit never became
   durable, and their intents were lost with that commit, so intents never apply twice.
 - **Suspension.** Changes up to the suspension commit with it. The resumed step is a new step with a new session.
-  Pending intents are never persisted.
+  Pending intents are not carried across a suspension.
 - **Intents and captures on one variable.** Within one commit, intents apply first and captures last, so the capture
   wins. Publish warns when a step's may-write set and one of its own captures name the same variable.
 
@@ -168,11 +179,15 @@ places, such as one placed on a background worker (`ActivityExecutionPlacement.B
 commit in between. For such a step, a variable it read (tracked or read-only) and then changed is checked at commit:
 if the variable's committed serialized value no longer equals the step's base, that is a conflict. The default is to
 fault the step with a message naming the variable. An activity type may declare a different default
-(`[VariableConflictPolicy(LastWins)]`), and the workflow author may override it per node.
+(`[VariableConflictPolicy(LastWins)]`), and the workflow author may override it per node. A background step's intents
+and the bases of the variables it read travel in its persisted worker result, and the invoke work item that commits
+that result applies them and runs the check.
 
-A blind write (assigned without being read) is never a conflict. It follows the same concurrent-write rule as every
-other write: ADR 0045 §4 refuses potentially concurrent writes at validation today, and spec 266 (#3286) proposes a
-warning with last-commit-wins instead.
+A blind write (assigned without being read) is never a conflict. Every step write, read-then-write or blind, also
+falls under the concurrent-write rule for all writes: ADR 0045 §4 refuses potentially concurrent writes at validation
+today, so the check mainly guards writes validation cannot see, such as operator alterations. If spec 266 (#3286)
+replaces that refusal with a warning and last-commit-wins, the check becomes the main guard for background
+read-then-write.
 
 *Why.* A stale read-modify-write (`count++` on two background branches) loses data silently, which is worse than an
 undefined order. Comparing the variable's own value, not the frame revision, avoids false conflicts: the revision
@@ -187,7 +202,8 @@ By default RunJavaScript keeps today's closed JSON world. A host may switch on h
 default. In that mode a RunJavaScript activity can read transient variables as live .NET objects and call their
 methods. Such an activity carries a distinct host-interop mark in its descriptor, which publish and Studio show, and
 runs under ADR 0045's transient execution policy: it "cannot suspend, migrate, or depend on durable retry". ADR 0089
-decision 5's publish refusal of transient reads does not apply to it. Transient variables are never tracked or saved:
+decision 5's publish refusal of transient reads does not apply to its script body; its input-binding expressions stay
+pinned and still refuse transient reads. Transient variables are never tracked or saved:
 a live object is changed in place and nothing is committed.
 
 *Why.* The closed world exists for good reasons: sandbox limits (timeout, memory, statements) do not bound a .NET
@@ -217,6 +233,9 @@ typed results.
     for outputs and outcomes. `context.Variables.Set` is the one sanctioned exception for variables: it records an
     intent, and the transition still returns its typed result. `context.Variables` is not a service locator.
   - §4's concurrent-write rule applies to step writes as to every other write (decision 7).
+  - §3's retries "receive … the same input snapshot" and §4's "Reads occur when the consumer invocation
+    materializes its inputs" still hold for inputs. A step's variable reads are a separate channel, read at invoke
+    from committed values, so a retry can see different variable values than its first attempt.
 - **ADR 0089.** Its "scripts do not write variables" and its open question on writes would be superseded. Its read
   model covers input-binding expressions; RunJavaScript gets the session reads of decision 2 instead of pinned
   parameter snapshots. Its decision 5 transient refusal has the host-interop exception of decision 8.
@@ -226,7 +245,7 @@ typed results.
   activity as touching every visible variable. Its rationale becomes precise: static analysis sees every write except
   those of marked free-name activities. Decision 7 uses value comparison, not the frame revision, so spec 266's
   ADR 0048 §4 amendment does not conflict with it.
-- **Converter (spec 247 follow-up).** Inside RunJavaScript, Elsa 3 `setVariable`, generated `set{Name}()` and
+- **Converter (spec 247 follow-up).** Inside RunJavaScript, Elsa 3 `setVariable`, generated `set<Name>()` and
   mutation of a read value (`getVariable('o').x = 1`) become convertible. In expressions they stay refused.
 - **Inspection.** Each commit records which variables a step changed, which is the data #3290 (variable write
   history and the winning write) needs.
@@ -259,9 +278,17 @@ variable. Rejected for now: array patches by index land in the wrong place after
   spec 266.
 - A background read-then-write conflict faults by default; a write to an unrelated variable in the same frame is not
   a conflict; the type default and the node override work; blind writes follow the concurrent-write rule.
+- A background step's intents and read bases are persisted with its worker result and applied, with the check, by
+  the invoke work item that commits it.
+- Intents apply before captures; the capture wins; publish warns when a may-write set and a capture overlap.
+- A free-name call on an unmarked activity faults; the marker appears in the descriptor; a free-name access to an
+  undeclared variable faults the step.
+- A script mutating a loop item throws; C# `Set` on a loop item or a read-only reference throws; publish refuses a
+  writable reference bound to a read-only target; a withheld value is refused with `VF-ACT-010`.
+- A C# read of a transient variable returns the live instance, and nothing about it is committed.
 - Host interop is off by default; when on, the activity carries the host-interop mark, cannot suspend, and is not
   retried durably. ADR 0045's transient execution policy has no implementation yet, so the spec builds it.
-- Elsa 3 `setVariable`, `set{Name}()` and nested mutation convert inside RunJavaScript and stay refused in
+- Elsa 3 `setVariable`, `set<Name>()` and nested mutation convert inside RunJavaScript and stay refused in
   expressions.
 - Serialization cost is measured against a large payload.
 

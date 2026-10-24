@@ -143,8 +143,8 @@ completion and activity transitions still cannot write variables.
 
 **Proposed amendment.**
 [ADR 0090](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md) (proposed)
-would add a third, declared variable-write form: changes an activity step makes, committed with the step. Until it
-is accepted, this section stands as written.
+would add a third, declared variable-write form (changes an activity step makes, committed with the step) and a
+step-read channel at invoke beside input materialization. Until it is accepted, this section stands as written.
 
 Potentially concurrent ordinary writes to the same variable fail validation unless an explicit,
 deterministic merge or reduction governs them. This refines ADR 0027's previously open concurrent
@@ -217,7 +217,8 @@ The activity transition algebra distinguishes complete, suspend, fault, and canc
 transition does not contain hidden variable mutations; explicit `Set` nodes remain the only normal
 variable-write mechanism. (Proposed amendment:
 [ADR 0090](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md) would add a
-third write form; see §4.) The activity invocation contract returns that transition directly; it does
+third write form, with `context.Variables.Set` as an exception to the sentence below; see §4.) The activity
+invocation contract returns that transition directly; it does
 not publish successful values or outcomes through mutable execution-context `Set` methods.
 
 ### 7. Provide a generated method-call authoring facade

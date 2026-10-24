@@ -8,6 +8,8 @@ Acceptance needs agreement with @j03y-nxxbz per #3204; it does not wait for the 
 (#3026), and this ADR changes with it if that review reads §5 more strictly. Its "Writes are unchanged: scripts do
 not write variables" would be superseded by
 [ADR 0090](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md) if that is accepted.
+Its read model, decisions 4 and 5 included, would then cover input-binding expressions only; RunJavaScript would
+read through ADR 0090's step sessions.
 
 Part of epic #3052 and program #2310. Constrained by
 [ADR 0045](0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md) §5 (explicit, pure
