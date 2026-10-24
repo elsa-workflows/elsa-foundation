@@ -4,7 +4,7 @@ Elsa Studio is the visual client you use with an Elsa server: you design workflo
 
 To set it up next to a server, follow the Foundation [Docker Compose quick start](https://github.com/elsa-workflows/elsa-foundation/blob/main/docker/compose/README.md#quick-start--published-images-no-clone-or-build). It documents the published Workbench and Studio reference pair and the settings that connect them. Use matching server and Studio versions.
 
-Studio's source lives in the [`Studio/` folder](https://github.com/elsa-workflows/elsa-foundation/tree/main/Studio) of the Foundation repository. Older issues remain in the former [Elsa Foundation Studio repository](https://github.com/elsa-workflows/elsa-foundation-studio).
+Studio's source lives in the [`Studio/` folder](https://github.com/elsa-workflows/elsa-foundation/tree/main/Studio) of the Foundation repository. See the [Studio overview](https://github.com/elsa-workflows/elsa-foundation/blob/main/Studio/README.md) and [Studio contribution guide](https://github.com/elsa-workflows/elsa-foundation/blob/main/Studio/CONTRIBUTING.md). Older issues remain in the former [Elsa Foundation Studio repository](https://github.com/elsa-workflows/elsa-foundation-studio).
 
 ## What Studio looks like
 
