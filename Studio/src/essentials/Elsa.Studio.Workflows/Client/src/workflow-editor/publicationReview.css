@@ -310,6 +310,10 @@ html[data-theme="meridian"][data-theme-appearance="dim"] .wf-publication-footer.
   padding-left: 20px;
 }
 
+.wf-publication-risks li {
+  overflow-wrap: anywhere;
+}
+
 /* Spec 261 FR-515: warnings are listed, in the warning tone, and never block publishing. */
 .wf-publication-warnings {
   border: 1px solid color-mix(in srgb, var(--wf-warning) 40%, var(--wf-border));

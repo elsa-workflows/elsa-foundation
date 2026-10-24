@@ -66,9 +66,11 @@ test("falls back to review when the direct publication preflight finds a trigger
   await expect(review).toBeVisible();
   await expect(review.getByRole("alert")).toContainText("These triggers are already in use");
   await expect(review.getByRole("alert")).toContainText("1 trigger conflicts with channel default.");
-  await expect(review.getByText("http:GET:/orders", { exact: true })).not.toBeVisible();
+  await expect(review.getByRole("alert")).toContainText("GET /orders/{id}");
+  await expect(review.getByRole("alert").locator(".wf-publication-selection")).toHaveText("http:GET:/orders");
   await review.locator("summary").filter({ hasText: "Technical details" }).click();
-  await expect(review.getByText("http:GET:/orders", { exact: true })).toBeVisible();
+  await expect(review.locator(".wf-publication-technical")).toContainText("GET /orders/{id}");
+  await expect(review.locator(".wf-publication-technical")).toContainText("http:GET:/orders");
   await expect(review).toContainText("channel default");
   const calls = await readApiCalls(page);
   expect(calls.filter(call => call.method === "PUT")).toHaveLength(0);

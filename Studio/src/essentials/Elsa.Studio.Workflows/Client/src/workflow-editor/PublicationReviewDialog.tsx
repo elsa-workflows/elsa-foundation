@@ -6,8 +6,11 @@ import {
   publicationBlockedMessage,
   publicationChangesFor,
   publicationChannelOccupancy,
+  publicationConflictKeyDetail,
+  publicationConflictLabel,
   publicationIntentForChannel,
   publicationPreflightMatchesIntent,
+  uniquePublicationConflicts,
   type PublicationChangeCount,
   type PublicationChannelOccupancy,
   type PublicationReviewState,
@@ -258,8 +261,23 @@ export function PublicationReviewDialog({
                     <strong>These triggers are already in use</strong>
                     <ul>
                       {[...new Set(reviewedPreflight.conflicts.map(conflict => conflict.slotName))].map(channel => {
-                        const count = new Set(reviewedPreflight.conflicts.filter(conflict => conflict.slotName === channel).map(conflict => conflict.key)).size;
-                        return <li key={channel}>{count} {count === 1 ? "trigger conflicts" : "triggers conflict"} with channel <strong>{channel}</strong>.</li>;
+                        const channelConflicts = uniquePublicationConflicts(
+                          reviewedPreflight.conflicts.filter(conflict => conflict.slotName === channel));
+                        return (
+                          <li key={channel}>
+                            {channelConflicts.length} {channelConflicts.length === 1 ? "trigger conflicts" : "triggers conflict"} with channel <strong>{channel}</strong>.
+                            <ul>
+                              {channelConflicts.map(conflict => (
+                                <li key={conflict.key}>
+                                  <div>{publicationConflictLabel(conflict)}</div>
+                                  {publicationConflictKeyDetail(conflict)
+                                    ? <small className="wf-publication-selection">{conflict.key}</small>
+                                    : null}
+                                </li>
+                              ))}
+                            </ul>
+                          </li>
+                        );
                       })}
                     </ul>
                   </div>
@@ -440,7 +458,10 @@ export function PublicationReviewDialog({
                   {reviewedPreflight?.conflicts.length ? <div className="wf-publication-claims">
                     <strong>Trigger conflict identifiers</strong>
                     <ul>{reviewedPreflight.conflicts.map(conflict => <li key={`${conflict.publicationId}-${conflict.key}`}>
-                      <code>{conflict.key}</code> · channel {conflict.slotName} · publication <code>{conflict.publicationId}</code>
+                      {publicationConflictKeyDetail(conflict)
+                        ? <>{publicationConflictLabel(conflict)} · <code>{conflict.key}</code></>
+                        : <code>{conflict.key}</code>}
+                      {" "}· channel {conflict.slotName} · publication <code>{conflict.publicationId}</code>
                     </li>)}</ul>
                   </div> : null}
                 </details>

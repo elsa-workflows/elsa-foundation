@@ -74,6 +74,27 @@ test("success and retained-promotion recovery keep their actions in the fixed fo
 });
 
 
+test("shows a conflict descriptor as the primary label and the raw key as muted detail", async ({ page }) => {
+  await page.goto("/?mode=publication-review&outcome=conflict");
+  const dialog = page.getByRole("dialog", { name: "Publish workflow" });
+  const alert = dialog.getByRole("alert");
+
+  await expect(alert).toContainText("These triggers are already in use");
+  await expect(alert).toContainText("GET /orders/{id}");
+  await expect(alert.locator(".wf-publication-selection")).toHaveText(
+    "httpendpoint:sha256:4191f265b8b2d2152d4056ed3d616d32f7c2953e7ae41c4f8b184244b830e4f7");
+  await expect(dialog.getByRole("button", { name: "Publish" })).toBeDisabled();
+});
+
+test("falls back to the raw conflict key when no descriptor is present", async ({ page }) => {
+  await page.goto("/?mode=publication-review&outcome=conflict&descriptor=0");
+  const alert = page.getByRole("dialog", { name: "Publish workflow" }).getByRole("alert");
+
+  await expect(alert).toContainText("httpendpoint:sha256:4191f265b8b2d2152d4056ed3d616d32f7c2953e7ae41c4f8b184244b830e4f7");
+  await expect(alert.locator(".wf-publication-selection")).toHaveCount(0);
+  await expect(alert).not.toContainText("GET /orders/{id}");
+});
+
 test("shows trigger counts while keeping exact identifiers in an explicit technical disclosure", async ({ page }) => {
   await page.goto("/?mode=publication-review&theme=dark");
   const dialog = page.getByRole("dialog", { name: "Publish workflow" });
