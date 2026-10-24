@@ -284,6 +284,12 @@
   font-weight: 700;
 }
 
+/* Meridian Dim's 70% accent mix is 4.01:1 on the wash. 40% accent is 6.25:1. */
+html[data-theme="meridian"][data-theme-appearance="dim"] .wf-publication-footer.wf-dialog-actions .wf-primary-action,
+html[data-theme="meridian"][data-theme-appearance="dim"] .wf-publication-footer.wf-dialog-actions button[type="submit"] {
+  color: color-mix(in srgb, var(--wf-accent) 40%, var(--wf-text));
+}
+
 .wf-publication-risks,
 .wf-publication-recovery {
   border: 1px solid color-mix(in srgb, var(--wf-danger) 45%, var(--wf-border));
