@@ -126,6 +126,7 @@
 }
 
 .wf-definitions-list .wf-definition-table-scroll {
+  container-type: inline-size;
   overflow-x: auto;
   min-width: 0;
   margin: 0;
@@ -133,8 +134,10 @@
 }
 
 .wf-definitions-list .wf-definition-grid {
-  grid-template-columns: 28px minmax(220px, 1fr) 126px 132px 142px 60px;
-  column-gap: 10px;
+  --wf-definition-selection-track: 28px;
+  --wf-definition-column-gap: 10px;
+  grid-template-columns: var(--wf-definition-selection-track) minmax(220px, 1fr) 126px 132px 142px 60px;
+  column-gap: var(--wf-definition-column-gap);
   min-width: 844px;
   margin: 0;
   border: 0;
@@ -197,6 +200,10 @@
 .wf-definitions-list .wf-definition-grid > .wf-grid-row > span {
   display: block;
   min-width: 0;
+}
+
+.wf-definitions-list .wf-definition-name {
+  max-width: calc(100cqi - var(--wf-definition-selection-track) - var(--wf-definition-column-gap));
 }
 
 .wf-definitions-list .wf-definition-name strong {

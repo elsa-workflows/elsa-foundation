@@ -141,7 +141,7 @@ const context = {
 } as unknown as StudioEndpointContext;
 
 export function WorkflowDefinitionBrowseFixture() {
-  return <QueryClientProvider client={queryClient}>
+  const page = <QueryClientProvider client={queryClient}>
     <WorkflowManagementPage
       context={context}
       ai={ai}
@@ -151,4 +151,8 @@ export function WorkflowDefinitionBrowseFixture() {
       workflowDesignerPanels={[]}
     />
   </QueryClientProvider>;
+
+  return new URLSearchParams(window.location.search).get("workbench-shell") === "1"
+    ? <div className="content">{page}</div>
+    : page;
 }

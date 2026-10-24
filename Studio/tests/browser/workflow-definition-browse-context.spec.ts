@@ -136,53 +136,79 @@ test("editor Back restores the later workflow page with its observed opaque curs
   });
 });
 
-test("expanded workflow definition identifiers stack labels above exact values at 390px", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(`${browseUrl}&long-identities=1`);
-  await page.getByRole("button", { name: "Next page" }).click();
-  const row = page.getByRole("row", { name: /Second page renewal/ });
-  await expect(row).toBeVisible();
-  await row.getByRole("button", { name: /More identifiers/ }).click();
-  const details = row.locator(".wf-definition-identifiers");
-  await expect(details.getByLabel(/^Draft ID:/)).toBeVisible();
+for (const width of [320, 390]) {
+  test(`workflow definition identifiers and copy controls fit the Workbench viewport at ${width}px`, async ({ page }) => {
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto(`${browseUrl}&long-identities=1&workbench-shell=1`);
+    await page.getByRole("button", { name: "Next page" }).click();
+    const row = page.getByRole("row", { name: /Second page renewal/ });
+    await expect(row).toBeVisible();
+    await row.getByRole("button", { name: /More identifiers/ }).click();
+    const details = row.locator(".wf-definition-identifiers");
+    await expect(details.getByLabel(/^Draft ID:/)).toBeVisible();
 
-  const geometry = await row.evaluate(element => {
-    const scroll = element.closest(".wf-definition-table-scroll")!;
-    const cell = element.querySelector<HTMLElement>(".wf-definition-name")!;
-    const detailsElement = element.querySelector<HTMLElement>(".wf-definition-identifiers")!;
-    const fields = Array.from(detailsElement.querySelectorAll<HTMLElement>(".studio-copyable-identifier")).map(field => {
-      const label = field.querySelector<HTMLElement>(".studio-copyable-identifier__label")!.getBoundingClientRect();
-      const value = field.querySelector<HTMLElement>(".studio-copyable-identifier__value")!.getBoundingClientRect();
-      const bounds = field.getBoundingClientRect();
+    const geometry = await row.evaluate(element => {
+      const scroll = element.closest<HTMLElement>(".wf-definition-table-scroll")!;
+      const cell = element.querySelector<HTMLElement>(".wf-definition-name")!;
+      const fields = Array.from(cell.querySelectorAll<HTMLElement>(".studio-copyable-identifier")).map(field => {
+        const label = field.querySelector<HTMLElement>(".studio-copyable-identifier__label")!.getBoundingClientRect();
+        const value = field.querySelector<HTMLElement>(".studio-copyable-identifier__value")!.getBoundingClientRect();
+        const button = field.querySelector<HTMLElement>(".studio-copyable-identifier__button")!.getBoundingClientRect();
+        const bounds = field.getBoundingClientRect();
+        return {
+          labelTop: label.top,
+          labelBottom: label.bottom,
+          valueTop: value.top,
+          left: bounds.left,
+          right: bounds.right,
+          copyLeft: button.left,
+          copyRight: button.right
+        };
+      });
+      const scrollBounds = scroll.getBoundingClientRect();
+      const cellBounds = cell.getBoundingClientRect();
+      const visibleLeft = scrollBounds.left + scroll.clientLeft;
+      const visibleRight = visibleLeft + scroll.clientWidth;
       return {
-        labelTop: label.top,
-        labelBottom: label.bottom,
-        valueTop: value.top,
-        left: bounds.left,
-        right: bounds.right
+        scroll: { left: visibleLeft, right: visibleRight, clientWidth: scroll.clientWidth, scrollWidth: scroll.scrollWidth, scrollLeft: scroll.scrollLeft },
+        cell: { left: cellBounds.left, right: cellBounds.right, width: cellBounds.width },
+        rowWidth: element.getBoundingClientRect().width,
+        fields
       };
     });
-    const scrollBounds = scroll.getBoundingClientRect();
-    const cellBounds = cell.getBoundingClientRect();
-    return {
-      scroll: { left: scrollBounds.left, right: scrollBounds.right, clientWidth: scroll.clientWidth },
-      cell: { left: cellBounds.left, right: cellBounds.right, width: cellBounds.width },
-      rowWidth: element.getBoundingClientRect().width,
-      fields
-    };
+    expect(geometry.rowWidth).toBeGreaterThan(geometry.scroll.clientWidth);
+    expect(geometry.scroll.scrollWidth).toBeGreaterThan(geometry.scroll.clientWidth);
+    expect(geometry.scroll.scrollLeft).toBe(0);
+    expect(geometry.cell.right).toBeLessThanOrEqual(geometry.scroll.right + 1);
+    expect(geometry.fields.length).toBeGreaterThanOrEqual(5);
+    for (const field of geometry.fields) {
+      expect(field.left).toBeGreaterThanOrEqual(geometry.cell.left - 1);
+      expect(field.right).toBeLessThanOrEqual(geometry.scroll.right + 1);
+      expect(field.copyLeft).toBeGreaterThanOrEqual(geometry.scroll.left - 1);
+      expect(field.copyRight).toBeLessThanOrEqual(geometry.scroll.right + 1);
+    }
+    for (const field of geometry.fields.slice(1)) {
+      expect(field.labelTop).toBeLessThan(field.valueTop);
+      expect(field.labelBottom, JSON.stringify(field)).toBeLessThanOrEqual(field.valueTop);
+    }
+
+    const primaryCopy = row.getByRole("button", { name: "Copy Definition ID" });
+    await primaryCopy.focus();
+    await page.keyboard.press("Enter");
+    await expect(row.getByRole("status").filter({ hasText: "Definition ID copied" })).toBeAttached();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("workflow-page-two");
+    expect(new URL(page.url()).searchParams.has("definition")).toBe(false);
+
+    const secondaryCopy = row.getByRole("button", { name: "Copy Draft ID" });
+    await secondaryCopy.focus();
+    await page.keyboard.press("Space");
+    await expect(row.getByRole("status").filter({ hasText: "Draft ID copied" })).toBeAttached();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(`draft-${"immutable-identifier-".repeat(7)}`);
+    expect(new URL(page.url()).searchParams.has("definition")).toBe(false);
   });
-  expect(geometry.rowWidth).toBeGreaterThan(geometry.scroll.clientWidth);
-  expect(geometry.cell.width).toBeLessThanOrEqual(330);
-  expect(geometry.cell.right).toBeLessThanOrEqual(geometry.scroll.right + 1);
-  expect(geometry.fields.length).toBeGreaterThanOrEqual(4);
-  for (const field of geometry.fields) {
-    expect(field.labelTop).toBeLessThan(field.valueTop);
-    expect(field.labelBottom, JSON.stringify(field)).toBeLessThanOrEqual(field.valueTop);
-    expect(field.left).toBeGreaterThanOrEqual(geometry.cell.left - 1);
-    expect(field.right).toBeLessThanOrEqual(geometry.cell.right + 1);
-    expect(field.right).toBeLessThanOrEqual(geometry.scroll.right + 1);
-  }
-});
+}
 
 test("Workflow Definitions groups its create and refresh actions above the collection filters", async ({ page }) => {
   await page.goto(browseUrl);
