@@ -1469,7 +1469,8 @@ public sealed class WorkflowExecutableCompilerTests
             new ReusableSourceReader(sourceReference),
             new Sha256ActivityPlacementHasher(),
             _activityStructureService,
-            new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create()));
+            new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create()),
+            new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()])));
         var placed = await placer.PlaceAsync(new(
             publication,
             template,
@@ -2660,7 +2661,30 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal("var-message", setNode.IntrinsicVariable?.VariableKey);
     }
 
-    private static ActivityNode SetIntrinsicNode(string nodeId, string variableKey) =>
+    [Fact]
+    public async Task Set_intrinsic_with_an_empty_scope_targets_the_workflow_variable()
+    {
+        var message = new Elsa.Expressions.Core.Models.VariableDefinition(
+            ReferenceKey: "var-message",
+            Name: "Message",
+            Type: new TypeReference("String"),
+            StorageDriverType: null,
+            Default: null);
+        var compiler = Compiler(WorkflowVersion(
+            SequenceNode("sequence", [SetIntrinsicNode("set-1", "var-message", declaringScopeId: "")]),
+            variables: [message]));
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Equal(
+            Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId,
+            executable.NodesById["set-1"].IntrinsicVariable?.DeclaringScopeId);
+    }
+
+    private static ActivityNode SetIntrinsicNode(
+        string nodeId,
+        string variableKey,
+        string? declaringScopeId = Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId) =>
         new(
             nodeId,
             "$intrinsic",
@@ -2673,9 +2697,7 @@ public sealed class WorkflowExecutableCompilerTests
             Intrinsic = new AuthoredWorkflowIntrinsic(
                 AuthoredWorkflowIntrinsicKind.Set,
                 new TypeReference("String"),
-                new Elsa.Expressions.Core.Models.VariableReference(
-                    variableKey,
-                    Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId))
+                new Elsa.Expressions.Core.Models.VariableReference(variableKey, declaringScopeId))
         };
 
     [Fact]
@@ -3076,7 +3098,8 @@ public sealed class WorkflowExecutableCompilerTests
                 references,
                 new Sha256ActivityPlacementHasher(),
                 _activityStructureService,
-                inputCompiler),
+                inputCompiler,
+                outputCompiler),
             inputCompiler,
             outputCompiler,
             new WorkflowExecutableHasher(),

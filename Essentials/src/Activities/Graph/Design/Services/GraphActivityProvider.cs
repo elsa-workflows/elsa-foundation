@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -32,6 +33,9 @@ public sealed class GraphActivityProvider(
     public const string CompleteActivityTypeKey = "Elsa.Activities.Graph.Runtime.Activities.Complete";
 
     private const string CompleteOutcomeInputKey = "outcome";
+    private const string ArgumentMalformedCode = "activity.graph.argument-malformed";
+    private static readonly JsonSerializerOptions NodeSerializerOptions = new(JsonSerializerDefaults.Web);
+
     /// <summary>
     /// The catalog definition id of <see cref="CompleteActivityTypeKey"/>: CLR catalog rows derive it from the type key, so
     /// a version is recognised by its own definition id without loading the definition.
@@ -39,7 +43,7 @@ public sealed class GraphActivityProvider(
     public static readonly string CompleteDefinitionId = ActivityCatalogStableIds.DefinitionId(CompleteActivityTypeKey)!;
 
     public const string Key = "elsa.activity-graph";
-    public const string Fingerprint = "elsa.activity-graph/compiler/2.0.0";
+    public const string Fingerprint = "elsa.activity-graph/compiler/3.0.0";
     public const string RuntimeConsumerKey = "elsa.graph-activity";
     public const string RuntimeDescriptorSchemaVersion = "1";
 
@@ -104,8 +108,11 @@ public sealed class GraphActivityProvider(
         if (graph is not null)
         {
             // A draft has no resolved dependencies yet, so Complete nodes are recognised through the catalog.
-            var completeNodes = await FindCompleteNodesInCatalogAsync(EnumerateNodes(graph.RootActivity), cancellationToken);
+            var nodes = EnumerateNodes(graph.RootActivity);
+            var completeNodes = await FindCompleteNodesInCatalogAsync(nodes, cancellationToken);
             ValidateGraph(graph, contract, subject, diagnostics, completeNodes);
+            // A draft has no resolved dependencies yet, so producer results and capture types are checked at compile.
+            ValidateBodyReferences(graph, contract, nodes, dependencyContracts: null, subject, diagnostics);
         }
 
         return ActivityDiagnosticOrderer.Order(diagnostics);
@@ -133,6 +140,15 @@ public sealed class GraphActivityProvider(
             ValidateDependencies(nodes, request.ResolvedDirectDependencies, subject, diagnostics);
             ValidateDeclaredStructures(nodes, request.ResolvedDirectDependencies, subject, diagnostics);
             ValidateOutcomeMappings(graph, nodes, request.ResolvedDirectDependencies, subject, diagnostics);
+            ValidateBodyReferences(
+                graph,
+                request.Contract,
+                nodes,
+                request.ResolvedDirectDependencies
+                    .GroupBy(x => x.OccurrenceId, StringComparer.Ordinal)
+                    .ToDictionary(x => x.Key, x => x.First().Contract, StringComparer.Ordinal),
+                subject,
+                diagnostics);
         }
 
         var orderedDiagnostics = ActivityDiagnosticOrderer.Order(diagnostics);
@@ -170,7 +186,9 @@ public sealed class GraphActivityProvider(
             .Select(node => new ActivityTemplateOccurrenceCompilation(
                 node.NodeId,
                 ReadCanonicalArray(node.Element, "inputs"),
-                activityStructureService.CompileExecutableStructure(node.Activity)))
+                activityStructureService.CompileExecutableStructure(node.Activity),
+                // A body node's captures into graph variables; absent when it captures nothing.
+                ReadCanonicalArray(node.Element, "outputs") is { } outputs && outputs.GetArrayLength() > 0 ? outputs : null))
             .ToArray();
 
         return ValueTask.FromResult(new ActivityTemplateCompilation(
@@ -353,6 +371,39 @@ public sealed class GraphActivityProvider(
                     subject,
                     $"{candidate.JsonPointer}/activityVersionId"));
             }
+
+            foreach (var propertyName in new[] { "inputs", "outputs" })
+            {
+                foreach (var pointer in MalformedArguments(candidate.Element, propertyName))
+                {
+                    diagnostics.Add(Diagnostic(
+                        ArgumentMalformedCode,
+                        $"A graph node's '{propertyName}' must be a list of arguments, each with a non-empty 'referenceKey' and, when bound, an expression 'value' object.",
+                        subject,
+                        $"{candidate.JsonPointer}{pointer}"));
+                }
+            }
+
+            // A graph body runs published activities only; engine intrinsics need graph-scope support first.
+            if (TryGetPropertyIgnoreCase(candidate.Element, "intrinsic", out var intrinsic) &&
+                intrinsic.Value.ValueKind != JsonValueKind.Null)
+            {
+                diagnostics.Add(Diagnostic(
+                    "activity.graph.intrinsic-unsupported",
+                    "A graph activity cannot hold an engine intrinsic (Set variable, Set output, Correlate, Set name) yet.",
+                    subject,
+                    $"{candidate.JsonPointer}/{EscapePointer(intrinsic.Name)}"));
+            }
+        }
+
+        // Anything else that keeps the body from being read is refused rather than leaving the body unchecked.
+        if (!diagnostics.Any(x => x.Code == ArgumentMalformedCode) && !TryReadRootNode(graph.RootActivity, out _))
+        {
+            diagnostics.Add(Diagnostic(
+                "activity.graph.root-activity-malformed",
+                "The graph's root activity cannot be read as an activity node.",
+                subject,
+                "/rootActivity"));
         }
 
         var nodes = EnumerateNodes(graph.RootActivity);
@@ -786,16 +837,9 @@ public sealed class GraphActivityProvider(
 
     private IReadOnlyList<GraphNode> EnumerateNodes(JsonElement root)
     {
-        ActivityNode rootNode;
-        try
-        {
-            rootNode = root.Deserialize<ActivityNode>(new JsonSerializerOptions(JsonSerializerDefaults.Web))
-                       ?? throw new JsonException("The root activity is null.");
-        }
-        catch (JsonException)
-        {
+        // ValidateGraph refuses a root that cannot be read, so an empty body here is never accepted.
+        if (!TryReadRootNode(root, out var rootNode))
             return [];
-        }
 
         var pointers = EnumerateNodeCandidates(root)
             .Where(x => TryReadNode(x.Element, out _, out _))
@@ -1009,6 +1053,73 @@ public sealed class GraphActivityProvider(
         }
     }
 
+    private static bool TryReadRootNode(JsonElement root, [NotNullWhen(true)] out ActivityNode? node)
+    {
+        try
+        {
+            node = root.Deserialize<ActivityNode>(NodeSerializerOptions);
+        }
+        catch (JsonException)
+        {
+            node = null;
+        }
+
+        return node is not null;
+    }
+
+    // The relative pointer of each argument the activity node reader cannot read, or that has no reference key.
+    private static IEnumerable<string> MalformedArguments(JsonElement node, string propertyName)
+    {
+        if (!TryGetPropertyIgnoreCase(node, propertyName, out var property) ||
+            property.Value.ValueKind == JsonValueKind.Null)
+            yield break;
+
+        var name = EscapePointer(property.Name);
+        var arguments = property.Value;
+        if (arguments.ValueKind != JsonValueKind.Array)
+        {
+            yield return $"/{name}";
+            yield break;
+        }
+
+        var index = 0;
+        foreach (var argument in arguments.EnumerateArray())
+        {
+            ArgumentState? state;
+            try
+            {
+                state = argument.Deserialize<ArgumentState>(NodeSerializerOptions);
+            }
+            catch (JsonException)
+            {
+                state = null;
+            }
+
+            if (state is null || string.IsNullOrWhiteSpace(state.ReferenceKey))
+                yield return $"/{name}/{index}";
+            index++;
+        }
+    }
+
+    // The node reader matches property names without regard to case, so these checks do too.
+    private static bool TryGetPropertyIgnoreCase(JsonElement element, string propertyName, out JsonProperty property)
+    {
+        property = default;
+        if (element.ValueKind != JsonValueKind.Object)
+            return false;
+
+        foreach (var candidate in element.EnumerateObject())
+        {
+            if (string.Equals(candidate.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+            {
+                property = candidate;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static bool TryReadRequiredString(JsonElement element, string propertyName, out string? value)
     {
         value = null;
@@ -1123,10 +1234,14 @@ public sealed class GraphActivityProvider(
         };
         var serializerOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         var payload = JsonSerializer.SerializeToElement(plan, serializerOptions);
+        var closedPayload = JsonNode.Parse(payload.GetRawText())!.AsObject();
+        // The body is a closed value scope. Placement reads this to remap body references and mark the
+        // boundary; versions compiled before it keep resolving their body against the caller.
+        closedPayload["scopeModel"] = Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.ActivityExecutionScopeClosed;
         if (!StringComparer.Ordinal.Equals(graph.ManifestSchemaVersion, ActivityGraphManifest.MultipleOutcomesSchemaVersion))
-            return Canonicalize(payload);
+            return Canonicalize(JsonSerializer.SerializeToElement(closedPayload, serializerOptions));
 
-        var schemaTwoPayload = JsonNode.Parse(payload.GetRawText())!.AsObject();
+        var schemaTwoPayload = closedPayload;
         schemaTwoPayload["outcomeMappings"] = JsonSerializer.SerializeToNode(outcomeMappings, serializerOptions);
 
         // Written only when the body has a Complete node, so every other graph compiles to the same bytes as before.
@@ -1221,6 +1336,22 @@ public sealed class GraphActivityProvider(
     }
 
     private static ActivityDiagnosticSubject ProposalSubject() => new("ActivityDefinition", Key);
+
+    // A closed-scope body refers only to what the activity declares or contains.
+    private static void ValidateBodyReferences(
+        ActivityGraphManifest graph,
+        DesignActivityContract contract,
+        IReadOnlyList<GraphNode> nodes,
+        IReadOnlyDictionary<string, DesignActivityContract>? dependencyContracts,
+        ActivityDiagnosticSubject subject,
+        List<ActivityDiagnostic> diagnostics)
+    {
+        var bodyNodes = nodes
+            .Select(node => new GraphBodyReferenceValidator.BodyNode(node.NodeId, node.JsonPointer, node.ParentOccurrenceId, node.Element))
+            .ToArray();
+        foreach (var finding in GraphBodyReferenceValidator.Validate(graph, contract, bodyNodes, dependencyContracts))
+            diagnostics.Add(Diagnostic(finding.Code, finding.Message, subject, finding.JsonPointer, finding.ReferenceKey));
+    }
 
     private static ActivityDiagnostic Diagnostic(
         string code,

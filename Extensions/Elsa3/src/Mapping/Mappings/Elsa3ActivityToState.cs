@@ -47,9 +47,9 @@ public sealed class Elsa3ActivityToState
                 if (!isInput && !isOutput)
                     continue;
 
-                // A value that carries no expression (an output's bare memory reference, already lowered away) is
-                // dropped; a JSON null is kept as an explicit null binding.
-                if (!TryGetArgument(key, value, out var argument) && value.ValueKind != JsonValueKind.Null)
+                // A value that carries no expression (an output's bare memory reference, already lowered away, or a
+                // JSON null the member pass did not convert) is dropped: an untyped binding cannot be published.
+                if (!TryGetArgument(key, value, out var argument))
                     continue;
                 (isInput ? inputs : outputs).Add(argument);
             }
@@ -75,6 +75,13 @@ public sealed class Elsa3ActivityToState
     private static bool TryGetArgument(string key, JsonElement jsonElement, out ArgumentState argument)
     {
         argument = ArgumentState.Null(key);
+        // A typed null: the conversion of a null member whose Elsa 4 input accepts null (spec 267).
+        if (Elsa3TypedValues.IsNullLiteral(jsonElement))
+        {
+            argument = new ArgumentState(key, new ArgumentValue(null, Elsa3TypedValues.Literal), null, null, null, null);
+            return true;
+        }
+
         if (!Elsa3TypedValues.TryGetExpression(jsonElement, out var expressionType, out var expressionValue))
             return false;
 

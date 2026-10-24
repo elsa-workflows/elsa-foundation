@@ -8,6 +8,7 @@ using Elsa.Maps.Generator;
 //   solution-filters | solution-filters-check | solution-filters-self-test
 //   solution-filter-roots <filter-path> | solution-filter <filter-path>
 //   ef-suites-select | ef-suites-self-test
+//   test-tiers-check | test-tiers-self-test | test-tiers-rebalance <trx-dir> [--write]
 //   project-facts-self-test | feature-facts-self-test | repo-layout-self-test | project-graph-self-test
 //   publish <out-dir> --source-commit <sha> --repo-url <url> | publish-self-test
 //
@@ -58,6 +59,25 @@ try
     if (layers.SequenceEqual(["ef-suites-self-test"], StringComparer.Ordinal))
     {
         EfSuiteSelectorContractTests.Run();
+        return 0;
+    }
+
+    if (layers.SequenceEqual(["test-tiers-check"], StringComparer.Ordinal))
+        return TestTierCheck.Run(repo);
+
+    if (layers.Length is 2 or 3 && string.Equals(layers[0], "test-tiers-rebalance", StringComparison.Ordinal))
+    {
+        if (layers.Length == 3 && layers[2] != "--write")
+        {
+            Console.Error.WriteLine("Usage: test-tiers-rebalance <trx-dir> [--write]");
+            return 2;
+        }
+        return TestTierRebalance.Run(repo, layers[1], write: layers.Length == 3);
+    }
+
+    if (layers.SequenceEqual(["test-tiers-self-test"], StringComparer.Ordinal))
+    {
+        TestTierCheckContractTests.Run();
         return 0;
     }
 
@@ -125,7 +145,7 @@ try
     // writing part of the maps and then throwing.
     var requested = layers.Contains("all", StringComparer.Ordinal) ? knownLayers : layers;
     if (requested.FirstOrDefault(layer => !knownLayers.Contains(layer, StringComparer.Ordinal)) is { } unknown)
-        throw new ArgumentException($"Unknown generator command '{unknown}'. Known map layers: {string.Join(", ", knownLayers)}, all, check, solution-filters, solution-filters-check, solution-filters-self-test, solution-filter-roots <filter-path>, solution-filter <filter-path>, ef-suites-select, ef-suites-self-test, project-facts-self-test, feature-facts-self-test, repo-layout-self-test, project-graph-self-test, publish <out-dir> --source-commit <sha> --repo-url <url>, publish-self-test.");
+        throw new ArgumentException($"Unknown generator command '{unknown}'. Known map layers: {string.Join(", ", knownLayers)}, all, check, solution-filters, solution-filters-check, solution-filters-self-test, solution-filter-roots <filter-path>, solution-filter <filter-path>, ef-suites-select, ef-suites-self-test, test-tiers-check, test-tiers-self-test, test-tiers-rebalance <trx-dir> [--write], project-facts-self-test, feature-facts-self-test, repo-layout-self-test, project-graph-self-test, publish <out-dir> --source-commit <sha> --repo-url <url>, publish-self-test.");
 
     var projects = ProjectGraph.Read(repo);
     var written = new List<string>();

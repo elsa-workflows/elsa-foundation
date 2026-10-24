@@ -2,7 +2,7 @@
   "id": "input-reader-v1",
   "definitionId": "input-reader",
   "name": "input-reader",
-  "description": "Test-owned reusable whose decision reads its approve input, which a graph body cannot do (spec 246 D-8).",
+  "description": "Test-owned reusable whose decision reads its approve input (spec 265: a graph body reads its own inputs).",
   "createdAt": "1970-01-01T00:00:00Z",
   "version": 1,
   "toolVersion": "3.6.0",

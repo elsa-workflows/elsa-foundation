@@ -108,23 +108,6 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             if (property.MemoryReferenceId is null)
                 continue;
 
-            if (isReusable)
-            {
-                // A captured output writes the value; anything else bound to a memory reference reads it.
-                var captures = directions.Contains(Elsa3PropertyDirection.Output);
-                diagnostics.Add(CreateDiagnostic(
-                    input,
-                    property,
-                    Elsa3ActivityDiagnosticCodes.ReusableValueReadUnsupported,
-                    captures
-                        ? $"Output '{property.PropertyName}' of reusable workflow node '{property.ActivityNodeId}' is captured into a variable, which nothing in an Elsa 4 graph activity body can read yet."
-                        : $"Property '{property.PropertyName}' of reusable workflow node '{property.ActivityNodeId}' reads a variable or another activity's result, which an Elsa 4 graph activity body cannot reach yet.",
-                    captures ? Elsa3ReusableGuidance.Capture : ReusableValueReadGuidance,
-                    $"{property.JsonPath}.memoryReference",
-                    property.MemoryReferenceId));
-                continue;
-            }
-
             if (string.IsNullOrWhiteSpace(property.MemoryReferenceId))
             {
                 diagnostics.Add(CreateDiagnostic(
@@ -511,14 +494,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         AccessorScope accessors,
         Elsa3AmbientReference ambient)
     {
-        // A graph body node's bindings resolve against the started workflow, never the graph (spec 246 D-8). Generated
-        // get{Name}() accessors resolve through here too, so they are refused alike.
-        if (accessors.IsReusable && ambient.Kind is Elsa3AmbientReferenceKind.WorkflowRequest or Elsa3AmbientReferenceKind.Variable or Elsa3AmbientReferenceKind.ActivityResult)
-            return Elsa3ExpressionParameterResolution.Failure(new Elsa3ExpressionRewriteIssue(
-                Elsa3ActivityDiagnosticCodes.ReusableValueReadUnsupported,
-                $"The reusable workflow body reads {ambient.Kind} '{ambient.Name}', which an Elsa 4 graph activity body cannot reach yet.",
-                ReusableValueReadGuidance));
-
+        // A graph body is a closed scope: its request inputs are the reusable's own inputs and its root
+        // variables are the reusable's variables, so the same lowering as a workflow's reads the reusable's values.
         switch (ambient.Kind)
         {
             case Elsa3AmbientReferenceKind.WorkflowRequest:
@@ -674,8 +651,6 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 Collect(child);
         }
     }
-
-    private const string ReusableValueReadGuidance = Elsa3ReusableGuidance.ValueRead;
 
     private static Elsa3ExpressionParameterResolution MissingAmbient(Elsa3AmbientReference ambient) =>
         Elsa3ExpressionParameterResolution.Failure(new Elsa3ExpressionRewriteIssue(

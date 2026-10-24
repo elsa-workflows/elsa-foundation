@@ -4,6 +4,7 @@ Reports are point-in-time findings. They may become work units, but they are not
 
 ## Current reports
 
+- [Scheduler poison sample: 16 October 2026](scheduler-poison-sample-2026-10-16.md) - read-only counts from two local demo backends found zero scheduler poison records and zero incidents; keep the current retry default until a representative observed sample exists.
 - [Native compensation: qualification and release readiness](native-compensation-qualification.md) - spec 261 (M5) record of the integrated candidate: every qualification matrix row with its revision and result, the supported and not-qualified configurations, known limits, open follow-ups and review findings. Claims no release or deployment.
 - [Native compensation: the Elsa 3 follow-on](native-compensation-elsa3-follow-on.md) - what an Elsa 3 implementation (elsa-core#4015) can reuse from Elsa 4's compensation: twenty engine-neutral acceptance scenarios and the participant contract, not the runtime seams; implementation is a separate effort.
 - [EF Core persistence completion ledger](ef-core-persistence-completion-ledger.md) - closed (2026-09-16) Program #1665 ledger: the pre-program inventory plus each row's replacement, default-flip (#1763) and deletion (#1764) disposition, with the carry-forwards it does not claim.

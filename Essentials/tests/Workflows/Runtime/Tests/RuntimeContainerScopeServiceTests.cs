@@ -311,6 +311,53 @@ public sealed class RuntimeContainerScopeServiceTests
     }
 
     [Fact]
+    public async Task Scoped_variable_reader_inside_a_closed_scope_sees_the_graph_variables_not_the_callers()
+    {
+        // Below a closed boundary the root is the boundary's variable rows, read from the durable store
+        // because the reader seam carries no durable values of its own.
+        var root = new VariableFrameFactory().CreateRoot(WorkflowExecutionId, "workflow", Values(("g", "caller")));
+        await _workflows.SaveAsync(WorkflowState(root));
+        var readerNode = DeclNode("reader", []);
+        var boundaryNode = DeclNode("boundary", [new ExecutableChildSlot("Graph.Entry", [readerNode])]);
+        var executable = Executable(boundaryNode, Declaration("g", "Greeting"));
+        await _activities.SaveAsync(State("boundary-exec", "boundary") with
+        {
+            Metadata = new Dictionary<string, string>
+            {
+                [RuntimeMetadataKeys.ActivityExecutionScope] = RuntimeMetadataKeys.ActivityExecutionScopeClosed
+            }
+        });
+        var reader = State("reader-exec", "reader", "boundary-exec");
+        await _activities.SaveAsync(reader);
+        var durableValues = new InMemoryDurableValueStateStore();
+        var rowId = ActivityExecutionScopeKeys.Variable("boundary-exec", "total");
+        await durableValues.SaveAsync(new DurableValueState(
+            rowId,
+            WorkflowExecutionId,
+            rowId,
+            new RuntimeValueTypeDescriptor("object", WellKnownRuntimeDurableValueStorageDrivers.Json, null),
+            DurableValueLifecycle.Instance,
+            DurableValueStorage.Inline,
+            JsonSerializer.SerializeToElement("graph"),
+            null,
+            "boundary-exec",
+            DateTimeOffset.UnixEpoch,
+            new Dictionary<string, string>
+            {
+                [RuntimeMetadataKeys.BoundaryValueRole] = "variable",
+                [RuntimeMetadataKeys.BoundaryReferenceKey] = "total",
+                [RuntimeMetadataKeys.BoundaryVariableName] = "RunningTotal"
+            }));
+
+        var populated = await new RuntimeContainerScopeService(_activities, _workflows, durableValues)
+            .ProjectScopedVariablesForReaderAsync(new MarkerReaderActivity(), executable, reader);
+
+        Assert.NotNull(populated);
+        Assert.Equal("graph", populated!["RunningTotal"].InlineValue!.Value.GetString());
+        Assert.False(populated.ContainsKey("Greeting"));
+    }
+
+    [Fact]
     public async Task Scoped_variable_reader_sees_committed_container_write_on_a_later_evaluation()
     {
         // A value committed into the reader's OWN container frame (as a mid-run intrinsic write would leave it) is
