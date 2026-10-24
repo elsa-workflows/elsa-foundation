@@ -20,7 +20,10 @@ import { activityDefinitionsObservationEvent, type ActivityDefinitionsObservatio
 import type { ActivityDefinitionDraftView, ActivityDefinitionManagementView } from "../activityDefinitionTypes";
 import { isExactVersionAtLeast, safeChangeValue } from "../ActivityDefinitionPublicationReview";
 
-afterEach(() => {
+const mountedAuthoringRoots = new Set<() => Promise<void>>();
+
+afterEach(async () => {
+  for (const unmount of [...mountedAuthoringRoots]) await unmount();
   clearApiCapabilityCache();
   window.history.replaceState({}, "", "/");
   window.localStorage.clear();
@@ -776,7 +779,7 @@ describe("Activity Definition authoring", () => {
     const defaultValue = controlByLabel<HTMLInputElement>(quantityPane, "Value");
     change(defaultValue, "pending candidate");
     await waitFor(() => expect(contractListButton(rendered.container, "input", "quantity").textContent).toContain("Apply default"));
-    expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(false);
+    await waitFor(() => expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(false));
 
     click(diagnostic);
     await waitFor(() => expect(contractMemberPane(rendered.container, "input", "message").dataset.contractSelected).toBe("true"));
@@ -2505,12 +2508,16 @@ function renderPage(options: {
       <ActivityDefinitionsPage context={context} activityEditors={() => contributions} runtime={options.runtime} />
     </QueryClientProvider>
   ));
+  const unmount = async () => {
+    if (!mountedAuthoringRoots.delete(unmount)) return;
+    flushSync(() => root.unmount());
+    queryClient.clear();
+    container.remove();
+  };
+  mountedAuthoringRoots.add(unmount);
   return {
     container,
-    async unmount() {
-      flushSync(() => root.unmount());
-      container.remove();
-    }
+    unmount
   };
 }
 
