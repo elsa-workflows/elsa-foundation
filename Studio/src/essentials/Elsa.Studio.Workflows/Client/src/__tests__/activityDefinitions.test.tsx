@@ -295,6 +295,12 @@ describe("Activity Definitions experience", () => {
     window.history.pushState({ hostEntry: "second" }, "", "/workflows/activity-definitions");
     window.dispatchEvent(new PopStateEvent("popstate"));
     await waitForText(rendered.container, "Invoice evaluator");
+    await waitFor(() => expect(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")?.value).toBe(""));
+    await waitFor(() => {
+      const entryId = window.history.state?.elsaActivityDefinitions?.collection?.entryId;
+      expect(typeof entryId).toBe("string");
+      expect(entryId).not.toBe(firstOrigin.elsaActivityDefinitions.collection.entryId);
+    });
     change(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")!, "second origin");
     change(controlByLabel<HTMLInputElement>(rendered.container, "Provider key"), "provider-two");
     change(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page"), "50");
@@ -311,6 +317,7 @@ describe("Activity Definitions experience", () => {
     window.history.replaceState(secondOrigin, "", "/workflows/activity-definitions");
     window.dispatchEvent(new PopStateEvent("popstate"));
     await waitForText(rendered.container, "Invoice evaluator");
+    await waitFor(() => expect(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")?.value).toBe("second origin"));
     expect(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")?.value).toBe("second origin");
     expect(controlByLabel<HTMLInputElement>(rendered.container, "Provider key").value).toBe("provider-two");
     expect(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page").value).toBe("50");
@@ -319,6 +326,7 @@ describe("Activity Definitions experience", () => {
     window.history.replaceState(firstOrigin, "", "/workflows/activity-definitions");
     window.dispatchEvent(new PopStateEvent("popstate"));
     await waitForText(rendered.container, "Invoice evaluator");
+    await waitFor(() => expect(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")?.value).toBe("first origin"));
     expect(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")?.value).toBe("first origin");
     expect(controlByLabel<HTMLInputElement>(rendered.container, "Provider key").value).toBe("");
     expect(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page").value).toBe("25");
