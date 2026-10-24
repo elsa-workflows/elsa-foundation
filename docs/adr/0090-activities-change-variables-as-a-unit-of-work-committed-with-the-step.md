@@ -239,8 +239,8 @@ typed results.
     intent, and the transition still returns its typed result. `context.Variables` is not a service locator.
   - §4's concurrent-write rule applies to step writes as to every other write (decision 7).
   - §3's retries and resumptions "retain … the same input snapshot" and §4's "Reads occur when the consumer
-    invocation materializes its inputs" still hold for inputs. A step's variable reads are a separate channel, read at invoke
-    from committed values, so a retry can see different variable values than its first attempt.
+    invocation materializes its inputs" still hold for inputs. A step's variable reads are a separate channel, read
+    at invoke from committed values, so a retry can see different variable values than its first attempt.
 - **ADR 0089.** Its "scripts do not write variables" and its open question on writes would be superseded. Its read
   model, decisions 4 and 5 included, covers input-binding expressions; RunJavaScript gets the session reads of
   decision 2 instead of pinned parameter snapshots, and decision 3's own transient refusal, with the host-interop
