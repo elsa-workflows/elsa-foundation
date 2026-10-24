@@ -1,7 +1,8 @@
 # Scripts Read Variables By Name And Publish Pins Them As Declared Parameters
 
-Status: proposed (2026-10-23). Sipke Schoorstra, the decision holder, chose this option on
-[#3204](https://github.com/elsa-workflows/elsa-foundation/issues/3204) (US2). Acceptance still needs agreement with
+Status: proposed (2026-10-23, amended 2026-10-24). Sipke Schoorstra, the decision holder, chose this option on
+[#3204](https://github.com/elsa-workflows/elsa-foundation/issues/3204) (US2), and on 2026-10-24 settled the
+converter output and open questions 1 and 3. Acceptance still needs agreement with
 @j03y-nxxbz per #3204, and alignment with the pending review of
 [ADR 0045 §5](0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md#5-make-expressions-serialized-explicit-and-pure)
 (#3026), because both change how values enter an expression.
@@ -44,7 +45,7 @@ Elsa 4 is unreleased and has no existing data, so none of the options below has 
 
 **1. Authors write variables by name.** In JavaScript the standard form is `variables.X`, with
 `variables['X']` (a string literal) and `getVariable('X')` (a string literal argument) as aliases. Liquid gets the
-equivalent root; its name is open (see below).
+same root, `{{ variables.X }}`; the converter rewrites Elsa 3's `{{ Variables.X }}`. There is one name, not both.
 
 **2. Publish resolves each name to its nearest declaring scope.** The read set comes from parsing the source with a
 JavaScript parser, the way the converter already does, not from regular expressions. Each name resolves against the
@@ -66,7 +67,8 @@ editor completions, and an exact answer to "which expressions read this variable
 **5. Computed names are refused at publish.** `variables[name]`, `getVariable(expr)` with a non-literal argument,
 or passing `variables` or `getVariable` around as a value, is a publish diagnostic. This is the same reason the
 importer refuses such reads with `VF-IMP-006`. A name that resolves to no visible variable is also a publish
-diagnostic, not a run-time `undefined`.
+diagnostic, not a run-time `undefined`. So is a read of a transient (non-durable) variable, because its value cannot
+be snapshotted.
 
 **6. `get<Name>()` leaves the runtime.** It survives only as an Elsa 3 import form that the converter rewrites, using
 Elsa 3's naming rule (`Elsa3JavaScriptNames`). The runtime's `ToGetterName` and the getter completions in
@@ -74,16 +76,23 @@ Elsa 3's naming rule (`Elsa3JavaScriptNames`). The runtime's `ToGetterName` and 
 
 **7. `args` stays the canonical form and stays authorable.** `variables.X` is a convenience for variables; `args` is
 what every parameter is underneath. Workflow inputs, activity results and instance metadata are still read through
-`args`, as on main today, and the converter keeps emitting `args`. An author may also write `args.X` for an explicit
-parameter. A script must not declare the same variable both ways; publish refuses that as ambiguous.
+`args`, as on main today. An author may also write `args.X` for an explicit parameter. A script must not declare
+the same variable both ways; publish refuses that as ambiguous.
+
+**8. An unset variable reads as `null`.** A name that resolves to a declared variable with no value binds JSON
+`null`, as Elsa 3's `getVariable` returned and as the workflow-instance binding treats an absent correlation ID. It
+never binds `undefined`, which the evaluator refuses as a result.
 
 Writes are unchanged: scripts do not write variables. A change goes through the `Set` intrinsic (ADR 0045 §5).
 
 ## Consequences
 
-- **Converter.** Spec 247's lowering keeps targeting declared parameters, now as the same form publish produces. It
-  can emit `variables.X` instead of rewriting reads to `args.X`, which is an implementation choice for the follow-up
-  spec. Per #3010 it emits statement bodies as they are and no longer wraps them in `(function () { … })()`.
+- **Converter.** Once publish pinning (decisions 2 to 4) is implemented, the converter emits `variables.X` for
+  Elsa 3 variable reads, spelled as the variable is declared, and keeps `args.X` for inputs, activity results and
+  instance metadata. Converted workflows then behave like authored ones when they are edited later. To stay
+  faithful, the converter checks that publish's resolution picks the same declaration as Elsa 3's resolution, and
+  refuses the read when they differ. Until publish pinning lands, it keeps emitting `args.X`. Per #3010 it emits
+  statement bodies as they are and no longer wraps them in `(function () { … })()`.
 - **Runtime.** `SetReadOnlyVariables` builds `variables` from pinned parameters, not from `AmbientVariables`. The
   regular-expression read detection, the "computed access exposes everything" path and the ambient frame projection
   for scripts go. `ExpressionEvaluationRequest.AmbientVariables` either goes or is filled only from pinned values.
@@ -92,8 +101,9 @@ Writes are unchanged: scripts do not write variables. A change goes through the 
   declaration would start to shadow; `GetShadowingWarnings` is a starting point.
 - **Scoping versus ADR 0027.** The pinned executable never retargets. The authored source is name-based, though, so
   moving an activity under a container that declares the same name changes what it reads at the next publish. That
-  is Elsa 3's behaviour and was chosen on purpose. Explicit `args` parameters keep ADR 0027's "invalid, not
-  retargeted" rule.
+  is Elsa 3's behaviour and was chosen on purpose. Publish warns when a name resolves to a different declaration
+  than in the previously published version, so the change is never silent. Explicit `args` parameters keep ADR
+  0027's "invalid, not retargeted" rule.
 - **Tooling (#2378, #2380).** Both are rebuilt after this ADR is accepted and drop generated-getter naming. Editor
   completions for `variables` come from the same visible-scope list publish uses.
 - **ADR 0045 §5.** The script still names a value, but publish turns that name into an explicit, declared parameter,
@@ -112,15 +122,11 @@ variable, publish cannot check reads, and tooling can only guess what a script t
 
 ## Open questions
 
-1. **Liquid root name.** Elsa 3 Liquid used `{{ Variables.X }}`. Options are `Variables` (Elsa 3 parity) or
-   `variables` (matches JavaScript). Liquid has no ambient surface today, so this is new either way.
-2. **Serialized shape.** How the compiled binding marks a parameter as exposed under `variables` rather than `args`
+1. **Serialized shape.** How the compiled binding marks a parameter as exposed under `variables` rather than `args`
    (a separate map, or a per-parameter surface flag), and how its name avoids colliding with authored `args` names.
    This belongs to the implementation spec and changes spec 095's contract.
-3. **Edge values.** Today the ambient surface silently omits transient variables and reads absent ones as
-   `undefined`, while spec 095 fails an absent required parameter before evaluation. Pick one rule. Loop iteration values
-   (ADR 0028) are exposed today from iteration frames by key; the implementation spec must confirm how they are
-   pinned.
-4. **Inputs by name.** Whether `input.X` (Elsa 3's `getInput`) should get the same treatment later. Out of scope
+2. **Loop iteration values.** Loop iteration values (ADR 0028) are exposed today from iteration frames by key. The
+   implementation spec must confirm how they are pinned.
+3. **Inputs by name.** Whether `input.X` (Elsa 3's `getInput`) should get the same treatment later. Out of scope
    here.
-5. **Writes.** Stay intrinsics. A request to let scripts write variables would need its own ADR.
+4. **Writes.** Stay intrinsics. A request to let scripts write variables would need its own ADR.
