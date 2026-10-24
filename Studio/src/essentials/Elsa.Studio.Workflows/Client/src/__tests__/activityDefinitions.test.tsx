@@ -1,4 +1,4 @@
-import React from "react";
+import React, { startTransition } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -331,6 +331,63 @@ describe("Activity Definitions experience", () => {
     expect(controlByLabel<HTMLInputElement>(rendered.container, "Provider key").value).toBe("");
     expect(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page").value).toBe("25");
     expect(rendered.container.querySelector(".ad-collection-view button[aria-pressed='true']")?.textContent).toBe("Designed");
+    await rendered.unmount();
+  }, 15000);
+
+  it("keeps a pending filter write with its origin during transitioned host navigation", async () => {
+    let navigationTriggered = false;
+    let previousEntryId: string | undefined;
+    let requestContext: { entryId?: string; searchInput?: string; search?: string } | undefined;
+    let stateAtNavigation: Record<string, unknown> | undefined;
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      const parameters = new URL(url, "https://studio.test").searchParams;
+      if (!navigationTriggered && parameters.get("search") === "first origin") {
+        navigationTriggered = true;
+        requestContext = window.history.state?.elsaActivityDefinitions?.collection;
+        previousEntryId = requestContext?.entryId;
+        startTransition(() => {
+          window.history.pushState({ hostEntry: "second" }, "", "/workflows/activity-definitions");
+          window.dispatchEvent(new PopStateEvent("popstate"));
+          stateAtNavigation = { ...window.history.state };
+        });
+      }
+      return page([definition()]);
+    });
+    const rendered = renderPage(getJson);
+    await waitForText(rendered.container, "Invoice evaluator");
+    const replaceState = vi.spyOn(window.history, "replaceState");
+    replaceState.mockClear();
+
+    change(controlByLabel<HTMLInputElement>(rendered.container, "Search"), "first origin");
+    await waitFor(() => expect(navigationTriggered).toBe(true));
+    expect(previousEntryId).toEqual(expect.any(String));
+    expect(requestContext).toMatchObject({ entryId: previousEntryId, searchInput: "first origin", search: "first origin" });
+    expect(stateAtNavigation).toEqual({ hostEntry: "second" });
+    await waitFor(() => {
+      const entryId = window.history.state?.elsaActivityDefinitions?.collection?.entryId;
+      expect(entryId).toEqual(expect.any(String));
+      expect(entryId).not.toBe(previousEntryId);
+      expect(controlByLabel<HTMLInputElement>(rendered.container, "Search").value).toBe("");
+    });
+
+    const collection = window.history.state?.elsaActivityDefinitions?.collection;
+    const writes = replaceState.mock.calls.map(([state]) => {
+      const value = state as { hostEntry?: string; elsaActivityDefinitions?: { collection?: { entryId?: string; searchInput?: string; search?: string } } };
+      const saved = value.elsaActivityDefinitions?.collection;
+      return { hostEntry: value.hostEntry, entryId: saved?.entryId, searchInput: saved?.searchInput, search: saved?.search };
+    });
+    const lateOriginWrites = writes.filter(write => write.hostEntry === "second" && write.entryId === previousEntryId);
+    const finalState = {
+      hostEntry: window.history.state?.hostEntry,
+      entryId: collection?.entryId,
+      searchInput: collection?.searchInput,
+      search: collection?.search,
+      input: controlByLabel<HTMLInputElement>(rendered.container, "Search").value
+    };
+    expect(finalState).toMatchObject({ hostEntry: "second", searchInput: "", search: "", input: "" });
+    expect(collection?.entryId).not.toBe(previousEntryId);
+    expect(lateOriginWrites).toEqual([]);
     await rendered.unmount();
   }, 15000);
 

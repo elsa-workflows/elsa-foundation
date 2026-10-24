@@ -88,9 +88,6 @@ export function ActivityDefinitionsPage({
   const routeRef = useRef(route);
   const navigationBlockedRef = useRef(false);
   const routeCollectionContextRef = useRef(readActivityHistoryMetadata()?.collection ?? null);
-  const updateRouteCollectionContext = useCallback((value: ActivityCollectionHistoryContext) => {
-    routeCollectionContextRef.current = value;
-  }, []);
   const queryClient = useQueryClient();
   const restoredHistoryContext = readActivityHistoryMetadata()?.collection;
   const currentAuthorityRevision = activityAuthorityRevision;
@@ -100,7 +97,14 @@ export function ActivityDefinitionsPage({
   const pendingRedactionsRef = useRef(0);
   const initialRedactionStartedRef = useRef(false);
   const [historyRevision, setHistoryRevision] = useState(0);
+  const historyRevisionRef = useRef(0);
   const baseUrlRef = useRef(context.baseUrl);
+  const updateRouteCollectionContext = useCallback((value: ActivityCollectionHistoryContext) => {
+    // Deferred collection effects must not write into a newer history entry.
+    if (historyRevisionRef.current !== historyRevision) return;
+    writeActivityCollectionHistoryContext(value);
+    routeCollectionContextRef.current = value;
+  }, [historyRevision]);
 
   const invalidateAuthorizationScope = useCallback(() => {
     setAuthorizationRevision(activityAuthorityRevision);
@@ -145,9 +149,10 @@ export function ActivityDefinitionsPage({
         writeRouteState(routeRef.current, "push", routeCollectionContextRef.current);
         return;
       }
+      const nextHistoryRevision = ++historyRevisionRef.current;
       routeCollectionContextRef.current = readActivityHistoryMetadata()?.collection ?? null;
       setRoute(readRouteState());
-      setHistoryRevision(value => value + 1);
+      setHistoryRevision(nextHistoryRevision);
     };
     window.addEventListener("popstate", sync);
     return () => window.removeEventListener("popstate", sync);
@@ -285,7 +290,6 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
   }, [authority, pageSize, providerKey, search]);
 
   useEffect(() => {
-    writeActivityCollectionHistoryContext(historyContext);
     onHistoryContextChange(historyContext);
   }, [historyContext, onHistoryContextChange]);
 
@@ -319,7 +323,6 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
 
   const openDefinition = (definition: ActivityDefinitionManagementView) => {
     observeActivityDefinitions({ event: "open-definition", surface: "collection" });
-    writeActivityCollectionHistoryContext(historyContext);
     onHistoryContextChange(historyContext);
     onOpen(definition.definition.definitionId);
   };
