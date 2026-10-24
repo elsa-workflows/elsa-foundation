@@ -127,6 +127,7 @@ export function WorkflowInstances({ context, navigate }: {
   const refreshButton = useRef<HTMLButtonElement>(null);
   const [deleteFeedback, setDeleteFeedback] = useState<{ message: string; failures: Array<{ id: string; message: string }> } | null>(null);
   const requestSequence = useRef(0);
+  const definitionNamesAbort = useRef<AbortController | null>(null);
   const deletionSequence = useRef(0);
   const deletionController = useRef<AbortController | null>(null);
   const deletionScope = useRef({ context, location });
@@ -172,6 +173,7 @@ export function WorkflowInstances({ context, navigate }: {
 
   const load = useCallback(async () => {
     const requestId = ++requestSequence.current;
+    definitionNamesAbort.current?.abort();
     setState("loading");
     setError("");
     try {
@@ -214,10 +216,13 @@ export function WorkflowInstances({ context, navigate }: {
       setSelectedRunIds(current => new Set([...current].filter(id => visibleIds.has(id))));
       setPage(nextPage);
       setState("ready");
+      definitionNamesAbort.current?.abort();
+      const namesAbort = new AbortController();
+      definitionNamesAbort.current = namesAbort;
       void loadDefinitionDisplayNames(context, [
         ...nextPage.items.map(item => item.definitionId),
         ...(filters.definitionId ? [filters.definitionId] : [])
-      ]).then(names => {
+      ], namesAbort.signal).then(names => {
         if (requestId !== requestSequence.current) return;
         setDefinitionNames(names);
       });
@@ -233,6 +238,7 @@ export function WorkflowInstances({ context, navigate }: {
     void load();
     return () => {
       requestSequence.current += 1;
+      definitionNamesAbort.current?.abort();
     };
   }, [load]);
 
@@ -843,6 +849,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
   const appliedInitialActivityExecutionId = useRef<string | null>(null);
   const incidentNavigationRequest = useRef(0);
   const loadGeneration = useRef(0);
+  const definitionNameAbort = useRef<AbortController | null>(null);
   const incidentActivityLookupSequence = useRef(0);
   const latestIncidentActivityLookupById = useRef(new Map<string, number>());
   const associationActivities = combineActivityExecutions(data?.details.activities ?? [], data?.incidentActivityExecutions ?? []);
@@ -1037,7 +1044,10 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
       if (initialEvidence) {
         requestAnimationFrame(() => requestAnimationFrame(() => focusSelectedCanvasActivity(initialEvidence)));
       }
-      void loadDefinitionDisplayNames(context, [details.instance.definitionId]).then(
+      definitionNameAbort.current?.abort();
+      const namesAbort = new AbortController();
+      definitionNameAbort.current = namesAbort;
+      void loadDefinitionDisplayNames(context, [details.instance.definitionId], namesAbort.signal).then(
         definitionNames => {
           if (generation !== loadGeneration.current) return;
           const definitionName = definitionNames.get(details.instance.definitionId);
@@ -1056,6 +1066,10 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
 
   useEffect(() => {
     void load();
+    return () => {
+      loadGeneration.current += 1;
+      definitionNameAbort.current?.abort();
+    };
   }, [load]);
 
   const goBack = () => {
