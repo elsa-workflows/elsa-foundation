@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-22
 
-**Status**: Approved — root approval recorded in [issue comment 6343367959](https://github.com/elsa-workflows/elsa-foundation/issues/3070#issuecomment-6343367959)
+**Status**: Implemented — delivered by [PR #3258](https://github.com/elsa-workflows/elsa-foundation/pull/3258) when it merges, as required by the [spec lifecycle](../../docs/reference/spec-lifecycle.md). Until merge, acceptance and delivery gates remain the live issue/PR record.
 
 **Input**: Issue [#3070: Align workflow and activity lists with the Runs list conventions](https://github.com/elsa-workflows/elsa-foundation/issues/3070), including its pre-claim refinements.
 
@@ -107,6 +107,7 @@ As an operator editing an Activity Definition, I want to return to the exact col
 - The existing public Studio UI identity, action, disclosure, and overflow controls are sufficient for these interactions.
 - Activity Definition collection context can be restored without changing the backend, cursor contract, or authentication model.
 - Existing authorization and lifecycle rules remain authoritative even where they create a deliberate visual exception between lists.
+- Folder navigation, folder paging, and Move remain capability-gated. The normal Workbench composition does not advertise `workflow-folders`, `workflow-definitions-page`, or `workflow-definition-folder-move`; normal-host proof covers hidden unsupported actions and truthful bookmarked folder/Unfiled fallback. Positive folder/Move cases remain supplemental supported-host regression coverage, not normal-host acceptance. See [the source-grounded refinement](https://github.com/elsa-workflows/elsa-foundation/issues/3070#issuecomment-6379713156).
 
 ## Scope Boundaries
 

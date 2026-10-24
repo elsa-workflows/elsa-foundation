@@ -70,7 +70,7 @@ code.
 
 ## Definition list consistency (#3070)
 
-**Status: `target, phase 2`** until this change is part of `main`.
+**Status: `exists`** when [PR #3258](https://github.com/elsa-workflows/elsa-foundation/pull/3258) merges. The implementation PR carries this rule; its issue/PR records acceptance and delivery evidence.
 
 The Activity Definitions and Workflow Definitions collections use the same scan hierarchy:
 page inset, eyebrow/title/description, one filled primary action, secondary page actions, search
@@ -94,7 +94,7 @@ hierarchy is a presentation rule, not a shared data-grid or filtering framework.
   expired snapshot recovery remain distinct from a generic request failure.
 - **Workflow Definitions exception:** Preserve lifecycle tabs, folder and Unfiled scope,
   selection, move, delete, restore, permanent-delete confirmations, and the current browse-session
-  behavior. Secondary IDs remain unavailable while stale previous-query rows are displayed.
+  behavior. Folder navigation and Move require the host's advertised relations; the normal Workbench does not currently provide them. Bookmarked unsupported folder scopes show a truthful fallback rather than guessed requests. Secondary IDs remain unavailable while stale previous-query rows are displayed. At narrow widths, constrain Name-cell identifiers and complete copy-button hitboxes to the visible scroll container, including the shell content inset; retain horizontal access to later table columns.
 - **Runs exception:** Keep workflow name as the first scan target and the exact execution ID
   visible and copyable. Reveal artifact, definition, and version IDs on demand. Keep applied and
   advanced filters, cursor navigation, row selection, and capability-gated deletion unchanged.
