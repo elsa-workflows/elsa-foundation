@@ -154,7 +154,8 @@ describe("workflow Test Run setup", () => {
       label: "HTTP endpoint",
       modes: [{ modeId: "http-request", label: "Send HTTP request", isDefault: true }]
     };
-    publishingMocks.getOptions.mockResolvedValue({ options: [httpOption] });
+    let resolveOptions!: (result: { options: Array<typeof httpOption> }) => void;
+    publishingMocks.getOptions.mockReturnValue(new Promise<{ options: Array<typeof httpOption> }>(resolve => { resolveOptions = resolve; }));
     const onStart = vi.fn(async () => testRunView);
     const container = renderPanel({
       draft: draft({ state: { rootActivity: draft().state.rootActivity, inputs: [] } }),
@@ -167,7 +168,17 @@ describe("workflow Test Run setup", () => {
     });
     await settle();
 
-    changeSelect(container.querySelector<HTMLSelectElement>("select")!, "trigger:http-option");
+    const startSelector = container.querySelector<HTMLSelectElement>("select")!;
+    expect(startSelector.disabled).toBe(true);
+    expect(startSelector.querySelector("option[value='trigger:http-option']")).toBeNull();
+
+    resolveOptions({ options: [httpOption] });
+    await vi.waitFor(() => {
+      expect(startSelector.disabled).toBe(false);
+      expect(startSelector.querySelector("option[value='trigger:http-option']")).toBeTruthy();
+    });
+
+    changeSelect(startSelector, "trigger:http-option");
     const textarea = container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Send HTTP request data']");
     expect(textarea).toBeTruthy();
     expect(JSON.parse(textarea!.value)).toEqual(defaultHttpTestRequest);
