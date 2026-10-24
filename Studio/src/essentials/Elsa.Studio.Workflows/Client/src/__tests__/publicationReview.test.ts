@@ -5,9 +5,13 @@ import {
   createPublicationReview,
   publicationBaselineFor,
   publicationChangesFor,
+  publicationConflictDescriptor,
+  publicationConflictKeyDetail,
+  publicationConflictLabel,
   publicationIntentFor,
   publicationIntentForChannel,
-  summarizePublicationChanges
+  summarizePublicationChanges,
+  uniquePublicationConflicts
 } from "../workflow-editor/publicationReview";
 import { flowchartActivity, sequenceActivity } from "./fixtures";
 import { activationSlot, importedActivationSlot, publishedSlot, versionDetails, withoutPublication } from "./fixtures/publicationSlots";
@@ -310,6 +314,39 @@ describe("publication review model", () => {
     expect(publicationChangesFor(unavailable, "canary")).toBeNull();
     expect(publicationIntentForChannel(unavailable, "default")).toEqual({ action: "replace", slotName: "default" });
     expect(unavailable.slotsUnavailableReason).toBe(activationSlotReadsUnavailableReason);
+  });
+});
+
+describe("publication conflict labels", () => {
+  const key = "httpendpoint:sha256:2b7c93605ce7dee2b58db62d6b0da54c6c7d7945ba83baecc93938e897a797bc";
+
+  it("uses the descriptor as the primary label and keeps the raw key as secondary detail", () => {
+    const conflict = { key, descriptor: "GET /orders/{id}" };
+
+    expect(publicationConflictDescriptor(conflict)).toBe("GET /orders/{id}");
+    expect(publicationConflictLabel(conflict)).toBe("GET /orders/{id}");
+    expect(publicationConflictKeyDetail(conflict)).toBe(key);
+  });
+
+  it("falls back to the raw key when the descriptor is missing, null, or blank", () => {
+    expect(publicationConflictLabel({ key })).toBe(key);
+    expect(publicationConflictKeyDetail({ key })).toBeUndefined();
+    expect(publicationConflictLabel({ key, descriptor: null })).toBe(key);
+    expect(publicationConflictKeyDetail({ key, descriptor: null })).toBeUndefined();
+    expect(publicationConflictLabel({ key, descriptor: "   " })).toBe(key);
+    expect(publicationConflictKeyDetail({ key, descriptor: "   " })).toBeUndefined();
+    expect(publicationConflictDescriptor({ descriptor: "   " })).toBeUndefined();
+  });
+
+  it("dedupes conflicts by slot and key so grouped counts stay aligned with listed labels", () => {
+    expect(uniquePublicationConflicts([
+      { key, cardinality: "exclusive", publicationId: "publication-1", slotName: "default", descriptor: "GET /orders/{id}" },
+      { key, cardinality: "exclusive", publicationId: "publication-2", slotName: "default", descriptor: "GET /orders/{id}" },
+      { key: "http:GET:/invoices", cardinality: "exclusive", publicationId: "publication-3", slotName: "blue" }
+    ]).map(conflict => `${conflict.slotName}:${conflict.key}`)).toEqual([
+      `default:${key}`,
+      "blue:http:GET:/invoices"
+    ]);
   });
 });
 

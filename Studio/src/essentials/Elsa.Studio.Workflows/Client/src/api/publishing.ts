@@ -104,6 +104,11 @@ export interface PublicationTriggerConflict {
   cardinality: "exclusive" | "fanOut";
   publicationId: string;
   slotName: string;
+  /**
+   * Optional readable label from elsa-foundation#2955 (for example `GET /orders/{id}`).
+   * Older hosts never send it. Treat absent, null, and blank the same as missing.
+   */
+  descriptor?: string | null;
 }
 
 /**
