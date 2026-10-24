@@ -38,8 +38,8 @@
 
 **Independent Test**: Run `Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/__tests__/homeTaskGroup.test.tsx` and `Studio/tests/browser/home.spec.ts` for authenticated allowed/denied and authentication-disabled sessions; verify the exact active-incident URL and unchanged Continue semantics.
 
-- [ ] T007 [P] [US3] Add allowed, denied, auth-disabled, matcher-grammar, exact-destination, and unchanged-Continue cases in `Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/__tests__/homeTaskGroup.test.tsx` and `Studio/tests/browser/home.spec.ts`, using bounded authenticated scenarios in `Studio/tests/browser/homeFixture.tsx` while preserving its default anonymous session.
-- [ ] T008 [US3] Gate only the Needs attention destination in `Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/HomeTaskGroup.tsx` using the existing effective-permission matcher; retain the active-incident URL, authentication-disabled behavior, and Continue catalog/count behavior without changing `Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/styles.css` unless visual review finds a concrete required correction.
+- [X] T007 [P] [US3] Add allowed, denied, auth-disabled, matcher-grammar, exact-destination, and unchanged-Continue cases in `Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/__tests__/homeTaskGroup.test.tsx` and `Studio/tests/browser/home.spec.ts`, using bounded authenticated scenarios in `Studio/tests/browser/homeFixture.tsx` while preserving its default anonymous session.
+- [X] T008 [US3] Gate only the Needs attention destination in `Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/HomeTaskGroup.tsx` using the existing effective-permission matcher; retain the active-incident URL, authentication-disabled behavior, and Continue catalog/count behavior without changing `Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/styles.css` unless visual review finds a concrete required correction.
 
 **Checkpoint**: Authenticated users without effective runtime-read cannot open Needs attention; authorized and authentication-disabled sessions keep the intended destination, and Continue remains unchanged.
 

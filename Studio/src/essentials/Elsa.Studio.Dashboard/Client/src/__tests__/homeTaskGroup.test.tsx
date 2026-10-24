@@ -153,6 +153,50 @@ describe("Home workflow task group", () => {
     view.unmount();
   });
 
+  it("withholds only Needs attention when authenticated design access lacks runtime read", async () => {
+    const api = stubApi();
+    const getJson = vi.spyOn(api.backend.http, "getJson").mockResolvedValue({ items: [
+      { id: "definition-a", name: "Draft A", draftId: "draft-a" },
+      { id: "definition-b", name: "Draft B", draftId: "draft-b" }
+    ] } as never);
+    const view = mount(<AuthProvider manager={authenticatedManager({ permissions: ["workflows/design:manage"] })}><HomeTaskGroup api={api} /></AuthProvider>);
+    await waitUntil(() => view.container.querySelector("button.home-task-card") !== null);
+
+    expect(view.container.querySelector("a[href^='/workflows/instances']")).toBeNull();
+    const unavailable = [...view.container.querySelectorAll(".home-task-card[aria-disabled='true']")]
+      .find(card => card.textContent?.includes("Needs attention"));
+    expect(unavailable?.textContent).toContain("Requires access to read workflow runs.");
+    expect(view.container.querySelector("a.home-task-card--primary")).not.toBeNull();
+    expect(view.container.querySelector<HTMLButtonElement>("button.home-task-card")?.disabled).toBe(false);
+    click(view.container.querySelector("button.home-task-card"));
+    await waitUntil(() => view.container.textContent?.includes("2 current drafts.") === true);
+    expect(getJson).toHaveBeenCalledWith(definitionsPath, expect.anything());
+    expect(view.container.querySelectorAll("[aria-label='Current workflow drafts'] li")).toHaveLength(2);
+  });
+
+  it.each(["workflows/runtime:read", "WORKFLOWS/RUNTIME:MANAGE", "workflows/*:read", "*:read", "*"])(
+    "allows the exact active-incidents destination for effective runtime grant %s", async grant => {
+      const api = stubApi();
+      window.history.replaceState({}, "", "/dashboard?keep=one&definition=old&homeAction=create&incidentHealth=resolved#home");
+      const view = mount(<AuthProvider manager={authenticatedManager({ permissions: [grant] })}><HomeTaskGroup api={api} /></AuthProvider>);
+      await waitUntil(() => view.container.querySelector("button.home-task-card") !== null);
+      const link = view.container.querySelector<HTMLAnchorElement>("a[href^='/workflows/instances']");
+      expect(link?.getAttribute("href")).toBe("/workflows/instances?keep=one&incidentHealth=active#home");
+      click(link);
+      expect(window.location.pathname).toBe("/workflows/instances");
+      expect(window.location.search).toBe("?keep=one&incidentHealth=active");
+      expect(window.location.hash).toBe("#home");
+    }
+  );
+
+  it("retains the active-incidents destination when authentication is disabled", () => {
+    const view = mount(<AnonymousAuthProvider><HomeTaskGroup api={stubApi()} /></AnonymousAuthProvider>);
+    const link = view.container.querySelector<HTMLAnchorElement>("a[href^='/workflows/instances']");
+    expect(link?.getAttribute("href")).toBe("/workflows/instances?incidentHealth=active");
+    click(link);
+    expect(window.location.pathname).toBe("/workflows/instances");
+  });
+
   it("closes discovery on backend authority change and ignores the old response", async () => {
     const api = stubApi();
     let resolveDefinitions: ((value: { items: Array<{ id: string; draftId: string; name: string }> }) => void) | undefined;

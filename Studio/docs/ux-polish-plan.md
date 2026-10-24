@@ -32,6 +32,10 @@ Legend: ✅ = Elsa 4 already comparable/good · ⚠️ = noticeable gap · 🔴 
 
 The #3063 Home slice adds a compact Workflow tasks group before the configurable widgets: one-use **Create workflow**, **Continue editing** by current draft identity, **Needs attention** into Runs' active-incident view, and **Browse workflows**. A single current-draft candidate opens its exact definition; multiple candidates use a chooser that shows stable IDs. Empty and failed discovery stay separate, and a stale or unavailable editor keeps the selected ID with explicit recovery. The group does not participate in widget preferences. Known permission checks only explain Home affordances; Workflows endpoints retain authorization authority, including the existing anonymous posture. No separate Home polish backlog item was present; the broader editor and shell work below remains open independently.
 
+### Resource pages — consistency (#3071 candidate)
+
+Secrets and Connections adopt the [resource-list contract](ux/design-spec.md#resource-list-consistency-3071): a familiar heading/search/results hierarchy and one primary header create action. Secrets keeps Edit direct and progressively discloses its secondary operations; Connections keeps Details as its domain entry. Accepted search, truthful inventory coverage, masking, permissions, confirmation and focus behavior remain part of the contract. Home's Needs attention destination also mirrors effective runtime-read access without changing Continue. Acceptance and delivery evidence remain on Foundation #3071; this entry does not mark the broader backlog below complete.
+
 ### 1. Workflow definition editor — canvas
 
 | Aspect | Elsa 3 (reference) | Elsa 4 Studio | Verdict |
