@@ -150,6 +150,8 @@ for (const width of [320, 390]) {
 
     const geometry = await row.evaluate(element => {
       const scroll = element.closest<HTMLElement>(".wf-definition-table-scroll")!;
+      const table = element.closest<HTMLElement>(".wf-definition-grid")!;
+      const header = table.querySelector<HTMLElement>(".wf-grid-head")!;
       const cell = element.querySelector<HTMLElement>(".wf-definition-name")!;
       const fields = Array.from(cell.querySelectorAll<HTMLElement>(".studio-copyable-identifier")).map(field => {
         const label = field.querySelector<HTMLElement>(".studio-copyable-identifier__label")!.getBoundingClientRect();
@@ -157,9 +159,8 @@ for (const width of [320, 390]) {
         const button = field.querySelector<HTMLElement>(".studio-copyable-identifier__button")!.getBoundingClientRect();
         const bounds = field.getBoundingClientRect();
         return {
-          labelTop: label.top,
-          labelBottom: label.bottom,
-          valueTop: value.top,
+          label: { left: label.left, right: label.right, bottom: label.bottom },
+          value: { left: value.left, right: value.right, top: value.top },
           left: bounds.left,
           right: bounds.right,
           copyLeft: button.left,
@@ -167,12 +168,22 @@ for (const width of [320, 390]) {
         };
       });
       const scrollBounds = scroll.getBoundingClientRect();
-      const cellBounds = cell.getBoundingClientRect();
+      const nameBounds = cell.querySelector<HTMLElement>(".wf-definition-link")!.getBoundingClientRect();
+      const disclosureBounds = cell.querySelector<HTMLElement>(".wf-definition-secondary-identifiers .studio-disclosure-fold-trigger")!.getBoundingClientRect();
       const visibleLeft = scrollBounds.left + scroll.clientLeft;
       const visibleRight = visibleLeft + scroll.clientWidth;
       return {
         scroll: { left: visibleLeft, right: visibleRight, clientWidth: scroll.clientWidth, scrollWidth: scroll.scrollWidth, scrollLeft: scroll.scrollLeft },
-        cell: { left: cellBounds.left, right: cellBounds.right, width: cellBounds.width },
+        header: Array.from(header.querySelectorAll<HTMLElement>("[role=columnheader]")).map(item => {
+          const bounds = item.getBoundingClientRect();
+          return { left: bounds.left, width: bounds.width };
+        }),
+        cells: Array.from(element.querySelectorAll<HTMLElement>("[role=cell]")).map(item => {
+          const bounds = item.getBoundingClientRect();
+          return { left: bounds.left, width: bounds.width };
+        }),
+        name: { left: nameBounds.left, right: nameBounds.right },
+        disclosure: { left: disclosureBounds.left, right: disclosureBounds.right },
         rowWidth: element.getBoundingClientRect().width,
         fields
       };
@@ -180,17 +191,29 @@ for (const width of [320, 390]) {
     expect(geometry.rowWidth).toBeGreaterThan(geometry.scroll.clientWidth);
     expect(geometry.scroll.scrollWidth).toBeGreaterThan(geometry.scroll.clientWidth);
     expect(geometry.scroll.scrollLeft).toBe(0);
-    expect(geometry.cell.right).toBeLessThanOrEqual(geometry.scroll.right + 1);
+    expect(geometry.header).toHaveLength(6);
+    expect(geometry.cells).toHaveLength(6);
+    for (let index = 0; index < geometry.header.length; index++) {
+      expect(Math.abs(geometry.header[index].left - geometry.cells[index].left), `column ${index + 1} starts on the same track`).toBeLessThanOrEqual(1);
+      expect(Math.abs(geometry.header[index].width - geometry.cells[index].width), `column ${index + 1} uses the full shared track`).toBeLessThanOrEqual(1);
+    }
+    expect(geometry.name.left).toBeGreaterThanOrEqual(geometry.scroll.left - 1);
+    expect(geometry.name.right).toBeLessThanOrEqual(geometry.scroll.right + 1);
+    expect(geometry.disclosure.left).toBeGreaterThanOrEqual(geometry.scroll.left - 1);
+    expect(geometry.disclosure.right).toBeLessThanOrEqual(geometry.scroll.right + 1);
     expect(geometry.fields.length).toBeGreaterThanOrEqual(5);
     for (const field of geometry.fields) {
-      expect(field.left).toBeGreaterThanOrEqual(geometry.cell.left - 1);
+      expect(field.left).toBeGreaterThanOrEqual(geometry.scroll.left - 1);
       expect(field.right).toBeLessThanOrEqual(geometry.scroll.right + 1);
+      expect(field.label.left).toBeGreaterThanOrEqual(geometry.scroll.left - 1);
+      expect(field.label.right).toBeLessThanOrEqual(geometry.scroll.right + 1);
+      expect(field.value.left).toBeGreaterThanOrEqual(geometry.scroll.left - 1);
+      expect(field.value.right).toBeLessThanOrEqual(geometry.scroll.right + 1);
       expect(field.copyLeft).toBeGreaterThanOrEqual(geometry.scroll.left - 1);
       expect(field.copyRight).toBeLessThanOrEqual(geometry.scroll.right + 1);
     }
     for (const field of geometry.fields.slice(1)) {
-      expect(field.labelTop).toBeLessThan(field.valueTop);
-      expect(field.labelBottom, JSON.stringify(field)).toBeLessThanOrEqual(field.valueTop);
+      expect(field.label.bottom).toBeLessThan(field.value.top);
     }
 
     const primaryCopy = row.getByRole("button", { name: "Copy Definition ID" });

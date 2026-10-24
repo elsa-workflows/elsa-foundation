@@ -60,3 +60,25 @@
   width: 22px;
   height: 22px;
 }
+
+@media (max-width: 560px) {
+  .wf-run-primary-identifier .studio-copyable-identifier {
+    grid-template-columns: minmax(0, 1fr) max-content;
+  }
+
+  .wf-run-primary-identifier .studio-copyable-identifier__label {
+    grid-area: 1 / 1 / 2 / -1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .wf-run-primary-identifier .studio-copyable-identifier__value {
+    grid-area: 2 / 1 / 3 / 2;
+  }
+
+  .wf-run-primary-identifier .studio-copyable-identifier__button {
+    grid-area: 2 / 2 / 3 / 3;
+    width: 22px;
+    height: 22px;
+  }
+}

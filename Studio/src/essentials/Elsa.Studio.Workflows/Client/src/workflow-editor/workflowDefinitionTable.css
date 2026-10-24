@@ -202,7 +202,7 @@
   min-width: 0;
 }
 
-.wf-definitions-list .wf-definition-name {
+.wf-definitions-list .wf-definition-name > * {
   max-width: calc(100cqi - var(--wf-definition-selection-track) - var(--wf-definition-column-gap));
 }
 
