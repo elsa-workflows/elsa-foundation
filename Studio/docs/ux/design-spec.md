@@ -61,12 +61,46 @@ code.
 | Bottom dock errors | `target, phase 2` | A status dot on the collapsed dock signals new errors. |
 | Page | `exists` | Content sits on the page surface. No wrapping card around a whole page. |
 | Page header | `target, phase 1` | Eyebrow, title, one-line description, actions. One `primary` button (see Principles). |
-| Lists | `target, phase 2` | A single filter row with primary task controls and "More filters", then the grid, then the pager. Primary controls apply immediately; advanced criteria remain drafts until explicit Apply and applied criteria stay visible as removable chips outside the disclosure. |
+| Lists | `target, phase 2` | Keep the page heading/actions, primary search or filters, results, and pager in a stable order. Use an accessible table or grid with a clear empty/error state. Lists may retain domain-specific filter layouts; advanced Runs criteria remain drafts until explicit Apply and applied criteria stay visible as removable chips outside the disclosure. See [Definition list consistency](#definition-list-consistency-3070). |
 | Runs | `exists` for the reference implementation | Workflow names lead, with exact execution, artifact, definition and version IDs available as copyable identifiers. Bulk actions appear only after row selection and preserve the host's permission gates. Detail navigation returns to the validated local list query, including page size and cursor. Loading, empty, unsupported and request-error states stay distinct; failed requests offer Retry. |
 | Designer | `exists` | Palette / canvas / inspector. |
 | Designer tabs | `exists` for inspector / Runtime / Artifacts panel tabs (wrap + `title`, no ellipsis); remaining collapse-to-icon is `target, phase 1` | Tab labels never truncate. The inspector panel tabs wrap and keep a `title` plus keyboard access. Below the width they need they should collapse to icon + tooltip. |
 | Designer header | `exists` | Save, Review & publish and Run are all visible. None uses `StudioButton`. Run is the filled action (`.wf-run-button` uses `--studio-accent`). Review & publish is outlined (`.wf-review-button`). |
 | Designer header primary | `target, phase 1` | Review & publish becomes the one `primary` action; Save and Run become `default` (or `ghost`). |
+
+## Definition list consistency (#3070)
+
+**Status: `exists`** when [PR #3258](https://github.com/elsa-workflows/elsa-foundation/pull/3258) merges. The implementation PR carries this rule; its issue/PR records acceptance and delivery evidence.
+
+The Activity Definitions and Workflow Definitions collections use the same scan hierarchy:
+page inset, eyebrow/title/description, one filled primary action, secondary page actions, search
+and filters, results, and pagination. Keep meaningful table headings and row labels. Shared
+hierarchy is a presentation rule, not a shared data-grid or filtering framework.
+
+- **Exact identity:** Keep each row's human-readable name and one exact, copyable primary ID
+  visible by default. Put additional technical IDs in the existing keyboard-accessible
+  `AdvancedSection`, with exact copy values and display-only truncation. A copy or disclosure
+  action must not open its containing row. A row reacts to Enter or Space only when the row
+  itself is the event target. In Workflow Definitions, previous search results retained while a
+  new query is pending stay non-actionable and do not expose their secondary identifiers.
+  Activity Definitions keeps its same-authority live-search placeholder rows and their existing
+  interactions while a replacement query is pending.
+- **Activity Definitions exception:** Keep the custom Activity collection and its live search,
+  Designed/Built-in/All authority filter, provider filter, page size, and server-owned opaque
+  cursor contract. The cursor stays in history state and never appears in a newly invented URL
+  parameter. Workbench/editor return restores the collection entry that opened it, including
+  entered and settled filters and its cursor stack. An authorization or backend change redacts
+  old rows and restarts paging while preserving filters and page size. Invalid continuation and
+  expired snapshot recovery remain distinct from a generic request failure.
+- **Workflow Definitions exception:** Preserve lifecycle tabs, folder and Unfiled scope,
+  selection, move, delete, restore, permanent-delete confirmations, and the current browse-session
+  behavior. Folder navigation and Move require the host's advertised relations; the normal Workbench does not currently provide them. Bookmarked unsupported folder scopes show a truthful fallback rather than guessed requests. Secondary IDs remain unavailable while stale previous-query rows are displayed. At narrow widths, constrain Name-cell identifiers and complete copy-button hitboxes to the visible scroll container, including the shell content inset; retain horizontal access to later table columns.
+- **Runs exception:** Keep workflow name as the first scan target and the exact execution ID
+  visible and copyable. Reveal artifact, definition, and version IDs on demand. Keep applied and
+  advanced filters, cursor navigation, row selection, and capability-gated deletion unchanged.
+- **Result states:** Keep loading, empty, request failure, denied access, unavailable capability,
+  stale retained data, invalid continuation, and expired snapshot visibly distinct. Do not expose
+  identities or counts after a confirmed privacy denial.
 
 ## Components
 

@@ -11,6 +11,9 @@ import "../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";
 
 setDialogs(dialogs);
 
+const deletionRequests: string[] = [];
+(window as Window & { workflowRunDeletionRequests?: string[] }).workflowRunDeletionRequests = deletionRequests;
+
 function Fixture() {
   const [opened, setOpened] = useState("");
   const context = useMemo(() => {
@@ -21,6 +24,7 @@ function Fixture() {
     const statusByRunId = new Map((statuses ?? []).map(status => [`status-${status.toLowerCase()}`, status] as const));
     let failedOnce = false;
     const deleteEnabled = new URLSearchParams(window.location.search).get("delete") !== "disabled";
+    const delayDeletion = new URLSearchParams(window.location.search).get("delete") === "delayed";
     return {
       baseUrl: "run-deletion-fixture",
       http: {
@@ -42,6 +46,8 @@ function Fixture() {
         },
         deleteJson: async (path: string) => {
           const id = decodeURIComponent(path.split("/").at(-1)!);
+          deletionRequests.push(id);
+          if (delayDeletion) await new Promise(resolve => window.setTimeout(resolve, 1_500));
           if (id === "quote-retry" && !failedOnce) { failedOnce = true; throw new Error("The run is still stopping. Wait for it to stop, then retry deletion."); }
           runs = runs.filter(run => run !== id);
           return { workflowExecutionId: id, status: "Deleted" };

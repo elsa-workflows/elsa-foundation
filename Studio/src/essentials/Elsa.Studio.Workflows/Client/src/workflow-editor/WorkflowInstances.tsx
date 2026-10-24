@@ -68,8 +68,9 @@ import {
 } from "./editorHelpers";
 import { runDetailMinInspectorWidth, useRunDetailLayout, type RunDetailLayoutMode } from "./useRunDetailLayout";
 import { decorateWorkflowCanvasElements } from "./workflowAccessibility";
-import { AdvancedSection, CopyableIdentifier } from "@elsa-workflows/studio-ui";
+import { AdvancedSection } from "@elsa-workflows/studio-ui";
 import { RunWorkflowPicker } from "./RunWorkflowPicker";
+import { WorkflowListIdentity } from "./WorkflowListIdentity";
 
 type WorkflowRunFlowInstance = ReactFlowInstance<Node<WorkflowNodeData>, Edge<WorkflowEdgeData>>;
 
@@ -520,6 +521,11 @@ export function WorkflowInstances({ context, navigate }: {
           </div>
           {instances.map(instance => {
             const workflowName = definitionNames.get(instance.definitionId) ?? instance.definitionId;
+            const secondaryIdentifiers = [
+              { label: "Artifact ID", value: instance.artifactId },
+              { label: "Definition ID", value: instance.definitionId },
+              { label: "Definition version ID", value: instance.definitionVersionId }
+            ].filter(identifier => identifier.value);
             return (
             <div
               className="wf-grid-row"
@@ -557,12 +563,15 @@ export function WorkflowInstances({ context, navigate }: {
                   >
                     <strong>{workflowName}</strong>
                   </button>
-                  <div className="wf-run-identifiers" aria-label={`Workflow run identifiers for ${instance.workflowExecutionId}`}>
-                    <CopyableIdentifier label="Execution ID" value={instance.workflowExecutionId} />
-                    <CopyableIdentifier label="Artifact ID" value={instance.artifactId} />
-                    <CopyableIdentifier label="Definition ID" value={instance.definitionId} />
-                    <CopyableIdentifier label="Definition version ID" value={instance.definitionVersionId} />
-                  </div>
+                  <WorkflowListIdentity
+                    primaryLabel="Execution ID"
+                    primaryValue={instance.workflowExecutionId}
+                    secondaryIdentifiers={secondaryIdentifiers}
+                    primaryClassName="wf-run-primary-identifier"
+                    secondaryClassName="wf-run-secondary-identifiers"
+                    detailsClassName="wf-run-identifiers"
+                    detailsAriaLabel={`Workflow run identifiers for ${instance.workflowExecutionId}`}
+                  />
                 </div>
               </div>
               <span role="cell">{formatRunKind(instance.runKind)}</span>
@@ -574,9 +583,10 @@ export function WorkflowInstances({ context, navigate }: {
               </span>
               <span role="cell">{formatDate(instance.startedAt ?? instance.createdAt)}</span>
               <span role="cell">{formatDuration(instance.startedAt ?? instance.createdAt, instance.completedAt ?? instance.updatedAt)}</span>
-              {canDeleteRuns ? <span role="cell" className="wf-run-row-actions">
+              {canDeleteRuns ? <span role="cell" className="wf-run-row-actions wf-row-actions">
                 <button
                   type="button"
+                  className="danger"
                   disabled={deletingRuns}
                   aria-label={`Delete workflow run ${instance.workflowExecutionId}`}
                   onClick={() => void deleteRuns([instance.workflowExecutionId])}

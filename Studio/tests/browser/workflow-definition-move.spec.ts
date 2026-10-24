@@ -20,7 +20,8 @@ test("workflow definitions rebase a paged public capability view after a keyboar
   await dialog.getByRole("button", { name: "Move" }).focus();
   await page.keyboard.press("Enter");
   await expect(dialog).toBeHidden();
-  await expect(page.getByRole("status")).toHaveText("Moved 1 workflow definition");
+  const moveStatus = page.getByText("Moved 1 workflow definition", { exact: true });
+  await expect(moveStatus).toHaveAttribute("role", "status");
   await expect(page.getByText("Moved workflow")).toBeVisible();
   await expect(page.getByText("Second page workflow")).toBeHidden();
   await expect(page.getByText("Page 1")).toBeVisible();

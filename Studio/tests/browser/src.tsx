@@ -73,6 +73,7 @@ import type {
   ActivityDefinitionVersionView
 } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityDefinitionTypes";
 import { getTheme, themeTokenNames } from "../../src/apps/Elsa.Studio.Web/Client/src/app/themes/presets";
+import { applyMaterialVariables } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
 import "../../src/apps/Elsa.Studio.Web/Client/src/app/ui/tokens.css";
 import "../../src/apps/Elsa.Studio.Web/Client/src/app/ui/disclosure/disclosure.css";
 import "../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";
@@ -1713,6 +1714,7 @@ function browserVersion(
 // writes the chosen theme palette onto <html> itself, the way the provider does at runtime.
 // Activity-icon shots default to Classic light — Studio 4's default theme.
 const darkVariant = searchParams.get("theme") === "dark";
+const materialVariant = searchParams.get("theme") === "material";
 const fixtureTheme = activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture || validationLabelsFixture ? "classic" : "meridian";
 if (searchParams.get("mode") !== "activity-authoring" && !navPlacementFixture && !navBeforeFixture && !settingsBeforeFixture && !settingsFixture && !homeFixture && !homeDashboardFixture && searchParams.get("mode") !== "definition-versions" && !userMenuFixture) {
   document.documentElement.dataset.theme = fixtureTheme;
@@ -1724,6 +1726,16 @@ if (searchParams.get("mode") !== "activity-authoring" && !navPlacementFixture &&
       document.documentElement.style.setProperty(`--${token.replace(/([A-Z])/g, "-$1").toLowerCase()}`, palette[token]);
     }
   }
+}
+if (materialVariant) {
+  document.documentElement.dataset.themeMaterial = "browser-fixture";
+  applyMaterialVariables(document.documentElement, {
+    cssVariables: {
+      "--studio-material-send-bg": "rgb(31, 87, 123)",
+      "--studio-material-send-text": "rgb(255, 255, 255)",
+      "--studio-material-edge": "rgb(16, 48, 68)"
+    }
+  });
 }
 if (activityIconsFixture && searchParams.get("host-override") === "1") {
   document.documentElement.style.setProperty("--studio-wf-activity-terminal", "rgb(255, 17, 0)");
@@ -1837,6 +1849,10 @@ async function renderRequestedFixture() {
     const { ValidationLabelsFixture } = await import("./validationLabelsFixture");
     root.render(<ValidationLabelsFixture />);
     return;
+  }
+
+  if (activityDefinitionsFixture) {
+    await import("../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css");
   }
 
   root.render(

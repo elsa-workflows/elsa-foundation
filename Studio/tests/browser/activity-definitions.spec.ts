@@ -33,6 +33,164 @@ test("Activity Definitions stays usable without viewport overflow at 360, 768, a
   }
 });
 
+test("Activity Definitions restores each collection origin through real browser Back and Forward history", async ({ page }) => {
+  const firstCursor = "opaque/first + cursor";
+  const secondCursor = "opaque/second + cursor";
+  const requests: Record<string, string>[] = [];
+  await mockActivityDefinitions(page, async route => {
+    const parameters = new URL(route.request().url()).searchParams;
+    const request = Object.fromEntries(parameters.entries());
+    requests.push(request);
+    const search = parameters.get("search") ?? "";
+    const continuation = !parameters.has("cursor")
+      ? search === "first-origin" ? firstCursor : search === "second-origin" ? secondCursor : null
+      : null;
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ...collectionPage(), totalCount: 4, hasMore: continuation !== null, continuation })
+    });
+  });
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/?mode=activity-definitions");
+  const search = page.getByRole("textbox", { name: "Search" });
+  await search.fill("first-origin");
+  await expect.poll(() => requests.some(request => request.search === "first-origin" && request.limit === "25")).toBe(true);
+  await page.getByText("Advanced filters", { exact: true }).click();
+  await page.getByLabel("Rows per page").selectOption("50");
+  await expect.poll(() => requests.some(request => request.search === "first-origin" && request.limit === "50")).toBe(true);
+  await page.getByRole("button", { name: /Next/ }).click();
+  await expect.poll(() => requests.some(request => request.search === "first-origin" && request.cursor === firstCursor)).toBe(true);
+
+  await page.getByRole("row", { name: "Open Activity Definition Invoice evaluator" }).click();
+  await expect(page.getByRole("heading", { name: "Invoice evaluator" })).toBeVisible();
+  await page.getByRole("button", { name: "Activity Definitions", exact: true }).click();
+  await expect(page.getByText("Page 2", { exact: false })).toBeVisible();
+  const firstAppReturn = requests.length;
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await expect.poll(() => requests.slice(firstAppReturn).some(request => request.search === "first-origin" &&
+    request.limit === "50" && request.cursor === firstCursor)).toBe(true);
+  await expect(page).not.toHaveURL(/cursor=/);
+
+  await search.fill("second-origin");
+  await expect.poll(() => requests.some(request => request.search === "second-origin" && request.limit === "50")).toBe(true);
+  await page.getByRole("button", { name: /Next/ }).click();
+  await expect.poll(() => requests.some(request => request.search === "second-origin" && request.cursor === secondCursor)).toBe(true);
+  await page.getByRole("row", { name: "Open Activity Definition Invoice evaluator" }).click();
+  await expect(page.getByRole("heading", { name: "Invoice evaluator" })).toBeVisible();
+  await page.getByRole("button", { name: "Activity Definitions", exact: true }).click();
+  await expect(page.getByText("Page 2", { exact: false })).toBeVisible();
+
+  let requestStart = requests.length;
+  await page.goBack();
+  await expect(page.getByRole("heading", { name: "Invoice evaluator" })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByText("Page 2", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await expect.poll(() => requests.slice(requestStart).some(request => request.search === "second-origin" &&
+    request.limit === "50" && request.cursor === secondCursor)).toBe(true);
+
+  requestStart = requests.length;
+  await page.goBack();
+  await expect(page.getByRole("heading", { name: "Invoice evaluator" })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole("textbox", { name: "Search" })).toHaveValue("first-origin");
+  await expect(page.getByText("Page 2", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await expect.poll(() => requests.slice(requestStart).some(request => request.search === "first-origin" &&
+    request.limit === "50" && request.cursor === firstCursor)).toBe(true);
+
+  requestStart = requests.length;
+  await page.goForward();
+  await expect(page.getByRole("heading", { name: "Invoice evaluator" })).toBeVisible();
+  await page.goForward();
+  await expect(page.getByRole("textbox", { name: "Search" })).toHaveValue("second-origin");
+  await expect(page.getByText("Page 2", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await expect.poll(() => requests.slice(requestStart).some(request => request.search === "second-origin" &&
+    request.limit === "50" && request.cursor === secondCursor)).toBe(true);
+
+  await page.goForward();
+  await expect(page.getByRole("heading", { name: "Invoice evaluator" })).toBeVisible();
+  await page.goForward();
+  await expect(page.getByRole("textbox", { name: "Search" })).toHaveValue("second-origin");
+  await expect(page.getByText("Page 2", { exact: false })).toBeVisible();
+});
+
+test("Activity Definition expanded identities remain within the 390px row bounds", async ({ page }, testInfo) => {
+  const longDefinition = structuredClone(definition());
+  longDefinition.definition.definitionId = `definition-${"identity-segment-".repeat(9)}`;
+  longDefinition.definition.activityTypeKey = `Contoso.${"LongActivityTypeSegment".repeat(5)}`;
+  longDefinition.definition.headVersionId = `head-${"immutable-version-".repeat(8)}`;
+  longDefinition.definition.recommendedVersionId = `recommended-${"immutable-version-".repeat(8)}`;
+  longDefinition.definition.displayName = "Invoice processing rules for international accounts and regional policy groups";
+  longDefinition.definition.description = "A long description used to check that the list row and disclosed identity fields stay inside the narrow viewport.";
+  await mockActivityDefinitions(page, route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(pageOf([longDefinition]))
+  }));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/?mode=activity-definitions");
+  await expect(page.getByRole("heading", { name: "Activity Definitions" })).toBeVisible();
+  await page.locator(".ad-row-identifiers .studio-disclosure-fold-trigger").click();
+  await expect(page.getByRole("button", { name: "Copy Activity Type Key" })).toBeVisible();
+
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  const disclosure = page.locator(".ad-row-identifiers .studio-disclosure-fold-trigger");
+  await disclosure.focus();
+  await page.keyboard.press("Enter");
+  await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+  await page.keyboard.press("Space");
+  await expect(disclosure).toHaveAttribute("aria-expanded", "true");
+
+  const copyActivityType = page.getByRole("button", { name: "Copy Activity Type Key" });
+  await copyActivityType.focus();
+  await page.keyboard.press("Space");
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(longDefinition.definition.activityTypeKey);
+  const copyDefinitionId = page.getByRole("button", { name: "Copy Definition ID" });
+  await copyDefinitionId.focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(longDefinition.definition.definitionId);
+  await expect(page.getByRole("heading", { name: "Activity Definitions" })).toBeVisible();
+
+  const measurements = await page.evaluate(() => [
+    ".ad-collection",
+    ".ad-collection-row",
+    ".ad-collection-activity",
+    ".ad-row-identifiers",
+    ".ad-row-identifiers-list",
+    ".ad-row-identifiers-list .studio-copyable-identifier"
+  ].flatMap(selector => Array.from(document.querySelectorAll<HTMLElement>(selector)).map(element => {
+    const bounds = element.getBoundingClientRect();
+    return { selector, left: bounds.left, right: bounds.right, width: bounds.width };
+  })));
+  expect(measurements.length).toBeGreaterThanOrEqual(6);
+  for (const measurement of measurements) {
+    expect(measurement.left, `${measurement.selector} left edge`).toBeGreaterThanOrEqual(-1);
+    expect(measurement.right, `${measurement.selector} right edge`).toBeLessThanOrEqual(391);
+    expect(measurement.width, `${measurement.selector} width`).toBeLessThanOrEqual(390);
+  }
+  const identityFields = await page.locator(".ad-row-identifiers-list").evaluate(details => {
+    const detailsBounds = details.getBoundingClientRect();
+    return Array.from(details.querySelectorAll<HTMLElement>(".studio-copyable-identifier")).map(field => {
+      const label = field.querySelector<HTMLElement>(".studio-copyable-identifier__label")!.getBoundingClientRect();
+      const value = field.querySelector<HTMLElement>(".studio-copyable-identifier__value")!.getBoundingClientRect();
+      const bounds = field.getBoundingClientRect();
+      return { labelTop: label.top, labelBottom: label.bottom, valueTop: value.top, left: bounds.left, right: bounds.right, detailsLeft: detailsBounds.left, detailsRight: detailsBounds.right };
+    });
+  });
+  expect(identityFields.length).toBeGreaterThanOrEqual(3);
+  for (const field of identityFields) {
+    expect(field.labelTop, JSON.stringify(field)).toBeLessThan(field.valueTop);
+    expect(field.labelBottom).toBeLessThanOrEqual(field.valueTop);
+    expect(field.left).toBeGreaterThanOrEqual(field.detailsLeft - 1);
+    expect(field.right).toBeLessThanOrEqual(field.detailsRight + 1);
+  }
+  await page.screenshot({ path: testInfo.outputPath("activity-identities-390px.png"), fullPage: true });
+});
+
 test("Activity Definitions retains confirmed rows when refresh fails and keeps errors private", async ({ page }) => {
   let collectionReads = 0;
   await mockActivityDefinitions(page, async route => {
@@ -475,10 +633,21 @@ test("Activity Definition dependency explorer keeps exact snapshot pages, repeat
   await expect(page.getByText("3 visible rows · 2 server pages")).toBeVisible();
 
   await page.getByRole("radio", { name: "Used by" }).check();
-  await page.locator("details.ad-scan-details summary").click();
+  await expect(page.getByText("workflow-use-a")).toBeVisible();
+  await expect(page.getByText("DerivedProjection")).toBeAttached();
+  const scanSummary = scanDetails.locator("summary");
+  await scanSummary.focus();
+  await page.keyboard.press("Enter");
+  await expect(scanDetails).toHaveJSProperty("open", true);
   await expect(page.getByText("DerivedProjection")).toBeVisible();
   await expect(page.getByText("7/18/2026")).toBeVisible();
   await expect(page.getByText("workflow-use-a")).toBeVisible();
+  await scanSummary.focus();
+  await page.keyboard.press("Enter");
+  await expect(scanDetails).toHaveJSProperty("open", false);
+  await page.keyboard.press("Enter");
+  await expect(scanDetails).toHaveJSProperty("open", true);
+  await expect(page.getByText("DerivedProjection")).toBeVisible();
 
   state.nextFailure = 409;
   await page.locator("details.ad-dependency-advanced summary").click();
