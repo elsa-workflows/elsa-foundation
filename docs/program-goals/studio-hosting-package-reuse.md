@@ -1,6 +1,6 @@
 # Studio Hosting and Package Reuse
 
-- **Status:** Active by owner authorization on 25 October 2026; runs beside the other active programs and displaces none.
+- **Status:** Active for end-to-end M0–M3 delivery by owner authorization on 25 October 2026; runs beside the other active programs and displaces none.
 - **Area:** Studio hosting, optional capabilities, package delivery and custom-host developer experience.
 - **Steward:** Sipke Schoorstra. Delivery leaves are claimed under Issue Bus Lite.
 - **Program:** [#3340](https://github.com/elsa-workflows/elsa-foundation/issues/3340).
@@ -41,7 +41,8 @@ promotion. Keep one implementation leaf active and one integration lane; board r
   Runtime work remains owned by [#2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892).
 - Reuse modular-hosting and runtime-composition evidence without reactivating their parked backlogs or
   reparenting existing issues by assumption. This program does not redesign workflow execution or add a general settings framework.
-- Establishment delivers the program records and board. Package implementation proceeds through scoped issues;
+- The owner's later "deliver this board end to end" goal supersedes the establishment-only session boundary.
+  Package implementation and integrated qualification proceed through scoped, claimed issues;
   releases, deployments, publisher activation, unrelated UI features and a new release train are outside this authorization.
 
 ## Completion

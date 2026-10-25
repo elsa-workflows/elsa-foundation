@@ -133,8 +133,11 @@ The program consolidates reusable Studio hosting into NuGet-consumable capabilit
 CShells/Nuplane and Elsa contracts, and proves independent package consumption. It does not reactivate the parked
 Runtime Composition & Configuration or Modular Hosting Upstream Delivery backlogs. Establishment creates the
 planning records and board; package implementation proceeds through scoped, claimed and triaged issues, with one
-implementation leaf at a time. Releases, deployments and publisher activation are not included. The remaining
-decisions in this ADR apply.
+implementation leaf at a time. Later in the same session the owner set the goal to "deliver this board end to end",
+authorizing implementation and integrated qualification of this named program's M0–M3 outcomes, including reviewed
+PR delivery and verification on resulting main and candidate packages. This supersedes the establishment-only
+session boundary; the sequencing and parked-work boundaries above remain. Releases, deployments and publisher
+activation are not included. The remaining decisions in this ADR apply.
 
 ### D1 — Risk-based testing
 
