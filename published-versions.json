@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "6e677745bb828dcb1117379859068f8e735dac47",
+  "last_publish_commit": "43fd7e40da2fb6cdd478ac4ce724d6ac6eccd224",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -639,8 +639,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Design.Core",
-      "version": "4.0.12-preview",
-      "commit": "0b40e42d5a7376998905817b2fb15dd4277fe418"
+      "version": "4.0.13-preview",
+      "commit": "43fd7e40da2fb6cdd478ac4ce724d6ac6eccd224"
     },
     {
       "package_id": "Elsa.Workflows.Design.JavaScript",
@@ -689,8 +689,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Publishing",
-      "version": "4.0.33-preview",
-      "commit": "e3cf4bfcca472fcb9c68b8d1dac0a8fc4f681b7c"
+      "version": "4.0.34-preview",
+      "commit": "43fd7e40da2fb6cdd478ac4ce724d6ac6eccd224"
     },
     {
       "package_id": "Elsa.Workflows.Publishing.Api",
@@ -709,8 +709,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime",
-      "version": "4.0.64-preview",
-      "commit": "e3cf4bfcca472fcb9c68b8d1dac0a8fc4f681b7c"
+      "version": "4.0.65-preview",
+      "commit": "43fd7e40da2fb6cdd478ac4ce724d6ac6eccd224"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Api",
