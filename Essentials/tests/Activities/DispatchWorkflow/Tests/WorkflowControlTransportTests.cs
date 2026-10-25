@@ -1,9 +1,8 @@
 using System.Text.Json;
+using Elsa.Events.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Events;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.Testing;
-using Elsa.Activities.Runtime.Core.Contracts;
-using Elsa.Activities.Runtime.Core.Models;
-using DispatchActivity = Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow;
 using Elsa.Activities.DispatchWorkflow.Runtime.Services;
 using Elsa.Activities.DispatchWorkflow.Runtime.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -63,9 +62,14 @@ public sealed class WorkflowControlTransportTests
         Assert.Null(parentLeaf.Fault);
         Assert.Equal(JsonSerializer.Serialize(carried, Json), JsonSerializer.Serialize(parentLeaf.ChildControl, Json));
         var leafCompletion = Assert.Single(fixture.Checkpoints.Commits, commit => commit.StateChanges.ActivityExecutions.Any(change =>
-            change.State.InvocationId == parentLeaf.InvocationId && change.State.Status == ActivityExecutionStatus.Completed));
+            change.State.InvocationId == parentLeaf.InvocationId && change.State.Status == ActivityExecutionStatus.Completed && change.State.ChildControlInbox is null));
         Assert.Equal(JsonSerializer.Serialize(carried, Json), JsonSerializer.Serialize(Assert.Single(leafCompletion.StateChanges.ActivityExecutions,
             change => change.State.InvocationId == parentLeaf.InvocationId).State.ChildControl, Json));
+        Assert.True(parentLeaf.ChildControlInbox!.IsTerminalConsumed);
+        Assert.Equal(1, parentLeaf.ChildControlInbox.NextOrdinal);
+        Assert.Contains(fixture.Checkpoints.Commits, commit =>
+            commit.StateChanges.ActivityExecutions.Any(change => change.State.InvocationId == parentLeaf.InvocationId && change.State.ChildControlInbox?.IsTerminalConsumed == true) &&
+            commit.StateChanges.ActivityExecutions.Any(change => change.State.InvocationId == carried.ConsumerActivityExecutionId && change.State.Status == ActivityExecutionStatus.Completed));
     }
 
     [Fact]
@@ -104,6 +108,7 @@ public sealed class WorkflowControlTransportTests
     [InlineData("omitted")]
     [InlineData("outputs")]
     [InlineData("batch")]
+    [InlineData("dispatch-failed")]
     public async Task Actual_leaf_refuses_an_omitted_or_forged_terminal_result_before_completing(string scenario)
     {
         await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync();
@@ -114,9 +119,15 @@ public sealed class WorkflowControlTransportTests
         var original = Assert.Single(CheckpointCommitIntents.IntentsOf(checkpoint), intent => intent.Kind == DispatchWorkflowConstants.ResumeParentIntentKind);
         var payload = original.Payload!.Value.Deserialize<WorkflowDispatchParentResumePayload>(Json)!;
         var control = payload.Result.Control!;
-        var result = new DispatchWorkflowResult(payload.ChildWorkflowExecutionId, payload.Result.Status,
+        var result = new DispatchWorkflowResult(payload.ChildWorkflowExecutionId, scenario == "dispatch-failed" ? WorkflowDispatchStatus.DispatchFailed : payload.Result.Status,
             scenario == "outputs" ? [new DispatchWorkflowOutput("forged-output", JsonSerializer.SerializeToElement(42), "Int32", false)] : [],
-            payload.Result.DiagnosticMetadata, scenario == "omitted" ? null : scenario == "batch" ? Copy(control, "batch") : control);
+            scenario == "dispatch-failed" ? new Dictionary<string, string>
+            {
+                [DispatchWorkflowDiagnostics.CodeKey] = DispatchWorkflowDiagnostics.DispatchFailedCode,
+                [DispatchWorkflowDiagnostics.CategoryKey] = DispatchWorkflowDiagnostics.DeliveryCategory,
+                [DispatchWorkflowDiagnostics.SummaryKey] = DispatchWorkflowDiagnostics.DispatchFailedSummary,
+                [DispatchWorkflowDiagnostics.DeliveryIncidentIdKey] = "forged-incident"
+            } : payload.Result.DiagnosticMetadata, scenario is "omitted" or "dispatch-failed" ? null : scenario == "batch" ? Copy(control, "batch") : control);
         var forgedPayload = new WorkflowDispatchParentResumePayload(payload.DispatchId, payload.ParentWorkflowExecutionId,
             payload.ParentActivityExecutionId, payload.ChildWorkflowExecutionId, payload.BookmarkId, payload.StimulusType, payload.StimulusHash, result);
         var forged = new RuntimePostCommitIntent(original.IntentId, original.WorkflowExecutionId, original.Kind, original.RecordedAt,
@@ -124,10 +135,11 @@ public sealed class WorkflowControlTransportTests
         await using var scope = fixture.Services.CreateAsyncScope();
         var lookup = scope.ServiceProvider.GetRequiredService<IPostCommitOutboxLookupStore>();
         var before = (await lookup.FindAsync(control.SourceOutboxItemId))!;
-        await scope.ServiceProvider.GetRequiredService<ParentResumeExecutor>().HandleAsync(forged);
+        await Assert.ThrowsAsync<ParentResumeDeferredException>(async () =>
+            await scope.ServiceProvider.GetRequiredService<ParentResumeExecutor>().HandleAsync(forged));
         var leaf = (await fixture.ListActivitiesAsync(payload.ParentWorkflowExecutionId)).Single(state => state.InvocationId == payload.ParentActivityExecutionId);
-        Assert.Equal(ActivityExecutionStatus.Faulted, leaf.Status);
-        Assert.NotNull(leaf.Fault);
+        Assert.NotEqual(ActivityExecutionStatus.Completed, leaf.Status);
+        Assert.Null(leaf.ChildControlInbox);
         Assert.True(before.Intent.IsEquivalentTo((await lookup.FindAsync(control.SourceOutboxItemId))!.Intent));
         Assert.DoesNotContain(fixture.Checkpoints.Commits, commit => commit.StateChanges.ActivityExecutions.Any(change =>
             change.State.InvocationId == leaf.InvocationId && change.State.Status == ActivityExecutionStatus.Completed));
@@ -137,34 +149,41 @@ public sealed class WorkflowControlTransportTests
     [InlineData("io")]
     [InlineData("json")]
     [InlineData("cancel")]
-    public async Task Resume_second_source_read_keeps_context_and_original_failure_after_authorization(string failureKind)
+    public async Task Pre_resume_source_read_preserves_failure_classification_and_original_cause(string failureKind)
     {
         await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync();
-        var run = await fixture.StartParentAsync("second-source-" + failureKind, "second-source-parent-" + failureKind, "correlation",
+        var run = await fixture.StartParentAsync("guard-source-" + failureKind, "guard-source-parent-" + failureKind, "correlation",
             waitForCompletion: true, controlConsumerVersion: 1);
         await fixture.SweepAsync();
         var original = Assert.Single(CheckpointCommitIntents.IntentsOf(fixture.Checkpoints.SingleIntentCommit(DispatchWorkflowConstants.ResumeParentIntentKind)),
             intent => intent.Kind == DispatchWorkflowConstants.ResumeParentIntentKind);
-        var payload = original.Payload!.Value.Deserialize<WorkflowDispatchParentResumePayload>(Json)!;
+        var message = original.Payload!.Value.Deserialize<WorkflowDispatchParentResumePayload>(Json)!;
         await using var scope = fixture.Services.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<IRuntimeChildControlAuthorizer>().ValidateAsync(payload.Result.Control!);
-        Exception cause = failureKind switch { "io" => new IOException("Second source read failed."),
-            "json" => new JsonException("Second source read is malformed."), _ => new OperationCanceledException() };
+        await scope.ServiceProvider.GetRequiredService<IRuntimeChildControlAuthorizer>().ValidateAsync(message.Result.Control!);
+        Exception cause = failureKind switch { "io" => new IOException("Source read failed."),
+            "json" => new JsonException("Source read is malformed."), _ => new OperationCanceledException() };
         var lookup = new SourceLookup { Failure = cause };
-        var activity = ActivatorUtilities.CreateInstance<DispatchActivity>(scope.ServiceProvider, lookup);
-        var context = new ActivityResumeContext<DispatchWorkflowState, WorkflowDispatchParentResumePayload>(
-            new ActivityExecutionContext(payload.ParentWorkflowExecutionId, payload.ParentActivityExecutionId, "resume-test-attempt",
-                run.Activity.Execution.ExecutableNodeId, CancellationToken.None), new DispatchWorkflowState(payload.ChildWorkflowExecutionId),
-            payload, payload.BookmarkId, "resume-test-delivery");
-        var resumed = (IStatefulActivity<DispatchWorkflowActivityResult, DispatchWorkflowState, WorkflowDispatchParentResumePayload>)activity;
-        if (failureKind == "cancel")
-            Assert.Same(cause, await Assert.ThrowsAsync<OperationCanceledException>(async () => await resumed.ResumeAsync(context)));
+        var template = Assert.Single(scope.ServiceProvider.GetServices<IEventHandler<ActivityResumeValidating>>());
+        var guard = (IEventHandler<ActivityResumeValidating>)ActivatorUtilities.CreateInstance(scope.ServiceProvider, template.GetType(), lookup);
+        var state = (await fixture.Services.GetRequiredService<IActivityExecutionStateStore>().FindAsync(message.ParentWorkflowExecutionId, message.ParentActivityExecutionId))!;
+        var pin = (await fixture.FindWorkflowAsync(message.ParentWorkflowExecutionId))!.PinnedExecutable;
+        var node = (await fixture.Services.GetRequiredService<IWorkflowExecutableStore>().FindAsync(pin.ArtifactId))!.NodesById[state.Execution.ExecutableNodeId];
+        var bookmark = (await fixture.FindBookmarkAsync(message.ParentWorkflowExecutionId, message.BookmarkId))!;
+        var payload = new RuntimeResumeBookmarkCommandPayload(pin, message.BookmarkId, state.InvocationId, node.ExecutableNodeId,
+            bookmark.ResumeTargetId, message.StimulusType, message.StimulusHash, JsonSerializer.SerializeToElement(message, Json),
+            RuntimeResumeBookmarkCommandPayload.StimulusMatchedReason);
+        if (failureKind is "io" or "cancel")
+        {
+            var unavailable = await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(async () => await guard.Handle(new ActivityResumeValidating(state, node, payload), default));
+            var failure = Assert.IsType<WorkflowControlBoundaryException>(unavailable.InnerException);
+            Assert.True(failure.IsUnavailable);
+            Assert.Same(cause, failure.InnerException);
+        }
         else
         {
-            var failure = await Assert.ThrowsAsync<WorkflowControlBoundaryException>(async () => await resumed.ResumeAsync(context));
+            var failure = await Assert.ThrowsAsync<WorkflowControlBoundaryException>(async () => await guard.Handle(new ActivityResumeValidating(state, node, payload), default));
+            Assert.False(failure.IsUnavailable);
             Assert.Same(cause, failure.InnerException);
-            Assert.Equal(payload.ChildWorkflowExecutionId, failure.WorkflowExecutionId);
-            Assert.Equal(payload.Result.Control!.Batch.RootActivityExecutionId, failure.RootActivityExecutionId);
         }
     }
 

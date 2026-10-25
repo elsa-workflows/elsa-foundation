@@ -1,4 +1,6 @@
 using CShells.Features;
+using Elsa.Events.Core.Extensions;
+using Elsa.Workflows.Runtime.Core.Events;
 using Elsa.Activities.DispatchWorkflow.Runtime.Configuration;
 using CShells.Lifecycle;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
@@ -19,7 +21,7 @@ namespace Elsa.Activities.DispatchWorkflow.Runtime;
     name: "ActivitiesDispatchWorkflowRuntime",
     DisplayName = "Activities Dispatch Workflow (Runtime)",
     Description = "Runs pinned DispatchWorkflow child starts through the runtime resumption path.",
-    DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
+    DependsOn = new object[] { "WorkflowsRuntimeResumption", "Events" })]
 public class DispatchWorkflowRuntimeFeature : IShellFeature
 {
     private int _childStartMaxDeliveryAttempts = DispatchWorkflowDeliveryOptions.DefaultMaxDeliveryAttempts;
@@ -81,6 +83,9 @@ public class DispatchWorkflowRuntimeFeature : IShellFeature
         services.AddRuntimePostCommitIntentHandler<ParentResumeExecutor>(
             DispatchWorkflowConstants.ResumeParentIntentKind,
             RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)));
+        services.AddRuntimePostCommitIntentHandler<WorkflowControlNotificationExecutor>(
+            WorkflowControlTransport.NotifyIntentKind,
+            RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)));
         services.TryAddEnumerable(
             ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, WorkflowDispatchCancellationEnricher>());
         services.TryAddEnumerable(
@@ -99,6 +104,7 @@ public class DispatchWorkflowRuntimeFeature : IShellFeature
         services.TryAddScoped<IWorkflowTestScopeCleaner, WorkflowTestScopeCleaner>();
         services.TryAddScoped<IRuntimeWorkflowControlBoundary, WorkflowDispatchControlBoundary>();
         services.TryAddScoped<IRuntimeChildControlAuthorizer, WorkflowDispatchControlAuthorizer>();
+        services.AddEventHandler<ActivityResumeValidating, DispatchWorkflowResumeGuard>();
         services.AddSingleton<IShellInitializer, WorkflowDispatchReadinessInitializer>();
         services.AddSingleton<IShellInitializer, WorkflowDispatchControlBoundaryInitializer>();
     }

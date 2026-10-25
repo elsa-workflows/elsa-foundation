@@ -2312,6 +2312,7 @@ public sealed class WorkflowExecutableCompilerTests
     private sealed class ChildControlProbe : IActivityResult<ActivityUnit>, IRuntimeStructuralActivity, IRuntimeActivityChildControlConsumer
     {
         public ChildControlProbe() => throw new InvalidOperationException("Publishing must not activate the declared consumer.");
+        public ValueTask<RuntimeStructuralContinuation> OnChildControlAsync(RuntimeChildControlContext context) => throw new NotSupportedException();
         public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context) =>
             throw new NotSupportedException();
     }

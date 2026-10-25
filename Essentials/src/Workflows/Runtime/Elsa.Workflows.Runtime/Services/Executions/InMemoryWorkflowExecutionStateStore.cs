@@ -63,6 +63,18 @@ public sealed class InMemoryWorkflowExecutionStateStore : InMemoryKeyedStateStor
         }, cancellationToken);
     }
 
+    public async ValueTask<bool> IsDeletionTombstonedAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (_executionLivenessStateStore is null) return false;
+        var ownership = await _executionLivenessStateStore.FindAsync(workflowExecutionId,
+            RuntimeExecutionOwnershipStateId.For(workflowExecutionId), cancellationToken);
+        if (ownership?.Metadata.TryGetValue(RuntimeMetadataKeys.WorkflowExecutionDeletionTombstone, out var value) != true)
+            return false;
+        return value == "true" ? true : throw new InvalidDataException("The persisted workflow-execution deletion tombstone is corrupt.");
+    }
+
     public ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
@@ -119,7 +131,7 @@ public sealed class InMemoryWorkflowExecutionStateStore : InMemoryKeyedStateStor
 
         return await _checkpointState.ExecuteWriteGateAsync(async token =>
         {
-            if (Find(workflowExecutionId) is null)
+            if (Find(workflowExecutionId) is not { } current || await HasControlDependenciesAsync(current, token))
                 return false;
 
             if (_executionLivenessStateStore is InMemoryExecutionLivenessStateStore inMemoryLivenessStore)
@@ -164,6 +176,8 @@ public sealed class InMemoryWorkflowExecutionStateStore : InMemoryKeyedStateStor
                     return WorkflowExecutionDeletionResult.Changed;
                 if (!current.Status.IsTerminal())
                     return WorkflowExecutionDeletionResult.NotTerminal;
+                if (await HasControlDependenciesAsync(current, token))
+                    return WorkflowExecutionDeletionResult.DependencyRetained;
 
                 return await livenessStore.ExecuteWorkflowDeletionAtomicAsync(
                     current.WorkflowExecutionId,
@@ -178,6 +192,41 @@ public sealed class InMemoryWorkflowExecutionStateStore : InMemoryKeyedStateStor
                     CancellationToken.None);
             }, token);
         }, cancellationToken);
+    }
+
+    private async ValueTask<bool> HasControlDependenciesAsync(WorkflowExecutionState state, CancellationToken cancellationToken)
+    {
+        WorkflowDispatchRecord[] links;
+        lock (_checkpointState.SyncRoot)
+            links = _checkpointState.WorkflowDispatches.Values.Where(dispatch =>
+                dispatch.Mode == WorkflowDispatchMode.WaitForCompletion &&
+                (dispatch.Metadata.ContainsKey(RuntimeMetadataKeys.ChildControlConsumerKey) ||
+                 dispatch.Metadata.ContainsKey(RuntimeMetadataKeys.ChildControlConsumerVersion))).ToArray();
+        var incoming = links.Where(link => link.ChildWorkflowExecutionId == state.WorkflowExecutionId).ToArray();
+        if (state.SystemMetadata.TryGetValue(RuntimeMetadataKeys.ChildControlDispatchId, out var hint) &&
+            (incoming.Length != 1 || incoming[0].DispatchId != hint || incoming[0].ParentWorkflowExecutionId != state.ParentWorkflowExecutionId))
+            return true;
+        foreach (var child in SnapshotAll().Where(child => child.ParentWorkflowExecutionId == state.WorkflowExecutionId &&
+                     child.SystemMetadata.ContainsKey(RuntimeMetadataKeys.ChildControlDispatchId)))
+            if (!links.Any(link => link.ParentWorkflowExecutionId == state.WorkflowExecutionId &&
+                    link.ChildWorkflowExecutionId == child.WorkflowExecutionId &&
+                    link.DispatchId == child.SystemMetadata[RuntimeMetadataKeys.ChildControlDispatchId])) return true;
+        foreach (var link in incoming)
+            if (!await IsDeletionTombstonedAsync(link.ParentWorkflowExecutionId, cancellationToken))
+                return true; // Absence alone cannot release exact caller/root authority.
+        foreach (var link in links.Where(link => link.ParentWorkflowExecutionId == state.WorkflowExecutionId))
+        {
+            if (!state.Status.IsTerminal()) return true;
+            var child = Find(link.ChildWorkflowExecutionId);
+            if (child is null ? (link.Status != WorkflowDispatchStatus.DispatchFailed && !WorkflowDispatchLifecycle.WasCancelledBeforeAdmission(link)) : !child.Status.IsTerminal())
+                return true;
+            lock (_checkpointState.SyncRoot)
+                if (_checkpointState.OutboxItems.Values.Any(item => item.Status != RuntimePostCommitOutboxStatus.Delivered &&
+                    (item.Intent.WorkflowExecutionId == link.ChildWorkflowExecutionId ||
+                     item.Intent.Metadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var id) && id == link.DispatchId)))
+                    return true;
+        }
+        return false;
     }
 
     private bool DeleteExecutionAndCancelOutstandingWork(string workflowExecutionId)

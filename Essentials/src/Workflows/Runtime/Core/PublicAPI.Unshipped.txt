@@ -8976,3 +8976,35 @@ const Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlInbox.CurrentVersion
 Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTarget.MatchesAddress(Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTransport! transport) -> bool
 Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.ChildControlInbox.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlInbox?
 Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.ChildControlInbox.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeActivityChildControlConsumer.OnChildControlAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext! context) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation!>
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext.RuntimeChildControlContext(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeActivityExecutionContext! parentContext, string! callingActivityExecutionId, string! callingExecutableNodeId, string? callingIterationId, System.Collections.Generic.IReadOnlyDictionary<string!, string!>! childSchedulingMetadata, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTransport!>! batches, System.Collections.Generic.IReadOnlyCollection<string!>? completionOutcomeNames = null) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext.ParentContext.get -> Elsa.Workflows.Runtime.Core.Contracts.IRuntimeActivityExecutionContext!
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext.CallingActivityExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext.CallingExecutableNodeId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext.CallingIterationId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext.ChildSchedulingMetadata.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext.Batches.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTransport!>!
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext.CompletionOutcomeNames.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlInbox.HasAccepted(Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTransport! transport) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionCommandKind.DeliverChildControl = 20 -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionCommandKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlCommandPayload
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlCommandPayload.RuntimeChildControlCommandPayload(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! pinnedExecutable, string! executableNodeId, string! activityExecutionId, string? parentActivityExecutionId, string? branchId, Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTransport! control) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlCommandPayload.PinnedExecutable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlCommandPayload.ExecutableNodeId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlCommandPayload.ActivityExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlCommandPayload.ParentActivityExecutionId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlCommandPayload.BranchId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlCommandPayload.Control.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTransport!
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlCommandPayload.Reason.get -> string!
+const Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlCommandPayload.DeliveryReason = "DeliverChildControl" -> string!
+Elsa.Workflows.Runtime.Core.Exceptions.WorkflowControlBoundaryException.WorkflowControlBoundaryException(string! workflowExecutionId, string? rootActivityExecutionId, System.Exception! innerException, bool isUnavailable) -> void
+Elsa.Workflows.Runtime.Core.Exceptions.WorkflowControlBoundaryException.IsUnavailable.get -> bool
+Elsa.Workflows.Runtime.Core.Exceptions.RuntimeSchedulerWorkUnavailableException.RuntimeSchedulerWorkUnavailableException(string! code, string! safeSummary, System.Exception? innerException) -> void
+Elsa.Workflows.Runtime.Core.Events.ActivityResumeValidating
+Elsa.Workflows.Runtime.Core.Events.ActivityResumeValidating.ActivityResumeValidating(Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState! state, Elsa.Workflows.Runtime.Core.Models.ExecutableNode! node, Elsa.Workflows.Runtime.Core.Models.RuntimeResumeBookmarkCommandPayload! payload) -> void
+Elsa.Workflows.Runtime.Core.Events.ActivityResumeValidating.State.get -> Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState!
+Elsa.Workflows.Runtime.Core.Events.ActivityResumeValidating.Node.get -> Elsa.Workflows.Runtime.Core.Models.ExecutableNode!
+Elsa.Workflows.Runtime.Core.Events.ActivityResumeValidating.Payload.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeResumeBookmarkCommandPayload!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionDeletionResult.DependencyRetained = 5 -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionDeletionResult
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore.IsDeletionTombstonedAsync(string! workflowExecutionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>

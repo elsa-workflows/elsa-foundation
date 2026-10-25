@@ -44,6 +44,17 @@ public sealed class RuntimeChildControlInbox
     public long NextOrdinal { get; }
     public bool IsTerminalConsumed { get; }
     public IReadOnlyList<RuntimeChildControlTransport> Pending { get; }
+
+    /// <summary>Queries committed acceptance after independent exact-source authorization; this data query grants no authority.</summary>
+    public bool HasAccepted(RuntimeChildControlTransport transport)
+    {
+        if (!Target.MatchesAddress(transport)) return false;
+        if (transport.Batch.Ordinal < NextOrdinal || IsTerminalConsumed && NextOrdinal == long.MaxValue && transport.Batch.Ordinal == long.MaxValue)
+            return true;
+        return Pending.Any(item => item.Batch.Ordinal == transport.Batch.Ordinal &&
+            JsonElement.DeepEquals(JsonSerializer.SerializeToElement(item), JsonSerializer.SerializeToElement(transport)));
+    }
+
 }
 
 internal sealed class RuntimeChildControlInboxJsonConverter : JsonConverter<RuntimeChildControlInbox>

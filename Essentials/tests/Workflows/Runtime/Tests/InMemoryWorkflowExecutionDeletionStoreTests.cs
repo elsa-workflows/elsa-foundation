@@ -17,6 +17,79 @@ namespace Elsa.Workflows.Runtime.Tests;
 
 public sealed class InMemoryWorkflowExecutionDeletionStoreTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Control_dependencies_retain_both_histories_until_successful_delivery_and_caller_first_deletion(bool finalFailure)
+    {
+        using var fixture = new RuntimeFixture();
+        var executions = fixture.Executions;
+        var deletion = fixture.DeletionStore;
+        var dispatches = fixture.Services.GetRequiredService<IWorkflowDispatchStore>();
+        var outbox = fixture.Services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>();
+        var delivery = (IRuntimePostCommitOutboxStore)outbox;
+        var link = ControlLink("control-parent");
+        await executions.SaveAsync(Workflow("control-parent", WorkflowExecutionStatus.Completed));
+        var child = Workflow(link.ChildWorkflowExecutionId, WorkflowExecutionStatus.Running) with
+        {
+            ParentWorkflowExecutionId = "control-parent",
+            SystemMetadata = new Dictionary<string, string> { [RuntimeMetadataKeys.ChildControlDispatchId] = link.DispatchId }
+        };
+        await executions.SaveAsync(child);
+        // A child hint without its dispatch authority must retain the caller too.
+        Assert.Equal(WorkflowExecutionDeletionResult.DependencyRetained,
+            await deletion.TryDeleteTerminalAsync((await deletion.ReadAsync("control-parent"))!));
+        await dispatches.SaveAsync(link);
+        link = link.TransitionTo(WorkflowDispatchStatus.Started, Now);
+        await dispatches.SaveAsync(link);
+        var inconsistent = child with { SystemMetadata = new Dictionary<string, string>
+            { [RuntimeMetadataKeys.ChildControlDispatchId] = "foreign-dispatch" } };
+        await executions.SaveAsync(inconsistent);
+        Assert.Equal(WorkflowExecutionDeletionResult.DependencyRetained,
+            await deletion.TryDeleteTerminalAsync((await deletion.ReadAsync("control-parent"))!));
+        await executions.SaveAsync(child);
+        var caller = (await deletion.ReadAsync("control-parent"))!;
+        Assert.Equal(WorkflowExecutionDeletionResult.DependencyRetained, await deletion.TryDeleteTerminalAsync(caller));
+        child = child with { Status = WorkflowExecutionStatus.Completed, CompletedAt = Now };
+        await executions.SaveAsync(child);
+        await dispatches.SaveAsync(link.TransitionTo(WorkflowDispatchStatus.Completed, Now));
+        var called = (await deletion.ReadAsync(link.ChildWorkflowExecutionId))!;
+        Assert.Equal(WorkflowExecutionDeletionResult.DependencyRetained, await deletion.TryDeleteTerminalAsync(called));
+        Assert.False(await executions.DeleteAsync(link.ChildWorkflowExecutionId));
+        var intent = new RuntimePostCommitIntent("control-source", link.ChildWorkflowExecutionId, "test.control", Now,
+            "root", "control-delivery", null, new Dictionary<string, string> { [RuntimeMetadataKeys.DispatchId] = link.DispatchId });
+        await outbox.AddPendingForTestingAsync(new RuntimePostCommitOutboxItem("control-source-row", intent,
+            RuntimePostCommitOutboxStatus.Pending, Now, Now));
+        if (finalFailure)
+            await delivery.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult("control-source-row",
+                RuntimePostCommitOutboxStatus.FailedFinal, Now, failureMessage: "Unresolved delivery."));
+        Assert.Equal(WorkflowExecutionDeletionResult.DependencyRetained, await deletion.TryDeleteTerminalAsync(caller));
+        Assert.NotNull(await executions.FindAsync("control-parent"));
+        Assert.NotNull(await executions.FindAsync(link.ChildWorkflowExecutionId));
+        Assert.False(await executions.IsDeletionTombstonedAsync("control-parent"));
+        if (finalFailure) return; // A terminal failure is not a successful acknowledgement.
+        await delivery.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult("control-source-row",
+            RuntimePostCommitOutboxStatus.Delivered, Now));
+        Assert.Equal(WorkflowExecutionDeletionResult.Deleted, await deletion.TryDeleteTerminalAsync(caller));
+        Assert.True(await executions.IsDeletionTombstonedAsync("control-parent"));
+        Assert.False(await executions.IsDeletionTombstonedAsync("unknown-parent"));
+        Assert.Equal(WorkflowExecutionDeletionResult.Deleted, await deletion.TryDeleteTerminalAsync(called));
+    }
+
+    private static WorkflowDispatchRecord ControlLink(string parent)
+    {
+        var identity = new WorkflowDispatchIdentity(parent, "call");
+        return new WorkflowDispatchRecord(identity.DispatchId, parent, "call", identity.ChildWorkflowExecutionId,
+            new WorkflowExecutableIdentity("artifact-child", "definition-child", "version-child", "1", "hash-child"),
+            new WorkflowExecutableSourceProvenance("source", "WorkflowDefinitionVersion", "version-child", "1",
+                "definition-child", "version-child", "1", "publication", "slot"),
+            WorkflowDispatchMode.WaitForCompletion, WorkflowDispatchStatus.Pending, null, "tenant-a",
+            new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue), WorkflowRunKind.PublishedRun,
+            new WorkflowExecutionAuthoritySnapshot(parent, "test"), [], Now, Now,
+            new Dictionary<string, string> { [RuntimeMetadataKeys.ChildControlConsumerKey] = "test.control",
+                [RuntimeMetadataKeys.ChildControlConsumerVersion] = "1" });
+    }
+
     private static readonly DateTimeOffset Now = new(2026, 10, 18, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
@@ -405,6 +478,7 @@ public sealed class InMemoryWorkflowExecutionDeletionStoreTests
         }
 
         private IServiceScope Scope { get; }
+        public IServiceProvider Services => Scope.ServiceProvider;
         public IWorkflowExecutionDeletionStore DeletionStore { get; }
         public InMemoryRuntimeCheckpointStoreState CheckpointState { get; }
         public IWorkflowExecutionStateStore Executions { get; }

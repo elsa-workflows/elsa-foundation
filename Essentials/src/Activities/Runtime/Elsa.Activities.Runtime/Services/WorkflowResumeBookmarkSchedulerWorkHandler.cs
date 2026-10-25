@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Elsa.Events.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Events;
 using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
@@ -117,7 +119,14 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         var bookmark = await bookmarkStateStore.FindAsync(workItem.WorkflowExecutionId, resumePayload.BookmarkId, cancellationToken);
         var deliveryMetadata = ResolveTriggerDeliveryMetadata(workItem, resumePayload, state);
 
-        if (TryResolveClaimedResume(state, workItem, deliveryMetadata, out var claimedDelivery, out var claimedAttempt))
+        var hasClaimedResume = TryResolveClaimedResume(state, workItem, deliveryMetadata, out var claimedDelivery, out var claimedAttempt);
+        if ((bookmark is not null || hasClaimedResume) &&
+            state.Status is not (ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled or ActivityExecutionStatus.Recovered) &&
+            serviceProvider.GetServices<IEventHandler<ActivityResumeValidating>>().Any())
+            await serviceProvider.GetRequiredService<IInlineEventPublisher>().Publish(
+                new ActivityResumeValidating(state, executableNode, resumePayload), cancellationToken);
+
+        if (hasClaimedResume)
         {
             await ResumeActivityAsync(serviceProvider, checkpointCommitter, activityFaultIncidentRecorder, bookmarkConsumptionCheckpointService, schedulerWorkQueue, durableValueStateStore, payloadCapturePolicy, workItem, resumePayload, null, [], executable, executableNode, state, claimedDelivery!, claimedAttempt, cancellationToken);
             return;

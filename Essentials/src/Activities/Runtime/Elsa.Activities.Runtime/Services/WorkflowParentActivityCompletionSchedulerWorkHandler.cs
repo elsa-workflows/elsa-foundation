@@ -143,6 +143,14 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
         else if (ActivityAttemptActivationClaimer.WasParentCompletionProcessed(completedChildState))
             return;
 
+        if (!isParentOutcomeEvaluation && !isDescendantFaultEvaluation &&
+            completedChildState.Status == ActivityExecutionStatus.Completed && completedChildState.ChildControl is { } control)
+        {
+            await ChildControlDelivery.RunAsync(serviceProvider, TimeProvider, workItem, payload, control,
+                workItem.WorkItemId, cancellationToken);
+            return;
+        }
+
         var viaChildState = isDescendantFaultEvaluation
             ? await activityExecutionStateStore.FindAsync(
                   workItem.WorkflowExecutionId,

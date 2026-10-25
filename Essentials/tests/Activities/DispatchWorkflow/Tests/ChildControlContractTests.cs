@@ -210,6 +210,32 @@ public sealed class ChildControlContractTests
         Assert.Throws<ArgumentException>(() => new RuntimeChildControlNotification("bad\ud800"));
     }
 
+    [Theory]
+    [InlineData("terminal")]
+    [InlineData("sibling")]
+    [InlineData("foreign-pin")]
+    public void Generic_nonterminal_delivery_cannot_readdress_or_terminalize_its_exact_source(string scenario)
+    {
+        var control = Transport(Batch(terminal: scenario == "terminal"));
+        var pin = scenario == "foreign-pin" ? Pin with { ArtifactHash = "foreign-content" } : Pin;
+        Assert.Throws<ArgumentException>(() => new RuntimeChildControlCommandPayload(pin, "consumer-node",
+            scenario == "sibling" ? "sibling-parent" : control.ConsumerActivityExecutionId, null, null, control));
+    }
+
+    [Fact]
+    public void Generic_nonterminal_delivery_wire_retains_its_whole_exact_source_and_address()
+    {
+        var control = Transport(Batch());
+        var original = new RuntimeChildControlCommandPayload(Pin, "consumer-node", control.ConsumerActivityExecutionId,
+            "enclosing-parent", "branch-a", control);
+        var json = JsonSerializer.Serialize(original);
+        var restored = JsonSerializer.Deserialize<RuntimeChildControlCommandPayload>(json)!;
+        Assert.Equal(json, JsonSerializer.Serialize(restored));
+        Assert.Equal(control.SourceOutboxItemId, restored.Control.SourceOutboxItemId);
+        Assert.Equal("enclosing-parent", restored.ParentActivityExecutionId);
+        Assert.Equal("branch-a", restored.BranchId);
+    }
+
     private static RuntimeChildControlBatch Batch(bool terminal = false, string? failure = null,
         IReadOnlyList<RuntimeChildControlNotification>? notifications = null) => new(1, "consumer", 1,
         Identity.ChildWorkflowExecutionId, "root-invocation", "source-work", 3, terminal,

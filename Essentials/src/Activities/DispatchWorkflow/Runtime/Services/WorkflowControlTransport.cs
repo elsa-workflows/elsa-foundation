@@ -77,7 +77,7 @@ internal sealed class WorkflowDispatchControlAuthorizer(IRuntimeWorkflowControlB
         }
         catch (OperationCanceledException) { throw; }
         catch (WorkflowControlBoundaryException) { throw; }
-        catch (Exception exception) { throw new WorkflowControlBoundaryException(transport.Batch.ChildWorkflowExecutionId,
+        catch (Exception exception) { throw WorkflowDispatchControlPolicy.Wrap(transport.Batch.ChildWorkflowExecutionId,
             transport.Batch.RootActivityExecutionId, exception); }
     }
 }

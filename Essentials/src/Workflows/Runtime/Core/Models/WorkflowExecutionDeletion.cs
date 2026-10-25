@@ -9,5 +9,7 @@ public enum WorkflowExecutionDeletionResult
     NotFound,
     Changed,
     NotTerminal,
-    Unsupported
+    Unsupported,
+    /// <summary>Linked control or replay responsibility still requires this execution history.</summary>
+    DependencyRetained
 }

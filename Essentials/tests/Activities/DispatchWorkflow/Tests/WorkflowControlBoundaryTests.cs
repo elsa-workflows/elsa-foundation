@@ -1,5 +1,7 @@
 using System.Text.Json;
 using CShells.Lifecycle;
+using Elsa.Events.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Events;
 using Elsa.Activities.DispatchWorkflow.Runtime;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Services;
@@ -115,6 +117,15 @@ public sealed class WorkflowControlBoundaryTests
         });
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.InitializeControlAsync());
         Assert.Contains("exactly one", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Startup_rejects_missing_exact_source_resume_event_handler()
+    {
+        await using var fixture = await Fixture.CreateAsync("valid", afterFeature: services =>
+            services.RemoveAll<IEventHandler<ActivityResumeValidating>>());
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.InitializeControlAsync());
+        Assert.Contains("exact-source pre-resume guard", failure.Message, StringComparison.Ordinal);
     }
 
     [Theory]

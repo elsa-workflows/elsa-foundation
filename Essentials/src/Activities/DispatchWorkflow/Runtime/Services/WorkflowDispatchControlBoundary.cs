@@ -22,7 +22,8 @@ internal sealed class WorkflowDispatchControlBoundary(
         ArgumentException.ThrowIfNullOrWhiteSpace(rootActivityExecutionId);
         try { return await ResolveCoreAsync(workflowExecutionId, rootActivityExecutionId, cancellationToken); }
         catch (OperationCanceledException) { throw; }
-        catch (Exception exception) { throw new WorkflowControlBoundaryException(workflowExecutionId, rootActivityExecutionId, exception); }
+        catch (WorkflowControlBoundaryException) { throw; }
+        catch (Exception exception) { throw WorkflowDispatchControlPolicy.Wrap(workflowExecutionId, rootActivityExecutionId, exception); }
     }
 
     private async ValueTask<RuntimeChildControlTarget?> ResolveCoreAsync(string workflowExecutionId, string rootActivityExecutionId,
@@ -125,7 +126,7 @@ internal static class WorkflowDispatchControlPolicy
             version.ToString(CultureInfo.InvariantCulture) != versionText)
             throw Failure("incomplete or malformed consumer declaration");
         try { return new ActivityChildControlConsumerAttribute(key!, version); }
-        catch (ArgumentException exception) { throw new InvalidOperationException("Workflow dispatch control consumer declaration is invalid.", exception); }
+        catch (ArgumentException exception) { throw new WorkflowDispatchControlConflictException("Workflow dispatch control consumer declaration is invalid.", exception); }
     }
 
     public static async ValueTask<ActivityChildControlConsumerAttribute?> AdmitAsync(ActivityExecutionState caller,
@@ -150,5 +151,10 @@ internal static class WorkflowDispatchControlPolicy
         return declared;
     }
 
-    public static InvalidOperationException Failure(string detail) => new($"Workflow dispatch control boundary is inconsistent: {detail}.");
+    public static InvalidOperationException Failure(string detail) => new WorkflowDispatchControlConflictException($"Workflow dispatch control boundary is inconsistent: {detail}.");
+
+    public static WorkflowControlBoundaryException Wrap(string workflow, string? root, Exception cause) =>
+        new(workflow, root, cause, isUnavailable: cause is not (WorkflowDispatchControlConflictException or ArgumentException or System.Text.Json.JsonException));
 }
+
+internal sealed class WorkflowDispatchControlConflictException(string message, Exception? innerException = null) : InvalidOperationException(message, innerException);

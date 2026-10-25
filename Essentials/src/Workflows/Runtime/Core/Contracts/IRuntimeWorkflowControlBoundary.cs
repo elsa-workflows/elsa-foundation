@@ -17,5 +17,8 @@ public interface IRuntimeWorkflowControlBoundary
         CancellationToken cancellationToken = default);
 }
 
-/// <summary>Marks a structural activity that declares its control protocol through ActivityChildControlConsumerAttribute.</summary>
-public interface IRuntimeActivityChildControlConsumer;
+/// <summary>Consumes one exact call's contiguous ordered control prefix as one structural decision.</summary>
+public interface IRuntimeActivityChildControlConsumer
+{
+    ValueTask<RuntimeStructuralContinuation> OnChildControlAsync(RuntimeChildControlContext context);
+}

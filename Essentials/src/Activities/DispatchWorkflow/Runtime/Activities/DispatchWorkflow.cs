@@ -9,7 +9,6 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Exceptions;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Activities.DispatchWorkflow.Runtime.Activities;
@@ -36,26 +35,6 @@ public sealed class DispatchWorkflow(
     TimeProvider timeProvider) :
     StatefulActivity<DispatchWorkflowActivityResult, DispatchWorkflowState, WorkflowDispatchParentResumePayload>
 {
-    private readonly IRuntimeChildControlAuthorizer? _controlAuthorizer;
-    private readonly IPostCommitOutboxLookupStore? _controlOutbox;
-
-    public DispatchWorkflow(
-        IWorkflowExecutableStore executableStore,
-        IWorkflowExecutionStateStore workflowExecutionStateStore,
-        IActivityExecutionStateStore activityExecutionStateStore,
-        IWorkflowExecutableInputValidator inputValidator,
-        IWorkflowDispatchStager dispatchStager,
-        IOptions<DispatchWorkflowOptions> options,
-        TimeProvider timeProvider,
-        IRuntimeChildControlAuthorizer controlAuthorizer,
-        IPostCommitOutboxLookupStore controlOutbox)
-        : this(executableStore, workflowExecutionStateStore, activityExecutionStateStore, inputValidator,
-            dispatchStager, options, timeProvider)
-    {
-        _controlAuthorizer = controlAuthorizer ?? throw new ArgumentNullException(nameof(controlAuthorizer));
-        _controlOutbox = controlOutbox ?? throw new ArgumentNullException(nameof(controlOutbox));
-    }
-
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     public const string ActivityType = DispatchWorkflowConstants.ActivityType;
 
@@ -268,7 +247,7 @@ public sealed class DispatchWorkflow(
     }
 
     [ResumeTarget(DispatchWorkflowConstants.CompletionResumeTargetId)]
-    protected override async ValueTask<ActivityTransition<DispatchWorkflowActivityResult, DispatchWorkflowState>> ResumeAsync(
+    protected override ValueTask<ActivityTransition<DispatchWorkflowActivityResult, DispatchWorkflowState>> ResumeAsync(
         ActivityResumeContext<DispatchWorkflowState, WorkflowDispatchParentResumePayload> context)
     {
         var payload = context.Trigger;
@@ -287,32 +266,6 @@ public sealed class DispatchWorkflow(
             throw new InvalidOperationException("DispatchWorkflow completion resume payload does not match the current activity execution.");
         }
 
-        try
-        {
-            var caller = await activityExecutionStateStore.FindAsync(context.WorkflowExecutionId, context.InvocationId, context.CancellationToken)
-                ?? throw WorkflowDispatchControlPolicy.Failure("completion caller is missing");
-            if (WorkflowDispatchControlPolicy.ReadCapability(caller.Provenance.Metadata) is not null && payload.Result.Control is null)
-                throw WorkflowDispatchControlPolicy.Failure("admitted control resume omitted its terminal barrier");
-            if (payload.Result.Control is { } control)
-            {
-                if (_controlAuthorizer is null || _controlOutbox is null)
-                    throw WorkflowDispatchControlPolicy.Failure("control resume requires exact-source authorization services");
-                await _controlAuthorizer.ValidateAsync(control, context.CancellationToken);
-                var source = await _controlOutbox.FindAsync(control.SourceOutboxItemId, context.CancellationToken)
-                    ?? throw WorkflowDispatchControlPolicy.Failure("terminal resume source is missing");
-                if (source.Intent.Payload is not { } committedPayload ||
-                    !JsonElement.DeepEquals(committedPayload, JsonSerializer.SerializeToElement(payload, SerializerOptions)))
-                    throw WorkflowDispatchControlPolicy.Failure("terminal resume result differs from its immutable source");
-            }
-        }
-        catch (OperationCanceledException) { throw; }
-        catch (WorkflowControlBoundaryException) { throw; }
-        catch (Exception exception)
-        {
-            throw new WorkflowControlBoundaryException(payload.ChildWorkflowExecutionId,
-                payload.Result.Control?.Batch.RootActivityExecutionId, exception);
-        }
-
         var outcome = payload.Result.Status switch
         {
             WorkflowDispatchStatus.Completed => DispatchWorkflowOutcomes.Completed,
@@ -321,9 +274,9 @@ public sealed class DispatchWorkflow(
             WorkflowDispatchStatus.DispatchFailed => DispatchWorkflowOutcomes.DispatchFailed,
             _ => throw new InvalidOperationException("DispatchWorkflow completion resume payload has an unsupported child terminal status.")
         };
-        return Complete(
+        return ValueTask.FromResult(Complete(
             new DispatchWorkflowActivityResult(payload.ChildWorkflowExecutionId, payload.Result),
-            outcome);
+            outcome));
     }
 
     private static void ValidatePin(DispatchWorkflowPin pin, string definitionId)

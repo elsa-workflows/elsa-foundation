@@ -225,16 +225,16 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
             !StringComparer.Ordinal.Equals(childWorkflowExecutionId, dispatch.ChildWorkflowExecutionId) ||
             intent.Payload is null)
         {
-            throw new InvalidOperationException($"Parent-resume intent '{intent.IntentId}' conflicts with dispatch '{dispatch.DispatchId}'.");
+            throw new WorkflowDispatchControlConflictException($"Parent-resume intent '{intent.IntentId}' conflicts with dispatch '{dispatch.DispatchId}'.");
         }
 
         var payload = intent.Payload.Value.Deserialize<WorkflowDispatchParentResumePayload>(SerializerOptions)
-            ?? throw new InvalidOperationException($"Parent-resume intent '{intent.IntentId}' has no valid payload.");
+            ?? throw new WorkflowDispatchControlConflictException($"Parent-resume intent '{intent.IntentId}' has no valid payload.");
         if (!StringComparer.Ordinal.Equals(payload.DispatchId, dispatch.DispatchId) ||
             !StringComparer.Ordinal.Equals(payload.ChildWorkflowExecutionId, dispatch.ChildWorkflowExecutionId) ||
             payload.Result.Status != dispatch.Status)
         {
-            throw new InvalidOperationException($"Parent-resume intent '{intent.IntentId}' payload conflicts with dispatch '{dispatch.DispatchId}'.");
+            throw new WorkflowDispatchControlConflictException($"Parent-resume intent '{intent.IntentId}' payload conflicts with dispatch '{dispatch.DispatchId}'.");
         }
 
         return payload;

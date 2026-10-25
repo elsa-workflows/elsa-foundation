@@ -317,9 +317,9 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         }
         catch (RuntimeSchedulerWorkUnavailableException exception)
         {
-            // Bookmark resumes preserve their retry delay either through a durable claim or through a visibility-aware
+            // Resumes and structural child-control/completion delivery preserve their retry delay through a durable claim or visibility-aware
             // overlay whose drain flush persists the release before returning. Other command kinds retain their source.
-            if (workItem.CommandKind != WorkflowExecutionCommandKind.ResumeBookmark ||
+            if (workItem.CommandKind is not (WorkflowExecutionCommandKind.ResumeBookmark or WorkflowExecutionCommandKind.DeliverChildControl or WorkflowExecutionCommandKind.CompleteActivity) ||
                 renewal is null || _consumedWorkClaimAccessor?.WasConsumedDurably == true)
                 throw;
 
@@ -509,6 +509,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             or WorkflowExecutionCommandKind.StartActivity
             or WorkflowExecutionCommandKind.InvokeActivity
             or WorkflowExecutionCommandKind.NotifyParentActivity
+            or WorkflowExecutionCommandKind.DeliverChildControl
             or WorkflowExecutionCommandKind.DeliverInterventionDecision
             or WorkflowExecutionCommandKind.RetryActivityBoundary
             or WorkflowExecutionCommandKind.CancelActivityScope;

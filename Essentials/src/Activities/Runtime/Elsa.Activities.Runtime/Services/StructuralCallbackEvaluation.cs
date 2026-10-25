@@ -60,6 +60,9 @@ internal static class StructuralCallbackEvaluation
         /// <summary>Builds the fault-incident request when the evaluation faults the target.</summary>
         public required Func<RuntimeCheckpointCommitter, ActivityExecutionState, Exception, string, IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot>, ActivityFaultIncidentRecordRequest> NewFaultIncidentRecordRequest { get; init; }
 
+        /// <summary>One accepted exact-call inbox contribution, committed only with a returned consumer decision.</summary>
+        public StructuralChildControlContribution? ChildControlContribution { get; init; }
+
         /// <summary>Stamps the target state the callback's outcome commits, such as a processed marker; identity by default.</summary>
         public Func<ActivityExecutionState, ActivityExecutionState> MarkProcessed { get; init; } = static state => state;
     }
@@ -298,7 +301,8 @@ internal static class StructuralCallbackEvaluation
         {
             await StructuralParentEvaluationSupport.CommitDeferredParentActivityAsync(
                 checkpointCommitter, inspectionAccumulator, idGenerator, timeProvider, definition.NewCommitSource(definition.DeferredCheckpointReason),
-                callbackBypassParentState, [], [], [], subtreeCancellationPlans, valueSnapshots, cancellationToken);
+                callbackBypassParentState, [], [], [], subtreeCancellationPlans, valueSnapshots, cancellationToken,
+                childControlContribution: definition.ChildControlContribution);
             return;
         }
 
@@ -318,7 +322,8 @@ internal static class StructuralCallbackEvaluation
                 Fault = fault.ToNormalized()
             };
             var exception = new ActivityTransitionFaultException(fault);
-            var request = definition.NewFaultIncidentRecordRequest(checkpointCommitter, faultedParentState, exception, "ActivityReturnedFault", valueSnapshots);
+            var request = definition.NewFaultIncidentRecordRequest(checkpointCommitter, faultedParentState, exception, "ActivityReturnedFault", valueSnapshots)
+                with { ChildControlContribution = definition.ChildControlContribution };
             var incidentId = ActivityFaultIncidentRecorder.IncidentId(workItem.WorkItemId, payload.ActivityExecutionId, "ActivityReturnedFault");
             var parentEvaluation = await ChildFaultParentEvaluation.TryBuildAsync(
                 activityExecutionStateStore,
@@ -342,7 +347,8 @@ internal static class StructuralCallbackEvaluation
         {
             await ActivityCancellationCheckpointService.CommitAsync(
                 checkpointCommitter, inspectionAccumulator, timeProvider, workItem,
-                currentParentState, resolvedContinuation.CancellationReason!, valueSnapshots, cancellationToken: cancellationToken);
+                currentParentState, resolvedContinuation.CancellationReason!, valueSnapshots, cancellationToken: cancellationToken,
+                childControlContribution: definition.ChildControlContribution);
             return;
         }
 
@@ -353,7 +359,8 @@ internal static class StructuralCallbackEvaluation
                 currentParentState, Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Suspend, timeProvider.GetUtcNow());
             await StructuralParentEvaluationSupport.CommitDeferredParentActivityAsync(
                 checkpointCommitter, inspectionAccumulator, idGenerator, timeProvider, definition.NewCommitSource(definition.DeferredCheckpointReason),
-                currentParentState, [], childScheduleRequests, parentNotificationWorkItems, subtreeCancellationPlans, valueSnapshots, cancellationToken);
+                currentParentState, [], childScheduleRequests, parentNotificationWorkItems, subtreeCancellationPlans, valueSnapshots, cancellationToken,
+                childControlContribution: definition.ChildControlContribution);
             return;
         }
 
@@ -443,7 +450,7 @@ internal static class StructuralCallbackEvaluation
             checkpointCommitter, inspectionAccumulator, timeProvider, definition.NewCommitSource(payload.Reason), completedParentState,
             SchedulerWorkHandlerHelpers.ReadCompletionOutcomeNames(completedParentState, skippedSubStatus: null), subtreeCancellationPlans, parentNotificationWorkItems,
             completedValueSnapshots, completionDurableValueChanges, completionWorkflowVariableWriteBack, cancellationToken,
-            ancestorNotifications: ancestorNotificationWorkItems);
+            ancestorNotifications: ancestorNotificationWorkItems, childControlContribution: definition.ChildControlContribution);
     }
 
     private static async ValueTask RecordParentFaultAsync(

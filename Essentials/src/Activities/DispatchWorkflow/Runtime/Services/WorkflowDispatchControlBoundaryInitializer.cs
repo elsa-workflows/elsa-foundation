@@ -1,4 +1,6 @@
 using CShells.Lifecycle;
+using Elsa.Events.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Events;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -14,5 +16,7 @@ internal sealed class WorkflowDispatchControlBoundaryInitializer(IServiceProvide
             throw new InvalidOperationException("DispatchWorkflow requires exactly one workflow control-boundary provider.");
         if (scope.ServiceProvider.GetServices<IRuntimeChildControlAuthorizer>().Count() != 1)
             throw new InvalidOperationException("DispatchWorkflow requires exactly one child-control authorizer.");
+        if (scope.ServiceProvider.GetServices<IEventHandler<ActivityResumeValidating>>().OfType<DispatchWorkflowResumeGuard>().Count() != 1)
+            throw new InvalidOperationException("DispatchWorkflow requires its exact-source pre-resume guard.");
     }
 }
