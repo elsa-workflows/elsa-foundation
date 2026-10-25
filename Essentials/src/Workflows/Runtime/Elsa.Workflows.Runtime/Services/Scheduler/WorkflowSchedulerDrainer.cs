@@ -317,10 +317,11 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         }
         catch (RuntimeSchedulerWorkUnavailableException exception)
         {
-            // Resumes and structural child-control/completion delivery preserve their retry delay through a durable claim or visibility-aware
-            // overlay whose drain flush persists the release before returning. Other command kinds retain their source.
-            if (workItem.CommandKind is not (WorkflowExecutionCommandKind.ResumeBookmark or WorkflowExecutionCommandKind.DeliverChildControl or WorkflowExecutionCommandKind.CompleteActivity) ||
-                renewal is null || _consumedWorkClaimAccessor?.WasConsumedDurably == true)
+            // Supported work preserves its retry delay through a durable claim or a visibility-aware overlay
+            // whose drain flush persists the release. Unsupported work/provider pairs retain their source.
+            if (!RuntimeUnavailableWork.SupportsDelayedRelease(workItem.CommandKind) ||
+                renewal is null || _consumedWorkClaimAccessor?.WasConsumedDurably == true ||
+                _schedulerWorkQueue is IRuntimeSchedulerWorkDeferralCapability capability && !capability.CanDefer(renewal.Current))
                 throw;
 
             var activeClaim = renewal;

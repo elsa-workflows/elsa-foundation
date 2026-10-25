@@ -76,9 +76,8 @@ internal sealed class WorkflowControlProducerEnricher(
                 }
             };
         }
-        catch (OperationCanceledException) { throw; }
-        catch (WorkflowControlBoundaryException) { throw; }
-        catch (Exception exception) { throw new WorkflowControlBoundaryException(commit.WorkflowExecutionId, rootId, exception); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception) { throw WorkflowDispatchControlPolicy.CheckpointFailure(commit.WorkflowExecutionId, rootId, exception); }
     }
 
     private async ValueTask<ActivityExecutionState> ReadRootAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)

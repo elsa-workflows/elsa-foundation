@@ -3,7 +3,7 @@ namespace Elsa.Workflows.Runtime.Core.Exceptions;
 /// <summary>
 /// Signals that scheduler work could not be evaluated because a durable runtime dependency is temporarily unavailable.
 /// The safe code and summary deliberately exclude provider diagnostics and retained workflow data.
-/// Delayed retry supports bookmark resumes and structural child-control/completion delivery with a live, unconsumed durable queue claim.
+/// Delayed retry supports bookmark resumes, invocation and structural notification/control/completion delivery and workflow checkpoints with a live, unconsumed durable queue claim.
 /// Unsupported command/provider combinations propagate this signal without acknowledging or poisoning the work.
 /// </summary>
 public sealed class RuntimeSchedulerWorkUnavailableException : Exception

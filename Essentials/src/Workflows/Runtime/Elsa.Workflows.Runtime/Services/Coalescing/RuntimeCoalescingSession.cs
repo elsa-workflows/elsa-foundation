@@ -857,6 +857,15 @@ public sealed class RuntimeCoalescingSession
     {
         var result = await _overlayQueue.CompleteClaimAsync(claim, cancellationToken);
         _overlayClaims.TryRemove(claim, out _);
+        if (result.Succeeded && !IsActive && _durableWorkItemIds.Contains(claim.Item.WorkItemId))
+        {
+            // The final decision already passed the execution fence. A retaining boundary may have ended
+            // coalescing before that decision, so no later active flush will acknowledge this durable copy.
+            // As in AdvanceInnerQueueAsync, clean only its exact accepted identity, never a sibling/head.
+            await _innerQueue.DeleteAsync(WorkflowExecutionId, claim.Item.WorkItemId, cancellationToken);
+            _durableWorkItemIds.Remove(claim.Item.WorkItemId);
+            _durablyConsumedWorkItemIds.Add(claim.Item.WorkItemId);
+        }
         return result;
     }
 
@@ -865,14 +874,14 @@ public sealed class RuntimeCoalescingSession
         DateTimeOffset visibleAt,
         CancellationToken cancellationToken)
     {
-        if (SupportsDeferredOverlayRelease && claim.Item.CommandKind == WorkflowExecutionCommandKind.ResumeBookmark &&
+        if (SupportsDeferredOverlayRelease && RuntimeUnavailableWork.SupportsDelayedRelease(claim.Item.CommandKind) &&
             _durablyConsumedWorkItemIds.Contains(claim.Item.WorkItemId))
             return RuntimeSchedulerWorkClaimTransitionResult.Stale;
 
         var result = await _overlayQueue.ReleaseClaimAsync(claim, visibleAt, cancellationToken);
         var owned = _overlayClaims.TryRemove(claim, out var visibilityTimeout);
         if (result.Succeeded && owned && SupportsDeferredOverlayRelease &&
-            claim.Item.CommandKind == WorkflowExecutionCommandKind.ResumeBookmark)
+            RuntimeUnavailableWork.SupportsDelayedRelease(claim.Item.CommandKind))
         {
             _pendingReleases[claim.Item.WorkItemId] = new PendingRelease(claim, visibleAt, visibilityTimeout);
             // A handler can cross a durable boundary before reporting unavailable. If it deactivated the overlay,

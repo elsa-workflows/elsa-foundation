@@ -286,6 +286,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         {
             var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
             activationLease = null;
+            if (exception is RuntimeSchedulerWorkUnavailableException && disposalException is null) throw;
             // The arm above takes the activation's cancellation, so this failure is never it.
             var fault = disposalException is null
                 ? exception
@@ -550,6 +551,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             publishStimulusStaging?.Reset(workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId);
             var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
             activationLease = null;
+            if (exception is RuntimeSchedulerWorkUnavailableException && disposalException is null) throw;
             var fault = disposalException is null
                 ? exception
                 : ActivityActivationLeaseDisposer.CombineExecutionFailure(exception, disposalException);

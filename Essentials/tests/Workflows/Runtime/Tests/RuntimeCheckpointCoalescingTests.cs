@@ -296,11 +296,16 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             var overlayClaim = await queue.ClaimAsync(NewClaimRequest(workflowExecutionId));
             Assert.NotNull(overlayClaim);
 
+            await inner.EnqueueAsync(new RuntimeSchedulerWorkItem(
+                "work-sibling", workflowExecutionId, "command-sibling", WorkflowExecutionCommandKind.Start,
+                "envelope-sibling", "idempotency-sibling", Now, Now));
             session.Deactivate();
             Assert.True((await queue.CompleteClaimAsync(overlayClaim!)).Succeeded);
 
+            Assert.Equal("work-sibling", Assert.Single(await inner.ListAllAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId))).WorkItemId);
             var durableClaim = await queue.ClaimAsync(NewClaimRequest(workflowExecutionId));
             Assert.NotNull(durableClaim);
+            Assert.Equal("work-sibling", durableClaim.Item.WorkItemId);
             Assert.True((await queue.CompleteClaimAsync(durableClaim!)).Succeeded);
         }
 

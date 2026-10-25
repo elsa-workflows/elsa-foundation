@@ -7,6 +7,7 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Attributes;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -30,7 +31,8 @@ namespace Elsa.Activities.Bpmn.Activities;
 [ActivityStructure("elsa.bpmn.structure", "1.0.0", Mode = "bpmn", SupportsScopedVariables = true)]
 [ActivityChildSlot("Bpmn.Activities", "activities", "Activities", ActivityChildSlotCardinalities.Many)]
 [ActivityOutcome(ActivityOutcomes.Done)]
-public sealed class BpmnProcess(IBpmnProcessRuntime executionEngine) : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler, IRuntimeActivityChildFaultHandler, IRuntimeActivityChildNotificationHandler, IRuntimeActivityChildOutcomeHandler, IRuntimeLiveChildActivityConsumer, IRuntimeScopedVariableReader
+[ActivityChildControlConsumer(BpmnControlProtocol.Key, BpmnControlProtocol.Version)]
+public sealed class BpmnProcess(IBpmnProcessRuntime executionEngine) : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler, IRuntimeActivityChildFaultHandler, IRuntimeActivityChildNotificationHandler, IRuntimeActivityChildOutcomeHandler, IRuntimeLiveChildActivityConsumer, IRuntimeScopedVariableReader, IRuntimeActivityChildControlConsumer
 {
     public const string ActivitiesSlotName = "Bpmn.Activities";
     public const string StructureKind = "elsa.bpmn.structure";
@@ -74,6 +76,9 @@ public sealed class BpmnProcess(IBpmnProcessRuntime executionEngine) : Structura
 
     public ValueTask<RuntimeStructuralContinuation> OnChildOutcomeAsync(ActivityChildOutcomeContext context) =>
         executionEngine.OutcomeAsync(RequireRuntimeContext(context.ParentContext), context);
+
+    public ValueTask<RuntimeStructuralContinuation> OnChildControlAsync(RuntimeChildControlContext context) =>
+        executionEngine.ControlAsync(context.ParentContext, context);
 
     private static IRuntimeActivityExecutionContext RequireRuntimeContext(IActivityExecutionContext context)
     {

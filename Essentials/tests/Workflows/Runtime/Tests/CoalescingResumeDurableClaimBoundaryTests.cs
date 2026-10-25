@@ -393,6 +393,40 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         Assert.Empty(await reopenedScope.ServiceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync(WorkflowExecutionId));
     }
 
+    [Theory]
+    [InlineData(WorkflowExecutionCommandKind.InvokeActivity, false)]
+    [InlineData(WorkflowExecutionCommandKind.CompleteActivity, false)]
+    [InlineData(WorkflowExecutionCommandKind.NotifyParentActivity, false)]
+    [InlineData(WorkflowExecutionCommandKind.DeliverChildControl, false)]
+    [InlineData(WorkflowExecutionCommandKind.Checkpoint, false)]
+    [InlineData(WorkflowExecutionCommandKind.Checkpoint, true)]
+    public async Task Unsupported_overlay_deferral_preserves_source_and_original_unavailability_without_a_false_delay(
+        WorkflowExecutionCommandKind kind, bool deactivate)
+    {
+        var shared = new SharedPersistence(new FakeTimeProvider(Now));
+        var probe = new ProbeRecorder(deferFirstResume: true, retainingBoundaryBeforeDeferral: deactivate);
+        await using var provider = BuildProvider(shared, probe);
+        var source = Work("unsupported-source", kind, 1);
+        await shared.Queue.EnqueueAsync(source);
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var exception = await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() =>
+                scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+                    .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId)).AsTask());
+            Assert.Equal("probe.resume-unavailable", exception.Code);
+            Assert.Empty(await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync(WorkflowExecutionId));
+        }
+        Assert.Equal(source.WorkItemId, Assert.Single(await shared.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).WorkItemId);
+        Assert.True(Assert.Single(probe.ResumeSnapshots).SessionActive);
+        // A new provider retries the unchanged source. No durable retry delay was advertised or invented.
+        await using var reopened = BuildProvider(shared, new ProbeRecorder(deferFirstResume: false));
+        await using var retryScope = reopened.CreateAsyncScope();
+        var result = await retryScope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+            .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+        Assert.False(result.StoppedOnDeferral);
+        Assert.Empty(await shared.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)));
+    }
+
     private static void AssertCoalescedVersions(IServiceProvider services, params long[] versions)
     {
         var commits = InnerCommitStore(services).ListCommits();
@@ -652,7 +686,9 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         public string Name => nameof(CoalescingProbeHandler);
 
         public bool CanHandle(RuntimeSchedulerWorkItem workItem) =>
-            workItem.CommandKind is WorkflowExecutionCommandKind.ScheduleActivity or WorkflowExecutionCommandKind.ResumeBookmark;
+            workItem.CommandKind is WorkflowExecutionCommandKind.ScheduleActivity or WorkflowExecutionCommandKind.ResumeBookmark or
+                WorkflowExecutionCommandKind.InvokeActivity or WorkflowExecutionCommandKind.CompleteActivity or
+                WorkflowExecutionCommandKind.NotifyParentActivity or WorkflowExecutionCommandKind.DeliverChildControl or WorkflowExecutionCommandKind.Checkpoint;
 
         public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
         {

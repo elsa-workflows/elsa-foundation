@@ -67,8 +67,7 @@ internal sealed class WorkflowControlNotificationEnricher(IRuntimeWorkflowContro
             return commit with { PostCommitIntents = intents,
                 StateChanges = commit.StateChanges.WithActivityExecutions(changes.Values.ToArray()) };
         }
-        catch (OperationCanceledException) { throw; }
-        catch (WorkflowControlBoundaryException) { throw; }
-        catch (Exception exception) { throw new WorkflowControlBoundaryException(commit.WorkflowExecutionId, rootId, exception); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception) { throw WorkflowDispatchControlPolicy.CheckpointFailure(commit.WorkflowExecutionId, rootId, exception); }
     }
 }

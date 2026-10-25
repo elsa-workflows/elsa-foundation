@@ -150,7 +150,10 @@ discipline the completion path already uses.
   runtime makes no cross-item ordering promise beyond the queue's per-execution FIFO of enqueue
   order.
 - Idempotent redelivery: same derived id → fence-checked consume; re-processing is a no-op.
-- The activation-claim discipline gives at-most-once callback invocation per work item.
+- Activation claims serialize callback evaluation. Before a final decision is accepted, a temporary
+  runtime dependency outage may retry callback code with its retained source; the fenced final commit
+  and processed marker prevent repeating accepted effects. Callback code must stage its effects through
+  the runtime context. Background admission keeps its separate atomic claim/publication contract.
 
 ### D5 — Stated cuts
 
@@ -281,8 +284,9 @@ only. No API surface accepts a target.
 
 **FR-3 — Delivery.** A parent implementing `IRuntimeActivityChildNotificationHandler` receives
 `OnChildNotifiedAsync` with the code, payload, and the notifying child's identity (aei, node,
-iteration id) exactly once per work item (activation-claimed), with the spec-119/123 marker-gated
-projections populated. The child's continued execution is unaffected by delivery.
+iteration id), with the spec-119/123 marker-gated projections populated. One fenced final decision
+accepts its effect set per work item; temporary dependency failure before that decision may retry
+the callback with its retained source. The child's continued execution is unaffected by delivery.
 
 **FR-4 — Tolerance.** A non-implementing parent acks silently; a non-Running parent acks silently;
 a notification whose child has since completed/faulted still delivers; redelivery is idempotent.

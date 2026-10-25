@@ -74,62 +74,75 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
         IReadOnlyCollection<string>? incidentIds = null;
         foreach (var dispatch in dispatches)
         {
-            var identity = new WorkflowDispatchIdentity(
-                dispatch.ParentWorkflowExecutionId,
-                dispatch.ParentActivityExecutionId);
-            var control = await CreateControlAsync(commit, dispatch, identity, cancellationToken);
-            var outboxItemId = identity.ParentResumeOutboxItemId(commit.CommitId);
-            var committed = await _outboxLookupStore.FindAsync(outboxItemId, cancellationToken);
-            var existing = intents.SingleOrDefault(intent => StringComparer.Ordinal.Equals(intent.IntentId, identity.ParentResumeIntentId));
-            if (committed is not null && existing is not null && !committed.Intent.IsEquivalentTo(existing))
-                throw new InvalidOperationException($"Parent-resume intent '{identity.ParentResumeIntentId}' conflicts with its committed outbox item.");
-
-            RuntimePostCommitIntent intent;
-            if (committed is not null)
+            var controlEnabled = WorkflowDispatchControlPolicy.ReadCapability(dispatch.Metadata) is not null;
+            try
             {
-                intent = committed.Intent;
-                if (existing is null)
-                    intents.Add(intent);
+                var identity = new WorkflowDispatchIdentity(
+                    dispatch.ParentWorkflowExecutionId,
+                    dispatch.ParentActivityExecutionId);
+                var control = await CreateControlAsync(commit, dispatch, identity, cancellationToken);
+                var outboxItemId = identity.ParentResumeOutboxItemId(commit.CommitId);
+                var committed = await _outboxLookupStore.FindAsync(outboxItemId, cancellationToken);
+                var existing = intents.SingleOrDefault(intent => StringComparer.Ordinal.Equals(intent.IntentId, identity.ParentResumeIntentId));
+                if (committed is not null && existing is not null && !committed.Intent.IsEquivalentTo(existing))
+                    throw TerminalConflict(controlEnabled, $"Parent-resume intent '{identity.ParentResumeIntentId}' conflicts with its committed outbox item.");
+
+                RuntimePostCommitIntent intent;
+                if (committed is not null)
+                {
+                    intent = committed.Intent;
+                    if (existing is null)
+                        intents.Add(intent);
+                }
+                else
+                {
+                    if (terminalStatus == WorkflowDispatchStatus.Completed)
+                    {
+                        safeOutputs ??= await _workflowOutputSource.ReadAsync(
+                            child.WorkflowExecutionId,
+                            commit.StateChanges.DurableValues,
+                            cancellationToken);
+                    }
+                    else if (terminalStatus == WorkflowDispatchStatus.Faulted)
+                    {
+                        incidentIds ??= await ReadIncidentIdsAsync(
+                            child.WorkflowExecutionId,
+                            commit.StateChanges.Incidents,
+                            cancellationToken);
+                    }
+
+                    var canonical = CreateIntent(
+                        dispatch,
+                        identity,
+                        safeOutputs ?? [],
+                        incidentIds ?? [],
+                        commit.Checkpoint.OccurredAt,
+                        control);
+                    if (existing is not null && !canonical.IsEquivalentTo(existing))
+                        throw TerminalConflict(controlEnabled, $"Parent-resume intent '{identity.ParentResumeIntentId}' conflicts with the policy-safe terminal result.");
+
+                    intent = existing ?? canonical;
+                    if (existing is null)
+                        intents.Add(intent);
+                }
+
+                var payload = ValidateIntent(intent, dispatch, identity, commit.Checkpoint.OccurredAt);
+                if (!WorkflowControlTransport.Equivalent(payload.Result.Control, control))
+                    throw WorkflowDispatchControlPolicy.Failure("terminal resume differs from its whole staged root control");
             }
-            else
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch (Exception exception) when (controlEnabled)
             {
-                if (terminalStatus == WorkflowDispatchStatus.Completed)
-                {
-                    safeOutputs ??= await _workflowOutputSource.ReadAsync(
-                        child.WorkflowExecutionId,
-                        commit.StateChanges.DurableValues,
-                        cancellationToken);
-                }
-                else if (terminalStatus == WorkflowDispatchStatus.Faulted)
-                {
-                    incidentIds ??= await ReadIncidentIdsAsync(
-                        child.WorkflowExecutionId,
-                        commit.StateChanges.Incidents,
-                        cancellationToken);
-                }
-
-                var canonical = CreateIntent(
-                    dispatch,
-                    identity,
-                    safeOutputs ?? [],
-                    incidentIds ?? [],
-                    commit.Checkpoint.OccurredAt,
-                    control);
-                if (existing is not null && !canonical.IsEquivalentTo(existing))
-                    throw new InvalidOperationException($"Parent-resume intent '{identity.ParentResumeIntentId}' conflicts with the policy-safe terminal result.");
-
-                intent = existing ?? canonical;
-                if (existing is null)
-                    intents.Add(intent);
+                throw WorkflowDispatchControlPolicy.CheckpointFailure(dispatch.ChildWorkflowExecutionId, null, exception);
             }
-
-            var payload = ValidateIntent(intent, dispatch, identity, commit.Checkpoint.OccurredAt);
-            if (!WorkflowControlTransport.Equivalent(payload.Result.Control, control))
-                throw WorkflowDispatchControlPolicy.Failure("terminal resume differs from its whole staged root control");
         }
 
         return commit with { PostCommitIntents = intents };
     }
+
+    private static Exception TerminalConflict(bool controlEnabled, string message) => controlEnabled
+        ? new WorkflowDispatchControlConflictException(message)
+        : new InvalidOperationException(message);
 
     private static RuntimePostCommitIntent CreateIntent(
         WorkflowDispatchRecord dispatch,
@@ -191,19 +204,26 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
     {
         if (WorkflowDispatchControlPolicy.ReadCapability(dispatch.Metadata) is null)
             return null;
-        if (_controlBoundary is null)
-            throw WorkflowDispatchControlPolicy.Failure("terminal control requires the boundary provider");
-        var root = commit.StateChanges.ActivityExecutions.Where(change => change.Operation != RuntimeStateChangeOperation.Delete &&
-            change.State.ParentActivityExecutionId is null && change.State.Execution.WorkflowExecutionId == dispatch.ChildWorkflowExecutionId)
-            .Select(change => change.State).Single();
-        if (root.ProducedControl is not { IsTerminal: true } batch)
-            throw WorkflowDispatchControlPolicy.Failure("terminal control requires its whole staged root barrier");
-        var target = await _controlBoundary.ResolveAsync(dispatch.ChildWorkflowExecutionId, root.InvocationId, cancellationToken)
-            ?? throw WorkflowDispatchControlPolicy.Failure("terminal control has no admitted boundary");
-        WorkflowControlProducerEnricher.ValidateOwned(batch, target);
-        if (target.DispatchId != dispatch.DispatchId)
-            throw WorkflowDispatchControlPolicy.Failure("terminal control dispatch differs");
-        return WorkflowControlTransport.Create(target, batch, commit.CommitId, identity.ParentResumeIntentId);
+        string? rootId = null;
+        try
+        {
+            if (_controlBoundary is null)
+                throw WorkflowDispatchControlPolicy.Failure("terminal control requires the boundary provider");
+            var root = commit.StateChanges.ActivityExecutions.Where(change => change.Operation != RuntimeStateChangeOperation.Delete &&
+                change.State.ParentActivityExecutionId is null && change.State.Execution.WorkflowExecutionId == dispatch.ChildWorkflowExecutionId)
+                .Select(change => change.State).Single();
+            if (root.ProducedControl is not { IsTerminal: true } batch)
+                throw WorkflowDispatchControlPolicy.Failure("terminal control requires its whole staged root barrier");
+            rootId = root.InvocationId;
+            var target = await _controlBoundary.ResolveAsync(dispatch.ChildWorkflowExecutionId, root.InvocationId, cancellationToken)
+                ?? throw WorkflowDispatchControlPolicy.Failure("terminal control has no admitted boundary");
+            WorkflowControlProducerEnricher.ValidateOwned(batch, target);
+            if (target.DispatchId != dispatch.DispatchId)
+                throw WorkflowDispatchControlPolicy.Failure("terminal control dispatch differs");
+            return WorkflowControlTransport.Create(target, batch, commit.CommitId, identity.ParentResumeIntentId);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception) { throw WorkflowDispatchControlPolicy.CheckpointFailure(dispatch.ChildWorkflowExecutionId, rootId, exception); }
     }
 
     internal static WorkflowDispatchParentResumePayload ValidateIntent(

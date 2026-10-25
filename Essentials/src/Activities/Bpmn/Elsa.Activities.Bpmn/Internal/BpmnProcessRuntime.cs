@@ -1,4 +1,7 @@
 using Bpmn.Model;
+using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Bpmn.Semantics;
 using Elsa.Activities.Bpmn.Contracts;
 using Elsa.Activities.Bpmn.Exceptions;
@@ -11,7 +14,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Activities.Bpmn.Internal;
 
 /// <summary>Translates Foundation deliveries and commands; the released interpreter owns all BPMN routing.</summary>
-internal sealed class BpmnProcessRuntime(BpmnStateCodec codec, BpmnWorkLedger ledger) : IBpmnProcessRuntime
+internal sealed class BpmnProcessRuntime(BpmnStateCodec codec, BpmnWorkLedger ledger,
+    IRuntimeWorkflowControlBoundary? controlBoundary = null) : IBpmnProcessRuntime
 {
     private static readonly BpmnInterpreter Interpreter = BpmnInterpreter.CreateDefault();
     private const string BpmnErrorCategory = "bpmn.error";
@@ -97,10 +101,70 @@ internal sealed class BpmnProcessRuntime(BpmnStateCodec codec, BpmnWorkLedger le
         return Finish(context, frame, final, outcome.IncidentId);
     }
 
+    public async ValueTask<RuntimeStructuralContinuation> ControlAsync(IRuntimeActivityExecutionContext context, RuntimeChildControlContext control)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        if (!ReferenceEquals(context, control.ParentContext) || control.Batches.Any(item =>
+                item.Batch.ConsumerKey != BpmnControlProtocol.Key || item.Batch.ConsumerVersion != BpmnControlProtocol.Version))
+            throw new BpmnHostException("Called BPMN control does not match its consumer protocol/context.");
+        var frame = await ReadAsync(context);
+        var child = BpmnWorkLedger.Child(frame.Children, frame.Document.State, Owner(context), control.CallingActivityExecutionId,
+            control.CallingExecutableNodeId, control.CallingIterationId);
+        var elementId = child.Provenance.Metadata.GetValueOrDefault("bpmn.elementId");
+        var element = frame.Graph.Elements.SingleOrDefault(candidate => candidate.ElementId == elementId)
+            ?? throw new BpmnHostException("Called BPMN control has no pinned element for its exact work token.");
+        if (!global::Bpmn.Semantics.BpmnElementFamilies.IsCallActivity(element))
+            throw new BpmnHostException("Called BPMN control requires an exact Call Activity work token.");
+        var commands = new List<BpmnHostCommand>();
+        var retired = new HashSet<string>(StringComparer.Ordinal);
+        // A previous accepted prefix may already have interrupted this exact call. Later ordinals can
+        // still fill a buffered terminal gap, but cannot signal an inactive semantic invocation again.
+        if (!frame.Document.State.Terminated && frame.Document.State.PendingFault is null &&
+            !frame.Document.State.ActiveWork.Any(work => work.TokenId == BpmnWorkLedger.TokenId(child)))
+            retired.Add(child.InvocationId);
+        BpmnContinuation.Fault? firstFault = null;
+        var final = new BpmnEvaluation(frame.Document.State, BpmnContinuation.Defer.Instance, []);
+        foreach (var incoming in control.Batches)
+        {
+            foreach (var notification in incoming.Batch.Notifications)
+            {
+                if (firstFault is not null || retired.Contains(child.InvocationId)) continue;
+                Fold(Signal(context, frame, child, notification.Code, notification.Payload, retired));
+            }
+            if (!incoming.Batch.IsTerminal || firstFault is not null) continue;
+            // Authored classification belongs to the called root, even if later cancellation won its actual
+            // workflow status. No local leaf fault or foreign incident is invented or absorbed here.
+            Fold(incoming.Batch.AuthoredFailureCode is { } code
+                ? Evaluate(() => Interpreter.OnWorkFaulted(new BpmnWorkFaultedRequest(frame.Graph, frame.Document.State,
+                    Snapshot(context, frame, exclude: child.InvocationId, retired: retired),
+                    child.Execution.ExecutableNodeId, child.InvocationId, "Called BPMN authored failure.")
+                    { WorkTokenId = BpmnWorkLedger.TokenId(child), FaultedIterationId = child.IterationId, ErrorCode = code }))
+                : Evaluate(() => Interpreter.OnWorkCompleted(new BpmnWorkCompletedRequest(frame.Graph, frame.Document.State,
+                    Snapshot(context, frame, exclude: child.InvocationId, retired: retired), child.Execution.ExecutableNodeId,
+                    child.InvocationId, control.CompletionOutcomeNames, child.IterationId)
+                    { WorkTokenId = BpmnWorkLedger.TokenId(child) })));
+        }
+        return Finish(context, frame, final with { Commands = commands, Continuation = firstFault ?? final.Continuation });
+
+        void Fold(BpmnEvaluation evaluation)
+        {
+            commands.AddRange(evaluation.Commands);
+            foreach (var cancellation in evaluation.Commands.OfType<BpmnHostCommand.CancelWorkSubtree>())
+                retired.Add(cancellation.Handle);
+            firstFault ??= evaluation.Continuation as BpmnContinuation.Fault;
+            frame = frame with { Document = frame.Document with { State = evaluation.State } };
+            final = evaluation;
+        }
+    }
+
     private static BpmnEvaluation Signal(IRuntimeActivityExecutionContext context, Frame frame, ActivityExecutionState child,
-        ActivityChildNotifiedContext signal, ISet<string>? retired = null) => Evaluate(() => Interpreter.OnWorkSignalled(
+        ActivityChildNotifiedContext signal, ISet<string>? retired = null) =>
+        Signal(context, frame, child, signal.Code, signal.Payload, retired);
+
+    private static BpmnEvaluation Signal(IRuntimeActivityExecutionContext context, Frame frame, ActivityExecutionState child,
+        string code, JsonElement? payload, ISet<string>? retired = null) => Evaluate(() => Interpreter.OnWorkSignalled(
         new BpmnWorkSignalledRequest(frame.Graph, frame.Document.State, Snapshot(context, frame, reporting: child, retired: retired),
-            child.Execution.ExecutableNodeId, child.InvocationId, signal.Code, signal.Payload, child.IterationId)
+            child.Execution.ExecutableNodeId, child.InvocationId, code, payload, child.IterationId)
         { WorkTokenId = BpmnWorkLedger.TokenId(child) }));
 
     private static BpmnEvaluation Fault(IRuntimeActivityExecutionContext context, Frame frame, ActivityExecutionState child,
@@ -117,7 +181,22 @@ internal sealed class BpmnProcessRuntime(BpmnStateCodec codec, BpmnWorkLedger le
         var document = codec.Read(context.ActivityExecutionState.PrivateState, context.SchedulerWorkItem.CommandMetadata);
         var children = await ledger.ReadAsync(context);
         document = BpmnWorkLedger.RecoverLegacy(document, children, Owner(context), graph);
-        return new Frame(graph, document, children);
+        RuntimeChildControlTarget? target = null;
+        if (context.ActivityExecutionState.ParentActivityExecutionId is null && controlBoundary is not null)
+        {
+            try { target = await controlBoundary.ResolveAsync(context.WorkflowExecutionId, Owner(context), context.CancellationToken); }
+            catch (WorkflowControlBoundaryException exception) when (exception.IsUnavailable)
+            {
+                throw new RuntimeSchedulerWorkUnavailableException("bpmn.control-boundary.unavailable",
+                    "The admitted BPMN control boundary could not be read; evaluation remains owed.", exception);
+            }
+            catch (OperationCanceledException exception) when (!context.CancellationToken.IsCancellationRequested)
+            {
+                throw new RuntimeSchedulerWorkUnavailableException("bpmn.control-boundary.unavailable",
+                    "The admitted BPMN control boundary could not be read; evaluation remains owed.", exception);
+            }
+        }
+        return new Frame(graph, document, children, target);
     }
 
     private static BpmnHostSnapshot Snapshot(IRuntimeActivityExecutionContext context, Frame frame, string? exclude = null,
@@ -129,7 +208,7 @@ internal sealed class BpmnProcessRuntime(BpmnStateCodec codec, BpmnWorkLedger le
             live.All(work => work.Handle != reporting.InvocationId))
             live.Add(new BpmnLiveWork(reporting.Execution.ExecutableNodeId, reporting.IterationId, reporting.InvocationId)
                 { WorkTokenId = BpmnWorkLedger.TokenId(reporting) });
-        return new BpmnHostSnapshot(Owner(context), context.ActivityExecutionState.ParentActivityExecutionId is not null,
+        return new BpmnHostSnapshot(Owner(context), context.ActivityExecutionState.ParentActivityExecutionId is not null || frame.ControlTarget is not null,
             live, frame.Document.InvocationCorrelation, new BpmnVariableReader(context), BpmnGraphAdapter.Capabilities);
     }
 
@@ -138,18 +217,20 @@ internal sealed class BpmnProcessRuntime(BpmnStateCodec codec, BpmnWorkLedger le
         var faulted = evaluation.Continuation is BpmnContinuation.Fault;
         var live = context.GetLiveChildActivities().Select(child => child.ActivityExecutionId).ToHashSet(StringComparer.Ordinal);
         var canceled = new HashSet<string>(StringComparer.Ordinal);
+        var notifications = new List<RuntimeChildControlNotification>();
         foreach (var command in evaluation.Commands)
         {
             switch (command)
             {
                 case BpmnHostCommand.StartWork start when !faulted && evaluation.State.ActiveWork.Any(work => work.TokenId == start.TokenId):
-                    Schedule(context, start);
+                    Schedule(context, start, frame.Graph);
                     break;
                 case BpmnHostCommand.CancelWorkSubtree stop when !faulted && live.Contains(stop.Handle) && canceled.Add(stop.Handle):
                     context.RequestChildSubtreeCancellation(stop.Handle, stop.Reason);
                     break;
                 case BpmnHostCommand.SignalEnclosingScope signal:
-                    context.RequestParentNotification(signal.Code, signal.Payload);
+                    if (frame.ControlTarget is null) context.RequestParentNotification(signal.Code, signal.Payload);
+                    else notifications.Add(new RuntimeChildControlNotification(signal.Code, signal.Payload));
                     break;
             }
         }
@@ -168,10 +249,21 @@ internal sealed class BpmnProcessRuntime(BpmnStateCodec codec, BpmnWorkLedger le
                 category: fault.ErrorCode is null ? null : BpmnErrorCategory, faultType: fault.ErrorCode)),
             _ => RuntimeStructuralContinuation.Defer
         };
-        return continuation.WithState(codec.Write(frame.Document, evaluation.State.Prune()), frame.Document.Version);
+        continuation = continuation.WithState(codec.Write(frame.Document, evaluation.State.Prune()), frame.Document.Version);
+        if (frame.ControlTarget is { } target && (!continuation.IsDeferred || notifications.Count > 0))
+        {
+            var prior = context.ActivityExecutionState.ProducedControl;
+            var workId = context.SchedulerWorkItem.WorkItemId;
+            var ordinal = prior is null ? 0 : prior.SourceWorkItemId == workId ? prior.Ordinal :
+                prior.Ordinal == long.MaxValue ? throw new BpmnHostException("BPMN root control ordinal space is exhausted.") : prior.Ordinal + 1;
+            continuation = continuation.WithControl(new RuntimeChildControlBatch(1, target.ConsumerKey, target.ConsumerVersion,
+                context.WorkflowExecutionId, Owner(context), workId, ordinal, !continuation.IsDeferred, notifications,
+                (evaluation.Continuation as BpmnContinuation.Fault)?.ErrorCode));
+        }
+        return continuation;
     }
 
-    private static void Schedule(IRuntimeActivityExecutionContext context, BpmnHostCommand.StartWork start)
+    private static void Schedule(IRuntimeActivityExecutionContext context, BpmnHostCommand.StartWork start, global::Bpmn.Semantics.BpmnGraph graph)
     {
         var owner = Owner(context);
         var producer = start.ProducedByHandle ?? owner;
@@ -187,11 +279,20 @@ internal sealed class BpmnProcessRuntime(BpmnStateCodec codec, BpmnWorkLedger le
         var values = iteration?.Values.ToDictionary(pair => pair.Key, pair =>
             ValueEnvelope.Inline(new ValueTypeDescriptor(pair.Value.TypeHint == BpmnValueTypes.Integer ? "Int32" : "Elsa.Any"),
                 pair.Value.Json ?? throw new BpmnHostException("BPMN iteration value is not inline."), ValueProtectionPolicy.InstanceInline));
+        var provenance = new Dictionary<string, string> { ["bpmn.targetNodeId"] = start.BindingRef, ["bpmn.elementId"] = start.ElementId };
+        // Already accepted executables without a compiled declaration retain their ordinary dispatch policy.
+        if (global::Bpmn.Semantics.BpmnElementFamilies.IsCallActivity(graph.GetRequiredElement(start.ElementId)) &&
+            context.ExecutableNode.Metadata.GetValueOrDefault(RuntimeMetadataKeys.ChildControlConsumerKey) == BpmnControlProtocol.Key &&
+            context.ExecutableNode.Metadata.GetValueOrDefault(RuntimeMetadataKeys.ChildControlConsumerVersion) == "1")
+        {
+            provenance[RuntimeMetadataKeys.ChildControlConsumerKey] = BpmnControlProtocol.Key;
+            provenance[RuntimeMetadataKeys.ChildControlConsumerVersion] = "1";
+        }
         context.ScheduleChildActivity(start.BindingRef, producer, metadata,
             ActivitySchedulingProvenance.From(context.WorkflowExecutionId, owner, producer,
                 branchId: context.ActivityExecutionState.BranchId, iterationId: iteration?.IterationId,
                 executionPathId: start.TokenId, executionScopeId: null, schedulingCause: start.SchedulingCause,
-                metadata: new Dictionary<string, string> { ["bpmn.targetNodeId"] = start.BindingRef, ["bpmn.elementId"] = start.ElementId }),
+                metadata: provenance),
             iteration is null ? null : new LoopIterationScopeRequest(context.ExecutableNode.ExecutableNodeId, iteration.IterationId, values!));
     }
 
@@ -203,5 +304,5 @@ internal sealed class BpmnProcessRuntime(BpmnStateCodec codec, BpmnWorkLedger le
         try { return action(); }
         catch (global::Bpmn.Semantics.BpmnExecutionException exception) { throw new BpmnHostException(exception.Message, exception); }
     }
-    private sealed record Frame(global::Bpmn.Semantics.BpmnGraph Graph, BpmnStateDocument Document, IReadOnlyList<ActivityExecutionState> Children);
+    private sealed record Frame(global::Bpmn.Semantics.BpmnGraph Graph, BpmnStateDocument Document, IReadOnlyList<ActivityExecutionState> Children, RuntimeChildControlTarget? ControlTarget);
 }

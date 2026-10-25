@@ -24,7 +24,7 @@ public sealed record RuntimeCheckpointCommit(
 
     /// <summary>
     /// Keeps the scheduler work item that caused this checkpoint available until its handler finishes. This is used by
-    /// bookmark trigger-claim boundaries: claiming an activity attempt is not the same as successfully executing it.
+    /// activity and bookmark trigger-claim boundaries: claiming an activity attempt is not the same as accepting its decision.
     /// </summary>
     public bool RetainSchedulerWork { get; init; }
 }

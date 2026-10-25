@@ -5,6 +5,7 @@ using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,7 +33,7 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
 
     public void InitializeActivityTypes() => _harness.InitializeActivityTypes();
 
-    public static ValueTask<BpmnRuntimeFixture> CreateAsync(IEnumerable<string> activityExecutionIds, Action<IServiceCollection>? configureServices = null)
+    public static ValueTask<BpmnRuntimeFixture> CreateAsync(IEnumerable<string> activityExecutionIds, Action<IServiceCollection>? configureServices = null, string? workflowExecutionId = null)
     {
         var builder = WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesBpmnFeature().ConfigureServices(services))
@@ -41,7 +42,7 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
         if (configureServices is not null)
             builder.ConfigureServices(configureServices);
 
-        return new ValueTask<BpmnRuntimeFixture>(new BpmnRuntimeFixture(builder.Build(activityExecutionIds)));
+        return new ValueTask<BpmnRuntimeFixture>(new BpmnRuntimeFixture(builder.Build(WorkflowExecutionHarness.Identity, workflowExecutionId ?? WorkflowExecutionHarness.WorkflowExecutionId, activityExecutionIds)));
     }
 
     public ValueTask DisposeAsync() => _harness.DisposeAsync();
@@ -62,7 +63,7 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
     /// <summary>Lists the run's live bookmark resume handles (catch-event scenarios).</summary>
     public async Task<IReadOnlyCollection<BookmarkState>> BookmarksAsync() =>
         await Provider.GetRequiredService<IBookmarkStateStore>()
-            .ListAllBookmarkStatesAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+            .ListAllBookmarkStatesAsync(_harness.ExecutionId);
 
     /// <summary>
     /// Resumes a suspended child's bookmark through the underlying harness, mirroring how a matched
@@ -73,7 +74,7 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
     public async Task<WorkflowExecutionRun> ResumeAsync(BookmarkState bookmark, JsonElement input)
     {
         var state = await Provider.GetRequiredService<IActivityExecutionStateStore>()
-            .FindAsync(WorkflowExecutionHarness.WorkflowExecutionId, bookmark.ActivityExecutionId)
+            .FindAsync(_harness.ExecutionId, bookmark.ActivityExecutionId)
             ?? throw new InvalidOperationException($"Activity execution '{bookmark.ActivityExecutionId}' is missing.");
         var registration = (state.TriggerRegistrations ?? [])
             .Single(candidate => StringComparer.Ordinal.Equals(candidate.RegistrationId, bookmark.BookmarkId));
@@ -97,7 +98,7 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
 
     public async Task<BpmnExecutionState> GetBpmnStateAsync()
     {
-        var states = await Provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("wfexec-1");
+        var states = await Provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(_harness.ExecutionId);
         var processState = states.Single(state => state.Execution.ExecutableNodeId == ProcessNodeId);
         var lastCommittedPrivateState = Provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits()
             .SelectMany(record => record.Commit.StateChanges.ActivityExecutions)
@@ -116,7 +117,7 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
         IReadOnlyCollection<BpmnSequenceFlow> sequenceFlows,
         IReadOnlyCollection<WorkflowExecutableResumeTarget>? resumeTargets = null,
         IReadOnlyCollection<RuntimeVariableDeclaration>? variables = null,
-        bool isTransaction = false)
+        bool isTransaction = false, bool controlCapable = false)
     {
         // The runtime reads the container's declared variables as RuntimeVariableDeclaration; BpmnStructure carries
         // authored VariableDefinition, so a collection variable is injected as the runtime shape here (the
@@ -133,7 +134,11 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
             descriptorType: typeof(BpmnDescriptor).FullName!,
             descriptorPayload: JsonSerializer.SerializeToElement(new BpmnDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            metadata: new Dictionary<string, string>(),
+            metadata: controlCapable ? new Dictionary<string, string>
+            {
+                [RuntimeMetadataKeys.ChildControlConsumerKey] = "elsa.bpmn",
+                [RuntimeMetadataKeys.ChildControlConsumerVersion] = "1"
+            } : new Dictionary<string, string>(),
             childSlots:
             [
                 new ExecutableChildSlot(BpmnProcessActivity.ActivitiesSlotName, children)

@@ -153,6 +153,16 @@ internal static class WorkflowDispatchControlPolicy
 
     public static InvalidOperationException Failure(string detail) => new WorkflowDispatchControlConflictException($"Workflow dispatch control boundary is inconsistent: {detail}.");
 
+    public static Exception CheckpointFailure(string workflow, string? root, Exception cause)
+    {
+        if (cause is RuntimeSchedulerWorkUnavailableException) return cause;
+        var boundary = cause as WorkflowControlBoundaryException ?? Wrap(workflow, root, cause);
+        return boundary.IsUnavailable
+            ? new RuntimeSchedulerWorkUnavailableException("runtime.child-control.source-unavailable",
+                "The admitted control source could not be read before persistence; its work remains owed.", boundary)
+            : boundary;
+    }
+
     public static WorkflowControlBoundaryException Wrap(string workflow, string? root, Exception cause) =>
         new(workflow, root, cause, isUnavailable: cause is not (WorkflowDispatchControlConflictException or ArgumentException or System.Text.Json.JsonException));
 }
