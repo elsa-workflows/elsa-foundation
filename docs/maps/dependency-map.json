@@ -13327,6 +13327,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Integrations.Connectors.Slack",
+          "path": "Extensions/Integrations/src/Connectors/Slack/Elsa.Integrations.Connectors.Slack.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Integrations.Sdk",
           "path": "Extensions/Integrations/src/Sdk/Elsa.Integrations.Sdk.csproj"
         },
@@ -23889,6 +23894,95 @@
       ]
     },
     {
+      "path": "Extensions/Integrations/src/Connectors/Slack/Elsa.Integrations.Connectors.Slack.csproj",
+      "name": "Elsa.Integrations.Connectors.Slack",
+      "kind": "source",
+      "domain": "Elsa.Integrations",
+      "sub_domain": "Connectors.Slack",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Integrations.Connectors.Slack",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Http",
+          "path": "Essentials/src/Activities/Http/Elsa.Activities.Http.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Connections.Core",
+          "path": "Essentials/src/Connections/Core/Elsa.Connections.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Integrations.Sdk",
+          "path": "Extensions/Integrations/src/Sdk/Elsa.Integrations.Sdk.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Http",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "CShells.AspNetCore.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
+        }
+      ]
+    },
+    {
       "path": "Extensions/Integrations/src/Sdk/Elsa.Integrations.Sdk.csproj",
       "name": "Elsa.Integrations.Sdk",
       "kind": "source",
@@ -24095,6 +24189,60 @@
         {
           "type": "external",
           "id": "Microsoft.Extensions.Logging",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.NET.Test.Sdk",
+          "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "coverlet.collector",
+          "version": "6.0.2"
+        },
+        {
+          "type": "external",
+          "id": "xunit",
+          "version": "2.9.3"
+        },
+        {
+          "type": "external",
+          "id": "xunit.runner.visualstudio",
+          "version": "3.1.5"
+        }
+      ]
+    },
+    {
+      "path": "Extensions/Integrations/tests/Connectors/Slack/Tests/Elsa.Integrations.Connectors.Slack.Tests.csproj",
+      "name": "Elsa.Integrations.Connectors.Slack.Tests",
+      "kind": "test",
+      "domain": "Elsa.Integrations",
+      "sub_domain": "Connectors.Slack.Tests",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Connections.Core",
+          "path": "Essentials/src/Connections/Core/Elsa.Connections.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Integrations.Connectors.Slack",
+          "path": "Extensions/Integrations/src/Connectors/Slack/Elsa.Integrations.Connectors.Slack.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Integrations.Sdk",
+          "path": "Extensions/Integrations/src/Sdk/Elsa.Integrations.Sdk.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection",
           "version": "10.0.10"
         },
         {
