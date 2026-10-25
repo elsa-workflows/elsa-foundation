@@ -1,9 +1,11 @@
 # Elsa Studio UI
 
 The shared UI layer defines the Modular Admin Workbench language for Studio
-screens. Host pages can consume these React primitives directly. Independently
-bundled modules should depend on the documented token aliases and stable SDK
-contracts until the component export boundary is finalized.
+screens. Host pages and independently bundled modules can consume the host-agnostic
+primitives through `@elsa-workflows/studio-ui`. Use the public package exports and
+injected SDK contracts; the host's `DialogHost` stays private. See
+[package consumption](../../../../../../../README.md#consuming-studio-packages-in-your-own-app)
+for styles, peer dependencies, and host examples.
 
 Core patterns:
 
@@ -31,9 +33,9 @@ Visual rules:
   green, amber, and red tokens.
 - Summary metrics are compact strips, not oversized dashboard cards.
 
-## Host-side worked examples
+## Worked examples
 
-The names below describe the current host-side source patterns. They are not a promise that independently bundled modules can import these components: keep those modules on the documented token aliases and stable SDK contracts until the export boundary is finalized.
+The examples use current public primitives. Import them from `@elsa-workflows/studio-ui`; use the injected `ElsaStudioModuleApi` for host services. A component being exported does not make every internal host component part of that public surface.
 
 A field keeps its label, optional help, and control together; use a supported shared button variant for the primary action:
 
@@ -74,3 +76,113 @@ For a configured optional section, start it open, show the set count, and allow 
 ```
 
 For a module-owned row instead of `StudioDataGrid`, guard the row handler against events whose target is inside an interactive descendant, and activate from the keyboard only when the row itself is the target. Workflow Definitions currently owns that guard in its custom rows; do not assume the shared primitive supplies it. See the [normative UX rules](../../../../../../../docs/ux/design-spec.md#components) for the supported Button variants and disclosure behavior.
+
+### Compose a page, list, and confirmation dialog
+
+This example filters an already loaded collection. For a paged inventory, use the module's server search and distinguish shown, loaded, and total counts. The data hook and mutation remain module-owned; the example does not define a service endpoint.
+
+```tsx
+import { useState } from "react";
+import {
+  EmptyState,
+  SkeletonRows,
+  StudioAlert,
+  StudioButton,
+  StudioDataGrid,
+  StudioField,
+  StudioSearchInput,
+  StudioToolbar,
+  type StudioDataGridColumn
+} from "@elsa-workflows/studio-ui";
+import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
+
+type Service = { id: string; name: string; endpoint: string };
+type Props = {
+  api: ElsaStudioModuleApi;
+  services: Service[];
+  loading: boolean;
+  loadError?: string;
+  onCreate(): void;
+  onRetry(): void;
+  onDelete(id: string): Promise<void>;
+};
+
+const columns: StudioDataGridColumn<Service>[] = [
+  { id: "name", header: "Name", render: service => service.name },
+  { id: "endpoint", header: "Endpoint", render: service => service.endpoint }
+];
+
+export function ServicesPage({ api, services, loading, loadError, onCreate, onRetry, onDelete }: Props) {
+  const [query, setQuery] = useState("");
+  const [selectedKey, setSelectedKey] = useState<string>();
+  const [mutationError, setMutationError] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  const needle = query.trim().toLowerCase();
+  const visible = services.filter(service => service.name.toLowerCase().includes(needle));
+  const selected = visible.find(service => service.id === selectedKey);
+
+  async function deleteSelected() {
+    if (!selected || busy || loading || loadError) return;
+    setBusy(true);
+    setMutationError(undefined);
+    try {
+      const confirmed = await api.dialogs.confirm({
+        title: "Delete service",
+        message: `Remove ${selected.name}?`,
+        confirmLabel: "Delete service",
+        tone: "danger"
+      });
+      if (!confirmed) return;
+      await onDelete(selected.id);
+      setSelectedKey(undefined);
+      setMutationError(undefined);
+    } catch {
+      setMutationError("Could not delete the service. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section>
+      <header>
+        <div>
+          <h2>Services</h2>
+          <p>Manage configured service connections.</p>
+        </div>
+        <StudioButton variant="primary" onClick={onCreate}>Create service</StudioButton>
+      </header>
+      <StudioToolbar>
+        <StudioField label="Search loaded services">
+          <StudioSearchInput value={query} onChange={event => setQuery(event.currentTarget.value)} />
+        </StudioField>
+        <StudioButton disabled={!selected || busy || loading || Boolean(loadError)} onClick={() => void deleteSelected()}>
+          Delete selected
+        </StudioButton>
+      </StudioToolbar>
+
+      {mutationError ? <StudioAlert tone="danger">{mutationError}</StudioAlert> : null}
+      {loading ? (
+        <SkeletonRows label="Loading services" />
+      ) : loadError ? (
+        <>
+          <StudioAlert tone="danger">{loadError}</StudioAlert>
+          <StudioButton onClick={onRetry}>Retry</StudioButton>
+        </>
+      ) : visible.length === 0 ? (
+        <EmptyState>{needle ? "No services match this search." : "No services yet."}</EmptyState>
+      ) : (
+        <StudioDataGrid
+          columns={columns}
+          items={visible}
+          getKey={service => service.id}
+          selectedKey={selected?.id}
+          onSelect={service => setSelectedKey(service.id)}
+        />
+      )}
+    </section>
+  );
+}
+```
+
+The injected `api.dialogs.confirm` resolves `true` for confirmation and `false` for cancel or dismissal. Only confirmation calls the mutation, and the button stays disabled while the dialog or mutation is pending. Modules must not import or mount `DialogHost`: the normal host mounts it once and owns the modal focus lifecycle. Use the existing host's dialog service instead of implementing another global dialog controller.

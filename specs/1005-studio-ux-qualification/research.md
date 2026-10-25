@@ -3,10 +3,10 @@
 ## Decisions
 
 - Use the existing #3075 finite matrix and owner decisions. All 24 prerequisites are accepted; leaf receipts remain historical evidence, not composed acceptance.
-- Retain ADR0022 navigation and the current module composition. Correct only reproduced in-scope defects; do not activate optional modules or invent backend contracts.
+- Retain [Studio ADR0022 navigation placement](../../Studio/docs/adr/0022-let-the-user-choose-where-the-navigation-sits.md) and the current module composition. Correct only reproduced in-scope defects; do not activate optional modules or invent backend contracts.
 - Use real normal hosts for composed journeys and label synthetic negative controls separately. Bind Test Run state/layout to the reviewed publication and preserve transient/durable identity distinctions.
 - Keep credentials/configuration private and temporary. Record bounded request metadata, hashes, screenshots and cleanup; never raw credentials, secret values or arbitrary provider payloads.
-- Reconcile existing design spec/UI README/polish-plan guidance instead of creating a new design-system contract. Independently bundled modules still use stable SDK contracts/tokens.
+- Reconcile existing design spec/UI README/polish-plan guidance instead of creating a new design-system contract. Independently bundled modules use the public UI package, stable SDK contracts and tokens; `DialogHost` remains host-only.
 - Root owns integration and final QA. Bounded delegated source preparation is reviewed by root before use. Delivery retains all gates and a separate non-author application approval/merge.
 
 ## Baseline findings

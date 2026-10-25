@@ -16,7 +16,7 @@ Qualify the existing implementation on normal Workbench/Studio, repair only repr
 **Target Platform**: Existing browser Workbench/Studio composition, laptop and narrow layouts.
 **Project Type**: Integration qualification and existing documentation; focused frontend correction only if reproduced.
 **Performance Goals**: None; no benchmark program.
-**Constraints**: Preserve authorization, backend/module contracts, ADR0022 navigation, exact identity and private evidence/cleanup.
+**Constraints**: Preserve authorization, backend/module contracts, [Studio ADR0022 navigation placement](../../Studio/docs/adr/0022-let-the-user-choose-where-the-navigation-sits.md), exact identity and private evidence/cleanup.
 **Scale/Scope**: Nine composed rows, UX-01–18 and the existing three guidance documents.
 
 ## Constitution Check

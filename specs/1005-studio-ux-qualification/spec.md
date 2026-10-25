@@ -56,7 +56,7 @@ Users can change dashboard settings and review feature drafts; module authors ha
 **Acceptance Scenarios**:
 1. **Given** widget settings, **When** Tab, Escape, Cancel or invalid Save is used, **Then** focus, validation and the footer work correctly.
 2. **Given** Studio or Server feature changes, **When** review is cancelled or controlled private Apply succeeds, **Then** exact selected configuration/draft/revision and visit retention/clearing are proved independently.
-3. **Given** a module author, **When** the existing examples are followed, **Then** available Field/Button/DataGrid/disclosure patterns and deliberate domain exceptions are clear without promising private host React exports.
+3. **Given** a module author, **When** the existing examples are followed, **Then** available Field/Button/DataGrid/disclosure patterns and deliberate domain exceptions are clear using the public UI package while keeping host-only components private.
 
 ### Edge Cases
 
@@ -73,7 +73,7 @@ Users can change dashboard settings and review feature drafts; module authors ha
 - **FR-002**: Use disposable normal Workbench/Studio compositions, exact source/build provenance, classified writes and owned cleanup.
 - **FR-003**: Reproduce a suspected product defect before editing; correct confirmed in-scope defects and verify the change with a meaningful regression and causal control.
 - **FR-004**: Update existing normative guidance/examples and map UX-01–18 to accepted evidence or explicit unresolved issues.
-- **FR-005**: Preserve ADR0022 navigation, authorization, domain operations, backend contracts and optional-module boundaries.
+- **FR-005**: Preserve [Studio ADR0022 navigation placement](../../Studio/docs/adr/0022-let-the-user-choose-where-the-navigation-sits.md), authorization, domain operations, backend contracts and optional-module boundaries.
 - **FR-006**: Complete independent review, exact-head checks, separate application approval/merge and resulting-main gates before closing the issue or epic.
 
 ### Key Entities

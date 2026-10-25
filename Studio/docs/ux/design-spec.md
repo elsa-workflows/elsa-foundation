@@ -130,7 +130,7 @@ and token contract while keeping each resource's domain columns and operations:
 | Component | Status | Rule |
 |---|---|---|
 | Button (today) | `exists` | `ui/forms/Button` (`StudioButton`): variants `primary`, `default`, `ghost`; sizes `sm` / `md`. Focus ring is `--studio-focus` (there is no `--studio-ring`). See the host-side [worked examples](../../src/apps/Elsa.Studio.Web/Client/src/app/ui/README.md#host-side-worked-examples). |
-| Field (today) | `exists` | `ui/forms/Field` (`StudioField`) wraps a control with its label and optional description/meta. This is a host-side pattern, not a stable export for independently bundled modules; see the UI README. |
+| Field (today) | `exists` | `ui/forms/Field` (`StudioField`) wraps a control with its label and optional description/meta. It is exported by the public `@elsa-workflows/studio-ui` package for host pages and independently bundled modules; see the UI README. |
 | Button (additions) | `target, phase 3` | Pressed state (`:active` translate) and a spinner while pending. |
 | Button (new variants) | `target, phase 4` | `outline` and `destructive` variants. Until they exist, use `default` / `ghost` and do not name `outline` or `destructive` in new call sites. |
 | Tabs | `exists` | `ui/layout/Tabs` (`StudioTabs`). Sentence case; overflow collapse is `target, phase 1`. |
@@ -319,12 +319,12 @@ These links locate the existing implementation records. They do not replace #307
 | UX-07 | [#3065](https://github.com/elsa-workflows/elsa-foundation/issues/3065) |
 | UX-08 | [#3060](https://github.com/elsa-workflows/elsa-foundation/issues/3060) |
 | UX-09 | [#3066](https://github.com/elsa-workflows/elsa-foundation/issues/3066) |
-| UX-10 | [#3070](https://github.com/elsa-workflows/elsa-foundation/issues/3070) |
+| UX-10 | [#3062](https://github.com/elsa-workflows/elsa-foundation/issues/3062), [#3070](https://github.com/elsa-workflows/elsa-foundation/issues/3070), [#3071](https://github.com/elsa-workflows/elsa-foundation/issues/3071) |
 | UX-11 | [#3067](https://github.com/elsa-workflows/elsa-foundation/issues/3067) |
 | UX-12 | [#3073](https://github.com/elsa-workflows/elsa-foundation/issues/3073) |
 | UX-13 | [#3068](https://github.com/elsa-workflows/elsa-foundation/issues/3068), [#3069](https://github.com/elsa-workflows/elsa-foundation/issues/3069) |
 | UX-14 | [#3061](https://github.com/elsa-workflows/elsa-foundation/issues/3061) |
-| UX-15 | [#3072](https://github.com/elsa-workflows/elsa-foundation/issues/3072) |
+| UX-15 | [#3062](https://github.com/elsa-workflows/elsa-foundation/issues/3062), [#3072](https://github.com/elsa-workflows/elsa-foundation/issues/3072) |
 | UX-16 | [#3070](https://github.com/elsa-workflows/elsa-foundation/issues/3070), [#3071](https://github.com/elsa-workflows/elsa-foundation/issues/3071) |
 | UX-17 | [#3074](https://github.com/elsa-workflows/elsa-foundation/issues/3074) |
 | UX-18 | [#3073](https://github.com/elsa-workflows/elsa-foundation/issues/3073), [#3131](https://github.com/elsa-workflows/elsa-foundation/issues/3131), [#3132](https://github.com/elsa-workflows/elsa-foundation/issues/3132) |
