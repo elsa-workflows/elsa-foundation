@@ -12,5 +12,7 @@ internal sealed class WorkflowDispatchControlBoundaryInitializer(IServiceProvide
         await using var scope = services.CreateAsyncScope();
         if (scope.ServiceProvider.GetServices<IRuntimeWorkflowControlBoundary>().Count() != 1)
             throw new InvalidOperationException("DispatchWorkflow requires exactly one workflow control-boundary provider.");
+        if (scope.ServiceProvider.GetServices<IRuntimeChildControlAuthorizer>().Count() != 1)
+            throw new InvalidOperationException("DispatchWorkflow requires exactly one child-control authorizer.");
     }
 }

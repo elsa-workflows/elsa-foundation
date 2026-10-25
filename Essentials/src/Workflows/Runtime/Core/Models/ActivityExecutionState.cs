@@ -77,6 +77,10 @@ public sealed record ActivityExecutionState(
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeChildControlBatch? ProducedControl { get; init; }
 
+    /// <summary>Source commit of the current nonterminal batch; committed atomically with its one outbox responsibility.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ProducedControlSourceCommitId { get; init; }
+
     /// <summary>Optional exact-source control transported with an ordinary waited dispatch completion.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeChildControlTransport? ChildControl { get; init; }

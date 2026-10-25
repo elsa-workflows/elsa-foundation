@@ -52,6 +52,20 @@ public sealed class RuntimeStructuralControlProjectionTests
             RuntimeStructuralContinuation.Defer.WithControl(Batch(2, source: "after-terminal")), Now));
     }
 
+    [Fact]
+    public void Source_commit_anchor_survives_equivalent_replay_and_resets_only_for_a_new_batch()
+    {
+        var batch = Batch(0);
+        var first = RuntimeStructuralStateProjector.Apply(Root(), RuntimeStructuralContinuation.Defer.WithControl(batch), Now)
+            with { ProducedControlSourceCommitId = "original-commit" };
+        var repeated = RuntimeStructuralStateProjector.Apply(first, RuntimeStructuralContinuation.Defer.WithControl(batch), Now);
+        Assert.Equal("original-commit", repeated.ProducedControlSourceCommitId);
+        var next = RuntimeStructuralStateProjector.Apply(first,
+            RuntimeStructuralContinuation.Defer.WithControl(Batch(1, source: "next-work")), Now);
+        Assert.Null(next.ProducedControlSourceCommitId);
+        Assert.Equal(1, next.ProducedControl!.Ordinal);
+    }
+
     [Theory]
     [InlineData("first-gap")]
     [InlineData("next-gap")]

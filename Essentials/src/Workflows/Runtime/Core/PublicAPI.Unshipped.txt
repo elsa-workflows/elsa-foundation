@@ -8958,3 +8958,10 @@ Elsa.Workflows.Runtime.Core.Exceptions.WorkflowControlBoundaryException.RootActi
 Elsa.Workflows.Runtime.Core.Exceptions.WorkflowControlBoundaryException.WorkflowControlBoundaryException(string! workflowExecutionId, string? rootActivityExecutionId, System.Exception! innerException) -> void
 Elsa.Workflows.Runtime.Core.Exceptions.WorkflowControlBoundaryException.WorkflowExecutionId.get -> string!
 Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointStateChangeSet.WithActivityExecutions(System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.RuntimeStateChange<Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState!>!>! activityExecutions) -> Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointStateChangeSet!
+
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeChildControlAuthorizer
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeChildControlAuthorizer.ValidateAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTransport! transport, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.ProducedControlSourceCommitId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.ProducedControlSourceCommitId.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeChildControlCompletion
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeChildControlCompletion.ChildControl.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTransport?

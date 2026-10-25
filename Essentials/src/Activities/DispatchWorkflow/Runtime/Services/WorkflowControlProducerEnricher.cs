@@ -64,7 +64,7 @@ internal sealed class WorkflowControlProducerEnricher(
             // Always carry the same terminal root projection, even on replay of an originally root-less
             // workflow terminal checkpoint. Otherwise the second enrichment would change its fingerprint.
             var rootChange = new RuntimeStateChange<ActivityExecutionState>(rootState.InvocationId,
-                RuntimeStateChangeOperation.Upsert, rootState with { ProducedControl = produced }, commit.Metadata);
+                RuntimeStateChangeOperation.Upsert, rootState with { ProducedControl = produced, ProducedControlSourceCommitId = null }, commit.Metadata);
             var changes = commit.StateChanges.ActivityExecutions.Where(change => change.StateId != rootState.InvocationId)
                 .Append(rootChange).ToArray();
             return commit with

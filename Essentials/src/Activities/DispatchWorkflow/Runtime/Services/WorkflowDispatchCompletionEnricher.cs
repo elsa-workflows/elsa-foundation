@@ -14,6 +14,7 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
     private readonly IWorkflowOutputSource _workflowOutputSource;
     private readonly IPostCommitOutboxLookupStore _outboxLookupStore;
     private readonly IIncidentStateStore? _incidentStateStore;
+    private readonly IRuntimeWorkflowControlBoundary? _controlBoundary;
 
     public WorkflowDispatchCompletionEnricher(
         IWorkflowOutputSource workflowOutputSource,
@@ -26,12 +27,22 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
         IWorkflowOutputSource workflowOutputSource,
         IPostCommitOutboxLookupStore outboxLookupStore,
         IIncidentStateStore? incidentStateStore)
+        : this(workflowOutputSource, outboxLookupStore, incidentStateStore, controlBoundary: null)
+    {
+    }
+
+    public WorkflowDispatchCompletionEnricher(
+        IWorkflowOutputSource workflowOutputSource,
+        IPostCommitOutboxLookupStore outboxLookupStore,
+        IIncidentStateStore? incidentStateStore,
+        IRuntimeWorkflowControlBoundary? controlBoundary)
     {
         ArgumentNullException.ThrowIfNull(workflowOutputSource);
         ArgumentNullException.ThrowIfNull(outboxLookupStore);
         _workflowOutputSource = workflowOutputSource;
         _outboxLookupStore = outboxLookupStore;
         _incidentStateStore = incidentStateStore;
+        _controlBoundary = controlBoundary;
     }
 
     public int Order => 100;
@@ -66,6 +77,7 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
             var identity = new WorkflowDispatchIdentity(
                 dispatch.ParentWorkflowExecutionId,
                 dispatch.ParentActivityExecutionId);
+            var control = await CreateControlAsync(commit, dispatch, identity, cancellationToken);
             var outboxItemId = identity.ParentResumeOutboxItemId(commit.CommitId);
             var committed = await _outboxLookupStore.FindAsync(outboxItemId, cancellationToken);
             var existing = intents.SingleOrDefault(intent => StringComparer.Ordinal.Equals(intent.IntentId, identity.ParentResumeIntentId));
@@ -101,7 +113,8 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
                     identity,
                     safeOutputs ?? [],
                     incidentIds ?? [],
-                    commit.Checkpoint.OccurredAt);
+                    commit.Checkpoint.OccurredAt,
+                    control);
                 if (existing is not null && !canonical.IsEquivalentTo(existing))
                     throw new InvalidOperationException($"Parent-resume intent '{identity.ParentResumeIntentId}' conflicts with the policy-safe terminal result.");
 
@@ -110,7 +123,9 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
                     intents.Add(intent);
             }
 
-            ValidateIntent(intent, dispatch, identity, commit.Checkpoint.OccurredAt);
+            var payload = ValidateIntent(intent, dispatch, identity, commit.Checkpoint.OccurredAt);
+            if (!WorkflowControlTransport.Equivalent(payload.Result.Control, control))
+                throw WorkflowDispatchControlPolicy.Failure("terminal resume differs from its whole staged root control");
         }
 
         return commit with { PostCommitIntents = intents };
@@ -121,7 +136,8 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
         WorkflowDispatchIdentity identity,
         IReadOnlyCollection<RuntimeWorkflowOutput> outputs,
         IReadOnlyCollection<string> incidentIds,
-        DateTimeOffset recordedAt)
+        DateTimeOffset recordedAt,
+        RuntimeChildControlTransport? control)
     {
         var resultOutputs = dispatch.Status == WorkflowDispatchStatus.Completed
             ? outputs
@@ -143,7 +159,8 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
             dispatch.ChildWorkflowExecutionId,
             dispatch.Status,
             resultOutputs,
-            diagnostics);
+            diagnostics,
+            control);
         var payload = new WorkflowDispatchParentResumePayload(
             dispatch.DispatchId,
             dispatch.ParentWorkflowExecutionId,
@@ -167,6 +184,26 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
                 [RuntimeMetadataKeys.DispatchId] = dispatch.DispatchId,
                 [RuntimeMetadataKeys.ChildWorkflowExecutionId] = dispatch.ChildWorkflowExecutionId
             });
+    }
+
+    private async ValueTask<RuntimeChildControlTransport?> CreateControlAsync(RuntimeCheckpointCommit commit,
+        WorkflowDispatchRecord dispatch, WorkflowDispatchIdentity identity, CancellationToken cancellationToken)
+    {
+        if (WorkflowDispatchControlPolicy.ReadCapability(dispatch.Metadata) is null)
+            return null;
+        if (_controlBoundary is null)
+            throw WorkflowDispatchControlPolicy.Failure("terminal control requires the boundary provider");
+        var root = commit.StateChanges.ActivityExecutions.Where(change => change.Operation != RuntimeStateChangeOperation.Delete &&
+            change.State.ParentActivityExecutionId is null && change.State.Execution.WorkflowExecutionId == dispatch.ChildWorkflowExecutionId)
+            .Select(change => change.State).Single();
+        if (root.ProducedControl is not { IsTerminal: true } batch)
+            throw WorkflowDispatchControlPolicy.Failure("terminal control requires its whole staged root barrier");
+        var target = await _controlBoundary.ResolveAsync(dispatch.ChildWorkflowExecutionId, root.InvocationId, cancellationToken)
+            ?? throw WorkflowDispatchControlPolicy.Failure("terminal control has no admitted boundary");
+        WorkflowControlProducerEnricher.ValidateOwned(batch, target);
+        if (target.DispatchId != dispatch.DispatchId)
+            throw WorkflowDispatchControlPolicy.Failure("terminal control dispatch differs");
+        return WorkflowControlTransport.Create(target, batch, commit.CommitId, identity.ParentResumeIntentId);
     }
 
     internal static WorkflowDispatchParentResumePayload ValidateIntent(

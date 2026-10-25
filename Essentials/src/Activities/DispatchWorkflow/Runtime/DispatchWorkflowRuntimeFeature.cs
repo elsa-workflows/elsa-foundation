@@ -88,6 +88,8 @@ public class DispatchWorkflowRuntimeFeature : IShellFeature
         services.TryAddEnumerable(
             ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, WorkflowControlProducerEnricher>());
         services.TryAddEnumerable(
+            ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, WorkflowControlNotificationEnricher>());
+        services.TryAddEnumerable(
             ServiceDescriptor.Scoped<IPostCommitFailureProjector, WorkflowDispatchDeliveryFailureProjector>());
         services.TryAddSingleton<WorkflowDispatchStagingBuffer>();
         services.TryAddSingleton<IWorkflowDispatchStager>(
@@ -96,6 +98,7 @@ public class DispatchWorkflowRuntimeFeature : IShellFeature
             serviceProvider => serviceProvider.GetRequiredService<WorkflowDispatchStagingBuffer>());
         services.TryAddScoped<IWorkflowTestScopeCleaner, WorkflowTestScopeCleaner>();
         services.TryAddScoped<IRuntimeWorkflowControlBoundary, WorkflowDispatchControlBoundary>();
+        services.TryAddScoped<IRuntimeChildControlAuthorizer, WorkflowDispatchControlAuthorizer>();
         services.AddSingleton<IShellInitializer, WorkflowDispatchReadinessInitializer>();
         services.AddSingleton<IShellInitializer, WorkflowDispatchControlBoundaryInitializer>();
     }

@@ -311,6 +311,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         }
 
         ActivityCompletionProjection? typedCompletion = null;
+        RuntimeChildControlTransport? completedChildControl = null;
         IActivityCompletionTransition? completionTransition = null;
         ActivityExecutionState? replacementSuspendedState = null;
         ActivityFault? returnedFault = null;
@@ -341,6 +342,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             else if (transition is IActivityCompletionTransition)
             {
                 completionTransition = (IActivityCompletionTransition)transition;
+                completedChildControl = (completionTransition.Result as IRuntimeChildControlCompletion)?.ChildControl;
                 typedCompletion = await serviceProvider.GetRequiredService<ActivityCompletionProjector>().ProjectAsync(
                     workItem.WorkflowExecutionId,
                     executionState.InvocationId,
@@ -483,6 +485,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             completedState = completedState with
             {
                 Completion = typedCompletion.Completion,
+                ChildControl = completedChildControl,
                 PrivateState = null,
                 TriggerRegistrations = []
             };

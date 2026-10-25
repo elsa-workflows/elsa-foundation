@@ -68,6 +68,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         Action<PersistenceModeOptions>? persistenceModes = null,
         bool replaySafeChild = false,
         bool authoredFaultChild = false,
+        bool authoredNotificationChild = false,
         Action<IServiceCollection>? configureServices = null)
     {
         var services = new ServiceCollection();
@@ -107,6 +108,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         var fixture = new DispatchWorkflowRuntimeTestFixture(
             provider,
             timeProvider,
+            authoredNotificationChild ? typeof(NotificationRootProbeActivity) :
             authoredFaultChild ? typeof(AuthoredFaultChildProbeActivity) :
             replaySafeChild ? typeof(ReplaySafeChildProbeActivity) : typeof(ChildProbeActivity));
         await fixture.SeedChildAsync();
@@ -357,7 +359,8 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                         nameof(ChildProbeActivity.Defaulted),
                         typeof(string),
                         "defaulted")
-                }),
+                }, childSlots: activityType == typeof(NotificationRootProbeActivity)
+                    ? [new ExecutableChildSlot("Activities", [NewNode("node-notification-child", typeof(PlainChildProbeActivity))])] : null),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: Now,
             compatibilityMetadata: new Dictionary<string, string>(),
@@ -688,6 +691,8 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             typeof(DispatchWorkflowResult),
             typeof(ChildProbeActivity),
             typeof(AuthoredFaultChildProbeActivity),
+            typeof(NotificationRootProbeActivity),
+            typeof(PlainChildProbeActivity),
             typeof(ControlParentActivity),
             typeof(ReplaySafeChildProbeActivity),
             typeof(ActivityUnit),
@@ -762,6 +767,32 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
 
     [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
     private sealed class ReplaySafeChildProbeActivity(ChildExecutionProbe probe, IRuntimeWorkflowControlBoundary boundary, IWorkflowDispatchStore dispatches) : ChildProbeActivity(probe, boundary, dispatches);
+
+    private sealed class PlainChildProbeActivity : Activity<ActivityUnit>
+    {
+        public PlainChildProbeActivity() { }
+        protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
+    }
+
+    private sealed class NotificationRootProbeActivity(ChildExecutionProbe probe, IRuntimeWorkflowControlBoundary boundary,
+        IWorkflowDispatchStore dispatches) : ChildProbeActivity(probe, boundary, dispatches), IRuntimeStructuralActivity,
+        IRuntimeActivityChildCompletionHandler
+    {
+        public async ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
+        {
+            var target = await ControlBoundary.ResolveAsync(context.WorkflowExecutionId, context.ActivityExecutionState.InvocationId,
+                context.CancellationToken) ?? throw new InvalidOperationException("Expected an admitted control boundary.");
+            var batch = new RuntimeChildControlBatch(1, target.ConsumerKey, target.ConsumerVersion, context.WorkflowExecutionId,
+                context.ActivityExecutionState.InvocationId, context.SchedulerWorkItem.WorkItemId, 0, false,
+                [new("first"), new("second")]);
+            context.ScheduleChildActivity("node-notification-child");
+            return RuntimeStructuralContinuation.Defer.WithControl(batch);
+        }
+
+        public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+    }
 
     private sealed class AuthoredFaultChildProbeActivity(ChildExecutionProbe probe, IRuntimeWorkflowControlBoundary boundary,
         IWorkflowDispatchStore dispatches) : ChildProbeActivity(probe, boundary, dispatches), IRuntimeStructuralActivity

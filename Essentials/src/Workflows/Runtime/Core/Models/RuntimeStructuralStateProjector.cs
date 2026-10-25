@@ -52,6 +52,8 @@ public static class RuntimeStructuralStateProjector
         return state with
         {
             ProducedControl = continuation.Control ?? state.ProducedControl,
+            ProducedControlSourceCommitId = continuation.Control is null || continuation.Control.SourceWorkItemId == state.ProducedControl?.SourceWorkItemId
+                ? state.ProducedControlSourceCommitId : null,
             PrivateState = continuation.StateUpdate is { } update ? new ActivityPrivateState(
                 state.InvocationId,
                 update.StateVersion,

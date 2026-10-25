@@ -140,14 +140,14 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
             0,
             new Dictionary<string, string>());
 
-    private static WorkflowExecutable NewTypedExecutable(string currentLiteral)
+    private static WorkflowExecutable NewTypedExecutable(string currentLiteral, Elsa.Primitives.Models.ValueTypeDescriptor? resultType = null)
     {
         var descriptor = JsonSerializer.SerializeToElement(new { type = "typed-resume" });
         var valueType = new Elsa.Primitives.Models.ValueTypeDescriptor("String");
         var contract = new ActivityContract(
             "test/typed-resume", "1.0.0", "typed-resume", descriptor,
             [new ActivityInputContract("text", "Text", valueType, true, false, false, null, ActivityValuePolicy.Default)],
-            new ActivityResultContract(new Elsa.Primitives.Models.ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
+            new ActivityResultContract(resultType ?? new Elsa.Primitives.Models.ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
             ["Done"],
             new ActivityActivationRequirement("typed-resume", "test/typed-resume"));
         var binding = new RuntimeInputBinding(
