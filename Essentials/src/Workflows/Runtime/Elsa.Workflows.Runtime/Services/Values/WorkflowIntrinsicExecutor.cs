@@ -725,8 +725,12 @@ public sealed class WorkflowIntrinsicExecutor(
             return;
         var validator = inputValidator
             ?? throw new InvalidOperationException($"Intrinsic input '{binding.InputName}' on node '{nodeId}' requires an IWorkflowExecutableInputValidator.");
+        // Elsa.Any is a portable runtime token; Object is its CLR element type in the registry.
+        var validationType = binding.TargetType.Alias == "Elsa.Any"
+            ? new TypeReference("Object", binding.TargetType.CollectionKind)
+            : binding.TargetType.ToTypeReference();
         var contract = new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion,
-            [new WorkflowDeclaredInput(binding.InputName, binding.TargetType.ToTypeReference(), isRequired: true)]);
+            [new WorkflowDeclaredInput(binding.InputName, validationType, isRequired: true)]);
         var validation = validator.Validate(contract,
             [new KeyValuePair<string, JsonElement>(binding.InputName, value.InlineValue!.Value)]);
         if (!validation.IsValid)

@@ -126,6 +126,24 @@ public sealed class WorkflowIntrinsicAssignmentConversionTests
         Assert.Equal(0, (await _workflowStore.FindAsync(WorkflowExecutionId))!.RootVariableFrame!.Revision);
     }
 
+    [Theory]
+    [InlineData(CollectionKind.Array)]
+    [InlineData(CollectionKind.List)]
+    [InlineData(CollectionKind.HashSet)]
+    public async Task Set_preserves_heterogeneous_Any_collections_and_still_checks_their_shape(CollectionKind kind)
+    {
+        var commit = await ExecuteAsync(Node("request", "Elsa.Any", collectionKind: kind), new object[] { 1, "x" }, false);
+        var value = commit.StateChanges.WorkflowExecution!.State.RootVariableFrame!.Values["counter"];
+        Assert.Equal("Elsa.Any", value.Type.Alias);
+        Assert.Equal(kind, value.Type.CollectionKind);
+        Assert.Equal(1, value.InlineValue!.Value[0].GetInt32());
+        Assert.Equal("x", value.InlineValue.Value[1].GetString());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            ExecuteAsync(Node("request", "Elsa.Any", collectionKind: kind), 7, false).AsTask());
+        Assert.Equal(0, (await _workflowStore.FindAsync(WorkflowExecutionId))!.RootVariableFrame!.Revision);
+    }
+
     private static ExecutableNode Node(string source, string alias = "Int32", ValueConversionPlan? plan = null, CollectionKind collectionKind = CollectionKind.Single)
     {
         var targetType = new ValueTypeDescriptor(alias, collectionKind);
