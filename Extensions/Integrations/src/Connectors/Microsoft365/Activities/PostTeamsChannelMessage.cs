@@ -45,7 +45,7 @@ public sealed class PostTeamsChannelMessage(
             {
                 ["body"] = new JsonObject
                 {
-                    ["contentType"] = string.IsNullOrWhiteSpace(ContentType) ? "text" : ContentType.Trim(),
+                    ["contentType"] = GraphPayloads.TeamsContentType(ContentType),
                     ["content"] = Content
                 }
             };

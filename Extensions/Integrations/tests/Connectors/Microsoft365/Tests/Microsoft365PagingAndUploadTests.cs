@@ -67,8 +67,45 @@ public sealed class Microsoft365PagingAndUploadTests
         Assert.Equal("item-1", result.Id);
         Assert.Equal("note.txt", result.Name);
         var request = Assert.Single(harness.Http.Recorded);
-        Microsoft365TestSupport.AssertGraph(request, HttpMethod.Put, "me/drive/root:/note.txt:/content");
+        Assert.Equal(HttpMethod.Put, request.Method);
+        Microsoft365TestSupport.AssertBearer(request);
+        Assert.StartsWith("https://graph.microsoft.com/v1.0/me/drive/root:/note.txt:/content", request.RequestUri?.ToString(), StringComparison.Ordinal);
+        Microsoft365TestSupport.AssertConflictBehavior(request, "rename");
         Assert.Equal("hello", request.Body);
+    }
+
+    [Fact]
+    public async Task UploadFile_simple_put_sends_an_explicit_conflict_behavior()
+    {
+        await using var harness = Microsoft365TestSupport.CreateHarness();
+        harness.Http.ResponseContent = """{"id":"item-1","name":"note.txt","size":5}""";
+        var activity = Microsoft365TestSupport.Activity<UploadFile>(harness, upload =>
+        {
+            upload.FileName = "note.txt";
+            upload.Content = "hello"u8.ToArray();
+            upload.ConflictBehavior = "replace";
+        });
+
+        Microsoft365TestSupport.Complete(await activity.ExecuteForTestsAsync(Microsoft365TestSupport.Context()));
+        var request = Assert.Single(harness.Http.Recorded);
+        Assert.Equal(HttpMethod.Put, request.Method);
+        Microsoft365TestSupport.AssertConflictBehavior(request, "replace");
+    }
+
+    [Fact]
+    public async Task UploadFile_faults_when_conflict_behavior_is_unknown()
+    {
+        await using var harness = Microsoft365TestSupport.CreateHarness();
+        var activity = Microsoft365TestSupport.Activity<UploadFile>(harness, upload =>
+        {
+            upload.FileName = "note.txt";
+            upload.Content = "hello"u8.ToArray();
+            upload.ConflictBehavior = "upsert";
+        });
+
+        var fault = Microsoft365TestSupport.Fault(await activity.ExecuteForTestsAsync(Microsoft365TestSupport.Context()));
+        Assert.Equal("invalid_input", fault.Code);
+        Assert.Empty(harness.Http.Recorded);
     }
 
     [Fact]
@@ -123,15 +160,19 @@ public sealed class Microsoft365PagingAndUploadTests
         Assert.Equal(["bytes 0-3/9", "bytes 4-7/9", "bytes 8-8/9"], ranges);
     }
 
-    [Fact]
-    public async Task UploadFile_faults_when_the_upload_url_is_not_a_microsoft_host()
+    [Theory]
+    [InlineData("https://example.com/up/abc")]
+    [InlineData("https://blob.core.windows.net/up/abc")]
+    [InlineData("https://upload.microsoft.com/up/abc")]
+    [InlineData("https://login.live.com/up/abc")]
+    public async Task UploadFile_faults_when_the_upload_url_is_not_a_sharepoint_or_onedrive_host(string uploadUrl)
     {
         await using var harness = Microsoft365TestSupport.CreateHarness();
         harness.Http.Respond = (request, _) =>
         {
             var path = request.RequestUri?.AbsolutePath ?? "";
             if (path.Contains("createUploadSession", StringComparison.Ordinal))
-                return CannedHttpResponse.Json("""{"uploadUrl":"https://example.com/up/abc"}""");
+                return CannedHttpResponse.Json("{\"uploadUrl\":\"" + uploadUrl + "\"}");
             return CannedHttpResponse.Json(Microsoft365TestSupport.GraphError("invalidRequest", "unexpected"));
         };
 

@@ -71,6 +71,23 @@ public sealed class Microsoft365ActivityTests
     }
 
     [Fact]
+    public async Task SendMail_faults_when_body_type_is_unknown()
+    {
+        await using var harness = Microsoft365TestSupport.CreateHarness();
+        var activity = Microsoft365TestSupport.Activity<SendMail>(harness, send =>
+        {
+            send.To = "ada@example.com";
+            send.Subject = "Hello";
+            send.Body = "World";
+            send.BodyType = "Markdown";
+        });
+
+        var fault = Microsoft365TestSupport.Fault(await activity.ExecuteForTestsAsync(Microsoft365TestSupport.Context()));
+        Assert.Equal("invalid_input", fault.Code);
+        Assert.Empty(harness.Http.Recorded);
+    }
+
+    [Fact]
     public async Task ListMessages_gets_inbox_with_filter_and_top()
     {
         await using var harness = Microsoft365TestSupport.CreateHarness();
@@ -204,6 +221,22 @@ public sealed class Microsoft365ActivityTests
     }
 
     [Fact]
+    public async Task DownloadFile_round_trips_non_utf8_bytes()
+    {
+        await using var harness = Microsoft365TestSupport.CreateHarness();
+        var bytes = new byte[] { 0x00, 0xFF, 0xC3, 0x28 };
+        harness.Http.Enqueue(CannedHttpResponse.Bytes(bytes));
+        var activity = Microsoft365TestSupport.Activity<DownloadFile>(harness, download => download.ItemPath = "/Reports/binary.bin");
+
+        var result = Microsoft365TestSupport.Complete(await activity.ExecuteForTestsAsync(Microsoft365TestSupport.Context()));
+        Assert.Equal(bytes, result.Content);
+        Microsoft365TestSupport.AssertGraph(
+            Assert.Single(harness.Http.Recorded),
+            HttpMethod.Get,
+            "me/drive/root:/Reports/binary.bin:/content");
+    }
+
+    [Fact]
     public async Task DownloadFile_gets_content_by_item_id()
     {
         await using var harness = Microsoft365TestSupport.CreateHarness();
@@ -254,6 +287,23 @@ public sealed class Microsoft365ActivityTests
             post.ChannelId = "channel-1";
             post.Content = "hello";
             post.Attachments = "{not-json";
+        });
+
+        var fault = Microsoft365TestSupport.Fault(await activity.ExecuteForTestsAsync(Microsoft365TestSupport.Context()));
+        Assert.Equal("invalid_input", fault.Code);
+        Assert.Empty(harness.Http.Recorded);
+    }
+
+    [Fact]
+    public async Task PostTeamsChannelMessage_faults_when_content_type_is_unknown()
+    {
+        await using var harness = Microsoft365TestSupport.CreateHarness();
+        var activity = Microsoft365TestSupport.Activity<PostTeamsChannelMessage>(harness, post =>
+        {
+            post.TeamId = "team-1";
+            post.ChannelId = "channel-1";
+            post.Content = "hello";
+            post.ContentType = "markdown";
         });
 
         var fault = Microsoft365TestSupport.Fault(await activity.ExecuteForTestsAsync(Microsoft365TestSupport.Context()));

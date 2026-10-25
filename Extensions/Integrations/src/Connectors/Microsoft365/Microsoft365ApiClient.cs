@@ -18,7 +18,7 @@ internal sealed class Microsoft365ApiClient(
     Microsoft365RetryOptions? retry = null,
     Microsoft365UploadOptions? upload = null)
 {
-    private static readonly HashSet<int> ThrottledStatuses = [429, 503, 504];
+    private static readonly HashSet<int> ThrottledStatuses = [429, 503];
 
     private static readonly string[] MicrosoftUploadHosts =
     [
@@ -26,12 +26,7 @@ internal sealed class Microsoft365ApiClient(
         "sharepoint-df.com",
         "sharepointonline.com",
         "1drv.com",
-        "onedrive.com",
-        "live.com",
-        "office.com",
-        "office365.com",
-        "microsoft.com",
-        "windows.net"
+        "onedrive.com"
     ];
 
     private readonly Microsoft365RetryOptions _retry = retry ?? Microsoft365RetryOptions.Default;
@@ -129,13 +124,14 @@ internal sealed class Microsoft365ApiClient(
         ConnectionReference? connection,
         ActivityExecutionContext context,
         CancellationToken cancellationToken,
-        string requiredScope)
+        string requiredScope,
+        string? query = null)
     {
         ArgumentNullException.ThrowIfNull(content);
         return await SendAsync(
             () =>
             {
-                var request = new HttpRequestMessage(HttpMethod.Put, GraphUri(relativePath))
+                var request = new HttpRequestMessage(HttpMethod.Put, GraphUri(relativePath, query))
                 {
                     Content = new ByteArrayContent(content)
                     {
@@ -159,7 +155,7 @@ internal sealed class Microsoft365ApiClient(
         CancellationToken cancellationToken,
         string requiredScope)
     {
-        var (_, payload, contentType, fileName) = await SendCoreAsync(
+        var (_, content, contentType, fileName) = await SendCoreAsync(
                 () => new HttpRequestMessage(HttpMethod.Get, GraphUri(relativePath)),
                 applyConnection: true,
                 connection,
@@ -168,7 +164,7 @@ internal sealed class Microsoft365ApiClient(
                 requiredScope,
                 allowNotFound: false)
             .ConfigureAwait(false);
-        return (Encoding.UTF8.GetBytes(payload), contentType, fileName);
+        return (content, contentType, fileName);
     }
 
     public async Task<IReadOnlyList<JsonElement>> CollectPagesAsync(
@@ -240,8 +236,12 @@ internal sealed class Microsoft365ApiClient(
         ArgumentException.ThrowIfNullOrWhiteSpace(itemPath);
         ArgumentNullException.ThrowIfNull(content);
 
+        var behavior = GraphPayloads.ConflictBehavior(conflictBehavior);
+
         if (content.Length <= _upload.SimpleUploadMaxBytes)
         {
+            var query =
+                $"{Uri.EscapeDataString("@microsoft.graph.conflictBehavior")}={Uri.EscapeDataString(behavior)}";
             return await PutBytesAsync(
                     $"{itemPath}/content",
                     content,
@@ -249,7 +249,8 @@ internal sealed class Microsoft365ApiClient(
                     connection,
                     context,
                     cancellationToken,
-                    requiredScope)
+                    requiredScope,
+                    query)
                 .ConfigureAwait(false);
         }
 
@@ -257,9 +258,7 @@ internal sealed class Microsoft365ApiClient(
         {
             ["item"] = new JsonObject
             {
-                ["@microsoft.graph.conflictBehavior"] = string.IsNullOrWhiteSpace(conflictBehavior)
-                    ? "rename"
-                    : conflictBehavior.Trim()
+                ["@microsoft.graph.conflictBehavior"] = behavior
             }
         };
         var session = await PostJsonAsync(
@@ -343,7 +342,7 @@ internal sealed class Microsoft365ApiClient(
         string requiredScope,
         bool allowNotFound)
     {
-        var (status, payload, _, _) = await SendCoreAsync(
+        var (status, content, _, _) = await SendCoreAsync(
                 createRequest,
                 applyConnection,
                 connection,
@@ -356,12 +355,12 @@ internal sealed class Microsoft365ApiClient(
         if (allowNotFound && status == HttpStatusCode.NotFound)
             return default;
 
-        if (string.IsNullOrWhiteSpace(payload))
+        if (content.Length == 0)
             return default;
 
         try
         {
-            using var document = JsonDocument.Parse(payload);
+            using var document = JsonDocument.Parse(content);
             return document.RootElement.Clone();
         }
         catch (JsonException)
@@ -372,7 +371,7 @@ internal sealed class Microsoft365ApiClient(
         }
     }
 
-    private async Task<(HttpStatusCode Status, string Payload, string? ContentType, string? FileName)> SendCoreAsync(
+    private async Task<(HttpStatusCode Status, byte[] Content, string? ContentType, string? FileName)> SendCoreAsync(
         Func<HttpRequestMessage> createRequest,
         bool applyConnection,
         ConnectionReference? connection,
@@ -387,7 +386,7 @@ internal sealed class Microsoft365ApiClient(
         for (var attempt = 1; attempt <= attempts; attempt++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var (status, payload, contentType, fileName) = await SendOnceWithAuthRefreshAsync(
+            var dispatched = await SendOnceWithAuthRefreshAsync(
                     createRequest,
                     applyConnection,
                     connection,
@@ -395,8 +394,8 @@ internal sealed class Microsoft365ApiClient(
                     cancellationToken)
                 .ConfigureAwait(false);
 
-            var code = (int)status;
-            if (ThrottledStatuses.Contains(code))
+            var code = (int)dispatched.Status;
+            if (ShouldRetryStatus(code, dispatched.Method))
             {
                 if (attempt >= attempts)
                 {
@@ -406,8 +405,7 @@ internal sealed class Microsoft365ApiClient(
                         isRetryable: true);
                 }
 
-                var delay = ReadRetryAfterFromLast() ?? _retry.DefaultRetryAfter;
-                delay = CapDelay(delay);
+                var delay = CapDelay(dispatched.RetryAfter ?? _retry.DefaultRetryAfter);
                 if (waited + delay > _retry.MaxTotalWait)
                 {
                     throw new Microsoft365ApiException(
@@ -417,18 +415,17 @@ internal sealed class Microsoft365ApiClient(
                 }
 
                 waited += delay;
-                _lastRetryAfter = delay;
                 await DelayAsync(delay, cancellationToken).ConfigureAwait(false);
                 continue;
             }
 
-            if (allowNotFound && status == HttpStatusCode.NotFound)
-                return (status, payload, contentType, fileName);
+            if (allowNotFound && dispatched.Status == HttpStatusCode.NotFound)
+                return (dispatched.Status, dispatched.Content, dispatched.ContentType, dispatched.FileName);
 
             if (code is >= 200 and < 300)
-                return (status, payload, contentType, fileName);
+                return (dispatched.Status, dispatched.Content, dispatched.ContentType, dispatched.FileName);
 
-            ThrowGraphFault(status, payload, connection, requiredScope);
+            ThrowGraphFault(dispatched.Status, dispatched.Content, connection, requiredScope);
         }
 
         throw new Microsoft365ApiException(
@@ -437,11 +434,11 @@ internal sealed class Microsoft365ApiClient(
             isRetryable: true);
     }
 
-    private TimeSpan? _lastRetryAfter;
+    private static bool ShouldRetryStatus(int status, HttpMethod method) =>
+        ThrottledStatuses.Contains(status)
+        || status == 504 && HttpMethod.Get.Equals(method);
 
-    private TimeSpan? ReadRetryAfterFromLast() => _lastRetryAfter;
-
-    private async Task<(HttpStatusCode Status, string Payload, string? ContentType, string? FileName)> SendOnceWithAuthRefreshAsync(
+    private async Task<DispatchedResponse> SendOnceWithAuthRefreshAsync(
         Func<HttpRequestMessage> createRequest,
         bool applyConnection,
         ConnectionReference? connection,
@@ -450,15 +447,12 @@ internal sealed class Microsoft365ApiClient(
     {
         var first = await DispatchAsync(createRequest, applyConnection, refresh: false, connection, context, cancellationToken)
             .ConfigureAwait(false);
-        _lastRetryAfter = first.RetryAfter;
 
         if ((int)first.Status != 401 || !first.CanRefresh)
-            return (first.Status, first.Payload, first.ContentType, first.FileName);
+            return first;
 
-        var retry = await DispatchAsync(createRequest, applyConnection, refresh: true, connection, context, cancellationToken)
+        return await DispatchAsync(createRequest, applyConnection, refresh: true, connection, context, cancellationToken)
             .ConfigureAwait(false);
-        _lastRetryAfter = retry.RetryAfter;
-        return (retry.Status, retry.Payload, retry.ContentType, retry.FileName);
     }
 
     private async Task<DispatchedResponse> DispatchAsync(
@@ -479,14 +473,15 @@ internal sealed class Microsoft365ApiClient(
             && refreshable;
 
         using var response = await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        var payload = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        var content = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
         return new DispatchedResponse(
             response.StatusCode,
-            payload,
+            content,
             response.Content.Headers.ContentType?.ToString(),
             ReadFileName(response),
             ReadRetryAfter(response),
-            canRefresh);
+            canRefresh,
+            request.Method);
     }
 
     private async Task<(HttpStatusCode Status, string Payload)> PutChunkWithoutAuthAsync(
@@ -516,19 +511,21 @@ internal sealed class Microsoft365ApiClient(
 
     private void ThrowGraphFault(
         HttpStatusCode status,
-        string payload,
+        byte[] content,
         ConnectionReference? connection,
         string requiredScope)
     {
+        var payload = Encoding.UTF8.GetString(content);
         var (code, message) = ReadGraphError(payload, (int)status);
 
-        if (IsConnectionUnavailable(code))
+        if ((int)status == 401 || IsConnectionUnavailable(code))
         {
             var name = string.IsNullOrWhiteSpace(connection?.Name) ? "http" : connection.Name.Trim();
+            var reason = IsConnectionUnavailable(code) ? code : "401";
             throw new ConnectionUnavailableException(
                 name,
                 ConnectionFaultCodes.Unavailable,
-                $"Microsoft 365 connection '{name}' is unavailable ({code}). Re-authorize the connection.");
+                $"Microsoft 365 connection '{name}' is unavailable ({reason}). Re-authorize the connection.");
         }
 
         if ((int)status == 403 && IsAccessDenied(code))
@@ -626,11 +623,16 @@ internal sealed class Microsoft365ApiClient(
         return null;
     }
 
-    private Uri GraphUri(string relativePath)
+    private Uri GraphUri(string relativePath, string? query = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
         var path = relativePath.TrimStart('/');
-        return new Uri($"{_graphBaseUri.ToString().TrimEnd('/')}/{Microsoft365Api.VersionSegment}/{path}", UriKind.Absolute);
+        var uri = new Uri($"{_graphBaseUri.ToString().TrimEnd('/')}/{Microsoft365Api.VersionSegment}/{path}", UriKind.Absolute);
+        if (string.IsNullOrWhiteSpace(query))
+            return uri;
+
+        var suffix = query.TrimStart('?', '&');
+        return new Uri($"{uri.AbsoluteUri}?{suffix}", UriKind.Absolute);
     }
 
     private static Uri NormalizeBase(Uri graphBaseUri)
@@ -706,11 +708,12 @@ internal sealed class Microsoft365ApiClient(
 
     private readonly record struct DispatchedResponse(
         HttpStatusCode Status,
-        string Payload,
+        byte[] Content,
         string? ContentType,
         string? FileName,
         TimeSpan? RetryAfter,
-        bool CanRefresh);
+        bool CanRefresh,
+        HttpMethod Method);
 }
 
 internal delegate ValueTask ApplyMicrosoft365Connection(

@@ -59,10 +59,12 @@ v1 is delegated `/me`, with an optional User id for a shared mailbox or calendar
 
 ## Upload File
 
-Files up to 4 MB use `PUT …:/content`. Larger files create an upload session. The connector
-PUTs chunks to Graph's returned `uploadUrl` **without** the connection `Authorization`
-header, and only when that URL is https on a Microsoft host. Tokens never appear in activity
-outputs, logs or faults.
+Files up to 4 MB use `PUT …:/content` with `@microsoft.graph.conflictBehavior` on the query
+string (default `rename`). Larger files create an upload session. The connector PUTs chunks
+to Graph's returned `uploadUrl` **without** the connection `Authorization` header, and only
+when that URL is https on SharePoint or OneDrive. Chunk PUTs are not retried or resumed in
+v1. Download File keeps the response as bytes and buffers the whole file in memory with no
+size cap. Tokens never appear in activity outputs, logs or faults.
 
 ## Not in v1
 

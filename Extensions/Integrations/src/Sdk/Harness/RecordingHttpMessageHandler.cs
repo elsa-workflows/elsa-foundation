@@ -83,7 +83,9 @@ public sealed class RecordingHttpMessageHandler : HttpMessageHandler
         var response = new HttpResponseMessage(canned.Status)
         {
             RequestMessage = request,
-            Content = new StringContent(canned.Content)
+            Content = canned.ContentBytes is { } bytes
+                ? new ByteArrayContent(bytes)
+                : new StringContent(canned.Content)
         };
         foreach (var header in canned.Headers)
             response.Headers.TryAddWithoutValidation(header.Key, header.Value);

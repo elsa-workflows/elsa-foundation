@@ -99,6 +99,26 @@ public sealed class Microsoft365ErrorTests
     }
 
     [Fact]
+    public async Task Empty_401_throws_connection_unavailable()
+    {
+        await using var harness = Microsoft365TestSupport.CreateHarness();
+        harness.Http.ResponseStatus = HttpStatusCode.Unauthorized;
+        harness.Http.ResponseContent = "";
+        var activity = Microsoft365TestSupport.Activity<SendMail>(harness, send =>
+        {
+            send.To = "ada@example.com";
+            send.Subject = "Hello";
+            send.Body = "World";
+        });
+
+        var exception = await Assert.ThrowsAsync<ConnectionUnavailableException>(
+            () => activity.ExecuteForTestsAsync(Microsoft365TestSupport.Context()).AsTask());
+        Assert.Equal(ConnectionFaultCodes.Unavailable, exception.Code);
+        Assert.Contains("401", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(Microsoft365TestSupport.Token, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Rate_limit_retries_then_succeeds()
     {
         await using var harness = Microsoft365TestSupport.CreateHarness();
@@ -130,14 +150,12 @@ public sealed class Microsoft365ErrorTests
         Assert.Equal([TimeSpan.Zero], delays);
     }
 
-    [Theory]
-    [InlineData(HttpStatusCode.ServiceUnavailable)]
-    [InlineData(HttpStatusCode.GatewayTimeout)]
-    public async Task Throttled_5xx_retries_then_succeeds(HttpStatusCode status)
+    [Fact]
+    public async Task ServiceUnavailable_retries_then_succeeds()
     {
         await using var harness = Microsoft365TestSupport.CreateHarness();
         harness.Http.Enqueue(CannedHttpResponse.WithStatus(
-            status,
+            HttpStatusCode.ServiceUnavailable,
             Microsoft365TestSupport.GraphError("UnknownError", "try again"),
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Retry-After"] = "0" }));
         harness.Http.Enqueue(CannedHttpResponse.WithStatus(HttpStatusCode.Accepted, ""));
@@ -156,6 +174,58 @@ public sealed class Microsoft365ErrorTests
         var transition = await activity.ExecuteForTestsAsync(Microsoft365TestSupport.Context());
         Assert.Equal(Elsa.Activities.Runtime.Core.Models.ActivityTransitionKind.Complete, transition.Kind);
         Assert.Equal(2, harness.Http.Recorded.Count);
+    }
+
+    [Fact]
+    public async Task Post_gateway_timeout_is_not_retried_and_faults_as_retryable()
+    {
+        await using var harness = Microsoft365TestSupport.CreateHarness();
+        harness.Http.Enqueue(CannedHttpResponse.WithStatus(
+            HttpStatusCode.GatewayTimeout,
+            Microsoft365TestSupport.GraphError("UnknownError", "gateway timeout"),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Retry-After"] = "0" }));
+        var activity = Microsoft365TestSupport.Activity<SendMail>(harness, send =>
+        {
+            send.To = "ada@example.com";
+            send.Subject = "Hello";
+            send.Body = "World";
+            send.Retry = new Microsoft365RetryOptions
+            {
+                MaxAttempts = 3,
+                DelayAsync = (_, _) => Task.CompletedTask
+            };
+        });
+
+        var fault = Microsoft365TestSupport.Fault(await activity.ExecuteForTestsAsync(Microsoft365TestSupport.Context()));
+        Assert.Equal("UnknownError", fault.Code);
+        Assert.True(fault.IsRetryable);
+        Assert.Single(harness.Http.Recorded);
+    }
+
+    [Fact]
+    public async Task Get_gateway_timeout_is_retried_then_succeeds()
+    {
+        await using var harness = Microsoft365TestSupport.CreateHarness();
+        harness.Http.Enqueue(CannedHttpResponse.WithStatus(
+            HttpStatusCode.GatewayTimeout,
+            Microsoft365TestSupport.GraphError("UnknownError", "gateway timeout"),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Retry-After"] = "0" }));
+        harness.Http.EnqueueJson("""{"id":"u1","displayName":"Ada Lovelace","mail":"ada@example.com"}""");
+        var activity = Microsoft365TestSupport.Activity<GetUser>(harness, get =>
+        {
+            get.UserId = "ada@example.com";
+            get.Retry = new Microsoft365RetryOptions
+            {
+                MaxAttempts = 3,
+                DelayAsync = (_, _) => Task.CompletedTask
+            };
+        });
+
+        var result = Microsoft365TestSupport.Complete(await activity.ExecuteForTestsAsync(Microsoft365TestSupport.Context()));
+        Assert.True(result.Found);
+        Assert.Equal("u1", result.User?.Id);
+        Assert.Equal(2, harness.Http.Recorded.Count);
+        Assert.All(harness.Http.Recorded, request => Assert.Equal(HttpMethod.Get, request.Method));
     }
 
     [Fact]

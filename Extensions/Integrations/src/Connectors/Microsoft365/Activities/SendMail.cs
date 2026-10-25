@@ -54,7 +54,7 @@ public sealed class SendMail(
                 ["subject"] = Subject,
                 ["body"] = new JsonObject
                 {
-                    ["contentType"] = string.IsNullOrWhiteSpace(BodyType) ? "Text" : BodyType.Trim(),
+                    ["contentType"] = GraphPayloads.MailBodyType(BodyType),
                     ["content"] = Body ?? ""
                 },
                 ["toRecipients"] = to

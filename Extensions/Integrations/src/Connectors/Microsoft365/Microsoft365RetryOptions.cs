@@ -1,8 +1,9 @@
 namespace Elsa.Integrations.Connectors.Microsoft365;
 
 /// <summary>
-/// Bounded retry for Graph 429, 503 and 504. Honours <c>Retry-After</c>, caps each wait and the
-/// total wait, and never delays past the activity cancellation token.
+/// Bounded retry for Graph 429 and 503 (every method) and 504 on GET only. Honours
+/// <c>Retry-After</c>, caps each wait and the total wait, and never delays past the activity
+/// cancellation token.
 /// </summary>
 internal sealed class Microsoft365RetryOptions
 {

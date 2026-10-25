@@ -9,6 +9,12 @@ public sealed class CannedHttpResponse
 
     public string Content { get; init; } = "{}";
 
+    /// <summary>
+    /// Optional exact response bytes. When set, the handler sends these instead of UTF-8
+    /// <see cref="Content"/> so binary fixtures are not re-encoded.
+    /// </summary>
+    public byte[]? ContentBytes { get; init; }
+
     public IReadOnlyDictionary<string, string> Headers { get; init; } =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -31,6 +37,21 @@ public sealed class CannedHttpResponse
             Content = content,
             Headers = headers ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         };
+
+    public static CannedHttpResponse Bytes(
+        byte[] content,
+        HttpStatusCode status = HttpStatusCode.OK,
+        IReadOnlyDictionary<string, string>? headers = null)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        return new CannedHttpResponse
+        {
+            Status = status,
+            ContentBytes = content,
+            Content = "",
+            Headers = headers ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        };
+    }
 }
 
 /// <summary>A captured outbound request, including the body the handler read.</summary>

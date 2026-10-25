@@ -60,18 +60,34 @@ fault with `invalid_input` when they are not a JSON array.
   bound scheme has refreshable state (the same seam as `SendHttpRequest`).
 - `Authorization_RequestDenied` and `ErrorAccessDenied` (HTTP 403) name the activity's required
   scope in the fault message.
-- HTTP 429, 503 and 504 honour `Retry-After` for 3 attempts, capping each wait at 30s and the
-  total wait at 60s, then fault with `rate_limited`. Other 5xx responses are retryable faults.
+- HTTP 429 and 503 honour `Retry-After` for 3 attempts on every method. HTTP 504 is retried
+  only for GET. Each wait is capped at 30s and the total wait at 60s, then the activity faults
+  with `rate_limited`. Other 5xx responses, and 504 on POST/PUT, are retryable faults with no
+  automatic retry (so Send Mail, Create Event, Teams messages and `createUploadSession` are
+  not sent twice).
+- A final HTTP 401 (after the one refresh attempt) raises `ConnectionUnavailableException`,
+  even when the body has no `InvalidAuthenticationToken` code.
 
 ## Upload
 
-Files up to 4 MB use `PUT …:/content` with the connection Authorization header. Larger files
-create an upload session. Chunk PUTs go only to an `uploadUrl` that is https on a Microsoft
-host, do **not** call `ApplyConnectionAsync`, and treat any 2xx as success. Do not put
-`*.sharepoint.com` or `*.1drv.com` on the connection unless you want other authenticated calls
-to those hosts.
+Files up to 4 MB use `PUT …:/content` with the connection Authorization header and
+`@microsoft.graph.conflictBehavior` as a query parameter (default `rename`). Larger files
+create an upload session with the same conflict behavior on the session item. Chunk PUTs go
+only to an `uploadUrl` that is https on SharePoint or OneDrive
+(`*.sharepoint.com`, `*.sharepoint-df.com`, `*.sharepointonline.com`, `*.1drv.com`,
+`*.onedrive.com`), do **not** call `ApplyConnectionAsync`, and treat any 2xx as success.
+v1 does not retry chunk PUTs on 429/5xx, does not resume from `nextExpectedRanges`, and
+does not DELETE the session on failure. Do not put those upload hosts on the connection
+unless you want other authenticated calls to them.
+
+Download File reads the Graph content response as bytes (not a UTF-8 string) and returns
+the whole file in the activity output. There is no size cap; large files sit in memory and
+in workflow state.
 
 Paging follows `@odata.nextLink` only when the link is https on the configured Graph host.
+
+`Body type` must be `Text` or `HTML`. Teams `Content type` must be `text` or `html`.
+`Conflict behavior` must be `rename`, `replace`, or `fail`.
 
 ## Out of scope
 

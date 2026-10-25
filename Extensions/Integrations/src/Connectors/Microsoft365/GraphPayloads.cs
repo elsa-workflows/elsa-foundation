@@ -116,6 +116,53 @@ internal static class GraphPayloads
         return attendees;
     }
 
+    public static string MailBodyType(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "Text";
+        var trimmed = value.Trim();
+        if (trimmed.Equals("Text", StringComparison.OrdinalIgnoreCase))
+            return "Text";
+        if (trimmed.Equals("HTML", StringComparison.OrdinalIgnoreCase))
+            return "HTML";
+        throw new Microsoft365ApiException(
+            Microsoft365ErrorCodes.InvalidInput,
+            "Body type must be Text or HTML.");
+    }
+
+    public static string TeamsContentType(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "text";
+        var trimmed = value.Trim();
+        if (trimmed.Equals("text", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Equals("html", StringComparison.OrdinalIgnoreCase))
+        {
+            return trimmed.ToLowerInvariant();
+        }
+
+        throw new Microsoft365ApiException(
+            Microsoft365ErrorCodes.InvalidInput,
+            "Content type must be text or html.");
+    }
+
+    public static string ConflictBehavior(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "rename";
+        var trimmed = value.Trim();
+        if (trimmed.Equals("rename", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Equals("replace", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Equals("fail", StringComparison.OrdinalIgnoreCase))
+        {
+            return trimmed.ToLowerInvariant();
+        }
+
+        throw new Microsoft365ApiException(
+            Microsoft365ErrorCodes.InvalidInput,
+            "Conflict behavior must be rename, replace, or fail.");
+    }
+
     public static JsonObject DateTime(DateTimeOffset value, string timeZone) =>
         new()
         {

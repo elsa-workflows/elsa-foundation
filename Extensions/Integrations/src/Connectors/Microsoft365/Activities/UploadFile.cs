@@ -25,7 +25,7 @@ public sealed class UploadFile(
     [ActivityInput(Key = nameof(Content), DisplayName = "Content", Tier = InputTier.Essential, Description = "File bytes. Uploads up to 4 MB with PUT /content; larger files use createUploadSession. Chunk PUTs do not send Authorization.")]
     public byte[]? Content { get; set; }
 
-    [ActivityInput(Key = nameof(ConflictBehavior), DisplayName = "Conflict behavior", Tier = InputTier.Optional, Description = "rename, replace, or fail. Default rename. Used for upload sessions.")]
+    [ActivityInput(Key = nameof(ConflictBehavior), DisplayName = "Conflict behavior", Tier = InputTier.Optional, Description = "rename, replace, or fail. Default rename. Sent on the simple PUT and on createUploadSession.")]
     public string? ConflictBehavior { get; set; }
 
     [ActivityInput(Key = nameof(UserId), DisplayName = "User id", Tier = InputTier.Optional, Description = "User id or UPN when Drive id is empty. Default /me/drive. Requires Files.ReadWrite (or Sites.ReadWrite.All for SharePoint drives).")]
@@ -48,12 +48,13 @@ public sealed class UploadFile(
 
         try
         {
+            var conflictBehavior = GraphPayloads.ConflictBehavior(ConflictBehavior);
             var itemPath = Microsoft365Paths.DriveItemByPath(DriveId, UserId, path);
             var root = await CreateClient()
                 .UploadItemAsync(
                     itemPath,
                     Content,
-                    ConflictBehavior,
+                    conflictBehavior,
                     Connection,
                     context,
                     context.CancellationToken,

@@ -65,6 +65,13 @@ internal static class Microsoft365TestSupport
         AssertBearer(request);
     }
 
+    public static void AssertConflictBehavior(RecordedHttpRequest request, string expected)
+    {
+        Assert.NotNull(request.RequestUri);
+        var query = Uri.UnescapeDataString(request.RequestUri.Query);
+        Assert.Contains("@microsoft.graph.conflictBehavior=" + expected, query, StringComparison.Ordinal);
+    }
+
     public static string GraphError(string code, string message, string? extraJson = null)
     {
         var error = extraJson is null
