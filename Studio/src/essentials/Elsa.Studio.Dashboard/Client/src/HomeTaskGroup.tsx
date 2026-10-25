@@ -7,6 +7,7 @@ import { loadRecentWorkflows, navigateStudioPath, type HomeWorkflowSummary } fro
 
 const designRead = "workflows/design:read";
 const designManage = "workflows/design:manage";
+const runtimeRead = "workflows/runtime:read";
 
 type DiscoveryState =
   | { kind: "loading" }
@@ -22,6 +23,7 @@ export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
   const authenticated = session.status === "authenticated";
   const canRead = !authenticated || hasEffectivePermission(session.permissions, designRead);
   const canManage = !authenticated || hasEffectivePermission(session.permissions, designManage);
+  const canReadRuntime = !authenticated || hasEffectivePermission(session.permissions, runtimeRead);
   const accessLimited = authenticated && (!canRead || !canManage);
   const authorityKey = useMemo(() => JSON.stringify([
     api.backend.baseUrl,
@@ -138,11 +140,18 @@ export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
           <span className="home-task-card-copy"><strong>Continue editing</strong><span>Open the current draft for a workflow.</span></span>
           <ArrowRight size={16} aria-hidden="true" />
         </button>
-        <a className="home-task-card" href={attentionHref} onClick={event => handleLinkClick(event, attentionHref)}>
-          <span className="home-task-card-icon"><CircleAlert size={19} aria-hidden="true" /></span>
-          <span className="home-task-card-copy"><strong>Needs attention</strong><span>Review runs with active incidents.</span></span>
-          <ArrowRight size={16} aria-hidden="true" />
-        </a>
+        {canReadRuntime ? (
+          <a className="home-task-card" href={attentionHref} onClick={event => handleLinkClick(event, attentionHref)}>
+            <span className="home-task-card-icon"><CircleAlert size={19} aria-hidden="true" /></span>
+            <span className="home-task-card-copy"><strong>Needs attention</strong><span>Review runs with active incidents.</span></span>
+            <ArrowRight size={16} aria-hidden="true" />
+          </a>
+        ) : (
+          <div className="home-task-card home-task-card--disabled" aria-disabled="true">
+            <span className="home-task-card-icon"><CircleAlert size={19} aria-hidden="true" /></span>
+            <span className="home-task-card-copy"><strong>Needs attention</strong><span>Requires access to read workflow runs.</span></span>
+          </div>
+        )}
       </div>
       <div className="home-task-group-footer">
         {canRead

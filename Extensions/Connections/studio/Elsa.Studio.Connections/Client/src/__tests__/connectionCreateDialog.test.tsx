@@ -476,7 +476,7 @@ describe("connection credential creation", () => {
     expect(button(container, "Create").disabled).toBe(false);
   });
 
-  it("restores focus to the New connection opener while the post-create refresh is pending", async () => {
+  it("restores focus to the Create connection opener while the post-create refresh is pending", async () => {
     const refresh = deferred<{ items: ConnectionMetadata[] }>();
     let listCalls = 0;
     const getJson = vi.fn((url: string) => {
@@ -492,8 +492,8 @@ describe("connection credential creation", () => {
     (context.http as unknown as { getJson: (url: string) => Promise<unknown> }).getJson = getJson;
     const { container: host } = renderConnectionsPage(context);
 
-    await waitFor(() => !button(host, "New connection").disabled);
-    const opener = button(host, "New connection");
+    await waitFor(() => !button(host, "Create connection").disabled);
+    const opener = button(host, "Create connection");
     opener.focus();
     flushSync(() => opener.click());
     await waitFor(() => host.querySelector('[role="dialog"]') !== null);
@@ -531,19 +531,19 @@ describe("connection credential creation", () => {
     const { container: host, rerender } = renderConnectionsPage(endpointA);
 
     await waitFor(() => host.textContent?.includes("Endpoint A Connection") === true);
-    expect(button(host, "New connection").disabled).toBe(false);
+    expect(button(host, "Create connection").disabled).toBe(false);
     rerender(endpointB);
     await waitFor(() => host.textContent?.includes("Endpoint B is unavailable.") === true);
 
     expect(host.textContent).not.toContain("Endpoint A Connection");
-    expect(button(host, "New connection").disabled).toBe(true);
+    expect(button(host, "Create connection").disabled).toBe(true);
 
     endpointBUnavailable = false;
     clickButton(host, "Search");
     await waitFor(() => host.textContent?.includes("Endpoint B Connection") === true);
     expect(host.textContent).not.toContain("Endpoint A Connection");
-    expect(button(host, "New connection").disabled).toBe(false);
-    clickButton(host, "New connection");
+    expect(button(host, "Create connection").disabled).toBe(false);
+    clickButton(host, "Create connection");
     await waitFor(() => host.querySelector('[role="dialog"]') !== null);
     expect(control<HTMLSelectElement>(host, "Type").value).toBe("endpoint-b");
   });

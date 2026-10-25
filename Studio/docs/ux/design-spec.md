@@ -102,6 +102,29 @@ hierarchy is a presentation rule, not a shared data-grid or filtering framework.
   stale retained data, invalid continuation, and expired snapshot visibly distinct. Do not expose
   identities or counts after a confirmed privacy denial.
 
+## Resource list consistency (#3071)
+
+**Status: implementation contract for [#3071](https://github.com/elsa-workflows/elsa-foundation/issues/3071)**; the issue records runtime acceptance and delivery. These rules become `exists` when the implementation merges.
+
+Secrets and Connections follow the definition lists' page inset, heading/description, one filled
+header create action, search/filter toolbar, and results order. Reuse the existing Studio controls
+and token contract while keeping each resource's domain columns and operations:
+
+- **Secrets:** Edit stays directly available per row. Rotate, Test, Revoke and Delete use the
+  keyboard-accessible secondary menu, with destructive actions separated. Copy uses only the
+  technical name. Preserve masking, operation permissions, confirmations and focus return.
+- **Inventory truth:** One internal100-record limit governs both the Secrets request and
+  coverage copy. Server search and total counts stay authoritative; Type/Store/Scope/Status
+  facets cover loaded rows only. An absent selected scope stays qualified. Draft, accepted and
+  failed attempted queries keep their separate meanings.
+- **Connections:** Details remains the row entry; Test, Revoke and Delete remain in Details.
+  Creation retains the accepted query, announces the exact created name and reloads that query.
+  Select the created item only if its exact name is returned. Test describes local readiness;
+  Revoke describes Elsa-side status.
+- **Home destination:** Only Needs attention requires effective `workflows/runtime:read` for
+  authenticated sessions. Preserve its active-incident Runs URL, authentication-disabled
+  behavior and the complete authorized Continue catalog.
+
 ## Components
 
 | Component | Status | Rule |
