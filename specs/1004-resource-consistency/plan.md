@@ -69,7 +69,7 @@ Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/
 ├── ConnectionList.tsx
 ├── ConnectionDetailDialog.tsx
 ├── styles.css
-└── __tests__/connectionsPage.test.tsx
+└── __tests__/ # connectionsPage.test.tsx and create-opener labels in connectionCreateDialog.test.tsx
 
 Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/
 ├── HomeTaskGroup.tsx
