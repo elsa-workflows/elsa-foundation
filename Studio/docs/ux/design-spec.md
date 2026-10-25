@@ -1,9 +1,12 @@
 # Studio UX design spec
 
-Status: draft for the Elsa 3 → Elsa 4 parity series. This spec is the yardstick each UX PR is
-reviewed against. It builds on [design-tokens.md](../design-tokens.md) (the token contract) and
-[ux-polish-plan.md](../ux-polish-plan.md) (the per-surface backlog). Where the plan and this spec
-disagree, this spec wins for new work, and the plan should be updated in the same PR.
+Status: draft for the Elsa 3 → Elsa 4 parity series. This spec is the current normative yardstick
+for Studio UX work. It builds on [design-tokens.md](../design-tokens.md) (the token contract). The
+[ux-polish-plan.md](../ux-polish-plan.md) preserves the original comparative review as a historical
+baseline; this spec is the current authority where its observations or proposals differ. The
+[#3075 acceptance record](https://github.com/elsa-workflows/elsa-foundation/issues/3075) owns
+qualification of the nine composed rows and their current source/build evidence. Acceptance of an
+individual issue does not establish that composed result.
 
 ## Status legend
 
@@ -297,12 +300,12 @@ track the theme instead of a per-descriptor hex.
 
 Use this short route to connect the existing patterns without turning them into a new framework:
 
-1. **Author:** From Home, create or resume the exact workflow draft. Configure a service with the required fields visible and any configured HTTP options in the existing disclosure. Save, use Test Run, then review and publish that same draft content; keep transient Test Run, durable published version and execution status distinct.
+1. **Author:** From Home, create or resume the exact workflow draft. Configure an HTTP activity with its required fields visible and a configured optional HTTP header in the existing disclosure. Save, run the exact Test Run, then review and publish that same draft content; keep transient Test Run, durable published version and execution status distinct.
 2. **Operator:** From Needs attention, open the exact run and its activity evidence, choose only a supported next step, then return to the validated Runs query. The incident guide remains the source for evidence, permissions, confirmation, and retry timing.
 3. **Resources:** Create a disposable secret with the value masked, disclose optional configured metadata, and search by name. State shown, loaded, and server-total counts separately; local facets describe loaded rows only. Preserve entered values on a real failure and explain denied or unavailable states without implying full inventory coverage.
-4. **Feature settings:** Review the selected draft, cancel and verify it is unchanged, then apply a justified change only to the selected target. Keep the review/cancel/apply result bound to that draft and the observed visit; do not imply a broader persistence guarantee.
+4. **Feature settings:** Make separate Studio and Server passes. For each target, review the selected draft, cancel and verify it is unchanged, then complete its own Apply flow for a justified change to only that target. Keep each review/cancel/apply result bound to that target's draft and the observed visit; do not imply a broader persistence guarantee.
 
-These examples do not certify a composed journey. The [#3075 acceptance record](https://github.com/elsa-workflows/elsa-foundation/issues/3075) owns the nine final rows and their source/build evidence; implementation-slice acceptance does not replace that qualification.
+These examples do not certify a composed journey. The [#3075 acceptance record](https://github.com/elsa-workflows/elsa-foundation/issues/3075) is the authority for the nine final rows, their current status, and source/build evidence; implementation-slice acceptance does not replace that qualification.
 
 ### UX-01–UX-18 implementation-slice map
 
@@ -328,3 +331,17 @@ These links locate the existing implementation records. They do not replace #307
 | UX-16 | [#3070](https://github.com/elsa-workflows/elsa-foundation/issues/3070), [#3071](https://github.com/elsa-workflows/elsa-foundation/issues/3071) |
 | UX-17 | [#3074](https://github.com/elsa-workflows/elsa-foundation/issues/3074) |
 | UX-18 | [#3073](https://github.com/elsa-workflows/elsa-foundation/issues/3073), [#3131](https://github.com/elsa-workflows/elsa-foundation/issues/3131), [#3132](https://github.com/elsa-workflows/elsa-foundation/issues/3132) |
+
+### Supplemental accepted corrective issues
+
+These later corrective records supplement the UX-01–UX-18 map; they are separate issue records,
+not new UX identifiers. Acceptance of an individual correction does not certify the composed
+[#3075 journey](https://github.com/elsa-workflows/elsa-foundation/issues/3075).
+
+| Corrective record | Accepted correction |
+|---|---|
+| [#3092](https://github.com/elsa-workflows/elsa-foundation/issues/3092) | Workflow run status badge contrast |
+| [#3102](https://github.com/elsa-workflows/elsa-foundation/issues/3102) | Connection picker load-failure explanation and Retry |
+| [#3154](https://github.com/elsa-workflows/elsa-foundation/issues/3154) | Inspector and category-picker clipping |
+| [#3165](https://github.com/elsa-workflows/elsa-foundation/issues/3165) | Narrow shell header actions |
+| [#3175](https://github.com/elsa-workflows/elsa-foundation/issues/3175) | Narrow selection counts and bulk actions |

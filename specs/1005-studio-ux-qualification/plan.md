@@ -50,3 +50,7 @@ The normal-host authoring journey reproduced a compile failure after clearing an
 ## Resource contrast refinement
 
 The rebuilt normal-host picker error resolves to near-white text on an opaque pale modal surface. Correct the existing standalone Connections error foreground tokens and add rendered Classic Light/Dark regression coverage for reachable error states, with a failing baseline control. Keep the defensive placement error style consistent without claiming it was reached through normal UI. Repeat affected browser/private-host checks and every final gate; no backend or provider changes are needed.
+
+## Features checkbox refinement
+
+The normal-host320px selection trace reproduced a same-node Clear miss: releasing checkbox focus expands its inherited padding and the first grid row by18px between pointerdown and pointerup. Stabilize only the bulk-selection checkbox with explicit padding and dimensions, preserving native appearance/focus. Add a rendered320/360 regression for checkbox focus followed by one native Clear click, prove red without the CSS correction and green with it, then repeat both-target private review/Apply and all final gates. The failed preliminary trace and configuration-delta gate remain failed; no exception is introduced.
