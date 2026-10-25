@@ -22,7 +22,7 @@ public sealed class BpmnMessageInterchangeTests
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly BpmnDocumentImporter _importer = new();
+    private readonly BpmnDocumentImporter _importer = new(new BpmnWorkBinder());
     private readonly BpmnDocumentExporter _exporter = new();
 
     private const string MessageDocument = """
@@ -200,8 +200,8 @@ public sealed class BpmnMessageInterchangeTests
         var child = Assert.Single(structure.Activities);
         Assert.Equal(BpmnDocumentImporter.DefaultPublishEventActivityVersionId, child.ActivityVersionId);
         AssertPublishSendChild(structure, "node-t", "alarm");
-        Assert.Contains(result.Analysis.Capabilities, finding => finding.ElementId == "t" && finding.Availability == BpmnImportCapabilityAvailability.Available);
-        Assert.True(result.Analysis.CanExecute);
+        Assert.Contains(result.Analysis.Capabilities, finding => finding.ElementId == "t" && finding.Availability == BpmnImportCapabilityAvailability.Unknown);
+        Assert.False(result.Analysis.CanExecute); // The pure conversion has not verified a host catalog.
         Assert.NotNull(new BpmnProcessTriggerStimulusProvider().Describe(BridgeToExecutableNode(structure)));
     }
 

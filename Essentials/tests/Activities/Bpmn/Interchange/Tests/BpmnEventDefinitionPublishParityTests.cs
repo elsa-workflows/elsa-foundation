@@ -29,7 +29,7 @@ public sealed class BpmnEventDefinitionPublishParityTests
               </process>
             </definitions>
             """;
-        var imported = new BpmnDocumentImporter().Import(source);
+        var imported = new BpmnDocumentImporter(new BpmnWorkBinder()).Import(source);
         var structure = imported.ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
         var retained = structure.Elements.Single(element => element.ElementId == "start").Properties[BpmnRetainedAuthoring.ConditionExpressionPrefix + "flow"];
         Assert.Equal("urn:conditions", JsonDocument.Parse(retained).RootElement.GetProperty("language").GetString());
@@ -82,7 +82,7 @@ public sealed class BpmnEventDefinitionPublishParityTests
     [Fact]
     public void ImportedEventDefinitions_PublishAndValidate_ThroughRealRuntimeSeams()
     {
-        var structure = new BpmnDocumentImporter().Import(Document)
+        var structure = new BpmnDocumentImporter(new BpmnWorkBinder()).Import(Document)
             .ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
 
         var node = BridgeToExecutableNode(structure);

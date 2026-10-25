@@ -22,7 +22,7 @@ public sealed class BpmnDocumentImporterTests
               </process>
             </definitions>
             """;
-        var analysis = new BpmnDocumentImporter().Analyze(document);
+        var analysis = new BpmnDocumentImporter(new BpmnWorkBinder()).Analyze(document);
         Assert.Contains(analysis.Issues, issue => issue.ElementId == "nested-lane" && issue.Severity == BpmnImportIssueSeverity.Degraded);
         Assert.False(analysis.CanExecute);
     }
@@ -44,7 +44,7 @@ public sealed class BpmnDocumentImporterTests
               <process id="q" isExecutable="true"><startEvent id="start-q"/><endEvent id="end-q"/><sequenceFlow id="q-flow" sourceRef="start-q" targetRef="end-q"/></process>
             </definitions>
             """;
-        var analysis = new BpmnDocumentImporter().Analyze(document.Replace($"<{element} ", $"<{element} vendor:tag=\"kept\" ", StringComparison.Ordinal));
+        var analysis = new BpmnDocumentImporter(new BpmnWorkBinder()).Analyze(document.Replace($"<{element} ", $"<{element} vendor:tag=\"kept\" ", StringComparison.Ordinal));
         Assert.Contains(analysis.Issues, issue => issue.ElementId == subject && issue.Severity == BpmnImportIssueSeverity.Degraded &&
             issue.Message.Contains("not fully represented", StringComparison.Ordinal));
         Assert.False(analysis.CanExecute);
@@ -54,14 +54,14 @@ public sealed class BpmnDocumentImporterTests
     public void Unknown_host_capability_cannot_qualify_execution_readiness()
     {
         var analysis = new BpmnImportAnalysis([], new Dictionary<string, int>(), [])
-            { Capabilities = [new BpmnImportCapability("element", "future-work", BpmnImportCapabilityAvailability.Unknown, "Unassessed")] };
+            { HostInventoryVerified = true, Capabilities = [new BpmnImportCapability("element", "future-work", BpmnImportCapabilityAvailability.Unknown, "Unassessed")] };
         Assert.False(analysis.CanExecute);
     }
 
     [Fact]
     public void Typed_expression_round_trip_retains_body_and_language_without_turning_it_into_an_outcome()
     {
-        var imported = new BpmnDocumentImporter().Import(SampleDocument);
+        var imported = new BpmnDocumentImporter(new BpmnWorkBinder()).Import(SampleDocument);
         var structure = imported.ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
         var flow = Assert.Single(structure.SequenceFlows, flow => flow.FlowId == "flow-reject");
         Assert.Null(flow.ConditionOutcome);
@@ -127,7 +127,7 @@ public sealed class BpmnDocumentImporterTests
         </definitions>
         """;
 
-    private readonly BpmnDocumentImporter _importer = new();
+    private readonly BpmnDocumentImporter _importer = new(new BpmnWorkBinder());
 
     private BpmnAuthoredStructure ImportStructure(out BpmnImportResult result)
     {

@@ -47,6 +47,16 @@ All original runtime scenarios stay in Foundation. State assertions now read rel
 
 The full permanent 242-method audit and deletion/replacement reconciliation are still required before merge. No library-only replacement is claimed for Foundation host assertions.
 
+## Registered binder and catalog increment
+
+The named scoped IBpmnWorkBinder now owns the existing Delay/Event/PublishEvent/DispatchWorkflow/nested activity policy. Its public request/result models are host-owned; third-party model types do not leak through that contract. Importer/exporter/binder are explicit single-implementation replacement contracts, with startup missing/duplicate checks and a preserved explicit host override.
+
+Pure synchronous conversion cannot establish host inventory: its proposed bindings are Unknown and CanExecute is false. The registered HTTP import/analyze endpoints use the asynchronous catalog path. It resolves visible, unique existing 1.0.0 profile versions to actual catalog IDs, recursively including nested processes, and refuses readiness for missing/ambiguous inventory rather than selecting a newer native contract implicitly. Ordinary publishing validation remains necessary.
+
+The whole interchange project passes **127/127, zero failures/skips**. Registration-removal mutation fails its positive composition witness; reverting the malformed-structure wrapper fails the exact BpmnInterchangeException control; restored whole-project tests pass. Independent correctness/standards/acceptance increment reviews are clean after the JSON-boundary fix. Normal and locked solution restore and generated-filter check pass. Five lock deltas add only the explicit Design.Core contract dependency edge.
+
+These are conversion, registration and catalog-port controls. They do not establish actual persisted publication/execution, message/signal delivery, dispatch, or Studio compatibility. PowerShell 7.6.8 is prepared in an isolated temporary tool directory, with the official release asset SHA-256 verified, for the repository's owned-server source journeys. A current source-built Workbench build succeeds; actual journeys follow on the committed source.
+
 ## Open gates
 
-Named binder extraction/registration; dedicated late-fault, duplicate callback and pruning witnesses; old/new reader and rollback matrix; durable combined-outcome retry/concurrent claims; complete native-parent qualification; actual CallActivity dispatch/error/escalation and ordinary-task compensation proof; published authoring fingerprint; source-built Studio journeys; duplicate deletion/guards; full checks and final review/merge. Keep #2898/#2907 and the broader program open. Orleans/task-runner follow-ups remain deferred.
+Dedicated late-fault, duplicate callback and pruning witnesses; old/new reader and rollback matrix; durable combined-outcome retry/concurrent claims; complete native-parent qualification; actual CallActivity dispatch/error/escalation and ordinary-task compensation proof; published authoring fingerprint; source-built Studio journeys; duplicate deletion/guards; full checks and final review/merge. Keep #2898/#2907 and the broader program open. Orleans/task-runner follow-ups remain deferred.

@@ -21,7 +21,7 @@ public sealed class BpmnCollaborationInterchangeTests
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly BpmnDocumentImporter _importer = new();
+    private readonly BpmnDocumentImporter _importer = new(new BpmnWorkBinder());
     private readonly BpmnDocumentExporter _exporter = new();
 
     // A two-pool executable collaboration. Buyer throws "order-placed" to the Seller's message start (throw→start);

@@ -51,8 +51,8 @@ Independent test: existing host scenarios, combined-outcome recovery and native 
 
 Independent test: normal registered APIs and real Workbench/Studio import/edit/publish/execute/export retain the frozen contracts and supported behavior.
 
-- [ ] T026 [US3] Extract/register the work binder in `Essentials/src/Activities/Bpmn/Interchange/`; preserve Delay, Event, PublishEvent, DispatchWorkflow and nested-process policy. Add registration tests that fail when importer/exporter/binder interfaces are missing.
-- [ ] T027 [US3] Preserve representable release descriptors/data and report exact unsupported/degraded capabilities; Unknown never qualifies readiness. Add affected interchange tests for date/cycle/signal/typed-field limits without silently erasing work.
+- [x] T026 [US3] Extract/register the work binder in `Essentials/src/Activities/Bpmn/Interchange/`; preserve Delay, Event, PublishEvent, DispatchWorkflow and nested-process policy. Add registration tests that fail when importer/exporter/binder interfaces are missing.
+- [x] T027 [US3] Preserve representable release descriptors/data and report exact unsupported/degraded capabilities; Unknown never qualifies readiness. Add affected interchange tests for date/cycle/signal/typed-field limits without silently erasing work.
 - [ ] T028 [US3] Fix default-flow translation from source `DefaultFlowId` and prove real registered import/export plus Studio edge preservation in the BPMN interchange and Studio Workflows tests.
 - [ ] T029 [US3] Prove ordinary bound-task compensation and interrupting/non-interrupting Call Activity escalation through the actual Foundation host; preserve dispatcher result/error identity.
 - [ ] T030 [US3] Compare real published BpmnProcess/BpmnDecision descriptors against the frozen fingerprint; keep `docs/reports/evidence/bpmn-extraction-baseline/` artifacts unchanged and reconcile actual authoring payloads with Studio's mirror.

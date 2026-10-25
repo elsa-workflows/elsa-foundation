@@ -17,7 +17,7 @@ public sealed class BpmnEventDefinitionImportTests
     private const string Bpmn = "http://www.omg.org/spec/BPMN/20100524/MODEL";
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly BpmnDocumentImporter _importer = new();
+    private readonly BpmnDocumentImporter _importer = new(new BpmnWorkBinder());
 
     private static string Document(string declarations, string processBody) => $$"""
         <definitions xmlns="{{Bpmn}}" id="defs" targetNamespace="https://example.org">

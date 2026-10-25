@@ -20,7 +20,7 @@ public sealed class BpmnCompensationInterchangeTests
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly BpmnDocumentImporter _importer = new();
+    private readonly BpmnDocumentImporter _importer = new(new BpmnWorkBinder());
     private readonly BpmnDocumentExporter _exporter = new();
 
     private const string CompensationDocument = """
