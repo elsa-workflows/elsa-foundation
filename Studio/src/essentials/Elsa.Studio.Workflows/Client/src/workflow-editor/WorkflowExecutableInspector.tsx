@@ -409,7 +409,7 @@ export function buildExecutableInspectorCanvas(
         ...node.data,
         ...(ghost && fact ? {
           ghost: true,
-          label: graph.activityPresentation.some(record => record.nodeId === node.id && record.displayName?.trim())
+          label: graph.activityPresentation.some(record => record.nodeId === node.id)
             ? node.data.label
             : ghostNodeLabel(fact.activityType)
         } : {}),

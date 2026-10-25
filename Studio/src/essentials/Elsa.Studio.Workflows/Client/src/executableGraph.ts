@@ -92,12 +92,12 @@ export function buildExecutableActivityGraph(
     // distinct instead of overwriting one another.
     const nodeId = nodeIdsByExecutableId.get(node.executableNodeId) ?? node.executableNodeId;
     const presentation = presentationByExecutableNodeId.get(node.executableNodeId);
-    const adaptedNodePresentation = presentation
-      ? {
-          nodeId,
-          displayName: presentation.displayName,
-          description: presentation.description
-        }
+    // View-only defaults also reach bound BPMN task labels; authored names retain precedence.
+    const displayName = presentation?.displayName?.trim()
+      ? presentation.displayName
+      : !catalogItem ? getIntrinsicActivityDisplay(node.activityType) : undefined;
+    const adaptedNodePresentation = presentation || displayName
+      ? { nodeId, displayName, description: presentation?.description }
       : undefined;
     factsByNodeId.set(nodeId, {
       executableNodeId: node.executableNodeId,

@@ -92,6 +92,16 @@ describe("buildExecutableActivityGraph", () => {
     expect(ghostNodeLabel("elsa.intrinsic.setoutput")).toBe("Set Output");
   });
 
+  it("labels historical intrinsic BPMN bindings through the adapted presentation", () => {
+    const intrinsic = executableNode({ activityType: "elsa.intrinsic.set" });
+    const graph = buildExecutableActivityGraph(bpmnRoot([intrinsic]), [bpmnActivity], [], [], null,
+      [{ executableNodeId: intrinsic.executableNodeId, description: "Updates the counter" }]);
+    const scope = resolveScope(graph.root, [], [bpmnActivity])!;
+    const canvas = buildBpmnCanvas(scope, [bpmnActivity], [], graph.activityPresentation);
+
+    expect(canvas.nodes.find(node => node.id === "task-0")?.data.boundActivity?.label).toBe("Set Variable");
+  });
+
   it("rebuilds pinned BPMN topology and maps its bindings to exact graph identities", () => {
     const graph = buildExecutableActivityGraph(bpmnRoot([
       executableNode({ executableNodeId: "exec-1", authoredActivityId: "shared" }),

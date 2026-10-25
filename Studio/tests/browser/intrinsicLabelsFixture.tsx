@@ -4,8 +4,8 @@ import { buildExecutableActivityGraph } from "../../src/essentials/Elsa.Studio.W
 import { buildExecutableInspectorCanvas } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowExecutableInspector";
 import { buildInstanceCanvas } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances";
 import { nodeTypes, edgeTypes } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/graph";
-import { WorkflowExecutionTimeline } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowInstanceTimeline";
-import { sequenceActivity, setVariableActivity, setOutputActivity, writeLine } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/fixtures";
+import { WorkflowExecutionTimeline } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/WorkflowInstanceTimeline";
+import { bpmnActivity, sequenceActivity, setVariableActivity, setOutputActivity, writeLine } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/fixtures";
 import type { WorkflowExecutableNode, WorkflowInstanceDetails, WorkflowDefinitionVersionDetails } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
 
 function leaf(id: string, type: string): WorkflowExecutableNode {
@@ -41,6 +41,20 @@ export function IntrinsicLabelsFixture() {
   };
   const runs = buildInstanceCanvas(definition, catalog, details, null, [], () => {}, undefined, details.activities, graph);
   const inspector = buildExecutableInspectorCanvas(graph, catalog, [], [], () => {});
+  const historicalBpmnCatalog = [bpmnActivity, writeLine];
+  const bpmnGraph = buildExecutableActivityGraph({
+    ...leaf("bpmn", bpmnActivity.activityTypeKey), structureKind: "elsa.bpmn.structure",
+    childSlots: [{ name: "Bpmn.Activities", activities: children }],
+    bpmnStructure: {
+      elements: children.map(node => ({ elementId: `task-${node.executableNodeId}`, elementType: "task",
+        childNodeId: node.executableNodeId, name: node.executableNodeId === "custom" ? "Named BPMN task" : undefined })),
+      sequenceFlows: []
+    }
+  }, historicalBpmnCatalog, [], [], null,
+  [{ executableNodeId: "set", description: "Updates the counter" }, { executableNodeId: "custom", displayName: "Increment counter" }]);
+  const bpmn = buildInstanceCanvas({ ...definition, state: { rootActivity: bpmnGraph.root },
+    activityPresentation: bpmnGraph.activityPresentation }, historicalBpmnCatalog, details, null, [], () => {}, undefined,
+    details.activities, bpmnGraph);
   const canvases = [{ name: "Run", model: runs }, { name: "Executable Inspector", model: inspector }];
   return <main className="wf-editor wf-page">
     <h1>Runtime activity labels</h1>
@@ -56,6 +70,13 @@ export function IntrinsicLabelsFixture() {
         </section>;
       })}
     </div>
+    <section aria-label="BPMN Run">
+      <h2>BPMN Run without the historical intrinsic catalog</h2>
+      <div className="wf-canvas" style={{ height: 250 }}>
+        <ReactFlow nodes={bpmn.nodes} edges={bpmn.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
+          fitView nodesDraggable={false} nodesConnectable={false} />
+      </div>
+    </section>
     <WorkflowExecutionTimeline activities={details.activities} activityCatalog={catalog} executableGraph={graph} />
   </main>;
 }

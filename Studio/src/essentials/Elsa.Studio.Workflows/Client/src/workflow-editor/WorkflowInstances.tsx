@@ -11,7 +11,7 @@ import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutio
 import { formatActivitySummary } from "../activitySummary";
 import { readPortableExpressionDefinition } from "../activityProperties";
 import { isMaskedInput, readSecretReference } from "../maskedInput";
-import { resolveRuntimeActivityLabel as resolveActivityLabel, getIntrinsicActivityDisplay } from "../runtimeActivityDisplay";
+import { resolveRuntimeActivityLabel as resolveActivityLabel } from "../runtimeActivityDisplay";
 import {
   buildCanvas,
   buildUnsupportedActivityCanvas,
@@ -1948,7 +1948,6 @@ export function buildInstanceCanvas(
     const bpmnData = node.data as BpmnNodeData;
     const runtimeNodeId = bpmnData.runtimeNodeId ?? bpmnData.boundActivity?.nodeId ?? node.id;
     const slotOwnerNodeId = bpmnData.boundActivity?.nodeId ?? runtimeNodeId;
-    const fact = executableGraph?.factsByNodeId.get(runtimeNodeId);
     return {
       ...node,
       draggable: false,
@@ -1956,9 +1955,6 @@ export function buildInstanceCanvas(
       deletable: false,
       data: {
         ...node.data,
-        label: fact && !fact.available && !fact.presentation?.displayName?.trim()
-          ? getIntrinsicActivityDisplay(fact.activityType) ?? node.data.label
-          : node.data.label,
         runtimeNodeId,
         onEnterSlot: (slot: ChildSlot) => {
           const plan = planSlotNavigation(frames, scopeOwner, slotOwnerNodeId, slot, slotCrumbLabel(node.data.label, slot), activityCatalog);

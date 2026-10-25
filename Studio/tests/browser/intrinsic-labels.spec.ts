@@ -25,3 +25,11 @@ test("Runs and Executable Inspector display intrinsic names and preserve custom 
   await expect(page.getByRole("list", { name: "Execution timeline" }).locator("strong"))
     .toHaveText(["Set Variable", "Set Output", "Write Line", "Increment counter"]);
 });
+
+test("historical BPMN runs use friendly bound labels and preserve explicit task names", async ({ page }) => {
+  await page.goto("/?mode=intrinsic-labels&theme=light");
+  const canvas = page.getByRole("region", { name: "BPMN Run", exact: true });
+  await expect(canvas.locator('.wf-bpmn-node[data-runtime-node-id="set"] strong')).toHaveText("Set Variable");
+  await expect(canvas.locator('.wf-bpmn-node[data-runtime-node-id="output"] strong')).toHaveText("Set Output");
+  await expect(canvas.locator('.wf-bpmn-node[data-runtime-node-id="custom"] strong')).toHaveText("Named BPMN task");
+});
