@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { resolveActivityLabel } from "./activityPresentation";
+import { resolveRuntimeActivityLabel as resolveActivityLabel } from "./runtimeActivityDisplay";
 import { findExecutableNodeFacts, type ExecutableActivityGraph } from "./executableGraph";
 import { resolveActivityIcon, resolveActivityIconFallback } from "./activityIcons";
 import { renderActivityIcon } from "./activityIconView";

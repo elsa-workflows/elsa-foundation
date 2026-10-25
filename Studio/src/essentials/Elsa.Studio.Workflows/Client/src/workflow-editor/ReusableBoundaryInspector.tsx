@@ -1,3 +1,4 @@
+import { getIntrinsicActivityDisplay } from "../runtimeActivityDisplay";
 import {
   useCallback,
   useEffect,
@@ -1214,6 +1215,8 @@ function hierarchyItemLabel(item: ActivityExecutionHierarchyItem) {
 
 function historicalActivityLabel(activityType: string) {
   if (!activityType || activityType.toLowerCase().startsWith("elsa.user.")) return "Reusable activity";
+  const intrinsicLabel = getIntrinsicActivityDisplay(activityType);
+  if (intrinsicLabel) return intrinsicLabel;
   const typeName = activityType.split(".").filter(Boolean).at(-1);
   return typeName?.replace(/([a-z0-9])([A-Z])/g, "$1 $2") || "Activity";
 }

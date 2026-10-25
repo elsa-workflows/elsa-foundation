@@ -15,7 +15,7 @@ import type {
   WorkflowExecutableReference
 } from "../workflowTypes";
 import { formatActivitySummary } from "../activitySummary";
-import { resolveActivityLabel } from "../activityPresentation";
+import { resolveRuntimeActivityLabel as resolveActivityLabel } from "../runtimeActivityDisplay";
 import {
   buildCanvas,
   buildUnsupportedActivityCanvas,
@@ -409,7 +409,7 @@ export function buildExecutableInspectorCanvas(
         ...node.data,
         ...(ghost && fact ? {
           ghost: true,
-          label: graph.activityPresentation.some(record => record.nodeId === node.id)
+          label: graph.activityPresentation.some(record => record.nodeId === node.id && record.displayName?.trim())
             ? node.data.label
             : ghostNodeLabel(fact.activityType)
         } : {}),

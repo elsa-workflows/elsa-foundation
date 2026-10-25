@@ -3,7 +3,7 @@ import { buildExecutableActivityGraph, findExecutableNodeFacts, ghostNodeLabel, 
 import { buildExecutableInspectorCanvas } from "../workflow-editor/WorkflowExecutableInspector";
 import { getChildSlots, resolveScope } from "../workflowAdapter";
 import type { ActivityNode, WorkflowExecutableNode } from "../workflowTypes";
-import { bpmnActivity, flowchartActivity, forEachActivity, sequenceActivity, writeLine } from "./fixtures";
+import { bpmnActivity, flowchartActivity, forEachActivity, sequenceActivity, setVariableActivity, setOutputActivity, writeLine } from "./fixtures";
 import { buildBpmnCanvas } from "../bpmn/bpmnAdapter";
 
 // The Executable Inspector adapts the Execution Material wire tree (executable nodes + named child
@@ -65,6 +65,33 @@ function bpmnRoot(children: WorkflowExecutableNode[]): WorkflowExecutableNode {
 }
 
 describe("buildExecutableActivityGraph", () => {
+  it.each([
+    [setVariableActivity, "set", "Set Variable"],
+    [setOutputActivity, "setoutput", "Set Output"],
+    [{ ...setOutputActivity, activityVersionId: "elsa.intrinsic.set-correlation-id@1", intrinsic: { kind: "SetCorrelationId", valueInputKey: "value" }, displayName: "Set Correlation Id" }, "setcorrelationid", "Set Correlation Id"],
+    [{ ...setOutputActivity, activityVersionId: "elsa.intrinsic.set-instance-name@1", intrinsic: { kind: "SetInstanceName", valueInputKey: "value" }, displayName: "Set Instance Name" }, "setinstancename", "Set Instance Name"],
+    [{ ...setOutputActivity, activityVersionId: "elsa.intrinsic.finish@1", intrinsic: { kind: "Finish", valueInputKey: "outcome" }, displayName: "Finish" }, "finish", "Finish"]
+  ] as const)("resolves intrinsic catalog metadata for %s", (descriptor, kind, label) => {
+    const intrinsic = executableNode({ activityType: `elsa.intrinsic.${kind}` });
+    const activities = [sequenceActivity, descriptor];
+    const graph = buildExecutableActivityGraph(sequenceRoot([intrinsic]), activities);
+    const canvas = buildExecutableInspectorCanvas(graph, activities, [], [], () => {});
+
+    expect(graph.factsByNodeId.get(intrinsic.authoredActivityId)?.available).toBe(true);
+    expect(canvas.nodes.find(node => node.id === intrinsic.authoredActivityId)?.data).toMatchObject({ label });
+    expect(canvas.nodes.find(node => node.id === intrinsic.authoredActivityId)?.data.ghost).not.toBe(true);
+  });
+
+  it("uses a friendly intrinsic label when the historical catalog entry is absent", () => {
+    const intrinsic = executableNode({ activityType: "elsa.intrinsic.set" });
+    const graph = buildExecutableActivityGraph(sequenceRoot([intrinsic]), [sequenceActivity], [], [], null,
+      [{ executableNodeId: intrinsic.executableNodeId, description: "Updates the counter" }]);
+    const canvas = buildExecutableInspectorCanvas(graph, [sequenceActivity], [], [], () => {});
+
+    expect(canvas.nodes.find(node => node.id === intrinsic.authoredActivityId)?.data).toMatchObject({ label: "Set Variable", ghost: true });
+    expect(ghostNodeLabel("elsa.intrinsic.setoutput")).toBe("Set Output");
+  });
+
   it("rebuilds pinned BPMN topology and maps its bindings to exact graph identities", () => {
     const graph = buildExecutableActivityGraph(bpmnRoot([
       executableNode({ executableNodeId: "exec-1", authoredActivityId: "shared" }),
