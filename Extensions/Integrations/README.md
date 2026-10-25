@@ -14,9 +14,11 @@ Extensions/Integrations/
   src/Sdk/                         Elsa.Integrations.Sdk v1 (#2726 / #2825)
   src/Connectors/OAuth2/           Generic OAuth2 scheme (#2727)
   src/Connectors/Slack/            Slack Web API activities (#3322)
+  src/Connectors/Microsoft365/     Microsoft Graph v1.0 activities (#3330)
   tests/Tests/                     SDK contract tests
   tests/Connectors/OAuth2/Tests/   Tests against a mock OAuth server
   tests/Connectors/Slack/Tests/    Slack ConnectorHarness tests (no live Slack)
+  tests/Connectors/Microsoft365/Tests/  Microsoft 365 ConnectorHarness tests (no live Graph)
 ```
 
 ## SDK
@@ -44,3 +46,10 @@ are registered when Connections is not composed.
 and apply it with `ApplyConnectionAsync`. The host adds `AddOAuth2Connector()` when the
 connection uses the generic `oauth2` scheme and the customer's own Slack app. See
 [elsa-integrations-slack.md](../../docs/reference/elsa-integrations-slack.md).
+
+## Microsoft 365
+
+`AddMicrosoft365Connector` calls `AddElsaIntegrationsRuntime`. Activities bind the `http`
+connection and apply it with `ApplyConnectionAsync`. The host adds `AddOAuth2Connector()` when
+the connection uses the generic `oauth2` scheme and the customer's own Entra app. See
+[elsa-integrations-microsoft365.md](../../docs/reference/elsa-integrations-microsoft365.md).
