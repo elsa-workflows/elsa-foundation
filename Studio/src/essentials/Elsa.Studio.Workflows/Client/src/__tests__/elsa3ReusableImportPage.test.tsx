@@ -361,7 +361,7 @@ describe("Elsa 3 reusable import workbench", () => {
     expect(stickyApplyStatus(container)).toBeUndefined();
     expect(container.querySelector('[data-status="Refused"] strong')?.textContent).toBe("Publishing refused");
     expect(container.querySelector('[data-status="NotPublishedDependency"] strong')?.textContent)
-      .toBe("Not published: depends on an unpublished workflow");
+      .toBe("Not published: depends on an unpublished version");
     expect(container.textContent).not.toContain("Publication Refused");
     expect(container.textContent).not.toContain("Publication Not published");
     expect(container.textContent).not.toContain("NotPublishedDependency");

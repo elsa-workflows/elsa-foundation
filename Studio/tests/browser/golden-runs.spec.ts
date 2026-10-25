@@ -111,7 +111,9 @@ test("detail restores the filtered second page through Runs and browser Back", a
   await expect(page.locator(".wf-instance-meta")).toContainText("corr-12");
   await expect(page.locator(".wf-instance-meta")).toContainText("Checkpoint cadence");
   await expect(page.locator(".wf-instance-meta")).toContainText("Balanced");
+  await expect(page.locator(".wf-instance-meta")).toContainText("Inspection detail");
   await expect(page.locator(".wf-instance-meta")).toContainText("Boundary-level");
+  await expect(page.locator(".wf-instance-meta")).toContainText("checkpoints at boundaries");
   await expect(page.getByRole("note")).toContainText("folded to the commit boundary");
   await page.getByRole("tab", { name: /^Issues/ }).click();
   await expect(page.locator(".wf-instance-incident")).toContainText("Fixture incident for run-12");
@@ -141,7 +143,10 @@ test("detail restores the filtered second page through Runs and browser Back", a
   await expect(page.locator(".wf-instance-canvas-shell h3")).toBeVisible();
   await page.getByRole("tab", { name: "Details" }).click();
   await expect(page.locator(".wf-instance-meta")).toContainText("Durable");
+  await expect(page.locator(".wf-instance-meta")).toContainText("Inspection detail");
   await expect(page.locator(".wf-instance-meta")).toContainText("Activity-level");
+  await expect(page.locator(".wf-instance-meta")).toContainText("checkpoints after every activity");
+  await expect(page.locator(".wf-instance-meta")).toContainText("Per-activity evidence is exact");
   await expect(page.getByRole("note")).toHaveCount(0);
   await page.getByRole("tab", { name: /^Issues/ }).click();
   await expect(page.locator(".wf-instance-incident")).toContainText("Fixture incident for run-01");
