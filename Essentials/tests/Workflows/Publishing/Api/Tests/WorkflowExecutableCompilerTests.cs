@@ -2755,6 +2755,63 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Contains("Int32", exception.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("Variable")]
+    [InlineData("WorkflowRequest")]
+    public async Task Set_refuses_a_statically_incompatible_source_contract(string syntax)
+    {
+        var counter = new Elsa.Expressions.Core.Models.VariableDefinition("counter", "Counter", new TypeReference("Int32"), null, null);
+        var source = counter with { ReferenceKey = "source", Name = "Source", Type = new TypeReference("String") };
+        object reference = syntax == "Variable" ? "source" : new { memberKey = "source" };
+        var set = DynamicSetIntrinsicNode("set-counter", "counter", reference, syntax);
+        var compiler = Compiler(WorkflowVersion(SequenceNode("root", [set]),
+            inputs: [WorkflowInput("source", new TypeReference("String"), true)], variables: [counter, source]));
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("set-counter", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Int32", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("String", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Variable")]
+    [InlineData("WorkflowRequest")]
+    public async Task Set_pins_safe_numeric_widening_from_a_referenced_source(string syntax)
+    {
+        var counter = new Elsa.Expressions.Core.Models.VariableDefinition("counter", "Counter", new TypeReference("Int64"), null, null);
+        var source = counter with { ReferenceKey = "source", Name = "Source", Type = new TypeReference("Int32") };
+        object reference = syntax == "Variable" ? "source" : new { memberKey = "source" };
+        var set = DynamicSetIntrinsicNode("set-counter", "counter", reference, syntax);
+
+        var executable = await Compiler(WorkflowVersion(SequenceNode("root", [set]),
+            inputs: [WorkflowInput("source", new TypeReference("Int32"), true)], variables: [counter, source]))
+            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var plan = executable.NodesById["set-counter"].InputBindings[WorkflowIntrinsicInputKeys.Value].ConversionPlan;
+        Assert.NotNull(plan);
+        Assert.Equal(syntax == "Variable" ? "Int32" : "Elsa.Any", plan.SourceType.Alias);
+        Assert.Equal("Int64", plan.TargetType.Alias);
+        Assert.Equal(syntax == "Variable" ? ValueConversionOperation.NumericWidening : ValueConversionOperation.Profile, plan.Operation);
+    }
+
+    [Fact]
+    public async Task Set_pins_runtime_validation_for_a_projected_request_value()
+    {
+        var counter = new Elsa.Expressions.Core.Models.VariableDefinition("counter", "Counter", new TypeReference("Int32"), null, null);
+        var set = DynamicSetIntrinsicNode("set-counter", "counter", new { memberKey = "source", path = "count" }, "WorkflowRequest");
+        var executable = await Compiler(WorkflowVersion(SequenceNode("root", [set]),
+            inputs: [WorkflowInput("source", new TypeReference("Elsa.Any"), true)], variables: [counter]))
+            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var plan = executable.NodesById["set-counter"].InputBindings[WorkflowIntrinsicInputKeys.Value].ConversionPlan;
+        Assert.NotNull(plan);
+        Assert.Equal(ValueConversionOperation.Profile, plan.Operation);
+        Assert.Equal(ValueRepresentation.StructuredValue, plan.SourceRepresentation);
+        Assert.Equal("Int32", plan.TargetType.Alias);
+    }
+
     private static ActivityNode DynamicSetIntrinsicNode(
         string nodeId,
         string variableKey,

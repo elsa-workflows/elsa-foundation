@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StudioActivityDescriptor, StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
+import { builtInPropertyEditors } from "../../../../../apps/Elsa.Studio.Web/Client/src/app/propertyEditors";
 import { IntrinsicInspector } from "../IntrinsicInspector";
 import { createActivityNode } from "../workflowAdapter";
 import { readIntrinsicDescriptor } from "../intrinsicActivities";
@@ -51,7 +52,7 @@ function inspector(activity: typeof setVariableActivity, node: ActivityNode, onC
       intrinsic={readIntrinsicDescriptor(activity)!}
       activity={node}
       descriptor={descriptorFor(activity)}
-      editors={[]}
+      editors={builtInPropertyEditors}
       expressionEditors={[]}
       expressionDescriptors={[literalDescriptor]}
       expressionDescriptorStatus="ready"
@@ -80,14 +81,19 @@ describe("IntrinsicInspector", () => {
     const container = render(inspector(setVariableActivity, node, vi.fn(), variables));
     const valueType = () => container.querySelector(".wf-property-row-header-meta span")?.textContent;
     expect(valueType()).toBe("Int32");
+    expect(container.querySelector('input[inputmode="numeric"]')).not.toBeNull();
 
     const changed = variables.map(variable => ({ ...variable, type: { alias: variable.scopeId === "workflow" ? "Boolean" : "String", collectionKind: "Single" as const } }));
     flushSync(() => active!.root.render(inspector(setVariableActivity, node, vi.fn(), changed)));
     expect(valueType()).toBe("Boolean");
+    expect(container.querySelector('input[type="checkbox"]')).not.toBeNull();
+    expect(container.querySelector('input[inputmode="numeric"]')).toBeNull();
 
     const retargeted: ActivityNode = { ...node, intrinsic: { ...node.intrinsic!, variable: { referenceKey: "row", declaringScopeId: "container-1" } } };
     flushSync(() => active!.root.render(inspector(setVariableActivity, retargeted, vi.fn(), changed)));
     expect(valueType()).toBe("String");
+    expect(container.querySelector('input[type="text"]')).not.toBeNull();
+    expect(container.querySelector('input[type="checkbox"]')).toBeNull();
   });
 
   it("matches the declaration by scope when keys and names are shadowed", () => {

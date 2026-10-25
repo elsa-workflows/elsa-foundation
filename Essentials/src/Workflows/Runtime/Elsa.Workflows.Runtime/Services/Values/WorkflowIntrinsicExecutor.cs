@@ -21,9 +21,11 @@ public sealed class WorkflowIntrinsicExecutor(
     IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator,
     TimeProvider timeProvider,
     IExternalPayloadStore? externalPayloadStore = null,
-    IPortableExpressionEvaluator? portableExpressionEvaluator = null)
+    IPortableExpressionEvaluator? portableExpressionEvaluator = null,
+    IRuntimeValueConversionExecutor? valueConversionExecutor = null)
 {
-    private readonly RuntimePortableExpressionEvaluator _portableExpressionEvaluator = new(portableExpressionEvaluator, externalPayloadStore);
+    private readonly IRuntimeValueConversionExecutor _valueConversionExecutor = valueConversionExecutor ?? new RuntimeValueConversionExecutor();
+    private readonly RuntimePortableExpressionEvaluator _portableExpressionEvaluator = new(portableExpressionEvaluator, externalPayloadStore, valueConversionExecutor);
     private readonly RuntimeExternalEnvelopeStorage _externalEnvelopeStorage = new(externalPayloadStore);
 
     public async ValueTask<RuntimeCheckpointCommit> ExecuteAsync(
@@ -658,7 +660,41 @@ public sealed class WorkflowIntrinsicExecutor(
             source.Policy,
             $"Intrinsic input '{binding.InputName}' on node '{intrinsicState.Execution.ExecutableNodeId}'");
 
-        var combined = new ValueEnvelope(binding.TargetType, source.Presence, source.InlineValue, source.ExternalReference, combinedPolicy);
+        var conversionSource = new ValueEnvelope(source.Type, source.Presence, source.InlineValue, source.ExternalReference, combinedPolicy);
+        if (source.ExternalReference is not null &&
+            (HasExternalProjection(binding) || binding.ConversionPlan is { Operation: not ValueConversionOperation.Identity and not ValueConversionOperation.NullableCompatibility }))
+        {
+            if (externalPayloadStore is null)
+                throw new InvalidOperationException($"Intrinsic input '{binding.InputName}' requires an IExternalPayloadStore for conversion.");
+            JsonElement payload;
+            try
+            {
+                payload = await externalPayloadStore.ReadAsync(source.ExternalReference, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                throw new InvalidOperationException($"External payload for intrinsic input '{binding.InputName}' could not be read.", exception);
+            }
+            if (HasExternalProjection(binding))
+            {
+                var path = ExternalProjectionPath(binding, executable);
+                foreach (var segment in path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    if (payload.ValueKind != JsonValueKind.Object || !TryGetProperty(payload, segment, out payload))
+                        throw new InvalidOperationException($"External source path '{path}' for intrinsic input '{binding.InputName}' is unavailable.");
+                }
+            }
+            conversionSource = payload.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
+                ? ValueEnvelope.Null(source.Type, combinedPolicy)
+                : ValueEnvelope.Inline(source.Type, payload.Clone(), combinedPolicy);
+        }
+        var combined = binding.ConversionPlan is null
+            ? conversionSource.Retype(binding.TargetType)
+            : _valueConversionExecutor.Convert(conversionSource, binding.ConversionPlan);
         return await ApplyStorageAsync(
             workflowState.WorkflowExecutionId,
             intrinsicState.InvocationId,
@@ -666,7 +702,42 @@ public sealed class WorkflowIntrinsicExecutor(
             combined,
             source.Policy,
             combinedPolicy,
-            cancellationToken);
+            cancellationToken,
+            source.ExternalReference?.StorageProfile);
+    }
+
+    private static bool HasExternalProjection(RuntimeInputBinding binding) =>
+        binding.Source == RuntimeInputBindingSource.WorkflowRequest && !string.IsNullOrWhiteSpace(binding.WorkflowRequest!.Path) ||
+        binding.Source == RuntimeInputBindingSource.ActivityResult && binding.ActivityResult!.ProjectionKey != "$result";
+
+    private static string ExternalProjectionPath(RuntimeInputBinding binding, WorkflowExecutable executable)
+    {
+        if (binding.Source == RuntimeInputBindingSource.WorkflowRequest)
+        {
+            var reference = binding.WorkflowRequest!;
+            var segments = reference.Path!.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var offset = segments.Length > 0 && StringComparer.OrdinalIgnoreCase.Equals(segments[0], reference.MemberKey) ? 1 : 0;
+            return string.Join('.', segments.Skip(offset));
+        }
+        var result = binding.ActivityResult!;
+        return executable.NodesById.GetValueOrDefault(result.ProducerExecutableNodeId)?.ActivityContract?.Result.Projections.GetValueOrDefault(result.ProjectionKey)?.Path
+            ?? throw new InvalidOperationException($"Intrinsic input '{binding.InputName}' requires a pinned result projection '{result.ProjectionKey}'.");
+    }
+
+    private static bool TryGetProperty(JsonElement value, string name, out JsonElement property)
+    {
+        if (value.TryGetProperty(name, out property))
+            return true;
+        foreach (var candidate in value.EnumerateObject())
+        {
+            if (StringComparer.OrdinalIgnoreCase.Equals(candidate.Name, name))
+            {
+                property = candidate.Value;
+                return true;
+            }
+        }
+        property = default;
+        return false;
     }
 
     private async ValueTask<ValueEnvelope> ApplyStorageAsync(
@@ -676,7 +747,8 @@ public sealed class WorkflowIntrinsicExecutor(
         ValueEnvelope value,
         ValueProtectionPolicy sourcePolicy,
         ValueProtectionPolicy effectivePolicy,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? fallbackStorageProfile = null)
     {
         return await _externalEnvelopeStorage.RewriteAsync(
             new RuntimeExternalEnvelopeRewriteRequest(
@@ -685,7 +757,8 @@ public sealed class WorkflowIntrinsicExecutor(
                 $"Intrinsic value '{valueName}'",
                 value,
                 sourcePolicy,
-                effectivePolicy),
+                effectivePolicy,
+                fallbackStorageProfile),
             cancellationToken);
     }
 

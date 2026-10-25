@@ -2,8 +2,8 @@
 .SYNOPSIS
     Studio-shaped Set Variable assignments update an Int32 counter and print 1 through 10 (#3316).
 .DESCRIPTION
-    Owns a rebuilt Workbench on a free loopback port with disposable SQLite data. Both Set nodes keep
-    Studio's Elsa.Any authoring fallback. Checks literal initialization, ten JavaScript increments,
+    Owns a rebuilt Workbench on a free loopback port with disposable SQLite data. All Set nodes keep
+    Studio's Elsa.Any authoring fallback. Checks literal initialization, referenced numeric widening, ten JavaScript increments,
     subsequent reads, exact ordered stdout, completion without incidents, and cleanup. Build Workbench first.
 #>
 [CmdletBinding()]
@@ -23,6 +23,8 @@ try {
     $marker = "SetVariable3316-$([guid]::NewGuid().ToString('N')):"
 
     $initialize = New-SetVariableNode -NodeId 'initialize' -VariableKey 'counter' -Value 0 -ValueAlias 'Elsa.Any'
+    $copy = New-SetVariableNode -NodeId 'copy' -VariableKey 'copy' -ValueAlias 'Elsa.Any' `
+        -Value @{ value = 'counter'; expressionType = 'Variable' }
     $increment = New-SetVariableNode -NodeId 'increment' -VariableKey 'counter' -ValueAlias 'Elsa.Any' `
         -Value @{ value = "getVariable('counter') + 1"; expressionType = 'JavaScript' }
     $print = New-ActivityNode -NodeId 'print' -VersionId $writeLine -Inputs @(
@@ -30,12 +32,12 @@ try {
     )
     $body = New-ActivityNode -NodeId 'body' -VersionId $sequence -Structure (New-SequenceStructure -Activities @($increment, $print))
     $loop = New-ActivityNode -NodeId 'loop' -VersionId $while -Inputs @(
-        @{ referenceKey = 'Condition'; value = @{ value = "getVariable('counter') < 10"; expressionType = 'JavaScript' } }
+        @{ referenceKey = 'Condition'; value = @{ value = "getVariable('copy') === 0 && getVariable('counter') < 10"; expressionType = 'JavaScript' } }
     ) -Structure (New-WhileStructure -Body $body)
-    $root = New-ActivityNode -NodeId 'root' -VersionId $sequence -Structure (New-SequenceStructure -Activities @($initialize, $loop))
+    $root = New-ActivityNode -NodeId 'root' -VersionId $sequence -Structure (New-SequenceStructure -Activities @($initialize, $copy, $loop))
 
     # A different default makes the literal initialization observable in the loop's first condition.
-    $variables = @((New-VariableDef -Key 'counter' -Alias 'Int32' -Default 99))
+    $variables = @((New-VariableDef -Key 'counter' -Alias 'Int32' -Default 99), (New-VariableDef -Key 'copy' -Alias 'Int64' -Default 99))
     $analysisBody = @{
         nodeId = 'increment'
         state = @{ variables = $variables; rootActivity = $root; inputs = @(); outputs = @(); workflowActivityOptions = $null; strategyOptions = $null }
