@@ -30,3 +30,47 @@ Visual rules:
 - Selection uses the shared blue/cyan accent; statuses use the shared semantic
   green, amber, and red tokens.
 - Summary metrics are compact strips, not oversized dashboard cards.
+
+## Host-side worked examples
+
+The names below describe the current host-side source patterns. They are not a promise that independently bundled modules can import these components: keep those modules on the documented token aliases and stable SDK contracts until the export boundary is finalized.
+
+A field keeps its label, optional help, and control together; use a supported shared button variant for the primary action:
+
+```tsx
+<StudioField label="Base URL" description="Address of the service" meta={<span>Required</span>}>
+  <input name="baseUrl" type="url" required />
+</StudioField>
+<StudioButton variant="primary" size="md" type="submit">Create service</StudioButton>
+```
+
+For a configured optional section, start it open, show the set count, and allow the author to collapse it. Pass only the host's actual error/force-open state; the disclosure contract owns how those states remain visible.
+
+```tsx
+<AdvancedSection
+  label="More options"
+  setCount={configuredOptionalCount}
+  defaultOpen={configuredAtOpen}
+  allowCollapseWhenSet
+  hasError={optionalHasBlockingError}
+  forceOpen={optionalSourceFailed}
+>
+  {optionalFields}
+</AdvancedSection>
+```
+
+`StudioDataGrid` activates a row on click and on Enter/Space. It does not stop events from nested controls. A caller embedding a copy button must stop both click and activation-key propagation:
+
+```tsx
+<button
+  type="button"
+  onClick={event => { event.stopPropagation(); copy(item.id); }}
+  onKeyDown={event => {
+    if (event.key === "Enter" || event.key === " ") event.stopPropagation();
+  }}
+>
+  Copy ID
+</button>
+```
+
+For a module-owned row instead of `StudioDataGrid`, guard the row handler against events whose target is inside an interactive descendant, and activate from the keyboard only when the row itself is the target. Workflow Definitions currently owns that guard in its custom rows; do not assume the shared primitive supplies it. See the [normative UX rules](../../../../../../../docs/ux/design-spec.md#components) for the supported Button variants and disclosure behavior.

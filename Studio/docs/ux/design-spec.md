@@ -70,7 +70,7 @@ code.
 
 ## Definition list consistency (#3070)
 
-**Status: `exists`** when [PR #3258](https://github.com/elsa-workflows/elsa-foundation/pull/3258) merges. The implementation PR carries this rule; its issue/PR records acceptance and delivery evidence.
+**Status: `exists`** (accepted in [#3070](https://github.com/elsa-workflows/elsa-foundation/issues/3070)). The issue record carries the acceptance and delivery evidence.
 
 The Activity Definitions and Workflow Definitions collections use the same scan hierarchy:
 page inset, eyebrow/title/description, one filled primary action, secondary page actions, search
@@ -104,7 +104,7 @@ hierarchy is a presentation rule, not a shared data-grid or filtering framework.
 
 ## Resource list consistency (#3071)
 
-**Status: implementation contract for [#3071](https://github.com/elsa-workflows/elsa-foundation/issues/3071)**; the issue records runtime acceptance and delivery. These rules become `exists` when the implementation merges.
+**Status: `exists`** (accepted in [#3071](https://github.com/elsa-workflows/elsa-foundation/issues/3071)). The issue record carries the acceptance and delivery evidence.
 
 Secrets and Connections follow the definition lists' page inset, heading/description, one filled
 header create action, search/filter toolbar, and results order. Reuse the existing Studio controls
@@ -113,7 +113,7 @@ and token contract while keeping each resource's domain columns and operations:
 - **Secrets:** Edit stays directly available per row. Rotate, Test, Revoke and Delete use the
   keyboard-accessible secondary menu, with destructive actions separated. Copy uses only the
   technical name. Preserve masking, operation permissions, confirmations and focus return.
-- **Inventory truth:** One internal100-record limit governs both the Secrets request and
+- **Inventory truth:** One internal 100-record limit governs both the Secrets request and
   coverage copy. Server search and total counts stay authoritative; Type/Store/Scope/Status
   facets cover loaded rows only. An absent selected scope stays qualified. Draft, accepted and
   failed attempted queries keep their separate meanings.
@@ -129,11 +129,12 @@ and token contract while keeping each resource's domain columns and operations:
 
 | Component | Status | Rule |
 |---|---|---|
-| Button (today) | `exists` | `ui/forms/Button` (`StudioButton`): variants `primary`, `default`, `ghost`; sizes `sm` / `md`. Focus ring is `--studio-focus` (there is no `--studio-ring`). |
+| Button (today) | `exists` | `ui/forms/Button` (`StudioButton`): variants `primary`, `default`, `ghost`; sizes `sm` / `md`. Focus ring is `--studio-focus` (there is no `--studio-ring`). See the host-side [worked examples](../../src/apps/Elsa.Studio.Web/Client/src/app/ui/README.md#host-side-worked-examples). |
+| Field (today) | `exists` | `ui/forms/Field` (`StudioField`) wraps a control with its label and optional description/meta. This is a host-side pattern, not a stable export for independently bundled modules; see the UI README. |
 | Button (additions) | `target, phase 3` | Pressed state (`:active` translate) and a spinner while pending. |
 | Button (new variants) | `target, phase 4` | `outline` and `destructive` variants. Until they exist, use `default` / `ghost` and do not name `outline` or `destructive` in new call sites. |
 | Tabs | `exists` | `ui/layout/Tabs` (`StudioTabs`). Sentence case; overflow collapse is `target, phase 1`. |
-| DataGrid | `exists` | `ui/data-grid/DataGrid`: row click (or Enter/Space) opens. |
+| DataGrid | `exists` | `ui/data-grid/DataGrid` (`StudioDataGrid`) supplies table semantics, row click, and Enter/Space activation. It does not isolate nested controls: callers must stop click and Enter/Space propagation for inner controls or use a guarded caller wrapper. Custom rows own their own target guards; Workflow Definitions guards nested controls itself. See the host-side worked examples in the UI README. |
 | Secrets inventory | `exists` (#3069) | Search by secret name or display name is server-backed and requests up to 100 records. Counts identify rows shown and loaded alongside the result total; a submitted search appears in the count so draft text cannot change its meaning. More matches than loaded means the result is partial; a full 100-row page with a total of 100 is complete. Type, store, scope and status facets apply only to loaded rows, and scope choices describe loaded results. |
 | DataGrid extras | `target, phase 4` | Sortable headers with an indicator; optional column picker persisted per grid; secondary actions in a ⋯ menu. |
 | Status | `exists` | `StatusChip` (filled) for run and definition status; `StatusPill` (outline) for low-emphasis metadata. Colours from the status tokens only. |
@@ -291,3 +292,39 @@ track the theme instead of a per-descriptor hex.
 - [ ] Checked against ux-polish-plan.md; plan updated if the item is now done.
 - [ ] Each claimed behaviour is tagged `exists` or `target, phase N` in this spec; the PR does
       not "verify" a target against code that is not there yet.
+
+## Author/operator walkthrough
+
+Use this short route to connect the existing patterns without turning them into a new framework:
+
+1. **Author:** From Home, create or resume the exact workflow draft. Configure a service with the required fields visible and any configured HTTP options in the existing disclosure. Save, use Test Run, then review and publish that same draft content; keep transient Test Run, durable published version and execution status distinct.
+2. **Operator:** From Needs attention, open the exact run and its activity evidence, choose only a supported next step, then return to the validated Runs query. The incident guide remains the source for evidence, permissions, confirmation, and retry timing.
+3. **Resources:** Create a disposable secret with the value masked, disclose optional configured metadata, and search by name. State shown, loaded, and server-total counts separately; local facets describe loaded rows only. Preserve entered values on a real failure and explain denied or unavailable states without implying full inventory coverage.
+4. **Feature settings:** Review the selected draft, cancel and verify it is unchanged, then apply a justified change only to the selected target. Keep the review/cancel/apply result bound to that draft and the observed visit; do not imply a broader persistence guarantee.
+
+These examples do not certify a composed journey. The [#3075 acceptance record](https://github.com/elsa-workflows/elsa-foundation/issues/3075) owns the nine final rows and their source/build evidence; implementation-slice acceptance does not replace that qualification.
+
+### UX-01–UX-18 implementation-slice map
+
+These links locate the existing implementation records. They do not replace #3075's composed evidence or change the state of any issue.
+
+| Slice | Existing issue record |
+|---|---|
+| UX-01 | [#3058](https://github.com/elsa-workflows/elsa-foundation/issues/3058) |
+| UX-02 | [#3059](https://github.com/elsa-workflows/elsa-foundation/issues/3059) |
+| UX-03 | [#3063](https://github.com/elsa-workflows/elsa-foundation/issues/3063) |
+| UX-04 | [#3063](https://github.com/elsa-workflows/elsa-foundation/issues/3063) |
+| UX-05 | [#3062](https://github.com/elsa-workflows/elsa-foundation/issues/3062) |
+| UX-06 | [#3064](https://github.com/elsa-workflows/elsa-foundation/issues/3064) |
+| UX-07 | [#3065](https://github.com/elsa-workflows/elsa-foundation/issues/3065) |
+| UX-08 | [#3060](https://github.com/elsa-workflows/elsa-foundation/issues/3060) |
+| UX-09 | [#3066](https://github.com/elsa-workflows/elsa-foundation/issues/3066) |
+| UX-10 | [#3070](https://github.com/elsa-workflows/elsa-foundation/issues/3070) |
+| UX-11 | [#3067](https://github.com/elsa-workflows/elsa-foundation/issues/3067) |
+| UX-12 | [#3073](https://github.com/elsa-workflows/elsa-foundation/issues/3073) |
+| UX-13 | [#3068](https://github.com/elsa-workflows/elsa-foundation/issues/3068), [#3069](https://github.com/elsa-workflows/elsa-foundation/issues/3069) |
+| UX-14 | [#3061](https://github.com/elsa-workflows/elsa-foundation/issues/3061) |
+| UX-15 | [#3072](https://github.com/elsa-workflows/elsa-foundation/issues/3072) |
+| UX-16 | [#3070](https://github.com/elsa-workflows/elsa-foundation/issues/3070), [#3071](https://github.com/elsa-workflows/elsa-foundation/issues/3071) |
+| UX-17 | [#3074](https://github.com/elsa-workflows/elsa-foundation/issues/3074) |
+| UX-18 | [#3073](https://github.com/elsa-workflows/elsa-foundation/issues/3073), [#3131](https://github.com/elsa-workflows/elsa-foundation/issues/3131), [#3132](https://github.com/elsa-workflows/elsa-foundation/issues/3132) |
