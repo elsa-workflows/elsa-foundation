@@ -58,3 +58,9 @@ The normal-host320px selection trace reproduced a same-node Clear miss: releasin
 ## Feature settings draft refinement
 
 The normal-host Server review exposed unrelated setting changes after editing only Workflow executable cache capacity: Save draft materialized untouched default/empty values. Preserve untouched configuration membership and values by staging only settings whose displayed values actually changed. Reuse the existing stable value comparison; cover no-op Save, changed-field-only review/payload, deliberate clear and reset using the mounted component. Prove red without the correction and green with it, then rebuild/repeat both-target private Apply and every final gate. No backend persistence contract changes.
+
+## Structured Logs stream authorization refinement
+
+The actual separate-origin browser EventSource uses the interactive cookie and receives a302 redirect when its authenticated identity lacks the Structured Logs read permission. The adjacent SDK reads use Bearer authentication and correctly return403. Restore the stream's already documented401/403 contract with the framework's endpoint-local `DisableCookieRedirect` metadata. Keep the permission policy, authentication selector, grants, ordinary browser redirects and all other endpoints unchanged; the withdrawn runtime-settings cookie proposal remains withdrawn.
+
+Add real-cookie HTTP regressions against the production stream mapping for anonymous401, denied403 and authorized200/SSE, plus ordinary browser redirect controls. Record the baseline failures before the correction, run the complete affected backend suite, then rebuild and repeat exact-head composed qualification, independent review and all delivery gates. This narrowly extends T009 to an observed diagnostics transport defect without changing a backend payload, persistence or module contract.

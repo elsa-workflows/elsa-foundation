@@ -24,7 +24,7 @@ The checkboxes below record the candidate-preparation checkpoint, not final acce
 
 - [ ] T007 [US1] Execute normal create/resume/configure/Test Run/exact review-publication and Flowchart/BPMN smoke against `Studio/src/essentials/Elsa.Studio.Workflows`.
 - [ ] T008 [US1] Execute editor resize/reopen/selection/preference restoration, narrow identity/copy and keyboard controls against the same final build.
-- [ ] T009 [US1] Reproduce and correct any confirmed in-scope defect in its existing frontend/component/browser paths; add meaningful behavioral/causal proof and repeat affected checks.
+- [ ] T009 [US1] Reproduce and correct confirmed in-scope defects in their existing paths; include the plan's endpoint-local Structured Logs cookie/SSE authorization refinement, meaningful behavioral/causal proof and repeated affected checks.
 
 ## Phase 4: US2 — Investigate and operate
 
