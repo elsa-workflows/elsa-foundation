@@ -27,10 +27,10 @@ code.
    action chrome is not visible until hover or focus. Fail if an open dock, diagnostic panel or
    always-visible widget toolbar is the first thing on screen.
 2. **One primary action per view.** `exists` on list and detail pages as the review rule;
-   Designer is an exception (see Layout). Exactly one filled (`primary`) button per page header;
+   Designer is an exception (see Layout). One filled (`primary`) action per page header;
    everything else is `default`, `ghost` or in an overflow menu. The Designer header keeps Save,
-   Review & publish and Run visible. Today Run is the filled action; making Review & publish the
-   one `primary` (Save and Run `default` or `ghost`) is `target, phase 1`.
+   the filled publication split control (Review & publish by default), and outlined Test Run visible.
+   The adjacent publication menu selects the supported publication mode; it is part of that same action.
 3. **Tokens only.** Colour, radius, shadow, spacing and type come from `--studio-*` tokens.
    Colour lint is only partly true today: `pnpm lint:css` (`elsa/no-raw-color-literal`) covers
    `src/essentials/*/Client/src/**/*.css` and `Extensions/*/studio/*/Client/src/**/*.css`.
@@ -59,8 +59,8 @@ code.
 | Navigation placement | `exists` | Each nav contribution may declare `placement` (`main` \| `more` \| `settings` \| `admin`), `order`, `requiresFeature` and `requiresRole` / `requiresPermission`. Unset `placement` is `more` at the top level; a child inherits its parent unless it declares a different placement, in which case it renders there. Main holds Home, Workflows, Runs and Tasks (Tasks only when the user-tasks feature is enabled). Extensions land under **More tools** (open state in `elsa-studio.ui.nav.more`). `settings` items (Appearance) render under Studio in the Settings shell and stay visible to every session. `admin` items render under Administration and use the host-control read gate. The sidebar keeps one Settings entry; searching still reveals the individual sections. Anonymous/demo sessions still see Administration when sign-in is off. Disabled features contribute nothing; role-gated items are hidden. Home is the customizable landing page at `/`, `/dashboard` and `/overview`; there is no separate Dashboard entry. |
 | Settings shell | `exists` | `/settings` is a two-pane shell (section list + content). Sections are deep-linkable as `/settings/<id>`. Original admin paths (`/modules`, `/theme-builder`, …) open the same shell and the same gate; a signed-in user without host-control read sees those sections as unavailable. The route is lazy-loaded. |
 | User menu | `exists` | See [User menu and sign-out](#user-menu-and-sign-out). |
-| Bottom dock | `exists` | Remembers the user's last state in `elsa-studio-bottom-panel-collapsed`, `elsa-studio-bottom-panel-height`, `elsa-studio-bottom-panel-maximized` and `elsa-studio-active-bottom-panel`. With no stored value the dock is **open** on desktop (`collapsed=false`) and collapsed at ≤640px. |
-| Bottom dock default | `target, phase 1` | Collapsed by default when no stored value, including on desktop. |
+| Bottom dock | `exists` | Remembers the user's last state in `elsa-studio-bottom-panel-collapsed`, `elsa-studio-bottom-panel-height`, `elsa-studio-bottom-panel-maximized` and `elsa-studio-active-bottom-panel`. With no stored value the dock is collapsed on desktop and narrow screens. Default chrome values stay represented by absent keys; explicit nondefault choices persist. |
+| Bottom dock default | `exists` | Collapsed by default when no stored value, including on desktop. Reset restores the default and keeps the cleared chrome keys absent. |
 | Bottom dock errors | `target, phase 2` | A status dot on the collapsed dock signals new errors. |
 | Page | `exists` | Content sits on the page surface. No wrapping card around a whole page. |
 | Page header | `target, phase 1` | Eyebrow, title, one-line description, actions. One `primary` button (see Principles). |
@@ -68,8 +68,8 @@ code.
 | Runs | `exists` for the reference implementation | Workflow names lead, with exact execution, artifact, definition and version IDs available as copyable identifiers. Bulk actions appear only after row selection and preserve the host's permission gates. Detail navigation returns to the validated local list query, including page size and cursor. Loading, empty, unsupported and request-error states stay distinct; failed requests offer Retry. |
 | Designer | `exists` | Palette / canvas / inspector. |
 | Designer tabs | `exists` for inspector / Runtime / Artifacts panel tabs (wrap + `title`, no ellipsis); remaining collapse-to-icon is `target, phase 1` | Tab labels never truncate. The inspector panel tabs wrap and keep a `title` plus keyboard access. Below the width they need they should collapse to icon + tooltip. |
-| Designer header | `exists` | Save, Review & publish and Run are all visible. None uses `StudioButton`. Run is the filled action (`.wf-run-button` uses `--studio-accent`). Review & publish is outlined (`.wf-review-button`). |
-| Designer header primary | `target, phase 1` | Review & publish becomes the one `primary` action; Save and Run become `default` (or `ghost`). |
+| Designer header | `exists` | Save, the publication split control and Test Run are all visible. These domain controls do not use `StudioButton`. `WorkflowEditorToolbar` fills the publication action; Test Run uses the surface background with an accent border. |
+| Designer header primary | `exists` | The publication split control is the filled action, defaulting to Review & publish. Save is an icon action and Test Run is outlined. |
 
 ## Definition list consistency (#3070)
 
