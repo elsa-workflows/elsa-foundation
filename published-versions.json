@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "98efed4fc2c07337ad0b30128b60f462b8ddcff0",
+  "last_publish_commit": "bc28be9a3dc077b9946adfa43ed03d7b33ad9260",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -438,6 +438,11 @@
       "commit": "0b40e42d5a7376998905817b2fb15dd4277fe418"
     },
     {
+      "package_id": "Elsa.Integrations.Connectors.Microsoft365",
+      "version": "4.0.0-preview",
+      "commit": "bc28be9a3dc077b9946adfa43ed03d7b33ad9260"
+    },
+    {
       "package_id": "Elsa.Integrations.Connectors.OAuth2",
       "version": "4.0.0-preview",
       "commit": "474fac5c6ac1776ae6940fc6e5a3cdf926f7fc20"
@@ -449,8 +454,8 @@
     },
     {
       "package_id": "Elsa.Integrations.Sdk",
-      "version": "4.0.1-preview",
-      "commit": "98efed4fc2c07337ad0b30128b60f462b8ddcff0"
+      "version": "4.0.2-preview",
+      "commit": "bc28be9a3dc077b9946adfa43ed03d7b33ad9260"
     },
     {
       "package_id": "Elsa.Integrations.Templates",
