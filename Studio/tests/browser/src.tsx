@@ -1594,6 +1594,17 @@ function publicationReview(): PublicationReviewState {
     slots,
     catalog: []
   });
+  const triggerKey = "httpendpoint:sha256:4191f265b8b2d2152d4056ed3d616d32f7c2953e7ae41c4f8b184244b830e4f7";
+  const conflictOutcome = searchParams.get("outcome") === "conflict";
+  const conflict = conflictOutcome
+    ? {
+        key: triggerKey,
+        cardinality: "exclusive" as const,
+        publicationId: "publication-default",
+        slotName: "default",
+        ...(searchParams.get("descriptor") === "0" ? {} : { descriptor: "GET /orders/{id}" })
+      }
+    : null;
   return {
     ...review,
     // Spec 261 FR-515: `warnings=1` lists the replay-safe warnings a compensation scope with Write Line steps gets.
@@ -1615,10 +1626,10 @@ function publicationReview(): PublicationReviewState {
       resolvedAction: "replace",
       policySource: "host",
       policyRevision: 12,
-      canActivate: true,
-      claims: [{ key: "httpendpoint:sha256:4191f265b8b2d2152d4056ed3d616d32f7c2953e7ae41c4f8b184244b830e4f7", cardinality: "exclusive" }],
-      triggers: [{ change: "added", key: "httpendpoint:sha256:4191f265b8b2d2152d4056ed3d616d32f7c2953e7ae41c4f8b184244b830e4f7", cardinality: "exclusive" }],
-      conflicts: []
+      canActivate: !conflictOutcome,
+      claims: [{ key: triggerKey, cardinality: "exclusive" }],
+      triggers: [{ change: "added", key: triggerKey, cardinality: "exclusive" }],
+      conflicts: conflict ? [conflict] : []
     },
     versionPreflight: {
       isReady: true,

@@ -79,7 +79,7 @@ describe("publication channel UX", () => {
     expect(changes.textContent).not.toContain("http:orders");
   });
 
-  it("shows grouped conflict counts while exact trigger and publication identifiers stay in Technical details", () => {
+  it("shows grouped conflict counts while publication identifiers stay in Technical details", () => {
     const triggerKey = "sha256:8a80851546a1f1875cf5c1d78dbbc51ac6e42d8f8f47b3f77b6e5db34f01c3cb";
     const publicationId = "publication-7f4d2a1c-9b6e-4f20-a45d-01a28dbe3381";
     const container = render(review({
@@ -99,7 +99,8 @@ describe("publication channel UX", () => {
     const technical = summary(container, "Technical details")!.parentElement as HTMLDetailsElement;
     const conflictAlert = container.querySelector<HTMLElement>(".wf-publication-risks[role='alert']")!;
     expect(conflictAlert.textContent).toContain("1 trigger conflicts with channel default.");
-    expect(conflictAlert.textContent).not.toContain(triggerKey);
+    expect(conflictAlert.textContent).toContain(triggerKey);
+    expect(conflictAlert.querySelector(".wf-publication-selection")).toBeNull();
     expect(conflictAlert.textContent).not.toContain(publicationId);
     expect(container.querySelector(".wf-publication-change-summary")?.textContent).toBe("Changes: 1 activity · 1 trigger");
     expect(changes.textContent).toContain("1 added");
@@ -108,6 +109,48 @@ describe("publication channel UX", () => {
     expect(technical.open).toBe(false);
     expect(technical.textContent).toContain(triggerKey);
     expect(technical.textContent).toContain(publicationId);
+  });
+
+  it("shows a conflict descriptor as the primary label and the raw key as muted detail", () => {
+    const triggerKey = "httpendpoint:sha256:2b7c93605ce7dee2b58db62d6b0da54c6c7d7945ba83baecc93938e897a797bc";
+    const container = render(review({
+      preflight: preflight({
+        canActivate: false,
+        conflicts: [{
+          key: triggerKey,
+          cardinality: "exclusive",
+          publicationId: "publication-9",
+          slotName: "default",
+          descriptor: "GET /orders/{id}"
+        }]
+      })
+    }));
+
+    const conflictAlert = container.querySelector<HTMLElement>(".wf-publication-risks[role='alert']")!;
+    expect(conflictAlert.textContent).toContain("1 trigger conflicts with channel default.");
+    expect(conflictAlert.textContent).toContain("GET /orders/{id}");
+    expect(conflictAlert.querySelector(".wf-publication-selection")?.textContent).toBe(triggerKey);
+    expect(conflictAlert.textContent).not.toContain("publication-9");
+  });
+
+  it("falls back to the raw conflict key when no descriptor is present", () => {
+    const triggerKey = "httpendpoint:sha256:2b7c93605ce7dee2b58db62d6b0da54c6c7d7945ba83baecc93938e897a797bc";
+    const container = render(review({
+      preflight: preflight({
+        canActivate: false,
+        conflicts: [{
+          key: triggerKey,
+          cardinality: "exclusive",
+          publicationId: "publication-9",
+          slotName: "default"
+        }]
+      })
+    }));
+
+    const conflictAlert = container.querySelector<HTMLElement>(".wf-publication-risks[role='alert']")!;
+    expect(conflictAlert.textContent).toContain(triggerKey);
+    expect(conflictAlert.querySelector(".wf-publication-selection")).toBeNull();
+    expect(conflictAlert.textContent).not.toContain("GET /orders/{id}");
   });
 
   it.each([
