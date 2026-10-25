@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "474fac5c6ac1776ae6940fc6e5a3cdf926f7fc20",
+  "last_publish_commit": "98efed4fc2c07337ad0b30128b60f462b8ddcff0",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -443,9 +443,14 @@
       "commit": "474fac5c6ac1776ae6940fc6e5a3cdf926f7fc20"
     },
     {
-      "package_id": "Elsa.Integrations.Sdk",
+      "package_id": "Elsa.Integrations.Connectors.Slack",
       "version": "4.0.0-preview",
-      "commit": "d32aba731870dff2215b0aaaebb38c4b23cdc4d7"
+      "commit": "98efed4fc2c07337ad0b30128b60f462b8ddcff0"
+    },
+    {
+      "package_id": "Elsa.Integrations.Sdk",
+      "version": "4.0.1-preview",
+      "commit": "98efed4fc2c07337ad0b30128b60f462b8ddcff0"
     },
     {
       "package_id": "Elsa.Integrations.Templates",
