@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "2b5789941d5cae5f7dda68fb845e7fb47878dd63",
+  "last_publish_commit": "c6c9b702692c5c0ebed6a9af428dbca8fea168fd",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -244,8 +244,8 @@
     },
     {
       "package_id": "Elsa.Diagnostics.StructuredLogs",
-      "version": "4.0.14-preview",
-      "commit": "6e677745bb828dcb1117379859068f8e735dac47"
+      "version": "4.0.15-preview",
+      "commit": "c6c9b702692c5c0ebed6a9af428dbca8fea168fd"
     },
     {
       "package_id": "Elsa.Diagnostics.StructuredLogs.Core",
