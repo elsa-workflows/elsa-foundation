@@ -1759,6 +1759,11 @@ if (activityIconsFixture && searchParams.get("host-override") === "1") {
 const root = createRoot(document.getElementById("root")!);
 
 async function renderRequestedFixture() {
+  if (searchParams.get("mode") === "intrinsic-labels") {
+    const { IntrinsicLabelsFixture } = await import("./intrinsicLabelsFixture");
+    root.render(<IntrinsicLabelsFixture />);
+    return;
+  }
   if (searchParams.get("mode") === "http-progressive-disclosure") {
     const { HttpProgressiveDisclosureFixture } = await import("./httpProgressiveDisclosureFixture");
     root.render(<HttpProgressiveDisclosureFixture />);

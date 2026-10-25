@@ -11,7 +11,7 @@ import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutio
 import { formatActivitySummary } from "../activitySummary";
 import { readPortableExpressionDefinition } from "../activityProperties";
 import { isMaskedInput, readSecretReference } from "../maskedInput";
-import { resolveActivityLabel } from "../activityPresentation";
+import { resolveRuntimeActivityLabel as resolveActivityLabel } from "../runtimeActivityDisplay";
 import {
   buildCanvas,
   buildUnsupportedActivityCanvas,

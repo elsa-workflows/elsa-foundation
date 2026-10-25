@@ -15,7 +15,7 @@ import type {
   WorkflowExecutableReference
 } from "../workflowTypes";
 import { formatActivitySummary } from "../activitySummary";
-import { resolveActivityLabel } from "../activityPresentation";
+import { resolveRuntimeActivityLabel as resolveActivityLabel } from "../runtimeActivityDisplay";
 import {
   buildCanvas,
   buildUnsupportedActivityCanvas,
