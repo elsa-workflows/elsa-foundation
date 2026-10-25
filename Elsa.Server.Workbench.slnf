@@ -153,8 +153,7 @@
       "Extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj",
       "Extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj",
       "Extensions/Rules/src/Workflows/Design/Elsa.Rules.Workflows.Design.csproj",
-      "Extensions/Rules/src/Workflows/Runtime/Elsa.Rules.Workflows.Runtime.csproj",
-      "samples/Elsa.Samples.Compensation/Elsa.Samples.Compensation.csproj"
+      "Extensions/Rules/src/Workflows/Runtime/Elsa.Rules.Workflows.Runtime.csproj"
     ]
   }
 }

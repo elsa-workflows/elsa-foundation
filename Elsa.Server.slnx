@@ -73,21 +73,12 @@
   <Folder Name="/Extensions/ExtensionBuilder/tests/Api/">
     <Project Path="Extensions/ExtensionBuilder/tests/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj" />
   </Folder>
-  <Folder Name="/samples/">
-    <Project Path="samples/Elsa.Samples.Compensation/Elsa.Samples.Compensation.csproj" />
-    <Project Path="samples/Elsa.Samples.Nuplane.Activities/Elsa.Samples.Nuplane.Activities.csproj" />
-    <Project Path="samples/Elsa.Samples.Nuplane.Notes/Elsa.Samples.Nuplane.Notes.csproj" />
-    <Project Path="samples/Elsa.Samples.Nuplane.Notes.Activities/Elsa.Samples.Nuplane.Notes.Activities.csproj" />
-  </Folder>
   <Folder Name="/solution/">
     <File Path=".gitignore" />
     <File Path="Directory.Packages.props" />
     <File Path="NuGet.config" />
   </Folder>
   <Folder Name="/tools/" />
-  <Folder Name="/tools/demo/">
-    <Project Path="tools/demo/Elsa.Samples.Nuplane.Notes.Tooling/Elsa.Samples.Nuplane.Notes.Tooling.csproj" />
-  </Folder>
   <Folder Name="/tools/ef/">
     <Project Path="tools/ef/Elsa.EntityFrameworkCore.Tooling/Elsa.EntityFrameworkCore.Tooling.csproj" />
   </Folder>
@@ -102,7 +93,6 @@
     <Project Path="tools/versioning/Elsa.Versioning.Calculator/Elsa.Versioning.Calculator.csproj" />
     <Project Path="tools/versioning/Elsa.Versioning.Publisher/Elsa.Versioning.Publisher.csproj" />
   </Folder>
-  <Folder Name="/src/" />
   <Folder Name="/Extensions/Rules/" />
   <Folder Name="/Extensions/Rules/src/">
     <Project Path="Extensions/Rules/src/Core/Elsa.Rules.Core.csproj" />
@@ -120,9 +110,11 @@
   <Folder Name="/Extensions/Rules/tests/">
     <Project Path="Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj" />
   </Folder>
+  <Folder Name="/Extensions/Rules/tests/Persistence/" />
   <Folder Name="/Extensions/Rules/tests/Persistence/EntityFrameworkCore/">
     <Project Path="Extensions/Rules/tests/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Rules.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
   </Folder>
+  <Folder Name="/Essentials/" />
   <Folder Name="/Essentials/apps/">
     <Project Path="Essentials/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj" />
     <Project Path="Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj" />
@@ -388,6 +380,7 @@
   <Folder Name="/Essentials/src/Workflows/Runtime/Persistence/">
     <Project Path="Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
+  <Folder Name="/studio/" />
   <Folder Name="/tests/" />
   <Folder Name="/Essentials/tests/">
     <Project Path="Essentials/tests/Testing/Elsa.Testing.csproj" />
@@ -401,6 +394,7 @@
   <Folder Name="/Essentials/tests/Activities/Compensation/">
     <Project Path="Essentials/tests/Activities/Compensation/Tests/Elsa.Activities.Compensation.Tests.csproj" />
   </Folder>
+  <Folder Name="/Essentials/tests/Activities/Compensation/Persistence/" />
   <Folder Name="/Essentials/tests/Activities/Compensation/Persistence/EntityFrameworkCore/">
     <Project Path="Essentials/tests/Activities/Compensation/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Activities.Compensation.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
   </Folder>
@@ -616,20 +610,6 @@
   <Folder Name="/Essentials/tests/Persistence/EntityFrameworkCore/MySql/">
     <Project Path="Essentials/tests/Persistence/EntityFrameworkCore/MySql/FeasibilityTests/Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.csproj" />
   </Folder>
-  <Folder Name="/Essentials/tests/Samples/" />
-  <Folder Name="/Essentials/tests/Samples/Compensation/">
-    <Project Path="Essentials/tests/Samples/Compensation/Tests/Elsa.Samples.Compensation.Tests.csproj" />
-  </Folder>
-  <Folder Name="/Essentials/tests/Samples/Nuplane/" />
-  <Folder Name="/Essentials/tests/Samples/Nuplane/Activities/">
-    <Project Path="Essentials/tests/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj" />
-  </Folder>
-  <Folder Name="/Essentials/tests/Samples/Nuplane/Notes/">
-    <Project Path="Essentials/tests/Samples/Nuplane/Notes/Tests/Elsa.Samples.Nuplane.Notes.Tests.csproj" />
-  </Folder>
-  <Folder Name="/Essentials/tests/Samples/Nuplane/Notes/Activities/">
-    <Project Path="Essentials/tests/Samples/Nuplane/Notes/Activities/Tests/Elsa.Samples.Nuplane.Notes.Activities.Tests.csproj" />
-  </Folder>
   <Folder Name="/Essentials/tests/Secrets/">
     <Project Path="Essentials/tests/Secrets/Tests/Elsa.Secrets.Tests.csproj" />
   </Folder>
@@ -737,6 +717,7 @@
   <Folder Name="/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/">
     <Project Path="Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/WorkerOidcHost/WorkerOidcHost.csproj" />
   </Folder>
+  <Folder Name="/Essentials/tests/Workflows/Runtime/Persistence/" />
   <Folder Name="/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/">
     <Project Path="Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj" />
     <Project Path="Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
