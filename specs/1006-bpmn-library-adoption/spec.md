@@ -58,6 +58,10 @@ An author imports, edits, publishes and exports an existing BPMN definition in t
 4. **Given** a library descriptor or typed data has no implemented Foundation representation or capability, **when** analyzed or imported, **then** the result explicitly reports the unsupported/degraded surface and never presents erased work or Unknown availability as executable readiness.
 5. **Given** an ordinary task compensation handler or a called process with escalation, **when** exercised through the real host, **then** handler identity and interrupting/non-interrupting delivery survive.
 
+6. **Given** a called workflow that ends with an authored BPMN error code, **when** its waited dispatch returns, **then** the caller matches the exact code through the exact call invocation; a different code remains uncaught. The called workflow's original incident remains truthful and ordinary DispatchWorkflow Faulted outcomes retain their current behavior.
+7. **Given** a called workflow emits escalation while running or with its terminal outcome, **when** the caller receives it, **then** the exact call invocation receives the ordered control data durably. For a running child, interrupting cancellation reaches that invocation's child workflow and non-interrupting handling leaves it running. Terminal delivery preserves the child's actual terminal status and incident. A terminal signal-and-failure batch is evaluated together, without starting work that a later item withdraws.
+8. **Given** concurrent calls, restart, redelivery, an unrelated root or a legacy dispatch without the new capability, **when** control delivery is attempted, **then** it cannot target another invocation, bypass dispatch authority or repeat accepted semantic advancement. Legacy payloads remain readable and absence of capability preserves existing ordinary dispatch policy.
+
 ### Edge Cases
 
 - Re-armed listeners, repeated node invocations and terminal child rows sharing a node ID.
@@ -85,6 +89,7 @@ An author imports, edits, publishes and exports an existing BPMN definition in t
 - **FR-011**: Retain valid host scenarios and reconcile any moved or changed test against the permanent audit and current test discipline. No test-name-only, equal-count or library-only result substitutes for host behavior evidence.
 - **FR-012**: Prove fresh upgraded-host recovery, native Sequence/Flowchart composition and actual Studio compatibility before accepting the switch. Record source/head identities, failures, skips and proof limits on the existing issue/PR.
 - **FR-013**: Preserve readers and replay/retention identities for accepted executions; reject unsafe cleanup/rollback rather than stranding or resurrecting work.
+- **FR-014**: Preserve authored BPMN error codes and ordered escalation across waited called-workflow boundaries using an explicit consumer capability tied to committed dispatch identity. Shared runtime transport must remain independent of BPMN. Carry authored control classification separately from fixed safe diagnostics and ordinary runtime faults; no exception detail or foreign incident absorption is implied. Ordinary DispatchWorkflow defaults, root-notification refusal without capability and existing legacy payload behavior remain unchanged. Terminal notifications and typed failure form one durable caller evaluation, with replay/cancellation tied to the exact dispatch and invocation.
 
 ### Key Entities
 
@@ -92,6 +97,7 @@ An author imports, edits, publishes and exports an existing BPMN definition in t
 - **Bound work invocation**: One exact child execution linked to one semantic token, element and optional iteration; node identity alone is insufficient.
 - **Versioned state document**: A private execution-state envelope with an explicit compatible reader/writer policy.
 - **Authored process**: The existing Elsa schema and activity contracts consumed by publishing, interchange and Studio.
+- **Called-workflow control outcome**: Ordered authored notifications and optional terminal classification, authorized by one exact waited dispatch and interpreted by its opted-in consumer. It is distinct from exception diagnostics and the called workflow's incident.
 - **Host capability result**: A truthful distinction between available, unavailable and unknown work, separate from lossless import or semantic support.
 
 ## Success Criteria
@@ -111,3 +117,9 @@ An author imports, edits, publishes and exports an existing BPMN definition in t
 - Native parents retain their existing fault-status differences. StateMachine, Orleans, task-runner follow-up, arbitrary alteration, live-instance migration and a general operator console are outside this unit.
 - Existing execution compatibility is required even though Elsa 4 is unreleased. Actual legacy fixtures must decide whether a proposed transition is safe; synthetic state probes are supplemental.
 - ADR0063 remains proposed throughout this PR. Acceptance is the third ordered PR after resulting-main delivery verification.
+
+## Delivery refinement: called-workflow boundary
+
+Source-host testing confirmed ordinary waited completion and catch-all error handling, but those baselines do not establish coded-error or escalation preservation. The existing same-workflow combined-fault protocol requires an actual faulted child and its local incident; DispatchWorkflow normally completes with a Faulted outcome. A called root also has no local activity parent. FR-014 refines the already-required Call Activity behavior so implementation cannot fake a leaf fault, infer authority from a parent workflow ID alone, overload safe diagnostics, or split a terminal control batch. This refinement authorizes the narrow generic transport needed for that behavior within this switch; it does not change ordinary dispatch policy or broaden production acceptance.
+
+Refinement review completed with independent correctness, standards and acceptance lenses. The standards review corrected the running-versus-terminal escalation wording; all three lenses are clean. Plan/task refinement and transport implementation remain separate gates.

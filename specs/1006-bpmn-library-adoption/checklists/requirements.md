@@ -16,3 +16,5 @@
 - [x] Scope, dependencies, retained cuts and deferred program work are explicit.
 - [x] Implementation structure is left to the plan. Required package/schema identities are compatibility constraints from #2735, not a new technology selection.
 - [x] Independent specification review completed before planning: correctness, standards and acceptance found no actionable issue on 25 October 2026.
+
+- [x] Called-workflow refinement FR-014 independently reviewed before updating plan/tasks or implementing transport; running/terminal escalation wording corrected, then all three lenses clean.
