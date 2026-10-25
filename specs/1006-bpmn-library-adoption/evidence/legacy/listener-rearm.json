@@ -1,0 +1,78 @@
+{
+  "scenario": "listener-rearm",
+  "captureSourceRevision": "d81a4c88a2924708ea8afcc2db20b8a77b84f703",
+  "runtimeBaselineRevision": "fbe694d2f3d126e324c3e46578bc1a560b0217f1",
+  "modelPackage": "0.1.1-preview.19",
+  "interchangePackage": "0.1.1-preview.19",
+  "stateAlias": "Elsa.Bpmn.ExecutionState",
+  "stateVersion": 1,
+  "databaseSha256": "d7a674b085de74faeedf2f35082a0cfd454bb5dc7030d7ad621dd5788f58083d",
+  "compressedSha256": "217102f444b01fd9a970aff53ed75f48f9f043cd76de876b774a01e7f17da017",
+  "oldHostControl": "fresh provider over a separate exact database copy passed",
+  "facts": {
+    "parentId": "legacy-activity-0",
+    "pendingFault": null,
+    "canceledLoser": false,
+    "queuedLoser": false,
+    "queuedBeforeCancellation": false,
+    "loserQueuedObservation": null,
+    "firstCancellationObservation": null,
+    "activeWork": [
+      {
+        "nodeId": "node-hold",
+        "elementId": "hold",
+        "tokenId": "token:5",
+        "schedulingCause": "element:task",
+        "iterationId": null
+      },
+      {
+        "nodeId": "node-listener",
+        "elementId": "event-scope",
+        "tokenId": "token:15",
+        "schedulingCause": "bpmn.event-subprocess.listener",
+        "iterationId": null
+      },
+      {
+        "nodeId": "node-body",
+        "elementId": "event-scope",
+        "tokenId": "token:18",
+        "schedulingCause": "bpmn.event-subprocess.body",
+        "iterationId": null
+      }
+    ],
+    "children": [
+      {
+        "invocationId": "legacy-activity-1",
+        "node": "node-hold",
+        "status": 3,
+        "iterationId": null,
+        "token": "token:5"
+      },
+      {
+        "invocationId": "legacy-activity-2",
+        "node": "node-listener",
+        "status": 4,
+        "iterationId": null,
+        "token": "token:3"
+      },
+      {
+        "invocationId": "legacy-activity-3",
+        "node": "node-listener",
+        "status": 3,
+        "iterationId": null,
+        "token": "token:15"
+      },
+      {
+        "invocationId": "legacy-activity-4",
+        "node": "node-body",
+        "status": 4,
+        "iterationId": null,
+        "token": "token:18"
+      }
+    ],
+    "bookmarkCount": 2,
+    "queuedIds": [
+      "fa286594d87e0e20:complete:legacy-activity-4"
+    ]
+  }
+}

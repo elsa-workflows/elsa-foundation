@@ -17,12 +17,12 @@ Spec review: three independent lenses clean. Plan review: corrected verdict-awar
 Goal: actual coherent execution checkpoints and a faithful capture control. This is a prerequisite for US1, not completed upgraded-host recovery.
 
 - [x] T006 Add a test-only committed-checkpoint capture/gate in `Essentials/tests/Activities/Bpmn/Tests/` that records actual state/queue/outbox/bookmark/value/incident documents before the next scheduler action. Capture source/pins/executable and assert boundary coherence. Normal tests must not regenerate goldens.
-- [ ] T007 Capture a real resolved event race with canceled loser and trailing live wait under `specs/1006-bpmn-library-adoption/evidence/legacy/`; assert canceled token, exact terminal child/provenance and cleaned bookmark.
-- [ ] T008 Capture and prove the separate loser-completion-already-queued-before-winner-cancellation order in the same evidence directory; a failed precondition is a failed capture, not a pass.
-- [ ] T009 Capture parallel MI outstanding work and a non-interrupting listener's terminal previous invocation plus live same-node/null-iteration re-arm; preserve distinct tokens, child handles and iteration/value state.
-- [ ] T010 Capture an actual committed legacy PendingFault after an evaluation already staged work; retain original code/message, child/incident state and owed work. A synthetic typed state cannot satisfy this task.
+- [x] T007 Capture a real resolved event race with canceled loser and trailing live wait under `specs/1006-bpmn-library-adoption/evidence/legacy/`; assert canceled token, exact terminal child/provenance and cleaned bookmark.
+- [x] T008 Capture and prove the separate loser-completion-already-queued-before-winner-cancellation order in the same evidence directory; a failed precondition is a failed capture, not a pass.
+- [x] T009 Capture parallel MI outstanding work and a non-interrupting listener's terminal previous invocation plus live same-node/null-iteration re-arm; preserve distinct tokens, child handles and iteration/value state.
+- [x] T010 Capture an actual committed legacy PendingFault after an evaluation already staged work; retain original code/message, child/incident state and owed work. A synthetic typed state cannot satisfy this task.
 - [x] T011 Restore/reopen the captured checkpoint through an old-host control in the BPMN test/integration projects, drive its remaining work, and record fixture digests/provenance in `specs/1006-bpmn-library-adoption/evidence/legacy/README.md`.
-- [ ] T012 Review capture preconditions, portable fixture completeness and old-host controls; commit the verified fixtures while the legacy writer and package pins still exist. Correct the reader design if evidence contradicts it. Gate A remains closed until T006–T012 pass.
+- [x] T012 Review capture preconditions, portable fixture completeness and old-host controls; commit the verified fixtures while the legacy writer and package pins still exist. Correct the reader design if evidence contradicts it. Gate A remains closed until T006–T012 pass.
 
 ## Phase 3: US1 — compatible execution-state continuation (P1)
 
