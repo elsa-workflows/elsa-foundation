@@ -13322,6 +13322,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Integrations.Connectors.Microsoft365",
+          "path": "Extensions/Integrations/src/Connectors/Microsoft365/Elsa.Integrations.Connectors.Microsoft365.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Integrations.Connectors.OAuth2",
           "path": "Extensions/Integrations/src/Connectors/OAuth2/Elsa.Integrations.Connectors.OAuth2.csproj"
         },
@@ -23790,6 +23795,95 @@
       ]
     },
     {
+      "path": "Extensions/Integrations/src/Connectors/Microsoft365/Elsa.Integrations.Connectors.Microsoft365.csproj",
+      "name": "Elsa.Integrations.Connectors.Microsoft365",
+      "kind": "source",
+      "domain": "Elsa.Integrations",
+      "sub_domain": "Connectors.Microsoft365",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Integrations.Connectors.Microsoft365",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Http",
+          "path": "Essentials/src/Activities/Http/Elsa.Activities.Http.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Connections.Core",
+          "path": "Essentials/src/Connections/Core/Elsa.Connections.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Integrations.Sdk",
+          "path": "Extensions/Integrations/src/Sdk/Elsa.Integrations.Sdk.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Http",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "CShells.AspNetCore.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
+        }
+      ]
+    },
+    {
       "path": "Extensions/Integrations/src/Connectors/OAuth2/Elsa.Integrations.Connectors.OAuth2.csproj",
       "name": "Elsa.Integrations.Connectors.OAuth2",
       "kind": "source",
@@ -24088,6 +24182,60 @@
       "package_id": "Elsa.Integrations.Templates",
       "line": "B",
       "edges": []
+    },
+    {
+      "path": "Extensions/Integrations/tests/Connectors/Microsoft365/Tests/Elsa.Integrations.Connectors.Microsoft365.Tests.csproj",
+      "name": "Elsa.Integrations.Connectors.Microsoft365.Tests",
+      "kind": "test",
+      "domain": "Elsa.Integrations",
+      "sub_domain": "Connectors.Microsoft365.Tests",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Connections.Core",
+          "path": "Essentials/src/Connections/Core/Elsa.Connections.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Integrations.Connectors.Microsoft365",
+          "path": "Extensions/Integrations/src/Connectors/Microsoft365/Elsa.Integrations.Connectors.Microsoft365.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Integrations.Sdk",
+          "path": "Extensions/Integrations/src/Sdk/Elsa.Integrations.Sdk.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.NET.Test.Sdk",
+          "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "coverlet.collector",
+          "version": "6.0.2"
+        },
+        {
+          "type": "external",
+          "id": "xunit",
+          "version": "2.9.3"
+        },
+        {
+          "type": "external",
+          "id": "xunit.runner.visualstudio",
+          "version": "3.1.5"
+        }
+      ]
     },
     {
       "path": "Extensions/Integrations/tests/Connectors/OAuth2/Tests/Elsa.Integrations.Connectors.OAuth2.Tests.csproj",
