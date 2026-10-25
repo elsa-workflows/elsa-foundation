@@ -119,4 +119,31 @@ public sealed class ListChannelsAndUploadTests
         Assert.Single(harness.Http.Recorded);
         SlackTestSupport.AssertSlackMethod(harness.Http.Recorded[0], "files.getUploadURLExternal");
     }
+
+    [Fact]
+    public async Task UploadFile_accepts_any_2xx_from_the_upload_host()
+    {
+        await using var harness = SlackTestSupport.CreateHarness();
+        harness.Http.Respond = (request, _) =>
+        {
+            var path = request.RequestUri?.AbsolutePath ?? "";
+            if (path.EndsWith("files.getUploadURLExternal", StringComparison.Ordinal))
+                return CannedHttpResponse.Json("""{"ok":true,"upload_url":"https://files.slack.com/upload/v1/abc","file_id":"F1"}""");
+            if (request.RequestUri?.Host == "files.slack.com")
+                return CannedHttpResponse.WithStatus(HttpStatusCode.Created, "Created");
+            if (path.EndsWith("files.completeUploadExternal", StringComparison.Ordinal))
+                return CannedHttpResponse.Json("""{"ok":true,"files":[{"id":"F1"}]}""");
+            return CannedHttpResponse.Json("""{"ok":false,"error":"unknown_method"}""");
+        };
+
+        var activity = SlackTestSupport.Activity<UploadFile>(harness, upload =>
+        {
+            upload.Filename = "note.txt";
+            upload.Content = "hello"u8.ToArray();
+        });
+
+        var result = SlackTestSupport.Complete(await activity.ExecuteForTestsAsync(SlackTestSupport.Context()));
+        Assert.Equal(["F1"], result.FileIds);
+        Assert.Equal(3, harness.Http.Recorded.Count);
+    }
 }

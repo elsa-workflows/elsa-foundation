@@ -69,7 +69,7 @@ public sealed class UploadFile(
 
             var uploaded = await client.PostBytesWithoutAuthAsync(uploadUri, Content, context.CancellationToken)
                 .ConfigureAwait(false);
-            if (uploaded is not HttpStatusCode.OK)
+            if ((int)uploaded is < 200 or >= 300)
             {
                 return ActivityTransition.Fault<SlackFileUploadResult>(
                     new ActivityFault(SlackErrorCodes.HttpError, $"Slack file host returned HTTP {(int)uploaded}."));

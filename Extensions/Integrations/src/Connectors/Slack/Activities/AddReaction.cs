@@ -17,7 +17,7 @@ public sealed class AddReaction(
     [ActivityInput(Tier = InputTier.Essential)]
     public string Channel { get; set; } = "";
 
-    [ActivityInput(Key = nameof(Ts), DisplayName = "Ts", Tier = InputTier.Essential)]
+    [ActivityInput(Key = nameof(Ts), DisplayName = "Message ts", Tier = InputTier.Essential)]
     public string Ts { get; set; } = "";
 
     [ActivityInput(Key = nameof(EmojiName), DisplayName = "Emoji name", Tier = InputTier.Essential, Description = "Emoji name without colons. Requires reactions:write.")]
