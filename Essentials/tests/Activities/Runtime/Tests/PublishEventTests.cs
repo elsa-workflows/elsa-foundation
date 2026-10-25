@@ -124,6 +124,7 @@ public sealed class PublishEventTests
 
         var dispatch = Assert.Single(router.Requests);
         Assert.Equal(StimulusRoutingMode.StartAndResume, dispatch.Mode);
+        Assert.True(dispatch.ResumeAllMatchingBookmarks);
         Assert.Equal(EventStimulus.StimulusType, dispatch.StimulusType);
         Assert.Equal(EventStimulus.Hash("order.placed"), dispatch.StimulusHash);
         Assert.Equal("corr-1", dispatch.CorrelationId);

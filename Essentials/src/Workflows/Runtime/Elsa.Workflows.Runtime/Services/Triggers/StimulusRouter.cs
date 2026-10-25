@@ -79,7 +79,7 @@ public sealed class StimulusRouter : IStimulusRouter
 
         // 1. Snapshot the pre-existing fan-in resume set BEFORE starting new instances, so bookmarks created by
         //    just-started (synchronously executed) instances are never resumed by the stimulus that started them.
-        var waitingExecutionIds = request.Mode == StimulusRoutingMode.StartOnly
+        var waitingTargets = request.Mode == StimulusRoutingMode.StartOnly
             ? []
             : await SnapshotWaitingExecutionsAsync(request, now, cancellationToken);
 
@@ -92,12 +92,12 @@ public sealed class StimulusRouter : IStimulusRouter
         // 3. Resume the snapshot fan-in set.
         var resumes = request.Mode == StimulusRoutingMode.StartOnly
             ? []
-            : await ResumeWaitingExecutionsAsync(request, waitingExecutionIds, dispatchMetadata, cancellationToken);
+            : await ResumeWaitingExecutionsAsync(request, waitingTargets, dispatchMetadata, cancellationToken);
 
         return new StimulusRoutingResult(starts, resumes);
     }
 
-    private async ValueTask<IReadOnlyList<string>> SnapshotWaitingExecutionsAsync(
+    private async ValueTask<IReadOnlyList<(string ExecutionId, string? BookmarkId)>> SnapshotWaitingExecutionsAsync(
         StimulusDispatchRequest request,
         DateTimeOffset now,
         CancellationToken cancellationToken)
@@ -108,9 +108,13 @@ public sealed class StimulusRouter : IStimulusRouter
 
         // A targeted (local) publish narrows the fan-in to the one execution that raised it; the lookup still runs
         // so a target with no matching wait resolves to an empty set rather than an unconditional resume attempt.
-        return request.TargetWorkflowExecutionId is { } target
-            ? lookup.WorkflowExecutionIds.Where(id => StringComparer.Ordinal.Equals(id, target)).ToArray()
-            : lookup.WorkflowExecutionIds;
+        var matches = request.TargetWorkflowExecutionId is { } target
+            ? lookup.Matches.Where(bookmark => StringComparer.Ordinal.Equals(bookmark.WorkflowExecutionId, target))
+            : lookup.Matches;
+        return request.ResumeAllMatchingBookmarks
+            ? matches.Select(bookmark => (bookmark.WorkflowExecutionId, (string?)bookmark.BookmarkId)).ToArray()
+            : matches.Select(bookmark => bookmark.WorkflowExecutionId).Distinct(StringComparer.Ordinal)
+                .Select(id => (id, (string?)null)).ToArray();
     }
 
     private async ValueTask<IReadOnlyList<StimulusStartOutcome>> StartMatchingTriggersAsync(
@@ -196,24 +200,28 @@ public sealed class StimulusRouter : IStimulusRouter
 
     private async ValueTask<IReadOnlyList<StimulusResumeOutcome>> ResumeWaitingExecutionsAsync(
         StimulusDispatchRequest request,
-        IReadOnlyList<string> waitingExecutionIds,
+        IReadOnlyList<(string ExecutionId, string? BookmarkId)> waitingTargets,
         IReadOnlyDictionary<string, string> dispatchMetadata,
         CancellationToken cancellationToken)
     {
-        var outcomes = new List<StimulusResumeOutcome>(waitingExecutionIds.Count);
+        var outcomes = new List<StimulusResumeOutcome>(waitingTargets.Count);
 
-        foreach (var workflowExecutionId in waitingExecutionIds)
+        foreach (var (workflowExecutionId, bookmarkId) in waitingTargets)
         {
             var resumeRequest = new BookmarkResumeDispatchRequest(
                 workflowExecutionId: workflowExecutionId,
                 stimulusType: request.StimulusType,
                 stimulusHash: request.StimulusHash,
                 input: request.Input,
+                // The resume dispatcher already scopes the durable key to the selected bookmark.
+                // Retain this parent key so an in-flight pre-upgrade delivery deduplicates on retry.
                 idempotencyKey: request.IdempotencyKey is null ? null : $"{request.IdempotencyKey}:resume:{workflowExecutionId}",
                 requestedBy: request.RequestedBy,
                 metadata: dispatchMetadata,
                 payloadType: request.PayloadType,
-                providerId: request.ProviderId);
+                providerId: request.ProviderId,
+                bookmarkId: bookmarkId,
+                testRunDelivery: null);
 
             // Same request scope serves every outcome of one HTTP request: a resume
             // driven by a synchronous-mode endpoint gets the caller's ambient services so its subsequent live write

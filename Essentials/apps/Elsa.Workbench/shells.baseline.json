@@ -31,6 +31,7 @@
           "ActivitiesGraphRuntime": {},
           "ActivitiesRuntime": {},
           "ActivitiesBpmn": {},
+          "ActivitiesBpmnInterchange": {},
           "ActivitiesCompensation": {},
           "ActivitiesControlFlow": {},
           "ActivitiesFlowchart": {},

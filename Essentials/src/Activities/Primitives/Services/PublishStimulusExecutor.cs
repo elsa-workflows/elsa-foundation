@@ -55,7 +55,7 @@ public sealed class PublishStimulusExecutor : IRuntimePostCommitIntentHandler
             mode: localTarget is null ? StimulusRoutingMode.StartAndResume : StimulusRoutingMode.ResumeOnly,
             idempotencyKey: intent.IdempotencyKey,
             requestedBy: PublishStimulusConstants.RequestedBy,
-            targetWorkflowExecutionId: localTarget);
+            targetWorkflowExecutionId: localTarget) { ResumeAllMatchingBookmarks = true };
 
         StimulusRoutingResult result;
         try

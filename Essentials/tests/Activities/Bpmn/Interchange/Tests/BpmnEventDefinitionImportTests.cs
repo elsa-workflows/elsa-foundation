@@ -156,7 +156,7 @@ public sealed class BpmnEventDefinitionImportTests
         var child = Assert.Single(structure.Activities);
         Assert.Equal("node-catch-timer", child.NodeId);
         Assert.Equal(BpmnDocumentImporter.DefaultDelayActivityVersionId, child.ActivityVersionId);
-        Assert.Equal("PT30S", Literal(child, "Duration"));
+        Assert.Equal("00:00:30", Literal(child, "Duration"));
         Assert.Equal(2, structure.SequenceFlows.Count); // both flows retained
     }
 

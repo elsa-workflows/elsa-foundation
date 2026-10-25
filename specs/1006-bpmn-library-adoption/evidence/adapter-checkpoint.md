@@ -51,7 +51,7 @@ The full permanent 242-method audit and deletion/replacement reconciliation are 
 
 The named scoped IBpmnWorkBinder now owns the existing Delay/Event/PublishEvent/DispatchWorkflow/nested activity policy. Its public request/result models are host-owned; third-party model types do not leak through that contract. Importer/exporter/binder are explicit single-implementation replacement contracts, with startup missing/duplicate checks and a preserved explicit host override.
 
-Pure synchronous conversion cannot establish host inventory: its proposed bindings are Unknown and CanExecute is false. The registered HTTP import/analyze endpoints use the asynchronous catalog path. It resolves visible, unique existing 1.0.0 profile versions to actual catalog IDs, recursively including nested processes, and refuses readiness for missing/ambiguous inventory rather than selecting a newer native contract implicitly. Ordinary publishing validation remains necessary.
+Pure synchronous conversion cannot establish host inventory: its proposed bindings are Unknown and CanExecute is false. The registered HTTP import/analyze endpoints use the asynchronous catalog path. It resolves visible, active recommended 1.0.0 profile versions (including build metadata) to actual catalog IDs, recursively including nested processes, and refuses readiness for missing/ambiguous inventory rather than selecting a newer native contract implicitly. Ordinary publishing validation remains necessary.
 
 The whole interchange project passes **127/127, zero failures/skips**. Registration-removal mutation fails its positive composition witness; reverting the malformed-structure wrapper fails the exact BpmnInterchangeException control; restored whole-project tests pass. Independent correctness/standards/acceptance increment reviews are clean after the JSON-boundary fix. Normal and locked solution restore and generated-filter check pass. Five lock deltas add only the explicit Design.Core contract dependency edge.
 
@@ -59,4 +59,40 @@ These are conversion, registration and catalog-port controls. They do not establ
 
 ## Open gates
 
-Dedicated late-fault, duplicate callback and pruning witnesses; old/new reader and rollback matrix; durable combined-outcome retry/concurrent claims; complete native-parent qualification; actual CallActivity dispatch/error/escalation and ordinary-task compensation proof; published authoring fingerprint; source-built Studio journeys; duplicate deletion/guards; full checks and final review/merge. Keep #2898/#2907 and the broader program open. Orleans/task-runner follow-ups remain deferred.
+Dedicated late-fault, duplicate callback and pruning witnesses; old/new reader and rollback matrix; durable combined-outcome retry/concurrent claims; complete native-parent qualification; actual CallActivity dispatch/error/escalation and ordinary-task compensation proof; published authoring/Studio mirror qualification; source-built Studio journeys; duplicate deletion/guards; full checks and final review/merge. Keep #2898/#2907 and the broader program open. Orleans/task-runner follow-ups remain deferred.
+
+## Actual Workbench catalog, timer and broadcast increment
+
+Live source-built Workbench HTTP exposed three failures that port tests missed: the default/baseline
+shell did not enable interchange (404); native `1.0.0+build` catalog versions were rejected; and imported
+ISO duration `PT0S` failed publication with `VF-COER-001`. Composition now enables interchange, new
+bindings follow the explicitly recommended active publication with stable 1.0.0 SemVer compatibility,
+and the binder supplies an invariant TimeSpan literal while retaining the original XML descriptor.
+The existing two-argument public lookup constructor is retained for compiled consumers.
+
+A fourth actual failure exposed same-execution signal fan-out: two durable Event catches remained
+suspended because instance-level routing was ambiguous. Named-event publication now opts into exact
+bookmark fan-out; ordinary routing keeps its ambiguity behavior. Correlation, local targeting and
+isolated-test exclusion remain on their existing paths. The router retains the original parent delivery
+key because the dispatcher already includes bookmark identity; the real-dispatcher upgrade witness
+proves an accepted pending resume retains its old mailbox key. This is at-least-once delivery, not a
+durable recipient snapshot across retries or exactly-once delivery to newly re-armed listeners.
+
+`e2e-tests/bpmn/Test-BpmnLibraryAdoption.ps1` runs actual registered import → publication → execution
+and export without controlling a server. It proves a none-start process, a PT5S timer observed durably
+Suspended before completion, and one imported signal publisher resuming both already-suspended
+same-execution catches through their parallel join. All complete with zero incidents. It fails a missing
+precondition or unsuccessful outcome and writes a passed/failed portable receipt.
+
+`e2e-tests/bpmn/verify_published_contracts.py` reads actual recommended active SQLite publication and
+catalog rows in one read transaction and projects all frozen descriptor fields. Both published BPMN
+descriptors match the unchanged fingerprint. Isolated actual-database backup controls with retired,
+missing or foreign-tenant publication/definition records refuse the comparison. Build metadata is
+recorded separately from the stable authoring version. This is persisted source-host publication
+proof; the Studio mirror/browser gate is still open.
+
+Local whole-project results for this increment: Design **689**, interchange **130**, Activities.Runtime
+**663**, Workflows.Runtime **2610**, zero failures/skips. The exact-bookmark control was red before the
+router fix (expected two, actual one). Incremental reviews corrected constructor binary compatibility,
+publication-query fidelity and redundant delivery-key changes. Final complete-PR review has not begun.
+Source-bound receipts follow the committed implementation so they name an exact buildable revision.

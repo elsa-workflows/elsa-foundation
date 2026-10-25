@@ -43,6 +43,9 @@ public sealed class BpmnCatalogBindingTests
     [InlineData("available")]
     [InlineData("missing-delay")]
     [InlineData("newer-version-only")]
+    [InlineData("build-metadata")]
+    [InlineData("prerelease")]
+    [InlineData("no-recommendation")]
     public async Task Registered_endpoint_resolves_exact_profile_references_from_visible_catalog(string inventory)
     {
         var services = new ServiceCollection();
@@ -59,7 +62,7 @@ public sealed class BpmnCatalogBindingTests
         Assert.Equal("catalog-process-v1", result.ProcessNode.ActivityVersionId);
         var structure = result.ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
         var wait = Assert.Single(structure.Activities);
-        if (inventory == "available")
+        if (inventory is "available" or "build-metadata")
         {
             Assert.Equal("catalog-delay-v1", wait.ActivityVersionId);
             Assert.True(result.Analysis.CanExecute);
@@ -101,11 +104,20 @@ public sealed class BpmnCatalogBindingTests
         }
         public Task<IEnumerable<ActivityDefinitionVersionSummary>> ListVersions(string definitionId, CancellationToken cancellationToken = default)
         {
-            var versions = new List<ActivityDefinitionVersionSummary>
-                { new(definitionId + "-v2", "2.0.0", DateTimeOffset.UnixEpoch, ActivityExecutionType.Action) };
-            if (definitionId == "catalog-process" || inventory != "newer-version-only")
-                versions.Add(new(definitionId + "-v1", "1.0.0", DateTimeOffset.UnixEpoch, ActivityExecutionType.Action));
-            return Task.FromResult<IEnumerable<ActivityDefinitionVersionSummary>>(versions);
+            throw new InvalidOperationException("New bindings must follow the recommendation, never historical version ordering.");
+        }
+        public Task<ActivityDefinitionVersionSummary?> FindRecommendedVersion(string definitionId, CancellationToken cancellationToken = default)
+        {
+            if (definitionId == "catalog-delay" && inventory == "no-recommendation")
+                return Task.FromResult<ActivityDefinitionVersionSummary?>(null);
+            var version = definitionId != "catalog-delay" ? "1.0.0+current-source" : inventory switch
+            {
+                "newer-version-only" => "2.0.0",
+                "prerelease" => "1.0.0-preview.1",
+                "build-metadata" => "1.0.0+current-source",
+                _ => "1.0.0"
+            };
+            return Task.FromResult<ActivityDefinitionVersionSummary?>(new(definitionId + "-v1", version, DateTimeOffset.UnixEpoch, ActivityExecutionType.Action));
         }
         public Task<IActivityDefinition> GetDefinition(string idOrActivityTypeKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IActivityDefinitionVersion> GetVersion(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();

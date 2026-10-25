@@ -3,6 +3,7 @@ using Elsa.Activities.Bpmn.Interchange.Models;
 using Elsa.Activities.Bpmn.Interchange.Exceptions;
 using Elsa.Activities.Bpmn.Models;
 using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Primitives.Versioning;
 using Elsa.Workflows.Design.Core.Models;
 using Process = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 
@@ -108,9 +109,10 @@ internal sealed class BpmnCatalogBindingSession(IActivityDefinitionLookup catalo
             {
                 // This binding profile targets the existing 1.0.0 contracts; never choose a newer,
                 // potentially incompatible native activity version merely because it sorts last.
-                var versions = (await catalog.ListVersions(definitions[0].Id, cancellationToken)).Where(version => version.Version == "1.0.0").ToArray();
-                if (versions.Length == 1)
-                    versionId = versions[0].Id;
+                var recommended = await catalog.FindRecommendedVersion(definitions[0].Id, cancellationToken);
+                if (recommended is not null && SemVer.TryParse(recommended.Version, out var version) &&
+                    version.Major == 1 && version.Minor == 0 && version.Patch == 0 && version.Prerelease is null)
+                    versionId = recommended.Id;
             }
         }
         else
@@ -119,7 +121,7 @@ internal sealed class BpmnCatalogBindingSession(IActivityDefinitionLookup catalo
             if (version is not null && _definitions.Any(definition => definition.Id == version.DefinitionId))
                 versionId = version.Id;
         }
-        var result = (versionId, versionId is not null ? "Resolved" : $"Activity reference '{reference}' has no unique visible catalog version for this binding profile.");
+        var result = (versionId, versionId is not null ? "Resolved" : $"Activity reference '{reference}' has no compatible recommended version in the visible catalog for this binding profile.");
         _references.Add(reference, result);
         return result;
     }

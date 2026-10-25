@@ -1,4 +1,6 @@
 using Elsa.Activities.Bpmn.Interchange.Contracts;
+using System.Globalization;
+using System.Xml;
 using Elsa.Activities.Bpmn.Interchange.Models;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
@@ -13,9 +15,25 @@ internal sealed class BpmnWorkBinder : IBpmnWorkBinder
     public BpmnWorkBindingResult Bind(BpmnWorkBindingRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+        if (request.Kind == BpmnWorkBindingKind.TimerWait)
+        {
+            try
+            {
+                // XML retains the BPMN descriptor separately. Delay's literal is a Foundation
+                // TimeSpan, whose publisher accepts the invariant constant representation.
+                var duration = XmlConvert.ToTimeSpan(request.Value!);
+                return new(Node(request, BpmnDocumentImporter.DefaultDelayActivityVersionId,
+                    Literal("Duration", duration.ToString("c", CultureInfo.InvariantCulture))),
+                    BpmnImportCapabilityAvailability.Available, "Foundation supplied the duration wait binding.");
+            }
+            catch (Exception exception) when (exception is FormatException or OverflowException or ArgumentNullException)
+            {
+                return new(null, BpmnImportCapabilityAvailability.Unsupported,
+                    $"Timer '{request.ElementId}' has no representable Foundation duration wait binding.");
+            }
+        }
         var activity = request.Kind switch
         {
-            BpmnWorkBindingKind.TimerWait => Node(request, BpmnDocumentImporter.DefaultDelayActivityVersionId, Literal("Duration", request.Value)),
             BpmnWorkBindingKind.MessageWait or BpmnWorkBindingKind.SignalWait => Node(request, BpmnDocumentImporter.DefaultEventActivityVersionId,
                 Literal("EventName", request.Value), Literal("CanStartWorkflow", false)),
             BpmnWorkBindingKind.MessagePublish or BpmnWorkBindingKind.SignalPublish => Node(request, BpmnDocumentImporter.DefaultPublishEventActivityVersionId,

@@ -37,9 +37,10 @@
 
 Synchronous conversion retains legacy placeholder version references and reports unverified mappings
 as Unknown. The registered HTTP endpoints use the asynchronous catalog path: it resolves visible,
-unambiguous existing 1.0.0 profile versions to their real catalog IDs, preserving the existing contracts
-instead of silently selecting a newer version. Missing inventory cannot qualify CanExecute; normal
-publication validation remains required. This check is distinct from runtime/Studio qualification.
+active recommended 1.0.0 profile versions (including build metadata) to their real catalog IDs, preserving the existing contracts
+instead of silently selecting a newer version. Missing inventory or recommendation cannot qualify CanExecute; normal
+publication validation remains required. The timer binding converts ISO duration text to an invariant
+TimeSpan literal for Delay; the authored event descriptor retains the XML text for export. This check is distinct from runtime/Studio qualification.
 
 ## Owned interchange contracts
 

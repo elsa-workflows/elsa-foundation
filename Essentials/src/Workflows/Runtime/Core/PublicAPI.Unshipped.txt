@@ -8893,3 +8893,5 @@ const Elsa.Workflows.Runtime.Core.Models.ActivityExecutionScopeValues.InputRole 
 const Elsa.Workflows.Runtime.Core.Models.ActivityExecutionScopeValues.OutputRole = "output" -> string!
 const Elsa.Workflows.Runtime.Core.Models.ActivityExecutionScopeValues.VariableRole = "variable" -> string!
 static Elsa.Workflows.Runtime.Core.Models.ActivityExecutionScopeValues.Metadata(string! boundaryActivityExecutionId, string! role, string! referenceKey, string! storageDriverKey, string? inputName = null, string? variableName = null) -> System.Collections.Generic.Dictionary<string!, string!>!
+Elsa.Workflows.Runtime.Core.Models.StimulusDispatchRequest.ResumeAllMatchingBookmarks.get -> bool
+Elsa.Workflows.Runtime.Core.Models.StimulusDispatchRequest.ResumeAllMatchingBookmarks.init -> void
