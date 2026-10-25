@@ -172,11 +172,12 @@ async function throttleCpu(page: Page) {
 /** Measures the browser interaction itself, excluding Playwright transport and actionability polling. */
 async function activateCompactEditor(preview: Locator) {
   return preview.evaluate(button => new Promise<number>((resolve, reject) => {
-    const surface = button.closest<HTMLElement>(".studio-code-editor");
-    if (!surface) {
+    const surface = button.closest(".studio-code-editor");
+    if (!(surface instanceof HTMLElement)) {
       reject(new Error("The compact preview is not inside a Studio code editor."));
       return;
     }
+    const editor = surface;
 
     const startedAt = performance.now();
     let finished = false;
@@ -190,12 +191,12 @@ async function activateCompactEditor(preview: Locator) {
       resolve(performance.now() - startedAt);
     };
     function check() {
-      if (surface.querySelector(".studio-code-editor-rich-compact .cm-content")) finish();
+      if (editor.querySelector(".studio-code-editor-rich-compact .cm-content")) finish();
       else if (!finished) frame = requestAnimationFrame(check);
     }
 
-    observer.observe(surface, { childList: true, subtree: true });
-    button.click();
+    observer.observe(editor, { childList: true, subtree: true });
+    (button as HTMLElement).click();
     check();
   }));
 }

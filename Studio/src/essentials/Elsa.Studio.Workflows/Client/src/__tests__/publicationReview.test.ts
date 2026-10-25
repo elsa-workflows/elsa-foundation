@@ -11,7 +11,8 @@ import {
   publicationIntentFor,
   publicationIntentForChannel,
   summarizePublicationChanges,
-  uniquePublicationConflicts
+  uniquePublicationConflicts,
+  unnamedPublicationConflictLabel
 } from "../workflow-editor/publicationReview";
 import { flowchartActivity, sequenceActivity } from "./fixtures";
 import { activationSlot, importedActivationSlot, publishedSlot, versionDetails, withoutPublication } from "./fixtures/publicationSlots";
@@ -328,13 +329,13 @@ describe("publication conflict labels", () => {
     expect(publicationConflictKeyDetail(conflict)).toBe(key);
   });
 
-  it("falls back to the raw key when the descriptor is missing, null, or blank", () => {
-    expect(publicationConflictLabel({ key })).toBe(key);
-    expect(publicationConflictKeyDetail({ key })).toBeUndefined();
-    expect(publicationConflictLabel({ key, descriptor: null })).toBe(key);
-    expect(publicationConflictKeyDetail({ key, descriptor: null })).toBeUndefined();
-    expect(publicationConflictLabel({ key, descriptor: "   " })).toBe(key);
-    expect(publicationConflictKeyDetail({ key, descriptor: "   " })).toBeUndefined();
+  it("uses a generic primary label and keeps the raw key as secondary detail when the descriptor is missing, null, or blank", () => {
+    expect(publicationConflictLabel({ key })).toBe(unnamedPublicationConflictLabel);
+    expect(publicationConflictKeyDetail({ key })).toBe(key);
+    expect(publicationConflictLabel({ key, descriptor: null })).toBe(unnamedPublicationConflictLabel);
+    expect(publicationConflictKeyDetail({ key, descriptor: null })).toBe(key);
+    expect(publicationConflictLabel({ key, descriptor: "   " })).toBe(unnamedPublicationConflictLabel);
+    expect(publicationConflictKeyDetail({ key, descriptor: "   " })).toBe(key);
     expect(publicationConflictDescriptor({ descriptor: "   " })).toBeUndefined();
   });
 

@@ -99,8 +99,8 @@ describe("publication channel UX", () => {
     const technical = summary(container, "Technical details")!.parentElement as HTMLDetailsElement;
     const conflictAlert = container.querySelector<HTMLElement>(".wf-publication-risks[role='alert']")!;
     expect(conflictAlert.textContent).toContain("1 trigger conflicts with channel default.");
-    expect(conflictAlert.textContent).toContain(triggerKey);
-    expect(conflictAlert.querySelector(".wf-publication-selection")).toBeNull();
+    expect(conflictAlert.textContent).toContain("Trigger conflict");
+    expect(conflictAlert.querySelector(".wf-publication-selection")?.textContent).toBe(triggerKey);
     expect(conflictAlert.textContent).not.toContain(publicationId);
     expect(container.querySelector(".wf-publication-change-summary")?.textContent).toBe("Changes: 1 activity · 1 trigger");
     expect(changes.textContent).toContain("1 added");
@@ -133,7 +133,7 @@ describe("publication channel UX", () => {
     expect(conflictAlert.textContent).not.toContain("publication-9");
   });
 
-  it("falls back to the raw conflict key when no descriptor is present", () => {
+  it("shows a generic primary label and the raw key as muted detail when no descriptor is present", () => {
     const triggerKey = "httpendpoint:sha256:2b7c93605ce7dee2b58db62d6b0da54c6c7d7945ba83baecc93938e897a797bc";
     const container = render(review({
       preflight: preflight({
@@ -148,8 +148,8 @@ describe("publication channel UX", () => {
     }));
 
     const conflictAlert = container.querySelector<HTMLElement>(".wf-publication-risks[role='alert']")!;
-    expect(conflictAlert.textContent).toContain(triggerKey);
-    expect(conflictAlert.querySelector(".wf-publication-selection")).toBeNull();
+    expect(conflictAlert.textContent).toContain("Trigger conflict");
+    expect(conflictAlert.querySelector(".wf-publication-selection")?.textContent).toBe(triggerKey);
     expect(conflictAlert.textContent).not.toContain("GET /orders/{id}");
   });
 

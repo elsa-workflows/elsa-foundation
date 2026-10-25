@@ -6,16 +6,23 @@
  * declaration generation has genuine errors.
  */
 
+import ts from "typescript";
+
 export interface DeclarationDiagnostic {
   code: number;
   category?: number;
-  messageText: string | { messageText: string };
+  messageText: string | DiagnosticMessageText;
+}
+
+interface DiagnosticMessageText {
+  messageText: string;
+  next?: DiagnosticMessageText | DiagnosticMessageText[];
 }
 
 const typescriptErrorCategory = 1;
 
 function diagnosticMessage(messageText: DeclarationDiagnostic["messageText"]): string {
-  return typeof messageText === "string" ? messageText : messageText.messageText;
+  return ts.flattenDiagnosticMessageText(messageText as string | ts.DiagnosticMessageChain, "\n");
 }
 
 export function failOnDeclarationDiagnostics(diagnostics: readonly DeclarationDiagnostic[]): void {

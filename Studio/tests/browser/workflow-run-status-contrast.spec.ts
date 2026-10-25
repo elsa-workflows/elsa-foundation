@@ -17,7 +17,7 @@ type AxeViolation = {
   id: string;
   impact: string | null;
   help: string;
-  targets: axe.NodeResult["target"][];
+  targets: unknown[];
 };
 
 async function measureRenderedBadgeContrast(page: import("@playwright/test").Page): Promise<BadgeMeasurement[]> {
@@ -80,10 +80,10 @@ async function measureRenderedBadgeContrast(page: import("@playwright/test").Pag
 async function inspectFullPageAxe(page: import("@playwright/test").Page): Promise<AxeViolation[]> {
   await page.addScriptTag({ content: axe.source });
   return page.evaluate(async () => {
-    const result = await (window as Window & { axe: typeof axe }).axe.run(document, { resultTypes: ["violations"] });
+    const result = await window.axe.run(document, { resultTypes: ["violations"] });
     return result.violations.map(violation => ({
       id: violation.id,
-      impact: violation.impact,
+      impact: violation.impact ?? null,
       help: violation.help,
       targets: violation.nodes.map(node => node.target)
     }));
