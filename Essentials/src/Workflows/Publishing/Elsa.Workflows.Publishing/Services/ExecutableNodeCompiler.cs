@@ -295,6 +295,12 @@ public sealed class ExecutableNodeCompiler(
             _ => throw new ArgumentOutOfRangeException(nameof(intrinsic.Kind), intrinsic.Kind, "Authored workflow intrinsic kind is not defined.")
         };
         var stringType = new TypeReference("String");
+        // Studio authors the intrinsic with a dynamic value type. The selected declaration owns the
+        // assignment contract, including collection shape; never publish a stale authoring fallback as
+        // the destination type and defer the mismatch to scheduler dispatch.
+        var valueType = intrinsic.Variable is { } target
+            ? ResolveIntrinsicVariableType(activity.NodeId, target, projection, workflowVariables)
+            : intrinsic.ValueType;
         var inputTypes = runtimeKind switch
         {
             WorkflowIntrinsicKind.Control or WorkflowIntrinsicKind.Finish =>
@@ -303,9 +309,9 @@ public sealed class ExecutableNodeCompiler(
                 new Dictionary<string, TypeReference>(StringComparer.Ordinal)
                 {
                     [WorkflowIntrinsicInputKeys.Name] = stringType,
-                    [WorkflowIntrinsicInputKeys.Value] = intrinsic.ValueType!
+                    [WorkflowIntrinsicInputKeys.Value] = valueType!
                 },
-            _ => new Dictionary<string, TypeReference>(StringComparer.Ordinal) { [WorkflowIntrinsicInputKeys.Value] = intrinsic.ValueType! }
+            _ => new Dictionary<string, TypeReference>(StringComparer.Ordinal) { [WorkflowIntrinsicInputKeys.Value] = valueType! }
         };
         var authoredInputs = activity.Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
         if (authoredInputs.Count != inputTypes.Count || inputTypes.Keys.Any(key => !authoredInputs.ContainsKey(key)))
@@ -375,6 +381,25 @@ public sealed class ExecutableNodeCompiler(
             activityContract: null,
             intrinsicKind: runtimeKind,
             intrinsicVariable: variable);
+    }
+
+    private TypeReference ResolveIntrinsicVariableType(
+        string nodeId,
+        VariableReference target,
+        ActivityTreeProjection projection,
+        IReadOnlyCollection<VariableDefinition> workflowVariables)
+    {
+        // Visibility is checked by ValidateIntrinsicVariableTargets before node compilation. Resolve
+        // this exact declaring scope, rather than a display name that may be shadowed in another scope.
+        IEnumerable<VariableDefinition> declarations = workflowVariables;
+        if (!target.IsWorkflowScope)
+        {
+            var owner = projection.Nodes.FirstOrDefault(node => StringComparer.Ordinal.Equals(node.NodeId, target.DeclaringScopeId));
+            declarations = owner is null ? [] : activityStructureService.ProjectScopedVariables(owner);
+        }
+
+        return declarations.SingleOrDefault(variable => StringComparer.Ordinal.Equals(variable.ReferenceKey, target.ReferenceKey))?.Type
+            ?? throw new ArgumentException($"Workflow intrinsic node '{nodeId}' targets undeclared variable '{target.ReferenceKey}' in scope '{target.DeclaringScopeId}'.");
     }
 
     private static IReadOnlyCollection<string> LiteralIntrinsicKeys(WorkflowIntrinsicKind kind) => kind switch

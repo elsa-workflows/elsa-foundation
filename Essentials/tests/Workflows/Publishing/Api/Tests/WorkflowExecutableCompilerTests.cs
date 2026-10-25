@@ -2681,6 +2681,94 @@ public sealed class WorkflowExecutableCompilerTests
             executable.NodesById["set-1"].IntrinsicVariable?.DeclaringScopeId);
     }
 
+    [Theory]
+    [InlineData("Literal", "Elsa.Any")]
+    [InlineData("JavaScript", "Elsa.Any")]
+    [InlineData("Variable", "Elsa.Any")]
+    [InlineData("Literal", "Int64")]
+    public async Task Set_compiles_against_the_selected_variable_declaration(string syntax, string authoredAlias)
+    {
+        var counter = new Elsa.Expressions.Core.Models.VariableDefinition(
+            "counter", "Counter", new TypeReference("Int32"), null, new ArgumentValue(0, "Literal"));
+        object value = syntax switch
+        {
+            "JavaScript" => "getVariable('Counter') + 1",
+            "Variable" => "counter",
+            _ => 7
+        };
+        var set = DynamicSetIntrinsicNode("set-counter", "counter", value, syntax, authoredAlias: authoredAlias);
+        var compiler = Compiler(WorkflowVersion(SequenceNode("root", [set]), variables: [counter]));
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var binding = executable.NodesById["set-counter"].InputBindings[WorkflowIntrinsicInputKeys.Value];
+        Assert.Equal("Int32", binding.TargetType.Alias);
+        if (syntax == "Literal")
+            Assert.Equal(7, binding.Literal!.InlineValue!.Value.GetInt32());
+        if (syntax == "JavaScript")
+            Assert.Equal("Int32", binding.Expression!.ResultType!.Id);
+    }
+
+    [Theory]
+    [InlineData("workflow", "Int32")]
+    [InlineData("container", "Boolean")]
+    public async Task Set_resolves_its_declaring_scope_when_variable_keys_and_names_are_shadowed(string scope, string expectedAlias)
+    {
+        var workflowCounter = new Elsa.Expressions.Core.Models.VariableDefinition("counter", "Counter", new TypeReference("Int32"), null, null);
+        var localCounter = workflowCounter with { Type = new TypeReference("Boolean") };
+        var set = DynamicSetIntrinsicNode("set-counter", "counter", "true", "JavaScript", scope);
+        var root = SequenceNode("container", [set], [localCounter]);
+
+        var executable = await Compiler(WorkflowVersion(root, variables: [workflowCounter]))
+            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var binding = executable.NodesById["set-counter"].InputBindings[WorkflowIntrinsicInputKeys.Value];
+        Assert.Equal(expectedAlias, binding.TargetType.Alias);
+        Assert.Equal(scope, executable.NodesById["set-counter"].IntrinsicVariable!.DeclaringScopeId);
+    }
+
+    [Fact]
+    public async Task Set_uses_the_selected_variables_collection_shape()
+    {
+        var numbers = new Elsa.Expressions.Core.Models.VariableDefinition("numbers", "Numbers", new TypeReference("Int32", CollectionKind.Array), null, null);
+        var set = DynamicSetIntrinsicNode("set-numbers", "numbers", new[] { 1, 2 }, "Literal");
+
+        var executable = await Compiler(WorkflowVersion(SequenceNode("root", [set]), variables: [numbers]))
+            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var binding = executable.NodesById["set-numbers"].InputBindings[WorkflowIntrinsicInputKeys.Value];
+        Assert.Equal(CollectionKind.Array, binding.TargetType.CollectionKind);
+        Assert.Equal(new[] { 1, 2 }, binding.Literal!.InlineValue!.Value.EnumerateArray().Select(item => item.GetInt32()));
+    }
+
+    [Fact]
+    public async Task Set_refuses_an_invalid_literal_at_publication_instead_of_publishing_a_poisoned_assignment()
+    {
+        var counter = new Elsa.Expressions.Core.Models.VariableDefinition("counter", "Counter", new TypeReference("Int32"), null, null);
+        var set = DynamicSetIntrinsicNode("set-counter", "counter", "not a number", "Literal");
+        var compiler = Compiler(WorkflowVersion(SequenceNode("root", [set]), variables: [counter]));
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("set-counter", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Int32", exception.Message, StringComparison.Ordinal);
+    }
+
+    private static ActivityNode DynamicSetIntrinsicNode(
+        string nodeId,
+        string variableKey,
+        object value,
+        string syntax,
+        string scope = "workflow",
+        string authoredAlias = "Elsa.Any") =>
+        new(nodeId, "elsa.intrinsic.set@1",
+            [new WorkflowArgumentState(WorkflowIntrinsicInputKeys.Value, new ArgumentValue(JsonSerializer.SerializeToElement(value), syntax), null, null, null, null)], [])
+        {
+            Intrinsic = new AuthoredWorkflowIntrinsic(AuthoredWorkflowIntrinsicKind.Set,
+                new TypeReference(authoredAlias), new Elsa.Expressions.Core.Models.VariableReference(variableKey, scope))
+        };
+
     private static ActivityNode SetIntrinsicNode(
         string nodeId,
         string variableKey,

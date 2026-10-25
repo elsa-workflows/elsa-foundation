@@ -35,10 +35,9 @@ const WORKFLOW_SCOPE_ID = "workflow";
  * `intrinsic` block round-trips verbatim as a non-input node member.
  */
 
-// The portable value type pinned on every authored intrinsic. "Elsa.Any" is the runtime's canonical
-// dynamic-value contract (WorkflowIntrinsicExecutor treats it as convert-to-target), so the value binds
-// losslessly whatever the declared target is. The authoring surface never asks the user for a value type,
-// so a single stable dynamic type is the faithful choice — it matches the descriptor's value input type.
+// Portable authoring fallback matching the generic catalog value input. Publication resolves a
+// variable-writing intrinsic against the selected variable's current declaration; the inspector uses
+// that same declaration for its value editor without persisting a second copy of the variable's type.
 export const INTRINSIC_ANY_VALUE_TYPE = { alias: "Elsa.Any", collectionKind: "Single" } as const;
 
 // Reads the additive intrinsic descriptor block from a catalog item, tolerating older backends that omit

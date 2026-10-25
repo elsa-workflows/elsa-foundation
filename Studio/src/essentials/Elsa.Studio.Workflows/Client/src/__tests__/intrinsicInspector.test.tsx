@@ -45,8 +45,8 @@ function descriptorFor(activity: typeof setVariableActivity): StudioActivityDesc
   };
 }
 
-function renderInspector(activity: typeof setVariableActivity, node: ActivityNode, onChange = vi.fn()) {
-  const container = render(
+function inspector(activity: typeof setVariableActivity, node: ActivityNode, onChange = vi.fn(), variables = visibleVariables) {
+  return (
     <IntrinsicInspector
       intrinsic={readIntrinsicDescriptor(activity)!}
       activity={node}
@@ -56,15 +56,54 @@ function renderInspector(activity: typeof setVariableActivity, node: ActivityNod
       expressionDescriptors={[literalDescriptor]}
       expressionDescriptorStatus="ready"
       descriptorStatus="ready"
-      visibleVariables={visibleVariables}
+      visibleVariables={variables}
       scopeStatus="ready"
       onChange={onChange}
     />
+  );
+}
+
+function renderInspector(activity: typeof setVariableActivity, node: ActivityNode, onChange = vi.fn()) {
+  const container = render(
+    inspector(activity, node, onChange)
   );
   return { container, onChange };
 }
 
 describe("IntrinsicInspector", () => {
+  it("renders the selected variable's current type and updates it after declaration or target changes", () => {
+    const node: ActivityNode = {
+      ...createActivityNode(setVariableActivity, "set-typed"),
+      intrinsic: { kind: "Set", valueType: { alias: "Elsa.Any", collectionKind: "Single" }, variable: { referenceKey: "counter", declaringScopeId: "workflow" } }
+    };
+    const variables = visibleVariables.map(variable => ({ ...variable, type: { alias: "Int32", collectionKind: "Single" as const } }));
+    const container = render(inspector(setVariableActivity, node, vi.fn(), variables));
+    const valueType = () => container.querySelector(".wf-property-row-header-meta span")?.textContent;
+    expect(valueType()).toBe("Int32");
+
+    const changed = variables.map(variable => ({ ...variable, type: { alias: variable.scopeId === "workflow" ? "Boolean" : "String", collectionKind: "Single" as const } }));
+    flushSync(() => active!.root.render(inspector(setVariableActivity, node, vi.fn(), changed)));
+    expect(valueType()).toBe("Boolean");
+
+    const retargeted: ActivityNode = { ...node, intrinsic: { ...node.intrinsic!, variable: { referenceKey: "row", declaringScopeId: "container-1" } } };
+    flushSync(() => active!.root.render(inspector(setVariableActivity, retargeted, vi.fn(), changed)));
+    expect(valueType()).toBe("String");
+  });
+
+  it("matches the declaration by scope when keys and names are shadowed", () => {
+    const node: ActivityNode = {
+      ...createActivityNode(setVariableActivity, "set-scoped"),
+      intrinsic: { kind: "Set", valueType: { alias: "Elsa.Any", collectionKind: "Single" }, variable: { referenceKey: "counter", declaringScopeId: "container-1" } }
+    };
+    const variables = [
+      { ...visibleVariables[0], type: { alias: "Int32", collectionKind: "Single" as const } },
+      { ...visibleVariables[0], scopeId: "container-1", isWorkflowScope: false, type: { alias: "Boolean", collectionKind: "Single" as const } }
+    ];
+    const container = render(inspector(setVariableActivity, node, vi.fn(), variables));
+
+    expect(container.querySelector(".wf-property-row-header-meta span")?.textContent).toBe("Boolean");
+  });
+
   it("renders a variable-target picker and hides the variable pseudo-input from the properties panel", () => {
     const node = createActivityNode(setVariableActivity, "set-1");
     const { container } = renderInspector(setVariableActivity, node);

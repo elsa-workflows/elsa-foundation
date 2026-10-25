@@ -45,8 +45,9 @@ public sealed record ActivityNode(
 }
 
 /// <summary>
-/// Portable authored contract for an engine intrinsic. The value type is pinned at authoring time
-/// because no CLR activity input contract exists from which Publishing could infer it.
+/// Portable authored contract for an engine intrinsic. Variable-writing intrinsics use their selected
+/// declaration's type at publication; other intrinsics use the authored value type because they have no
+/// CLR activity input contract from which Publishing could infer it.
 /// </summary>
 public sealed record AuthoredWorkflowIntrinsic
 {

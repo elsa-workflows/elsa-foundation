@@ -435,6 +435,7 @@ export interface VisibleVariableView {
   name: string;
   scopeId: string;
   isWorkflowScope: boolean;
+  type?: ArgumentType;
 }
 
 // A non-blocking advisory that a container scope declares a name that shadows a visible ancestor
