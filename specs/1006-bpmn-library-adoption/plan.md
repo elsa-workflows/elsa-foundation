@@ -117,3 +117,9 @@ The guard covers public Bpmn.Semantics simple-name collisions plus an explicit d
 Every gate reports actual source/head, commands, fixtures, failures/skips and limits on #2735 and the PR. No synthetic state, library-only test or same-provider baseline is restamped as upgraded-host or Studio acceptance. If a fixture disproves the proposed reader or combined-outcome mapping, correct and review the design before deleting the legacy writer.
 
 Optional Spec Kit auto-commit hooks are handled by explicit reviewed commits; disabled agent-context hooks stay disabled. No unrelated AGENTS update is generated. Independent plan review must complete before tasks are generated.
+
+## Legacy capture implementation checkpoint
+
+The committed capture path uses EF SQLite transaction interception and the provider's online database backup, preserving every coupled table, checkpoint replay marker, queue/outbox claim and bookmark at the actual boundary. Old-host controls consume a separate immutable-copy database through a fresh service provider. The earlier in-memory JSON probe was superseded by this whole-store witness and is not retained as a second capture framework.
+
+The queued-loser fixture records distinct first queue-presence and first cancellation observations, requiring the queue observation to be earlier. A physical delayed-insert control creates the opposite durable order and must not capture. Removing the ordering guard made that control fail; restoring it passes. This establishes ordering sensitivity, not upgraded-host recovery. Actual portable artifacts still require the exact capture source revision, digests and review before gate A closes.

@@ -28,6 +28,8 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
 
     public IServiceProvider Provider { get; }
 
+    public void InitializeActivityTypes() => _harness.InitializeActivityTypes();
+
     public static ValueTask<BpmnRuntimeFixture> CreateAsync(IEnumerable<string> activityExecutionIds, Action<IServiceCollection>? configureServices = null)
     {
         var builder = WorkflowExecutionHarness.Create()

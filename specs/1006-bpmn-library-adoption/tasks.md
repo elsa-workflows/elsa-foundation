@@ -10,18 +10,18 @@ Spec review: three independent lenses clean. Plan review: corrected verdict-awar
 - [x] T002 Create/review `specs/1006-bpmn-library-adoption/spec.md` and requirements checklist before planning.
 - [x] T003 Create/review `specs/1006-bpmn-library-adoption/plan.md` and its research/data-model/contract/quickstart outputs before tasks.
 - [x] T004 Independently review `specs/1006-bpmn-library-adoption/tasks.md` for complete dependencies and proof gates; record outcome before implementing.
-- [ ] T005 Open the second ordered draft PR for #2735 from `agent/codex/2735-bpmn-switch`, with reviewed artifacts and a checklist of still-unproved acceptance. Keep #2735/#2892 checkpoints current; preserve all frozen files.
+- [x] T005 Open the second ordered draft PR for #2735 from `agent/codex/2735-bpmn-switch`, with reviewed artifacts and a checklist of still-unproved acceptance. Keep #2735/#2892 checkpoints current; preserve all frozen files.
 
 ## Phase 2: Actual legacy capture — blocks pin changes and writer deletion
 
 Goal: actual coherent execution checkpoints and a faithful capture control. This is a prerequisite for US1, not completed upgraded-host recovery.
 
-- [ ] T006 Add a test-only committed-checkpoint capture/gate in `Essentials/tests/Activities/Bpmn/Tests/` that records actual state/queue/outbox/bookmark/value/incident documents before the next scheduler action. Capture source/pins/executable and assert boundary coherence. Normal tests must not regenerate goldens.
+- [x] T006 Add a test-only committed-checkpoint capture/gate in `Essentials/tests/Activities/Bpmn/Tests/` that records actual state/queue/outbox/bookmark/value/incident documents before the next scheduler action. Capture source/pins/executable and assert boundary coherence. Normal tests must not regenerate goldens.
 - [ ] T007 Capture a real resolved event race with canceled loser and trailing live wait under `specs/1006-bpmn-library-adoption/evidence/legacy/`; assert canceled token, exact terminal child/provenance and cleaned bookmark.
 - [ ] T008 Capture and prove the separate loser-completion-already-queued-before-winner-cancellation order in the same evidence directory; a failed precondition is a failed capture, not a pass.
 - [ ] T009 Capture parallel MI outstanding work and a non-interrupting listener's terminal previous invocation plus live same-node/null-iteration re-arm; preserve distinct tokens, child handles and iteration/value state.
 - [ ] T010 Capture an actual committed legacy PendingFault after an evaluation already staged work; retain original code/message, child/incident state and owed work. A synthetic typed state cannot satisfy this task.
-- [ ] T011 Restore/reopen the captured checkpoint through an old-host control in the BPMN test/integration projects, drive its remaining work, and record fixture digests/provenance in `specs/1006-bpmn-library-adoption/evidence/legacy/README.md`.
+- [x] T011 Restore/reopen the captured checkpoint through an old-host control in the BPMN test/integration projects, drive its remaining work, and record fixture digests/provenance in `specs/1006-bpmn-library-adoption/evidence/legacy/README.md`.
 - [ ] T012 Review capture preconditions, portable fixture completeness and old-host controls; commit the verified fixtures while the legacy writer and package pins still exist. Correct the reader design if evidence contradicts it. Gate A remains closed until T006–T012 pass.
 
 ## Phase 3: US1 — compatible execution-state continuation (P1)
