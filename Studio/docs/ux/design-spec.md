@@ -1,9 +1,12 @@
 # Studio UX design spec
 
-Status: draft for the Elsa 3 → Elsa 4 parity series. This spec is the yardstick each UX PR is
-reviewed against. It builds on [design-tokens.md](../design-tokens.md) (the token contract) and
-[ux-polish-plan.md](../ux-polish-plan.md) (the per-surface backlog). Where the plan and this spec
-disagree, this spec wins for new work, and the plan should be updated in the same PR.
+Status: draft for the Elsa 3 → Elsa 4 parity series. This spec is the current normative yardstick
+for Studio UX work. It builds on [design-tokens.md](../design-tokens.md) (the token contract). The
+[ux-polish-plan.md](../ux-polish-plan.md) preserves the original comparative review as a historical
+baseline; this spec is the current authority where its observations or proposals differ. The
+[#3075 acceptance record](https://github.com/elsa-workflows/elsa-foundation/issues/3075) owns
+qualification of the nine composed rows and their current source/build evidence. Acceptance of an
+individual issue does not establish that composed result.
 
 ## Status legend
 
@@ -24,10 +27,10 @@ code.
    action chrome is not visible until hover or focus. Fail if an open dock, diagnostic panel or
    always-visible widget toolbar is the first thing on screen.
 2. **One primary action per view.** `exists` on list and detail pages as the review rule;
-   Designer is an exception (see Layout). Exactly one filled (`primary`) button per page header;
+   Designer is an exception (see Layout). One filled (`primary`) action per page header;
    everything else is `default`, `ghost` or in an overflow menu. The Designer header keeps Save,
-   Review & publish and Run visible. Today Run is the filled action; making Review & publish the
-   one `primary` (Save and Run `default` or `ghost`) is `target, phase 1`.
+   the filled publication split control (Review & publish by default), and outlined Test Run visible.
+   The adjacent publication menu selects the supported publication mode; it is part of that same action.
 3. **Tokens only.** Colour, radius, shadow, spacing and type come from `--studio-*` tokens.
    Colour lint is only partly true today: `pnpm lint:css` (`elsa/no-raw-color-literal`) covers
    `src/essentials/*/Client/src/**/*.css` and `Extensions/*/studio/*/Client/src/**/*.css`.
@@ -56,8 +59,8 @@ code.
 | Navigation placement | `exists` | Each nav contribution may declare `placement` (`main` \| `more` \| `settings` \| `admin`), `order`, `requiresFeature` and `requiresRole` / `requiresPermission`. Unset `placement` is `more` at the top level; a child inherits its parent unless it declares a different placement, in which case it renders there. Main holds Home, Workflows, Runs and Tasks (Tasks only when the user-tasks feature is enabled). Extensions land under **More tools** (open state in `elsa-studio.ui.nav.more`). `settings` items (Appearance) render under Studio in the Settings shell and stay visible to every session. `admin` items render under Administration and use the host-control read gate. The sidebar keeps one Settings entry; searching still reveals the individual sections. Anonymous/demo sessions still see Administration when sign-in is off. Disabled features contribute nothing; role-gated items are hidden. Home is the customizable landing page at `/`, `/dashboard` and `/overview`; there is no separate Dashboard entry. |
 | Settings shell | `exists` | `/settings` is a two-pane shell (section list + content). Sections are deep-linkable as `/settings/<id>`. Original admin paths (`/modules`, `/theme-builder`, …) open the same shell and the same gate; a signed-in user without host-control read sees those sections as unavailable. The route is lazy-loaded. |
 | User menu | `exists` | See [User menu and sign-out](#user-menu-and-sign-out). |
-| Bottom dock | `exists` | Remembers the user's last state in `elsa-studio-bottom-panel-collapsed`, `elsa-studio-bottom-panel-height`, `elsa-studio-bottom-panel-maximized` and `elsa-studio-active-bottom-panel`. With no stored value the dock is **open** on desktop (`collapsed=false`) and collapsed at ≤640px. |
-| Bottom dock default | `target, phase 1` | Collapsed by default when no stored value, including on desktop. |
+| Bottom dock | `exists` | Remembers the user's last state in `elsa-studio-bottom-panel-collapsed`, `elsa-studio-bottom-panel-height`, `elsa-studio-bottom-panel-maximized` and `elsa-studio-active-bottom-panel`. With no stored value the dock is collapsed on desktop and narrow screens. Default chrome values stay represented by absent keys; explicit nondefault choices persist. |
+| Bottom dock default | `exists` | Collapsed by default when no stored value, including on desktop. Reset restores the default and keeps the cleared chrome keys absent. |
 | Bottom dock errors | `target, phase 2` | A status dot on the collapsed dock signals new errors. |
 | Page | `exists` | Content sits on the page surface. No wrapping card around a whole page. |
 | Page header | `target, phase 1` | Eyebrow, title, one-line description, actions. One `primary` button (see Principles). |
@@ -65,12 +68,12 @@ code.
 | Runs | `exists` for the reference implementation | Workflow names lead, with exact execution, artifact, definition and version IDs available as copyable identifiers. Bulk actions appear only after row selection and preserve the host's permission gates. Detail navigation returns to the validated local list query, including page size and cursor. Loading, empty, unsupported and request-error states stay distinct; failed requests offer Retry. |
 | Designer | `exists` | Palette / canvas / inspector. |
 | Designer tabs | `exists` for inspector / Runtime / Artifacts panel tabs (wrap + `title`, no ellipsis); remaining collapse-to-icon is `target, phase 1` | Tab labels never truncate. The inspector panel tabs wrap and keep a `title` plus keyboard access. Below the width they need they should collapse to icon + tooltip. |
-| Designer header | `exists` | Save, Review & publish and Run are all visible. None uses `StudioButton`. Run is the filled action (`.wf-run-button` uses `--studio-accent`). Review & publish is outlined (`.wf-review-button`). |
-| Designer header primary | `target, phase 1` | Review & publish becomes the one `primary` action; Save and Run become `default` (or `ghost`). |
+| Designer header | `exists` | Save, the publication split control and Test Run are all visible. These domain controls do not use `StudioButton`. `WorkflowEditorToolbar` fills the publication action; Test Run uses the surface background with an accent border. |
+| Designer header primary | `exists` | The publication split control is the filled action, defaulting to Review & publish. Save is an icon action and Test Run is outlined. |
 
 ## Definition list consistency (#3070)
 
-**Status: `exists`** when [PR #3258](https://github.com/elsa-workflows/elsa-foundation/pull/3258) merges. The implementation PR carries this rule; its issue/PR records acceptance and delivery evidence.
+**Status: `exists`** (accepted in [#3070](https://github.com/elsa-workflows/elsa-foundation/issues/3070)). The issue record carries the acceptance and delivery evidence.
 
 The Activity Definitions and Workflow Definitions collections use the same scan hierarchy:
 page inset, eyebrow/title/description, one filled primary action, secondary page actions, search
@@ -104,7 +107,7 @@ hierarchy is a presentation rule, not a shared data-grid or filtering framework.
 
 ## Resource list consistency (#3071)
 
-**Status: implementation contract for [#3071](https://github.com/elsa-workflows/elsa-foundation/issues/3071)**; the issue records runtime acceptance and delivery. These rules become `exists` when the implementation merges.
+**Status: `exists`** (accepted in [#3071](https://github.com/elsa-workflows/elsa-foundation/issues/3071)). The issue record carries the acceptance and delivery evidence.
 
 Secrets and Connections follow the definition lists' page inset, heading/description, one filled
 header create action, search/filter toolbar, and results order. Reuse the existing Studio controls
@@ -113,7 +116,7 @@ and token contract while keeping each resource's domain columns and operations:
 - **Secrets:** Edit stays directly available per row. Rotate, Test, Revoke and Delete use the
   keyboard-accessible secondary menu, with destructive actions separated. Copy uses only the
   technical name. Preserve masking, operation permissions, confirmations and focus return.
-- **Inventory truth:** One internal100-record limit governs both the Secrets request and
+- **Inventory truth:** One internal 100-record limit governs both the Secrets request and
   coverage copy. Server search and total counts stay authoritative; Type/Store/Scope/Status
   facets cover loaded rows only. An absent selected scope stays qualified. Draft, accepted and
   failed attempted queries keep their separate meanings.
@@ -129,11 +132,12 @@ and token contract while keeping each resource's domain columns and operations:
 
 | Component | Status | Rule |
 |---|---|---|
-| Button (today) | `exists` | `ui/forms/Button` (`StudioButton`): variants `primary`, `default`, `ghost`; sizes `sm` / `md`. Focus ring is `--studio-focus` (there is no `--studio-ring`). |
+| Button (today) | `exists` | `ui/forms/Button` (`StudioButton`): variants `primary`, `default`, `ghost`; sizes `sm` / `md`. Focus ring is `--studio-focus` (there is no `--studio-ring`). See the [worked examples](../../src/apps/Elsa.Studio.Web/Client/src/app/ui/README.md#worked-examples). |
+| Field (today) | `exists` | `ui/forms/Field` (`StudioField`) wraps a control with its label and optional description/meta. It is exported by the public `@elsa-workflows/studio-ui` package for host pages and independently bundled modules; see the UI README. |
 | Button (additions) | `target, phase 3` | Pressed state (`:active` translate) and a spinner while pending. |
 | Button (new variants) | `target, phase 4` | `outline` and `destructive` variants. Until they exist, use `default` / `ghost` and do not name `outline` or `destructive` in new call sites. |
 | Tabs | `exists` | `ui/layout/Tabs` (`StudioTabs`). Sentence case; overflow collapse is `target, phase 1`. |
-| DataGrid | `exists` | `ui/data-grid/DataGrid`: row click (or Enter/Space) opens. |
+| DataGrid | `exists` | `ui/data-grid/DataGrid` (`StudioDataGrid`) supplies table semantics; with `onSelect`, its rows activate on click and Enter/Space. Without `onSelect`, rows have no activation handlers or tab stop. It does not isolate nested controls: callers must stop click and Enter/Space propagation for inner controls or use a guarded caller wrapper. Custom rows own their target guards; Workflow Definitions guards descendant clicks and uses the name link for keyboard entry. See the [worked examples](../../src/apps/Elsa.Studio.Web/Client/src/app/ui/README.md#worked-examples). |
 | Secrets inventory | `exists` (#3069) | Search by secret name or display name is server-backed and requests up to 100 records. Counts identify rows shown and loaded alongside the result total; a submitted search appears in the count so draft text cannot change its meaning. More matches than loaded means the result is partial; a full 100-row page with a total of 100 is complete. Type, store, scope and status facets apply only to loaded rows, and scope choices describe loaded results. |
 | DataGrid extras | `target, phase 4` | Sortable headers with an indicator; optional column picker persisted per grid; secondary actions in a ⋯ menu. |
 | Status | `exists` | `StatusChip` (filled) for run and definition status; `StatusPill` (outline) for low-emphasis metadata. Colours from the status tokens only. |
@@ -291,3 +295,53 @@ track the theme instead of a per-descriptor hex.
 - [ ] Checked against ux-polish-plan.md; plan updated if the item is now done.
 - [ ] Each claimed behaviour is tagged `exists` or `target, phase N` in this spec; the PR does
       not "verify" a target against code that is not there yet.
+
+## Author/operator walkthrough
+
+Use this short route to connect the existing patterns without turning them into a new framework:
+
+1. **Author:** From Home, create or resume the exact workflow draft. Configure an HTTP activity with its required fields visible and a configured optional HTTP header in the existing disclosure. Save, run the exact Test Run, then review and publish that same draft content; keep transient Test Run, durable published version and execution status distinct.
+2. **Operator:** From Needs attention, open the exact run and its activity evidence, choose only a supported next step, then return to the validated Runs query. The incident guide remains the source for evidence, permissions, confirmation, and retry timing.
+3. **Resources:** Create a disposable secret with the value masked, disclose optional configured metadata, and search by name. State shown, loaded, and server-total counts separately; local facets describe loaded rows only. Preserve entered values on a real failure and explain denied or unavailable states without implying full inventory coverage.
+4. **Feature settings:** Make separate Studio and Server passes. For each target, review the selected draft, cancel and verify it is unchanged, then complete its own Apply flow for a justified change to only that target. Keep each review/cancel/apply result bound to that target's draft and the observed visit; do not imply a broader persistence guarantee.
+
+These examples do not certify a composed journey. The [#3075 acceptance record](https://github.com/elsa-workflows/elsa-foundation/issues/3075) is the authority for the nine final rows, their current status, and source/build evidence; implementation-slice acceptance does not replace that qualification.
+
+### UX-01–UX-18 implementation-slice map
+
+These links locate the existing implementation records. They do not replace #3075's composed evidence or change the state of any issue.
+
+| Slice | Existing issue record |
+|---|---|
+| UX-01 | [#3058](https://github.com/elsa-workflows/elsa-foundation/issues/3058) |
+| UX-02 | [#3059](https://github.com/elsa-workflows/elsa-foundation/issues/3059) |
+| UX-03 | [#3063](https://github.com/elsa-workflows/elsa-foundation/issues/3063) |
+| UX-04 | [#3063](https://github.com/elsa-workflows/elsa-foundation/issues/3063) |
+| UX-05 | [#3062](https://github.com/elsa-workflows/elsa-foundation/issues/3062) |
+| UX-06 | [#3064](https://github.com/elsa-workflows/elsa-foundation/issues/3064) |
+| UX-07 | [#3065](https://github.com/elsa-workflows/elsa-foundation/issues/3065) |
+| UX-08 | [#3060](https://github.com/elsa-workflows/elsa-foundation/issues/3060) |
+| UX-09 | [#3066](https://github.com/elsa-workflows/elsa-foundation/issues/3066) |
+| UX-10 | [#3062](https://github.com/elsa-workflows/elsa-foundation/issues/3062), [#3070](https://github.com/elsa-workflows/elsa-foundation/issues/3070), [#3071](https://github.com/elsa-workflows/elsa-foundation/issues/3071) |
+| UX-11 | [#3067](https://github.com/elsa-workflows/elsa-foundation/issues/3067) |
+| UX-12 | [#3073](https://github.com/elsa-workflows/elsa-foundation/issues/3073) |
+| UX-13 | [#3068](https://github.com/elsa-workflows/elsa-foundation/issues/3068), [#3069](https://github.com/elsa-workflows/elsa-foundation/issues/3069) |
+| UX-14 | [#3061](https://github.com/elsa-workflows/elsa-foundation/issues/3061) |
+| UX-15 | [#3062](https://github.com/elsa-workflows/elsa-foundation/issues/3062), [#3072](https://github.com/elsa-workflows/elsa-foundation/issues/3072) |
+| UX-16 | [#3070](https://github.com/elsa-workflows/elsa-foundation/issues/3070), [#3071](https://github.com/elsa-workflows/elsa-foundation/issues/3071) |
+| UX-17 | [#3074](https://github.com/elsa-workflows/elsa-foundation/issues/3074) |
+| UX-18 | [#3073](https://github.com/elsa-workflows/elsa-foundation/issues/3073), [#3131](https://github.com/elsa-workflows/elsa-foundation/issues/3131), [#3132](https://github.com/elsa-workflows/elsa-foundation/issues/3132) |
+
+### Supplemental accepted corrective issues
+
+These later corrective records supplement the UX-01–UX-18 map; they are separate issue records,
+not new UX identifiers. Acceptance of an individual correction does not certify the composed
+[#3075 journey](https://github.com/elsa-workflows/elsa-foundation/issues/3075).
+
+| Corrective record | Accepted correction |
+|---|---|
+| [#3092](https://github.com/elsa-workflows/elsa-foundation/issues/3092) | Workflow run status badge contrast |
+| [#3102](https://github.com/elsa-workflows/elsa-foundation/issues/3102) | Connection picker load-failure explanation and Retry |
+| [#3154](https://github.com/elsa-workflows/elsa-foundation/issues/3154) | Inspector and category-picker clipping |
+| [#3165](https://github.com/elsa-workflows/elsa-foundation/issues/3165) | Narrow shell header actions |
+| [#3175](https://github.com/elsa-workflows/elsa-foundation/issues/3175) | Narrow selection counts and bulk actions |

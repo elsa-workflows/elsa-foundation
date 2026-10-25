@@ -4,9 +4,12 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ShellFrame } from "../app/App";
 import { ThemeProvider } from "../app/components/ThemeProvider";
+import { AppearancePage } from "../app/settings/AppearancePage";
+import { appearanceResetStorageKeys } from "../app/themes/appearance";
 
 const collapsedKey = "elsa-studio-bottom-panel-collapsed";
 const maximizedKey = "elsa-studio-bottom-panel-maximized";
+const originalHeight = window.innerHeight;
 
 let container: HTMLDivElement;
 let root: Root;
@@ -15,15 +18,14 @@ beforeEach(() => {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
-  window.localStorage.removeItem(collapsedKey);
-  window.localStorage.removeItem(maximizedKey);
+  appearanceResetStorageKeys.forEach(key => window.localStorage.removeItem(key));
 });
 
 afterEach(() => {
   flushSync(() => root.unmount());
   container.remove();
-  window.localStorage.removeItem(collapsedKey);
-  window.localStorage.removeItem(maximizedKey);
+  Object.defineProperty(window, "innerHeight", { configurable: true, value: originalHeight });
+  appearanceResetStorageKeys.forEach(key => window.localStorage.removeItem(key));
 });
 
 function DummyPanel() {
@@ -35,7 +37,7 @@ const panels = [
   { id: "logs", title: "Structured Logs", component: DummyPanel }
 ];
 
-function renderShell() {
+function renderShell(children: React.ReactNode = <div>page</div>) {
   flushSync(() => root.render(
     <ThemeProvider>
       <ShellFrame
@@ -46,7 +48,7 @@ function renderShell() {
         backendBaseUrl="https://backend.example/"
         onNavigate={() => {}}
       >
-        <div>page</div>
+        {children}
       </ShellFrame>
     </ThemeProvider>
   ));
@@ -104,5 +106,42 @@ describe("bottom panel default", () => {
     renderShell();
 
     expect(bottomPanel()?.classList.contains("collapsed")).toBe(false);
+  });
+
+  it("keeps Reset appearance preferences cleared after the mounted shell restores its defaults", async () => {
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 900 });
+    const stored: Record<string, string> = {
+      "elsa-studio-theme": "drift",
+      "elsa-studio-theme-mode": "dark",
+      "elsa-studio-nav-mode": "top",
+      "elsa-studio-sidebar-collapsed": "true",
+      "elsa-studio-bottom-panel-collapsed": "false",
+      "elsa-studio-bottom-panel-height": "320",
+      "elsa-studio-bottom-panel-maximized": "true",
+      "elsa-studio-active-bottom-panel": "logs"
+    };
+    Object.entries(stored).forEach(([key, value]) => localStorage.setItem(key, value));
+    renderShell(<AppearancePage onNavigate={() => {}} />);
+    for (let tick = 0; tick < 3; tick++) await new Promise(resolve => setTimeout(resolve, 0));
+    expect(bottomPanel()?.classList.contains("maximized")).toBe(true);
+    expect(bottomPanel()?.getAttribute("style")).toContain("320px");
+
+    const reset = Array.from(container.querySelectorAll("button"))
+      .find(button => button.textContent?.trim() === "Reset appearance")!;
+    flushSync(() => reset.click());
+    for (let tick = 0; tick < 3; tick++) await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(bottomPanel()?.classList.contains("collapsed")).toBe(true);
+    expect(bottomPanel()?.classList.contains("maximized")).toBe(false);
+    expect(bottomPanel()?.getAttribute("style")).toContain("260px");
+    appearanceResetStorageKeys.forEach(key => expect(localStorage.getItem(key), key).toBeNull());
+
+    flushSync(() => container.querySelector<HTMLButtonElement>('[aria-label="Expand bottom panel"]')!.click());
+    const resize = container.querySelector('[aria-label="Resize bottom panel"]')!;
+    flushSync(() => resize.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true })));
+    expect(localStorage.getItem("elsa-studio-bottom-panel-height")).toBe("276");
+    flushSync(() => container.querySelector<HTMLButtonElement>('[data-tab-id="logs"]')!.click());
+    expect(localStorage.getItem("elsa-studio-active-bottom-panel")).toBe("logs");
+    expect(localStorage.getItem(collapsedKey)).toBe("false");
   });
 });
