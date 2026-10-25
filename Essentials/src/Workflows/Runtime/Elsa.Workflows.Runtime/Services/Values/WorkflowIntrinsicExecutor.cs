@@ -22,7 +22,8 @@ public sealed class WorkflowIntrinsicExecutor(
     TimeProvider timeProvider,
     IExternalPayloadStore? externalPayloadStore = null,
     IPortableExpressionEvaluator? portableExpressionEvaluator = null,
-    IRuntimeValueConversionExecutor? valueConversionExecutor = null)
+    IRuntimeValueConversionExecutor? valueConversionExecutor = null,
+    IWorkflowExecutableInputValidator? inputValidator = null)
 {
     private readonly IRuntimeValueConversionExecutor _valueConversionExecutor = valueConversionExecutor ?? new RuntimeValueConversionExecutor();
     private readonly RuntimePortableExpressionEvaluator _portableExpressionEvaluator = new(portableExpressionEvaluator, externalPayloadStore, valueConversionExecutor);
@@ -119,7 +120,8 @@ public sealed class WorkflowIntrinsicExecutor(
             intrinsicState,
             executable,
             runtimeView,
-            cancellationToken);
+            cancellationToken,
+            validateAssignmentPayload: true);
         ValidateAssignment(frameOwner.Frame, target.VariableKey, valueBinding, value, node.ExecutableNodeId);
 
         var changedFrame = frameOwner.Frame.Set(target.VariableKey, value, frameOwner.Frame.Revision);
@@ -591,7 +593,8 @@ public sealed class WorkflowIntrinsicExecutor(
         ActivityExecutionState intrinsicState,
         WorkflowExecutable executable,
         IReadOnlyCollection<ActivityExecutionState> runtimeView,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool validateAssignmentPayload = false)
     {
         ThrowIfWithheld(binding);
         var durableValues = await durableValueStateStore.ListAllDurableValueStatesAsync(workflowState.WorkflowExecutionId, cancellationToken);
@@ -637,6 +640,8 @@ public sealed class WorkflowIntrinsicExecutor(
             var envelope = evaluated.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
                 ? ValueEnvelope.Null(binding.TargetType, evaluated.EffectivePolicy)
                 : ValueEnvelope.Inline(binding.TargetType, evaluated.Value, evaluated.EffectivePolicy);
+            if (validateAssignmentPayload)
+                ValidateAssignmentPayload(binding, envelope, intrinsicState.Execution.ExecutableNodeId);
             return await ApplyStorageAsync(
                 workflowState.WorkflowExecutionId,
                 intrinsicState.InvocationId,
@@ -660,9 +665,14 @@ public sealed class WorkflowIntrinsicExecutor(
             source.Policy,
             $"Intrinsic input '{binding.InputName}' on node '{intrinsicState.Execution.ExecutableNodeId}'");
 
+        // Encryption-required values are withheld by storage without inspecting their payload.
+        if (combinedPolicy.RequiresEncryption)
+            return await ApplyStorageAsync(workflowState.WorkflowExecutionId, intrinsicState.InvocationId, binding.InputName,
+                source.Retype(binding.TargetType), source.Policy, combinedPolicy, cancellationToken);
+
         var conversionSource = new ValueEnvelope(source.Type, source.Presence, source.InlineValue, source.ExternalReference, combinedPolicy);
         if (source.ExternalReference is not null &&
-            (HasExternalProjection(binding) || binding.ConversionPlan is { Operation: not ValueConversionOperation.Identity and not ValueConversionOperation.NullableCompatibility }))
+            (validateAssignmentPayload || HasExternalProjection(binding) || binding.ConversionPlan is { Operation: not ValueConversionOperation.Identity and not ValueConversionOperation.NullableCompatibility }))
         {
             if (externalPayloadStore is null)
                 throw new InvalidOperationException($"Intrinsic input '{binding.InputName}' requires an IExternalPayloadStore for conversion.");
@@ -695,6 +705,8 @@ public sealed class WorkflowIntrinsicExecutor(
         var combined = binding.ConversionPlan is null
             ? conversionSource.Retype(binding.TargetType)
             : _valueConversionExecutor.Convert(conversionSource, binding.ConversionPlan);
+        if (validateAssignmentPayload)
+            ValidateAssignmentPayload(binding, combined, intrinsicState.Execution.ExecutableNodeId);
         return await ApplyStorageAsync(
             workflowState.WorkflowExecutionId,
             intrinsicState.InvocationId,
@@ -704,6 +716,22 @@ public sealed class WorkflowIntrinsicExecutor(
             combinedPolicy,
             cancellationToken,
             source.ExternalReference?.StorageProfile);
+    }
+
+    private void ValidateAssignmentPayload(RuntimeInputBinding binding, ValueEnvelope value, string nodeId)
+    {
+        if (value.Presence != ValuePresence.Present || value.Policy.RequiresEncryption ||
+            value.Type is { Alias: "Elsa.Any", CollectionKind: CollectionKind.Single })
+            return;
+        var validator = inputValidator
+            ?? throw new InvalidOperationException($"Intrinsic input '{binding.InputName}' on node '{nodeId}' requires an IWorkflowExecutableInputValidator.");
+        var contract = new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion,
+            [new WorkflowDeclaredInput(binding.InputName, binding.TargetType.ToTypeReference(), isRequired: true)]);
+        var validation = validator.Validate(contract,
+            [new KeyValuePair<string, JsonElement>(binding.InputName, value.InlineValue!.Value)]);
+        if (!validation.IsValid)
+            throw new InvalidOperationException($"Intrinsic input '{binding.InputName}' on node '{nodeId}' does not match '{binding.TargetType.Alias}': " +
+                string.Join(" ", validation.Findings.Select(finding => finding.Message)));
     }
 
     private static bool HasExternalProjection(RuntimeInputBinding binding) =>

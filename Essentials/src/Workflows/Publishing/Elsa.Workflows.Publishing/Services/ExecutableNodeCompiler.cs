@@ -413,24 +413,16 @@ public sealed class ExecutableNodeCompiler(
         if (binding.Source is not RuntimeInputBindingSource.VariableRead and not RuntimeInputBindingSource.WorkflowRequest)
             return binding;
 
-        // A projected request member has no static contract. Treat its JSON as structured data so the
-        // existing JSON profile validates the physical payload instead of merely relabeling it.
-        var source = sourceType is null
-            ? new ValueTypeDescriptor("Elsa.Any")
-            : new ValueTypeDescriptor(sourceType.Alias, sourceType.CollectionKind);
+        // Dynamic JSON has no static source contract. Runtime validates its actual payload against
+        // the destination contract before storage; do not invent a source type or parse string content.
+        if (sourceType is null || sourceType.Alias == "Elsa.Any")
+            return binding;
+        var source = new ValueTypeDescriptor(sourceType.Alias, sourceType.CollectionKind);
         try
         {
             var context = new ValueConversionBindingContext(nodeId, binding.InputKey, ValueConversionBindingKind.Input);
-            var plan = _conversionPlanResolver.Resolve(source,
-                sourceType is null ? ValueRepresentation.StructuredValue : ValueRepresentationDefaults.Infer(source),
+            var plan = _conversionPlanResolver.Resolve(source, ValueRepresentationDefaults.Infer(source),
                 binding.TargetType, binding: context);
-            if (binding.Source == RuntimeInputBindingSource.WorkflowRequest)
-            {
-                // Request payloads arrive as JSON. Even a matching declaration must validate the actual
-                // value (for example, an Int32 input carrying the JSON string "7") before a durable write.
-                plan = _conversionPlanResolver.Resolve(new ValueTypeDescriptor("Elsa.Any"), ValueRepresentation.StructuredValue,
-                    binding.TargetType, binding: context);
-            }
             return new RuntimeInputBinding(binding.InputKey, binding.TargetType, binding.EffectivePolicy, binding.Source,
                 binding.Literal, binding.WorkflowRequest, binding.Variable, binding.ActivityResult, binding.Expression, binding.Metadata,
                 plan, binding.ConversionRequest, binding.Secret);

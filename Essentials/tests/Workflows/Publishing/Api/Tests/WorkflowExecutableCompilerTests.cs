@@ -2791,13 +2791,13 @@ public sealed class WorkflowExecutableCompilerTests
 
         var plan = executable.NodesById["set-counter"].InputBindings[WorkflowIntrinsicInputKeys.Value].ConversionPlan;
         Assert.NotNull(plan);
-        Assert.Equal(syntax == "Variable" ? "Int32" : "Elsa.Any", plan.SourceType.Alias);
+        Assert.Equal("Int32", plan.SourceType.Alias);
         Assert.Equal("Int64", plan.TargetType.Alias);
-        Assert.Equal(syntax == "Variable" ? ValueConversionOperation.NumericWidening : ValueConversionOperation.Profile, plan.Operation);
+        Assert.Equal(ValueConversionOperation.NumericWidening, plan.Operation);
     }
 
     [Fact]
-    public async Task Set_pins_runtime_validation_for_a_projected_request_value()
+    public async Task Set_defers_projected_request_type_validation_to_runtime()
     {
         var counter = new Elsa.Expressions.Core.Models.VariableDefinition("counter", "Counter", new TypeReference("Int32"), null, null);
         var set = DynamicSetIntrinsicNode("set-counter", "counter", new { memberKey = "source", path = "count" }, "WorkflowRequest");
@@ -2806,10 +2806,27 @@ public sealed class WorkflowExecutableCompilerTests
             .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
 
         var plan = executable.NodesById["set-counter"].InputBindings[WorkflowIntrinsicInputKeys.Value].ConversionPlan;
+        Assert.Null(plan);
+        Assert.Equal("Int32", executable.NodesById["set-counter"].InputBindings[WorkflowIntrinsicInputKeys.Value].TargetType.Alias);
+    }
+
+    [Theory]
+    [InlineData("Guid")]
+    [InlineData("DateTime")]
+    [InlineData("TimeSpan")]
+    [InlineData("Object")]
+    public async Task Set_preserves_matching_request_contracts_for_registered_non_numeric_types(string alias)
+    {
+        var target = new Elsa.Expressions.Core.Models.VariableDefinition("target", "Target", new TypeReference(alias), null, null);
+        var set = DynamicSetIntrinsicNode("set-target", "target", new { memberKey = "source" }, "WorkflowRequest");
+        var executable = await Compiler(WorkflowVersion(SequenceNode("root", [set]),
+            inputs: [WorkflowInput("source", new TypeReference(alias), true)], variables: [target]))
+            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var plan = executable.NodesById["set-target"].InputBindings[WorkflowIntrinsicInputKeys.Value].ConversionPlan;
         Assert.NotNull(plan);
-        Assert.Equal(ValueConversionOperation.Profile, plan.Operation);
-        Assert.Equal(ValueRepresentation.StructuredValue, plan.SourceRepresentation);
-        Assert.Equal("Int32", plan.TargetType.Alias);
+        Assert.Equal(ValueConversionOperation.Identity, plan.Operation);
+        Assert.Equal(alias, plan.TargetType.Alias);
     }
 
     private static ActivityNode DynamicSetIntrinsicNode(
