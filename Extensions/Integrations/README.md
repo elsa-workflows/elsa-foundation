@@ -11,16 +11,17 @@ parallel secret store, no Elsa 3 shims. HTTP uses the foundation `http` connecti
 
 ```
 Extensions/Integrations/
-  src/Sdk/                         Minimal non-packable STUB until #2726 / PR #2825
+  src/Sdk/                         Elsa.Integrations.Sdk v1 (#2726 / #2825)
   src/Connectors/OAuth2/           Generic OAuth2 scheme (#2727)
+  tests/Tests/                     SDK contract tests
   tests/Connectors/OAuth2/Tests/   Tests against a mock OAuth server
 ```
 
-## SDK stub (#2726)
+## SDK
 
-`Elsa.Integrations.Sdk` is **not packable** (`IsPackable=false`) until PR #2825 merges. It is a
-marker assembly only (`IntegrationsSdkStub.IsStub`). The packable OAuth2 connector does not
-reference it. When #2825 lands, delete `src/Sdk` and PackageReference the real SDK.
+`Elsa.Integrations.Sdk` is the packable connector activity base. `AddOAuth2Connector` calls
+`AddElsaIntegrationsRuntime` so the named `Elsa.Activities.Http` client and unbound applicator
+are registered when Connections is not composed.
 
 ## OAuth2 scheme
 

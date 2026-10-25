@@ -37,9 +37,8 @@ registered with `IRuntimeSecretMask` so they are replaced in logs, outputs and e
 
 ## SDK
 
-[#2726](https://github.com/elsa-workflows/elsa-foundation/issues/2726) / PR #2825 is the real
-SDK. This package does not reference the local stub, so no `Elsa.Integrations.Sdk` package is
-produced from this tree.
+This package references `Elsa.Integrations.Sdk` and `AddOAuth2Connector` calls
+`AddElsaIntegrationsRuntime`. Service connections stay on `Elsa.Connections`.
 
 ## Tests
 

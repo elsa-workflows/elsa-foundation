@@ -1,7 +1,6 @@
 using Elsa.Connections.Api;
 using Elsa.Connections.Core.Contracts;
 using Elsa.Connections.Core.Models;
-using Elsa.Integrations.Sdk;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -18,7 +17,6 @@ public sealed class SchemeAndCallbackTests
     {
         Assert.Equal(HttpAuthSchemes.OAuth2, OAuth2AuthenticationScheme.Name);
         Assert.True(OAuth2AuthenticationScheme.RequiresWritableStore);
-        Assert.True(IntegrationsSdkStub.IsStub);
     }
 
     [Fact]

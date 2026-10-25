@@ -7,7 +7,7 @@ catalog ([#2726](https://github.com/elsa-workflows/elsa-foundation/issues/2726) 
 
 ## Acceptance criteria
 
-1. Built against the foundation Connections model; a non-packable SDK stub remains until #2726 / PR #2825. OAuth2 is one scheme. No `Elsa.Integrations.Sdk` package is produced until #2726.
+1. Built against the foundation Connections model and `Elsa.Integrations.Sdk` v1. OAuth2 is one scheme.
 2. Authorization-code + PKCE and client-credentials, with configurable auth/token/scopes URLs.
 3. BYO client only. Client secret is a connection secret field or a named credential
    (`IAccessTokenSource` / `named-credential`).
@@ -25,6 +25,4 @@ catalog ([#2726](https://github.com/elsa-workflows/elsa-foundation/issues/2726) 
 
 ## Blockers
 
-The real Integrations SDK (#2726, PR #2825) has not merged. Hosted connections platform
-(valence-works/elsa-control#801) has not landed. This tree uses the foundation Connections
-types and a marker-only SDK stub.
+Hosted connections platform (valence-works/elsa-control#801) has not landed.
