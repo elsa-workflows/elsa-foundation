@@ -1256,6 +1256,95 @@ describe("feature impact review", () => {
     await unmount();
   });
 
+  it("saves only changed settings and does not materialize untouched defaults", async () => {
+    const featureId = "WorkflowsRuntimeEntityFrameworkCore";
+    const settings = [
+      setting({ name: "WorkflowExecutableCacheCapacity", displayName: "Workflow executable cache capacity", jsonType: "integer", defaultValue: 256 }),
+      setting({ name: "ConnectionName", displayName: "Connection name", jsonType: "string" }),
+      setting({ name: "ConnectionString", displayName: "Connection string", jsonType: "string" }),
+      setting({ name: "PooledContexts", displayName: "Pooled contexts", jsonType: "boolean" }),
+      setting({ name: "Provider", displayName: "Provider", jsonType: "string", defaultValue: "Sqlite" }),
+      setting({ name: "Schema", displayName: "Schema", jsonType: "string" }),
+      setting({ name: "ExistingSetting", displayName: "Existing setting", jsonType: "string", defaultValue: "default" })
+    ];
+    const initialFeature = feature(featureId, true, {
+      WorkflowExecutableCacheCapacity: 256,
+      ExistingSetting: "preserve me"
+    }, ["Runtime"], { settings });
+    let submitted: unknown;
+    const api = stubApi({
+      getJson: async () => ({ revision: "server-rev-1", features: [initialFeature] }),
+      postJson: async (_url, body) => {
+        submitted = body;
+        return {
+          catalog: {
+            revision: "server-rev-2",
+            features: [feature(featureId, true, {
+              WorkflowExecutableCacheCapacity: 257,
+              ExistingSetting: "preserve me"
+            }, ["Runtime"], { settings })]
+          },
+          featureDescriptorCount: 1,
+          reloadedShellCount: 1
+        };
+      }
+    });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+
+    const openSettingsDialog = async () => {
+      await click(buttonByText(container, "Edit settings"));
+      const dialog = container.querySelector(".feature-management-settings-dialog");
+      if (!dialog) throw new Error("The feature settings dialog should open.");
+      return dialog;
+    };
+
+    try {
+      let dialog = await openSettingsDialog();
+      await click(buttonByText(dialog, "Save draft"));
+      expect(container.textContent).not.toContain("Unsaved changes");
+      expectControlUnavailableByText(container, "Review changes");
+
+      dialog = await openSettingsDialog();
+      let capacityInput = dialog.querySelector("input[type='number']") as HTMLInputElement | null;
+      await changeInput(capacityInput, "257");
+      await click(buttonByText(dialog, "Reset changes"));
+      expect(capacityInput?.value).toBe("256");
+      await click(buttonByText(dialog, "Save draft"));
+      expect(container.textContent).not.toContain("Unsaved changes");
+      expectControlUnavailableByText(container, "Review changes");
+
+      dialog = await openSettingsDialog();
+      capacityInput = dialog.querySelector("input[type='number']") as HTMLInputElement | null;
+      await changeInput(capacityInput, "257");
+      await click(buttonByText(dialog, "Save draft"));
+      expect(container.textContent).toContain("Unsaved changes");
+
+      const review = await openImpactReview(container);
+      const changedFeature = impactRow(review, featureId);
+      const changedSettings = Array.from(changedFeature?.querySelectorAll(".feature-management-impact-section") ?? [])
+        .find(section => section.querySelector("h5")?.textContent === "Changed settings");
+      expect(Array.from(changedSettings?.querySelectorAll("dt") ?? []).map(item => item.textContent)).toEqual([
+        "Workflow executable cache capacity"
+      ]);
+
+      await click(buttonByText(review, "Apply"));
+      expect(submitted).toEqual({
+        revision: "server-rev-1",
+        features: [{
+          id: featureId,
+          enabled: true,
+          configuration: {
+            WorkflowExecutableCacheCapacity: 257,
+            ExistingSetting: "preserve me"
+          }
+        }]
+      });
+    } finally {
+      await unmount();
+    }
+  });
+
   it("invalidates the review as soon as a catalog refresh starts", async () => {
     let serverRead = 0;
     let finishRefresh: ((value: unknown) => void) | undefined;

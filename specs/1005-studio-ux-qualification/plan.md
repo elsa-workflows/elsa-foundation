@@ -54,3 +54,7 @@ The rebuilt normal-host picker error resolves to near-white text on an opaque pa
 ## Features checkbox refinement
 
 The normal-host320px selection trace reproduced a same-node Clear miss: releasing checkbox focus expands its inherited padding and the first grid row by18px between pointerdown and pointerup. Stabilize only the bulk-selection checkbox with explicit padding and dimensions, preserving native appearance/focus. Add a rendered320/360 regression for checkbox focus followed by one native Clear click, prove red without the CSS correction and green with it, then repeat both-target private review/Apply and all final gates. The failed preliminary trace and configuration-delta gate remain failed; no exception is introduced.
+
+## Feature settings draft refinement
+
+The normal-host Server review exposed unrelated setting changes after editing only Workflow executable cache capacity: Save draft materialized untouched default/empty values. Preserve untouched configuration membership and values by staging only settings whose displayed values actually changed. Reuse the existing stable value comparison; cover no-op Save, changed-field-only review/payload, deliberate clear and reset using the mounted component. Prove red without the correction and green with it, then rebuild/repeat both-target private Apply and every final gate. No backend persistence contract changes.
