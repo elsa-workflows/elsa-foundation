@@ -1,0 +1,151 @@
+diff --git a/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/LegacyBpmnCheckpointEfTests.cs b/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/LegacyBpmnCheckpointEfTests.cs
+index 295a14783..53c82b6a8 100644
+--- a/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/LegacyBpmnCheckpointEfTests.cs
++++ b/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/LegacyBpmnCheckpointEfTests.cs
+@@ -61,6 +61,11 @@ public sealed class LegacyBpmnCheckpointEfTests
+             File.Copy(backup, control);
+             await using (var reader = await CreateAsync(control, null))
+             {
++                var originalFaultWork = scenario == "queued-late-fault"
++                    ? Assert.Single((await reader.Provider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
++                        .ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionHarness.WorkflowExecutionId, 100))).Items,
++                        item => item.CommandMetadata.GetValueOrDefault(Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.ChildFaulted) == bool.TrueString)
++                    : null;
+                 await reader.Provider.GetRequiredService<IRuntimeResumptionService>()
+                     .SweepAsync(new RuntimeResumptionSweepRequest());
+                 if (scenario == "listener-rearm")
+@@ -71,16 +76,35 @@ public sealed class LegacyBpmnCheckpointEfTests
+                     var node = scenario == "parallel-mi" ? "node-work" : scenario == "listener-rearm" ? "node-hold" : "node-final";
+                     var waiting = (await reader.BookmarksAsync()).Where(bookmark => bookmark.ExecutableNodeId == node).ToArray();
+                     Assert.Equal(scenario == "parallel-mi" ? 3 : 1, waiting.Length);
+-                    foreach (var bookmark in waiting)
+-                        await reader.ResumeAsync(bookmark, JsonSerializer.SerializeToElement(new { eventName = "continue" }));
++                    if (scenario != "queued-late-fault")
++                        foreach (var bookmark in waiting)
++                            await reader.ResumeAsync(bookmark, JsonSerializer.SerializeToElement(new { eventName = "continue" }));
+                 }
+ 
+                 var state = await reader.Provider.GetRequiredService<IWorkflowExecutionStateStore>()
+                     .FindAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+                 var incidents = await reader.Provider.GetRequiredService<IIncidentStateStore>()
+                     .ListAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+-                Assert.True(state!.Status == (scenario == "deferred-fault" ? WorkflowExecutionStatus.Faulted : WorkflowExecutionStatus.Completed),
++                Assert.True(state!.Status == (scenario is "deferred-fault" or "queued-late-fault" ? WorkflowExecutionStatus.Faulted : WorkflowExecutionStatus.Completed),
+                     JsonSerializer.Serialize(incidents.Select(incident => new { incident.FailureType, incident.Message }), Web));
++                if (scenario == "queued-late-fault")
++                {
++                    var states = await reader.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(WorkflowExecutionHarness.WorkflowExecutionId);
++                    Assert.True(Assert.Single(states, child => child.Execution.ExecutableNodeId == F.ProcessNodeId).Status == ActivityExecutionStatus.Running,
++                        JsonSerializer.Serialize(states.Select(child => new { child.InvocationId, child.Execution.ExecutableNodeId, child.Status, child.Fault }), Web));
++                    var loser = Assert.Single(states, child => child.Execution.ExecutableNodeId == "node-loser");
++                    Assert.Equal(ActivityExecutionStatus.Faulted, loser.Status);
++                    Assert.Equal(originalFaultWork!.WorkItemId, loser.Metadata.GetValueOrDefault(Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId));
++                    Assert.DoesNotContain((await reader.Provider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
++                        .ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionHarness.WorkflowExecutionId, 100))).Items,
++                        item => item.WorkItemId == originalFaultWork.WorkItemId);
++                    var bpmn = Assert.Single(states, child => child.Execution.ExecutableNodeId == F.ProcessNodeId)
++                        .PrivateState!.Value.InlineValue!.Value.Deserialize<BpmnExecutionState>(Web)!;
++                    Assert.Contains(bpmn.Diagnostics, diagnostic => diagnostic.Message.Contains("ignored a late fault", StringComparison.Ordinal));
++                    var incident = Assert.Single(incidents, incident => loser.IncidentIds.Contains(incident.IncidentId));
++                    Assert.True(incident.IsBlocking);
++                    Assert.Equal(Elsa.Workflows.Runtime.Core.Constants.IncidentResolutionActionKinds.FaultWorkflow, incident.ResolutionOutcome!.ActionKind);
++                }
+                 if (scenario == "deferred-fault")
+                 {
+                     var parent = Assert.Single(await reader.Provider.GetRequiredService<IActivityExecutionStateStore>()
+@@ -97,6 +121,10 @@ public sealed class LegacyBpmnCheckpointEfTests
+         }
+     }
+ 
++    [Fact]
++    public Task Actual_legacy_late_fault_checkpoint_reopens_in_a_fresh_old_host_control() =>
++        Actual_legacy_checkpoint_reopens_in_a_fresh_old_host_control("queued-late-fault");
++
+     [Fact]
+     public async Task Capture_rejects_loser_completion_enqueued_after_first_winner_cancellation()
+     {
+@@ -176,10 +204,10 @@ public sealed class LegacyBpmnCheckpointEfTests
+                 [F.Flow("start-fork", "start", "fork"), F.Flow("fork-work", "fork", "work"), F.Flow("fork-decision", "fork", "decision"),
+                     F.Flow("work-end", "work", "work-end"), F.Flow("decision-left", "decision", "left", "Left"), F.Flow("decision-right", "decision", "right", "Right")]);
+ 
+-        var queued = scenario == "queued-loser";
++        var queued = scenario is "queued-loser" or "queued-late-fault";
+         return fixture.NewExecutable(
+             [queued ? fixture.NewProbeNode("node-winner") : F.EventWaitNode("node-winner", "winner"),
+-                queued ? fixture.NewProbeNode("node-loser") : F.EventWaitNode("node-loser", "loser"), F.EventWaitNode("node-final", "final")],
++                scenario == "queued-late-fault" ? fixture.NewFaultingNode("node-loser") : queued ? fixture.NewProbeNode("node-loser") : F.EventWaitNode("node-loser", "loser"), F.EventWaitNode("node-final", "final")],
+             [F.StartEvent(), F.EventBasedGateway("race"), F.IntermediateCatchEvent("catch-winner", BpmnEventDefinitionTypes.Message, "node-winner"),
+                 F.IntermediateCatchEvent("catch-loser", BpmnEventDefinitionTypes.Message, "node-loser"),
+                 F.IntermediateCatchEvent("catch-final", BpmnEventDefinitionTypes.Message, "node-final"), F.EndEvent()],
+@@ -197,6 +225,15 @@ public sealed class LegacyBpmnCheckpointEfTests
+             return;
+         var source = Environment.GetEnvironmentVariable("ELSA_BPMN_CAPTURE_SOURCE");
+         Assert.True(source is { Length: 40 } && source.All(Uri.IsHexDigit), "Exact capture source revision is required.");
++        string? patchDigest = null;
++        if (scenario == "queued-late-fault")
++        {
++            patchDigest = Environment.GetEnvironmentVariable("ELSA_BPMN_CAPTURE_PATCH_SHA256");
++            var patchFile = Environment.GetEnvironmentVariable("ELSA_BPMN_CAPTURE_PATCH_FILE");
++            Assert.True(patchDigest is { Length: 64 } && patchDigest.All(Uri.IsHexDigit), "Exact capture overlay digest is required.");
++            Assert.True(File.Exists(patchFile), "The portable capture overlay patch must exist.");
++            Assert.Equal(patchDigest, Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(patchFile))));
++        }
+         Directory.CreateDirectory(destination);
+         var path = Path.Combine(destination, scenario + ".sqlite.gz");
+         await using (var input = File.OpenRead(backup))
+@@ -206,12 +243,12 @@ public sealed class LegacyBpmnCheckpointEfTests
+         await using var metadata = new FileStream(Path.Combine(destination, scenario + ".json"), FileMode.CreateNew);
+         await JsonSerializer.SerializeAsync(metadata, new
+         {
+-            scenario, captureSourceRevision = source, runtimeBaselineRevision = "fbe694d2f3d126e324c3e46578bc1a560b0217f1",
++            scenario, captureSourceRevision = source, capturePatchSha256 = patchDigest, runtimeBaselineRevision = "fbe694d2f3d126e324c3e46578bc1a560b0217f1",
+             modelPackage = "0.1.1-preview.19", interchangePackage = "0.1.1-preview.19",
+             stateAlias = "Elsa.Bpmn.ExecutionState", stateVersion = 1,
+             databaseSha256 = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(backup))),
+             compressedSha256 = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(path))),
+-            oldHostControl = "fresh provider over a separate exact database copy passed",
++            oldHostControl = scenario == "queued-late-fault" ? "fresh old provider ignores canceled-token fault but leaves original incident blocking, workflow Faulted and BPMN/final catch parked; known legacy incident-absorption gap" : "fresh provider over a separate exact database copy passed",
+             capture.Facts
+         }, Web);
+     }
+@@ -303,9 +340,20 @@ public sealed class LegacyBpmnCheckpointEfTests
+                 await TransactionCommittedAsync(transaction, eventData, cancellationToken);
+                 return;
+             }
++            var incidents = await scope.ServiceProvider.GetRequiredService<EfIncidentStateStore>()
++                .ListAsync(WorkflowExecutionHarness.WorkflowExecutionId);
++            var originalIncident = loser?.IncidentIds.Count == 1
++                ? incidents.SingleOrDefault(item => item.IncidentId == loser.IncidentIds.Single()) : null;
++            var queuedFault = loser is not null && queue.Any(item => queuedLoser &&
++                item.CommandMetadata.GetValueOrDefault(Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.ChildFaulted) == bool.TrueString &&
++                item.CommandMetadata.GetValueOrDefault(Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.IncidentId) == originalIncident?.IncidentId &&
++                item.Payload is { } body && body.Deserialize<RuntimeCompleteActivityCommandPayload>(Web)?.CompletedChildActivityExecutionId == loser.InvocationId);
+             var match = scenario switch
+             {
+                 "resolved-race" => canceledLoser && loser?.Status == ActivityExecutionStatus.Cancelled && bookmarks.Any(bookmark => bookmark.ExecutableNodeId == "node-final"),
++                "queued-late-fault" => canceledLoser && loser?.Status == ActivityExecutionStatus.Faulted &&
++                    loser.Fault is not null && originalIncident is { IsBlocking: true, ResolutionOutcome: null } &&
++                    parent.Status == ActivityExecutionStatus.Running && queuedFault && queuedBeforeCancellation,
+                 "queued-loser" => canceledLoser && loser?.Status == ActivityExecutionStatus.Completed && queuedLoser && queuedBeforeCancellation,
+                 "parallel-mi" => state.ActiveChildren.Count == 3 && bookmarks.Count(bookmark => bookmark.ExecutableNodeId == "node-work") == 3,
+                 "listener-rearm" => states.Count(child => child.Execution.ExecutableNodeId == "node-listener") == 2 && bookmarks.Any(bookmark => bookmark.ExecutableNodeId == "node-listener"),
+@@ -319,6 +367,8 @@ public sealed class LegacyBpmnCheckpointEfTests
+             {
+                 parentId = parent.InvocationId, pendingFault = state.PendingFault,
+                 canceledLoser, queuedLoser, queuedBeforeCancellation, LoserQueuedObservation, FirstCancellationObservation,
++                originalLoserFault = loser?.Fault,
++                originalLoserIncident = originalIncident, queuedFault,
+                 activeWork = state.ActiveChildren,
+                 children = states.Where(child => child.ParentActivityExecutionId == parent.InvocationId)
+                     .Select(child => new { child.InvocationId, node = child.Execution.ExecutableNodeId, child.Status, child.IterationId, token = child.Provenance.ExecutionPathId }),
+@@ -348,6 +398,10 @@ public sealed class LegacyBpmnCheckpointEfTests
+                 JsonSerializer.Serialize(storedBookmarks.OrderBy(bookmark => bookmark.BookmarkId), Web));
+             Assert.Equal(JsonSerializer.Serialize(queue.OrderBy(item => item.WorkItemId), Web),
+                 JsonSerializer.Serialize(storedQueue.OrderBy(item => item.WorkItemId), Web));
++            var storedIncidents = await new EfIncidentStateStore(copied, access)
++                .ListAsync(WorkflowExecutionHarness.WorkflowExecutionId);
++            Assert.Equal(JsonSerializer.Serialize(incidents.OrderBy(item => item.IncidentId), Web),
++                JsonSerializer.Serialize(storedIncidents.OrderBy(item => item.IncidentId), Web));
+             Captured = true;
+         }
+     }

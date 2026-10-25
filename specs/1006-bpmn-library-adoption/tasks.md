@@ -33,7 +33,7 @@ Independent test: old fixtures enter a fresh upgraded host/provider and finish w
 - [x] T015 [US1] Implement explicit legacy/current readers and writers in `Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/`; keep existing v1 storage representation and preserve all pending-fault/race/loop/compensation/diagnostic fields. Add alias/version/corruption and old-reader controls.
 - [x] T016 [US1] Resolve exact active/stopped handles from complete durable direct-child history, exact callback IDs and queued provenance in the host adapter; validate parent/node/element/token/iteration uniqueness before released pruning. Distinguish never-issued work from missing identity.
 - [ ] T017 [US1] Prove completion, fault, replay and pruning for canceled work, queued-loser order, MI and same-node re-arm through the upgraded host. Mutate lookup to first node/iteration match and prove the re-arm witness fails; restore and rerun green.
-- [ ] T018 [US1] Prove fresh-provider recovery of original deferred fault and all fixture outcomes in `Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/`; retain capable readers/replay IDs and document actual rollback limits.
+- [x] T018 [US1] Prove fresh-provider recovery of original deferred fault and all fixture outcomes in `Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/`; retain capable readers/replay IDs and document actual rollback limits.
 
 ## Phase 4: US2 — released semantics through Foundation (P1)
 

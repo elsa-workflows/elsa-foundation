@@ -24,6 +24,7 @@ public sealed class BpmnUpgradeRecoveryEfTests
     [Theory]
     [InlineData("resolved-race")]
     [InlineData("queued-loser")]
+    [InlineData("queued-late-fault")]
     [InlineData("parallel-mi")]
     [InlineData("listener-rearm")]
     [InlineData("deferred-fault")]
@@ -168,15 +169,17 @@ public sealed class BpmnUpgradeRecoveryEfTests
         }
     }
 
-    [Fact]
-    public async Task Actual_legacy_queued_loser_callback_is_not_re_evaluated_after_pruning_and_provider_restart()
+    [Theory]
+    [InlineData("queued-loser")]
+    [InlineData("queued-late-fault")]
+    public async Task Actual_legacy_queued_loser_callback_is_not_re_evaluated_after_pruning_and_provider_restart(string scenario)
     {
         var directory = Path.Combine(Path.GetTempPath(), $"elsa-bpmn-replay-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
         try
         {
             var database = Path.Combine(directory, "upgraded.db");
-            await CopyCheckpointAsync("queued-loser", database);
+            await CopyCheckpointAsync(scenario, database);
             var observations = new CallbackObservations();
             RuntimeSchedulerWorkItem persistedWork;
             string parentId;
@@ -184,6 +187,10 @@ public sealed class BpmnUpgradeRecoveryEfTests
             string stablePrivateState;
             string stableFinalBookmark;
             int stableChildCount;
+            string? originalFault = null;
+            string? stableIncident = null;
+            string? incidentId = null;
+            string? originalIncidentCore = null;
             await using (var first = await OpenHostAsync(database, Enumerable.Range(0, 100).Select(index => $"replay-first-{index}"), observations))
             {
                 var states = first.Provider.GetRequiredService<IActivityExecutionStateStore>();
@@ -192,6 +199,18 @@ public sealed class BpmnUpgradeRecoveryEfTests
                 var loser = Assert.Single(before, child => child.Execution.ExecutableNodeId == "node-loser");
                 parentId = parent.InvocationId;
                 loserId = loser.InvocationId;
+                if (scenario == "queued-late-fault")
+                {
+                    Assert.Equal(ActivityExecutionStatus.Faulted, loser.Status);
+                    Assert.Equal("TEST-FAULT", loser.Fault!.Code);
+                    originalFault = JsonSerializer.Serialize(loser.Fault);
+                    incidentId = Assert.Single(loser.IncidentIds);
+                    var originalIncident = await first.Provider.GetRequiredService<IIncidentStateStore>()
+                        .FindAsync(WorkflowExecutionHarness.WorkflowExecutionId, incidentId);
+                    Assert.True(originalIncident!.IsBlocking);
+                    Assert.Null(originalIncident.ResolutionOutcome);
+                    originalIncidentCore = IncidentCore(originalIncident);
+                }
                 var tokenId = loser.Provenance.ExecutionPathId;
                 Assert.Contains(parent.PrivateState!.Value.InlineValue!.Value.GetProperty("tokens").EnumerateArray(),
                     token => token.GetProperty("tokenId").GetString() == tokenId && token.GetProperty("status").GetInt32() == 4);
@@ -215,11 +234,24 @@ public sealed class BpmnUpgradeRecoveryEfTests
                     .Metadata.GetValueOrDefault(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId));
                 stableFinalBookmark = Assert.Single(await first.BookmarksAsync(), bookmark => bookmark.ExecutableNodeId == "node-final").BookmarkId;
                 stableChildCount = after.Count;
-                Assert.Equal(1, observations.CompletedHandles.Count(handle => handle == loserId));
+                if (incidentId is not null)
+                {
+                    Assert.Equal(originalFault, JsonSerializer.Serialize(Assert.Single(after, child => child.InvocationId == loserId).Fault));
+                    var absorbed = await first.Provider.GetRequiredService<IIncidentStateStore>()
+                        .FindAsync(WorkflowExecutionHarness.WorkflowExecutionId, incidentId);
+                    Assert.False(absorbed!.IsBlocking);
+                    Assert.Equal(IncidentResolutionActionKinds.AbsorbFault, absorbed.ResolutionOutcome!.ActionKind);
+                    Assert.Equal(IncidentResolutionSystemSources.StructuralFaultAbsorption, absorbed.ResolutionOutcome.SystemSource);
+                    Assert.Equal("bpmn.work.late-fault-absorbed", absorbed.Metadata.GetValueOrDefault(RuntimeMetadataKeys.FaultAbsorptionReason));
+                    Assert.Equal(parentId, absorbed.Metadata.GetValueOrDefault(RuntimeMetadataKeys.FaultAbsorbedBy));
+                    Assert.Equal(originalIncidentCore, IncidentCore(absorbed));
+                    stableIncident = JsonSerializer.Serialize(absorbed);
+                }
+                Assert.Equal(1, observations.TerminalHandles.Count(handle => handle == loserId));
             }
             await using (var restarted = await OpenHostAsync(database, [], observations))
             {
-                var calls = observations.CompletedHandles.Count;
+                var calls = observations.TerminalHandles.Count;
                 await using (var scope = restarted.Provider.CreateAsyncScope())
                     await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>().EnqueueAsync(persistedWork);
                 var queued = await restarted.Provider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
@@ -234,11 +266,17 @@ public sealed class BpmnUpgradeRecoveryEfTests
                 Assert.Equal(stablePrivateState, runningParent.PrivateState!.Value.InlineValue!.Value.GetRawText());
                 Assert.Equal(persistedWork.WorkItemId, Assert.Single(afterReplay, child => child.InvocationId == loserId)
                     .Metadata.GetValueOrDefault(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId));
-                Assert.Equal(calls, observations.CompletedHandles.Count);
+                Assert.Equal(calls, observations.TerminalHandles.Count);
                 Assert.Empty((await restarted.Provider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
                     .ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionHarness.WorkflowExecutionId, 100))).Items);
                 Assert.Empty(await restarted.Provider.GetRequiredService<IWorkflowSchedulerPoisonStore>()
                     .ListAsync(WorkflowExecutionHarness.WorkflowExecutionId));
+                if (incidentId is not null)
+                {
+                    Assert.Equal(originalFault, JsonSerializer.Serialize(Assert.Single(afterReplay, child => child.InvocationId == loserId).Fault));
+                    Assert.Equal(stableIncident, JsonSerializer.Serialize(await restarted.Provider.GetRequiredService<IIncidentStateStore>()
+                        .FindAsync(WorkflowExecutionHarness.WorkflowExecutionId, incidentId)));
+                }
                 var final = Assert.Single(await restarted.BookmarksAsync());
                 Assert.Equal(stableFinalBookmark, final.BookmarkId);
                 await restarted.ResumeAsync(final, JsonSerializer.SerializeToElement(new { eventName = "continue" }));
@@ -249,6 +287,12 @@ public sealed class BpmnUpgradeRecoveryEfTests
         }
         finally { Directory.Delete(directory, recursive: true); }
     }
+
+    private static string IncidentCore(IncidentState incident) => JsonSerializer.Serialize(new
+    {
+        incident.IncidentId, incident.WorkflowExecutionId, incident.ActivityExecutionId, incident.ExecutableNodeId,
+        incident.Severity, incident.FailureType, incident.Message, incident.CreatedAt
+    });
 
     private static async Task CopyCheckpointAsync(string scenario, string database)
     {
@@ -294,7 +338,7 @@ public sealed class BpmnUpgradeRecoveryEfTests
 
     private sealed class CallbackObservations
     {
-        public System.Collections.Concurrent.ConcurrentQueue<string> CompletedHandles { get; } = new();
+        public System.Collections.Concurrent.ConcurrentQueue<string> TerminalHandles { get; } = new();
     }
 
     private sealed class ObservedRuntime(IBpmnProcessRuntime inner, CallbackObservations observations) : IBpmnProcessRuntime
@@ -302,10 +346,14 @@ public sealed class BpmnUpgradeRecoveryEfTests
         public ValueTask<RuntimeStructuralContinuation> StartAsync(IRuntimeActivityExecutionContext context) => inner.StartAsync(context);
         public ValueTask<RuntimeStructuralContinuation> CompleteAsync(IRuntimeActivityExecutionContext context, ActivityChildCompletedContext completion)
         {
-            observations.CompletedHandles.Enqueue(completion.CompletedChildActivityExecutionId);
+            observations.TerminalHandles.Enqueue(completion.CompletedChildActivityExecutionId);
             return inner.CompleteAsync(context, completion);
         }
-        public ValueTask<RuntimeStructuralContinuation> FaultAsync(IRuntimeActivityExecutionContext context, ActivityChildFaultedContext fault) => inner.FaultAsync(context, fault);
+        public ValueTask<RuntimeStructuralContinuation> FaultAsync(IRuntimeActivityExecutionContext context, ActivityChildFaultedContext fault)
+        {
+            observations.TerminalHandles.Enqueue(fault.FaultedChildActivityExecutionId);
+            return inner.FaultAsync(context, fault);
+        }
         public ValueTask<RuntimeStructuralContinuation> SignalAsync(IRuntimeActivityExecutionContext context, ActivityChildNotifiedContext signal) => inner.SignalAsync(context, signal);
         public ValueTask<RuntimeStructuralContinuation> OutcomeAsync(IRuntimeActivityExecutionContext context, ActivityChildOutcomeContext outcome) => inner.OutcomeAsync(context, outcome);
     }
