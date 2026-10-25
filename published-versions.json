@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "43fd7e40da2fb6cdd478ac4ce724d6ac6eccd224",
+  "last_publish_commit": "d32aba731870dff2215b0aaaebb38c4b23cdc4d7",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -436,6 +436,16 @@
       "package_id": "Elsa.Http.JavaScript",
       "version": "4.0.9-preview",
       "commit": "0b40e42d5a7376998905817b2fb15dd4277fe418"
+    },
+    {
+      "package_id": "Elsa.Integrations.Sdk",
+      "version": "4.0.0-preview",
+      "commit": "d32aba731870dff2215b0aaaebb38c4b23cdc4d7"
+    },
+    {
+      "package_id": "Elsa.Integrations.Templates",
+      "version": "4.0.0-preview",
+      "commit": "d32aba731870dff2215b0aaaebb38c4b23cdc4d7"
     },
     {
       "package_id": "Elsa.Locking.Core",
