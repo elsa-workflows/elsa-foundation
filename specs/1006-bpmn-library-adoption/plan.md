@@ -144,7 +144,8 @@ implementation gates. Actual host/fresh-EF recovery and frozen fingerprint verif
 semantic deletion and delivery. No exception is proposed.
 
 Independent correctness, standards and acceptance plan reviews completed with no actionable findings.
-Stable new task IDs may now be refined; source implementation waits for the subsequent task review. T045 and existing open gates
+T046–T051 were subsequently refined and independently reviewed clean. Source implementation may
+proceed in their ordered increments; all implementation/host acceptance gates remain open. T045 and existing open gates
 remain open. This is additional work in the sole existing switch PR, not a new claim or PR.
 
 ## Review and evidence
