@@ -79,7 +79,9 @@ Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/
 Studio/tests/browser/
 ├── secretScopesFixture.tsx
 ├── secret-scopes.spec.ts
+├── creation-dialog-tokens.spec.ts # Header create-label integration only
 ├── connections-management.spec.ts
+├── connection-secrets.spec.ts # Header create-label integration only
 ├── homeFixture.tsx
 └── home.spec.ts
 ```

@@ -9,6 +9,13 @@ import "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/styles
 
 const scenario = new URLSearchParams(window.location.search).get("scenario") ?? "default";
 
+async function rejectAfterFixtureRelease(message: string): Promise<never> {
+  await new Promise<void>(resolve => {
+    window.addEventListener("fixture-release-mutation", () => resolve(), { once: true });
+  });
+  throw new Error(message);
+}
+
 const tallDescription = scenario === "tall-error"
   ? Array.from({ length: 16 }, () => "This explanatory text is intentionally long so the create dialog has enough content to test its own scrolling area.").join(" ")
   : undefined;
@@ -92,12 +99,13 @@ function inventoryResults(url: string): SecretMetadata[] {
 
 function Fixture() {
   const [unexpectedReadCount, setUnexpectedReadCount] = useState(0);
+  const [listRequestCount, setListRequestCount] = useState(0);
+  const [mutationRequestCount, setMutationRequestCount] = useState(0);
   const [createdMetadata, setCreatedMetadata] = useState<Pick<SecretMetadata, "name" | "displayName" | "typeName" | "storeName" | "scope" | "tags" | "status"> | null>(null);
   const [updatedMetadata, setUpdatedMetadata] = useState<Pick<SecretMetadata, "name" | "displayName" | "description" | "typeName" | "storeName" | "scope" | "status"> | null>(null);
   const editorSecret = useRef<SecretMetadata>({ ...initialEditorSecret });
   const updateRequestCount = useRef(0);
   const descriptorRequestCount = useRef(0);
-  const mutationRequestCount = useRef(0);
   const context = useMemo<StudioEndpointContext>(() => ({
     baseUrl: "http://fixture.example",
     http: {
@@ -121,9 +129,10 @@ function Fixture() {
           return { ...descriptors, scopes } as T;
         }
         if (url.startsWith("/secrets?")) {
+          setListRequestCount(count => count + 1);
           const items = scenario === "inventory"
             ? inventoryResults(url)
-            : scenario.startsWith("editor") ? [editorSecret.current] : [];
+            : scenario.startsWith("editor") || scenario === "mutation-attempts" ? [editorSecret.current] : [];
           const totalCount = scenario === "inventory" && !new URLSearchParams(url.split("?")[1] ?? "").get("search")?.trim()
             ? 101
             : items.length;
@@ -133,8 +142,9 @@ function Fixture() {
         throw new Error(`Unexpected fixture GET ${url}`);
       },
       postJson: async <T,>(url: string, body: unknown) => {
-        mutationRequestCount.current += 1;
+        setMutationRequestCount(count => count + 1);
         if (url !== "/secrets") throw new Error(`Unexpected fixture POST ${url}`);
+        if (scenario === "mutation-attempts") return rejectAfterFixtureRelease("Fixture secret creation failed after the request was attempted.");
         if (scenario === "tall-error") {
           const details = Array.from({ length: 24 }, () => "The test service rejected this secret after validating its metadata and selected storage configuration.").join(" ");
           throw new Error(`Fixture secret creation failed. ${details}`);
@@ -166,10 +176,11 @@ function Fixture() {
         return metadata as T;
       },
       putJson: async <T,>(url: string, body: unknown) => {
-        mutationRequestCount.current += 1;
+        setMutationRequestCount(count => count + 1);
         if (url !== `/secrets/${encodeURIComponent(initialEditorSecret.name)}`) {
           throw new Error(`Unexpected fixture PUT ${url}`);
         }
+        if (scenario === "mutation-attempts") return rejectAfterFixtureRelease("Fixture metadata update failed after the request was attempted.");
         updateRequestCount.current += 1;
         if (scenario === "editor-error" && updateRequestCount.current === 1) {
           throw new Error("Fixture metadata update failed.");
@@ -194,8 +205,14 @@ function Fixture() {
         return editorSecret.current as T;
       },
       requestJson: async () => { throw new Error("No raw request expected in this fixture"); },
-      deleteJson: async () => { mutationRequestCount.current += 1; throw new Error("No delete expected in this fixture"); },
-      postForm: async () => { mutationRequestCount.current += 1; throw new Error("No form request expected in this fixture"); }
+      deleteJson: async (url: string) => {
+        setMutationRequestCount(count => count + 1);
+        if (scenario === "mutation-attempts" && url === `/secrets/${encodeURIComponent(initialEditorSecret.name)}`) {
+          return rejectAfterFixtureRelease("Fixture secret deletion failed after the request was attempted.");
+        }
+        throw new Error("No delete expected in this fixture");
+      },
+      postForm: async () => { setMutationRequestCount(count => count + 1); throw new Error("No form request expected in this fixture"); }
     }
   }), []);
 
@@ -203,7 +220,8 @@ function Fixture() {
     <ThemeProvider>
       <SecretsPage context={context} dialogs={{ confirm: async () => true, prompt: async () => null, alert: async () => undefined }} />
       <output data-testid="unexpected-secret-reads">{unexpectedReadCount}</output>
-      <output data-testid="secret-mutation-requests">{mutationRequestCount.current}</output>
+      <output data-testid="secret-list-requests">{listRequestCount}</output>
+      <output data-testid="secret-mutation-requests">{mutationRequestCount}</output>
       {createdMetadata ? <output data-testid="created-secret-metadata">{JSON.stringify(createdMetadata)}</output> : null}
       {updatedMetadata ? <output data-testid="updated-secret-metadata">{JSON.stringify(updatedMetadata)}</output> : null}
     </ThemeProvider>

@@ -53,6 +53,57 @@ describe("Connections page", () => {
     expect(host.textContent).not.toContain("No matching connections");
   });
 
+  it("keeps the accepted search after creating a connection outside its results", async () => {
+    const listQueries: string[] = [];
+    const created = { ...connection, name: "billing-api", displayName: "Billing API" };
+    const { context } = endpointContext({
+      getJson: vi.fn(async (url: string) => {
+        if (url.startsWith("/connections?")) {
+          const query = new URL(url, "https://server.example").searchParams.get("search") ?? "";
+          listQueries.push(query);
+          return { items: query === "customer" ? [connection] : [] };
+        }
+        return descriptors;
+      }),
+      postJson: vi.fn(async () => created)
+    });
+    const { host } = renderPage(context);
+
+    await waitFor(() => listQueries.length === 1);
+    await waitFor(() => button(host, "Search").disabled === false);
+    changeSearch(host, "customer");
+    click(button(host, "Search"));
+    await waitFor(() => listQueries.length === 2);
+    expect(listQueries).toEqual(["", "customer"]);
+    await waitFor(() => detailsButton(host) !== null);
+    changeSearch(host, "draft-only");
+    await createConnection(host, created.name);
+
+    await waitFor(() => host.textContent?.includes("Connection 'billing-api' created.") === true);
+    expect(listQueries).toEqual(["", "customer", "customer"]);
+    expect(host.querySelector<HTMLInputElement>('input[aria-label="Search connections"]')?.value).toBe("customer");
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it("selects a created connection when its exact name appears in returned items", async () => {
+    const created = { ...connection, name: "customer-api" };
+    let listCalls = 0;
+    const { context } = endpointContext({
+      getJson: vi.fn(async (url: string) => {
+        if (url.startsWith("/connections?")) return { items: ++listCalls === 1 ? [] : [created] };
+        return descriptors;
+      }),
+      postJson: vi.fn(async () => created)
+    });
+    const { host } = renderPage(context);
+
+    await waitFor(() => listCalls === 1 && findButton(host, "Create connection")?.disabled === false);
+    await createConnection(host, created.name);
+
+    await waitFor(() => host.querySelector('[role="dialog"] h2')?.textContent === "Customer API");
+    expect(host.querySelector('[role="dialog"] h2')?.textContent).toBe("Customer API");
+  });
+
   it("shows a list error and retries the current search", async () => {
     const listQueries: string[] = [];
     let listCalls = 0;
@@ -221,9 +272,22 @@ function click(element: HTMLElement) {
 function changeSearch(host: HTMLElement, value: string) {
   const input = host.querySelector<HTMLInputElement>('input[aria-label="Search connections"]');
   if (!input) throw new Error("Search connections input not found.");
+  changeInput(input, value);
+}
+
+function changeInput(input: HTMLInputElement, value: string) {
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
   setter?.call(input, value);
   flushSync(() => input.dispatchEvent(new Event("input", { bubbles: true })));
+}
+
+async function createConnection(host: HTMLElement, name: string) {
+  click(button(host, "Create connection"));
+  await waitFor(() => host.querySelector<HTMLInputElement>(".connections-create-dialog input[autocomplete='off']") !== null);
+  const input = host.querySelector<HTMLInputElement>(".connections-create-dialog input[autocomplete='off']");
+  if (!input) throw new Error("Create connection name input not found.");
+  changeInput(input, name);
+  click(button(host, "Create"));
 }
 
 async function waitFor(predicate: () => boolean) {

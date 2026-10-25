@@ -14,6 +14,69 @@ afterEach(() => {
 });
 
 describe("secrets page", () => {
+  it("places Create in the header as its only filled primary action", async () => {
+    const { container } = render();
+    await waitForText(container, "Payments API");
+
+    const header = container.querySelector<HTMLElement>(".secrets-header")!;
+    const create = header.querySelector<HTMLButtonElement>("button[aria-label='Create secret']");
+    expect(create).not.toBeNull();
+    expect(create?.textContent).toContain("Create secret");
+    expect(create?.getAttribute("data-variant")).toBe("primary");
+    expect(header.querySelectorAll("button[data-variant='primary']")).toHaveLength(1);
+  });
+
+  it("keeps Edit direct and exposes secondary operations in a keyboard accessible menu", async () => {
+    const { container } = render();
+    await waitForText(container, "Payments API");
+
+    const row = container.querySelector<HTMLButtonElement>("button[aria-label='Edit payments.api']")?.closest("tr");
+    expect(row).not.toBeNull();
+    expect(row?.querySelector("button[aria-label='Edit payments.api']")).not.toBeNull();
+    expect(row?.querySelector("button[aria-label='Rotate payments.api']")).toBeNull();
+
+    const trigger = row?.querySelector<HTMLButtonElement>("button[aria-label='Actions for payments.api']");
+    expect(trigger).not.toBeNull();
+    if (!trigger) return;
+
+    trigger.getBoundingClientRect = () => ({ left: 20, right: 52, top: 20, bottom: 52, width: 32, height: 32 } as DOMRect);
+    flushSync(() => {
+      trigger.focus();
+      trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
+    });
+    await waitFor(() => document.body.querySelector("[role='menu']") !== null);
+
+    const menu = document.body.querySelector<HTMLElement>("[role='menu']")!;
+    const items = [...menu.querySelectorAll<HTMLElement>("[role='menuitem']")];
+    expect(items.map(item => item.textContent?.trim())).toEqual(["Rotate", "Test", "Revoke", "Delete"]);
+    expect(items.slice(2).map(item => item.dataset.destructive)).toEqual(["true", "true"]);
+    expect(menu.querySelector("[role='separator']")).not.toBeNull();
+    expect(document.activeElement).toBe(items[0]);
+
+    flushSync(() => items[0].dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    await waitFor(() => document.body.querySelector("[role='menu']") === null);
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("preserves revoked and deleted operation gates in the secondary menu", async () => {
+    const { container } = render({ getItems: () => [
+      paymentSecret({ status: "Revoked" }),
+      secret({ id: "deleted", name: "deleted.api", displayName: "Deleted API", status: "Deleted" })
+    ] });
+    await waitForText(container, "Deleted API");
+
+    const revokedMenu = await openSecretMenu(container, "payments.api");
+    expect(menuItem(revokedMenu, "Rotate").disabled).toBe(false);
+    expect(menuItem(revokedMenu, "Test").disabled).toBe(false);
+    expect(menuItem(revokedMenu, "Revoke").disabled).toBe(true);
+    expect(menuItem(revokedMenu, "Delete").disabled).toBe(false);
+    flushSync(() => menuItem(revokedMenu, "Rotate").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    await waitFor(() => document.body.querySelector("[role='menu']") === null);
+
+    const deletedMenu = await openSecretMenu(container, "deleted.api");
+    expect([...deletedMenu.querySelectorAll<HTMLButtonElement>("[role='menuitem']")].every(item => item.disabled)).toBe(true);
+  });
+
   it("opens details only on request, cancels edits and restores focus to the list", async () => {
     const putJson = vi.fn();
     const { container } = render({ putJson });
@@ -151,8 +214,8 @@ describe("secrets page", () => {
       : vi.fn().mockResolvedValue({ succeeded: true, code: "resolved", message: "Secret resolved successfully." });
     const { container } = render({ postJson });
     await waitForText(container, "Payments API");
-    const runTest = () => container.querySelector<HTMLButtonElement>("button[aria-label='Test payments.api']")!.click();
-    runTest();
+    const runTest = () => clickSecretAction(container, "payments.api", "Test");
+    await runTest();
     const message = error ? "Test unavailable." : "Secret resolved successfully.";
     await waitForText(container, message);
     const notice = container.querySelector<HTMLElement>(".secrets-notification")!;
@@ -164,7 +227,7 @@ describe("secrets page", () => {
     flushSync(() => dismiss.click());
     expect(container.querySelector(".secrets-notification")).toBeNull();
     expect(container.textContent).toContain("Payments API");
-    runTest();
+    await runTest();
     await waitForText(container, message);
     expect(container.querySelector(".secrets-notification")).not.toBeNull();
     expect(postJson).toHaveBeenCalledTimes(2);
@@ -173,12 +236,12 @@ describe("secrets page", () => {
   it("clears entered rotation material and visibility when the target secret changes", async () => {
     const { container } = render({ getItems: () => [paymentSecret(), secret({ id: "2", name: "other.api", displayName: "Other API" })] });
     await waitForText(container, "Other API");
-    flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Rotate payments.api']")!.click());
+    await clickSecretAction(container, "payments.api", "Rotate");
     change(container.querySelector<HTMLInputElement>(".secrets-value-input input")!, "dummy-new-value");
     await waitFor(() => container.querySelector<HTMLInputElement>(".secrets-value-input input")?.value === "dummy-new-value");
     flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Show value']")!.click());
     expect(container.querySelector<HTMLInputElement>(".secrets-value-input input")?.type).toBe("text");
-    flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Rotate other.api']")!.click());
+    await clickSecretAction(container, "other.api", "Rotate");
     const input = container.querySelector<HTMLInputElement>(".secrets-value-input input")!;
     expect(input.value).toBe("");
     expect(input.type).toBe("password");
@@ -189,7 +252,7 @@ describe("secrets page", () => {
     await waitForText(container, "No secrets yet");
     expect(container.querySelector(".secrets-detail")).toBeNull();
     expect(container.textContent).not.toContain("Select a secret.");
-    clickButton(container, "Create");
+    clickButton(container, "Create secret");
     await waitFor(() => !!container.querySelector("[role=dialog][aria-label='Create secret']"));
   });
 
@@ -206,10 +269,10 @@ describe("secrets page", () => {
     };
     const { container } = render({ getDescriptors: descriptors });
     await waitForText(container, "Payments API");
-    await waitFor(() => !container.querySelector<HTMLButtonElement>(".secrets-toolbar-actions button:last-child")?.disabled);
-    clickButton(container, "Create");
-    await waitFor(() => !!container.querySelector("[aria-label='Create secret']"));
-    const dialog = container.querySelector<HTMLElement>("[aria-label='Create secret']")!;
+    await waitFor(() => !container.querySelector<HTMLButtonElement>(".secrets-header-actions button[aria-label='Create secret']")?.disabled);
+    clickButton(container, "Create secret");
+    await waitFor(() => !!container.querySelector("[role='dialog'][aria-label='Create secret']"));
+    const dialog = container.querySelector<HTMLElement>("[role='dialog'][aria-label='Create secret']")!;
     change(dialog.querySelector<HTMLInputElement>("input")!, "kept-secret");
     change(dialog.querySelector<HTMLTextAreaElement>("textarea")!, "Keep this description during refresh.");
     change(dialog.querySelector<HTMLInputElement>(".secrets-value-input input")!, "kept-value");
@@ -252,10 +315,10 @@ describe("secrets page", () => {
 
     endpoint = "new";
     changeEndpoint("/new-endpoint");
-    await waitFor(() => !container.querySelector<HTMLButtonElement>(".secrets-toolbar-actions button:last-child")?.disabled);
-    clickButton(container, "Create");
-    await waitFor(() => !!container.querySelector("[aria-label='Create secret'] select[id^='scope-select-']"));
-    const scopeSelect = container.querySelector<HTMLSelectElement>("[aria-label='Create secret'] select[id^='scope-select-']")!;
+    await waitFor(() => !container.querySelector<HTMLButtonElement>(".secrets-header-actions button[aria-label='Create secret']")?.disabled);
+    clickButton(container, "Create secret");
+    await waitFor(() => !!container.querySelector("[role='dialog'][aria-label='Create secret'] select[id^='scope-select-']"));
+    const scopeSelect = container.querySelector<HTMLSelectElement>("[role='dialog'][aria-label='Create secret'] select[id^='scope-select-']")!;
     await waitFor(() => [...scopeSelect.options].some(option => option.value === "module.current"));
 
     finishObsolete(new Error("old endpoint failed"));
@@ -650,7 +713,7 @@ describe("secrets page", () => {
     expect(container.querySelector(".secrets-count")?.textContent).toContain(`1 shown · 1 loaded · 1 result for “${laterSecret.name}”`);
 
     change(search, laterSecret.displayName);
-    flushSync(() => search.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+    flushSync(() => search.closest("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
     await waitFor(() => listRequests.length === 3);
     await waitForText(container, `for “${laterSecret.displayName}”`);
     expect(getSearchTerm(listRequests.at(-1)!)).toBe(laterSecret.displayName);
@@ -724,7 +787,7 @@ describe("secrets page", () => {
     });
 
     await waitForText(container, "Payments API");
-    clickButton(container, "Create");
+    clickButton(container, "Create secret");
     await waitFor(() => !!container.querySelector(".secrets-modal"));
     const inputs = Array.from(container.querySelectorAll<HTMLInputElement>(".secrets-modal input"));
     change(inputs[0], "smtp-password");
@@ -847,6 +910,7 @@ function secret(overrides: {
   createdAt?: string;
   updatedAt?: string | null;
   expiresAt?: string | null;
+  status?: string;
 }) {
   return {
     id: overrides.id,
@@ -855,7 +919,7 @@ function secret(overrides: {
     typeName: "text",
     storeName: "encrypted",
     tags: overrides.tags ?? [],
-    status: "Active",
+    status: overrides.status ?? "Active",
     currentVersion: overrides.currentVersion ?? 1,
     createdAt: overrides.createdAt ?? "2026-06-24T00:00:00Z",
     updatedAt: overrides.updatedAt,
@@ -903,4 +967,26 @@ function openEditor(container: HTMLElement) {
   trigger.focus();
   flushSync(() => trigger.click());
   return trigger;
+}
+
+async function clickSecretAction(container: HTMLElement, secretName: string, action: string) {
+  const menu = await openSecretMenu(container, secretName);
+  const item = menuItem(menu, action);
+  flushSync(() => item.click());
+  await waitFor(() => document.body.querySelector("[role='menu']") === null);
+}
+
+async function openSecretMenu(container: HTMLElement, secretName: string) {
+  const trigger = container.querySelector<HTMLButtonElement>(`button[aria-label='Actions for ${secretName}']`);
+  if (!trigger) throw new Error(`Secret action menu not found: ${secretName}`);
+  trigger.getBoundingClientRect = () => ({ left: 20, right: 52, top: 20, bottom: 52, width: 32, height: 32 } as DOMRect);
+  flushSync(() => trigger.click());
+  await waitFor(() => document.body.querySelector("[role='menu']") !== null);
+  return document.body.querySelector<HTMLElement>("[role='menu']")!;
+}
+
+function menuItem(menu: HTMLElement, action: string) {
+  const item = [...menu.querySelectorAll<HTMLButtonElement>("[role='menuitem']")].find(button => button.textContent?.trim() === action);
+  if (!item) throw new Error(`Secret action not found: ${action}`);
+  return item;
 }
