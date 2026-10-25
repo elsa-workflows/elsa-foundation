@@ -33,7 +33,7 @@ Align the Secrets and Connections page hierarchy around the approved Studio list
 *Gate: both constitutions and `docs/contributing/review-checklist.md` were applied before design and rechecked after the design below.*
 
 - **Elsa Foundation constitution**: No new module, endpoint, public API, package, or dependency is introduced. Existing endpoint and authorization contracts remain authoritative. Framework §2.24 and Elsa §E2.8/§E2.9 are draft/provisional and are not used to impose a new design rule; this work does not depend on them.
-- **Framework constitution**: This is a repair to an existing UI, not greenfield application development. Framework §2.21.2 does not declare a TDD cadence for this application; do not infer a test-first mandate. Add focused behavioral regressions for the changed search, selection, permission, action, and fixture-counter behavior, and use a source-revert control where the approved program requires causal evidence. Framework §2.23 is not a Foundation feature-registration obligation here; behavior tests are warranted for the affected UI logic. Tests remain Not run until the implementation owner executes them.
+- **Framework constitution**: This is a repair to an existing UI, not greenfield application development. Framework §2.21.2 does not declare a TDD cadence for this application; do not infer a test-first mandate. Add focused behavioral regressions for the changed search, selection, permission, action, and fixture-counter behavior, and use a source-revert control where the approved program requires causal evidence. Framework §2.23 is not a Foundation feature-registration obligation here; behavior tests are warranted for the affected UI logic. Revision-bound execution results and outstanding gates are recorded on #3071 and PR #3313; this plan does not certify them.
 - **Security and privacy**: Never reveal or copy secret material. Synthetic secret values stay within a disposable private host; proof artifacts, browser logs, screenshots, and receipts contain no request bodies, headers, credentials, or secret values. Connection examples are loopback-only.
 - **Architecture and UX**: Reuse existing Studio controls and page semantics. Keep Secrets Edit primary and secondary operations in the accessible overflow pattern; preserve Connections Details and its existing actions; use only the local effective-permission matcher for the single Home task destination. No generic list abstraction or permission-helper change is justified.
 - **Review checklist**: Review security, permission behavior, error and confirmation paths, keyboard access, focus return, empty/loading/failed states, responsive layout, and public contract impact. No backend/API contract is changed.
@@ -45,15 +45,14 @@ Align the Secrets and Connections page hierarchy around the approved Studio list
 
 ```text
 specs/1004-resource-consistency/
+├── spec.md
 ├── plan.md
 ├── research.md
 ├── data-model.md
 ├── quickstart.md
 ├── contracts/
 │   └── ui-contract.md
-├── checklists/
-│   └── requirements.md
-└── tasks.md                 # Produced by the subsequent SpecKit tasks step
+└── tasks.md
 ```
 
 ### Existing source and tests (expected implementation touch points)
@@ -90,13 +89,13 @@ Studio/tests/browser/
 
 ## Phase 0: Research Findings
 
-See [research.md](research.md). The selected worktree is at `d2968b0f1bc8330fe99dff927cecd885867e68fb`. The code graph had no matching TSX nodes for the named surfaces, so bounded direct source inspection was used. Current source confirms the proposed behaviors and touch points. No code was changed during this planning pass.
+See [research.md](research.md). The planning inspection used base `d2968b0f1bc8330fe99dff927cecd885867e68fb`. The code graph had no matching TSX nodes for the named surfaces, so bounded direct source inspection was used. That inspection confirmed the proposed behaviors and touch points. No code was changed during that planning pass.
 
 ## Phase 1: Design and Contracts
 
 - [data-model.md](data-model.md) records the current UI state concepts and allowed transitions. It introduces no persisted entity or endpoint.
 - [contracts/ui-contract.md](contracts/ui-contract.md) defines observable UI, search, operation, authorization, and privacy behavior; backend contracts remain unchanged.
-- [quickstart.md](quickstart.md) is the implementation-time verification guide. Its commands and host scenarios are instructions only; none has been run.
+- [quickstart.md](quickstart.md) is the implementation-time verification guide. It defines the commands and host scenarios; their revision-bound outcomes, including incomplete or failed attempts, are recorded on #3071 and PR #3313.
 
 ## Verification Plan and Evidence Boundaries
 
@@ -109,7 +108,7 @@ The following gates belong to the exact implementation head and must remain indi
 5. **Safe private-host proof**: Use a fresh disposable normal host with 101 synthetic Secrets and registered Connections that target loopback only. Verify strict-write behavior, masking, authenticated allow/deny including 403, query retention, operation results, and cleanup. Keep synthetic values, payloads, and credential-bearing values out of logs/screenshots/receipts; dispose of the private store. The built-in HTTP test is local readiness, not an outbound test; Revoke is not remote revocation.
 6. **Review and delivery**: Obtain the three independent review axes against the complete draft PR first; after readiness, request the actual Full tier on the exact head, then app approval and merge only under the root-owned delivery process. Verify resulting-main CI, Maps, and Studio after merge. A skipped, unavailable, stale-head, or failed gate is not passed.
 
-The implementation owner must refresh all selected gate commands and current CI requirements against the then-current shared matrix. These planned checks are **Not run** in this artifact set. Root owns checklist review, acceptance, exact-head evidence, implementation integration, and delivery.
+The implementation owner must refresh all selected gate commands and current CI requirements against the then-current shared matrix. Execution results are maintained on #3071 and PR #3313 rather than cached in this plan; prior-head results do not qualify a later revision. Root owns checklist review, acceptance, exact-head evidence, implementation integration, and delivery.
 
 ## Complexity Tracking
 
