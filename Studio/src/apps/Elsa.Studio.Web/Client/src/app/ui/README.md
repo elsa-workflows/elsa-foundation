@@ -61,7 +61,7 @@ For a configured optional section, start it open, show the set count, and allow 
 </AdvancedSection>
 ```
 
-`StudioDataGrid` activates a row on click and on Enter/Space. It does not stop events from nested controls. A caller embedding a copy button must stop both click and activation-key propagation:
+`StudioDataGrid` makes rows selectable when `onSelect` is supplied; those rows activate on click and on Enter/Space. Without `onSelect`, it renders a read-only table without row activation. It does not stop events from nested controls. A caller embedding a copy button must stop both click and activation-key propagation:
 
 ```tsx
 <button
@@ -75,7 +75,7 @@ For a configured optional section, start it open, show the set count, and allow 
 </button>
 ```
 
-For a module-owned row instead of `StudioDataGrid`, guard the row handler against events whose target is inside an interactive descendant, and activate from the keyboard only when the row itself is the target. Workflow Definitions currently owns that guard in its custom rows; do not assume the shared primitive supplies it. See the [normative UX rules](../../../../../../../docs/ux/design-spec.md#components) for the supported Button variants and disclosure behavior.
+For a module-owned row instead of `StudioDataGrid`, guard the row handler against events whose target is inside an interactive descendant, and activate from the keyboard only when the row itself is the target. Workflow Definitions currently applies the descendant click guard in its custom rows and provides keyboard entry through the workflow-name link; its rows do not implement row-level keyboard activation. Do not assume the shared primitive supplies caller guards. See the [normative UX rules](../../../../../../../docs/ux/design-spec.md#components) for the supported Button variants and disclosure behavior.
 
 ### Compose a page, list, and confirmation dialog
 
