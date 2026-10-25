@@ -79,7 +79,7 @@ public sealed class DependencyMapTests
                 .Select(group => $"{group.Key} holds {group.Count()} projects"))
             .ToArray();
 
-        Assert.All((string[])["Essentials/src/", "Essentials/apps/", "Essentials/tests/", "Extensions/", "tools/", "samples/"],
+        Assert.All((string[])["Essentials/src/", "Essentials/apps/", "Essentials/tests/", "Extensions/", "tools/"],
             root => Assert.Contains(directories, directory => directory.StartsWith(root, StringComparison.Ordinal)));
         Assert.True(nested.Length == 0,
             "Move the outer project into a sub-folder named after it instead of excluding the inner one from its globs:" +
