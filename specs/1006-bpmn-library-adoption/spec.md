@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-25
 
-**Status**: Draft
+**Status**: In progress
 
 **Input**: [Foundation #2735](https://github.com/elsa-workflows/elsa-foundation/issues/2735), second of its three ordered PRs, under [Program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892). Sipke's end-to-end transfer and continuation authorize implementation. [Parity PR #3335](https://github.com/elsa-workflows/elsa-foundation/pull/3335) delivered the [release comparison](../../docs/reports/evidence/bpmn-adoption-0.5.0/README.md) and [cut ledger](../../docs/reports/evidence/bpmn-adoption-0.5.0/cut-ledger.md). Those are comparison evidence, not switch acceptance.
 
