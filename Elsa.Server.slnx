@@ -65,6 +65,14 @@
   <Folder Name="/Extensions/Elsa3/tests/Mapping/">
     <Project Path="Extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj" />
   </Folder>
+  <Folder Name="/Extensions/Integrations/" />
+  <Folder Name="/Extensions/Integrations/src/">
+    <Project Path="Extensions/Integrations/src/Sdk/Elsa.Integrations.Sdk.csproj" />
+    <Project Path="Extensions/Integrations/src/Templates/Elsa.Integrations.Templates.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Integrations/tests/">
+    <Project Path="Extensions/Integrations/tests/Tests/Elsa.Integrations.Tests.csproj" />
+  </Folder>
   <Folder Name="/Extensions/ExtensionBuilder/" />
   <Folder Name="/Extensions/ExtensionBuilder/src/">
     <Project Path="Extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj" />

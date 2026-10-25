@@ -1,0 +1,21 @@
+<Project>
+  <!--
+    Imported by connector packages that PackageReference Elsa.Integrations.Sdk.
+
+    Activity metadata is never read from connector.json at runtime (#2726 rule 1, constitution §E2.8).
+    CLR reconciliation already discovers IActivity types from [Activity], [ActivityInput], [Version]
+    and [TriggerActivity]. This target optionally reminds authors how to write a packaging copy of
+    that attribute data after Build; the copy is not a catalog.
+  -->
+  <PropertyGroup>
+    <ElsaConnectorManifestPath Condition="'$(ElsaConnectorManifestPath)' == ''">$(OutputPath)connector.json</ElsaConnectorManifestPath>
+    <ElsaGenerateConnectorManifest Condition="'$(ElsaGenerateConnectorManifest)' == ''">false</ElsaGenerateConnectorManifest>
+  </PropertyGroup>
+
+  <Target Name="GenerateElsaConnectorManifest"
+          AfterTargets="Build"
+          Condition="'$(ElsaGenerateConnectorManifest)' == 'true' and '$(DesignTimeBuild)' != 'true'">
+    <Message Importance="high"
+             Text="ElsaGenerateConnectorManifest is true. Write the packaging copy with Elsa.Integrations.Sdk.Manifest.ConnectorManifest.FromAssembly(assembly).WriteTo('$(ElsaConnectorManifestPath)'). Do not hand-author connector.json, and do not read it for activity metadata at runtime. CLR reconciliation remains the catalog source." />
+  </Target>
+</Project>
