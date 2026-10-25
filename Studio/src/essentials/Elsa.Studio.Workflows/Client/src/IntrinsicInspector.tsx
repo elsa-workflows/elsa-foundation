@@ -23,11 +23,23 @@ export type IntrinsicInspectorProps = ActivityPropertiesPanelProps & {
 export function IntrinsicInspector({ intrinsic, ...panelProps }: IntrinsicInspectorProps) {
   const { activity, descriptor, visibleVariables, scopeStatus, scopeRetry, onChange } = panelProps;
   const variableInputKey = intrinsic.variableInputKey?.trim() || null;
+  const selectedTarget = selectedOptionKey(readIntrinsicVariable(activity));
+  const targetType = variableInputKey && scopeStatus === "ready"
+    ? visibleVariables.find(variable => selectedOptionKey(makeVariableReference(variable.referenceKey, variable.scopeId)) === selectedTarget)?.type
+    : null;
 
   // The variable target is authored separately from the runtime inputs, so drop its pseudo-input from the
-  // descriptor the standard panel renders; the value (and output name) inputs flow through untouched.
+  // descriptor the standard panel renders. Derive the value editor from the current declaration on
+  // every render, so a target or declaration change cannot leave an old type on the editor.
   const panelDescriptor = variableInputKey && descriptor
-    ? { ...descriptor, inputs: descriptor.inputs.filter(input => input.referenceKey !== variableInputKey) }
+    ? {
+        ...descriptor,
+        inputs: descriptor.inputs
+          .filter(input => input.referenceKey !== variableInputKey)
+          .map(input => input.referenceKey === intrinsic.valueInputKey && targetType
+            ? { ...input, typeName: targetType.alias, collectionKind: targetType.collectionKind, uiHint: undefined }
+            : input)
+      }
     : descriptor;
 
   const variableInput = variableInputKey && descriptor
@@ -42,7 +54,7 @@ export function IntrinsicInspector({ intrinsic, ...panelProps }: IntrinsicInspec
           visibleVariables={visibleVariables}
           status={scopeStatus}
           retry={scopeRetry}
-          selected={selectedOptionKey(readIntrinsicVariable(activity))}
+          selected={selectedTarget}
           onSelect={selection =>
             onChange(writeIntrinsicVariable(activity, selection ? makeVariableReference(selection.referenceKey, selection.scopeId) : null))
           }

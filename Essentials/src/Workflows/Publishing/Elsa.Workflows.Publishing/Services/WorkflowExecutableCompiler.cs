@@ -195,7 +195,7 @@ public sealed class WorkflowExecutableCompiler(
                 }
             }
 
-            var compiledRoot = executableNodeCompiler.CompileRoot(rootActivity, projection, activityRows, placedActivities, state.Variables);
+            var compiledRoot = executableNodeCompiler.CompileRoot(rootActivity, projection, activityRows, placedActivities, state.Variables, state.Inputs);
             IReadOnlyCollection<ExecutableDependencyClaim> dependencyClaims = [];
             if (metadataEnricher is not null)
             {
