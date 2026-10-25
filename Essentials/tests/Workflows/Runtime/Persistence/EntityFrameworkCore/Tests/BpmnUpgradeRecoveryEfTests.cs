@@ -4,9 +4,12 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using CShells.Lifecycle;
 using Elsa.Activities.Bpmn.Tests;
+using Elsa.Activities.Bpmn.Contracts;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
@@ -40,39 +43,14 @@ public sealed class BpmnUpgradeRecoveryEfTests
 
     private static async Task RecoverAsync(string scenario, string? defect = null)
     {
-        var repository = new DirectoryInfo(AppContext.BaseDirectory);
-        while (repository is not null && !File.Exists(Path.Combine(repository.FullName, "Directory.Packages.props")))
-            repository = repository.Parent;
-        Assert.NotNull(repository);
-        var evidence = Path.Combine(repository.FullName, "specs/1006-bpmn-library-adoption/evidence/legacy");
-        var receipt = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(evidence, scenario + ".json")));
-        var compressed = await File.ReadAllBytesAsync(Path.Combine(evidence, scenario + ".sqlite.gz"));
-        Assert.Equal(receipt.RootElement.GetProperty("compressedSha256").GetString(), Convert.ToHexStringLower(SHA256.HashData(compressed)));
         var directory = Path.Combine(Path.GetTempPath(), $"elsa-bpmn-upgrade-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
         try
         {
             var database = Path.Combine(directory, "upgraded.db");
-            await using (var input = new GZipStream(new MemoryStream(compressed), CompressionMode.Decompress))
-            await using (var output = File.Create(database))
-                await input.CopyToAsync(output);
-            Assert.Equal(receipt.RootElement.GetProperty("databaseSha256").GetString(),
-                Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(database))));
+            await CopyCheckpointAsync(scenario, database);
 
-            await using var host = await BpmnRuntimeFixture.CreateAsync(Enumerable.Range(0, 100).Select(index => $"upgraded-activity-{index}"), services =>
-            {
-                services.AddSingleton<TimeProvider>(new FakeTimeProvider(DateTimeOffset.UtcNow.AddDays(1)));
-                services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
-                {
-                    Provider = "Sqlite", ConnectionString = $"Data Source={database};Pooling=False",
-                    RecoveryContinuationSigningKey = "legacy-bpmn-recovery-fixture-key-32",
-                    HierarchyCursorSigningKey = "legacy-bpmn-hierarchy-fixture-key-32"
-                }).AddEfModuleMigrations<RuntimeDbContext>("Sqlite");
-                new Elsa.Workflows.Runtime.Resumption.WorkflowsRuntimeResumptionFeature().ConfigureServices(services);
-            });
-            foreach (var initializer in host.Provider.GetServices<IShellInitializer>())
-                await initializer.InitializeAsync();
-            host.InitializeActivityTypes();
+            await using var host = await OpenHostAsync(database, Enumerable.Range(0, 100).Select(index => $"upgraded-activity-{index}"));
             var store = host.Provider.GetRequiredService<IActivityExecutionStateStore>();
             var before = await store.ListAllAsync(WorkflowExecutionHarness.WorkflowExecutionId);
             var parent = Assert.Single(before, state => state.Execution.ExecutableNodeId == BpmnRuntimeFixture.ProcessNodeId);
@@ -188,6 +166,148 @@ public sealed class BpmnUpgradeRecoveryEfTests
         {
             Directory.Delete(directory, recursive: true);
         }
+    }
+
+    [Fact]
+    public async Task Actual_legacy_queued_loser_callback_is_not_re_evaluated_after_pruning_and_provider_restart()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"elsa-bpmn-replay-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var database = Path.Combine(directory, "upgraded.db");
+            await CopyCheckpointAsync("queued-loser", database);
+            var observations = new CallbackObservations();
+            RuntimeSchedulerWorkItem persistedWork;
+            string parentId;
+            string loserId;
+            string stablePrivateState;
+            string stableFinalBookmark;
+            int stableChildCount;
+            await using (var first = await OpenHostAsync(database, Enumerable.Range(0, 100).Select(index => $"replay-first-{index}"), observations))
+            {
+                var states = first.Provider.GetRequiredService<IActivityExecutionStateStore>();
+                var before = await states.ListAllAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+                var parent = Assert.Single(before, child => child.Execution.ExecutableNodeId == BpmnRuntimeFixture.ProcessNodeId);
+                var loser = Assert.Single(before, child => child.Execution.ExecutableNodeId == "node-loser");
+                parentId = parent.InvocationId;
+                loserId = loser.InvocationId;
+                var tokenId = loser.Provenance.ExecutionPathId;
+                Assert.Contains(parent.PrivateState!.Value.InlineValue!.Value.GetProperty("tokens").EnumerateArray(),
+                    token => token.GetProperty("tokenId").GetString() == tokenId && token.GetProperty("status").GetInt32() == 4);
+                await using (var scope = first.Provider.CreateAsyncScope())
+                {
+                    var page = await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
+                        .ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionHarness.WorkflowExecutionId, 100));
+                    Assert.Null(page.NextContinuationToken);
+                    persistedWork = Assert.Single(page.Items, work =>
+                        work.CommandKind == WorkflowExecutionCommandKind.CompleteActivity && work.Payload is { } body &&
+                        body.Deserialize<RuntimeCompleteActivityCommandPayload>()?.CompletedChildActivityExecutionId == loserId);
+                }
+                await first.Provider.GetRequiredService<IRuntimeResumptionService>().SweepAsync(new RuntimeResumptionSweepRequest());
+                var after = await states.ListAllAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+                var continuing = Assert.Single(after, child => child.InvocationId == parentId);
+                Assert.Equal(ActivityExecutionStatus.Running, continuing.Status);
+                stablePrivateState = continuing.PrivateState!.Value.InlineValue!.Value.GetRawText();
+                Assert.DoesNotContain(continuing.PrivateState.Value.InlineValue.Value.GetProperty("tokens").EnumerateArray(),
+                    token => token.GetProperty("tokenId").GetString() == tokenId);
+                Assert.Equal(persistedWork.WorkItemId, Assert.Single(after, child => child.InvocationId == loserId)
+                    .Metadata.GetValueOrDefault(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId));
+                stableFinalBookmark = Assert.Single(await first.BookmarksAsync(), bookmark => bookmark.ExecutableNodeId == "node-final").BookmarkId;
+                stableChildCount = after.Count;
+                Assert.Equal(1, observations.CompletedHandles.Count(handle => handle == loserId));
+            }
+            await using (var restarted = await OpenHostAsync(database, [], observations))
+            {
+                var calls = observations.CompletedHandles.Count;
+                await using (var scope = restarted.Provider.CreateAsyncScope())
+                    await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>().EnqueueAsync(persistedWork);
+                var queued = await restarted.Provider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
+                    .ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionHarness.WorkflowExecutionId, 100));
+                Assert.Equal(persistedWork.WorkItemId, Assert.Single(queued.Items).WorkItemId);
+                await restarted.Provider.GetRequiredService<IRuntimeResumptionService>().SweepAsync(new RuntimeResumptionSweepRequest());
+                var states = restarted.Provider.GetRequiredService<IActivityExecutionStateStore>();
+                var afterReplay = await states.ListAllAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+                Assert.Equal(stableChildCount, afterReplay.Count);
+                var runningParent = Assert.Single(afterReplay, child => child.InvocationId == parentId);
+                Assert.Equal(ActivityExecutionStatus.Running, runningParent.Status);
+                Assert.Equal(stablePrivateState, runningParent.PrivateState!.Value.InlineValue!.Value.GetRawText());
+                Assert.Equal(persistedWork.WorkItemId, Assert.Single(afterReplay, child => child.InvocationId == loserId)
+                    .Metadata.GetValueOrDefault(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId));
+                Assert.Equal(calls, observations.CompletedHandles.Count);
+                Assert.Empty((await restarted.Provider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
+                    .ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionHarness.WorkflowExecutionId, 100))).Items);
+                Assert.Empty(await restarted.Provider.GetRequiredService<IWorkflowSchedulerPoisonStore>()
+                    .ListAsync(WorkflowExecutionHarness.WorkflowExecutionId));
+                var final = Assert.Single(await restarted.BookmarksAsync());
+                Assert.Equal(stableFinalBookmark, final.BookmarkId);
+                await restarted.ResumeAsync(final, JsonSerializer.SerializeToElement(new { eventName = "continue" }));
+                Assert.Equal(WorkflowExecutionStatus.Completed, (await restarted.Provider.GetRequiredService<IWorkflowExecutionStateStore>()
+                    .FindAsync(WorkflowExecutionHarness.WorkflowExecutionId))?.Status);
+                Assert.Empty(await restarted.BookmarksAsync());
+            }
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    private static async Task CopyCheckpointAsync(string scenario, string database)
+    {
+        var repository = new DirectoryInfo(AppContext.BaseDirectory);
+        while (repository is not null && !File.Exists(Path.Combine(repository.FullName, "Directory.Packages.props")))
+            repository = repository.Parent;
+        Assert.NotNull(repository);
+        var evidence = Path.Combine(repository.FullName, "specs/1006-bpmn-library-adoption/evidence/legacy");
+        using var receipt = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(evidence, scenario + ".json")));
+        var compressed = await File.ReadAllBytesAsync(Path.Combine(evidence, scenario + ".sqlite.gz"));
+        Assert.Equal(receipt.RootElement.GetProperty("compressedSha256").GetString(), Convert.ToHexStringLower(SHA256.HashData(compressed)));
+        await using (var input = new GZipStream(new MemoryStream(compressed), CompressionMode.Decompress))
+        await using (var output = File.Create(database))
+            await input.CopyToAsync(output);
+        Assert.Equal(receipt.RootElement.GetProperty("databaseSha256").GetString(), Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(database))));
+    }
+
+    private static async Task<BpmnRuntimeFixture> OpenHostAsync(string database, IEnumerable<string> ids, CallbackObservations? observations = null)
+    {
+        var host = await BpmnRuntimeFixture.CreateAsync(ids, services =>
+        {
+            services.AddSingleton<TimeProvider>(new FakeTimeProvider(DateTimeOffset.UtcNow.AddDays(1)));
+            services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
+            {
+                Provider = "Sqlite", ConnectionString = $"Data Source={database};Pooling=False",
+                RecoveryContinuationSigningKey = "legacy-bpmn-recovery-fixture-key-32",
+                HierarchyCursorSigningKey = "legacy-bpmn-hierarchy-fixture-key-32"
+            }).AddEfModuleMigrations<RuntimeDbContext>("Sqlite");
+            new Elsa.Workflows.Runtime.Resumption.WorkflowsRuntimeResumptionFeature().ConfigureServices(services);
+            if (observations is not null)
+            {
+                var original = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IBpmnProcessRuntime));
+                services.Remove(original);
+                services.AddScoped<IBpmnProcessRuntime>(provider => new ObservedRuntime(
+                    (IBpmnProcessRuntime)ActivatorUtilities.CreateInstance(provider, original.ImplementationType!), observations));
+            }
+        });
+        foreach (var initializer in host.Provider.GetServices<IShellInitializer>())
+            await initializer.InitializeAsync();
+        host.InitializeActivityTypes();
+        return host;
+    }
+
+    private sealed class CallbackObservations
+    {
+        public System.Collections.Concurrent.ConcurrentQueue<string> CompletedHandles { get; } = new();
+    }
+
+    private sealed class ObservedRuntime(IBpmnProcessRuntime inner, CallbackObservations observations) : IBpmnProcessRuntime
+    {
+        public ValueTask<RuntimeStructuralContinuation> StartAsync(IRuntimeActivityExecutionContext context) => inner.StartAsync(context);
+        public ValueTask<RuntimeStructuralContinuation> CompleteAsync(IRuntimeActivityExecutionContext context, ActivityChildCompletedContext completion)
+        {
+            observations.CompletedHandles.Enqueue(completion.CompletedChildActivityExecutionId);
+            return inner.CompleteAsync(context, completion);
+        }
+        public ValueTask<RuntimeStructuralContinuation> FaultAsync(IRuntimeActivityExecutionContext context, ActivityChildFaultedContext fault) => inner.FaultAsync(context, fault);
+        public ValueTask<RuntimeStructuralContinuation> SignalAsync(IRuntimeActivityExecutionContext context, ActivityChildNotifiedContext signal) => inner.SignalAsync(context, signal);
+        public ValueTask<RuntimeStructuralContinuation> OutcomeAsync(IRuntimeActivityExecutionContext context, ActivityChildOutcomeContext outcome) => inner.OutcomeAsync(context, outcome);
     }
 
     // Historical parse control while the original v1 reader still exists. This does not claim that
