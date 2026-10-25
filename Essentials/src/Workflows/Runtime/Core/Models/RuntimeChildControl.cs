@@ -126,12 +126,7 @@ public sealed class RuntimeChildControlTransport
         RuntimeChildControlValidation.Text(parentWorkflowExecutionId, nameof(parentWorkflowExecutionId));
         RuntimeChildControlValidation.Text(callingActivityExecutionId, nameof(callingActivityExecutionId));
         RuntimeChildControlValidation.Text(consumerActivityExecutionId, nameof(consumerActivityExecutionId));
-        ArgumentNullException.ThrowIfNull(parentExecutable);
-        RuntimeChildControlValidation.Text(parentExecutable.ArtifactId, "parentExecutable.ArtifactId");
-        RuntimeChildControlValidation.Text(parentExecutable.DefinitionId, "parentExecutable.DefinitionId");
-        RuntimeChildControlValidation.Text(parentExecutable.DefinitionVersionId, "parentExecutable.DefinitionVersionId");
-        RuntimeChildControlValidation.Text(parentExecutable.ArtifactVersion, "parentExecutable.ArtifactVersion", 128);
-        RuntimeChildControlValidation.Text(parentExecutable.ArtifactHash, "parentExecutable.ArtifactHash", 1024);
+        RuntimeChildControlValidation.Pin(parentExecutable);
         RuntimeChildControlValidation.Text(sourceCommitId, nameof(sourceCommitId));
         RuntimeChildControlValidation.Text(sourceIntentId, nameof(sourceIntentId));
         RuntimeChildControlValidation.Text(sourceOutboxItemId, nameof(sourceOutboxItemId), 8193);
@@ -197,6 +192,16 @@ internal sealed class RuntimeChildControlBatchJsonConverter : JsonConverter<Runt
 internal static class RuntimeChildControlValidation
 {
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
+
+    public static void Pin(WorkflowExecutableIdentity parentExecutable)
+    {
+        ArgumentNullException.ThrowIfNull(parentExecutable);
+        Text(parentExecutable.ArtifactId, "parentExecutable.ArtifactId");
+        Text(parentExecutable.DefinitionId, "parentExecutable.DefinitionId");
+        Text(parentExecutable.DefinitionVersionId, "parentExecutable.DefinitionVersionId");
+        Text(parentExecutable.ArtifactVersion, "parentExecutable.ArtifactVersion", 128);
+        Text(parentExecutable.ArtifactHash, "parentExecutable.ArtifactHash", 1024);
+    }
 
     public static void Text(string value, string parameterName, int maximumBytes = 4096)
     {

@@ -93,6 +93,8 @@ public class DispatchWorkflowRuntimeFeature : IShellFeature
         services.TryAddSingleton<IWorkflowDispatchStagingAccessor>(
             serviceProvider => serviceProvider.GetRequiredService<WorkflowDispatchStagingBuffer>());
         services.TryAddScoped<IWorkflowTestScopeCleaner, WorkflowTestScopeCleaner>();
+        services.TryAddScoped<IRuntimeWorkflowControlBoundary, WorkflowDispatchControlBoundary>();
         services.AddSingleton<IShellInitializer, WorkflowDispatchReadinessInitializer>();
+        services.AddSingleton<IShellInitializer, WorkflowDispatchControlBoundaryInitializer>();
     }
 }

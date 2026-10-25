@@ -165,7 +165,9 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
                     requestedBy: authority.SystemIdentity,
                     workflowExecutionId: payload.ChildWorkflowExecutionId,
                     idempotencyKey: identity.StartIdempotencyKey,
-                    metadata: null,
+                    metadata: durableDispatch is not null && WorkflowDispatchControlPolicy.ReadCapability(durableDispatch.Metadata) is not null
+                        ? new Dictionary<string, string> { [RuntimeMetadataKeys.ChildControlDispatchId] = durableDispatch.DispatchId }
+                        : null,
                     variables: null,
                     inputs: payload.Inputs.ToDictionary(item => item.Key, item => (object?)item.Value.Clone(), StringComparer.Ordinal),
                     stimulusInput: null,

@@ -1,4 +1,5 @@
 using Elsa.Workflows.Testing;
+using Elsa.Workflows.Runtime.Core.Attributes;
 using System.Reflection;
 using System.Text.Json;
 using Elsa.Workflows.Publishing.Handlers;
@@ -2272,6 +2273,51 @@ public sealed class WorkflowExecutableCompilerTests
         public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
             ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
     }
+
+    [Theory]
+    [InlineData(typeof(ChildControlProbe), true)]
+    [InlineData(typeof(ChildFaultHandlingProbe), false)]
+    public async Task Child_control_protocol_is_compiled_only_from_an_explicit_structural_declaration(Type activityType, bool declared)
+    {
+        var activityVersion = LegacyTriggerActivityVersion(activityType);
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(activityType, TypeAliasConvention.CanonicalAlias(activityType));
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("node", activityVersion.Id, [], []))),
+            new FakeActivityVersionStore([activityVersion]), _activityStructureService, registry);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Equal(declared ? "test.control" : null, executable.RootActivity.Metadata.GetValueOrDefault(RuntimeMetadataKeys.ChildControlConsumerKey));
+        Assert.Equal(declared ? "1" : null, executable.RootActivity.Metadata.GetValueOrDefault(RuntimeMetadataKeys.ChildControlConsumerVersion));
+    }
+
+    [Fact]
+    public async Task A_control_declaration_without_the_structural_consumer_marker_cannot_be_published()
+    {
+        var activityType = typeof(InvalidChildControlProbe);
+        var activityVersion = LegacyTriggerActivityVersion(activityType);
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(activityType, TypeAliasConvention.CanonicalAlias(activityType));
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("node", activityVersion.Id, [], []))),
+            new FakeActivityVersionStore([activityVersion]), _activityStructureService, registry);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(async () =>
+            await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)));
+        Assert.Contains("control", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [ActivityChildControlConsumer("test.control", 1)]
+    private sealed class ChildControlProbe : IActivityResult<ActivityUnit>, IRuntimeStructuralActivity, IRuntimeActivityChildControlConsumer
+    {
+        public ChildControlProbe() => throw new InvalidOperationException("Publishing must not activate the declared consumer.");
+        public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context) =>
+            throw new NotSupportedException();
+    }
+
+    [ActivityChildControlConsumer("test.control", 1)]
+    private sealed class InvalidChildControlProbe : IActivityResult<ActivityUnit>;
 
     private sealed class ChildFaultHandlingProbe : IActivityResult<ActivityUnit>, IRuntimeActivityChildFaultHandler
     {
