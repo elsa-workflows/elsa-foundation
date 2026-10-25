@@ -60,6 +60,7 @@ specs/1004-resource-consistency/
 ```text
 Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/
 ├── SecretsPage.tsx
+├── SecretDetail.tsx         # Restore the matching row action after a save refresh replaces its opener
 ├── styles.css
 └── __tests__/secretsPage.test.tsx
 

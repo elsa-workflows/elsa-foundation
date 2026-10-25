@@ -584,6 +584,28 @@ test("Edit secret keeps Scope read-only, explains matching, and saves metadata o
   await expect(dialog).toHaveCount(0);
 });
 
+test("restores row Edit focus when a metadata refresh temporarily removes the opener", async ({ page }) => {
+  await page.goto("/secret-scopes.html?scenario=editor-focus-refresh");
+  const originalOpener = page.locator('button[data-secret-open="billing.integration-key"]');
+  await expect(originalOpener).toBeVisible();
+  const originalElement = await originalOpener.elementHandle();
+  expect(originalElement).toBeTruthy();
+  await originalOpener.click();
+
+  const dialog = page.getByRole("dialog", { name: "Edit secret", exact: true });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("Display name", { exact: true }).fill("Focus restored after delayed refresh");
+  await dialog.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(page.getByTestId("secret-list-requests")).toHaveText("2");
+  await expect(page.locator(".secrets-loading")).toBeVisible();
+  await expect(originalOpener).toHaveCount(0);
+  expect(await originalElement!.evaluate(element => element.isConnected)).toBe(false);
+
+  await page.evaluate(() => window.dispatchEvent(new Event("fixture-release-editor-refresh")));
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator('button[data-secret-edit="billing.integration-key"]')).toBeFocused();
+});
+
 test("Edit save errors preserve fields and Cancel restores focus at 320px", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 900 });
   const { dialog, opener } = await openEditSecret(page, "editor-error");

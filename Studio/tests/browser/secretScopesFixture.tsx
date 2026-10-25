@@ -106,6 +106,7 @@ function Fixture() {
   const editorSecret = useRef<SecretMetadata>({ ...initialEditorSecret });
   const updateRequestCount = useRef(0);
   const descriptorRequestCount = useRef(0);
+  const secretListRequestCount = useRef(0);
   const context = useMemo<StudioEndpointContext>(() => ({
     baseUrl: "http://fixture.example",
     http: {
@@ -129,7 +130,11 @@ function Fixture() {
           return { ...descriptors, scopes } as T;
         }
         if (url.startsWith("/secrets?")) {
+          const requestNumber = ++secretListRequestCount.current;
           setListRequestCount(count => count + 1);
+          if (scenario === "editor-focus-refresh" && requestNumber === 2) {
+            await new Promise<void>(resolve => window.addEventListener("fixture-release-editor-refresh", () => resolve(), { once: true }));
+          }
           const items = scenario === "inventory"
             ? inventoryResults(url)
             : scenario.startsWith("editor") || scenario === "mutation-attempts" ? [editorSecret.current] : [];
