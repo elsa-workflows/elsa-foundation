@@ -169,9 +169,14 @@ fixed-at-publish start configuration and its secret refusal, and exact withheld 
 already have rows in the 242-method audit. The removed
 `ActivitiesBpmnInterchangeFeatureTests.ConfigureServices_RegistersImporterAndExporter` is a
 **pre-existing** deletion in [PR2608](https://github.com/elsa-workflows/elsa-foundation/pull/2608),
-commit `a82956af9f10eab0ab007fa4bcfd8d7aa17b821f`: its registration objective moved to
-[`FeatureCompositionTests`](https://github.com/elsa-workflows/elsa-foundation/blob/98efed4fc2c07337ad0b30128b60f462b8ddcff0/Essentials/tests/Architecture/Tests/FeatureCompositionTests.cs).
-The nested-process import test is not its replacement proof merely because the total is unchanged.
+commit `a82956af9f10eab0ab007fa4bcfd8d7aa17b821f`.
+[`FeatureCompositionTests`](https://github.com/elsa-workflows/elsa-foundation/blob/98efed4fc2c07337ad0b30128b60f462b8ddcff0/Essentials/tests/Architecture/Tests/FeatureCompositionTests.cs)
+checks resolvability of registrations a feature actually adds; it does not assert the presence of
+`IBpmnDocumentImporter` and `IBpmnDocumentExporter`. It is not equivalent replacement proof for
+those deleted presence assertions. The nested-process import test is not their replacement either,
+merely because the total is unchanged. Record that existing coverage limit; the switch must exercise
+interchange through the real registered service graph or HTTP endpoints, so missing binder/service
+registrations fail integration validation rather than being masked by concrete-class unit tests.
 No tests are deleted or renamed by this parity report.
 
 The immutable [authoring fingerprint](../bpmn-extraction-baseline/activity-contract-fingerprint.json)

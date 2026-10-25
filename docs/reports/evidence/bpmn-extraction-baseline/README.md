@@ -37,7 +37,7 @@ so a broken run can look like a passing one.
 The interchange project is
 `Essentials/tests/Activities/Bpmn/Interchange/Tests/Elsa.Activities.Bpmn.Interchange.Tests.csproj`.
 The [0.5.0 adoption comparison](../bpmn-adoption-0.5.0/README.md) records the current test inventory,
-the already-landed registration-test replacement and the separate host-compatibility gates.
+the historical registration-test removal, its coverage limit and the separate host-compatibility gates.
 
 **`activity-contract-fingerprint.json` must not change across the entire program.** It encodes
 `structure.kind = elsa.bpmn.structure`, `schemaVersion = 1.0.0`, the `Bpmn.Activities` child slot, the
