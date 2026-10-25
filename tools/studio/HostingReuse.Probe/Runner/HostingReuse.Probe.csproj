@@ -8,8 +8,7 @@
     <PackageReference Include="CShells.Nuplane" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="Fixtures/First/First.csproj" />
-    <ProjectReference Include="Fixtures/Second/Second.csproj" />
-    <Compile Remove="Fixtures/**/*.cs" />
+    <ProjectReference Include="../Fixtures/First/First.csproj" />
+    <ProjectReference Include="../Fixtures/Second/Second.csproj" />
   </ItemGroup>
 </Project>

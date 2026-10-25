@@ -8,10 +8,10 @@ assemblies contribute the same feature identity with different services.
 From the repository root:
 
 ```sh
-dotnet restore tools/studio/HostingReuse.Probe --locked-mode
-dotnet run --project tools/studio/HostingReuse.Probe -c Release --no-restore
-dotnet run --project tools/studio/HostingReuse.Probe -c Release --no-build -- --disable-auto-reload
-dotnet run --project tools/studio/HostingReuse.Probe -c Release --no-build
+dotnet restore tools/studio/HostingReuse.Probe/Runner/HostingReuse.Probe.csproj --locked-mode
+dotnet run --project tools/studio/HostingReuse.Probe/Runner/HostingReuse.Probe.csproj -c Release --no-restore
+dotnet run --project tools/studio/HostingReuse.Probe/Runner/HostingReuse.Probe.csproj -c Release --no-build -- --disable-auto-reload
+dotnet run --project tools/studio/HostingReuse.Probe/Runner/HostingReuse.Probe.csproj -c Release --no-build
 ```
 
 The normal run exits zero after four behavior groups: deferred cold discovery, update, removal-to-empty,
