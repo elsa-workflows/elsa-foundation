@@ -23,6 +23,7 @@ public sealed record OAuth2AuthenticationScheme
     public string? ScopesUrl { get; init; }
     public string? Scopes { get; init; }
     public string? ClientId { get; init; }
+    public string? TokenHeaderScheme { get; init; }
 
     public IReadOnlyDictionary<string, string> ToConnectionSettings()
     {
@@ -39,6 +40,8 @@ public sealed record OAuth2AuthenticationScheme
             settings[OAuth2SettingKeys.Scopes] = Scopes;
         if (!string.IsNullOrWhiteSpace(ClientId))
             settings[OAuth2SettingKeys.ClientId] = ClientId;
+        if (!string.IsNullOrWhiteSpace(TokenHeaderScheme))
+            settings[OAuth2SettingKeys.TokenHeaderScheme] = TokenHeaderScheme;
         return settings;
     }
 
@@ -57,7 +60,8 @@ internal sealed class OAuth2SchemeProvider(ISecretStoreRegistry stores) : IAuthe
             new AuthSchemeField(OAuth2SettingKeys.AuthorizationUrl, "Authorization URL", Sensitive: false, "url", Required: false),
             new AuthSchemeField(OAuth2SettingKeys.Scopes, "Scopes", Sensitive: false, "text", Required: false),
             new AuthSchemeField(OAuth2SettingKeys.ClientId, "Client ID", Sensitive: false, "text"),
-            new AuthSchemeField(OAuth2SecretFields.ClientSecret, "Client secret", Sensitive: true, "password", Required: false)
+            new AuthSchemeField(OAuth2SecretFields.ClientSecret, "Client secret", Sensitive: true, "password", Required: false),
+            new AuthSchemeField(OAuth2SettingKeys.TokenHeaderScheme, "Token header scheme", Sensitive: false, "text", Required: false)
         ],
         HasInteractiveAuthorization: true,
         HasRefreshableState: true,

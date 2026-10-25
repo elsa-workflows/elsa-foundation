@@ -42,6 +42,10 @@ internal sealed class OAuth2CallbackHandler(
             await tokens.CompleteAuthorizationCodeAsync(connection, request.Code, request.State!, cancellationToken);
             return new OAuthCallbackResponse(200, "authorized", null);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception)
         {
             await tokens.DeletePkceAsync(tenantId, connectionName, nonce, cancellationToken);

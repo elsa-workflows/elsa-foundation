@@ -17,6 +17,7 @@ public static class OAuth2SettingKeys
     public const string ScopesUrl = "scopesUrl";
     public const string Scopes = "scopes";
     public const string ClientId = "clientId";
+    public const string TokenHeaderScheme = "tokenHeaderScheme";
 }
 
 public static class OAuth2SecretFields

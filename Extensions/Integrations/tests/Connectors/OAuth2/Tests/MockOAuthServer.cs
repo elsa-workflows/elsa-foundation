@@ -32,7 +32,14 @@ public sealed class MockOAuthServer : HttpMessageHandler
     public bool RotateRefreshTokens { get; set; }
     public bool OmitRefreshTokenOnRefresh { get; set; }
     public bool OmitExpiresIn { get; set; }
+    public bool OmitTokenType { get; set; }
+    public bool ExpiresInAsString { get; set; }
+    public string IssuedTokenType { get; set; } = "Bearer";
+    public object? TokenErrorBody { get; set; }
+    public HttpStatusCode TokenErrorStatus { get; set; } = HttpStatusCode.OK;
     public int TokenRequestCount { get; private set; }
+    public string? LastAuthorizationScheme { get; private set; }
+    public string? LastAuthorizationHeader { get; private set; }
 
     public IReadOnlyCollection<string> IssuedAccessTokens => _tokens.Keys.ToArray();
 
@@ -86,6 +93,9 @@ public sealed class MockOAuthServer : HttpMessageHandler
             !string.Equals(clientSecret, ExpectedClientSecret, StringComparison.Ordinal))
             return Json(HttpStatusCode.Unauthorized, new { error = "invalid_client" });
 
+        if (TokenErrorBody is not null)
+            return Json(TokenErrorStatus, TokenErrorBody);
+
         return grantType switch
         {
             "authorization_code" => ExchangeAuthorizationCode(form, clientId!),
@@ -131,11 +141,15 @@ public sealed class MockOAuthServer : HttpMessageHandler
         var payload = new Dictionary<string, object?>
         {
             ["access_token"] = access,
-            ["token_type"] = "Bearer",
             ["scope"] = scope
         };
+        if (!OmitTokenType)
+            payload["token_type"] = IssuedTokenType;
         if (!OmitExpiresIn)
-            payload["expires_in"] = ExpireImmediately ? 1 : AccessTokenLifetimeSeconds;
+        {
+            var expiresIn = ExpireImmediately ? 1 : AccessTokenLifetimeSeconds;
+            payload["expires_in"] = ExpiresInAsString ? expiresIn.ToString() : expiresIn;
+        }
         if (refreshToken is not null)
             payload["refresh_token"] = refreshToken;
         return Json(HttpStatusCode.OK, payload);
@@ -143,6 +157,10 @@ public sealed class MockOAuthServer : HttpMessageHandler
 
     private HttpResponseMessage Resource(HttpRequestMessage request)
     {
+        LastAuthorizationScheme = request.Headers.Authorization?.Scheme;
+        LastAuthorizationHeader = request.Headers.TryGetValues("Authorization", out var values)
+            ? values.FirstOrDefault()
+            : null;
         var token = request.Headers.Authorization?.Parameter;
         if (string.IsNullOrWhiteSpace(token) || !_tokens.ContainsKey(token) || token.StartsWith("expired-", StringComparison.Ordinal))
             return new HttpResponseMessage(HttpStatusCode.Unauthorized);

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -133,17 +134,32 @@ internal sealed class OAuth2TokenService(
         return await RefreshAsync(connection, current, cancellationToken);
     }
 
+    /// <summary>
+    /// Refreshes an expired or rejected grant. A 401 retry with no refresh token (authorization-code)
+    /// faults: the connection needs authorization again. Pass <paramref name="forceRefresh"/> on
+    /// that retry so this method reads the stored grant once instead of the caller reading it first.
+    /// </summary>
     public async ValueTask<OAuth2Grant> RefreshAsync(
         IResolvedConnection connection,
         OAuth2Grant? current,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool forceRefresh = false)
     {
         ArgumentNullException.ThrowIfNull(connection);
-        var latest = await ReadGrantAsync(connection, cancellationToken);
-        if (latest is { HasAccessToken: true } && !IsExpired(latest) && latest.Version != current?.Version)
-            return latest;
+        OAuth2Grant? latest;
+        if (forceRefresh)
+        {
+            latest = current ?? await ReadGrantAsync(connection, cancellationToken);
+        }
+        else
+        {
+            latest = await ReadGrantAsync(connection, cancellationToken);
+            if (latest is { HasAccessToken: true } && !IsExpired(latest) && latest.Version != current?.Version)
+                return latest;
 
-        latest ??= current;
+            latest ??= current;
+        }
+
         if (latest?.RefreshToken is { Length: > 0 })
         {
             var client = await ResolveClientAsync(connection, cancellationToken);
@@ -299,10 +315,10 @@ internal sealed class OAuth2TokenService(
         var root = document.RootElement;
         var accessToken = root.TryGetProperty("access_token", out var access) ? access.GetString() : null;
         if (string.IsNullOrWhiteSpace(accessToken))
-            throw new InvalidOperationException("Token endpoint returned no access_token.");
+            throw new InvalidOperationException(OAuth2TokenError.MissingAccessTokenMessage(root));
 
         DateTimeOffset? expiresAt = null;
-        if (root.TryGetProperty("expires_in", out var expires) && expires.TryGetInt32(out var seconds))
+        if (root.TryGetProperty("expires_in", out var expires) && TryReadExpiresIn(expires, out var seconds))
             expiresAt = timeProvider.GetUtcNow().AddSeconds(seconds);
 
         var responseRefresh = root.TryGetProperty("refresh_token", out var refresh) ? refresh.GetString() : null;
@@ -410,6 +426,20 @@ internal sealed class OAuth2TokenService(
         ["token_type"] = grant.TokenType,
         ["scope"] = grant.Scope
     });
+
+    private static bool TryReadExpiresIn(JsonElement expires, out int seconds)
+    {
+        if (expires.ValueKind == JsonValueKind.Number && expires.TryGetInt32(out seconds))
+            return true;
+        if (expires.ValueKind == JsonValueKind.String
+            && int.TryParse(expires.GetString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out seconds))
+        {
+            return true;
+        }
+
+        seconds = 0;
+        return false;
+    }
 
     private static string RequiredSetting(IResolvedConnection connection, string key) =>
         connection.Settings.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)

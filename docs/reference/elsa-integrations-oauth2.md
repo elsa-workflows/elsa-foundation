@@ -18,6 +18,8 @@ catalog ([#2726](https://github.com/elsa-workflows/elsa-foundation/issues/2726) 
    A refresh that omits `refresh_token` keeps the existing one. A refresh that omits `expires_in`
    stores no expiry.
 6. `SendHttpRequest` uses the foundation `http` connection through `IHttpConnectionApplicator`.
+   The Authorization header is `Bearer` unless `tokenHeaderScheme` overrides it. A 401 with no
+   refresh token faults for authorization-code connections.
 7. Access and refresh tokens resolve through `ISecretValueResolver` and are registered with
    `IRuntimeSecretMask` for logs, outputs and errors.
 8. Harness tests against a mock OAuth server; live lab test pending.

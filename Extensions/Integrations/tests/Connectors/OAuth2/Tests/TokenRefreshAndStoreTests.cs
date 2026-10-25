@@ -96,6 +96,31 @@ public sealed class TokenRefreshAndStoreTests
     }
 
     [Fact]
+    public async Task Refresh_accepts_expires_in_as_a_numeric_string()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);
+        var preview = new MockOAuthServer();
+        await using var harness = await OAuth2TestSupport.StartAsync(
+            OAuth2TestSupport.ClientCredentialsScheme(preview),
+            configureServer: mock =>
+            {
+                mock.AccessTokenLifetimeSeconds = 90;
+                mock.ExpiresInAsString = true;
+            },
+            timeProvider: clock);
+
+        var first = await OAuth2TestSupport.SendAsync(harness, harness.Server.ResourceEndpoint);
+        Assert.Equal(200, first.Result.StatusCode);
+        var before = (await harness.Secrets.FindAsync(OAuth2TestSupport.TenantId, OAuth2SecretKeys.Grant(OAuth2TestSupport.ConnectionName)))?.CurrentVersion ?? 0;
+
+        clock.Advance(TimeSpan.FromMinutes(2));
+        var second = await OAuth2TestSupport.SendAsync(harness, harness.Server.ResourceEndpoint);
+        Assert.Equal(200, second.Result.StatusCode);
+        var after = (await harness.Secrets.FindAsync(OAuth2TestSupport.TenantId, OAuth2SecretKeys.Grant(OAuth2TestSupport.ConnectionName)))?.CurrentVersion ?? 0;
+        Assert.True(after > before);
+    }
+
+    [Fact]
     public async Task Refresh_with_no_expires_in_does_not_refresh_again()
     {
         var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);

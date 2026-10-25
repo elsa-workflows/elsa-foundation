@@ -29,6 +29,12 @@ This package claims that reserved route through `IOAuthCallbackHandler`.
 
 On 401 or expiry, the new grant is written with **compare-and-swap on the secret version**
 (`IConnectionGrantWriter`). Concurrent refreshes rely on that compare-and-swap.
+A 401 (or expiry) with no refresh token faults for authorization-code connections: the
+connection needs authorization again. Client-credentials connections acquire a new grant.
+
+The Authorization header uses `Bearer` (RFC 6750) when `token_type` is missing, `bearer` in
+any casing, or any non-standard value such as Slack's `bot`. Set `tokenHeaderScheme` to send
+a different scheme. The grant still stores the raw `token_type`.
 
 ## Secrets (AC 7)
 
