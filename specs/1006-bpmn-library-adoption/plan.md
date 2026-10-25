@@ -118,6 +118,35 @@ The guard covers public Bpmn.Semantics simple-name collisions plus an explicit d
 - Run affected whole projects and compare discovery/executed counts; verify meaningful red/green controls, architecture guards, locked restore when references change, generated maps and relevant Studio tests.
 - Open only this second ordered draft PR on #2735, review to convergence, retain required checks/protection and verify resulting main. Finish spec status in the implementing PR. ADR acceptance follows in PR3.
 
+## FR-015 refinement: delivery-time broadcast recovery
+
+The owner's reviewed specification fixes delivery-time matching and a durable first recipient set.
+The [broadcast recipient contract](contracts/broadcast-recipient-snapshot.md) defines the proposed
+storage/dispatch refinement. Source audit identifies missing exact delivery context, immutable
+outbox cohort CAS, retained selected-start authority, coalescing source durability and GC roots.
+Keep the complete sorted binding list and existing per-artifact keyed-start behavior; freeze exact
+bookmarks before starts. Store the whole cohort, including empty, on the existing durable source row
+before any recipient effect. Retries never match again.
+
+Extend current Core/provider and start-admission boundaries rather than introduce another engine or
+ledger. Version the outbox family against destructive old-writer rewrites. Preserve cohort state
+through every provider/coalescing transition, retain selected executable dependencies and dedup
+responsibility, and explicitly hold ambiguous legacy unresolved sends. Actual-store preflight must
+supply evidence before any owner recovery choice is needed. A zero attempt count is insufficient
+proof that a legacy send had no effects.
+
+Constitution recheck: Runtime.Core contains immutable contracts; Primitives depends on those contracts;
+provider adapters own CAS and existing retention/deletion coordination. Required-source context is
+explicit; keyed handler contributions remain unchanged in cardinality. There is no new Design lookup,
+public authoring field or provisional-constitution amendment. Named extension contracts, registration
+checks, domain exceptions with preserved causes, catalog updates and intentional API deltas are
+implementation gates. Actual host/fresh-EF recovery and frozen fingerprint verification precede
+semantic deletion and delivery. No exception is proposed.
+
+Independent correctness, standards and acceptance plan reviews completed with no actionable findings.
+Stable new task IDs may now be refined; source implementation waits for the subsequent task review. T045 and existing open gates
+remain open. This is additional work in the sole existing switch PR, not a new claim or PR.
+
 ## Review and evidence
 
 Every gate reports actual source/head, commands, fixtures, failures/skips and limits on #2735 and the PR. No synthetic state, library-only test or same-provider baseline is restamped as upgraded-host or Studio acceptance. If a fixture disproves the proposed reader or combined-outcome mapping, correct and review the design before deleting the legacy writer.

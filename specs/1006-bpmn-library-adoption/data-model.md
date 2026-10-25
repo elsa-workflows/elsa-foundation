@@ -16,3 +16,15 @@ Storage transitions: absence of private state permits a fresh execution; known v
 ## Called-workflow refinement (proposed)
 
 The [control boundary contract](contracts/called-workflow-control.md) adds an explicit consumer capability, bounded versioned authored-control batch, additive activity-state projection and optional waited-result transport. Its exact dispatch/root/source identity and durable processed identity are separate from semantic state and safe diagnostic metadata. Root-local committed ordinals and an exact-call inbox with next ordinal and pending batches preserve cross-batch order. Inbox changes share the parent checkpoint; plan review must validate both buffered and consumed paths before implementation.
+
+## FR-015 proposed delivery-state refinement
+
+The [recipient contract](contracts/broadcast-recipient-snapshot.md#state-and-identities) specifies
+immutable versioned start/bookmark recipient models and explicit source-delivery context. Store the
+snapshot on the existing exact outbox row, separate from its immutable Intent and private workflow
+semantic state. Absent is uninitialized; present empty is authoritative; corrupt present data refuses.
+The only installation transition is absent → one complete immutable winner under row revision and
+claim authority. Claim/renew/retry/completion/redrive preserve it. Legacy ambiguous absence holds
+responsibility instead of pretending a first match. New declared outbox family versions protect the
+state from old writers. Saved-start authority and existing GC roots bind executable material to the
+same owed source, without another persistence ledger.

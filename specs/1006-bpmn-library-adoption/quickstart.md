@@ -17,3 +17,23 @@ Compare discovery, execution and skipped counts. Run the affected EF native-comp
 5. Compare the frozen descriptor fingerprint and historical test lists without restamping. Mutation-test the deletion guard and risky compatibility/combined-outcome behavior.
 6. Run architecture/maps and locked solution restore where required, plus affected Studio whole suites. Use the repository build-slot wrapper and check machine load before interpreting timing failures.
 7. Complete draft review, required exact-head checks and resulting-main verification. Only then continue to the ADR acceptance PR. Keep #2898/#2907 and all unproved program acceptance open.
+
+## FR-015 validation additions (planned)
+
+After plan and task review, add controls to the existing Primitives/Workflow Runtime/provider projects:
+
+1. Inventory actual unresolved legacy publish rows and record source/family/attempt/claim evidence.
+   Quiesce old writers; do not infer no previous effects from attempt zero. Ambiguous rows hold rollout.
+2. Delay first delivery, create waits, then capture both recipient classes through the normal processor.
+   Verify the durable source row contains the whole cohort before the first recipient is invoked.
+3. Race distinct candidate sets (also empty/nonempty) across providers; only the persisted winner may
+   dispatch. Kill/rebuild after snapshot commit and before any dispatch, then continue exact recipients.
+4. Fail after a selected start/resume accepts, lose acknowledgement, restart with fresh EF and rearm
+   same-name listeners/publish another trigger. Verify existing keys deduplicate original recipients,
+   the new listeners/trigger are excluded, and old selected publications retain their exact executable.
+5. Repeat through real coalescing flush, renew/retry/redrive/completion, legacy-family read/new-family
+   old-writer refusal and executable/dedup/source retention races. Include same-artifact bindings with
+   first shedding and later acceptance; preserve local/correlation/test-scope behavior.
+6. Mutation-test cohort reuse, exact recipients, CAS/claim checks and retention. Run affected whole
+   projects and actual host/fresh-provider recovery; verify the frozen authoring fingerprint. Record
+   exact source hashes and finite scope. Final Studio proof and T045 remain independent gates.
