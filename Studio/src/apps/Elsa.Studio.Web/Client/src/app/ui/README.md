@@ -89,7 +89,6 @@ import {
   StudioAlert,
   StudioButton,
   StudioDataGrid,
-  StudioField,
   StudioSearchInput,
   StudioToolbar,
   type StudioDataGridColumn
@@ -153,9 +152,12 @@ export function ServicesPage({ api, services, loading, loadError, onCreate, onRe
         <StudioButton variant="primary" onClick={onCreate}>Create service</StudioButton>
       </header>
       <StudioToolbar>
-        <StudioField label="Search loaded services">
-          <StudioSearchInput value={query} onChange={event => setQuery(event.currentTarget.value)} />
-        </StudioField>
+        <StudioSearchInput
+          aria-label="Search loaded services"
+          placeholder="Search loaded services"
+          value={query}
+          onChange={event => setQuery(event.currentTarget.value)}
+        />
         <StudioButton disabled={!selected || busy || loading || Boolean(loadError)} onClick={() => void deleteSelected()}>
           Delete selected
         </StudioButton>
