@@ -22,6 +22,7 @@ vi.mock("../workflowTestStimulusEditorComponents", () => stimulusEditorChunk.pro
 
 import { WorkflowTestDrivePanel } from "../workflow-editor/WorkflowTestDrivePanel";
 import { httpWorkflowTestStimulusEditor } from "../workflowTestStimulusEditors";
+import { defaultHttpTestRequest } from "../workflowTestRequestDefaults";
 import { WorkflowRuntimePanel } from "../workflow-editor/editorPanels";
 
 let active: { root: Root; container: HTMLElement } | null = null;
@@ -143,6 +144,62 @@ describe("workflow Test Run setup", () => {
     expect(container.textContent).not.toContain("Loading Test Drive editor…");
     expect(onStart).not.toHaveBeenCalled();
     expect(loadingAnnouncement).toBe("Loading Test Run editor…");
+  });
+
+  it("starts a fresh HTTP Test Run with a request shape that passes validation", async () => {
+    const httpOption = {
+      optionId: "http-option",
+      driverId: "Elsa.HttpEndpoint",
+      nodeId: "http-node",
+      label: "HTTP endpoint",
+      modes: [{ modeId: "http-request", label: "Send HTTP request", isDefault: true }]
+    };
+    let resolveOptions!: (result: { options: Array<typeof httpOption> }) => void;
+    publishingMocks.getOptions.mockReturnValue(new Promise<{ options: Array<typeof httpOption> }>(resolve => { resolveOptions = resolve; }));
+    const onStart = vi.fn(async () => testRunView);
+    const container = renderPanel({
+      draft: draft({ state: { rootActivity: draft().state.rootActivity, inputs: [] } }),
+      stimulusEditors: [{
+        ...httpWorkflowTestStimulusEditor,
+        component: ({ draft: value, controlProps, onChange, disabled }) =>
+          <textarea {...controlProps} value={value} disabled={disabled} onChange={event => onChange(event.currentTarget.value)} />
+      }],
+      onStart
+    });
+    await settle();
+
+    const startSelector = container.querySelector<HTMLSelectElement>("select")!;
+    expect(startSelector.disabled).toBe(true);
+    expect(startSelector.querySelector("option[value='trigger:http-option']")).toBeNull();
+
+    resolveOptions({ options: [httpOption] });
+    await vi.waitFor(() => {
+      expect(startSelector.disabled).toBe(false);
+      expect(startSelector.querySelector("option[value='trigger:http-option']")).toBeTruthy();
+    });
+
+    changeSelect(startSelector, "trigger:http-option");
+    const textarea = container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Send HTTP request data']");
+    expect(textarea).toBeTruthy();
+    expect(JSON.parse(textarea!.value)).toEqual(defaultHttpTestRequest);
+    expect(httpWorkflowTestStimulusEditor.validate({
+      option: httpOption,
+      mode: httpOption.modes[0],
+      draft: textarea!.value
+    })).toBeUndefined();
+
+    flushSync(() => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    await settle();
+
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    expect(onStart).toHaveBeenCalledTimes(1);
+    const [, , start] = onStart.mock.calls[0] as unknown as [WorkflowDraft, WorkflowExecutionInputs, { kind: string; data?: unknown }];
+    expect(start).toEqual({
+      kind: "trigger",
+      optionId: "http-option",
+      modeId: "http-request",
+      data: defaultHttpTestRequest
+    });
   });
 
   it("uses a public custom editor and keeps its data separate from workflow inputs", async () => {

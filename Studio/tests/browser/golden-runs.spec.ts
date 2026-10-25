@@ -167,7 +167,9 @@ test("long run identities remain copyable and keyboard inspection works at lapto
       await expect(page.getByRole("row", { name: /run-01/ })).toBeVisible();
       await page.getByLabel("Workflow run page size").selectOption("50");
       await expect(page.getByRole("button", { name: /Inspect workflow run run-14-quarterly-reconciliation/ })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Copy Definition version ID" }).first()).toBeVisible();
+      const moreIdentifiers = page.getByRole("button", { name: /More identifiers/ }).last();
+      await moreIdentifiers.click();
+      await expect(page.getByRole("button", { name: "Copy Definition version ID" }).last()).toBeVisible();
       await expectIdentifierValues(targetRow, identifiers);
       expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
     }
@@ -180,12 +182,113 @@ test("long run identities remain copyable and keyboard inspection works at lapto
     await expectIdentifierValues(targetRow, identifiers);
   }
 
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/golden-runs.html");
+  await page.getByLabel("Workflow run page size").selectOption("50");
+  const narrowTarget = runRow(page, executionId);
+  await expect(narrowTarget).toBeVisible();
+  await narrowTarget.getByRole("button", { name: /More identifiers/ }).click();
+  const narrowDetails = narrowTarget.locator(".wf-run-identifiers");
+  await expect(narrowDetails.getByLabel(/^Artifact ID:/)).toBeVisible();
+  const geometry = await narrowTarget.evaluate(element => {
+    const grid = element.closest(".wf-instance-grid")!;
+    const cell = element.querySelector<HTMLElement>(".wf-run-identity-cell")!;
+    const details = element.querySelector<HTMLElement>(".wf-run-identifiers")!;
+    const fields = Array.from(details.querySelectorAll<HTMLElement>(".studio-copyable-identifier")).map(field => {
+      const label = field.querySelector<HTMLElement>(".studio-copyable-identifier__label")!.getBoundingClientRect();
+      const value = field.querySelector<HTMLElement>(".studio-copyable-identifier__value")!.getBoundingClientRect();
+      const bounds = field.getBoundingClientRect();
+      return { labelTop: label.top, labelBottom: label.bottom, valueTop: value.top, left: bounds.left, right: bounds.right };
+    });
+    const gridBounds = grid.getBoundingClientRect();
+    const cellBounds = cell.getBoundingClientRect();
+    return {
+      grid: { left: gridBounds.left, right: gridBounds.right, clientWidth: grid.clientWidth },
+      cell: { left: cellBounds.left, right: cellBounds.right, width: cellBounds.width },
+      fields
+    };
+  });
+  expect(geometry.cell.width).toBeLessThanOrEqual(250);
+  expect(geometry.fields.length).toBeGreaterThanOrEqual(3);
+  for (const field of geometry.fields) {
+    expect(field.labelTop).toBeLessThan(field.valueTop);
+    expect(field.labelBottom).toBeLessThanOrEqual(field.valueTop);
+    expect(field.left).toBeGreaterThanOrEqual(geometry.cell.left - 1);
+    expect(field.right).toBeLessThanOrEqual(geometry.cell.right + 1);
+    expect(field.right).toBeLessThanOrEqual(geometry.grid.right + 1);
+  }
+
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   await targetRow.getByRole("button", { name: "Copy Execution ID" }).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(executionId);
   await targetRow.focus();
   await targetRow.press("Enter");
   await expect(page.locator(".wf-instance-canvas-shell h3")).toBeVisible();
+});
+
+test("primary run identity remains visible and exactly copyable inside the narrow Workbench gutter", async ({ page }) => {
+  const executionId = "run-14-quarterly-reconciliation-2026-10-20-long-execution-reference";
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto("/golden-runs.html?workbench-shell=1");
+    await page.getByLabel("Workflow run page size").selectOption("50");
+    const listUrl = page.url();
+    const row = runRow(page, executionId);
+    await expect(row).toBeVisible();
+
+    const primaryCopy = row.getByRole("button", { name: "Copy Execution ID" });
+    await primaryCopy.focus();
+    const geometry = await row.evaluate(element => {
+      const grid = element.closest<HTMLElement>(".wf-instance-grid--deletable")!;
+      const cell = element.querySelector<HTMLElement>(".wf-run-identity-cell")!;
+      const host = element.querySelector<HTMLElement>(".wf-run-primary-identifier")!;
+      const field = host.querySelector<HTMLElement>(".studio-copyable-identifier")!;
+      const label = field.querySelector<HTMLElement>(".studio-copyable-identifier__label")!.getBoundingClientRect();
+      const value = field.querySelector<HTMLElement>(".studio-copyable-identifier__value")!.getBoundingClientRect();
+      const button = field.querySelector<HTMLElement>(".studio-copyable-identifier__button")!.getBoundingClientRect();
+      const [gridBounds, cellBounds, hostBounds, fieldBounds] = [grid, cell, host, field].map(item => item.getBoundingClientRect());
+      const visibleLeft = gridBounds.left + grid.clientLeft;
+      return {
+        visibleLeft,
+        visibleRight: visibleLeft + grid.clientWidth,
+        cell: { left: cellBounds.left, right: cellBounds.right },
+        host: { left: hostBounds.left, right: hostBounds.right },
+        field: { left: fieldBounds.left, right: fieldBounds.right },
+        label: { left: label.left, right: label.right, bottom: label.bottom },
+        value: { left: value.left, right: value.right, width: value.width, top: value.top },
+        button: { left: button.left, right: button.right },
+        documentWidth: document.documentElement.scrollWidth,
+        viewportWidth: window.innerWidth
+      };
+    });
+
+    expect(geometry.value.width, `Execution ID value width at ${width}px`).toBeGreaterThanOrEqual(16);
+    expect(geometry.label.left).toBeGreaterThanOrEqual(geometry.host.left - 1);
+    expect(geometry.label.right).toBeLessThanOrEqual(geometry.host.right + 1);
+    expect(geometry.label.bottom).toBeLessThanOrEqual(geometry.value.top + 1);
+    expect(geometry.field.left).toBeGreaterThanOrEqual(geometry.host.left - 1);
+    expect(geometry.field.right).toBeLessThanOrEqual(geometry.host.right + 1);
+    expect(geometry.value.left).toBeGreaterThanOrEqual(geometry.host.left - 1);
+    expect(geometry.value.right).toBeLessThanOrEqual(geometry.button.left + 1);
+    expect(geometry.button.left).toBeGreaterThanOrEqual(geometry.field.left - 1);
+    expect(geometry.button.right).toBeLessThanOrEqual(geometry.field.right + 1);
+    expect(geometry.button.left).toBeGreaterThanOrEqual(geometry.host.left - 1);
+    expect(geometry.button.right).toBeLessThanOrEqual(geometry.host.right + 1);
+    expect(geometry.button.right).toBeLessThanOrEqual(geometry.cell.right + 1);
+    expect(geometry.button.left).toBeGreaterThanOrEqual(geometry.visibleLeft - 1);
+    expect(geometry.button.right).toBeLessThanOrEqual(geometry.visibleRight + 1);
+    expect(geometry.documentWidth).toBeLessThanOrEqual(geometry.viewportWidth);
+
+    await page.keyboard.press("Enter");
+    await expect(row.getByRole("status").filter({ hasText: "Execution ID copied" })).toBeAttached();
+    await expect(primaryCopy).toBeFocused();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(executionId);
+    await expect(row).toBeVisible();
+    await expect(page.locator(".wf-instance-canvas-shell")).toHaveCount(0);
+    expect(page.url()).toBe(listUrl);
+  }
 });
 
 test("loading, empty, unsupported and failed states stay distinct and failure can retry", async ({ page }) => {

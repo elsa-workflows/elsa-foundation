@@ -21,6 +21,12 @@ public sealed record RuntimeCheckpointCommit(
     /// equivalent already-committed request remains a replay after ownership changes.
     /// </summary>
     public RuntimeExecutionFence? ExpectedFence { get; init; }
+
+    /// <summary>
+    /// Keeps the scheduler work item that caused this checkpoint available until its handler finishes. This is used by
+    /// bookmark trigger-claim boundaries: claiming an activity attempt is not the same as successfully executing it.
+    /// </summary>
+    public bool RetainSchedulerWork { get; init; }
 }
 
 public sealed class RuntimeCheckpointStateChangeSet

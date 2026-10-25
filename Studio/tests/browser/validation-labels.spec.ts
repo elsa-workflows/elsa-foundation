@@ -1,8 +1,4 @@
 import { expect, test } from "@playwright/test";
-import { mkdir } from "node:fs/promises";
-import { resolve } from "node:path";
-
-const screenshotDir = "/opt/cursor/artifacts/screenshots";
 
 test("validation and rejection copy names activities by display name, not node id", async ({ page }) => {
   await page.setViewportSize({ width: 960, height: 720 });
@@ -18,15 +14,14 @@ test("validation and rejection copy names activities by display name, not node i
   await expect(page.locator(".wf-runtime-reason")).toHaveAttribute("title", /writeline-22ab948a/);
 });
 
-test("captures Classic light before/after screenshots of named validation copy", async ({ page }) => {
-  await mkdir(screenshotDir, { recursive: true });
+test("captures Classic light before/after screenshots of named validation copy", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 960, height: 720 });
 
   await page.goto("/?mode=validation-labels-before&theme=light");
   await expect(page.getByTestId("validation-labels-fixture")).toBeVisible();
   await expect(page.getByTestId("validation-labels-fixture")).toContainText("writeline-22ab948a");
   await page.screenshot({
-    path: resolve(screenshotDir, "2698-before-classic-light.png"),
+    path: testInfo.outputPath("2698-before-classic-light.png"),
     animations: "disabled"
   });
 
@@ -34,7 +29,7 @@ test("captures Classic light before/after screenshots of named validation copy",
   await expect(page.getByTestId("validation-labels-fixture")).toContainText("\"Say hello\" (Write Line)");
   await expect(page.getByTestId("validation-labels-fixture")).not.toContainText("writeline-22ab948a");
   await page.screenshot({
-    path: resolve(screenshotDir, "2698-after-classic-light.png"),
+    path: testInfo.outputPath("2698-after-classic-light.png"),
     animations: "disabled"
   });
 });

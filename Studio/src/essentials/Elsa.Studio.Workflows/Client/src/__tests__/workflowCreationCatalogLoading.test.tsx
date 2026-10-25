@@ -33,7 +33,7 @@ it("waits for the activity catalog before creating a workflow with its default r
   const { container } = await renderRegisteredRoute();
 
   await waitForText(container, "Hello World");
-  await click(buttonByText(container, "Create"));
+  await click(buttonByText(container, "Create workflow"));
   await waitForDialog(container);
   await fill(inputByLabel(container, "Display name"), "Catalog race");
 
@@ -75,7 +75,7 @@ it.each([
   const { container } = await renderRegisteredRoute();
 
   await waitForText(container, "Hello World");
-  await click(buttonByText(container, "Create"));
+  await click(buttonByText(container, "Create workflow"));
   await waitForDialog(container);
   await waitForText(dialog(container), availabilityReason);
   expect(inputByLabel(dialog(container), "Flowchart")?.disabled).toBe(true);
@@ -95,7 +95,7 @@ it("explains missing HTTP starter activities while Blank remains selected", asyn
   const { container } = await renderRegisteredRoute();
 
   await waitForText(container, "Hello World");
-  await click(buttonByText(container, "Create"));
+  await click(buttonByText(container, "Create workflow"));
   await waitForDialog(container);
   await waitForText(dialog(container), "HTTP Endpoint is not present in the activity catalog");
   expect(dialog(container).querySelector<HTMLOptionElement>('[aria-label="Starting point"] option[value="http"]')?.disabled).toBe(true);
@@ -123,7 +123,7 @@ it.each([
   const { container } = await renderRegisteredRoute();
 
   await waitForText(container, "Hello World");
-  await click(buttonByText(container, "Create"));
+  await click(buttonByText(container, "Create workflow"));
   await waitForDialog(container);
   await waitForText(dialog(container), expectedReason);
   await vi.waitFor(() => expect(inputByLabel(dialog(container), "Flowchart")?.disabled).toBe(true));
@@ -158,7 +158,7 @@ it("creates with the explicitly selected current root version and opens the crea
   const { container } = await renderRegisteredRoute("/workflows/definitions", undefined, true, capabilityDocument());
 
   await waitForText(container, "Hello World");
-  await click(buttonByText(container, "Create"));
+  await click(buttonByText(container, "Create workflow"));
   await waitForDialog(container);
   await fill(inputByLabel(dialog(container), "Display name"), "Selected root version");
   await click(inputByLabel(dialog(container), "Sequence"));
@@ -189,7 +189,7 @@ it("does not issue duplicate requests from a rapid repeated submit while creatio
   const { container } = await renderRegisteredRoute();
 
   await waitForText(container, "Hello World");
-  await click(buttonByText(container, "Create"));
+  await click(buttonByText(container, "Create workflow"));
   await waitForDialog(container);
   await fill(inputByLabel(dialog(container), "Display name"), "Pending workflow");
   const createButton = buttonByText(dialog(container), "Create");
@@ -226,7 +226,7 @@ it("allows a new create attempt after the previous request fails", async () => {
   const { container } = await renderRegisteredRoute("/workflows/definitions", undefined, true, capabilityDocument());
 
   await waitForText(container, "Hello World");
-  await click(buttonByText(container, "Create"));
+  await click(buttonByText(container, "Create workflow"));
   await waitForDialog(container);
   await fill(inputByLabel(dialog(container), "Display name"), "Retry create");
   await click(buttonByText(dialog(container), "Create"));
@@ -266,7 +266,7 @@ it("can recover from an activity catalog failure with the dialog retry action", 
   const { container } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilityDocument());
 
   await waitForText(container, "Hello World");
-  await click(buttonByText(container, "Create"));
+  await click(buttonByText(container, "Create workflow"));
   await waitForDialog(container);
   await vi.waitFor(() => expect(catalogRequests).toBe(1));
   await vi.waitFor(() => expect(dialog(container).querySelector('[role="alert"]')?.textContent).toContain("Activity catalog is temporarily unavailable."));

@@ -37,30 +37,49 @@ export function WorkflowManagementPage({
   autosaveEnabledByDefault?: boolean;
 }) {
   const [definitionId, setDefinitionId] = useState(readDefinitionIdFromUrl);
+  const [homeCreateRequestId, setHomeCreateRequestId] = useState<string | null>(null);
+  const homeCreateSequence = useRef(0);
   const browseSession = useWorkflowDefinitionBrowseSession(context);
 
   useEffect(() => {
-    const syncFromLocation = () => setDefinitionId(readDefinitionIdFromUrl());
+    const syncFromLocation = () => {
+      const url = new URL(window.location.href);
+      const selectedDefinitionId = url.searchParams.get("definition");
+      const shouldCreate = url.searchParams.get("homeAction") === "create";
+      if (shouldCreate) {
+        url.searchParams.delete("homeAction");
+        window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+      }
+      setDefinitionId(selectedDefinitionId);
+      setHomeCreateRequestId(shouldCreate && !selectedDefinitionId
+        ? `home-create-${++homeCreateSequence.current}`
+        : null);
+    };
+    syncFromLocation();
     window.addEventListener("popstate", syncFromLocation);
     return () => window.removeEventListener("popstate", syncFromLocation);
   }, []);
 
-  const openDefinition = (id: string | null) => {
+  const acknowledgeHomeCreate = useCallback((requestId: string) => {
+    setHomeCreateRequestId(current => current === requestId ? null : current);
+  }, []);
+
+  const openDefinition = useCallback((id: string | null) => {
     const url = updateWorkflowDefinitionIdInUrl(new URL(window.location.href), id);
-    window.history.pushState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    window.history.pushState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
     window.dispatchEvent(new PopStateEvent("popstate"));
-  };
+  }, []);
 
   return definitionId
     ? (
       <WorkflowLazyBoundary label="workflow designer">
-        <WorkflowEditor context={context} definitionId={definitionId} ai={ai} propertyEditors={propertyEditors} expressionEditors={expressionEditors} expressionTooling={expressionTooling} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors} testStimulusEditors={testStimulusEditors ?? []} workflowDesignerPanels={workflowDesignerPanels} autosaveEnabledByDefault={autosaveEnabledByDefault} onBack={() => openDefinition(null)} />
+        <WorkflowEditor key={definitionId} context={context} definitionId={definitionId} ai={ai} propertyEditors={propertyEditors} expressionEditors={expressionEditors} expressionTooling={expressionTooling} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors} testStimulusEditors={testStimulusEditors ?? []} workflowDesignerPanels={workflowDesignerPanels} autosaveEnabledByDefault={autosaveEnabledByDefault} onBack={() => openDefinition(null)} />
       </WorkflowLazyBoundary>
     )
     : (
-      <WorkflowsPageFrame title="Workflow definitions" definitions>
+      <WorkflowsPageFrame definitions>
         <WorkflowLazyBoundary label="workflow definitions">
-          <WorkflowDefinitions context={context} ai={ai} onOpen={openDefinition} session={browseSession} />
+          <WorkflowDefinitions context={context} ai={ai} onOpen={openDefinition} session={browseSession} homeCreateRequestId={homeCreateRequestId} onHomeCreateRequestHandled={acknowledgeHomeCreate} />
         </WorkflowLazyBoundary>
       </WorkflowsPageFrame>
     );
@@ -199,7 +218,7 @@ export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [
 }
 
 function WorkflowsPageFrame({ title, context, workbench = false, definitions = false, children }: {
-  title: string;
+  title?: string;
   context?: React.ReactNode;
   workbench?: boolean;
   definitions?: boolean;
@@ -207,13 +226,13 @@ function WorkflowsPageFrame({ title, context, workbench = false, definitions = f
 }) {
   return (
     <section className={`wf-page${workbench ? " wf-page--run-workbench" : ""}${definitions ? " wf-page--definitions" : ""}`}>
-      <div className="wf-page-header">
+      {title ? <div className="wf-page-header">
         <div>
           {!definitions ? <span className="wf-kicker">Workflow management</span> : null}
           <h2>{title}</h2>
         </div>
         {context}
-      </div>
+      </div> : null}
       {children}
     </section>
   );

@@ -1,10 +1,16 @@
-# Seams & bridges in the activities/workflows domain
+# Seams and bridges in the activities and workflows domain
 
-> **Audience:** engineers and architects working in `elsa-foundation`.
-> **Purpose:** make the load-bearing boundaries of the activities/workflows domain *visible* — so we
-> can point at them, build against them, and watch them grow.
-> **Knowledge role:** worked reference. Canonical short definitions live in
-> [`docs/glossary/elsa.md`](glossary/elsa.md).
+**Who this is for:** contributors who need to know where the activities/workflows code is allowed to connect, so they can build against those boundaries without coupling the pieces together.
+
+## A concrete example first
+
+When you publish a workflow that contains a *Write Line* activity, three different parts of Elsa are involved:
+
+1. **Design** has saved what the activity *is*: its type identity, its input definitions, and the value the author typed into its `text` input.
+2. **Publishing** reads that saved form and compiles it into a ready-to-run node with typed input bindings. It never creates a live *Write Line* object.
+3. **Runtime**, when the workflow runs, saves a snapshot of the inputs, picks the activation strategy that owns this kind of activity, creates one short-lived *Write Line* instance, runs it, and keeps only the immutable result.
+
+Runtime must not reference Design (§E2.2). Publishing sits **above** both and talks to each through its public contract only. That is the whole idea of this page: the public contracts are **seams**, and the code that joins two seams is a **bridge**.
 
 Most Elsa features are self-contained: a feature owns its contracts, its implementation, and its
 persistence, and never reaches into a neighbour. The **activities/workflows** domain is the exception.
@@ -14,9 +20,7 @@ connect. The art is letting them connect **without coupling**.
 
 We do that with two ideas.
 
----
-
-## 1. Seam vs. bridge
+## Seam versus bridge
 
 **A seam is a contract boundary.** It is the published surface of a sub-domain — the set of `.Core`
 types another sub-domain is allowed to know about. A seam hides everything behind it: change the
@@ -45,11 +49,11 @@ flowchart LR
 ```
 
 The dependency arrows only ever point **into** the seams (down onto `.Core`). Neither seam points at
-the other. That invariant is the whole game (see the [§E2.2 hard rule](#cross-references)).
+the other. That invariant is the whole game (see [the rules behind this](#the-rules-behind-this)).
 
----
+> *Good to know:* a deferred allow-list entry (`ArchitectureGuardTests.DeferredRuntimeDesignReferences`) remains, although `Elsa.Workflows.Runtime.JavaScript` no longer references `Elsa.Workflows.Design.Core`.
 
-## 2. The seam map
+## The seam map
 
 The domain splits into two co-equal sub-domains, each with its own seam:
 
@@ -84,11 +88,9 @@ strategy owns it:
 There is no workflow-definition activator. `ExecuteWorkflow` is an explicit separate-workflow operation;
 reusable graph activities execute inside the current workflow execution.
 
----
+## Bridge 1: compiling and invoking an activity
 
-## 3. Bridge 1 — Activity compilation and invocation *(the worked example)*
-
-[`Elsa.Workflows.Publishing.Api`](../Essentials/src/Workflows/Publishing/Api) reads the authored contract and
+The publishing API (`Elsa.Workflows.Publishing.Api`) reads the authored contract and
 compiles it into an executable node. Design tooling does not construct a live activity object.
 Transient activation is reserved for a pinned runtime invocation attempt.
 
@@ -132,11 +134,9 @@ The bridge does three things, each touching exactly one seam:
 **Why this is legal.** `Elsa.Workflows.Publishing.Api` references only `Elsa.Activities.Design(.Persistence).Core`
 and `Elsa.Activities.Runtime.Core` — the two seams. It references **neither** the Runtime
 implementation (`Elsa.Activities.Runtime`) **nor** any `.Api`/Design feature. Because the bridge is a
-third party, the Runtime sub-domain never has to know Design exists. The §E2.2 hard rule holds.
+third party, the Runtime sub-domain never has to know Design exists, and the Runtime-must-not-depend-on-Design rule holds.
 
----
-
-## 4. Bridge 2 — Workflow compile / publish *(root activity)*
+## Bridge 2: compiling and publishing a workflow
 
 The same shape recurs one level up. A workflow definition is authored as one root activity; to run
 it, something must turn that authored root into one compiled root activity in a runnable artifact.
@@ -177,13 +177,10 @@ into generic composition containers.
 
 At runtime the published `WorkflowExecutable` is the **only** thing the Workflows.Runtime seam needs;
 the design-side documents are reachable by foreign key but are never required to execute (the
-"artifact-only runtime", §E2.6.2). `WorkflowDefinitionState`, its read projections, and
-`WorkflowExecutable` form the irreducible triplet of §E2.9 — authoring, reading, executing — and must
-not be merged.
+"artifact-only runtime" rule). `WorkflowDefinitionState`, its read projections, and
+`WorkflowExecutable` form an irreducible triplet (authoring, reading, executing) and must not be merged.
 
----
-
-## 5. Why seams are checkpoints
+## Why seams are the places to grow
 
 Seams are where the domain will *expand*, and they tell you where:
 
@@ -201,14 +198,22 @@ stay where they are.
 
 ---
 
-## Cross-references
+## The rules behind this
 
-- **§E2.2** — *Workflows.Runtime MUST NOT depend on Workflows.Design.* The hard rule every bridge here
-  preserves. (`.specify/memory/constitution.md`)
-- **§E2.6.2** — *Artifact-only runtime.* The runtime depends only on the runnable artifact + the
-  features that interpret it.
-- **§E2.9** — *The architectural triplet.* `WorkflowDefinitionState` ↔ read projections ↔
-  `WorkflowExecutable`, at three separate scopes.
-- **Current value-flow design** — [`specs/095-value-flow-redesign/`](../specs/095-value-flow-redesign)
-  and [ADR 0045](adr/0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md).
-- **The worked bridge** — [`Essentials/src/Workflows/Publishing/Api/`](../Essentials/src/Workflows/Publishing/Api).
+These are sections of the Elsa constitution (`.specify/memory/constitution.md`):
+
+| Section | Rule |
+|---|---|
+| §E2.2 | *Workflows.Runtime must not depend on Workflows.Design.* The hard rule every bridge here preserves (with the one allow-listed exception above). |
+| §E2.6.2 | *Artifact-only runtime.* The runtime depends only on the runnable artifact and the features that interpret it. |
+| §E2.9 | *The architectural triplet:* `WorkflowDefinitionState`, its read projections, and `WorkflowExecutable`, at three separate scopes. Marked draft/provisional in the constitution. |
+
+## Where this lives in the code
+
+- The worked bridge: `Essentials/src/Workflows/Publishing/Api/`
+- CLR activation: `ClrActivityActivator` in `Essentials/src/Activities/Primitives/Activation/ClrActivityActivator.cs`
+- Graph activation: `GraphActivityActivationStrategy`, registered in `Essentials/src/Activities/Graph/Runtime/GraphActivitiesRuntimeFeature.cs`
+- Consumer keys `elsa.clr-activity` / `elsa.graph-activity`: `Essentials/src/Activities/Runtime/Core/Models/RuntimeActivityDescriptor.cs`
+- Current value-flow design: [`specs/095-value-flow-redesign/`](../specs/095-value-flow-redesign) and [ADR 0045](adr/0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md)
+
+Related: [Elsa glossary](glossary/elsa.md) · [Architecture tour](architecture-tour.md) · [How a workflow executes](how-a-workflow-executes.md)

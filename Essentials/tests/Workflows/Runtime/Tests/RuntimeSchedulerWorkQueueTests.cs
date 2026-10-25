@@ -111,6 +111,82 @@ public sealed class RuntimeSchedulerWorkQueueTests
     }
 
     [Fact]
+    public async Task ListWithVisibilityAsync_PagesAllScopedUnclaimedItemsAndReturnsNull()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        await queue.EnqueueAsync(NewWorkItem(1));
+        await queue.EnqueueAsync(NewWorkItem(2));
+        await queue.EnqueueAsync(NewWorkItem(3));
+        await queue.EnqueueAsync(NewWorkItem(1, workflowExecutionId: "wfexec-other"));
+
+        var ordinary = await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        var first = await queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery("wfexec-1", limit: 2));
+        var second = await queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery(
+            "wfexec-1", limit: 2, continuationToken: first.NextContinuationToken));
+        var snapshotItems = first.Items.Concat(second.Items).ToArray();
+
+        Assert.Equal(ordinary.Select(item => item.WorkItemId).Order(StringComparer.Ordinal),
+            snapshotItems.Select(entry => entry.Item.WorkItemId).Order(StringComparer.Ordinal));
+        Assert.Equal(["work-1", "work-2", "work-3"], snapshotItems.Select(entry => entry.Item.WorkItemId));
+        Assert.All(snapshotItems, entry => Assert.Null(entry.VisibleAfter));
+        Assert.Null(second.NextContinuationToken);
+    }
+
+    [Fact]
+    public async Task ListWithVisibilityAsync_UsesClaimOrderAndContinuesAfterHeadRemoval()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        await queue.EnqueueAsync(NewWorkItem(1, recordedAt: _now.AddDays(1), workItemId: "head"));
+        await queue.EnqueueAsync(NewWorkItem(2, recordedAt: _now.AddDays(-1), workItemId: "tie-b", sequence: 1));
+        await queue.EnqueueAsync(NewWorkItem(3, recordedAt: _now.AddDays(-1), workItemId: "tie-a", sequence: 1));
+
+        var ordinary = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        Assert.Equal(["tie-a", "tie-b", "head"], ordinary.Items.Select(item => item.WorkItemId));
+
+        var firstQuery = new RuntimeSchedulerWorkQuery("wfexec-1", limit: 1);
+        var first = await queue.ListWithVisibilityAsync(firstQuery);
+        Assert.Equal(["head"], first.Items.Select(entry => entry.Item.WorkItemId));
+        Assert.NotNull(first.NextContinuationToken);
+
+        var ordinaryPage = await queue.ListAsync(firstQuery);
+        await Assert.ThrowsAsync<ArgumentException>(() => queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery(
+            "wfexec-1", limit: 1, continuationToken: ordinaryPage.NextContinuationToken)).AsTask());
+
+        Assert.True(await queue.DeleteAsync("wfexec-1", "head"));
+        var second = await queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery(
+            "wfexec-1", limit: 1, continuationToken: first.NextContinuationToken));
+        Assert.Equal(["tie-b"], second.Items.Select(entry => entry.Item.WorkItemId));
+        Assert.NotNull(second.NextContinuationToken);
+
+        var third = await queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery(
+            "wfexec-1", limit: 1, continuationToken: second.NextContinuationToken));
+        Assert.Equal(["tie-a"], third.Items.Select(entry => entry.Item.WorkItemId));
+        Assert.Null(third.NextContinuationToken);
+    }
+
+    [Fact]
+    public async Task ListWithVisibilityAsync_IncludesClaimAndReleaseDeadlinesEvenAfterClaimExpiry()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        await queue.EnqueueAsync(NewWorkItem(1));
+        var claimedAt = new DateTimeOffset(2020, 1, 2, 3, 4, 5, TimeSpan.Zero);
+        var claim = await queue.ClaimAsync(new RuntimeSchedulerWorkClaimRequest(
+            "wfexec-1", "owner-1", claimedAt, TimeSpan.FromMinutes(1)));
+        Assert.NotNull(claim);
+
+        var claimDeadline = claimedAt.AddMinutes(1);
+        Assert.True(claimDeadline < DateTimeOffset.UtcNow);
+        var expiredSnapshot = await queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        Assert.Equal(claimDeadline, Assert.Single(expiredSnapshot.Items).VisibleAfter);
+
+        var retryDeadline = new DateTimeOffset(2099, 1, 2, 3, 9, 5, TimeSpan.Zero);
+        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Succeeded,
+            (await queue.ReleaseClaimAsync(claim!, retryDeadline)).Status);
+        var releasedSnapshot = await queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        Assert.Equal(retryDeadline, Assert.Single(releasedSnapshot.Items).VisibleAfter);
+    }
+
+    [Fact]
     public async Task ListAsync_RejectsContinuationTokensThatAreForeignOrMalformed()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
@@ -294,19 +370,22 @@ public sealed class RuntimeSchedulerWorkQueueTests
     private RuntimeSchedulerWorkItem NewWorkItem(
         int index,
         string workflowExecutionId = "wfexec-1",
-        string? commandId = null)
+        string? commandId = null,
+        DateTimeOffset? recordedAt = null,
+        string? workItemId = null,
+        long? sequence = null)
     {
         using var document = JsonDocument.Parse($$"""{"workItemId":"work-{{index}}"}""");
         return new(
-            workItemId: $"work-{index}",
+            workItemId: workItemId ?? $"work-{index}",
             workflowExecutionId: workflowExecutionId,
             commandId: commandId ?? $"command-{index}",
             commandKind: WorkflowExecutionCommandKind.RunSchedulerWork,
             envelopeId: $"envelope-{index}",
             idempotencyKey: $"{workflowExecutionId}:command-{index}",
             enqueuedAt: _now,
-            recordedAt: _now,
-            sequence: index,
+            recordedAt: recordedAt ?? _now,
+            sequence: sequence ?? index,
             payload: document.RootElement.Clone());
     }
 

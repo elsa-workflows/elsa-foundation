@@ -17,8 +17,10 @@
 }
 
 .connections-shell {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
-  margin: 1.25rem;
+  min-height: 100%;
   overflow: hidden;
   border: 1px solid var(--connections-border);
   border-radius: var(--studio-radius-md);
@@ -35,6 +37,7 @@
   padding: 1.25rem;
   border-bottom: 1px solid var(--connections-border);
 }
+.connections-header-copy { min-width: 0; }
 .connections-header h2 {
   display: flex;
   align-items: center;
@@ -52,6 +55,8 @@
 .connection-secret-selection { color: var(--connections-text-muted); }
 .connections-header p { margin: 0; }
 .connections-count { white-space: nowrap; font-size: var(--studio-label-size); }
+.connections-header-actions { display: flex; align-items: center; gap: 12px; }
+.connections-page-actions { display: flex; align-items: center; gap: 8px; }
 .connections-kicker,
 .connections-create-eyebrow {
   color: var(--connections-text-muted);
@@ -62,34 +67,13 @@
 }
 .connections-toolbar { flex-wrap: wrap; padding-block: 1rem; }
 .connections-search,
-.connections-toolbar-actions,
 .connections-danger-actions { display: flex; align-items: center; gap: 0.5rem; }
-.connections-search { flex: 1; max-width: 32rem; min-width: 0; }
-.connections-search-field {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-width: 0;
-  flex: 1;
-  padding-inline: 0.75rem;
-  border: 1px solid var(--connections-border);
-  border-radius: var(--connections-radius-sm);
-  background: var(--studio-material-control-bg);
-  color: var(--connections-text-muted);
-}
-.connections-search-field input {
-  min-width: 0;
-  width: 100%;
-  min-height: 2.25rem;
-  padding: 0.4rem 0;
-  border: 0;
-  background: transparent;
-  color: var(--connections-text);
-  font: inherit;
-}
-.connections-search-field:focus-within { outline: 2px solid var(--connections-focus); outline-offset: 2px; }
-.connections-search-field input:focus-visible { outline: none; }
-.connections-shell button,
+.connections-search { flex: 1; max-width: 32rem; min-width: min(100%, 18rem); }
+.connections-search-control { flex: 1; min-width: 0; }
+.connections-search-control .studio-search-input { width: 100%; min-height: 2.25rem; padding: 0; }
+.connections-search-control:focus-within { outline: 2px solid var(--connections-focus); outline-offset: 2px; }
+.connections-search-control .studio-search-input:focus-visible { outline: none; }
+.connections-shell button:not(.studio-button),
 .connections-modal button,
 .connection-picker-editor button,
 .connections-modal input,
@@ -103,16 +87,14 @@
   color: var(--connections-text);
   font: inherit;
 }
-.connections-shell button,
+.connections-shell button:not(.studio-button),
 .connections-modal button,
 .connection-picker-editor button { display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; cursor: pointer; }
-.connections-shell button:hover:not(:disabled),
+.connections-shell button:not(.studio-button):hover:not(:disabled),
 .connections-modal button:hover:not(:disabled) { background: var(--studio-material-hover-bg); }
-.connections-shell button.connections-primary,
 .connections-modal button[type="submit"] { border-color: var(--connections-accent); background: var(--connections-accent); color: var(--connections-accent-text); }
-.connections-shell button.connections-primary:hover:not(:disabled),
 .connections-modal button[type="submit"]:hover:not(:disabled) { filter: brightness(1.08); background: var(--connections-accent); }
-.connections-shell button:disabled,
+.connections-shell button:not(.studio-button):disabled,
 .connections-modal button:disabled { cursor: not-allowed; opacity: 0.6; }
 .connections-shell :focus-visible,
 .connections-modal :focus-visible,
@@ -428,10 +410,11 @@
   .connections-header, .connections-toolbar { padding: 1rem; }
   .connections-toolbar { align-items: stretch; }
   .connections-search { flex-basis: 100%; max-width: none; }
-  .connections-toolbar-actions { justify-content: flex-end; flex: 1; }
 }
 @media (max-width: 40rem) {
   .connections-header { flex-direction: column; gap: 0.5rem; }
+  .connections-header-actions { width: 100%; display: grid; gap: 12px; }
+  .connections-page-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
   .connections-summary, .connections-create-fields { grid-template-columns: minmax(0, 1fr); }
   .connections-create-header, .connections-create-content, .connections-create-actions, .connections-dialog-body, .connections-dialog-header { padding: var(--spacing-lg); }
   .connections-dialog-footer { padding: 1rem; }

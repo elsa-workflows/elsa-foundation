@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "productSourceCommit": "544e9840f91422f1760ac65c2ca5e63480974045",
+  "finding": "Declared producer scope is the outer Flowchart node ID; persisted local execution scope is scope:root. Reordering alone did not resolve the mismatch.",
+  "cases": [
+    {
+      "case": "initial-run",
+      "database": "/var/folders/63/lbnh2n0n6dv9dzm8bks0854c0000gn/T/elsa-rules-e2e-432b519e43f646a7b27e096c54c79242/elsa.db",
+      "declaredProducerScopeId": "flowchart-root",
+      "incidentMessage": "Scheduler work item 'a31be5c500870bb8:start:14YTRP3859T' (StartActivity) was poisoned during dispatch by handler 'WorkflowStartActivitySchedulerWorkHandler' after 1 failure(s): Elsa.Workflows.Runtime.Core.Exceptions.CausalActivityResultResolutionException: Activity result projection '$result' from executable node 'rules' in structural scope 'flowchart-root' is not available in the causal lineage of consumer invocation '14YTRP3859T'.",
+      "states": [
+        {
+          "execution": {
+            "activityExecutionId": "14YTQgwhVGk",
+            "workflowExecutionId": "14YTQgf4aZI",
+            "executableNodeId": "rules",
+            "authoredActivityId": "rules",
+            "activityType": "Elsa.Rules.Workflows.Runtime.Activities.RunRules",
+            "activityTypeVersion": "4.0.0-branch-agent-codex-3181-durable-rules+544e9840f91422f1760ac65c2ca5e63480974045"
+          },
+          "status": "Completed",
+          "schedulingActivityExecutionId": "14YTQgktrZX",
+          "parentActivityExecutionId": "14YTQgktrZX",
+          "provenance": {
+            "parentActivityExecutionId": "14YTQgktrZX",
+            "schedulingActivityExecutionId": "14YTQgktrZX",
+            "schedulingWorkflowExecutionId": "14YTQgf4aZI",
+            "branchId": null,
+            "iterationId": null,
+            "executionPathId": "path:root",
+            "executionScopeId": "scope:root",
+            "schedulingCause": "start",
+            "metadata": {
+              "flowchart.targetNodeId": "rules"
+            },
+            "attempt": null
+          }
+        },
+        {
+          "execution": {
+            "activityExecutionId": "14YTROtjc39",
+            "workflowExecutionId": "14YTQgf4aZI",
+            "executableNodeId": "after-rules",
+            "authoredActivityId": "after-rules",
+            "activityType": "Elsa.Activities.Primitives.Activities.WriteLine",
+            "activityTypeVersion": "4.0.17-preview+544e9840f91422f1760ac65c2ca5e63480974045"
+          },
+          "status": "Completed",
+          "schedulingActivityExecutionId": "14YTQgwhVGk",
+          "parentActivityExecutionId": "14YTQgktrZX",
+          "provenance": {
+            "parentActivityExecutionId": "14YTQgktrZX",
+            "schedulingActivityExecutionId": "14YTQgwhVGk",
+            "schedulingWorkflowExecutionId": "14YTQgf4aZI",
+            "branchId": null,
+            "iterationId": null,
+            "executionPathId": "path:7",
+            "executionScopeId": "scope:root",
+            "schedulingCause": "continuation",
+            "metadata": {
+              "flowchart.targetNodeId": "after-rules"
+            },
+            "attempt": null
+          }
+        },
+        {
+          "execution": {
+            "activityExecutionId": "14YTRP3859T",
+            "workflowExecutionId": "14YTQgf4aZI",
+            "executableNodeId": "capture-rules-result",
+            "authoredActivityId": "capture-rules-result",
+            "activityType": "elsa.intrinsic.setoutput",
+            "activityTypeVersion": "1.0.0"
+          },
+          "status": "Scheduled",
+          "schedulingActivityExecutionId": "14YTROtjc39",
+          "parentActivityExecutionId": "14YTQgktrZX",
+          "provenance": {
+            "parentActivityExecutionId": "14YTQgktrZX",
+            "schedulingActivityExecutionId": "14YTROtjc39",
+            "schedulingWorkflowExecutionId": "14YTQgf4aZI",
+            "branchId": null,
+            "iterationId": null,
+            "executionPathId": "path:16",
+            "executionScopeId": "scope:root",
+            "schedulingCause": "continuation",
+            "metadata": {
+              "flowchart.targetNodeId": "capture-rules-result"
+            },
+            "attempt": null
+          }
+        }
+      ]
+    },
+    {
+      "case": "reorder-only-retry",
+      "database": "/var/folders/63/lbnh2n0n6dv9dzm8bks0854c0000gn/T/elsa-rules-e2e-455894dae5c74cb7aea04df17060ec76/elsa.db",
+      "declaredProducerScopeId": "flowchart-root",
+      "incidentMessage": "Scheduler work item '0ceb6cbffdb20e80:start:14YTkTgFWfJ' (StartActivity) was poisoned during dispatch by handler 'WorkflowStartActivitySchedulerWorkHandler' after 1 failure(s): Elsa.Workflows.Runtime.Core.Exceptions.CausalActivityResultResolutionException: Activity result projection '$result' from executable node 'rules' in structural scope 'flowchart-root' is not available in the causal lineage of consumer invocation '14YTkTgFWfJ'.",
+      "states": [
+        {
+          "execution": {
+            "activityExecutionId": "14YTjklIbBc",
+            "workflowExecutionId": "14YTjkZ6vU4",
+            "executableNodeId": "rules",
+            "authoredActivityId": "rules",
+            "activityType": "Elsa.Rules.Workflows.Runtime.Activities.RunRules",
+            "activityTypeVersion": "4.0.0-branch-agent-codex-3181-durable-rules+544e9840f91422f1760ac65c2ca5e63480974045"
+          },
+          "status": "Completed",
+          "schedulingActivityExecutionId": "14YTjkdD2wG",
+          "parentActivityExecutionId": "14YTjkdD2wG",
+          "provenance": {
+            "parentActivityExecutionId": "14YTjkdD2wG",
+            "schedulingActivityExecutionId": "14YTjkdD2wG",
+            "schedulingWorkflowExecutionId": "14YTjkZ6vU4",
+            "branchId": null,
+            "iterationId": null,
+            "executionPathId": "path:root",
+            "executionScopeId": "scope:root",
+            "schedulingCause": "start",
+            "metadata": {
+              "flowchart.targetNodeId": "rules"
+            },
+            "attempt": null
+          }
+        },
+        {
+          "execution": {
+            "activityExecutionId": "14YTkTgFWfJ",
+            "workflowExecutionId": "14YTjkZ6vU4",
+            "executableNodeId": "capture-rules-result",
+            "authoredActivityId": "capture-rules-result",
+            "activityType": "elsa.intrinsic.setoutput",
+            "activityTypeVersion": "1.0.0"
+          },
+          "status": "Scheduled",
+          "schedulingActivityExecutionId": "14YTjklIbBc",
+          "parentActivityExecutionId": "14YTjkdD2wG",
+          "provenance": {
+            "parentActivityExecutionId": "14YTjkdD2wG",
+            "schedulingActivityExecutionId": "14YTjklIbBc",
+            "schedulingWorkflowExecutionId": "14YTjkZ6vU4",
+            "branchId": null,
+            "iterationId": null,
+            "executionPathId": "path:7",
+            "executionScopeId": "scope:root",
+            "schedulingCause": "continuation",
+            "metadata": {
+              "flowchart.targetNodeId": "capture-rules-result"
+            },
+            "attempt": null
+          }
+        }
+      ]
+    }
+  ]
+}

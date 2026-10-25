@@ -1,5 +1,6 @@
 import type { HTMLAttributes, ReactNode, RefObject } from "react";
-import { Background, Controls, MiniMap, ReactFlow, type Node, type ReactFlowProps } from "@xyflow/react";
+import { Background, Controls, ReactFlow, type Node, type ReactFlowProps } from "@xyflow/react";
+import { GraphOverflowMiniMap } from "./GraphOverflowMiniMap";
 import type { WorkflowEdge, WorkflowNodeAvailabilityLookup } from "../workflow-editor/editorTypes";
 import type { WorkflowNodeData } from "../workflowAdapter";
 import type { WorkflowSlotNavigation } from "../workflow-editor/contexts";
@@ -60,7 +61,7 @@ export function GraphAuthoringCanvas({
               >
                 <Background gap={18} size={1} />
                 <Controls />
-                <MiniMap pannable zoomable />
+                <GraphOverflowMiniMap />
               </ReactFlow>
             </WorkflowSlotNavigationContext.Provider>
           </WorkflowNodeAvailabilityContext.Provider>

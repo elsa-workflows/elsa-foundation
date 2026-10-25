@@ -1805,7 +1805,7 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute();
 
     await waitForText(container, "Hello World");
-    await click(buttonByText(container, "Create"));
+    await click(buttonByText(container, "Create workflow"));
     await waitForText(container, "Create Workflow");
     const rootCards = dialog(container).querySelectorAll(".wf-root-card");
     expect(rootCards).toHaveLength(3);
@@ -1875,7 +1875,7 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute();
 
     await waitForText(container, "Hello World");
-    await click(buttonByText(container, "Create"));
+    await click(buttonByText(container, "Create workflow"));
     await waitForText(container, "Create Workflow");
     await fill(inputByLabel(container, "Display name"), "Customer onboarding");
     await click(buttonByText(dialog(container), "Create"));
@@ -4235,7 +4235,7 @@ describe("workflows module", () => {
     await click(buttonByLabel(container, "Create folder"));
     await vi.waitFor(() => expect(api.dialogs.prompt).toHaveBeenCalled());
     await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith("/folders") && (init as RequestInit)?.method === "POST")).toBe(true));
-    await click(buttonByText(container, "Create"));
+    await click(buttonByText(container, "Create workflow"));
     await waitForText(container, "Create Workflow");
     await fill(inputByLabel(container, "Display name"), "Placed workflow");
     await click(buttonByText(dialog(container), "Create"));
@@ -4556,22 +4556,25 @@ describe("workflows module", () => {
       workflowFolderMutationCapabilities()
     );
 
+    const allWorkflowRow = () => container.querySelector('[role="row"][aria-label="Open workflow definition All workflow"]');
+    await vi.waitFor(() => expect(allWorkflowRow()).not.toBeNull());
     await waitForText(container, "Delete me");
     await click(container.querySelector<HTMLElement>("[data-folder-id='folder-delete']"));
     await waitForText(container, "Folder workflow");
+    const globalRequestsBeforeDelete = globalDefinitionRequests;
     await click(buttonByText(container, "Delete"));
     try {
       await vi.waitFor(() => expect(rootFolderRequests).toBe(2));
-      // Hold the folder refresh open so the selection-change request is observable before the
-      // mutation callback runs. This makes a duplicate rebase deterministic instead of timing-based.
-      await vi.waitFor(() => expect(globalDefinitionRequests).toBe(2));
+      // Hold the folder refresh open while the survivor collection loads. This makes an extra
+      // rebase request from the folder mutation observable before refresh completes.
+      await vi.waitFor(() => expect(globalDefinitionRequests).toBe(globalRequestsBeforeDelete + 1));
     } finally {
       resolveDeletedRootRefresh?.(response({ items: [], nextContinuationToken: null }));
     }
     await waitForText(container, "Deleted folder Delete me");
-    await waitForText(container, "All workflow");
+    await vi.waitFor(() => expect(allWorkflowRow()).not.toBeNull());
 
-    expect(globalDefinitionRequests).toBe(2);
+    expect(globalDefinitionRequests).toBe(globalRequestsBeforeDelete + 1);
     expect(new URLSearchParams(window.location.search).has("folderId")).toBe(false);
     await unmount();
   });
@@ -5081,7 +5084,7 @@ async function openCreateDialogWithSuggest() {
   });
 
   await waitForText(rendered.container, "Hello World");
-  await click(buttonByText(rendered.container, "Create"));
+  await click(buttonByText(rendered.container, "Create workflow"));
   await waitForText(rendered.container, "Create Workflow");
   // The button reveals the intent field rather than firing a context-free prompt.
   await click(buttonByText(dialog(rendered.container), "Suggest name and description"));

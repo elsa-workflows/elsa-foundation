@@ -1,0 +1,756 @@
+{
+  "baseCommit": "fa13408e2cae4d035cd6193d942ac4ea84d47fbb",
+  "sourceFingerprint": {
+    "Essentials/src/Workflows/Runtime/Core/Models/WorkflowDrainOrchestratorOptions.cs": "b64b406da029ca6c26321d22a57e911f777a9b352bb32b90c2a3788519192acf",
+    "Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutionCommandProcessResult.cs": "cfb22c56d9434c4dfa8532b17f14242071fcba9d86321df3d38c9c1f7ee64292",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowDrainOrchestrator.cs": "79b7e642728bec1cb2d09b922737b3dc64d984eb28260bf239c6e89ea599d300",
+    "Essentials/tests/Workflows/Runtime/Tests/CoalescingResumeDurableClaimBoundaryTests.cs": "b3aa33e75e22d03d53f21e8f23514145fb9b766d9225966e31ad3fcbe356c52e",
+    "Essentials/tests/Workflows/Runtime/Tests/RuntimeSchedulerWorkDeferralTests.cs": "3b1ca6174c984c2bee35f1759495fa7f49982af2d3f93172899f80f393113599"
+  },
+  "finalCorrectionFingerprint": {
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowDrainOrchestrator.cs": "79b7e642728bec1cb2d09b922737b3dc64d984eb28260bf239c6e89ea599d300",
+    "Essentials/tests/Workflows/Runtime/Tests/CoalescingResumeDurableClaimBoundaryTests.cs": "b3aa33e75e22d03d53f21e8f23514145fb9b766d9225966e31ad3fcbe356c52e"
+  },
+  "scope": "Local candidate verification; exact new-head hosted CI and external review pending. Final EF1003 and Architecture585 ran before the later external-delivery accounting correction; runtime/Rules/build/REST/map checks were repeated after it. Earlier package and provider receipts retain their recorded source scope.",
+  "review": "Code Review round1 changes requested; self-review rounds1-5 previously completed, final formal round6 found targeted corrections. No seventh self-review or clean full round asserted. Request Code Review reassessment of repair head.",
+  "records": [
+    {
+      "name": "handoff-mutation",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+        "--no-restore",
+        "--filter",
+        "FullyQualifiedName~Resume_boundary_flushes_coalesced_work_then_durable_deferral_survives_provider_rebuild",
+        "--logger",
+        "trx;LogFileName=mutation.trx",
+        "--results-directory",
+        "/tmp/rules-pr3192-coalescing-repair/mutation"
+      ],
+      "exitCode": 1,
+      "durationSeconds": 10.49,
+      "log": "/tmp/rules-pr3192-coalescing-repair/handoff-mutation.log",
+      "sha256": "d5fe432f970fd160bcb226837ace4f8c138e1c68cfa89e995e1924654b59ba51",
+      "phase": "validation",
+      "testReports": [
+        {
+          "path": "/tmp/rules-pr3192-coalescing-repair/mutation/mutation.trx",
+          "sha256": "d97bd5697989ff53bdf20a7d73b03d08ca1a3c55905e996e10f52fbbc9bb0b90",
+          "counters": {
+            "total": "1",
+            "executed": "1",
+            "passed": "0",
+            "failed": "1",
+            "error": "0",
+            "timeout": "0",
+            "aborted": "0",
+            "inconclusive": "0",
+            "passedButRunAborted": "0",
+            "notRunnable": "0",
+            "notExecuted": "0",
+            "disconnected": "0",
+            "warning": "0",
+            "completed": "0",
+            "inProgress": "0",
+            "pending": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "runtime-all",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+        "--no-restore",
+        "--logger",
+        "trx;LogFileName=runtime-all.trx",
+        "--results-directory",
+        "/tmp/rules-pr3192-coalescing-repair/runtime-all"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 11.25,
+      "log": "/tmp/rules-pr3192-coalescing-repair/runtime-all.log",
+      "sha256": "845394bedaa9fa643037a0c02f7a9367ce4005eb1ca49e4f2ed9325a75bdf35d",
+      "phase": "validation",
+      "testReports": [
+        {
+          "path": "/tmp/rules-pr3192-coalescing-repair/runtime-all/runtime-all.trx",
+          "sha256": "641bbe2c1c3201122b203586d74760b76d3e8bee7426d78eed522ec6cf48bef7",
+          "counters": {
+            "total": "2543",
+            "executed": "2543",
+            "passed": "2543",
+            "failed": "0",
+            "error": "0",
+            "timeout": "0",
+            "aborted": "0",
+            "inconclusive": "0",
+            "passedButRunAborted": "0",
+            "notRunnable": "0",
+            "notExecuted": "0",
+            "disconnected": "0",
+            "warning": "0",
+            "completed": "0",
+            "inProgress": "0",
+            "pending": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rules-all",
+      "command": [
+        "dotnet",
+        "test",
+        "Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj",
+        "--no-restore",
+        "--logger",
+        "trx;LogFileName=rules-all.trx",
+        "--results-directory",
+        "/tmp/rules-pr3192-coalescing-repair/rules-all"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 80.13,
+      "log": "/tmp/rules-pr3192-coalescing-repair/rules-all.log",
+      "sha256": "e0c8e1cb59a88eb9c7ce69a0c8f56ded68890cee8b365bcedf74aa6cb79346ee",
+      "phase": "validation",
+      "testReports": [
+        {
+          "path": "/tmp/rules-pr3192-coalescing-repair/rules-all/rules-all.trx",
+          "sha256": "f749f104efc71ed70faabc81caeb8fe7e061ea1244cd0fa9917069418ae41835",
+          "counters": {
+            "total": "278",
+            "executed": "278",
+            "passed": "278",
+            "failed": "0",
+            "error": "0",
+            "timeout": "0",
+            "aborted": "0",
+            "inconclusive": "0",
+            "passedButRunAborted": "0",
+            "notRunnable": "0",
+            "notExecuted": "0",
+            "disconnected": "0",
+            "warning": "0",
+            "completed": "0",
+            "inProgress": "0",
+            "pending": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "workbench-build",
+      "command": [
+        "dotnet",
+        "build",
+        "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj",
+        "--no-restore"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 58.94,
+      "log": "/tmp/rules-pr3192-coalescing-repair/workbench-build.log",
+      "sha256": "7098ad03d5333efbef1a4cdd7e18efb07fea13463046cd7d692273047aaed1dd",
+      "phase": "validation",
+      "testReports": []
+    },
+    {
+      "name": "restart-e2e",
+      "command": [
+        "pwsh",
+        "-NoProfile",
+        "-File",
+        "e2e-tests/durability/Test-RestartRecovery.ps1"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 40.71,
+      "log": "/tmp/rules-pr3192-coalescing-repair/restart-e2e.log",
+      "sha256": "565e127623d602e0604180f8db7661254a3314b7f6e483eafed5eb751b7da1da",
+      "phase": "validation",
+      "testReports": []
+    },
+    {
+      "name": "http-flowchart-e2e",
+      "command": [
+        "pwsh",
+        "-NoProfile",
+        "-File",
+        "e2e-tests/http/Test-HttpResponseFlowchart.ps1"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 20.41,
+      "log": "/tmp/rules-pr3192-coalescing-repair/http-flowchart-e2e.log",
+      "sha256": "b31f9d5bff0bf5cf038d627f685c5694cb3b57e8f5aaf4959b80953099dbacec",
+      "phase": "validation",
+      "testReports": []
+    },
+    {
+      "name": "budget-mutation",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+        "--no-restore",
+        "--filter",
+        "FullyQualifiedName~Single_resume_continuation_runs_within_the_original_one_item_drain_request",
+        "--logger",
+        "trx;LogFileName=budget-mutation.trx",
+        "--results-directory",
+        "/tmp/rules-pr3192-coalescing-repair/budget-mutation"
+      ],
+      "exitCode": 1,
+      "durationSeconds": 6.61,
+      "log": "/tmp/rules-pr3192-coalescing-repair/budget-mutation.log",
+      "sha256": "375edf431afdc73777ef148590d78b316762bea82a68998afdbc40fa458d8851",
+      "phase": "final-validation",
+      "testReports": [
+        {
+          "path": "/tmp/rules-pr3192-coalescing-repair/budget-mutation/budget-mutation.trx",
+          "sha256": "bf83d08ce6795c4bd0d47b88bd7388b08e331c7d4d0d7a4f6710dabe10c7de25",
+          "counters": {
+            "total": "1",
+            "executed": "1",
+            "passed": "0",
+            "failed": "1",
+            "error": "0",
+            "timeout": "0",
+            "aborted": "0",
+            "inconclusive": "0",
+            "passedButRunAborted": "0",
+            "notRunnable": "0",
+            "notExecuted": "0",
+            "disconnected": "0",
+            "warning": "0",
+            "completed": "0",
+            "inProgress": "0",
+            "pending": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "final-runtime",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+        "--no-restore",
+        "--logger",
+        "trx;LogFileName=final-runtime.trx",
+        "--results-directory",
+        "/tmp/rules-pr3192-coalescing-repair/final-runtime"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 8.35,
+      "log": "/tmp/rules-pr3192-coalescing-repair/final-runtime.log",
+      "sha256": "fd012cb7ecd58cd369d3d6b28a96acb584f443b6cc00459843090ab2b62cb22f",
+      "phase": "final-validation",
+      "testReports": [
+        {
+          "path": "/tmp/rules-pr3192-coalescing-repair/final-runtime/final-runtime.trx",
+          "sha256": "34f6e99340f02e6828a72ef32ebfe9547c0654feebe2564fb0be8fe6cf655e6e",
+          "counters": {
+            "total": "2545",
+            "executed": "2545",
+            "passed": "2545",
+            "failed": "0",
+            "error": "0",
+            "timeout": "0",
+            "aborted": "0",
+            "inconclusive": "0",
+            "passedButRunAborted": "0",
+            "notRunnable": "0",
+            "notExecuted": "0",
+            "disconnected": "0",
+            "warning": "0",
+            "completed": "0",
+            "inProgress": "0",
+            "pending": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "final-rules",
+      "command": [
+        "dotnet",
+        "test",
+        "Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj",
+        "--no-restore",
+        "--logger",
+        "trx;LogFileName=final-rules.trx",
+        "--results-directory",
+        "/tmp/rules-pr3192-coalescing-repair/final-rules"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 51.34,
+      "log": "/tmp/rules-pr3192-coalescing-repair/final-rules.log",
+      "sha256": "2baffcdfa64cdb35ea967a5f1c723cc3be4b7e46a637242ec271278802a379c7",
+      "phase": "final-validation",
+      "testReports": [
+        {
+          "path": "/tmp/rules-pr3192-coalescing-repair/final-rules/final-rules.trx",
+          "sha256": "74aac4606dc5e5b5d4fc102809040be35aa637e8bcd387272a8f3df2889682c4",
+          "counters": {
+            "total": "278",
+            "executed": "278",
+            "passed": "278",
+            "failed": "0",
+            "error": "0",
+            "timeout": "0",
+            "aborted": "0",
+            "inconclusive": "0",
+            "passedButRunAborted": "0",
+            "notRunnable": "0",
+            "notExecuted": "0",
+            "disconnected": "0",
+            "warning": "0",
+            "completed": "0",
+            "inProgress": "0",
+            "pending": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "final-runtime-ef",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+        "--no-restore",
+        "--logger",
+        "trx;LogFileName=final-runtime-ef.trx",
+        "--results-directory",
+        "/tmp/rules-pr3192-coalescing-repair/final-runtime-ef"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 199.79,
+      "log": "/tmp/rules-pr3192-coalescing-repair/final-runtime-ef.log",
+      "sha256": "88471630561f19bf9131acca5109a47a8eb20421dc9aacff8ead2ff8842275ce",
+      "phase": "final-validation",
+      "testReports": [
+        {
+          "path": "/tmp/rules-pr3192-coalescing-repair/final-runtime-ef/final-runtime-ef.trx",
+          "sha256": "368037cf7de550149a7afefaaf1ae3aaae6611940e66339ba28f04cd256622ae",
+          "counters": {
+            "total": "1003",
+            "executed": "1003",
+            "passed": "1003",
+            "failed": "0",
+            "error": "0",
+            "timeout": "0",
+            "aborted": "0",
+            "inconclusive": "0",
+            "passedButRunAborted": "0",
+            "notRunnable": "0",
+            "notExecuted": "0",
+            "disconnected": "0",
+            "warning": "0",
+            "completed": "0",
+            "inProgress": "0",
+            "pending": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "final-architecture",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+        "--no-restore",
+        "--logger",
+        "trx;LogFileName=final-architecture.trx",
+        "--results-directory",
+        "/tmp/rules-pr3192-coalescing-repair/final-architecture"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 236.57,
+      "log": "/tmp/rules-pr3192-coalescing-repair/final-architecture.log",
+      "sha256": "b6053812f7bba2ed91b5a46ef02c2a21f644d593039e55fb9c333e76ffb811df",
+      "phase": "final-validation",
+      "testReports": [
+        {
+          "path": "/tmp/rules-pr3192-coalescing-repair/final-architecture/final-architecture.trx",
+          "sha256": "8c87f8c01eecc2552e987a2db122a2841b0e5bec8fddcd4f37773e9bb0c5cf1f",
+          "counters": {
+            "total": "585",
+            "executed": "585",
+            "passed": "585",
+            "failed": "0",
+            "error": "0",
+            "timeout": "0",
+            "aborted": "0",
+            "inconclusive": "0",
+            "passedButRunAborted": "0",
+            "notRunnable": "0",
+            "notExecuted": "0",
+            "disconnected": "0",
+            "warning": "0",
+            "completed": "0",
+            "inProgress": "0",
+            "pending": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "final-workbench-build",
+      "command": [
+        "dotnet",
+        "build",
+        "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj",
+        "--no-restore"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 36.57,
+      "log": "/tmp/rules-pr3192-coalescing-repair/final-workbench-build.log",
+      "sha256": "56258ae9c2957773171ff4a2a4a09a5aa06c74db26f55c4b58563dd786d5c386",
+      "phase": "final-validation",
+      "testReports": []
+    },
+    {
+      "name": "final-restart-e2e",
+      "command": [
+        "pwsh",
+        "-NoProfile",
+        "-File",
+        "e2e-tests/durability/Test-RestartRecovery.ps1"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 74.85,
+      "log": "/tmp/rules-pr3192-coalescing-repair/final-restart-e2e.log",
+      "sha256": "e68d2ddb24291d854031d07c3006a7ce3e2630861097d02c3d8c06f441efd8cc",
+      "phase": "final-validation",
+      "testReports": []
+    },
+    {
+      "name": "final-http-flowchart-e2e",
+      "command": [
+        "pwsh",
+        "-NoProfile",
+        "-File",
+        "e2e-tests/http/Test-HttpResponseFlowchart.ps1"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 51.9,
+      "log": "/tmp/rules-pr3192-coalescing-repair/final-http-flowchart-e2e.log",
+      "sha256": "5e2c7fc4198ee913915f982ec2992d5a7e822d4fbdbc0ba692193af91b08ca04",
+      "phase": "final-validation",
+      "testReports": []
+    },
+    {
+      "name": "final-maps",
+      "command": [
+        "dotnet",
+        "run",
+        "--project",
+        "tools/maps/Elsa.Maps.Generator",
+        "--no-restore",
+        "--",
+        "check"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 11.04,
+      "log": "/tmp/rules-pr3192-coalescing-repair/final-maps.log",
+      "sha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04",
+      "phase": "final-validation",
+      "testReports": []
+    },
+    {
+      "name": "final-diff",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.18,
+      "log": "/tmp/rules-pr3192-coalescing-repair/final-diff.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "phase": "final-validation",
+      "testReports": []
+    },
+    {
+      "name": "round6-external-red",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+        "--no-restore",
+        "--logger",
+        "trx;LogFileName=round6-external-red.trx",
+        "--results-directory",
+        "/tmp/rules-pr3192-coalescing-repair/round6-external-red",
+        "--filter",
+        "FullyQualifiedName~Resume_reprobes_all_durable_continuations_after_external_delivery_supersedes_each_batch"
+      ],
+      "exitCode": 1,
+      "durationSeconds": 61.13,
+      "log": "/tmp/rules-pr3192-coalescing-repair/round6-external-red.log",
+      "sha256": "4894b5f9bf368a3fe94f9b830803cc67834006aa913d0c86e1ef6265ca0ed587",
+      "phase": "round6-validation",
+      "testReports": [
+        {
+          "path": "/tmp/rules-pr3192-coalescing-repair/round6-external-red/round6-external-red.trx",
+          "sha256": "6e3764d3a6b4b11e882fa82b054932ddee7dcddbb8538cd84cd3b332696af1b6",
+          "counters": {
+            "total": "1",
+            "executed": "1",
+            "passed": "0",
+            "failed": "1",
+            "error": "0",
+            "timeout": "0",
+            "aborted": "0",
+            "inconclusive": "0",
+            "passedButRunAborted": "0",
+            "notRunnable": "0",
+            "notExecuted": "0",
+            "disconnected": "0",
+            "warning": "0",
+            "completed": "0",
+            "inProgress": "0",
+            "pending": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "round6-external-green",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+        "--no-restore",
+        "--logger",
+        "trx;LogFileName=round6-external-green.trx",
+        "--results-directory",
+        "/tmp/rules-pr3192-coalescing-repair/round6-external-green",
+        "--filter",
+        "FullyQualifiedName~Resume_reprobes_all_durable_continuations_after_external_delivery_supersedes_each_batch"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 41.28,
+      "log": "/tmp/rules-pr3192-coalescing-repair/round6-external-green.log",
+      "sha256": "c3862ee6339995e099dd3abe3a9dc6b8d13e123b9a758a867660720727c1b279",
+      "phase": "round6-validation",
+      "testReports": [
+        {
+          "path": "/tmp/rules-pr3192-coalescing-repair/round6-external-green/round6-external-green.trx",
+          "sha256": "dac63190b658423198cedf5223c9b3df7396199a2df2ea23a68b1fdbd12c5070",
+          "counters": {
+            "total": "1",
+            "executed": "1",
+            "passed": "1",
+            "failed": "0",
+            "error": "0",
+            "timeout": "0",
+            "aborted": "0",
+            "inconclusive": "0",
+            "passedButRunAborted": "0",
+            "notRunnable": "0",
+            "notExecuted": "0",
+            "disconnected": "0",
+            "warning": "0",
+            "completed": "0",
+            "inProgress": "0",
+            "pending": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "round6-runtime",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+        "--no-restore",
+        "--logger",
+        "trx;LogFileName=round6-runtime.trx",
+        "--results-directory",
+        "/tmp/rules-pr3192-coalescing-repair/round6-runtime"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 24.43,
+      "log": "/tmp/rules-pr3192-coalescing-repair/round6-runtime.log",
+      "sha256": "92cdc08c43f6888c6ec623556a528b70c4892950afc5138063d6239ae294a50a",
+      "phase": "round6-validation",
+      "testReports": [
+        {
+          "path": "/tmp/rules-pr3192-coalescing-repair/round6-runtime/round6-runtime.trx",
+          "sha256": "043dae41590f389e3c78273d6d2136e14a56230e98d0ed14361d5174374a4cf8",
+          "counters": {
+            "total": "2546",
+            "executed": "2546",
+            "passed": "2546",
+            "failed": "0",
+            "error": "0",
+            "timeout": "0",
+            "aborted": "0",
+            "inconclusive": "0",
+            "passedButRunAborted": "0",
+            "notRunnable": "0",
+            "notExecuted": "0",
+            "disconnected": "0",
+            "warning": "0",
+            "completed": "0",
+            "inProgress": "0",
+            "pending": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "round6-rules",
+      "command": [
+        "dotnet",
+        "test",
+        "Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj",
+        "--no-restore",
+        "--logger",
+        "trx;LogFileName=round6-rules.trx",
+        "--results-directory",
+        "/tmp/rules-pr3192-coalescing-repair/round6-rules"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 77.36,
+      "log": "/tmp/rules-pr3192-coalescing-repair/round6-rules.log",
+      "sha256": "e751bb1485b23cf321515cd95a7a9f7cabb0861041e81d8b87361d66c9a875cf",
+      "phase": "round6-validation",
+      "testReports": [
+        {
+          "path": "/tmp/rules-pr3192-coalescing-repair/round6-rules/round6-rules.trx",
+          "sha256": "47dc4ef06fdb18a09a6f2f2b0f4f5e5bfc2290ce72a6cffdc9e6488a742435a3",
+          "counters": {
+            "total": "278",
+            "executed": "278",
+            "passed": "278",
+            "failed": "0",
+            "error": "0",
+            "timeout": "0",
+            "aborted": "0",
+            "inconclusive": "0",
+            "passedButRunAborted": "0",
+            "notRunnable": "0",
+            "notExecuted": "0",
+            "disconnected": "0",
+            "warning": "0",
+            "completed": "0",
+            "inProgress": "0",
+            "pending": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "round6-workbench-build",
+      "command": [
+        "dotnet",
+        "build",
+        "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj",
+        "--no-restore"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 45.66,
+      "log": "/tmp/rules-pr3192-coalescing-repair/round6-workbench-build.log",
+      "sha256": "e1dad467282f38a97f31df81a93e8cd61950aa63a96adf6153f465aa0632c077",
+      "phase": "round6-validation",
+      "testReports": []
+    },
+    {
+      "name": "round6-restart-e2e",
+      "command": [
+        "pwsh",
+        "-NoProfile",
+        "-File",
+        "e2e-tests/durability/Test-RestartRecovery.ps1"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 53.83,
+      "log": "/tmp/rules-pr3192-coalescing-repair/round6-restart-e2e.log",
+      "sha256": "ec5f25da2332ec6d3f592e6f768b53ce4230470d4f1a66fca3ea4c89dbf8d550",
+      "phase": "round6-validation",
+      "testReports": []
+    },
+    {
+      "name": "round6-http-flowchart-e2e",
+      "command": [
+        "pwsh",
+        "-NoProfile",
+        "-File",
+        "e2e-tests/http/Test-HttpResponseFlowchart.ps1"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 25.44,
+      "log": "/tmp/rules-pr3192-coalescing-repair/round6-http-flowchart-e2e.log",
+      "sha256": "4b2a6e961ef4eb2c51993b68d6645233f81debe6495322c5c086d0680920c855",
+      "phase": "round6-validation",
+      "testReports": []
+    },
+    {
+      "name": "round6-maps",
+      "command": [
+        "dotnet",
+        "run",
+        "--project",
+        "tools/maps/Elsa.Maps.Generator",
+        "--no-restore",
+        "--",
+        "check"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 1.65,
+      "log": "/tmp/rules-pr3192-coalescing-repair/round6-maps.log",
+      "sha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04",
+      "phase": "round6-validation",
+      "testReports": []
+    },
+    {
+      "name": "round6-diff",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.09,
+      "log": "/tmp/rules-pr3192-coalescing-repair/round6-diff.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "phase": "round6-validation",
+      "testReports": []
+    },
+    {
+      "name": "initial-red",
+      "testReports": [
+        {
+          "path": "/tmp/rules-pr3192-coalescing-repair/red/red.trx",
+          "sha256": "7e8a5d4bad1ecd01bfa00d06a5f965655cc95f5ab72eb83f795fec2d78bd9fee",
+          "counters": {
+            "total": "12",
+            "executed": "12",
+            "passed": "7",
+            "failed": "5",
+            "error": "0",
+            "timeout": "0",
+            "aborted": "0",
+            "inconclusive": "0",
+            "passedButRunAborted": "0",
+            "notRunnable": "0",
+            "notExecuted": "0",
+            "disconnected": "0",
+            "warning": "0",
+            "completed": "0",
+            "inProgress": "0",
+            "pending": "0"
+          }
+        }
+      ]
+    }
+  ]
+}

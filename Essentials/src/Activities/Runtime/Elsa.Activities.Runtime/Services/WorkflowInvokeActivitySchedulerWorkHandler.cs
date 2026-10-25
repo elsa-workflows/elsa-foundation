@@ -153,7 +153,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         publishStimulusStaging?.Reset(workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId);
         var scopeService = new RuntimeContainerScopeService(
             activityExecutionStateStore,
-            serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>());
+            serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
+            serviceProvider.GetRequiredService<IDurableValueStateStore>());
 
         RuntimeInputBindingStateProjectionSet projections;
         IReadOnlyDictionary<string, object?> workflowInputValues;
@@ -598,7 +599,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 (IActivityCompletionTransition)returnedTransition,
                 valueFlowCompletion,
                 TimeProvider.GetUtcNow(),
-                cancellationToken);
+                cancellationToken,
+                // A capture into a graph variable writes the row of the producer's nearest closed scope.
+                closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId, executableNode, cancellationToken));
             durableValueChanges = MergeDurableValueChanges(durableValueChanges, captureProjection.DurableValues);
             workflowVariableWrites = captureProjection.WorkflowVariableWrites;
             return valueFlowCompletion.Projections

@@ -21,6 +21,7 @@ import { readArgumentType } from "../workflowProperties";
 import { createDraftSnapshotId, getDraftSignature } from "./editorHelpers";
 import { WorkflowRunInputField } from "./WorkflowRunInputDialog";
 import { parseWorkflowRunInputs, type WorkflowRunInputDrafts } from "../workflowRunInputs";
+import { defaultStimulusDraft } from "../workflowTestRequestDefaults";
 import type { WorkflowTestDriveSetupState } from "./editorTypes";
 
 type TestDriveSnapshot = { draft: WorkflowDraft; signature: string; snapshotId: string };
@@ -63,7 +64,7 @@ export function WorkflowTestDrivePanel({
   selectedOptionIdRef.current = selectedOptionId;
   selectedModeIdRef.current = selectedModeId;
   const [inputDrafts, setInputDrafts] = useState<WorkflowRunInputDrafts>(() => setupState?.inputDrafts ?? {});
-  const [stimulusDraft, setStimulusDraft] = useState(() => setupState?.stimulusDraft ?? "{}");
+  const [stimulusDraft, setStimulusDraft] = useState(() => setupState?.stimulusDraft ?? defaultStimulusDraft());
   const [inputErrors, setInputErrors] = useState<Record<string, string>>({});
   const [stimulusError, setStimulusError] = useState("");
   const [actionError, setActionError] = useState("");
@@ -109,10 +110,11 @@ export function WorkflowTestDrivePanel({
       if (!retainedOption) {
         setSelectedOptionId("");
         setSelectedModeId("");
-        setStimulusDraft("{}");
+        setStimulusDraft(defaultStimulusDraft());
       } else if (!retainedOption.modes.some(mode => mode.modeId === selectedModeIdRef.current)) {
-        setSelectedModeId(retainedOption.modes.find(mode => mode.isDefault)?.modeId ?? retainedOption.modes[0]?.modeId ?? "");
-        setStimulusDraft("{}");
+        const mode = retainedOption.modes.find(candidate => candidate.isDefault) ?? retainedOption.modes[0];
+        setSelectedModeId(mode?.modeId ?? "");
+        setStimulusDraft(defaultStimulusDraft(retainedOption, mode));
       }
       setInputErrors({});
       setStimulusError("");
@@ -252,7 +254,7 @@ export function WorkflowTestDrivePanel({
             if (value === "direct") {
               setSelectedOptionId("");
               setSelectedModeId("");
-        setStimulusDraft("{}");
+              setStimulusDraft(defaultStimulusDraft());
               setStimulusError("");
             } else {
               const next = value.slice("trigger:".length);
@@ -260,8 +262,8 @@ export function WorkflowTestDrivePanel({
               const mode = option?.modes.find(candidate => candidate.isDefault) ?? option?.modes[0];
               setSelectedOptionId(next);
               setSelectedModeId(mode?.modeId ?? "");
-        setStimulusDraft("{}");
-        setStimulusError("");
+              setStimulusDraft(defaultStimulusDraft(option, mode));
+              setStimulusError("");
             }
           }}>
             <option value="direct">Direct start</option>
@@ -272,8 +274,9 @@ export function WorkflowTestDrivePanel({
           <label className="wf-form-field">
             <span>Mode</span>
             <select value={selectedModeId} disabled={busy || isStale} onChange={event => {
+              const mode = selectedOption.modes.find(candidate => candidate.modeId === event.currentTarget.value);
               setSelectedModeId(event.currentTarget.value);
-              setStimulusDraft("{}");
+              setStimulusDraft(defaultStimulusDraft(selectedOption, mode));
               setStimulusError("");
             }}>
               {selectedOption.modes.map(mode => <option key={mode.modeId} value={mode.modeId}>{mode.label}</option>)}

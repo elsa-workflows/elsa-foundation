@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { AnonymousAuthProvider, type ElsaStudioModuleApi, type StudioDashboardWidgetContribution, type StudioSettingEditorContribution } from "@elsa-workflows/studio-sdk";
+import { AnonymousAuthProvider, AuthProvider, type AuthProviderManager, type AuthSession, type ElsaStudioModuleApi, type StudioDashboardWidgetContribution, type StudioSettingEditorContribution } from "@elsa-workflows/studio-sdk";
 import { StatusChip } from "@elsa-workflows/studio-ui";
 import { ShellFrame, getStudioNavigation } from "../../src/apps/Elsa.Studio.Web/Client/src/app/App";
 import { ThemeProvider } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
@@ -15,6 +15,21 @@ const edit = searchParams.get("edit") === "1";
 const before = searchParams.get("mode") === "home-before";
 const dark = searchParams.get("theme") === "dark";
 const appearance = dark ? "dark" : "light";
+const runtimeAccess = searchParams.get("runtimeAccess");
+const fixtureSession: AuthSession = {
+  status: "authenticated", subject: "home-access-fixture", tenantId: "fixture", roles: [],
+  permissions: ["workflows/design:manage", ...(runtimeAccess === "allowed" ? ["workflows/runtime:read"] : [])]
+};
+const fixtureManager: AuthProviderManager = {
+  getSession: () => fixtureSession,
+  getCapabilities: async () => ({ ownershipMode: "foundation-owned", providers: [] }),
+  initialize: async () => fixtureSession,
+  login: async () => undefined,
+  handleCallback: async () => fixtureSession,
+  logout: async () => undefined,
+  getAccessToken: async () => null,
+  refresh: async () => fixtureSession
+};
 
 const moduleNavigation: StudioNavigationContribution[] = [
   { id: "home", label: "Home", path: "/dashboard", order: 10, placement: "main" },
@@ -134,9 +149,9 @@ function createHomeApi(): ElsaStudioModuleApi {
           <h4 id="home-docs-title">Documentation</h4>
           <p>Guides for Studio and your next workflow.</p>
           <ul>
-            <li><a href="https://v4.elsaworkflows.io/essentials/essentials/quickstart" target="_blank" rel="noreferrer">Try Elsa locally</a></li>
-            <li><a href="https://v4.elsaworkflows.io/essentials/essentials/first-workflow" target="_blank" rel="noreferrer">Your first workflow</a></li>
-            <li><a href="https://v4.elsaworkflows.io/studio/studio" target="_blank" rel="noreferrer">Elsa Studio</a></li>
+            <li><a href="https://v4.elsaworkflows.io/essentials/quickstart" target="_blank" rel="noreferrer">Try Elsa locally</a></li>
+            <li><a href="https://v4.elsaworkflows.io/essentials/first-workflow" target="_blank" rel="noreferrer">Your first workflow</a></li>
+            <li><a href="https://v4.elsaworkflows.io/studio" target="_blank" rel="noreferrer">Elsa Studio</a></li>
           </ul>
         </section>
       </div>
@@ -212,10 +227,38 @@ function createHomeApi(): ElsaStudioModuleApi {
   return api;
 }
 
+function installCurrentDraftFixture(api: ElsaStudioModuleApi, scenario: string) {
+  const items = scenario === "multiple-long-names"
+    ? [
+        { id: "definition-long-name", name: `Home3063-long-${"x".repeat(89)}`, draftId: "draft-long-name" },
+        { id: "definition-another", name: "Home3063-draft-a", draftId: "draft-a" },
+        { id: "definition-published-current", name: "Home3063-published-current", draftId: "draft-published", publicationState: "published" }
+      ]
+    : scenario === "multiple"
+    ? [
+        { id: "definition-a", name: "Duplicate workflow", draftId: "draft-a" },
+        { id: "definition-b", name: "Duplicate workflow", draftId: "draft-b" }
+      ]
+    : scenario === "one"
+      ? [{ id: "definition-only", name: "Only workflow", draftId: "draft-only" }]
+      : [];
+  Object.defineProperty(api.backend.http, "getJson", {
+    configurable: true,
+    value: async (url: string) => {
+      if (url.startsWith("/design/workflows/definitions")) return { items };
+      const error = new Error("missing") as Error & { status: number };
+      error.status = 404;
+      throw error;
+    }
+  });
+}
+
 export function HomeFixture() {
   writeAppearancePreferences({ themeId: "classic", mode: appearance, navigation: "left" });
   const navigation = getStudioNavigation(moduleNavigation);
   const api = before ? createEmptyHomeApi() : createHomeApi();
+  const draftScenario = searchParams.get("drafts");
+  if (draftScenario) installCurrentDraftFixture(api, draftScenario);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", "classic");
@@ -227,13 +270,16 @@ export function HomeFixture() {
     }
   }, []);
 
+  const content = (
+    <ShellFrame navigation={navigation} panels={[]} path="/dashboard" title="Home" backendBaseUrl="https://backend.example/" onNavigate={() => undefined}>
+      <HomePage api={api} />
+    </ShellFrame>
+  );
   return (
     <ThemeProvider>
-      <AnonymousAuthProvider>
-        <ShellFrame navigation={navigation} panels={[]} path="/dashboard" title="Home" backendBaseUrl="https://backend.example/" onNavigate={() => undefined}>
-          <HomePage api={api} />
-        </ShellFrame>
-      </AnonymousAuthProvider>
+      {runtimeAccess === "allowed" || runtimeAccess === "denied"
+        ? <AuthProvider manager={fixtureManager}>{content}</AuthProvider>
+        : <AnonymousAuthProvider>{content}</AnonymousAuthProvider>}
     </ThemeProvider>
   );
 }

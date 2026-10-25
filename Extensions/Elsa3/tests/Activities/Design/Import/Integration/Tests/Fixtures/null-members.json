@@ -1,0 +1,269 @@
+{
+  "id": "null-members-v1",
+  "definitionId": "null-members",
+  "name": "null-members",
+  "description": "Test-owned regular workflow (spec 267): activities whose unset members are null, each converting to what Elsa 3 ran it with.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": false
+  },
+  "root": {
+    "id": "null-members-root",
+    "nodeId": "null-members-root",
+    "name": "null-members-root",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "size": {
+          "width": 100,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "correlate-set",
+        "nodeId": "correlate-set",
+        "name": "correlate-set",
+        "type": "Elsa.Correlate",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "correlationId": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "order-1"
+          }
+        }
+      },
+      {
+        "id": "name-set",
+        "nodeId": "name-set",
+        "name": "name-set",
+        "type": "Elsa.SetName",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "value": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "Order 1"
+          }
+        }
+      },
+      {
+        "id": "write",
+        "nodeId": "write",
+        "name": "write",
+        "type": "Elsa.WriteLine",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "text": null
+      },
+      {
+        "id": "publish",
+        "nodeId": "publish",
+        "name": "publish",
+        "type": "Elsa.PublishEvent",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "eventName": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "order.null-members"
+          }
+        },
+        "correlationId": null,
+        "payload": null,
+        "isLocalEvent": null
+      },
+      {
+        "id": "correlate",
+        "nodeId": "correlate",
+        "name": "correlate",
+        "type": "Elsa.Correlate",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "correlationId": null
+      },
+      {
+        "id": "name",
+        "nodeId": "name",
+        "name": "name",
+        "type": "Elsa.SetName",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "value": null
+      }
+    ],
+    "connections": [
+      {
+        "source": {
+          "activity": "correlate-set",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "name-set",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "name-set",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "write",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "write",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "publish",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "publish",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "correlate",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "correlate",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "name",
+          "port": "In"
+        },
+        "vertices": []
+      }
+    ],
+    "variables": []
+  }
+}

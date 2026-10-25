@@ -1,0 +1,163 @@
+name: Full tier shards
+
+# The full tier's test jobs (spec 263): the integration-tier projects in shards, and the EF container suites combined
+# into a few jobs. Called by ci-full.yml on ready pull requests, and by ci.yml on pushes to main, nightly and on
+# dispatch. The callers compute the matrices with tools/ci/test_tiers.py and own the aggregate check, so no job here
+# reports a required context: a context inside a reusable workflow is prefixed with the caller's job name.
+
+on:
+  workflow_call:
+    inputs:
+      integration_matrix:
+        type: string
+        required: true
+      integration_count:
+        type: string
+        required: true
+      container_matrix:
+        type: string
+        required: true
+      container_count:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  integration-shard:
+    name: Integration shard (${{ matrix.shard }})
+    if: ${{ inputs.integration_count != '0' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(inputs.integration_matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore
+        run: bash tools/architecture/restore-ci-project-graph.sh --locked-mode -p:WarningsNotAsErrors=NU1603
+
+      - name: Restore repository-local .NET tools
+        run: dotnet tool restore
+
+      # The whole solution, as in the PR shards: the integration projects launch hosts, probes and the CLI from
+      # sibling build outputs that their own project references do not build (spec 263 research R4).
+      - name: Build (full solution)
+        run: dotnet build Elsa.Server.slnx -c Release --no-restore -p:WarningsNotAsErrors=NU1603
+
+      - name: Test the shard, retrying each failure once
+        env:
+          SHARD: ${{ toJSON(matrix) }}
+        run: >-
+          python3 tools/ci/run_shard.py --entry "$SHARD" --out "$RUNNER_TEMP/shard" --head "$GITHUB_SHA"
+          --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the shard outcome
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-outcomes-${{ matrix.shard }}
+          path: ${{ runner.temp }}/shard/test-outcomes.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload the shard TRX files
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: trx-${{ matrix.shard }}
+          path: ${{ runner.temp }}/shard/try*/**/*.trx
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # Several EF suites per job, one after another: the suites' own build is paid once per job instead of once per suite,
+  # which keeps the full tier within the organization's 20-job limit (FR-022). Each suite still runs whole, with its
+  # required-provider mode armed for that suite only, so an engine that fails to start fails rather than skips.
+  ef-container-shard:
+    name: EF container shard (${{ matrix.shard }})
+    if: ${{ inputs.container_count != '0' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(inputs.container_matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      # Configuration-driven CShells composition, migration/validation, CRUD/OCC, runtime resolution, restart
+      # persistence and the packed-module child-host proof on a native PostgreSQL. Npgsql is the only relational
+      # provider package in that project.
+      - name: Start PostgreSQL for the Secrets EF shell proof
+        if: ${{ matrix.secrets }}
+        run: |
+          docker run --detach --name secrets-ef-postgresql --publish 5432:5432 \
+            --env POSTGRES_HOST_AUTH_METHOD=trust postgres:17.6-alpine3.22
+          for attempt in {1..60}; do
+            if docker exec secrets-ef-postgresql pg_isready -U postgres > /dev/null; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              docker logs secrets-ef-postgresql
+              exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Restore and build the shard's suites
+        env:
+          SHARD: ${{ toJSON(matrix) }}
+        run: |
+          set -euo pipefail
+          python3 -c 'import json, os
+          entry = json.loads(os.environ["SHARD"])
+          projects = [suite["project"] for suite in entry["suites"]] + ([entry["secretsProject"]] if entry["secrets"] else [])
+          print("\n".join(dict.fromkeys(projects)))' > "$RUNNER_TEMP/projects.txt"
+          while IFS= read -r project; do
+            dotnet restore "$project" --locked-mode -p:WarningsNotAsErrors=NU1603
+            dotnet build "$project" -c Release --no-restore -p:WarningsNotAsErrors=NU1603
+          done < "$RUNNER_TEMP/projects.txt"
+
+      - name: Test the suites, retrying each failure once
+        env:
+          SHARD: ${{ toJSON(matrix) }}
+          ELSA_SECRETS_EF_POSTGRESQL_TEST_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Username=postgres;Database=postgres
+        run: >-
+          python3 tools/ci/run_shard.py --entry "$SHARD" --out "$RUNNER_TEMP/shard" --head "$GITHUB_SHA" --parallel 1
+          --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the shard outcome
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-outcomes-${{ matrix.shard }}
+          path: ${{ runner.temp }}/shard/test-outcomes.json
+          if-no-files-found: ignore
+          retention-days: 7

@@ -617,7 +617,7 @@ public sealed class RuntimeInputBindingCompiler(
             source: RuntimeInputBindingSource.VariableRead,
             variable: new RuntimeVariableReference(
                 reference.ReferenceKey,
-                reference.DeclaringScopeId ?? VariableReference.WorkflowScopeId),
+                reference.IsWorkflowScope ? VariableReference.WorkflowScopeId : reference.DeclaringScopeId!),
             metadata: BuildInputMetadata(inputDefinition));
     }
 

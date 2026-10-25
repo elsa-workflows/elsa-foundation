@@ -249,9 +249,10 @@ export async function listDefinitions(context: StudioEndpointContext, request: D
   } satisfies WorkflowDefinitionsResponse;
 }
 
-export async function getDefinition(context: StudioEndpointContext, definitionId: string) {
+export async function getDefinition(context: StudioEndpointContext, definitionId: string, signal?: AbortSignal) {
   const details = await context.http.getJson<WorkflowDefinitionDetailsResponse>(
-    `${await definitionsPath(context)}/${encodeURIComponent(definitionId)}`);
+    `${await definitionsPath(context)}/${encodeURIComponent(definitionId)}`,
+    ...(signal ? [{ signal }] as const : []));
   return normalizeDefinitionDetails(details);
 }
 

@@ -3,7 +3,7 @@ import axe from "axe-core";
 
 async function openCreate(page: import("@playwright/test").Page, scenario = "default") {
   await page.goto(`/connection-secrets.html?scenario=${scenario}`);
-  const opener = page.getByRole("button", { name: "New connection", exact: true });
+  const opener = page.locator(".connections-header").getByRole("button", { name: "Create connection", exact: true });
   await opener.click();
   const dialog = page.getByRole("dialog", { name: "Create connection", exact: true });
   await expect(dialog).toBeVisible();

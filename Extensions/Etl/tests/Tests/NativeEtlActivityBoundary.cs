@@ -158,7 +158,8 @@ internal static class NativeEtlActivityBoundary
             services.GetRequiredService<IWorkflowExecutableSourceReferenceReader>(),
             services.GetRequiredService<IActivityPlacementHasher>(),
             services.GetRequiredService<IActivityStructureService>(),
-            services.GetRequiredService<RuntimeInputBindingCompiler>());
+            services.GetRequiredService<RuntimeInputBindingCompiler>(),
+            services.GetRequiredService<RuntimeOutputCaptureCompiler>());
 
         return await placer.PlaceAsync(new(
             publication,

@@ -11,6 +11,7 @@ import {
   type NodeChange,
   type OnConnectEnd,
   type OnConnectStart,
+  type OnMove,
   type OnNodeDrag,
   type OnReconnect,
   type ReactFlowInstance,
@@ -27,7 +28,7 @@ import {
   type WorkflowNodeData
 } from "../workflowAdapter";
 import { resolveActivityIcon, resolveActivityIconTone } from "../activityIcons";
-import { useGraphViewport } from "./useGraphViewport";
+import { graphFitViewOptions, useGraphViewport } from "./useGraphViewport";
 import { computeAutoLayout } from "../workflowLayout";
 import { activityDragDataType, pointerDragThreshold } from "../workflow-editor/constants";
 import {
@@ -124,6 +125,50 @@ export interface GraphCanvasInteractionsParams {
 }
 
 /**
+ * Named so library declaration emit can reference `@xyflow/react` types instead of inferring a
+ * non-portable `@xyflow/system` path (TS2742).
+ */
+export interface GraphCanvasInteractionsResult {
+  accessibleNodes: Node<WorkflowNodeData>[];
+  accessibleEdges: WorkflowEdge[];
+  canvasRef: React.RefObject<HTMLDivElement | null>;
+  reactFlowInstance: ReactFlowInstance<Node<WorkflowNodeData>, WorkflowEdge> | null;
+  setReactFlowInstance: React.Dispatch<React.SetStateAction<ReactFlowInstance<Node<WorkflowNodeData>, WorkflowEdge> | null>>;
+  onMoveEnd: OnMove;
+  canCreateActivityFromPort: boolean;
+  connectMenu: ConnectMenuState | null;
+  setConnectMenu: React.Dispatch<React.SetStateAction<ConnectMenuState | null>>;
+  edgeActions: WorkflowEdgeActions;
+  queueCanvasNodeFocus(nodeId: string): void;
+  stampCanvasNode: GraphCanvasStamp;
+  onNodesChange(changes: NodeChange<Node<WorkflowNodeData>>[]): void;
+  onEdgesChange(changes: EdgeChange<WorkflowEdge>[]): void;
+  onNodesDelete(deletedNodes: Node<WorkflowNodeData>[]): void;
+  onEdgesDelete(deletedEdges: WorkflowEdge[]): void;
+  isValidConnection(connection: Connection | Edge): boolean;
+  onConnect(connection: Connection): void;
+  onConnectStart: OnConnectStart;
+  onConnectEnd: OnConnectEnd;
+  onReconnect: OnReconnect<WorkflowEdge>;
+  commitLayout: OnNodeDrag<Node<WorkflowNodeData>>;
+  canAutoLayout: boolean;
+  autoLayout(): void;
+  onCanvasDragOver(event: React.DragEvent): void;
+  onCanvasDragLeave(event: React.DragEvent): void;
+  onCanvasDrop(event: React.DragEvent): void;
+  openEmptyConnectMenu(anchor?: { clientX: number; clientY: number }): void;
+  openAddStepMenu(anchor: { clientX: number; clientY: number }, source?: { nodeId: string; handleId: string }): void;
+  openSequenceInsertMenu(index: number, anchor: { clientX: number; clientY: number }): void;
+  insertSequenceActivity(activity: ActivityCatalogItem, index: number): void;
+  moveSequenceActivity(nodeId: string, boundary: number): void;
+  onConnectMenuPick(activity: ActivityCatalogItem): void;
+  onPaletteClick(activity: ActivityCatalogItem): void;
+  onPaletteDragStart(event: React.DragEvent<HTMLButtonElement>, activity: ActivityCatalogItem): void;
+  onPaletteDragEnd(event: React.DragEvent<HTMLButtonElement>, activity: ActivityCatalogItem): void;
+  onPalettePointerDown(event: React.PointerEvent<HTMLButtonElement>, activity: ActivityCatalogItem): void;
+}
+
+/**
  * Every canvas interaction that is a pure function of (nodes, edges, slot mode) and a commit seam:
  * palette drag/drop routing, edge splicing, the connect menu, connect/reconnect, deletes, auto-layout,
  * viewport persistence, and canvas focus management.
@@ -150,7 +195,7 @@ export function useGraphCanvasInteractions({
   resolveRemovedActivityNodeIds,
   onStatus,
   onActivityPlaced
-}: GraphCanvasInteractionsParams) {
+}: GraphCanvasInteractionsParams): GraphCanvasInteractionsResult {
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance<Node<WorkflowNodeData>, WorkflowEdge> | null>(null);
   const [connectMenu, setConnectMenu] = useState<ConnectMenuState | null>(null);
   const [highlightedEdgeId, setHighlightedEdgeId] = useState<string | null>(null);
@@ -611,7 +656,7 @@ export function useGraphCanvasInteractions({
     });
     setNodes(nextNodes);
     commitCanvas(nextNodes, edges);
-    window.requestAnimationFrame(() => reactFlowInstance?.fitView({ padding: 0.2 }));
+    window.requestAnimationFrame(() => reactFlowInstance?.fitView(graphFitViewOptions));
     onStatus?.("Rearranged the canvas.");
   }, [commitCanvas, edges, isUnsupported, mode, nodes, onStatus, reactFlowInstance, setNodes]);
 

@@ -58,6 +58,7 @@
       "Essentials/src/Expressions/JavaScript/Jint/Elsa.Expressions.JavaScript.Jint.csproj",
       "Essentials/src/Expressions/JavaScript/Rendering/Core/Elsa.Expressions.JavaScript.Rendering.Core.csproj",
       "Essentials/src/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering/Elsa.Expressions.JavaScript.Rendering.csproj",
+      "Essentials/src/Expressions/Liquid/Elsa.Expressions.Liquid.csproj",
       "Essentials/src/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj",
       "Essentials/src/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj",
       "Essentials/src/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity.csproj",
@@ -147,7 +148,12 @@
       "Extensions/Etl/src/Workflows/Design/Elsa.Etl.Workflows.Design.csproj",
       "Extensions/Etl/src/Workflows/Runtime/Elsa.Etl.Workflows.Runtime.csproj",
       "Extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj",
-      "samples/Elsa.Samples.Compensation/Elsa.Samples.Compensation.csproj"
+      "Extensions/Rules/src/Core/Elsa.Rules.Core.csproj",
+      "Extensions/Rules/src/Persistence/Core/Elsa.Rules.Persistence.Core.csproj",
+      "Extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj",
+      "Extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj",
+      "Extensions/Rules/src/Workflows/Design/Elsa.Rules.Workflows.Design.csproj",
+      "Extensions/Rules/src/Workflows/Runtime/Elsa.Rules.Workflows.Runtime.csproj"
     ]
   }
 }

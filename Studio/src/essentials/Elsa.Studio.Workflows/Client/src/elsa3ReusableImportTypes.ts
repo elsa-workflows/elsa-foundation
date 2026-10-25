@@ -110,6 +110,30 @@ export interface Elsa3ReusableImportSourceReceipt {
   activityVersionNavigationIdentity?: string | null;
 }
 
+export type Elsa3ReusableImportPublicationStatus =
+  | "Published"
+  | "AlreadyPublished"
+  | "Refused"
+  | "NotPublishedDependency"
+  | "NotPublished"
+  | string
+  | number;
+
+export interface Elsa3ReusableImportPublicationDiagnostic {
+  message: string;
+  remediation?: string | null;
+  code?: string | null;
+}
+
+export interface Elsa3ReusableImportPublication {
+  activityDefinitionVersionId: string;
+  sourceVersionId: string;
+  status: Elsa3ReusableImportPublicationStatus;
+  errorCode?: string | null;
+  diagnostics?: Elsa3ReusableImportPublicationDiagnostic[] | null;
+  blockedBy?: string | null;
+}
+
 export interface Elsa3ReusableImportReceipt {
   receiptId: string;
   collectionHandle: string;
@@ -120,4 +144,6 @@ export interface Elsa3ReusableImportReceipt {
   status: "Applied" | "AlreadyImported" | string | number;
   completedAt: string;
   sources: Elsa3ReusableImportSourceReceipt[];
+  publications?: Elsa3ReusableImportPublication[] | null;
+  warnings?: Elsa3MigrationDiagnostic[] | null;
 }

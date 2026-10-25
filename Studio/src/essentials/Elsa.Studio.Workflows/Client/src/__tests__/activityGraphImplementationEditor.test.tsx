@@ -13,6 +13,7 @@ import {
   reconcileGraphLayout
 } from "../ActivityGraphImplementationEditor";
 import { inputReferenceContribution } from "../inputReferenceContribution";
+import { variableReferenceContribution } from "../variableReferenceContribution";
 import { flowchartStructureKind } from "../flowchartStartNode";
 import { bpmnStructureKind } from "../bpmn/bpmnTypes";
 import { sequenceStructureKind } from "../workflowAdapter";
@@ -253,6 +254,43 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
     await vi.waitFor(() => {
       const picker = rendered.container.querySelector<HTMLSelectElement>("select[aria-label='Input reference']");
       expect([...picker!.options].map(option => option.textContent)).toContainEqual(expect.stringContaining("Customer ID"));
+    });
+  });
+
+  // Inside a graph body the root scope is the graph, so graph variables are offered as workflow-scope
+  // variables; placement remaps them to the placed graph. The earlier "activity-graph" scope had no runtime frame.
+  it("offers graph variables to body nodes under the workflow root scope", async () => {
+    expressionDescriptors = [{ type: "Variable", displayName: "Variable", editingMode: "reference" }];
+    catalogItems = [flowchartCatalogItem(), inputLeafCatalogItem("Variable")];
+    const value = flowchartImplementationValue(flowchartStructureKind, [{
+      nodeId: "write-line-1",
+      activityVersionId: "write-line-v1",
+      inputs: [],
+      outputs: [],
+      structure: null
+    }]);
+    const rendered = renderDesigner({
+      value: {
+        ...value,
+        payload: {
+          ...value.payload,
+          variables: [{
+            referenceKey: "running-total",
+            name: "RunningTotal",
+            type: { alias: "String", collectionKind: "Single" },
+            storageDriverKey: "elsa.json"
+          }]
+        }
+      },
+      expressionEditors: [variableReferenceContribution]
+    });
+
+    click(rendered.container.querySelector("[data-graph-node-id='write-line-1']")!);
+
+    await vi.waitFor(() => {
+      const picker = rendered.container.querySelector<HTMLSelectElement>("select[aria-label='Variable reference']");
+      const option = [...picker!.options].find(candidate => candidate.textContent?.includes("RunningTotal"));
+      expect(option?.value.startsWith("workflow")).toBe(true);
     });
   });
 
@@ -930,7 +968,7 @@ function leafCatalogItem() {
   };
 }
 
-function inputLeafCatalogItem() {
+function inputLeafCatalogItem(defaultSyntax = "Input") {
   return {
     ...leafCatalogItem(),
     inputs: [{
@@ -940,7 +978,7 @@ function inputLeafCatalogItem() {
       description: "Message to write.",
       isBrowsable: true,
       isWrapped: true,
-      defaultSyntax: "Input"
+      defaultSyntax
     }]
   };
 }

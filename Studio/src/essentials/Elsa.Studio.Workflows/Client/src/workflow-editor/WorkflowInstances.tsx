@@ -68,8 +68,9 @@ import {
 } from "./editorHelpers";
 import { runDetailMinInspectorWidth, useRunDetailLayout, type RunDetailLayoutMode } from "./useRunDetailLayout";
 import { decorateWorkflowCanvasElements } from "./workflowAccessibility";
-import { AdvancedSection, CopyableIdentifier } from "@elsa-workflows/studio-ui";
+import { AdvancedSection } from "@elsa-workflows/studio-ui";
 import { RunWorkflowPicker } from "./RunWorkflowPicker";
+import { WorkflowListIdentity } from "./WorkflowListIdentity";
 
 type WorkflowRunFlowInstance = ReactFlowInstance<Node<WorkflowNodeData>, Edge<WorkflowEdgeData>>;
 
@@ -127,6 +128,7 @@ export function WorkflowInstances({ context, navigate }: {
   const refreshButton = useRef<HTMLButtonElement>(null);
   const [deleteFeedback, setDeleteFeedback] = useState<{ message: string; failures: Array<{ id: string; message: string }> } | null>(null);
   const requestSequence = useRef(0);
+  const definitionNamesAbort = useRef<AbortController | null>(null);
   const deletionSequence = useRef(0);
   const deletionController = useRef<AbortController | null>(null);
   const deletionScope = useRef({ context, location });
@@ -172,6 +174,7 @@ export function WorkflowInstances({ context, navigate }: {
 
   const load = useCallback(async () => {
     const requestId = ++requestSequence.current;
+    definitionNamesAbort.current?.abort();
     setState("loading");
     setError("");
     try {
@@ -214,10 +217,13 @@ export function WorkflowInstances({ context, navigate }: {
       setSelectedRunIds(current => new Set([...current].filter(id => visibleIds.has(id))));
       setPage(nextPage);
       setState("ready");
+      definitionNamesAbort.current?.abort();
+      const namesAbort = new AbortController();
+      definitionNamesAbort.current = namesAbort;
       void loadDefinitionDisplayNames(context, [
         ...nextPage.items.map(item => item.definitionId),
         ...(filters.definitionId ? [filters.definitionId] : [])
-      ]).then(names => {
+      ], namesAbort.signal).then(names => {
         if (requestId !== requestSequence.current) return;
         setDefinitionNames(names);
       });
@@ -233,6 +239,7 @@ export function WorkflowInstances({ context, navigate }: {
     void load();
     return () => {
       requestSequence.current += 1;
+      definitionNamesAbort.current?.abort();
     };
   }, [load]);
 
@@ -514,6 +521,11 @@ export function WorkflowInstances({ context, navigate }: {
           </div>
           {instances.map(instance => {
             const workflowName = definitionNames.get(instance.definitionId) ?? instance.definitionId;
+            const secondaryIdentifiers = [
+              { label: "Artifact ID", value: instance.artifactId },
+              { label: "Definition ID", value: instance.definitionId },
+              { label: "Definition version ID", value: instance.definitionVersionId }
+            ].filter(identifier => identifier.value);
             return (
             <div
               className="wf-grid-row"
@@ -551,12 +563,15 @@ export function WorkflowInstances({ context, navigate }: {
                   >
                     <strong>{workflowName}</strong>
                   </button>
-                  <div className="wf-run-identifiers" aria-label={`Workflow run identifiers for ${instance.workflowExecutionId}`}>
-                    <CopyableIdentifier label="Execution ID" value={instance.workflowExecutionId} />
-                    <CopyableIdentifier label="Artifact ID" value={instance.artifactId} />
-                    <CopyableIdentifier label="Definition ID" value={instance.definitionId} />
-                    <CopyableIdentifier label="Definition version ID" value={instance.definitionVersionId} />
-                  </div>
+                  <WorkflowListIdentity
+                    primaryLabel="Execution ID"
+                    primaryValue={instance.workflowExecutionId}
+                    secondaryIdentifiers={secondaryIdentifiers}
+                    primaryClassName="wf-run-primary-identifier"
+                    secondaryClassName="wf-run-secondary-identifiers"
+                    detailsClassName="wf-run-identifiers"
+                    detailsAriaLabel={`Workflow run identifiers for ${instance.workflowExecutionId}`}
+                  />
                 </div>
               </div>
               <span role="cell">{formatRunKind(instance.runKind)}</span>
@@ -568,9 +583,10 @@ export function WorkflowInstances({ context, navigate }: {
               </span>
               <span role="cell">{formatDate(instance.startedAt ?? instance.createdAt)}</span>
               <span role="cell">{formatDuration(instance.startedAt ?? instance.createdAt, instance.completedAt ?? instance.updatedAt)}</span>
-              {canDeleteRuns ? <span role="cell" className="wf-run-row-actions">
+              {canDeleteRuns ? <span role="cell" className="wf-run-row-actions wf-row-actions">
                 <button
                   type="button"
+                  className="danger"
                   disabled={deletingRuns}
                   aria-label={`Delete workflow run ${instance.workflowExecutionId}`}
                   onClick={() => void deleteRuns([instance.workflowExecutionId])}
@@ -843,6 +859,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
   const appliedInitialActivityExecutionId = useRef<string | null>(null);
   const incidentNavigationRequest = useRef(0);
   const loadGeneration = useRef(0);
+  const definitionNameAbort = useRef<AbortController | null>(null);
   const incidentActivityLookupSequence = useRef(0);
   const latestIncidentActivityLookupById = useRef(new Map<string, number>());
   const associationActivities = combineActivityExecutions(data?.details.activities ?? [], data?.incidentActivityExecutions ?? []);
@@ -1037,7 +1054,10 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
       if (initialEvidence) {
         requestAnimationFrame(() => requestAnimationFrame(() => focusSelectedCanvasActivity(initialEvidence)));
       }
-      void loadDefinitionDisplayNames(context, [details.instance.definitionId]).then(
+      definitionNameAbort.current?.abort();
+      const namesAbort = new AbortController();
+      definitionNameAbort.current = namesAbort;
+      void loadDefinitionDisplayNames(context, [details.instance.definitionId], namesAbort.signal).then(
         definitionNames => {
           if (generation !== loadGeneration.current) return;
           const definitionName = definitionNames.get(details.instance.definitionId);
@@ -1056,6 +1076,10 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
 
   useEffect(() => {
     void load();
+    return () => {
+      loadGeneration.current += 1;
+      definitionNameAbort.current?.abort();
+    };
   }, [load]);
 
   const goBack = () => {

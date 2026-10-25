@@ -19,6 +19,7 @@ using Elsa.Workflows.Runtime.Services.Dispatch;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.Extensions.Time.Testing;
+using Elsa.Workflows.Runtime.Services.Values;
 using Xunit;
 using WorkflowExecutableHasher = Elsa.Workflows.Publishing.Services.WorkflowExecutableHasher;
 
@@ -205,7 +206,8 @@ public sealed class ActivityDraftTestRunServiceTests
                 sourceReferences,
                 new Sha256ActivityPlacementHasher(),
                 new DefaultActivityStructureService([]),
-                new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create())),
+                new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create()),
+                new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]))),
             new WorkflowExecutableHasher(),
             new InMemoryWorkflowExecutableStore(),
             dispatcher,

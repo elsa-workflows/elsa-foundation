@@ -9,6 +9,7 @@ import {
 } from "@elsa-workflows/studio-sdk";
 import { homeLayoutPermissions } from "./hostControl";
 import { useHomeDialogFocus } from "./useHomeDialogFocus";
+import { HomeTaskGroup } from "./HomeTaskGroup";
 import {
   HomeLayoutStore,
   createHomeLayoutScope,
@@ -112,7 +113,13 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
     button?.focus();
   }, [moveFocus]);
 
-  if (!document) return <section className="dashboard-page home-page"><div role="status">Loading Home…</div></section>;
+  if (!document) return <section className="dashboard-page home-page">
+    <header className="dashboard-page-header">
+      <div><h2>Home</h2><p>What to know and do next.</p></div>
+    </header>
+    <HomeTaskGroup api={api} />
+    <div role="status">Loading Home layout…</div>
+  </section>;
 
   const known = new Map(available.map(widget => [widget.id, widget]));
   const update = (mutate: (value: HomeLayoutDocument["value"]) => HomeLayoutDocument["value"]) => {
@@ -202,6 +209,7 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
           ) : <button type="button" onClick={() => setEditing(true)}>Edit home</button>}
         </div>
       </header>
+      <HomeTaskGroup api={api} />
       <div className="visually-hidden" aria-live="polite">{liveMessage}</div>
       {preferenceError ? <div role="status">{preferenceError}</div> : null}
       <div className="dashboard-grid">

@@ -148,6 +148,45 @@ public sealed class CausalActivityResultResolverTests
         Assert.Equal(ProjectionKey, resolution.ProjectionKey);
     }
 
+    [Fact]
+    public void Resolve_InsideAClosedScope_FindsTheBodyProducerWhateverItsRuntimeScope()
+    {
+        // A placed body node opens its own execution scope, so its runtime scope never equals the declared
+        // one; producer and consumer sharing the nearest closed boundary is what identifies it.
+        var boundary = ClosedBoundary("boundary-1");
+        var producer = Completed("producer", ProducerNodeId, 2, "scope:producer-own") with { ParentActivityExecutionId = boundary.InvocationId };
+        var consumer = Running("consumer", "node-consumer", 3, "scope:consumer-own", schedulingInvocationId: producer.InvocationId) with { ParentActivityExecutionId = boundary.InvocationId };
+
+        var resolution = _resolver.Resolve(Reference(), consumer, [boundary, producer, consumer]);
+
+        Assert.NotNull(resolution);
+        Assert.Equal(producer.InvocationId, resolution.ProducerInvocation.InvocationId);
+    }
+
+    [Fact]
+    public void Resolve_DoesNotCrossIntoAnotherClosedScope()
+    {
+        var first = ClosedBoundary("boundary-1");
+        var second = ClosedBoundary("boundary-2");
+        var producer = Completed("producer", ProducerNodeId, 2, RootScopeId) with { ParentActivityExecutionId = first.InvocationId };
+        var consumer = Running("consumer", "node-consumer", 3, RootScopeId, schedulingInvocationId: producer.InvocationId) with { ParentActivityExecutionId = second.InvocationId };
+
+        var exception = Assert.Throws<CausalActivityResultResolutionException>(
+            () => _resolver.Resolve(Reference(), consumer, [first, second, producer, consumer]));
+
+        Assert.Equal(CausalActivityResultResolutionFailureReason.Unavailable, exception.Reason);
+    }
+
+    private static ActivityExecutionState ClosedBoundary(string invocationId) =>
+        Running(invocationId, $"node-{invocationId}", 1, RootScopeId) with
+        {
+            Metadata = new Dictionary<string, string>
+            {
+                [Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.ActivityExecutionScope] =
+                    Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.ActivityExecutionScopeClosed
+            }
+        };
+
     private static RuntimeActivityResultReference Reference(bool isOptional = false) =>
         new(ProducerNodeId, ProjectionKey, RootScopeId, isOptional);
 

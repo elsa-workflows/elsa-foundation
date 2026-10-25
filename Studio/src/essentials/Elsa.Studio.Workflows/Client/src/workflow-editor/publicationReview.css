@@ -275,11 +275,19 @@
   padding: 12px 20px;
 }
 
-.wf-publication-footer .wf-primary-action {
+.wf-publication-footer.wf-dialog-actions .wf-primary-action,
+.wf-publication-footer.wf-dialog-actions button[type="submit"] {
   border-color: color-mix(in srgb, var(--wf-accent) 44%, var(--wf-border));
   background: var(--wf-accent-soft);
-  color: var(--wf-accent);
+  /* --wf-accent on this wash is 4.46:1 in Classic light. Mix toward --wf-text so the label stays AA in light and dark. */
+  color: color-mix(in srgb, var(--wf-accent) 70%, var(--wf-text));
   font-weight: 700;
+}
+
+/* Meridian Dim's 70% accent mix is 4.01:1 on the wash. 40% accent is 6.25:1. */
+html[data-theme="meridian"][data-theme-appearance="dim"] .wf-publication-footer.wf-dialog-actions .wf-primary-action,
+html[data-theme="meridian"][data-theme-appearance="dim"] .wf-publication-footer.wf-dialog-actions button[type="submit"] {
+  color: color-mix(in srgb, var(--wf-accent) 40%, var(--wf-text));
 }
 
 .wf-publication-risks,
@@ -300,6 +308,10 @@
 .wf-publication-risks ul {
   margin: 6px 0 0;
   padding-left: 20px;
+}
+
+.wf-publication-risks li {
+  overflow-wrap: anywhere;
 }
 
 /* Spec 261 FR-515: warnings are listed, in the warning tone, and never block publishing. */

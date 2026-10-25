@@ -1,4 +1,5 @@
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Primitives.Models;
 
 namespace Elsa.Workflows.Design.Core.Services;
 
@@ -32,7 +33,7 @@ public sealed class ScopedVariableAuthoringContract(
                 visible.Variable.ReferenceKey,
                 visible.Variable.Name,
                 visible.ScopeId,
-                visible.IsWorkflowScope))
+                visible.IsWorkflowScope) { Type = visible.Variable.Type })
             .ToArray();
     }
 
@@ -54,4 +55,7 @@ public sealed class ScopedVariableAuthoringContract(
 /// <summary>
 /// A variable visible from a selected activity, in serializable form for the authoring picker.
 /// </summary>
-public sealed record VisibleVariableView(string ReferenceKey, string Name, string ScopeId, bool IsWorkflowScope);
+public sealed record VisibleVariableView(string ReferenceKey, string Name, string ScopeId, bool IsWorkflowScope)
+{
+    public TypeReference? Type { get; init; }
+}

@@ -74,6 +74,27 @@ test("success and retained-promotion recovery keep their actions in the fixed fo
 });
 
 
+test("shows a conflict descriptor as the primary label and the raw key as muted detail", async ({ page }) => {
+  await page.goto("/?mode=publication-review&outcome=conflict");
+  const dialog = page.getByRole("dialog", { name: "Publish workflow" });
+  const alert = dialog.getByRole("alert");
+
+  await expect(alert).toContainText("These triggers are already in use");
+  await expect(alert).toContainText("GET /orders/{id}");
+  await expect(alert.locator(".wf-publication-selection")).toHaveText(
+    "httpendpoint:sha256:4191f265b8b2d2152d4056ed3d616d32f7c2953e7ae41c4f8b184244b830e4f7");
+  await expect(dialog.getByRole("button", { name: "Publish" })).toBeDisabled();
+});
+
+test("falls back to the raw conflict key when no descriptor is present", async ({ page }) => {
+  await page.goto("/?mode=publication-review&outcome=conflict&descriptor=0");
+  const alert = page.getByRole("dialog", { name: "Publish workflow" }).getByRole("alert");
+
+  await expect(alert).toContainText("httpendpoint:sha256:4191f265b8b2d2152d4056ed3d616d32f7c2953e7ae41c4f8b184244b830e4f7");
+  await expect(alert.locator(".wf-publication-selection")).toHaveCount(0);
+  await expect(alert).not.toContainText("GET /orders/{id}");
+});
+
 test("shows trigger counts while keeping exact identifiers in an explicit technical disclosure", async ({ page }) => {
   await page.goto("/?mode=publication-review&theme=dark");
   const dialog = page.getByRole("dialog", { name: "Publish workflow" });
@@ -111,21 +132,23 @@ test("lists validation warnings without blocking Publish", async ({ page }) => {
 
 for (const theme of ["light", "dark"]) {
   for (const width of [390, 1200]) {
-    test(`the warnings fit ${width}px in ${theme} with no serious accessibility violations`, async ({ page }) => {
+    test(`the review dialog fits ${width}px in ${theme} with no serious accessibility violations`, async ({ page }) => {
       await page.setViewportSize({ width, height: 800 });
       await page.goto(`/?mode=publication-review&warnings=1&theme=${theme}`);
-      const warnings = page.getByRole("dialog", { name: "Publish workflow" }).getByRole("region", { name: "Warnings" });
+      const dialog = page.getByRole("dialog", { name: "Publish workflow" });
+      const warnings = dialog.getByRole("region", { name: "Warnings" });
       await expect(warnings).toBeVisible();
+      await expect(dialog.locator(".wf-publication-footer").getByRole("button", { name: "Publish" })).toBeVisible();
 
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
       const box = await warnings.boundingBox();
       expect(box!.x + box!.width).toBeLessThanOrEqual(width);
-      expect(await seriousViolations(page, ".wf-publication-warnings")).toEqual([]);
+      expect(await seriousViolations(page, ".wf-publication-review")).toEqual([]);
     });
   }
 }
 
-// Checks the new warnings section. The rest of this fixture page predates spec 261 and is not part of this check.
+// The fixture page chrome predates spec 261. Scope the dialog so the footer and contrast are included.
 async function seriousViolations(page: Page, selector: string) {
   await page.addScriptTag({ content: axe.source });
   return page.evaluate(async scope => {
