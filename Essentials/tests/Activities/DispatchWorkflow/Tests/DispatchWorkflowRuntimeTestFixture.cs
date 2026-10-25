@@ -66,7 +66,9 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         int maxNestingDepth = DispatchWorkflowOptions.DefaultMaxNestingDepth,
         bool failDispatchCommit = false,
         Action<PersistenceModeOptions>? persistenceModes = null,
-        bool replaySafeChild = false)
+        bool replaySafeChild = false,
+        bool authoredFaultChild = false,
+        Action<IServiceCollection>? configureServices = null)
     {
         var services = new ServiceCollection();
         var timeProvider = new FakeTimeProvider(Now);
@@ -98,12 +100,14 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                 serviceProvider.GetRequiredService<CheckpointRecorder>(),
                 failDispatchCommit)));
         services.AddPersistenceModes(persistenceModes ?? (options => options.Mode = PersistenceMode.Durable));
+        configureServices?.Invoke(services);
 
         RegisterActivityTypes(typeRegistry);
         var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         var fixture = new DispatchWorkflowRuntimeTestFixture(
             provider,
             timeProvider,
+            authoredFaultChild ? typeof(AuthoredFaultChildProbeActivity) :
             replaySafeChild ? typeof(ReplaySafeChildProbeActivity) : typeof(ChildProbeActivity));
         await fixture.SeedChildAsync();
         return fixture;
@@ -683,6 +687,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             typeof(WorkflowDispatchParentResumePayload),
             typeof(DispatchWorkflowResult),
             typeof(ChildProbeActivity),
+            typeof(AuthoredFaultChildProbeActivity),
             typeof(ControlParentActivity),
             typeof(ReplaySafeChildProbeActivity),
             typeof(ActivityUnit),
@@ -719,6 +724,8 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
 
     private class ChildProbeActivity(ChildExecutionProbe probe, IRuntimeWorkflowControlBoundary boundary, IWorkflowDispatchStore dispatches) : Activity<ActivityUnit>
     {
+        protected IRuntimeWorkflowControlBoundary ControlBoundary => boundary;
+
         [ActivityInput]
         [Required]
         public string Message { get; set; } = null!;
@@ -755,6 +762,21 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
 
     [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
     private sealed class ReplaySafeChildProbeActivity(ChildExecutionProbe probe, IRuntimeWorkflowControlBoundary boundary, IWorkflowDispatchStore dispatches) : ChildProbeActivity(probe, boundary, dispatches);
+
+    private sealed class AuthoredFaultChildProbeActivity(ChildExecutionProbe probe, IRuntimeWorkflowControlBoundary boundary,
+        IWorkflowDispatchStore dispatches) : ChildProbeActivity(probe, boundary, dispatches), IRuntimeStructuralActivity
+    {
+        public async ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
+        {
+            var target = await ControlBoundary.ResolveAsync(context.WorkflowExecutionId, context.ActivityExecutionState.InvocationId,
+                context.CancellationToken) ?? throw new InvalidOperationException("Expected an admitted control boundary.");
+            var batch = new RuntimeChildControlBatch(1, target.ConsumerKey, target.ConsumerVersion, context.WorkflowExecutionId,
+                context.ActivityExecutionState.InvocationId, context.SchedulerWorkItem.WorkItemId, 0, true,
+                [new("before-error"), new("alongside-error")], "authored-error");
+            return RuntimeStructuralContinuation.Faulted(new ActivityFault("original-runtime-code", "Original runtime failure."))
+                .WithControl(batch);
+        }
+    }
 }
 
 internal sealed record ParentDispatchRun(

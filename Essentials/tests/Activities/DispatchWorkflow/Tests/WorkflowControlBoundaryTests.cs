@@ -195,7 +195,7 @@ public sealed class WorkflowControlBoundaryTests
             await fixture.Boundary.ResolveAsync(fixture.Identity.ChildWorkflowExecutionId, "arbitrary-root"));
     }
 
-    private sealed class Fixture(ServiceProvider services, WorkflowDispatchIdentity identity) : IAsyncDisposable
+    internal sealed class Fixture(ServiceProvider services, WorkflowDispatchIdentity identity) : IAsyncDisposable
     {
         public ServiceProvider Services => services;
         public WorkflowDispatchIdentity Identity { get; } = identity;
@@ -282,7 +282,7 @@ public sealed class WorkflowControlBoundaryTests
                 identity.ChildWorkflowExecutionId, childPin, source,
                 scenario == "fire-and-forget" ? WorkflowDispatchMode.FireAndForget : WorkflowDispatchMode.WaitForCompletion,
                 WorkflowDispatchStatus.Pending, null, "tenant", partition, WorkflowRunKind.TestRun, childAuthority, [], now, now,
-                scenario == "missing-record-capability" ? new Dictionary<string, string>() : capability, 1, scope);
+                scenario is "missing-record-capability" or "legacy" or "parent-id-only" ? new Dictionary<string, string>() : capability, 1, scope);
             await dispatches.SaveAsync(record);
             if (scenario == "cancelled-before-admission")
                 await dispatches.SaveAsync(WorkflowDispatchLifecycle.CancelBeforeAdmission(record, now));
@@ -294,6 +294,8 @@ public sealed class WorkflowControlBoundaryTests
             }
             var services = new ServiceCollection();
             services.AddLogging();
+            services.AddSingleton<IWorkflowOutputSource, NoOutputs>();
+            services.AddSingleton<IPostCommitOutboxLookupStore, NoOutboxLookup>();
             services.AddSingleton<IWorkflowExecutionStateStore>(workflows);
             services.AddSingleton<IActivityExecutionStateStore>(activities);
             services.AddSingleton<IWorkflowExecutableStore>(executables);
@@ -322,6 +324,21 @@ public sealed class WorkflowControlBoundaryTests
         public ReplacementBoundary() { }
         public ValueTask<RuntimeChildControlTarget?> ResolveAsync(string workflowExecutionId, string rootActivityExecutionId,
             CancellationToken cancellationToken = default) => ValueTask.FromResult<RuntimeChildControlTarget?>(null);
+    }
+
+    private sealed class NoOutputs : IWorkflowOutputSource
+    {
+        public NoOutputs() { }
+        public ValueTask<IReadOnlyCollection<RuntimeWorkflowOutput>> ReadAsync(string workflowExecutionId,
+            IReadOnlyCollection<RuntimeStateChange<DurableValueState>>? pendingDurableValueChanges = null,
+            CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<RuntimeWorkflowOutput>>([]);
+    }
+
+    private sealed class NoOutboxLookup : IPostCommitOutboxLookupStore
+    {
+        public NoOutboxLookup() { }
+        public ValueTask<RuntimePostCommitOutboxItem?> FindAsync(string outboxItemId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<RuntimePostCommitOutboxItem?>(null);
     }
 
     private sealed class ThrowingDispatchStore(Exception cause) : IWorkflowDispatchStore

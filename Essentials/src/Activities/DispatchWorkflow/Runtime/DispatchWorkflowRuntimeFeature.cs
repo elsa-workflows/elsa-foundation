@@ -86,6 +86,8 @@ public class DispatchWorkflowRuntimeFeature : IShellFeature
         services.TryAddEnumerable(
             ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, WorkflowDispatchCompletionEnricher>());
         services.TryAddEnumerable(
+            ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, WorkflowControlProducerEnricher>());
+        services.TryAddEnumerable(
             ServiceDescriptor.Scoped<IPostCommitFailureProjector, WorkflowDispatchDeliveryFailureProjector>());
         services.TryAddSingleton<WorkflowDispatchStagingBuffer>();
         services.TryAddSingleton<IWorkflowDispatchStager>(

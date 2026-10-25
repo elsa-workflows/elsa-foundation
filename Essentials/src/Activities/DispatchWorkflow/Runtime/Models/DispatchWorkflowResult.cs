@@ -55,9 +55,11 @@ public sealed class DispatchWorkflowResult
 
         if (status is WorkflowDispatchStatus.Pending or WorkflowDispatchStatus.Started)
             throw new ArgumentOutOfRangeException(nameof(status), status, "A DispatchWorkflow result requires a terminal child status.");
+        // Root authored control can commit before a later workflow cancellation wins. Keep both facts;
+        // start-delivery failure has no admitted root and therefore cannot carry root control.
         if (control is not null && (!control.Batch.IsTerminal ||
             !StringComparer.Ordinal.Equals(control.Batch.ChildWorkflowExecutionId, childWorkflowExecutionId.Trim()) ||
-            control.Batch.AuthoredFailureCode is not null && status != WorkflowDispatchStatus.Faulted))
+            status == WorkflowDispatchStatus.DispatchFailed))
             throw new ArgumentException("DispatchWorkflow control must match the exact terminal child result.", nameof(control));
 
         var outputSnapshot = (outputs ?? []).ToArray();

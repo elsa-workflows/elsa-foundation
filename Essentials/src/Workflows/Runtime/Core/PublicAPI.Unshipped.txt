@@ -8954,6 +8954,7 @@ const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.ChildControlCons
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.ChildControlConsumerVersion = "runtime.childControlConsumerVersion" -> string!
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.ChildControlDispatchId = "runtime.childControlDispatchId" -> string!
 Elsa.Workflows.Runtime.Core.Exceptions.WorkflowControlBoundaryException
-Elsa.Workflows.Runtime.Core.Exceptions.WorkflowControlBoundaryException.RootActivityExecutionId.get -> string!
-Elsa.Workflows.Runtime.Core.Exceptions.WorkflowControlBoundaryException.WorkflowControlBoundaryException(string! workflowExecutionId, string! rootActivityExecutionId, System.Exception! innerException) -> void
+Elsa.Workflows.Runtime.Core.Exceptions.WorkflowControlBoundaryException.RootActivityExecutionId.get -> string?
+Elsa.Workflows.Runtime.Core.Exceptions.WorkflowControlBoundaryException.WorkflowControlBoundaryException(string! workflowExecutionId, string? rootActivityExecutionId, System.Exception! innerException) -> void
 Elsa.Workflows.Runtime.Core.Exceptions.WorkflowControlBoundaryException.WorkflowExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointStateChangeSet.WithActivityExecutions(System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.RuntimeStateChange<Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState!>!>! activityExecutions) -> Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointStateChangeSet!

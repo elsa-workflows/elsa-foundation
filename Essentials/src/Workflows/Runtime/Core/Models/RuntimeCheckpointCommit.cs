@@ -193,6 +193,26 @@ public sealed class RuntimeCheckpointStateChangeSet
             AlterationJobTerminalChange,
             BackgroundActivityWork);
 
+    /// <summary>Returns a copy with the supplied activity projections, preserving every other atomic participant.</summary>
+    public RuntimeCheckpointStateChangeSet WithActivityExecutions(
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>> activityExecutions) =>
+        new(
+            WorkflowExecution,
+            Scheduler,
+            activityExecutions,
+            Bookmarks,
+            DurableValues,
+            Incidents,
+            Operational,
+            WorkflowDispatches,
+            ActivityExecutionInspections,
+            PostCommitOutbox,
+            ActivityScopeCleanups,
+            WorkflowDispatchCancellations,
+            ConsumedSchedulerWorkItems,
+            AlterationJobTerminalChange,
+            BackgroundActivityWork);
+
     /// <summary>Returns a copy with the supplied workflow-dispatch lifecycle changes.</summary>
     public RuntimeCheckpointStateChangeSet WithWorkflowDispatches(
         IReadOnlyCollection<RuntimeStateChange<WorkflowDispatchRecord>> workflowDispatches) =>

@@ -137,7 +137,7 @@ public sealed class ChildControlContractTests
         Assert.Throws<ArgumentException>(() => Batch(failure: "authored"));
         Assert.Throws<ArgumentException>(() => new DispatchWorkflowResult("different-child", WorkflowDispatchStatus.Completed,
             [], null, Transport(Batch(terminal: true))));
-        Assert.Throws<ArgumentException>(() => new DispatchWorkflowResult(Identity.ChildWorkflowExecutionId, WorkflowDispatchStatus.Completed,
+        Assert.Throws<ArgumentException>(() => new DispatchWorkflowResult(Identity.ChildWorkflowExecutionId, WorkflowDispatchStatus.DispatchFailed,
             [], null, Transport(Batch(terminal: true, failure: "authored"))));
         Assert.Throws<ArgumentException>(() => new DispatchWorkflowResult(Identity.ChildWorkflowExecutionId, WorkflowDispatchStatus.Completed,
             [], null, Transport(Batch())));
