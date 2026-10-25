@@ -85,6 +85,10 @@ public sealed record ActivityExecutionState(
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeChildControlTransport? ChildControl { get; init; }
 
+    /// <summary>Exact-call ordered acceptance; absent on ordinary and legacy invocations.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeChildControlInbox? ChildControlInbox { get; init; }
+
     public void EnsureValueFlowCompatible()
     {
         if (DocumentVersion != ActivityExecutionValueFlowDocumentVersions.Current)

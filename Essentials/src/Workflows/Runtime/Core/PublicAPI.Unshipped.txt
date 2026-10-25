@@ -8965,3 +8965,14 @@ Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.ProducedControlSourceC
 Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.ProducedControlSourceCommitId.init -> void
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeChildControlCompletion
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeChildControlCompletion.ChildControl.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTransport?
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlInbox
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlInbox.RuntimeChildControlInbox(int version, Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTarget! target, long nextOrdinal, bool isTerminalConsumed, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTransport!>? pending = null) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlInbox.Version.get -> int
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlInbox.Target.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTarget!
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlInbox.NextOrdinal.get -> long
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlInbox.IsTerminalConsumed.get -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlInbox.Pending.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTransport!>!
+const Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlInbox.CurrentVersion = 1 -> int
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTarget.MatchesAddress(Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTransport! transport) -> bool
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.ChildControlInbox.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlInbox?
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.ChildControlInbox.init -> void

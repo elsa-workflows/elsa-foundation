@@ -38,4 +38,18 @@ public sealed class RuntimeChildControlTarget
     public string RootActivityExecutionId { get; }
     public string ConsumerKey { get; }
     public int ConsumerVersion { get; }
+
+    /// <summary>Compares stream address data only; a match does not validate committed source authority.</summary>
+    public bool MatchesAddress(RuntimeChildControlTransport transport)
+    {
+        ArgumentNullException.ThrowIfNull(transport);
+        return transport.DispatchId == DispatchId && transport.ParentWorkflowExecutionId == ParentWorkflowExecutionId &&
+               transport.CallingActivityExecutionId == CallingActivityExecutionId &&
+               transport.ConsumerActivityExecutionId == ConsumerActivityExecutionId &&
+               WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(transport.ParentExecutable, ParentExecutable) &&
+               transport.Batch.ChildWorkflowExecutionId == ChildWorkflowExecutionId &&
+               transport.Batch.RootActivityExecutionId == RootActivityExecutionId &&
+               transport.Batch.ConsumerKey == ConsumerKey && transport.Batch.ConsumerVersion == ConsumerVersion;
+    }
+
 }

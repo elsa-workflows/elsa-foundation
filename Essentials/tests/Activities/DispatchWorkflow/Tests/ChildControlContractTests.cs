@@ -184,10 +184,12 @@ public sealed class ChildControlContractTests
         Assert.False(document.RootElement.TryGetProperty("producedControl", out _));
         Assert.False(document.RootElement.TryGetProperty("childControl", out _));
         Assert.False(document.RootElement.TryGetProperty("producedControlSourceCommitId", out _));
+        Assert.False(document.RootElement.TryGetProperty("childControlInbox", out _));
         var restored = JsonSerializer.Deserialize<ActivityExecutionState>(oldWire, Web)!;
         Assert.Null(restored.ProducedControl);
         Assert.Null(restored.ChildControl);
         Assert.Null(restored.ProducedControlSourceCommitId);
+        Assert.Null(restored.ChildControlInbox);
         var projected = state with { ProducedControl = Batch(terminal: true), ChildControl = Transport(Batch(terminal: true)) };
         var current = JsonSerializer.Deserialize<ActivityExecutionState>(JsonSerializer.Serialize(projected, Web), Web)!;
         Assert.Equal(3, current.ProducedControl!.Ordinal);
