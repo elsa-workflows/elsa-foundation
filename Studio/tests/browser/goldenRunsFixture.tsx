@@ -53,6 +53,13 @@ function createRuns(): WorkflowInstanceSummary[] {
   });
 }
 
+function runInspectionFacts(workflowExecutionId: string) {
+  if (workflowExecutionId === "run-13") return {};
+  if (workflowExecutionId === "run-01") return { persistenceMode: "Durable", inspectionGranularity: "activity-level" };
+  if (workflowExecutionId === "run-12") return { persistenceMode: "Balanced", inspectionGranularity: "boundary-level" };
+  return { persistenceMode: "Ephemeral", inspectionGranularity: "boundary-level" };
+}
+
 function createIncidents(instance: WorkflowInstanceSummary): IncidentStateSummary[] {
   const incidentCount = instance.incidentCount ?? 0;
   const activeIncidentCount = instance.activeIncidentCount ?? 0;
@@ -167,7 +174,7 @@ function Fixture() {
             const workflowExecutionId = decodeURIComponent(path.split("/").at(-1)!);
             const instance = runs.find(run => run.workflowExecutionId === workflowExecutionId);
             if (!instance) throw new Error(`Unknown fixture run ${workflowExecutionId}`);
-            return { instance, activities: [], incidents: createIncidents(instance) };
+            return { instance, activities: [], incidents: createIncidents(instance), ...runInspectionFacts(workflowExecutionId) };
           }
 
           if (path.startsWith("/runtime/workflows/executables/")) {

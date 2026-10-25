@@ -109,6 +109,10 @@ test("detail restores the filtered second page through Runs and browser Back", a
   await expect(page.locator(".wf-instance-canvas-shell h3")).toBeVisible();
   await page.getByRole("tab", { name: "Details" }).click();
   await expect(page.locator(".wf-instance-meta")).toContainText("corr-12");
+  await expect(page.locator(".wf-instance-meta")).toContainText("Checkpoint cadence");
+  await expect(page.locator(".wf-instance-meta")).toContainText("Balanced");
+  await expect(page.locator(".wf-instance-meta")).toContainText("Boundary-level");
+  await expect(page.getByRole("note")).toContainText("folded to the commit boundary");
   await page.getByRole("tab", { name: /^Issues/ }).click();
   await expect(page.locator(".wf-instance-incident")).toContainText("Fixture incident for run-12");
   await expect(page.locator(".wf-instance-incident")).toContainText("Non-blocking · Active");
@@ -135,6 +139,10 @@ test("detail restores the filtered second page through Runs and browser Back", a
   await page.getByRole("button", { name: "Clear filters" }).click();
   await inspectRun(page, "run-01").click();
   await expect(page.locator(".wf-instance-canvas-shell h3")).toBeVisible();
+  await page.getByRole("tab", { name: "Details" }).click();
+  await expect(page.locator(".wf-instance-meta")).toContainText("Durable");
+  await expect(page.locator(".wf-instance-meta")).toContainText("Activity-level");
+  await expect(page.getByRole("note")).toHaveCount(0);
   await page.getByRole("tab", { name: /^Issues/ }).click();
   await expect(page.locator(".wf-instance-incident")).toContainText("Fixture incident for run-01");
   await expect(page.locator(".wf-instance-incident")).toContainText("Needs intervention · Active");
@@ -145,6 +153,20 @@ test("detail restores the filtered second page through Runs and browser Back", a
   await page.getByRole("button", { name: "Runs", exact: true }).click();
   await expect(page).toHaveURL(/\/workflows\/instances(?:\?|$)/);
   await expect(page).not.toHaveURL(/returnTo=/);
+});
+
+test("older hosts omit checkpoint cadence and inspection without changing the details summary", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("elsa-studio-theme", "classic");
+    localStorage.setItem("elsa-studio-theme-mode", "light");
+  });
+  await page.goto("/golden-runs.html?directRun=run-13");
+  await expect(page.locator(".wf-instance-canvas-shell h3")).toBeVisible();
+  await page.getByRole("tab", { name: "Details" }).click();
+  await expect(page.locator(".wf-instance-meta")).toContainText("corr-13");
+  await expect(page.locator(".wf-instance-meta")).not.toContainText("Checkpoint cadence");
+  await expect(page.locator(".wf-instance-meta")).not.toContainText("Inspection");
+  await expect(page.getByRole("note")).toHaveCount(0);
 });
 
 test("long run identities remain copyable and keyboard inspection works at laptop widths in both modes", async ({ page }) => {

@@ -36,6 +36,7 @@ import { WorkflowExecutionTimeline } from "../WorkflowInstanceTimeline";
 import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
 import { PanelTabList } from "./PanelTabList";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
+import { WorkflowInstanceInspectionFacts, WorkflowInstanceInspectionNote } from "./WorkflowInstanceInspectionFacts";
 import { nodeTypes, edgeTypes } from "./graph";
 import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
 import { ReadOnlyWorkflowSequence } from "./ReadOnlyWorkflowSequence";
@@ -2264,30 +2265,37 @@ function WorkflowInstanceInspector({
                   <WorkflowUnmatchedEvidence details={details} graphNodeIds={graphNodeIds} rootNodeId={rootNodeId} activityCatalog={activityCatalog} executableGraph={executableGraph} />
                 </>
               ) : (
-                <dl className="wf-instance-meta">
-                  <dt>Status</dt>
-                  <dd><WorkflowStatusBadge status={summary.status} subStatus={summary.subStatus} /></dd>
-                  <dt>Run Kind</dt>
-                  <dd>{formatRunKind(summary.runKind)}</dd>
-                  <dt>Artifact</dt>
-                  <dd>{summary.artifactId} <small>{summary.artifactVersion}</small></dd>
-                  <dt>Definition</dt>
-                  <dd>
-                    <NamedIdentity
-                      name={definitionName}
-                      id={summary.definitionId}
-                      secondary={summary.definitionVersionId}
+                <>
+                  <dl className="wf-instance-meta">
+                    <dt>Status</dt>
+                    <dd><WorkflowStatusBadge status={summary.status} subStatus={summary.subStatus} /></dd>
+                    <dt>Run Kind</dt>
+                    <dd>{formatRunKind(summary.runKind)}</dd>
+                    <dt>Artifact</dt>
+                    <dd>{summary.artifactId} <small>{summary.artifactVersion}</small></dd>
+                    <dt>Definition</dt>
+                    <dd>
+                      <NamedIdentity
+                        name={definitionName}
+                        id={summary.definitionId}
+                        secondary={summary.definitionVersionId}
+                      />
+                    </dd>
+                    <dt>Created</dt>
+                    <dd>{formatDate(summary.createdAt)}</dd>
+                    <dt>Started</dt>
+                    <dd>{formatDate(summary.startedAt)}</dd>
+                    <dt>Completed</dt>
+                    <dd>{formatDate(summary.completedAt)}</dd>
+                    <dt>Correlation</dt>
+                    <dd>{summary.correlationId || "None"}</dd>
+                    <WorkflowInstanceInspectionFacts
+                      persistenceMode={details.persistenceMode}
+                      inspectionGranularity={details.inspectionGranularity}
                     />
-                  </dd>
-                  <dt>Created</dt>
-                  <dd>{formatDate(summary.createdAt)}</dd>
-                  <dt>Started</dt>
-                  <dd>{formatDate(summary.startedAt)}</dd>
-                  <dt>Completed</dt>
-                  <dd>{formatDate(summary.completedAt)}</dd>
-                  <dt>Correlation</dt>
-                  <dd>{summary.correlationId || "None"}</dd>
-                </dl>
+                  </dl>
+                  <WorkflowInstanceInspectionNote inspectionGranularity={details.inspectionGranularity} />
+                </>
               )}
             </div>
           ) : null}
