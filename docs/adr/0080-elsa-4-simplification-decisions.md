@@ -125,6 +125,20 @@ for ADR 0089 to be accepted. The program runs beside the
 other active programs, displaces none of them, and reactivates no other parked work. Releases and deployment
 are not included. The remaining decisions in this ADR apply to this work as to any other.
 
+**Owner amendment, 25 October 2026:** [Studio Hosting and Package Reuse #3340](../program-goals/studio-hosting-package-reuse.md)
+is authorized as an active program. The owner instructed: "Run it alongside the other active programs. Go ahead
+and create the Program, issue hierarchy and dedicated Kanban Project board on GitHub." Sequencing: run beside
+the active programs, displace none, and coordinate changes to shared Studio paths with their current owners.
+The program consolidates reusable Studio hosting into NuGet-consumable capabilities, reuses qualified existing
+CShells/Nuplane and Elsa contracts, and proves independent package consumption. It does not reactivate the parked
+Runtime Composition & Configuration or Modular Hosting Upstream Delivery backlogs. Establishment creates the
+planning records and board; package implementation proceeds through scoped, claimed and triaged issues, with one
+implementation leaf at a time. Later in the same session the owner set the goal to "deliver this board end to end",
+authorizing implementation and integrated qualification of this named program's M0–M3 outcomes, including reviewed
+PR delivery and verification on resulting main and candidate packages. This supersedes the establishment-only
+session boundary; the sequencing and parked-work boundaries above remain. Releases, deployments and publisher
+activation are not included. The remaining decisions in this ADR apply.
+
 ### D1 — Risk-based testing
 
 - Test observable behaviour at the cheapest level that proves it; unit-test logic that carries real risk.
