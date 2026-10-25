@@ -51,6 +51,11 @@ Subject, body, file bytes, Teams content and Teams attachments refuse secret bin
 (`EchoedToOutput`). JSON inputs (To/Cc/Bcc when they start with `[`, attendees, attachments)
 fault with `invalid_input` when they are not a JSON array.
 
+Create Event and List Events convert `DateTimeOffset` values into the target zone before
+formatting (UTC by default; an explicit Windows or IANA id otherwise). An unknown zone
+faults as `invalid_input`. Teams attachments require `Content type` `html` and a matching
+`<attachment id="..."></attachment>` tag in Content for each attachment id.
+
 ## Errors
 
 - Graph errors become an activity fault whose code and message are only `error.code` and

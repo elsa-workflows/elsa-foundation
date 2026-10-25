@@ -1,4 +1,3 @@
-using System.Globalization;
 using Elsa.Activities.Http.Connections;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
@@ -13,10 +12,10 @@ public sealed class ListEvents(
     IHttpConnectionApplicator connectionApplicator)
     : Microsoft365Activity<IReadOnlyList<GraphEvent>>(httpClientFactory, connectionApplicator)
 {
-    [ActivityInput(Key = nameof(StartDateTime), DisplayName = "Start date time", Tier = InputTier.Essential, Description = "calendarView start. Requires Calendars.Read.")]
+    [ActivityInput(Key = nameof(StartDateTime), DisplayName = "Start date time", Tier = InputTier.Essential, Description = "calendarView start, converted to UTC. Requires Calendars.Read.")]
     public DateTimeOffset StartDateTime { get; set; }
 
-    [ActivityInput(Key = nameof(EndDateTime), DisplayName = "End date time", Tier = InputTier.Essential)]
+    [ActivityInput(Key = nameof(EndDateTime), DisplayName = "End date time", Tier = InputTier.Essential, Description = "calendarView end, converted to UTC.")]
     public DateTimeOffset EndDateTime { get; set; }
 
     [ActivityInput(Key = nameof(Top), DisplayName = "Top", Tier = InputTier.Optional, Description = "Page size (1-999). Default 50.")]
@@ -42,8 +41,8 @@ public sealed class ListEvents(
             var maxItems = MaxItems is > 0
                 ? Math.Min(MaxItems.Value, Microsoft365Api.AbsoluteMaxItems)
                 : Microsoft365Api.DefaultMaxItems;
-            var start = Uri.EscapeDataString(StartDateTime.ToString("o", CultureInfo.InvariantCulture));
-            var end = Uri.EscapeDataString(EndDateTime.ToString("o", CultureInfo.InvariantCulture));
+            var start = Uri.EscapeDataString(GraphPayloads.FormatInZone(StartDateTime, "UTC"));
+            var end = Uri.EscapeDataString(GraphPayloads.FormatInZone(EndDateTime, "UTC"));
             var path = $"{Microsoft365Paths.UserRoot(UserId)}/calendarView?startDateTime={start}&endDateTime={end}&$top={top}";
 
             var pages = await CreateClient()

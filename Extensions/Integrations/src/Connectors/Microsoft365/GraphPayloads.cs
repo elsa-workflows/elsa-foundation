@@ -163,12 +163,104 @@ internal static class GraphPayloads
             "Conflict behavior must be rename, replace, or fail.");
     }
 
-    public static JsonObject DateTime(DateTimeOffset value, string timeZone) =>
-        new()
+    public static string ResolveTimeZone(string? timeZone) =>
+        string.IsNullOrWhiteSpace(timeZone) ? "UTC" : timeZone.Trim();
+
+    public static string FormatInZone(DateTimeOffset value, string? timeZone)
+    {
+        var zoneName = ResolveTimeZone(timeZone);
+        return ClockInZone(value, zoneName).ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture);
+    }
+
+    public static JsonObject DateTime(DateTimeOffset value, string? timeZone)
+    {
+        var zoneName = ResolveTimeZone(timeZone);
+        return new JsonObject
         {
-            ["dateTime"] = value.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture),
-            ["timeZone"] = timeZone
+            ["dateTime"] = FormatInZone(value, zoneName),
+            ["timeZone"] = zoneName
         };
+    }
+
+    public static JsonArray TeamsAttachments(string? attachments, string content, string contentType)
+    {
+        if (string.IsNullOrWhiteSpace(attachments))
+            return [];
+
+        JsonNode? parsed;
+        try
+        {
+            parsed = JsonNode.Parse(attachments);
+        }
+        catch (JsonException)
+        {
+            throw new Microsoft365ApiException(
+                Microsoft365ErrorCodes.InvalidInput,
+                "Attachments must be a JSON array.");
+        }
+
+        if (parsed is not JsonArray array)
+        {
+            throw new Microsoft365ApiException(
+                Microsoft365ErrorCodes.InvalidInput,
+                "Attachments must be a JSON array.");
+        }
+
+        if (array.Count == 0)
+            return array;
+
+        if (!contentType.Equals("html", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new Microsoft365ApiException(
+                Microsoft365ErrorCodes.InvalidInput,
+                "Attachments require Content type html and a matching <attachment id=\"...\"></attachment> tag in Content for each attachment.");
+        }
+
+        foreach (var node in array)
+        {
+            var id = node is JsonObject obj ? NodeString(obj["id"]) : null;
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                throw new Microsoft365ApiException(
+                    Microsoft365ErrorCodes.InvalidInput,
+                    "Each attachment must have an id.");
+            }
+
+            var tag = "<attachment id=\"" + id + "\"></attachment>";
+            if (!content.Contains(tag, StringComparison.Ordinal))
+            {
+                throw new Microsoft365ApiException(
+                    Microsoft365ErrorCodes.InvalidInput,
+                    "Content must include " + tag + " for each attachment.");
+            }
+        }
+
+        return array;
+    }
+
+    private static DateTime ClockInZone(DateTimeOffset value, string timeZone)
+    {
+        if (timeZone.Equals("UTC", StringComparison.OrdinalIgnoreCase)
+            || timeZone.Equals("Etc/UTC", StringComparison.OrdinalIgnoreCase)
+            || timeZone.Equals("Etc/GMT", StringComparison.OrdinalIgnoreCase))
+        {
+            return value.UtcDateTime;
+        }
+
+        TimeZoneInfo zone;
+        try
+        {
+            zone = TimeZoneInfo.FindSystemTimeZoneById(timeZone);
+        }
+        catch (Exception exception) when (exception is TimeZoneNotFoundException or InvalidTimeZoneException)
+        {
+            throw new Microsoft365ApiException(
+                Microsoft365ErrorCodes.InvalidInput,
+                "Time zone must be a Windows or IANA id.");
+        }
+
+        return TimeZoneInfo.ConvertTime(value, zone).DateTime;
+    }
 
     public static GraphMessage ReadMessage(JsonElement element)
     {

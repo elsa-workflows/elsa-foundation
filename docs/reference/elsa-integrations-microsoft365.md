@@ -55,7 +55,9 @@ National clouds: set each activity's **Graph base URL** (default
 | `offline_access` | refresh the delegated grant |
 
 v1 is delegated `/me`, with an optional User id for a shared mailbox or calendar. App-only
-(client credentials) is out of scope.
+(client credentials) is out of scope. Create Event converts Start/End into the chosen
+Windows or IANA zone (UTC by default). List Events converts its window to UTC. Teams
+attachments need an HTML body with a matching `<attachment id="..."></attachment>` tag.
 
 ## Upload File
 

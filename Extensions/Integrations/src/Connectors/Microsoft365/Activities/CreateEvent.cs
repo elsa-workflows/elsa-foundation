@@ -24,7 +24,7 @@ public sealed class CreateEvent(
     [ActivityInput(Key = nameof(End), DisplayName = "End", Tier = InputTier.Essential)]
     public DateTimeOffset End { get; set; }
 
-    [ActivityInput(Key = nameof(TimeZone), DisplayName = "Time zone", Tier = InputTier.Optional, Description = "Windows or IANA time zone. Default UTC.")]
+    [ActivityInput(Key = nameof(TimeZone), DisplayName = "Time zone", Tier = InputTier.Optional, Description = "Windows or IANA time zone. Default UTC. Start and End are converted into this zone before they are sent.")]
     public string? TimeZone { get; set; }
 
     [ActivityInput(Key = nameof(Body), DisplayName = "Body", Tier = InputTier.Optional)]
@@ -49,7 +49,7 @@ public sealed class CreateEvent(
 
         try
         {
-            var timeZone = string.IsNullOrWhiteSpace(TimeZone) ? "UTC" : TimeZone.Trim();
+            var timeZone = GraphPayloads.ResolveTimeZone(TimeZone);
             var body = new JsonObject
             {
                 ["subject"] = Subject,

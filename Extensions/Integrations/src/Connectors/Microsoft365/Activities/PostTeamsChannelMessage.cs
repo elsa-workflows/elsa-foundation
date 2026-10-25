@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Activities.Http.Connections;
 using Elsa.Activities.Runtime.Core.Attributes;
@@ -25,10 +24,10 @@ public sealed class PostTeamsChannelMessage(
     [ActivityInput(Key = nameof(Content), DisplayName = "Content", Tier = InputTier.Essential)]
     public string Content { get; set; } = "";
 
-    [ActivityInput(Key = nameof(ContentType), DisplayName = "Content type", Tier = InputTier.Optional, Description = "text or html. Default text.")]
+    [ActivityInput(Key = nameof(ContentType), DisplayName = "Content type", Tier = InputTier.Optional, Description = "text or html. Default text. Attachments require html.")]
     public string? ContentType { get; set; }
 
-    [ActivityInput(Key = nameof(Attachments), DisplayName = "Attachments", Tier = InputTier.Optional, Description = "Optional JSON array of Teams message attachments.")]
+    [ActivityInput(Key = nameof(Attachments), DisplayName = "Attachments", Tier = InputTier.Optional, Description = "Optional JSON array of Teams attachments. Requires Content type html and a matching <attachment id=\"...\"></attachment> tag in Content for each id.")]
     public string? Attachments { get; set; }
 
     protected override async ValueTask<ActivityTransition<GraphChatMessage>> ExecuteAsync(ActivityExecutionContext context)
@@ -41,16 +40,17 @@ public sealed class PostTeamsChannelMessage(
 
         try
         {
+            var contentType = GraphPayloads.TeamsContentType(ContentType);
             var body = new JsonObject
             {
                 ["body"] = new JsonObject
                 {
-                    ["contentType"] = GraphPayloads.TeamsContentType(ContentType),
+                    ["contentType"] = contentType,
                     ["content"] = Content
                 }
             };
             if (!string.IsNullOrWhiteSpace(Attachments))
-                body["attachments"] = ParseAttachments(Attachments);
+                body["attachments"] = GraphPayloads.TeamsAttachments(Attachments, Content, contentType);
 
             var root = await CreateClient()
                 .PostJsonAsync(
@@ -67,29 +67,5 @@ public sealed class PostTeamsChannelMessage(
         {
             return GraphFault(exception);
         }
-    }
-
-    private static JsonArray ParseAttachments(string attachments)
-    {
-        JsonNode? parsed;
-        try
-        {
-            parsed = JsonNode.Parse(attachments);
-        }
-        catch (JsonException)
-        {
-            throw new Microsoft365ApiException(
-                Microsoft365ErrorCodes.InvalidInput,
-                "Attachments must be a JSON array.");
-        }
-
-        if (parsed is not JsonArray array)
-        {
-            throw new Microsoft365ApiException(
-                Microsoft365ErrorCodes.InvalidInput,
-                "Attachments must be a JSON array.");
-        }
-
-        return array;
     }
 }

@@ -10,8 +10,9 @@ public sealed class CannedHttpResponse
     public string Content { get; init; } = "{}";
 
     /// <summary>
-    /// Optional exact response bytes. When set, the handler sends these instead of UTF-8
-    /// <see cref="Content"/> so binary fixtures are not re-encoded.
+    /// Optional exact response bytes. When set, <see cref="ContentBytes"/> wins over
+    /// <see cref="Content"/>: the handler sends these bytes and does not UTF-8-encode
+    /// <see cref="Content"/>.
     /// </summary>
     public byte[]? ContentBytes { get; init; }
 

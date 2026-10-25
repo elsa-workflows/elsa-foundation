@@ -133,7 +133,67 @@ public sealed class Microsoft365ActivityTests
         Microsoft365TestSupport.AssertGraph(request, HttpMethod.Post, "me/events");
         var body = Microsoft365TestSupport.BodyJson(request);
         Assert.Equal("Sync", body.GetProperty("subject").GetString());
+        Assert.Equal("2026-10-25T14:00:00", body.GetProperty("start").GetProperty("dateTime").GetString());
+        Assert.Equal("UTC", body.GetProperty("start").GetProperty("timeZone").GetString());
         Assert.Equal("ada@example.com", body.GetProperty("attendees")[0].GetProperty("emailAddress").GetProperty("address").GetString());
+    }
+
+    [Fact]
+    public async Task CreateEvent_converts_a_plus_two_offset_to_the_utc_default()
+    {
+        await using var harness = Microsoft365TestSupport.CreateHarness();
+        harness.Http.ResponseContent = """{"id":"e1","subject":"Offset"}""";
+        var activity = Microsoft365TestSupport.Activity<CreateEvent>(harness, create =>
+        {
+            create.Subject = "Offset";
+            create.Start = new DateTimeOffset(2026, 10, 25, 14, 0, 0, TimeSpan.FromHours(2));
+            create.End = new DateTimeOffset(2026, 10, 25, 15, 0, 0, TimeSpan.FromHours(2));
+        });
+
+        Microsoft365TestSupport.Complete(await activity.ExecuteForTestsAsync(Microsoft365TestSupport.Context()));
+        var body = Microsoft365TestSupport.BodyJson(Assert.Single(harness.Http.Recorded));
+        Assert.Equal("2026-10-25T12:00:00", body.GetProperty("start").GetProperty("dateTime").GetString());
+        Assert.Equal("UTC", body.GetProperty("start").GetProperty("timeZone").GetString());
+        Assert.Equal("2026-10-25T13:00:00", body.GetProperty("end").GetProperty("dateTime").GetString());
+        Assert.Equal("UTC", body.GetProperty("end").GetProperty("timeZone").GetString());
+    }
+
+    [Fact]
+    public async Task CreateEvent_converts_an_explicit_zone_across_a_dst_boundary()
+    {
+        await using var harness = Microsoft365TestSupport.CreateHarness();
+        harness.Http.ResponseContent = """{"id":"e1","subject":"DST"}""";
+        var activity = Microsoft365TestSupport.Activity<CreateEvent>(harness, create =>
+        {
+            create.Subject = "DST";
+            create.Start = new DateTimeOffset(2026, 10, 25, 14, 0, 0, TimeSpan.FromHours(2));
+            create.End = new DateTimeOffset(2026, 10, 25, 15, 0, 0, TimeSpan.FromHours(2));
+            create.TimeZone = "Europe/Amsterdam";
+        });
+
+        Microsoft365TestSupport.Complete(await activity.ExecuteForTestsAsync(Microsoft365TestSupport.Context()));
+        var body = Microsoft365TestSupport.BodyJson(Assert.Single(harness.Http.Recorded));
+        Assert.Equal("2026-10-25T13:00:00", body.GetProperty("start").GetProperty("dateTime").GetString());
+        Assert.Equal("Europe/Amsterdam", body.GetProperty("start").GetProperty("timeZone").GetString());
+        Assert.Equal("2026-10-25T14:00:00", body.GetProperty("end").GetProperty("dateTime").GetString());
+        Assert.Equal("Europe/Amsterdam", body.GetProperty("end").GetProperty("timeZone").GetString());
+    }
+
+    [Fact]
+    public async Task CreateEvent_faults_when_the_time_zone_is_unknown()
+    {
+        await using var harness = Microsoft365TestSupport.CreateHarness();
+        var activity = Microsoft365TestSupport.Activity<CreateEvent>(harness, create =>
+        {
+            create.Subject = "Nope";
+            create.Start = new DateTimeOffset(2026, 10, 25, 14, 0, 0, TimeSpan.Zero);
+            create.End = new DateTimeOffset(2026, 10, 25, 15, 0, 0, TimeSpan.Zero);
+            create.TimeZone = "Not/AZone";
+        });
+
+        var fault = Microsoft365TestSupport.Fault(await activity.ExecuteForTestsAsync(Microsoft365TestSupport.Context()));
+        Assert.Equal("invalid_input", fault.Code);
+        Assert.Empty(harness.Http.Recorded);
     }
 
     [Fact]
@@ -173,6 +233,23 @@ public sealed class Microsoft365ActivityTests
         Assert.Contains("startDateTime=", request.RequestUri?.Query, StringComparison.Ordinal);
         Assert.Contains("endDateTime=", request.RequestUri?.Query, StringComparison.Ordinal);
         Assert.Contains("$top=25", request.RequestUri?.Query, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ListEvents_converts_a_plus_two_offset_to_utc()
+    {
+        await using var harness = Microsoft365TestSupport.CreateHarness();
+        harness.Http.ResponseContent = """{"value":[]}""";
+        var activity = Microsoft365TestSupport.Activity<ListEvents>(harness, list =>
+        {
+            list.StartDateTime = new DateTimeOffset(2026, 10, 25, 14, 0, 0, TimeSpan.FromHours(2));
+            list.EndDateTime = new DateTimeOffset(2026, 10, 25, 15, 0, 0, TimeSpan.FromHours(2));
+        });
+
+        Microsoft365TestSupport.Complete(await activity.ExecuteForTestsAsync(Microsoft365TestSupport.Context()));
+        var query = Uri.UnescapeDataString(Assert.Single(harness.Http.Recorded).RequestUri?.Query ?? "");
+        Assert.Contains("startDateTime=2026-10-25T12:00:00", query, StringComparison.Ordinal);
+        Assert.Contains("endDateTime=2026-10-25T13:00:00", query, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -263,7 +340,7 @@ public sealed class Microsoft365ActivityTests
         {
             post.TeamId = "team-1";
             post.ChannelId = "channel-1";
-            post.Content = "<p>hello</p>";
+            post.Content = "<p>hello</p><attachment id=\"1\"></attachment>";
             post.ContentType = "html";
             post.Attachments = """[{"id":"1","contentType":"application/vnd.microsoft.card.adaptive","content":"{}"}]""";
         });
@@ -287,6 +364,42 @@ public sealed class Microsoft365ActivityTests
             post.ChannelId = "channel-1";
             post.Content = "hello";
             post.Attachments = "{not-json";
+        });
+
+        var fault = Microsoft365TestSupport.Fault(await activity.ExecuteForTestsAsync(Microsoft365TestSupport.Context()));
+        Assert.Equal("invalid_input", fault.Code);
+        Assert.Empty(harness.Http.Recorded);
+    }
+
+    [Fact]
+    public async Task PostTeamsChannelMessage_faults_when_attachments_are_not_referenced_in_html()
+    {
+        await using var harness = Microsoft365TestSupport.CreateHarness();
+        var activity = Microsoft365TestSupport.Activity<PostTeamsChannelMessage>(harness, post =>
+        {
+            post.TeamId = "team-1";
+            post.ChannelId = "channel-1";
+            post.Content = "hello";
+            post.ContentType = "text";
+            post.Attachments = """[{"id":"1","contentType":"application/vnd.microsoft.card.adaptive","content":"{}"}]""";
+        });
+
+        var fault = Microsoft365TestSupport.Fault(await activity.ExecuteForTestsAsync(Microsoft365TestSupport.Context()));
+        Assert.Equal("invalid_input", fault.Code);
+        Assert.Empty(harness.Http.Recorded);
+    }
+
+    [Fact]
+    public async Task PostTeamsChannelMessage_faults_when_html_is_missing_the_attachment_tag()
+    {
+        await using var harness = Microsoft365TestSupport.CreateHarness();
+        var activity = Microsoft365TestSupport.Activity<PostTeamsChannelMessage>(harness, post =>
+        {
+            post.TeamId = "team-1";
+            post.ChannelId = "channel-1";
+            post.Content = "<p>hello</p>";
+            post.ContentType = "html";
+            post.Attachments = """[{"id":"1","contentType":"application/vnd.microsoft.card.adaptive","content":"{}"}]""";
         });
 
         var fault = Microsoft365TestSupport.Fault(await activity.ExecuteForTestsAsync(Microsoft365TestSupport.Context()));
