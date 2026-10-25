@@ -1,4 +1,4 @@
-import { describeActivationSource, type Publication, type PublicationIntent, type PublicationPolicy, type PublicationPreflight, type PublicationSlot } from "../api/publishing";
+import { describeActivationSource, type Publication, type PublicationIntent, type PublicationPolicy, type PublicationPreflight, type PublicationSlot, type PublicationTriggerConflict } from "../api/publishing";
 import type { PromotionPreflightAssessment } from "../api/workflowDesign";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDefinitionDetails, WorkflowDefinitionState, WorkflowDefinitionVersionDetails, WorkflowDraft } from "../workflowTypes";
 import { getChildSlots, readStructureDesignFacet, type ActivityCatalogLookup, type ChildSlot } from "../workflowAdapter";
@@ -266,6 +266,35 @@ function blockCauseFromPreflight(preflight: PublicationPreflight): PublicationBl
 export function publicationBlockCause(preflight: PublicationPreflight): PublicationBlockCause | null {
   if (preflight.canActivate) return null;
   return blockCauseFromPreflight(preflight);
+}
+
+/** The engine's optional `descriptor`, or undefined when a host omitted, nulled, or blanked it. */
+export function publicationConflictDescriptor(conflict: Pick<PublicationTriggerConflict, "descriptor">): string | undefined {
+  const descriptor = conflict.descriptor?.trim();
+  return descriptor || undefined;
+}
+
+/** Primary conflict label: the readable descriptor when present, otherwise the stable key. */
+export function publicationConflictLabel(conflict: Pick<PublicationTriggerConflict, "key" | "descriptor">): string {
+  return publicationConflictDescriptor(conflict) ?? conflict.key;
+}
+
+/** Raw `conflict.key` shown as muted detail only when a descriptor is already the primary label. */
+export function publicationConflictKeyDetail(conflict: Pick<PublicationTriggerConflict, "key" | "descriptor">): string | undefined {
+  return publicationConflictDescriptor(conflict) ? conflict.key : undefined;
+}
+
+/** One entry per `(slotName, key)` so grouped counts and listed labels stay aligned. */
+export function uniquePublicationConflicts(conflicts: readonly PublicationTriggerConflict[]): PublicationTriggerConflict[] {
+  const seen = new Set<string>();
+  const unique: PublicationTriggerConflict[] = [];
+  for (const conflict of conflicts) {
+    const id = `${conflict.slotName}\0${conflict.key}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    unique.push(conflict);
+  }
+  return unique;
 }
 
 /** Why an authoritative preflight blocks activation, in the author's words. See `publicationBlockCause`. */
