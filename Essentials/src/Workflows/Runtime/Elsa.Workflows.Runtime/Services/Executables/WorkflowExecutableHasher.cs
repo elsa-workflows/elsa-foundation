@@ -46,17 +46,18 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         if (executable.InputContract is not { } contract)
             return false;
 
-        var current = ComputeHash(executable.RootActivity, contract, executable.Dependencies,
-            executable.PersistenceMode, executable.WorkflowVariables, executable.IncidentStrategy);
-        if (StringComparer.Ordinal.Equals(current, executable.Identity.ArtifactHash))
-            return true;
-
         // V1 artifacts retain their original identities. Only verification may use the historical
         // rendering; every new publication uses V2 so it cannot deduplicate onto a stale V1 body.
+        // Check V1 first so its verification does not depend on serializing fields it never covered.
         var historical = ComputeBehavioralHash(executable.RootActivity, contract, executable.Dependencies,
             executable.PersistenceMode, executable.WorkflowVariables, executable.IncidentStrategy,
             includeInputContracts: false);
-        return StringComparer.Ordinal.Equals(historical, executable.Identity.ArtifactHash);
+        if (StringComparer.Ordinal.Equals(historical, executable.Identity.ArtifactHash))
+            return true;
+
+        var current = ComputeHash(executable.RootActivity, contract, executable.Dependencies,
+            executable.PersistenceMode, executable.WorkflowVariables, executable.IncidentStrategy);
+        return StringComparer.Ordinal.Equals(current, executable.Identity.ArtifactHash);
     }
 
     private static string ComputeBehavioralHash(

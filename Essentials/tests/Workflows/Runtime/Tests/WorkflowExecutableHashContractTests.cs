@@ -23,6 +23,23 @@ public sealed class WorkflowExecutableHashContractTests
     }
 
     [Fact]
+    public void Historical_verification_does_not_require_serializing_fields_outside_the_v1_coverage()
+    {
+        var legacy = LegacyWorkflowHashFixture.Load();
+        var json = string.Concat(Enumerable.Repeat("{\"nested\":", 96)) + "0" + new string('}', 96);
+        using var schema = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 256 });
+        var binding = legacy.RootActivity.InputBindings["value"];
+        var historical = LegacyWorkflowHashFixture.WithBinding(legacy,
+            new RuntimeInputBinding("value", new ValueTypeDescriptor("Elsa.Any", schema: schema.RootElement),
+                binding.EffectivePolicy, RuntimeInputBindingSource.Expression, expression: binding.Expression,
+                metadata: binding.Metadata));
+
+        // V1 did not serialize destination schemas. Historical verification must keep that coverage,
+        // even when a schema admitted by an older host exceeds the new renderer's depth limit.
+        Assert.True(_hasher.MatchesHash(historical));
+    }
+
+    [Fact]
     public void Historical_verification_does_not_accept_a_changed_expression()
     {
         var legacy = LegacyWorkflowHashFixture.Load();
