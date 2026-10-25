@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "d32aba731870dff2215b0aaaebb38c4b23cdc4d7",
+  "last_publish_commit": "474fac5c6ac1776ae6940fc6e5a3cdf926f7fc20",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -84,8 +84,8 @@
     },
     {
       "package_id": "Elsa.Activities.Http",
-      "version": "4.0.23-preview",
-      "commit": "6e677745bb828dcb1117379859068f8e735dac47"
+      "version": "4.0.24-preview",
+      "commit": "474fac5c6ac1776ae6940fc6e5a3cdf926f7fc20"
     },
     {
       "package_id": "Elsa.Activities.Primitives",
@@ -194,18 +194,18 @@
     },
     {
       "package_id": "Elsa.Connections",
-      "version": "4.0.4-preview",
-      "commit": "0b40e42d5a7376998905817b2fb15dd4277fe418"
+      "version": "4.0.5-preview",
+      "commit": "474fac5c6ac1776ae6940fc6e5a3cdf926f7fc20"
     },
     {
       "package_id": "Elsa.Connections.Api",
-      "version": "4.0.3-preview",
-      "commit": "0b40e42d5a7376998905817b2fb15dd4277fe418"
+      "version": "4.0.4-preview",
+      "commit": "474fac5c6ac1776ae6940fc6e5a3cdf926f7fc20"
     },
     {
       "package_id": "Elsa.Connections.Core",
-      "version": "4.0.4-preview",
-      "commit": "0b40e42d5a7376998905817b2fb15dd4277fe418"
+      "version": "4.0.5-preview",
+      "commit": "474fac5c6ac1776ae6940fc6e5a3cdf926f7fc20"
     },
     {
       "package_id": "Elsa.Connections.Design",
@@ -214,8 +214,8 @@
     },
     {
       "package_id": "Elsa.Connections.Workflows",
-      "version": "4.0.5-preview",
-      "commit": "5f4f2d63c3bc75501299889f962e601110243b73"
+      "version": "4.0.6-preview",
+      "commit": "474fac5c6ac1776ae6940fc6e5a3cdf926f7fc20"
     },
     {
       "package_id": "Elsa.Diagnostics.ConsoleLogStreaming",
@@ -436,6 +436,11 @@
       "package_id": "Elsa.Http.JavaScript",
       "version": "4.0.9-preview",
       "commit": "0b40e42d5a7376998905817b2fb15dd4277fe418"
+    },
+    {
+      "package_id": "Elsa.Integrations.Connectors.OAuth2",
+      "version": "4.0.0-preview",
+      "commit": "474fac5c6ac1776ae6940fc6e5a3cdf926f7fc20"
     },
     {
       "package_id": "Elsa.Integrations.Sdk",
