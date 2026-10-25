@@ -59,7 +59,7 @@ These are conversion, registration and catalog-port controls. They do not establ
 
 ## Open gates
 
-Dedicated late-fault, duplicate callback and pruning witnesses; old/new reader and rollback matrix; durable combined-outcome retry/concurrent claims; complete native-parent qualification; actual CallActivity dispatch/error/escalation and ordinary-task compensation proof; published authoring/Studio mirror qualification; source-built Studio journeys; duplicate deletion/guards; full checks and final review/merge. Keep #2898/#2907 and the broader program open. Orleans/task-runner follow-ups remain deferred.
+Dedicated late-fault, duplicate callback and pruning witnesses; old/new reader and rollback matrix; durable combined-outcome retry/concurrent claims; complete native-parent qualification; actual CallActivity dispatch/error/escalation and ordinary-task compensation proof; duplicate deletion/guards; full checks and final review/merge. Keep #2898/#2907 and the broader program open. Orleans/task-runner follow-ups remain deferred.
 
 ## Actual Workbench catalog, timer and broadcast increment
 
@@ -96,3 +96,18 @@ Local whole-project results for this increment: Design **689**, interchange **13
 router fix (expected two, actual one). Incremental reviews corrected constructor binary compatibility,
 publication-query fidelity and redundant delivery-key changes. Final complete-PR review has not begun.
 Source-bound receipts follow the committed implementation so they name an exact buildable revision.
+
+## Actual Studio default-flow qualification
+
+[Source-bound browser evidence](studio/README.md) now qualifies T028/T030/T031 for a representative
+v1 authored default-flow/timer process. Real source-built Studio import, gateway/condition edit, Save,
+Review & publish, exact published-artifact Run, definition reload and actual XML download retain the
+same default edge, frozen schema/child references and edited values. The PublishedRun's process and
+Delay complete with zero incidents. Actual persisted catalog descriptor fingerprints match2/2;
+Studio displays their exact catalog versions. Screenshots, the persisted authored node, exported XML,
+normal runtime API receipt and served module digest are retained. The whole Workflows frontend suite
+passes2493/2493 (183 files). No frontend source correction was needed for this tested journey.
+
+This closes these finite milestones, not all US3 or adoption: T029's actual called-workflow
+error/escalation and ordinary-task compensation remain open, as do all outstanding runtime,
+combined-durability, deletion/guard, reconciliation and final-review gates.

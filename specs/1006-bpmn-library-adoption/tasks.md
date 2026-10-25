@@ -53,10 +53,10 @@ Independent test: normal registered APIs and real Workbench/Studio import/edit/p
 
 - [x] T026 [US3] Extract/register the work binder in `Essentials/src/Activities/Bpmn/Interchange/`; preserve Delay, Event, PublishEvent, DispatchWorkflow and nested-process policy. Add registration tests that fail when importer/exporter/binder interfaces are missing.
 - [x] T027 [US3] Preserve representable release descriptors/data and report exact unsupported/degraded capabilities; Unknown never qualifies readiness. Add affected interchange tests for date/cycle/signal/typed-field limits without silently erasing work.
-- [ ] T028 [US3] Fix default-flow translation from source `DefaultFlowId` and prove real registered import/export plus Studio edge preservation in the BPMN interchange and Studio Workflows tests.
+- [x] T028 [US3] Fix default-flow translation from source `DefaultFlowId` and prove real registered import/export plus Studio edge preservation in the BPMN interchange and Studio Workflows tests.
 - [ ] T029 [US3] Prove ordinary bound-task compensation and interrupting/non-interrupting Call Activity escalation through the actual Foundation host; preserve dispatcher result/error identity.
-- [ ] T030 [US3] Compare real published BpmnProcess/BpmnDecision descriptors against the frozen fingerprint; keep `docs/reports/evidence/bpmn-extraction-baseline/` artifacts unchanged and reconcile actual authoring payloads with Studio's mirror.
-- [ ] T031 [US3] Run the real source-built Workbench/Studio import → edit → publish → execute → export journeys, capture source-bound screenshots/receipts in `specs/1006-bpmn-library-adoption/evidence/`, and retain browser proof limits.
+- [x] T030 [US3] Compare real published BpmnProcess/BpmnDecision descriptors against the frozen fingerprint; keep `docs/reports/evidence/bpmn-extraction-baseline/` artifacts unchanged and reconcile actual authoring payloads with Studio's mirror.
+- [x] T031 [US3] Run the real source-built Workbench/Studio import → edit → publish → execute → export journeys, capture source-bound screenshots/receipts in `specs/1006-bpmn-library-adoption/evidence/`, and retain browser proof limits.
 
 ## Phase 6: Delete duplication and qualify the ordered switch
 
