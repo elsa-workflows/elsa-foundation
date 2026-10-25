@@ -73,6 +73,14 @@ public sealed record ActivityExecutionState(
     /// <summary>Typed scheduler-carried values used to activate <see cref="IterationVariableFrame"/>.</summary>
     public LoopIterationScopeRequest? IterationFrameRequest { get; init; }
 
+    /// <summary>Last root control emission committed with this invocation's structural continuation.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeChildControlBatch? ProducedControl { get; init; }
+
+    /// <summary>Optional exact-source control transported with an ordinary waited dispatch completion.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeChildControlTransport? ChildControl { get; init; }
+
     public void EnsureValueFlowCompatible()
     {
         if (DocumentVersion != ActivityExecutionValueFlowDocumentVersions.Current)

@@ -8895,3 +8895,40 @@ const Elsa.Workflows.Runtime.Core.Models.ActivityExecutionScopeValues.VariableRo
 static Elsa.Workflows.Runtime.Core.Models.ActivityExecutionScopeValues.Metadata(string! boundaryActivityExecutionId, string! role, string! referenceKey, string! storageDriverKey, string? inputName = null, string? variableName = null) -> System.Collections.Generic.Dictionary<string!, string!>!
 Elsa.Workflows.Runtime.Core.Models.StimulusDispatchRequest.ResumeAllMatchingBookmarks.get -> bool
 Elsa.Workflows.Runtime.Core.Models.StimulusDispatchRequest.ResumeAllMatchingBookmarks.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.ChildControl.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTransport?
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.ChildControl.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.ProducedControl.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlBatch?
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.ProducedControl.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlBatch
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlBatch.AuthoredFailureCode.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlBatch.ChildWorkflowExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlBatch.ConsumerKey.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlBatch.ConsumerVersion.get -> int
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlBatch.IsTerminal.get -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlBatch.Notifications.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlNotification!>!
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlBatch.Ordinal.get -> long
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlBatch.RootActivityExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlBatch.RuntimeChildControlBatch(int version, string! consumerKey, int consumerVersion, string! childWorkflowExecutionId, string! rootActivityExecutionId, string! sourceWorkItemId, long ordinal, bool isTerminal, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlNotification!>? notifications = null, string? authoredFailureCode = null) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlBatch.SourceWorkItemId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlBatch.Version.get -> int
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlNotification
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlNotification.Code.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlNotification.Payload.get -> System.Text.Json.JsonElement?
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlNotification.RuntimeChildControlNotification(string! code, System.Text.Json.JsonElement? payload = null) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTransport
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTransport.Batch.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlBatch!
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTransport.CallingActivityExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTransport.ConsumerActivityExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTransport.DispatchId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTransport.ParentExecutable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTransport.ParentWorkflowExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTransport.RuntimeChildControlTransport(string! dispatchId, string! parentWorkflowExecutionId, string! callingActivityExecutionId, string! consumerActivityExecutionId, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! parentExecutable, string! sourceCommitId, string! sourceIntentId, string! sourceOutboxItemId, Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlBatch! batch) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTransport.SourceCommitId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTransport.SourceIntentId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlTransport.SourceOutboxItemId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.Control.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlBatch?
+Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.WithControl(Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlBatch! control) -> Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation!
+const Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlBatch.CurrentVersion = 1 -> int
+const Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlBatch.MaximumContentBytes = 65536 -> int
+const Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlBatch.MaximumNotifications = 32 -> int
+const Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlNotification.MaximumPayloadBytes = 16384 -> int

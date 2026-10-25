@@ -1,6 +1,6 @@
 # Called-workflow control boundary design
 
-Status: implementation plan refinement reviewed for FR-014 by independent correctness, standards and acceptance lenses. Findings corrected: mandatory empty terminal barriers, retained-root/current-overlay lookup, exact source outbox identity and atomic inbox contributions on every continuation branch. Source changes await task review. This is inside the existing switch PR, with ordinary DispatchWorkflow policy unchanged.
+Status: implementation plan refinement reviewed for FR-014 by independent correctness, standards and acceptance lenses. Findings corrected: mandatory empty terminal barriers, retained-root/current-overlay lookup, exact source outbox identity and atomic inbox contributions on every continuation branch. Task review is complete. [T039 contract shapes and legacy-wire compatibility](../evidence/control-contracts.md) are implemented and qualified; producer, authority and delivery implementation remains open. This is inside the existing switch PR, with ordinary DispatchWorkflow policy unchanged.
 
 ## Typed control data
 
