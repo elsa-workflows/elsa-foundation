@@ -55,8 +55,8 @@
 .connection-secret-selection { color: var(--connections-text-muted); }
 .connections-header p { margin: 0; }
 .connections-count { white-space: nowrap; font-size: var(--studio-label-size); }
-.connections-header-actions { display: flex; align-items: center; gap: var(--spacing-md); }
-.connections-page-actions { display: flex; align-items: center; gap: var(--spacing-sm); }
+.connections-header-actions { display: flex; align-items: center; gap: 12px; }
+.connections-page-actions { display: flex; align-items: center; gap: 8px; }
 .connections-kicker,
 .connections-create-eyebrow {
   color: var(--connections-text-muted);
@@ -413,7 +413,7 @@
 }
 @media (max-width: 40rem) {
   .connections-header { flex-direction: column; gap: 0.5rem; }
-  .connections-header-actions { width: 100%; display: grid; gap: var(--spacing-md); }
+  .connections-header-actions { width: 100%; display: grid; gap: 12px; }
   .connections-page-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
   .connections-summary, .connections-create-fields { grid-template-columns: minmax(0, 1fr); }
   .connections-create-header, .connections-create-content, .connections-create-actions, .connections-dialog-body, .connections-dialog-header { padding: var(--spacing-lg); }
