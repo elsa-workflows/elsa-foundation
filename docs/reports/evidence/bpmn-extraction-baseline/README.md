@@ -18,20 +18,25 @@ Both suites were green at capture time: 247 passed / 0 failed, and 107 passed / 
 
 ## How to use them
 
-**The test-name lists are the framework §2.21.1 ledger.** Regenerate after any work unit and diff.
-Additions are fine. A deletion or a rename is not a passing CI detail: it needs recorded architect
-approval in the PR body, because §2.21.1 says a test may move file, project, or assembly but its
-subject and objective must be preserved, and CI green is explicitly not sufficient evidence.
+**The test-name lists are historical differential oracles.** Compare later work with them without
+restamping the captured files. Follow the current [framework §2.21.1](../../../../.specify/memory/constitution-framework.md#221-test-discipline)
+for moves, rewrites and deletions: name the affected test and its replacement proof in the PR for
+review. Green CI alone does not explain a changed subject or objective.
 
 Regenerate with:
 
 ```bash
-dotnet test tests/Elsa/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj -c Release --logger "trx;LogFileName=bpmn.trx" --results-directory <dir>
+dotnet test Essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj -c Release --logger "trx;LogFileName=bpmn.trx" --results-directory <dir>
 ```
 
 Run the two projects in **separate** invocations. `dotnet test` rejects two project arguments with
 MSB1008, and if the call is piped the shell reports the pipe's exit status rather than the failure,
 so a broken run can look like a passing one.
+
+The interchange project is
+`Essentials/tests/Activities/Bpmn/Interchange/Tests/Elsa.Activities.Bpmn.Interchange.Tests.csproj`.
+The [0.5.0 adoption comparison](../bpmn-adoption-0.5.0/README.md) records the current test inventory,
+the already-landed registration-test replacement and the separate host-compatibility gates.
 
 **`activity-contract-fingerprint.json` must not change across the entire program.** It encodes
 `structure.kind = elsa.bpmn.structure`, `schemaVersion = 1.0.0`, the `Bpmn.Activities` child slot, the
