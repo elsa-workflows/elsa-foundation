@@ -26,8 +26,8 @@ public sealed class WorkflowExecutableHashContractTests
     public void Historical_verification_does_not_require_serializing_fields_outside_the_v1_coverage()
     {
         var legacy = LegacyWorkflowHashFixture.Load();
-        var json = string.Concat(Enumerable.Repeat("{\"nested\":", 96)) + "0" + new string('}', 96);
-        using var schema = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 256 });
+        var json = string.Concat(Enumerable.Repeat("{\"nested\":", 1100)) + "0" + new string('}', 1100);
+        using var schema = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 2048 });
         var binding = legacy.RootActivity.InputBindings["value"];
         var historical = LegacyWorkflowHashFixture.WithBinding(legacy,
             new RuntimeInputBinding("value", new ValueTypeDescriptor("Elsa.Any", schema: schema.RootElement),
@@ -37,6 +37,24 @@ public sealed class WorkflowExecutableHashContractTests
         // V1 did not serialize destination schemas. Historical verification must keep that coverage,
         // even when a schema admitted by an older host exceeds the new renderer's depth limit.
         Assert.True(_hasher.MatchesHash(historical));
+    }
+
+    [Theory]
+    [InlineData(96)]
+    [InlineData(900)]
+    public void Current_hashes_preserve_schemas_within_the_behavioral_writer_depth(int depth)
+    {
+        var legacy = LegacyWorkflowHashFixture.Load();
+        var json = string.Concat(Enumerable.Repeat("{\"nested\":", depth)) + "0" + new string('}', depth);
+        using var schema = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 1000 });
+        var binding = legacy.RootActivity.InputBindings["value"];
+        var changed = LegacyWorkflowHashFixture.WithBinding(legacy,
+            new RuntimeInputBinding("value", new ValueTypeDescriptor("Elsa.Any", schema: schema.RootElement),
+                binding.EffectivePolicy, RuntimeInputBindingSource.Expression, expression: binding.Expression,
+                metadata: binding.Metadata), _hasher);
+
+        Assert.NotEqual(legacy.Identity.ArtifactHash, changed.Identity.ArtifactHash);
+        Assert.True(_hasher.MatchesHash(changed));
     }
 
     [Fact]
