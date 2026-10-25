@@ -1,6 +1,6 @@
 # Verification Guide: Studio resource-list consistency
 
-This guide is for the implementation and exact-head review. It contains planned checks only. **No test, build, browser, host, or review check listed here has been run for #3071.** Root owns implementation integration and final qualification.
+This guide defines the implementation and exact-head verification recipe. Actual results, failed attempts, revision bindings and pending gates are recorded on #3071 and PR #3313 rather than cached in this recipe. Root owns implementation integration and final qualification.
 
 ## Prerequisites
 

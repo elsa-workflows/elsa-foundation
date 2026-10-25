@@ -45,7 +45,7 @@
 
 ## Phase 4: Integration, visual review, and exact-head qualification
 
-**Purpose**: Complete the approved product scope, retain sensitive-data controls, and provide root with reviewable candidate-head evidence. No check in this phase has run yet.
+**Purpose**: Complete the approved product scope, retain sensitive-data controls, and provide root with reviewable candidate-head evidence. Execution outcomes and exact revision bindings are recorded on #3071 and PR #3313; unchecked tasks below remain subject to their full delivery gates.
 
 - [ ] T009 Review combined loading, empty, failed, action-error, keyboard, accessible-name, confirmation, focus-return, masking, and responsive states; save before/after screenshots at 1600×1000 @2x in Classic Light and dark, and inspect Dim, High Contrast, 1280 px light, 1440 px dark, and 390 px narrow layouts under `/Users/sipke/Documents/Codex/2026-10-19/studio-ux-audit/execution/`.
 - [ ] T010 Run the exact-head focused Vitest and browser suites from the story checkpoints, causal negative controls, full Workflows shuffle seeds 1/11/29, full Studio `pnpm typecheck` including `tests/live`, affected lint/style/layout checks, affected Secrets and Connections client builds, five existing build groups, applicable architecture/maps checks, and full Chromium; preserve actual failures, skips, and unexecuted counts.
@@ -78,4 +78,4 @@
 2. Keep implementation to the existing Secrets, Connections, Home, and browser-fixture paths above. Add behavioral regressions and source-revert controls for the approved changes; the plan does not claim constitutional test-first cadence.
 3. Integrate the three independent stories, then review the complete diff for scope, access behavior, query state, secret masking, and design boundaries.
 4. Run the exact-head checks in T009–T012; preserve each result and do not carry forward #3069/#3310 proof as #3071 acceptance.
-5. Mark the spec `Implemented` only in an authorized implementation PR when the lifecycle transition is ready. During implementation, this specification remains **In progress** and actual checks remain **Not run**.
+5. The implementation PR carries `Implemented` in its diff as required by the spec lifecycle; that status takes effect when the PR merges. Keep actual acceptance and resulting-main outcomes in #3071 and PR #3313, and do not treat the prospective status as evidence that a pending gate passed.

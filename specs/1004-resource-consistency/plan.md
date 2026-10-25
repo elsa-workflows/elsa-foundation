@@ -16,7 +16,7 @@ Align the Secrets and Connections page hierarchy around the approved Studio list
 
 **Storage**: Existing Elsa Secrets and Connections endpoints; no storage changes.
 
-**Testing**: Existing Vitest suites for affected Studio modules and Playwright Chromium browser suites; full Studio typecheck, lint/style checks, existing build groups, architecture/maps checks, and safe private-host proof as qualified below. No tests or builds have run for this draft.
+**Testing**: Existing Vitest suites for affected Studio modules and Playwright Chromium browser suites; full Studio typecheck, lint/style checks, existing build groups, architecture/maps checks, and safe private-host proof as qualified below. Actual execution outcomes are recorded on #3071 and PR #3313.
 
 **Target Platform**: Studio web client and its existing browser test harness.
 

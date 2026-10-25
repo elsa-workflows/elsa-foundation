@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-24
 
-**Status**: In progress
+**Status**: Implemented — takes effect when implementation PR #3313 merges; acceptance and resulting-main verification are tracked in #3071.
 
 **Input**: User description: Deliver the approved #3071 Studio Secrets, Connections, and Home consistency repair: align familiar resource-list hierarchy while preserving each page's distinct actions and security behavior; keep Connection creation within the accepted search context; retain truthful Secrets inventory coverage; gate only Home's Needs attention destination by effective runtime-read access; and make the browser fixture's attempted Secrets writes observable, including failures.
 
