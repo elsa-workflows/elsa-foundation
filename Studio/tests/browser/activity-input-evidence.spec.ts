@@ -125,7 +125,7 @@ for (const theme of ["light", "dark"]) {
         const violations = await page.evaluate(async () => {
           const root = document.querySelector('[aria-label="Run details"]');
           if (!root) return [{ id: "missing-run-details", impact: "critical", help: "Run details inspector is missing." }];
-          const result = await (window as Window & { axe: typeof axe }).axe.run(root, { resultTypes: ["violations"] });
+          const result = await window.axe.run(root, { resultTypes: ["violations"] });
           return result.violations
             .filter(violation => violation.impact === "critical" || violation.impact === "serious")
             .map(({ id, impact, help }) => ({ id, impact, help }));

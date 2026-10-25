@@ -274,14 +274,17 @@ export function publicationConflictDescriptor(conflict: Pick<PublicationTriggerC
   return descriptor || undefined;
 }
 
-/** Primary conflict label: the readable descriptor when present, otherwise the stable key. */
+/** Primary conflict label when the host omitted a readable descriptor. */
+export const unnamedPublicationConflictLabel = "Trigger conflict";
+
+/** Primary conflict label: the readable descriptor when present, otherwise a generic label. */
 export function publicationConflictLabel(conflict: Pick<PublicationTriggerConflict, "key" | "descriptor">): string {
-  return publicationConflictDescriptor(conflict) ?? conflict.key;
+  return publicationConflictDescriptor(conflict) ?? unnamedPublicationConflictLabel;
 }
 
-/** Raw `conflict.key` shown as muted detail only when a descriptor is already the primary label. */
-export function publicationConflictKeyDetail(conflict: Pick<PublicationTriggerConflict, "key" | "descriptor">): string | undefined {
-  return publicationConflictDescriptor(conflict) ? conflict.key : undefined;
+/** Raw `conflict.key` shown as muted secondary detail under the primary label. */
+export function publicationConflictKeyDetail(conflict: Pick<PublicationTriggerConflict, "key" | "descriptor">): string {
+  return conflict.key;
 }
 
 /** One entry per `(slotName, key)` so grouped counts and listed labels stay aligned. */

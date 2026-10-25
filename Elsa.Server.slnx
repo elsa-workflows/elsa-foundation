@@ -83,10 +83,14 @@
   </Folder>
   <Folder Name="/Extensions/Integrations/src/Connectors/">
     <Project Path="Extensions/Integrations/src/Connectors/OAuth2/Elsa.Integrations.Connectors.OAuth2.csproj" />
+    <Project Path="Extensions/Integrations/src/Connectors/Slack/Elsa.Integrations.Connectors.Slack.csproj" />
   </Folder>
   <Folder Name="/Extensions/Integrations/tests/Connectors/" />
   <Folder Name="/Extensions/Integrations/tests/Connectors/OAuth2/">
     <Project Path="Extensions/Integrations/tests/Connectors/OAuth2/Tests/Elsa.Integrations.Connectors.OAuth2.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Integrations/tests/Connectors/Slack/">
+    <Project Path="Extensions/Integrations/tests/Connectors/Slack/Tests/Elsa.Integrations.Connectors.Slack.Tests.csproj" />
   </Folder>
   <Folder Name="/solution/">
     <File Path=".gitignore" />

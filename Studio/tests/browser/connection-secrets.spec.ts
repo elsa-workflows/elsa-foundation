@@ -280,7 +280,7 @@ test("dialog traps keyboard focus, restores opener, and passes automated accessi
   await page.addScriptTag({ content: axe.source });
   const violations = await page.evaluate(async () => {
     const root = document.querySelector('[role="dialog"]')!;
-    const result = await (window as Window & { axe: typeof axe }).axe.run(root);
+    const result = await window.axe.run(root);
     return result.violations.filter(item => item.impact === "critical" || item.impact === "serious").map(item => ({ id: item.id, targets: item.nodes.map(node => node.target) }));
   });
   expect(violations).toEqual([]);

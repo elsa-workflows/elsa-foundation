@@ -2938,7 +2938,26 @@ function authoringDraftSummary(draft: ReturnType<typeof authoringDraft>) {
 }
 
 function authoringDraft(draftId: string, revision: number, payload: unknown) {
-  return { draftId, definitionId: "activity-def-browser", tenantId: "browser-tenant", revision, sourceVersionId: null, status: "active", contract: { contractSchemaVersion: "1", inputs: [], outputs: [], outcomes: [{ referenceKey: "done", name: "Done", isEmitted: true, description: null }] }, provider: { providerKey: "elsa.activity-graph", schemaVersion: "1", manifestFingerprint: `sha256:${revision}`, payload }, layout: [], validation: null, createdAt: "2026-07-17T10:00:00Z", updatedAt: "2026-07-17T10:00:00Z", presentationLabel: null };
+  return {
+    draftId,
+    definitionId: "activity-def-browser",
+    tenantId: "browser-tenant",
+    revision,
+    sourceVersionId: null as string | null,
+    status: "active",
+    contract: {
+      contractSchemaVersion: "1",
+      inputs: [] as ReturnType<typeof browserContractInput>[],
+      outputs: [] as unknown[],
+      outcomes: [{ referenceKey: "done", name: "Done", isEmitted: true, description: null }]
+    },
+    provider: { providerKey: "elsa.activity-graph", schemaVersion: "1", manifestFingerprint: `sha256:${revision}`, payload },
+    layout: [] as unknown[],
+    validation: null,
+    createdAt: "2026-07-17T10:00:00Z",
+    updatedAt: "2026-07-17T10:00:00Z",
+    presentationLabel: null as string | null
+  };
 }
 
 function browserContractInput() {
@@ -2954,7 +2973,7 @@ function browserContractInput() {
     type: { alias: "String", collectionKind: "Single" },
     isRequired: false,
     isNullable: true,
-    default: null,
+    default: null as { syntax: string; value: string } | null,
     storageDriverKey: "elsa.json",
     durability: "Required"
   };
