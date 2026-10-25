@@ -837,31 +837,25 @@ public sealed class WorkflowArtifactReconciler(
         if (member.InputContract is null)
             return $"artifact '{identity.ArtifactId}' carries no input contract, so its canonical content hash cannot be recomputed.";
 
-        string recomputed;
+        bool matches;
         try
         {
-            recomputed = hasher.ComputeHash(
-                member.RootActivity,
-                member.InputContract,
-                member.Dependencies,
-                member.PersistenceMode,
-                member.WorkflowVariables,
-                member.IncidentStrategy);
+            matches = hasher.MatchesHash(member);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             return $"artifact '{identity.ArtifactId}' could not be hashed: {exception.Message}";
         }
 
-        if (!StringComparer.Ordinal.Equals(recomputed, identity.ArtifactHash))
-            return $"artifact '{identity.ArtifactId}' declares hash '{identity.ArtifactHash}' but its payload hashes to '{recomputed}'.";
+        if (!matches)
+            return $"artifact '{identity.ArtifactId}' declares hash '{identity.ArtifactHash}' but its payload does not match a supported content-hash schema.";
 
         // The id embeds a prefix of the hash. A payload whose hash matches the declared hash but whose id does not
         // match either is an envelope that was rewritten inconsistently, and the id is what the store keys on.
         string expectedId;
         try
         {
-            expectedId = hasher.CreateArtifactId(string.Empty, recomputed);
+            expectedId = hasher.CreateArtifactId(string.Empty, identity.ArtifactHash);
         }
         catch (ArgumentException exception)
         {

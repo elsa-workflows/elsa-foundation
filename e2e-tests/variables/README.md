@@ -12,6 +12,7 @@ Backend REST tests for the value/typing layer. Shared helper: `_VarCommon.ps1`. 
 | `Test-CrossTypeCoercion.ps1` | Literal string → `Int32` coerces (100); JS → `Int32` coerces (6*7→42); Object → String sink **faults** (the materialization boundary) |
 | `Test-WorkflowInputsOutputs.ps1` | typed workflow inputs bound via `WorkflowRequest` (`{ memberKey }`), executed WITH inputs (execute body carries `inputs`), echoed into typed outputs |
 | `Test-SetVariableLoop.ps1` | owns an isolated rebuilt host; Studio-shaped `Elsa.Any` Set inputs initialize and increment an `Int32` variable, printing exactly 1..10 with zero incidents |
+| `Test-SetVariableRetainedArtifact.ps1` | owns an isolated rebuilt host; imports a retained v1 Any assignment, republishes the same authored expression, and verifies a distinct executable, numeric write, idempotency and preserved history |
 
 ## Contract notes learned
 
@@ -21,3 +22,4 @@ Backend REST tests for the value/typing layer. Shared helper: `_VarCommon.ps1`. 
 - **Inputs:** the `execute` body accepts `inputs` (name → JSON value); `input.*` is read with a `WorkflowRequest` expression whose `memberKey` is the declared input's reference key.
 
 `Test-SetVariableLoop.ps1` starts its own server and takes no `-BaseUrl` argument. Build Workbench before running it.
+`Test-SetVariableRetainedArtifact.ps1` has the same owned-server lifecycle and also takes no `-BaseUrl` argument.
