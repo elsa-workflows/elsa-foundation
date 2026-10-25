@@ -36,7 +36,7 @@ internal sealed class BpmnProcessRuntime(BpmnStateCodec codec, BpmnWorkLedger le
     public async ValueTask<RuntimeStructuralContinuation> CompleteAsync(IRuntimeActivityExecutionContext context, ActivityChildCompletedContext completion)
     {
         var frame = await ReadAsync(context);
-        var child = BpmnWorkLedger.Child(frame.Children, Owner(context), completion.CompletedChildActivityExecutionId,
+        var child = BpmnWorkLedger.Child(frame.Children, frame.Document.State, Owner(context), completion.CompletedChildActivityExecutionId,
             completion.CompletedChildExecutableNodeId, completion.CompletedChildIterationId);
         var result = Evaluate(() => Interpreter.OnWorkCompleted(new BpmnWorkCompletedRequest(frame.Graph, frame.Document.State,
             Snapshot(context, frame, exclude: child.InvocationId), child.Execution.ExecutableNodeId, child.InvocationId,
@@ -47,7 +47,7 @@ internal sealed class BpmnProcessRuntime(BpmnStateCodec codec, BpmnWorkLedger le
     public async ValueTask<RuntimeStructuralContinuation> FaultAsync(IRuntimeActivityExecutionContext context, ActivityChildFaultedContext fault)
     {
         var frame = await ReadAsync(context);
-        var child = BpmnWorkLedger.Child(frame.Children, Owner(context), fault.FaultedChildActivityExecutionId,
+        var child = BpmnWorkLedger.Child(frame.Children, frame.Document.State, Owner(context), fault.FaultedChildActivityExecutionId,
             fault.FaultedChildExecutableNodeId, fault.FaultedChildIterationId);
         var result = Fault(context, frame, child);
         return Finish(context, frame, result, fault.IncidentId);
@@ -56,7 +56,7 @@ internal sealed class BpmnProcessRuntime(BpmnStateCodec codec, BpmnWorkLedger le
     public async ValueTask<RuntimeStructuralContinuation> SignalAsync(IRuntimeActivityExecutionContext context, ActivityChildNotifiedContext signal)
     {
         var frame = await ReadAsync(context);
-        var child = BpmnWorkLedger.Child(frame.Children, Owner(context), signal.NotifyingChildActivityExecutionId,
+        var child = BpmnWorkLedger.Child(frame.Children, frame.Document.State, Owner(context), signal.NotifyingChildActivityExecutionId,
             signal.NotifyingChildExecutableNodeId, signal.NotifyingChildIterationId);
         // Delivery may follow the child's terminal checkpoint. Its pending terminal callback, rather than
         // the database status, determines when its semantic invocation stops being live.
@@ -69,7 +69,7 @@ internal sealed class BpmnProcessRuntime(BpmnStateCodec codec, BpmnWorkLedger le
     public async ValueTask<RuntimeStructuralContinuation> OutcomeAsync(IRuntimeActivityExecutionContext context, ActivityChildOutcomeContext outcome)
     {
         var frame = await ReadAsync(context);
-        var child = BpmnWorkLedger.Child(frame.Children, Owner(context), outcome.FaultedChildActivityExecutionId,
+        var child = BpmnWorkLedger.Child(frame.Children, frame.Document.State, Owner(context), outcome.FaultedChildActivityExecutionId,
             outcome.FaultedChildExecutableNodeId, outcome.FaultedChildIterationId);
         var commands = new List<BpmnHostCommand>();
         BpmnContinuation.Fault? firstFault = null;

@@ -111,3 +111,19 @@ passes2493/2493 (183 files). No frontend source correction was needed for this t
 This closes these finite milestones, not all US3 or adoption: T029's actual called-workflow
 error/escalation and ordinary-task compensation remain open, as do all outstanding runtime,
 combined-durability, deletion/guard, reconciliation and final-review gates.
+
+## Terminal callback identity and reader matrix
+
+A new actual frozen parallel-MI corruption control reproduced a missing terminal-reporter element
+check; all callback paths now use the complete durable ledger and semantic work record. Refusal
+preserves the original parent state and other accepted MI waits. Explicit supersession lineage is
+validated instead of treating all historical rows with one work token as competing invocations.
+Original-reader controls parse real newly written continuing-v1 MI/listener/deferred-fault checkpoints,
+with every original field compared recursively. A real new-host v2 checkpoint is refused by that old
+reader. [The reader matrix](reader-matrix.md) states the exact boundary: parser compatibility does not
+qualify live binary rollback. The current adapter's v1 reader remains required after duplicate deletion.
+Callback replay after pruning, actual late fault and the combined-durability gates remain open.
+
+Whole-project local results after this correction: BPMN273, runtime EF1015, zero failures/skips.
+[The checkpoint receipt](callback-reader-checkpoint.json) records the unchanged original reader source
+identity and exact proof limits. These are incremental reviews, not final complete-PR author review.

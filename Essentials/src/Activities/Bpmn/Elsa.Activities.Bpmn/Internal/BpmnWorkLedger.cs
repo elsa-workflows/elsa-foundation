@@ -1,6 +1,7 @@
 using Bpmn.Model.State;
 using Bpmn.Semantics;
 using Elsa.Activities.Bpmn.Exceptions;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -24,14 +25,55 @@ internal sealed class BpmnWorkLedger(IActivityExecutionStateStore store)
     }
 
     public static ActivityExecutionState Child(
-        IReadOnlyList<ActivityExecutionState> children, string owner, string handle, string binding, string? iteration)
+        IReadOnlyList<ActivityExecutionState> children, BpmnExecutionState state, string owner, string handle, string binding, string? iteration)
     {
-        var child = children.SingleOrDefault(candidate => candidate.InvocationId == handle)
-            ?? throw new BpmnHostException($"BPMN child '{handle}' has no durable direct-child identity.");
+        var matches = children.Where(candidate => candidate.InvocationId == handle).ToArray();
+        if (matches.Length != 1)
+            throw new BpmnHostException($"BPMN child '{handle}' has no unique durable direct-child identity.");
+        var child = matches[0];
         if (child.ParentActivityExecutionId != owner || child.Provenance.ParentActivityExecutionId != owner ||
             child.Execution.ExecutableNodeId != binding || child.IterationId != iteration || child.Provenance.IterationId != iteration)
             throw new BpmnHostException($"BPMN child '{handle}' does not match its parent, binding and iteration.");
+        var token = TokenId(child);
+        ValidateWorkHistory(children, child, token);
+        var work = state.ActiveWork.Where(candidate => candidate.TokenId == token).ToArray();
+        if (work.Length > 1 || work.Length == 1 &&
+            (work[0].NodeId != binding || work[0].IterationId != iteration ||
+             work[0].ElementId != child.Provenance.Metadata.GetValueOrDefault("bpmn.elementId")))
+            throw new BpmnHostException($"BPMN child '{handle}' does not match its active work record.");
+        var stopped = state.Tokens.Where(candidate => candidate.Status == BpmnTokenStatus.Canceled && candidate.StoppedHandle == handle).ToArray();
+        if (stopped.Length > 1 || stopped.Length == 1 &&
+            (stopped[0].TokenId != token || stopped[0].AtElementId != child.Provenance.Metadata.GetValueOrDefault("bpmn.elementId")))
+            throw new BpmnHostException($"BPMN child '{handle}' does not match its retired work record.");
         return child;
+    }
+
+    private static void ValidateWorkHistory(IReadOnlyList<ActivityExecutionState> children, ActivityExecutionState child, string token)
+    {
+        var history = children.Where(candidate => candidate.Provenance.ExecutionPathId == token).ToArray();
+        // Operator successors retain the semantic work token. Their mutually linked supersession
+        // chain is history, not a competing invocation; unrelated current/terminal claims are ambiguous.
+        if (history.Count(candidate => candidate.Status != ActivityExecutionStatus.Superseded) != 1 ||
+            child.Status == ActivityExecutionStatus.Superseded || history.Select(candidate => candidate.InvocationId).Distinct().Count() != history.Length)
+            throw new BpmnHostException($"BPMN child '{child.InvocationId}' has ambiguous durable work-token identity '{token}'.");
+        foreach (var source in history.Where(candidate => candidate.InvocationId != child.InvocationId))
+        {
+            var current = source;
+            var visited = new HashSet<string>(StringComparer.Ordinal);
+            while (current.InvocationId != child.InvocationId)
+            {
+                var next = history.SingleOrDefault(candidate => candidate.InvocationId == current.SupersededByActivityExecutionId);
+                if (!visited.Add(current.InvocationId) || current.Status != ActivityExecutionStatus.Superseded || current.SupersededAt is null ||
+                    next is null || next.Metadata.GetValueOrDefault(RuntimeMetadataKeys.SupersedesActivityExecutionId) != current.InvocationId ||
+                    current.ParentActivityExecutionId != child.ParentActivityExecutionId ||
+                    current.Provenance.ParentActivityExecutionId != child.Provenance.ParentActivityExecutionId ||
+                    current.Execution.ExecutableNodeId != child.Execution.ExecutableNodeId || current.IterationId != child.IterationId ||
+                    current.Provenance.IterationId != child.Provenance.IterationId ||
+                    current.Provenance.Metadata.GetValueOrDefault("bpmn.elementId") != child.Provenance.Metadata.GetValueOrDefault("bpmn.elementId"))
+                    throw new BpmnHostException($"BPMN child '{child.InvocationId}' has incompatible work-token supersession history '{token}'.");
+                current = next;
+            }
+        }
     }
 
     public static string TokenId(ActivityExecutionState child) =>
@@ -50,8 +92,6 @@ internal sealed class BpmnWorkLedger(IActivityExecutionStateStore store)
             if (token.Status != BpmnTokenStatus.Canceled || token.StoppedHandle is not null)
                 return token;
             var matches = children.Where(child => child.Provenance.ExecutionPathId == token.TokenId).ToArray();
-            if (matches.Length > 1)
-                throw new BpmnHostException($"Legacy BPMN token '{token.TokenId}' has ambiguous child provenance.");
             var element = graph.Elements.SingleOrDefault(entry => entry.ElementId == token.AtElementId)
                 ?? throw new BpmnHostException($"Legacy BPMN owner '{owner}', token '{token.TokenId}' refers to missing element '{token.AtElementId}'.");
             if (matches.Length == 0)
@@ -72,7 +112,11 @@ internal sealed class BpmnWorkLedger(IActivityExecutionStateStore store)
                 throw new BpmnHostException($"Legacy BPMN token '{token.TokenId}' cannot recover an exact durable stopped-work identity.");
             }
 
-            var child = matches[0];
+            var current = matches.Where(child => child.Status != ActivityExecutionStatus.Superseded).ToArray();
+            if (current.Length != 1)
+                throw new BpmnHostException($"Legacy BPMN token '{token.TokenId}' has ambiguous child provenance.");
+            var child = current[0];
+            ValidateWorkHistory(children, child, token.TokenId);
             if (child.ParentActivityExecutionId != owner || child.Provenance.ParentActivityExecutionId != owner ||
                 child.IterationId != child.Provenance.IterationId ||
                 child.Provenance.Metadata.GetValueOrDefault("bpmn.elementId") != token.AtElementId ||
@@ -89,9 +133,9 @@ internal sealed class BpmnWorkLedger(IActivityExecutionStateStore store)
         IRuntimeActivityExecutionContext context, BpmnExecutionState state, IReadOnlyList<ActivityExecutionState> children)
     {
         var owner = context.ActivityExecutionState.InvocationId;
-        return context.GetLiveChildActivities().Select(live =>
+        return context.GetLiveChildActivities().Where(live => live.Status != ActivityExecutionStatus.Superseded).Select(live =>
         {
-            var child = Child(children, owner, live.ActivityExecutionId, live.ExecutableNodeId, live.IterationId);
+            var child = Child(children, state, owner, live.ActivityExecutionId, live.ExecutableNodeId, live.IterationId);
             var token = TokenId(child);
             var work = state.ActiveWork.Where(candidate => candidate.TokenId == token).ToArray();
             if (work.Length > 1 || work.Length == 1 &&

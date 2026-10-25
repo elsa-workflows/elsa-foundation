@@ -5,6 +5,7 @@ using Elsa.Activities.Bpmn.Internal;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,6 +17,80 @@ namespace Elsa.Activities.Bpmn.Tests;
 /// <summary>Synthetic delivery regression controls; actual old-state recovery is tested separately against frozen EF stores.</summary>
 public sealed class BpmnDeliveryBoundaryTests
 {
+    [Fact]
+    public async Task Original_reader_explicitly_refuses_an_actual_new_host_v2_checkpoint()
+    {
+        await using var host = await F.CreateAsync(["reader-parent", "reader-child"]);
+        var executable = host.NewExecutable([F.EventWaitNode("node-child", "wait")],
+            [F.StartEvent(), F.Task("work", "node-child"), F.EndEvent()],
+            [F.Flow("start-work", "start", "work"), F.Flow("work-end", "work", "end")],
+            [F.NodeResumeTarget("node-child", Elsa.Activities.Primitives.Activities.Event.ResumeTargetId)]);
+        var run = await host.RunAsync(executable);
+        var parent = run.State(F.ProcessNodeId);
+        Assert.Equal(2, parent.PrivateState!.StateVersion);
+        Assert.Throws<Elsa.Activities.Bpmn.Exceptions.BpmnExecutionException>(() => BpmnStatePersister.LoadState(parent));
+    }
+
+    [Theory]
+    [InlineData("element")]
+    [InlineData("duplicate-token")]
+    [InlineData("duplicate-handle")]
+    [InlineData("superseded-chain")]
+    [InlineData("broken-supersession")]
+    public async Task Terminal_callback_validates_complete_durable_identity_before_semantic_dispatch(string defect)
+    {
+        await using var host = await F.CreateAsync(["identity-parent", "identity-child"]);
+        var executable = host.NewExecutable([F.EventWaitNode("node-child", "wait")],
+            [F.StartEvent(), F.Task("work", "node-child"), F.EndEvent()],
+            [F.Flow("start-work", "start", "work"), F.Flow("work-end", "work", "end")],
+            [F.NodeResumeTarget("node-child", Elsa.Activities.Primitives.Activities.Event.ResumeTargetId)]);
+        var run = await host.RunAsync(executable);
+        var parent = run.State(F.ProcessNodeId);
+        var child = run.State("node-child") with { Status = ActivityExecutionStatus.Completed };
+        var state = new BpmnStateCodec().Read(parent.PrivateState).State;
+        ActivityExecutionState[] children = defect switch
+        {
+            "element" => [child with { Provenance = child.Provenance with
+                { Metadata = new Dictionary<string, string>(child.Provenance.Metadata) { ["bpmn.elementId"] = "wrong-element" } } }],
+            "duplicate-token" => [child, child with { Execution = child.Execution with { ActivityExecutionId = "another-handle" } }],
+            _ => [child, child]
+        };
+        if (defect is "superseded-chain" or "broken-supersession")
+        {
+            var previous = child with
+            {
+                Execution = child.Execution with { ActivityExecutionId = "previous-handle" }, Status = ActivityExecutionStatus.Superseded,
+                SupersededByActivityExecutionId = child.InvocationId, SupersededAt = DateTimeOffset.UnixEpoch
+            };
+            child = child with { Metadata = new Dictionary<string, string>(child.Metadata)
+                { [RuntimeMetadataKeys.SupersedesActivityExecutionId] = defect == "superseded-chain" ? previous.InvocationId : "wrong-predecessor" } };
+            children = [previous, child];
+        }
+        if (defect == "superseded-chain")
+        {
+            Assert.Equal(child, BpmnWorkLedger.Child(children, state, parent.InvocationId, child.InvocationId, child.Execution.ExecutableNodeId, child.IterationId));
+            var runtime = host.Provider.GetRequiredService<IBpmnProcessRuntime>();
+            var context = new SimpleActivityExecutionContext(new Activities.BpmnProcess(runtime), CancellationToken.None,
+                "wfexec-1", WorkflowExecutionHarness.Identity,
+                new RuntimeSchedulerWorkItem("history", "wfexec-1", "command", WorkflowExecutionCommandKind.InvokeActivity,
+                    "envelope", "idempotency", DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch), executable.RootActivity, parent,
+                liveChildActivities: children.Select(candidate => new RuntimeLiveChildActivity(candidate.InvocationId,
+                    candidate.Execution.ExecutableNodeId, candidate.Status, candidate.IterationId)).ToArray());
+            Assert.Equal(child.InvocationId, Assert.Single(BpmnWorkLedger.Live(context, state, children)).Handle);
+            var tokenId = BpmnWorkLedger.TokenId(child);
+            var legacy = new BpmnStateCodec().Read(parent.PrivateState) with { Version = 1, State = state with
+            {
+                ActiveWork = [], Tokens = state.Tokens.Select(token => token.TokenId == tokenId
+                    ? token with { Status = BpmnTokenStatus.Canceled, StoppedHandle = null } : token).ToArray()
+            } };
+            var recovered = BpmnWorkLedger.RecoverLegacy(legacy, children, parent.InvocationId, BpmnGraphAdapter.Build(executable.RootActivity));
+            Assert.Equal(child.InvocationId, recovered.State.Tokens.Single(token => token.TokenId == tokenId).StoppedHandle);
+        }
+        else
+            Assert.Throws<BpmnHostException>(() => BpmnWorkLedger.Child(children, state, parent.InvocationId,
+                child.InvocationId, child.Execution.ExecutableNodeId, child.IterationId));
+    }
+
     [Theory]
     [InlineData("fault")]
     [InlineData("terminate")]

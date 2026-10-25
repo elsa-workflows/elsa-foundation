@@ -34,6 +34,10 @@ public sealed class BpmnUpgradeRecoveryEfTests
     public Task Incomplete_or_conflicting_durable_identity_refuses_dispatch_and_preserves_original_state(string defect) =>
         RecoverAsync("resolved-race", defect);
 
+    [Fact]
+    public Task Active_terminal_callback_refuses_conflicting_element_identity_from_actual_legacy_mi_checkpoint() =>
+        RecoverAsync("parallel-mi", "active-element-mismatch");
+
     private static async Task RecoverAsync(string scenario, string? defect = null)
     {
         var repository = new DirectoryInfo(AppContext.BaseDirectory);
@@ -81,6 +85,7 @@ public sealed class BpmnUpgradeRecoveryEfTests
             if (scenario is "parallel-mi" or "listener-rearm")
                 Assert.NotEmpty(original.GetProperty("activeChildren").EnumerateArray());
 
+            string? damagedHandle = null;
             if (defect is not null)
             {
                 if (defect == "missing-graph-element")
@@ -96,7 +101,10 @@ public sealed class BpmnUpgradeRecoveryEfTests
                 }
                 else
                 {
-                    var loser = Assert.Single(before, state => state.Execution.ExecutableNodeId == "node-loser");
+                    var loser = defect == "active-element-mismatch"
+                        ? before.Where(state => state.Execution.ExecutableNodeId == "node-work").OrderBy(state => state.InvocationId, StringComparer.Ordinal).First()
+                        : Assert.Single(before, state => state.Execution.ExecutableNodeId == "node-loser");
+                    damagedHandle = loser.InvocationId;
                     var damaged = defect switch
                     {
                         "missing-history" => loser with { ParentActivityExecutionId = "missing-parent-history" },
@@ -122,8 +130,23 @@ public sealed class BpmnUpgradeRecoveryEfTests
                 Assert.Equal(scenario == "parallel-mi" ? 3 : 1, bookmarks.Length);
                 if (scenario == "parallel-mi")
                     Assert.Equal(3, bookmarks.Select(bookmark => bookmark.ActivityExecutionId).Distinct().Count());
-                foreach (var bookmark in bookmarks)
+                if (scenario == "listener-rearm" && defect is null)
+                {
+                    Assert.True(continuing.PrivateState.CommittedAt > parent.PrivateState.CommittedAt);
+                    AssertLegacyReaderParses(continuing);
+                }
+                var resumedCount = 0;
+                foreach (var bookmark in defect == "active-element-mismatch" ? bookmarks.Where(bookmark => bookmark.ActivityExecutionId == damagedHandle) : bookmarks)
+                {
                     await host.ResumeAsync(bookmark, JsonSerializer.SerializeToElement(new { eventName = "continue" }));
+                    if (scenario == "parallel-mi" && defect is null && ++resumedCount == 1)
+                    {
+                        var updated = await store.FindAsync(WorkflowExecutionHarness.WorkflowExecutionId, parent.InvocationId);
+                        Assert.True(updated!.PrivateState!.CommittedAt > parent.PrivateState.CommittedAt);
+                        Assert.True(updated.PrivateState.Value.InlineValue!.Value.GetProperty("sequence").GetInt32() > original.GetProperty("sequence").GetInt32());
+                        AssertLegacyReaderParses(updated);
+                    }
+                }
             }
             var workflow = await host.Provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(WorkflowExecutionHarness.WorkflowExecutionId);
             var after = await store.ListAllAsync(WorkflowExecutionHarness.WorkflowExecutionId);
@@ -143,8 +166,19 @@ public sealed class BpmnUpgradeRecoveryEfTests
                 Assert.Equal(original.GetProperty("pendingFault").GetProperty("message").GetString(), resumed.Fault.Message);
                 Assert.Equal(1, resumed.PrivateState!.StateVersion);
                 Assert.True(resumed.PrivateState.Value.InlineValue!.Value.TryGetProperty("activeChildren", out _));
+                AssertLegacyReaderParses(resumed);
             }
-            Assert.Empty(await host.BookmarksAsync());
+            if (defect == "active-element-mismatch")
+            {
+                // Refusal retains the other accepted MI waits for repair; it must not advance or
+                // destructively clean their continuation state merely because one callback is corrupt.
+                var remaining = await host.BookmarksAsync();
+                Assert.Equal(before.Where(child => child.Execution.ExecutableNodeId == "node-work" && child.InvocationId != damagedHandle)
+                    .SelectMany(child => child.BookmarkIds).Order(StringComparer.Ordinal),
+                    remaining.Select(bookmark => bookmark.BookmarkId).Order(StringComparer.Ordinal));
+            }
+            else
+                Assert.Empty(await host.BookmarksAsync());
             await host.Provider.GetRequiredService<IRuntimeResumptionService>().SweepAsync(new RuntimeResumptionSweepRequest());
             var replay = await store.ListAllAsync(WorkflowExecutionHarness.WorkflowExecutionId);
             Assert.Equal(after.Count, replay.Count);
@@ -154,6 +188,39 @@ public sealed class BpmnUpgradeRecoveryEfTests
         {
             Directory.Delete(directory, recursive: true);
         }
+    }
+
+    // Historical parse control while the original v1 reader still exists. This does not claim that
+    // rolling an upgraded execution back to the old engine is safe after released pruning.
+    private static void AssertLegacyReaderParses(ActivityExecutionState continuing)
+    {
+        var legacy = Elsa.Activities.Bpmn.Internal.BpmnStatePersister.LoadState(continuing);
+        Assert.NotNull(legacy);
+        var read = JsonSerializer.SerializeToNode(legacy, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var written = JsonNode.Parse(continuing.PrivateState!.Value.InlineValue!.Value.GetRawText());
+        AssertLegacyFields(read, written);
+    }
+
+    private static void AssertLegacyFields(JsonNode? read, JsonNode? written)
+    {
+        if (read is JsonObject source)
+        {
+            var target = Assert.IsType<JsonObject>(written);
+            foreach (var (key, value) in source)
+            {
+                Assert.True(target.ContainsKey(key), $"Legacy reader field '{key}' was lost by the v1 writer.");
+                AssertLegacyFields(value, target[key]);
+            }
+        }
+        else if (read is JsonArray sourceArray)
+        {
+            var targetArray = Assert.IsType<JsonArray>(written);
+            Assert.Equal(sourceArray.Count, targetArray.Count);
+            for (var index = 0; index < sourceArray.Count; index++)
+                AssertLegacyFields(sourceArray[index], targetArray[index]);
+        }
+        else
+            Assert.True(JsonNode.DeepEquals(read, written), $"Legacy reader changed a persisted v1 field: {read} / {written}.");
     }
 
     private static async Task ResumeAsync(BpmnRuntimeFixture host, string node)
