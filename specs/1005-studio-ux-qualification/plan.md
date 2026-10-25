@@ -46,3 +46,7 @@ No new product abstraction, project, provider or governance exception.
 ## T009 refinement: Connection clear
 
 The normal-host authoring journey reproduced a compile failure after clearing an optional Connection. Repair the properties-panel clear path in the existing Workflows frontend, with a behavioral regression through canonical serialization. Retain malformed-reference compiler rejection and all other expression semantics. Root verifies the test fails without the fix, inspects the full diff and repeats the composed authoring/service journey on rebuilt exact-head hosts before final acceptance. This remains the sole #3075 work unit and PR.
+
+## Resource contrast refinement
+
+The rebuilt normal-host picker error resolves to near-white text on an opaque pale modal surface. Correct the existing standalone Connections error foreground tokens and add rendered Classic Light/Dark regression coverage for reachable error states, with a failing baseline control. Keep the defensive placement error style consistent without claiming it was reached through normal UI. Repeat affected browser/private-host checks and every final gate; no backend or provider changes are needed.

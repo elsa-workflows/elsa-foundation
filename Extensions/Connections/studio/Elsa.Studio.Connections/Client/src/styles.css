@@ -301,7 +301,7 @@
 .connection-secret-picker-status.error,
 .connection-credential-error,
 .connections-create-error {
-  color: var(--studio-danger-text);
+  color: var(--studio-danger-fg);
 }
 
 .connections-create-content {
@@ -330,7 +330,7 @@
 }
 
 .connections-create-field-error {
-  color: var(--studio-danger-text);
+  color: var(--studio-danger-fg);
   font-size: var(--studio-label-size);
 }
 
