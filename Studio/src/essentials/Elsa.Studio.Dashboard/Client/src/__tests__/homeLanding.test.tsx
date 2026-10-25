@@ -74,6 +74,11 @@ describe("Home default landing", () => {
     expect(host.textContent).toContain("Create a workflow");
     expect(host.textContent).toContain("Documentation");
     expect(host.textContent).toContain("New to Elsa?");
+    expect(homeDocsLinks.map(link => link.href)).toEqual([
+      "https://v4.elsaworkflows.io/essentials/quickstart",
+      "https://v4.elsaworkflows.io/essentials/first-workflow",
+      "https://v4.elsaworkflows.io/studio"
+    ]);
     for (const link of homeDocsLinks) {
       expect(host.querySelector(`a[href="${link.href}"]`)).not.toBeNull();
     }

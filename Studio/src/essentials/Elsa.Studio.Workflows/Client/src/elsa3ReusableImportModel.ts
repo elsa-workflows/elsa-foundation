@@ -124,12 +124,12 @@ const publicationStatusLabels: Record<(typeof publicationStatusNames)[number], s
   Published: "Published",
   AlreadyPublished: "Already published",
   Refused: "Publishing refused",
-  NotPublishedDependency: "Not published: depends on an unpublished workflow",
+  NotPublishedDependency: "Not published: depends on an unpublished version",
   NotPublished: "Not published"
 };
 
 export function importPublicationStatus(status: string | number) {
-  if (typeof status === "number") return publicationStatusNames[status] ?? `Status ${status}`;
+  if (typeof status === "number") return publicationStatusNames[status] ?? `Status${status}`;
   return status;
 }
 
@@ -151,6 +151,8 @@ function humanizePublicationStatus(value: string) {
   return value
     .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Za-z])(\d)/g, "$1 $2")
+    .replace(/(\d)([A-Za-z])/g, "$1 $2")
     .replace(/[_-]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();

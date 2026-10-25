@@ -103,13 +103,17 @@ describe("workflow instance inspection facts", () => {
 
     expect(container.textContent).toContain("Checkpoint cadence");
     expect(container.textContent).toContain("Durable");
-    expect(container.textContent).toContain("Inspection");
+    expect(container.textContent).toContain("Inspection detail");
     expect(container.textContent).toContain("Activity-level");
     expect(container.textContent).not.toContain("folded to the commit boundary");
     expect(valueFor(container, "Checkpoint cadence")).toBe("Durable");
-    expect(valueFor(container, "Inspection")).toBe("Activity-level");
-    expect(dd(container, "Durable").getAttribute("title")).toContain("checkpoints after every activity");
-    expect(dd(container, "Activity-level").getAttribute("title")).toContain("exact");
+    expect(valueFor(container, "Inspection detail")).toBe("Activity-level");
+    expect(dd(container, "Durable").getAttribute("aria-describedby")).toBe("wf-instance-cadence-help");
+    expect(dd(container, "Activity-level").getAttribute("aria-describedby")).toBe("wf-instance-inspection-help");
+    expect(help(container, "wf-instance-cadence-help")).toContain("checkpoints after every activity");
+    expect(help(container, "wf-instance-inspection-help")).toContain("exact");
+    expect(describedHelp(container, "Durable")?.tabIndex).toBe(0);
+    expect(describedHelp(container, "Activity-level")?.tabIndex).toBe(0);
   });
 
   it.each(["Balanced", "Ephemeral"] as const)("shows a %s run as boundary-level with the folded-evidence explanation", mode => {
@@ -120,11 +124,15 @@ describe("workflow instance inspection facts", () => {
 
     expect(container.textContent).toContain("Checkpoint cadence");
     expect(container.textContent).toContain(mode);
+    expect(container.textContent).toContain("Inspection detail");
     expect(container.textContent).toContain("Boundary-level");
     expect(container.textContent).toContain("folded to the commit boundary");
-    expect(dd(container, mode).getAttribute("title")).toContain("boundary-level detail");
-    expect(dd(container, "Boundary-level").getAttribute("title")).toContain("folded to the commit boundary");
+    expect(dd(container, mode).getAttribute("aria-describedby")).toBe("wf-instance-cadence-help");
+    expect(dd(container, "Boundary-level").getAttribute("aria-describedby")).toBe("wf-instance-inspection-help");
+    expect(help(container, "wf-instance-cadence-help")).toContain("boundary-level detail");
+    expect(container.querySelector("[role='note']")?.id).toBe("wf-instance-inspection-help");
     expect(container.querySelector("[role='note']")?.textContent).toContain("timeline values reflect the durable boundary");
+    expect((container.querySelector("[role='note']") as HTMLElement | null)?.tabIndex).toBe(0);
     expect(formatInspectionGranularity("boundary-level")).toBe("Boundary-level");
   });
 
@@ -177,11 +185,20 @@ function details(overrides: Partial<WorkflowInstanceDetails> = {}): WorkflowInst
 
 function valueFor(container: HTMLElement, label: string) {
   const term = [...container.querySelectorAll("dt")].find(item => item.textContent === label);
-  return term?.nextElementSibling?.textContent ?? "";
+  return term?.nextElementSibling?.querySelector("span")?.textContent ?? "";
 }
 
 function dd(container: HTMLElement, value: string) {
-  return [...container.querySelectorAll("dd")].find(item => item.textContent === value)!;
+  return [...container.querySelectorAll("dd")].find(item => item.querySelector("span")?.textContent === value)!;
+}
+
+function describedHelp(container: HTMLElement, value: string) {
+  const describedBy = dd(container, value).getAttribute("aria-describedby");
+  return describedBy ? container.querySelector<HTMLElement>(`#${describedBy}`) : null;
+}
+
+function help(container: HTMLElement, id: string) {
+  return container.querySelector(`#${id}`)?.textContent ?? "";
 }
 
 function context(http: Record<string, unknown>) {

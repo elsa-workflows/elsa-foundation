@@ -4,18 +4,17 @@
   // Specs only: fixture TSX pulls the app graph and is compiled by Vite, not this project.
   // Paths match tests/browser/vite.config.ts. Keep automatic `@types` empty so installing
   // nothing here can leak Node globals into packages.
+  // React types come from the Studio-root `@types/react` and `@types/react-dom` devDependencies
+  // via typeRoots, not a leaf package's node_modules/@types layout.
   "compilerOptions": {
     "baseUrl": "../..",
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "types": [],
+    "typeRoots": ["./typings", "../../node_modules/@types"],
     "paths": {
       "@elsa-workflows/studio-sdk": ["src/apps/Elsa.Studio.Web/Client/src/sdk/index.ts"],
       "@elsa-workflows/studio-ui": ["src/apps/Elsa.Studio.Web/StudioUi/src/index.ts"],
-      "@xyflow/react": ["src/essentials/Elsa.Studio.Workflows/Client/node_modules/@xyflow/react"],
-      "react": ["src/essentials/Elsa.Studio.Workflows/Client/node_modules/@types/react/index.d.ts"],
-      "react/jsx-runtime": ["src/essentials/Elsa.Studio.Workflows/Client/node_modules/@types/react/jsx-runtime.d.ts"],
-      "react-dom": ["src/essentials/Elsa.Studio.Workflows/Client/node_modules/@types/react-dom/index.d.ts"],
-      "react-dom/client": ["src/essentials/Elsa.Studio.Workflows/Client/node_modules/@types/react-dom/client.d.ts"]
+      "@xyflow/react": ["src/essentials/Elsa.Studio.Workflows/Client/node_modules/@xyflow/react"]
     }
   },
   "include": ["./**/*.spec.ts", "./playwright*.ts", "./typings/**/*.d.ts"]
