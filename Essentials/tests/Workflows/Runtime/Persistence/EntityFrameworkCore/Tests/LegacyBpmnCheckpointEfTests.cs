@@ -271,15 +271,17 @@ public sealed class LegacyBpmnCheckpointEfTests
             if (!Ready || Captured)
                 return;
             await using var scope = Services!.CreateAsyncScope();
-            var states = await scope.ServiceProvider.GetRequiredService<IActivityExecutionStateStore>()
+            // A new DI scope still inherits the AsyncLocal coalescing session. Read the durable
+            // EF adapters directly: predicates/order/facts must describe the database being backed up.
+            var states = await scope.ServiceProvider.GetRequiredService<EfActivityExecutionStateStore>()
                 .ListAllAsync(WorkflowExecutionHarness.WorkflowExecutionId);
             var parent = states.SingleOrDefault(state => state.Execution.ExecutableNodeId == F.ProcessNodeId);
             if (parent?.PrivateState?.Value.InlineValue is not { } raw)
                 return;
             var state = raw.Deserialize<BpmnExecutionState>(Web)!;
-            var bookmarks = await scope.ServiceProvider.GetRequiredService<IBookmarkStateStore>()
+            var bookmarks = await scope.ServiceProvider.GetRequiredService<EfBookmarkStateStore>()
                 .ListAllBookmarkStatesAsync(WorkflowExecutionHarness.WorkflowExecutionId);
-            var queue = await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
+            var queue = await scope.ServiceProvider.GetRequiredService<EfSchedulerWorkQueueStore>()
                 .ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionHarness.WorkflowExecutionId));
             var loser = states.SingleOrDefault(child => child.Execution.ExecutableNodeId == "node-loser");
             var queuedLoser = loser is not null && queue.Where(item => item.CommandKind == WorkflowExecutionCommandKind.CompleteActivity)
@@ -326,6 +328,26 @@ public sealed class LegacyBpmnCheckpointEfTests
             using var destination = new SqliteConnection($"Data Source={backup};Pooling=False");
             source.Open(); destination.Open();
             source.BackupDatabase(destination);
+            source.Close(); destination.Close();
+
+            // Re-read the backup itself, outside the capture provider's coalescing wrappers.
+            // This makes a receipt/physical-store mismatch a capture failure.
+            await using var copied = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>()
+                .UseSqlite($"Data Source={backup};Pooling=False").Options);
+            var access = scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextAccessor>();
+            var codec = scope.ServiceProvider.GetRequiredService<IRuntimeRecoveryContinuationCodec>();
+            var storedActivities = await new EfActivityExecutionStateStore(copied, access, codec)
+                .ListAllAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+            var storedBookmarks = await new EfBookmarkStateStore(copied, access)
+                .ListAllBookmarkStatesAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+            var storedQueue = await new EfSchedulerWorkQueueStore(copied, access, codec)
+                .ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionHarness.WorkflowExecutionId));
+            Assert.Equal(JsonSerializer.Serialize(states.OrderBy(child => child.InvocationId), Web),
+                JsonSerializer.Serialize(storedActivities.OrderBy(child => child.InvocationId), Web));
+            Assert.Equal(JsonSerializer.Serialize(bookmarks.OrderBy(bookmark => bookmark.BookmarkId), Web),
+                JsonSerializer.Serialize(storedBookmarks.OrderBy(bookmark => bookmark.BookmarkId), Web));
+            Assert.Equal(JsonSerializer.Serialize(queue.OrderBy(item => item.WorkItemId), Web),
+                JsonSerializer.Serialize(storedQueue.OrderBy(item => item.WorkItemId), Web));
             Captured = true;
         }
     }
