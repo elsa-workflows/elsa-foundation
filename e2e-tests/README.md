@@ -126,7 +126,7 @@ take no server argument and can run while yours is up:
 $base = 'http://localhost:5295'
 $selfHosted = 'Test-RestartRecovery.ps1', 'Test-AlterationReplayAndRestart.ps1', 'Test-FileBasedDeployment.ps1',
               'Test-SharedPersistence.ps1', 'Test-SharedDiagnosticsPersistence.ps1', 'Test-ServerLifecycleGuard.ps1',
-              'Test-JsonSourceComposition.ps1', 'Test-UnknownFeatures.ps1', 'Test-HttpResponseFlowchart.ps1', 'Test-SetVariableLoop.ps1'
+              'Test-JsonSourceComposition.ps1', 'Test-UnknownFeatures.ps1', 'Test-HttpResponseFlowchart.ps1', 'Test-SetVariableLoop.ps1', 'Test-SetVariableRetainedArtifact.ps1'
 # Package-backed Rules is qualified separately with an immutable feed and deployment receipt.
 $packageQualified = 'Test-DurableRules.ps1', 'Test-NativeRulesInstallation.ps1', 'Test-RulesAdmissionRecovery.ps1'
 $failed = @()
