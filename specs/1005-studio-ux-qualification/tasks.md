@@ -4,6 +4,8 @@
 **Acceptance authority**: [#3075](https://github.com/elsa-workflows/elsa-foundation/issues/3075).
 No performance or optional-provider program; no markdown/source-text tests.
 
+The checkboxes below record the candidate-preparation checkpoint, not final acceptance. Unchecked tasks are not asserted complete by this candidate. Exact-head execution evidence, acceptance and post-merge events are recorded on #3075 and its project board; they do not require a status-only source commit after the candidate is verified. The prospective terminal status in `spec.md` takes effect only when the gated PR merges.
+
 ## Phase 1: Setup
 
 - [x] T001 Verify the 24 prerequisites, healthy containing main, competing claims/PRs and claim #3075 before repository edits.

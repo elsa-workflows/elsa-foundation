@@ -1272,17 +1272,18 @@ describe("feature impact review", () => {
       ExistingSetting: "preserve me"
     }, ["Runtime"], { settings });
     let submitted: unknown;
+    let responseRevision = 1;
     const api = stubApi({
       getJson: async () => ({ revision: "server-rev-1", features: [initialFeature] }),
       postJson: async (_url, body) => {
         submitted = body;
+        const request = body as { features: Array<{ configuration: Record<string, unknown> }> };
+        const requestFeature = request.features[0];
+        if (!requestFeature) throw new Error("The feature apply request should contain the feature.");
         return {
           catalog: {
-            revision: "server-rev-2",
-            features: [feature(featureId, true, {
-              WorkflowExecutableCacheCapacity: 257,
-              ExistingSetting: "preserve me"
-            }, ["Runtime"], { settings })]
+            revision: `server-rev-${++responseRevision}`,
+            features: [feature(featureId, true, requestFeature.configuration, ["Runtime"], { settings })]
           },
           featureDescriptorCount: 1,
           reloadedShellCount: 1
@@ -1337,6 +1338,39 @@ describe("feature impact review", () => {
           configuration: {
             WorkflowExecutableCacheCapacity: 257,
             ExistingSetting: "preserve me"
+          }
+        }]
+      });
+
+      dialog = await openSettingsDialog();
+      const existingSettingLabel = Array.from(dialog.querySelectorAll("label"))
+        .find(label => label.querySelector("strong")?.textContent === "Existing setting");
+      const existingSettingInput = existingSettingLabel?.querySelector("input, textarea") as HTMLInputElement | null;
+      expect(existingSettingInput?.value).toBe("preserve me");
+      await changeInput(existingSettingInput, "");
+      await click(buttonByText(dialog, "Save draft"));
+      expect(container.textContent).toContain("Unsaved changes");
+
+      const clearReview = await openImpactReview(container);
+      const clearedFeature = impactRow(clearReview, featureId);
+      const clearedSettings = Array.from(clearedFeature?.querySelectorAll(".feature-management-impact-section") ?? [])
+        .find(section => section.querySelector("h5")?.textContent === "Changed settings");
+      expect(Array.from(clearedSettings?.querySelectorAll("dt") ?? []).map(item => item.textContent)).toEqual([
+        "Existing setting"
+      ]);
+      expect(Array.from(clearedSettings?.querySelectorAll("dd") ?? []).map(item => item.textContent?.trim())).toEqual([
+        "preserve me → Not set"
+      ]);
+
+      await click(buttonByText(clearReview, "Apply"));
+      expect(submitted).toEqual({
+        revision: "server-rev-2",
+        features: [{
+          id: featureId,
+          enabled: true,
+          configuration: {
+            WorkflowExecutableCacheCapacity: 257,
+            ExistingSetting: ""
           }
         }]
       });

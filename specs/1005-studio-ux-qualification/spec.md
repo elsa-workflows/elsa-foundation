@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/codex/3075-final-qualification`
 **Created**: 2026-10-25
-**Status**: In progress
+**Status**: Implemented — PR #3319; takes effect on merge after #3075 acceptance and every required delivery gate passes.
 **Input**: Deliver epic #3057 end to end, retaining every delivery gate.
 
 Owning work unit: [#3075](https://github.com/elsa-workflows/elsa-foundation/issues/3075).
