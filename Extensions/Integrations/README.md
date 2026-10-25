@@ -13,8 +13,10 @@ parallel secret store, no Elsa 3 shims. HTTP uses the foundation `http` connecti
 Extensions/Integrations/
   src/Sdk/                         Elsa.Integrations.Sdk v1 (#2726 / #2825)
   src/Connectors/OAuth2/           Generic OAuth2 scheme (#2727)
+  src/Connectors/Slack/            Slack Web API activities (#3322)
   tests/Tests/                     SDK contract tests
   tests/Connectors/OAuth2/Tests/   Tests against a mock OAuth server
+  tests/Connectors/Slack/Tests/    Slack ConnectorHarness tests (no live Slack)
 ```
 
 ## SDK
@@ -35,3 +37,10 @@ are registered when Connections is not composed.
 - Client secret: connection secret field or named credential (`IAccessTokenSource`)
 - Access and refresh tokens: `IRuntimeSecretMask`
 - Grants: `RequiresWritableStore`
+
+## Slack
+
+`AddSlackConnector` calls `AddElsaIntegrationsRuntime`. Activities bind the `http` connection
+and apply it with `ApplyConnectionAsync`. The host adds `AddOAuth2Connector()` when the
+connection uses the generic `oauth2` scheme and the customer's own Slack app. See
+[elsa-integrations-slack.md](../../docs/reference/elsa-integrations-slack.md).
