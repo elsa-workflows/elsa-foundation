@@ -108,12 +108,15 @@ describe("workflow instance inspection facts", () => {
     expect(container.textContent).not.toContain("folded to the commit boundary");
     expect(valueFor(container, "Checkpoint cadence")).toBe("Durable");
     expect(valueFor(container, "Inspection detail")).toBe("Activity-level");
-    expect(dd(container, "Durable").getAttribute("aria-describedby")).toBe("wf-instance-cadence-help");
-    expect(dd(container, "Activity-level").getAttribute("aria-describedby")).toBe("wf-instance-inspection-help");
-    expect(help(container, "wf-instance-cadence-help")).toContain("checkpoints after every activity");
-    expect(help(container, "wf-instance-inspection-help")).toContain("exact");
-    expect(describedHelp(container, "Durable")?.tabIndex).toBe(0);
-    expect(describedHelp(container, "Activity-level")?.tabIndex).toBe(0);
+    expect(dd(container, "Durable").querySelector("small")?.textContent).toContain("checkpoints after every activity");
+    expect(dd(container, "Activity-level").querySelector("small")?.textContent).toContain("exact");
+    assertHelpIsNotFocusable(dd(container, "Durable").querySelector("small"));
+    assertHelpIsNotFocusable(dd(container, "Activity-level").querySelector("small"));
+    assertNoDdDescribesItself(container);
+    expect(dd(container, "Durable").querySelector("small")?.id).toBeTruthy();
+    expect(dd(container, "Activity-level").querySelector("small")?.id).toBeTruthy();
+    expect(dd(container, "Durable").querySelector("small")?.id).not.toBe("wf-instance-cadence-help");
+    expect(dd(container, "Activity-level").querySelector("small")?.id).not.toBe("wf-instance-inspection-help");
   });
 
   it.each(["Balanced", "Ephemeral"] as const)("shows a %s run as boundary-level with the folded-evidence explanation", mode => {
@@ -127,13 +130,64 @@ describe("workflow instance inspection facts", () => {
     expect(container.textContent).toContain("Inspection detail");
     expect(container.textContent).toContain("Boundary-level");
     expect(container.textContent).toContain("folded to the commit boundary");
-    expect(dd(container, mode).getAttribute("aria-describedby")).toBe("wf-instance-cadence-help");
-    expect(dd(container, "Boundary-level").getAttribute("aria-describedby")).toBe("wf-instance-inspection-help");
-    expect(help(container, "wf-instance-cadence-help")).toContain("boundary-level detail");
-    expect(container.querySelector("[role='note']")?.id).toBe("wf-instance-inspection-help");
+    expect(dd(container, mode).querySelector("small")?.textContent).toContain("boundary-level detail");
     expect(container.querySelector("[role='note']")?.textContent).toContain("timeline values reflect the durable boundary");
-    expect((container.querySelector("[role='note']") as HTMLElement | null)?.tabIndex).toBe(0);
+    assertHelpIsNotFocusable(dd(container, mode).querySelector("small"));
+    assertHelpIsNotFocusable(container.querySelector("[role='note']"));
+    assertNoDdDescribesItself(container);
+    expect(dd(container, mode).querySelector("small")?.id).toBeTruthy();
+    expect(container.querySelector("[role='note']")?.id).toBeTruthy();
+    expect(dd(container, mode).querySelector("small")?.id).not.toBe("wf-instance-cadence-help");
+    expect(container.querySelector("[role='note']")?.id).not.toBe("wf-instance-inspection-help");
     expect(formatInspectionGranularity("boundary-level")).toBe("Boundary-level");
+  });
+
+  it("does not make help text a tab stop and never lets a definition describe itself", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    flushSync(() => root.render(
+      <>
+        <dl>
+          <WorkflowInstanceInspectionFacts persistenceMode="Durable" inspectionGranularity="activity-level" />
+        </dl>
+        <WorkflowInstanceInspectionNote inspectionGranularity="activity-level" />
+        <dl>
+          <WorkflowInstanceInspectionFacts persistenceMode="Balanced" inspectionGranularity="boundary-level" />
+        </dl>
+        <WorkflowInstanceInspectionNote inspectionGranularity="boundary-level" />
+      </>
+    ));
+    mounted = { root, container };
+
+    const helpElements = [...container.querySelectorAll<HTMLElement>("dd small, [role='note']")];
+    expect(helpElements.length).toBeGreaterThan(0);
+    for (const help of helpElements) {
+      assertHelpIsNotFocusable(help);
+    }
+    assertNoDdDescribesItself(container);
+  });
+
+  it("assigns unique help ids per instance", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    flushSync(() => root.render(
+      <>
+        <dl>
+          <WorkflowInstanceInspectionFacts persistenceMode="Durable" inspectionGranularity="activity-level" />
+        </dl>
+        <dl>
+          <WorkflowInstanceInspectionFacts persistenceMode="Durable" inspectionGranularity="activity-level" />
+        </dl>
+      </>
+    ));
+    mounted = { root, container };
+
+    const ids = [...container.querySelectorAll("small")].map(element => element.id);
+    expect(ids).toHaveLength(4);
+    expect(new Set(ids).size).toBe(4);
+    expect(ids.every(id => id && id !== "wf-instance-cadence-help" && id !== "wf-instance-inspection-help")).toBe(true);
   });
 
   it("renders nothing when the host omits the fields", () => {
@@ -192,13 +246,23 @@ function dd(container: HTMLElement, value: string) {
   return [...container.querySelectorAll("dd")].find(item => item.querySelector("span")?.textContent === value)!;
 }
 
-function describedHelp(container: HTMLElement, value: string) {
-  const describedBy = dd(container, value).getAttribute("aria-describedby");
-  return describedBy ? container.querySelector<HTMLElement>(`#${describedBy}`) : null;
+function assertHelpIsNotFocusable(element: Element | null) {
+  expect(element).toBeInstanceOf(HTMLElement);
+  const help = element as HTMLElement;
+  expect(help.getAttribute("tabindex")).toBeNull();
+  expect(help.tabIndex).toBe(-1);
 }
 
-function help(container: HTMLElement, id: string) {
-  return container.querySelector(`#${id}`)?.textContent ?? "";
+function assertNoDdDescribesItself(container: HTMLElement) {
+  for (const item of container.querySelectorAll("dd")) {
+    const describedBy = item.getAttribute("aria-describedby");
+    if (!describedBy) continue;
+    for (const id of describedBy.split(/\s+/).filter(Boolean)) {
+      const target = document.getElementById(id);
+      expect(target, `aria-describedby target #${id} should exist`).not.toBeNull();
+      expect(item.contains(target), `dd must not describe its own child #${id}`).toBe(false);
+    }
+  }
 }
 
 function context(http: Record<string, unknown>) {

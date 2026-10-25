@@ -1,3 +1,4 @@
+import { useId } from "react";
 import {
   readWorkflowInstanceInspectionGranularity,
   readWorkflowInstancePersistenceMode
@@ -20,9 +21,6 @@ const inspectionGranularityLabel: Record<InspectionGranularity, string> = {
   "boundary-level": "Boundary-level"
 };
 
-const cadenceHelpId = "wf-instance-cadence-help";
-const inspectionHelpId = "wf-instance-inspection-help";
-
 export function formatInspectionGranularity(value: InspectionGranularity) {
   return inspectionGranularityLabel[value];
 }
@@ -31,6 +29,8 @@ export function WorkflowInstanceInspectionFacts({
   persistenceMode,
   inspectionGranularity
 }: Pick<WorkflowInstanceDetails, "persistenceMode" | "inspectionGranularity">) {
+  const cadenceHelpId = useId();
+  const inspectionHelpId = useId();
   const mode = readWorkflowInstancePersistenceMode(persistenceMode);
   const granularity = readWorkflowInstanceInspectionGranularity(inspectionGranularity);
   if (!mode && !granularity) return null;
@@ -40,20 +40,20 @@ export function WorkflowInstanceInspectionFacts({
       {mode ? (
         <>
           <dt>Checkpoint cadence</dt>
-          <dd className="wf-identity-cell" aria-describedby={cadenceHelpId}>
+          <dd className="wf-identity-cell">
             <span>{mode}</span>
-            <small id={cadenceHelpId} tabIndex={0}>{checkpointCadenceHelp[mode]}</small>
+            <small id={cadenceHelpId}>{checkpointCadenceHelp[mode]}</small>
           </dd>
         </>
       ) : null}
       {granularity ? (
         <>
           <dt>Inspection detail</dt>
-          <dd className="wf-identity-cell" aria-describedby={inspectionHelpId}>
+          <dd className="wf-identity-cell">
             <span>{formatInspectionGranularity(granularity)}</span>
             {granularity === "boundary-level"
               ? null
-              : <small id={inspectionHelpId} tabIndex={0}>{inspectionGranularityHelp[granularity]}</small>}
+              : <small id={inspectionHelpId}>{inspectionGranularityHelp[granularity]}</small>}
           </dd>
         </>
       ) : null}
@@ -64,10 +64,11 @@ export function WorkflowInstanceInspectionFacts({
 export function WorkflowInstanceInspectionNote({
   inspectionGranularity
 }: Pick<WorkflowInstanceDetails, "inspectionGranularity">) {
+  const inspectionHelpId = useId();
   const granularity = readWorkflowInstanceInspectionGranularity(inspectionGranularity);
   if (granularity !== "boundary-level") return null;
   return (
-    <p id={inspectionHelpId} className="wf-instance-note wf-muted" role="note" tabIndex={0}>
+    <p id={inspectionHelpId} className="wf-instance-note wf-muted" role="note">
       {inspectionGranularityHelp[granularity]}
     </p>
   );
