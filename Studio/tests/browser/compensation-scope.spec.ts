@@ -117,7 +117,8 @@ test("a repeated scope picks its occurrence by keyboard, and names a Compensate 
   await expect(page.locator(".wf-compensation-phase")).toContainText("Cancelled — nothing undone");
 
   await picker.focus();
-  await page.keyboard.press("ArrowUp");
+  // Native select type-ahead avoids platform-specific arrow-key navigation behavior.
+  await page.keyboard.press("o");
   await expect(page.getByTestId("fixture-execution")).toHaveText("ae-scope-1");
   await expect(picker).toHaveValue("ae-scope-1");
   await expect(picker).toBeFocused();

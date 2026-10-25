@@ -19,8 +19,8 @@ Extensions/
     tests/   the module's test projects
 ```
 
-`<Name>` is the capability bucket, not a project name. Agent, Elsa3, ExtensionBuilder and
-Integrations retain their existing backend classification. Studio components occupy their named capability buckets; the two
+`<Name>` is the capability bucket, not a project name. Agent, Elsa3, ExtensionBuilder and Integrations retain their
+existing backend classification. Studio components occupy their named capability buckets; the two
 Weaver projects share `Weaver/studio/`. This consolidation does not reclassify all optional backend
 features or move backend essentials merely because a Studio component has a matching name.
 
@@ -126,8 +126,8 @@ stay green. Stage 2 pushed without it and CI caught a real boundary question the
 1. Move the projects, keeping each `.csproj` file name unchanged.
 2. Fix the `ProjectReference` paths that pointed at them, and their entries in `Elsa.Server.slnx`.
 3. Extensions get no solution filter of their own (#2577). If the module brings Testcontainers suites, check
-   they reach the nightly EF container matrix: `dotnet run --project tools/maps/Elsa.Maps.Generator -- solution-filter-roots
-   Elsa.Server.Persistence.Integration.slnf` must list them, and `tools/ci/ef-suites.json` must name each one
+   they reach the EF container matrix: `dotnet run --project tools/maps/Elsa.Maps.Generator -- solution-filter-roots
+   Elsa.Server.Persistence.Integration.slnf` must list them, and `containerSuites` in `tools/ci/test-tiers.json` must name each one
    (`-- ef-suites-self-test` fails until it does).
 4. Check that the dependency map still derives with `dotnet run --project tools/maps/Elsa.Maps.Generator -- dependency-map`
    (its output is git-ignored), and commit the solution filters only when they change. The dependency map and the

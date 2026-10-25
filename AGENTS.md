@@ -103,6 +103,7 @@ New work moves toward this rule: constitution for gates and governance, glossary
 [org-agents-review]: https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#review-and-merge-rules
 
 <!-- SPECKIT START -->
-For the active work unit's design and validation, read
-`specs/993-studio-diagnostics-index/plan.md`.
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+at specs/1003-studio-list-consistency/plan.md.
 <!-- SPECKIT END -->

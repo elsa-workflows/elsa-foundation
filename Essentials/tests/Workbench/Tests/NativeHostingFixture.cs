@@ -26,6 +26,7 @@ internal sealed class NativeHostingFixture : IAsyncDisposable
     private readonly HashSet<WorkbenchProcess> _currentHosts = [];
     private readonly HashSet<string> _roles = new(StringComparer.Ordinal);
     private bool _disposed;
+    private bool _preserveScenarioRootForDiagnostics;
 
     private NativeHostingFixture(NativeHostingProfile profile, string root, string packagePath, string packageSha256,
         bool observeNativeHosting, bool observeStaleWrite)
@@ -48,6 +49,8 @@ internal sealed class NativeHostingFixture : IAsyncDisposable
     internal string PackagePath => _packagePath;
     internal string PackageSha256 { get; }
     internal string SharedRoot => _root;
+
+    internal void PreserveScenarioRootForDiagnostics() => _preserveScenarioRootForDiagnostics = true;
 
     internal static NativeHostingFixture Create(NativeHostingProfile profile, bool observeNativeHosting = false,
         bool observeStaleWrite = false)
@@ -226,7 +229,8 @@ internal sealed class NativeHostingFixture : IAsyncDisposable
         if (failures.Count > 0)
             throw new AggregateException("One or more fixture-owned Workbench hosts failed to stop; the shared scenario root was preserved.", failures);
 
-        Directory.Delete(_root, recursive: true);
+        if (!_preserveScenarioRootForDiagnostics)
+            Directory.Delete(_root, recursive: true);
     }
 
     private void ThrowIfDisposed()

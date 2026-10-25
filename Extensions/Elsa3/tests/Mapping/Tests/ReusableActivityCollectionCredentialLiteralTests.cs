@@ -230,11 +230,13 @@ public sealed class ReusableActivityCollectionCredentialLiteralTests : IAsyncDis
 
     [Theory]
     [MemberData(nameof(SourcesDepthsAndSpellings))]
-    public async Task The_same_collection_with_the_input_unbound_is_imported_under_the_declared_key(bool reusable, int depth, string propertyName)
+    public async Task The_same_collection_with_the_input_null_is_imported_without_a_binding(bool reusable, int depth, string propertyName)
     {
         await ApplyAsync(Source("source", reusable, depth, NodeId, (propertyName, JsonSerializer.SerializeToElement<object?>(null))));
 
-        Assert.Equal([CredentialInput], StoredBindingKeys());
+        // A null member of an activity resolved by name gets no binding (spec 267), so the rule has nothing to refuse.
+        Assert.NotNull(_command.Mutation);
+        Assert.Empty(StoredBindingKeys());
     }
 
     [Theory]

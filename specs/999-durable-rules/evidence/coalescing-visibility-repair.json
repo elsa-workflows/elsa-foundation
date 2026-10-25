@@ -1,0 +1,480 @@
+{
+  "scope": "Local visibility repair on parent a5653d99fc9ba1062210f10293c410cdd44cece4. Not hosted or resulting-main verification.",
+  "failedHostedRun": 39771539856,
+  "failedHostedJob": 119800343501,
+  "unchangedBudgets": {
+    "Durable": 256,
+    "Balanced": 183,
+    "Ephemeral": 183
+  },
+  "beforeRepairActual": {
+    "Durable": 269,
+    "Balanced": 211,
+    "Ephemeral": 211
+  },
+  "removalControls": [
+    {
+      "name": "visibility-deadline",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--filter",
+        "FullyQualifiedName~Active_durable_claim_hides_the_overlay_head_and_its_sibling",
+        "--logger",
+        "console;verbosity=normal"
+      ],
+      "exitCode": 1,
+      "executedTestFailed": true,
+      "log": "/tmp/rules-pr3192-coalescing-repair/visibility-deadline-removal.log",
+      "sha256": "8674583c9138b2ecf7a720f1ed44ab5d8bfc55d5e802a33c73de7b5622d9d6ac",
+      "sourceRestored": true,
+      "seconds": 11.84
+    },
+    {
+      "name": "visibility-release",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--filter",
+        "FullyQualifiedName~Deferred_overlay_only_source_is_persisted_before_its_visibility_delay",
+        "--logger",
+        "console;verbosity=normal"
+      ],
+      "exitCode": 1,
+      "executedTestFailed": true,
+      "log": "/tmp/rules-pr3192-coalescing-repair/visibility-release-removal.log",
+      "sha256": "31b3ddb3aac64b01e9b439ff32eb11878f594fb91ec742927643b4a093edc404",
+      "sourceRestored": true,
+      "seconds": 12.16
+    },
+    {
+      "name": "visibility-retain",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--filter",
+        "FullyQualifiedName~Overlay_deferral_flushes_prefix_and_preserves_delay_across_provider_rebuild_and_early_drain",
+        "--logger",
+        "console;verbosity=normal"
+      ],
+      "exitCode": 1,
+      "executedTestFailed": true,
+      "log": "/tmp/rules-pr3192-coalescing-repair/visibility-retain-removal.log",
+      "sha256": "9fc4b88ad3ad7243398ea5352a49b3014cf36f467940f241e8bf58827a7169c7",
+      "sourceRestored": true,
+      "seconds": 14.31
+    }
+  ],
+  "checks": [
+    {
+      "name": "visibility-final-runtime",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--logger",
+        "console;verbosity=minimal"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 10.25,
+      "log": "/tmp/rules-pr3192-coalescing-repair/visibility-final-runtime.log",
+      "sha256": "f8847f4d12cec0ce8621363c56e02f979c5fd78d962c9afe246679a764279af1",
+      "testSummaries": [
+        {
+          "passed": 2559,
+          "failed": 0,
+          "skipped": 0,
+          "total": 2559
+        }
+      ]
+    },
+    {
+      "name": "visibility-final-http",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Activities/Http/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--logger",
+        "console;verbosity=minimal"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 180.37,
+      "log": "/tmp/rules-pr3192-coalescing-repair/visibility-final-http.log",
+      "sha256": "cb3429c5d3e9e83f6bd4292ca509b25e4c16fec73d51b9d28b8c5c5dee491cab",
+      "testSummaries": [
+        {
+          "passed": 94,
+          "failed": 0,
+          "skipped": 0,
+          "total": 94
+        }
+      ]
+    },
+    {
+      "name": "visibility-final-rules",
+      "command": [
+        "dotnet",
+        "test",
+        "Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--logger",
+        "console;verbosity=minimal"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 44.03,
+      "log": "/tmp/rules-pr3192-coalescing-repair/visibility-final-rules.log",
+      "sha256": "98e4a86ec84b256a0ad5397d9fca1a18ca3fc99d52f21267d24efd2af952edf2",
+      "testSummaries": [
+        {
+          "passed": 278,
+          "failed": 0,
+          "skipped": 0,
+          "total": 278
+        }
+      ]
+    },
+    {
+      "name": "visibility-final-architecture",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--logger",
+        "console;verbosity=minimal"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 136.48,
+      "log": "/tmp/rules-pr3192-coalescing-repair/visibility-final-architecture.log",
+      "sha256": "21cffbd662fa6e97a19246029afca9ff7d1594cfd2f61dcf23d66a5bfad2efda",
+      "testSummaries": [
+        {
+          "passed": 585,
+          "failed": 0,
+          "skipped": 0,
+          "total": 585
+        }
+      ]
+    },
+    {
+      "name": "visibility-workbench-build",
+      "command": [
+        "dotnet",
+        "build",
+        "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj",
+        "--no-restore"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 50.17,
+      "log": "/tmp/rules-pr3192-coalescing-repair/visibility-workbench-build.log",
+      "sha256": "80fccd6a4a43972b5a416e2baeeb941f8ba1dd7fd2fe60f67e2e945d769a2916",
+      "testSummaries": []
+    },
+    {
+      "name": "visibility-restart-e2e",
+      "command": [
+        "pwsh",
+        "-NoProfile",
+        "-File",
+        "e2e-tests/durability/Test-RestartRecovery.ps1"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 29.17,
+      "log": "/tmp/rules-pr3192-coalescing-repair/visibility-restart-e2e.log",
+      "sha256": "3e3c2ab960c993e20343084d525465f77f61ab58eebe6b5cdae7bc17aa1ebcb3",
+      "testSummaries": []
+    },
+    {
+      "name": "visibility-http-flowchart-e2e",
+      "command": [
+        "pwsh",
+        "-NoProfile",
+        "-File",
+        "e2e-tests/http/Test-HttpResponseFlowchart.ps1"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 13.74,
+      "log": "/tmp/rules-pr3192-coalescing-repair/visibility-http-flowchart-e2e.log",
+      "sha256": "8412f35dad9bcd0acc19aa8870ae18525396220174d839a2da50f121afff18e1",
+      "testSummaries": []
+    },
+    {
+      "name": "visibility-core-build",
+      "command": [
+        "dotnet",
+        "build",
+        "Elsa.Server.Core.slnf",
+        "-c",
+        "Release",
+        "--no-restore"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 10.01,
+      "log": "/tmp/rules-pr3192-coalescing-repair/visibility-core-build.log",
+      "sha256": "6f6c63d0218eb66a82189c655e1b1613ec9f6f39f03e2b8a711533874c6c23d5",
+      "testSummaries": []
+    },
+    {
+      "name": "visibility-core-tests",
+      "command": [
+        "dotnet",
+        "test",
+        "Elsa.Server.Core.slnf",
+        "-c",
+        "Release",
+        "--no-build"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 36.16,
+      "log": "/tmp/rules-pr3192-coalescing-repair/visibility-core-tests.log",
+      "sha256": "661d335d8a0dbe09eac4bcb4e4f92d0d3a2437639c4c86cbd032f29eed1b72fd",
+      "testSummaries": [
+        {
+          "passed": 37,
+          "failed": 0,
+          "skipped": 0,
+          "total": 37
+        },
+        {
+          "passed": 87,
+          "failed": 0,
+          "skipped": 0,
+          "total": 87
+        },
+        {
+          "passed": 49,
+          "failed": 0,
+          "skipped": 0,
+          "total": 49
+        },
+        {
+          "passed": 11,
+          "failed": 0,
+          "skipped": 0,
+          "total": 11
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "skipped": 0,
+          "total": 5
+        },
+        {
+          "passed": 13,
+          "failed": 0,
+          "skipped": 0,
+          "total": 13
+        },
+        {
+          "passed": 10,
+          "failed": 0,
+          "skipped": 0,
+          "total": 10
+        },
+        {
+          "passed": 11,
+          "failed": 0,
+          "skipped": 0,
+          "total": 11
+        },
+        {
+          "passed": 16,
+          "failed": 0,
+          "skipped": 0,
+          "total": 16
+        },
+        {
+          "passed": 63,
+          "failed": 0,
+          "skipped": 0,
+          "total": 63
+        },
+        {
+          "passed": 35,
+          "failed": 0,
+          "skipped": 0,
+          "total": 35
+        },
+        {
+          "passed": 61,
+          "failed": 0,
+          "skipped": 1,
+          "total": 62
+        },
+        {
+          "passed": 176,
+          "failed": 0,
+          "skipped": 0,
+          "total": 176
+        },
+        {
+          "passed": 710,
+          "failed": 0,
+          "skipped": 1,
+          "total": 711
+        },
+        {
+          "passed": 68,
+          "failed": 0,
+          "skipped": 0,
+          "total": 68
+        },
+        {
+          "passed": 22,
+          "failed": 0,
+          "skipped": 0,
+          "total": 22
+        },
+        {
+          "passed": 2559,
+          "failed": 0,
+          "skipped": 0,
+          "total": 2559
+        },
+        {
+          "passed": 87,
+          "failed": 0,
+          "skipped": 0,
+          "total": 87
+        },
+        {
+          "passed": 207,
+          "failed": 0,
+          "skipped": 0,
+          "total": 207
+        }
+      ]
+    },
+    {
+      "name": "visibility-maps-generate",
+      "command": [
+        "dotnet",
+        "run",
+        "--project",
+        "tools/maps/Elsa.Maps.Generator",
+        "--no-restore",
+        "--",
+        "all"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 7.39,
+      "log": "/tmp/rules-pr3192-coalescing-repair/visibility-maps-generate.log",
+      "sha256": "7d064c50c1916c048e7fe2d72a2dd4d2dacd6033d45ace418552da2c01f8fe2d",
+      "testSummaries": []
+    },
+    {
+      "name": "visibility-maps-check",
+      "command": [
+        "dotnet",
+        "run",
+        "--project",
+        "tools/maps/Elsa.Maps.Generator",
+        "--no-restore",
+        "--",
+        "check"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 1.27,
+      "log": "/tmp/rules-pr3192-coalescing-repair/visibility-maps-check.log",
+      "sha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04",
+      "testSummaries": []
+    },
+    {
+      "name": "visibility-filter-check",
+      "command": [
+        "dotnet",
+        "run",
+        "--project",
+        "tools/maps/Elsa.Maps.Generator",
+        "--no-build",
+        "--",
+        "check-solution-filters"
+      ],
+      "exitCode": 2,
+      "durationSeconds": 0.52,
+      "log": "/tmp/rules-pr3192-coalescing-repair/visibility-filter-check.log",
+      "sha256": "12f9c10c899bc4029d60023f5daebdb1155d7f1734246cbc8afc8dd7fd1e2a08",
+      "testSummaries": []
+    },
+    {
+      "name": "visibility-runtime-ef",
+      "log": "/tmp/rules-pr3192-coalescing-repair/visibility-runtime-ef.log",
+      "sha256": "1e26eb74109168e1ce43a64610e1eeb2e295351ac57221ba3a49badadbf9891a",
+      "exitCode": 0,
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--logger",
+        "console;verbosity=minimal"
+      ],
+      "testSummaries": [
+        {
+          "passed": 1005,
+          "failed": 0,
+          "skipped": 0,
+          "total": 1005
+        }
+      ]
+    },
+    {
+      "name": "visibility-filter-corrected",
+      "log": "/tmp/rules-pr3192-coalescing-repair/visibility-filter-corrected.log",
+      "sha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04",
+      "exitCode": 0,
+      "command": [
+        "dotnet",
+        "run",
+        "--project",
+        "tools/maps/Elsa.Maps.Generator",
+        "--no-build",
+        "--",
+        "solution-filters-check"
+      ],
+      "testSummaries": []
+    }
+  ],
+  "sourceSha256": {
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingRuntimeCheckpointCommitStore.cs": "aff8c3e5a4caccfd59c4c5c6a64d691cebfa023742f97082f1afea847c81838d",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingWorkflowSchedulerWorkQueue.cs": "a55fe71ec3eef56e522bc0b1016b6367acf850c3e40615659a334d7d4443f53d",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/RuntimeCoalescingDrainScopeFactory.cs": "a946da5426ed547a949996771d297373fc862fd3ef286974a9ce9f638edc3f04",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/RuntimeCoalescingSession.cs": "d80461df98b2cab60d5a85ced94c27df3a42c27ac79c6d53244cd31e4f277004",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/InMemoryWorkflowSchedulerWorkQueue.cs": "b4344549f810faba72dafde364192fa63f1579aa1a6bf640e9be43d097eaf3df",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs": "a8040a5f71de73b16599ca56a30c9457e6ca41b4905b6a555f6f7d1b77098261",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfSchedulerWorkQueueStore.cs": "5c5fc24d0ff110c854e49ab2926c7a385bcdc7039e1ea7ec02d9b34ab2c5a2ff",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfSchedulerWorkQueueStoreTests.cs": "d927178e59b2ae36552681e167440518cd104d42dcacadf191a3ba0c3e01047b",
+    "Essentials/tests/Workflows/Runtime/Tests/CoalescingResumeDurableClaimBoundaryTests.cs": "778d95e061be73976f1641fa76e3b77715d55aeccacfa6f57fc012ab526831f3",
+    "Essentials/tests/Workflows/Runtime/Tests/RuntimeCheckpointCoalescingTests.cs": "dd772eac352195314b81b1e72b542cac94f9f7d277223fd72ccbe585bf3cd5d1",
+    "Essentials/tests/Workflows/Runtime/Tests/RuntimeSchedulerWorkQueueTests.cs": "3155f650bcbdfb783b41b5ba0ebf0e19a05ef1c1949ecd705df71e254c736594",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IWorkflowSchedulerWorkVisibilityReader.cs": "e5b2d2f251f7e2933ceb0c47392b9fb6e109e1aadbd9223ff2e5bd32fa2b9266",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeSchedulerWorkVisibility.cs": "f54888153dec19bc783fe40f805d003700d772050b421482eedfa683006093da",
+    "Essentials/tests/Workflows/Runtime/Tests/CoalescingSchedulerVisibilityTests.cs": "b44cf06b6e934cb0ddd8cb130be1c16d5f818535d20394c8971a08e9dd612fcc",
+    "Essentials/tests/Workflows/Runtime/Tests/QueueWithoutVisibility.cs": "0cf1afa833c13c4998546bea5022c0f06aba1e46f2cfc12a320470564bd4f53f"
+  },
+  "formalReviewLimit": "Six formal rounds exhausted; this focused failure repair does not assert a seventh or a clean final full review. External reassessment and new-head CI remain required."
+}

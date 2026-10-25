@@ -40,14 +40,19 @@
   -->
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Cli\Elsa.Cli\Elsa.Cli.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\Extensions\Integrations\src\Templates\Elsa.Integrations.Templates.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\apps\Elsa.Workbench\Elsa.Workbench.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\apps\Elsa.Foundation.Host\Elsa.Foundation.Host.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\src\Cli\Worker\Elsa.Cli.Worker.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\src\Workflows\Design\CodeGeneration\Elsa.Workflows.Design.CodeGeneration.csproj" ReferenceOutputAssembly="false" />
-    <ProjectReference Include="..\..\..\..\Extensions\Integrations\src\Sdk\Elsa.Integrations.Sdk.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../../../Extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj" />
+    <ProjectReference Include="../../../../Extensions/Rules/src/Workflows/Design/Elsa.Rules.Workflows.Design.csproj" />
+    <ProjectReference Include="../../../../Extensions/Rules/src/Workflows/Runtime/Elsa.Rules.Workflows.Runtime.csproj" />
+    <ProjectReference Include="../../../../Extensions/Rules/src/Tooling/Elsa.Rules.Tooling.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../../../Extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../../Extensions/Etl/src/Core/Elsa.Etl.Core.csproj" />
     <ProjectReference Include="../../../../Extensions/Etl/src/Design/Elsa.Etl.Design/Elsa.Etl.Design.csproj" />
     <ProjectReference Include="../../../../Extensions/Etl/src/Design/Api/Elsa.Etl.Design.Api.csproj" />
@@ -139,6 +144,7 @@
     <ProjectReference Include="..\..\..\src\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
     <ProjectReference Include="..\..\..\src\Expressions\Liquid\Elsa.Expressions.Liquid.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\ExtensionBuilder\src\Api\Elsa.ExtensionBuilder.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\Extensions\Integrations\src\Sdk\Elsa.Integrations.Sdk.csproj" />
     <ProjectReference Include="..\..\..\src\Foundation\DataProtection\EntityFrameworkCore\Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\src\Foundation\Identity\AspNetCoreIdentity\EntityFrameworkCore\Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\src\Foundation\Identity\Oidc\Elsa.Foundation.Identity.Oidc.csproj" />

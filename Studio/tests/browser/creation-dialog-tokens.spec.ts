@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
 
 for (const fixture of [
-  { path: "connection-secrets.html", opener: "New connection", dialog: "Create connection" },
-  { path: "secret-scopes.html", opener: "Create", dialog: "Create secret" }
+  { path: "connection-secrets.html", opener: "Create connection", dialog: "Create connection", scope: ".connections-header" },
+  { path: "secret-scopes.html", opener: "Create secret", dialog: "Create secret", scope: ".secrets-header" }
 ]) {
   test(`${fixture.dialog} retains desktop insets with the minimum host token contract`, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -10,7 +10,7 @@ for (const fixture of [
     // The documented minimum layer-1 host contract only requires spacing xs/sm/md/lg.
     // `initial` makes this optional custom property invalid even if the fixture host defines it.
     await page.addStyleTag({ content: ":root { --spacing-xl: initial !important; }" });
-    await page.getByRole("button", { name: fixture.opener, exact: true }).click();
+    await page.locator(fixture.scope).getByRole("button", { name: fixture.opener, exact: true }).click();
     const dialog = page.getByRole("dialog", { name: fixture.dialog, exact: true });
 
     for (const selector of ["header", "[class$='-create-content']", "[class*='-create-actions']"]) {

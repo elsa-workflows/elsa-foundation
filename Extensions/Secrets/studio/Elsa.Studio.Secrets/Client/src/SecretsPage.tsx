@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { AlertCircle, Ban, CheckCircle2, KeyRound, Pencil, Plus, RefreshCw, RotateCcw, Search, ShieldCheck, Trash2, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, KeyRound, Plus, RefreshCw, X } from "lucide-react";
 import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { OverflowMenu, StudioButton, StudioSearchInput, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
 import { createSecret, deleteSecret, getSecretDescriptors, listSecrets, revokeSecret, rotateSecret, testSecret, updateSecret } from "./secretsApi";
 import type { CreateSecretRequest, RotateSecretRequest, SecretDescriptorsResponse, SecretMetadata, SecretStatus, UpdateSecretRequest } from "./secretTypes";
 import { CopySecretNameButton } from "./CopySecretNameButton";
@@ -8,6 +9,7 @@ import { SecretDetail } from "./SecretDetail";
 import { CreateSecretDialog, RotateSecretDialog } from "./SecretDialogs";
 
 const secretStatuses: SecretStatus[] = ["Active", "Retired", "Expired", "Revoked", "Deleted"];
+const MAX_SECRETS_PER_LOAD = 100;
 
 export function SecretsPage({ context, dialogs }: { context: StudioEndpointContext; dialogs: StudioDialogApi }) {
   const [search, setSearch] = useState("");
@@ -74,7 +76,7 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
     setLoadError(false);
     setError(null);
     try {
-      const list = await listSecrets(context, { search: searchTerm, activeOnly: false, pageSize: 100 });
+      const list = await listSecrets(context, { search: searchTerm, activeOnly: false, pageSize: MAX_SECRETS_PER_LOAD });
       if (requestSequence !== secretsRequestSequence.current) return;
       setSecrets(list.items);
       setTotalCount(list.totalCount);
@@ -225,25 +227,29 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
   return (
     <main className="secrets-shell">
       <header className="secrets-header">
-        <div>
+        <div className="secrets-header-copy">
           <span className="secrets-kicker">Secret management</span>
           <h2><KeyRound size={18} aria-hidden /> Secrets</h2>
+          <p>Manage secret metadata; existing values stay masked.</p>
         </div>
-        {!loading && !loadError ? (
-          <p className="secrets-count" aria-live="polite">
-            {filteredSecrets.length} shown · {secrets.length} loaded · {totalCount} {totalCount === 1 ? "result" : "results"}{completedSearch.trim() ? ` for “${completedSearch}”` : ""}
-          </p>
-        ) : null}
+        <div className="secrets-header-meta">
+          {!loading && !loadError ? (
+            <p className="secrets-count" aria-live="polite">
+              {filteredSecrets.length} shown · {secrets.length} loaded · {totalCount} {totalCount === 1 ? "result" : "results"}{completedSearch.trim() ? ` for “${completedSearch}”` : ""}
+            </p>
+          ) : null}
+          <div className="secrets-header-actions" role="group" aria-label="Secret page actions">
+            <StudioButton variant="primary" size="md" aria-label="Create secret" onClick={() => setDialog({ kind: "create" })} disabled={!descriptors}><Plus size={15} aria-hidden /> Create secret</StudioButton>
+            <StudioButton variant="default" size="md" onClick={() => void load(completedSearch)} disabled={loading || descriptorsLoading} aria-label="Refresh secrets"><RefreshCw size={15} aria-hidden /> Refresh</StudioButton>
+          </div>
+        </div>
       </header>
 
       <section className="secrets-toolbar" aria-label="Secret filters">
-        <div className="secrets-search-wrap">
-          <label className="secrets-search">
-            <Search size={15} aria-hidden />
-            <input aria-label="Search secrets" value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event => event.key === "Enter" && void load(search)} placeholder="Search secrets" />
-          </label>
-          <button type="button" className="secrets-search-action" onClick={() => void load(search)}>Search</button>
-        </div>
+        <form className="secrets-search-wrap" role="search" aria-label="Secrets" onSubmit={event => { event.preventDefault(); void load(search); }}>
+          <StudioSearchInput className="secrets-search-control" aria-label="Search secrets" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search secrets" />
+          <StudioButton type="submit" className="secrets-search-action" size="md">Search</StudioButton>
+        </form>
         <FilterSelect label="Type" value={typeFilter} onChange={setTypeFilter} options={descriptors?.types.map(type => ({ value: type.name, label: type.displayName || type.name })) ?? []} />
         <FilterSelect label="Store" value={storeFilter} onChange={setStoreFilter} options={descriptors?.stores.map(store => ({ value: store.name, label: store.displayName || store.name })) ?? []} />
         <FilterSelect
@@ -252,13 +258,9 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
           onChange={setScopeFilter}
           options={scopeOptions}
           helpText="Scopes in loaded results"
-          description="The list loads up to 100 secrets, so other scopes may exist."
+          description={`The list loads up to ${MAX_SECRETS_PER_LOAD} secrets, so other scopes may exist.`}
         />
         <FilterSelect label="Status" value={statusFilter} onChange={setStatusFilter} options={secretStatuses.map(value => ({ value, label: value }))} />
-        <div className="secrets-toolbar-actions">
-          <button type="button" onClick={() => void load(completedSearch)} disabled={loading || descriptorsLoading}><RefreshCw size={15} aria-hidden /> Refresh</button>
-          <button type="button" onClick={() => setDialog({ kind: "create" })} disabled={!descriptors}><Plus size={15} aria-hidden /> Create</button>
-        </div>
       </section>
 
       {descriptorError && dialog?.kind !== "create" ? (
@@ -271,7 +273,7 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
       {status ? <SecretNotification message={status} onDismiss={() => setStatus(null)} /> : null}
       {!loading && !loadError && partialResult ? (
         <p className="secrets-coverage">
-          Only the first 100 results are loaded. Search by name or display name to find other secrets. Filters apply to loaded results.
+          Only the first {MAX_SECRETS_PER_LOAD} results are loaded. Search by name or display name to find other secrets. Filters apply to loaded results.
         </p>
       ) : null}
 
@@ -330,11 +332,16 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
                   <td>{formatDate(secret.updatedAt ?? secret.createdAt)}</td>
                   <td>
                     <div className="secrets-row-actions">
-                      <button type="button" className="secrets-edit-action" data-secret-edit={secret.name} aria-label={`Edit ${secret.name}`} title={`Edit ${secret.displayName || secret.name}`} onClick={() => setDialog({ kind: "edit", name: secret.name })}><Pencil size={14} aria-hidden /> Edit</button>
-                      <button type="button" title="Rotate" aria-label={`Rotate ${secret.name}`} disabled={secret.status === "Deleted" || busyName === secret.name} onClick={() => rotateSelected(secret)}><RotateCcw size={14} /></button>
-                      <button type="button" title="Test" aria-label={`Test ${secret.name}`} disabled={busyName === secret.name || secret.status === "Deleted"} onClick={() => void runTest(secret)}><ShieldCheck size={14} /></button>
-                      <button type="button" title="Revoke" aria-label={`Revoke ${secret.name}`} disabled={busyName === secret.name || secret.status === "Revoked" || secret.status === "Deleted"} onClick={() => void revoke(secret)}><Ban size={14} /></button>
-                      <button type="button" className="danger" title="Delete" aria-label={`Delete ${secret.name}`} disabled={busyName === secret.name || secret.status === "Deleted"} onClick={() => void remove(secret)}><Trash2 size={14} /></button>
+                      <StudioButton variant="default" size="sm" className="secrets-edit-action" data-secret-edit={secret.name} aria-label={`Edit ${secret.name}`} title={`Edit ${secret.displayName || secret.name}`} onClick={() => setDialog({ kind: "edit", name: secret.name })}>Edit</StudioButton>
+                      <OverflowMenu
+                        ariaLabel={`Actions for ${secret.name}`}
+                        items={[
+                          { id: "rotate", label: "Rotate", disabled: secret.status === "Deleted" || busyName === secret.name, onSelect: () => rotateSelected(secret) },
+                          { id: "test", label: "Test", disabled: busyName === secret.name || secret.status === "Deleted", onSelect: () => void runTest(secret) },
+                          { id: "revoke", label: "Revoke", disabled: busyName === secret.name || secret.status === "Revoked" || secret.status === "Deleted", destructive: true, onSelect: () => void revoke(secret) },
+                          { id: "delete", label: "Delete", disabled: busyName === secret.name || secret.status === "Deleted", destructive: true, onSelect: () => void remove(secret) }
+                        ] satisfies OverflowMenuItem[]}
+                      />
                     </div>
                   </td>
                 </tr>

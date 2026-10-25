@@ -1,9 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { StudioAiContributionApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { WorkflowManagementPage } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/pages";
+import "../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css";
+import "../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 const continuationToken = "opaque-cursor/next+002";
+const longIdentifiers = new URLSearchParams(window.location.search).get("long-identities") === "1";
 const folder = {
   id: "folder-operations",
   parentId: null,
@@ -21,10 +24,11 @@ function definition(id: string, name: string) {
     createdAt: "2026-10-20T00:00:00Z",
     lastModifiedAt: "2026-10-20T00:00:00Z",
     deletedAt: null,
-    draftId: `draft-${id}`,
-    latestVersionId: null,
+    draftId: longIdentifiers ? `draft-${"immutable-identifier-".repeat(7)}` : `draft-${id}`,
+    draftSourceVersionId: longIdentifiers ? `source-${"published-version-".repeat(6)}` : null,
+    latestVersionId: longIdentifiers ? `latest-${"immutable-version-".repeat(6)}` : null,
     latestVersion: null,
-    publishedVersionId: null,
+    publishedVersionId: longIdentifiers ? `published-${"release-reference-".repeat(6)}` : null,
     publishedVersion: null,
     versionCount: 0,
     folderId: folder.id,
@@ -137,7 +141,7 @@ const context = {
 } as unknown as StudioEndpointContext;
 
 export function WorkflowDefinitionBrowseFixture() {
-  return <QueryClientProvider client={queryClient}>
+  const page = <QueryClientProvider client={queryClient}>
     <WorkflowManagementPage
       context={context}
       ai={ai}
@@ -147,4 +151,8 @@ export function WorkflowDefinitionBrowseFixture() {
       workflowDesignerPanels={[]}
     />
   </QueryClientProvider>;
+
+  return new URLSearchParams(window.location.search).get("workbench-shell") === "1"
+    ? <div className="content">{page}</div>
+    : page;
 }

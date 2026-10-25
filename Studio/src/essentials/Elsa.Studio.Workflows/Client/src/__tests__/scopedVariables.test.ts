@@ -136,6 +136,13 @@ describe("scopedVariableSignature", () => {
     expect(scopedVariableSignature(renamed)).not.toBe(scopedVariableSignature(base));
   });
 
+  it("changes when a variable type or collection shape changes", () => {
+    const retyped: WorkflowDefinitionState = { ...base, variables: [{ ...base.variables![0], type: { alias: "Int32", collectionKind: "Single" } }] };
+    const collection: WorkflowDefinitionState = { ...retyped, variables: [{ ...retyped.variables![0], type: { alias: "Int32", collectionKind: "List" } }] };
+    expect(scopedVariableSignature(retyped)).not.toBe(scopedVariableSignature(base));
+    expect(scopedVariableSignature(collection)).not.toBe(scopedVariableSignature(retyped));
+  });
+
   it("changes when the tree shape changes", () => {
     const moved: WorkflowDefinitionState = { ...base, rootActivity: sequence("root", [leaf("a"), leaf("b")], [variable("c", "Counter")]) };
     expect(scopedVariableSignature(moved)).not.toBe(scopedVariableSignature(base));

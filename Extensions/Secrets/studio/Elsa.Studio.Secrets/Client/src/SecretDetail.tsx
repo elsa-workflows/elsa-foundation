@@ -29,9 +29,13 @@ export function SecretDetail({
   const scopeHelpId = useId();
   const cannotClose = busy || saving;
   useDialogFocus(dialogRef, cannotClose ? null : onClose, false, () => {
-    const fallback = Array.from(document.querySelectorAll<HTMLElement>("[data-secret-edit]"))
-      .find(element => element.dataset.secretEdit === secret.name);
-    fallback?.focus();
+    // The refreshed row may mount in the same React commit that removes this dialog.
+    queueMicrotask(() => {
+      if (document.activeElement !== document.body || document.querySelector('[aria-modal="true"]')) return;
+      const fallback = Array.from(document.querySelectorAll<HTMLElement>("[data-secret-edit]"))
+        .find(element => element.dataset.secretEdit === secret.name);
+      fallback?.focus();
+    });
   });
   useLayoutEffect(() => {
     dialogRef.current?.querySelector<HTMLElement>("[data-dialog-initial-focus]")?.focus();

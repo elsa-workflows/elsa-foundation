@@ -1,0 +1,53 @@
+{
+  "date": "2026-10-22",
+  "baseCommit": "230eb5ab536c70b41694d7009910940496df64cc",
+  "scope": "partial T027-T029 native components, not integration acceptance",
+  "checks": {
+    "focused_components": {
+      "path": "/tmp/3181-native-components4.log",
+      "sha256": "611d58a8522821c7cef81e30757b27e8bcfa7784f1635e24cb58dbd70757b40b",
+      "summary": [
+        "Passed!  - Failed:     0, Passed:    31, Skipped:     0, Total:    31, Duration: 224 ms - Elsa.Rules.Tests.dll (net10.0)"
+      ]
+    },
+    "result_comparison_removed": {
+      "path": "/tmp/3181-native-result-control.log",
+      "sha256": "a0bdaf7b341b100919808e0c7cc2828c0d65cf59e1a5e1f90a78da1db51bf8c0",
+      "summary": [
+        "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 583 ms - Elsa.Rules.Tests.dll (net10.0)"
+      ]
+    },
+    "restored_full_rules": {
+      "path": "/tmp/3181-native-all-rules.log",
+      "sha256": "851439515c38acfdce26d4c76a99e8ecdd66779b761f9a13efd2248f8dfc55ca",
+      "summary": [
+        "Passed!  - Failed:     0, Passed:   222, Skipped:     0, Total:   222, Duration: 12 s - Elsa.Rules.Tests.dll (net10.0)"
+      ]
+    },
+    "checkpoint_fixture_cleanup": {
+      "path": "/tmp/3181-native-fixture-final.log",
+      "sha256": "8e9ab4f1f2cc20cac659e96d272a9efbedbc505b073d1ad7431d8171488956ca",
+      "summary": [
+        "Passed!  - Failed:     0, Passed:     9, Skipped:     0, Total:     9, Duration: 181 ms - Elsa.Rules.Tests.dll (net10.0)"
+      ]
+    },
+    "architecture": {
+      "path": "/tmp/3181-native-architecture.log",
+      "sha256": "1ca6ecb2756991c7f939795f7f70cf1e14032fdeaa190af64c153c343379645d",
+      "summary": [
+        "Passed!  - Failed:     0, Passed:    86, Skipped:     0, Total:    86, Duration: 41 s - Elsa.Architecture.Tests.dll (net10.0)"
+      ]
+    },
+    "maps_generation": {
+      "path": "/tmp/3181-native-maps.log",
+      "sha256": "7d064c50c1916c048e7fe2d72a2dd4d2dacd6033d45ace418552da2c01f8fe2d",
+      "summary": []
+    },
+    "filter_check": {
+      "path": "/tmp/3181-native-maps-check.log",
+      "sha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04",
+      "summary": []
+    }
+  },
+  "openGate": "Retryable Rules reader unavailability during native resume must be resolved before runtime registration."
+}

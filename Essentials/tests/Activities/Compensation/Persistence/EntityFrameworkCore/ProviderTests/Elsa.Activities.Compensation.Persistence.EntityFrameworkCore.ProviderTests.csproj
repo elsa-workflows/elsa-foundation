@@ -2,7 +2,7 @@
 
   <!--
     Spec 261 OD18: the compensation provider subset S1–S7 on PostgreSQL, SQL Server and MySQL in every persistence mode,
-    run nightly and on dispatch as EF suite "compensation" (tools/ci/ef-suites.json). The subset and the host are the
+    run in the full tier as EF suite "compensation" (containerSuites in tools/ci/test-tiers.json). The subset and the host are the
     ones Elsa.Activities.Compensation.Tests runs on SQLite on every pull request, linked rather than copied, so the
     server providers prove exactly the journeys the SQLite matrix proves.
   -->

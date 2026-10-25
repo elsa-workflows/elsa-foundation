@@ -294,12 +294,13 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(ApiCapabilitiesFeature).Assembly,
             typeof(ExpressionsApiFeature).Assembly,
 
-            // JavaScript expression + activity feature assemblies. Listing them here makes their features
+            // JavaScript and Liquid expression + activity feature assemblies. Listing them here makes their features
             // discoverable by the runtime feature catalog (so they surface as "available" in the modularity UI)
             // and enablable via shell configuration.
             typeof(Elsa.Expressions.JavaScript.JavaScriptFeature).Assembly,
             typeof(Elsa.Expressions.JavaScript.Jint.JintFeature).Assembly,
             typeof(Elsa.Expressions.JavaScript.Rendering.JavaScriptRenderingFeature).Assembly,
+            typeof(Elsa.Expressions.Liquid.LiquidExpressionsFeature).Assembly,
             typeof(Elsa.Http.JavaScript.HttpJavaScriptFeature).Assembly,
             typeof(Elsa.Workflows.Design.JavaScript.JavaScriptWorkflowsDesignFeature).Assembly,
             typeof(Elsa.Workflows.Runtime.JavaScript.JavaScriptActivitiesFeature).Assembly,
@@ -398,6 +399,12 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(Elsa.Etl.Persistence.EntityFrameworkCore.EtlDesignEntityFrameworkCoreFeature).Assembly,
             typeof(Elsa.Etl.Workflows.Design.EtlWorkflowsDesignFeature).Assembly,
             typeof(Elsa.Etl.Workflows.Runtime.EtlWorkflowsRuntimeFeature).Assembly,
+            // Opt-in durable Rules. Package qualification references these same host assemblies from NuGet;
+            // the configured deployment receipt must still match the active package graph and loaded assets.
+            typeof(Elsa.Rules.Runtime.RulesRuntimeFeature).Assembly,
+            typeof(Elsa.Rules.Persistence.EntityFrameworkCore.RulesRuntimeEntityFrameworkCoreFeature).Assembly,
+            typeof(Elsa.Rules.Workflows.Design.RulesWorkflowsDesignFeature).Assembly,
+            typeof(Elsa.Rules.Workflows.Runtime.RulesWorkflowsRuntimeFeature).Assembly,
             typeof(WorkflowsRuntimeAttentionFeature).Assembly,
             typeof(StructuredLogsFeature).Assembly,
             typeof(OpenTelemetryFeature).Assembly,

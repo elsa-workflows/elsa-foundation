@@ -96,6 +96,12 @@ not automatic constitution violations.
 | Foundation Data Protection (the host's key ring: fixed application name, opt-in EF key store, certificate at rest, startup warnings) | [`Essentials/src/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Workflow Agent (workflow explain/troubleshoot/change-proposal contribution) | [`Extensions/Agent/src/Workflows/EXTENSION_POINTS.md`](Extensions/Agent/src/Workflows/EXTENSION_POINTS.md) |
 
+### Integrations
+
+| Domain | Catalog |
+|---|---|
+| Integrations SDK (connector activities, named HTTP client auth scope) | [`Extensions/Integrations/src/Sdk/EXTENSION_POINTS.md`](Extensions/Integrations/src/Sdk/EXTENSION_POINTS.md) |
+
 ### Secrets
 
 | Domain | Catalog |
@@ -165,6 +171,12 @@ not automatic constitution violations.
 | Workflows runtime distributed EF Core placement persistence | [`Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Workflows runtime — HTTP endpoint behaviour | [`Essentials/src/Workflows/Runtime/Http/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Http/EXTENSION_POINTS.md) |
 | Workflows runtime — durable resumption (sweep service, recurring pump, feature gating) | [`Essentials/src/Workflows/Runtime/Resumption/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Resumption/EXTENSION_POINTS.md) |
+
+### Rules
+
+| Domain | Catalog |
+|---|---|
+| Rules compilation, invocation preparation and deployment identity | [`Extensions/Rules/src/Core/EXTENSION_POINTS.md`](Extensions/Rules/src/Core/EXTENSION_POINTS.md) |
 
 ### ETL
 

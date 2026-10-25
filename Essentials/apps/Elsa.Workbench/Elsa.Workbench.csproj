@@ -51,6 +51,14 @@
 	<!-- The computed-vs-source-build production configuration swap this host shares with Elsa.Foundation.Host (#2084, #2126). -->
 	<Import Project="$(MSBuildThisFileDirectory)../ComputedProductionSettings.targets" />
 
+	<!-- Rules is discoverable here and enabled only by an explicit shell composition. -->
+	<ItemGroup>
+		<ProjectReference Include="..\..\..\Extensions\Rules\src\Runtime\Elsa.Rules.Runtime.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Rules\src\Persistence\EntityFrameworkCore\Elsa.Rules.Persistence.EntityFrameworkCore.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Rules\src\Workflows\Design\Elsa.Rules.Workflows.Design.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Rules\src\Workflows\Runtime\Elsa.Rules.Workflows.Runtime.csproj" />
+	</ItemGroup>
+
 	<ItemGroup>
 		<ProjectReference Include="..\..\src\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
 		<!-- Cluster membership, selected from host configuration on the host container (spec 183, FR-024). -->
@@ -102,6 +110,7 @@
 		<ProjectReference Include="..\..\src\Expressions\JavaScript\Elsa.Expressions.JavaScript\Elsa.Expressions.JavaScript.csproj" />
 		<ProjectReference Include="..\..\src\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
 		<ProjectReference Include="..\..\src\Expressions\JavaScript\Rendering\Elsa.Expressions.JavaScript.Rendering\Elsa.Expressions.JavaScript.Rendering.csproj" />
+		<ProjectReference Include="..\..\src\Expressions\Liquid\Elsa.Expressions.Liquid.csproj" />
 		<ProjectReference Include="..\..\src\Expressions\Api\Elsa.Expressions.Api.csproj" />
 		<ProjectReference Include="..\..\src\Http\Elsa.Http\Elsa.Http.csproj" />
 		<ProjectReference Include="..\..\src\Http\JavaScript\Elsa.Http.JavaScript.csproj" />

@@ -37,8 +37,11 @@ test.describe("customizable Home", () => {
     await expect(page.getByRole("heading", { name: "Recent workflows" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Recent runs" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Needs attention" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Tasks" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Tasks", exact: true })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Create a workflow" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Create workflow" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Continue editing/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Needs attention" })).toHaveAttribute("href", /\/workflows\/instances\?.*incidentHealth=active/);
     await expect(page.getByRole("link", { name: "Open the designer" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Try Elsa locally" })).toBeVisible();
     await expect(page.getByText("Completed")).toBeVisible();
@@ -66,6 +69,180 @@ test.describe("customizable Home", () => {
     await page.getByRole("button", { name: "Done" }).click();
 
     await expectNoSeriousAxeViolations(page);
+  });
+
+  test("keeps the workflow task group before configurable widgets at both laptop sizes and themes", async ({ page }) => {
+    for (const theme of ["light", "dark"] as const) {
+      for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900 }]) {
+        await page.setViewportSize(viewport);
+        await page.goto(`/?mode=home&theme=${theme}`);
+        await expect(page.getByRole("heading", { name: "Workflow tasks" })).toBeVisible();
+        await expect(page.getByRole("link", { name: "Create workflow" })).toBeVisible();
+        await expect(page.getByRole("button", { name: /Continue editing/ })).toBeVisible();
+        await expect(page.getByRole("link", { name: "Needs attention" })).toBeVisible();
+        await expect(page.locator(".dashboard-grid")).toBeVisible();
+        const ordering = await page.evaluate(() => {
+          const tasks = document.querySelector(".home-task-group");
+          const grid = document.querySelector(".dashboard-grid");
+          return Boolean(tasks && grid && (tasks.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING));
+        });
+        expect(ordering).toBe(true);
+        await expect(page.locator("html")).toHaveAttribute("data-theme-mode", theme);
+        const widths = await page.evaluate(() => ({ client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
+        expect(widths.scroll).toBeLessThanOrEqual(widths.client + 1);
+      }
+    }
+  });
+
+  test("gates only Needs attention by authenticated runtime read and preserves design actions", async ({ page }) => {
+    await page.goto("/?mode=home&runtimeAccess=denied&drafts=multiple&keep=one#home-anchor");
+    const tasks = page.getByRole("region", { name: "Workflow tasks" });
+    await expect(tasks.getByRole("link", { name: "Create workflow" })).toBeVisible();
+    await expect(tasks.getByRole("link", { name: "Needs attention" })).toHaveCount(0);
+    await expect(tasks.locator(".home-task-card[aria-disabled='true']")).toContainText("Requires access to read workflow runs.");
+    const continueButton = tasks.getByRole("button", { name: /Continue editing/ });
+    await expect(continueButton).toBeEnabled();
+    await continueButton.focus();
+    await page.keyboard.press("Enter");
+    const chooser = page.getByRole("dialog", { name: "Continue editing" });
+    await expect(chooser).toContainText("2 current drafts.");
+    await expect(chooser.getByRole("list", { name: "Current workflow drafts" }).getByRole("link")).toHaveCount(2);
+    await page.keyboard.press("Escape");
+    await expect(continueButton).toBeFocused();
+    await expectNoSeriousAxeViolations(page);
+
+    await page.goto("/?mode=home&runtimeAccess=allowed&keep=one#home-anchor");
+    const attention = page.getByRole("region", { name: "Workflow tasks" }).getByRole("link", { name: "Needs attention" });
+    await expect(attention).toHaveAttribute("href", "/workflows/instances?mode=home&runtimeAccess=allowed&keep=one&incidentHealth=active#home-anchor");
+    await attention.focus();
+    await page.keyboard.press("Enter");
+    const location = new URL(page.url());
+    expect(location.pathname).toBe("/workflows/instances");
+    expect(location.searchParams.get("incidentHealth")).toBe("active");
+    expect(location.searchParams.get("keep")).toBe("one");
+    expect(location.hash).toBe("#home-anchor");
+  });
+
+  test("navigates Create once and keeps Browse as the ordinary definitions route", async ({ page }) => {
+    await page.goto("/?mode=home&keep=one#home-anchor");
+    await page.getByRole("link", { name: "Create workflow" }).click();
+
+    let location = new URL(page.url());
+    expect(location.pathname).toBe("/workflows/definitions");
+    expect(location.searchParams.get("mode")).toBe("home");
+    expect(location.searchParams.get("keep")).toBe("one");
+    expect(location.searchParams.get("homeAction")).toBe("create");
+    expect(location.hash).toBe("#home-anchor");
+
+    await page.goBack();
+    await expect(page.getByRole("heading", { name: "Workflow tasks" })).toBeVisible();
+    await page.getByRole("link", { name: "Browse workflows" }).click();
+
+    location = new URL(page.url());
+    expect(location.pathname).toBe("/workflows/definitions");
+    expect(location.searchParams.get("mode")).toBe("home");
+    expect(location.searchParams.get("keep")).toBe("one");
+    expect(location.searchParams.has("homeAction")).toBe(false);
+    expect(location.hash).toBe("#home-anchor");
+  });
+
+  test("continues to an exact draft, restores chooser focus, and remains usable at narrow zoom", async ({ page }) => {
+    await page.goto("/?mode=home&drafts=multiple");
+    const opener = page.getByRole("button", { name: /Continue editing/ });
+    await opener.focus();
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog", { name: "Continue editing" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("list", { name: "Current workflow drafts" }).getByRole("link")).toHaveCount(2);
+    await expect(dialog).toContainText("definition-a");
+    await expect(dialog).toContainText("definition-b");
+    await expectNoSeriousAxeViolations(page);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(opener).toBeFocused();
+
+    await opener.click();
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("link", { name: /definition-b/ }).click();
+    await expect.poll(() => new URL(page.url()).searchParams.get("definition")).toBe("definition-b");
+
+    await page.goto("/?mode=home&drafts=one&keep=one#home-anchor");
+    await page.getByRole("button", { name: /Continue editing/ }).click();
+    await expect.poll(() => new URL(page.url()).searchParams.get("definition")).toBe("definition-only");
+    expect(new URL(page.url()).searchParams.get("keep")).toBe("one");
+    expect(new URL(page.url()).hash).toBe("#home-anchor");
+
+    await page.goto("/?mode=home&drafts=multiple&theme=dark");
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.evaluate(() => { document.documentElement.style.zoom = "200%"; });
+    const narrowOpener = page.getByRole("button", { name: /Continue editing/ });
+    await narrowOpener.scrollIntoViewIfNeeded();
+    await narrowOpener.focus();
+    await page.keyboard.press("Enter");
+    const narrowDialog = page.getByRole("dialog", { name: "Continue editing" });
+    await expect(narrowDialog).toBeVisible();
+    await expect(narrowDialog.getByRole("link", { name: /definition-a/ })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(narrowDialog).toHaveCount(0);
+    await expect(narrowOpener).toBeFocused();
+  });
+
+  test("wraps a long current-draft name within the narrow chooser and keeps exact selection usable", async ({ page }) => {
+    const longWorkflowName = `Home3063-long-${"x".repeat(89)}`;
+    expect(longWorkflowName).toHaveLength(103);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/?mode=home&drafts=multiple-long-names");
+
+    const opener = page.getByRole("button", { name: /Continue editing/ });
+    await opener.focus();
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog", { name: "Continue editing" });
+    const list = dialog.getByRole("list", { name: "Current workflow drafts" });
+    await expect(dialog).toBeVisible();
+    await expect(list.getByRole("link")).toHaveCount(3);
+    const longCandidate = list.locator("li").filter({ hasText: "definition-long-name" }).getByRole("link");
+    await expect(longCandidate).toBeFocused();
+    await expect(list.getByText(longWorkflowName, { exact: true })).toBeVisible();
+    await expect(list.getByText("definition-another", { exact: true })).toBeVisible();
+    await expect(list.getByText("definition-published-current", { exact: true })).toBeVisible();
+
+    const metrics = await list.evaluate(element => {
+      const bounds = element.getBoundingClientRect();
+      const rows = [...element.querySelectorAll("li")].map(row => {
+        const name = row.querySelector("strong")!;
+        const id = row.querySelector("code")!;
+        const nameBounds = name.getBoundingClientRect();
+        return {
+          id: id.textContent,
+          rowClientWidth: row.clientWidth,
+          rowScrollWidth: row.scrollWidth,
+          nameClientWidth: name.clientWidth,
+          nameScrollWidth: name.scrollWidth,
+          nameInsideList: nameBounds.left >= bounds.left - 1 && nameBounds.right <= bounds.right + 1,
+          nameText: name.textContent
+        };
+      });
+      return { listClientWidth: element.clientWidth, listScrollWidth: element.scrollWidth, rows };
+    });
+    await test.info().attach("current-draft-list-layout.json", {
+      body: JSON.stringify(metrics, null, 2),
+      contentType: "application/json"
+    });
+    expect(metrics.rows.map(row => row.id)).toEqual([
+      "definition-long-name",
+      "definition-another",
+      "definition-published-current"
+    ]);
+    expect(metrics.listScrollWidth, JSON.stringify(metrics)).toBeLessThanOrEqual(metrics.listClientWidth);
+    for (const row of metrics.rows) {
+      expect(row.rowScrollWidth, JSON.stringify(row)).toBeLessThanOrEqual(row.rowClientWidth);
+      expect(row.nameScrollWidth, JSON.stringify(row)).toBeLessThanOrEqual(row.nameClientWidth);
+      expect(row.nameInsideList).toBe(true);
+    }
+    expect(metrics.rows[0].nameText).toBe(longWorkflowName);
+
+    await page.keyboard.press("Enter");
+    await expect.poll(() => new URL(page.url()).searchParams.get("definition")).toBe("definition-long-name");
   });
 
   test("renders run trends, exact buckets, definition names, and portfolio counts from the real widgets", async ({ page }) => {

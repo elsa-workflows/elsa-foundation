@@ -38,6 +38,7 @@ import { observeReusableActivity } from "../reusableActivityObservability";
 import {
   useGraphCanvasInteractions,
   type GraphCanvasCommitOptions,
+  type GraphCanvasInteractionsResult,
   type GraphCanvasMode,
   type GraphCanvasPlacement,
   type GraphCanvasStamp
@@ -77,6 +78,17 @@ interface WorkflowCanvasParams {
   setError(value: WorkflowErrorInput): void;
 }
 
+/**
+ * Named so library declaration emit can reference `@xyflow/react` types instead of inferring a
+ * non-portable `@xyflow/system` path (TS2742).
+ */
+export interface WorkflowCanvasResult extends Omit<GraphCanvasInteractionsResult, "accessibleNodes" | "accessibleEdges"> {
+  nodes: Node<WorkflowNodeData>[];
+  edges: WorkflowEdge[];
+  addActivity(activity: ActivityCatalogItem, position?: XYPosition): ActivityNode | null;
+  addBpmnShape(shape: BpmnShapeDescriptor, position?: XYPosition): void;
+}
+
 // Owns the React Flow mirror (nodes/edges) of the current scope for a WorkflowDraft, plus everything
 // about mutating it that is specific to that document: root routing (become/wrap/leaf-error), BPMN
 // element binding, layout pinning, and activityPresentation cleanup.
@@ -101,7 +113,7 @@ export function useWorkflowCanvas({
   resetToRoot,
   setStatus,
   setError
-}: WorkflowCanvasParams) {
+}: WorkflowCanvasParams): WorkflowCanvasResult {
   const [nodes, setNodes] = useState<Node<WorkflowNodeData>[]>([]);
   const [edges, setEdges] = useState<WorkflowEdge[]>([]);
   const scopeViewportKey = useMemo(

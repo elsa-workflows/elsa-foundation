@@ -324,6 +324,12 @@ public sealed class NativeHostingConformanceTests(ITestOutputHelper output)
             Assert.False(owner.HasExited);
             Assert.False(survivor.HasExited);
         }
+        catch
+        {
+            fixture.PreserveScenarioRootForDiagnostics();
+            output.WriteLine($"Native stale-write diagnostic database and journal retained after fixture cleanup: {fixture.SharedRoot}");
+            throw;
+        }
         finally
         {
             File.Delete(Path.Combine(journal, "stale.execution-id"));

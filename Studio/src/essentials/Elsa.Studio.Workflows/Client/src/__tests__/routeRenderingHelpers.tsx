@@ -42,7 +42,8 @@ export async function renderRegisteredRoute(
   path = "/workflows/definitions",
   configureApi?: (api: ElsaStudioModuleApi) => void,
   followNavigation = false,
-  capabilities = capabilityDocument()
+  capabilities = capabilityDocument(),
+  historyState: unknown = {}
 ) {
   if (typeof ResizeObserver === "undefined") {
     vi.stubGlobal("ResizeObserver", class {
@@ -58,7 +59,7 @@ export async function renderRegisteredRoute(
     if (url.includes("/design/activities/definitions/picker")) return response(recommendedActivityPicker());
     return fetchWithoutCapabilities(input, init);
   }));
-  window.history.replaceState({}, "", path);
+  window.history.replaceState(historyState, "", path);
   const api = testApi();
   configureApi?.(api);
   register(api);

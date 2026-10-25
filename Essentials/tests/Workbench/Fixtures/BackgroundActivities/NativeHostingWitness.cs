@@ -270,7 +270,26 @@ internal sealed class NativeHostingOwnershipWitness(
 {
     public async ValueTask<RuntimeExecutionLease> AcquireAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
-        var lease = await Inner.AcquireAsync(workflowExecutionId, cancellationToken);
+        var traceSuccessorAcquire = IsSelectedSuccessorAcquire(workflowExecutionId);
+        if (traceSuccessorAcquire)
+            NativeHostingWitnessRecorder.Write(Settings, AcquisitionEvent("stale-successor-acquire-entered", workflowExecutionId));
+
+        RuntimeExecutionLease lease;
+        try
+        {
+            lease = await Inner.AcquireAsync(workflowExecutionId, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            if (traceSuccessorAcquire)
+                NativeHostingWitnessRecorder.Write(Settings, AcquisitionEvent("stale-successor-acquire-exception", workflowExecutionId, exception.GetType().FullName));
+            throw;
+        }
+
+        if (traceSuccessorAcquire)
+            NativeHostingWitnessRecorder.Write(Settings, AcquisitionEvent("stale-successor-acquire-returned", workflowExecutionId,
+                leaseId: lease.LeaseId, ownerId: lease.OwnerId, fencingToken: lease.FencingToken, leaseExpiresAt: lease.ExpiresAt));
+
         await NativeHostingWitnessRecorder.TryRecordCompositionAsync(Services, Settings);
         NativeHostingWitnessRecorder.Write(Settings, new
         {
@@ -288,6 +307,39 @@ internal sealed class NativeHostingOwnershipWitness(
         await NativeStaleWriteWitness.GateSuccessorAcquireAsync(Services, Settings, lease, cancellationToken);
         return lease;
     }
+
+    private bool IsSelectedSuccessorAcquire(string executionId)
+    {
+        if (!Settings.NativeStaleWriteObservation || !StringComparer.Ordinal.Equals(Settings.Role, "survivor"))
+            return false;
+
+        try
+        {
+            var selectorPath = Path.Combine(Settings.JournalDirectory, "stale.execution-id");
+            return File.Exists(selectorPath) &&
+                   StringComparer.Ordinal.Equals(File.ReadAllText(selectorPath).Trim(), executionId);
+        }
+        catch (Exception)
+        {
+            // Diagnostic selector reads must not change the ownership result.
+            return false;
+        }
+    }
+
+    private object AcquisitionEvent(string stage, string executionId, string? exceptionType = null,
+        string? leaseId = null, string? ownerId = null, long? fencingToken = null, DateTimeOffset? leaseExpiresAt = null) => new
+    {
+        Stage = stage,
+        RecordedAt = DateTimeOffset.UtcNow,
+        ProcessId = Environment.ProcessId,
+        Role = Settings.Role,
+        ExecutionId = executionId,
+        ExceptionType = exceptionType,
+        LeaseId = leaseId,
+        OwnerId = ownerId,
+        FencingToken = fencingToken,
+        LeaseExpiresAt = leaseExpiresAt
+    };
 
     public async ValueTask<RuntimeExecutionOwnershipTransitionResult> HeartbeatAsync(RuntimeExecutionLease lease, CancellationToken cancellationToken = default)
     {

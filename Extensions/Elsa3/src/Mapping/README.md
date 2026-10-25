@@ -61,9 +61,17 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   - `Object` → the text, unparsed, even when it is JSON;
   - `String`, primitives and enums → the text converted to the type (`"5"` → `5`, `"true"` → `true`);
   - a collection (`List<T>`, `T[]` or an array flag) whose element type Elsa 4 knows → a JSON array. The variable is
-    `T` with collection kind List or Array, and every item is converted to `T`. A collection of a type Elsa 4 does not
-    know (`FormFile[]`, uploaded files) is refused, with or without a starting value, until it has its own spec (#3194);
-  - `ObjectDictionary` and `HttpHeaders` → `Object` holding a JSON object.
+    `T` with collection kind List or Array. Every item must be JSON of `T`, read as Elsa 3 read it (enums by name,
+    property names case-insensitive) and written for Elsa 4 as plain JSON (an enum as its number). As in Elsa 3, a
+    number written as a string (`["5"]` for `List<Int32>`) does not convert;
+  - `ObjectDictionary` and `HttpHeaders` → `Object` holding a JSON object;
+  - any other type Elsa 4 does not know (a nested collection such as `List<List<String>>`, `ObjectDictionary[]`, a
+    custom class or an unregistered enum) → `Object`. A JSON starting value (`{…}` or `[…]`) is held as parsed JSON,
+    exactly as written: Elsa 3 deserialized it case-insensitively and wrote camelCase names, but `Object` keeps the
+    names as the author wrote them (`{"ID":1}` stays `ID`).
+
+  A resource type (`FormFile`, `IFormFile`, `Stream`, `byte[]` or `Byte` with the array flag, alone, as a collection
+  element or as a CLR generic type argument) is refused with or without a starting value: it stands for a file, a stream or raw bytes, which Elsa 4 cannot hold yet (#3194).
 
   Text is never split on commas. `ELS3-ACTIVITY-VARIABLE-VALUE-UNCONVERTIBLE` refuses, with the exact fix, a starting
   value that:
@@ -72,10 +80,9 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   - has an item that does not convert to the element type;
   - is not a JSON object for a dictionary;
   - does not convert to its scalar type (`"abc"` for an `Int32`, which Elsa 3 silently started as `0`);
-  - sits on a scalar type Elsa 4's type registry does not know (an enum or CLR type the host registers no alias for):
-    such a variable runs as `Object`, so its value would stay text.
+  - is not JSON, on a type Elsa 4 does not know: Elsa 3 converted such text in a way the converter cannot know.
 
-  A variable with no starting value converts whatever its type.
+  Any other variable with no starting value converts.
 - **HttpEndpoint headers and query string.** A captured `Headers` or `QueryStringData` gets a synthesized `set` node
   right after the endpoint. It rebuilds the Elsa 3 shape from Elsa 4's `Request` output (one value → string, several →
   array) into the captured variable, or into `elsa3.http.{node}.headers` / `.query` for a bare memory slot. The
@@ -84,6 +91,24 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
 - **Defaults and required inputs.** A WriteLine without text gets `text = ""`, because Elsa 3 writes an empty line. An
   R2 default counts as bound even when it is blank. Any other required Elsa 4 input with no Elsa 3 value is
   `ELS3-ACTIVITY-REQUIRED-INPUT-UNBOUND`.
+- **Null members (spec 267).** Elsa 3's exporter writes `null` for every member the author never set. A null member
+  converts to what the Elsa 3 runtime ran the activity with, as each map rule records (`OnNull`):
+  - Elsa 3 ran with null and the Elsa 4 input accepts null: a `Literal` holding null (RunJavaScript's
+    `possibleOutcomes`, HttpEndpoint's `Policy`, …).
+  - Elsa 3 ran with a value Elsa 4's default equals: no binding (If's `Condition`, …).
+  - Elsa 3 ran with a value Elsa 4's default differs from: that value, as for an absent member (R2), plus
+    FlowSendHttpRequest's `[200]` and an empty string for Correlate and SetName, which Elsa 4 reads as clearing them.
+  - Elsa 4 cannot reproduce or represent what Elsa 3 did: `ELS3-ACTIVITY-NULL-UNCONVERTIBLE`, naming the member and why
+    (For's `step` ran as 0, ForEach's `items` and the header members faulted, a SendHttpRequest with content and a
+    null content type sent no body, a required member rejected the activity, a null SetVariable or SetOutput value
+    cannot be published: #3280).
+
+  A null output is captured by nothing, and a null member of an activity resolved by name gets no binding. An input
+  holding a literal null converts as a JSON null does. Nothing above reports a warning, except one case (#3293). On an
+  alias or a verbatim catalog key, Elsa 3 ran a null with its own activity's default, which the conversion cannot see.
+  Where the Elsa 4 input declares a default, the member converts with `ELS3-BEHAVIOUR-NULL-TAKES-ELSA4-DEFAULT`, which
+  names that default and says what to set to keep Elsa 3's value: the member in the Elsa 3 workflow, or the input on the
+  converted activity.
 - **`canStartWorkflow` on a non-trigger** (a WriteLine, SetVariable, …) only picks a flowchart's start node, as in Elsa 3
   when no trigger fired. It is dropped after that, without a diagnostic. HttpEndpoint and Event carry the flag; Cron and
   Timer require it.
@@ -152,8 +177,10 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   - A reusable body's natural completion maps from its root's own `Done` key to the boundary's `done`.
   - Refused until Elsa 4 graph activities support them: a reusable whose body starts from a trigger
     (`ELS3-REUSABLE-UNSUPPORTED-START-TRIGGER`; 'Can start workflow' on a non-trigger only picks the start node and is fine), uses an engine intrinsic (SetVariable, SetOutput, Correlate, SetName, Finish, or a captured HTTP Endpoint header or query projection)
-    (`ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED`, #3023), or reads one of its inputs, a variable or another
-    activity's result (`ELS3-ACTIVITY-REUSABLE-VALUE-READ-UNSUPPORTED`, #3027).
+    (`ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED`, #3023).
+  - A reusable body that reads its inputs, its variables or another activity's result, or captures an output into
+    one of its variables, converts as a workflow body does: an Elsa 4 graph activity is a closed scope whose request
+    is its own inputs and whose root variables are its own (spec 265, #3027).
   - What to change in Elsa 3 before exporting: [Elsa 3 migration readiness](../../../../docs/reference/elsa3-migration-readiness.md).
 
 ## Migrating Elsa 3 JavaScript

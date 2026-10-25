@@ -309,6 +309,18 @@ public static class RuntimeMetadataKeys
     public const string BoundaryExecutionScopeId = "runtime.boundaryExecutionScopeId";
     public const string BoundaryValueRole = "runtime.boundaryValueRole";
     public const string BoundaryReferenceKey = "runtime.boundaryReferenceKey";
+    /// <summary>Name of a graph variable row, so the runtime can expose it by name without the graph descriptor.</summary>
+    public const string BoundaryVariableName = "runtime.boundaryVariableName";
+    /// <summary>
+    /// Executable-node metadata marking a boundary whose body is a closed value scope. Placement stamps it
+    /// only from the boundary's hashed descriptor (<c>scopeModel: closed</c>), so two executables with the same artifact
+    /// hash never differ in it. Below such a boundary the request inputs and the root variable frame are the
+    /// boundary's own, and the caller's are not visible.
+    /// </summary>
+    public const string ActivityExecutionScope = "runtime.activityExecutionScope";
+    public const string ActivityExecutionScopeClosed = "closed";
+    /// <summary>Placed boundary node id a capture into a graph variable writes into.</summary>
+    public const string CaptureTargetScopeId = "runtime.captureTargetScopeId";
     public const string RetrySourceActivityExecutionId = "runtime.retrySourceActivityExecutionId";
     public const string RetryReason = "runtime.retryReason";
     /// <summary>

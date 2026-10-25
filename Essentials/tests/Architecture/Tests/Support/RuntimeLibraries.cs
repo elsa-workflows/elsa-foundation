@@ -50,7 +50,8 @@ internal static class RuntimeLibraries
     private static bool IsPackableRuntimeLibrary(XDocument project) =>
         !string.Equals(Property(project, "IsPackable"), "false", StringComparison.OrdinalIgnoreCase) &&
         !string.Equals(Property(project, "OutputType"), "Exe", StringComparison.OrdinalIgnoreCase) &&
-        !string.Equals(Property(project, "IsRoslynComponent"), "true", StringComparison.OrdinalIgnoreCase);
+        !string.Equals(Property(project, "IsRoslynComponent"), "true", StringComparison.OrdinalIgnoreCase) &&
+        !string.Equals(Property(project, "PackageType"), "Template", StringComparison.OrdinalIgnoreCase);
 
     private static string? Property(XDocument project, string name) =>
         project.Descendants(name).Select(element => element.Value.Trim()).LastOrDefault();

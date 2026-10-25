@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import dts from "vite-plugin-dts";
+import { failOnDeclarationDiagnostics } from "./libDeclarationDiagnostics";
 
 /**
  * Library build for publishing `@elsa-workflows/studio-workflows` to npm.
@@ -37,7 +38,9 @@ export default defineConfig({
       rollupTypes: true,
       insertTypesEntry: true,
       entryRoot: "src",
-      exclude: ["**/__tests__/**", "**/*.test.*"]
+      exclude: ["**/__tests__/**", "**/*.test.*"],
+      // vite-plugin-dts logs declaration diagnostics but still exits 0; fail the library build.
+      afterDiagnostic: failOnDeclarationDiagnostics
     })
   ],
   define: {
