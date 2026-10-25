@@ -960,6 +960,41 @@
           "type": "pinned-transitive",
           "id": "Cronos",
           "version": "0.13.0"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
         }
       ]
     },
@@ -2108,6 +2143,41 @@
         },
         {
           "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
           "id": "NativeEndpoints",
           "version": "1.0.0-preview.6"
         }
@@ -2607,6 +2677,31 @@
           "type": "external",
           "id": "NativeEndpoints",
           "version": "1.0.0-preview.6"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
         }
       ]
     },
@@ -3293,6 +3388,36 @@
           "type": "external",
           "id": "Microsoft.Extensions.DependencyInjection",
           "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
         }
       ]
     },
@@ -3588,6 +3713,51 @@
           "type": "pinned-transitive",
           "id": "CShells.AspNetCore.Abstractions",
           "version": "0.0.31"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Hosting.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
         }
       ]
     },
@@ -3879,6 +4049,36 @@
           "type": "external",
           "id": "NativeEndpoints",
           "version": "1.0.0-preview.6"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
         }
       ]
     },
@@ -4713,6 +4913,71 @@
         },
         {
           "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Caching.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Caching.Memory",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.EnvironmentVariables",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Json",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Hosting.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
           "id": "Nuplane.Loading.Abstractions",
           "version": "0.0.12"
         }
@@ -4818,6 +5083,36 @@
           "type": "external",
           "id": "NativeEndpoints",
           "version": "1.0.0-preview.6"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
         }
       ]
     },
@@ -4872,6 +5167,71 @@
           "type": "pinned-transitive",
           "id": "CShells.AspNetCore.Abstractions",
           "version": "0.0.31"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Caching.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Caching.Memory",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.EnvironmentVariables",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Json",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Hosting.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
         },
         {
           "type": "pinned-transitive",
@@ -5364,6 +5724,41 @@
         },
         {
           "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Caching.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
           "id": "NativeEndpoints",
           "version": "1.0.0-preview.6"
         }
@@ -5778,6 +6173,51 @@
           "type": "pinned-transitive",
           "id": "JsonSchema.Net",
           "version": "9.2.0"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Hosting.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
         },
         {
           "type": "pinned-transitive",
@@ -7304,6 +7744,41 @@
           "type": "pinned-transitive",
           "id": "Cronos",
           "version": "0.13.0"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
         }
       ]
     },
@@ -7547,6 +8022,31 @@
           "type": "external",
           "id": "NativeEndpoints",
           "version": "1.0.0-preview.6"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
         }
       ]
     },
@@ -8251,6 +8751,36 @@
           "type": "external",
           "id": "NativeEndpoints",
           "version": "1.0.0-preview.6"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
         }
       ]
     },
@@ -9246,6 +9776,36 @@
           "type": "pinned-transitive",
           "id": "Cronos",
           "version": "0.13.0"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
         }
       ]
     },
@@ -17537,222 +18097,6 @@
       ]
     },
     {
-      "path": "Essentials/tests/Samples/Compensation/Tests/Elsa.Samples.Compensation.Tests.csproj",
-      "name": "Elsa.Samples.Compensation.Tests",
-      "kind": "test",
-      "domain": "Elsa.Samples",
-      "sub_domain": "Compensation.Tests",
-      "role": "test",
-      "declared_target_framework": null,
-      "packable": false,
-      "package_id": null,
-      "line": null,
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Activities.Design.Core",
-          "path": "Essentials/src/Activities/Design/Core/Elsa.Activities.Design.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Activities.Runtime.Core",
-          "path": "Essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Samples.Compensation",
-          "path": "samples/Elsa.Samples.Compensation/Elsa.Samples.Compensation.csproj"
-        },
-        {
-          "type": "external",
-          "id": "CShells.Abstractions",
-          "version": "0.0.31"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.DependencyInjection",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.NET.Test.Sdk",
-          "version": "18.0.0"
-        },
-        {
-          "type": "external",
-          "id": "xunit",
-          "version": "2.9.3"
-        },
-        {
-          "type": "external",
-          "id": "xunit.runner.visualstudio",
-          "version": "3.1.5"
-        }
-      ]
-    },
-    {
-      "path": "Essentials/tests/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj",
-      "name": "Elsa.Samples.Nuplane.Activities.Tests",
-      "kind": "test",
-      "domain": "Elsa.Samples",
-      "sub_domain": "Nuplane.Activities.Tests",
-      "role": "test",
-      "declared_target_framework": null,
-      "packable": false,
-      "package_id": null,
-      "line": null,
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Activities.Design.Core",
-          "path": "Essentials/src/Activities/Design/Core/Elsa.Activities.Design.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Activities.Runtime.Core",
-          "path": "Essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Samples.Nuplane.Activities",
-          "path": "samples/Elsa.Samples.Nuplane.Activities/Elsa.Samples.Nuplane.Activities.csproj"
-        },
-        {
-          "type": "external",
-          "id": "CShells.Abstractions",
-          "version": "0.0.31"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.DependencyInjection",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.NET.Test.Sdk",
-          "version": "18.0.0"
-        },
-        {
-          "type": "external",
-          "id": "xunit",
-          "version": "2.9.3"
-        },
-        {
-          "type": "external",
-          "id": "xunit.runner.visualstudio",
-          "version": "3.1.5"
-        }
-      ]
-    },
-    {
-      "path": "Essentials/tests/Samples/Nuplane/Notes/Activities/Tests/Elsa.Samples.Nuplane.Notes.Activities.Tests.csproj",
-      "name": "Elsa.Samples.Nuplane.Notes.Activities.Tests",
-      "kind": "test",
-      "domain": "Elsa.Samples",
-      "sub_domain": "Nuplane.Notes.Activities.Tests",
-      "role": "test",
-      "declared_target_framework": null,
-      "packable": false,
-      "package_id": null,
-      "line": null,
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Activities.Design.Core",
-          "path": "Essentials/src/Activities/Design/Core/Elsa.Activities.Design.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Activities.Runtime.Core",
-          "path": "Essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Cluster.InProcess",
-          "path": "Essentials/src/Cluster/InProcess/Elsa.Cluster.InProcess.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Samples.Nuplane.Notes.Activities",
-          "path": "samples/Elsa.Samples.Nuplane.Notes.Activities/Elsa.Samples.Nuplane.Notes.Activities.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Samples.Nuplane.Notes",
-          "path": "samples/Elsa.Samples.Nuplane.Notes/Elsa.Samples.Nuplane.Notes.csproj"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.EntityFrameworkCore.Sqlite",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.NET.Test.Sdk",
-          "version": "18.0.0"
-        },
-        {
-          "type": "external",
-          "id": "coverlet.collector",
-          "version": "6.0.2"
-        },
-        {
-          "type": "external",
-          "id": "xunit",
-          "version": "2.9.3"
-        },
-        {
-          "type": "external",
-          "id": "xunit.runner.visualstudio",
-          "version": "3.1.5"
-        }
-      ]
-    },
-    {
-      "path": "Essentials/tests/Samples/Nuplane/Notes/Tests/Elsa.Samples.Nuplane.Notes.Tests.csproj",
-      "name": "Elsa.Samples.Nuplane.Notes.Tests",
-      "kind": "test",
-      "domain": "Elsa.Samples",
-      "sub_domain": "Nuplane.Notes.Tests",
-      "role": "test",
-      "declared_target_framework": null,
-      "packable": false,
-      "package_id": null,
-      "line": null,
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Samples.Nuplane.Notes",
-          "path": "samples/Elsa.Samples.Nuplane.Notes/Elsa.Samples.Nuplane.Notes.csproj"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.EntityFrameworkCore.Sqlite",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.NET.Test.Sdk",
-          "version": "18.0.0"
-        },
-        {
-          "type": "external",
-          "id": "coverlet.collector",
-          "version": "6.0.2"
-        },
-        {
-          "type": "external",
-          "id": "xunit",
-          "version": "2.9.3"
-        },
-        {
-          "type": "external",
-          "id": "xunit.runner.visualstudio",
-          "version": "3.1.5"
-        }
-      ]
-    },
-    {
       "path": "Essentials/tests/Secrets/Nuplane/Tests/Elsa.Secrets.Nuplane.Tests.csproj",
       "name": "Elsa.Secrets.Nuplane.Tests",
       "kind": "test",
@@ -19217,11 +19561,6 @@
           "type": "internal",
           "id": "Elsa.Workbench.Tests.Reservations",
           "path": "Essentials/tests/Workbench/Fixtures/Reservations/Reservations.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Samples.Compensation",
-          "path": "samples/Elsa.Samples.Compensation/Elsa.Samples.Compensation.csproj"
         },
         {
           "type": "external",
@@ -21713,6 +22052,36 @@
         },
         {
           "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
           "id": "Microsoft.OpenApi",
           "version": "2.7.5"
         }
@@ -22095,6 +22464,36 @@
           "type": "pinned-transitive",
           "id": "Cronos",
           "version": "0.13.0"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
         }
       ]
     },
@@ -23040,6 +23439,36 @@
           "type": "pinned-transitive",
           "id": "CShells.AspNetCore.Abstractions",
           "version": "0.0.31"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
         }
       ]
     },
@@ -23127,6 +23556,41 @@
           "type": "external",
           "id": "NativeEndpoints",
           "version": "1.0.0-preview.6"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
         }
       ]
     },
@@ -23369,6 +23833,36 @@
           "type": "external",
           "id": "NativeEndpoints",
           "version": "1.0.0-preview.6"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
         }
       ]
     },
@@ -23908,6 +24402,51 @@
           "type": "pinned-transitive",
           "id": "CShells.AspNetCore.Abstractions",
           "version": "0.0.31"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Hosting.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
         },
         {
           "type": "pinned-transitive",
