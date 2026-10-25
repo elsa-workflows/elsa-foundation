@@ -64,7 +64,7 @@ project beside it.
 A locked restore can pass while the dependency map's pinned-transitive edges differ from restore's nuspec list.
 NuGet's locked-mode check accounts for packages the target framework prunes, but it can retain those packages in an
 older lock file. The [next lock-file regeneration omits them](https://learn.microsoft.com/en-us/nuget/consume-packages/package-references-in-project-files#lock-files-and-prunepackagereference).
-This occurred after the demo removal in #3314: restore pruned packages supplied by `Microsoft.AspNetCore.App`, while
+This occurred after the demo removal in [#3314](https://github.com/elsa-workflows/elsa-foundation/issues/3314): restore pruned packages supplied by `Microsoft.AspNetCore.App`, while
 the committed lock files still exposed them to the tree-only dependency scan.
 
 Regenerate the affected locks with `--force-evaluate`, review every changed package entry and dependency edge, and
