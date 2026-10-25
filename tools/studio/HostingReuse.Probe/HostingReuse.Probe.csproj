@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="CShells.Nuplane" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="Fixtures/First/First.csproj" />
+    <ProjectReference Include="Fixtures/Second/Second.csproj" />
+    <Compile Remove="Fixtures/**/*.cs" />
+  </ItemGroup>
+</Project>
