@@ -1638,6 +1638,14 @@
           "Elsa.Http.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.integrations.connectors.microsoft365": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Activities.Http": "[4.0.0-dev, )",
+          "Elsa.Connections.Core": "[4.0.0-dev, )",
+          "Elsa.Integrations.Sdk": "[4.0.0-dev, )"
+        }
+      },
       "elsa.integrations.connectors.oauth2": {
         "type": "Project",
         "dependencies": {
