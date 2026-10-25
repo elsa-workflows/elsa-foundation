@@ -1,4 +1,5 @@
 using Elsa.Activities.Bpmn.Exceptions;
+using Elsa.Activities.Bpmn.Contracts;
 using Elsa.Activities.Bpmn.Internal;
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
@@ -29,7 +30,7 @@ namespace Elsa.Activities.Bpmn.Activities;
 [ActivityStructure("elsa.bpmn.structure", "1.0.0", Mode = "bpmn", SupportsScopedVariables = true)]
 [ActivityChildSlot("Bpmn.Activities", "activities", "Activities", ActivityChildSlotCardinalities.Many)]
 [ActivityOutcome(ActivityOutcomes.Done)]
-public sealed class BpmnProcess(BpmnExecutionEngine executionEngine) : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler, IRuntimeActivityChildFaultHandler, IRuntimeActivityChildNotificationHandler, IRuntimeLiveChildActivityConsumer, IRuntimeScopedVariableReader
+public sealed class BpmnProcess(IBpmnProcessRuntime executionEngine) : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler, IRuntimeActivityChildFaultHandler, IRuntimeActivityChildNotificationHandler, IRuntimeActivityChildOutcomeHandler, IRuntimeLiveChildActivityConsumer, IRuntimeScopedVariableReader
 {
     public const string ActivitiesSlotName = "Bpmn.Activities";
     public const string StructureKind = "elsa.bpmn.structure";
@@ -52,7 +53,7 @@ public sealed class BpmnProcess(BpmnExecutionEngine executionEngine) : Structura
         ArgumentNullException.ThrowIfNull(context);
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
-        return executionEngine.OnChildCompletedAsync(runtimeContext, context);
+        return executionEngine.CompleteAsync(runtimeContext, context);
     }
 
     public ValueTask<RuntimeStructuralContinuation> OnChildFaultedAsync(ActivityChildFaultedContext context)
@@ -60,7 +61,7 @@ public sealed class BpmnProcess(BpmnExecutionEngine executionEngine) : Structura
         ArgumentNullException.ThrowIfNull(context);
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
-        return executionEngine.OnChildFaultedAsync(runtimeContext, context);
+        return executionEngine.FaultAsync(runtimeContext, context);
     }
 
     public ValueTask<RuntimeStructuralContinuation> OnChildNotifiedAsync(IRuntimeActivityExecutionContext context, ActivityChildNotifiedContext notification)
@@ -68,14 +69,17 @@ public sealed class BpmnProcess(BpmnExecutionEngine executionEngine) : Structura
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(notification);
 
-        return executionEngine.OnChildNotifiedAsync(context, notification);
+        return executionEngine.SignalAsync(context, notification);
     }
+
+    public ValueTask<RuntimeStructuralContinuation> OnChildOutcomeAsync(ActivityChildOutcomeContext context) =>
+        executionEngine.OutcomeAsync(RequireRuntimeContext(context.ParentContext), context);
 
     private static IRuntimeActivityExecutionContext RequireRuntimeContext(IActivityExecutionContext context)
     {
         if (context is IRuntimeActivityExecutionContext runtimeContext)
             return runtimeContext;
 
-        throw new BpmnExecutionException("BpmnProcess requires an Elsa runtime activity execution context.");
+        throw new BpmnHostException("BpmnProcess requires an Elsa runtime activity execution context.");
     }
 }

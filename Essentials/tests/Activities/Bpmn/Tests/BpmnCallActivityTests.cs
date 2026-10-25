@@ -12,6 +12,9 @@ using Elsa.Workflows.Runtime.Scheduling;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
+using BpmnDiagnosticKind = global::Bpmn.Model.State.BpmnDiagnosticKind;
+using BpmnExecutionState = global::Bpmn.Model.State.BpmnExecutionState;
+
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>

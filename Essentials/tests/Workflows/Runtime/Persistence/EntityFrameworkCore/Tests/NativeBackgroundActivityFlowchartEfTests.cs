@@ -26,6 +26,9 @@ using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using BpmnExecutionState = global::Bpmn.Model.State.BpmnExecutionState;
+using BpmnTokenStatus = global::Bpmn.Model.State.BpmnTokenStatus;
+using BpmnDiagnosticKind = global::Bpmn.Model.State.BpmnDiagnosticKind;
 using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
 using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
@@ -293,7 +296,7 @@ public sealed class NativeBackgroundActivityFlowchartEfTests : IDisposable
                 (await BackgroundWorkAsync(restartedHarness, executionId, first.Request.WorkId))!.Status);
 
             var waitingState = await BpmnStateAsync(restartedHarness, executionId);
-            Assert.Single(waitingState.ActiveChildren, child => child.NodeId == second.Request.ExecutableNodeId);
+            Assert.Single(waitingState.ActiveWork, child => child.NodeId == second.Request.ExecutableNodeId);
             Assert.Contains(waitingState.Tokens, token => token.AtElementId == JoinElementId && token.Status == BpmnTokenStatus.WaitingAtJoin);
 
             if (outerSibling is not null && outerSiblingCompletesFirst)
@@ -849,7 +852,8 @@ public sealed class NativeBackgroundActivityFlowchartEfTests : IDisposable
     private static async Task<BpmnExecutionState> BpmnStateAsync(WorkflowExecutionHarness harness, string executionId)
     {
         var processState = Assert.Single(await ActivityStatesAsync(harness, executionId), state => state.Execution.ExecutableNodeId == BpmnNodeId);
-        return Assert.IsType<BpmnExecutionState>(BpmnStatePersister.LoadState(processState));
+        Assert.Equal(2, processState.PrivateState!.StateVersion);
+        return processState.PrivateState.Value.InlineValue!.Value.Deserialize<BpmnExecutionState>(new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
     }
 
     private static async Task<BackgroundActivityWorkItem?> BackgroundWorkAsync(

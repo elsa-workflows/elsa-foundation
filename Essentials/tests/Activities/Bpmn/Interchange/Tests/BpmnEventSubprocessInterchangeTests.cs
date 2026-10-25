@@ -113,13 +113,18 @@ public sealed class BpmnEventSubprocessInterchangeTests
         AssertDrops(EventSubprocessDoc("es", body: "<task id=\"t\" />"), "es", "exactly one start event");
 
     [Fact]
-    public void TimeCycleTimer_Degrades() =>
-        // A timer event subprocess needs a one-shot <timeDuration>; a recurring <timeCycle> (or cron) is a
-        // module-wide cut — the body start degrades to a none start and the event subprocess is dropped, so the
-        // importer never emits a validator-rejected graph.
-        AssertDrops(
-            EventSubprocessDoc("es", body: "<startEvent id=\"s\"><timerEventDefinition><timeCycle>PT1H</timeCycle></timerEventDefinition></startEvent>"),
-            "es", "supported trigger definition");
+    public void TimeCycleTimer_IsRetainedWithExplicitUnsupportedHostCapability()
+    {
+        var result = _importer.Import(EventSubprocessDoc("es", body:
+            "<startEvent id=\"s\"><timerEventDefinition><timeCycle>PT1H</timeCycle></timerEventDefinition></startEvent>"));
+        var structure = result.ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
+        var scope = Assert.Single(structure.Elements, element => element.ElementId == "es");
+        Assert.NotNull(scope.ChildNodeId);
+        Assert.Null(scope.ListenerNodeId);
+        Assert.Contains(result.Analysis.Capabilities, finding => finding.ElementId == "es" && finding.Capability == "TimerCycleWait" &&
+            finding.Availability == BpmnImportCapabilityAvailability.Unsupported);
+        Assert.False(result.Analysis.CanExecute);
+    }
 
     [Fact]
     public void CompensateTrigger_Drops() =>

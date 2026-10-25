@@ -6,6 +6,8 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using CShells.Lifecycle;
 
 namespace Elsa.Activities.Bpmn;
 
@@ -22,6 +24,10 @@ public class ActivitiesBpmnFeature : IShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddSingleton<IActivityStructureHandler, BpmnStructureHandler>();
+        services.AddScoped<BpmnStateCodec>();
+        services.AddScoped<BpmnWorkLedger>();
+        services.TryAddScoped<IBpmnProcessRuntime, BpmnProcessRuntime>();
+        services.AddSingleton<IShellInitializer>(new BpmnRuntimeRegistrationInitializer(services));
         services.AddSingleton<BpmnTokenCoordinator>();
         services.AddSingleton<BpmnStatePersister>();
         services.AddSingleton<BpmnExecutionEngine>();

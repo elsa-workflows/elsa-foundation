@@ -19,6 +19,44 @@ namespace Elsa.Activities.Bpmn.Interchange.Tests;
 /// </summary>
 public sealed class BpmnEventDefinitionPublishParityTests
 {
+    [Fact]
+    public void Retained_typed_condition_is_refused_by_the_real_trigger_publish_preflight()
+    {
+        const string source = """
+            <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" id="defs" targetNamespace="urn:test" expressionLanguage="urn:conditions">
+              <process id="p" isExecutable="true"><startEvent id="start"/><endEvent id="end"/>
+                <sequenceFlow id="flow" sourceRef="start" targetRef="end"><conditionExpression>amount &gt; 1000</conditionExpression></sequenceFlow>
+              </process>
+            </definitions>
+            """;
+        var imported = new BpmnDocumentImporter().Import(source);
+        var structure = imported.ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
+        var retained = structure.Elements.Single(element => element.ElementId == "start").Properties[BpmnRetainedAuthoring.ConditionExpressionPrefix + "flow"];
+        Assert.Equal("urn:conditions", JsonDocument.Parse(retained).RootElement.GetProperty("language").GetString());
+        var exception = Assert.Throws<ArgumentException>(() => new BpmnProcessTriggerStimulusProvider().Describe(BridgeToExecutableNode(structure)));
+        Assert.Contains("condition", exception.Message, StringComparison.OrdinalIgnoreCase);
+
+        // Studio keeps element property bags when an edge is removed/replaced. Its stale retention
+        // marker must not block the new graph or attach the deleted condition to another edge.
+        var edited = new BpmnAuthoredStructure(elements: structure.Elements,
+            sequenceFlows: [new BpmnSequenceFlow("replacement", "start", "end")]);
+        Assert.NotNull(new BpmnProcessTriggerStimulusProvider().Describe(BridgeToExecutableNode(edited)));
+
+        var reconnected = new BpmnAuthoredStructure(elements: structure.Elements.Append(new BpmnElement("new-source", BpmnElementTypes.StartEvent)).ToArray(),
+            sequenceFlows: [new BpmnSequenceFlow("flow", "new-source", "end")]);
+        Assert.Throws<ArgumentException>(() => new BpmnProcessTriggerStimulusProvider().Describe(BridgeToExecutableNode(reconnected)));
+        var exported = new BpmnDocumentExporter().Export(imported.ProcessNode with
+        {
+            Structure = new(imported.ProcessNode.Structure!.Kind, imported.ProcessNode.Structure.SchemaVersion,
+                JsonSerializer.SerializeToElement(reconnected, SerializerOptions))
+        });
+        var xml = System.Xml.Linq.XDocument.Parse(exported);
+        System.Xml.Linq.XNamespace bpmn = Bpmn;
+        var edge = xml.Descendants(bpmn + "sequenceFlow").Single(element => (string?)element.Attribute("id") == "flow");
+        Assert.Equal("new-source", (string?)edge.Attribute("sourceRef"));
+        Assert.Equal("amount > 1000", edge.Element(bpmn + "conditionExpression")!.Value);
+    }
+
     private const string Bpmn = "http://www.omg.org/spec/BPMN/20100524/MODEL";
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 

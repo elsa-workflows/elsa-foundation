@@ -88,7 +88,8 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
                 element.LaneId,
                 element.DefaultFlowId,
                 element.EventDefinitions.Select(definition => new LibModel.BpmnEventDefinition(definition.Type, definition.Properties)).ToArray(),
-                element.Properties.Count == 0 ? null : element.Properties,
+                element.Properties.Where(property => !property.Key.StartsWith(BpmnRetainedAuthoring.ConditionExpressionPrefix, StringComparison.Ordinal))
+                    .ToDictionary(property => property.Key, property => property.Value, StringComparer.Ordinal),
                 element.AttachedToRef,
                 element.CancelActivity,
                 element.LoopCharacteristics is { } loop ? new LibModel.BpmnLoopCharacteristics(loop.IsSequential, loop.Cardinality, loop.CollectionVariable, loop.ItemVariable) : null,
@@ -106,10 +107,33 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
             IsTransaction: structure.IsTransaction,
             Elements: elements,
             SequenceFlows: structure.SequenceFlows
-                .Select(flow => new LibModel.BpmnSequenceFlow(flow.FlowId, flow.SourceRef, flow.TargetRef, flow.Name, flow.ConditionOutcome, flow.IsDefault))
+                .Select(flow => new LibModel.BpmnSequenceFlow(flow.FlowId, flow.SourceRef, flow.TargetRef, flow.Name, flow.ConditionOutcome, flow.IsDefault)
+                    { ConditionExpression = ReadRetainedCondition(structure, flow) })
                 .ToArray(),
             Lanes: structure.Lanes.Select(lane => new LibModel.BpmnLane(lane.LaneId, lane.PoolId, lane.Name)).ToArray(),
             Variables: structure.Variables.Select(variable => new LibModel.BpmnVariableDeclaration(variable.Name)).ToArray());
+    }
+
+    private static LibModel.BpmnConditionExpression? ReadRetainedCondition(BpmnAuthoredStructure structure, BpmnSequenceFlow flow)
+    {
+        // Studio reconnects an edge without changing its id. Retention follows that identity even
+        // while its property bag remains on the original source; deletion ignores unused markers.
+        var retained = structure.Elements.Select(element => element.Properties.GetValueOrDefault(BpmnRetainedAuthoring.ConditionExpressionPrefix + flow.FlowId))
+            .Where(value => value is not null).Distinct(StringComparer.Ordinal).ToArray();
+        if (retained.Length == 0)
+            return null;
+        if (retained.Length != 1)
+            throw new BpmnInterchangeException($"Flow '{flow.FlowId}' has conflicting retained condition expressions.");
+        var json = retained[0]!;
+        try
+        {
+            return JsonSerializer.Deserialize<LibModel.BpmnConditionExpression>(json, SerializerOptions)
+                ?? throw new BpmnInterchangeException($"Retained condition for flow '{flow.FlowId}' is null.");
+        }
+        catch (Exception exception) when (exception is JsonException or ArgumentException)
+        {
+            throw new BpmnInterchangeException($"Retained condition for flow '{flow.FlowId}' is invalid.", exception);
+        }
     }
 
     /// <summary>

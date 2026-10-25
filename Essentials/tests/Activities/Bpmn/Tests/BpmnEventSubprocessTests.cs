@@ -11,6 +11,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using EventActivity = Elsa.Activities.Primitives.Activities.Event;
 
+using BpmnExecutionState = global::Bpmn.Model.State.BpmnExecutionState;
+
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>

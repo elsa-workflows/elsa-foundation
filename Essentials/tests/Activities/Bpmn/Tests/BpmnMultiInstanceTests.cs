@@ -17,6 +17,8 @@ using Xunit;
 using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 using EventActivity = Elsa.Activities.Primitives.Activities.Event;
 
+using BpmnExecutionState = global::Bpmn.Model.State.BpmnExecutionState;
+
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
@@ -321,7 +323,7 @@ public sealed class BpmnMultiInstanceTests
         // back the withheld envelope a variable frame would hold.
         await using var fixture = await BpmnRuntimeFixture.CreateAsync(["actexec-bpmn"]);
         var process = NewCollectionExecutable(fixture, isSequential: true, NewItemCaptureNode(BodyNodeId, "item"), ["a"]).RootActivity;
-        var activity = new BpmnProcessActivity(fixture.Provider.GetRequiredService<BpmnExecutionEngine>());
+        var activity = new BpmnProcessActivity(fixture.Provider.GetRequiredService<Elsa.Activities.Bpmn.Contracts.IBpmnProcessRuntime>());
         var context = new SimpleActivityExecutionContext(
             activity,
             CancellationToken.None,

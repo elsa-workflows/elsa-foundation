@@ -9,6 +9,19 @@ namespace Elsa.Activities.Bpmn.Tests;
 public sealed class ActivitiesBpmnFeatureTests
 {
     [Fact]
+    public async Task Duplicate_runtime_replacements_are_rejected_at_shell_startup()
+    {
+        var services = new ServiceCollection();
+        new ActivitiesBpmnFeature().ConfigureServices(services);
+        services.AddScoped<IBpmnProcessRuntime, BpmnProcessRuntime>();
+        using var provider = services.BuildServiceProvider();
+
+        var initializer = Assert.Single(provider.GetServices<CShells.Lifecycle.IShellInitializer>());
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => initializer.InitializeAsync(CancellationToken.None));
+        Assert.Contains("exactly one IBpmnProcessRuntime", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ConfigureServices_RegistersEngineBehaviorsAndStructureHandler()
     {
         var services = new ServiceCollection();

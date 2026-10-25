@@ -10,6 +10,8 @@ using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Microsoft.Extensions.DependencyInjection;
 using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 
+using BpmnExecutionState = global::Bpmn.Model.State.BpmnExecutionState;
+
 namespace Elsa.Activities.Bpmn.Tests;
 
 public sealed class BpmnRuntimeFixture : IAsyncDisposable
@@ -100,11 +102,11 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
         var lastCommittedPrivateState = Provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits()
             .SelectMany(record => record.Commit.StateChanges.ActivityExecutions)
             .Where(change => StringComparer.Ordinal.Equals(change.StateId, processState.Execution.ActivityExecutionId))
-            .Select(change => change.State.PrivateState?.Value.InlineValue?.GetRawText())
+            .Select(change => change.State.PrivateState)
             .LastOrDefault(value => value is not null);
-        var raw = processState.PrivateState?.Value.InlineValue?.GetRawText() ?? lastCommittedPrivateState
+        var document = processState.PrivateState ?? lastCommittedPrivateState
             ?? throw new InvalidOperationException($"BPMN private state is missing. Status: {processState.Status}/{processState.SubStatus}.");
-        return JsonSerializer.Deserialize<BpmnExecutionState>(raw, new JsonSerializerOptions(JsonSerializerDefaults.Web))
+        return document.Value.InlineValue!.Value.Deserialize<BpmnExecutionState>(WebOptions)
                ?? throw new InvalidOperationException("BPMN execution state resolved to null.");
     }
 

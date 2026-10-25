@@ -13,6 +13,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using EventActivity = Elsa.Activities.Primitives.Activities.Event;
 
+using BpmnDiagnosticKind = global::Bpmn.Model.State.BpmnDiagnosticKind;
+using BpmnExecutionState = global::Bpmn.Model.State.BpmnExecutionState;
+
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
@@ -305,7 +308,7 @@ public sealed class BpmnBoundaryEventTests
             process.PrivateState!.Value.InlineValue!.Value.GetRawText(),
             new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
         Assert.Contains(persistedState.Diagnostics, diagnostic =>
-            diagnostic.Kind == BpmnDiagnosticKind.Faulted && diagnostic.Message.Contains("faulted child cannot complete", StringComparison.Ordinal));
+            diagnostic.Kind == BpmnDiagnosticKind.Faulted && diagnostic.Message.Contains("failed work cannot complete", StringComparison.Ordinal));
     }
 
     [Fact]

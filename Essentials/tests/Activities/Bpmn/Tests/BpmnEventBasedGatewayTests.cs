@@ -13,6 +13,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using EventActivity = Elsa.Activities.Primitives.Activities.Event;
 
+using BpmnDiagnosticKind = global::Bpmn.Model.State.BpmnDiagnosticKind;
+using BpmnExecutionState = global::Bpmn.Model.State.BpmnExecutionState;
+using BpmnTokenStatus = global::Bpmn.Model.State.BpmnTokenStatus;
+
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
@@ -236,12 +240,11 @@ public sealed class BpmnEventBasedGatewayTests
     }
 
     [Fact]
-    public async Task Terminate_WhileRaceLive_CancelsMembersLogically_WithoutSeamATeardown()
+    public async Task Terminate_WhileRaceLive_CancelsMemberSubtrees_AndCleansBookmarks()
     {
         // One parallel branch waits on a "kill" event; the other opens a live race. Resuming "kill" routes to a
-        // terminate end event: terminate's CancelLiveWork logically cancels the live race members and ends the
-        // process, but stages NO seam-A subtree cancellation. The losing race children therefore stay
-        // suspended with their bookmarks intact — the observable proof that no runtime teardown happened.
+        // terminate end event. Released 0.5.0 requests teardown of already-issued work as well as
+        // logical cancellation; Foundation must reclaim the suspended children and their bookmarks.
         await using var fixture = await CreateFixtureAsync("actexec-bpmn", "actexec-kill", "actexec-a", "actexec-b");
         var executable = fixture.NewExecutable(
             children:
@@ -290,13 +293,9 @@ public sealed class BpmnEventBasedGatewayTests
         Assert.Empty(await fixture.Provider.GetRequiredService<IIncidentStateStore>()
             .ListAsync(WorkflowExecutionHarness.WorkflowExecutionId));
 
-        // Logical-only: the race members' children were NOT terminalized through seam A — they stay suspended
-        // and their durable event bookmarks survive (contrast with a first-catch win, which cleans them).
-        Assert.NotEqual(ActivityExecutionStatus.Cancelled, resumed.State("node-a").Status);
-        Assert.NotEqual(ActivityExecutionStatus.Cancelled, resumed.State("node-b").Status);
-        var survivingBookmarks = await fixture.BookmarksAsync();
-        Assert.Contains(survivingBookmarks, bookmark => bookmark.StimulusHash == EventStimulus.Hash("evt-a"));
-        Assert.Contains(survivingBookmarks, bookmark => bookmark.StimulusHash == EventStimulus.Hash("evt-b"));
+        Assert.Equal(ActivityExecutionStatus.Cancelled, resumed.State("node-a").Status);
+        Assert.Equal(ActivityExecutionStatus.Cancelled, resumed.State("node-b").Status);
+        Assert.Empty(await fixture.BookmarksAsync());
     }
 
     [Fact]

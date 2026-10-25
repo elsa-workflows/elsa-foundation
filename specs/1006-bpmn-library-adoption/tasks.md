@@ -28,8 +28,8 @@ Goal: actual coherent execution checkpoints and a faithful capture control. This
 
 Independent test: old fixtures enter a fresh upgraded host/provider and finish with exact work/incident/parent identity; ambiguous/missing identity refuses dispatch safely.
 
-- [ ] T013 [US1] Adopt published Model/Interchange/Semantics 0.5.0 in `Directory.Packages.props` and the BPMN project; regenerate affected lockfiles using the normal locked-restore workflow. This follows Gate A; do not use source project references as release proof.
-- [ ] T014 [US1] Add state-compatibility tests in `Essentials/tests/Activities/Bpmn/Tests/` and the runtime EF project using the actual captured fixtures; prove direct model substitution fails before implementing the versioned boundary.
+- [x] T013 [US1] Adopt published Model/Interchange/Semantics 0.5.0 in `Directory.Packages.props` and the BPMN project; regenerate affected lockfiles using the normal locked-restore workflow. This follows Gate A; do not use source project references as release proof.
+- [x] T014 [US1] Add state-compatibility tests in `Essentials/tests/Activities/Bpmn/Tests/` and the runtime EF project using the actual captured fixtures; prove direct model substitution fails before implementing the versioned boundary.
 - [ ] T015 [US1] Implement explicit legacy/current readers and writers in `Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/`; keep existing v1 storage representation and preserve all pending-fault/race/loop/compensation/diagnostic fields. Add alias/version/corruption and old-reader controls.
 - [ ] T016 [US1] Resolve exact active/stopped handles from complete durable direct-child history, exact callback IDs and queued provenance in the host adapter; validate parent/node/element/token/iteration uniqueness before released pruning. Distinguish never-issued work from missing identity.
 - [ ] T017 [US1] Prove completion, fault, replay and pruning for canceled work, queued-loser order, MI and same-node re-arm through the upgraded host. Mutate lookup to first node/iteration match and prove the re-arm witness fails; restore and rerun green.
@@ -39,11 +39,11 @@ Independent test: old fixtures enter a fresh upgraded host/provider and finish w
 
 Independent test: existing host scenarios, combined-outcome recovery and native parents run through the released interpreter, with no second semantic implementation.
 
-- [ ] T019 [US2] Implement the authored/executable-to-library graph and nested-work translation in `Elsa.Activities.Bpmn/Internal/`; reuse it in execution, start-trigger and recurring-schedule providers. Preserve authored DTOs and variable declarations.
-- [ ] T020 [US2] Implement explicit capabilities, host values/refusals, scope invocation correlation and exact WorkTokenId live snapshots in that package; preserve produced-by provenance and typed iteration scopes.
+- [x] T019 [US2] Implement the authored/executable-to-library graph and nested-work translation in `Elsa.Activities.Bpmn/Internal/`; reuse it in execution, start-trigger and recurring-schedule providers. Preserve authored DTOs and variable declarations.
+- [x] T020 [US2] Implement explicit capabilities, host values/refusals, scope invocation correlation and exact WorkTokenId live snapshots in that package; preserve produced-by provenance and typed iteration scopes.
 - [ ] T021 [US2] Implement ordered command application and library-verdict/state staging through existing Foundation runtime operations; wrap boundary failures and map coded BPMN errors separately from incident/fault classification.
 - [ ] T022 [US2] Add real-host combined-outcome tests: non-interrupting handler start then uncaught fault, first-of-two notifications interrupting, concurrent same-node invocation untouched, semantic terminal precedence, outward signal preservation and exact original incident absorption. Establish failing controls.
-- [ ] T023 [US2] Implement `BpmnProcess` combined outcome handling and verdict-aware local command reconciliation: retire exact handles between signals, consume later notifications for retired handles, retain terminal fault evaluation and suppress all unissued starts/inadmissible cancellations on final Fault. Do not prune between batch items.
+- [x] T023 [US2] Implement `BpmnProcess` combined outcome handling and verdict-aware local command reconciliation: retire exact handles between signals, consume later notifications for retired handles, retain terminal fault evaluation and suppress all unissued starts/inadmissible cancellations on final Fault. Do not prune between batch items.
 - [ ] T024 [US2] Prove combined outcome durability with fresh EF host, split/concurrent outbox claims, dispatch failure and replay after parent commit before acknowledgement in the existing runtime persistence test project.
 - [ ] T025 [US2] Re-run and extend native Sequence and outer Flowchart witnesses in the runtime EF project for both orders, cancellation, typed fault and replay, preserving parent-specific fault status and exactly-once semantic advancement.
 

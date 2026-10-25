@@ -177,7 +177,7 @@ public sealed class BpmnMessageInterchangeTests
     }
 
     [Fact]
-    public void SignalThrow_StaysDropped()
+    public void SignalThrow_IsRetainedAndBoundToPublishEvent()
     {
         const string document = """
             <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" id="defs" targetNamespace="https://example.org">
@@ -195,9 +195,14 @@ public sealed class BpmnMessageInterchangeTests
         var result = _importer.Import(document);
         var structure = result.ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
 
-        Assert.DoesNotContain(structure.Elements, element => element.ElementId == "t");
-        Assert.Contains(result.Analysis.Issues, issue => issue.Severity == BpmnImportIssueSeverity.Dropped && issue.ElementId == "t");
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(structure)));
+        var signal = Assert.Single(structure.Elements, element => element.ElementId == "t");
+        Assert.Equal("node-t", signal.ChildNodeId);
+        var child = Assert.Single(structure.Activities);
+        Assert.Equal(BpmnDocumentImporter.DefaultPublishEventActivityVersionId, child.ActivityVersionId);
+        AssertPublishSendChild(structure, "node-t", "alarm");
+        Assert.Contains(result.Analysis.Capabilities, finding => finding.ElementId == "t" && finding.Availability == BpmnImportCapabilityAvailability.Available);
+        Assert.True(result.Analysis.CanExecute);
+        Assert.NotNull(new BpmnProcessTriggerStimulusProvider().Describe(BridgeToExecutableNode(structure)));
     }
 
     [Fact]

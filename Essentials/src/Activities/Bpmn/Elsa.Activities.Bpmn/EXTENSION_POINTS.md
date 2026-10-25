@@ -1,5 +1,24 @@
 # Elsa.Activities.Bpmn Extension Points
 
+## Released-library host adapter
+
+`IBpmnProcessRuntime` is the scoped single-implementation replacement boundary used by BpmnProcess.
+The default internal adapter translates Foundation state, exact child deliveries and runtime commands
+to/from released BPMN 0.5.0. The interpreter owns token routing; callers receive Foundation continuations
+and BpmnHostException for incompatible bindings/state. Shell startup rejects competing registrations.
+An explicit host registration made before this feature replaces the default via TryAddScoped.
+
+- **Default / owner:** internal `BpmnProcessRuntime`, in `Elsa.Activities.Bpmn`.
+- **Signature:** [IBpmnProcessRuntime](Contracts/IBpmnProcessRuntime.cs): StartAsync, CompleteAsync,
+  FaultAsync, SignalAsync and OutcomeAsync return ValueTask of RuntimeStructuralContinuation.
+- **Override when:** a Foundation host supplies a different integration with its runtime context.
+  Preserve exact durable delivery identity, compatible state readers/writers and the released
+  interpreter's semantic authority; custom BPMN token routing is not a reason to replace this adapter.
+
+The legacy behavior/engine surfaces below remain temporarily in the in-progress adoption branch;
+the new BpmnProcess path does not consult them. Their ordered removal and API reconciliation are
+tracked by [spec 1006](../../../../../specs/1006-bpmn-library-adoption/tasks.md).
+
 ## Scoped execution seam
 
 `BpmnExecutionEngine` is the activity-owned scoped execution seam. It owns BPMN runtime state
