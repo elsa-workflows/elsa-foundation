@@ -99,6 +99,10 @@ Implementation review clarified terminal precedence: when a notification itself 
 
 Map BPMN error codes separately from incident/fault classification. Preserve the exact withheld-variable refusal. Never rethrow a raw library exception across the host boundary or replace an original fault with a guessed code.
 
+### Called-workflow refinement
+
+Reviewed FR-014 requires explicit opted-in generic transport for authored control across a waited dispatch. The proposed [called-workflow control boundary](contracts/called-workflow-control.md) defines the models, committed dispatch/root/caller authority, producer/enricher/consumer path, terminal batching, replay and compatibility limits. It keeps ordinary DispatchWorkflow completion outcomes and safe diagnostics intact; local fault-and-incident absorption remains a separate protocol. This refinement passed independent correctness, standards and acceptance plan review after correcting empty terminal barriers, retained-root lookup, exact source authority and all-branch inbox atomicity. Task refinement/review precedes transport implementation.
+
 ### Deletion gate
 
 Only after gate A plus actual upgraded-reader/adapter tests pass, remove BpmnExecutionEngine, BpmnGraph, coordinator/mutator/registry/behaviors and duplicated semantic state. Remove PruneForPersistence; use library Prune after correlation restoration. Preserve host-owned authored DTOs, BpmnDecision, structure handlers and trigger/binding logic.

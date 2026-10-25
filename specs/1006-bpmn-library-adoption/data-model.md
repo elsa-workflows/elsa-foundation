@@ -12,3 +12,7 @@ The library owns semantic token/work/race/loop/compensation state. Foundation ow
 | Combined parent outcome | Existing durable outcome ID, committed parent and faulted child, ordered notifications, original typed fault and incident. One parent evaluation consumes it once. |
 
 Storage transitions: absence of private state permits a fresh execution; known v1 invokes the compatibility reader/writer without restamping; the explicit new version uses its capable reader/writer; unknown versions or ambiguous work identity fail before new dispatch. Active execution format conversion and cleanup are not implicit side effects of reading.
+
+## Called-workflow refinement (proposed)
+
+The [control boundary contract](contracts/called-workflow-control.md) adds an explicit consumer capability, bounded versioned authored-control batch, additive activity-state projection and optional waited-result transport. Its exact dispatch/root/source identity and durable processed identity are separate from semantic state and safe diagnostic metadata. Root-local committed ordinals and an exact-call inbox with next ordinal and pending batches preserve cross-batch order. Inbox changes share the parent checkpoint; plan review must validate both buffered and consumed paths before implementation.

@@ -16,3 +16,7 @@ This is bounded implementation design for #2735 part 2, not a restarted parity i
 Open engineering proof gates, not owner-policy questions: actual queued-loser order, deferred-fault capture, complete historical correlation, v1 writer/read-back behavior, combined-notification command reconciliation and real Studio behavior. Failure at a gate requires design correction before writer deletion.
 
 Plan review corrections: capture same-node listener re-arm history; retire exact reporting handles between notifications as the released reference host does; use verdict-aware command reconciliation because a later interpreter call cannot withdraw starts held in an earlier call. These are required real-host witnesses before accepting the batch adapter.
+
+## Called-workflow source findings
+
+Actual existing CallActivity HTTP baseline passes waited completion and catch-all error handling. DispatchWorkflow.ResumeAsync completes its leaf normally with a Faulted outcome; its result diagnostics have a fixed safe allowlist. The local ParentNotificationEvaluation refuses activity roots, and the existing combined child-fault protocol requires a real local fault/incident. Therefore neither putting a BPMN code in DiagnosticMetadata nor faking a leaf fault is valid. FR-014 and the proposed control contract define a separate capability-bound transport; implementation remains gated on plan/task review and real-host proof.
