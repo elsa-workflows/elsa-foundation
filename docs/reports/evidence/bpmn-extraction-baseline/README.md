@@ -20,8 +20,9 @@ Both suites were green at capture time: 247 passed / 0 failed, and 107 passed / 
 
 **The test-name lists are historical differential oracles.** Compare later work with them without
 restamping the captured files. Follow the current [framework §2.21.1](../../../../.specify/memory/constitution-framework.md#221-test-discipline)
-for moves, rewrites and deletions: name the affected test and its replacement proof in the PR for
-review. Green CI alone does not explain a changed subject or objective.
+when moving, rewriting or deleting tests. For rewrites or deletions, name the removed code or the
+other test that proves the behaviour, for PR review. Green CI alone does not explain a changed
+subject or objective.
 
 Regenerate with:
 

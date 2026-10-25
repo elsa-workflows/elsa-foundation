@@ -61,6 +61,11 @@ fixture remains invalid; a bound signal throw is supported while missing broadca
 invalid. The audit names the corresponding tests. Retain their failure scenarios while updating
 obsolete expectations under current [test discipline](../../../../.specify/memory/constitution-framework.md#221-test-discipline).
 
+The [cut disposition ledger](cut-ledger.md) separately accounts for the explicit runtime and
+interchange limitations: library-supported host gaps, retained neutral cuts, host policy, and
+aligned validation/profile restrictions. It checks active source predicates where README wording
+is stale. No gap conclusion above depends on treating an omitted cut as supported.
+
 ## Host adapter and private-state gates
 
 The adapter must apply library commands in order, stage state and owed work through the existing
@@ -129,9 +134,13 @@ semantics from a binding discriminator alone. Its optional availability assessme
 results, classifies every descriptor after host inventory exists, and requires Available rather than
 Unknown for readiness. It does not choose host capabilities or replace publish validation.
 
-Concrete translation gap to fix with the switch: the current importer copies element `DefaultFlowId`
-but omits sequence-flow `IsDefault` when constructing the authored flow. Pin import → Studio/export
-default-edge preservation; the runtime's separate default-flow ID does not prove that marker survived.
+Concrete translation gap to fix with the switch: the current importer retains element `DefaultFlowId`
+but does not populate the authored flow's `IsDefault` marker. The pinned XML reader also leaves
+`BpmnSequenceFlow.IsDefault` false: it represents XML defaults through the source element's
+`DefaultFlowId`. Derive the Studio edge marker from that reference, then pin import → Studio → export
+preservation. Simply copying `flow.IsDefault` would not fix it. XML export can already emit the
+default through `DefaultFlowId`; the demonstrated gap is the Studio edge marker, not necessarily
+loss of the XML default.
 Also prove host-supplied ordinary-task compensation, and Call Activity escalation with both
 interrupting and non-interrupting behavior. The released supported-constructs document still calls
 Call Activity escalation “unreleased main” although the 0.5.0 release includes it; that documentation
