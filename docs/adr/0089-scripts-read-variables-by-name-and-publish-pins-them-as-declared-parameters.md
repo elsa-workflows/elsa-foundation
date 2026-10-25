@@ -2,10 +2,14 @@
 
 Status: proposed (2026-10-23, amended 2026-10-24). Sipke Schoorstra, the decision holder, chose this option on
 [#3204](https://github.com/elsa-workflows/elsa-foundation/issues/3204) (US2), and on 2026-10-24 settled the
-converter output and open questions 1 and 3. Acceptance still needs agreement with
-@j03y-nxxbz per #3204, and alignment with the pending review of
+converter output and the former open questions on the Liquid root and on unset and transient variables.
+Acceptance needs agreement with @j03y-nxxbz per #3204; it does not wait for the full review of
 [ADR 0045 §5](0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md#5-make-expressions-serialized-explicit-and-pure)
-(#3026), because both change how values enter an expression.
+(#3026), and this ADR changes with it if that review reads §5 more strictly. Its "Writes are unchanged: scripts do
+not write variables" would be superseded by
+[ADR 0090](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md) if that is accepted.
+Its read model, decisions 4 and 5 included, would then cover input-binding expressions only; RunJavaScript would
+read through ADR 0090's step sessions.
 
 Part of epic #3052 and program #2310. Constrained by
 [ADR 0045](0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md) §5 (explicit, pure
@@ -48,10 +52,12 @@ Elsa 4 is unreleased and has no existing data, so none of the options below has 
 same root, `{{ variables.X }}`; the converter rewrites Elsa 3's `{{ Variables.X }}`. There is one name, not both.
 
 **2. Publish resolves each name to its nearest declaring scope.** The read set comes from parsing the source with a
-JavaScript parser, the way the converter already does, not from regular expressions. Each name resolves against the
-node's visible scopes, nearest first: the enclosing container, then outer containers, then the workflow. An inner
-declaration shadows an outer one, as in Elsa 3 and most programming languages. This is the order
-`ScopedVariableResolver` already computes for Studio.
+JavaScript parser, the way the converter already does, not from regular expressions; Liquid templates are parsed
+the same way, with Liquid's parser. Each name resolves against the node's visible scopes, nearest first: for a loop
+body its iteration scope (ADR 0028), then the enclosing container, then outer containers, then the workflow. An inner
+declaration shadows an outer one, as in Elsa 3 and most programming languages. The runtime's scoped variable
+reader (`IRuntimeActivityExecutionContext.TryReadScopedVariableValue`) already resolves in this order. Studio's
+`ScopedVariableResolver` covers containers and the workflow; the implementing spec adds the iteration scope.
 
 **3. Publish pins each read as a declared parameter.** Every resolved name becomes a spec 095 `Variable` parameter
 binding that records the declaring scope node id and the variable key. The authored source is not rewritten (ADR
@@ -81,9 +87,13 @@ the same variable both ways; publish refuses that as ambiguous.
 
 **8. An unset variable reads as `null`.** A name that resolves to a declared variable with no value binds JSON
 `null`, as Elsa 3's `getVariable` returned and as the workflow-instance binding treats an absent correlation ID. It
-never binds `undefined`, which the evaluator refuses as a result.
+never binds `undefined`, which the evaluator refuses as a result. A pinned variable parameter is therefore never an
+absent required parameter in spec 095's sense: it binds `null` when its variable has no value.
 
-Writes are unchanged: scripts do not write variables. A change goes through the `Set` intrinsic (ADR 0045 §5).
+Writes are unchanged: scripts do not write variables. A change goes through an output capture or the `Set`
+intrinsic (ADR 0045 §4). (Proposed amendment:
+[ADR 0090](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md)
+would let activities, RunJavaScript included, change variables; input-binding expressions would stay read-only.)
 
 ## Consequences
 
@@ -92,7 +102,9 @@ Writes are unchanged: scripts do not write variables. A change goes through the 
   instance metadata. Converted workflows then behave like authored ones when they are edited later. To stay
   faithful, the converter checks that publish's resolution picks the same declaration as Elsa 3's resolution, and
   refuses the read when they differ. Until publish pinning lands, it keeps emitting `args.X`. Per #3010 it emits
-  statement bodies as they are and no longer wraps them in `(function () { … })()`.
+  statement bodies as they are and no longer wraps them in `(function () { … })()`. A converted read of a variable
+  that is transient in the Elsa 4 workflow is flagged at import with its own diagnostic, so the failure points at the
+  Elsa 3 source rather than at publish (decision 5).
 - **Runtime.** `SetReadOnlyVariables` builds `variables` from pinned parameters, not from `AmbientVariables`. The
   regular-expression read detection, the "computed access exposes everything" path and the ambient frame projection
   for scripts go. `ExpressionEvaluationRequest.AmbientVariables` either goes or is filled only from pinned values.
@@ -129,4 +141,6 @@ variable, publish cannot check reads, and tooling can only guess what a script t
    implementation spec must confirm how they are pinned.
 3. **Inputs by name.** Whether `input.X` (Elsa 3's `getInput`) should get the same treatment later. Out of scope
    here.
-4. **Writes.** Stay intrinsics. A request to let scripts write variables would need its own ADR.
+4. **Writes.** Stay intrinsics and captures.
+   [ADR 0090](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md) (proposed) answers
+   this: input-binding expressions stay read-only, and activities change variables as a unit of work.
