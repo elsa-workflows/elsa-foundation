@@ -14,3 +14,9 @@
 Preliminary authoring attempts at reviewed Resources head3bd4c59 exposed harness assumptions: duplicate Create buttons, visually hidden native radio inputs, incorrect inspector label, asynchronous focus restoration, and the distinction between inline insertion and the side palette. Their failed receipts and cleanup remain external; none is a product pass or an established layout defect.
 
 A source review also replaced the undefined `headers()` expression with an ordinary JavaScript object authored through the real dictionary syntax picker. The final HTTP200 remains to be observed.
+
+## Reproduced correction: clearing a Connection
+
+At candidate `d6fb3bfb54e9a375bb8e81231ce5b362c02c69de`, the composed normal-host run selected an HTTP Connection, exercised a controlled picker failure and actual Retry recovery, then selected the blank option and saved. Test Run reported `compile.failed`: the saved Connection expression carried no object reference payload. This is a product failure after a valid UI clear, distinct from the controlled picker outage and earlier harness failures.
+
+The picker emits `null` for its blank option. The properties panel preserves the Connection syntax around that value, while the publishing compiler requires an object payload for an authored Connection binding. The focused correction must remove the cleared binding, preserve unrelated inputs and allow selecting a connection again. Add a panel-to-wire behavioral regression and a revert/mutation control, then rerun the actual Test Run/publication journey. No backend validation relaxation or provider activation is required. The failed run remains unaccepted; runtime success is pending.

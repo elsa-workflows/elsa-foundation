@@ -2,8 +2,15 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { StudioActivityDescriptor, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type {
+  StudioActivityDescriptor,
+  StudioActivityInputDescriptor,
+  StudioEndpointContext,
+  StudioExpressionEditorContribution,
+  StudioExpressionEditorProps
+} from "@elsa-workflows/studio-sdk";
 import { ActivityPropertiesPanel } from "../ActivityPropertiesPanel";
+import { canonicalizeStateForWire } from "../activityInputWire";
 import { inputReferenceContribution } from "../inputReferenceContribution";
 import { InspectorPanel } from "../workflow-editor/InspectorPanel";
 import type { ActivityNode, WorkflowInput } from "../workflowTypes";
@@ -157,17 +164,129 @@ describe("workflow Input reference Contribution", () => {
   });
 });
 
+describe("Activity Property Panel reference clears", () => {
+  it("unbinds a cleared Connection reference on the save wire and supports repicking without losing other inputs", () => {
+    const { container, getActivity } = renderPicker({
+      input: {
+        name: "Connection",
+        displayName: "Connection",
+        referenceKey: "Connection",
+        typeName: "ConnectionReference",
+        uiHint: "connection-picker",
+        connectionType: "http",
+        isWrapped: true,
+        defaultSyntax: "Connection",
+        isRequired: false,
+        tier: "essential"
+      },
+      syntax: "Connection",
+      value: null,
+      expressionEditors: [nullableReferencePickerContribution],
+      expressionDescriptors: [{ type: "Connection", displayName: "Connection", editingMode: "reference" }],
+      otherInputs: {
+        untouched: { typeName: "System.String", expression: { type: "Literal", value: "keep me" } }
+      }
+    });
+    const select = container.querySelector<HTMLSelectElement>("select[aria-label='Connection reference']")!;
+
+    select.value = "existing.connection";
+    flushSync(() => select.dispatchEvent(new Event("change", { bubbles: true })));
+
+    let wire = canonicalizeStateForWire({ rootActivity: getActivity() }).rootActivity!;
+    expect(wire.inputs).toContainEqual({
+      referenceKey: "Connection",
+      value: { value: { connection: "existing.connection", type: "http" }, expressionType: "Connection" }
+    });
+
+    select.value = "";
+    flushSync(() => select.dispatchEvent(new Event("change", { bubbles: true })));
+
+    expect(getActivity()).not.toHaveProperty("Connection");
+    wire = canonicalizeStateForWire({ rootActivity: getActivity() }).rootActivity!;
+    expect(wire.inputs).toEqual([{
+      referenceKey: "untouched",
+      value: { value: "keep me", expressionType: "Literal" }
+    }]);
+
+    const repickSelect = container.querySelector<HTMLSelectElement>("select[aria-label='Connection reference']")!;
+    repickSelect.value = "existing.connection";
+    flushSync(() => repickSelect.dispatchEvent(new Event("change", { bubbles: true })));
+
+    wire = canonicalizeStateForWire({ rootActivity: getActivity() }).rootActivity!;
+    expect(wire.inputs).toContainEqual({
+      referenceKey: "Connection",
+      value: { value: { connection: "existing.connection", type: "http" }, expressionType: "Connection" }
+    });
+    expect(wire.inputs).toContainEqual({
+      referenceKey: "untouched",
+      value: { value: "keep me", expressionType: "Literal" }
+    });
+  });
+
+  it("keeps an explicit null payload for a non-Connection reference syntax", () => {
+    const { container, getActivity } = renderPicker({
+      input: {
+        name: "Input",
+        displayName: "Input",
+        referenceKey: "workflowInput",
+        typeName: "System.String",
+        isWrapped: true
+      },
+      syntax: "Input",
+      value: { referenceKey: "count" },
+      expressionEditors: [nullableReferencePickerContribution]
+    });
+    const select = container.querySelector<HTMLSelectElement>("select[aria-label='Input reference']")!;
+
+    select.value = "";
+    flushSync(() => select.dispatchEvent(new Event("change", { bubbles: true })));
+
+    expect(getActivity().workflowInput).toEqual({
+      typeName: "System.String",
+      expression: { type: "Input", value: null }
+    });
+    expect(canonicalizeStateForWire({ rootActivity: getActivity() }).rootActivity!.inputs).toEqual([{
+      referenceKey: "workflowInput",
+      value: { value: null, expressionType: "Input" }
+    }]);
+  });
+});
+
 function renderPicker(options: {
   syntax?: string;
   value?: unknown;
   typeName?: string;
   workflowInputs?: WorkflowInput[];
+  input?: StudioActivityInputDescriptor;
+  expressionEditors?: StudioExpressionEditorContribution[];
+  expressionDescriptors?: { type: string; displayName: string; editingMode: "literal" | "reference" }[];
+  otherInputs?: Record<string, unknown>;
 } = {}) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
   const onChange = vi.fn();
-  const initial = activity(options.syntax ?? "Input", options.value === undefined ? { referenceKey: "count" } : options.value);
+  const input = options.input ?? {
+    ...descriptor.inputs[0],
+    ...(options.typeName ? { typeName: options.typeName } : {})
+  };
+  const propertyName = input.referenceKey ?? "source";
+  const initial: ActivityNode = {
+    nodeId: "n1",
+    activityVersionId: "v1",
+    inputs: [],
+    outputs: [],
+    structure: null,
+    ...options.otherInputs,
+    [propertyName]: {
+      typeName: input.typeName,
+      expression: {
+        type: options.syntax ?? "Input",
+        value: options.value === undefined ? { referenceKey: "count" } : options.value
+      }
+    }
+  };
+  let currentActivity = initial;
 
   function Harness() {
     const [current, setCurrent] = React.useState(initial);
@@ -175,13 +294,10 @@ function renderPicker(options: {
       <ActivityPropertiesPanel
         workflowState={{ inputs: options.workflowInputs ?? inputs }}
         activity={current}
-        descriptor={options.typeName ? {
-          ...descriptor,
-          inputs: [{ ...descriptor.inputs[0], typeName: options.typeName }]
-        } : descriptor}
+        descriptor={{ ...descriptor, inputs: [input] }}
         editors={[]}
-        expressionEditors={[inputReferenceContribution]}
-        expressionDescriptors={[
+        expressionEditors={options.expressionEditors ?? [inputReferenceContribution]}
+        expressionDescriptors={options.expressionDescriptors ?? [
           { type: "Literal", displayName: "Literal", editingMode: "literal" },
           { type: "Input", displayName: "Input", editingMode: "reference" }
         ]}
@@ -191,6 +307,7 @@ function renderPicker(options: {
         scopeStatus="ready"
         onChange={next => {
           onChange(next);
+          currentActivity = next;
           setCurrent(next);
         }}
       />
@@ -199,7 +316,7 @@ function renderPicker(options: {
 
   flushSync(() => root.render(<Harness />));
   active = { root, container };
-  return { container, onChange };
+  return { container, onChange, getActivity: () => currentActivity };
 }
 
 function openAndSelect(label: string) {
@@ -237,3 +354,37 @@ function workflowInput(
     isNullable: false
   };
 }
+
+const nullableReferencePickerContribution: StudioExpressionEditorContribution = {
+  id: "test.nullable-reference-picker",
+  order: 1,
+  supports: context => context.syntax === "Connection" || context.syntax === "Input",
+  surfaces: {
+    inline: ({ syntax, value, onChange }: StudioExpressionEditorProps) => {
+      const isConnection = syntax === "Connection";
+      const field = isConnection ? "connection" : "referenceKey";
+      const current = value && typeof value === "object" && !Array.isArray(value)
+        ? (value as Record<string, unknown>)[field]
+        : "";
+      const option = isConnection ? "existing.connection" : "count";
+      return (
+        <select
+          aria-label={isConnection ? "Connection reference" : "Input reference"}
+          value={typeof current === "string" ? current : ""}
+          onChange={event => {
+            const next = event.target.value
+              ? isConnection
+                ? { connection: event.target.value, type: "http" }
+                : { referenceKey: event.target.value }
+              : null;
+            onChange(next);
+          }}
+        >
+          <option value="">Select reference</option>
+          <option value={option}>{option}</option>
+        </select>
+      );
+    }
+  },
+  createDefaultValue: () => null
+};

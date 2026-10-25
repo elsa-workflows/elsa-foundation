@@ -780,6 +780,12 @@ function PropertyRow({
       current.onChange(cleared, current.input);
       return;
     }
+    if (currentWrapped?.expression.type === "Connection" && nextValue === null) {
+      const unbound = { ...current.activity };
+      delete unbound[getInputPropertyName(current.input)];
+      current.onChange(unbound, current.input);
+      return;
+    }
     const portableDefinition = currentWrapped
       ? readPortableExpressionDefinition(currentWrapped.expression.value, currentWrapped.expression.type)
       : null;
