@@ -104,6 +104,7 @@ public sealed class SlackActivityTests
         Assert.Equal("C1", result.Id);
         Assert.Equal("general", result.Name);
         SlackTestSupport.AssertSlackMethod(Assert.Single(harness.Http.Recorded), "conversations.info");
+        Assert.Equal("C1", SlackTestSupport.FormValue(harness.Http.LastRecorded!, "channel"));
     }
 
     [Fact]
@@ -118,7 +119,7 @@ public sealed class SlackActivityTests
         Assert.Equal("U1", result.User?.Id);
         Assert.Equal("Ada Lovelace", result.User?.RealName);
         SlackTestSupport.AssertSlackMethod(Assert.Single(harness.Http.Recorded), "users.lookupByEmail");
-        Assert.Equal("ada@example.com", SlackTestSupport.BodyJson(harness.Http.LastRecorded!).GetProperty("email").GetString());
+        Assert.Equal("ada@example.com", SlackTestSupport.FormValue(harness.Http.LastRecorded!, "email"));
     }
 
     [Fact]
@@ -131,5 +132,37 @@ public sealed class SlackActivityTests
         var result = SlackTestSupport.Complete(await activity.ExecuteForTestsAsync(SlackTestSupport.Context()));
         Assert.False(result.Found);
         Assert.Null(result.User);
+    }
+
+    [Fact]
+    public async Task SendMessage_faults_when_blocks_is_malformed_json()
+    {
+        await using var harness = SlackTestSupport.CreateHarness();
+        var activity = SlackTestSupport.Activity<SendMessage>(harness, send =>
+        {
+            send.Channel = "C1";
+            send.Text = "hello";
+            send.Blocks = "{not-json";
+        });
+
+        var fault = SlackTestSupport.Fault(await activity.ExecuteForTestsAsync(SlackTestSupport.Context()));
+        Assert.Equal("invalid_input", fault.Code);
+        Assert.Empty(harness.Http.Recorded);
+    }
+
+    [Fact]
+    public async Task SendMessage_faults_when_blocks_is_not_an_array()
+    {
+        await using var harness = SlackTestSupport.CreateHarness();
+        var activity = SlackTestSupport.Activity<SendMessage>(harness, send =>
+        {
+            send.Channel = "C1";
+            send.Text = "hello";
+            send.Blocks = """{"type":"section"}""";
+        });
+
+        var fault = SlackTestSupport.Fault(await activity.ExecuteForTestsAsync(SlackTestSupport.Context()));
+        Assert.Equal("invalid_input", fault.Code);
+        Assert.Empty(harness.Http.Recorded);
     }
 }

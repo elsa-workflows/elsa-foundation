@@ -45,6 +45,34 @@ internal sealed class SlackApiClient(
             allowedErrors);
     }
 
+    public async Task<JsonElement> PostFormAsync(
+        string method,
+        JsonObject body,
+        ConnectionReference? connection,
+        ActivityExecutionContext context,
+        CancellationToken cancellationToken,
+        IReadOnlySet<string>? allowedErrors = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(method);
+        ArgumentNullException.ThrowIfNull(body);
+
+        var uri = new Uri(SlackApi.BaseUrl + method, UriKind.Absolute);
+        return await SendAsync(
+            () =>
+            {
+                var request = new HttpRequestMessage(HttpMethod.Post, uri)
+                {
+                    Content = ToForm(body)
+                };
+                return request;
+            },
+            applyConnection: true,
+            connection,
+            context,
+            cancellationToken,
+            allowedErrors);
+    }
+
     public async Task<HttpStatusCode> PostBytesWithoutAuthAsync(
         Uri uploadUrl,
         byte[] content,
@@ -85,7 +113,7 @@ internal sealed class SlackApiClient(
             if (!string.IsNullOrEmpty(cursor))
                 body["cursor"] = cursor;
 
-            var root = await PostJsonAsync(method, body, connection, context, cancellationToken).ConfigureAwait(false);
+            var root = await PostFormAsync(method, body, connection, context, cancellationToken).ConfigureAwait(false);
             if (root.TryGetProperty(arrayProperty, out var array) && array.ValueKind == JsonValueKind.Array)
             {
                 foreach (var element in array.EnumerateArray())
@@ -157,7 +185,8 @@ internal sealed class SlackApiClient(
             {
                 throw new SlackApiException(
                     SlackErrorCodes.HttpError,
-                    $"Slack HTTP {(int)response.StatusCode} on {request.RequestUri?.AbsolutePath}.");
+                    $"Slack HTTP {(int)response.StatusCode} on {request.RequestUri?.AbsolutePath}.",
+                    isRetryable: (int)response.StatusCode >= 500);
             }
 
             return ReadEnvelope(payload, connection, allowedErrors);
@@ -261,6 +290,41 @@ internal sealed class SlackApiClient(
         }
 
         return null;
+    }
+
+    internal static bool IsAllowedUploadUri(Uri uri)
+    {
+        ArgumentNullException.ThrowIfNull(uri);
+        if (!string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var host = uri.IdnHost;
+        return host.Equals("slack.com", StringComparison.OrdinalIgnoreCase)
+            || host.Equals("files.slack.com", StringComparison.OrdinalIgnoreCase)
+            || host.EndsWith(".slack.com", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static FormUrlEncodedContent ToForm(JsonObject body)
+    {
+        var fields = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (key, node) in body)
+        {
+            if (node is null)
+                continue;
+
+            fields[key] = node switch
+            {
+                JsonValue value when value.TryGetValue<string>(out var text) => text,
+                JsonValue value when value.TryGetValue<bool>(out var flag) => flag ? "true" : "false",
+                JsonValue value when value.TryGetValue<int>(out var number) =>
+                    number.ToString(CultureInfo.InvariantCulture),
+                JsonValue value when value.TryGetValue<long>(out var number) =>
+                    number.ToString(CultureInfo.InvariantCulture),
+                _ => node.ToJsonString()
+            };
+        }
+
+        return new FormUrlEncodedContent(fields);
     }
 
     private static bool IsConnectionUnavailable(string error) =>

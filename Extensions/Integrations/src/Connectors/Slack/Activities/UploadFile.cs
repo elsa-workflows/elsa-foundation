@@ -60,7 +60,8 @@ public sealed class UploadFile(
             var uploadUrl = started.TryGetProperty("upload_url", out var urlElement) ? urlElement.GetString() : null;
             var fileId = started.TryGetProperty("file_id", out var idElement) ? idElement.GetString() : null;
             if (string.IsNullOrWhiteSpace(uploadUrl) || string.IsNullOrWhiteSpace(fileId)
-                || !Uri.TryCreate(uploadUrl, UriKind.Absolute, out var uploadUri))
+                || !Uri.TryCreate(uploadUrl, UriKind.Absolute, out var uploadUri)
+                || !SlackApiClient.IsAllowedUploadUri(uploadUri))
             {
                 return ActivityTransition.Fault<SlackFileUploadResult>(
                     new ActivityFault(SlackErrorCodes.InvalidResponse, "Slack did not return an upload URL and file id."));

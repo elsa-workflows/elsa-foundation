@@ -21,6 +21,7 @@ internal static class SlackErrorCodes
     public const string MissingScope = "missing_scope";
     public const string UsersNotFound = "users_not_found";
     public const string RateLimited = "rate_limited";
+    public const string InvalidInput = "invalid_input";
     public const string InvalidResponse = "invalid_response";
     public const string HttpError = "http_error";
 }

@@ -22,7 +22,7 @@ internal static class SlackMessageBody
         if (!string.IsNullOrWhiteSpace(text))
             body["text"] = text;
         if (!string.IsNullOrWhiteSpace(blocks))
-            body["blocks"] = JsonNode.Parse(blocks);
+            body["blocks"] = ParseBlocks(blocks);
         if (!string.IsNullOrWhiteSpace(threadTs))
             body["thread_ts"] = threadTs;
         if (replyBroadcast is { } broadcast)
@@ -32,6 +32,24 @@ internal static class SlackMessageBody
         if (unfurlMedia is { } media)
             body["unfurl_media"] = media;
         return body;
+    }
+
+    private static JsonArray ParseBlocks(string blocks)
+    {
+        JsonNode? parsed;
+        try
+        {
+            parsed = JsonNode.Parse(blocks);
+        }
+        catch (JsonException)
+        {
+            throw new SlackApiException(SlackErrorCodes.InvalidInput, "Blocks must be a JSON array.");
+        }
+
+        if (parsed is not JsonArray array)
+            throw new SlackApiException(SlackErrorCodes.InvalidInput, "Blocks must be a JSON array.");
+
+        return array;
     }
 
     public static SlackMessageResult ReadResult(JsonElement root) =>

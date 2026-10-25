@@ -19,7 +19,7 @@ public sealed class UpdateMessage(
     [ActivityInput(Tier = InputTier.Essential)]
     public string Channel { get; set; } = "";
 
-    [ActivityInput(Tier = InputTier.Essential, Description = "Timestamp of the message to update.")]
+    [ActivityInput(Key = nameof(Ts), DisplayName = "Ts", Tier = InputTier.Essential, Description = "Timestamp of the message to update.")]
     public string Ts { get; set; } = "";
 
     [ActivityInput(Tier = InputTier.Essential)]

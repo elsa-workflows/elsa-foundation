@@ -32,7 +32,7 @@ public abstract class SlackActivity<TResult> : ConnectorActivity<TResult>
     internal ActivityTransition<TResult> SlackFault(SlackApiException exception) =>
         ActivityTransition.Fault<TResult>(new ActivityFault(exception.Code, exception.Message, exception.IsRetryable));
 
-    public ValueTask<ActivityTransition<TResult>> ExecuteForTestsAsync(ActivityExecutionContext context) =>
+    internal ValueTask<ActivityTransition<TResult>> ExecuteForTestsAsync(ActivityExecutionContext context) =>
         ExecuteAsync(context);
 }
 

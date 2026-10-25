@@ -24,7 +24,7 @@ public sealed class LookupChannel(
         {
             var body = new JsonObject { ["channel"] = ChannelId };
             var root = await CreateClient()
-                .PostJsonAsync(SlackApi.ConversationInfo, body, Connection, context, context.CancellationToken)
+                .PostFormAsync(SlackApi.ConversationInfo, body, Connection, context, context.CancellationToken)
                 .ConfigureAwait(false);
             var channel = root.TryGetProperty("channel", out var element)
                 ? SlackJson.Deserialize<SlackChannel>(element) ?? new SlackChannel()

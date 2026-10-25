@@ -168,4 +168,22 @@ public sealed class SlackErrorTests
         Assert.Equal("rate_limited", fault.Code);
         Assert.Single(harness.Http.Recorded);
     }
+
+    [Fact]
+    public async Task Http_5xx_is_a_retryable_fault()
+    {
+        await using var harness = SlackTestSupport.CreateHarness();
+        harness.Http.ResponseStatus = HttpStatusCode.BadGateway;
+        harness.Http.ResponseContent = "unavailable";
+        var activity = SlackTestSupport.Activity<SendMessage>(harness, send =>
+        {
+            send.Channel = "C1";
+            send.Text = "hello";
+        });
+
+        var fault = SlackTestSupport.Fault(await activity.ExecuteForTestsAsync(SlackTestSupport.Context()));
+        Assert.Equal("http_error", fault.Code);
+        Assert.True(fault.IsRetryable);
+        Assert.DoesNotContain(SlackTestSupport.Token, fault.Message, StringComparison.Ordinal);
+    }
 }

@@ -54,6 +54,21 @@ internal static class SlackTestSupport
         return JsonDocument.Parse(request.Body!).RootElement.Clone();
     }
 
+    public static string FormValue(RecordedHttpRequest request, string name)
+    {
+        Assert.False(string.IsNullOrWhiteSpace(request.Body));
+        foreach (var part in request.Body!.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var separator = part.IndexOf('=');
+            var key = Uri.UnescapeDataString(separator < 0 ? part : part[..separator].Replace('+', ' '));
+            if (!string.Equals(key, name, StringComparison.Ordinal))
+                continue;
+            return Uri.UnescapeDataString(separator < 0 ? "" : part[(separator + 1)..].Replace('+', ' '));
+        }
+
+        throw new InvalidOperationException($"Form field '{name}' was missing from '{request.Body}'.");
+    }
+
     public static void AssertBearer(RecordedHttpRequest request)
     {
         Assert.Equal(new AuthenticationHeaderValue("Bearer", Token), request.Authorization);

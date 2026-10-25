@@ -27,7 +27,9 @@ public sealed class ListChannelsAndUploadTests
         Assert.Equal(2, harness.Http.Recorded.Count);
         SlackTestSupport.AssertSlackMethod(harness.Http.Recorded[0], "conversations.list");
         SlackTestSupport.AssertSlackMethod(harness.Http.Recorded[1], "conversations.list");
-        Assert.Equal("page-2", SlackTestSupport.BodyJson(harness.Http.Recorded[1]).GetProperty("cursor").GetString());
+        Assert.Equal("public_channel,private_channel", SlackTestSupport.FormValue(harness.Http.Recorded[0], "types"));
+        Assert.Equal("50", SlackTestSupport.FormValue(harness.Http.Recorded[0], "limit"));
+        Assert.Equal("page-2", SlackTestSupport.FormValue(harness.Http.Recorded[1], "cursor"));
     }
 
     [Fact]
@@ -92,5 +94,29 @@ public sealed class ListChannelsAndUploadTests
         Assert.Equal("Note", complete.GetProperty("files")[0].GetProperty("title").GetString());
         Assert.Equal("see attached", complete.GetProperty("initial_comment").GetString());
         Assert.Equal("123.456", complete.GetProperty("thread_ts").GetString());
+    }
+
+    [Fact]
+    public async Task UploadFile_faults_when_the_upload_url_is_not_https_slack()
+    {
+        await using var harness = SlackTestSupport.CreateHarness();
+        harness.Http.Respond = (request, _) =>
+        {
+            var path = request.RequestUri?.AbsolutePath ?? "";
+            if (path.EndsWith("files.getUploadURLExternal", StringComparison.Ordinal))
+                return CannedHttpResponse.Json("""{"ok":true,"upload_url":"https://example.com/upload/v1/abc","file_id":"F1"}""");
+            return CannedHttpResponse.Json("""{"ok":false,"error":"unknown_method"}""");
+        };
+
+        var activity = SlackTestSupport.Activity<UploadFile>(harness, upload =>
+        {
+            upload.Filename = "note.txt";
+            upload.Content = "hello"u8.ToArray();
+        });
+
+        var fault = SlackTestSupport.Fault(await activity.ExecuteForTestsAsync(SlackTestSupport.Context()));
+        Assert.Equal("invalid_response", fault.Code);
+        Assert.Single(harness.Http.Recorded);
+        SlackTestSupport.AssertSlackMethod(harness.Http.Recorded[0], "files.getUploadURLExternal");
     }
 }

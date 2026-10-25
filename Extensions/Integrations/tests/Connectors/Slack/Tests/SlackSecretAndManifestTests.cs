@@ -48,6 +48,16 @@ public sealed class SlackSecretAndManifestTests
             Assert.False(entry.IsTrigger);
             Assert.Contains(entry.Inputs, input => input.Key == "Connection" && input.DisplayName == "Connection");
         }
+
+        Assert.Contains(
+            manifest.Activities.Single(activity => activity.TypeName == typeof(UpdateMessage).FullName).Inputs,
+            input => input.Key == "Ts" && input.DisplayName == "Ts");
+        Assert.Contains(
+            manifest.Activities.Single(activity => activity.TypeName == typeof(AddReaction).FullName).Inputs,
+            input => input.Key == "Ts" && input.DisplayName == "Ts");
+        Assert.Contains(
+            manifest.Activities.Single(activity => activity.TypeName == typeof(ReplyInThread).FullName).Inputs,
+            input => input.Key == "ThreadTs" && input.DisplayName == "Thread ts");
     }
 
     [Fact]

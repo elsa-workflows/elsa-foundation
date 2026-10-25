@@ -24,7 +24,7 @@ public sealed class LookupUserByEmail(
         {
             var body = new JsonObject { ["email"] = Email };
             var root = await CreateClient()
-                .PostJsonAsync(
+                .PostFormAsync(
                     SlackApi.LookupUserByEmail,
                     body,
                     Connection,
