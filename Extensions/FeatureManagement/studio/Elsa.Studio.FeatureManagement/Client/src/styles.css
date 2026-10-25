@@ -313,6 +313,12 @@
   flex: 0 0 auto;
 }
 
+.feature-management-bulk-actions > label > input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+}
+
 .feature-management-bulk-actions span {
   color: var(--studio-text-muted, var(--muted-foreground));
   font-size: 12px;

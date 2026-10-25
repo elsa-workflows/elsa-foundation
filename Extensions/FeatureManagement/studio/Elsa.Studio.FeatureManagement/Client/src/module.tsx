@@ -1645,7 +1645,10 @@ function FeatureSettingsDialog({
 
   function saveDraft() {
     for (const setting of feature.settings) {
-      onSettingChange(feature, setting, values[setting.name]);
+      const value = values[setting.name];
+      if (stableStringify(value) !== stableStringify(getSettingValue(feature, setting))) {
+        onSettingChange(feature, setting, value);
+      }
     }
 
     onClose();

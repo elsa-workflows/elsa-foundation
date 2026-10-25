@@ -79,7 +79,6 @@ export function ThemeProvider({
   const preferredMode = React.useMemo(() => resolveModePreference(modePreference), [modePreference, systemModeVersion]);
   const [navModePreference, setNavModePreferenceState] = useState<NavModePreference>("theme");
   const [mounted, setMounted] = useState(false);
-  const [persistThemeSelection, setPersistThemeSelection] = useState(false);
   const supportedModes = getSupportedThemeModes(currentTheme);
   const activeMode = resolveThemeMode(currentTheme, preferredMode);
   const navMode = resolveNavMode(currentTheme.layout, navModePreference);
@@ -94,7 +93,9 @@ export function ThemeProvider({
     setModePreferenceState(saved.mode);
     setNavModePreferenceState(saved.navigation);
     setCurrentTheme(nextTheme);
-    setPersistThemeSelection(storeLoaded);
+    if (storeLoaded && saved.themeId !== null) {
+      writeAppearancePreferences({ themeId: nextTheme.id });
+    }
     setMounted(true);
   }, [store, storeLoaded]);
 
@@ -158,14 +159,12 @@ export function ThemeProvider({
       root.removeAttribute("data-theme-material");
     }
 
-    if (persistThemeSelection) {
-      writeAppearancePreferences({ themeId: currentTheme.id });
-    }
-  }, [currentTheme, activeMode, navMode, mounted, persistThemeSelection]);
+  }, [currentTheme, activeMode, navMode, mounted]);
 
   const handleSetTheme = (themeId: string) => {
-    setPersistThemeSelection(true);
-    setCurrentTheme(findSelectableTheme(store, themeId));
+    const nextTheme = findSelectableTheme(store, themeId);
+    writeAppearancePreferences({ themeId: nextTheme.id });
+    setCurrentTheme(nextTheme);
   };
 
   const handleSetModePreference = (preference: ThemeModePreference) => {
@@ -183,12 +182,10 @@ export function ThemeProvider({
     setModePreferenceState(defaults.mode);
     setNavModePreferenceState(defaults.navigation);
     // Not persisted: the configured default theme applies until the user picks one again.
-    setPersistThemeSelection(false);
     setCurrentTheme(findSelectableTheme(store, defaults.themeId));
   };
 
   const handlePreviewTheme = (theme: StudioThemeDefinition) => {
-    setPersistThemeSelection(false);
     setCurrentTheme(toTheme(theme));
   };
 
