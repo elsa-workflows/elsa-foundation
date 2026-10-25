@@ -56,12 +56,17 @@ Use `services.AddConnections()` to register defaults, then replace these service
 
 ## HTTP type (phase 1)
 
-The built-in `http` connection type supports `api-key` (header or query), `basic`, and `bearer`.
-OAuth schemes are ordinary plugins on the same type; they are not a second HTTP activity.
+The built-in `http` connection type supports `api-key` (header or query), `basic`, `bearer`, and
+`oauth2`. The `oauth2` scheme is provided by the Integrations OAuth2 connector (#2728); creating an
+`http` connection with that scheme requires the connector's `IAuthenticationSchemeProvider` and
+`IHttpRequestAuthenticator`. OAuth is not a second HTTP activity.
 
 ## OAuth callback (phase 2 groundwork)
 
-The API maps `GET /_elsa/connections/oauth/callback`. The redirect URI is
+The API maps `GET /_elsa/connections/oauth/callback` and
+`POST /connections/{name}/oauth/authorize`. The redirect URI is
 `{PublicBaseUrl}/_elsa/connections/oauth/callback`. `PublicBaseUrl` is required; the API does not
 fall back to the request host. Token refresh writes the grant with compare-and-swap on the expected
-secret version (`IConnectionGrantWriter`).
+secret version (`IConnectionGrantWriter`). `HttpConnectionApplication`,
+`HttpConnectionRequestOptionKeys` and `HttpConnectionHostGuard` stay internal; authenticators use
+`HttpConnectionCredentials`.

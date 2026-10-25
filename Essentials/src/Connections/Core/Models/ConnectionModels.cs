@@ -211,7 +211,9 @@ public sealed class GrantWriteRequest
     public required int ExpectedSecretVersion { get; init; }
     public required string AccessToken { get; init; }
     public string? RefreshToken { get; init; }
-    public DateTimeOffset ExpiresAt { get; init; }
+    public DateTimeOffset? ExpiresAt { get; init; }
+    public string? TokenType { get; init; }
+    public string? Scope { get; init; }
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]

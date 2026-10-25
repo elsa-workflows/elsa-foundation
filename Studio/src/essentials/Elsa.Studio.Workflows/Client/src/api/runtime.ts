@@ -20,6 +20,7 @@ import type {
 } from "../workflowTypes";
 import { capabilityIds, getApiCapability, hasCapabilityLink, resolveCapabilityLink } from "./capabilities";
 import { createWorkflowExecutionRequestInit } from "../workflowRunInputs";
+import { mapWorkflowInstanceDetails } from "../workflowInstanceInspection";
 
 export const runtimeKeys = {
   all: ["workflow-runtime"] as const,
@@ -320,7 +321,7 @@ export async function getWorkflowInstance(context: StudioEndpointContext, workfl
     capabilityIds.runtime,
     "workflow-instance",
     { workflowExecutionId });
-  return context.http.getJson<WorkflowInstanceDetails>(path);
+  return mapWorkflowInstanceDetails(await context.http.getJson<WorkflowInstanceDetails>(path));
 }
 
 export async function getActivityExecutionInspection(

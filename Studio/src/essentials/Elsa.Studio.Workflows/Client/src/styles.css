@@ -1406,6 +1406,10 @@
   border-bottom: 0;
 }
 
+.wf-instance-tab-content > .wf-instance-note {
+  padding: 0 12px 12px;
+}
+
 .wf-instance-inspector header span {
   color: var(--wf-muted-text);
   font-size: 11px;

@@ -65,6 +65,14 @@
   <Folder Name="/Extensions/Elsa3/tests/Mapping/">
     <Project Path="Extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj" />
   </Folder>
+  <Folder Name="/Extensions/Integrations/" />
+  <Folder Name="/Extensions/Integrations/src/">
+    <Project Path="Extensions/Integrations/src/Sdk/Elsa.Integrations.Sdk.csproj" />
+    <Project Path="Extensions/Integrations/src/Templates/Elsa.Integrations.Templates.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Integrations/tests/">
+    <Project Path="Extensions/Integrations/tests/Tests/Elsa.Integrations.Tests.csproj" />
+  </Folder>
   <Folder Name="/Extensions/ExtensionBuilder/" />
   <Folder Name="/Extensions/ExtensionBuilder/src/">
     <Project Path="Extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj" />
@@ -72,6 +80,13 @@
   <Folder Name="/Extensions/ExtensionBuilder/tests/" />
   <Folder Name="/Extensions/ExtensionBuilder/tests/Api/">
     <Project Path="Extensions/ExtensionBuilder/tests/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Integrations/src/Connectors/">
+    <Project Path="Extensions/Integrations/src/Connectors/OAuth2/Elsa.Integrations.Connectors.OAuth2.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Integrations/tests/Connectors/" />
+  <Folder Name="/Extensions/Integrations/tests/Connectors/OAuth2/">
+    <Project Path="Extensions/Integrations/tests/Connectors/OAuth2/Tests/Elsa.Integrations.Connectors.OAuth2.Tests.csproj" />
   </Folder>
   <Folder Name="/solution/">
     <File Path=".gitignore" />

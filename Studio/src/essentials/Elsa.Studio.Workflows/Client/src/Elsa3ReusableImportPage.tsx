@@ -34,6 +34,7 @@ import {
   diagnosticPathSegmentKind,
   diagnosticSeverity,
   importPublicationStatus,
+  importPublicationStatusLabel,
   importReceiptApplyMessage,
   importReceiptNeedsResume,
   importReceiptOutcomeLabel,
@@ -883,9 +884,10 @@ function PublicationState({ publication }: { publication: Elsa3ReusableImportPub
     <section
       style={published ? styles.publication : styles.unpublishedPublication}
       aria-label={`Publication state for ${publication.sourceVersionId}`}
+      data-status={status}
     >
       <header style={styles.split}>
-        <strong>Publication {status}</strong>
+        <strong>{importPublicationStatusLabel(publication.status)}</strong>
         {publication.errorCode ? <code>{publication.errorCode}</code> : null}
       </header>
       {publication.blockedBy ? <p>Blocked by <code>{publication.blockedBy}</code></p> : null}
