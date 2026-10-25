@@ -59,6 +59,20 @@ with no lock file does not fail: NuGet writes one and carries on, unlocked. So
 lock file beside it, for two projects sharing a directory (and so one lock file), and for a committed lock file with no
 project beside it.
 
+### Reconciling framework package pruning
+
+A locked restore can pass while the dependency map's pinned-transitive edges differ from restore's nuspec list.
+NuGet's locked-mode check accounts for packages the target framework prunes, but it can retain those packages in an
+older lock file. The [next lock-file regeneration omits them](https://learn.microsoft.com/en-us/nuget/consume-packages/package-references-in-project-files#lock-files-and-prunepackagereference).
+This occurred after the demo removal in #3314: restore pruned packages supplied by `Microsoft.AspNetCore.App`, while
+the committed lock files still exposed them to the tree-only dependency scan.
+
+Regenerate the affected locks with `--force-evaluate`, review every changed package entry and dependency edge, and
+rerun a locked restore plus `NuGetLockFileTests`. For a pruning-only correction, retained package versions, requested
+ranges and content hashes must remain unchanged; investigate any additions or version changes separately. Keep the
+exact restore comparison and the scanner's committed-tree-only inputs; do not mask the mismatch with a package-name
+exclusion or the installed SDK's pruning catalog.
+
 ## Where restores are locked
 
 - Every `dotnet restore` step in `.github/workflows` passes `--locked-mode`: CI's build and test, architecture guards,
