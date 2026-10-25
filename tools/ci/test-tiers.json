@@ -631,6 +631,11 @@
       "medianMinutes": 0.12
     },
     {
+      "project": "Extensions/Integrations/tests/Tests/Elsa.Integrations.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": 0.01
+    },
+    {
       "project": "Extensions/Rules/tests/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Rules.Persistence.EntityFrameworkCore.ProviderTests.csproj",
       "tier": "integration",
       "trait": "testcontainers",
@@ -766,6 +771,7 @@
           "Extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj",
           "Essentials/tests/Caching/Tests/Elsa.Caching.Tests.csproj",
           "Extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj",
+          "Extensions/Integrations/tests/Tests/Elsa.Integrations.Tests.csproj",
           "Essentials/tests/Workflows/ExecutionEvidence/Tests/Elsa.Workflows.ExecutionEvidence.Tests.csproj",
           "Essentials/tests/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj",
           "Essentials/tests/Cluster/Tests/Elsa.Cluster.Tests.csproj",

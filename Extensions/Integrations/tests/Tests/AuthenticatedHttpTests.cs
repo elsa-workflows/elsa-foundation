@@ -76,6 +76,21 @@ public sealed class AuthenticatedHttpTests
     }
 
     [Fact]
+    public async Task In_memory_applicator_trims_the_connection_name_on_add_and_apply()
+    {
+        await using var harness = ConnectorHarness.Create();
+        harness.Connections.Add(" acme ", "Bearer", "tok-secret");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.example.com/private");
+
+        await harness.ConnectionApplicator.ApplyAsync(
+            request,
+            new ConnectionReference { Name = " acme ", Type = "http" },
+            NewContext());
+
+        Assert.Equal(new AuthenticationHeaderValue("Bearer", "tok-secret"), request.Headers.Authorization);
+    }
+
+    [Fact]
     public async Task Create_configure_can_swap_the_applicator()
     {
         await using var harness = ConnectorHarness.Create(configure: services =>

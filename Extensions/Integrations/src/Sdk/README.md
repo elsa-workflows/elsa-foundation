@@ -52,4 +52,4 @@ public sealed class PingRemote : ConnectorActivity<string>
 }
 ```
 
-Scaffold with `dotnet new elsa-connector`. Test with `ConnectorHarness`: `harness.Secrets.Add(...)` and `harness.Connections.Add(name, scheme, credential)` register the in-memory stores. Pass `Create(configure: ...)` to replace the applicator.
+Scaffold with `dotnet new elsa-connector`. Test with `ConnectorHarness`: `harness.Secrets.Add(...)` and `harness.Connections.Add(name, scheme, credential)` register the in-memory stores. Pass `Create(configure: ...)` to replace the applicator. Those harness types currently ship in this package; moving them to `Elsa.Integrations.Sdk.Testing` is #3249.

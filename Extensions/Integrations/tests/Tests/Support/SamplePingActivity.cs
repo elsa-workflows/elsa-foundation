@@ -63,6 +63,17 @@ public sealed class OpenGenericConnectorActivity<TPayload> : ConnectorActivity
         ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
 }
 
+[Activity(Icon = "plug")]
+public abstract class IconOnBaseConnector : ConnectorActivity;
+
+[Activity]
+[Version("1.0.0")]
+public sealed class DerivedWithoutOwnIcon : IconOnBaseConnector
+{
+    protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
+}
+
 [Activity(Icon = "key")]
 [Version("1.0.0")]
 public sealed class SampleCredentialActivity : ConnectorActivity

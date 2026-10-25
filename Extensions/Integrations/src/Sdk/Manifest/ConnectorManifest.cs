@@ -78,9 +78,10 @@ public sealed class ConnectorManifest
         type is { IsClass: true, IsAbstract: false, ContainsGenericParameters: false }
         && typeof(IActivity).IsAssignableFrom(type);
 
+    private static readonly string ActivityAttributeFullName = typeof(ActivityAttribute).FullName!;
+
     private static ConnectorActivityEntry ToEntry(Type type)
     {
-        var activity = type.GetCustomAttribute<ActivityAttribute>(inherit: true);
         var inputs = type.GetProperties(BindingFlags.Instance | BindingFlags.Public)
             .Select(property => (Property: property, Attribute: property.GetCustomAttribute<ActivityInputAttribute>(inherit: true)))
             .Where(pair => pair.Attribute is not null)
@@ -91,10 +92,34 @@ public sealed class ConnectorManifest
         {
             TypeName = type.FullName ?? type.Name,
             Version = ConnectorActivityVersion.Resolve(type),
-            Icon = string.IsNullOrWhiteSpace(activity?.Icon) ? null : activity.Icon,
+            Icon = ReadIconUpTypeChain(type),
             IsTrigger = type.GetCustomAttribute<TriggerActivityAttribute>(inherit: false) is not null,
             Inputs = inputs
         };
+    }
+
+    /// <summary>
+    /// Same walk as <c>ClrAssemblyScanner.BuildIconFacet</c>: keep going until a non-empty
+    /// <c>[Activity(Icon = …)]</c> is found. A derived <c>[Activity]</c> with no icon must not hide
+    /// the base icon.
+    /// </summary>
+    private static string? ReadIconUpTypeChain(Type type)
+    {
+        for (var current = (Type?)type; current is not null; current = current.BaseType)
+        {
+            var data = current.GetCustomAttributesData()
+                .FirstOrDefault(attribute => attribute.AttributeType.FullName == ActivityAttributeFullName);
+            if (data is null)
+                continue;
+
+            var icon = data.NamedArguments
+                .FirstOrDefault(argument => argument.MemberName == nameof(ActivityAttribute.Icon))
+                .TypedValue.Value as string;
+            if (!string.IsNullOrWhiteSpace(icon))
+                return icon;
+        }
+
+        return null;
     }
 
     private static ConnectorInputEntry ToInput(PropertyInfo property, ActivityInputAttribute attribute)

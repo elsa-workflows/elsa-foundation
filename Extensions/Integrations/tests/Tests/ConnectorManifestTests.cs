@@ -44,6 +44,14 @@ public sealed class ConnectorManifestTests
     }
 
     [Fact]
+    public void FromAssembly_reads_Icon_declared_on_a_base_type()
+    {
+        var manifest = ConnectorManifest.FromAssembly(typeof(DerivedWithoutOwnIcon).Assembly);
+        var derived = Assert.Single(manifest.Activities, activity => activity.TypeName == typeof(DerivedWithoutOwnIcon).FullName);
+        Assert.Equal("plug", derived.Icon);
+    }
+
+    [Fact]
     public void FromAssembly_uses_types_that_loaded_when_GetTypes_is_partial()
     {
         var loaded = typeof(SamplePingActivity);

@@ -1,5 +1,4 @@
 using Elsa.Integrations.Sdk.Harness;
-using Elsa.Integrations.Tests.Support;
 using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Workflows;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -28,25 +27,21 @@ public sealed class SecretResolverTests
     }
 
     [Fact]
-    public async Task Credential_input_resolves_through_runtime_secret_resolver_on_each_activation()
+    public async Task Runtime_secret_resolver_reads_ISecretValueResolver_on_each_call()
     {
         await using var harness = ConnectorHarness.Create();
         harness.Secrets.Add(harness.TenantId, "demo-token", "tok-1");
         IRuntimeSecretResolver resolver = new SecretValueRuntimeResolver(harness.Secrets);
 
-        var first = await ActivateAsync(resolver, harness.TenantId);
-        var second = await ActivateAsync(resolver, harness.TenantId);
+        var first = await resolver.ResolveAsync(
+            new RuntimeSecretResolutionRequest(harness.TenantId, new RuntimeSecretReference("demo-token")));
+        var second = await resolver.ResolveAsync(
+            new RuntimeSecretResolutionRequest(harness.TenantId, new RuntimeSecretReference("demo-token")));
 
-        Assert.Equal("tok-1", first.Token);
-        Assert.Equal("tok-1", second.Token);
+        Assert.True(first.Succeeded);
+        Assert.True(second.Succeeded);
+        Assert.Equal("tok-1", first.Value);
+        Assert.Equal("tok-1", second.Value);
         Assert.Equal(2, harness.Secrets.ResolveCount);
-    }
-
-    private static async Task<SampleCredentialActivity> ActivateAsync(IRuntimeSecretResolver resolver, string tenantId)
-    {
-        var resolution = await resolver.ResolveAsync(
-            new RuntimeSecretResolutionRequest(tenantId, new RuntimeSecretReference("demo-token")));
-        Assert.True(resolution.Succeeded);
-        return new SampleCredentialActivity { Token = resolution.Value };
     }
 }

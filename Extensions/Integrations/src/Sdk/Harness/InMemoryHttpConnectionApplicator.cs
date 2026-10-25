@@ -55,7 +55,8 @@ public sealed class InMemoryHttpConnectionApplicator : IHttpConnectionApplicator
         ArgumentNullException.ThrowIfNull(request);
         if (connection is null)
             return ValueTask.CompletedTask;
-        if (string.IsNullOrWhiteSpace(connection.Name))
+        var name = connection.Name.Trim();
+        if (string.IsNullOrWhiteSpace(name))
         {
             throw new InvalidOperationException(
                 "A bound connection reference has no name.");
@@ -64,10 +65,10 @@ public sealed class InMemoryHttpConnectionApplicator : IHttpConnectionApplicator
         AuthenticationHeaderValue authorization;
         lock (_headers)
         {
-            if (!_headers.TryGetValue(connection.Name, out var header))
+            if (!_headers.TryGetValue(name, out var header))
             {
                 throw new InvalidOperationException(
-                    $"No in-memory connection named '{connection.Name}' is registered.");
+                    $"No in-memory connection named '{name}' is registered.");
             }
 
             authorization = header;
