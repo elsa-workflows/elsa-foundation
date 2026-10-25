@@ -81,6 +81,13 @@
   <Folder Name="/Extensions/ExtensionBuilder/tests/Api/">
     <Project Path="Extensions/ExtensionBuilder/tests/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj" />
   </Folder>
+  <Folder Name="/Extensions/Integrations/src/Connectors/">
+    <Project Path="Extensions/Integrations/src/Connectors/OAuth2/Elsa.Integrations.Connectors.OAuth2.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Integrations/tests/Connectors/" />
+  <Folder Name="/Extensions/Integrations/tests/Connectors/OAuth2/">
+    <Project Path="Extensions/Integrations/tests/Connectors/OAuth2/Tests/Elsa.Integrations.Connectors.OAuth2.Tests.csproj" />
+  </Folder>
   <Folder Name="/solution/">
     <File Path=".gitignore" />
     <File Path="Directory.Packages.props" />

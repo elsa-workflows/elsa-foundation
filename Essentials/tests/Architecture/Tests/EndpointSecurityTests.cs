@@ -254,6 +254,7 @@ public sealed class EndpointSecurityTests
             ["DELETE /connections/{name}"] = [ConnectionsPermissions.Manage],
             ["POST /connections/{name}/revoke"] = [ConnectionsPermissions.Manage],
             ["GET /connections/{name}/oauth-redirect-uri"] = [ConnectionsPermissions.Manage],
+            ["POST /connections/{name}/oauth/authorize"] = [ConnectionsPermissions.Manage],
             ["POST /connections/{name}/test"] = [ConnectionsPermissions.Test]
         };
         using var serviceProvider = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();

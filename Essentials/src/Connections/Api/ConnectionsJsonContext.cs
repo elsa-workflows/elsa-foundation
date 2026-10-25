@@ -18,4 +18,5 @@ namespace Elsa.Connections.Api;
 [JsonSerializable(typeof(UpdateConnectionRequest))]
 [JsonSerializable(typeof(ConnectionTestResult))]
 [JsonSerializable(typeof(OAuthRedirectUriResponse))]
+[JsonSerializable(typeof(OAuthAuthorizeUrlResponse))]
 internal partial class ConnectionsJsonContext : JsonSerializerContext;
