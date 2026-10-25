@@ -35,7 +35,7 @@ Do not interpret the historical subprocess-only test name as the released profil
 ## Element and validation comparison
 
 Foundation sources are under
-[`Elsa.Activities.Bpmn`](../../../../Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/);
+[`Elsa.Activities.Bpmn`](https://github.com/elsa-workflows/elsa-foundation/blob/98efed4fc2c07337ad0b30128b60f462b8ddcff0/Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/);
 released neutral sources are
 [`Bpmn.Semantics`](https://github.com/valence-works/bpmn/tree/021d2c5bba494f17d346144d97763cd3b2a13a4b/src/Bpmn.Semantics).
 The family resolvers, graph validators, behaviors and interpreter coordinators were compared as
@@ -67,6 +67,15 @@ aligned validation/profile restrictions. It checks active source predicates wher
 is stale. No gap conclusion above depends on treating an omitted cut as supported.
 
 ## Host adapter and private-state gates
+
+**Pruning ownership (issue step 2).** The old Elsa `PruneForPersistence` policy must leave with
+its interpreter; `BpmnStatePersister` keeps loading/staging, not token-retention rules. Released
+0.5.0 already provides
+[`BpmnExecutionState.Prune()`](https://github.com/valence-works/bpmn/blob/021d2c5bba494f17d346144d97763cd3b2a13a4b/src/Bpmn.Model/State/BpmnExecutionState.cs#L88)
+in `Bpmn.Model`, the state dependency of `Bpmn.Semantics`. No neutral gap requires a second pruning
+implementation. The switch uses that library policy after restoring legacy correlation, then
+persists its result. Delete Elsa's old `PruneForPersistence` and verify the late-callback behavior;
+do not silently retain a host-side copy or move the same policy into a new adapter helper.
 
 The adapter must apply library commands in order, stage state and owed work through the existing
 checkpoint authority, and map the library verdict rather than reconstruct token semantics.
@@ -108,8 +117,8 @@ and “both completions in one drain” do not prove that order or a new-provide
 
 ## Interchange, bindings and Studio
 
-The [Elsa authored envelope](../../../../Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Models/BpmnAuthoredStructure.cs)
-and [Studio mirror](../../../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/bpmn/bpmnTypes.ts)
+The [Elsa authored envelope](https://github.com/elsa-workflows/elsa-foundation/blob/98efed4fc2c07337ad0b30128b60f462b8ddcff0/Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Models/BpmnAuthoredStructure.cs)
+and [Studio mirror](https://github.com/elsa-workflows/elsa-foundation/blob/98efed4fc2c07337ad0b30128b60f462b8ddcff0/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/bpmn/bpmnTypes.ts)
 are adapters, not the library's definitions/execution-state/work-binding schema roots. Keep the frozen
 public authoring fingerprint; an optional library field is not permission to replace Elsa's schema.
 
@@ -161,7 +170,7 @@ already have rows in the 242-method audit. The removed
 `ActivitiesBpmnInterchangeFeatureTests.ConfigureServices_RegistersImporterAndExporter` is a
 **pre-existing** deletion in [PR2608](https://github.com/elsa-workflows/elsa-foundation/pull/2608),
 commit `a82956af9f10eab0ab007fa4bcfd8d7aa17b821f`: its registration objective moved to
-[`FeatureCompositionTests`](../../../../Essentials/tests/Architecture/Tests/FeatureCompositionTests.cs).
+[`FeatureCompositionTests`](https://github.com/elsa-workflows/elsa-foundation/blob/98efed4fc2c07337ad0b30128b60f462b8ddcff0/Essentials/tests/Architecture/Tests/FeatureCompositionTests.cs).
 The nested-process import test is not its replacement proof merely because the total is unchanged.
 No tests are deleted or renamed by this parity report.
 
@@ -177,7 +186,8 @@ and outcomes. The `Cancelled` outcome remains structure-dependent.
    identified here; the observed differences above belong to deliberate library fixes or the host.
 2. Specify and review the versioned adapter/state/binding contract. Capture legacy runtime fixtures
    before deleting their writer, then implement the host against published packages. Remove duplicate
-   interpreter/graph/behavior code and add the issue's deletion/name-collision guard.
+   interpreter/graph/behavior code, including host `PruneForPersistence`, and add the issue's
+   deletion/name-collision guard.
 3. Run affected runtime/interchange suites, real persisted recovery and exact parent-outcome cases,
    native Sequence/Flowchart compatibility, publication/import/export and relevant Studio browser
    journeys; prove behavioral regressions with a revert/mutation control. Run architecture/maps and

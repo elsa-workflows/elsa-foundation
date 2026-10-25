@@ -49,14 +49,19 @@ Note the fingerprint records only `Done` for `BpmnProcess`. The `Cancelled` outc
 structure-dependent and resolved during compilation, so it is correctly absent from the static
 contract.
 
-## Still missing, and it matters
+## Existing restart evidence and missing upgrade fixtures
 
-There is no persisted-state golden here yet, and no test anywhere asserts that a BPMN instance
-persisted by the current engine resumes on a later one. `BpmnStatePersister` hard-validates both the
-`Elsa.Bpmn.ExecutionState` type alias and the state schema version, throwing on any mismatch, so a
-shape change in `BpmnExecutionState` is the one class of regression that unit tests pass through
-silently while breaking every running instance on upgrade.
+This capture has no persisted-state golden for changing engines. Later integration work does prove a
+narrower fresh-host restart: the EF
+[`NativeBackgroundActivityFlowchartEfTests`](https://github.com/elsa-workflows/elsa-foundation/blob/98efed4fc2c07337ad0b30128b60f462b8ddcff0/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/NativeBackgroundActivityFlowchartEfTests.cs#L252)
+disposes the host, reopens the same durable store, accepts a recorded background-worker receipt and
+asserts the still-running BPMN instance is waiting at its join. That is same-version restart proof;
+it does not prove upgrading the private-state reader, a killed process, provider migration, or
+race-loser/deferred-fault recovery.
 
-Add that golden in WU-2, alongside the host-port refactor: serialize a representative set of
-post-prune `BpmnExecutionState` instances, commit them here, and add a test that deserializes them
-through the current code path.
+`BpmnStatePersister` hard-validates the `Elsa.Bpmn.ExecutionState` alias and schema version. A shape
+change under that version can still lose fields silently. Before the library switch deletes the old
+writer, capture actual legacy checkpoints and prove their version-aware read and continuation
+through the replacement. Include state, durable child identity, queues/outbox and bookmarks at a
+coherent checkpoint. Synthetic typed-state probes remain useful but are not persisted execution
+upgrade proof. The [adoption comparison](../bpmn-adoption-0.5.0/README.md) names these gates.
