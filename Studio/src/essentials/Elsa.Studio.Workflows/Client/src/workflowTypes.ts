@@ -120,6 +120,9 @@ export interface IncidentStrategiesResponse {
 /** When a run's state is committed, and therefore what a crash costs. Unset means the host's default applies. */
 export type PersistenceMode = "Durable" | "Balanced" | "Ephemeral";
 
+/** Whether a run's inspection evidence is exact per activity or folded to a commit boundary. */
+export type InspectionGranularity = "activity-level" | "boundary-level";
+
 export interface WorkflowStrategyOptions {
   incidentStrategy?: IncidentStrategyReference | null;
   persistenceMode?: PersistenceMode | null;
@@ -883,6 +886,10 @@ export interface WorkflowInstanceDetails {
   incidents?: IncidentStateSummary[] | null;
   /** The caller's permissions for this run (spec 260 FR-416); an older host omits it, which reads as "may not manage". */
   permissions?: WorkflowInstancePermissions | null;
+  /** Run checkpoint cadence (`Durable`, `Balanced`, `Ephemeral`); absent on older Runtime hosts. */
+  persistenceMode?: PersistenceMode | null;
+  /** `activity-level` when Durable, otherwise `boundary-level`; absent on older Runtime hosts. */
+  inspectionGranularity?: InspectionGranularity | null;
 }
 
 /** A display hint: the endpoints still enforce every permission. */
