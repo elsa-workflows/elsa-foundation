@@ -86,12 +86,13 @@ test("shows a conflict descriptor as the primary label and the raw key as muted 
   await expect(dialog.getByRole("button", { name: "Publish" })).toBeDisabled();
 });
 
-test("falls back to the raw conflict key when no descriptor is present", async ({ page }) => {
+test("shows a generic primary label and the raw key as muted detail when no descriptor is present", async ({ page }) => {
   await page.goto("/?mode=publication-review&outcome=conflict&descriptor=0");
   const alert = page.getByRole("dialog", { name: "Publish workflow" }).getByRole("alert");
 
-  await expect(alert).toContainText("httpendpoint:sha256:4191f265b8b2d2152d4056ed3d616d32f7c2953e7ae41c4f8b184244b830e4f7");
-  await expect(alert.locator(".wf-publication-selection")).toHaveCount(0);
+  await expect(alert).toContainText("Trigger conflict");
+  await expect(alert.locator(".wf-publication-selection")).toHaveText(
+    "httpendpoint:sha256:4191f265b8b2d2152d4056ed3d616d32f7c2953e7ae41c4f8b184244b830e4f7");
   await expect(alert).not.toContainText("GET /orders/{id}");
 });
 

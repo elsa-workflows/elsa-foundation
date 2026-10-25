@@ -16,8 +16,11 @@ describe("failOnDeclarationDiagnostics", () => {
   it("fails when a nested diagnostic message reports a declaration error", () => {
     expect(() => failOnDeclarationDiagnostics([{
       code: 2742,
-      messageText: { messageText: "The inferred type of 'useGraphCanvasInteractions' cannot be named without a reference to '@xyflow/system'." }
-    }])).toThrow(/TS2742: The inferred type of 'useGraphCanvasInteractions'/);
+      messageText: {
+        messageText: "The inferred type of 'useGraphCanvasInteractions' cannot be named without a reference to '@xyflow/system'.",
+        next: [{ messageText: "This is likely not portable. A type annotation is necessary." }]
+      }
+    }])).toThrow(/TS2742: The inferred type of 'useGraphCanvasInteractions'[\s\S]*This is likely not portable/);
   });
 
   it("ignores warning-category diagnostics", () => {
