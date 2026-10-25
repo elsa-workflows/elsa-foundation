@@ -316,8 +316,12 @@ describe("Elsa 3 reusable import workbench", () => {
     expect(occurrences(container.textContent ?? "", "The commit is atomic; publishing is per version.")).toBe(1);
     expect(occurrences(container.textContent ?? "", "To finish, re-upload the export and apply it under a new idempotency key.")).toBe(1);
     expect(stickyApplyStatus(container)).toBeUndefined();
-    expect(container.textContent).toContain("Publication Published");
-    expect(container.textContent).toContain("Publication Refused");
+    expect(container.querySelector('[data-status="Published"] strong')?.textContent).toBe("Published");
+    expect(container.querySelector('[data-status="Refused"] strong')?.textContent).toBe("Publishing refused");
+    expect(container.textContent).not.toContain("Publication Published");
+    expect(container.textContent).not.toContain("Publication Refused");
+    expect(container.querySelector('[data-status="Published"]')).not.toBeNull();
+    expect(container.querySelector('[data-status="Refused"]')).not.toBeNull();
     expect(container.textContent).toContain("activity.version.bump-insufficient");
     expect(container.textContent).toContain("Version 'activity-owner-v1' is below the published minimum.");
     expect(container.textContent).toContain("Select the older version together with the newer versions in one apply, or leave it out.");
@@ -355,8 +359,14 @@ describe("Elsa 3 reusable import workbench", () => {
     expect(occurrences(container.textContent ?? "", "The commit is atomic; publishing is per version.")).toBe(1);
     expect(occurrences(container.textContent ?? "", "To finish, re-upload the export and apply it under a new idempotency key.")).toBe(1);
     expect(stickyApplyStatus(container)).toBeUndefined();
-    expect(container.textContent).toContain("Publication Refused");
-    expect(container.textContent).toContain("Publication NotPublishedDependency");
+    expect(container.querySelector('[data-status="Refused"] strong')?.textContent).toBe("Publishing refused");
+    expect(container.querySelector('[data-status="NotPublishedDependency"] strong')?.textContent)
+      .toBe("Not published: depends on an unpublished workflow");
+    expect(container.textContent).not.toContain("Publication Refused");
+    expect(container.textContent).not.toContain("Publication Not published");
+    expect(container.textContent).not.toContain("NotPublishedDependency");
+    expect(container.querySelector('[data-status="Refused"]')).not.toBeNull();
+    expect(container.querySelector('[data-status="NotPublishedDependency"]')).not.toBeNull();
   });
 });
 

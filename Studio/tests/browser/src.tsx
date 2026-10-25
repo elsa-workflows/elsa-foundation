@@ -1726,12 +1726,13 @@ function browserVersion(
 // Activity-icon shots default to Classic light — Studio 4's default theme.
 const darkVariant = searchParams.get("theme") === "dark";
 const materialVariant = searchParams.get("theme") === "material";
-const fixtureTheme = activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture || validationLabelsFixture ? "classic" : "meridian";
+const classicVariant = searchParams.get("theme") === "classic";
+const fixtureTheme = classicVariant || activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture || validationLabelsFixture ? "classic" : "meridian";
 if (searchParams.get("mode") !== "activity-authoring" && !navPlacementFixture && !navBeforeFixture && !settingsBeforeFixture && !settingsFixture && !homeFixture && !homeDashboardFixture && searchParams.get("mode") !== "definition-versions" && !userMenuFixture) {
   document.documentElement.dataset.theme = fixtureTheme;
   document.documentElement.dataset.themeLayout = "classic";
   document.documentElement.dataset.themeMode = darkVariant ? "dark" : "light";
-  if (darkVariant || searchParams.get("mode") === "connections" || activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture || validationLabelsFixture) {
+  if (darkVariant || classicVariant || searchParams.get("mode") === "connections" || activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture || validationLabelsFixture) {
     const palette = getTheme(fixtureTheme)![darkVariant ? "dark" : "light"];
     for (const token of themeTokenNames) {
       document.documentElement.style.setProperty(`--${token.replace(/([A-Z])/g, "-$1").toLowerCase()}`, palette[token]);

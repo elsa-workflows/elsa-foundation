@@ -120,14 +120,40 @@ const publicationStatusNames = [
   "NotPublished"
 ] as const;
 
+const publicationStatusLabels: Record<(typeof publicationStatusNames)[number], string> = {
+  Published: "Published",
+  AlreadyPublished: "Already published",
+  Refused: "Publishing refused",
+  NotPublishedDependency: "Not published: depends on an unpublished workflow",
+  NotPublished: "Not published"
+};
+
 export function importPublicationStatus(status: string | number) {
   if (typeof status === "number") return publicationStatusNames[status] ?? `Status ${status}`;
   return status;
 }
 
+export function importPublicationStatusLabel(status: string | number) {
+  const name = importPublicationStatus(status);
+  return isKnownPublicationStatus(name) ? publicationStatusLabels[name] : humanizePublicationStatus(name);
+}
+
 export function isPublishedImportStatus(status: string | number) {
-  const label = importPublicationStatus(status);
-  return label === "Published" || label === "AlreadyPublished";
+  const name = importPublicationStatus(status);
+  return name === "Published" || name === "AlreadyPublished";
+}
+
+function isKnownPublicationStatus(name: string): name is (typeof publicationStatusNames)[number] {
+  return publicationStatusNames.includes(name as (typeof publicationStatusNames)[number]);
+}
+
+function humanizePublicationStatus(value: string) {
+  return value
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function publicationForSource(

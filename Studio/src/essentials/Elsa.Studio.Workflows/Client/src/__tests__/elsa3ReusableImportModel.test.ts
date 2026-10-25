@@ -3,6 +3,7 @@ import {
   appendElsa3ReusableImportAnalysis,
   groupElsa3ReusableImportItems,
   importPublicationStatus,
+  importPublicationStatusLabel,
   importReceiptApplyMessage,
   importReceiptOutcomeLabel,
   isElsa3ReusableImportItemSelectable,
@@ -129,6 +130,33 @@ describe("Elsa 3 reusable import model", () => {
     expect(importReceiptApplyMessage(receipt("AlreadyImported"))).toBe(
       "Already imported. The durable receipt is identical and no second mutation was made."
     );
+  });
+
+  it.each([
+    [0, "Published", "Published"],
+    [1, "AlreadyPublished", "Already published"],
+    [2, "Refused", "Publishing refused"],
+    [3, "NotPublishedDependency", "Not published: depends on an unpublished workflow"],
+    [4, "NotPublished", "Not published"],
+    ["Published", "Published", "Published"],
+    ["AlreadyPublished", "AlreadyPublished", "Already published"],
+    ["Refused", "Refused", "Publishing refused"],
+    ["NotPublishedDependency", "NotPublishedDependency", "Not published: depends on an unpublished workflow"],
+    ["NotPublished", "NotPublished", "Not published"]
+  ] as const)("maps publication status %j to a readable label", (status, name, label) => {
+    expect(importPublicationStatus(status)).toBe(name);
+    expect(importPublicationStatusLabel(status)).toBe(label);
+    expect(isPublishedImportStatus(status)).toBe(name === "Published" || name === "AlreadyPublished");
+  });
+
+  it("humanizes unknown publication statuses instead of showing the raw enum", () => {
+    expect(importPublicationStatus(9)).toBe("Status 9");
+    expect(importPublicationStatusLabel(9)).toBe("Status 9");
+    expect(importPublicationStatus("QueuedForRetry")).toBe("QueuedForRetry");
+    expect(importPublicationStatusLabel("QueuedForRetry")).toBe("Queued For Retry");
+    expect(importPublicationStatusLabel("HTTPBlocked")).toBe("HTTP Blocked");
+    expect(isPublishedImportStatus("QueuedForRetry")).toBe(false);
+    expect(isPublishedImportStatus(9)).toBe(false);
   });
 });
 
