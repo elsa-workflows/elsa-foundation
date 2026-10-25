@@ -112,6 +112,13 @@
     <Project Path="tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator.csproj" />
     <Project Path="tools/maps/Elsa.Maps.Projects/Elsa.Maps.Projects.csproj" />
   </Folder>
+  <Folder Name="/tools/studio/" />
+  <Folder Name="/tools/studio/HostingReuse.Probe/">
+    <Project Path="tools/studio/HostingReuse.Probe/Fixtures/First/First.csproj" />
+    <Project Path="tools/studio/HostingReuse.Probe/Fixtures/Second/Second.csproj" />
+    <Project Path="tools/studio/HostingReuse.Probe/Runner/HostingReuse.Probe.csproj" />
+    <Project Path="tools/studio/HostingReuse.Probe/StorePruning/StorePruning.csproj" />
+  </Folder>
   <Folder Name="/tools/versioning/">
     <Project Path="tools/versioning/Elsa.Versioning.Calculator/Elsa.Versioning.Calculator.csproj" />
     <Project Path="tools/versioning/Elsa.Versioning.Publisher/Elsa.Versioning.Publisher.csproj" />
