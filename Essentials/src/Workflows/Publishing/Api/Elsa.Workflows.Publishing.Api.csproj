@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+  </PropertyGroup>
+
   <!--
     The bridge feature. It depends DOWN on stable Design and Runtime contracts and connects them:
       - the Design seam:  Elsa.Activities.Design.Core / .Persistence.Core (read the catalog row)

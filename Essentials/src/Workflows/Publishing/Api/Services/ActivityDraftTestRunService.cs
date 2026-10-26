@@ -3,6 +3,7 @@ using Elsa.Workflows.Publishing.Services;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Entities;
@@ -15,11 +16,18 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Primitives.Diagnostics;
+using Elsa.Workflows.Runtime.Core.Configuration;
+using WorkflowExecutableRootWriteLeaseManager = Elsa.Workflows.Runtime.Services.Executables.WorkflowExecutableRootWriteLeaseManager;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Publishing.Api.Services;
 
 public interface IActivityDraftTestRunService
 {
+    /// <summary>Prepares or resumes the receipt selected by the request's idempotency key.</summary>
+    /// <exception cref="ActivityDraftTestRunStorageException">Wrapper material/source retention failed;
+    /// identifies the Test Run and preserves the infrastructure cause. Retry the same key.</exception>
+    /// <exception cref="OperationCanceledException">Requested cancellation propagates.</exception>
     Task<ActivityDraftTestRunView> StartAsync(StartActivityDraftTestRun request, CancellationToken cancellationToken = default);
     Task<ActivityDraftTestRunView> GetAsync(string testRunId, CancellationToken cancellationToken = default);
     Task<ActivityDraftTestRunView> GetByIdempotencyKeyAsync(string draftId, string idempotencyKey, CancellationToken cancellationToken = default);
@@ -52,13 +60,32 @@ public sealed class ActivityDraftTestRunService(
     IActivityDraftTestRunCancellationPolicy cancellationPolicy,
     IWorkflowExecutionActorProvider actorProvider,
     IRuntimeExecutionIdGenerator runtimeIds,
-    TimeProvider timeProvider) : IActivityDraftTestRunService
+    TimeProvider timeProvider,
+    IWorkflowExecutableRootWriteLeaseManager rootWrites) : IActivityDraftTestRunService
 {
+    // Preserve the original CLR constructor. Direct callers retain the built-in lease defaults;
+    // DI uses the additive constructor and the host's selected coordinator/options.
+    public ActivityDraftTestRunService(IActivityDefinitionStore definitions, IActivityDefinitionDraftStore drafts,
+        IActivityDefinitionLayoutStore layouts, IActivityTemplateCompiler compiler, IActivityPublishingAuthorizationContext authorization,
+        IExecutableActivityTemplateStore activityTemplates, IWorkflowExecutableSourceReferenceStore sourceReferences,
+        ActivityTemplatePlacer placer, WorkflowExecutableHasher hasher, IWorkflowExecutableStore workflowExecutables,
+        IWorkflowStartDispatcher startDispatcher, IWorkflowTestScopeStore testScopeStore,
+        IWorkflowExecutionPartitionAccessor partitionAccessor, IActivityDraftTestRunStore testRuns,
+        IWorkflowExecutionStateStore workflowExecutions, IActivityExecutionStateStore activityExecutions,
+        IActivityDraftTestRunCancellationPolicy cancellationPolicy, IWorkflowExecutionActorProvider actorProvider,
+        IRuntimeExecutionIdGenerator runtimeIds, TimeProvider timeProvider)
+        : this(definitions, drafts, layouts, compiler, authorization, activityTemplates, sourceReferences, placer,
+            hasher, workflowExecutables, startDispatcher, testScopeStore, partitionAccessor, testRuns,
+            workflowExecutions, activityExecutions, cancellationPolicy, actorProvider, runtimeIds, timeProvider,
+            new WorkflowExecutableRootWriteLeaseManager(workflowExecutables,
+                Options.Create(new WorkflowExecutableGarbageCollectionOptions()), timeProvider)) { }
+
     public static readonly TimeSpan DefaultRetention = TimeSpan.FromMinutes(30);
     public static readonly TimeSpan DefaultReceiptRetention = TimeSpan.FromDays(7);
     private static readonly IReadOnlyDictionary<string, RuntimeOutputCapture> NoOutputCaptures =
         new Dictionary<string, RuntimeOutputCapture>(StringComparer.Ordinal);
 
+    /// <inheritdoc />
     public async Task<ActivityDraftTestRunView> StartAsync(
         StartActivityDraftTestRun request,
         CancellationToken cancellationToken = default)
@@ -177,7 +204,8 @@ public sealed class ActivityDraftTestRunService(
 
         // The port owns its native tuple; the host must qualify the actual selected stores before using it.
         // A mixed composition must not create hidden references in a different material boundary.
-        if (!activityTemplates.CanMaintainReferences(workflowExecutables, sourceReferences))
+        if (!activityTemplates.CanMaintainReferences(workflowExecutables, sourceReferences) ||
+            !sourceReferences.CanWriteRootReferences(workflowExecutables))
             return await RejectValidationAsync(receipt, "activity.test-run.preparation-unavailable",
                 "The activity draft cannot be prepared for a Test Run in this Runtime.", [], cancellationToken);
 
@@ -269,8 +297,6 @@ public sealed class ActivityDraftTestRunService(
                 ["activity.templateHash"] = compilation.Template.TemplateHash
             },
             IncidentStrategyBuiltIns.FaultReference);
-        await workflowExecutables.SaveAsync(executable, cancellationToken);
-
         var wrapperReference = new WorkflowExecutableSourceReference(
             $"activity-test-source-ref-{StableHash(testRunId)}",
             artifactId,
@@ -285,7 +311,25 @@ public sealed class ActivityDraftTestRunService(
             WorkflowExecutableReferenceScope.TestRun,
             expiresAt,
             LayoutSidecar: placement.LayoutSidecar);
-        await sourceReferences.SaveAsync(wrapperReference, cancellationToken);
+        try
+        {
+            await workflowExecutables.SaveAsync(executable, cancellationToken);
+            var storedExecutable = await workflowExecutables.FindAsync(artifactId, cancellationToken)
+                ?? throw new InvalidDataException("The saved Test Run wrapper is unavailable.");
+            RequireMatchingWrapper(storedExecutable, executable);
+
+            // Each concurrent invocation owns a different lease ID. A stable run-wide ID could let one
+            // writer release another writer's live grants. The source ID and expiry remain receipt-stable.
+            await rootWrites.ExecuteFencedAsync([storedExecutable.Identity], $"activity-test-root:{Guid.NewGuid():N}",
+                async (grants, token) => wrapperReference = await sourceReferences.SaveWithRootWriteLeasesAsync(
+                    wrapperReference, storedExecutable.Identity, grants, token), cancellationToken);
+        }
+        catch (Exception exception) when (exception is IOException or JsonException or System.Data.Common.DbException or
+            InvalidOperationException or AggregateException ||
+            exception is OperationCanceledException && !cancellationToken.IsCancellationRequested)
+        {
+            throw new ActivityDraftTestRunStorageException(testRunId, exception);
+        }
 
         receipt = await UpdateConditionallyAsync(
             receipt,
@@ -301,6 +345,21 @@ public sealed class ActivityDraftTestRunService(
             return await ProjectAsync(receipt, cancellationToken);
 
         return await DispatchPersistedAsync(receipt, request, cancellationToken);
+    }
+
+    private static void RequireMatchingWrapper(WorkflowExecutable stored, WorkflowExecutable proposed)
+    {
+        if (stored.Identity.ArtifactId != proposed.Identity.ArtifactId || stored.Identity.ArtifactHash != proposed.Identity.ArtifactHash)
+            throw new InvalidDataException("The saved Test Run wrapper identity conflicts with preparation.");
+        // Hashes exclude node inspection metadata and do not cover every wrapper contract field.
+        // Check the actual winner's complete payload, including template provenance and resume targets.
+        // Only first-writer producer attribution and creation time are independent publication facts.
+        var winner = JsonSerializer.SerializeToNode(stored)!.AsObject();
+        var candidate = JsonSerializer.SerializeToNode(proposed)!.AsObject();
+        winner.Remove(nameof(WorkflowExecutable.Identity)); candidate.Remove(nameof(WorkflowExecutable.Identity));
+        winner.Remove(nameof(WorkflowExecutable.CreatedAt)); candidate.Remove(nameof(WorkflowExecutable.CreatedAt));
+        if (!JsonNode.DeepEquals(winner, candidate))
+            throw new InvalidDataException("The saved Test Run wrapper content or provenance conflicts with preparation.");
     }
 
     private async Task<ActivityDraftTestRunView?> ResumeExistingAsync(

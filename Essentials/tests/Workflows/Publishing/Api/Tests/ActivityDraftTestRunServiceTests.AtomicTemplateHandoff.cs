@@ -64,6 +64,10 @@ public sealed partial class ActivityDraftTestRunServiceTests
         var second = await fixture.Service.StartAsync(fixture.Request with { IdempotencyKey = "different-run" });
         Assert.NotEqual(first.TestRunId, second.TestRunId); Assert.Equal("DispatchAmbiguous", second.Status);
         var next = probe.Winners.Last(); Assert.NotEqual(original.SourceReferenceId, next.SourceReferenceId);
+        var storedSecondWrapper = (await fixture.Artifacts.FindAsync(second.ArtifactId!))!;
+        Assert.Equal(next.SourceReferenceId, storedSecondWrapper.RootActivity.Metadata["activity.sourceReferenceId"]);
+        Assert.Equal(next.SourceReferenceId, storedSecondWrapper.RootActivity.Descriptor.Payload.GetProperty("sourceReferenceId").GetString());
+        Assert.NotEqual(first.ArtifactId, second.ArtifactId); // Source binding participates in the existing full-descriptor hash.
         Assert.Equal(original.ArtifactId, next.ArtifactId); Assert.Equal(fixture.Clock.GetUtcNow().AddMinutes(30), next.ExpiresAt);
         Assert.True(WorkflowExecutableSourceReferenceComparer.SameSnapshot(original, (await fixture.References.FindAsync(original.SourceReferenceId))!));
         Assert.True(next.IsLive(fixture.Clock.GetUtcNow())); Assert.Equal(2, (await fixture.References.ListAllAsync()).Count(reference => reference.ArtifactId == fixture.RootTemplate.TemplateId));

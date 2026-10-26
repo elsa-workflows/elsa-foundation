@@ -151,7 +151,10 @@ public sealed partial class ActivityDraftTestRunServiceTests
         Func<InMemoryExecutableActivityTemplateStore, IExecutableActivityTemplateStore>? wrapTemplates = null,
         IActivityDraftTestRunStore? receipts = null,
         ExecutableActivityTemplate? childTemplate = null,
-        IServiceProvider? runtimeServices = null)
+        IServiceProvider? runtimeServices = null,
+        Func<IWorkflowExecutableRootWriteLeaseManager, IWorkflowExecutableRootWriteLeaseManager>? wrapRootWrites = null,
+        Func<IExecutableActivityTemplateStore, IWorkflowExecutableSourceReferenceStore,
+            (IExecutableActivityTemplateStore Templates, IWorkflowExecutableSourceReferenceStore References)>? selectRootPorts = null)
     {
         var now = new DateTimeOffset(2026, 10, 17, 9, 0, 0, TimeSpan.Zero);
         var clock = runtimeServices is null ? new FakeTimeProvider(now) : (FakeTimeProvider)runtimeServices.GetRequiredService<TimeProvider>();
@@ -171,12 +174,13 @@ public sealed partial class ActivityDraftTestRunServiceTests
             now,
             WorkflowExecutableReferenceScope.Published);
         var artifacts = runtimeServices?.GetRequiredService<IWorkflowExecutableStore>() ?? new InMemoryWorkflowExecutableStore();
-        var sourceReferences = runtimeServices?.GetRequiredService<IWorkflowExecutableSourceReferenceStore>() ?? new InMemoryWorkflowExecutableSourceReferenceStore(artifacts);
+        var sourceReferences = runtimeServices?.GetRequiredService<IWorkflowExecutableSourceReferenceStore>() ?? new InMemoryWorkflowExecutableSourceReferenceStore(artifacts, clock);
         var innerTemplates = runtimeServices is null
             ? InMemoryExecutableActivityTemplateStore.CreateForMaintenance(artifacts, sourceReferences, clock)
             : (InMemoryExecutableActivityTemplateStore)runtimeServices.GetRequiredService<IExecutableActivityTemplateStore>();
         await innerTemplates.SaveAsync(childTemplate);
         var templates = wrapTemplates?.Invoke(innerTemplates) ?? innerTemplates;
+        if (selectRootPorts is not null) (templates, sourceReferences) = selectRootPorts(templates, sourceReferences);
         await sourceReferences.SaveAsync(childReference);
         var draftContract = new Elsa.Activities.Design.Core.Models.ActivityContract("1", [], [], []);
         var draft = new ActivityDefinitionDraft
@@ -224,7 +228,12 @@ public sealed partial class ActivityDraftTestRunServiceTests
             new DefaultActivityDraftTestRunCancellationPolicy(),
             null!,
             null!,
-            clock);
+            clock,
+            wrapRootWrites?.Invoke(new WorkflowExecutableRootWriteLeaseManager(artifacts,
+                Microsoft.Extensions.Options.Options.Create(new Elsa.Workflows.Runtime.Core.Configuration.WorkflowExecutableGarbageCollectionOptions()), clock))
+            ?? runtimeServices?.GetRequiredService<IWorkflowExecutableRootWriteLeaseManager>()
+            ?? new WorkflowExecutableRootWriteLeaseManager(artifacts,
+                Microsoft.Extensions.Options.Options.Create(new Elsa.Workflows.Runtime.Core.Configuration.WorkflowExecutableGarbageCollectionOptions()), clock));
         return new(service, draft, new(draft.Id, draft.Revision, "placement-fails"), receipts, dispatcher, templates, sourceReferences, artifacts, clock, rootTemplate);
     }
 
