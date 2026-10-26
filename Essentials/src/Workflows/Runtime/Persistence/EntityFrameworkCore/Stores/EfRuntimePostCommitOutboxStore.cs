@@ -161,6 +161,38 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
         }
     }
 
+    public async ValueTask<PostCommitDeliveryContext> ReadSavedStartSourceAsync(WorkflowExecutableStimulusDeliveryAuthority authority,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(authority); cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            var access = accessContextAccessor.Current; var scope = access.RequireScope(); access.EnsureScope(authority.Scope);
+            EnsureCommittedSourceBoundary();
+            var row = await LoadAsync(scope.Value, authority.SourceOutboxItemId, tracking: false, cancellationToken)
+                ?? throw new InvalidDataException("The exact saved-start source is missing.");
+            var current = ReadChecked(row, scope.Value, authority.SourceOutboxItemId);
+            var publisherRow = await context.WorkflowExecutionStates.AsNoTracking().SingleOrDefaultAsync(
+                candidate => candidate.Id == EfWorkflowExecutionStateStore.CreateId(scope.Value, current.Intent.WorkflowExecutionId), cancellationToken)
+                ?? throw new InvalidDataException("The authoritative saved-start publisher is missing.");
+            var publisher = EfWorkflowExecutionStateStore.ReadChecked(publisherRow, scope.Value, current.Intent.WorkflowExecutionId);
+            access.EnsureTenantScope(publisher.TenantId);
+            // Publisher lookup awaited a separate read. Do not authorize the earlier claim snapshot if a peer
+            // completed/reclaimed the source meanwhile, even when its old visibility deadline is still future.
+            row = await LoadAsync(scope.Value, authority.SourceOutboxItemId, tracking: false, cancellationToken)
+                ?? throw new InvalidDataException("The saved-start source was removed during publisher validation.");
+            current = ReadChecked(row, scope.Value, authority.SourceOutboxItemId);
+            EnsureCommittedSourceBoundary();
+            return current.OpenSavedStartSource(authority, publisher, scope, timeProvider.GetUtcNow());
+        }
+        catch (RuntimePostCommitOutboxStaleClaimException) { throw; }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception)
+        { throw new StimulusDeliveryBoundaryException(authority.SourceOutboxItemId, exception,
+            EfRelationalExceptionClassifier.IsProviderFailure(exception) ||
+            exception is not (InvalidDataException or InvalidOperationException or ArgumentException or NotSupportedException)); }
+    }
+
     public async ValueTask<RuntimePostCommitOutboxItem?> FindAsync(
         string outboxItemId,
         CancellationToken cancellationToken = default)

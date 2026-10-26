@@ -119,6 +119,14 @@ RetainedDependency authority, rediscover a current publication or permit an arbi
 Current domain/security admission remains applicable; the cohort grants only its saved publication
 selection. Preserve normal shedding/duplicate behavior and safe diagnostics.
 
+The compact stimulus-delivery union member carries source ID, canonical intent digest, actual scope,
+current owner/fence and binding ID without copying the cohort or payload. A named read-only provider
+operation revalidates the physical source, current claim expiry and authoritative publisher/cohort,
+including after awaited reads. Its default refuses unsupported providers. This initial contract/read
+increment does not admit starts: the dispatcher refuses the new kind before keyed-duplicate lookup
+until the separate reference, root-lease and retention gates are implemented. Ordinary duplicate and
+dependency paths retain their behavior; a data carrier cannot grant arbitrary retained-start authority.
+
 Capture the existing `WorkflowExecutableSourceProvenance` selected by ordinary live-reference resolution,
 separately from deduplicated executable producer metadata. A versioned `SourceCapture` wrapper on each
 start entry distinguishes uncaptured older fixtures from captured provenance and an explicitly captured

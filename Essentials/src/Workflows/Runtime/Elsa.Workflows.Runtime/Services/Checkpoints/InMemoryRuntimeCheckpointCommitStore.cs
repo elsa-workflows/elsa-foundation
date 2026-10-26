@@ -493,6 +493,36 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         }
     }
 
+    public async ValueTask<PostCommitDeliveryContext> ReadSavedStartSourceAsync(WorkflowExecutableStimulusDeliveryAuthority authority,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(authority); cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            return await _state.ExecuteWriteGateAsync(async ct =>
+            {
+                var access = _persistenceAccessContextAccessor?.Current ?? throw new InvalidOperationException("Saved-start source reads require explicit persistence access.");
+                var scope = access.RequireScope(); access.EnsureScope(authority.Scope);
+                RuntimePostCommitOutboxItem initial;
+                lock (_state.SyncRoot)
+                    initial = _state.OutboxItems.GetValueOrDefault(authority.SourceOutboxItemId) ?? throw new InvalidDataException("The exact saved-start source is missing.");
+                var publisher = _workflowExecutionStateStore is null ? null : await _workflowExecutionStateStore.FindAsync(initial.Intent.WorkflowExecutionId, ct);
+                if (publisher is null) throw new InvalidDataException("The authoritative saved-start publisher is missing.");
+                access.EnsureTenantScope(publisher.TenantId);
+                lock (_state.SyncRoot)
+                {
+                    var current = _state.OutboxItems.GetValueOrDefault(authority.SourceOutboxItemId) ?? throw new InvalidDataException("The saved-start source was removed.");
+                    return current.OpenSavedStartSource(authority, publisher, scope, _timeProvider.GetUtcNow());
+                }
+            }, cancellationToken);
+        }
+        catch (RuntimePostCommitOutboxStaleClaimException) { throw; }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception)
+        { throw new StimulusDeliveryBoundaryException(authority.SourceOutboxItemId, exception,
+            exception is not (InvalidDataException or InvalidOperationException or ArgumentException or NotSupportedException)); }
+    }
+
     public ValueTask<RuntimePostCommitOutboxItem?> FindAsync(
         string outboxItemId,
         CancellationToken cancellationToken = default)

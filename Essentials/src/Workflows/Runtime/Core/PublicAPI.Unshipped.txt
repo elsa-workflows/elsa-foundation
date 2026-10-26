@@ -9139,3 +9139,17 @@ Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableRootWriteLeaseManager.E
 Elsa.Workflows.Runtime.Core.Models.StimulusStartRecipient.SourceProvenance.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceProvenance?
 Elsa.Workflows.Runtime.Core.Models.StimulusStartRecipient.SourceProvenanceCaptured.get -> bool
 Elsa.Workflows.Runtime.Core.Models.StimulusStartRecipient.StimulusStartRecipient(Elsa.Workflows.Runtime.Core.Models.WorkflowTriggerBinding! binding, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! executable, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceProvenance? sourceProvenance) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStimulusDeliveryAuthority
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStimulusDeliveryAuthority.WorkflowExecutableStimulusDeliveryAuthority(string! sourceOutboxItemId, string! intentFingerprint, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, string! ownerId, long fencingToken, string! triggerBindingId) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStimulusDeliveryAuthority.SourceOutboxItemId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStimulusDeliveryAuthority.IntentFingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStimulusDeliveryAuthority.Scope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStimulusDeliveryAuthority.OwnerId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStimulusDeliveryAuthority.FencingToken.get -> long
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStimulusDeliveryAuthority.TriggerBindingId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStartAuthorityKind.StimulusDelivery = 2 -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStartAuthorityKind
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStartAuthority.StimulusDelivery.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStimulusDeliveryAuthority?
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStartAuthority.WorkflowExecutableStartAuthority(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStartAuthorityKind kind, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableRetainedDependencyAuthority? retainedDependency, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStimulusDeliveryAuthority? stimulusDelivery) -> void
+static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStartAuthority.FromStimulusDelivery(Elsa.Workflows.Runtime.Core.Models.PostCommitDeliveryContext! source, string! triggerBindingId) -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStartAuthority!
+Elsa.Workflows.Runtime.Core.Contracts.IStimulusDeliveryStore.ReadSavedStartSourceAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStimulusDeliveryAuthority! authority, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.PostCommitDeliveryContext!>
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem.OpenSavedStartSource(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStimulusDeliveryAuthority! authority, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState! publisher, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, System.DateTimeOffset observedAt) -> Elsa.Workflows.Runtime.Core.Models.PostCommitDeliveryContext!

@@ -26,4 +26,18 @@ public interface IStimulusDeliveryStore
     /// <exception cref="ArgumentException">The caller supplied invalid source/candidate arguments.</exception>
     ValueTask<StimulusDeliverySnapshot> InstallAsync(PostCommitDeliveryContext source, StimulusDeliverySnapshot candidate,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Reread an exact physical source and captured binding under its current claim and publisher scope.</summary>
+    /// <remarks>Read-only provenance validation; it does not admit a start or replace reference/retention checks.
+    /// Legacy implementations refuse before effects rather than falling back to intent-only or live matching.</remarks>
+    /// <exception cref="StimulusDeliveryBoundaryException">Source/cohort/scope/support is missing or contradictory. Preserve the cause and mark temporary dependency failure unavailable.</exception>
+    /// <exception cref="RuntimePostCommitOutboxStaleClaimException">Current owner/fence or trusted provider-clock expiry no longer admits this claim.</exception>
+    /// <exception cref="OperationCanceledException">Requested cancellation propagates.</exception>
+    ValueTask<PostCommitDeliveryContext> ReadSavedStartSourceAsync(WorkflowExecutableStimulusDeliveryAuthority authority,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(authority); cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromException<PostCommitDeliveryContext>(new StimulusDeliveryBoundaryException(authority.SourceOutboxItemId,
+            new NotSupportedException("The selected provider cannot validate saved-start source provenance."), false));
+    }
 }

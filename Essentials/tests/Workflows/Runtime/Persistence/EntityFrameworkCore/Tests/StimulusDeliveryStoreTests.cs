@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Persistence.EntityFramework;
@@ -108,6 +109,150 @@ public sealed class StimulusDeliveryStoreTests
         else Assert.True(capture.Remove(defect == "capture-version" ? "version" : "provenance"));
         row.ContentJson = json.ToJsonString(); await harness.Context.SaveChangesAsync(); harness.Context.ChangeTracker.Clear();
         await Assert.ThrowsAsync<InvalidDataException>(() => harness.Lookup.FindDurableAsync(source.SourceOutboxItemId).AsTask());
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Saved_start_source_read_returns_only_current_physical_cohort_claim(bool ef)
+    {
+        await using var harness = await Harness.Create(ef);
+        var source = new PostCommitDeliveryContext(await harness.Seed(), Scope);
+        var candidate = CapturedSnapshot(source, false);
+        await harness.Delivery.InstallAsync(source, candidate);
+        var authority = WorkflowExecutableStartAuthority.FromStimulusDelivery(source, "binding-a").StimulusDelivery!;
+        var opened = await harness.Reopen().ReadSavedStartSourceAsync(authority);
+        Assert.Equal(source.SourceOutboxItemId, opened.SourceOutboxItemId);
+        Assert.Equal(source.IntentFingerprint, opened.IntentFingerprint);
+        Assert.Equal(source.Claim.OwnerId, opened.Claim.OwnerId);
+        Assert.Equal(source.Claim.FencingToken, opened.Claim.FencingToken);
+        Assert.True(candidate.IsEquivalentTo(opened.Claim.Item.RecipientSnapshot));
+    }
+
+    [Theory]
+    [InlineData(false, "source")] [InlineData(true, "source")]
+    [InlineData(false, "intent")] [InlineData(true, "intent")]
+    [InlineData(false, "scope")] [InlineData(true, "scope")]
+    [InlineData(false, "binding")] [InlineData(true, "binding")]
+    [InlineData(false, "unselected")] [InlineData(true, "unselected")]
+    [InlineData(false, "uncaptured")] [InlineData(true, "uncaptured")]
+    [InlineData(false, "publisher")] [InlineData(true, "publisher")]
+    public async Task Saved_start_source_read_refuses_missing_or_contradictory_authority(bool ef, string defect)
+    {
+        await using var harness = await Harness.Create(ef);
+        var source = new PostCommitDeliveryContext(await harness.Seed(), Scope);
+        if (defect != "unselected") await harness.Delivery.InstallAsync(source,
+            defect == "uncaptured" ? Snapshot(source) : CapturedSnapshot(source, false));
+        if (defect == "publisher") await harness.SavePublisher(Publisher with { RunKind = WorkflowRunKind.Unknown });
+        var original = WorkflowExecutableStartAuthority.FromStimulusDelivery(source, "binding-a").StimulusDelivery!;
+        var presented = new WorkflowExecutableStimulusDeliveryAuthority(defect == "source" ? "missing:send" : original.SourceOutboxItemId,
+            defect == "intent" ? new string('0', 64) : original.IntentFingerprint,
+            defect == "scope" ? new("foreign") : original.Scope, original.OwnerId, original.FencingToken,
+            defect == "binding" ? "not-selected" : original.TriggerBindingId);
+        var exception = await Assert.ThrowsAsync<StimulusDeliveryBoundaryException>(() =>
+            harness.Delivery.ReadSavedStartSourceAsync(presented).AsTask());
+        Assert.False(exception.IsUnavailable); Assert.NotNull(exception.InnerException);
+        Assert.Equal(0, (await harness.Lookup.FindAsync(source.SourceOutboxItemId))!.DeliveryAttemptCount);
+    }
+
+    [Theory]
+    [InlineData(false, false)] [InlineData(false, true)]
+    [InlineData(true, false)] [InlineData(true, true)]
+    public async Task Saved_start_source_read_refuses_wrong_current_owner_or_fence(bool ef, bool fence)
+    {
+        await using var harness = await Harness.Create(ef);
+        var source = new PostCommitDeliveryContext(await harness.Seed(), Scope);
+        await harness.Delivery.InstallAsync(source, CapturedSnapshot(source, false));
+        var authority = new WorkflowExecutableStimulusDeliveryAuthority(source.SourceOutboxItemId, source.IntentFingerprint,
+            Scope, fence ? source.Claim.OwnerId : "other", fence ? source.Claim.FencingToken + 1 : source.Claim.FencingToken, "binding-a");
+        await Assert.ThrowsAsync<RuntimePostCommitOutboxStaleClaimException>(() => harness.Delivery.ReadSavedStartSourceAsync(authority).AsTask());
+    }
+
+    [Theory]
+    [InlineData(false, false)] [InlineData(false, true)]
+    [InlineData(true, false)] [InlineData(true, true)]
+    public async Task Saved_start_source_read_uses_trusted_clock_and_current_renewed_deadline(bool ef, bool renew)
+    {
+        await using var harness = await Harness.Create(ef);
+        var source = new PostCommitDeliveryContext(await harness.Seed(), Scope);
+        await harness.Delivery.InstallAsync(source, CapturedSnapshot(source, false));
+        var authority = WorkflowExecutableStartAuthority.FromStimulusDelivery(source, "binding-a").StimulusDelivery!;
+        harness.Clock.Advance(TimeSpan.FromSeconds(30));
+        if (renew) Assert.NotNull(await harness.Claims.RenewClaimAsync(source.Claim, Now.AddSeconds(30), TimeSpan.FromMinutes(3)));
+        harness.Clock.Advance(TimeSpan.FromSeconds(31));
+        if (renew)
+        {
+            var current = await harness.Delivery.ReadSavedStartSourceAsync(authority);
+            Assert.Equal(Now.AddSeconds(30).AddMinutes(3), current.Claim.VisibleAfter);
+        }
+        else await Assert.ThrowsAsync<RuntimePostCommitOutboxStaleClaimException>(() => harness.Delivery.ReadSavedStartSourceAsync(authority).AsTask());
+    }
+
+    [Fact]
+    public async Task Saved_start_source_read_refuses_caller_transaction_then_accepts_committed_read()
+    {
+        await using var harness = await Harness.Create(true);
+        var source = new PostCommitDeliveryContext(await harness.Seed(), Scope);
+        await harness.Delivery.InstallAsync(source, CapturedSnapshot(source, false));
+        var authority = WorkflowExecutableStartAuthority.FromStimulusDelivery(source, "binding-a").StimulusDelivery!;
+        await using (var transaction = await harness.Context!.Database.BeginTransactionAsync())
+        {
+            var exception = await Assert.ThrowsAsync<StimulusDeliveryBoundaryException>(() => harness.Delivery.ReadSavedStartSourceAsync(authority).AsTask());
+            Assert.False(exception.IsUnavailable); Assert.IsType<InvalidOperationException>(exception.InnerException);
+            await transaction.RollbackAsync();
+        }
+        Assert.Equal(source.SourceOutboxItemId, (await harness.Delivery.ReadSavedStartSourceAsync(authority)).SourceOutboxItemId);
+    }
+
+    [Theory]
+    [InlineData(false, false)] [InlineData(false, true)]
+    [InlineData(true, false)] [InlineData(true, true)]
+    public async Task Saved_start_source_read_preserves_unavailable_cause_and_requested_cancellation(bool ef, bool providerCancellation)
+    {
+        await using var harness = await Harness.Create(ef);
+        var source = new PostCommitDeliveryContext(await harness.Seed(), Scope);
+        var authority = WorkflowExecutableStartAuthority.FromStimulusDelivery(source, "binding-a").StimulusDelivery!;
+        Exception cause = providerCancellation ? new OperationCanceledException("provider unavailable") : new IOException("provider unavailable");
+        IStimulusDeliveryStore failed = ef ? new EfRuntimePostCommitOutboxStore(harness.Context!, new FailedAccess(cause)) :
+            new InMemoryRuntimeCheckpointCommitStore(persistenceAccessContextAccessor: new FailedAccess(cause));
+        var exception = await Assert.ThrowsAsync<StimulusDeliveryBoundaryException>(() => failed.ReadSavedStartSourceAsync(authority).AsTask());
+        Assert.True(exception.IsUnavailable); Assert.Same(cause, exception.InnerException);
+        var token = new CancellationToken(canceled: true);
+        var cancelled = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => failed.ReadSavedStartSourceAsync(authority, token).AsTask());
+        Assert.Equal(token, cancelled.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Saved_start_source_read_rechecks_peer_takeover_during_publisher_lookup()
+    {
+        var hook = new BeforePublisherRead(); await using var harness = await Harness.Create(true, hook);
+        var source = new PostCommitDeliveryContext(await harness.Seed(), Scope);
+        await harness.Delivery.InstallAsync(source, CapturedSnapshot(source, false));
+        var authority = WorkflowExecutableStartAuthority.FromStimulusDelivery(source, "binding-a").StimulusDelivery!;
+        hook.Action = async () =>
+        {
+            var peer = (IRuntimePostCommitOutboxClaimStore)harness.Reopen();
+            await peer.RecordDeliveryResultAsync(source.Claim, new(source.SourceOutboxItemId,
+                RuntimePostCommitOutboxStatus.FailedRetryable, Now, "retry"));
+            harness.Clock.Advance(TimeSpan.FromSeconds(2));
+            Assert.Single(await peer.ClaimAsync(new("peer", Now.AddSeconds(2), TimeSpan.FromMinutes(1), 1)));
+        };
+        await Assert.ThrowsAsync<RuntimePostCommitOutboxStaleClaimException>(() => harness.Delivery.ReadSavedStartSourceAsync(authority).AsTask());
+        Assert.Equal(1, hook.Interleavings);
+        Assert.True(harness.Clock.GetUtcNow() < source.Claim.VisibleAfter);
+        Assert.Equal("peer", (await harness.Lookup.FindAsync(source.SourceOutboxItemId))!.DeliveringOwnerId);
+    }
+
+    private sealed class BeforePublisherRead : DbCommandInterceptor
+    {
+        public Func<Task>? Action { get; set; }
+        public int Interleavings { get; private set; }
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (Action is { } action && command.CommandText.Contains(RuntimeWorkflowExecutionEfModule.TableName, StringComparison.Ordinal))
+            { Action = null; Interleavings++; await action(); }
+            return result;
+        }
     }
 
     // Constructed storage witnesses only; no authoritative reference selection/retention or host start is implied.
@@ -699,6 +844,8 @@ public sealed class StimulusDeliveryStoreTests
         }
         public ValueTask SavePending(RuntimePostCommitOutboxItem item) => Outbox is EfRuntimePostCommitOutboxStore ef
             ? ef.SavePendingAsync(item) : ((InMemoryRuntimeCheckpointCommitStore)Outbox).AddPendingForTestingAsync(item);
+        public ValueTask<WorkflowExecutionState> SavePublisher(WorkflowExecutionState publisher) => Context is null ?
+            publishers.SaveAsync(publisher) : new EfWorkflowExecutionStateStore(Context, new Accessor(), new Codec()).SaveAsync(publisher);
         public async Task SeedPending(bool protocol = true, WorkflowExecutionState? publisher = null)
         {
             if (Context is null) await publishers.SaveAsync(publisher ?? Publisher);

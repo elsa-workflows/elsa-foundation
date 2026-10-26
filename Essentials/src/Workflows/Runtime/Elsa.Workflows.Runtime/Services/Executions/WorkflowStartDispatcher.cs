@@ -111,6 +111,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         ArgumentNullException.ThrowIfNull(request);
         if (request.DispatchNestingDepth < 0)
             throw new ArgumentOutOfRangeException(nameof(request), "Dispatch nesting depth cannot be negative.");
+        if (request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.StimulusDelivery)
+            throw AuthorityRejected("stimulus-delivery-source-unavailable", "Saved stimulus authority requires verified provider admission.");
 
         // A keyed start that already ran is answered before anything else is resolved: the existing execution is the
         // answer even if the workflow has since been unpublished, so a redelivery converges instead of failing (#2195).

@@ -154,16 +154,10 @@ public sealed class RuntimePostCommitOutboxItem
         ArgumentNullException.ThrowIfNull(scope);
         if (!candidate.MatchesSource(source))
             throw new ArgumentException("The proposed cohort does not match its source.", nameof(candidate));
-        if (OutboxItemId != source.SourceOutboxItemId || scope != source.Scope ||
-            RuntimeCheckpointCommitFingerprint.ComputeIntent(Intent) != source.IntentFingerprint ||
-            publisher.WorkflowExecutionId != Intent.WorkflowExecutionId || !candidate.Scope.Matches(publisher, scope))
+        if (!candidate.Scope.Matches(publisher, scope))
             throw new InvalidDataException("The persisted source or authoritative publisher differs from the recipient proposal.");
-        if (Status != RuntimePostCommitOutboxStatus.Delivering || DeliveringOwnerId != source.Claim.OwnerId ||
-            DeliveryFencingToken != source.Claim.FencingToken || DeliveryVisibleAfter is null || DeliveryVisibleAfter <= observedAt)
-            throw new RuntimePostCommitOutboxStaleClaimException(OutboxItemId, source.Claim.OwnerId,
-                source.Claim.FencingToken, DeliveringOwnerId, DeliveryFencingToken, Status);
-        if (StimulusDeliverySourceScope != scope || StimulusDeliveryProtocolVersion != StimulusDeliverySnapshot.CurrentVersion)
-            throw new InvalidDataException("Legacy delivery responsibility requires recovery; recipients cannot be reconstructed.");
+        ValidateStimulusSource(source.SourceOutboxItemId, source.IntentFingerprint, source.Scope,
+            source.Claim.OwnerId, source.Claim.FencingToken, publisher, scope, observedAt);
         if (RecipientSnapshot is { } winner)
         {
             if (!winner.MatchesSource(source) || !winner.Scope.Matches(publisher, scope))
@@ -173,6 +167,41 @@ public sealed class RuntimePostCommitOutboxItem
         return new(OutboxItemId, Intent, Status, RecordedAt, AvailableAt, RetryPolicy, DeliveryAttemptCount,
             DeliveringOwnerId, DeliveryStartedAt, DeliveredAt, LastFailureMessage, Metadata, DeliveryFencingToken,
             DeliveryVisibleAfter, StimulusDeliveryProtocolVersion, StimulusDeliverySourceScope, candidate);
+    }
+
+    /// <summary>Pure validation of compact saved-start provenance against a provider's current physical source/publisher.</summary>
+    /// <remarks>The returned context is not independent authorization. Providers supply scoped physical data and trusted
+    /// time; reference eligibility, executable retention and recipient admission remain separate requirements.</remarks>
+    public PostCommitDeliveryContext OpenSavedStartSource(WorkflowExecutableStimulusDeliveryAuthority authority,
+        WorkflowExecutionState publisher, PersistenceScope scope, DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(authority); ArgumentNullException.ThrowIfNull(publisher); ArgumentNullException.ThrowIfNull(scope);
+        ValidateStimulusSource(authority.SourceOutboxItemId, authority.IntentFingerprint, authority.Scope,
+            authority.OwnerId, authority.FencingToken, publisher, scope, observedAt);
+        var snapshot = RecipientSnapshot ?? throw new InvalidDataException("The exact source has no accepted recipient cohort.");
+        var claim = new RuntimePostCommitOutboxClaim(this, authority.OwnerId, authority.FencingToken,
+            DeliveryStartedAt ?? throw new InvalidDataException("The physical source has no claim start."), DeliveryVisibleAfter!.Value);
+        var source = new PostCommitDeliveryContext(claim, scope);
+        if (!snapshot.MatchesSource(source) || !snapshot.Scope.Matches(publisher, scope))
+            throw new InvalidDataException("The saved cohort differs from its authoritative source or publisher.");
+        var recipient = snapshot.Starts.SingleOrDefault(entry => entry.Binding.TriggerBindingId == authority.TriggerBindingId);
+        if (recipient is null || !recipient.SourceProvenanceCaptured)
+            throw new InvalidDataException("No captured start entry authorizes the requested binding.");
+        return source;
+    }
+
+    private void ValidateStimulusSource(string sourceOutboxItemId, string intentFingerprint, PersistenceScope expectedScope,
+        string ownerId, long fencingToken, WorkflowExecutionState publisher, PersistenceScope scope, DateTimeOffset observedAt)
+    {
+        if (OutboxItemId != sourceOutboxItemId || scope != expectedScope ||
+            RuntimeCheckpointCommitFingerprint.ComputeIntent(Intent) != intentFingerprint || publisher.WorkflowExecutionId != Intent.WorkflowExecutionId)
+            throw new InvalidDataException("The persisted source or authoritative publisher differs from delivery provenance.");
+        if (Status != RuntimePostCommitOutboxStatus.Delivering || DeliveringOwnerId != ownerId ||
+            DeliveryFencingToken != fencingToken || DeliveryVisibleAfter is null || DeliveryVisibleAfter <= observedAt)
+            throw new RuntimePostCommitOutboxStaleClaimException(OutboxItemId, ownerId, fencingToken,
+                DeliveringOwnerId, DeliveryFencingToken, Status);
+        if (StimulusDeliverySourceScope != scope || StimulusDeliveryProtocolVersion != StimulusDeliverySnapshot.CurrentVersion)
+            throw new InvalidDataException("Legacy delivery responsibility requires recovery; recipients cannot be reconstructed.");
     }
 
     public bool IsTerminal => Status is RuntimePostCommitOutboxStatus.Delivered
