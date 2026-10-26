@@ -4,7 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using CShells.Features;
 using CShells.Lifecycle;
-using Elsa.Platform.PackageManifests;
+using Elsa.Specifications.PackageManifests;
 using Microsoft.AspNetCore.Mvc;
 using Nuplane.Abstractions;
 using Nuplane.Admin;
@@ -29,12 +29,12 @@ internal static class ElsaFeatureManagementApi
 
     private static async Task<IResult> GetFeaturesAsync(
         [FromServices] StudioShellFeatureConfigurationStore shellStore,
-        [FromServices] StudioRuntimeFeatureCatalogRefresher runtimeFeatureCatalog,
+        [FromServices] IRuntimeFeatureCatalog runtimeFeatureCatalog,
         [FromServices] INuplaneAdminOperations nuplaneAdmin,
         CancellationToken cancellationToken)
     {
         var shell = await shellStore.LoadAsync(cancellationToken);
-        var descriptors = await runtimeFeatureCatalog.GetFeatureDescriptorsAsync(cancellationToken);
+        var descriptors = (await runtimeFeatureCatalog.GetSnapshotAsync(cancellationToken)).FeatureDescriptors;
         var packages = await nuplaneAdmin.GetPackagesAsync(cancellationToken);
         return Results.Ok(BuildCatalog(shell, descriptors, packages.Packages));
     }
@@ -42,7 +42,7 @@ internal static class ElsaFeatureManagementApi
     private static async Task<IResult> ApplyFeaturesAsync(
         [FromBody] FeatureManagementApplyRequest request,
         [FromServices] StudioShellFeatureConfigurationStore shellStore,
-        [FromServices] StudioRuntimeFeatureCatalogRefresher runtimeFeatureCatalog,
+        [FromServices] IRuntimeFeatureCatalog runtimeFeatureCatalog,
         [FromServices] INuplaneAdminOperations nuplaneAdmin,
         [FromServices] IShellRegistry shellRegistry,
         CancellationToken cancellationToken)
@@ -51,7 +51,7 @@ internal static class ElsaFeatureManagementApi
             return Results.BadRequest(new FeatureManagementErrorResponse("Revision is required."));
 
         var currentShell = await shellStore.LoadAsync(cancellationToken);
-        var currentDescriptors = await runtimeFeatureCatalog.GetFeatureDescriptorsAsync(cancellationToken);
+        var currentDescriptors = (await runtimeFeatureCatalog.GetSnapshotAsync(cancellationToken)).FeatureDescriptors;
         var currentPackages = await nuplaneAdmin.GetPackagesAsync(cancellationToken);
         var currentCatalog = BuildCatalog(currentShell, currentDescriptors, currentPackages.Packages);
         var knownFeatureIds = currentCatalog.Features.Select(feature => feature.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -81,7 +81,7 @@ internal static class ElsaFeatureManagementApi
         var reloadResults = await shellRegistry.ReloadActiveAsync(null, cancellationToken);
         var reloadedShellCount = reloadResults.Count(result => result.Error is null);
         var savedPackages = await nuplaneAdmin.GetPackagesAsync(cancellationToken);
-        var descriptors = await runtimeFeatureCatalog.GetFeatureDescriptorsAsync(cancellationToken);
+        var descriptors = (await runtimeFeatureCatalog.GetSnapshotAsync(cancellationToken)).FeatureDescriptors;
         var catalog = BuildCatalog(savedShell, descriptors, savedPackages.Packages);
 
         return Results.Ok(new FeatureManagementApplyResultResponse(
@@ -158,7 +158,7 @@ internal static class ElsaFeatureManagementApi
             : manifestDependencies ?? [];
 
     /// <summary>
-    /// Reads <c>elsa-package.json</c> manifests using the shared <c>Elsa.Platform.PackageManifests</c> wire contract
+    /// Reads <c>elsa-package.json</c> manifests using the shared <c>Elsa.Specifications.PackageManifests</c> wire contract
     /// (the same models the generator that produces these files is built against), instead of hand-parsing raw JSON.
     /// </summary>
     private static IEnumerable<FeatureManagementManifestFeature> GetPackageManifestFeatures(IEnumerable<ActivePackage> packages)

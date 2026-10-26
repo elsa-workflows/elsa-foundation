@@ -15,7 +15,7 @@
     <PackageReference Include="CShells.Abstractions" PrivateAssets="all" />
     <PackageReference Include="CShells.AspNetCore.Abstractions" />
     <PackageReference Include="ConsoleLogStreaming.AspNetCore" />
-    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>

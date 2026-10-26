@@ -38,11 +38,8 @@ builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
 {
     nuplane.AddDirectoryFeedsFromConfiguration(nuplaneConfiguration);
     nuplane.AutoloadPackages(nuplaneConfiguration.GetSection("Loading"));
-    nuplane.OnPackagesChanged<StudioNuplaneShellReloadObserver>();
 });
-builder.Services.AddSingleton<StudioRuntimeFeatureCatalogRefresher>();
 builder.Services.AddSingleton<StudioShellFeatureConfigurationStore>();
-builder.Services.AddSingleton<StudioNuplaneAssemblyProvider>();
 
 builder.Services.AddCShellsAspNetCore(shells =>
 {
@@ -57,7 +54,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
 
 // Host the console-log-streaming server (capture host + SignalR hub + HTTP endpoints) on the application
 // root rather than inside the ConsoleStream shell feature. Shell route scopes are recycled at runtime on
-// package changes (see StudioNuplaneShellReloadObserver), which would dispose the service provider a live
+// package changes (through the shared CShells.Nuplane adapter), which would dispose the service provider a live
 // hub connection captured and throw ObjectDisposedException in OnDisconnectedAsync. The root container's
 // lifetime matches the connection's. Gated by the same feature-enablement check as the capture hook above.
 builder.Services.AddConsoleStreamStudioHostIfEnabled(configuration);

@@ -55,7 +55,9 @@ Hosting. No aggregate/re-export package or separate permanent browser-assets pac
 ## Complete Web file disposition
 
 All types/DTOs declared in a row's file follow that row unless explicitly replaced below. Their HTTP JSON shape
-is retained independently of their C# namespace/visibility. The inventory is all 20 current Web C# files.
+is retained independently of their C# namespace/visibility. The inventory records all 20 Web C# files at the
+pre-adoption snapshot (`d55f5f5229ab4aaeaa728a85f6d41d9050af0a71`). #3356 removes the three local loader/catalog
+wrappers below; their source links are pinned to that snapshot so the original disposition stays traceable.
 
 | Current file | Target and decision |
 |---|---|
@@ -72,9 +74,9 @@ is retained independently of their C# namespace/visibility. The inventory is all
 | [StudioBackendManagementBridge.cs](../../Studio/src/apps/Elsa.Studio.Web/StudioBackendManagementBridge.cs) | Hosting internal bridge/client/DTOs. Reuse existing Api backend options/status/routes; keep server-only credentials and fail-closed availability projection. |
 | [StudioBridgeAuth.cs](../../Studio/src/apps/Elsa.Studio.Web/StudioBridgeAuth.cs) | Hosting internal named scheme/handlers/cache and stable permission policies. Root ownership, first-request checks and trusted query-token paths remain explicit. |
 | [StudioFeatureAssemblies.cs](../../Studio/src/apps/Elsa.Studio.Web/StudioFeatureAssemblies.cs) | Delete app-specific provider/list wrapper. Hosting includes mandatory Api discovery; addons register themselves; Web/callers select additional module assemblies through the framework callback. |
-| [StudioNuplaneAssemblyProvider.cs](../../Studio/src/apps/Elsa.Studio.Web/StudioNuplaneAssemblyProvider.cs) | Delete; use released CShells.Nuplane package-aware discovery. |
-| [StudioNuplaneShellReloadObserver.cs](../../Studio/src/apps/Elsa.Studio.Web/StudioNuplaneShellReloadObserver.cs) | Delete; use ChangedOrPending + automatic reload and the existing reporting callback. No detached task/semaphore replacement. |
-| [StudioRuntimeFeatureCatalogRefresher.cs](../../Studio/src/apps/Elsa.Studio.Web/StudioRuntimeFeatureCatalogRefresher.cs) | Delete; use the existing shared catalog/refresher services, including the current snapshot-returning API. |
+| [StudioNuplaneAssemblyProvider.cs](https://github.com/elsa-workflows/elsa-foundation/blob/d55f5f5229ab4aaeaa728a85f6d41d9050af0a71/Studio/src/apps/Elsa.Studio.Web/StudioNuplaneAssemblyProvider.cs) | Delete; use released CShells.Nuplane package-aware discovery. |
+| [StudioNuplaneShellReloadObserver.cs](https://github.com/elsa-workflows/elsa-foundation/blob/d55f5f5229ab4aaeaa728a85f6d41d9050af0a71/Studio/src/apps/Elsa.Studio.Web/StudioNuplaneShellReloadObserver.cs) | Delete; use ChangedOrPending + automatic reload and the existing reporting callback. No detached task/semaphore replacement. |
+| [StudioRuntimeFeatureCatalogRefresher.cs](https://github.com/elsa-workflows/elsa-foundation/blob/d55f5f5229ab4aaeaa728a85f6d41d9050af0a71/Studio/src/apps/Elsa.Studio.Web/StudioRuntimeFeatureCatalogRefresher.cs) | Delete; use the existing shared catalog/refresher services, including the current snapshot-returning API. |
 | [StudioRuntimeScript.cs](../../Studio/src/apps/Elsa.Studio.Web/StudioRuntimeScript.cs) | Hosting internal. Retain the explicit allowlist/global name and existing configuration keys. No arbitrary IConfiguration serialization or browser management key. |
 | [StudioShellActivation.cs](../../Studio/src/apps/Elsa.Studio.Web/StudioShellActivation.cs) | Hosting internal selected-shell activation before routing/authorization. Preserve best-effort static availability; pin shell-service use and handle lookup/disposal races. |
 | [StudioShellFeatureConfigurationStore.cs](../../Studio/src/apps/Elsa.Studio.Web/StudioShellFeatureConfigurationStore.cs) | Nuplane addon internal implementation of the existing store contract; configure the same shell/file the host uses, keep the shared gate/atomicity, revisions and deterministic reload. Remove app-specific snapshots/exceptions where shared contracts replace them. |

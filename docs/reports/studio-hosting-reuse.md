@@ -19,11 +19,13 @@ by [#3352](https://github.com/elsa-workflows/elsa-foundation/issues/3352) and
 
 ## Reuse matrix
 
+Removed wrapper links below are pinned to the pre-adoption source snapshot; #3356 replaces them with the shared adapter.
+
 | Current responsibility | Disposition | Reason and implementation requirement |
 |---|---|---|
-| [StudioNuplaneAssemblyProvider](../../Studio/src/apps/Elsa.Studio.Web/StudioNuplaneAssemblyProvider.cs) | Replace with `CShells.Nuplane` | The released provider reads Nuplane's package-aware assembly catalog. Register after Nuplane autoload; also register the host's explicitly selected feature assemblies. |
-| [StudioNuplaneShellReloadObserver](../../Studio/src/apps/Elsa.Studio.Web/StudioNuplaneShellReloadObserver.cs) | Replace with the adapter coordinator | Use `ChangedOrPending`, automatic reload enabled, and `OnReloadResults` for Studio-specific reporting. Remove the local observer and its detached task/semaphore. |
-| [StudioRuntimeFeatureCatalogRefresher](../../Studio/src/apps/Elsa.Studio.Web/StudioRuntimeFeatureCatalogRefresher.cs) | Replace with existing catalog services | Use the shared refresher for apply and runtime contributor for catalog reads; avoid another public refresh abstraction. The newer catalog interface returns its snapshot abstraction on refresh, so update Studio's test doubles as part of dependency convergence. |
+| [StudioNuplaneAssemblyProvider](https://github.com/elsa-workflows/elsa-foundation/blob/d55f5f5229ab4aaeaa728a85f6d41d9050af0a71/Studio/src/apps/Elsa.Studio.Web/StudioNuplaneAssemblyProvider.cs) | Replace with `CShells.Nuplane` | The released provider reads Nuplane's package-aware assembly catalog. Register after Nuplane autoload; also register the host's explicitly selected feature assemblies. |
+| [StudioNuplaneShellReloadObserver](https://github.com/elsa-workflows/elsa-foundation/blob/d55f5f5229ab4aaeaa728a85f6d41d9050af0a71/Studio/src/apps/Elsa.Studio.Web/StudioNuplaneShellReloadObserver.cs) | Replace with the adapter coordinator | Use `ChangedOrPending`, automatic reload enabled, and `OnReloadResults` for Studio-specific reporting. Remove the local observer and its detached task/semaphore. |
+| [StudioRuntimeFeatureCatalogRefresher](https://github.com/elsa-workflows/elsa-foundation/blob/d55f5f5229ab4aaeaa728a85f6d41d9050af0a71/Studio/src/apps/Elsa.Studio.Web/StudioRuntimeFeatureCatalogRefresher.cs) | Replace with existing catalog services | Use the shared refresher for apply and runtime contributor for catalog reads; avoid another public refresh abstraction. The newer catalog interface returns its snapshot abstraction on refresh, so update Studio's test doubles as part of dependency convergence. |
 | [ElsaFeatureManagementApi](../../Studio/src/apps/Elsa.Studio.Web/ElsaFeatureManagementApi.cs) | Adapt HTTP; reuse application services | `AddNuplaneFeatureCatalog` already composes runtime/manifest contributors and `IFeatureManagementService`. Preserve Studio routes, authorization and browser DTOs through a small mapping adapter. |
 | [StudioShellFeatureConfigurationStore](../../Studio/src/apps/Elsa.Studio.Web/StudioShellFeatureConfigurationStore.cs) | Adapt to the existing `IShellFeatureConfigurationStore` | Keep a Studio file provider with configured shell/path, atomic writes, one read-modify-write gate, revision conflicts and deterministic reload. Do not substitute the backend file store as-is. |
 | [Backend JsonShellFeatureConfigurationStore](../../Essentials/src/Modularity/Api/Services/JsonShellFeatureConfigurationStore.cs) | Retain in its current owner | It supports a configured path and current `ShellSettings`, and keyed revisions, but writes directly and does not provide Studio's atomic-write/concurrency/reload behavior. Reuse its contracts and keyed revision policy, not the implementation wholesale. |
@@ -50,10 +52,12 @@ by [#3352](https://github.com/elsa-workflows/elsa-foundation/issues/3352) and
 - A reusable file store must preserve Studio's concurrency and atomic-write guarantees while using keyed revisions
   when the revision covers secret values, as the existing backend store explains. Configuration overrides must not
   silently redirect management writes to a different shell/file than the selected hosting configuration.
-- Studio is still on CShells `0.0.29-preview.144`, Nuplane `0.0.8` and the older `Elsa.Platform.PackageManifests`
-  contract. Foundation uses `0.0.31`, `0.0.12` and `Elsa.Specifications.PackageManifests`. Align these as one reviewed
-  dependency change in #3356, including the source-only generator and consumed manifest wire shape. Do not infer
-  API compatibility from package names or cache presence.
+- At qualification, Studio used CShells `0.0.29-preview.144`, Nuplane `0.0.8` and the older
+  `Elsa.Platform.PackageManifests` contract. #3356 aligns it with Foundation's `0.0.31`, `0.0.12` and
+  `Elsa.Specifications.PackageManifests` preview.8, including the source-only generator and consumed wire shape.
+  The [implementation qualification](../../specs/1007-studio-shared-loader/quickstart.md) exercises the actual
+  Studio adapter profile with real directory-feed packages and round-trips a generated manifest through the
+  selected contract. Compatibility is verified through behavior, not package names or cache presence.
 
 ## Executed compatibility proof
 
