@@ -28,7 +28,8 @@ Exercise disabled/enabled modes, missing/invalid/valid tokens, missing/sufficien
 2. **Given** enabled authentication, **When** a request has no valid backend session, **Then** it receives401; a valid session missing the required permission receives403.
 3. **Given** a manage permission, **When** the existing read policy is requested, **Then** manage satisfies read without relying on backend implication expansion.
 4. **Given** a token in the query string, **When** its path is an explicitly trusted hub path or child, **Then** it can be read; an unrelated/sibling path accepts bearer by header only.
-5. **Given** cached authenticated/anonymous outcomes, **When** the configured TTL expires or caching is disabled,
+5. **Given** an application using a sole cookie scheme without an explicit default, **When** Studio is registered before or after it, **Then** ordinary application sign-in/authentication/challenges keep working, while Studio policies still require the backend bearer. Explicit application defaults, multiple-scheme ambiguity and the framework auto-default suppression switch remain authoritative.
+6. **Given** cached authenticated/anonymous outcomes, **When** the configured TTL expires or caching is disabled,
    **Then** backend revalidation reflects permission changes/revocation according to the existing bounded-staleness contract.
 
 ### User Story 2 — Keep privileged credentials on the server (Priority: P1)

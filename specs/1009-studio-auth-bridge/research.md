@@ -45,3 +45,13 @@ normal open-generic registration. The mandatory StudioApi feature restores stand
 and AddAuthorization shell services; copied root scheme/policy callbacks reconstruct the installed choices,
 while handlers stay scoped. Public IAuthenticationService/IAuthorizationService tests exercise that boundary.
 No production friend, global scheme-provider override or closed-monitor replacement is needed.
+
+## Embedding authentication defaults
+
+Independent review found that adding Studio's named scheme turns a host's single application scheme into
+a multi-scheme configuration, removing ASP.NET Core's implicit default. Preserve the sole non-Studio
+scheme as the fallback default after normal configuration callbacks; retain explicit general/action defaults,
+multiple-application-scheme ambiguity and the standard auto-default suppression switch. Registration order
+must not matter. Studio policies continue to select their own scheme explicitly, so an application cookie
+never grants Studio access. The implementation follows the framework's documented default behavior and
+[AuthenticationOptions source](https://github.com/dotnet/aspnetcore/blob/v10.0.0/src/Http/Authentication.Abstractions/src/AuthenticationOptions.cs).

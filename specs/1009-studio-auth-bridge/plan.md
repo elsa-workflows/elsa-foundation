@@ -40,6 +40,11 @@ policy/permission constants, never Hosting's internals.
 
 Keep named scheme, disabled-demo posture, header/query precedence, segment-aware query restrictions,
 401/403, manage/read implication, cache TTL/cap/hash/definitive-outcome behavior and backend mappings.
+Preserve a surrounding application's sole implicit authentication scheme with a final AuthenticationOptions
+callback, excluding Studio's scheme. Infer only one non-Studio scheme when no general default was configured
+and the standard ASP.NET Core auto-default suppression switch is off. Keep action-specific defaults intact;
+do not infer among multiple application schemes. Test real cookie sign-in, authentication and challenges
+with registration in both orders, plus explicit defaults and suppression.
 Privileged key attachment stays in the reused Api read-client path; session introspection never receives it.
 An unavailable key/URL makes zero privileged calls, distinct from ordinary session validation. Do not add
 single-flight/revocation machinery or change backend endpoint ownership.

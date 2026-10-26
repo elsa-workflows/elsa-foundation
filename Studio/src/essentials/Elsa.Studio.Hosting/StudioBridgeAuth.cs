@@ -112,6 +112,18 @@ internal static class StudioBridgeAuth
                 schemeOptions.QueryTokenPathPrefixes = settings.QueryTokenPathPrefixes.ToArray();
             });
 
+        // Adding Studio's explicit scheme must not remove a host's single-scheme implicit default.
+        // Run after all ordinary scheme registrations so callers can configure application auth on either side of AddElsaStudio.
+        services.PostConfigure<AuthenticationOptions>(options =>
+        {
+            if (options.DefaultScheme is not null
+                || (AppContext.TryGetSwitch("Microsoft.AspNetCore.Authentication.SuppressAutoDefaultScheme", out var suppressed) && suppressed))
+                return;
+            var applicationSchemes = options.Schemes.Where(scheme => scheme.Name != SchemeName).Take(2).ToArray();
+            if (applicationSchemes.Length == 1)
+                options.DefaultScheme = applicationSchemes[0].Name;
+        });
+
         // The one decision point for every StudioBridgePermissionRequirement — the named policies below and the inline
         // policies Studio modules declare through RequireStudioBridgePermission. It captures authEnabled so that when
         // Studio auth is disabled every permission surface allows anonymously (the demo shell keeps full access);

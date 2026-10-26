@@ -64,7 +64,15 @@ Configure these values before AddElsaStudio; installed security choices require 
 Set `StudioHostingOptions.QueryTokenPathPrefixes` before Build for explicit trusted hub paths. It defaults empty;
 regular endpoints accept bearer by header only. Prefixes are segment-aware application paths, excluding root,
 ambiguous leading double slashes and wildcards. Web supplies its distribution-owned Console Stream hub path;
-Hosting has no Console Stream dependency. Module authors use Api's `StudioBridgeAuthorization` policies or
+Hosting has no Console Stream dependency.
+
+An application's sole implicit authentication scheme remains its default when Studio is added, including
+when application authentication is registered afterward. Explicit defaults take precedence; multiple application
+schemes still need explicit defaults. ASP.NET Core's `Microsoft.AspNetCore.Authentication.SuppressAutoDefaultScheme`
+switch remains effective. Studio policies always select their own backend bearer scheme, so an application
+cookie does not authorize Studio management.
+
+Module authors use Api's `StudioBridgeAuthorization` policies or
 `RequireStudioBridgePermission`, without referencing private Hosting handlers.
 
 Use normal root DI/HttpClientFactory APIs to customize clocks, handlers and HTTP behavior before Build.
