@@ -3,6 +3,7 @@ using Elsa.Studio.ConsoleStream;
 using Elsa.Studio.ConsoleStream.Extensions;
 using Elsa.Studio.Web;
 using Elsa.Studio.Hosting;
+using Elsa.Studio.Hosting.Themes;
 using Nuplane;
 using Nuplane.Admin;
 using Nuplane.Loading.Hosting.Builder;
@@ -20,13 +21,7 @@ var configuration = builder.Configuration;
 ConsoleStreamHookInstaller.InstallConsoleStreamHookIfEnabled(configuration);
 var nuplaneConfiguration = configuration.GetSection("Nuplane");
 
-// Theme configuration. Bound from the "Themes" section, which the Configuration API populates from
-// appsettings.json, environment variables (Themes__ThemesDirectory, etc.), and any other registered source.
-var themeConfig = new ThemeConfiguration();
-configuration.GetSection("Themes").Bind(themeConfig);
-_ = themeConfig.GetThemesMode();
-builder.Services.AddSingleton(themeConfig);
-builder.Services.AddSingleton<ThemeConfigurationService>();
+studio.AddElsaStudioThemes();
 
 builder.Services.AddNuplaneAdmin();
 builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>

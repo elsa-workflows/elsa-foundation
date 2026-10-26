@@ -6,6 +6,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyModel;
 using Nuplane.Loading;
+using Elsa.Studio.Hosting;
+using Elsa.Studio.Hosting.Themes;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Studio.Tests;
 
@@ -23,7 +27,7 @@ public sealed class WebHostShellFeatureDiscoveryTests : IAsyncLifetime
     {
         _enabled = await ReadEnabledFeaturesAsync();
         _shipped = await DiscoverFeatureIdsAsync(shells => shells.WithAssemblies(LoadWebHostProjectAssemblies()));
-        _discovered = await DiscoverFeatureIdsAsync(shells => shells.WithStudioFeatureAssemblies());
+        _discovered = await DiscoverFeatureIdsAsync(shells => shells.WithStudioFeatureAssemblies(), composeThemes: true);
     }
 
     public Task DisposeAsync() => Task.CompletedTask;
@@ -82,15 +86,17 @@ public sealed class WebHostShellFeatureDiscoveryTests : IAsyncLifetime
     }
 
     // Runs CShells discovery with no Nuplane packages installed, so the result matches a fresh start.
-    private static async Task<HashSet<string>> DiscoverFeatureIdsAsync(Action<CShellsBuilder> configure)
+    private static async Task<HashSet<string>> DiscoverFeatureIdsAsync(Action<CShellsBuilder> configure, bool composeThemes = false)
     {
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddSingleton<IPackageAssemblyCatalog, EmptyPackageAssemblyCatalog>();
-        services.AddCShells(configure);
-        await using var provider = services.BuildServiceProvider();
+        var builder = WebApplication.CreateSlimBuilder();
+        builder.Logging.ClearProviders();
+        builder.Services.AddSingleton<IPackageAssemblyCatalog, EmptyPackageAssemblyCatalog>();
+        var studio = builder.AddElsaStudio(options => options.ShellsFile = null);
+        if (composeThemes) studio.AddElsaStudioThemes();
+        studio.ConfigureShells(configure);
+        await using var app = builder.Build();
 
-        var snapshot = await provider.GetRequiredService<IRuntimeFeatureCatalog>().GetSnapshotAsync();
+        var snapshot = await app.Services.GetRequiredService<IRuntimeFeatureCatalog>().GetSnapshotAsync();
         return snapshot.FeatureDescriptors.Select(descriptor => descriptor.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 

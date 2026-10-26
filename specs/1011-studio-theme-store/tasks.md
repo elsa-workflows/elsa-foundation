@@ -14,8 +14,8 @@ Risk-based behavior tests and causal controls; no mandated test-first cadence. O
 
 Independent test: real public-API host, selected nondefault shell, feature combinations and authenticated requests.
 
-- [ ] T005 Register private settings/directory/API/models in the addon and migrate Web Program/assembly roster to public composition; remove moved app-only classes.
-- [ ] T006 Migrate ElsaThemeStoreApiTests to public APIs/HTTP and test-owned wire shapes, using fresh hosts for changed installed choices; qualify base absence, core/picker/management combinations, auth and lifecycle.
+- [x] T005 Register private settings/directory/API/models in the addon and migrate Web Program/assembly roster to public composition; remove moved app-only classes.
+- [x] T006 Migrate ElsaThemeStoreApiTests to public APIs/HTTP and test-owned wire shapes, using fresh hosts for changed installed choices; qualify base absence, core/picker/management combinations, auth and lifecycle.
 
 ## Phase3 — US2 managed/source separation
 

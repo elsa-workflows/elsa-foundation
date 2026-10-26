@@ -64,7 +64,6 @@ internal static class StudioFeatureAssemblies
                 typeof(ConnectionsStudioFeature).Assembly,
                 typeof(EtlStudioFeature).Assembly,
                 typeof(JavaScriptExpressionEditorStudioFeature).Assembly,
-                typeof(LiquidExpressionEditorStudioFeature).Assembly,
-                typeof(ThemeStoreCoreStudioFeature).Assembly);
+                typeof(LiquidExpressionEditorStudioFeature).Assembly);
     }
 }

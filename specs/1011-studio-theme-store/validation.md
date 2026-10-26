@@ -19,3 +19,11 @@ Whole Studio project **539 passed, 0 failed/skipped**, `studio3360-managed-state
 Causal control: reconstructing managed state from the merged view in the visibility writer reproduces the old defect. Whole-project negative check: **536 passed / exactly3 failed**, the no-copy regression under BuiltInsOnly, DirectoryOnly and AddToBuiltIns. The source was restored byte-for-byte; whole-project restored check **539 passed, 0 failed/skipped**, `studio3360-persistence-restored.trx` (1m07s). This proves the regression tests detect the removed behavior. No unrelated source was changed by the control.
 
 Concurrency/assets/cancellation qualification, migration of old Web fixtures and Web adoption, frontend/runtime changes and delivery gates remain outstanding.
+
+## Web adoption checkpoint
+
+Web now references the optional package and calls AddElsaStudioThemes. Its copied theme API/models, three feature classes, app-only configuration type and directory service are removed. The theme addon owns its assembly registration; the Web roster keeps distribution modules. The private Web ConfigFileWriter remains because module/feature administration still consumes it until #3359; the theme addon uses its own permitted private atomic writer.
+
+Existing theme tests now use public composition plus test-owned JSON records, with host recreation for installed option changes. The previous directory-copy expectation is replaced by preservation of the original managed definition. Invalid modes fail through normal options startup validation. No production friend was added.
+
+Whole Studio project **539 passed, 0 failed/skipped**, `studio3360-web-adoption-fixed.trx` (1m07s). The first adoption run passed537 and failed two discovery fixtures that still constructed only the old host roster. They now compose the public theme addon exactly as Program does; the whole rerun passes.
