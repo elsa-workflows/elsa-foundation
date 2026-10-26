@@ -46,12 +46,36 @@ Root/addon writers must hold that same lease across the entire read/revision/mod
 Dispose the lease; consumers cannot release or dispose the underlying coordinator. It coordinates hosts in one process,
 not arbitrary external processes writing the same files.
 
-This leaf preserves existing Web Studio bearer/bridge registration; #3358 moves those internals into Hosting.
-Generic host-supplied authentication/policies work through the common pipeline. Trusted query-token prefixes
-(default empty) are validated registration input for that security integration. #3359/#3360 extract optional
-administration/themes and complete their selected-shell/storage cases; #3362 completes the thin distribution.
+AddElsaStudio also owns the Studio bearer/permission gate and backend-management bridge. Existing `Studio:Auth`
+keys retain their meanings: `Enabled` (false/absent is the anonymous demo posture), `SessionCacheSeconds`
+(default 30; 0 disables caching), and `SessionCacheMaxEntries` (default 1000; non-positive values use the default).
+Enabled Studio policies validate the backend bearer even when the surrounding app has another identity.
+401 means no validated session;403 means a valid session lacks the required permission. Manage satisfies
+existing read policies locally. Permission changes/revocation follow cache expiry; no distributed invalidation
+or single-flight guarantee is added. Definitive anonymous sessions have a shorter TTL; transport/HTTP/parse
+failures remain uncached.
 
-There are no registered domain events, contributor interfaces or scheduled tasks in this package. The startup
-service validates the selected provided blueprint without activating optional features. Public composition,
-options and coordination surface are tracked in PublicAPI files. Behavioral tests use public APIs and HTTP,
-without a production friend grant; see [spec 1008](https://github.com/elsa-workflows/elsa-foundation/blob/main/specs/1008-studio-base-hosting/quickstart.md).
+Configure `Studio:BackendBaseUrl` for the browser and optionally `Studio:BackendServerBaseUrl` for server calls.
+`Studio:BackendModuleManagementApiKey` is server configuration (for example the standard environment key
+`Studio__BackendModuleManagementApiKey`), never browser runtime state. Status/registry return unconfigured
+without privileged calls when URL/key is absent. Ordinary bearer-session introspection never carries that key.
+Configure these values before AddElsaStudio; installed security choices require restart.
+
+Set `StudioHostingOptions.QueryTokenPathPrefixes` before Build for explicit trusted hub paths. It defaults empty;
+regular endpoints accept bearer by header only. Prefixes are segment-aware application paths, excluding root,
+ambiguous leading double slashes and wildcards. Web supplies its distribution-owned Console Stream hub path;
+Hosting has no Console Stream dependency. Module authors use Api's `StudioBridgeAuthorization` policies or
+`RequireStudioBridgePermission`, without referencing private Hosting handlers.
+
+Use normal root DI/HttpClientFactory APIs to customize clocks, handlers and HTTP behavior before Build.
+Root cache, clock, backend options and a private session transport are borrowed by shells through CShells.
+General HTTP factories remain shell-owned so feature-local named-client configuration is preserved. The
+mandatory Api feature restores standard local auth/authorization infrastructure; installed scheme/policy
+callbacks flow from root. No private scheme provider or closed options-monitor override is shared globally.
+
+Optional administration/themes, prebuilt browser ownership and final thin distribution remain their separately
+scoped program leaves. The package declares no domain events, contributor contracts or scheduled tasks; its
+private resolver implementations use existing CShells contracts. Public composition/options/coordination and
+Api policy surface are tracked. Tests use public APIs/HTTP without a production friend; see
+[spec1008](https://github.com/elsa-workflows/elsa-foundation/blob/main/specs/1008-studio-base-hosting/quickstart.md)
+and [spec1009](https://github.com/elsa-workflows/elsa-foundation/blob/main/specs/1009-studio-auth-bridge/quickstart.md).

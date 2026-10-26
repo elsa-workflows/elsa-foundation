@@ -36,8 +36,8 @@ Independent test: public authentication inside shell scopes, manual reload and a
 ## Phase5 — Adoption and delivery
 
 - [x] T010 Remove Web's two superseded files/manual registration/mapping from Studio/src/apps/Elsa.Studio.Web/; update remaining policy users to the Api contract.
-- [ ] T011 Run the whole Studio project, public behavior matrix and causal controls; restore sources exactly and compare discovery/execution counts.
-- [ ] T012 Run packed Api consumer, isolated actual Web smoke, architecture/maps/inventory/locked-restore gates; retain precise evidence on the PR.
+- [x] T011 Run the whole Studio project, public behavior matrix and causal controls; restore sources exactly and compare discovery/execution counts.
+- [x] T012 Run packed Api consumer, isolated actual Web smoke, architecture/maps/inventory/locked-restore gates; retain precise evidence on the PR.
 - [ ] T013 Update Hosting README and docs/reports/studio-hosting-contract.md, reconcile implemented spec status, complete independent review and exact-head CI.
 - [ ] T014 Verify actual resulting main, then close #3358 and update Program #3340 board/evidence.
 

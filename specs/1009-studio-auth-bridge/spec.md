@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-26
 
-**Status**: Draft
+**Status**: Implemented
 
 **Input**: Deliver [#3358](https://github.com/elsa-workflows/elsa-foundation/issues/3358) within
 [Program #3340](https://github.com/elsa-workflows/elsa-foundation/issues/3340), following the accepted

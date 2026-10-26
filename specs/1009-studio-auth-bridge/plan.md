@@ -53,7 +53,8 @@ Tests replace private named-client/type dependencies with public IHttpMessageHan
 public authorization/HTTP composition. The missing-permission-handler test can select the public generic
 AuthorizationHandler<StudioBridgePermissionRequirement> base of its instance or restore default authorization
 handlers after removing custom handlers; do not expose the implementation merely for that setup. Internal
-registry DTO assertions become JSON/wire assertions. Root/shell ownership coverage uses a tracked clock,
+registry DTO assertions become JSON/wire assertions. The mandatory Api feature restores AddAuthenticationCore/AddAuthorization locally, respecting CShells
+provider exclusions. Root/shell ownership coverage uses a tracked clock,
 public IAuthenticationService calls inside a shell scope and recorded introspection counts across reload.
 
 ## Structure and validation
