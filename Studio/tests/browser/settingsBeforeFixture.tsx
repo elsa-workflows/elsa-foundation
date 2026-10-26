@@ -1,10 +1,10 @@
 import React, { useEffect } from "react";
-import { ShellFrame, getStudioNavigation } from "../../src/apps/Elsa.Studio.Web/Client/src/app/App";
-import { ThemeProvider } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
-import { writeAppearancePreferences } from "../../src/apps/Elsa.Studio.Web/Client/src/app/themes/appearance";
-import { moreToolsStorageKey } from "../../src/apps/Elsa.Studio.Web/Client/src/app/navigation/placement";
-import type { StudioNavigationContribution } from "../../src/apps/Elsa.Studio.Web/Client/src/sdk";
-import "../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css";
+import { ShellFrame, getStudioNavigation } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/App";
+import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
+import { writeAppearancePreferences } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
+import { moreToolsStorageKey } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/navigation/placement";
+import type { StudioNavigationContribution } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/sdk";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 
 const moduleNavigation: StudioNavigationContribution[] = [
   { id: "home", label: "Home", path: "/dashboard", order: 10, placement: "main" },

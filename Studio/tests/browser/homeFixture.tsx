@@ -1,13 +1,13 @@
 import React, { useEffect } from "react";
 import { AnonymousAuthProvider, AuthProvider, type AuthProviderManager, type AuthSession, type ElsaStudioModuleApi, type StudioDashboardWidgetContribution, type StudioSettingEditorContribution } from "@elsa-workflows/studio-sdk";
 import { StatusChip } from "@elsa-workflows/studio-ui";
-import { ShellFrame, getStudioNavigation } from "../../src/apps/Elsa.Studio.Web/Client/src/app/App";
-import { ThemeProvider } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
-import { writeAppearancePreferences } from "../../src/apps/Elsa.Studio.Web/Client/src/app/themes/appearance";
+import { ShellFrame, getStudioNavigation } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/App";
+import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
+import { writeAppearancePreferences } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
 import { HomePage } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/HomePage";
 import { homeLayoutLocalStoragePrefix } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/homeLayout";
-import type { StudioNavigationContribution } from "../../src/apps/Elsa.Studio.Web/Client/src/sdk";
-import "../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css";
+import type { StudioNavigationContribution } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/sdk";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import "../../src/essentials/Elsa.Studio.Dashboard/Client/src/styles.css";
 
 const searchParams = new URLSearchParams(window.location.search);

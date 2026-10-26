@@ -1,12 +1,12 @@
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Diagnostics, getStudioNavigation, ShellFrame } from "../../src/apps/Elsa.Studio.Web/Client/src/app/App";
-import { ThemeProvider } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
-import { filterAccessibleNavigation } from "../../src/apps/Elsa.Studio.Web/Client/src/app/navigation/placement";
-import { writeAppearancePreferences } from "../../src/apps/Elsa.Studio.Web/Client/src/app/themes/appearance";
-import type { ElsaStudioModuleApi, StudioNavigationContribution } from "../../src/apps/Elsa.Studio.Web/Client/src/sdk";
-import "../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css";
+import { Diagnostics, getStudioNavigation, ShellFrame } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/App";
+import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
+import { filterAccessibleNavigation } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/navigation/placement";
+import { writeAppearancePreferences } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
+import type { ElsaStudioModuleApi, StudioNavigationContribution } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/sdk";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 
 const theme = new URLSearchParams(window.location.search).get("theme") === "dark" ? "dark" : "light";
 writeAppearancePreferences({ themeId: "classic", mode: theme, navigation: "left" });

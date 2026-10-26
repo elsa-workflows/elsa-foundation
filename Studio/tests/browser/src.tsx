@@ -23,7 +23,7 @@ import { ActivityDefinitionTestRunDialog } from "../../src/essentials/Elsa.Studi
 import { WorkflowLazyBoundary } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/WorkflowLazyBoundary";
 import { TestRunStatus } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/editorPanels";
 import { WorkflowEditorToolbar } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditorToolbar";
-import { builtInPropertyEditors } from "../../src/apps/Elsa.Studio.Web/Client/src/app/propertyEditors";
+import { builtInPropertyEditors } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/propertyEditors";
 import { Download, ListTree, Package, PackageOpen, Play, Sparkles, Upload } from "lucide-react";
 import { PanelTabList } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/PanelTabList";
 import { WorkflowDefinitions } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowDefinitions";
@@ -72,10 +72,10 @@ import type {
   ActivityDefinitionDraftView,
   ActivityDefinitionVersionView
 } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityDefinitionTypes";
-import { getTheme, themeTokenNames } from "../../src/apps/Elsa.Studio.Web/Client/src/app/themes/presets";
-import { applyMaterialVariables } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
-import "../../src/apps/Elsa.Studio.Web/Client/src/app/ui/tokens.css";
-import "../../src/apps/Elsa.Studio.Web/Client/src/app/ui/disclosure/disclosure.css";
+import { getTheme, themeTokenNames } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/presets";
+import { applyMaterialVariables } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/tokens.css";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/disclosure/disclosure.css";
 import "../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";
 import "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/styles.css";
 import "../../../Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/styles.css";
@@ -1869,7 +1869,7 @@ async function renderRequestedFixture() {
   }
 
   if (activityDefinitionsFixture) {
-    await import("../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css");
+    await import("../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css");
   }
 
   root.render(

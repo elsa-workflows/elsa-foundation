@@ -45,7 +45,7 @@ COPY Extensions/Workflows.Dashboard/studio/ ./Extensions/Workflows.Dashboard/stu
 # Fail the image build clearly if the frontend build was skipped. The generated
 # wwwroot files are intentionally ignored by Git, so this protects both CI and
 # local Docker builds from publishing an assetless image that returns 404 at `/`.
-RUN test -f Studio/src/apps/Elsa.Studio.Web/wwwroot/studio/index.html
+RUN test -f Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/index.html
 
 # Restore and publish only the web host; project references are pulled in transitively.
 #

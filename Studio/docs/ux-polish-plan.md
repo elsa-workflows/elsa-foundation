@@ -2,7 +2,7 @@
 
 A comparative UX review of **Elsa 4 Studio** (Vite + React 19, custom `--wf-*` CSS, `@xyflow/react`) against the more polished **Elsa 3 designer** (Next.js + Tailwind + shadcn/ui), with a prioritized backlog for closing the gap.
 
-- **Target to improve:** `elsa-foundation-studio` — workflow editor at `src/essentials/Elsa.Studio.Workflows/Client/src/styles.css` + `module.tsx`; host shell at `src/apps/Elsa.Studio.Web/Client/src/app/`.
+- **Target to improve:** `elsa-foundation-studio` — workflow editor at `src/essentials/Elsa.Studio.Workflows/Client/src/styles.css` + `module.tsx`; host shell at `src/essentials/Elsa.Studio.Hosting/Client/src/app/`.
 - **Reference:** `elsa-foundation-designer` — shadcn/Radix component layer, OKLCH tokens, sonner toasts.
 - **Constraint:** This is a plan only. No application code is changed by this document.
 
@@ -117,7 +117,7 @@ Secrets and Connections follow the accepted [resource-list contract](ux/design-s
 | Focus rings | One recipe everywhere (3px ring/50%) | Mix of `outline`, `box-shadow`, `outline-offset` per element | ⚠️ Inconsistent |
 | Reduced motion | Honored | Original review baseline: absent. Scoped rules now cover selected workflow/editor/dialog surfaces; verify remaining surfaces individually. | ⚠️ Partial |
 
-### Cross-cutting: host shell (`Elsa.Studio.Web/Client`)
+### Cross-cutting: host shell (`Elsa.Studio.Hosting/Client`)
 
 The shell is genuinely strong and **not** a major source of the gap: backdrop-blur sticky topbar (`422–498`), nav active-indicator bar (`.nav-section a::before`, `1715–1741`), tinted `.nav-icon-tile`, status-dot footer with glow ring, a real spacing/radius/shadow/transition token set (`tokens.css`), and a 7-theme OKLCH system (`themes/presets.ts`). The irony: **the shell's tokens are the fix** for the workflow module's hardcoding.
 
@@ -181,7 +181,7 @@ C1 (shared primitive layer) first — it absorbs and standardizes everything fro
 
 ### Token work summary
 
-- **Reuse existing host tokens:** `--radius-sm/--radius/--radius-md/--radius-xl` (A2), `--shadow-sm/md/lg/xl` (A3), `--studio-*-size` type tokens (A4), `--transition-fast/base/slow` (already used). The shell already defines these in `Elsa.Studio.Web/Client/src/app/ui/tokens.css` and `app/styles.css` — the workflow module just needs to consume them.
+- **Reuse existing host tokens:** `--radius-sm/--radius/--radius-md/--radius-xl` (A2), `--shadow-sm/md/lg/xl` (A3), `--studio-*-size` type tokens (A4), `--transition-fast/base/slow` (already used). The shell already defines these in `Elsa.Studio.Hosting/Client/src/app/ui/tokens.css` and `app/styles.css` — the workflow module just needs to consume them.
 - **Add new `--wf-*` tokens:** `--wf-text-2xs` (A4), `--wf-shadow-node/overlay/menu` (A3), `--wf-activity-terminal/composite/runtime/trigger` (A5), `--wf-label-weight`/`--wf-label-transform` (A1), `--wf-disabled-text` (A7), `--wf-radius-*` aliases if a local mapping is cleaner than referencing host tokens directly (A2).
 
 ---

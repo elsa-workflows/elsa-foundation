@@ -319,8 +319,8 @@ jobs:
       - name: Prepare npm manifests
         run: |
           for dir in \
-            src/apps/Elsa.Studio.Web/StudioSdk \
-            src/apps/Elsa.Studio.Web/StudioUi \
+            src/essentials/Elsa.Studio.Hosting/StudioSdk \
+            src/essentials/Elsa.Studio.Hosting/StudioUi \
             src/essentials/Elsa.Studio.CodeEditor/Client \
             src/essentials/Elsa.Studio.Workflows/Client; do
             node scripts/prepare-npm-package.mjs "$dir" "$VERSION"
@@ -333,8 +333,8 @@ jobs:
           mkdir -p packages/npm
           DEST="$(pwd)/packages/npm"
           for dir in \
-            src/apps/Elsa.Studio.Web/StudioSdk \
-            src/apps/Elsa.Studio.Web/StudioUi \
+            src/essentials/Elsa.Studio.Hosting/StudioSdk \
+            src/essentials/Elsa.Studio.Hosting/StudioUi \
             src/essentials/Elsa.Studio.CodeEditor/Client \
             src/essentials/Elsa.Studio.Workflows/Client; do
             (cd "$dir" && pnpm pack --pack-destination "$DEST")
