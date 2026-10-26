@@ -47,11 +47,13 @@ public sealed class StudioHostingTests
     }
 
     [Theory]
-    [InlineData("/_elsa/studio/modules")]
-    [InlineData("/_elsa/studio/module-registry")]
-    public async Task Selected_shell_discovers_external_feature_and_configured_versions(string route)
+    [InlineData("/_elsa/studio/modules", false)]
+    [InlineData("/_elsa/studio/module-registry", false)]
+    [InlineData("/_elsa/studio/modules", true)]
+    [InlineData("/_elsa/studio/module-registry", true)]
+    public async Task Selected_shell_discovers_external_feature_and_configured_versions(string route, bool withDefaultDecoy)
     {
-        await using var host = await HostingTestHost.StartAsync();
+        await using var host = await HostingTestHost.StartAsync(withDefaultDecoy: withDefaultDecoy);
         using var response = await host.Client.GetAsync(route);
         response.EnsureSuccessStatusCode();
         var json = await response.Content.ReadAsStringAsync();
@@ -281,7 +283,7 @@ internal sealed class HostingTestHost : IAsyncDisposable
 
     public static StudioConfigurationMutationGate CreateGate() => WebApplication.CreateSlimBuilder().AddElsaStudio(options => options.ShellsFile = null).ConfigurationMutationGate;
 
-    public static async Task<HostingTestHost> StartAsync(bool failActivation = false, int scopeFailures = 0)
+    public static async Task<HostingTestHost> StartAsync(bool failActivation = false, int scopeFailures = 0, bool withDefaultDecoy = false)
     {
         var host = new HostingTestHost();
         try
@@ -292,6 +294,7 @@ internal sealed class HostingTestHost : IAsyncDisposable
             await File.WriteAllTextAsync(Path.Combine(webRoot, "custom.html"), "<html>custom Studio</html>");
             var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { EnvironmentName = Environments.Production, ContentRootPath = host.Root, WebRootPath = webRoot });
             builder.WebHost.UseTestServer();
+            builder.Configuration.Sources.Clear();
             builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["CShells:Shells:Authoring:Features:StudioApi"] = "true",
@@ -303,6 +306,7 @@ internal sealed class HostingTestHost : IAsyncDisposable
                 ["Studio:BackendModuleManagementApiKey"] = "private-key-sentinel",
                 ["Unrelated"] = "unrelated-sentinel"
             });
+            if (withDefaultDecoy) builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?> { ["CShells:Shells:Default:Features:StudioApi"] = "true" });
             if (failActivation) builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?> { ["CShells:Shells:Authoring:Features:FailingStudioTestFeature"] = "true" });
             builder.Services.AddSingleton(host.Probe);
             host.Studio = builder.AddElsaStudio(options => { options.ShellName = "Authoring"; options.ShellsFile = null; options.IndexFile = "custom.html"; })

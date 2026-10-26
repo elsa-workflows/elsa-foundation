@@ -50,7 +50,7 @@ requiring explicit StudioApi enablement (case-insensitive), without activating f
 
 UseElsaStudio activates the selected shell before routing/authentication/authorization, then installs static
 files. Missing/unavailable/failed activation remains best-effort for static/runtime requests; request
-cancellation propagates. MapElsaStudio maps runtime JS, MapShells, strongly prioritized discovery endpoints,
+cancellation propagates. UseElsaStudio also installs the framework MapShells middleware; MapElsaStudio maps runtime JS, strongly prioritized discovery endpoints,
 unknown-API 404 and configured fallback. #3358 adds the bridge mappings/owned security registrations here.
 
 Discovery acquires IShell.BeginScope and retains it across the entire async manifest operation. If only scope

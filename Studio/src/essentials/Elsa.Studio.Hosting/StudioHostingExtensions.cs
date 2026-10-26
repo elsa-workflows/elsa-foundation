@@ -14,6 +14,8 @@ namespace Elsa.Studio.Hosting;
 public static class StudioHostingExtensions
 {
     /// <summary>Registers Studio hosting. Call once before Build; callbacks override Studio:Hosting configuration.</summary>
+    /// <exception cref="StudioHostingException">The configured shell file cannot be loaded.</exception>
+    /// <exception cref="ArgumentException">An explicit hosting option is invalid.</exception>
     public static StudioBuilder AddElsaStudio(this WebApplicationBuilder builder, Action<StudioHostingOptions>? configure = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -29,7 +31,7 @@ public static class StudioHostingExtensions
             {
                 builder.Configuration.AddJsonFile(settings.ShellsFile, optional: false, reloadOnChange: true);
             }
-            catch (Exception error) when (error is IOException or FormatException)
+            catch (Exception error) when (error is IOException or FormatException or UnauthorizedAccessException)
             {
                 throw new StudioHostingException($"Could not load Studio shell configuration '{settings.ShellsFile}'.", error);
             }

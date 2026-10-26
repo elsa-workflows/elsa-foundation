@@ -2,9 +2,12 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <Description>Studio server startup, module discovery, runtime configuration and application composition.</Description>
     <StaticWebAssetBasePath>/</StaticWebAssetBasePath>
   </PropertyGroup>
   <ItemGroup>
+    <None Update="README.md" Pack="true" PackagePath="" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="CShells.AspNetCore" />
     <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />

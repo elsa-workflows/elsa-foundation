@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-26
 
-**Status**: Draft
+**Status**: Implemented
 
 **Input**: Deliver [#3357](https://github.com/elsa-workflows/elsa-foundation/issues/3357) within
 [Program #3340](https://github.com/elsa-workflows/elsa-foundation/issues/3340): provide standard

@@ -40,8 +40,8 @@ Independent test: real test-owned files and runtime HTTP requests through Add/Us
 
 - [x] T011 Adopt public calls in Studio/src/apps/Elsa.Studio.Web/Program.cs, preserving its existing root auth/bridge/Console Stream and optional registrations; remove superseded Web helpers and update test wiring (FR-010).
 - [x] T012 Add mutation concurrency/cancellation/idempotent-release tests in Studio/tests/Elsa.Studio.Tests/Hosting/StudioHostingTests.cs; verify existing writer behavior remains green.
-- [ ] T013 Run whole Studio tests/discovery and causal controls; record exact results in specs/1008-studio-base-hosting/quickstart.md and PR evidence.
-- [ ] T014 Run locked solution restore, architecture graph restore/guards and generated-map checks; update reached locks and changed filters only.
+- [x] T013 Run whole Studio tests/discovery and causal controls; keep commands in specs/1008-studio-base-hosting/quickstart.md and exact results in PR evidence.
+- [x] T014 Run locked solution restore, architecture graph restore/guards and generated-map checks; update reached locks and changed filters only.
 - [ ] T015 Narrow the canonical gate signature in docs/reports/studio-hosting-contract.md, reconcile spec status and complete independent review/CI on the exact PR head.
 - [ ] T016 Verify actual merged main, then update #3357 and Program #3340 state/evidence.
 

@@ -42,3 +42,20 @@ or moving auth/Nuplane/theme/frontend implementations into the base package to m
 
 No unresolved design clarification remains. The accepted contract fixes public composition and package direction;
 source verification settles the framework API details.
+
+## Matched host endpoint ownership
+
+Actual HTTP qualification found that an unconditional selected fallback also resolves root runtime/fallback
+requests to a failing shell. Keep a small IShellResolver decorator around the public DefaultShellResolver:
+when the protocol context is HttpContext and routing matched a non-ShellEndpointMetadata endpoint, return
+no shell; otherwise delegate. Exact-generation shell endpoints already bypass the resolver in CShells.
+
+The default middleware cache key is host/path/method, so it cannot preserve changing endpoint ownership.
+Disable that cache with the public ShellMiddlewareOptions; preserve framework strategy ordering by supplying
+IOptions<ShellResolverOptions>.Value to the delegate. The selected fallback remains the actual framework
+UseFallback registration, not a local registry. Pre-routing activation remains essential for cold protected
+routes. A real failing-feature/file/runtime/root-fallback test failed before this guard and passed afterward.
+
+The public framework MapShells receiver is IApplicationBuilder; UseElsaStudio installs it after static files.
+MapElsaStudio remains the endpoint mapping surface. This resolves the contract's conceptual grouping without
+adding another public API or copying framework middleware.
