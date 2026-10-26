@@ -102,6 +102,8 @@ The [source-attribution receipt](evidence/broadcast-source-attribution.md) quali
 storage preservation only; authoritative selection and saved-start admission remain open.
 The [compact saved-source receipt](evidence/broadcast-saved-source.md) qualifies data and physical
 read validation only; the dispatcher still refuses the new authority before duplicate lookup.
+The [shared ordinary selection receipt](evidence/broadcast-source-selection.md) qualifies capture using the
+existing authoritative selector; acceptance under root leases and retention remain open.
 Publisher authorization, recipient execution and all host delivery/recovery gates remain open.
 
 Execution order: T046 → T047 → T048 → T049 → T050 → T051. No new task is marked parallel:

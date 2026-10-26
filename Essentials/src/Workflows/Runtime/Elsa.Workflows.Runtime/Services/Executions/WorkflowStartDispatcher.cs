@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Runtime.Services.Executions;
 public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
 {
     private readonly IWorkflowExecutableStore _executableStore;
-    private readonly IWorkflowExecutableSourceReferenceStore _sourceReferenceStore;
+    private readonly WorkflowExecutableStartSourceResolver _startSourceResolver;
     private readonly IWorkflowExecutionActorProvider _agentProvider;
     private readonly IRuntimeExecutionIdGenerator _idGenerator;
     private readonly TimeProvider _timeProvider;
@@ -91,7 +91,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         ArgumentNullException.ThrowIfNull(startPolicy);
 
         _executableStore = executableStore;
-        _sourceReferenceStore = sourceReferenceStore;
+        _startSourceResolver = new(sourceReferenceStore, timeProvider);
         _agentProvider = agentProvider;
         _idGenerator = idGenerator;
         _timeProvider = timeProvider;
@@ -297,80 +297,11 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     private static WorkflowExecutableStartRejectedException AuthorityRejected(string reasonCode, string message) =>
         new(WorkflowExecutableStartRejectionCategory.Authority, reasonCode, message);
 
-    // Resolves the artifact's Source References and returns content identity plus independently pinned source
-    // attribution. This is deliberately fail-closed: the content artifact's identity can reflect whichever source
-    // first produced deduplicated content, so it is never authoritative activation provenance on its own.
     private async ValueTask<ResolvedPinnedExecutable> ResolvePinnedExecutableAsync(
-        WorkflowExecutionStartDispatchRequest request,
-        WorkflowExecutable executable,
-        WorkflowExecutableReferenceScope requiredScope,
-        CancellationToken cancellationToken)
-    {
-        var references = await _sourceReferenceStore.ListAllByArtifactAsync(request.ArtifactId, cancellationToken);
-        if (references.Count == 0)
-        {
-            if (request.SourceSelection is null &&
-                request.ProvenanceRequirement == WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy)
-                return new(executable.Identity, null, null);
-
-            throw new WorkflowExecutableReferenceRejectedException(
-                request.ArtifactId,
-                requiredScope,
-                request.SourceSelection is null
-                    ? WorkflowExecutableReferenceRejectionReason.NoLiveReference
-                    : WorkflowExecutableReferenceRejectionReason.SelectionNotFound);
-        }
-
-        var now = _timeProvider.GetUtcNow();
-        var scopedReferences = references.Where(reference => reference.Scope == requiredScope).ToArray();
-        var selectedReferences = Select(scopedReferences, request.SourceSelection);
-        var liveReferences = selectedReferences
-            .Where(reference => reference.IsLive(now))
-            .OrderBy(reference => reference.SourceReferenceId, StringComparer.Ordinal)
-            .ToArray();
-
-        if (liveReferences.Length == 1)
-            return new(
-                executable.Identity,
-                WorkflowExecutableSourceProvenance.From(liveReferences[0]),
-                null);
-
-        if (liveReferences.Length > 1)
-            throw new WorkflowExecutableReferenceRejectedException(
-                request.ArtifactId,
-                requiredScope,
-                WorkflowExecutableReferenceRejectionReason.Ambiguous);
-
-        if (request.SourceSelection is not null && selectedReferences.Length == 0)
-            throw new WorkflowExecutableReferenceRejectedException(
-                request.ArtifactId,
-                requiredScope,
-                WorkflowExecutableReferenceRejectionReason.SelectionNotFound);
-
-        // No live reference of the required scope. Distinguish the test-run-lapsed case (a non-retired reference
-        // that is present but past its expiry) from the absent/retired/wrong-scope case, so an expired test run is
-        // reported honestly rather than as an unpublished artifact.
-        var expired = selectedReferences.Any(reference => reference.DeletedAt is null && reference.IsExpired(now));
-        throw new WorkflowExecutableReferenceRejectedException(
-            request.ArtifactId,
-            requiredScope,
-            expired ? WorkflowExecutableReferenceRejectionReason.Expired : WorkflowExecutableReferenceRejectionReason.NoLiveReference);
-    }
-
-    private static WorkflowExecutableSourceReference[] Select(
-        WorkflowExecutableSourceReference[] references,
-        WorkflowExecutableSourceSelection? selection)
-    {
-        if (selection is null)
-            return references;
-        if (selection.SourceReferenceId is { } sourceReferenceId)
-            return references.Where(reference => StringComparer.Ordinal.Equals(reference.SourceReferenceId, sourceReferenceId)).ToArray();
-
-        return references
-            .Where(reference => selection.ActivationId is null || StringComparer.Ordinal.Equals(reference.ActivationId, selection.ActivationId))
-            .Where(reference => selection.SlotId is null || StringComparer.Ordinal.Equals(reference.SlotId, selection.SlotId))
-            .ToArray();
-    }
+        WorkflowExecutionStartDispatchRequest request, WorkflowExecutable executable,
+        WorkflowExecutableReferenceScope requiredScope, CancellationToken cancellationToken) =>
+        new(executable.Identity, await _startSourceResolver.ResolveAsync(request.ArtifactId, request.SourceSelection,
+            request.ProvenanceRequirement, requiredScope, cancellationToken), null);
 
     private async ValueTask<WorkflowExecutionStartDispatchResult> DispatchCoreAsync(
         WorkflowExecutionStartDispatchRequest request,
