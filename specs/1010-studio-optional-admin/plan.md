@@ -103,14 +103,14 @@ published-install profile only, with all writers participating in native admissi
 custom mutable profiles refuse protected package reads with a diagnostic; no ordinary-reader fallback.
 
 Resolve package descriptors before admission. Under live exclusive install-path admission and its borrow,
-validate canonical relative components, stat fresh length and reject over16MiB (metadata over1MiB), then get bytes
+validate canonical relative components, stat fresh length and reject over16MiB (metadata over1MiB per file), then get bytes
 only through PackageContent.TryReadFile(borrow). The same normalized relative path is used for stat and read.
 Check the result length as a violated-profile guard. Native root ownership excludes every supported publisher,
 reconciler, maintenance/recovery writer between stat and read; arbitrary out-of-protocol filesystem modification
 is outside this bound. This is coordinated immutability, not an identity-bound limit supplied by Nuplane's API.
 Cancellation cannot interrupt its synchronous read; honor it before/after and always release ownership.
 
-Keep at most4 payload responses allocated per host, rejecting saturation with a retryable response; keep the
+Keep at most4 asset payload responses allocated per host, with32 total admitted/queued asset requests; reject further saturation with a retryable response; keep the
 permit until response execution completes, including slow/range responses. Release package admission after bytes
 are detached. Reuse guarded content for package manifest/nuspec HTTP reads too; replace only the unprotected
 package contributor with a private admitted adapter that delegates parsing/catalog projection to the shared mapper.

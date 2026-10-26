@@ -60,3 +60,27 @@ Sources: [PackageContent](https://github.com/valence-works/nuplane/blob/80f74d02
 
 Three independent read-only research lenses examined shared feature contracts, composition/frontend migration,
 and native content/maintenance APIs. No implementation was delegated. No unresolved owner decision remains.
+
+## Implemented composition details
+
+The directory module exposes effective resolver feeds through IOptions<FeedResolutionOptions>, with file URIs,
+but does not expose a complete public directory-registration inventory at builder time. Do not construct a
+temporary service provider or inspect private marker fields. Register a reserved fallback directory through
+AddDirectoryFeed itself, wrap only its desired-source descriptor with a private conditional scoped delegator,
+and remove its resolver entry when other directory feeds exist. Both ordinary and borrowed source calls
+delegate to the original native-aware source only when fallback is selected. The fallback watcher is disabled: uploads
+already reconcile; direct fallback-folder copies require manual reconciliation. Configured feeds keep their watcher
+settings. Source-only/cache-only roles still need explicit qualification/refusal; do not imply uploads activate from
+a resolver-only directory. Feed selection is frozen from final options. Public callback composition remains the
+supported customization path; do not re-register the reserved fallback name afterward.
+
+The root settings, private content reader and existing store interface are explicitly borrowed into shells.
+Do not share arbitrary general HTTP factories/options or scoped contributor collections. The reader keeps its
+own catalog lookup/read operations serialized so simultaneous HTTP assets do not race one another for native
+non-waiting root ownership. Four allocated asset responses are allowed, with32 active/queued requests; ownership
+of the response permit continues until result execution finishes. Metadata has a per-file1MiB cap, not an
+unbounded-catalog aggregate-memory guarantee.
+
+A standard debug event PackageContentPreflight records package ID, relative path and admitted length just before
+guarded reading. It provides useful content diagnostics and a public ILoggerProvider observation seam for the
+preflight/maintenance-overlap test without a production friend or a test-only callback API.

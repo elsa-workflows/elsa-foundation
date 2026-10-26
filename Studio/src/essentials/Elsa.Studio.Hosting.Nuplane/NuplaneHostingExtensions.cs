@@ -1,4 +1,8 @@
 using CShells.Nuplane;
+using CShells.Features;
+using CShells.AspNetCore.Features;
+using Elsa.Studio.Api.Features;
+using Elsa.Studio.Core.Attributes;
 using Elsa.Modularity.Nuplane.Extensions;
 using Elsa.Modularity.Core.Contracts;
 using Microsoft.Extensions.Options;
@@ -50,12 +54,23 @@ public static class NuplaneHostingExtensions
         studio.Services.AddHostedService<NuplaneHostingStartup>();
         studio.Services.AddNuplaneAdmin();
         studio.Services.AddNuplanePackageStoreMaintenance();
+        studio.Services.AddSingleton<PackageContentReader>();
         var configuration = studio.Configuration.GetSection("Nuplane");
         studio.Services.AddNuplane(configuration, nuplane =>
         {
             nuplane.UseBasePath(contentRoot);
             nuplane.AddDirectoryFeedsFromConfiguration(configuration);
-            nuplane.AutoloadPackages(configuration.GetSection("Loading"));
+            nuplane.AutoloadPackages(configuration.GetSection("Loading"), loading =>
+            {
+                // Studio features must use the host's contract identities instead of private package copies.
+                foreach (var assembly in new[] { typeof(IShellFeature).Assembly, typeof(IWebShellFeature).Assembly,
+                             typeof(StudioModuleAttribute).Assembly, typeof(StudioApiFeature).Assembly, typeof(IServiceCollection).Assembly })
+                {
+                    var name = assembly.GetName();
+                    var token = name.GetPublicKeyToken();
+                    loading.SharedAssembly(name.Name!, token is { Length: > 0 } ? Convert.ToHexString(token).ToLowerInvariant() : null, name.Version!.Major);
+                }
+            });
             configureNuplane?.Invoke(nuplane);
             RegisterFallback(studio, nuplane);
         });
@@ -90,7 +105,9 @@ public static class NuplaneHostingExtensions
         {
             integration.RefreshTrigger = NuplaneRefreshTrigger.ChangedOrPending;
             integration.AutoReload = true;
-        }));
+        }).ShareSingletonWithShells<StudioNuplaneSettings>()
+          .ShareSingletonWithShells<PackageContentReader>()
+          .ShareSingletonWithShells<IShellFeatureConfigurationStore>());
         return studio;
     }
 
@@ -99,6 +116,7 @@ public static class NuplaneHostingExtensions
     {
         _ = endpoints.ServiceProvider.GetRequiredService<StudioNuplaneSettings>();
         FeatureManagementEndpoints.Map(endpoints);
+        PackageAssetEndpoints.Map(endpoints);
         return endpoints;
     }
 

@@ -25,7 +25,7 @@ root/epoch/policy confirmation and complete known protection. Never enroll autom
 confirmation, accept arbitrary paths, or call local Directory.Delete. Return actual refusal/partial/cancelled facts.
 
 Package bytes use stock immutable extracted installs under admitted ownership. Fresh in-admission preflight caps
-assets at16MiB/metadata1MiB, with at most4 active allocated payload responses. Keep the permit through response
+assets at16MiB/metadata1MiB, with at most4 active allocated asset responses and32 total active/queued asset requests. Keep the permit through response
 completion and ownership through detachment. Unknown/busy/unsupported authority and shapes refuse safely; no
 ordinary-reader fallback. Preserve no-cache, MIME, conditional and Range behavior. Arbitrary external mutation
 cannot be converted into an identity-bound allocation guarantee by this adapter.

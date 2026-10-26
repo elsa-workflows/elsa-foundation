@@ -10,6 +10,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Nuplane.Admin;
 using Nuplane.Builder;
+using Nuplane.Reconciliation.LockFile;
 using Nuplane.Feeds.Configuration;
 using Nuplane.Sources.Directory.Builder;
 
@@ -76,7 +77,7 @@ internal sealed class AdministrationHost : IAsyncDisposable
     public string ShellsFile => Path.Combine(Root, "config", "studio-shells.json");
     public const string Credential = "private-feature-credential-sentinel";
 
-    public static async Task<AdministrationHost> StartAsync(Action<NuplaneBuilder>? configureNuplane = null, bool addAdministration = true, bool managedFeatures = false, Action<WebApplicationBuilder>? beforeStudio = null, Action<WebApplicationBuilder>? afterStudio = null)
+    public static async Task<AdministrationHost> StartAsync(Action<NuplaneBuilder>? configureNuplane = null, bool addAdministration = true, bool managedFeatures = false, Action<WebApplicationBuilder>? beforeStudio = null, Action<WebApplicationBuilder>? afterStudio = null, bool nativeStore = false, bool loadPackages = false, Action<WebApplication>? configurePipeline = null)
     {
         var host = new AdministrationHost();
         try
@@ -87,7 +88,7 @@ internal sealed class AdministrationHost : IAsyncDisposable
             builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Nuplane:Setup:AutomaticReconciliation"] = "false",
-                ["Nuplane:Loading:Enabled"] = "false"
+                ["Nuplane:Loading:Enabled"] = loadPackages.ToString()
             });
             if (managedFeatures)
             {
@@ -97,12 +98,32 @@ internal sealed class AdministrationHost : IAsyncDisposable
             else builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?> { ["CShells:Shells:Authoring:Features:StudioApi"] = "true" });
             beforeStudio?.Invoke(builder);
             var studio = builder.AddElsaStudio(options => { options.ShellName = "Authoring"; options.ShellsFile = managedFeatures ? "config/studio-shells.json" : null; });
-            if (addAdministration) studio.AddElsaStudioNuplane(configureNuplane: configureNuplane);
+            if (addAdministration) studio.AddElsaStudioNuplane(configureNuplane: nuplane =>
+            {
+                if (nativeStore)
+                {
+                    var state = Path.Combine(host.Root, "native-store", "state.json");
+                    nuplane.WithStateFile(state).UseCoordinatedPackageStore([new("default", "studio", state)], true);
+                    nuplane.Services.Configure<FeedResolutionOptions>(options => options.PackageInstallRoot = Path.Combine(host.Root, "native-store", "installs"));
+                    nuplane.Services.Configure<LockFileOptions>(options => options.Path = Path.Combine(host.Root, "native-store", "nuplane.lock.json"));
+                    nuplane.AddDirectoryFeed("native-feed", "feed", feed => { feed.Watch = false; feed.IncludeAll(); });
+                }
+                configureNuplane?.Invoke(nuplane);
+            });
             afterStudio?.Invoke(builder);
             host.App = builder.Build();
+            configurePipeline?.Invoke(host.App);
             host.App.UseElsaStudio();
             host.App.MapElsaStudio();
             if (addAdministration) host.App.MapElsaStudioNuplane();
+            if (nativeStore)
+            {
+                Directory.CreateDirectory(Path.Combine(host.Root, "native-store", "installs"));
+                var maintenance = host.App.Services.GetRequiredService<INuplanePackageStoreMaintenanceOperations>();
+                var preview = await maintenance.PreviewEnrollmentAsync();
+                var enrolled = await maintenance.EnrollAsync(new("default", preview.RootIdentity!, 1, true, ["studio"], []));
+                Assert.Equal("Complete", enrolled.Status);
+            }
             await host.App.StartAsync();
             host.Client = host.App.GetTestClient();
             return host;
