@@ -21,8 +21,8 @@ Independent test: real public-API host, selected nondefault shell, feature combi
 
 Independent test: directory overlay, unrelated write, directory removal, original managed state retained.
 
-- [ ] T007 Separate internal managed state from directory-enriched read snapshots and projected responses in the package; retain existing JSON and historical managed records.
-- [ ] T008 Update each save/import/duplicate/delete/default/visibility mutation to operate on intended managed state under the whole host gate; refuse unpersistable source-owned changes explicitly.
+- [x] T007 Separate internal managed state from directory-enriched read snapshots and projected responses in the package; retain existing JSON and historical managed records.
+- [x] T008 Update each save/import/duplicate/delete/default/visibility mutation to operate on intended managed state under the whole host gate; refuse unpersistable source-owned changes explicitly.
 - [ ] T009 Add no-copy/directory-removal, overlapping-ID/legacy preservation, default/visibility and concurrent atomic mutation regressions; remove the former directory-copy expectation.
 
 ## Phase4 — US3 paths/assets/browser
