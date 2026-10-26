@@ -50,7 +50,8 @@ public sealed class EfActivityPublicationRuntimeCommit
     /// <summary>
     /// Commits <paramref name="template"/> and <paramref name="reference"/> atomically.
     /// </summary>
-    /// <returns><c>true</c> when this call wrote anything; <c>false</c> when phase one was already done.</returns>
+    /// <returns><c>true</c> when material/reference creation was needed; <c>false</c> when phase one was already done.
+    /// Coordination revisions still advance when existing material is adopted.</returns>
     /// <exception cref="InvalidOperationException">
     /// The template id or hash is bound to different content, or the source reference id is bound to different
     /// material.
@@ -66,6 +67,11 @@ public sealed class EfActivityPublicationRuntimeCommit
         if (!StringComparer.Ordinal.Equals(reference.ArtifactId, template.TemplateId))
             throw new ArgumentException("A publication's source reference must retain the template it is published with.", nameof(reference));
 
+        var capturedTemplates = templates.WithAccess(new FixedAccess(templates.AccessContext));
+        var capturedReferences = sourceReferences.WithAccess(new FixedAccess(sourceReferences.AccessContext));
+        if (capturedTemplates.PublicationScope != capturedReferences.ScopeForPublication(reference))
+            throw new InvalidOperationException("Template publication requires one captured persistence scope for material and source reference.");
+
         return await Commits.RunAsync(context, async () =>
         {
             context.ChangeTracker.Clear();
@@ -73,9 +79,12 @@ public sealed class EfActivityPublicationRuntimeCommit
             {
                 await using var transaction = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
                     context, "publishing", template.TemplateId, () => context.Database.BeginTransactionAsync(cancellationToken));
-                var createsTemplate = await templates.StageCreateAsync(template, cancellationToken);
-                var createsReference = await sourceReferences.StageCreateOrAdoptAsync(reference, cancellationToken);
-                if (createsTemplate || createsReference)
+                var createsTemplate = await capturedTemplates.StageCreateAsync(template, cancellationToken);
+                var createsReference = await capturedReferences.StageCreateOrAdoptAsync(reference, cancellationToken);
+                // Adoption must advance native material authority too: a stale collector must lose its
+                // template revision check even when this publication reuses an existing immutable row.
+                await capturedTemplates.StagePublicationFencesAsync(template, cancellationToken);
+                if (context.ChangeTracker.HasChanges())
                     await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
                         context, "publishing", template.TemplateId, () => context.SaveChangesAsync(cancellationToken));
                 await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
@@ -100,4 +109,9 @@ public sealed class EfActivityPublicationRuntimeCommit
             $"The Runtime material of activity template '{template.TemplateId}' changed concurrently and did not settle after {Commits.MaxAttempts} attempts.",
             lastConflict), cancellationToken);
     }
+    private sealed class FixedAccess(PersistenceAccessContext snapshot) : IPersistenceAccessContextAccessor
+    {
+        public PersistenceAccessContext Current => snapshot;
+    }
+
 }

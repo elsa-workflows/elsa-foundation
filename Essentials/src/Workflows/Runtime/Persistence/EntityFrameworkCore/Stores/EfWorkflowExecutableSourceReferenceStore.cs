@@ -40,6 +40,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
                 _ = Read(existing, scope, reference.SourceReferenceId);
                 throw new InvalidOperationException($"Workflow executable source reference '{reference.SourceReferenceId}' already exists; source references are create-only.");
             }
+            await EfExecutableActivityTemplateStore.StageSourceTemplateFenceAsync(context, scope, reference.ArtifactId, cancellationToken);
             context.WorkflowExecutableSourceReferences.Add(ToEntity(reference, scope, id));
             await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
                 context, "saving", reference.SourceReferenceId, () => context.SaveChangesAsync(cancellationToken));
@@ -59,6 +60,8 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
 
     /// <summary>The context this store reads and stages through.</summary>
     internal RuntimeDbContext Context => context;
+    internal PersistenceAccessContext AccessContext => access.Current;
+    internal string ScopeForPublication(WorkflowExecutableSourceReference reference) => ScopeForWrite(reference);
 
     // Cohort acceptance must resolve publications in its own selected access boundary, even when a
     // caller supplies a native reader over this context with a different ambient accessor.
@@ -82,6 +85,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             () => RowsOf(scope, reference.SourceReferenceId).AsNoTracking().SingleOrDefaultAsync(cancellationToken));
         if (existing is null)
         {
+            await EfExecutableActivityTemplateStore.StageSourceTemplateFenceAsync(context, scope, reference.ArtifactId, cancellationToken);
             context.WorkflowExecutableSourceReferences.Add(ToEntity(reference, scope, id));
             return true;
         }
@@ -90,6 +94,12 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         if (current.DeletedAt is not null || !SameArtifactBinding(current, reference))
             throw new InvalidOperationException(
                 $"Workflow executable source reference '{reference.SourceReferenceId}' already exists for different material; source references are create-only.");
+        await EfExecutableActivityTemplateStore.StageSourceTemplateFenceAsync(context, scope, reference.ArtifactId, cancellationToken);
+        // Adoption is a root write too. Fence a concurrent retirement/replacement of this exact row
+        // in the same commit as the native material revision, without rewriting its source payload.
+        context.Attach(existing);
+        existing.Revision = checked(existing.Revision + 1);
+        context.Entry(existing).Property(row => row.Revision).IsModified = true;
         return false;
     }
 

@@ -23,7 +23,7 @@ using static Elsa.Persistence.EntityFramework.Tests.ProviderFailures;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
-public sealed class EfRuntimeArtifactScopeTests
+public sealed partial class EfRuntimeArtifactScopeTests
 {
     [Theory]
     [InlineData("valid")] [InlineData("expired")] [InlineData("released")] [InlineData("token")]

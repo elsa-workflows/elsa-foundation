@@ -11,7 +11,7 @@ using System.Data.Common;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
-public sealed class EfExecutableActivityTemplateStore(
+public sealed partial class EfExecutableActivityTemplateStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
     IRuntimeRecoveryContinuationCodec continuationCodec) : IExecutableActivityTemplateStore
@@ -55,6 +55,9 @@ public sealed class EfExecutableActivityTemplateStore(
 
     /// <summary>The context this store reads and stages through.</summary>
     internal RuntimeDbContext Context => context;
+    internal PersistenceAccessContext AccessContext => accessContextAccessor.Current;
+    internal string PublicationScope => RequireScope();
+    internal EfExecutableActivityTemplateStore WithAccess(IPersistenceAccessContextAccessor accessor) => new(context, accessor, continuationCodec);
 
     /// <summary>
     /// Stages the template and its hash claim in the caller's open transaction without saving. An identical
@@ -98,6 +101,7 @@ public sealed class EfExecutableActivityTemplateStore(
         }
         if (byHash.Count > 0)
             throw HashCollision(template, Decode(byHash[0].TemplateId));
+        await StageTemplateDependencyFencesAsync(context, identity.Scope, template, requireExact: false, cancellationToken);
         var incarnationId = NewIncarnationId();
         context.ExecutableActivityTemplates.Add(ToEntity(template, identity, json, incarnationId));
         context.ExecutableActivityTemplateHashClaims.Add(ToClaimEntity(template, identity, incarnationId));

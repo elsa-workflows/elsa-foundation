@@ -70,6 +70,8 @@ public sealed class EfWorkflowExecutableStore(
 
             await using var transaction = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
                 context, "saving", scope, () => context.Database.BeginTransactionAsync(cancellationToken));
+            await EfExecutableActivityTemplateStore.StageWorkflowTemplateFencesAsync(
+                context, scope, pending.Select(item => item.Executable), cancellationToken);
             foreach (var (item, id) in pending)
             {
                 var incarnationId = NewIncarnationId();

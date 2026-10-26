@@ -121,8 +121,10 @@ public sealed class EfActivityPublicationCommandTests : IAsyncLifetime
             await retry.Command.ExecuteAsync(commit);
 
         await using var verify = Open();
-        // Phase one is recognised as done, not rewritten: both rows keep their original incarnation and revision.
-        Assert.Equal(before, await RuntimeRowsAsync(verify));
+        // The winning incarnation and payload stay intact. Adoption advances only coordination
+        // revisions so an older collector/source writer loses its compare-and-swap.
+        Assert.Equal(before with { TemplateRevision = before.TemplateRevision + 1, ReferenceRevision = before.ReferenceRevision + 1 },
+            await RuntimeRowsAsync(verify));
         Assert.NotNull(await ((IActivityDefinitionVersionPublicationStore)verify.DesignStores).FindAsync("version-1"));
         Assert.Equal(1, (await verify.Design.ActivityDependencyProjections.AsNoTracking().SingleAsync()).Sequence);
         ReceiptAssert.Equivalent(commit.Receipt, await verify.Receipts.FindAsync(null, "publish-operation-1"));
@@ -445,10 +447,11 @@ public sealed class EfActivityPublicationCommandTests : IAsyncLifetime
     {
         var template = await scope.Runtime.ExecutableActivityTemplates.AsNoTracking().SingleAsync();
         var reference = await scope.Runtime.WorkflowExecutableSourceReferences.AsNoTracking().SingleAsync();
-        return new(template.IncarnationId, template.Revision, reference.IncarnationId, reference.Revision);
+        return new(template.IncarnationId, template.Revision, reference.IncarnationId, reference.Revision, template.ContentJson, reference.ContentJson);
     }
 
-    private sealed record RuntimeRows(string TemplateIncarnation, long TemplateRevision, string ReferenceIncarnation, long ReferenceRevision);
+    private sealed record RuntimeRows(string TemplateIncarnation, long TemplateRevision, string ReferenceIncarnation, long ReferenceRevision,
+        string TemplatePayload, string ReferencePayload);
 
     private sealed class ForeignTemplateStore :Elsa.Workflows.Runtime.Core.Contracts.IExecutableActivityTemplateStore
     {
