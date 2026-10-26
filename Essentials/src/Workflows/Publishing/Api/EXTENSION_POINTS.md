@@ -65,8 +65,10 @@ feature. A replacement must supply the same tenant/scope facts the activity-draf
   coordinator/default lease options); DI uses the additive selected-coordinator constructor. New wrapper IO,
   database, JSON, contextual provider/coordination and unrequested cancellation failures carry a catchable
   Publishing Core `ActivityDraftTestRunStorageException` with Test Run ID and the complete original cause
-  (including aggregate failures); requested cancellation propagates. Native service probes qualify this handoff only. EF service recovery, qualified
-  default cohort GC and actual upgraded-host/Studio proof remain unfinished.
+  (including aggregate failures); requested cancellation propagates. Native and SQLite service controls qualify
+  material/source/receipt preparation and retry, including fresh contexts, committed source acknowledgement loss
+  and ordinary zero-grace GC. Their compiler is fixed and dispatch/execution-state ports do not execute a workflow;
+  qualified default cohort GC, old-writer exclusion and actual upgraded-host/Studio proof remain unfinished.
 - Dispatch, retry, and cancellation use stable Runtime idempotency keys. An ambiguous acknowledgement may be
   retried, but must resolve to the same Test Run and workflow execution identity.
 - Status projection may expose safe codes and diagnostics, immutable artifact/source identities, and the eventual
