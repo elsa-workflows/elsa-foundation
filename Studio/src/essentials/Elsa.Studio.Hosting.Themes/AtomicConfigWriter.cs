@@ -1,8 +1,7 @@
 namespace Elsa.Studio.Hosting.Themes;
 
 /// <summary>
-/// Shared helpers for mutating the host's on-disk JSON configuration files (shells.json,
-/// nuplane-management.json) crash-safely. Writes go to a sibling temp file that is then atomically
+/// Private helper for replacing the managed theme JSON store. Writes go to a sibling temp file that is atomically
 /// moved into place, so a process crash mid-write can never leave a truncated or half-written config
 /// file behind — readers observe either the old or the new content, never a partial one.
 /// </summary>

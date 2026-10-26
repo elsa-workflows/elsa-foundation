@@ -10,6 +10,29 @@ public sealed class ThemePersistenceTests
     private const string Base = "/_elsa/theme-store";
 
     [Theory]
+    [InlineData(".", "studio-theme-store.json")]
+    [InlineData("state", "state/themes.json")]
+    public async Task A_source_directory_containing_the_managed_store_does_not_adopt_it(string source, string store)
+    {
+        await using var host = await ThemeHost.StartAsync("ThemeManagement", configure: (options, root) =>
+        {
+            options.ThemesDirectory = source;
+            options.StoreFile = store;
+            options.ThemesMode = StudioThemeSourceMode.DirectoryOnly;
+            Directory.CreateDirectory(Path.Combine(root, source));
+        });
+        await Save(host, Definition("managed-only", "Managed only"));
+        var response = await Read(host);
+        Assert.Empty(response["directoryThemeIds"]!.AsArray());
+        Assert.Equal("Managed only", (string?)Theme(response, "managed-only")["name"]);
+        using var defaultResponse = await host.Client.PutAsJsonAsync(Base + "/default", new { themeId = "managed-only" });
+        Assert.Equal(HttpStatusCode.BadRequest, defaultResponse.StatusCode);
+        using var deleted = await host.Client.DeleteAsync(Base + "/themes/managed-only");
+        deleted.EnsureSuccessStatusCode();
+        Assert.Empty((await Read(host))["themes"]!.AsArray());
+    }
+
+    [Theory]
     [InlineData("BuiltInsOnly")]
     [InlineData("DirectoryOnly")]
     [InlineData("AddToBuiltIns")]

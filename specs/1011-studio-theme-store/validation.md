@@ -55,3 +55,15 @@ Actual candidate packages Core/Api/Hosting/Themes at local version `4.0.0-theme3
 Actual reference Web ran from an owned temporary working directory and ContentRoot with isolated Nuplane paths, empty package feed and unreachable backend. Discovery returned14 modules, registry/runtime responses succeeded without the management-key sentinel, all three selected theme capabilities returned200, and a management write used the configured theme store while preserving DirectoryOnly projection. It ran the real Program and addon, without a test-only host wrapper. No publisher, release or deployment was activated.
 
 Remaining: draft PR review, exact-head CI/formal review, actual reviewed merge/main audit and native board completion. #3359 remains stopped on its saved branch.
+
+## Independent review round1 and corrections
+
+Independent correctness, repo-standards and acceptance reviewers inspected base `2fd983021891056b092e69914073cfb4c38862af` through `5afc5cdba4b1c8341fb5152865bd0206f9021e5f`. Three unique actionable findings survived verification:
+
+1. Missing Themes identity in the CI inventory. The existing read-only inventory verifier reproduced the unexpected-project failure. The identity is now registered as introduced after consolidation; verifier self-test passes.
+2. A source directory containing the managed store imported it as an external collection. Public HTTP regressions for source `.`/default store and source `state`/`state/themes.json` both failed before the fix. Directory enumeration now excludes the configured managed store, preserving these otherwise useful layouts. DirectoryOnly cannot select/default the managed-only theme, and management deletion succeeds.
+3. Equal StoreFile/AssetsDirectory choices, or an asset directory below the future file path, passed startup but could not both work. Both invalid-option cases failed before the fix; startup now rejects them.
+
+Combined whole-project negative check: exactly4 failures /556 passed (`studio3360-storage-negative.trx`), all four new cases. Corrected whole-project check: **560 passed, 0 failed/skipped** (`studio3360-storage-fixed.trx`). Full Studio solution pack at local version `4.0.0-theme3360-review` succeeded; the production verifier accepted exactly21 expected NuGet IDs, version, MIT license and icon. The isolated Themes-only consumer restored/published/ran the corrected candidate packages with hidden feed/source/cache and matching archive/output DLL hashes. Earlier556-case evidence remains historical; the current suite has four additional cases. Frontend source is unchanged by these review fixes.
+
+GitHub delivery impediment: two app-authenticated pushes returned403 despite a contents:write installation token; fetch and issue comments work, and the repository reports push:false. Owner notified; no alternate identity or permission bypass attempted. Source/review fixes remain local until push access is restored. No PR or CI completion is claimed.

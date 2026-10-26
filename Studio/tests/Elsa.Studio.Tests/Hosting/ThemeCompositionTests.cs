@@ -108,6 +108,8 @@ public sealed class ThemeCompositionTests
     [InlineData("store-directory")]
     [InlineData("assets-file")]
     [InlineData("source-store")]
+    [InlineData("store-assets")]
+    [InlineData("assets-below-store")]
     public async Task Invalid_typed_theme_choices_fail_during_startup(string kind)
     {
         var error = await Assert.ThrowsAsync<OptionsValidationException>(async () =>
@@ -121,6 +123,8 @@ public sealed class ThemeCompositionTests
                 if (kind == "store-directory") options.StoreFile = root;
                 if (kind == "assets-file") { File.WriteAllText(Path.Combine(root, "asset-file"), "owned"); options.AssetsDirectory = "asset-file"; }
                 if (kind == "source-store") options.ThemesDirectory = options.StoreFile;
+                if (kind == "store-assets") options.AssetsDirectory = options.StoreFile;
+                if (kind == "assets-below-store") options.AssetsDirectory = Path.Combine(options.StoreFile, "materials");
             });
         });
         Assert.Contains("Themes:", error.Message);

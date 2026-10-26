@@ -46,6 +46,10 @@ internal sealed class ThemeOptionsValidator(string contentRoot) : IValidateOptio
                 var applied = ThemeStoreSettings.Create(options, contentRoot);
                 if (Directory.Exists(applied.StoreFile)) errors.Add("Themes:StoreFile names an existing directory.");
                 if (File.Exists(applied.AssetsDirectory)) errors.Add("Themes:AssetsDirectory names an existing file.");
+                if (SamePath(applied.StoreFile, applied.AssetsDirectory) || applied.AssetsDirectory.StartsWith(
+                        Path.TrimEndingDirectorySeparator(applied.StoreFile) + Path.DirectorySeparatorChar,
+                        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                    errors.Add("Themes:AssetsDirectory must not equal or descend from the writable StoreFile.");
                 if (applied.ThemesDirectory is { } source && SamePath(source, applied.StoreFile))
                     errors.Add("Themes:ThemesDirectory must not be the writable StoreFile.");
             }
