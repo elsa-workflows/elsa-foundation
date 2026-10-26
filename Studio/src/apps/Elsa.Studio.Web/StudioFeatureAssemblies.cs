@@ -1,4 +1,5 @@
 using CShells.DependencyInjection;
+using CShells.Nuplane;
 using Elsa.Studio.Api.Features;
 using Elsa.Studio.Attention;
 using Elsa.Studio.ConsoleStream;
@@ -25,9 +26,28 @@ internal static class StudioFeatureAssemblies
     /// Registering explicit providers turns off CShells' host-assembly scanning, so a feature enabled in shells.json whose
     /// assembly is missing here is skipped at startup with only a warning.
     /// </summary>
-    public static CShellsBuilder WithStudioFeatureAssemblies(this CShellsBuilder shells) =>
-        shells
-            .WithAssemblyProvider<StudioNuplaneAssemblyProvider>()
+    public static CShellsBuilder WithStudioFeatureAssemblies(this CShellsBuilder shells)
+    {
+        shells.Services.AddOptions<NuplaneIntegrationOptions>()
+            .Configure<ILoggerFactory>((options, loggerFactory) =>
+            {
+                var logger = loggerFactory.CreateLogger("Elsa.Studio.Web.PackageReload");
+                options.OnReloadResults = (results, _) =>
+                {
+                    foreach (var result in results.Where(result => result.Error is not null))
+                        logger.LogWarning(result.Error, "Studio shell {ShellName} failed to reload after package reconciliation; its previous generation remains active.", result.Name);
+
+                    logger.LogInformation("Reloaded {ReloadedShellCount} active Studio shell(s) after package reconciliation.", results.Count(result => result.Error is null));
+                    return ValueTask.CompletedTask;
+                };
+            });
+
+        return shells
+            .WithNuplaneFeatureDiscovery(options =>
+            {
+                options.RefreshTrigger = NuplaneRefreshTrigger.ChangedOrPending;
+                options.AutoReload = true;
+            })
             .WithAssemblies(
                 typeof(StudioApiFeature).Assembly,
                 typeof(ConsoleStreamStudioFeature).Assembly,
@@ -46,4 +66,5 @@ internal static class StudioFeatureAssemblies
                 typeof(JavaScriptExpressionEditorStudioFeature).Assembly,
                 typeof(LiquidExpressionEditorStudioFeature).Assembly,
                 typeof(ThemeStoreCoreStudioFeature).Assembly);
+    }
 }

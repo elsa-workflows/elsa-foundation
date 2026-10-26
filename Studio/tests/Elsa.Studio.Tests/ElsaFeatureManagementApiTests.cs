@@ -1,5 +1,5 @@
-using Elsa.Platform.PackageManifests;
-using Elsa.Platform.PackageManifests.Compatibility;
+using Elsa.Specifications.PackageManifests;
+using Elsa.Specifications.PackageManifests.Compatibility;
 using Elsa.Studio.Web;
 
 namespace Elsa.Studio.Tests;

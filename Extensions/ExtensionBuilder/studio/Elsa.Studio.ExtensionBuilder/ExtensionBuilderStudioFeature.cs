@@ -1,6 +1,6 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Studio.Core.Attributes;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
