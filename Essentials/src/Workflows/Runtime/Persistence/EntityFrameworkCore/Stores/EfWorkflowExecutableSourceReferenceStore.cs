@@ -60,6 +60,11 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
     /// <summary>The context this store reads and stages through.</summary>
     internal RuntimeDbContext Context => context;
 
+    // Cohort acceptance must resolve publications in its own selected access boundary, even when a
+    // caller supplies a native reader over this context with a different ambient accessor.
+    internal EfWorkflowExecutableSourceReferenceStore WithAccess(IPersistenceAccessContextAccessor accessor) =>
+        new(context, accessor, continuationCodec);
+
     /// <summary>
     /// Stages a create-only source reference in the caller's open transaction without saving. A live reference
     /// already carrying the same identity and artifact is adopted and returns <c>false</c>: it is the one a

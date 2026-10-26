@@ -111,6 +111,14 @@ Prove the real processor/flush path and mailbox ordering, not only a direct stor
 
 ## Saved-start authority and retention
 
+Verified provider installation records an additive versioned retention-acceptance witness with the whole
+source-row cohort in the same atomic boundary. Old data-only cohorts keep the original unmarked wire:
+they may retain material but cannot authorize saved starts, and a later proposal cannot restamp them.
+Normal pending/checkpoint creation and atomic failure follow-ups cannot mint this witness. Unknown commit
+acknowledgement is resolved by reading the exact verified winner, never by recapturing current publications.
+The witness is persisted evidence, not an independently trusted token supplied by a caller. Its eventual
+start consumer must still validate the exact physical source/entry, authority, scope and complete pin.
+
 The ordinary start resolver requires a live publication. After republish, an already keyed execution
 can deduplicate, but an unstarted selected old publication cannot currently start. Add a narrow retained
 start authority for an accepted cohort entry. It validates the exact persisted source, immutable intent,

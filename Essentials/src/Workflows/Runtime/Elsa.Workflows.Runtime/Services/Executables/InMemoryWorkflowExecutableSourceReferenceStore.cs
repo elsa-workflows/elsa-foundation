@@ -9,6 +9,7 @@ public sealed class InMemoryWorkflowExecutableSourceReferenceStore : IWorkflowEx
     private readonly Lock _gate = new();
 
     private readonly InMemoryWorkflowExecutableStore? _executableStore;
+    internal InMemoryWorkflowExecutableStore? FencedArtifactStore => _executableStore;
     public InMemoryWorkflowExecutableSourceReferenceStore() { }
     public InMemoryWorkflowExecutableSourceReferenceStore(IWorkflowExecutableStore executableStore)
     {

@@ -32,7 +32,7 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>Actual provider CAS and rewrite controls; these do not qualify recipient dispatch/host recovery.</summary>
-public sealed class StimulusDeliveryStoreTests
+public sealed partial class StimulusDeliveryStoreTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 26, 1, 0, 0, TimeSpan.Zero);
     private static readonly PersistenceScope Scope = new("tenant");
@@ -70,7 +70,7 @@ public sealed class StimulusDeliveryStoreTests
     [InlineData(true, false)] [InlineData(true, true)]
     public async Task Source_capture_survives_saved_winner_restart_renew_retry_and_completion(bool ef, bool referenceLess)
     {
-        await using var harness = await Harness.Create(ef);
+        await using var harness = await Harness.Create(ef, referenceLess: referenceLess);
         var claim = await harness.Seed(); var source = new PostCommitDeliveryContext(claim, Scope);
         var candidate = CapturedSnapshot(source, referenceLess);
         var winner = await harness.Delivery.InstallAsync(source, candidate);
@@ -145,8 +145,15 @@ public sealed class StimulusDeliveryStoreTests
     {
         await using var harness = await Harness.Create(ef);
         var source = new PostCommitDeliveryContext(await harness.Seed(), Scope);
-        if (defect != "unselected") await harness.Delivery.InstallAsync(source,
-            defect == "uncaptured" ? Snapshot(source) : CapturedSnapshot(source, false));
+        if (defect == "uncaptured")
+        {
+            var candidate = Snapshot(source);
+            var uncaptured = new StimulusDeliverySnapshot(candidate.Version, candidate.SourceOutboxItemId, candidate.IntentFingerprint,
+                candidate.Scope, candidate.SelectedAt, candidate.StimulusType, candidate.StimulusHash,
+                candidate.Starts.Select(start => new StimulusStartRecipient(start.Binding, start.Executable)).ToArray(), candidate.Resumes);
+            await Assert.ThrowsAsync<StimulusDeliveryBoundaryException>(() => harness.Delivery.InstallAsync(source, uncaptured).AsTask());
+        }
+        else if (defect != "unselected") await harness.Delivery.InstallAsync(source, CapturedSnapshot(source, false));
         if (defect == "publisher") await harness.SavePublisher(Publisher with { RunKind = WorkflowRunKind.Unknown });
         var original = WorkflowExecutableStartAuthority.FromStimulusDelivery(source, "binding-a").StimulusDelivery!;
         var presented = new WorkflowExecutableStimulusDeliveryAuthority(defect == "source" ? "missing:send" : original.SourceOutboxItemId,
@@ -226,8 +233,9 @@ public sealed class StimulusDeliveryStoreTests
         Assert.Equal(token, cancelled.CancellationToken);
     }
 
-    [Fact]
-    public async Task Saved_start_source_read_rechecks_peer_takeover_during_publisher_lookup()
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Saved_start_source_read_and_cohort_replay_recheck_peer_takeover_during_publisher_lookup(bool replay)
     {
         var hook = new BeforePublisherRead(); await using var harness = await Harness.Create(true, hook);
         var source = new PostCommitDeliveryContext(await harness.Seed(), Scope);
@@ -241,7 +249,10 @@ public sealed class StimulusDeliveryStoreTests
             harness.Clock.Advance(TimeSpan.FromSeconds(2));
             Assert.Single(await peer.ClaimAsync(new("peer", Now.AddSeconds(2), TimeSpan.FromMinutes(1), 1)));
         };
-        await Assert.ThrowsAsync<RuntimePostCommitOutboxStaleClaimException>(() => harness.Delivery.ReadSavedStartSourceAsync(authority).AsTask());
+        if (replay)
+            await Assert.ThrowsAsync<RuntimePostCommitOutboxStaleClaimException>(() => harness.Delivery.InstallAsync(source, Snapshot(source)).AsTask());
+        else
+            await Assert.ThrowsAsync<RuntimePostCommitOutboxStaleClaimException>(() => harness.Delivery.ReadSavedStartSourceAsync(authority).AsTask());
         Assert.Equal(1, hook.Interleavings);
         Assert.True(harness.Clock.GetUtcNow() < source.Claim.VisibleAfter);
         Assert.Equal("peer", (await harness.Lookup.FindAsync(source.SourceOutboxItemId))!.DeliveringOwnerId);
@@ -265,11 +276,9 @@ public sealed class StimulusDeliveryStoreTests
     {
         var entries = new[] { Start("binding-a"), Start("binding-b") }.Select(entry => new StimulusStartRecipient(
             referenceLess ? entry.Binding with { ActivationId = null, SlotId = null } : entry.Binding, entry.Executable,
-            referenceLess ? null : new WorkflowExecutableSourceProvenance("reference-" + entry.Binding.TriggerBindingId,
-                "definition", "selected-definition", "2", "selected-definition", "selected-publication-version",
-                "selected-label", "activation", "slot"))).ToArray();
+            referenceLess ? null : SelectedSource())).ToArray();
         return new(1, source.SourceOutboxItemId, source.IntentFingerprint, StimulusDeliveryScope.From(Publisher, source.Scope),
-            Now, "event", "named", entries, []);
+            Now, "event", "named", entries, [], StimulusDeliverySnapshot.CurrentRetentionAcceptanceVersion);
     }
 
     [Theory]
@@ -419,7 +428,7 @@ public sealed class StimulusDeliveryStoreTests
 
     [Theory]
     [InlineData(false)] [InlineData(true)]
-    public async Task CAS_loser_reloads_actual_winner_including_empty(bool emptyWinner)
+    public async Task Competing_install_reloads_actual_winner_including_empty(bool emptyWinner)
     {
         var race = new InterleavingSave();
         await using var harness = await Harness.Create(true, race);
@@ -434,7 +443,7 @@ public sealed class StimulusDeliveryStoreTests
 
     [Theory]
     [InlineData(false)] [InlineData(true)]
-    public async Task CAS_race_with_renewal_or_takeover_revalidates_fence(bool takeover)
+    public async Task Source_race_with_renewal_or_takeover_revalidates_fence(bool takeover)
     {
         var race = new InterleavingSave();
         await using var harness = await Harness.Create(true, race);
@@ -544,6 +553,7 @@ public sealed class StimulusDeliveryStoreTests
     public async Task Atomic_checkpoint_refuses_forged_source_scope_before_publisher_or_marker_effects(bool ef)
     {
         await using var harness = await Harness.Create(ef);
+        await harness.EnsureMaterial();
         var item = Pending("forged", true);
         var forged = new RuntimePostCommitOutboxItem(item.OutboxItemId, item.Intent, item.Status, item.RecordedAt,
             item.AvailableAt, item.RetryPolicy, 0, null, null, null, null, null, 0, null, 1, new("foreign"), null);
@@ -561,6 +571,7 @@ public sealed class StimulusDeliveryStoreTests
         // The identical participant envelope succeeds when only its committed scope is corrected. This prevents a
         // missing fixture dependency from falsely qualifying the scope refusal or its no-effects claim.
         await using var positive = await Harness.Create(ef);
+        await positive.EnsureMaterial();
         await positive.Checkpoints.CommitAsync(Envelope(item), new(RuntimeCheckpointPersistenceMode.Immediate));
         Assert.NotNull(await positive.FindPublisher());
         Assert.Equal(Scope, (await positive.Lookup.FindAsync(item.OutboxItemId))!.StimulusDeliverySourceScope);
@@ -642,6 +653,7 @@ public sealed class StimulusDeliveryStoreTests
     public async Task Actual_EF_uncommitted_source_never_invokes_handler_and_committed_retry_succeeds()
     {
         await using var harness = await Harness.Create(true);
+        await harness.EnsureMaterial();
         var handler = new ContextHandler(_ => ValueTask.CompletedTask);
         using var services = new ServiceCollection().AddSingleton(handler).BuildServiceProvider();
         await using (var transaction = await harness.Context!.Database.BeginTransactionAsync())
@@ -805,16 +817,13 @@ public sealed class StimulusDeliveryStoreTests
     public async Task Actual_GC_keeps_cohort_pin_dependency_and_retired_reference_through_absent_target_handoff(bool ef)
     {
         await using var harness = await Harness.Create(ef);
-        IWorkflowExecutableStore artifacts = ef ? new EfWorkflowExecutableStore(harness.Context!, new Accessor()) : new InMemoryWorkflowExecutableStore();
-        IWorkflowExecutableSourceReferenceStore references = ef ? new EfWorkflowExecutableSourceReferenceStore(harness.Context!, new Accessor(), new Codec()) :
-            new InMemoryWorkflowExecutableSourceReferenceStore(artifacts);
+        IWorkflowExecutableStore artifacts = harness.Artifacts;
+        IWorkflowExecutableSourceReferenceStore references = harness.References;
         var dependency = Material(Pin with { ArtifactId = "dependency", ArtifactHash = "dependency-hash" });
         await artifacts.SaveBatchAsync([dependency, Material(Pin, dependency)]);
-        var reference = new WorkflowExecutableSourceReference("selected", Pin.ArtifactId, "WorkflowDefinitionVersion", "version", "1",
-            Pin.DefinitionId, Pin.DefinitionVersionId, Pin.ArtifactVersion, Now, Now, WorkflowExecutableReferenceScope.Published);
-        await references.SaveAsync(reference); await references.RetireAsync(reference.SourceReferenceId, Now);
         var source = new PostCommitDeliveryContext(await harness.Seed(), Scope);
         await harness.Delivery.InstallAsync(source, Snapshot(source));
+        Assert.True(await references.RetireAsync("selected-reference", Now));
         var gc = new WorkflowExecutableReferenceGarbageCollector(artifacts, references, new InMemoryExecutableActivityTemplateStore(),
             harness.Executions, null, Options.Create(new WorkflowExecutableGarbageCollectionOptions { ArtifactCreationGracePeriod = TimeSpan.Zero }),
             harness.Clock, NullLogger<WorkflowExecutableReferenceGarbageCollector>.Instance, harness.Delivery);
@@ -824,13 +833,13 @@ public sealed class StimulusDeliveryStoreTests
         Assert.True(await harness.Executions.DeleteAsync("publisher"));
         Assert.False((await gc.SweepAsync()).DidWork); // No target state yet; absence cannot drop the handoff root.
         Assert.NotNull(await artifacts.FindAsync(Pin.ArtifactId)); Assert.NotNull(await artifacts.FindAsync("dependency"));
-        Assert.NotNull(await references.FindAsync("selected"));
+        Assert.NotNull(await references.FindAsync("selected-reference"));
         var target = KeyedWorkflowStartIdentity.For("key", Pin.ArtifactId).WorkflowExecutionId;
         await harness.Executions.SaveAsync(Publisher with { WorkflowExecutionId = target, Status = WorkflowExecutionStatus.Completed });
         Assert.True(await harness.Executions.DeleteAsync(target));
         var released = await gc.SweepAsync();
         Assert.Equal(1, released.DeletedReferenceCount); Assert.Equal(2, released.DeletedArtifactCount);
-        Assert.Null(await references.FindAsync("selected")); Assert.Null(await artifacts.FindAsync("dependency"));
+        Assert.Null(await references.FindAsync("selected-reference")); Assert.Null(await artifacts.FindAsync("dependency"));
     }
 
     [Fact]
@@ -896,9 +905,8 @@ public sealed class StimulusDeliveryStoreTests
     public async Task GC_reference_final_recheck_and_native_leases_order_competing_cohort_root_creation(bool ef, bool acceptanceFirst)
     {
         await using var harness = await Harness.Create(ef);
-        IWorkflowExecutableStore artifacts = ef ? new EfWorkflowExecutableStore(harness.Context!, new Accessor()) : new InMemoryWorkflowExecutableStore();
-        IWorkflowExecutableSourceReferenceStore references = ef ? new EfWorkflowExecutableSourceReferenceStore(harness.Context!, new Accessor(), new Codec()) :
-            new InMemoryWorkflowExecutableSourceReferenceStore(artifacts);
+        IWorkflowExecutableStore artifacts = harness.Artifacts;
+        IWorkflowExecutableSourceReferenceStore references = harness.References;
         var publisher = Publisher with { PinnedExecutable = Pin with { ArtifactId = "publisher-artifact", ArtifactHash = "publisher-hash" } };
         var dependency = Material(Pin with { ArtifactId = "dependency", ArtifactHash = "dependency-hash" });
         await artifacts.SaveBatchAsync([Material(publisher.PinnedExecutable), dependency, Material(Pin, dependency)]);
@@ -907,23 +915,24 @@ public sealed class StimulusDeliveryStoreTests
         await references.SaveAsync(reference); await references.RetireAsync(reference.SourceReferenceId, Now);
         var source = new PostCommitDeliveryContext(await harness.Seed(publisher: publisher), Scope);
         var options = Options.Create(new WorkflowExecutableGarbageCollectionOptions { ArtifactCreationGracePeriod = TimeSpan.Zero });
-        var leases = new WorkflowExecutableRootWriteLeaseManager(artifacts, options, harness.Clock);
         var installed = false;
         async ValueTask Accept()
         {
-            await leases.ExecuteAsync(new[] { Pin }, "candidate-root", async token =>
-            {
-                await harness.Delivery.InstallAsync(source, Snapshot(source, publisher: publisher), token); installed = true;
-            });
+            await harness.Delivery.InstallAsync(source, Snapshot(source, publisher: publisher)); installed = true;
         }
         var interleaving = new AtReferenceGuard(artifacts, acceptanceFirst, async () =>
         {
             if (acceptanceFirst) await Accept();
-            else await Assert.ThrowsAsync<WorkflowExecutableRootWriteLeaseUnavailableException>(() => Accept().AsTask());
+            else
+            {
+                var refused = await Assert.ThrowsAsync<StimulusDeliveryBoundaryException>(() => Accept().AsTask());
+                Assert.True(refused.IsUnavailable); Assert.IsType<WorkflowExecutableRootWriteLeaseUnavailableException>(refused.InnerException);
+            }
+            Assert.True(await references.RetireAsync("selected-reference", Now));
         });
         var gc = new WorkflowExecutableReferenceGarbageCollector(interleaving, references, new InMemoryExecutableActivityTemplateStore(),
             harness.Executions, null, options, harness.Clock, NullLogger<WorkflowExecutableReferenceGarbageCollector>.Instance, harness.Delivery);
-        await gc.SweepAsync();
+        await gc.SweepAsync(); await gc.SweepAsync();
         Assert.Equal(1, interleaving.Interleavings); Assert.Equal(acceptanceFirst, installed);
         Assert.Equal(acceptanceFirst, await references.FindAsync("selected") is not null);
         Assert.Equal(acceptanceFirst, await artifacts.FindAsync(Pin.ArtifactId) is not null);
@@ -974,11 +983,14 @@ public sealed class StimulusDeliveryStoreTests
     private static StimulusDeliverySnapshot Snapshot(PostCommitDeliveryContext source, bool empty = false, WorkflowExecutionState? publisher = null) =>
         new(1, source.SourceOutboxItemId, source.IntentFingerprint, StimulusDeliveryScope.From(publisher ?? Publisher, source.Scope),
             Now, "event", "named", empty ? [] : [Start("binding-a"), Start("binding-b")], empty ? [] : [new("waiter", "bookmark-1", "activity", "node", "resume", "event", "named", Now, null),
-                new("waiter", "bookmark-2", "activity", "node", "resume", "event", "named", Now, null)]);
+                new("waiter", "bookmark-2", "activity", "node", "resume", "event", "named", Now, null)], StimulusDeliverySnapshot.CurrentRetentionAcceptanceVersion);
+
+    private static WorkflowExecutableSourceProvenance SelectedSource() => new("selected-reference", "definition", "selected-definition", "2",
+        "selected-definition", "selected-publication-version", "selected-label", "activation", "slot");
 
     private static StimulusStartRecipient Start(string id) => new(new(id, "artifact", "definition", "1.0.0", "hash",
         "start", "event", "named", null, new Dictionary<string, string> { ["key\ud800"] = "value\udc00" }, Now,
-        "activation", "slot"), Pin);
+        "activation", "slot"), Pin, SelectedSource());
 
     private static RuntimePostCommitOutboxItem Pending(string commit, bool protocol, string payload = "original") => new(
         commit + ":send", new("send", "publisher", "publish", Now, "activity", "key", JsonSerializer.SerializeToElement(payload)),
@@ -1001,25 +1013,53 @@ public sealed class StimulusDeliveryStoreTests
         public string Encode(string purpose, ReadOnlySpan<byte> payload) => Convert.ToBase64String(payload);
         public byte[] Decode(string purpose, string token) => Convert.FromBase64String(token);
     }
-    private sealed class InterleavingSave : SaveChangesInterceptor
+    // SQLite serializes writes at transaction entry. Interleave after actual capture/leases but before that owned
+    // transaction, rather than accidentally firing on a lease-row SaveChanges or attempting a nested peer transaction.
+    private sealed class InterleavingSave : DbTransactionInterceptor
     {
         public Func<Task>? Action { get; set; }
         public int Interleavings { get; private set; }
-        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData,
-            InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        public override async ValueTask<InterceptionResult<DbTransaction>> TransactionStartingAsync(DbConnection connection,
+            TransactionStartingEventData eventData, InterceptionResult<DbTransaction> result, CancellationToken cancellationToken = default)
         {
             if (Action is { } action) { Action = null; Interleavings++; await action(); }
             return result;
         }
     }
+    private sealed class ObservedRootManager(IWorkflowExecutableRootWriteLeaseManager inner, Harness owner) : IWorkflowExecutableRootWriteLeaseManager
+    {
+        public ValueTask ExecuteAsync(string artifactId, string leaseId, Func<CancellationToken, ValueTask> write, CancellationToken cancellationToken = default) =>
+            inner.ExecuteAsync(artifactId, leaseId, write, cancellationToken);
+        public ValueTask ExecuteAsync(WorkflowExecutableIdentity root, string leaseId, Func<CancellationToken, ValueTask> write, CancellationToken cancellationToken = default) =>
+            inner.ExecuteAsync(root, leaseId, write, cancellationToken);
+        public ValueTask ExecuteAsync(IReadOnlyCollection<WorkflowExecutableIdentity> roots, string leaseId, Func<CancellationToken, ValueTask> write, CancellationToken cancellationToken = default) =>
+            inner.ExecuteAsync(roots, leaseId, write, cancellationToken);
+        public async ValueTask ExecuteFencedAsync(IReadOnlyCollection<WorkflowExecutableIdentity> roots, string leaseId,
+            Func<IReadOnlyList<WorkflowExecutableRootWriteLease>, CancellationToken, ValueTask> write, CancellationToken cancellationToken = default)
+        {
+            await inner.ExecuteFencedAsync(roots, leaseId, async (grants, token) =>
+            {
+                if (owner.BeforeAcceptance is { } action) { owner.BeforeAcceptance = null; await action(); }
+                await write(grants, token);
+            }, cancellationToken);
+            if (owner.LoseInstallAcknowledgement) { owner.LoseInstallAcknowledgement = false; throw owner.LostInstallAcknowledgement; }
+        }
+    }
+
     private sealed class Harness : IAsyncDisposable
     {
         private readonly SqliteConnection? connection;
         private readonly InMemoryRuntimeCheckpointStoreState memory = new();
         private readonly InMemoryWorkflowExecutionStateStore publishers;
         private readonly InMemoryExecutionLivenessStateStore liveness = new();
+        private readonly bool referenceLess;
+        private readonly InMemoryWorkflowExecutableStore memoryArtifacts = new();
+        private readonly InMemoryWorkflowExecutableSourceReferenceStore memoryReferences;
         private readonly List<RuntimeSqliteDbContext> contexts = [];
         public FakeTimeProvider Clock { get; } = new(Now);
+        public Func<Task>? BeforeAcceptance { get; set; }
+        public bool LoseInstallAcknowledgement { get; set; }
+        public IOException LostInstallAcknowledgement { get; } = new("Constructed acknowledgement loss after actual native cohort commit.");
         public RuntimeSqliteDbContext? Context { get; }
         public IRuntimePostCommitOutboxStore Outbox { get; }
         public IPostCommitOutboxLookupStore Lookup => (IPostCommitOutboxLookupStore)Outbox;
@@ -1031,32 +1071,62 @@ public sealed class StimulusDeliveryStoreTests
             new EfWorkflowExecutionStateStore(Context, new Accessor(), new Codec()).FindAsync("publisher");
         public IStimulusDeliveryStore Delivery => (IStimulusDeliveryStore)Outbox;
         public IWorkflowExecutionStateStore Executions => Context is null ? publishers : new EfWorkflowExecutionStateStore(Context, new Accessor(), new Codec());
-        private Harness(SqliteConnection? connection, IInterceptor? interceptor)
+        private Harness(SqliteConnection? connection, IInterceptor? interceptor, bool referenceLess)
         {
-            this.connection = connection;
+            this.connection = connection; this.referenceLess = referenceLess;
+            memoryReferences = new(memoryArtifacts);
             publishers = new(memory, liveness);
             if (connection is null)
                 Outbox = MemoryStore();
             else
             {
                 Context = Open(interceptor);
-                Outbox = new EfRuntimePostCommitOutboxStore(Context, new Accessor(), Clock);
+                Outbox = EfStore(Context);
             }
         }
+        public IWorkflowExecutableStore Artifacts => Context is null ? memoryArtifacts : new EfWorkflowExecutableStore(Context, new Accessor());
+        public IWorkflowExecutableSourceReferenceStore References => Context is null ? memoryReferences : new EfWorkflowExecutableSourceReferenceStore(Context, new Accessor(), new Codec());
         private InMemoryRuntimeCheckpointCommitStore MemoryStore(PersistenceScope? scope = null) =>
-            new(publishers, state: memory, persistenceAccessContextAccessor: new Accessor(scope), timeProvider: Clock, rootWriteLeaseManager: new ParticipantLease());
+            new(memoryArtifacts, memoryReferences, publishers, operationalStateStore: liveness, state: memory,
+                persistenceAccessContextAccessor: new Accessor(scope), timeProvider: Clock,
+                rootWriteLeaseManager: Observe(new WorkflowExecutableRootWriteLeaseManager(memoryArtifacts,
+                    Options.Create(new WorkflowExecutableGarbageCollectionOptions()), Clock)));
+        private EfRuntimePostCommitOutboxStore EfStore(RuntimeSqliteDbContext context, PersistenceScope? scope = null) =>
+            new(context, new Accessor(scope), Clock, new EfWorkflowExecutableSourceReferenceStore(context, new Accessor(scope), new Codec()),
+                Observe(new WorkflowExecutableRootWriteLeaseManager(new EfWorkflowExecutableStore(context, new Accessor(scope)),
+                    Options.Create(new WorkflowExecutableGarbageCollectionOptions()), Clock)));
+        private IWorkflowExecutableRootWriteLeaseManager Observe(IWorkflowExecutableRootWriteLeaseManager inner) => new ObservedRootManager(inner, this);
+        public async Task EnsureMaterial(WorkflowExecutionState? publisher = null)
+        {
+            if (await Artifacts.FindAsync(Pin.ArtifactId) is null) await Artifacts.SaveAsync(Material(Pin));
+            if (publisher is not null && await Artifacts.FindAsync(publisher.PinnedExecutable.ArtifactId) is null)
+                await Artifacts.SaveAsync(Material(publisher.PinnedExecutable));
+            if (!referenceLess && await References.FindAsync("selected-reference") is null)
+                await References.SaveAsync(new("selected-reference", Pin.ArtifactId, "definition", "selected-definition", "2",
+                    "selected-definition", "selected-publication-version", "selected-label", Now, Now,
+                    WorkflowExecutableReferenceScope.Published, ActivationId: "activation", SlotId: "slot"));
+        }
         private RuntimeSqliteDbContext Open(IInterceptor? interceptor = null)
         {
             var options = new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection!);
             if (interceptor is not null) options.AddInterceptors(interceptor);
             var context = new RuntimeSqliteDbContext(options.Options); contexts.Add(context); return context;
         }
-        public IStimulusDeliveryStore Reopen(PersistenceScope? scope = null) => connection is null ? MemoryStore(scope) : new EfRuntimePostCommitOutboxStore(Open(), new Accessor(scope), Clock);
-        public static async Task<Harness> Create(bool ef, IInterceptor? interceptor = null)
+        public IStimulusDeliveryStore Reopen(PersistenceScope? scope = null) => connection is null ? MemoryStore(scope) : EfStore(Open(), scope);
+        public IStimulusDeliveryStore Unsupported(bool legacyManager) => Context is null
+            ? legacyManager
+                ? new InMemoryRuntimeCheckpointCommitStore(memoryArtifacts, memoryReferences, publishers, operationalStateStore: liveness,
+                    state: memory, persistenceAccessContextAccessor: new Accessor(), timeProvider: Clock, rootWriteLeaseManager: new ParticipantLease())
+                : new InMemoryRuntimeCheckpointCommitStore(publishers, operationalStateStore: liveness, state: memory,
+                    persistenceAccessContextAccessor: new Accessor(), timeProvider: Clock)
+            : legacyManager
+                ? new EfRuntimePostCommitOutboxStore(Context, new Accessor(), Clock, References, new ParticipantLease())
+                : new EfRuntimePostCommitOutboxStore(Context, new Accessor(), Clock);
+        public static async Task<Harness> Create(bool ef, IInterceptor? interceptor = null, bool referenceLess = false)
         {
             SqliteConnection? connection = null;
             if (ef) { connection = new("Data Source=:memory:"); await connection.OpenAsync(); }
-            var harness = new Harness(connection, interceptor);
+            var harness = new Harness(connection, interceptor, referenceLess);
             if (ef) await harness.Context!.Database.EnsureCreatedAsync();
             return harness;
         }
@@ -1066,6 +1136,7 @@ public sealed class StimulusDeliveryStoreTests
             publishers.SaveAsync(publisher) : new EfWorkflowExecutionStateStore(Context, new Accessor(), new Codec()).SaveAsync(publisher);
         public async Task SeedPending(bool protocol = true, WorkflowExecutionState? publisher = null)
         {
+            await EnsureMaterial(publisher ?? Publisher);
             if (Context is null) await publishers.SaveAsync(publisher ?? Publisher);
             else await new EfWorkflowExecutionStateStore(Context, new Accessor(), new Codec()).SaveAsync(publisher ?? Publisher);
             await SavePending(Pending("commit", protocol));

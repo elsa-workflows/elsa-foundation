@@ -167,12 +167,22 @@ public sealed class StimulusResumeRecipient
 public sealed class StimulusDeliverySnapshot
 {
     public const int CurrentVersion = 1;
+    public const int CurrentRetentionAcceptanceVersion = 1;
 
     public StimulusDeliverySnapshot(int version, string sourceOutboxItemId, string intentFingerprint,
         StimulusDeliveryScope scope, DateTimeOffset selectedAt, string stimulusType, string stimulusHash,
         IReadOnlyList<StimulusStartRecipient> starts, IReadOnlyList<StimulusResumeRecipient> resumes)
+        : this(version, sourceOutboxItemId, intentFingerprint, scope, selectedAt, stimulusType, stimulusHash, starts, resumes, null) { }
+
+    /// <summary>Carry a provider's versioned acceptance witness; construction alone grants no authority.</summary>
+    /// <remarks>Only actual fenced provider installation may persist the witness. Older data-only winners cannot be restamped.</remarks>
+    public StimulusDeliverySnapshot(int version, string sourceOutboxItemId, string intentFingerprint,
+        StimulusDeliveryScope scope, DateTimeOffset selectedAt, string stimulusType, string stimulusHash,
+        IReadOnlyList<StimulusStartRecipient> starts, IReadOnlyList<StimulusResumeRecipient> resumes, int? retentionAcceptanceVersion)
     {
         if (version != CurrentVersion) throw new ArgumentOutOfRangeException(nameof(version));
+        if (retentionAcceptanceVersion is not null and not CurrentRetentionAcceptanceVersion)
+            throw new ArgumentOutOfRangeException(nameof(retentionAcceptanceVersion));
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceOutboxItemId);
         ArgumentException.ThrowIfNullOrWhiteSpace(intentFingerprint);
         if (intentFingerprint.Length != 64 || intentFingerprint.Any(character => character is not (>= '0' and <= '9' or >= 'a' and <= 'f')))
@@ -203,6 +213,7 @@ public sealed class StimulusDeliverySnapshot
         }
 
         Version = version;
+        RetentionAcceptanceVersion = retentionAcceptanceVersion;
         SourceOutboxItemId = sourceOutboxItemId;
         IntentFingerprint = intentFingerprint;
         Scope = scope;
@@ -214,6 +225,8 @@ public sealed class StimulusDeliverySnapshot
     }
 
     public int Version { get; }
+    /// <summary>Null for older data-only cohorts; these can retain material but cannot authorize saved starts.</summary>
+    public int? RetentionAcceptanceVersion { get; }
     public string SourceOutboxItemId { get; }
     public string IntentFingerprint { get; }
     public StimulusDeliveryScope Scope { get; }
@@ -225,7 +238,7 @@ public sealed class StimulusDeliverySnapshot
 
     /// <summary>Exact structural equality, including the saved order and explicit empty set.</summary>
     public bool IsEquivalentTo(StimulusDeliverySnapshot? other) => other is not null &&
-        Version == other.Version && SourceOutboxItemId == other.SourceOutboxItemId &&
+        Version == other.Version && RetentionAcceptanceVersion == other.RetentionAcceptanceVersion && SourceOutboxItemId == other.SourceOutboxItemId &&
         IntentFingerprint == other.IntentFingerprint && SelectedAt == other.SelectedAt &&
         StimulusType == other.StimulusType && StimulusHash == other.StimulusHash &&
         Scope.PersistenceScope == other.Scope.PersistenceScope && Scope.TenantId == other.Scope.TenantId &&
@@ -241,6 +254,22 @@ public sealed class StimulusDeliverySnapshot
             pair.First.ExecutableNodeId == pair.Second.ExecutableNodeId && pair.First.ResumeTargetId == pair.Second.ResumeTargetId &&
             pair.First.StimulusType == pair.Second.StimulusType && pair.First.StimulusHash == pair.Second.StimulusHash &&
             pair.First.CreatedAt == pair.Second.CreatedAt && pair.First.ExpiresAt == pair.Second.ExpiresAt);
+
+    /// <summary>Exact publisher and recipient execution/dedup dependencies under the original source's per-artifact key.</summary>
+    public IReadOnlyList<string> GetExecutionDependencies(RuntimePostCommitIntent intent)
+    {
+        ArgumentNullException.ThrowIfNull(intent);
+        if (IntentFingerprint != RuntimeCheckpointCommitFingerprint.ComputeIntent(intent))
+            throw new ArgumentException("The intent differs from the saved cohort source.", nameof(intent));
+        var ids = new SortedSet<string>(StringComparer.Ordinal) { intent.WorkflowExecutionId };
+        foreach (var resume in Resumes) ids.Add(resume.WorkflowExecutionId);
+        foreach (var start in Starts)
+        {
+            var key = intent.IdempotencyKey ?? throw new InvalidDataException("A saved start cohort has no deterministic source key.");
+            ids.Add(KeyedWorkflowStartIdentity.For(key, start.Executable.ArtifactId).WorkflowExecutionId);
+        }
+        return Array.AsReadOnly(ids.ToArray());
+    }
 
     /// <summary>Structural source binding only. The provider must still verify the persisted row and live claim.</summary>
     public bool MatchesSource(PostCommitDeliveryContext context)
@@ -258,19 +287,22 @@ internal sealed class StimulusDeliverySnapshotJsonConverter : JsonConverter<Stim
     {
         var wire = JsonSerializer.Deserialize<Wire>(ref reader, options) ?? throw new JsonException("A recipient snapshot must be an object.");
         try { return new(wire.Version, wire.SourceOutboxItemId, wire.IntentFingerprint, wire.Scope,
-            wire.SelectedAt, wire.StimulusType, wire.StimulusHash, wire.Starts, wire.Resumes); }
+            wire.SelectedAt, wire.StimulusType, wire.StimulusHash, wire.Starts, wire.Resumes, wire.RetentionAcceptance?.Version); }
         catch (ArgumentException exception) { throw new JsonException("The persisted recipient snapshot is invalid.", exception); }
     }
 
     public override void Write(Utf8JsonWriter writer, StimulusDeliverySnapshot value, JsonSerializerOptions options) =>
         JsonSerializer.Serialize(writer, new Wire(value.Version, value.SourceOutboxItemId, value.IntentFingerprint, value.Scope,
-            value.SelectedAt, value.StimulusType, value.StimulusHash, value.Starts, value.Resumes), options);
+            value.SelectedAt, value.StimulusType, value.StimulusHash, value.Starts, value.Resumes,
+            value.RetentionAcceptanceVersion is { } version ? new(version) : null), options);
 
     private sealed record Wire([property: JsonRequired] int Version, [property: JsonRequired] string SourceOutboxItemId,
         [property: JsonRequired] string IntentFingerprint, [property: JsonRequired] StimulusDeliveryScope Scope,
         [property: JsonRequired] DateTimeOffset SelectedAt, [property: JsonRequired] string StimulusType,
         [property: JsonRequired] string StimulusHash, [property: JsonRequired] IReadOnlyList<StimulusStartRecipient> Starts,
-        [property: JsonRequired] IReadOnlyList<StimulusResumeRecipient> Resumes);
+        [property: JsonRequired] IReadOnlyList<StimulusResumeRecipient> Resumes,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RetentionAcceptanceWire? RetentionAcceptance = null);
+    private sealed record RetentionAcceptanceWire([property: JsonRequired] int Version);
 }
 
 /// <summary>New cohort wire requires complete binding provenance without changing legacy binding readers.</summary>

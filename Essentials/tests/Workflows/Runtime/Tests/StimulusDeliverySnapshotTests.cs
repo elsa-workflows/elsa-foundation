@@ -284,6 +284,55 @@ public sealed class StimulusDeliverySnapshotTests
     }
 
     [Fact]
+    public void Retention_witness_round_trips_without_changing_old_unmarked_wire_or_equivalence()
+    {
+        var old = Snapshot([Start()], [Wait()]);
+        var accepted = new StimulusDeliverySnapshot(old.Version, old.SourceOutboxItemId, old.IntentFingerprint, old.Scope,
+            old.SelectedAt, old.StimulusType, old.StimulusHash, old.Starts, old.Resumes, StimulusDeliverySnapshot.CurrentRetentionAcceptanceVersion);
+        Assert.False(JsonSerializer.SerializeToNode(old, Web)!.AsObject().ContainsKey("retentionAcceptance"));
+        Assert.Null(RoundTrip(old).RetentionAcceptanceVersion);
+        Assert.Equal(1, RoundTrip(accepted).RetentionAcceptanceVersion);
+        Assert.True(accepted.IsEquivalentTo(RoundTrip(accepted)));
+        Assert.False(old.IsEquivalentTo(accepted));
+        Assert.False(accepted.IsEquivalentTo(old));
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"version\":null}")]
+    [InlineData("{\"version\":0}")]
+    [InlineData("{\"version\":2}")]
+    public void Present_retention_witness_requires_its_supported_version(string malformed)
+    {
+        var wire = JsonSerializer.SerializeToNode(Snapshot([], []), Web)!;
+        wire["retentionAcceptance"] = JsonNode.Parse(malformed);
+        Assert.ThrowsAny<JsonException>(() => wire.Deserialize<StimulusDeliverySnapshot>(Web));
+    }
+
+    [Fact]
+    public void Execution_dependencies_preserve_original_per_artifact_keys_and_all_exact_recipients()
+    {
+        var source = Context();
+        var saved = Snapshot([Start("binding-a"), Start("binding-b")], [Wait("wait-a"), Wait("wait-b")]);
+        var dependencies = saved.GetExecutionDependencies(source.Intent);
+        var originalStart = KeyedWorkflowStartIdentity.For("key", Pin.ArtifactId).WorkflowExecutionId;
+        Assert.Equal(new[] { "publisher", "waiter", originalStart }.Order(StringComparer.Ordinal), dependencies);
+        Assert.DoesNotContain(KeyedWorkflowStartIdentity.For("key:binding-a", Pin.ArtifactId).WorkflowExecutionId, dependencies);
+        Assert.ThrowsAny<NotSupportedException>(() => ((IList<string>)dependencies).Add("injected"));
+        Assert.Throws<ArgumentException>(() => saved.GetExecutionDependencies(new("send", "publisher", "publish", Now, "activity", "other", null)));
+    }
+
+    [Fact]
+    public void Start_dependencies_require_original_key_but_empty_cohort_still_keeps_publisher()
+    {
+        var intent = new RuntimePostCommitIntent("send", "publisher", "publish", Now, "activity", null, null);
+        StimulusDeliverySnapshot Saved(IReadOnlyList<StimulusStartRecipient> starts) => new(1, Context().SourceOutboxItemId,
+            RuntimeCheckpointCommitFingerprint.ComputeIntent(intent), Scope(), Now, "event", "named", starts, []);
+        Assert.Throws<InvalidDataException>(() => Saved([Start()]).GetExecutionDependencies(intent));
+        Assert.Equal(["publisher"], Saved([]).GetExecutionDependencies(intent));
+    }
+
+    [Fact]
     public void Legacy_scope_is_preserved_and_test_scope_facts_match_the_authoritative_publisher()
     {
         var legacy = Workflow() with { Partition = null, RunKind = WorkflowRunKind.Unknown, TenantId = null };

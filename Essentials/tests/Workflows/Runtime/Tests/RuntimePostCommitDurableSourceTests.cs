@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -196,6 +197,11 @@ public sealed class RuntimePostCommitDurableSourceTests
         var services = serviceScope.ServiceProvider; var inner = services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>();
         var publisher = new WorkflowExecutionState("publisher", new("artifact", "definition", "version", "1.0.0", "hash"),
             WorkflowExecutionStatus.Running, null, Now, Now, null, null, null, null, Scope.Value, new Dictionary<string, string>());
+        await services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(new(publisher.PinnedExecutable,
+            new ExecutableNode("node", "authored", "test/activity", "1.0.0",
+                new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { })),
+                new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>()),
+            new Dictionary<string, WorkflowExecutableResumeTarget>(), Now, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference));
         await services.GetRequiredService<CoalescingInner<IWorkflowExecutionStateStore>>().Value.SaveAsync(publisher);
         await using var drain = services.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>()
             .Begin("publisher", new(PersistenceMode.Balanced, RunHasRecord: false));
@@ -207,9 +213,10 @@ public sealed class RuntimePostCommitDurableSourceTests
         Assert.NotNull(await inner.FindDurableAsync(original.OutboxItemId));
         var peer = Assert.Single(await inner.ClaimAsync(new("peer", Now, TimeSpan.FromMinutes(1), 1)));
         var source = new PostCommitDeliveryContext(peer, Scope);
-        var selected = new StimulusDeliverySnapshot(1, source.SourceOutboxItemId, source.IntentFingerprint,
+        var candidate = new StimulusDeliverySnapshot(1, source.SourceOutboxItemId, source.IntentFingerprint,
             StimulusDeliveryScope.From(publisher, Scope), Now, "event", "named", [], []);
-        await inner.InstallAsync(source, selected);
+        var selected = await inner.InstallAsync(source, candidate);
+        Assert.Equal(1, selected.RetentionAcceptanceVersion);
         await inner.RecordDeliveryResultAsync(peer, new(peer.OutboxItemId, RuntimePostCommitOutboxStatus.Delivered, Now));
         await store.CommitAsync(Envelope("three", 3), new(RuntimeCheckpointPersistenceMode.Deferred));
         await store.CommitAsync(Envelope("four", 4), new(RuntimeCheckpointPersistenceMode.Deferred));

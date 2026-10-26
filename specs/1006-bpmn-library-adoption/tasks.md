@@ -108,6 +108,9 @@ The [retention-root receipt](evidence/broadcast-retention-roots.md) qualifies sc
 deletion read guards and guarded reference cleanup; automatic fenced acceptance/admission remains open.
 The [material-fence receipt](evidence/broadcast-material-fence.md) qualifies immutable actual grants and
 native memory/EF commit fencing; source/ownership acceptance and saved admission remain open.
+The [verified cohort-installation receipt](evidence/broadcast-cohort-acceptance.md) qualifies actual canonical
+capture, material/ownership/source fencing and immutable acceptance-witness installation in both providers.
+Earlier unmarked data-only winners remain held; saved-start admission and final GC composition remain open.
 Publisher authorization, recipient execution and all host delivery/recovery gates remain open.
 
 Execution order: T046 → T047 → T048 → T049 → T050 → T051. No new task is marked parallel:

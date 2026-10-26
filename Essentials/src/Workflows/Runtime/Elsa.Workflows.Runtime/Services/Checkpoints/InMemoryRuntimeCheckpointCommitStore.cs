@@ -6,6 +6,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Alterations;
 using Elsa.Workflows.Runtime.Services.Dispatch;
 using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Services.Executables;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 
 namespace Elsa.Workflows.Runtime.Services.Checkpoints;
 
@@ -64,12 +66,47 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     private readonly IWorkflowAlterationStore? _alterationStore;
     private readonly TimeProvider _timeProvider;
     private readonly IPersistenceAccessContextAccessor? _persistenceAccessContextAccessor;
+    private readonly InMemoryWorkflowExecutableStore? _retentionMaterial;
+    private readonly InMemoryWorkflowExecutionStateStore? _retentionExecutions;
+    private readonly WorkflowExecutableStartSourceResolver? _retentionSources;
 
     /// <summary>
     /// Creates the in-memory commit store. Backing stores are optional for direct test construction. The runtime DI
     /// composition requires the workflow execution store for child-start evidence and injects the other registered
     /// backing stores. Coalescing decorators keep wrapping that registration without modification.
     /// </summary>
+    public InMemoryRuntimeCheckpointCommitStore(
+        IWorkflowExecutableStore executableStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
+        IActivityExecutionStateStore? activityExecutionStateStore = null,
+        IBookmarkStateStore? bookmarkStateStore = null,
+        IDurableValueStateStore? durableValueStateStore = null,
+        IIncidentStateStore? incidentStateStore = null,
+        IExecutionLivenessStateStore? operationalStateStore = null,
+        ISchedulerStateStore? schedulerStateStore = null,
+        IActivityExecutionInspectionWriter? activityExecutionInspectionWriter = null,
+        IWorkflowExecutableRootWriteLeaseManager? rootWriteLeaseManager = null,
+        InMemoryRuntimeCheckpointStoreState? state = null,
+        TimeProvider? timeProvider = null,
+        IActivityScopeCleanupStore? activityScopeCleanupStore = null,
+        IActivityExecutionHierarchyWriter? activityExecutionHierarchyWriter = null,
+        IWorkflowDispatchStore? workflowDispatchStore = null,
+        IWorkflowSchedulerWorkQueue? schedulerWorkQueue = null,
+        IWorkflowAlterationStore? alterationStore = null,
+        IPersistenceAccessContextAccessor? persistenceAccessContextAccessor = null,
+        CoalescingInner<IWorkflowExecutionStateStore>? physicalWorkflowExecutionStore = null)
+        : this(workflowExecutionStateStore, activityExecutionStateStore, bookmarkStateStore, durableValueStateStore, incidentStateStore, operationalStateStore, schedulerStateStore, activityExecutionInspectionWriter, rootWriteLeaseManager, state, timeProvider, activityScopeCleanupStore, activityExecutionHierarchyWriter, workflowDispatchStore, schedulerWorkQueue, alterationStore, persistenceAccessContextAccessor)
+    {
+        ArgumentNullException.ThrowIfNull(executableStore); ArgumentNullException.ThrowIfNull(sourceReferenceStore);
+        _retentionSources = new(sourceReferenceStore, _timeProvider);
+        if (executableStore is InMemoryWorkflowExecutableStore material &&
+            sourceReferenceStore is InMemoryWorkflowExecutableSourceReferenceStore references &&
+            ReferenceEquals(references.FencedArtifactStore, material)) _retentionMaterial = material;
+        _retentionExecutions = (workflowExecutionStateStore?.GetType() == typeof(CoalescingWorkflowExecutionStateStore)
+            ? physicalWorkflowExecutionStore?.Value : workflowExecutionStateStore) as InMemoryWorkflowExecutionStateStore;
+    }
+
     public InMemoryRuntimeCheckpointCommitStore(
         IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
         IActivityExecutionStateStore? activityExecutionStateStore = null,
@@ -489,40 +526,86 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     public async ValueTask<StimulusDeliverySnapshot> InstallAsync(PostCommitDeliveryContext source,
         StimulusDeliverySnapshot candidate, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(source);
-        ArgumentNullException.ThrowIfNull(candidate);
-        if (!candidate.MatchesSource(source))
-            throw new ArgumentException("The proposed cohort does not match its source.", nameof(candidate));
+        ArgumentNullException.ThrowIfNull(source); ArgumentNullException.ThrowIfNull(candidate);
+        if (!candidate.MatchesSource(source)) throw new ArgumentException("The proposed cohort does not match its source.", nameof(candidate));
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            return await _state.ExecuteWriteGateAsync(async ct =>
+            var access = _persistenceAccessContextAccessor?.Current ?? throw new InvalidOperationException("Recipient installation requires explicit persistence access.");
+            var scope = access.RequireScope(); access.EnsureScope(source.Scope);
+            if (_retentionMaterial is null || _retentionSources is null || _rootWriteLeaseManager is null ||
+                _retentionExecutions is null || !ReferenceEquals(_retentionExecutions.CheckpointState, _state) ||
+                _operationalStateStore is not InMemoryExecutionLivenessStateStore ownership ||
+                !ReferenceEquals(_retentionExecutions.ExecutionLivenessStateStore, ownership))
+                throw new NotSupportedException("Verified cohort installation requires coherent native material, execution, ownership and root-lease stores.");
+            var publisher = await _retentionExecutions.FindAsync(source.Intent.WorkflowExecutionId, cancellationToken) ??
+                throw new InvalidDataException("The authoritative publisher is missing.");
+            access.EnsureTenantScope(publisher.TenantId);
+            lock (_state.SyncRoot)
             {
-                var access = _persistenceAccessContextAccessor?.Current ??
-                    throw new InvalidOperationException("Recipient installation requires explicit persistence access.");
-                var scope = access.RequireScope();
-                access.EnsureScope(source.Scope);
-                var publisher = _workflowExecutionStateStore is null ? null :
-                    await _workflowExecutionStateStore.FindAsync(source.Intent.WorkflowExecutionId, ct);
-                if (publisher is null)
-                    throw new InvalidDataException("The authoritative publisher is unavailable or missing.");
-                access.EnsureTenantScope(publisher.TenantId);
-                lock (_state.SyncRoot)
+                var current = Source();
+                _ = current.InstallRecipientSnapshot(source, candidate, publisher, scope, _timeProvider.GetUtcNow());
+                if (current.RecipientSnapshot is { } winner) return Verified(winner);
+            }
+            if (candidate.SelectedAt < source.Intent.RecordedAt || candidate.SelectedAt > _timeProvider.GetUtcNow())
+                throw new InvalidDataException("The recipient selection timestamp is outside this source delivery.");
+            var dependencies = candidate.GetExecutionDependencies(source.Intent);
+            var roots = candidate.Starts.Select(start => start.Executable).Append(publisher.PinnedExecutable).ToArray();
+            StimulusDeliverySnapshot? result = null;
+            await _rootWriteLeaseManager.ExecuteFencedAsync(roots, "stimulus:" + source.SourceOutboxItemId + ":" + Guid.NewGuid().ToString("N"), async (grants, token) =>
+            {
+                await _retentionSources.ValidateCapturedAsync(candidate.Starts, token);
+                result = await _state.ExecuteWriteGateAsync(async gateToken =>
                 {
-                    if (!_state.OutboxItems.TryGetValue(source.SourceOutboxItemId, out var current))
-                        throw new InvalidDataException("The exact recipient source is missing.");
-                    var installed = current.InstallRecipientSnapshot(source, candidate, publisher, scope, _timeProvider.GetUtcNow());
-                    _state.OutboxItems[source.SourceOutboxItemId] = installed;
-                    return installed.RecipientSnapshot!;
-                }
+                    var currentPublisher = await _retentionExecutions.FindAsync(source.Intent.WorkflowExecutionId, gateToken) ??
+                        throw new InvalidDataException("The authoritative publisher was removed.");
+                    if (!WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(currentPublisher.PinnedExecutable, publisher.PinnedExecutable))
+                        throw new InvalidDataException("The publisher executable changed before cohort acceptance.");
+                    access.EnsureTenantScope(currentPublisher.TenantId);
+                    lock (_state.SyncRoot)
+                    {
+                        var current = Source();
+                        _ = current.InstallRecipientSnapshot(source, candidate, currentPublisher, scope, _timeProvider.GetUtcNow());
+                        if (current.RecipientSnapshot is { } winner) return Verified(winner);
+                    }
+                    return await ownership.ExecuteOwnershipAtomicAsync(async ownershipToken =>
+                    {
+                        foreach (var id in dependencies)
+                            if (await _retentionExecutions.IsDeletionTombstonedAsync(id, ownershipToken))
+                                throw new InvalidDataException("A saved cohort execution dependency was retired before acceptance.");
+                        return _retentionMaterial.ExecuteUnderRootWriteLeases(grants, _timeProvider, () =>
+                        {
+                            ownershipToken.ThrowIfCancellationRequested();
+                            lock (_state.SyncRoot)
+                            {
+                                var current = Source();
+                                var accepted = new StimulusDeliverySnapshot(candidate.Version, candidate.SourceOutboxItemId,
+                                    candidate.IntentFingerprint, candidate.Scope, candidate.SelectedAt, candidate.StimulusType,
+                                    candidate.StimulusHash, candidate.Starts, candidate.Resumes, StimulusDeliverySnapshot.CurrentRetentionAcceptanceVersion);
+                                var installed = current.InstallRecipientSnapshot(source, accepted, currentPublisher, scope, _timeProvider.GetUtcNow());
+                                var winner = Verified(installed.RecipientSnapshot!);
+                                _state.OutboxItems[source.SourceOutboxItemId] = installed;
+                                return winner;
+                            }
+                        }, ownershipToken);
+                    }, gateToken);
+                }, token);
             }, cancellationToken);
+            return result ?? throw new InvalidOperationException("Verified cohort installation did not produce a persisted result.");
+
+            RuntimePostCommitOutboxItem Source() => _state.OutboxItems.TryGetValue(source.SourceOutboxItemId, out var item) ? item :
+                throw new InvalidDataException("The exact recipient source is missing.");
+            static StimulusDeliverySnapshot Verified(StimulusDeliverySnapshot snapshot) =>
+                snapshot.RetentionAcceptanceVersion == StimulusDeliverySnapshot.CurrentRetentionAcceptanceVersion ? snapshot :
+                    throw new InvalidDataException("The existing data-only cohort has no verified retention acceptance; it must not be restamped.");
         }
         catch (RuntimePostCommitOutboxStaleClaimException) { throw; }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception exception)
         {
             throw new StimulusDeliveryBoundaryException(source.SourceOutboxItemId, exception,
-                exception is not (InvalidDataException or InvalidOperationException or ArgumentException or NotSupportedException));
+                exception is WorkflowExecutableRootWriteLeaseLostException or WorkflowExecutableRootWriteLeaseUnavailableException ||
+                exception is not (InvalidDataException or InvalidOperationException or ArgumentException or NotSupportedException or WorkflowExecutableReferenceRejectedException));
         }
     }
 
@@ -539,7 +622,8 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                 RuntimePostCommitOutboxItem initial;
                 lock (_state.SyncRoot)
                     initial = _state.OutboxItems.GetValueOrDefault(authority.SourceOutboxItemId) ?? throw new InvalidDataException("The exact saved-start source is missing.");
-                var publisher = _workflowExecutionStateStore is null ? null : await _workflowExecutionStateStore.FindAsync(initial.Intent.WorkflowExecutionId, ct);
+                var publisherStore = (IWorkflowExecutionStateStore?)_retentionExecutions ?? _workflowExecutionStateStore;
+                var publisher = publisherStore is null ? null : await publisherStore.FindAsync(initial.Intent.WorkflowExecutionId, ct);
                 if (publisher is null) throw new InvalidDataException("The authoritative saved-start publisher is missing.");
                 access.EnsureTenantScope(publisher.TenantId);
                 lock (_state.SyncRoot)
@@ -809,6 +893,8 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             foreach (var item in items)
             {
                 EnsureOutboxSourceScope(item);
+                if (!_state.OutboxItems.ContainsKey(item.OutboxItemId) && item.RecipientSnapshot?.RetentionAcceptanceVersion is not null)
+                    throw new InvalidOperationException("A pending checkpoint cannot mint verified cohort acceptance.");
                 if (_state.OutboxItems.TryGetValue(item.OutboxItemId, out var existing) && !existing.IsEquivalentPendingItem(item))
                     throw new InvalidOperationException($"Post-commit outbox item '{item.OutboxItemId}' already exists with a different intent or status.");
             }
@@ -838,6 +924,8 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             throw new InvalidOperationException($"Post-commit outbox item '{item.OutboxItemId}' already exists with a different intent or status.");
         }
 
+        if (item.RecipientSnapshot?.RetentionAcceptanceVersion is not null)
+            throw new InvalidOperationException("A pending source cannot mint verified cohort acceptance.");
         _state.OutboxItems.Add(item.OutboxItemId, item);
     }
 

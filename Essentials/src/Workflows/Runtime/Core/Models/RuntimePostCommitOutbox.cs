@@ -432,6 +432,8 @@ public sealed class RuntimePostCommitOutboxClaimCompletion
         }
         if (followUpOutboxItem is not null)
         {
+            if (followUpOutboxItem.RecipientSnapshot?.RetentionAcceptanceVersion is not null)
+                throw new ArgumentException("A failure follow-up cannot mint a verified cohort acceptance witness.", nameof(followUpOutboxItem));
             if (workflowDispatch is null || workflowDispatch.Mode != WorkflowDispatchMode.WaitForCompletion)
                 throw new ArgumentException("A failure follow-up is valid only for a waited workflow dispatch.", nameof(followUpOutboxItem));
             var identity = new WorkflowDispatchIdentity(

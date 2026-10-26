@@ -1,4 +1,8 @@
 #nullable enable
+Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableSourceReadException
+Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableSourceReadException.WorkflowExecutableSourceReadException(string! artifactId, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableReferenceScope requiredScope, System.Exception! innerException) -> void
+Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableSourceReadException.ArtifactId.get -> string!
+Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableSourceReadException.RequiredScope.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableReferenceScope
 Elsa.Workflows.Runtime.Core.Builders.RuntimePipelinePlanBuilder
 Elsa.Workflows.Runtime.Core.Builders.RuntimePipelinePlanBuilder.AddRegistration(System.Type! middlewareType, string! slotName, int order, string? name, bool isBuiltIn) -> void
 Elsa.Workflows.Runtime.Core.Builders.RuntimePipelinePlanBuilder.BuildPlan() -> Elsa.Workflows.Runtime.Core.Models.RuntimePipelinePlan!
@@ -9161,3 +9165,7 @@ Elsa.Workflows.Runtime.Core.Exceptions.StimulusDeliveryRetentionException
 Elsa.Workflows.Runtime.Core.Exceptions.StimulusDeliveryRetentionException.StimulusDeliveryRetentionException(Elsa.Workflows.Runtime.Core.Models.PersistenceScope? scope, System.Exception! innerException) -> void
 Elsa.Workflows.Runtime.Core.Exceptions.StimulusDeliveryRetentionException.Scope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope?
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableRootWriteLeaseManager.ExecuteFencedAsync(System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!>! roots, string! leaseId, System.Func<System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableRootWriteLease!>!, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! write, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.Models.StimulusDeliverySnapshot.StimulusDeliverySnapshot(int version, string! sourceOutboxItemId, string! intentFingerprint, Elsa.Workflows.Runtime.Core.Models.StimulusDeliveryScope! scope, System.DateTimeOffset selectedAt, string! stimulusType, string! stimulusHash, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.StimulusStartRecipient!>! starts, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.StimulusResumeRecipient!>! resumes, int? retentionAcceptanceVersion) -> void
+const Elsa.Workflows.Runtime.Core.Models.StimulusDeliverySnapshot.CurrentRetentionAcceptanceVersion = 1 -> int
+Elsa.Workflows.Runtime.Core.Models.StimulusDeliverySnapshot.RetentionAcceptanceVersion.get -> int?
+Elsa.Workflows.Runtime.Core.Models.StimulusDeliverySnapshot.GetExecutionDependencies(Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntent! intent) -> System.Collections.Generic.IReadOnlyList<string!>!

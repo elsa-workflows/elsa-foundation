@@ -2,6 +2,8 @@ using System.Text.Json;
 using System.Transactions;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
@@ -26,6 +28,8 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
     private readonly RuntimeDbContext context;
     private readonly IPersistenceAccessContextAccessor accessContextAccessor;
     private readonly TimeProvider timeProvider;
+    private readonly WorkflowExecutableStartSourceResolver? retentionSources;
+    private readonly IWorkflowExecutableRootWriteLeaseManager? retentionLeases;
 
     public EfRuntimePostCommitOutboxStore(RuntimeDbContext context, IPersistenceAccessContextAccessor accessContextAccessor)
         : this(context, accessContextAccessor, TimeProvider.System) { }
@@ -36,6 +40,19 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
         this.context = context ?? throw new ArgumentNullException(nameof(context));
         this.accessContextAccessor = accessContextAccessor ?? throw new ArgumentNullException(nameof(accessContextAccessor));
         this.timeProvider = timeProvider ?? TimeProvider.System;
+    }
+
+    public EfRuntimePostCommitOutboxStore(RuntimeDbContext context, IPersistenceAccessContextAccessor accessContextAccessor,
+        TimeProvider? timeProvider, IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IWorkflowExecutableRootWriteLeaseManager rootWriteLeaseManager)
+        : this(context, accessContextAccessor, timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(sourceReferenceStore); ArgumentNullException.ThrowIfNull(rootWriteLeaseManager);
+        if (sourceReferenceStore is EfWorkflowExecutableSourceReferenceStore references && ReferenceEquals(references.Context, context))
+        {
+            retentionSources = new(references.WithAccess(accessContextAccessor), this.timeProvider);
+            retentionLeases = rootWriteLeaseManager;
+        }
     }
 
     private const int ProviderPageSize = RuntimeStorePageRequest.MaximumLimit;
@@ -57,6 +74,8 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
             throw DifferentPendingItem(item.OutboxItemId);
         }
 
+        if (item.RecipientSnapshot?.RetentionAcceptanceVersion is not null)
+            throw new InvalidOperationException("A pending source cannot mint verified cohort acceptance.");
         var row = ToEntity(item, scope, id, revision: 1, WriteVersion(item));
         context.RuntimePostCommitOutbox.Add(row);
         try
@@ -152,64 +171,127 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
     public async ValueTask<StimulusDeliverySnapshot> InstallAsync(PostCommitDeliveryContext source,
         StimulusDeliverySnapshot candidate, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(source);
-        ArgumentNullException.ThrowIfNull(candidate);
-        if (!candidate.MatchesSource(source))
-            throw new ArgumentException("The proposed cohort does not match its source.", nameof(candidate));
+        ArgumentNullException.ThrowIfNull(source); ArgumentNullException.ThrowIfNull(candidate);
+        if (!candidate.MatchesSource(source)) throw new ArgumentException("The proposed cohort does not match its source.", nameof(candidate));
         cancellationToken.ThrowIfCancellationRequested();
-        RuntimePostCommitOutboxEntity? row = null;
         try
         {
-            var access = accessContextAccessor.Current;
-            var scope = access.RequireScope();
-            access.EnsureScope(source.Scope);
+            var access = accessContextAccessor.Current; var scope = access.RequireScope(); access.EnsureScope(source.Scope);
             EnsureCommittedSourceBoundary();
+            if (retentionSources is null || retentionLeases is null)
+                throw new NotSupportedException("Verified cohort installation requires coherent native reference and root-lease stores.");
+            if (context.ChangeTracker.HasChanges())
+                throw new InvalidOperationException("Verified cohort installation requires a clean context for its owned transaction.");
+            Exception? lastConflict = null;
             for (var attempt = 0; attempt < 8; attempt++)
             {
-                // Re-read authoritative content even when this context tracked a pre-install claim. A stale claim's
-                // Item can authorize its owner/fence, but cannot replace current persisted content.
-                row = await LoadAsync(scope.Value, source.SourceOutboxItemId, tracking: true, cancellationToken);
-                if (row is null)
+                context.ChangeTracker.Clear();
+                try
+                {
+                    var initial = await ReadFacts();
+                    _ = initial.Source.InstallRecipientSnapshot(source, candidate, initial.Publisher, scope, timeProvider.GetUtcNow());
+                    if (initial.Source.RecipientSnapshot is { } existing) return Verified(existing);
+                    if (candidate.SelectedAt < source.Intent.RecordedAt || candidate.SelectedAt > timeProvider.GetUtcNow())
+                        throw new InvalidDataException("The recipient selection timestamp is outside this source delivery.");
+                    var dependencies = candidate.GetExecutionDependencies(source.Intent);
+                    var roots = candidate.Starts.Select(start => start.Executable).Append(initial.Publisher.PinnedExecutable).ToArray();
+                    StimulusDeliverySnapshot? result = null;
+                    await retentionLeases.ExecuteFencedAsync(roots, "stimulus:" + source.SourceOutboxItemId + ":" + Guid.NewGuid().ToString("N"), async (grants, token) =>
+                    {
+                        await retentionSources.ValidateCapturedAsync(candidate.Starts, token);
+                        await using var transaction = await context.Database.BeginTransactionAsync(token);
+                        try
+                        {
+                            // Material is locked before ownership. All workflow/reference facts are read before
+                            // ownership locks; deletion may hold another workflow root while scanning source rows.
+                            await new EfWorkflowExecutableStore(context, accessContextAccessor).FenceRootWriteLeasesAsync(grants, timeProvider, token);
+                            var facts = await ReadFacts(token);
+                            if (!WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(facts.Publisher.PinnedExecutable, initial.Publisher.PinnedExecutable))
+                                throw new InvalidDataException("The publisher executable changed before cohort acceptance.");
+                            _ = facts.Source.InstallRecipientSnapshot(source, candidate, facts.Publisher, scope, timeProvider.GetUtcNow());
+                            if (facts.Source.RecipientSnapshot is { } winner) { result = Verified(winner); return; }
+                            foreach (var id in dependencies) await FenceExecutionDependencyAsync(scope.Value, id, token);
+                            // Re-read physical source/claim after all awaited fences. No workflow-root read occurs here.
+                            var row = await LoadAsync(scope.Value, source.SourceOutboxItemId, tracking: true, token) ??
+                                throw new InvalidDataException("The exact recipient source is missing.");
+                            await context.Entry(row).ReloadAsync(token);
+                            if (context.Entry(row).State == EntityState.Detached) throw new InvalidDataException("The recipient source was removed.");
+                            var current = ReadChecked(row, scope.Value, source.SourceOutboxItemId);
+                            var accepted = new StimulusDeliverySnapshot(candidate.Version, candidate.SourceOutboxItemId,
+                                candidate.IntentFingerprint, candidate.Scope, candidate.SelectedAt, candidate.StimulusType,
+                                candidate.StimulusHash, candidate.Starts, candidate.Resumes, StimulusDeliverySnapshot.CurrentRetentionAcceptanceVersion);
+                            var installed = current.InstallRecipientSnapshot(source, accepted, facts.Publisher, scope, timeProvider.GetUtcNow());
+                            if (current.RecipientSnapshot is { } laterWinner) { result = Verified(laterWinner); return; }
+                            token.ThrowIfCancellationRequested();
+                            Copy(row, installed, scope.Value, checked(row.Revision + 1), WriteVersion(installed));
+                            await context.SaveChangesAsync(token);
+                            await transaction.CommitAsync(token);
+                            result = Verified(installed.RecipientSnapshot!);
+                        }
+                        catch
+                        {
+                            try { await transaction.RollbackAsync(CancellationToken.None); } catch { }
+                            throw;
+                        }
+                    }, cancellationToken);
+                    context.ChangeTracker.Clear();
+                    return result ?? throw new InvalidOperationException("Verified cohort installation did not produce a persisted result.");
+                }
+                catch (Exception exception) when (exception is DbUpdateConcurrencyException ||
+                    EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
+                {
+                    lastConflict = exception; context.ChangeTracker.Clear();
+                }
+            }
+            throw new IOException("The recipient source remained contended; retry without dispatching.", lastConflict);
+
+            async ValueTask<(RuntimePostCommitOutboxItem Source, WorkflowExecutionState Publisher)> ReadFacts(CancellationToken token = default)
+            {
+                if (token == default) token = cancellationToken;
+                var row = await LoadAsync(scope.Value, source.SourceOutboxItemId, tracking: false, token) ??
                     throw new InvalidDataException("The exact recipient source is missing.");
-                await context.Entry(row).ReloadAsync(cancellationToken);
-                if (context.Entry(row).State == EntityState.Detached)
-                    throw new InvalidDataException("The exact recipient source was removed.");
-                var current = ReadChecked(row, scope.Value, source.SourceOutboxItemId);
-                var publisherId = EfWorkflowExecutionStateStore.CreateId(scope.Value, source.Intent.WorkflowExecutionId);
-                var publisherRow = await context.WorkflowExecutionStates.AsNoTracking()
-                    .SingleOrDefaultAsync(item => item.Id == publisherId, cancellationToken);
-                if (publisherRow is null)
+                var publisherRow = await context.WorkflowExecutionStates.AsNoTracking().SingleOrDefaultAsync(item =>
+                    item.Id == EfWorkflowExecutionStateStore.CreateId(scope.Value, source.Intent.WorkflowExecutionId), token) ??
                     throw new InvalidDataException("The authoritative publisher is missing.");
                 var publisher = EfWorkflowExecutionStateStore.ReadChecked(publisherRow, scope.Value, source.Intent.WorkflowExecutionId);
                 access.EnsureTenantScope(publisher.TenantId);
-                var installed = current.InstallRecipientSnapshot(source, candidate, publisher, scope, timeProvider.GetUtcNow());
-                if (ReferenceEquals(installed, current))
-                    return installed.RecipientSnapshot!;
-                Copy(row, installed, scope.Value, checked(row.Revision + 1), WriteVersion(installed));
-                try
-                {
-                    await context.SaveChangesAsync(cancellationToken);
-                    return installed.RecipientSnapshot!;
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    // Another install or renewal won. Revalidate its current owner/fence and return only its winner.
-                    Detach(row);
-                    row = null;
-                }
+                row = await LoadAsync(scope.Value, source.SourceOutboxItemId, tracking: false, token) ??
+                    throw new InvalidDataException("The recipient source was removed during publisher validation.");
+                return (ReadChecked(row, scope.Value, source.SourceOutboxItemId), publisher);
             }
-            throw new IOException("The recipient source remained contended; retry without dispatching.");
+            static StimulusDeliverySnapshot Verified(StimulusDeliverySnapshot snapshot) =>
+                snapshot.RetentionAcceptanceVersion == StimulusDeliverySnapshot.CurrentRetentionAcceptanceVersion ? snapshot :
+                    throw new InvalidDataException("The existing data-only cohort has no verified retention acceptance; it must not be restamped.");
         }
-        catch (RuntimePostCommitOutboxStaleClaimException) { if (row is not null) Detach(row); throw; }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        { if (row is not null) Detach(row); throw; }
+        catch (RuntimePostCommitOutboxStaleClaimException) { context.ChangeTracker.Clear(); throw; }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { context.ChangeTracker.Clear(); throw; }
         catch (Exception exception)
         {
-            if (row is not null) Detach(row);
+            context.ChangeTracker.Clear();
             throw new StimulusDeliveryBoundaryException(source.SourceOutboxItemId, exception,
+                exception is WorkflowExecutableRootWriteLeaseLostException or WorkflowExecutableRootWriteLeaseUnavailableException ||
                 EfRelationalExceptionClassifier.IsProviderFailure(exception) ||
-                exception is not (InvalidDataException or InvalidOperationException or ArgumentException or NotSupportedException));
+                exception is not (InvalidDataException or InvalidOperationException or ArgumentException or NotSupportedException or WorkflowExecutableReferenceRejectedException));
         }
+    }
+
+    private async ValueTask FenceExecutionDependencyAsync(string scope, string workflowExecutionId, CancellationToken cancellationToken)
+    {
+        var row = await EfExecutionLivenessStateStore.WorkflowExecutionDeletionOwnershipRows(context, scope, workflowExecutionId)
+            .SingleOrDefaultAsync(cancellationToken);
+        if (EfExecutionLivenessStateStore.IsWorkflowExecutionDeletionTombstone(row, scope, workflowExecutionId))
+            throw new InvalidDataException("A saved cohort execution dependency was retired before acceptance.");
+        if (row is null)
+        {
+            var state = new ExecutionLivenessState(RuntimeExecutionOwnershipStateId.For(workflowExecutionId), workflowExecutionId,
+                null, null, null, null, [], new Dictionary<string, string> { [RuntimeMetadataKeys.OwnershipFencingToken] = "0" });
+            context.ExecutionLivenessStates.Add(EfExecutionLivenessStateStore.ToEntity(state, scope, 1));
+            await context.SaveChangesAsync(cancellationToken); // Acquire the unique missing-owner fence before source CAS.
+            return;
+        }
+        var touched = await context.ExecutionLivenessStates.Where(candidate => candidate.Id == row.Id && candidate.Revision == row.Revision)
+            .ExecuteUpdateAsync(update => update.SetProperty(candidate => candidate.Revision, row.Revision + 1), cancellationToken);
+        if (touched != 1) throw new DbUpdateConcurrencyException("Cohort execution ownership changed before acceptance.");
     }
 
     public async ValueTask<PostCommitDeliveryContext> ReadSavedStartSourceAsync(WorkflowExecutableStimulusDeliveryAuthority authority,

@@ -91,6 +91,32 @@ public sealed class StimulusStartSourceCaptureTests
     private static WorkflowTriggerBinding Binding() => new("binding", Pin.ArtifactId, Pin.DefinitionId, Pin.ArtifactVersion,
         Pin.ArtifactHash, "start", "event", "named", null, new Dictionary<string, string>(), Now, "activation-a", "slot");
 
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Public_capture_preserves_failed_read_cause_with_artifact_and_required_scope(bool unrequestedCancellation)
+    {
+        Exception cause = unrequestedCancellation ? new OperationCanceledException("unrequested") : new IOException("provider read");
+        var resolver = new WorkflowExecutableStartSourceResolver(new UnavailableReferences(cause), new FakeTimeProvider(Now));
+        var failure = await Assert.ThrowsAsync<WorkflowExecutableSourceReadException>(() => resolver.CaptureAsync(Binding(), Pin).AsTask());
+        Assert.Same(cause, failure.InnerException); Assert.Equal(Pin.ArtifactId, failure.ArtifactId);
+        Assert.Equal(WorkflowExecutableReferenceScope.Published, failure.RequiredScope);
+        using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
+        var cancelled = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => resolver.CaptureAsync(Binding(), Pin, cancellation.Token).AsTask());
+        Assert.Equal(cancellation.Token, cancelled.CancellationToken);
+    }
+
+    private sealed class UnavailableReferences(Exception cause) : IWorkflowExecutableSourceReferenceStore
+    {
+        public ValueTask<WorkflowExecutableSourceReference?> FindAsync(string id, CancellationToken cancellationToken = default) => throw cause;
+        public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByArtifactPageAsync(WorkflowExecutableSourceReferenceArtifactPageQuery query, CancellationToken cancellationToken = default) => throw cause;
+        public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(WorkflowExecutableSourceReferencePageQuery query, CancellationToken cancellationToken = default) => throw cause;
+        public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(WorkflowExecutableArtifactCandidateBatch candidates, DateTimeOffset now, CancellationToken cancellationToken = default) => throw cause;
+        public ValueTask SaveAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default) => throw cause;
+        public ValueTask<bool> RetireAsync(string id, DateTimeOffset deletedAt, string? reason = null, CancellationToken cancellationToken = default) => throw cause;
+        public ValueTask<bool> TryDeleteDoomedAsync(WorkflowExecutableSourceReference reference, DateTimeOffset now, CancellationToken cancellationToken = default) => throw cause;
+        public ValueTask<IReadOnlyCollection<string>> DeleteExpiredOrRetiredAsync(WorkflowExecutableSourceReferenceCleanupBatch batch, DateTimeOffset now, CancellationToken cancellationToken = default) => throw cause;
+    }
+
     private static WorkflowExecutableSourceReference Reference(string id, string activation) => new(id, Pin.ArtifactId,
         "WorkflowDefinitionVersion", "selected-source", "2", "selected-definition", "selected-version", "selected-label",
         Now, Now, WorkflowExecutableReferenceScope.Published, ActivationId: activation, SlotId: "slot");

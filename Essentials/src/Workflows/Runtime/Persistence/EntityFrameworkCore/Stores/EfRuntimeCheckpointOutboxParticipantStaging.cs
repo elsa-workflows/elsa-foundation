@@ -36,6 +36,8 @@ internal static class EfRuntimeCheckpointOutboxParticipantStaging
                 .SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
             if (existing is null)
             {
+                if (candidate.RecipientSnapshot?.RetentionAcceptanceVersion is not null)
+                    throw new InvalidOperationException("A pending checkpoint cannot mint verified cohort acceptance.");
                 context.RuntimePostCommitOutbox.Add(EfRuntimePostCommitOutboxStore.ToEntity(candidate, scope, id, 1, RuntimePostCommitOutboxWriteVersion.For(context, candidate)));
                 continue;
             }
