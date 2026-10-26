@@ -138,7 +138,14 @@ public static class RuntimeCoreServiceCollectionExtensions
         // tracer (which itself stays free until a listener attaches).
         services.TryAddSingleton<IWorkflowEngineTracer>(NullWorkflowEngineTracer.Instance);
 
-        services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
+        // Own the three default native stores together. Factories never resolve a host's selected scoped
+        // replacements into a singleton. Exact selected-store capability still rejects mixed compositions.
+        var nativeArtifacts = ServiceDescriptor.Singleton<InMemoryRuntimeArtifactStores, InMemoryRuntimeArtifactStores>();
+        if (RuntimeArtifactStoreBackend.Find(services)?.Name != RuntimeArtifactStoreBackend.EntityFramework)
+            services.TryAdd(nativeArtifacts);
+        var defaultWorkflowExecutableStore = ServiceDescriptor.Singleton<IWorkflowExecutableStore>(provider =>
+            provider.GetRequiredService<InMemoryRuntimeArtifactStores>().Executables);
+        services.TryAdd(defaultWorkflowExecutableStore);
         services.AddWorkflowActivationDefaults();
         services.TryAddScoped<IWorkflowExecutableHasher, WorkflowExecutableHasher>();
         // Burst-scoped reconstructible cache. The accessor is a singleton AsyncLocal (like
@@ -152,23 +159,28 @@ public static class RuntimeCoreServiceCollectionExtensions
         // import admission. Hosts compose the serialization/type-registry feature alongside Runtime.
         services.TryAddScoped<IRuntimeRequirementChecker, RuntimeRequirementChecker>();
         services.TryAddSingleton<IWorkflowArtifactClosureSerializer, WorkflowArtifactClosureSerializer>();
-        services.TryAddSingleton<IExecutableActivityTemplateStore, InMemoryExecutableActivityTemplateStore>();
+        var defaultActivityTemplateStore = ServiceDescriptor.Singleton<IExecutableActivityTemplateStore>(provider =>
+            provider.GetRequiredService<InMemoryRuntimeArtifactStores>().Templates);
+        services.TryAdd(defaultActivityTemplateStore);
         var defaultActivityTemplateReader = ServiceDescriptor.Scoped<IExecutableActivityTemplateReader>(serviceProvider =>
             serviceProvider.GetRequiredService<IExecutableActivityTemplateStore>());
         services.TryAdd(defaultActivityTemplateReader);
-        services.TryAddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
+        var defaultSourceReferenceStore = ServiceDescriptor.Singleton<IWorkflowExecutableSourceReferenceStore>(provider =>
+            provider.GetRequiredService<InMemoryRuntimeArtifactStores>().References);
+        services.TryAdd(defaultSourceReferenceStore);
         var defaultSourceReferenceReader = ServiceDescriptor.Scoped<IWorkflowExecutableSourceReferenceReader>(serviceProvider =>
             serviceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>());
         services.TryAdd(defaultSourceReferenceReader);
         if (RuntimeArtifactStoreBackend.Find(services) is null)
         {
             var defaultArtifactDescriptors = services.Where(descriptor =>
-                descriptor.ServiceType == typeof(IWorkflowExecutableStore) && descriptor.ImplementationType == typeof(InMemoryWorkflowExecutableStore) ||
-                descriptor.ServiceType == typeof(IExecutableActivityTemplateStore) && descriptor.ImplementationType == typeof(InMemoryExecutableActivityTemplateStore) ||
-                descriptor.ServiceType == typeof(IWorkflowExecutableSourceReferenceStore) && descriptor.ImplementationType == typeof(InMemoryWorkflowExecutableSourceReferenceStore) ||
+                ReferenceEquals(descriptor, nativeArtifacts) ||
+                ReferenceEquals(descriptor, defaultWorkflowExecutableStore) ||
+                ReferenceEquals(descriptor, defaultActivityTemplateStore) ||
+                ReferenceEquals(descriptor, defaultSourceReferenceStore) ||
                 ReferenceEquals(descriptor, defaultActivityTemplateReader) ||
                 ReferenceEquals(descriptor, defaultSourceReferenceReader)).ToArray();
-            if (defaultArtifactDescriptors.Length == 5)
+            if (defaultArtifactDescriptors.Length == 6)
                 RuntimeArtifactStoreBackend.Register(services, new RuntimeArtifactStoreBackend(RuntimeArtifactStoreBackend.InMemory, defaultArtifactDescriptors));
         }
         services.AddOptions<ActivityExecutionHierarchyCursorOptions>();

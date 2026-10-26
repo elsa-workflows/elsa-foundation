@@ -28,7 +28,7 @@ public sealed class InMemoryExecutableActivityTemplateStore : IExecutableActivit
         _clock = clock ?? TimeProvider.System;
     }
 
-    /// <summary>Explicitly binds native maintenance without changing ordinary singleton DI construction.</summary>
+    /// <summary>Explicitly binds native maintenance to the actual native artifact and reference stores.</summary>
     public static InMemoryExecutableActivityTemplateStore CreateForMaintenance(IWorkflowExecutableStore executables,
         IWorkflowExecutableSourceReferenceStore references, TimeProvider? clock = null)
     {

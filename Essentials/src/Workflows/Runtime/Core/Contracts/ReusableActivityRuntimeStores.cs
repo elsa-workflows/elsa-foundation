@@ -18,7 +18,9 @@ public interface IExecutableActivityTemplateWriter
         ValueTask.FromResult(false);
 
     /// <summary>Whether maintenance coordinates the exact selected artifact and reference stores.</summary>
-    /// <remarks>A template ID is not a workflow artifact ID. Unsupported or mixed provider compositions refuse.</remarks>
+    /// <remarks>A template ID is not a workflow artifact ID. Callers must qualify their exact selected executable
+    /// and reference stores before invoking any atomic/maintenance port; the port cannot infer unrelated host DI
+    /// replacements from its native tuple alone. Unsupported or mixed selected compositions must not invoke it.</remarks>
     bool CanMaintainReferences(IWorkflowExecutableStore executables, IWorkflowExecutableSourceReferenceStore references) => false;
 
     /// <summary>Atomically saves/adopts immutable template material and its live source reference.</summary>

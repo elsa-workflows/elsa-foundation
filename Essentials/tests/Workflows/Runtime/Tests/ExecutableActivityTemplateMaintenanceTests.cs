@@ -8,7 +8,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
-public sealed class ExecutableActivityTemplateMaintenanceTests
+public sealed partial class ExecutableActivityTemplateMaintenanceTests
 {
     private static readonly DateTimeOffset Now = DateTimeOffset.Parse("2026-10-26T12:00:00Z");
     private readonly InMemoryWorkflowExecutableStore _artifacts = new();
