@@ -17,12 +17,18 @@ import {
   type ThemeTypography
 } from "./presets";
 
+export type ThemeSourceMode = "BuiltInsOnly" | "DirectoryOnly" | "AddToBuiltIns";
+
 export interface ThemeStoreResponse {
   themes: StudioThemeDefinition[];
   defaultThemeId: string;
   assets: ThemeStoreAsset[];
   /** Built-in theme ids an admin has hidden from the theme picker dropdown. */
   disabledBuiltInThemeIds: string[];
+  /** Host selection policy; definitions remain available for management. Missing means AddToBuiltIns. */
+  themesMode?: ThemeSourceMode;
+  /** IDs currently supplied by the configured directory; managed copies are not directory sources. */
+  directoryThemeIds?: string[];
 }
 
 export interface ThemeStoreCapabilities {
@@ -72,6 +78,10 @@ export const defaultThemeStoreCapabilities: ThemeStoreCapabilities = {
 };
 
 export function normalizeThemeStore(value?: Partial<ThemeStoreResponse> | null): ThemeStoreResponse {
+  const themesMode = value?.themesMode ?? "AddToBuiltIns";
+  if (themesMode !== "BuiltInsOnly" && themesMode !== "DirectoryOnly" && themesMode !== "AddToBuiltIns") {
+    throw new Error("Unsupported theme source mode.");
+  }
   const customThemes = (value?.themes ?? [])
     .filter(theme => theme?.source === "custom")
     .map(normalizeThemeDefinition)
@@ -93,21 +103,26 @@ export function normalizeThemeStore(value?: Partial<ThemeStoreResponse> | null):
     // the built-in wins; save/import reject the same clash before it is persisted.
     ...customThemes.filter(theme => !builtInIds.has(theme.id.toLowerCase()))
   ];
-  const defaultThemeId = themes.some(theme => theme.id === value?.defaultThemeId)
-    ? value!.defaultThemeId!
-    : builtInThemeDefinitions[0].id;
-
-  return {
+  const store: ThemeStoreResponse = {
     themes,
-    defaultThemeId,
+    defaultThemeId: "",
     assets: value?.assets ?? [],
-    disabledBuiltInThemeIds
+    disabledBuiltInThemeIds,
+    themesMode,
+    directoryThemeIds: (value?.directoryThemeIds ?? []).filter(id => typeof id === "string").map(id => id.toLowerCase())
   };
+  const selectable = getSelectableThemes(store);
+  store.defaultThemeId = selectable.find(theme => theme.id === value?.defaultThemeId)?.id ?? selectable[0]?.id ?? "";
+  return store;
 }
 
 export function getSelectableThemes(store: ThemeStoreResponse): Theme[] {
+  const directoryIds = new Set(store.directoryThemeIds ?? []);
   return store.themes
-    .filter(theme => theme.enabled && theme.published)
+    .filter(theme => theme.enabled && theme.published
+      && (store.themesMode === "BuiltInsOnly" ? theme.source === "built-in"
+        : store.themesMode === "DirectoryOnly" ? theme.source === "custom" && directoryIds.has(theme.id.toLowerCase())
+        : true))
     .map(toTheme);
 }
 
@@ -115,6 +130,7 @@ export function findSelectableTheme(store: ThemeStoreResponse, themeId: string |
   const selectableThemes = getSelectableThemes(store);
   return selectableThemes.find(theme => theme.id === themeId)
     ?? selectableThemes.find(theme => theme.id === store.defaultThemeId)
+    ?? selectableThemes[0]
     ?? toTheme(builtInThemeDefinitions[0]);
 }
 

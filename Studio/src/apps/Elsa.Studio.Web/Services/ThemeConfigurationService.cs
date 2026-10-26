@@ -30,13 +30,16 @@ internal sealed class ThemeConfigurationService
     /// </summary>
     public async Task<ThemeConfigurationResult> LoadThemesAsync(CancellationToken cancellationToken = default)
     {
+        // Validate outside the file-loading fallback: invalid host policy must remain an explicit error.
+        var themesMode = _config.GetThemesMode();
         try
         {
             var customThemes = await LoadCustomThemesAsync(cancellationToken);
 
             return new ThemeConfigurationResult(
                 Themes: customThemes.OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase).ToArray(),
-                DefaultThemeId: _config.DefaultThemeId ?? ""
+                DefaultThemeId: _config.DefaultThemeId ?? "",
+                ThemesMode: themesMode
             );
         }
         catch (Exception ex)
@@ -44,7 +47,8 @@ internal sealed class ThemeConfigurationService
             _logger.LogError(ex, "Error loading custom themes from directory.");
             return new ThemeConfigurationResult(
                 Themes: [],
-                DefaultThemeId: _config.DefaultThemeId ?? ""
+                DefaultThemeId: _config.DefaultThemeId ?? "",
+                ThemesMode: themesMode
             );
         }
     }
@@ -137,6 +141,7 @@ internal sealed class ThemeConfigurationService
 
 internal sealed record ThemeConfigurationResult(
     StudioThemeDefinition[] Themes,
-    string DefaultThemeId);
+    string DefaultThemeId,
+    string ThemesMode);
 
 internal sealed record ThemesCollectionResponse(StudioThemeDefinition[]? Themes);
