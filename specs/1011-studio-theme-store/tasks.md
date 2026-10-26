@@ -7,8 +7,8 @@ Risk-based behavior tests and causal controls; no mandated test-first cadence. O
 
 - [x] T001 Record and review specification/design/contracts/research/checklist before implementation in specs/1011-studio-theme-store.
 - [ ] T002 Create Studio/src/essentials/Elsa.Studio.Hosting.Themes project, README, public API tracking and solution/reference/lock inputs without Web/Nuplane dependencies.
-- [ ] T003 Implement public StudioThemeStoreOptions/AddElsaStudioThemes, typed startup validation, copied ContentRoot-resolved applied choices and duplicate/after-Build guards.
-- [ ] T004 Move the three independently selected shell features to the package; use existing discovery/sharing, root mutation gate and Api authorization policy.
+- [x] T003 Implement public StudioThemeStoreOptions/AddElsaStudioThemes, typed startup validation, copied ContentRoot-resolved applied choices and duplicate/after-Build guards.
+- [x] T004 Move the three independently selected shell features to the package; use existing discovery/sharing, root mutation gate and Api authorization policy.
 
 ## Phase2 — US1 public optional host
 

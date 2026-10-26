@@ -16,6 +16,7 @@
     <Project Path="src/essentials/Elsa.Studio.Api/Elsa.Studio.Api.csproj" />
     <Project Path="src/essentials/Elsa.Studio.Core/Elsa.Studio.Core.csproj" />
     <Project Path="src/essentials/Elsa.Studio.Hosting/Elsa.Studio.Hosting.csproj" />
+    <Project Path="src/essentials/Elsa.Studio.Hosting.Themes/Elsa.Studio.Hosting.Themes.csproj" />
     <Project Path="src/essentials/Elsa.Studio.Dashboard/Elsa.Studio.Dashboard.csproj" />
     <Project Path="src/essentials/Elsa.Studio.Workflows/Elsa.Studio.Workflows.csproj" />
   </Folder>
