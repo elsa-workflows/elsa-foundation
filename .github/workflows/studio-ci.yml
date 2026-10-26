@@ -23,6 +23,7 @@ on:
       - '.github/workflows/studio-ci.yml'
       - 'tools/ci/verify-studio-assets.py'
       - 'tools/ci/verify_studio_nuget_packages.py'
+      - 'tools/studio/ApiPackageClosure.Probe/**'
       - 'tools/ci/studio*'
   push:
     branches: [main]
@@ -196,6 +197,9 @@ jobs:
         run: |
           python3 tools/ci/verify_studio_nuget_packages.py --self-test
           python3 tools/ci/verify_studio_nuget_packages.py --packages "$RUNNER_TEMP/studio-nuget"
+
+      - name: Verify Studio.Api dependency closure from packed NuGet artifacts
+        run: python3 tools/studio/ApiPackageClosure.Probe/qualify.py --packages "$RUNNER_TEMP/studio-nuget"
 
       - name: Build standalone Studio image without publishing
         run: docker build --file Studio/src/apps/Elsa.Studio.Web/Dockerfile --tag "elsa-studio:ci-${{ github.sha }}" .
