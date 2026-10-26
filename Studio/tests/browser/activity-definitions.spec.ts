@@ -695,22 +695,26 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
   await page.getByRole("button", { name: "Add input", exact: true }).last().click();
   const contractInput = page.getByRole("region", { name: "Customer note", exact: true });
   await expect(contractInput).toBeVisible();
+  // Each edit below is an explicit saved boundary. Browser interactions can exceed the
+  // debounce window on a loaded runner, so separate changes must not assume one PUT.
+  await expectSavedRevision(page, 2);
   await contractInput.getByText("Advanced", { exact: true }).click();
   await contractInput.getByRole("checkbox", { name: /Allow null/ }).check();
+  await expectSavedRevision(page, 3);
   await contractInput.getByRole("combobox", { name: /^Default/ }).selectOption("null");
   await contractInput.getByRole("button", { name: "Apply default" }).click();
-  await expectSavedRevision(page, 2);
+  await expectSavedRevision(page, 4);
   await page.getByRole("tab", { name: "Designer" }).click();
   await expect(page.locator("[data-graph-root-location]")).toContainText("Sequence");
   await addPaletteActivity(page, "Write line");
-  await expectSavedRevision(page, 3);
+  await expectSavedRevision(page, 5);
   await expect(page.locator(".wf-sequence-step").getByText("Write line", { exact: true })).toHaveCount(1);
   await addPaletteActivity(page, "Delay");
-  await expectSavedRevision(page, 4);
+  await expectSavedRevision(page, 6);
   await expect(page.locator(".wf-sequence-step").getByText("Delay", { exact: true })).toHaveCount(1);
 
   await page.reload();
-  await expectSavedRevision(page, 4);
+  await expectSavedRevision(page, 6);
   await page.getByRole("tab", { name: "Inputs & outputs" }).click();
   await expect(page.getByRole("region", { name: "Customer note", exact: true }).getByRole("combobox", { name: /^Default/ })).toHaveValue("null");
   await page.getByRole("tab", { name: "Designer" }).click();
@@ -725,7 +729,7 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
   await selectSequenceStep(page, "Delay");
   await page.getByRole("button", { name: "Move activity up" }).click();
   await expect(page.getByText("Local work preserved")).toBeVisible();
-  await expect(page.getByText(/server draft advanced to revision 5/i)).toBeVisible();
+  await expect(page.getByText(/server draft advanced to revision 7/i)).toBeVisible();
   await expect(page.locator(".wf-sequence-step").getByText("Delay", { exact: true })).toHaveCount(1);
   await page.getByRole("button", { name: "Create parallel recovery draft" }).click();
 
