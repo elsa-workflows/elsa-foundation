@@ -369,6 +369,48 @@ export function supportsActivityExecutionInspection(context: StudioEndpointConte
   return hasCapabilityLink(context, capabilityIds.runtime, "activity-execution");
 }
 
+export interface ActivityExecutionBrowseEntry {
+  iterationPosition?: number | null;
+  attempt?: { attemptNumber: number } | null;
+  execution: import("../workflowTypes").ActivityExecutionStateSummary & { executionSequence: number };
+  position: number;
+  previousActivityExecutionId: string | null;
+  nextActivityExecutionId: string | null;
+}
+
+export interface ActivityExecutionBrowsePage {
+  items: ActivityExecutionBrowseEntry[];
+  totalCount: number;
+  previousCursor: string | null;
+  nextCursor: string | null;
+}
+
+export interface ActivityExecutionBrowseRequest {
+  executableNodeId?: string;
+  parentActivityExecutionId?: string;
+  ancestorActivityExecutionId?: string;
+  anchorActivityExecutionId?: string;
+  cursor?: string;
+  limit?: number;
+}
+
+export function supportsActivityExecutionBrowsing(context: StudioEndpointContext) {
+  return hasCapabilityLink(context, capabilityIds.runtime, "activity-executions");
+}
+
+export async function browseActivityExecutions(context: StudioEndpointContext, workflowExecutionId: string,
+  request: ActivityExecutionBrowseRequest = {}, signal?: AbortSignal): Promise<ActivityExecutionBrowsePage> {
+  const path = await resolveCapabilityLink(context, capabilityIds.runtime, "activity-executions", { workflowExecutionId });
+  const parameters = new URLSearchParams({ limit: String(request.limit ?? 50) });
+  for (const [key, value] of Object.entries(request)) if (value !== undefined) parameters.set(key, String(value));
+  const page = await context.http.getJson<ActivityExecutionBrowsePage>(`${path}?${parameters}`, { signal });
+  return { ...page, items: page.items.map(item => ({ ...item, execution: {
+    ...item.execution,
+    parentActivityExecutionId: item.execution.provenance?.parentActivityExecutionId,
+    iterationId: item.execution.provenance?.iterationId
+  } })) };
+}
+
 export interface ActivityExecutionDescendantsRequest {
   cursor?: string | null;
   limit?: number;

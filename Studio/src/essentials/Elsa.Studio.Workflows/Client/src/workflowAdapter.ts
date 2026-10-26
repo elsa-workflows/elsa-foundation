@@ -1,5 +1,5 @@
 import type { Edge, Node, XYPosition } from "@xyflow/react";
-import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, ActivityNodeStructure, ActivityPresentationRecord, DesignMetadataRecord } from "./workflowTypes";
+import type { ActivityCatalogItem, ActivityNode, ActivityNodeStructure, ActivityPresentationRecord, DesignMetadataRecord } from "./workflowTypes";
 import {
   canStartWorkflow as activityCanStartWorkflow,
   flowchartStructureKind,
@@ -1127,14 +1127,8 @@ function clonePayload(payload: Record<string, unknown>): Record<string, unknown>
   return JSON.parse(JSON.stringify(payload)) as Record<string, unknown>;
 }
 
-export function latestActivityExecution(activities: ActivityExecutionStateSummary[]) {
-  return [...activities].sort((left, right) =>
-    activityExecutionTime(right).localeCompare(activityExecutionTime(left)))[0];
-}
 
-function activityExecutionTime(activity: ActivityExecutionStateSummary) {
-  return activity.completedAt ?? activity.startedAt ?? activity.scheduledAt;
-}
+
 
 function isPosition(value: unknown): value is XYPosition {
   return isRecord(value) && typeof value.x === "number" && typeof value.y === "number";

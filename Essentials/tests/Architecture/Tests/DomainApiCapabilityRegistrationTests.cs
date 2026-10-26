@@ -3,6 +3,7 @@ using CShells.Features;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Api.Capabilities;
 using Elsa.Api.Capabilities.Models;
+using Elsa.Api.Capabilities.Contracts;
 using Elsa.Expressions;
 using Elsa.Expressions.Api;
 using Elsa.Expressions.Core.Contracts;
@@ -185,6 +186,19 @@ public sealed class DomainApiCapabilityRegistrationTests
         var link = Assert.Single(Assert.Single(available).Links);
         Assert.Equal("runtime-diagnostics", link.Rel);
         Assert.Equal("runtime/workflows/diagnostics/settings", link.Href);
+    }
+
+    [Fact]
+    public async Task Runtime_execution_browsing_is_advertised_only_for_a_supporting_provider()
+    {
+        Assert.Empty(await new RuntimeActivityExecutionBrowsingCapabilitySource().GetCapabilitiesAsync());
+        var store = new Elsa.Workflows.Runtime.Services.ActivityExecutions.InMemoryActivityExecutionInspectionStore();
+        var available = await new RuntimeActivityExecutionBrowsingCapabilitySource(store).GetCapabilitiesAsync();
+        Assert.Equal("activity-executions", Assert.Single(Assert.Single(available).Links).Rel);
+        var services = new ServiceCollection();
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IApiCapabilitySource) &&
+            descriptor.ImplementationType == typeof(RuntimeActivityExecutionBrowsingCapabilitySource));
     }
 
     private sealed class StubInputOptionsProvider : IActivityInputOptionsProvider

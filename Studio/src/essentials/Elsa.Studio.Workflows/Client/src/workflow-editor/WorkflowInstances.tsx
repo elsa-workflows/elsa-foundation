@@ -1,4 +1,7 @@
 import "./activityInspection.css";
+import { latestActivityExecution } from "../runtimeActivityOrder";
+import { useScopedCanvasActivities } from "./scopedExecutionEvidence";
+import { browseActivityExecutions, getActivityExecutionLayout, supportsActivityExecutionBrowsing, type ActivityExecutionBrowseEntry } from "../api/runtime";
 import { createCursorHistory, getPreviousCursor, moveCursorHistoryNext, moveCursorHistoryPrevious, reconcileCursorHistory } from "./cursorHistory";
 import { Component, lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { applyNodeChanges, ReactFlow, Background, Controls, MiniMap, type Edge, type Node, type NodeChange, type ReactFlowInstance } from "@xyflow/react";
@@ -7,7 +10,7 @@ import type { StudioActivityInputDescriptor, StudioAiContributionApi, StudioEndp
 import { listActivities } from "../api/activityDesign";
 import { deleteWorkflowInstance, getActivityExecutionInspection, getExecutable, getExecutableInputSources, getWorkflowInstance, listWorkflowInstances, supportsActivityExecutionInspection, supportsWorkflowInstanceDeletion, supportsWorkflowInstanceHealthFilter, WorkflowInstanceHealthFilterUnavailableError, type WorkflowInstanceListPage } from "../api/runtime";
 import { formatNamedIdentityTitle, loadDefinitionDisplayNames, resolveNamedIdentity } from "./definitionDisplayNames";
-import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowExecutableDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
+import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionLayout, ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowExecutableDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
 import { formatActivitySummary } from "../activitySummary";
 import { readPortableExpressionDefinition } from "../activityProperties";
 import { isMaskedInput, readSecretReference } from "../maskedInput";
@@ -19,7 +22,6 @@ import {
   findNodeScopePath,
   getActivityDesignerSupport,
   getChildSlots,
-  latestActivityExecution,
   planSlotNavigation,
   resolveScope,
   slotCrumbLabel,
@@ -76,6 +78,9 @@ import { WorkflowListIdentity } from "./WorkflowListIdentity";
 type WorkflowRunFlowInstance = ReactFlowInstance<Node<WorkflowNodeData>, Edge<WorkflowEdgeData>>;
 
 const runHistoryPageSizes = [10, 25, 50, 100] as const;
+const ActivityExecutionInspectionPanel = lazy(async () => ({ default: (await import("./ActivityExecutionBrowser")).ActivityExecutionInspectionPanel }));
+const ExecutionScopeNavigator = lazy(async () => ({ default: (await import("./ActivityExecutionBrowser")).ExecutionScopeNavigator }));
+const HistoricalBoundaryLayout = lazy(async () => ({ default: (await import("./ReusableBoundaryInspector")).HistoricalBoundaryLayout }));
 const ReusableBoundaryInspector = lazy(async () => {
   const module = await import("./ReusableBoundaryInspector");
   return { default: module.ReusableBoundaryInspector };
@@ -863,7 +868,21 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
   const definitionNameAbort = useRef<AbortController | null>(null);
   const incidentActivityLookupSequence = useRef(0);
   const latestIncidentActivityLookupById = useRef(new Map<string, number>());
-  const associationActivities = combineActivityExecutions(data?.details.activities ?? [], data?.incidentActivityExecutions ?? []);
+  const browserContext = `${runtimeValueContextId(context)}:${workflowExecutionId}`;
+  const [browserEvidence, setBrowserEvidence] = useState<{ context: string; items: ActivityExecutionStateSummary[] }>({ context: browserContext, items: [] });
+  const [executionScopes, setExecutionScopes] = useState<{ context: string; items: Array<{ execution: ActivityExecutionStateSummary; label: string }> }>({ context: browserContext, items: [] });
+  const [scopeNavigation, setScopeNavigation] = useState<{ context: string; loading: boolean; error: string }>({ context: browserContext, loading: false, error: "" });
+  const scopeRequest = useRef<AbortController | null>(null);
+  const [boundaryCanvas, setBoundaryCanvas] = useState<{ context: string; layout: ActivityExecutionLayout } | null>(null);
+  const requestedScope = useRef<{ execution: ActivityExecutionStateSummary; includeSelf: boolean; label?: string } | null>(null);
+  const rememberedExecutions = useRef(new Map<string, ActivityExecutionStateSummary>());
+  const loadedBrowserContext = useRef<string | null>(null);
+  useEffect(() => () => scopeRequest.current?.abort(), [browserContext]);
+  const currentExecutionScopes = executionScopes.context === browserContext ? executionScopes.items : [];
+  const executionScope = currentExecutionScopes.at(-1)?.execution;
+  const associationActivities = combineActivityExecutions(
+    combineActivityExecutions(data?.details.activities ?? [], data?.incidentActivityExecutions ?? []),
+    browserEvidence.context === browserContext ? browserEvidence.items : []);
   const selectedActivity = findSelectedActivityExecution(associationActivities, selectedEvidenceId, data?.details.incidents ?? []);
   const {
     containerRef,
@@ -889,9 +908,12 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
     if (appliedInitialInspectorTab.current === initialInspectorTab) return;
     appliedInitialInspectorTab.current = initialInspectorTab;
     incidentNavigationRequest.current += 1;
+    scopeRequest.current?.abort();
+    setScopeNavigation(current => current.context === browserContext && current.loading
+      ? { context: browserContext, loading: false, error: "Execution scope navigation was interrupted. Retry the scope." } : current);
     setActiveInspectorTab(initialInspectorTab);
     if (initialInspectorTab === "issues" || initialInspectorTab === "activity") openInspector();
-  }, [initialInspectorTab, openInspector]);
+  }, [browserContext, initialInspectorTab, openInspector]);
   const instanceAction = findAiAction(ai, "weaver.workflows.explain-instance");
   const journals = useCompensationJournals(context, workflowExecutionId);
 
@@ -964,6 +986,9 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
   const resetJournals = journals.reset;
   const load = useCallback(async () => {
     const generation = ++loadGeneration.current;
+    scopeRequest.current?.abort();
+    setScopeNavigation(current => current.context === browserContext && current.loading
+      ? { context: browserContext, loading: false, error: "Execution scope resolution was interrupted by refresh. Retry the scope." } : current);
     resetJournals();
     latestIncidentActivityLookupById.current.clear();
     incidentNavigationRequest.current += 1;
@@ -1049,8 +1074,15 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
       const initialEvidence = resolveInitialActivityEvidenceId(
         combineActivityExecutions(details.activities, incidentActivityResult.activities),
         initialActivityExecutionId);
-      setSelectedEvidenceId(initialEvidence);
-      setFrames([]);
+      if (loadedBrowserContext.current !== browserContext) {
+        setSelectedEvidenceId(initialEvidence);
+        setFrames([]);
+        loadedBrowserContext.current = browserContext;
+      } else {
+        setSelectedEvidenceId(current => details.incidents?.some(item => item.incidentId === current) ? initialEvidence : current);
+        setBrowserEvidence(current => ({ context: browserContext, items: (current.context === browserContext ? current.items : [])
+          .map(item => details.activities.find(fresh => fresh.activityExecutionId === item.activityExecutionId) ?? item) }));
+      }
       setState("ready");
       if (initialEvidence) {
         requestAnimationFrame(() => requestAnimationFrame(() => focusSelectedCanvasActivity(initialEvidence)));
@@ -1073,7 +1105,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
       setError(formatWorkflowRunLoadError(e, workflowExecutionId));
       setState("failed");
     }
-  }, [context, initialActivityExecutionId, resetJournals, workflowExecutionId]);
+  }, [browserContext, context, initialActivityExecutionId, resetJournals, workflowExecutionId]);
 
   useEffect(() => {
     void load();
@@ -1094,13 +1126,13 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
     navigate(`/workflows/definitions?definition=${encodeURIComponent(definitionId)}`);
   };
   const closeResponsiveInspector = () => {
-    incidentNavigationRequest.current += 1;
+    beginEvidenceNavigation();
     closeInspector();
     requestAnimationFrame(() => focusSelectedCanvasActivity(focusedRuntimeNodeId ?? selectedEvidenceId));
   };
 
   const navigateToScope = (nextFrames: ScopeFrame[]) => {
-    incidentNavigationRequest.current += 1;
+    beginEvidenceNavigation();
     setFrames(nextFrames);
   };
 
@@ -1118,18 +1150,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
     if (path) setFrames(path);
   }, [data]);
 
-  useEffect(() => {
-    const requestedActivityExecutionId = initialActivityExecutionId?.trim();
-    if (!data || !requestedActivityExecutionId || appliedInitialActivityExecutionId.current === requestedActivityExecutionId) return;
 
-    const activity = associationActivities.find(item => item.activityExecutionId === requestedActivityExecutionId);
-    if (!activity) return;
-    appliedInitialActivityExecutionId.current = requestedActivityExecutionId;
-
-    const nodeId = findExecutableGraphNodeId(data.executableGraph, activity) ?? activity.authoredActivityId ?? activity.executableNodeId;
-    requestCanvasFocus(nodeId);
-    focusNodePath(nodeId);
-  }, [associationActivities, data, focusNodePath, initialActivityExecutionId]);
 
   const ensureIncidentActivityAssociation = useCallback(async (incident: IncidentStateSummary, isCurrent: () => boolean = () => true) => {
     const generation = loadGeneration.current;
@@ -1225,6 +1246,10 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
 
   const beginEvidenceNavigation = () => {
     const requestId = ++incidentNavigationRequest.current;
+    if (scopeNavigation.context === browserContext && scopeNavigation.loading) {
+      scopeRequest.current?.abort();
+      setScopeNavigation({ context: browserContext, loading: false, error: "Execution scope navigation was interrupted. Retry the scope." });
+    }
     setIncidentAssociationMessage(null);
     setFocusInputKey(null);
     setFocusedRuntimeNodeId(null);
@@ -1242,17 +1267,17 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
   };
 
   const selectInspectorTab = (tab: InstanceInspectorTab) => {
-    incidentNavigationRequest.current += 1;
+    beginEvidenceNavigation();
     setActiveInspectorTab(tab);
   };
 
   const toggleInspectorCollapsedWithNavigation = () => {
-    incidentNavigationRequest.current += 1;
+    beginEvidenceNavigation();
     toggleInspectorCollapsed();
   };
 
   const toggleInspectorMaximizedWithNavigation = () => {
-    incidentNavigationRequest.current += 1;
+    beginEvidenceNavigation();
     toggleInspectorMaximized();
   };
 
@@ -1296,6 +1321,10 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
       if (!association?.activityExecution && association?.nodeId && !readIncidentActivityExecutionId(incident)) {
         setIncidentAssociationMessage("This incident identifies an activity but not an exact execution, so Studio cannot choose a repeated occurrence.");
       }
+      if (association?.activityExecution) {
+        setSelectedEvidenceId(association.activityExecution.activityExecutionId);
+        void restoreExecutionContext(association.activityExecution, false);
+      }
       setActiveInspectorTab(association?.activityExecution ? "activity" : "issues");
       setFocusInputKey(showInput && association?.activityExecution ? readIncidentInputKey(incident) : null);
       if (association?.nodeId !== existingAssociation?.nodeId) {
@@ -1307,38 +1336,178 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
     });
   };
 
-  const selectActivityExecution = (activityExecutionId: string) => {
-    const activity = associationActivities.find(item => item.activityExecutionId === activityExecutionId);
-    if (!activity) return;
-    const incident = choosePreferredIncident((data?.details.incidents ?? []).filter(item =>
-      isActiveIncident(item) && resolveIncidentActivityAssociation(item, associationActivities, data?.executableGraph)?.activityExecution?.activityExecutionId === activityExecutionId));
-    if (incident) {
-      openIncidentInIssues(incident.incidentId, findExecutableGraphNodeId(data?.executableGraph, activity) ?? (activity.authoredActivityId || activity.executableNodeId));
-      return;
+  const labelForExecution = useCallback((execution: ActivityExecutionStateSummary) => resolveActivityLabel(
+    findExecutableNodeFacts(data?.executableGraph, execution)?.presentation,
+    data?.activityCatalog.find(item => item.activityTypeKey === execution.activityType), execution.activityType), [data?.activityCatalog, data?.executableGraph]);
+
+  const rememberExecution = useCallback((execution: ActivityExecutionStateSummary) => {
+    setBrowserEvidence(current => ({ context: browserContext, items: combineActivityExecutions(
+      current.context === browserContext ? current.items : [], [execution]) }));
+  }, [browserContext]);
+
+  const restoreExecutionContext = useCallback(async (execution: ActivityExecutionStateSummary, includeSelf: boolean, label?: string) => {
+    requestedScope.current = { execution, includeSelf, label };
+    scopeRequest.current?.abort();
+    const controller = new AbortController();
+    scopeRequest.current = controller;
+    const generation = loadGeneration.current;
+    const navigation = incidentNavigationRequest.current;
+    try {
+      if (!await supportsActivityExecutionBrowsing(context) || controller.signal.aborted || generation !== loadGeneration.current || navigation !== incidentNavigationRequest.current) return;
+      setScopeNavigation({ context: browserContext, loading: true, error: "" });
+      let includeSelectedScope = includeSelf;
+      if (includeSelf && !findExecutableNodeFacts(data?.executableGraph, execution)) {
+        const children = await browseActivityExecutions(context, workflowExecutionId, { parentActivityExecutionId: execution.activityExecutionId, limit: 1 }, controller.signal);
+        includeSelectedScope = children.totalCount > 0;
+      }
+      // Clear the old context while resolving the new one; its evidence must not leak into this navigation.
+      const chain: Array<{ execution: ActivityExecutionStateSummary; label: string }> = [];
+      let pinnedBoundaryLayout: ActivityExecutionLayout | null = null;
+      let id: string | null | undefined = execution.activityExecutionId;
+      const visited = new Set<string>();
+      while (id) {
+        if (visited.has(id) || visited.size >= 256) throw new Error("Recorded execution ancestry is incomplete or cyclic.");
+        visited.add(id);
+        const inspection = await getActivityExecutionInspection(context, workflowExecutionId, id, controller.signal);
+        if (inspection.activityExecutionId !== id || inspection.workflowExecutionId !== workflowExecutionId) throw new Error("Execution context identity did not match.");
+        if (!pinnedBoundaryLayout && inspection.boundary?.layoutAvailable) {
+          const layout = await getActivityExecutionLayout(context, workflowExecutionId, id, controller.signal);
+          if (layout.activityExecutionId !== id || layout.workflowExecutionId !== workflowExecutionId) throw new Error("Pinned boundary identity did not match.");
+          pinnedBoundaryLayout = layout;
+        }
+        const item = { ...activityExecutionSummaryFromInspection(inspection), executionSequence: inspection.executionSequence,
+          provenance: inspection.provenance, parentActivityExecutionId: inspection.provenance.parentActivityExecutionId,
+          iterationId: inspection.provenance.iterationId };
+        if (controller.signal.aborted || generation !== loadGeneration.current || navigation !== incidentNavigationRequest.current) return;
+        rememberExecution(item);
+        let occurrenceLabel = id === execution.activityExecutionId && label ? label : labelForExecution(item);
+        if (item.iterationId && !(inspection.attempt?.attemptNumber && inspection.attempt.attemptNumber > 1) && !label) {
+          const siblings = await browseActivityExecutions(context, workflowExecutionId, { executableNodeId: item.executableNodeId,
+            parentActivityExecutionId: item.parentActivityExecutionId ?? undefined, anchorActivityExecutionId: item.activityExecutionId, limit: 1 }, controller.signal);
+          const position = siblings.items[0]?.iterationPosition;
+          if (position) occurrenceLabel += ` · Iteration ${position}`;
+        }
+        if (includeSelectedScope || id !== execution.activityExecutionId) chain.unshift({ execution: item,
+          label: occurrenceLabel });
+        id = inspection.provenance.parentActivityExecutionId;
+      }
+      if (!controller.signal.aborted && navigation === incidentNavigationRequest.current) {
+        if (!findExecutableNodeFacts(data?.executableGraph, execution) && !pinnedBoundaryLayout)
+          throw new Error("Pinned boundary structure is unavailable.");
+        setBoundaryCanvas(pinnedBoundaryLayout ? { context: browserContext, layout: pinnedBoundaryLayout } : null);
+        setExecutionScopes({ context: browserContext, items: chain });
+        setScopeNavigation({ context: browserContext, loading: false, error: "" });
+        return true;
+      }
+    } catch {
+      if (!controller.signal.aborted && navigation === incidentNavigationRequest.current) setScopeNavigation({ context: browserContext, loading: false, error: "Execution context could not be resolved. Retry the selection to inspect its scope." });
     }
+  }, [browserContext, context, data?.executableGraph, labelForExecution, rememberExecution, workflowExecutionId]);
+
+  const selectBrowserExecution = (execution: ActivityExecutionStateSummary, updateScope = true) => {
+    rememberExecution(execution);
+    rememberedExecutions.current.set(JSON.stringify([browserContext, executionScope?.activityExecutionId, execution.executableNodeId]), execution);
     beginEvidenceNavigation();
-    const nodeId = findExecutableGraphNodeId(data?.executableGraph, activity) ?? (activity.authoredActivityId || activity.executableNodeId);
-    setSelectedEvidenceId(activityExecutionId);
+    setSelectedEvidenceId(execution.activityExecutionId);
     setActiveInspectorTab("activity");
+    const nodeId = findExecutableGraphNodeId(data?.executableGraph, execution) ?? execution.authoredActivityId;
     requestCanvasFocus(nodeId);
-    focusNodePath(nodeId);
+    if (updateScope && executionScope?.executableNodeId === execution.executableNodeId && executionScope.activityExecutionId !== execution.activityExecutionId)
+      void restoreExecutionContext(execution, true);
     openInspector();
   };
 
+  const selectActivityExecution = (activityExecutionId: string) => {
+    const known = associationActivities.find(item => item.activityExecutionId === activityExecutionId);
+    if (!known) return;
+    selectBrowserExecution(known);
+    focusNodePath(findExecutableGraphNodeId(data?.executableGraph, known) ?? known.authoredActivityId);
+    void restoreExecutionContext(known, false);
+  };
+
+  const enterChildExecution = (entry: ActivityExecutionBrowseEntry) => {
+    const execution = entry.execution;
+    selectBrowserExecution(execution);
+    const nodeId = findExecutableGraphNodeId(data?.executableGraph, execution) ?? execution.authoredActivityId;
+    const root = data?.definitionVersion?.state.rootActivity;
+    const node = root ? findActivityNode(root, nodeId, data?.activityCatalog) : null;
+    const firstChild = node ? getChildSlots(node, data?.activityCatalog)[0]?.activities[0] : null;
+    focusNodePath(firstChild?.nodeId ?? nodeId);
+    const occurrence = execution.iterationId && entry.iterationPosition && !entry.attempt ? `Iteration ${entry.iterationPosition}` : `Execution ${entry.position}`;
+    void restoreExecutionContext(execution, Boolean(firstChild) || !node, `${labelForExecution(execution)} · ${occurrence}`);
+  };
+
   const selectGraphActivity = (nodeId: string) => {
-    const nodeIncidents = (data?.details.incidents ?? []).filter(incident =>
-      isActiveIncident(incident) && resolveIncidentActivityAssociation(incident, associationActivities, data?.executableGraph)?.nodeId === nodeId);
-    const incidentToOpen = choosePreferredIncident(nodeIncidents);
-    if (incidentToOpen) {
-      openIncidentInIssues(incidentToOpen.incidentId, nodeId);
-      return;
-    }
     beginEvidenceNavigation();
-    setSelectedEvidenceId(nodeId);
+    const node = data?.executableGraph?.factsByNodeId.get(nodeId);
+    const remembered = rememberedExecutions.current.get(JSON.stringify([browserContext, executionScope?.activityExecutionId, node?.executableNodeId]));
+    setSelectedEvidenceId(remembered?.activityExecutionId ?? nodeId);
     setActiveInspectorTab("activity");
     requestCanvasFocus(nodeId);
     openInspector();
   };
+
+  const moveScopeOccurrence = async (execution: ActivityExecutionStateSummary) => {
+    const navigation = beginEvidenceNavigation();
+    const retainedNode = selectedActivity?.executableNodeId;
+    const retainedCanvasNode = selectedActivity ? findExecutableGraphNodeId(data?.executableGraph, selectedActivity) ?? selectedActivity.executableNodeId : null;
+    if (!await restoreExecutionContext(execution, true) || navigation !== incidentNavigationRequest.current) return;
+    const controller = scopeRequest.current;
+    if (!retainedNode || retainedNode === execution.executableNodeId) { selectBrowserExecution(execution, false); return; }
+    try {
+      const page = await browseActivityExecutions(context, workflowExecutionId, { executableNodeId: retainedNode,
+        ancestorActivityExecutionId: execution.activityExecutionId, limit: 1 }, controller?.signal);
+      if (controller?.signal.aborted || scopeRequest.current !== controller || navigation !== incidentNavigationRequest.current) return;
+      if (page.items[0]) selectBrowserExecution(page.items[0].execution);
+      else setSelectedEvidenceId(retainedCanvasNode);
+    } catch {
+      if (!controller?.signal.aborted && navigation === incidentNavigationRequest.current) setScopeNavigation({ context: browserContext, loading: false, error: "This occurrence's activity evidence could not be loaded. Retry the scope." });
+    }
+  };
+
+  const openExecutionIssues = (execution: ActivityExecutionStateSummary) => {
+    rememberExecution(execution);
+    beginEvidenceNavigation();
+    setSelectedEvidenceId(execution.activityExecutionId);
+    setActiveInspectorTab("issues");
+    openInspector();
+  };
+
+  const browserNodeFacts = findExecutableNodeFacts(data?.executableGraph, selectedActivity)
+    ?? (selectedEvidenceId ? data?.executableGraph?.factsByNodeId.get(selectedEvidenceId) : undefined);
+  const boundaryNode = boundaryCanvas?.context === browserContext
+    ? boundaryCanvas.layout.nodes.find(node => node.executableNodeId === selectedEvidenceId) : undefined;
+  const browserNodeIdentity = browserNodeFacts ?? selectedActivity ?? (boundaryNode ? {
+    executableNodeId: boundaryNode.executableNodeId, activityType: boundaryNode.activityType ?? "Activity"
+  } : undefined);
+  const browserExactId = selectedActivity?.activityExecutionId === selectedEvidenceId ? selectedEvidenceId ?? undefined : undefined;
+  const browserAncestorId = executionScope?.activityExecutionId === browserExactId
+    ? currentExecutionScopes.at(-2)?.execution.activityExecutionId : executionScope?.activityExecutionId;
+  const scopeBlocked = scopeNavigation.context === browserContext && (scopeNavigation.loading || Boolean(scopeNavigation.error));
+  const browserActivityContent = scopeBlocked ? <p className="wf-instance-note" role="status">{scopeNavigation.loading ? "Resolving execution scope…" : scopeNavigation.error}</p> : browserNodeIdentity && data ? <Suspense fallback={<p role="status">Loading execution browser…</p>}><ActivityExecutionInspectionPanel
+    key={`${browserContext}:${browserNodeIdentity.executableNodeId}:${browserAncestorId ?? ""}`}
+    context={context} workflowExecutionId={workflowExecutionId} nodeId={browserNodeIdentity.executableNodeId}
+    nodeLabel={browserNodeFacts?.presentation?.displayName ?? (shortTypeName(browserNodeIdentity.activityType) ?? browserNodeIdentity.activityType)}
+    exactId={browserExactId} seed={selectedActivity} ancestorId={browserAncestorId} refreshKey={loadGeneration.current}
+    labelFor={labelForExecution} onSelect={selectBrowserExecution} onEnter={enterChildExecution}
+    onIncident={openExecutionIssues}
+    renderDetails={(execution, navigation, children) => <WorkflowActivityExecutionDetails context={context} activity={execution}
+      activityCatalog={data.activityCatalog} executableNodeFacts={findExecutableNodeFacts(data.executableGraph, execution)}
+      expressionEditors={expressionEditors} focusInputKey={focusInputKey} onSelectEvidence={selectActivityExecution}
+      executionNavigation={navigation} childExecutions={children} />}
+  /></Suspense> : undefined;
+
+  useEffect(() => {
+    const id = initialActivityExecutionId?.trim();
+    if (!data || !id || appliedInitialActivityExecutionId.current === id) return;
+    const activity = associationActivities.find(item => item.activityExecutionId === id);
+    if (!activity) return;
+    appliedInitialActivityExecutionId.current = id;
+    const nodeId = findExecutableGraphNodeId(data.executableGraph, activity) ?? activity.authoredActivityId;
+    requestCanvasFocus(nodeId);
+    focusNodePath(nodeId);
+    void restoreExecutionContext(activity, false);
+  }, [associationActivities, data, focusNodePath, initialActivityExecutionId, restoreExecutionContext]);
 
   const openIncidents = () => {
     const active = choosePreferredIncident((data?.details.incidents ?? []).filter(isActiveIncident));
@@ -1376,6 +1545,13 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
             </div>
           ) : null}
           <WorkflowInstanceCanvas
+            onSelectExecutionSummary={selectBrowserExecution}
+            context={context}
+            boundaryLayout={boundaryCanvas?.context === browserContext ? boundaryCanvas.layout : undefined}
+            executionScope={executionScope}
+            refreshKey={loadGeneration.current}
+            scopeLoading={scopeBlocked}
+            executionBreadcrumb={<nav className="wf-execution-scope" aria-label="Execution scope"><button type="button" onClick={() => { scopeRequest.current?.abort(); setBoundaryCanvas(null); requestedScope.current = null; setExecutionScopes({ context: browserContext, items: [] }); setScopeNavigation({ context: browserContext, loading: false, error: "" }); setFrames([]); }}>All executions</button>{currentExecutionScopes.map(scope => <button type="button" key={scope.execution.activityExecutionId} onClick={() => { selectBrowserExecution(scope.execution); focusNodePath(scope.execution.authoredActivityId); void restoreExecutionContext(scope.execution, true); }}><ChevronRight size={13} />{scope.label}</button>)}{executionScope && !scopeBlocked ? <Suspense fallback={null}><ExecutionScopeNavigator context={context} execution={executionScope} refreshKey={loadGeneration.current} onIncident={openExecutionIssues} onSelect={execution => void moveScopeOccurrence(execution)} onUnavailable={() => setScopeNavigation({ context: browserContext, loading: false, error: "This execution scope is unavailable in the current context." })} /></Suspense> : null}{scopeNavigation.context === browserContext && (scopeNavigation.loading || scopeNavigation.error) ? <span role="status">{scopeNavigation.loading ? "Resolving execution scope…" : scopeNavigation.error}{scopeNavigation.error ? <button type="button" onClick={() => { const request = requestedScope.current; if (request) void restoreExecutionContext(request.execution, request.includeSelf, request.label); }}>Retry execution scope</button> : null}</span> : null}</nav>}
             definitionVersion={data.definitionVersion}
             definitionVersionError={data.definitionVersionError}
             activityCatalog={data.activityCatalog}
@@ -1419,6 +1595,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
           <WorkflowInstanceInspector
             context={context}
             summary={data.details.instance}
+            activityContent={browserActivityContent}
             details={data.details}
             associationActivities={associationActivities}
             associationLookupIncomplete={data.incidentAssociationLookupIncomplete}
@@ -1703,6 +1880,7 @@ function sourceAccessFromError(error: unknown) {
 }
 
 function WorkflowInstanceCanvas({
+  context, executionScope, boundaryLayout, refreshKey, scopeLoading, executionBreadcrumb, onSelectExecutionSummary,
   definitionVersion,
   definitionVersionError,
   activityCatalog,
@@ -1721,6 +1899,13 @@ function WorkflowInstanceCanvas({
   journals,
   operator
 }: {
+  context: StudioEndpointContext;
+  executionScope?: ActivityExecutionStateSummary;
+  boundaryLayout?: ActivityExecutionLayout;
+  refreshKey: number;
+  scopeLoading: boolean;
+  executionBreadcrumb: ReactNode;
+  onSelectExecutionSummary(execution: ActivityExecutionStateSummary): void;
   definitionVersion: WorkflowDefinitionVersionDetails | null;
   definitionVersionError: string;
   activityCatalog: ActivityCatalogItem[];
@@ -1742,10 +1927,20 @@ function WorkflowInstanceCanvas({
   const scopeKey = getInstanceScopeKey(frames);
   const [flowInstance, setFlowInstance] = useState<WorkflowRunFlowInstance | null>(null);
   const journalOf = journals?.get;
-  const canvas = useMemo(
-    () => buildInstanceCanvas(definitionVersion, activityCatalog, details, selectedEvidenceId, frames, onNavigateToScope, onOpenIncident, associationActivities, executableGraph, journalOf),
-    [activityCatalog, associationActivities, definitionVersion, details, executableGraph, frames, journalOf, onNavigateToScope, onOpenIncident, selectedEvidenceId]
-  );
+  const unscopedCanvas = useMemo(
+    () => buildInstanceCanvas(definitionVersion, activityCatalog, details, selectedEvidenceId, frames, onNavigateToScope, onOpenIncident, [], executableGraph, journalOf),
+    [activityCatalog, definitionVersion, details, executableGraph, frames, journalOf, onNavigateToScope, onOpenIncident, selectedEvidenceId]);
+  const scoped = useScopedCanvasActivities(context, details.instance.workflowExecutionId, executionScope?.activityExecutionId,
+    boundaryLayout ? boundaryLayout.nodes.map(node => node.executableNodeId) : unscopedCanvas.nodes.map(node => executableGraph?.factsByNodeId.get(nodeRuntimeId(node))?.executableNodeId ?? nodeRuntimeId(node)), refreshKey,
+    associationActivities.find(item => item.activityExecutionId === selectedEvidenceId));
+  const shownActivities = scopeLoading ? [] : executionScope ? scoped.activities : associationActivities;
+  const scopedIds = new Set(shownActivities.map(item => item.activityExecutionId));
+  const shownIncidents = executionScope || scopeLoading ? (details.incidents ?? []).filter(item => {
+    const id = readIncidentActivityExecutionId(item);
+    return id ? scopedIds.has(id) : false;
+  }) : details.incidents;
+  const canvas = buildInstanceCanvas(definitionVersion, activityCatalog, { ...details, incidents: shownIncidents }, selectedEvidenceId,
+    frames, onNavigateToScope, onOpenIncident, shownActivities, executableGraph, journalOf);
   // Spec 260: a live scope's rows come from its journal; read it once the shown occurrence is known.
   const shownScopeExecutionId = canvas.mode === "compensation" ? canvas.compensation?.runtime.scopeActivityExecutionId : undefined;
   const shownScopeStatus = shownScopeExecutionId ? associationActivities.find(activity => activity.activityExecutionId === shownScopeExecutionId)?.status : undefined;
@@ -1787,6 +1982,8 @@ function WorkflowInstanceCanvas({
       {definitionVersion ? (
         <ScopeBreadcrumb className="wf-instance-breadcrumb" frames={frames} onNavigate={onNavigateToScope} />
       ) : null}
+      {executionBreadcrumb}
+      {executionScope && (scoped.loading || scoped.failed) ? <p className="wf-instance-note" role="status">{scoped.loading ? "Loading this execution scope…" : "Some scoped execution evidence could not be loaded. Refresh to retry."}</p> : null}
       <div className="wf-instance-canvas">
         {!definitionVersion ? (
           <div className="wf-empty">
@@ -1795,7 +1992,14 @@ function WorkflowInstanceCanvas({
           </div>
         ) : null}
         {definitionVersion && canvas.mode === "graph" && canvas.nodes.length === 0 ? <div className="wf-empty">No workflow activities are available for this executable.</div> : null}
-        {definitionVersion && canvas.mode === "compensation" && canvas.compensation ? (
+        {boundaryLayout ? <Suspense fallback={<p role="status">Loading pinned activity structure…</p>}><HistoricalBoundaryLayout layout={boundaryLayout}
+          selectedExecutableNodeId={associationActivities.find(item => item.activityExecutionId === selectedEvidenceId)?.executableNodeId}
+          statusByNode={new Map(shownActivities.map(item => [item.executableNodeId, item.status]))}
+          onSelectNode={nodeId => {
+            const execution = shownActivities.find(item => item.executableNodeId === nodeId);
+            if (execution) onSelectExecutionSummary(execution);
+            else onSelectActivity(nodeId);
+          }} /></Suspense> : definitionVersion && canvas.mode === "compensation" && canvas.compensation ? (
           <CompensationScopeDesigner
             key={scopeKey}
             owner={canvas.compensation.owner}
@@ -2051,6 +2255,7 @@ function IncidentHealthAction({ incidents, onClick }: { incidents?: IncidentStat
 }
 
 function WorkflowInstanceInspector({
+  activityContent,
   context,
   summary,
   details,
@@ -2092,6 +2297,7 @@ function WorkflowInstanceInspector({
 }: {
   context: StudioEndpointContext;
   summary: WorkflowInstanceSummary | null;
+  activityContent?: ReactNode;
   details: WorkflowInstanceDetails | null;
   associationActivities?: ActivityExecutionStateSummary[];
   associationLookupIncomplete?: boolean;
@@ -2228,7 +2434,7 @@ function WorkflowInstanceInspector({
                     onSelectEvidence={openActivityEvidence}
                   />
                 </>
-              ) : activeTab === "activity" ? (
+              ) : activeTab === "activity" ? (activityContent ??
                 <WorkflowActivityExecutionDetails
                   context={context}
                   activity={selectedActivity}
@@ -2454,6 +2660,8 @@ function CompensatesRow({ forwardActivityExecutionId, stepName, onSelectEvidence
 }
 
 export function WorkflowActivityExecutionDetails({
+  executionNavigation,
+  childExecutions,
   context,
   activity,
   activityCatalog,
@@ -2462,6 +2670,8 @@ export function WorkflowActivityExecutionDetails({
   focusInputKey = null,
   onSelectEvidence
 }: {
+  executionNavigation?: ReactNode;
+  childExecutions?: ReactNode;
   context: StudioEndpointContext;
   activity: ActivityExecutionStateSummary | null;
   activityCatalog: ActivityCatalogItem[];
@@ -2628,6 +2838,8 @@ export function WorkflowActivityExecutionDetails({
 
         {copyStatus ? <p className="wf-copy-status" role="status" aria-live="polite">{copyStatus}</p> : null}
       </section>
+      {executionNavigation}
+      {childExecutions}
       <RuntimeValueEvidenceResolutionProvider scope={resolutionScope}>
         <WorkflowActivityInputEvidence
           state={currentInspectionState}

@@ -8,6 +8,59 @@ public sealed class InMemoryActivityExecutionInspectionStore : IActivityExecutio
     private readonly object _syncRoot = new();
     private readonly Dictionary<ActivityExecutionInspectionProjectionKey, ActivityExecutionInspectionProjection> _projections = new();
 
+    public bool SupportsExecutionBrowsing => true;
+
+    public ValueTask<ActivityExecutionBrowsePage> BrowseAsync(ActivityExecutionBrowseQuery query, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_syncRoot)
+        {
+            var workflow = ListByWorkflowExecutionId(query.WorkflowExecutionId).ToArray();
+            var parents = workflow.ToDictionary(x => x.ActivityExecutionId, x => x.Provenance.ParentActivityExecutionId, StringComparer.Ordinal);
+            bool IsDescendant(ActivityExecutionInspectionProjection item)
+            {
+                if (query.AncestorActivityExecutionId is null) return true;
+                if (!parents.ContainsKey(query.AncestorActivityExecutionId)) return false;
+                var visited = new HashSet<string>(StringComparer.Ordinal) { item.ActivityExecutionId };
+                var parent = item.Provenance.ParentActivityExecutionId;
+                while (parent is not null && visited.Add(parent))
+                {
+                    if (StringComparer.Ordinal.Equals(parent, query.AncestorActivityExecutionId)) return true;
+                    parent = parents.GetValueOrDefault(parent);
+                }
+                return false;
+            }
+            var matches = workflow.Where(x =>
+                (query.ExecutableNodeId is null || StringComparer.Ordinal.Equals(x.ExecutableNodeId, query.ExecutableNodeId)) &&
+                (query.ParentActivityExecutionId is null || StringComparer.Ordinal.Equals(x.Provenance.ParentActivityExecutionId, query.ParentActivityExecutionId)) &&
+                IsDescendant(x)).OrderBy(x => x.ScheduledAt).ThenBy(x => x.ExecutionSequence)
+                .ThenBy(x => x.ActivityExecutionId, StringComparer.Ordinal).ToArray();
+            var anchor = query.AnchorActivityExecutionId is null ? -1 : Array.FindIndex(matches, x => x.ActivityExecutionId == query.AnchorActivityExecutionId);
+            if (query.AnchorActivityExecutionId is not null && anchor < 0)
+                return ValueTask.FromResult(new ActivityExecutionBrowsePage(matches.LongLength, 0, []));
+            var offset = query.Offset ?? (anchor >= 0 ? anchor / query.Limit * query.Limit : Math.Max(0, matches.LongLength - query.Limit));
+            var iterationPositions = new Dictionary<(string Node, string? Parent, string Iteration), long>();
+            var iterationCounts = new Dictionary<(string Node, string? Parent), long>();
+            foreach (var item in matches)
+            {
+                if (item.Provenance.IterationId is not { } iteration) continue;
+                var group = (item.ExecutableNodeId, item.Provenance.ParentActivityExecutionId);
+                var key = (item.ExecutableNodeId, item.Provenance.ParentActivityExecutionId, iteration);
+                if (!iterationPositions.ContainsKey(key)) iterationPositions[key] = iterationCounts[group] = iterationCounts.GetValueOrDefault(group) + 1;
+            }
+            var items = matches.Skip((int)Math.Min(offset, int.MaxValue)).Take(query.Limit).Select((x, index) =>
+            {
+                var position = offset + index;
+                return new ActivityExecutionBrowseEntry(ActivityExecutionInspectionSummaryProjection.FromProjection(x), position + 1,
+                    position > 0 ? matches[(int)position - 1].ActivityExecutionId : null,
+                    position + 1 < matches.LongLength ? matches[(int)position + 1].ActivityExecutionId : null,
+                    x.Provenance.IterationId is { } iteration ? iterationPositions[(x.ExecutableNodeId, x.Provenance.ParentActivityExecutionId, iteration)] : null);
+            }).ToArray();
+            return ValueTask.FromResult(new ActivityExecutionBrowsePage(matches.LongLength, offset, items));
+        }
+    }
+
     internal void DeleteForWorkflowExecution(string workflowExecutionId)
     {
         lock (_syncRoot)
