@@ -1,5 +1,7 @@
 using System.Net;
 using Elsa.Studio.Web;
+using Elsa.Studio.Hosting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
@@ -14,7 +16,7 @@ namespace Elsa.Studio.Tests;
 
 /// <summary>
 /// Stable-URL entry points import content-hashed chunks that a rebuild deletes, so every served asset must be revalidated
-/// before reuse — see <see cref="StudioAssetCaching"/>.
+/// before reuse through the public Hosting pipeline.
 /// </summary>
 public sealed class StudioAssetCachingTests : IAsyncLifetime
 {
@@ -80,10 +82,12 @@ public sealed class StudioAssetCachingTests : IAsyncLifetime
         builder.WebHost.UseTestServer();
         builder.Services.AddSingleton<INuplaneAdminOperations>(new SinglePackageNuplaneAdmin(PackageId, PackageInstallPath));
 
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?> { ["CShells:Shells:Default:Features:StudioApi"] = "true" });
+        builder.AddElsaStudio(options => options.ShellsFile = null);
         _app = builder.Build();
-        _app.UseStudioStaticFiles();
+        _app.UseElsaStudio();
         _app.MapNuplaneStaticWebAssets();
-        _app.MapStudioFallback();
+        _app.MapElsaStudio();
 
         await _app.StartAsync();
         _client = _app.GetTestClient();

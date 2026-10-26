@@ -8,11 +8,6 @@ namespace Elsa.Studio.Web;
 /// </summary>
 internal static class ConfigFileWriter
 {
-    // Process-wide gate guarding every read-modify-write cycle over the host config files. All config
-    // mutations (shell feature saves and module-management feed/retention edits) take this before
-    // reading, so concurrent requests can't interleave and lose each other's changes.
-    public static readonly SemaphoreSlim WriteGate = new(1, 1);
-
     /// <summary>
     /// Writes <paramref name="contents"/> to <paramref name="path"/> atomically: the payload is first
     /// written to a temp file in the same directory (guaranteeing the same volume, so the move is a

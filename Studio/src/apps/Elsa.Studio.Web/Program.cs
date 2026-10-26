@@ -1,9 +1,7 @@
-using CShells.AspNetCore.Configuration;
-using CShells.AspNetCore.Extensions;
-using CShells.DependencyInjection;
 using Elsa.Studio.ConsoleStream;
 using Elsa.Studio.ConsoleStream.Extensions;
 using Elsa.Studio.Web;
+using Elsa.Studio.Hosting;
 using Nuplane;
 using Nuplane.Admin;
 using Nuplane.Loading.Hosting.Builder;
@@ -15,15 +13,11 @@ using Nuplane.Sources.Directory.Configuration;
 ConsoleStreamHookInstaller.InstallConsoleStreamHookIfEnabled(args);
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Configuration.AddJsonFile("shells.json", optional: false, reloadOnChange: true);
+var studio = builder.AddElsaStudio(options => options.QueryTokenPathPrefixes = [ConsoleStreamStudioServiceCollectionExtensions.HubPath]);
 builder.Configuration.AddJsonFile("nuplane-management.json", optional: true, reloadOnChange: true);
 var configuration = builder.Configuration;
 ConsoleStreamHookInstaller.InstallConsoleStreamHookIfEnabled(configuration);
 var nuplaneConfiguration = configuration.GetSection("Nuplane");
-
-builder.WebHost.UseStaticWebAssets();
-
-builder.Services.AddSingleton<IConfigurationRoot>(configuration);
 
 // Theme configuration. Bound from the "Themes" section, which the Configuration API populates from
 // appsettings.json, environment variables (Themes__ThemesDirectory, etc.), and any other registered source.
@@ -41,16 +35,7 @@ builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
 });
 builder.Services.AddSingleton<StudioShellFeatureConfigurationStore>();
 
-builder.Services.AddCShellsAspNetCore(shells =>
-{
-    shells
-        .WithStudioFeatureAssemblies()
-        .WithConfigurationProvider(configuration)
-        .WithWebRouting(options =>
-        {
-            options.EnablePathRouting = true;
-        });
-});
+studio.ConfigureShells(shells => shells.WithStudioFeatureAssemblies());
 
 // Host the console-log-streaming server (capture host + SignalR hub + HTTP endpoints) on the application
 // root rather than inside the ConsoleStream shell feature. Shell route scopes are recycled at runtime on
@@ -72,30 +57,13 @@ builder.Services.AddStudioBackendManagementBridge(configuration);
 
 var app = builder.Build();
 
-// The default shell must be active before routing runs so shell-mapped endpoints are matched — and gated by the
-// authorization middleware below — on the first request after a cold start too (see StudioShellActivation).
-app.UseStudioDefaultShellActivation();
-app.UseRouting();
-app.UseAuthentication();
-app.UseAuthorization();
-
-// Browser runtime config (window.__ELSA_STUDIO_RUNTIME__). The body is built by StudioRuntimeScript, which
-// deliberately omits the backend host management key so no server-side secret reaches the browser (ADR 0037).
-app.MapGet("/studio-runtime.js", () =>
-    Results.Content(StudioRuntimeScript.Render(configuration), "application/javascript"));
-
-app.UseStudioStaticFiles();
+app.UseElsaStudio();
+app.MapElsaStudio();
 
 app.MapElsaModuleManagementApi();
 app.MapStudioBackendManagementBridge();
 app.MapElsaFeatureManagementApi();
 app.MapConsoleStreamStudioIfEnabled(configuration, StudioBridgeAuth.PolicyName);
-app.MapShells();
-app.MapActiveShellStudioApi();
 app.MapNuplaneStaticWebAssets();
-// Unknown API routes must remain real 404 responses. Letting the SPA fallback answer them with index.html and 200
-// turns an optional API capability into a JSON parse failure and obscures ordinary endpoint mistakes in the browser.
-app.MapFallback("/_elsa/{**path}", () => Results.NotFound());
-app.MapStudioFallback();
 
 app.Run();

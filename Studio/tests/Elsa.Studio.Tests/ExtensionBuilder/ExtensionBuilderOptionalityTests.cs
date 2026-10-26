@@ -13,6 +13,7 @@ using Elsa.Studio.Api.Options;
 using Elsa.Studio.Core.Models;
 using Elsa.Studio.ExtensionBuilder;
 using Elsa.Studio.Web;
+using Elsa.Studio.Hosting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -206,7 +207,8 @@ public sealed class ExtensionBuilderOptionalityTests : IAsyncDisposable
     {
         var shellSettings = new Dictionary<string, string?>
         {
-            ["CShells:Shells:Default:Configuration:WebRouting:Path"] = ""
+            ["CShells:Shells:Default:Configuration:WebRouting:Path"] = "",
+            ["CShells:Shells:Default:Features:StudioApi"] = "true"
         };
         if (featureEnabled)
             shellSettings[$"CShells:Shells:Default:Features:{FeatureName}"] = "true";
@@ -215,24 +217,15 @@ public sealed class ExtensionBuilderOptionalityTests : IAsyncDisposable
 
         var builder = BridgeTestHost.CreateBuilder(authEnabled: authEnabled, extraSettings: shellSettings);
         builder.Services.RouteBackendClientsThrough(backend);
-        builder.Services.AddCShellsAspNetCore(shells =>
-        {
-            shells
-                .WithAssemblies(typeof(ExtensionBuilderStudioFeature).Assembly, typeof(FailingShellFeature).Assembly)
-                .WithConfigurationProvider(builder.Configuration)
-                .WithWebRouting(options => options.EnablePathRouting = true);
-        });
+        builder.AddElsaStudio(options => options.ShellsFile = null)
+            .ConfigureShells(shells => shells.WithAssemblies(typeof(ExtensionBuilderStudioFeature).Assembly, typeof(FailingShellFeature).Assembly));
 
         var app = builder.Build();
-        app.UseStudioDefaultShellActivation();
-        app.UseRouting();
-        app.UseAuthentication();
-        app.UseAuthorization();
-        // Program.cs's UseStudioStaticFiles sits here, ahead of the shell middleware MapShells adds.
+        // Preserve this independent root branch before the Studio middleware, as in the original harness.
         app.Map(StaticAssetRoute, asset => asset.Run(context => context.Response.WriteAsync(StaticAssetContent)));
+        app.UseElsaStudio();
         app.MapStudioBackendManagementBridge();
-        app.MapShells();
-        MapFallbacks(app);
+        app.MapElsaStudio();
 
         return await StartAsync(app);
     }

@@ -375,6 +375,7 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
         {
             ["Studio:Auth:Enabled"] = "false"
         });
+        builder.Services.AddSingleton(Hosting.HostingTestHost.CreateGate());
         builder.Services.AddStudioBridgeAuth(builder.Configuration);
         // The theme-management endpoints resolve ThemeConfigurationService per request; register it and its bound
         // ThemeConfiguration exactly as Program.cs does (no "Themes" section here, so it binds to defaults).

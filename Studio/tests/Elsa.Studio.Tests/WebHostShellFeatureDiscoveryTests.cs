@@ -62,7 +62,7 @@ public sealed class WebHostShellFeatureDiscoveryTests : IAsyncLifetime
     private static async Task<HashSet<string>> ReadEnabledFeaturesAsync()
     {
         var environment = new TestHostEnvironment(Path.Join(AppContext.BaseDirectory, "WebHost"));
-        var store = new StudioShellFeatureConfigurationStore(environment, new ConfigurationBuilder().Build());
+        var store = new StudioShellFeatureConfigurationStore(environment, new ConfigurationBuilder().Build(), Hosting.HostingTestHost.CreateGate());
         var snapshot = await store.LoadAsync();
         return snapshot.Features.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
