@@ -242,9 +242,27 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
                     deletedReferenceIds.Add(reference.SourceReferenceId);
                 continue;
             }
-            // Templates have no native deletion guard. Until that material boundary is composed, retain their
-            // references conservatively instead of asserting an artifact guard covers a different store.
-            if (!executables.Any(executable => executable.Identity.ArtifactId == reference.ArtifactId)) continue;
+            if (!executables.Any(executable => executable.Identity.ArtifactId == reference.ArtifactId))
+            {
+                // A template's own native boundary checks all physical referencers, not a stale GC root set.
+                // This composes with cohort acceptance through the artifact fence: either its artifact survives,
+                // retaining its template, or collection removed that artifact and acceptance refuses.
+                if (templates.Any(template => template.TemplateId == reference.ArtifactId) &&
+                    _activityTemplateStore.CanMaintainReferences(_executableStore, _sourceReferenceStore))
+                {
+                    try
+                    {
+                        if (await _activityTemplateStore.TryDeleteDoomedReferenceAsync(reference, now, cancellationToken))
+                            deletedReferenceIds.Add(reference.SourceReferenceId);
+                    }
+                    catch (Exception exception)
+                    {
+                        if (exception is OperationCanceledException && cancellationToken.IsCancellationRequested) throw;
+                        _logger.LogWarning(exception, "Reference GC retained template source {SourceReferenceId} because native maintenance failed", reference.SourceReferenceId);
+                    }
+                }
+                continue;
+            }
             var guardNow = _timeProvider.GetUtcNow();
             var guard = await _executableStore.TryBeginDeletionAsync(reference.ArtifactId, Guid.NewGuid().ToString("N"),
                 guardNow + _deletionGuardTimeout, guardNow, cancellationToken);
@@ -344,7 +362,21 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
         var deletedActivityTemplateCount = 0;
         foreach (var templateId in unreferencedTemplateIds)
         {
-            if (_stimulusDeliveryStore is not null) continue; // Explicit conservative boundary; see guarded reference cleanup above.
+            if (_stimulusDeliveryStore is not null)
+            {
+                if (!_activityTemplateStore.CanMaintainReferences(_executableStore, _sourceReferenceStore)) continue;
+                try
+                {
+                    if (await _activityTemplateStore.TryDeleteUnreferencedAsync(templates.Single(template => template.TemplateId == templateId), cancellationToken))
+                        deletedActivityTemplateCount++;
+                }
+                catch (Exception exception)
+                {
+                    if (exception is OperationCanceledException && cancellationToken.IsCancellationRequested) throw;
+                    _logger.LogWarning(exception, "Reference GC retained template {TemplateId} because native maintenance failed", templateId);
+                }
+                continue;
+            }
             if (await _activityTemplateStore.DeleteAsync(templateId, cancellationToken))
                 deletedActivityTemplateCount++;
         }

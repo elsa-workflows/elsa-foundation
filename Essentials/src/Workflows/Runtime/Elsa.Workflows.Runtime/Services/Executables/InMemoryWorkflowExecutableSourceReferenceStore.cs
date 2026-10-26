@@ -39,6 +39,12 @@ public sealed class InMemoryWorkflowExecutableSourceReferenceStore : IWorkflowEx
         return ValueTask.CompletedTask;
     }
 
+    internal T ExecuteUnderReferenceGate<T>(Func<IReadOnlyDictionary<string, WorkflowExecutableSourceReference>, T> operation)
+    {
+        lock (_gate)
+            return operation(_references);
+    }
+
     public ValueTask<WorkflowExecutableSourceReference?> FindAsync(string sourceReferenceId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceReferenceId);

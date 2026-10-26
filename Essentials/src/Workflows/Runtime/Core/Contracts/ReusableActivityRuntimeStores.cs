@@ -16,6 +16,53 @@ public interface IExecutableActivityTemplateWriter
     ValueTask SaveAsync(ExecutableActivityTemplate template, CancellationToken cancellationToken = default);
     ValueTask<bool> DeleteAsync(string templateId, CancellationToken cancellationToken = default) =>
         ValueTask.FromResult(false);
+
+    /// <summary>Whether maintenance coordinates the exact selected artifact and reference stores.</summary>
+    /// <remarks>A template ID is not a workflow artifact ID. Unsupported or mixed provider compositions refuse.</remarks>
+    bool CanMaintainReferences(IWorkflowExecutableStore executables, IWorkflowExecutableSourceReferenceStore references) => false;
+
+    /// <summary>Atomically saves/adopts immutable template material and its live source reference.</summary>
+    /// <remarks>Returns the actual winning reference. Adoption cannot restore retirement, extend expiry or change
+    /// source identity. The provider must refuse a conflicting or no-longer-live reference before writing material.</remarks>
+    /// <exception cref="NotSupportedException">The selected provider lacks this atomic material boundary.</exception>
+    /// <exception cref="ArgumentException">A source reference ID is invalid or names different template material.</exception>
+    /// <exception cref="InvalidDataException">An exact template dependency is missing or has a different hash.</exception>
+    /// <exception cref="InvalidOperationException">Material/reference conflicts or no live reference can be established.</exception>
+    /// <exception cref="OperationCanceledException">Requested cancellation propagates.</exception>
+    ValueTask<WorkflowExecutableSourceReference> SaveWithReferenceAsync(ExecutableActivityTemplate template,
+        WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(template); ArgumentNullException.ThrowIfNull(reference);
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromException<WorkflowExecutableSourceReference>(new NotSupportedException("Atomic template/reference publication is unavailable."));
+    }
+
+    /// <summary>Deletes an unchanged doomed template reference only while no physical executable/template depends on its material.</summary>
+    /// <remarks>The final dependency read and reference snapshot deletion must share the native material boundary.
+    /// Physical referencers retain their dependencies even before a runtime root is installed. This operation
+    /// does not manufacture a workflow deletion guard or delete a live/restored/replaced reference.</remarks>
+    /// <exception cref="NotSupportedException">Atomic template/reference maintenance is unavailable.</exception>
+    /// <exception cref="InvalidDataException">Persisted material cannot be trusted; retain it.</exception>
+    /// <exception cref="OperationCanceledException">Requested cancellation propagates.</exception>
+    ValueTask<bool> TryDeleteDoomedReferenceAsync(WorkflowExecutableSourceReference expectedReference,
+        DateTimeOffset now, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(expectedReference); cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromException<bool>(new NotSupportedException("Atomic template/reference maintenance is unavailable."));
+    }
+
+    /// <summary>Deletes unchanged template material only with no physical referencer or remaining source reference.</summary>
+    /// <remarks>Rechecks the actual native material/reference state at deletion. Every reference must be removed
+    /// through its own guarded maintenance first, so collection cannot strand a source row. Unsupported providers refuse.</remarks>
+    /// <exception cref="NotSupportedException">Atomic template/reference maintenance is unavailable.</exception>
+    /// <exception cref="InvalidDataException">Persisted material cannot be trusted; retain it.</exception>
+    /// <exception cref="OperationCanceledException">Requested cancellation propagates.</exception>
+    ValueTask<bool> TryDeleteUnreferencedAsync(ExecutableActivityTemplate expectedTemplate,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(expectedTemplate); cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromException<bool>(new NotSupportedException("Atomic template/reference maintenance is unavailable."));
+    }
 }
 
 public interface IExecutableActivityTemplateStore : IExecutableActivityTemplateReader, IExecutableActivityTemplateWriter;

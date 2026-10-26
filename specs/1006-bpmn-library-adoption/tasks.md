@@ -115,6 +115,7 @@ The [saved-start admission receipt](evidence/broadcast-saved-admission.md) quali
 verified source/entry/key/full-pin/root-scope admission, ordinary policy/options/shedding and actual duplicate
 provenance. Final GC composition, immutable input projection/activation, exact bookmarks and host proof remain open.
 The [template reachability/dormancy receipt](evidence/broadcast-template-reachability.md) qualifies nested and exact template closure plus explicit ordinary DI composition. Atomic template coordination and qualified cohort-aware default GC remain unfinished T049 work.
+The [native template-maintenance receipt](evidence/broadcast-template-native-maintenance.md) qualifies exact native material/reference maintenance and the actual native cohort-GC bridge. EF coordination, production-writer integration and qualified default GC still keep T049 open.
 Publisher authorization, recipient execution and all host delivery/recovery gates remain open.
 
 Execution order: T046 → T047 → T048 → T049 → T050 → T051. No new task is marked parallel:

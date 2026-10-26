@@ -230,6 +230,12 @@ public sealed class InMemoryWorkflowExecutableStore : IWorkflowExecutableStore
         }
     }
 
+    internal T ExecuteUnderMaterialGate<T>(Func<IReadOnlyCollection<WorkflowExecutable>, T> operation)
+    {
+        lock (_gate)
+            return operation(_executables.Values.ToArray());
+    }
+
     public ValueTask<WorkflowExecutable?> FindAsync(string artifactId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
