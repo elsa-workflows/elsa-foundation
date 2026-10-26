@@ -46,7 +46,7 @@ public sealed partial class EfExecutableActivityTemplateStore
         return new EfActivityPublicationRuntimeCommit(WithAccess(access), sources).CommitLiveReferenceAsync(template, reference, timeProvider, cancellationToken);
     }
 
-    private void RequireMaintenanceBoundary()
+    internal void RequireMaintenanceBoundary()
     {
         if (context.Database.CurrentTransaction is not null || context.Database.GetEnlistedTransaction() is not null ||
             System.Transactions.Transaction.Current is not null || context.ChangeTracker.HasChanges())

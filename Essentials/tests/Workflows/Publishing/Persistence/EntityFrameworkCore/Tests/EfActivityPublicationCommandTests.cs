@@ -26,7 +26,7 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Tests;
 /// sequence at each phase boundary at the storage seam and assert what a host dying there leaves, and that a
 /// retry of the same commit converges without redoing a phase.
 /// </summary>
-public sealed class EfActivityPublicationCommandTests : IAsyncLifetime
+public sealed partial class EfActivityPublicationCommandTests : IAsyncLifetime
 {
     private static readonly DateTimeOffset Seeded = ActivityPublicationTestMaterial.Seeded;
     private static readonly DateTimeOffset Published = ActivityPublicationTestMaterial.Published;

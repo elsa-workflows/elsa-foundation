@@ -52,6 +52,8 @@ public sealed class EfActivityPublicationRuntimeCommit
     /// </summary>
     /// <returns><c>true</c> when material/reference creation was needed; <c>false</c> when phase one was already done.
     /// Coordination revisions still advance when existing material is adopted.</returns>
+    /// <remarks>Requires a clean Runtime context with no caller transaction. Admission uses the selected
+    /// template provider's clock and preserves the complete winning live source payload except retry timestamps.</remarks>
     /// <exception cref="InvalidOperationException">
     /// The template id or hash is bound to different content, or the source reference id is bound to different
     /// material.
@@ -61,7 +63,7 @@ public sealed class EfActivityPublicationRuntimeCommit
         WorkflowExecutableSourceReference reference,
         CancellationToken cancellationToken = default)
     {
-        var result = await CommitCoreAsync(template, reference, null, cancellationToken);
+        var result = await CommitCoreAsync(template, reference, templates.PublicationClock, cancellationToken);
         return result.Created;
     }
 
@@ -78,6 +80,7 @@ public sealed class EfActivityPublicationRuntimeCommit
         ArgumentNullException.ThrowIfNull(template);
         ArgumentNullException.ThrowIfNull(reference);
         cancellationToken.ThrowIfCancellationRequested();
+        templates.RequireMaintenanceBoundary();
         if (!StringComparer.Ordinal.Equals(reference.ArtifactId, template.TemplateId))
             throw new ArgumentException("A publication's source reference must retain the template it is published with.", nameof(reference));
 

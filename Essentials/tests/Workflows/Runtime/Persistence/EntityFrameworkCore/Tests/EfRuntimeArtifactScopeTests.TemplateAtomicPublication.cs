@@ -377,6 +377,27 @@ public sealed partial class EfRuntimeArtifactScopeTests
         { stop.Cancel(); throw new OperationCanceledException(stop.Token); }
     }
 
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task EF_atomic_template_publication_phase_one_uses_the_selected_provider_clock_for_awaited_liveness(bool expired)
+    {
+        await using var database = await Database.CreateAsync(); var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var template = Template("template", "template-hash");
+        await using (var seed = database.Open("tenant-a")) await seed.Template.SaveAsync(template);
+        var delay = new AtomicClockDuringMaterialRead(clock); var saves = new AtomicSaveCounter();
+        await using (var owner = database.Open("tenant-a", delay, saves))
+        {
+            var commit = new EfActivityPublicationRuntimeCommit(AtomicTemplates(owner, clock), owner.Store);
+            var source = Reference("source", template.TemplateId) with { ExpiresAt = clock.GetUtcNow().AddMinutes(expired ? 1 : 3) };
+            if (expired) await Assert.ThrowsAsync<InvalidOperationException>(() => commit.CommitAsync(template, source).AsTask());
+            else Assert.True(await commit.CommitAsync(template, source));
+        }
+        Assert.True(delay.Advanced); Assert.Equal(expired ? 0 : 1, saves.Count);
+        await using var fresh = database.Open("tenant-a");
+        Assert.Equal(expired, await fresh.Store.FindAsync("source") is null);
+        Assert.Equal(expired ? 1 : 2, (await fresh.Context.ExecutableActivityTemplates.SingleAsync()).Revision);
+    }
+
     private sealed class AtomicSaveCounter : SaveChangesInterceptor
     {
         public int Count { get; private set; }

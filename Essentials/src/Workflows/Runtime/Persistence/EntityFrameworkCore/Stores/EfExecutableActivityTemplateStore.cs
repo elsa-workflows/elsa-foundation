@@ -62,6 +62,7 @@ public sealed partial class EfExecutableActivityTemplateStore(
     /// <summary>The context this store reads and stages through.</summary>
     internal RuntimeDbContext Context => context;
     internal PersistenceAccessContext AccessContext => accessContextAccessor.Current;
+    internal TimeProvider PublicationClock => timeProvider;
     internal string PublicationScope => RequireScope();
     internal EfExecutableActivityTemplateStore WithAccess(IPersistenceAccessContextAccessor accessor) => new(context, accessor, continuationCodec, timeProvider);
 
