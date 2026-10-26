@@ -8,6 +8,52 @@ import { createCustomThemeFrom, findSelectableTheme, getSelectableThemes, normal
 const retiredThemeIds = ["black-glass", "stone", "blueprint", "brass-instrument"] as const;
 
 describe("theme presets", () => {
+  it.each(["BuiltInsOnly", "DirectoryOnly", "AddToBuiltIns"] as const)("applies %s to the selectable source list", themesMode => {
+    const custom = { ...createCustomThemeFrom(builtInThemeDefinitions[0], "directory-theme", "Directory Theme"), enabled: true, published: true };
+    const response = { themes: [custom], themesMode, directoryThemeIds: [custom.id] };
+    const store = normalizeThemeStore(response);
+    const expected = themesMode === "BuiltInsOnly" ? builtInThemeDefinitions.map(theme => theme.id)
+      : themesMode === "DirectoryOnly" ? [custom.id]
+      : [...builtInThemeDefinitions.map(theme => theme.id), custom.id];
+
+    expect(getSelectableThemes(store).map(theme => theme.id)).toEqual(expected);
+    // Management retains the inventory even when source policy excludes it from selection.
+    expect(store.themes.some(theme => theme.id === custom.id)).toBe(true);
+  });
+
+  it("resolves a stale built-in preference to the first eligible custom theme in DirectoryOnly mode", () => {
+    const custom = { ...createCustomThemeFrom(builtInThemeDefinitions[0], "directory-theme", "Directory Theme"), enabled: true, published: true };
+    const response = { themes: [custom], themesMode: "DirectoryOnly" as const, directoryThemeIds: [custom.id], defaultThemeId: "classic" };
+    const store = normalizeThemeStore(response);
+
+    expect(store.defaultThemeId).toBe(custom.id);
+    expect(findSelectableTheme(store, "classic").id).toBe(custom.id);
+  });
+
+  it("keeps managed themes, unpublished directory themes and disabled directory themes out of DirectoryOnly selection", () => {
+    const custom = createCustomThemeFrom(builtInThemeDefinitions[0], "managed-theme", "Managed Theme");
+    const response = {
+      themesMode: "DirectoryOnly" as const,
+      themes: [
+        { ...custom, enabled: true, published: true },
+        { ...custom, id: "directory-draft", enabled: true, published: false },
+        { ...custom, id: "directory-disabled", enabled: false, published: true }
+      ],
+      directoryThemeIds: ["directory-draft", "directory-disabled", "classic"]
+    };
+    const store = normalizeThemeStore(response);
+
+    expect(getSelectableThemes(store)).toEqual([]);
+    expect(store.defaultThemeId).toBe("");
+    // Rendering still has a safe palette if the configured directory is empty or has no published theme.
+    expect(findSelectableTheme(store, "managed-theme").id).toBe("classic");
+    expect(store.themes.some(theme => theme.id === custom.id)).toBe(true);
+  });
+
+  it("rejects an unrecognized source policy from the wire", () => {
+    expect(() => normalizeThemeStore(JSON.parse('{"themesMode":"everything"}'))).toThrow("Unsupported theme source mode");
+  });
+
   it("keeps every built-in a read-only definition", () => {
     expect(getThemeNames()).toEqual(builtInThemeDefinitions.map(({ id, name }) => ({ id, name })));
     expect(builtInThemeDefinitions.every(theme => theme.source === "built-in")).toBe(true);
