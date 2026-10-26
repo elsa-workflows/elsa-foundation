@@ -9,14 +9,14 @@ from pathlib import Path
 
 
 EXPECTED_ASSETS = (
-    "Studio/src/apps/Elsa.Studio.Web/wwwroot/studio/index.html",
-    "Studio/src/apps/Elsa.Studio.Web/wwwroot/studio/vendor/react.js",
-    "Studio/src/apps/Elsa.Studio.Web/wwwroot/studio/vendor/react-dom.js",
-    "Studio/src/apps/Elsa.Studio.Web/wwwroot/studio/vendor/react-dom-client.js",
-    "Studio/src/apps/Elsa.Studio.Web/wwwroot/studio/vendor/react-query.js",
-    "Studio/src/apps/Elsa.Studio.Web/wwwroot/studio/vendor/lucide-react.js",
-    "Studio/src/apps/Elsa.Studio.Web/wwwroot/studio/vendor/studio-ui.js",
-    "Studio/src/apps/Elsa.Studio.Web/wwwroot/studio/sdk/index.js",
+    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/index.html",
+    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/react.js",
+    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/react-dom.js",
+    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/react-dom-client.js",
+    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/react-query.js",
+    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/lucide-react.js",
+    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/studio-ui.js",
+    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/sdk/index.js",
     "Studio/src/essentials/Elsa.Studio.Dashboard/wwwroot/studio/modules/dashboard/module.js",
     "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module.js",
     "Extensions/Attention/studio/Elsa.Studio.Attention/wwwroot/studio/modules/attention/module.js",

@@ -5,10 +5,10 @@ import { ActivityDefinitionDraftEditor } from "../../src/essentials/Elsa.Studio.
 import { activityGraphSchema2ImplementationEditorContribution } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityGraphContribution";
 import { inputReferenceContribution } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/inputReferenceContribution";
 import type { ActivityDefinitionDraftView, ReplaceActivityDefinitionDraftRequest } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityDefinitionTypes";
-import { ThemeProvider } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
-import { writeAppearancePreferences } from "../../src/apps/Elsa.Studio.Web/Client/src/app/themes/appearance";
-import { ShellFrame, getStudioNavigation } from "../../src/apps/Elsa.Studio.Web/Client/src/app/App";
-import "../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css";
+import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
+import { writeAppearancePreferences } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
+import { ShellFrame, getStudioNavigation } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/App";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 
 const storageKey = "activity-authoring-2994-fixture";
 const timestamp = "2026-10-19T09:00:00Z";

@@ -5,15 +5,15 @@ Inputs: [spec](spec.md), [plan](plan.md), [research](research.md), [asset contra
 ## Phase1 — Setup and ownership
 
 - [x] T001 Verify #3361 prerequisites/claim/main health, record source-path inventory, allocate spec1012 and review spec/plan/contracts/checklist before implementation.
-- [ ] T002 Move Web Client, StudioSdk and StudioUi into Studio/src/essentials/Elsa.Studio.Hosting with git rename tracking; preserve source/runtime contracts and private npm identities.
-- [ ] T003 Update active workspace/lock/build/test/example/browser/tooling/Docker references and current contributor/canonical docs; preserve frozen historical consolidation manifests and completed spec evidence.
-- [ ] T004 Update shell/module CSS classification, harness/generated-output ignore rules and source-boundary checks; remove the obsolete Web generated shell payload and prohibit a second maintained copy.
+- [x] T002 Move Web Client, StudioSdk and StudioUi into Studio/src/essentials/Elsa.Studio.Hosting with git rename tracking; preserve source/runtime contracts and private npm identities.
+- [x] T003 Update active workspace/lock/build/test/example/browser/tooling/Docker references and current contributor/canonical docs; preserve frozen historical consolidation manifests and completed spec evidence.
+- [x] T004 Update shell/module CSS classification, harness/generated-output ignore rules and source-boundary checks; remove the obsolete Web generated shell payload and prohibit a second maintained copy.
 
 ## Phase2 — US1 packaged standard browser
 
 Independent test: actual default package-only published consumer, full resource inventory and browser application/module route.
 
-- [ ] T005 Build frontend into Hosting's existing Razor static-web-asset owner; add producer-only required-output pack checks in Elsa.Studio.Hosting.csproj without consumer frontend hooks.
+- [x] T005 Build frontend into Hosting's existing Razor static-web-asset owner; add producer-only required-output pack checks in Elsa.Studio.Hosting.csproj without consumer frontend hooks.
 - [ ] T006 Update tools/ci/verify-studio-assets.py and its self-test for the new owner, preserving full module inventory; qualify frozen install and whole frontend build/test/typecheck/lint paths after the move.
 - [ ] T007 Create tools/studio/HostingAssets.Probe using actual production projects/archives, owned committed producer snapshot, explicit source/candidate hashes and complete archive/resource accounting. Accept a supplied artifact directory for later CI integration.
 - [ ] T008 Implement external Hosting+Dashboard consumer with public composition and selected shell, isolated source mapping/cache, locked restore/publish, denied frontend shims and hidden owned producer/feed/consumer source/cache.

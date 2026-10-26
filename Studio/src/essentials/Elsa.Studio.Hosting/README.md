@@ -1,8 +1,9 @@
 # Elsa.Studio.Hosting
 
-Base server composition for a Studio host. References Studio Api/Core and CShells.AspNetCore; Nuplane,
-Theme Store and distribution modules are separate choices. Prebuilt browser source/assets are moved in
-program #3340's #3361; this server extraction alone does not claim the final browser/package journey.
+Server composition and the prebuilt standard browser for a Studio host. References Studio Api/Core and
+CShells.AspNetCore; Nuplane, Theme Store and distribution modules are separate choices. The package owns
+the standard application, shared SDK/UI sources and generated `/studio` payload. Package consumers need
+no frontend source copy or Node/pnpm build.
 
 ```csharp
 using CShells.DependencyInjection;
@@ -81,8 +82,20 @@ General HTTP factories remain shell-owned so feature-local named-client configur
 mandatory Api feature restores standard local auth/authorization infrastructure; installed scheme/policy
 callbacks flow from root. No private scheme provider or closed options-monitor override is shared globally.
 
-Optional administration/themes, prebuilt browser ownership and final thin distribution remain their separately
-scoped program leaves. The package declares no domain events, contributor contracts or scheduled tasks; its
+The standard payload reserves `/studio`: index, application bundles, CSS, images/fonts, SDK and import-map
+vendors. Independently selected modules retain their `/_content/<package-id>/...` assets. A separately named
+fallback document can use the standard bundle through IndexFile. For a fully custom frontend, the final
+application's direct Hosting PackageReference can set `ExcludeAssets="build;buildTransitive"`; its own frontend
+then owns SDK/vendor compatibility, while Hosting's .NET APIs and independent module assets remain available.
+Same-path overlays with the standard bundle and arbitrary application PathBase are not supported contracts.
+
+Source contributors build the Studio workspace frontend before .NET build/pack. The sole standard source
+trees are Client, StudioSdk and StudioUi beside this project; output is wwwroot/studio. Packing fails clearly
+when required index/SDK/vendor output is missing. This is a producer check, with no Node consumer build hook.
+Browser source/tool inputs are excluded from .NET content and packages.
+
+Optional administration/themes and final thin distribution remain their separately scoped program leaves.
+The package declares no domain events, contributor contracts or scheduled tasks; its
 private resolver implementations use existing CShells contracts. Public composition/options/coordination and
 Api policy surface are tracked. Tests use public APIs/HTTP without a production friend; see
 [spec1008](https://github.com/elsa-workflows/elsa-foundation/blob/main/specs/1008-studio-base-hosting/quickstart.md)
