@@ -93,7 +93,7 @@ MIME types, revalidation responses, discovery priority and unknown API behavior.
 - **FR-006**: Retain tracked shell scopes across asynchronous discovery, handle disposal races and honor request cancellation.
 - **FR-007**: Preserve browser configuration allowlisting, existing response shapes, discovery priority, unknown API 404 and static revalidation.
 - **FR-008**: Expose only a cancellation-aware asynchronous configuration mutation lease; writers cannot release or dispose the underlying coordinator.
-- **FR-009**: Keep one configuration coordinator per running host and preserve whole read/revision/write/reload critical sections in existing writers.
+- **FR-009**: Keep one process-wide configuration coordinator shared by host roots and preserve whole read/revision/write/reload critical sections in existing writers.
 - **FR-010**: Remove superseded Web implementations when the application adopts the extracted behavior; retain its distribution/module/Console Stream choices.
 
 ### Key Entities

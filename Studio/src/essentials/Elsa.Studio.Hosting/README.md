@@ -43,7 +43,7 @@ requests available when feature activation fails.
 
 `StudioBuilder.ConfigurationMutationGate` exposes only `AcquireAsync(CancellationToken)` and an async lease.
 Root/addon writers must hold that same lease across the entire read/revision/modify/atomic-write/reload cycle.
-Dispose the lease; consumers cannot release or dispose the underlying coordinator. It coordinates one host,
+Dispose the lease; consumers cannot release or dispose the underlying coordinator. It coordinates hosts in one process,
 not arbitrary external processes writing the same files.
 
 This leaf preserves existing Web Studio bearer/bridge registration; #3358 moves those internals into Hosting.

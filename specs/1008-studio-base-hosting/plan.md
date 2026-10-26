@@ -38,7 +38,7 @@ Pre-design and post-design checks pass against both current constitutions and th
 
 Implement AddElsaStudio, StudioBuilder.ConfigureShells, UseElsaStudio and MapElsaStudio from the accepted
 [contract](../../docs/reports/studio-hosting-contract.md). Add public StudioHostingOptions and a lease-only
-StudioConfigurationMutationGate. Bind then callback, clone installed settings, register once per root and
+StudioConfigurationMutationGate. Bind then callback, clone installed settings, register one facade per root over the process-wide gate and
 reject duplicate registration. Load a required shell file only when ShellsFile is non-null; its relative path
 resolves against ContentRoot. The null mode retains host-owned configuration and creates no file.
 
@@ -63,7 +63,7 @@ Runtime settings continue to use an explicit allowlist; freeze the installed aut
 configuration changes do not advertise a different gate. Web supplies its existing root Studio auth/bridge,
 Nuplane/theme registrations and explicit distribution assemblies. Its Console Stream capture remains early.
 
-The mutation coordinator grants only AcquireAsync(CancellationToken) -> IAsyncDisposable. It owns a private
+The mutation coordinator grants only AcquireAsync(CancellationToken) -> IAsyncDisposable. It owns one private process-wide
 semaphore and idempotent release handle, with no public Release/Dispose. Existing Web writers borrow the
 registered coordinator over their whole read/revision/write/reload transaction; keep their private IO helper.
 Optional adapters later borrow this exact instance. Tests use public builder/DI access, not private friends.

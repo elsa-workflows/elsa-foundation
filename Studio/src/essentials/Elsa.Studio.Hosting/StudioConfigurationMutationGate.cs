@@ -1,17 +1,17 @@
 namespace Elsa.Studio.Hosting;
 
-/// <summary>Coordinates whole configuration read/revision/write/reload operations in one running host.</summary>
+/// <summary>Coordinates whole configuration read/revision/write/reload operations in one process.</summary>
 public sealed class StudioConfigurationMutationGate
 {
-    private readonly SemaphoreSlim _gate = new(1, 1);
+    private static readonly SemaphoreSlim Gate = new(1, 1);
 
     internal StudioConfigurationMutationGate() { }
 
     /// <summary>Acquires exclusive access until the returned borrowed lease is disposed.</summary>
     public async ValueTask<IAsyncDisposable> AcquireAsync(CancellationToken cancellationToken = default)
     {
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        return new Lease(_gate);
+        await Gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        return new Lease(Gate);
     }
 
     private sealed class Lease(SemaphoreSlim gate) : IAsyncDisposable

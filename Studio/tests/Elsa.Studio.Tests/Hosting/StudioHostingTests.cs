@@ -252,6 +252,22 @@ public sealed class StudioHostingTests
     }
 
     [Fact]
+    public async Task Host_roots_borrow_the_same_process_configuration_gate()
+    {
+        var first = HostingTestHost.CreateGate();
+        var second = HostingTestHost.CreateGate();
+        var lease = await first.AcquireAsync();
+        try
+        {
+            var waiting = second.AcquireAsync().AsTask();
+            Assert.False(waiting.IsCompleted);
+            await lease.DisposeAsync();
+            await using var borrowed = await waiting.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        finally { await lease.DisposeAsync(); }
+    }
+
+    [Fact]
     public async Task Coordinator_is_shared_cancellable_and_lease_disposal_is_idempotent()
     {
         await using var host = await HostingTestHost.StartAsync();
