@@ -2,6 +2,8 @@
 """Pack actual prebuilt Studio assets and qualify an isolated, published .NET-only host."""
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 import argparse
 import base64
 import hashlib
@@ -58,6 +60,38 @@ def request(base: str, path: str, headers: dict[str, str] | None = None) -> tupl
         return response.code, response.read(), dict(response.headers)
 
 
+
+@contextmanager
+def serve(dotnet: str, published: Path, root: Path, env: dict[str, str], log_name: str):
+    with socket.socket() as port_probe:
+        port_probe.bind(("127.0.0.1", 0))
+        port = port_probe.getsockname()[1]
+    base = f"http://127.0.0.1:{port}"
+    with (root / log_name).open("w") as output:
+        process = subprocess.Popen([dotnet, str(published / "Consumer.dll")], cwd=published,
+                                   env=dict(env, ASPNETCORE_URLS=base), stdout=output, stderr=subprocess.STDOUT)
+        try:
+            deadline = time.monotonic() + 30
+            while True:
+                check(process.poll() is None, f"Published host stopped; see {root / log_name}")
+                try:
+                    if request(base, "/studio/index.html")[0] == 200:
+                        break
+                except (urllib.error.URLError, TimeoutError):
+                    pass
+                check(time.monotonic() < deadline, "Published host did not become ready")
+                time.sleep(0.1)
+            yield base, process
+        finally:
+            if process.poll() is None:
+                process.terminate()
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=10)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, help="new artifact directory; defaults to a fresh temporary directory")
@@ -91,6 +125,7 @@ def main() -> None:
         shutil.copytree(source, target / "wwwroot")
         csproj = target / f"{name}.csproj"
         csproj.write_text(project(name, base))
+        (target / "Marker.cs").write_text(f"namespace {PREFIX}{name}; public static class Marker {{ public static string Describe() => typeof(Marker).Assembly.GetName().Name!; }}")
         run([dotnet, "pack", str(csproj), "-c", "Release", "-o", str(feed)], root / f"pack-{name}.log", env, root)
         package = feed / f"{PREFIX}{name}.{VERSION}.nupkg"
         files = {p.relative_to(source).as_posix(): p.read_bytes() for p in source.rglob("*") if p.is_file()}
@@ -128,6 +163,7 @@ def main() -> None:
 var app = builder.Build();
 var files = new StaticFileOptions { OnPrepareResponse = context => context.Context.Response.Headers.CacheControl = "no-cache" };
 app.UseStaticFiles(files);
+app.MapGet("/__hosting-marker", () => Studio.AssetQualification.Hosting.Marker.Describe());
 app.MapGet("/__asset-qualification", () => Results.Content("<!doctype html><title>Asset qualification</title>", "text/html"));
 app.MapGet("/_elsa/{**path}", () => Results.NotFound());
 app.MapFallbackToFile("/custom-studio/{**path:nonfile}", "custom-index.html", files);
@@ -176,28 +212,37 @@ app.Run();
     check(result != 0 and "GenerateStaticWebAssetsDevelopmentManifest" in collision_log and "Sequence contains more than one element" in collision_log,
           "SDK duplicate-path behavior changed; requalify/document the override contract")
 
+    # A fully custom frontend can remove this package's SDK asset integration while retaining .NET APIs.
+    optout = root / "optout-consumer"
+    optout.mkdir()
+    original = csproj.read_text()
+    reference = f'Include="{PREFIX}Hosting" Version="{VERSION}" />'
+    check(original.count(reference) == 1, "Hosting reference shape changed")
+    (optout / csproj.name).write_text(original.replace(reference, reference.replace(' />', ' ExcludeAssets="build;buildTransitive" />')))
+    shutil.copyfile(consumer / "Program.cs", optout / "Program.cs")
+    own_index = optout / "wwwroot/studio/index.html"
+    own_index.parent.mkdir(parents=True)
+    own_bytes = b"<!doctype html><title>Consumer-owned frontend</title>"
+    own_index.write_bytes(own_bytes)
+    run([dotnet, "restore", str(optout / csproj.name), "--configfile", str(config)], root / "optout-restore.log", isolated, optout)
+    run([dotnet, "restore", str(optout / csproj.name), "--locked-mode", "--configfile", str(config)], root / "optout-locked.log", isolated, optout)
+    optout_assets = json.loads((optout / "obj/project.assets.json").read_text())
+    check(optout_assets["libraries"] == assets["libraries"] and optout_assets["packageFolders"] == assets["packageFolders"],
+          "Custom frontend changed the verified package archives/cache")
+    optout_target = next(iter(optout_assets["targets"].values()))
+    check("lib/net10.0/Hosting.dll" in optout_target[PREFIX + "Hosting/" + VERSION]["compile"], "Asset opt-out lost the .NET API reference")
+    optout_published = root / "optout-published"
+    run([dotnet, "publish", str(optout / csproj.name), "-c", "Release", "--no-restore", "-o", str(optout_published)], root / "optout-publish.log", isolated, optout)
+    check((optout_published / "wwwroot/studio/index.html").read_bytes() == own_bytes, "Opt-out did not retain consumer frontend")
+    check(not (optout_published / "wwwroot/studio/vendor/react.js").exists(), "Opt-out still copied the bundled frontend")
+    check((optout_published / "Hosting.dll").read_bytes() == (published / "Hosting.dll").read_bytes(), "Opt-out changed/dropped the compiled hosting fixture")
+
     # Published execution must remain independent of producer directories, source projects and NuGet cache.
-    for directory in [producers, consumer, override, cache, feed]:
+    for directory in [producers, consumer, override, optout, cache, feed]:
         directory.rename(root / (directory.name + "-hidden"))
     check(not audit.exists(), "Consumer restore/publish invoked a frontend tool")
-    with socket.socket() as port_probe:
-        port_probe.bind(("127.0.0.1", 0))
-        port = port_probe.getsockname()[1]
-    base = f"http://127.0.0.1:{port}"
-    runtime = dict(isolated, ASPNETCORE_URLS=base)
-    server_log = (root / "server.log").open("w")
-    process = subprocess.Popen([dotnet, str(published / "Consumer.dll")], cwd=published, env=runtime, stdout=server_log, stderr=subprocess.STDOUT)
-    try:
-        deadline = time.monotonic() + 30
-        while True:
-            check(process.poll() is None, f"Published host stopped; see {root / 'server.log'}")
-            try:
-                if request(base, "/studio/index.html")[0] == 200:
-                    break
-            except (urllib.error.URLError, TimeoutError):
-                pass
-            check(time.monotonic() < deadline, "Published host did not become ready")
-            time.sleep(0.1)
+    with serve(dotnet, published, root, isolated, "server.log") as (base, process):
+        check(request(base, "/__hosting-marker")[1] == b"Hosting", "Default consumer cannot execute the packaged .NET fixture API")
         def verify() -> list[dict[str, str | int]]:
             rows = []
             for url, data in expected.items():
@@ -237,22 +282,25 @@ app.Run();
         run([node, str(Path(__file__).with_name("browser.mjs"))], root / "browser.log", browser_env, REPO / "Studio")
         check(not audit.exists(), "Published host invoked a frontend tool")
         check(process.poll() is None, "Owned published host stopped during verification")
+        with serve(dotnet, optout_published, root, isolated, "optout-server.log") as (custom_base, custom_process):
+            check(request(custom_base, "/")[1] == own_bytes, "Custom-frontend runtime did not serve its own index")
+            check(request(custom_base, "/__hosting-marker")[1] == b"Hosting", "Custom frontend cannot execute retained packaged .NET API")
+            check(request(custom_base, "/studio/vendor/react.js")[0] == 404, "Opt-out resolved bundled assets at runtime")
+            for url, data in expected.items():
+                if url.startswith("/_content/"):
+                    check(request(custom_base, url)[1] == data, "Opt-out affected independent module assets")
+            check(custom_process.poll() is None, "Owned opt-out host stopped")
+        check(not audit.exists(), "Custom-frontend consumer invoked a frontend tool")
         evidence = {"status": "passed", "sourceRevision": source_revision, "sdk": subprocess.check_output([dotnet, "--version"], text=True).strip(),
                     "probeSha256": digest(Path(__file__).read_bytes()), "browserProbeSha256": digest(Path(__file__).with_name("browser.mjs").read_bytes()),
                     "frontendLockSha256": digest((REPO / "Studio/pnpm-lock.yaml").read_bytes()), "archives": archives, "httpAssets": rows, "consumerGraph": list(assets["libraries"]),
-                    "frontendInvocations": 0, "hiddenInputs": ["producers", "consumer", "override-consumer", "cache", "feed"],
+                    "frontendInvocations": 0, "hiddenInputs": ["producers", "consumer", "override-consumer", "optout-consumer", "cache", "feed"],
                     "override": "duplicate studio/index.html rejected by SDK; separately named custom fallback document coexists", "negativeControl": "missing published react.js fails; restoring bytes passes",
+                    "customFrontend": {"excludedAssets": ["build", "buildTransitive"], "retainedDotNetApiExecuted": True, "consumerIndexSha256": digest(own_bytes), "bundledAssetsAbsent": True, "moduleAssetsRetained": True},
                     "browser": json.loads((root / "browser.json").read_text())}
         (root / "evidence.json").write_text(json.dumps(evidence, indent=2))
         print(json.dumps({"status": "passed", "httpAssetCount": len(rows), "evidence": str(root / "evidence.json")}), flush=True)
-    finally:
-        process.terminate()
-        try:
-            process.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait(timeout=10)
-        server_log.close()
+
 
 
 if __name__ == "__main__":

@@ -26,6 +26,9 @@ checked byte-for-byte. Producers, consumer source, feed and cache are renamed ou
 before the server starts. Every packed resource is fetched and checked for bytes, MIME and revalidation;
 index/SPA fallback, missing API/assets, Range, duplicate-path rejection and a separately named consumer
 fallback document are checked too. Chromium executes the actual import map/SDK/React and registers Dashboard.
+An advanced consumer excludes Hosting's `build;buildTransitive` assets: its own frontend publishes without
+collision, the same packaged .NET fixture API executes, bundled vendors are absent, and module assets remain.
+Both published hosts execute after their source/cache locations are hidden and use frontend denial shims.
 
 The probe owns and stops only its server process. The artifacts retain logs, archives, copied inputs,
 consumer lock/restore graph, HTTP digests, browser results and source/probe hashes. The denial shims and

@@ -61,8 +61,19 @@ and the existing runtime/module/theme extension points. No caller should need to
 the standard frontend to use those capabilities. Custom frontend source/bundles remain an explicit advanced
 choice, with their own build; this package does not promise mutation of its compiled files.
 
+For a fully custom frontend, the same package can retain its compiled .NET API while the consumer disables
+its bundled asset integration with `ExcludeAssets="build;buildTransitive"` on the direct PackageReference.
+The probe publishes that profile with a consumer-owned `studio/index.html`: the Hosting fixture DLL is
+unchanged, its packaged .NET marker API executes over HTTP, standard vendor files are absent, and all independent
+Dashboard assets remain available. The consumer uses the same verified archives/cache, runs after source/cache
+locations are hidden and records no frontend-tool invocation. This is an explicit asset opt-out; the custom
+frontend owns its SDK/vendor compatibility and build. Hosting must keep its build/buildTransitive integration
+limited to the bundled assets so excluding it cannot disable essential server behavior. #3363 must repeat this
+profile against the actual production Hosting API; the marker here belongs only to the temporary wrapper.
+
 A separate shell-assets package would encounter the same URL collision and does not resolve this constraint.
-Revisit that split only for a demonstrated independent release/consumer requirement.
+The qualified opt-out also serves the custom-frontend consumer without another permanent package. Revisit that
+split only for a demonstrated independent release/consumer requirement.
 
 ## Executed archive, publish and HTTP proof
 
@@ -87,7 +98,8 @@ On macOS ARM64 with .NET SDK **10.0.402**, the final baseline and restored profi
   assets and six Dashboard assets, including 18 JS, three CSS, 117 font files, index and image.
 - Actual import-map targets exist. Root and SPA fallback return the packed document; missing API/JS paths return
   404. A real JS Range request returns 206 with exact bytes. A separately named consumer fallback document works;
-  the actual same-path collision is rejected during publish.
+  the actual same-path collision is rejected during normal publish. The advanced asset opt-out publishes and
+  serves the consumer's own document while retaining/executing the packaged .NET fixture API and module assets.
 - Chromium **149.0.7827.55** executes the packed import map, SDK and shared React and imports the actual Dashboard
   ESM module. Calling its registration function with a contribution collector produces one navigation entry,
   three routes and six home widgets. This checks executable asset delivery, not backend data or page rendering.
@@ -96,8 +108,8 @@ On macOS ARM64 with .NET SDK **10.0.402**, the final baseline and restored profi
   `HTTP asset mismatch: /studio/vendor/react.js (status 404)`. Normal baseline/restoration exit **0**.
 
 Raw archive/source/publish digests, locks, graph, logs, browser output, probe hashes and all HTTP rows are retained
-in the printed owned artifact directories. The local run index is `/tmp/studio-asset-final-runs.json` and the
-baseline/control/restored logs are `/tmp/studio-asset-final-{baseline,negative,restored}.log`. These are local
+in the printed owned artifact directories. The local run index is `/tmp/studio-asset-optout-final-runs.json` and the
+baseline/control/restored logs are `/tmp/studio-asset-optout-final-{baseline,negative,restored}.log`. These are local
 receipts; this committed tool and report make the profile reproducible. No temporary package is published.
 
 ## Handoff and remaining acceptance
