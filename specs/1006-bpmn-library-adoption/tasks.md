@@ -111,6 +111,9 @@ native memory/EF commit fencing; source/ownership acceptance and saved admission
 The [verified cohort-installation receipt](evidence/broadcast-cohort-acceptance.md) qualifies actual canonical
 capture, material/ownership/source fencing and immutable acceptance-witness installation in both providers.
 Earlier unmarked data-only winners remain held; saved-start admission and final GC composition remain open.
+The [saved-start admission receipt](evidence/broadcast-saved-admission.md) qualifies the ordinary dispatcher's
+verified source/entry/key/full-pin/root-scope admission, ordinary policy/options/shedding and actual duplicate
+provenance. Final GC composition, immutable input projection/activation, exact bookmarks and host proof remain open.
 Publisher authorization, recipient execution and all host delivery/recovery gates remain open.
 
 Execution order: T046 → T047 → T048 → T049 → T050 → T051. No new task is marked parallel:

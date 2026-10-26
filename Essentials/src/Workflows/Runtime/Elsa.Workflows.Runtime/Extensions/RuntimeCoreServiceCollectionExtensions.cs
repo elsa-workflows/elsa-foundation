@@ -515,7 +515,8 @@ public static class RuntimeCoreServiceCollectionExtensions
                 policies[0],
                 serviceProvider.GetService<IWorkflowDispatchStore>(),
                 serviceProvider.GetService<IWorkflowExecutionStateStore>(),
-                serviceProvider.GetRequiredService<IRuntimePersistenceModeResolver>());
+                serviceProvider.GetRequiredService<IRuntimePersistenceModeResolver>(),
+                serviceProvider.GetService<IStimulusDeliveryStore>());
         });
         services.TryAddScoped<IWorkflowDispatchRetentionCollector, WorkflowDispatchRetentionCollector>();
         services.TryAddSingleton<WorkflowDispatchRetentionCursor>();

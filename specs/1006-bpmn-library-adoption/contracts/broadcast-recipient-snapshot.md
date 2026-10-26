@@ -130,10 +130,15 @@ selection. Preserve normal shedding/duplicate behavior and safe diagnostics.
 The compact stimulus-delivery union member carries source ID, canonical intent digest, actual scope,
 current owner/fence and binding ID without copying the cohort or payload. A named read-only provider
 operation revalidates the physical source, current claim expiry and authoritative publisher/cohort,
-including after awaited reads. Its default refuses unsupported providers. This initial contract/read
-increment does not admit starts: the dispatcher refuses the new kind before keyed-duplicate lookup
-until the separate reference, root-lease and retention gates are implemented. Ordinary duplicate and
-dependency paths retain their behavior; a data carrier cannot grant arbitrary retained-start authority.
+including after awaited reads. Its default refuses unsupported providers. The dispatcher requires the
+verified retention witness, captured entry and exact original key/root context before keyed-duplicate
+lookup. Existing duplicates must match the complete saved pin/scope/authority, retaining their actual winning
+source attribution. New starts use captured provenance with the ordinary policy/options/shedding path.
+Source authority is rechecked after awaited policy, duplicate and actor lookup. Admitted queued commands
+can run after source ACK/publisher cleanup under retained handoff roots; they do not require an expired
+delivery claim. The owning T050 adapter derives stimulus input from the immutable source payload, without
+teaching Core about an activity payload schema. Ordinary duplicate/dependency paths retain their behavior.
+A data carrier alone grants no arbitrary retained-start authority; publisher activation remains disabled.
 
 Capture the existing `WorkflowExecutableSourceProvenance` selected by ordinary live-reference resolution,
 separately from deduplicated executable producer metadata. A versioned `SourceCapture` wrapper on each
