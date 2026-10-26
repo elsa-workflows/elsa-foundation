@@ -21,6 +21,7 @@ import {
   deleteThemeAsset,
   duplicateTheme,
   fetchThemeStore,
+  getSelectableThemes,
   importThemePack,
   saveTheme,
   setBuiltInThemeEnabled,
@@ -326,7 +327,7 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
             <div>
               <button type="button" className="studio-button" onClick={() => void duplicateSelected()}><Copy size={15} /> Duplicate</button>
               <button type="button" className="studio-button" onClick={() => void exportSelected()}><Download size={15} /> Export</button>
-              <button type="button" className="studio-button" onClick={() => void makeDefault()} disabled={!draft.enabled || !draft.published}><Check size={15} /> Default</button>
+              <button type="button" className="studio-button" onClick={() => void makeDefault()} disabled={!getSelectableThemes(store).some(theme => theme.id === draft.id)}><Check size={15} /> Default</button>
               <button type="button" className="studio-button" onClick={() => void persistDraft()} disabled={isReadOnly || !hasChanges}><Save size={15} /> Save</button>
               <button type="button" className="studio-button danger" onClick={() => void removeSelected()} disabled={isReadOnly}><Trash2 size={15} /> Delete</button>
             </div>

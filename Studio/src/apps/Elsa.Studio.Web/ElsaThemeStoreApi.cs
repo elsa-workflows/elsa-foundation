@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 
@@ -98,7 +99,7 @@ internal static class ElsaThemeStoreApi
         CancellationToken cancellationToken)
     {
         var store = await ReadStoreAsync(environment, themeService, request, cancellationToken);
-        return Results.Ok(store);
+        return Results.Ok(ToResponse(store));
     }
 
     private static async Task<IResult> SaveThemeAsync(
@@ -126,7 +127,7 @@ internal static class ElsaThemeStoreApi
             themes.Add(theme with { Source = "custom" });
             store = store with { Themes = themes.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToArray() };
             await WriteStoreAsync(environment, store, cancellationToken);
-            return Results.Ok(store);
+            return Results.Ok(ToResponse(store));
         }
         finally
         {
@@ -177,7 +178,7 @@ internal static class ElsaThemeStoreApi
 
             store = store with { DisabledBuiltInThemeIds = disabled.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray() };
             await WriteStoreAsync(environment, store, cancellationToken);
-            return Results.Ok(store);
+            return Results.Ok(ToResponse(store));
         }
         finally
         {
@@ -245,7 +246,7 @@ internal static class ElsaThemeStoreApi
             var defaultThemeId = StringComparer.OrdinalIgnoreCase.Equals(store.DefaultThemeId, id) ? "" : store.DefaultThemeId;
             store = store with { Themes = themes, DefaultThemeId = defaultThemeId };
             await WriteStoreAsync(environment, store, cancellationToken);
-            return Results.Ok(store);
+            return Results.Ok(ToResponse(store));
         }
         finally
         {
@@ -272,6 +273,8 @@ internal static class ElsaThemeStoreApi
             var theme = store.Themes.FirstOrDefault(x => StringComparer.OrdinalIgnoreCase.Equals(x.Id, request.ThemeId));
             if (theme is null && !BuiltInThemeIds.Contains(request.ThemeId))
                 return Results.NotFound(new ThemeStoreErrorResponse($"Theme '{request.ThemeId}' was not found."));
+            if (!IsSourceAllowed(store, request.ThemeId, theme is null))
+                return Results.BadRequest(new ThemeStoreErrorResponse("Default theme must be available under the configured theme source mode."));
             if (theme is not null && (!theme.Enabled || !theme.Published))
                 return Results.BadRequest(new ThemeStoreErrorResponse("Default theme must be published and enabled."));
             if (theme is null && (store.DisabledBuiltInThemeIds ?? []).Contains(request.ThemeId, StringComparer.OrdinalIgnoreCase))
@@ -279,7 +282,7 @@ internal static class ElsaThemeStoreApi
 
             store = store with { DefaultThemeId = request.ThemeId };
             await WriteStoreAsync(environment, store, cancellationToken);
-            return Results.Ok(store);
+            return Results.Ok(ToResponse(store));
         }
         finally
         {
@@ -348,7 +351,7 @@ internal static class ElsaThemeStoreApi
         if (File.Exists(path))
             File.Delete(path);
 
-        return Results.Ok(await ReadStoreAsync(environment, themeService, request, cancellationToken));
+        return Results.Ok(ToResponse(await ReadStoreAsync(environment, themeService, request, cancellationToken)));
     }
 
     private static async Task<IResult> ImportThemePackAsync(
@@ -383,7 +386,7 @@ internal static class ElsaThemeStoreApi
                 Themes = store.Themes.Where(theme => !importedIds.Contains(theme.Id)).Concat(imported).OrderBy(theme => theme.Name, StringComparer.OrdinalIgnoreCase).ToArray()
             };
             await WriteStoreAsync(environment, store, cancellationToken);
-            return Results.Ok(store);
+            return Results.Ok(ToResponse(store));
         }
         finally
         {
@@ -445,17 +448,37 @@ internal static class ElsaThemeStoreApi
             Assets: ListAssets(environment, request),
             DisabledBuiltInThemeIds: (store.DisabledBuiltInThemeIds ?? [])
                 .Where(BuiltInThemeIds.Contains)
-                .ToArray()
+                .ToArray(),
+            ThemesMode: configResult.ThemesMode,
+            DirectoryThemeIds: directoryThemeIds.ToArray()
         );
     }
 
     private static Task WriteStoreAsync(IWebHostEnvironment environment, ThemeStoreResponse store, CancellationToken cancellationToken)
     {
-        var persisted = store with { Assets = [] };
+        // Source policy belongs to host configuration. Never persist a filtered response or that policy.
+        var persisted = store with { Assets = [], ThemesMode = null, DirectoryThemeIds = null };
         return ConfigFileWriter.WriteAtomicAsync(GetStorePath(environment), JsonSerializer.Serialize(persisted, JsonOptions) + Environment.NewLine, cancellationToken);
     }
 
     private static ThemeStoreResponse EmptyStore() => new([], "", []);
+
+    private static bool IsSourceAllowed(ThemeStoreResponse store, string themeId, bool builtIn) => store.ThemesMode switch
+    {
+        "BuiltInsOnly" => builtIn,
+        "DirectoryOnly" => !builtIn && (store.DirectoryThemeIds ?? []).Contains(themeId, StringComparer.OrdinalIgnoreCase),
+        _ => true
+    };
+
+    private static ThemeStoreResponse ToResponse(ThemeStoreResponse store)
+    {
+        var custom = store.Themes.FirstOrDefault(theme => StringComparer.OrdinalIgnoreCase.Equals(theme.Id, store.DefaultThemeId));
+        var available = custom is not null
+            ? IsSourceAllowed(store, custom.Id, false) && custom.Enabled && custom.Published
+            : IsSourceAllowed(store, store.DefaultThemeId, true) && BuiltInThemeIds.Contains(store.DefaultThemeId)
+                && !(store.DisabledBuiltInThemeIds ?? []).Contains(store.DefaultThemeId, StringComparer.OrdinalIgnoreCase);
+        return available ? store : store with { DefaultThemeId = "" };
+    }
 
     private static ThemeStoreAsset[] ListAssets(IWebHostEnvironment environment, HttpRequest request)
     {
@@ -593,7 +616,9 @@ internal sealed record ThemeStoreResponse(
     StudioThemeDefinition[] Themes,
     string DefaultThemeId,
     ThemeStoreAsset[] Assets,
-    string[]? DisabledBuiltInThemeIds = null);
+    string[]? DisabledBuiltInThemeIds = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ThemesMode = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string[]? DirectoryThemeIds = null);
 internal sealed record ThemeStoreAsset(string Id, string FileName, string ContentType, long Size, string Url);
 internal sealed record ThemeStoreErrorResponse(string Message);
 internal sealed record ThemeFeatureCapabilityResponse(bool Enabled);

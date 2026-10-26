@@ -29,6 +29,7 @@ builder.Services.AddSingleton<IConfigurationRoot>(configuration);
 // appsettings.json, environment variables (Themes__ThemesDirectory, etc.), and any other registered source.
 var themeConfig = new ThemeConfiguration();
 configuration.GetSection("Themes").Bind(themeConfig);
+_ = themeConfig.GetThemesMode();
 builder.Services.AddSingleton(themeConfig);
 builder.Services.AddSingleton<ThemeConfigurationService>();
 
