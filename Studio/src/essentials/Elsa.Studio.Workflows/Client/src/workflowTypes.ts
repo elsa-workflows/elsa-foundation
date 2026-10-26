@@ -1243,6 +1243,7 @@ export interface RuntimeValueTypeDescriptor {
 }
 
 export interface ActivityExecutionStateSummary {
+  executionSequence?: number;
   activityExecutionId: string;
   workflowExecutionId: string;
   executableNodeId: string;

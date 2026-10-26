@@ -87,7 +87,6 @@ public sealed class WebHostShellFeatureDiscoveryTests : IAsyncLifetime
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton<IPackageAssemblyCatalog, EmptyPackageAssemblyCatalog>();
-        services.AddSingleton<StudioNuplaneAssemblyProvider>();
         services.AddCShells(configure);
         await using var provider = services.BuildServiceProvider();
 
@@ -97,9 +96,6 @@ public sealed class WebHostShellFeatureDiscoveryTests : IAsyncLifetime
 
     private sealed class EmptyPackageAssemblyCatalog : IPackageAssemblyCatalog
     {
-        public Task<IReadOnlyList<Assembly>> GetAssembliesAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<Assembly>>([]);
-
         public Task<IReadOnlyList<PackageAssemblies>> GetPackagedAssembliesAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<PackageAssemblies>>([]);
 

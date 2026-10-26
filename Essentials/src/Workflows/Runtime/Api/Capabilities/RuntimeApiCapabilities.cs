@@ -61,6 +61,17 @@ public sealed class RuntimeOperationalCapabilitySource(
     }
 }
 
+/// <summary>Advertises browsing only for inspection providers that implement the bounded collection read.</summary>
+public sealed class RuntimeActivityExecutionBrowsingCapabilitySource(IActivityExecutionInspectionStore? inspectionStore = null) : IApiCapabilitySource
+{
+    public ValueTask<IReadOnlyCollection<ApiCapabilityDeclaration>> GetCapabilitiesAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult<IReadOnlyCollection<ApiCapabilityDeclaration>>(inspectionStore?.SupportsExecutionBrowsing == true
+            ? [new(RuntimeApiCapabilities.CapabilityId, 1,
+                [new ApiCapabilityLink("activity-executions", "runtime/workflows/instances/{workflowExecutionId}/activity-executions", templated: true)],
+                $"{RuntimeApiCapabilities.SourceFeatureId}.ExecutionBrowsing")]
+            : []);
+}
+
 /// <summary>Advertises alteration routes only when this shell composed both durable plan state and the orchestration service.</summary>
 public sealed class RuntimeAlterationCapabilitySource(IServiceProvider serviceProvider) : IApiCapabilitySource
 {

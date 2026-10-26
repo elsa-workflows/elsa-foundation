@@ -14,8 +14,10 @@ public class ThemeConfiguration
     public string? ThemesDirectory { get; set; }
 
     /// <summary>
-    /// How to combine directory themes with built-ins.
-    /// Values: "BuiltInsOnly" (built-ins only), "DirectoryOnly" (directory only), "AddToBuiltIns" (both).
+    /// Which sources are selectable.
+    /// Values: "BuiltInsOnly" (built-ins only), "DirectoryOnly" (configured directory only),
+    /// "AddToBuiltIns" (built-ins, directory themes and managed custom themes).
+    /// Management retains every definition regardless of this selection policy.
     /// Default: "AddToBuiltIns".
     /// </summary>
     public string ThemesMode { get; set; } = "AddToBuiltIns";
@@ -24,4 +26,12 @@ public class ThemeConfiguration
     /// Default theme ID to select on first load (e.g., "classic").
     /// </summary>
     public string? DefaultThemeId { get; set; }
+
+    internal string GetThemesMode() => ThemesMode?.Trim().ToUpperInvariant() switch
+    {
+        "BUILTINSONLY" => "BuiltInsOnly",
+        "DIRECTORYONLY" => "DirectoryOnly",
+        "ADDTOBUILTINS" => "AddToBuiltIns",
+        _ => throw new InvalidOperationException("Themes:ThemesMode must be BuiltInsOnly, DirectoryOnly or AddToBuiltIns.")
+    };
 }

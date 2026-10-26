@@ -9081,3 +9081,57 @@ Elsa.Workflows.Runtime.Core.Exceptions.RuntimePostCommitSourceBoundaryException.
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntentHandlerContribution.RequiresDurableSource.get -> bool
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntentHandlerContribution.RuntimePostCommitIntentHandlerContribution(string! intentKind, System.Type! handlerType, Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitRetryPolicy! retryPolicy, bool requiresDurableSource) -> void
 static Elsa.Workflows.Runtime.Core.Extensions.RuntimePostCommitIntentHandlerServiceCollectionExtensions.AddRuntimePostCommitIntentHandler<THandler>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! intentKind, Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitRetryPolicy! retryPolicy, bool requiresDurableSource) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry.Execution.get -> Elsa.Workflows.Runtime.Core.Models.ActivityExecutionInspectionSummaryProjection!
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowsePage.TotalCount.get -> long
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowsePage.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry!>!
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry.PreviousActivityExecutionId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry.Execution.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowsePage.Items.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry.NextActivityExecutionId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry.PreviousActivityExecutionId.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry.Position.get -> long
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry.NextActivityExecutionId.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry.Position.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowsePage.Offset.get -> long
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowsePage.TotalCount.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowsePage.Offset.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseQuery.ActivityExecutionBrowseQuery(string! workflowExecutionId, int limit = 50, long? offset = null, string? executableNodeId = null, string? parentActivityExecutionId = null, string? ancestorActivityExecutionId = null, string? anchorActivityExecutionId = null) -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseQuery.Offset.get -> long?
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseQuery.AncestorActivityExecutionId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseQuery.ExecutableNodeId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseQuery.ParentActivityExecutionId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseQuery.WorkflowExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseQuery.AnchorActivityExecutionId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowsePage.ActivityExecutionBrowsePage(long TotalCount, long Offset, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry!>! Items) -> void
+Elsa.Workflows.Runtime.Core.Contracts.IActivityExecutionInspectionStore.SupportsExecutionBrowsing.get -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IActivityExecutionInspectionStore.BrowseAsync(Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseQuery! query, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowsePage!>
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry
+override Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry.operator !=(Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry? left, Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry.operator ==(Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry? left, Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry? right) -> bool
+override Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry.Equals(object? obj) -> bool
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry.Equals(Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry!
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowsePage
+override Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowsePage.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowsePage.operator !=(Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowsePage? left, Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowsePage? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowsePage.operator ==(Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowsePage? left, Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowsePage? right) -> bool
+override Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowsePage.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowsePage.Equals(object? obj) -> bool
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowsePage.Equals(Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowsePage? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowsePage.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowsePage!
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowsePage.Deconstruct(out long TotalCount, out long Offset, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry!>! Items) -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseQuery
+override Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseQuery.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseQuery.operator !=(Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseQuery? left, Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseQuery? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseQuery.operator ==(Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseQuery? left, Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseQuery? right) -> bool
+override Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseQuery.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseQuery.Equals(object? obj) -> bool
+override sealed Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseQuery.Equals(Elsa.Workflows.Runtime.Core.Models.RuntimeStorePageRequest? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseQuery.Equals(Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseQuery? other) -> bool
+override Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseQuery.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseQuery!
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry.Deconstruct(out Elsa.Workflows.Runtime.Core.Models.ActivityExecutionInspectionSummaryProjection! Execution, out long Position, out string? PreviousActivityExecutionId, out string? NextActivityExecutionId, out long? IterationPosition) -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry.IterationPosition.get -> long?
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry.IterationPosition.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBrowseEntry.ActivityExecutionBrowseEntry(Elsa.Workflows.Runtime.Core.Models.ActivityExecutionInspectionSummaryProjection! Execution, long Position, string? PreviousActivityExecutionId, string? NextActivityExecutionId, long? IterationPosition = null) -> void

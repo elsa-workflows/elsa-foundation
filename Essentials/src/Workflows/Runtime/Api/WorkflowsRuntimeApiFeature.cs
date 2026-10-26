@@ -135,6 +135,7 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         services.TryAddScoped<IWorkflowAlterationAdmissionGate, AllowWorkflowAlterationAdmissionGate>();
         services.AddApiCapability(RuntimeApiCapabilities.StaticDeclaration);
         services.AddApiCapabilitySource<RuntimeOperationalCapabilitySource>();
+        services.AddApiCapabilitySource<RuntimeActivityExecutionBrowsingCapabilitySource>();
         services.AddApiCapabilitySource<RuntimeAlterationCapabilitySource>();
         services.AddApiCapabilitySource<RuntimeRunDeletionCapabilitySource>();
         services.AddApiCapabilitySource<RuntimeActivityStateViewCapabilitySource>();

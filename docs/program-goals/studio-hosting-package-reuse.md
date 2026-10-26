@@ -14,8 +14,9 @@ small composition root, without copying `Elsa.Studio.Web` infrastructure or buil
 Consolidate reusable behavior and adopt existing qualified infrastructure before introducing another implementation.
 
 GitHub issues own scope, acceptance, native hierarchy, dependencies and progress. The Project is the scheduling
-view. This page routes to those records and does not duplicate the backlog. Package names and boundaries remain
-provisional until the M0 spikes and disposition task settle them.
+view. This page routes to those records and does not duplicate the backlog. The [M0 extraction contract](../reports/studio-hosting-contract.md) selects package names, boundaries and public
+API targets from the completed qualification spikes. Those targets are not production-package delivery evidence;
+implementation and final consumer acceptance remain on the owning GitHub leaves.
 
 ## Delivery sequence
 

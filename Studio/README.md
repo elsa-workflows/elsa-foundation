@@ -95,6 +95,27 @@ so the host needs `Studio:BackendServerBaseUrl` (or `Studio:BackendBaseUrl`) and
 configured, and the backend must expose the Extension Builder surface. Against a backend without it, the page shows its
 explicit "backend management unavailable" state.
 
+### Theme source selection
+
+`Themes:ThemesMode` controls the theme picker and default selection:
+
+| Mode | Selectable definitions |
+|---|---|
+| `AddToBuiltIns` (default) | Built-ins, configured directory themes and managed custom themes |
+| `BuiltInsOnly` | Built-ins |
+| `DirectoryOnly` | Themes currently supplied by `Themes:ThemesDirectory` |
+
+`ThemesDirectory` accepts a JSON collection file or a directory of JSON collection files, relative
+to the host content root or absolute. Directory definitions win over managed definitions with the
+same ID; built-in IDs remain reserved. Definitions must also be enabled and published to be selectable.
+An unavailable configured or saved default falls back to the first selectable theme in the browser.
+If none is selectable, the picker is empty and Studio renders with its safe Classic palette.
+
+The Theme Builder retains the full inventory in every mode. Changing modes does not remove managed
+themes or change directory files. Managed state stays in `studio-theme-store.json`; source policy and
+directory provenance come from configuration, not that file. Mode names are case-insensitive; invalid
+values fail host startup with a `Themes:ThemesMode` configuration error.
+
 ## Build
 
 > **Source setup status:** The central `ConsoleLogStreaming.AspNetCore` pin now uses `1.1.0`.
