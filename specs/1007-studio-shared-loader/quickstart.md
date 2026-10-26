@@ -11,6 +11,13 @@ dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj -
 dotnet run --project tools/maps/Elsa.Maps.Generator -- check
 ```
 
+Studio maps `Elsa.Specifications.*` to the Elsa 4 preview feed, matching the root configuration.
+A populated global package cache can hide an incorrect source mapping. To check this boundary, restore
+`Elsa.Studio.Api.csproj` and `Elsa.Studio.Web.csproj` with `--packages` pointing at a new owned empty cache
+and `--no-http-cache --force-evaluate`. Verify both Specifications preview.8 package metadata files name
+`https://f.feedz.io/elsa-workflows/elsa-4/nuget/index.json` as their source. This is a producer restore check;
+the separate NuGet-only consumer qualification still belongs to #3363/#3364.
+
 `StudioPackageLifecycleTests` binds the actual Web `appsettings.json` and `nuplane-management.json`, overriding
 only owned state/install/feed paths and background scheduling. It uses `WithStudioFeatureAssemblies`, which
 selects the released adapter with `ChangedOrPending`, automatic reload and Studio result diagnostics.
