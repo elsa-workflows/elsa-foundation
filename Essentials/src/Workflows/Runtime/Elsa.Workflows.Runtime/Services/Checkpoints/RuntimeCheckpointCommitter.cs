@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Diagnostics;
@@ -11,6 +12,7 @@ namespace Elsa.Workflows.Runtime.Services.Checkpoints;
 public sealed class RuntimeCheckpointCommitter
 {
     private readonly IRuntimeCheckpointPersistencePolicy _persistencePolicy;
+    private readonly IPersistenceAccessContextAccessor? _persistenceAccessContextAccessor;
     private readonly IRuntimeCheckpointCommitStore _checkpointCommitStore;
     private readonly IRuntimeExecutionOwnershipContextAccessor _ownershipContextAccessor;
     private readonly IWorkflowEngineTracer _tracer;
@@ -64,6 +66,18 @@ public sealed class RuntimeCheckpointCommitter
         _coalescingSessionAccessor = coalescingSessionAccessor;
         _liveDrainDeliveryAccessor = liveDrainDeliveryAccessor;
         _inProcessHopFastPathOptions = inProcessHopFastPathOptions ?? new RuntimeInProcessHopFastPathOptions();
+    }
+
+    public RuntimeCheckpointCommitter(IRuntimeCheckpointPersistencePolicy persistencePolicy,
+        IRuntimeCheckpointCommitStore checkpointCommitStore, IRuntimeExecutionOwnershipContextAccessor ownershipContextAccessor,
+        IEnumerable<IRuntimeCheckpointCommitEnricher> enrichers, IEnumerable<RuntimePostCommitIntentHandlerContribution> intentHandlerContributions,
+        IWorkflowEngineTracer? tracer, IRuntimeConsumedSchedulerWorkClaimAccessor? consumedWorkClaimAccessor,
+        IRuntimeCoalescingSessionAccessor? coalescingSessionAccessor, IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor,
+        RuntimeInProcessHopFastPathOptions? inProcessHopFastPathOptions, IPersistenceAccessContextAccessor? persistenceAccessContextAccessor)
+        : this(persistencePolicy, checkpointCommitStore, ownershipContextAccessor, enrichers, intentHandlerContributions, tracer,
+            consumedWorkClaimAccessor, coalescingSessionAccessor, liveDrainDeliveryAccessor, inProcessHopFastPathOptions)
+    {
+        _persistenceAccessContextAccessor = persistenceAccessContextAccessor;
     }
 
     public async ValueTask<RuntimeCheckpointCommitResult> CommitAsync(
@@ -122,7 +136,7 @@ public sealed class RuntimeCheckpointCommitter
 
         // Fold post-commit intents into the applied change set so the provider persists them atomically with
         // the rest of the checkpoint through its uniform apply path, then verify the provider acknowledged them.
-        var postCommitOutbox = RuntimePostCommitOutboxItems.CreatePendingChanges(commit, _intentHandlerContributions);
+        var postCommitOutbox = RuntimePostCommitOutboxItems.CreatePendingChanges(commit, _intentHandlerContributions, RequiredSourceScope(commit));
 
         // Fold the claimed scheduler work item's fence-checked delete into this same commit so the
         // drainer can skip its separate acknowledgement. Suppressed while a coalescing session owns the execution — the
@@ -212,6 +226,22 @@ public sealed class RuntimeCheckpointCommitter
         _consumedWorkClaimAccessor is { } accessor && consumedWorkItems.FirstOrDefault() is { } consumed
             ? accessor.BeginConsumeAttempt(consumed.WorkItemId)
             : null;
+
+    private PersistenceScope? RequiredSourceScope(RuntimeCheckpointCommit commit)
+    {
+        var required = commit.PostCommitIntents.FirstOrDefault(intent => _intentHandlerContributions.Any(contribution =>
+            contribution.RequiresDurableSource && contribution.IntentKind == intent.Kind));
+        if (required is null) return null;
+        try
+        {
+            return (_persistenceAccessContextAccessor?.Current ??
+                throw new InvalidOperationException("A required-source checkpoint needs explicit persistence access.")).RequireScope();
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException)
+        {
+            throw new RuntimePostCommitSourceBoundaryException(null, required.Kind, exception, false);
+        }
+    }
 
     private static bool HasDelayedIntent(RuntimeCheckpointCommit commit) =>
         commit.PostCommitIntents.Any(intent => intent.IsDelayedPast(commit.Checkpoint.OccurredAt));

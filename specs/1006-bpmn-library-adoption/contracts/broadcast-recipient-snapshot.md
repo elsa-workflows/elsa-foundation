@@ -82,11 +82,11 @@ ownership, failures and unsupported combinations belong in the relevant extensio
 
 In-memory and EF providers use their existing checkpoint/outbox authority. EF stores the additive
 snapshot in the row's existing ContentJson and uses its revision concurrency token with claim fencing.
-Use declared outbox family2.0.0 with an explicit1.0.0 upcast preserving absence; ordinary predecessor
-writes omit all new-only fields while the existing gate still observes1.0.0. Publisher protocol
+Use declared outbox family 2.0.0 with an explicit 1.0.0 upcast preserving absence; ordinary predecessor
+writes omit all new-only fields while the existing gate still observes 1.0.0. Publisher protocol
 acceptance checks the shared schema dormancy contract before effects. The supported fleet/hold/
-finalization protocol advances the same host to2.0.0; storage never force-finalizes or restamps new
-protocol data as1.0.0. Backfill uses the family's declared checked revision-CAS row rewriter. Old readers
+finalization protocol advances the same host to 2.0.0; storage never force-finalizes or restamps new
+protocol data as 1.0.0. Backfill uses the family's declared checked revision-CAS row rewriter. Old readers
 must refuse the new stamp, rather than discard an unknown JSON member and rewrite it. Unknown cohort
 versions, corrupt present cohorts and mismatched source/intent/scope refuse before effects. Preserve the
 cohort through every constructor/copy, claim/renew/retry/completion, atomic checkpoint participant,
@@ -96,7 +96,16 @@ persisted content; the pre-initialization claim.Item cannot overwrite a newly in
 Coalescing needs an explicit durable-source boundary before this handler runs. Its overlay can reissue
 intents under a flush commit; only the resulting canonical durable OutboxItemId may own a snapshot.
 Never snapshot/dispatch an overlay source, mint a replacement source during retry, or let overlay
-reconciliation overwrite durable cohort state. Add generic required-source registration metadata or
+reconciliation overwrite durable cohort state.
+Within a drain scope, an uncertain quiescence flush retains its prepared commit identity, timestamp
+and envelope. Other checkpoint decisions for that session refuse until resolution; a retry reuses the
+existing source even after peer delivery. Process-restart qualification remains a separate host gate.
+The additive context path and physical-only lookup refuse legacy fallback. The processor honors both
+contribution metadata and a retained scope/protocol witness, including old-constructor combinations.
+Unknown in-memory scope ownership and an active caller-owned EF transaction refuse before effects.
+A generic required-source row may retain scope without declaring a recipient protocol; it still needs
+family 2.0.0 and grants no authority to select a cohort. The original committer records that witness
+from actual access; a caller's later context cannot supply it. Add generic required-source registration metadata or
 an equivalent named contract, keeping ordinary handlers/coalescing defaults and constructor behavior.
 Prove the real processor/flush path and mailbox ordering, not only a direct store invocation.
 

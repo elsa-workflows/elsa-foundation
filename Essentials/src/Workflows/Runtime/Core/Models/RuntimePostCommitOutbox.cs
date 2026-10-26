@@ -91,7 +91,7 @@ public sealed class RuntimePostCommitOutboxItem
 
         if (stimulusDeliveryProtocolVersion is not null and not StimulusDeliverySnapshot.CurrentVersion)
             throw new ArgumentOutOfRangeException(nameof(stimulusDeliveryProtocolVersion));
-        if ((stimulusDeliveryProtocolVersion is null) != (stimulusDeliverySourceScope is null))
+        if (stimulusDeliveryProtocolVersion is not null && stimulusDeliverySourceScope is null)
             throw new ArgumentException("A declared recipient protocol requires its committed persistence scope.", nameof(stimulusDeliverySourceScope));
         if (recipientSnapshot is not null && (stimulusDeliveryProtocolVersion != recipientSnapshot.Version ||
             recipientSnapshot.SourceOutboxItemId != outboxItemId || recipientSnapshot.Scope.PersistenceScope != stimulusDeliverySourceScope ||
@@ -132,11 +132,11 @@ public sealed class RuntimePostCommitOutboxItem
     public long DeliveryFencingToken { get; }
     public DateTimeOffset? DeliveryVisibleAfter { get; }
 
-    /// <summary>Null means a legacy source whose prior recipients cannot be inferred.</summary>
+    /// <summary>Null means no recipient protocol is declared; it never authorizes recipient selection.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? StimulusDeliveryProtocolVersion { get; }
 
-    /// <summary>Persistence scope accepted with the publisher commit, including legacy publishers without TenantId.</summary>
+    /// <summary>Persistence scope accepted with a required-source commit, including publishers without TenantId.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public PersistenceScope? StimulusDeliverySourceScope { get; }
 

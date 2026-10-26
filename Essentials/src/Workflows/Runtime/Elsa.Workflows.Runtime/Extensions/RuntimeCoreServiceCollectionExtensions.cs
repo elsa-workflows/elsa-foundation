@@ -297,7 +297,9 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetServices<IPostCommitFailureProjector>(),
                 serviceProvider.GetService<ILogger<RuntimePostCommitOutboxProcessor>>(),
                 serviceProvider.GetService<IRuntimeLiveDrainDeliveryAccessor>(),
-                serviceProvider.GetService<IRuntimeCoalescingSessionAccessor>()));
+                serviceProvider.GetService<IRuntimeCoalescingSessionAccessor>(),
+                serviceProvider.GetService<IPersistenceAccessContextAccessor>(),
+                serviceProvider.GetServices<RuntimePostCommitIntentHandlerContribution>()));
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
         services.TryAddSingleton<RuntimeSchedulerWorkClaimOptions>();
         services.TryAddSingleton<IDurableTimerStore, InMemoryDurableTimerStore>();
@@ -446,7 +448,8 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetService<IRuntimeConsumedSchedulerWorkClaimAccessor>(),
                 serviceProvider.GetService<IRuntimeCoalescingSessionAccessor>(),
                 serviceProvider.GetService<IRuntimeLiveDrainDeliveryAccessor>(),
-                serviceProvider.GetService<RuntimeInProcessHopFastPathOptions>()));
+                serviceProvider.GetService<RuntimeInProcessHopFastPathOptions>(),
+                serviceProvider.GetService<IPersistenceAccessContextAccessor>()));
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, WorkflowDispatchCheckpointEnricher>());
         services.TryAddSingleton<IRuntimePayloadCapturePolicy, DefaultRuntimePayloadCapturePolicy>();
         services.TryAddSingleton<IWorkflowExecutableInputValidator, WorkflowExecutableInputValidator>();

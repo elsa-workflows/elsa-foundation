@@ -59,6 +59,25 @@ public sealed class StimulusDeliverySchemaGateTests
     }
 
     [Fact]
+    public async Task Generic_required_source_scope_needs_finalized_v2_without_declaring_recipient_protocol()
+    {
+        await using var fixture = await Fixture.Create();
+        await using var context = fixture.Open();
+        var original = Pending("generic", false);
+        var scoped = new RuntimePostCommitOutboxItem(original.OutboxItemId, original.Intent, original.Status, original.RecordedAt,
+            original.AvailableAt, original.RetryPolicy, 0, null, null, null, null, null, 0, null, null, Scope, null);
+        var store = new EfRuntimePostCommitOutboxStore(context, new Accessor());
+        await Assert.ThrowsAsync<EfSchemaWriteRefusedException>(() => store.SavePendingAsync(scoped).AsTask());
+        Assert.Empty(await context.RuntimePostCommitOutbox.AsNoTracking().ToArrayAsync());
+        await fixture.Finalize();
+        await store.SavePendingAsync(scoped);
+        var saved = (await store.FindDurableAsync(scoped.OutboxItemId))!;
+        Assert.Equal(Scope, saved.StimulusDeliverySourceScope);
+        Assert.Null(saved.StimulusDeliveryProtocolVersion); Assert.Null(saved.RecipientSnapshot);
+        Assert.Equal("2.0.0", (await context.RuntimePostCommitOutbox.AsNoTracking().SingleAsync()).SchemaVersion);
+    }
+
+    [Fact]
     public async Task Actual_backfill_uses_declared_checked_rewriter_and_preserves_legacy_absence()
     {
         await using var fixture = await Fixture.Create();

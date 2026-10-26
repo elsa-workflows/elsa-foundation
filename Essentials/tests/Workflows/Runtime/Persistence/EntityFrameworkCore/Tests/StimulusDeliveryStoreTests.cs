@@ -3,17 +3,23 @@ using System.Text.Json.Nodes;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
+using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Extensions;
+using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.Coalescing;
+using Elsa.Workflows.Runtime.Services.Incidents;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
@@ -402,6 +408,145 @@ public sealed class StimulusDeliveryStoreTests
         Assert.Equal(before, services);
     }
 
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Required_source_processor_passes_real_provider_context_and_preserves_handler_installed_cohort(bool ef)
+    {
+        await using var harness = await Harness.Create(ef);
+        await harness.SeedPending();
+        var handler = new ContextHandler(async source => { await harness.Delivery.InstallAsync(source, Snapshot(source)); });
+        using var services = new ServiceCollection().AddSingleton(handler).BuildServiceProvider();
+        var processor = ContextProcessor(harness, services);
+        Assert.Equal(1, (await processor.ProcessAsync(new(10))).DeliveredCount);
+        var context = Assert.Single(handler.Contexts);
+        Assert.Equal("commit:send", context.SourceOutboxItemId); Assert.Equal(Scope, context.Scope);
+        var completed = (await harness.Lookup.FindAsync(context.SourceOutboxItemId))!;
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, completed.Status);
+        Assert.True(Snapshot(context).IsEquivalentTo(completed.RecipientSnapshot));
+    }
+
+    [Fact]
+    public async Task Actual_EF_uncommitted_source_never_invokes_handler_and_committed_retry_succeeds()
+    {
+        await using var harness = await Harness.Create(true);
+        var handler = new ContextHandler(_ => ValueTask.CompletedTask);
+        using var services = new ServiceCollection().AddSingleton(handler).BuildServiceProvider();
+        await using (var transaction = await harness.Context!.Database.BeginTransactionAsync())
+        {
+            await harness.SeedPending();
+            var refusal = await Assert.ThrowsAsync<RuntimePostCommitSourceBoundaryException>(() =>
+                ContextProcessor(harness, services).ProcessAsync(new(10)).AsTask());
+            Assert.IsType<InvalidOperationException>(refusal.InnerException);
+            Assert.Empty(handler.Contexts);
+            await transaction.RollbackAsync();
+        }
+        harness.Context!.ChangeTracker.Clear();
+        Assert.Null(await harness.Lookup.FindAsync("commit:send"));
+        Assert.Null(await harness.FindPublisher());
+        await harness.SeedPending();
+        Assert.Equal(1, (await ContextProcessor(harness, services).ProcessAsync(new(10))).DeliveredCount);
+        Assert.Single(handler.Contexts);
+    }
+
+    [Fact]
+    public async Task Actual_EF_ambient_transaction_cannot_authorize_source_or_install_recipients()
+    {
+        await using var harness = await Harness.Create(true);
+        var source = new PostCommitDeliveryContext(await harness.Seed(), Scope);
+        using (var ambient = new System.Transactions.TransactionScope(System.Transactions.TransactionScopeAsyncFlowOption.Enabled))
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(() => harness.Lookup.FindDurableAsync(source.SourceOutboxItemId).AsTask());
+            var refusal = await Assert.ThrowsAsync<StimulusDeliveryBoundaryException>(() =>
+                harness.Delivery.InstallAsync(source, Snapshot(source)).AsTask());
+            Assert.False(refusal.IsUnavailable); Assert.IsType<InvalidOperationException>(refusal.InnerException);
+        }
+        Assert.Null((await harness.Lookup.FindAsync(source.SourceOutboxItemId))!.RecipientSnapshot);
+        Assert.NotNull(await harness.Lookup.FindDurableAsync(source.SourceOutboxItemId));
+        Assert.NotNull(await harness.Delivery.InstallAsync(source, Snapshot(source)));
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Actual_EF_source_is_claimed_only_after_real_coalescing_flush_with_canonical_identity(bool acknowledgementLost)
+    {
+        await using var harness = await Harness.Create(true);
+        var handler = new ContextHandler(_ => ValueTask.CompletedTask);
+        var registrations = new ServiceCollection(); registrations.AddWorkflowRuntime();
+        registrations.AddSingleton(handler);
+        registrations.AddRuntimePostCommitIntentHandler<ContextHandler>("publish", RuntimePostCommitRetryPolicy.None, true);
+        registrations.AddSingleton<IPersistenceAccessContextAccessor>(new Accessor());
+        registrations.Replace(ServiceDescriptor.Singleton<TimeProvider>(harness.Clock));
+        // Finite coalescing/provider seam: source/checkpoint contracts share the real EF context; this fixture has no
+        // scheduler work and does not qualify a fully EF-backed host, queue recovery, retention or recipient effects.
+        var lost = new LostFlushAcknowledgement(harness.Checkpoints, acknowledgementLost);
+        registrations.Replace(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitStore>(_ => lost));
+        registrations.Replace(ServiceDescriptor.Scoped<IRuntimePostCommitOutboxStore>(_ => harness.Outbox));
+        registrations.Replace(ServiceDescriptor.Scoped<IPostCommitOutboxLookupStore>(_ => harness.Lookup));
+        registrations.Replace(ServiceDescriptor.Scoped<IRuntimePostCommitOutboxClaimStore>(_ => harness.Claims));
+        registrations.Replace(ServiceDescriptor.Scoped<IRuntimePostCommitOutboxClaimCompletionStore>(_ => harness.Completion));
+        registrations.Replace(ServiceDescriptor.Scoped<IStimulusDeliveryStore>(_ => harness.Delivery));
+        registrations.AddPersistenceModes();
+        using var provider = registrations.BuildServiceProvider(); using var scope = provider.CreateScope();
+        var services = scope.ServiceProvider;
+        await using var drain = services.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>()
+            .Begin("publisher", new(PersistenceMode.Balanced, RunHasRecord: false));
+        var envelope = new RuntimeCheckpointCommit("overlay", new("checkpoint", RuntimeCheckpointNames.ActivityCompleted,
+            "publisher", Now, ["activity"], new Dictionary<string, string>()),
+            new(null, null, [], [], [], [], []), [], new Dictionary<string, string>());
+        var original = RuntimePostCommitOutboxItems.CreatePending(envelope, Pending("ignored", false).Intent,
+            [new("publish", typeof(ContextHandler), RuntimePostCommitRetryPolicy.None, true)], Scope);
+        envelope = envelope with { StateChanges = envelope.StateChanges.WithPostCommitOutbox(
+            [new(original.OutboxItemId, RuntimeStateChangeOperation.Upsert, original, new Dictionary<string, string>())]) };
+        await services.GetRequiredService<IRuntimeCheckpointCommitStore>().CommitAsync(envelope, new(RuntimeCheckpointPersistenceMode.Deferred));
+        Assert.Null(await harness.Lookup.FindDurableAsync(original.OutboxItemId));
+        var processor = services.GetRequiredService<IRuntimePostCommitOutboxProcessor>();
+        Assert.Empty((await processor.ProcessAsync(new(10, "publisher", "publish"))).Items);
+        Assert.Empty(handler.Contexts);
+        if (acknowledgementLost)
+        {
+            await Assert.ThrowsAsync<IOException>(() => drain.FlushAtQuiescenceAsync().AsTask());
+            Assert.Equal(1, (await ContextProcessor(harness, services).ProcessAsync(new(10))).DeliveredCount);
+            harness.Clock.Advance(TimeSpan.FromSeconds(2));
+        }
+        await drain.FlushAtQuiescenceAsync();
+        Assert.Equal(acknowledgementLost ? 2 : 1, lost.FlushIds.Count);
+        Assert.Single(lost.FlushIds.Distinct(StringComparer.Ordinal));
+        var row = await harness.Context!.RuntimePostCommitOutbox.AsNoTracking().SingleAsync();
+        Assert.Equal("2.0.0", row.SchemaVersion);
+        var canonical = EfRelationalIdentity.Decode(row.OutboxItemId);
+        Assert.NotEqual(original.OutboxItemId, canonical);
+        Assert.Equal(acknowledgementLost ? 0 : 1, (await processor.ProcessAsync(new(10, "publisher", "publish"))).DeliveredCount);
+        Assert.Equal(canonical, Assert.Single(handler.Contexts).SourceOutboxItemId);
+        Assert.Null(await harness.Lookup.FindDurableAsync(original.OutboxItemId));
+        Assert.Equal(Scope, (await harness.Lookup.FindDurableAsync(canonical))!.StimulusDeliverySourceScope);
+        Assert.Empty((await processor.ProcessAsync(new(10, "publisher", "publish"))).Items);
+    }
+
+    private sealed class LostFlushAcknowledgement(IRuntimeCheckpointCommitStore inner, bool armed) : IRuntimeCheckpointCommitStore
+    {
+        public List<string> FlushIds { get; } = [];
+        public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit,
+            RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
+        {
+            var flush = commit.Checkpoint.Metadata.ContainsKey(RuntimeCoalescingMetadataKeys.CoalescedFlush);
+            if (flush) FlushIds.Add(commit.CommitId);
+            var result = await inner.CommitAsync(commit, decision, cancellationToken);
+            if (flush && armed) { armed = false; throw new IOException("Constructed acknowledgement loss after actual EF commit."); }
+            return result;
+        }
+    }
+
+    private static RuntimePostCommitOutboxProcessor ContextProcessor(Harness harness, IServiceProvider services) =>
+        new(harness.Outbox, new RuntimePostCommitIntentDispatcher([new("publish", typeof(ContextHandler), RuntimePostCommitRetryPolicy.None, true)], services),
+            harness.Clock, DefaultRuntimeFaultCapturePolicy.CreateDefault(), null, [], null, null, null, new Accessor(),
+            [new("publish", typeof(ContextHandler), RuntimePostCommitRetryPolicy.None, true)]);
+    private sealed class ContextHandler(Func<PostCommitDeliveryContext, ValueTask> deliver) : IRuntimePostCommitDurableSourceIntentHandler
+    {
+        public List<PostCommitDeliveryContext> Contexts { get; } = [];
+        public async ValueTask HandleAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
+        { Contexts.Add(source); await deliver(source); }
+    }
+
     private static StimulusDeliverySnapshot Snapshot(PostCommitDeliveryContext source, bool empty = false, WorkflowExecutionState? publisher = null) =>
         new(1, source.SourceOutboxItemId, source.IntentFingerprint, StimulusDeliveryScope.From(publisher ?? Publisher, source.Scope),
             Now, "event", "named", empty ? [] : [Start("binding-a"), Start("binding-b")], empty ? [] : [new("waiter", "bookmark-1", "activity", "node", "resume", "event", "named", Now, null),
@@ -491,11 +636,15 @@ public sealed class StimulusDeliveryStoreTests
         }
         public ValueTask SavePending(RuntimePostCommitOutboxItem item) => Outbox is EfRuntimePostCommitOutboxStore ef
             ? ef.SavePendingAsync(item) : ((InMemoryRuntimeCheckpointCommitStore)Outbox).AddPendingForTestingAsync(item);
-        public async Task<RuntimePostCommitOutboxClaim> Seed(bool protocol = true, WorkflowExecutionState? publisher = null)
+        public async Task SeedPending(bool protocol = true, WorkflowExecutionState? publisher = null)
         {
             if (Context is null) await publishers.SaveAsync(publisher ?? Publisher);
             else await new EfWorkflowExecutionStateStore(Context, new Accessor(), new Codec()).SaveAsync(publisher ?? Publisher);
             await SavePending(Pending("commit", protocol));
+        }
+        public async Task<RuntimePostCommitOutboxClaim> Seed(bool protocol = true, WorkflowExecutionState? publisher = null)
+        {
+            await SeedPending(protocol, publisher);
             return Assert.Single(await Claims.ClaimAsync(new("owner", Now, TimeSpan.FromMinutes(1), 1)));
         }
         public async Task Export(string name)

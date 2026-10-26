@@ -14,6 +14,12 @@ public sealed class RuntimePostCommitIntentHandlerContribution
         string intentKind,
         Type handlerType,
         RuntimePostCommitRetryPolicy retryPolicy)
+        : this(intentKind, handlerType, retryPolicy, requiresDurableSource: false)
+    {
+    }
+
+    public RuntimePostCommitIntentHandlerContribution(string intentKind, Type handlerType,
+        RuntimePostCommitRetryPolicy retryPolicy, bool requiresDurableSource)
     {
         RuntimePostCommitIntent.ValidateKind(intentKind, nameof(intentKind));
         ArgumentNullException.ThrowIfNull(handlerType);
@@ -26,11 +32,15 @@ public sealed class RuntimePostCommitIntentHandlerContribution
                 nameof(handlerType));
         }
 
+        if (requiresDurableSource && !typeof(IRuntimePostCommitDurableSourceIntentHandler).IsAssignableFrom(handlerType))
+            throw new ArgumentException("A required-source contribution needs the explicit context handler contract.", nameof(handlerType));
+        RequiresDurableSource = requiresDurableSource;
         IntentKind = intentKind;
         HandlerType = handlerType;
         RetryPolicy = retryPolicy;
     }
 
+    public bool RequiresDurableSource { get; }
     public string IntentKind { get; }
     public Type HandlerType { get; }
     public RuntimePostCommitRetryPolicy RetryPolicy { get; }

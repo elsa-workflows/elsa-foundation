@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -9,6 +10,7 @@ public sealed class RuntimePostCommitIntentDispatcher : IRuntimePostCommitIntent
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly IReadOnlyDictionary<string, Type> _handlerTypes;
+    private readonly HashSet<string> _requiredSourceKinds;
 
     public RuntimePostCommitIntentDispatcher(
         IEnumerable<RuntimePostCommitIntentHandlerContribution> contributions,
@@ -18,13 +20,19 @@ public sealed class RuntimePostCommitIntentDispatcher : IRuntimePostCommitIntent
         ArgumentNullException.ThrowIfNull(serviceProvider);
 
         _serviceProvider = serviceProvider;
-        _handlerTypes = BuildHandlerMap(contributions);
+        var materialized = contributions.ToArray();
+        _handlerTypes = BuildHandlerMap(materialized);
+        _requiredSourceKinds = RuntimePostCommitOutboxItems.RequiredSourceKinds(materialized);
     }
 
     public ValueTask DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(intent);
         cancellationToken.ThrowIfCancellationRequested();
+
+        if (RequiresDurableSource(intent.Kind))
+            throw new RuntimePostCommitSourceBoundaryException(null, intent.Kind,
+                new InvalidOperationException("The contributed handler requires durable source context."), false);
 
         if (!_handlerTypes.TryGetValue(intent.Kind, out var handlerType))
         {
@@ -36,6 +44,23 @@ public sealed class RuntimePostCommitIntentDispatcher : IRuntimePostCommitIntent
         return handler.HandleAsync(intent, cancellationToken);
     }
 
+    public bool RequiresDurableSource(string intentKind)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(intentKind);
+        return _requiredSourceKinds.Contains(intentKind);
+    }
+
+    public ValueTask DispatchAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!RequiresDurableSource(source.Intent.Kind))
+            return DispatchAsync(source.Intent, cancellationToken);
+        var handler = (IRuntimePostCommitDurableSourceIntentHandler)_serviceProvider
+            .GetRequiredService(_handlerTypes[source.Intent.Kind]);
+        return handler.HandleAsync(source, cancellationToken);
+    }
+
     private static IReadOnlyDictionary<string, Type> BuildHandlerMap(
         IEnumerable<RuntimePostCommitIntentHandlerContribution> contributions)
     {
@@ -45,6 +70,8 @@ public sealed class RuntimePostCommitIntentDispatcher : IRuntimePostCommitIntent
                      .GroupBy(contribution => contribution.IntentKind, StringComparer.Ordinal)
                      .OrderBy(group => group.Key, StringComparer.Ordinal))
         {
+            if (group.Select(item => item.RequiresDurableSource).Distinct().Count() != 1)
+                throw new InvalidOperationException("One intent kind cannot have competing durable-source requirements.");
             var distinctTypes = group
                 .Select(contribution => contribution.HandlerType)
                 .Distinct()

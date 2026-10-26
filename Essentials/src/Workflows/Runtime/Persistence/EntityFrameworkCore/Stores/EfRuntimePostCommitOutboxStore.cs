@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Transactions;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -82,6 +83,21 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
         }
     }
 
+    public ValueTask<RuntimePostCommitOutboxItem?> FindDurableAsync(string outboxItemId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(outboxItemId);
+        cancellationToken.ThrowIfCancellationRequested();
+        EnsureCommittedSourceBoundary();
+        return FindAsync(outboxItemId, cancellationToken);
+    }
+
+    private void EnsureCommittedSourceBoundary()
+    {
+        if (System.Transactions.Transaction.Current is not null || context.Database.CurrentTransaction is not null ||
+            context.Database.GetEnlistedTransaction() is not null)
+            throw new InvalidOperationException("A durable source cannot be authorized inside a caller-owned transaction.");
+    }
+
     public async ValueTask<StimulusDeliverySnapshot> InstallAsync(PostCommitDeliveryContext source,
         StimulusDeliverySnapshot candidate, CancellationToken cancellationToken = default)
     {
@@ -96,8 +112,7 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
             var access = accessContextAccessor.Current;
             var scope = access.RequireScope();
             access.EnsureScope(source.Scope);
-            if (context.Database.CurrentTransaction is not null)
-                throw new InvalidOperationException("Recipient installation must commit its source before dispatch.");
+            EnsureCommittedSourceBoundary();
             for (var attempt = 0; attempt < 8; attempt++)
             {
                 // Re-read authoritative content even when this context tracked a pre-install claim. A stale claim's

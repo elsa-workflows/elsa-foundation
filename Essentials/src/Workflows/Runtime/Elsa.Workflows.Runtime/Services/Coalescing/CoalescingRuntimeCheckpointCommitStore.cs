@@ -24,18 +24,36 @@ namespace Elsa.Workflows.Runtime.Services.Coalescing;
 /// this store has already been fenced by the committer for the same workflow execution. The durable scheduler queue is
 /// advanced only after the folded commit lands (condition B), so a crash mid-segment replays from the last flushed state.
 /// </remarks>
-public sealed class CoalescingRuntimeCheckpointCommitStore(
-    CoalescingInner<IRuntimeCheckpointCommitStore> inner,
-    IRuntimeCoalescingSessionAccessor sessionAccessor,
-    IRuntimeExecutionOwnershipService? ownershipService = null) : IRuntimeCheckpointCommitStore
+public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointCommitStore
 {
+    private readonly IRuntimeCoalescingSessionAccessor sessionAccessor;
+    private readonly IRuntimeExecutionOwnershipService? ownershipService;
+    private readonly HashSet<string> requiredSourceKinds;
+
+    public CoalescingRuntimeCheckpointCommitStore(CoalescingInner<IRuntimeCheckpointCommitStore> inner,
+        IRuntimeCoalescingSessionAccessor sessionAccessor, IRuntimeExecutionOwnershipService? ownershipService = null)
+        : this(inner, sessionAccessor, ownershipService, []) { }
+
+    public CoalescingRuntimeCheckpointCommitStore(CoalescingInner<IRuntimeCheckpointCommitStore> inner,
+        IRuntimeCoalescingSessionAccessor sessionAccessor, IRuntimeExecutionOwnershipService? ownershipService,
+        IEnumerable<RuntimePostCommitIntentHandlerContribution> contributions)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        ArgumentNullException.ThrowIfNull(sessionAccessor);
+        ArgumentNullException.ThrowIfNull(contributions);
+        _inner = inner.Value;
+        this.sessionAccessor = sessionAccessor;
+        this.ownershipService = ownershipService;
+        requiredSourceKinds = RuntimePostCommitOutboxItems.RequiredSourceKinds(contributions);
+    }
+
     private static readonly RuntimeCheckpointPersistenceDecision ImmediateDecision =
         new(RuntimeCheckpointPersistenceMode.Immediate, "Coalesced segment flush.");
 
     private static readonly RuntimeCheckpointPersistenceDecision NoActiveSessionDecision =
         new(RuntimeCheckpointPersistenceMode.Immediate, "No matching active coalescing session.");
 
-    private readonly IRuntimeCheckpointCommitStore _inner = inner.Value;
+    private readonly IRuntimeCheckpointCommitStore _inner;
 
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
     {
@@ -45,6 +63,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         // Capture the ambient owner before the await so a concurrent context change cannot redirect this write lease to
         // another session. Even a non-matching commit fences the current owner's raw-page memo conservatively.
         var session = sessionAccessor.Current;
+        session?.EnsurePreparedFlushAllows(commit);
         if (session is null || !session.AppliesTo(commit.WorkflowExecutionId))
         {
             // Deferred has meaning only inside this matching working set. In particular, a legacy queue's disabled
@@ -237,12 +256,14 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
     // it is, keeping its attempt count and retry time so the sweep that delivers it counts the attempt already made. One
     // an earlier flush already persisted is left out: its durable Pending row is that backstop, and the overlay's changed
     // copy would be a conflicting second save of the same item. Both are what the quiescence flush does with such an item.
-    private static IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>> FoldableOutbox(
+    private IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>> FoldableOutbox(
         RuntimeCoalescingSession session,
         IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>> remaining) =>
         remaining
-            .Where(change => change.State.Status != RuntimePostCommitOutboxStatus.FailedRetryable ||
-                             !session.IsOutboxDurablyPersisted(change.StateId))
+            .Where(change => !session.IsOutboxDurablyPersisted(change.StateId) ||
+                             change.State.Status != RuntimePostCommitOutboxStatus.FailedRetryable &&
+                             change.State.StimulusDeliverySourceScope is null &&
+                             !requiredSourceKinds.Contains(change.State.Intent.Kind))
             .Select(change => change.State.Status == RuntimePostCommitOutboxStatus.FailedRetryable
                 ? change with { State = AsPending(change.State) }
                 : change)

@@ -9068,3 +9068,16 @@ Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem.RuntimePostCommit
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem.StimulusDeliveryProtocolVersion.get -> int?
 Elsa.Workflows.Runtime.Core.Models.StimulusDeliverySnapshot.IsEquivalentTo(Elsa.Workflows.Runtime.Core.Models.StimulusDeliverySnapshot? other) -> bool
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem.StimulusDeliverySourceScope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope?
+Elsa.Workflows.Runtime.Core.Contracts.IPostCommitOutboxLookupStore.FindDurableAsync(string! outboxItemId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem?>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitDurableSourceIntentHandler
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitDurableSourceIntentHandler.HandleAsync(Elsa.Workflows.Runtime.Core.Models.PostCommitDeliveryContext! source, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitIntentDispatcher.DispatchAsync(Elsa.Workflows.Runtime.Core.Models.PostCommitDeliveryContext! source, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitIntentDispatcher.RequiresDurableSource(string! intentKind) -> bool
+Elsa.Workflows.Runtime.Core.Exceptions.RuntimePostCommitSourceBoundaryException
+Elsa.Workflows.Runtime.Core.Exceptions.RuntimePostCommitSourceBoundaryException.IntentKind.get -> string!
+Elsa.Workflows.Runtime.Core.Exceptions.RuntimePostCommitSourceBoundaryException.IsUnavailable.get -> bool
+Elsa.Workflows.Runtime.Core.Exceptions.RuntimePostCommitSourceBoundaryException.RuntimePostCommitSourceBoundaryException(string? sourceOutboxItemId, string! intentKind, System.Exception! innerException, bool isUnavailable) -> void
+Elsa.Workflows.Runtime.Core.Exceptions.RuntimePostCommitSourceBoundaryException.SourceOutboxItemId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntentHandlerContribution.RequiresDurableSource.get -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntentHandlerContribution.RuntimePostCommitIntentHandlerContribution(string! intentKind, System.Type! handlerType, Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitRetryPolicy! retryPolicy, bool requiresDurableSource) -> void
+static Elsa.Workflows.Runtime.Core.Extensions.RuntimePostCommitIntentHandlerServiceCollectionExtensions.AddRuntimePostCommitIntentHandler<THandler>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! intentKind, Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitRetryPolicy! retryPolicy, bool requiresDurableSource) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

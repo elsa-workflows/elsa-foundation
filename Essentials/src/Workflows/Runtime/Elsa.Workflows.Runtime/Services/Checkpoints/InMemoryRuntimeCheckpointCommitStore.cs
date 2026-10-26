@@ -441,6 +441,18 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         }
     }
 
+    public async ValueTask<RuntimePostCommitOutboxItem?> FindDurableAsync(string outboxItemId, CancellationToken cancellationToken = default)
+    {
+        var item = await FindAsync(outboxItemId, cancellationToken);
+        if (item is null) return null;
+        var access = _persistenceAccessContextAccessor?.Current ??
+            throw new InvalidOperationException("A durable source read requires explicit persistence access.");
+        var scope = access.RequireScope();
+        if (item.StimulusDeliverySourceScope != scope)
+            throw new InvalidDataException("The in-memory source has no matching committed scope witness.");
+        return item;
+    }
+
     public async ValueTask<StimulusDeliverySnapshot> InstallAsync(PostCommitDeliveryContext source,
         StimulusDeliverySnapshot candidate, CancellationToken cancellationToken = default)
     {

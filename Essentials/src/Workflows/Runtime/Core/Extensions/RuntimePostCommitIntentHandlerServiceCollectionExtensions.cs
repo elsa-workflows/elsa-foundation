@@ -19,6 +19,12 @@ public static class RuntimePostCommitIntentHandlerServiceCollectionExtensions
         this IServiceCollection services,
         string intentKind,
         RuntimePostCommitRetryPolicy retryPolicy)
+        where THandler : class, IRuntimePostCommitIntentHandler =>
+        services.AddRuntimePostCommitIntentHandler<THandler>(intentKind, retryPolicy, requiresDurableSource: false);
+
+    /// <summary>Contributes a handler with an explicit durable-source requirement; ordinary defaults are unchanged.</summary>
+    public static IServiceCollection AddRuntimePostCommitIntentHandler<THandler>(this IServiceCollection services,
+        string intentKind, RuntimePostCommitRetryPolicy retryPolicy, bool requiresDurableSource)
         where THandler : class, IRuntimePostCommitIntentHandler
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -26,6 +32,7 @@ public static class RuntimePostCommitIntentHandlerServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(retryPolicy);
 
         var handlerType = typeof(THandler);
+        var proposed = new RuntimePostCommitIntentHandlerContribution(intentKind, handlerType, retryPolicy, requiresDurableSource);
         var matchingKind = services
             .Where(descriptor => descriptor.ServiceType == typeof(RuntimePostCommitIntentHandlerContribution))
             .Select(descriptor => descriptor.ImplementationInstance)
@@ -35,11 +42,11 @@ public static class RuntimePostCommitIntentHandlerServiceCollectionExtensions
 
         if (matchingKind.Any(contribution =>
                 contribution.HandlerType != handlerType ||
-                !contribution.RetryPolicy.IsEquivalentTo(retryPolicy)))
+                !contribution.RetryPolicy.IsEquivalentTo(retryPolicy) || contribution.RequiresDurableSource != requiresDurableSource))
         {
             var contributionIdentities = matchingKind
                 .Select(ContributionIdentity)
-                .Append(ContributionIdentity(new RuntimePostCommitIntentHandlerContribution(intentKind, handlerType, retryPolicy)))
+                .Append(ContributionIdentity(proposed))
                 .Distinct()
                 .Order(StringComparer.Ordinal);
             throw new InvalidOperationException(
@@ -48,7 +55,7 @@ public static class RuntimePostCommitIntentHandlerServiceCollectionExtensions
 
         services.TryAddScoped<THandler>();
         if (matchingKind.Length == 0)
-            services.AddSingleton(new RuntimePostCommitIntentHandlerContribution(intentKind, handlerType, retryPolicy));
+            services.AddSingleton(proposed);
 
         return services;
     }
@@ -58,5 +65,5 @@ public static class RuntimePostCommitIntentHandlerServiceCollectionExtensions
     private static string ContributionIdentity(RuntimePostCommitIntentHandlerContribution contribution) =>
         $"{HandlerIdentity(contribution.HandlerType)} " +
         $"[maxAttempts={contribution.RetryPolicy.MaxAttempts}, delay={contribution.RetryPolicy.Delay}, " +
-        $"retryUntilAcknowledged={contribution.RetryPolicy.RetryUntilAcknowledged}]";
+        $"retryUntilAcknowledged={contribution.RetryPolicy.RetryUntilAcknowledged}, requiresDurableSource={contribution.RequiresDurableSource}]";
 }
