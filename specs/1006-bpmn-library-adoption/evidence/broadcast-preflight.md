@@ -1,6 +1,7 @@
 # T046 initial increment — legacy broadcast inventory
 
-T046 remains open: strict cohort/source-context contracts are not implemented by this increment.
+This initial increment did not implement strict cohort/source-context contracts; the later
+[Core contract receipt](broadcast-contracts.md) completes T046.
 This utility performs read-only legacy inventory; it never dispatches, repairs, acknowledges or
 resnapshots an event. It does not establish FR-015 recovery, mixed-writer quiescence or production readiness.
 
@@ -58,7 +59,7 @@ the validator through the normal dotnet wrapper, then returns before connecting/
 Host parameter selection remains available. Existing NuGet/analyzer warnings are not a clean-warning claim.
 Independent correctness, standards and acceptance component reviews of the revised reader are clean.
 
-Remaining T046 contracts and all T047–T051 source/host gates stay open. There is no concrete residual
+The later T046 contracts are recorded separately; all T047–T051 source/host gates stay open. There is no concrete residual
 legacy row requiring an owner recovery choice in these inventoried stores. The existing matched-time
 owner decision is unchanged. T045, final Studio proof, semantic deletion, full-PR review, required checks,
 ADR0063 and production #2898/#2907 retain their separate gates.

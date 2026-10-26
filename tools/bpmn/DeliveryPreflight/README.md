@@ -18,4 +18,4 @@ never proves that no recipient effect occurred. Results cover only supplied data
 establish mixed-writer quiescence, production-wide inventory or broadcast recovery acceptance.
 
 [T046 receipt](../../../specs/1006-bpmn-library-adoption/evidence/broadcast-preflight.md) records actual
-stores, controls and remaining gates. Cohort/source-context implementation and T047–T051 remain open.
+stores, controls and remaining gates. The later Core contracts are recorded separately; provider/delivery/recovery T047–T051 remain open.

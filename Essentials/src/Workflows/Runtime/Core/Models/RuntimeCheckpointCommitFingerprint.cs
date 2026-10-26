@@ -1,4 +1,7 @@
 using System.Security.Cryptography;
+using System.Buffers.Binary;
+using System.Globalization;
+using System.Numerics;
 using System.Text.Json;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
@@ -7,6 +10,105 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 public static class RuntimeCheckpointCommitFingerprint
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+
+    /// <summary>
+    /// Identifies an immutable persisted intent for a delivery-state extension. This is separate from
+    /// checkpoint replay identity and grants no authority without checking the exact persisted source.
+    /// Opaque string fields retain their UTF-16 code units; in-process conduits are deliberately excluded.
+    /// </summary>
+    public static string ComputeIntent(RuntimePostCommitIntent intent)
+    {
+        ArgumentNullException.ThrowIfNull(intent);
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        Append("elsa.post-commit.intent.v1");
+        Append(intent.IntentId);
+        Append(intent.WorkflowExecutionId);
+        Append(intent.Kind);
+        Append(intent.RecordedAt.UtcTicks.ToString(CultureInfo.InvariantCulture));
+        Append(intent.ActivityExecutionId);
+        Append(intent.IdempotencyKey);
+        Append(intent.DependsOnWaitRegistrationId);
+        Append(intent.WaitFailurePolicy is { } policy ? ((int)policy).ToString(CultureInfo.InvariantCulture) : null);
+        Append(intent.NotBefore?.UtcTicks.ToString(CultureInfo.InvariantCulture));
+        if (intent.Payload is { } payload)
+        {
+            using var stream = new MemoryStream();
+            using (var writer = new Utf8JsonWriter(stream)) WriteIntentCanonical(payload, writer);
+            AppendBytes(stream.ToArray());
+        }
+        else AppendBytes(null);
+        Append(intent.Metadata.Count.ToString(CultureInfo.InvariantCulture));
+        foreach (var pair in intent.Metadata.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            Append(pair.Key);
+            Append(pair.Value);
+        }
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
+
+        void Append(string? value)
+        {
+            if (value is null) { AppendBytes(null); return; }
+            var bytes = new byte[checked(value.Length * sizeof(char))];
+            for (var index = 0; index < value.Length; index++)
+                BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(index * sizeof(char), sizeof(char)), value[index]);
+            AppendBytes(bytes);
+        }
+
+        void AppendBytes(byte[]? bytes)
+        {
+            Span<byte> header = stackalloc byte[5];
+            header[0] = bytes is null ? (byte)0 : (byte)1;
+            BinaryPrimitives.WriteInt32BigEndian(header[1..], bytes?.Length ?? 0);
+            hash.AppendData(header);
+            if (bytes is not null) hash.AppendData(bytes);
+        }
+    }
+
+    // Intent equivalence uses JsonElement.DeepEquals, including exact numeric equivalence. Keep this
+    // normalization separate from the historical checkpoint writer, whose existing bytes are durable identities.
+    private static void WriteIntentCanonical(JsonElement element, Utf8JsonWriter writer)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                writer.WriteStartObject();
+                foreach (var property in element.EnumerateObject().OrderBy(property => property.Name, StringComparer.Ordinal))
+                {
+                    writer.WritePropertyName(property.Name);
+                    WriteIntentCanonical(property.Value, writer);
+                }
+                writer.WriteEndObject();
+                return;
+            case JsonValueKind.Array:
+                writer.WriteStartArray();
+                foreach (var value in element.EnumerateArray()) WriteIntentCanonical(value, writer);
+                writer.WriteEndArray();
+                return;
+            case JsonValueKind.Number:
+                writer.WriteRawValue(CanonicalIntentNumber(element.GetRawText()), skipInputValidation: true);
+                return;
+            default:
+                element.WriteTo(writer);
+                return;
+        }
+    }
+
+    private static string CanonicalIntentNumber(string token)
+    {
+        var exponentIndex = token.AsSpan().IndexOfAny('e', 'E');
+        var mantissa = exponentIndex < 0 ? token : token[..exponentIndex];
+        var negative = mantissa[0] == '-';
+        if (negative) mantissa = mantissa[1..];
+        var point = mantissa.IndexOf('.');
+        var fractionDigits = point < 0 ? 0 : mantissa.Length - point - 1;
+        var digits = mantissa.Replace(".", "", StringComparison.Ordinal).TrimStart('0');
+        if (digits.Length == 0) return "0";
+        var coefficient = digits.TrimEnd('0');
+        var exponent = exponentIndex < 0 ? BigInteger.Zero :
+            BigInteger.Parse(token.AsSpan(exponentIndex + 1), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture);
+        exponent += digits.Length - coefficient.Length - fractionDigits;
+        return (negative ? "-" : "") + coefficient + "e" + exponent.ToString(CultureInfo.InvariantCulture);
+    }
 
     public static string Compute(RuntimeCheckpointCommit commit)
     {

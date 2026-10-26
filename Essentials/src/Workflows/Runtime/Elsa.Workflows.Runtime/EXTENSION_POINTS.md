@@ -1063,3 +1063,13 @@ work. A legacy queue without visibility snapshots keeps its established bookmark
 other ordinary work remains coalescible. Unsupported overlay deferral propagates the original
 unavailable signal with its source retained, including after overlay deactivation. It never reports
 a durable retry delay that exists only in memory.
+
+### `IStimulusDeliveryStore` *(Core — `Elsa.Workflows.Runtime.Core`, #2735)*
+
+- **Kind:** Scoped provider replacement, one implementation per selected provider. This increment declares the contract; provider installation/registration follows T047. The publisher does not consume it yet.
+- **Contract:** `InstallAsync(PostCommitDeliveryContext, StimulusDeliverySnapshot, CancellationToken)` atomically chooses one complete first-delivery recipient set on the existing exact outbox row. The return value is the persisted winner. It creates no second ledger. Existing snapshots are read through exact outbox lookup.
+- **Authority:** The context records a coherent commit-specific claim, persistence scope and immutable intent digest. It is no independent authorization token. The provider must revalidate its persisted source/intent, owner/fence, publisher tenant/partition/run/test-scope and row revision. The later retained-start/GC guards precede enabled fan-out.
+- **Wire:** Version 1 distinguishes absent from a present empty cohort, preserves every sorted start binding/full pin and exact bookmark registration identity, and refuses truncated required fields including nullable scope/provenance. Legacy null partition and Unknown run kind are preserved. Recipient input/metadata collections are frozen. No recipient payload is copied.
+- **Failure:** `StimulusDeliveryBoundaryException` preserves source ID/cause with a safe outer message and distinguishes unavailable dependencies; `RuntimePostCommitOutboxStaleClaimException` reports lost authority. Requested cancellation propagates unchanged; unrequested provider cancellation is contextual unavailability. Refusal accepts no effects.
+- **Identity:** `RuntimeCheckpointCommitFingerprint.ComputeIntent` uses framed lossless UTF-16 identity fields and exact decimal JSON normalization for this source digest. Historical checkpoint `Compute` bytes remain unchanged; the digest does not replace provider source comparison.
+- **Scope / evidence:** [reviewed recipient contract](../../../../../specs/1006-bpmn-library-adoption/contracts/broadcast-recipient-snapshot.md). Provider CAS/versioning, the durable processor/coalescing seam, retention and actual host/fresh-provider recovery remain separate T047–T051 gates. `PostCommitDeliveryContext` is not threaded through handlers until T048.
