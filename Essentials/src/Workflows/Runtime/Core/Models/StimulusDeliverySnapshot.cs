@@ -191,6 +191,23 @@ public sealed class StimulusDeliverySnapshot
     public IReadOnlyList<StimulusStartRecipient> Starts { get; }
     public IReadOnlyList<StimulusResumeRecipient> Resumes { get; }
 
+    /// <summary>Exact structural equality, including the saved order and explicit empty set.</summary>
+    public bool IsEquivalentTo(StimulusDeliverySnapshot? other) => other is not null &&
+        Version == other.Version && SourceOutboxItemId == other.SourceOutboxItemId &&
+        IntentFingerprint == other.IntentFingerprint && SelectedAt == other.SelectedAt &&
+        StimulusType == other.StimulusType && StimulusHash == other.StimulusHash &&
+        Scope.PersistenceScope == other.Scope.PersistenceScope && Scope.TenantId == other.Scope.TenantId &&
+        Scope.Partition == other.Scope.Partition && Scope.RunKind == other.Scope.RunKind && Scope.TestScope == other.Scope.TestScope &&
+        Starts.Count == other.Starts.Count && Resumes.Count == other.Resumes.Count &&
+        Starts.Zip(other.Starts).All(pair => pair.First.Executable == pair.Second.Executable &&
+            pair.First.Binding with { Metadata = pair.Second.Binding.Metadata } == pair.Second.Binding &&
+            RuntimeModelMetadata.AreEqual(pair.First.Binding.Metadata, pair.Second.Binding.Metadata)) &&
+        Resumes.Zip(other.Resumes).All(pair => pair.First.WorkflowExecutionId == pair.Second.WorkflowExecutionId &&
+            pair.First.BookmarkId == pair.Second.BookmarkId && pair.First.ActivityExecutionId == pair.Second.ActivityExecutionId &&
+            pair.First.ExecutableNodeId == pair.Second.ExecutableNodeId && pair.First.ResumeTargetId == pair.Second.ResumeTargetId &&
+            pair.First.StimulusType == pair.Second.StimulusType && pair.First.StimulusHash == pair.Second.StimulusHash &&
+            pair.First.CreatedAt == pair.Second.CreatedAt && pair.First.ExpiresAt == pair.Second.ExpiresAt);
+
     /// <summary>Structural source binding only. The provider must still verify the persisted row and live claim.</summary>
     public bool MatchesSource(PostCommitDeliveryContext context)
     {

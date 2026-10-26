@@ -36,7 +36,7 @@ internal static class EfRuntimeCheckpointOutboxParticipantStaging
                 .SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
             if (existing is null)
             {
-                context.RuntimePostCommitOutbox.Add(EfRuntimePostCommitOutboxStore.ToEntity(candidate, scope, id, 1));
+                context.RuntimePostCommitOutbox.Add(EfRuntimePostCommitOutboxStore.ToEntity(candidate, scope, id, 1, RuntimePostCommitOutboxWriteVersion.For(context, candidate)));
                 continue;
             }
 

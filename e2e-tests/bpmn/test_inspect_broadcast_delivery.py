@@ -116,8 +116,14 @@ class BroadcastPreflightTests(unittest.TestCase):
         self.assertEqual("InventoryUnavailable", preflight.inspect_database(self.path)["status"])
 
     def test_unsupported_family_is_not_treated_as_no_publish_work(self):
-        self.add(kind="other-kind", family="2.0.0")
+        self.add(kind="other-kind", family="999.0.0")
         self.assertEqual("InventoryUnavailable", preflight.inspect_database(self.path)["status"])
+
+    def test_declared_current_family_can_preserve_legacy_absence(self):
+        self.add(kind="other-kind", family="2.0.0")
+        result = preflight.inspect_database(self.path)
+        self.assertTrue(result["providerChecked"])
+        self.assertEqual("NoLegacyPublishResponsibilityOwed", result["status"])
 
     def test_legacy_family_cannot_claim_a_protected_cohort(self):
         self.add(cohort={"version": 1, "starts": [], "resumes": []})

@@ -82,7 +82,11 @@ ownership, failures and unsupported combinations belong in the relevant extensio
 
 In-memory and EF providers use their existing checkpoint/outbox authority. EF stores the additive
 snapshot in the row's existing ContentJson and uses its revision concurrency token with claim fencing.
-Use a new declared outbox family version and explicit old-row upcast preserving absence; old readers
+Use declared outbox family2.0.0 with an explicit1.0.0 upcast preserving absence; ordinary predecessor
+writes omit all new-only fields while the existing gate still observes1.0.0. Publisher protocol
+acceptance checks the shared schema dormancy contract before effects. The supported fleet/hold/
+finalization protocol advances the same host to2.0.0; storage never force-finalizes or restamps new
+protocol data as1.0.0. Backfill uses the family's declared checked revision-CAS row rewriter. Old readers
 must refuse the new stamp, rather than discard an unknown JSON member and rewrite it. Unknown cohort
 versions, corrupt present cohorts and mismatched source/intent/scope refuse before effects. Preserve the
 cohort through every constructor/copy, claim/renew/retry/completion, atomic checkpoint participant,
@@ -119,6 +123,11 @@ statement; no new throughput claim is made.
 ## Upgrade and legacy ambiguity
 
 New publisher writes declare the durable-cohort protocol at commit without selecting recipients there.
+The additive source row retains the protocol version and the exact authoritative persistence scope at
+that commit, including when an upgraded legacy publisher has no TenantId. Neither a caller's current
+scope nor the eventual candidate snapshot can supply missing source ownership. All row rewrites retain
+this committed witness. An expired claimant cannot install/select a cohort; each provider checks its
+trusted clock against the current persisted visibility deadline, including renewed claims.
 New protocol rows must be protected from old writers before first dispatch, not only after installing
 the cohort. Verify explicit family-version/read compatibility and every relevant provider transition.
 

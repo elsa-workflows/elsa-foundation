@@ -52,6 +52,32 @@ public sealed class RuntimePostCommitOutboxItem
         IReadOnlyDictionary<string, string>? metadata = null,
         long deliveryFencingToken = 0,
         DateTimeOffset? deliveryVisibleAfter = null)
+        : this(outboxItemId, intent, status, recordedAt, availableAt, retryPolicy, deliveryAttemptCount,
+            deliveringOwnerId, deliveryStartedAt, deliveredAt, lastFailureMessage, metadata,
+            deliveryFencingToken, deliveryVisibleAfter, null, null, null)
+    {
+    }
+
+    /// <summary>Reads additive delivery protocol state while retaining the original CLR constructor.</summary>
+    [JsonConstructor]
+    public RuntimePostCommitOutboxItem(
+        string outboxItemId,
+        RuntimePostCommitIntent intent,
+        RuntimePostCommitOutboxStatus status,
+        DateTimeOffset recordedAt,
+        DateTimeOffset? availableAt,
+        RuntimePostCommitRetryPolicy? retryPolicy,
+        int deliveryAttemptCount,
+        string? deliveringOwnerId,
+        DateTimeOffset? deliveryStartedAt,
+        DateTimeOffset? deliveredAt,
+        string? lastFailureMessage,
+        IReadOnlyDictionary<string, string>? metadata,
+        long deliveryFencingToken,
+        DateTimeOffset? deliveryVisibleAfter,
+        int? stimulusDeliveryProtocolVersion,
+        PersistenceScope? stimulusDeliverySourceScope,
+        StimulusDeliverySnapshot? recipientSnapshot)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(outboxItemId);
         ArgumentNullException.ThrowIfNull(intent);
@@ -63,6 +89,18 @@ public sealed class RuntimePostCommitOutboxItem
 
         Validate(status, deliveringOwnerId, deliveryStartedAt, deliveredAt, deliveryFencingToken, deliveryVisibleAfter);
 
+        if (stimulusDeliveryProtocolVersion is not null and not StimulusDeliverySnapshot.CurrentVersion)
+            throw new ArgumentOutOfRangeException(nameof(stimulusDeliveryProtocolVersion));
+        if ((stimulusDeliveryProtocolVersion is null) != (stimulusDeliverySourceScope is null))
+            throw new ArgumentException("A declared recipient protocol requires its committed persistence scope.", nameof(stimulusDeliverySourceScope));
+        if (recipientSnapshot is not null && (stimulusDeliveryProtocolVersion != recipientSnapshot.Version ||
+            recipientSnapshot.SourceOutboxItemId != outboxItemId || recipientSnapshot.Scope.PersistenceScope != stimulusDeliverySourceScope ||
+            recipientSnapshot.IntentFingerprint != RuntimeCheckpointCommitFingerprint.ComputeIntent(intent)))
+            throw new ArgumentException("The recipient snapshot does not belong to this declared source protocol.", nameof(recipientSnapshot));
+
+        StimulusDeliveryProtocolVersion = stimulusDeliveryProtocolVersion;
+        StimulusDeliverySourceScope = stimulusDeliverySourceScope;
+        RecipientSnapshot = recipientSnapshot;
         OutboxItemId = outboxItemId;
         Intent = intent;
         Status = status;
@@ -94,6 +132,49 @@ public sealed class RuntimePostCommitOutboxItem
     public long DeliveryFencingToken { get; }
     public DateTimeOffset? DeliveryVisibleAfter { get; }
 
+    /// <summary>Null means a legacy source whose prior recipients cannot be inferred.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? StimulusDeliveryProtocolVersion { get; }
+
+    /// <summary>Persistence scope accepted with the publisher commit, including legacy publishers without TenantId.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public PersistenceScope? StimulusDeliverySourceScope { get; }
+
+    /// <summary>Absent until the first delivery installs the complete set; a present empty set is final.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StimulusDeliverySnapshot? RecipientSnapshot { get; }
+
+    /// <summary>Pure absent-to-whole transition; providers must pass their current authoritative source and publisher.</summary>
+    public RuntimePostCommitOutboxItem InstallRecipientSnapshot(PostCommitDeliveryContext source,
+        StimulusDeliverySnapshot candidate, WorkflowExecutionState publisher, PersistenceScope scope, DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(candidate);
+        ArgumentNullException.ThrowIfNull(publisher);
+        ArgumentNullException.ThrowIfNull(scope);
+        if (!candidate.MatchesSource(source))
+            throw new ArgumentException("The proposed cohort does not match its source.", nameof(candidate));
+        if (OutboxItemId != source.SourceOutboxItemId || scope != source.Scope ||
+            RuntimeCheckpointCommitFingerprint.ComputeIntent(Intent) != source.IntentFingerprint ||
+            publisher.WorkflowExecutionId != Intent.WorkflowExecutionId || !candidate.Scope.Matches(publisher, scope))
+            throw new InvalidDataException("The persisted source or authoritative publisher differs from the recipient proposal.");
+        if (Status != RuntimePostCommitOutboxStatus.Delivering || DeliveringOwnerId != source.Claim.OwnerId ||
+            DeliveryFencingToken != source.Claim.FencingToken || DeliveryVisibleAfter is null || DeliveryVisibleAfter <= observedAt)
+            throw new RuntimePostCommitOutboxStaleClaimException(OutboxItemId, source.Claim.OwnerId,
+                source.Claim.FencingToken, DeliveringOwnerId, DeliveryFencingToken, Status);
+        if (StimulusDeliverySourceScope != scope || StimulusDeliveryProtocolVersion != StimulusDeliverySnapshot.CurrentVersion)
+            throw new InvalidDataException("Legacy delivery responsibility requires recovery; recipients cannot be reconstructed.");
+        if (RecipientSnapshot is { } winner)
+        {
+            if (!winner.MatchesSource(source) || !winner.Scope.Matches(publisher, scope))
+                throw new InvalidDataException("The persisted recipient cohort differs from its authoritative source.");
+            return this;
+        }
+        return new(OutboxItemId, Intent, Status, RecordedAt, AvailableAt, RetryPolicy, DeliveryAttemptCount,
+            DeliveringOwnerId, DeliveryStartedAt, DeliveredAt, LastFailureMessage, Metadata, DeliveryFencingToken,
+            DeliveryVisibleAfter, StimulusDeliveryProtocolVersion, StimulusDeliverySourceScope, candidate);
+    }
+
     public bool IsTerminal => Status is RuntimePostCommitOutboxStatus.Delivered
         or RuntimePostCommitOutboxStatus.FailedFinal
         or RuntimePostCommitOutboxStatus.Cancelled;
@@ -114,7 +195,10 @@ public sealed class RuntimePostCommitOutboxItem
         StringComparer.Ordinal.Equals(LastFailureMessage, other.LastFailureMessage) &&
         RuntimeModelMetadata.AreEqual(Metadata, other.Metadata) &&
         DeliveryFencingToken == other.DeliveryFencingToken &&
-        DeliveryVisibleAfter == other.DeliveryVisibleAfter;
+        DeliveryVisibleAfter == other.DeliveryVisibleAfter &&
+        StimulusDeliveryProtocolVersion == other.StimulusDeliveryProtocolVersion &&
+        StimulusDeliverySourceScope == other.StimulusDeliverySourceScope &&
+        (RecipientSnapshot is null ? other.RecipientSnapshot is null : RecipientSnapshot.IsEquivalentTo(other.RecipientSnapshot));
 
     /// <summary>
     /// Exact-replay idempotency for saving a pending item whose identity already exists: the save is a replay only when both
@@ -678,7 +762,10 @@ public static class RuntimePostCommitOutboxClaimTransitions
             lastFailureMessage,
             metadata,
             deliveryFencingToken,
-            deliveryVisibleAfter);
+            deliveryVisibleAfter,
+            item.StimulusDeliveryProtocolVersion,
+            item.StimulusDeliverySourceScope,
+            item.RecipientSnapshot);
 }
 
 public sealed class RuntimePostCommitRetryPolicy

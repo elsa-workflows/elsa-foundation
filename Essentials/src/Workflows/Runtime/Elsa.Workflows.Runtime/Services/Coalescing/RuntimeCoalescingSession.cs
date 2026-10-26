@@ -706,7 +706,11 @@ public sealed class RuntimeCoalescingSession
             deliveredAt: status == RuntimePostCommitOutboxStatus.Delivered ? result.RecordedAt : null,
             lastFailureMessage: result.FailureMessage,
             metadata: existing.Metadata,
-            deliveryFencingToken: existing.DeliveryFencingToken);
+            deliveryFencingToken: existing.DeliveryFencingToken,
+                deliveryVisibleAfter: null,
+                stimulusDeliveryProtocolVersion: existing.StimulusDeliveryProtocolVersion,
+                stimulusDeliverySourceScope: existing.StimulusDeliverySourceScope,
+                recipientSnapshot: existing.RecipientSnapshot);
     }
 
     public void RecordOutboxDelivery(RuntimePostCommitOutboxClaim claim, RuntimePostCommitOutboxDeliveryResult result)

@@ -257,9 +257,16 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
             item.AvailableAt,
             item.RetryPolicy,
             item.DeliveryAttemptCount,
+            deliveringOwnerId: null,
+            deliveryStartedAt: null,
+            deliveredAt: null,
             lastFailureMessage: item.LastFailureMessage,
             metadata: item.Metadata,
-            deliveryFencingToken: item.DeliveryFencingToken);
+            deliveryFencingToken: item.DeliveryFencingToken,
+            deliveryVisibleAfter: null,
+            stimulusDeliveryProtocolVersion: item.StimulusDeliveryProtocolVersion,
+            stimulusDeliverySourceScope: item.StimulusDeliverySourceScope,
+            recipientSnapshot: item.RecipientSnapshot);
 
     // A claim is taken just before the claimed work runs, and the work item that runs it can exist only in the session's
     // memory: a parent re-claimed to evaluate its finished child runs from such an item. A cap fold at the claim would

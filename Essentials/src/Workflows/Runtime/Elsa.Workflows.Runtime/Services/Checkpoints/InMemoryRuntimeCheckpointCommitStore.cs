@@ -44,7 +44,7 @@ public sealed class InMemoryRuntimeCheckpointStoreState
     }
 }
 
-public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCommitStore, IRuntimePostCommitOutboxStore, IPostCommitOutboxLookupStore, IRuntimePostCommitOutboxClaimStore, IRuntimePostCommitOutboxClaimCompletionStore
+public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCommitStore, IRuntimePostCommitOutboxStore, IPostCommitOutboxLookupStore, IRuntimePostCommitOutboxClaimStore, IRuntimePostCommitOutboxClaimCompletionStore, IStimulusDeliveryStore
 {
     private readonly InMemoryRuntimeCheckpointStoreState _state;
     internal InMemoryRuntimeCheckpointStoreState State => _state;
@@ -134,6 +134,8 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     {
         return await _state.ExecuteWriteGateAsync(async ct =>
         {
+            foreach (var change in commit.StateChanges.PostCommitOutbox)
+                EnsureOutboxSourceScope(change.State);
             var fingerprint = RuntimeCheckpointCommitFingerprint.Compute(commit);
             lock (_state.SyncRoot)
             {
@@ -439,6 +441,46 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         }
     }
 
+    public async ValueTask<StimulusDeliverySnapshot> InstallAsync(PostCommitDeliveryContext source,
+        StimulusDeliverySnapshot candidate, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(candidate);
+        if (!candidate.MatchesSource(source))
+            throw new ArgumentException("The proposed cohort does not match its source.", nameof(candidate));
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            return await _state.ExecuteWriteGateAsync(async ct =>
+            {
+                var access = _persistenceAccessContextAccessor?.Current ??
+                    throw new InvalidOperationException("Recipient installation requires explicit persistence access.");
+                var scope = access.RequireScope();
+                access.EnsureScope(source.Scope);
+                var publisher = _workflowExecutionStateStore is null ? null :
+                    await _workflowExecutionStateStore.FindAsync(source.Intent.WorkflowExecutionId, ct);
+                if (publisher is null)
+                    throw new InvalidDataException("The authoritative publisher is unavailable or missing.");
+                access.EnsureTenantScope(publisher.TenantId);
+                lock (_state.SyncRoot)
+                {
+                    if (!_state.OutboxItems.TryGetValue(source.SourceOutboxItemId, out var current))
+                        throw new InvalidDataException("The exact recipient source is missing.");
+                    var installed = current.InstallRecipientSnapshot(source, candidate, publisher, scope, _timeProvider.GetUtcNow());
+                    _state.OutboxItems[source.SourceOutboxItemId] = installed;
+                    return installed.RecipientSnapshot!;
+                }
+            }, cancellationToken);
+        }
+        catch (RuntimePostCommitOutboxStaleClaimException) { throw; }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception)
+        {
+            throw new StimulusDeliveryBoundaryException(source.SourceOutboxItemId, exception,
+                exception is not (InvalidDataException or InvalidOperationException or ArgumentException or NotSupportedException));
+        }
+    }
+
     public ValueTask<RuntimePostCommitOutboxItem?> FindAsync(
         string outboxItemId,
         CancellationToken cancellationToken = default)
@@ -491,7 +533,11 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                 deliveredAt: status == RuntimePostCommitOutboxStatus.Delivered ? result.RecordedAt : null,
                 lastFailureMessage: result.FailureMessage,
                 metadata: existing.Metadata,
-                deliveryFencingToken: existing.DeliveryFencingToken);
+                deliveryFencingToken: existing.DeliveryFencingToken,
+                deliveryVisibleAfter: null,
+                stimulusDeliveryProtocolVersion: existing.StimulusDeliveryProtocolVersion,
+                stimulusDeliverySourceScope: existing.StimulusDeliverySourceScope,
+                recipientSnapshot: existing.RecipientSnapshot);
         }
 
         return new ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome>(
@@ -687,14 +733,25 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         {
             foreach (var item in items)
             {
+                EnsureOutboxSourceScope(item);
                 if (_state.OutboxItems.TryGetValue(item.OutboxItemId, out var existing) && !existing.IsEquivalentPendingItem(item))
                     throw new InvalidOperationException($"Post-commit outbox item '{item.OutboxItemId}' already exists with a different intent or status.");
             }
         }
     }
 
+    private void EnsureOutboxSourceScope(RuntimePostCommitOutboxItem item)
+    {
+        if (item.StimulusDeliverySourceScope is not { } sourceScope) return;
+        var access = _persistenceAccessContextAccessor?.Current ??
+            throw new InvalidOperationException("A declared recipient source requires explicit persistence access at commit.");
+        _ = access.RequireScope();
+        access.EnsureScope(sourceScope);
+    }
+
     private void SavePendingOutboxItem(RuntimePostCommitOutboxItem item)
     {
+        EnsureOutboxSourceScope(item);
         if (item.Status != RuntimePostCommitOutboxStatus.Pending)
             throw new InvalidOperationException("Only pending post-commit outbox items can be saved as pending.");
 
