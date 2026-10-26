@@ -204,11 +204,13 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
         var templates = (await _activityTemplateStore.ListAllAsync(cancellationToken)).ToArray();
         HashSet<string> protectedArtifactIds;
         HashSet<string> executionProtectedArtifactIds;
+        HashSet<string> retainedTemplateIds;
         try
         {
             protectedArtifactIds = await LoadProtectedClosureAsync(executables, templates, now, cancellationToken);
             var runtimeRootIds = await ListRuntimeRootIdsAsync(cancellationToken);
             executionProtectedArtifactIds = ResolveProtectedClosure(executables, runtimeRootIds);
+            retainedTemplateIds = ResolveRetainedTemplateIds(executables, templates, executionProtectedArtifactIds);
         }
         catch (Exception exception)
         {
@@ -219,15 +221,6 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
             return new WorkflowExecutableReferenceSweepResult(0, 0, 0);
         }
 
-        var retainedTemplateHashes = executables
-            .Where(executable => executionProtectedArtifactIds.Contains(executable.Identity.ArtifactId))
-            .Select(executable => executable.CompatibilityMetadata.GetValueOrDefault("activity.templateHash"))
-            .Where(hash => !string.IsNullOrWhiteSpace(hash))
-            .ToHashSet(StringComparer.Ordinal);
-        var retainedTemplateIds = templates
-            .Where(template => retainedTemplateHashes.Contains(template.TemplateHash))
-            .Select(template => template.TemplateId)
-            .ToHashSet(StringComparer.Ordinal);
         var retainedMaterialIds = executionProtectedArtifactIds
             .Concat(retainedTemplateIds)
             .ToHashSet(StringComparer.Ordinal);
@@ -364,6 +357,47 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
                 deletedActivityTemplateCount);
 
         return new WorkflowExecutableReferenceSweepResult(deletedReferenceIds.Count, deletedArtifactCount, deletedActivityTemplateCount);
+    }
+
+    private static HashSet<string> ResolveRetainedTemplateIds(
+        IReadOnlyCollection<WorkflowExecutable> executables,
+        IReadOnlyCollection<ExecutableActivityTemplate> templates,
+        HashSet<string> retainedArtifactIds)
+    {
+        var byId = templates.ToDictionary(template => template.TemplateId, StringComparer.Ordinal);
+        var byHash = templates.ToDictionary(template => template.TemplateHash, StringComparer.Ordinal);
+        var pending = new Queue<ExecutableActivityTemplateIdentity>();
+        foreach (var executable in executables.Where(item => retainedArtifactIds.Contains(item.Identity.ArtifactId)))
+        {
+            // Draft wrappers carry this on the artifact; ordinary reusable placements carry it on each
+            // boundary node. NodesById is the immutable, fully flattened node snapshot, including nested slots.
+            foreach (var metadata in executable.NodesById.Values.Select(node => node.Metadata).Prepend(executable.CompatibilityMetadata))
+                EnqueueMetadata(metadata);
+        }
+
+        var retained = new HashSet<string>(StringComparer.Ordinal);
+        while (pending.TryDequeue(out var identity))
+        {
+            if (!byId.TryGetValue(identity.TemplateId, out var template) || template.TemplateHash != identity.TemplateHash)
+                throw new InvalidDataException($"Retained activity template dependency '{identity.TemplateId}' is missing or has a different hash.");
+            if (!retained.Add(template.TemplateId)) continue;
+            foreach (var metadata in template.NodesById.Values.Select(node => node.Metadata).Prepend(template.CompatibilityMetadata))
+                EnqueueMetadata(metadata);
+            foreach (var dependency in template.ClosedTemplates)
+                pending.Enqueue(dependency);
+            foreach (var dependency in template.DirectDependencies)
+                pending.Enqueue(new(dependency.TemplateId, dependency.TemplateHash));
+        }
+        // Inlined imported artifacts may legitimately carry provenance for templates not installed on this
+        // host. Do not invent that material. Once a present template declares an exact dependency, however,
+        // an incomplete/mismatched graph is uncertainty and the caller retains the entire sweep.
+        return retained;
+
+        void EnqueueMetadata(IReadOnlyDictionary<string, string> metadata)
+        {
+            if (metadata.TryGetValue("activity.templateHash", out var hash) && !string.IsNullOrWhiteSpace(hash) && byHash.TryGetValue(hash, out var template))
+                pending.Enqueue(new(template.TemplateId, template.TemplateHash));
+        }
     }
 
     private async ValueTask CancelDeletionConservativelyAsync(WorkflowExecutableDeletionGuard guard)
