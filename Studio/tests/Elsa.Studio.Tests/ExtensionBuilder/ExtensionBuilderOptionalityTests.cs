@@ -189,13 +189,11 @@ public sealed class ExtensionBuilderOptionalityTests : IAsyncDisposable
     {
         var backend = RespondingWith(_ => JsonOk("""{ "modules": [] }"""));
         var builder = BridgeTestHost.CreateBuilder();
-        builder.Services.AddHttpClient(nameof(StudioBackendManagementClient)).ConfigurePrimaryHttpMessageHandler(() => backend);
+        builder.Services.RouteAllBackendClientsThrough(backend);
 
         var app = builder.Build();
-        app.UseAuthentication();
-        app.UseAuthorization();
-        app.MapStudioBackendManagementBridge();
-        MapFallbacks(app);
+        app.UseElsaStudio();
+        app.MapElsaStudio();
 
         return await StartAsync(app);
     }
@@ -215,26 +213,17 @@ public sealed class ExtensionBuilderOptionalityTests : IAsyncDisposable
         if (withFailingFeature)
             shellSettings[$"CShells:Shells:Default:Features:{FailingShellFeature.Name}"] = "true";
 
-        var builder = BridgeTestHost.CreateBuilder(authEnabled: authEnabled, extraSettings: shellSettings);
+        var builder = BridgeTestHost.CreateBuilder(authEnabled: authEnabled, extraSettings: shellSettings,
+            configureStudio: studio => studio.ConfigureShells(shells => shells.WithAssemblies(typeof(ExtensionBuilderStudioFeature).Assembly, typeof(FailingShellFeature).Assembly)));
         builder.Services.RouteBackendClientsThrough(backend);
-        builder.AddElsaStudio(options => options.ShellsFile = null)
-            .ConfigureShells(shells => shells.WithAssemblies(typeof(ExtensionBuilderStudioFeature).Assembly, typeof(FailingShellFeature).Assembly));
 
         var app = builder.Build();
         // Preserve this independent root branch before the Studio middleware, as in the original harness.
         app.Map(StaticAssetRoute, asset => asset.Run(context => context.Response.WriteAsync(StaticAssetContent)));
         app.UseElsaStudio();
-        app.MapStudioBackendManagementBridge();
         app.MapElsaStudio();
 
         return await StartAsync(app);
-    }
-
-    // Program.cs's fallbacks: unknown API routes stay real 404s instead of being swallowed by the SPA fallback.
-    private static void MapFallbacks(WebApplication app)
-    {
-        app.MapFallback("/_elsa/{**path}", () => Results.NotFound());
-        app.MapFallback(() => Results.Text("<html>studio</html>", "text/html"));
     }
 
     private async Task<HttpClient> StartAsync(WebApplication app)

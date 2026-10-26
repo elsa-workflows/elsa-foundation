@@ -1,4 +1,5 @@
 using CShells.AspNetCore.Configuration;
+using Elsa.Studio.Api.Options;
 using CShells.AspNetCore.Extensions;
 using CShells.AspNetCore.Middleware;
 using CShells.AspNetCore.Resolution;
@@ -49,6 +50,8 @@ public static class StudioHostingExtensions
         builder.Services.AddSingleton(gate);
         builder.Services.AddAuthentication();
         builder.Services.AddAuthorization();
+        builder.Services.AddStudioBridgeAuth(builder.Configuration, settings);
+        builder.Services.AddStudioBackendManagementBridge(builder.Configuration);
         CShellsBuilder? shellBuilder = null;
         builder.Services.AddCShellsAspNetCore(shells =>
         {
@@ -58,7 +61,11 @@ public static class StudioHostingExtensions
                 .WithWebRouting(routing => routing.EnablePathRouting = true)
                 .ConfigureResolverPipeline(pipeline => pipeline
                     .Use<WebRoutingShellResolver>(0)
-                    .UseFallback<StudioSelectedShellFallbackResolver>());
+                    .UseFallback<StudioSelectedShellFallbackResolver>())
+                .ShareSingletonWithShells<StudioBridgeSessionCache>()
+                .ShareSingletonWithShells<TimeProvider>()
+                .ShareSingletonWithShells<StudioBackendManagementOptions>()
+                .ShareSingletonWithShells<StudioSessionTransport>();
         });
         builder.Services.AddSingleton(provider => new DefaultShellResolver(provider.GetServices<IShellResolverStrategy>(), provider.GetRequiredService<IOptions<ShellResolverOptions>>().Value));
         builder.Services.Replace(ServiceDescriptor.Singleton<IShellResolver, StudioShellResolver>());
@@ -91,6 +98,7 @@ public static class StudioHostingExtensions
         var configuration = endpoints.ServiceProvider.GetRequiredService<IConfiguration>();
         endpoints.MapGet("/studio-runtime.js", () => Results.Content(StudioRuntimeScript.Render(configuration, settings.AuthEnabled), "application/javascript"));
         endpoints.MapActiveShellStudioApi();
+        endpoints.MapStudioBackendManagementBridge();
         endpoints.MapFallback("/_elsa/{**path}", () => Results.NotFound());
         endpoints.MapStudioFallback(settings.IndexFile);
         return endpoints;

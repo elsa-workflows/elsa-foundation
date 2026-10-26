@@ -1,3 +1,4 @@
+using Elsa.Studio.Api.Authorization;
 using Elsa.Studio.ConsoleStream;
 using Elsa.Studio.ConsoleStream.Extensions;
 using Elsa.Studio.Web;
@@ -44,26 +45,14 @@ studio.ConfigureShells(shells => shells.WithStudioFeatureAssemblies());
 // lifetime matches the connection's. Gated by the same feature-enablement check as the capture hook above.
 builder.Services.AddConsoleStreamStudioHostIfEnabled(configuration);
 
-// Studio management bridge (ADR 0037): a Studio-owned server-side surface that reports backend management availability
-// so the browser stops probing backend host-control endpoints directly. The bridge — and every other browser-facing
-// Studio host-control endpoint (module management, feature management, theme management, console-stream) — is gated by
-// a single coarse user-session gate (StudioBridgeAuth). The browser never carries an Elsa host management key; Studio
-// attaches the server-side management key only on its own backend calls (StudioBackendManagementClient). The
-// console-stream hub path is allowed to carry the browser bearer as an access_token query parameter (browsers cannot
-// set headers on the WebSocket/SSE handshake); every other endpoint takes the bearer by header only, keeping it out of
-// access logs. When Studio auth is disabled the gate allows anonymously so the demo shell keeps working.
-builder.Services.AddStudioBridgeAuth(configuration, ConsoleStreamStudioServiceCollectionExtensions.HubPath);
-builder.Services.AddStudioBackendManagementBridge(configuration);
-
 var app = builder.Build();
 
 app.UseElsaStudio();
 app.MapElsaStudio();
 
 app.MapElsaModuleManagementApi();
-app.MapStudioBackendManagementBridge();
 app.MapElsaFeatureManagementApi();
-app.MapConsoleStreamStudioIfEnabled(configuration, StudioBridgeAuth.PolicyName);
+app.MapConsoleStreamStudioIfEnabled(configuration, StudioBridgeAuthorization.PolicyName);
 app.MapNuplaneStaticWebAssets();
 
 app.Run();

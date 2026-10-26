@@ -71,8 +71,8 @@ wrappers below; their source links are pinned to that snapshot so the original d
 | [NuplaneStaticWebAssetsEndpoint.cs](../../Studio/src/apps/Elsa.Studio.Web/NuplaneStaticWebAssetsEndpoint.cs) | Nuplane addon internal. Preserve URLs/revalidation/ranges while holding admission through package access; no unprotected physical-path result. |
 | [Services/ThemeConfigurationService.cs](../../Studio/src/apps/Elsa.Studio.Web/Services/ThemeConfigurationService.cs) | Themes addon internal root service; keep source/store precedence and validate options before IO. |
 | [StudioAssetCaching.cs](../../Studio/src/essentials/Elsa.Studio.Hosting/StudioAssetCaching.cs) | Hosting internal static/fallback behavior. Preserve and test actual revalidation; the asset spike's consumer headers are not delivered Hosting behavior. |
-| [StudioBackendManagementBridge.cs](../../Studio/src/apps/Elsa.Studio.Web/StudioBackendManagementBridge.cs) | Hosting internal bridge/client/DTOs. Reuse existing Api backend options/status/routes; keep server-only credentials and fail-closed availability projection. |
-| [StudioBridgeAuth.cs](../../Studio/src/apps/Elsa.Studio.Web/StudioBridgeAuth.cs) | Hosting internal named scheme/handlers/cache and stable permission policies. Root ownership, first-request checks and trusted query-token paths remain explicit. |
+| [StudioBackendManagementBridge.cs](../../Studio/src/essentials/Elsa.Studio.Hosting/StudioBackendManagementBridge.cs) | Hosting internal bridge/client/DTOs. Reuse existing Api backend options/status/routes; keep server-only credentials and fail-closed availability projection. |
+| [StudioBridgeAuth.cs](../../Studio/src/essentials/Elsa.Studio.Hosting/StudioBridgeAuth.cs) | Hosting internal named scheme/handlers/cache and stable permission policies. Root ownership, first-request checks and trusted query-token paths remain explicit. |
 | [StudioFeatureAssemblies.cs](../../Studio/src/apps/Elsa.Studio.Web/StudioFeatureAssemblies.cs) | Delete app-specific provider/list wrapper. Hosting includes mandatory Api discovery; addons register themselves; Web/callers select additional module assemblies through the framework callback. |
 | [StudioNuplaneAssemblyProvider.cs](https://github.com/elsa-workflows/elsa-foundation/blob/d55f5f5229ab4aaeaa728a85f6d41d9050af0a71/Studio/src/apps/Elsa.Studio.Web/StudioNuplaneAssemblyProvider.cs) | Delete; use released CShells.Nuplane package-aware discovery. |
 | [StudioNuplaneShellReloadObserver.cs](https://github.com/elsa-workflows/elsa-foundation/blob/d55f5f5229ab4aaeaa728a85f6d41d9050af0a71/Studio/src/apps/Elsa.Studio.Web/StudioNuplaneShellReloadObserver.cs) | Delete; use ChangedOrPending + automatic reload and the existing reporting callback. No detached task/semaphore replacement. |
@@ -86,8 +86,9 @@ CShells 0.0.31 uses Assembly.GetExportedTypes in
 [FeatureDiscovery](https://github.com/valence-works/cshells/blob/b7611aadb49789d3b282749df18ffe68d0eacec5/src/CShells/Features/FeatureDiscovery.cs).
 The three public feature classes are therefore a framework-discovery exception to internal-by-default, not a
 new application service API. No current internal DTO becomes public merely because its file moves. #3357 implements base composition,
-activation, tracked discovery, runtime/static integration and the lease-only coordinator; auth/bridge, optional
-adapters and prebuilt browser ownership remain their separately scoped leaves. Matched root endpoints stay
+activation, tracked discovery, runtime/static integration and the lease-only coordinator; #3358 implements the
+root auth/bridge and Api policy contract. Optional adapters and prebuilt browser ownership remain their
+separately scoped leaves. Matched root endpoints stay
 in the root scope through a small resolver decorator; the framework resolution cache is disabled because its
 host/path/method key cannot preserve endpoint ownership across reload. Framework middleware registration
 (`MapShells`) is installed by UseElsaStudio because its public receiver is IApplicationBuilder.

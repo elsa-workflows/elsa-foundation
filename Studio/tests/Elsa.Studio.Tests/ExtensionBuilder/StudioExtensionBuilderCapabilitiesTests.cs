@@ -1,3 +1,4 @@
+using Elsa.Studio.Api.Authorization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -107,7 +108,7 @@ public sealed class StudioExtensionBuilderCapabilitiesTests : IAsyncDisposable
     {
         // module-management:read does NOT satisfy the Extension Builder capabilities gate — the surfaces are gated
         // independently, so a module-only holder is forbidden (403).
-        var (client, backend) = await StartAuthenticatedHostWithBackendAsync(StudioBridgeAuth.ModuleManagementReadPermission);
+        var (client, backend) = await StartAuthenticatedHostWithBackendAsync(StudioBridgeAuthorization.ModuleManagementReadPermission);
 
         var response = await client.GetAsync(CapabilitiesRoute);
 
