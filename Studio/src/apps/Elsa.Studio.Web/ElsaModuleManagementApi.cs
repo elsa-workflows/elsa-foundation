@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Studio.Hosting;
 using System.Text.Json.Nodes;
 using System.Xml.Linq;
 using Elsa.Studio.Api.Contracts;
@@ -228,12 +229,13 @@ internal static class ElsaModuleManagementApi
     private static async Task<IResult> AddFeedAsync(
         ModuleManagementFeed feed,
         [FromServices] IWebHostEnvironment environment,
+        [FromServices] StudioConfigurationMutationGate mutationGate,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(feed.Name))
             return Results.BadRequest(new ModuleManagementErrorResponse("Feed name is required."));
 
-        return await MutateManagementConfigurationAsync(environment, cancellationToken, config =>
+        return await MutateManagementConfigurationAsync(environment, mutationGate, cancellationToken, config =>
         {
             var feeds = ReadFeedsArray(config);
             if (feeds.Any(node => string.Equals((string?)node?["Name"], feed.Name, StringComparison.OrdinalIgnoreCase)))
@@ -248,9 +250,10 @@ internal static class ElsaModuleManagementApi
         string name,
         ModuleManagementFeed feed,
         [FromServices] IWebHostEnvironment environment,
+        [FromServices] StudioConfigurationMutationGate mutationGate,
         CancellationToken cancellationToken)
     {
-        return await MutateManagementConfigurationAsync(environment, cancellationToken, config =>
+        return await MutateManagementConfigurationAsync(environment, mutationGate, cancellationToken, config =>
         {
             var feeds = ReadFeedsArray(config);
             var index = FindFeedIndex(feeds, name);
@@ -265,9 +268,10 @@ internal static class ElsaModuleManagementApi
     private static async Task<IResult> DeleteFeedAsync(
         string name,
         [FromServices] IWebHostEnvironment environment,
+        [FromServices] StudioConfigurationMutationGate mutationGate,
         CancellationToken cancellationToken)
     {
-        return await MutateManagementConfigurationAsync(environment, cancellationToken, config =>
+        return await MutateManagementConfigurationAsync(environment, mutationGate, cancellationToken, config =>
         {
             var feeds = ReadFeedsArray(config);
             var index = FindFeedIndex(feeds, name);
@@ -282,9 +286,10 @@ internal static class ElsaModuleManagementApi
     private static async Task<IResult> UpdateRetentionPolicyAsync(
         ModuleManagementRetentionPolicy policy,
         [FromServices] IWebHostEnvironment environment,
+        [FromServices] StudioConfigurationMutationGate mutationGate,
         CancellationToken cancellationToken)
     {
-        return await MutateManagementConfigurationAsync(environment, cancellationToken, config =>
+        return await MutateManagementConfigurationAsync(environment, mutationGate, cancellationToken, config =>
         {
             var nuplane = GetOrCreateObject(config.Document, "Nuplane");
             nuplane["CleanupPolicy"] = JsonSerializer.SerializeToNode(policy, JsonOptions);
@@ -299,23 +304,17 @@ internal static class ElsaModuleManagementApi
     // circuit before any write.
     private static async Task<IResult> MutateManagementConfigurationAsync(
         IWebHostEnvironment environment,
+        StudioConfigurationMutationGate mutationGate,
         CancellationToken cancellationToken,
         Func<ManagementConfiguration, IResult> mutate)
     {
-        await ConfigFileWriter.WriteGate.WaitAsync(cancellationToken);
-        try
-        {
-            var config = await ReadManagementConfigurationAsync(environment, cancellationToken);
-            var result = mutate(config);
-            if (result is IStatusCodeHttpResult { StatusCode: >= 200 and < 300 })
-                await WriteManagementConfigurationAsync(environment, config, cancellationToken);
+        await using var mutation = await mutationGate.AcquireAsync(cancellationToken);
+        var config = await ReadManagementConfigurationAsync(environment, cancellationToken);
+        var result = mutate(config);
+        if (result is IStatusCodeHttpResult { StatusCode: >= 200 and < 300 })
+            await WriteManagementConfigurationAsync(environment, config, cancellationToken);
 
-            return result;
-        }
-        finally
-        {
-            ConfigFileWriter.WriteGate.Release();
-        }
+        return result;
     }
 
     private static IReadOnlyList<ModuleManagementPruneDecision> PrunePackageInstallDirectories(

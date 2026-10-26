@@ -1,0 +1,25 @@
+#nullable enable
+Elsa.Studio.Hosting.StudioBuilder
+Elsa.Studio.Hosting.StudioBuilder.Configuration.get -> Microsoft.Extensions.Configuration.IConfiguration!
+Elsa.Studio.Hosting.StudioBuilder.ConfigurationMutationGate.get -> Elsa.Studio.Hosting.StudioConfigurationMutationGate!
+Elsa.Studio.Hosting.StudioBuilder.ConfigureShells(System.Action<CShells.DependencyInjection.CShellsBuilder!>! configure) -> Elsa.Studio.Hosting.StudioBuilder!
+Elsa.Studio.Hosting.StudioBuilder.Environment.get -> Microsoft.AspNetCore.Hosting.IWebHostEnvironment!
+Elsa.Studio.Hosting.StudioBuilder.Services.get -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+Elsa.Studio.Hosting.StudioConfigurationMutationGate
+Elsa.Studio.Hosting.StudioConfigurationMutationGate.AcquireAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.IAsyncDisposable!>
+Elsa.Studio.Hosting.StudioHostingException
+Elsa.Studio.Hosting.StudioHostingException.StudioHostingException(string! message, System.Exception? innerException = null) -> void
+Elsa.Studio.Hosting.StudioHostingExtensions
+Elsa.Studio.Hosting.StudioHostingOptions
+Elsa.Studio.Hosting.StudioHostingOptions.IndexFile.get -> string!
+Elsa.Studio.Hosting.StudioHostingOptions.IndexFile.set -> void
+Elsa.Studio.Hosting.StudioHostingOptions.QueryTokenPathPrefixes.get -> string![]!
+Elsa.Studio.Hosting.StudioHostingOptions.QueryTokenPathPrefixes.set -> void
+Elsa.Studio.Hosting.StudioHostingOptions.ShellName.get -> string!
+Elsa.Studio.Hosting.StudioHostingOptions.ShellName.set -> void
+Elsa.Studio.Hosting.StudioHostingOptions.ShellsFile.get -> string?
+Elsa.Studio.Hosting.StudioHostingOptions.ShellsFile.set -> void
+Elsa.Studio.Hosting.StudioHostingOptions.StudioHostingOptions() -> void
+static Elsa.Studio.Hosting.StudioHostingExtensions.AddElsaStudio(this Microsoft.AspNetCore.Builder.WebApplicationBuilder! builder, System.Action<Elsa.Studio.Hosting.StudioHostingOptions!>? configure = null) -> Elsa.Studio.Hosting.StudioBuilder!
+static Elsa.Studio.Hosting.StudioHostingExtensions.MapElsaStudio(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints) -> Microsoft.AspNetCore.Routing.IEndpointRouteBuilder!
+static Elsa.Studio.Hosting.StudioHostingExtensions.UseElsaStudio(this Microsoft.AspNetCore.Builder.WebApplication! app) -> Microsoft.AspNetCore.Builder.WebApplication!

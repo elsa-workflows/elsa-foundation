@@ -42,6 +42,7 @@ internal static class BridgeTestHost
         });
         builder.WebHost.UseTestServer();
         builder.Configuration.AddInMemoryCollection(settings);
+        builder.Services.AddSingleton(Hosting.HostingTestHost.CreateGate());
         builder.Services.AddStudioBridgeAuth(builder.Configuration);
         builder.Services.AddStudioBackendManagementBridge(builder.Configuration);
         return builder;

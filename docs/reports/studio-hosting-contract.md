@@ -62,7 +62,7 @@ wrappers below; their source links are pinned to that snapshot so the original d
 | Current file | Target and decision |
 |---|---|
 | [Program.cs](../../Studio/src/apps/Elsa.Studio.Web/Program.cs) | Keep only app/distribution choices, early ConsoleStream capture, selected module assemblies and public Add/Use/Map calls. No copied endpoint/auth/store/loader implementation. |
-| [ActiveShellStudioApiEndpoint.cs](../../Studio/src/apps/Elsa.Studio.Web/ActiveShellStudioApiEndpoint.cs) | Hosting internal. Keep high-priority manifest/registry routes and use the configured Studio shell with a tracked scope across async reads. |
+| [ActiveShellStudioApiEndpoint.cs](../../Studio/src/essentials/Elsa.Studio.Hosting/ActiveShellStudioApiEndpoint.cs) | Hosting internal. Keep high-priority manifest/registry routes and use the configured Studio shell with a tracked scope across async reads. |
 | [ConfigFileWriter.cs](../../Studio/src/apps/Elsa.Studio.Web/ConfigFileWriter.cs) | Split coordination from IO: Hosting owns the one process-lifetime gate exposed by StudioBuilder.ConfigurationMutationGate. Each addon keeps its small stateless atomic-write helper private and receives that same gate at registration. No production friend grant, duplicate static gate or public generic file utility. |
 | [ElsaFeatureManagementApi.cs](../../Studio/src/apps/Elsa.Studio.Web/ElsaFeatureManagementApi.cs) | Nuplane addon internal HTTP/DTO adapter over the existing feature-management application service/catalog contracts. Adopt masking/full-state validation and keyed revision semantics from #3351. |
 | [ElsaModuleManagementApi.cs](../../Studio/src/apps/Elsa.Studio.Web/ElsaModuleManagementApi.cs) | Nuplane addon internal HTTP/DTO adapter. Keep upload/feed/registry behavior and permissions; replace direct directory pruning with qualified maintenance. |
@@ -70,28 +70,34 @@ wrappers below; their source links are pinned to that snapshot so the original d
 | [Models/ThemeConfiguration.cs](../../Studio/src/apps/Elsa.Studio.Web/Models/ThemeConfiguration.cs) | Replace app-only type with public StudioThemeStoreOptions in Themes, retaining existing Themes configuration keys plus explicit writable-store paths. |
 | [NuplaneStaticWebAssetsEndpoint.cs](../../Studio/src/apps/Elsa.Studio.Web/NuplaneStaticWebAssetsEndpoint.cs) | Nuplane addon internal. Preserve URLs/revalidation/ranges while holding admission through package access; no unprotected physical-path result. |
 | [Services/ThemeConfigurationService.cs](../../Studio/src/apps/Elsa.Studio.Web/Services/ThemeConfigurationService.cs) | Themes addon internal root service; keep source/store precedence and validate options before IO. |
-| [StudioAssetCaching.cs](../../Studio/src/apps/Elsa.Studio.Web/StudioAssetCaching.cs) | Hosting internal static/fallback behavior. Preserve and test actual revalidation; the asset spike's consumer headers are not delivered Hosting behavior. |
+| [StudioAssetCaching.cs](../../Studio/src/essentials/Elsa.Studio.Hosting/StudioAssetCaching.cs) | Hosting internal static/fallback behavior. Preserve and test actual revalidation; the asset spike's consumer headers are not delivered Hosting behavior. |
 | [StudioBackendManagementBridge.cs](../../Studio/src/apps/Elsa.Studio.Web/StudioBackendManagementBridge.cs) | Hosting internal bridge/client/DTOs. Reuse existing Api backend options/status/routes; keep server-only credentials and fail-closed availability projection. |
 | [StudioBridgeAuth.cs](../../Studio/src/apps/Elsa.Studio.Web/StudioBridgeAuth.cs) | Hosting internal named scheme/handlers/cache and stable permission policies. Root ownership, first-request checks and trusted query-token paths remain explicit. |
 | [StudioFeatureAssemblies.cs](../../Studio/src/apps/Elsa.Studio.Web/StudioFeatureAssemblies.cs) | Delete app-specific provider/list wrapper. Hosting includes mandatory Api discovery; addons register themselves; Web/callers select additional module assemblies through the framework callback. |
 | [StudioNuplaneAssemblyProvider.cs](https://github.com/elsa-workflows/elsa-foundation/blob/d55f5f5229ab4aaeaa728a85f6d41d9050af0a71/Studio/src/apps/Elsa.Studio.Web/StudioNuplaneAssemblyProvider.cs) | Delete; use released CShells.Nuplane package-aware discovery. |
 | [StudioNuplaneShellReloadObserver.cs](https://github.com/elsa-workflows/elsa-foundation/blob/d55f5f5229ab4aaeaa728a85f6d41d9050af0a71/Studio/src/apps/Elsa.Studio.Web/StudioNuplaneShellReloadObserver.cs) | Delete; use ChangedOrPending + automatic reload and the existing reporting callback. No detached task/semaphore replacement. |
 | [StudioRuntimeFeatureCatalogRefresher.cs](https://github.com/elsa-workflows/elsa-foundation/blob/d55f5f5229ab4aaeaa728a85f6d41d9050af0a71/Studio/src/apps/Elsa.Studio.Web/StudioRuntimeFeatureCatalogRefresher.cs) | Delete; use the existing shared catalog/refresher services, including the current snapshot-returning API. |
-| [StudioRuntimeScript.cs](../../Studio/src/apps/Elsa.Studio.Web/StudioRuntimeScript.cs) | Hosting internal. Retain the explicit allowlist/global name and existing configuration keys. No arbitrary IConfiguration serialization or browser management key. |
-| [StudioShellActivation.cs](../../Studio/src/apps/Elsa.Studio.Web/StudioShellActivation.cs) | Hosting internal selected-shell activation before routing/authorization. Preserve best-effort static availability; pin shell-service use and handle lookup/disposal races. |
+| [StudioRuntimeScript.cs](../../Studio/src/essentials/Elsa.Studio.Hosting/StudioRuntimeScript.cs) | Hosting internal. Retain the explicit allowlist/global name and existing configuration keys. No arbitrary IConfiguration serialization or browser management key. |
+| [StudioShellActivation.cs](../../Studio/src/essentials/Elsa.Studio.Hosting/StudioShellActivation.cs) | Hosting internal selected-shell activation before routing/authorization. Preserve best-effort static availability; pin shell-service use and handle lookup/disposal races. |
 | [StudioShellFeatureConfigurationStore.cs](../../Studio/src/apps/Elsa.Studio.Web/StudioShellFeatureConfigurationStore.cs) | Nuplane addon internal implementation of the existing store contract; configure the same shell/file the host uses, keep the shared gate/atomicity, revisions and deterministic reload. Remove app-specific snapshots/exceptions where shared contracts replace them. |
 | [ThemeStoreStudioFeatures.cs](../../Studio/src/apps/Elsa.Studio.Web/ThemeStoreStudioFeatures.cs) | Themes addon. Keep IDs ThemeStoreCore, ThemePicker and ThemeManagement and their dependency/gating behavior. Feature classes remain public for framework discovery; name/helper/DTO implementation stays internal. |
 
 CShells 0.0.31 uses Assembly.GetExportedTypes in
 [FeatureDiscovery](https://github.com/valence-works/cshells/blob/b7611aadb49789d3b282749df18ffe68d0eacec5/src/CShells/Features/FeatureDiscovery.cs).
 The three public feature classes are therefore a framework-discovery exception to internal-by-default, not a
-new application service API. No current internal DTO becomes public merely because its file moves.
+new application service API. No current internal DTO becomes public merely because its file moves. #3357 implements base composition,
+activation, tracked discovery, runtime/static integration and the lease-only coordinator; auth/bridge, optional
+adapters and prebuilt browser ownership remain their separately scoped leaves. Matched root endpoints stay
+in the root scope through a small resolver decorator; the framework resolution cache is disabled because its
+host/path/method key cannot preserve endpoint ownership across reload. Framework middleware registration
+(`MapShells`) is installed by UseElsaStudio because its public receiver is IApplicationBuilder.
 
 Studio is currently domainless in the governing ElsaDomains classifier. No new production InternalsVisibleTo
 relationship is authorized by matching Studio package prefixes. The gate is therefore a public integration seam:
 third-party Studio hosting extensions that write their own configuration must coordinate with built-in writers.
-They borrow the process-lifetime semaphore, hold it across the entire read/revision/modify/write/reload operation,
-release in finally and never dispose it. Owned addon registrations capture that same instance; shell copies do not
+They acquire the shared coordinator through `AcquireAsync(CancellationToken) : ValueTask<IAsyncDisposable>`,
+keep the returned lease across the entire read/revision/modify/write/reload operation and dispose only that lease.
+The underlying semaphore is private; callers have no release/dispose control over the coordinator. Owned addon registrations capture that same instance; shell copies do not
 create or own another gate. The stateless sibling-temp/rename helper may exist privately in each addon: this small
 implementation duplication preserves the boundary without exposing a general file/settings framework. Prefer the
 existing feature application/store contracts when they already express the desired change.
@@ -129,7 +135,7 @@ The target entry points are:
 |---|---|
 | Hosting registration | `WebApplicationBuilder.AddElsaStudio(Action<StudioHostingOptions>? configure = null) : StudioBuilder` loads/binds host configuration and composes common services. |
 | Framework customization | `StudioBuilder.ConfigureShells(Action<CShellsBuilder> configure) : StudioBuilder` selects module assemblies and uses existing framework policy/extension points. Do not invent another feature registry. |
-| Root service customization | StudioBuilder exposes read-only `IServiceCollection Services`, `IConfiguration Configuration`, `IWebHostEnvironment Environment` and `SemaphoreSlim ConfigurationMutationGate` references for addon/third-party root registration and coordinated configuration changes; constructor is internal and registration occurs only before Build. |
+| Root service customization | StudioBuilder exposes read-only `IServiceCollection Services`, `IConfiguration Configuration`, `IWebHostEnvironment Environment` and `StudioConfigurationMutationGate ConfigurationMutationGate` references for addon/third-party root registration and coordinated configuration changes; constructor is internal and registration occurs only before Build. |
 | Pipeline | `WebApplication.UseElsaStudio() : WebApplication` installs selected-shell activation, routing, authentication/authorization and static-file middleware in the required order. Call before other explicit routing/auth middleware. |
 | Core endpoint mapping | `IEndpointRouteBuilder.MapElsaStudio() : IEndpointRouteBuilder` maps runtime/discovery/bridge, shell endpoints, API 404 and SPA fallback. |
 | Optional administration | `StudioBuilder.AddElsaStudioNuplane(Action<StudioNuplaneOptions>? configure = null, Action<NuplaneBuilder>? configureNuplane = null) : StudioBuilder`; `IEndpointRouteBuilder.MapElsaStudioNuplane() : IEndpointRouteBuilder`. The existing Nuplane builder callback handles trusted feeds/coordination; do not duplicate its membership model. |
