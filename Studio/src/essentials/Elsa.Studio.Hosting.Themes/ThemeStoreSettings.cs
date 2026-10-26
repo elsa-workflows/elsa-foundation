@@ -48,12 +48,12 @@ internal sealed class ThemeOptionsValidator(string contentRoot) : IValidateOptio
                 if (File.Exists(applied.AssetsDirectory)) errors.Add("Themes:AssetsDirectory names an existing file.");
                 if (SamePath(applied.StoreFile, applied.AssetsDirectory) || applied.AssetsDirectory.StartsWith(
                         Path.TrimEndingDirectorySeparator(applied.StoreFile) + Path.DirectorySeparatorChar,
-                        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                        ThemeStoragePaths.ComparisonFor(applied.StoreFile)))
                     errors.Add("Themes:AssetsDirectory must not equal or descend from the writable StoreFile.");
                 if (applied.ThemesDirectory is { } source && SamePath(source, applied.StoreFile))
                     errors.Add("Themes:ThemesDirectory must not be the writable StoreFile.");
             }
-            catch (Exception error) when (error is ArgumentException or NotSupportedException or PathTooLongException)
+            catch (Exception error) when (error is ArgumentException or NotSupportedException or IOException or UnauthorizedAccessException)
             {
                 errors.Add("Themes storage contains an invalid path: " + error.Message);
             }
@@ -62,5 +62,5 @@ internal sealed class ThemeOptionsValidator(string contentRoot) : IValidateOptio
     }
 
     private static bool SamePath(string first, string second) => string.Equals(first, second,
-        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+        ThemeStoragePaths.ComparisonFor(first));
 }

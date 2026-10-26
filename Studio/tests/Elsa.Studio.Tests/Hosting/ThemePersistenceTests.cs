@@ -33,6 +33,29 @@ public sealed class ThemePersistenceTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Case_aliases_cannot_reclassify_managed_state_as_directory_content(bool filenameAlias)
+    {
+        bool aliases = false;
+        await using var host = await ThemeHost.StartAsync("ThemeManagement", configure: (options, root) =>
+        {
+            var directory = Directory.CreateDirectory(Path.Combine(root, "state")).FullName;
+            aliases = Directory.Exists(Path.Combine(root, "STATE"));
+            options.ThemesDirectory = aliases ? "STATE" : "state";
+            options.StoreFile = "state/themes.json";
+            options.ThemesMode = StudioThemeSourceMode.DirectoryOnly;
+            if (aliases && filenameAlias && !File.Exists(Path.Combine(directory, "Themes.json")))
+                File.WriteAllText(Path.Combine(directory, "Themes.json"), """{"themes":[]}""");
+        });
+        // On a case-sensitive volume these are distinct paths; the ordinary no-copy contract still applies.
+        await Save(host, Definition("managed-only", "Managed only"));
+        Assert.Empty((await Read(host))["directoryThemeIds"]!.AsArray());
+        using var deleted = await host.Client.DeleteAsync(Base + "/themes/managed-only");
+        deleted.EnsureSuccessStatusCode();
+    }
+
+    [Theory]
     [InlineData("BuiltInsOnly")]
     [InlineData("DirectoryOnly")]
     [InlineData("AddToBuiltIns")]

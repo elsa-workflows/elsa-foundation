@@ -94,9 +94,9 @@ internal sealed class ThemeDirectorySource
             _logger.LogInformation("Loading themes from directory: {Path}", themePath);
             // A host may keep its writable store inside the source directory. It is managed state,
             // never an external source collection, even though the two JSON formats share a themes member.
+            var comparison = ThemeStoragePaths.ComparisonFor(themePath);
             var files = Directory.EnumerateFiles(themePath, "*.json").Where(file =>
-                !string.Equals(Path.GetFullPath(file), _config.StoreFile,
-                    OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
+                !string.Equals(Path.GetFullPath(file), _config.StoreFile, comparison));
             foreach (var file in files)
             {
                 try

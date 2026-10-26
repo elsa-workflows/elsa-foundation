@@ -151,6 +151,23 @@ public sealed class ThemeCompositionTests
     }
 
     [Fact]
+    public async Task Future_file_and_directory_case_aliases_follow_the_storage_filesystem()
+    {
+        bool aliases = false;
+        ThemeHost? host = null;
+        var error = await Record.ExceptionAsync(async () => host = await ThemeHost.StartAsync(configure: (options, root) =>
+        {
+            Directory.CreateDirectory(Path.Combine(root, "state"));
+            aliases = Directory.Exists(Path.Combine(root, "STATE"));
+            options.StoreFile = "state/managed.json";
+            options.AssetsDirectory = "STATE/MANAGED.JSON";
+        }));
+        if (host is not null) await host.DisposeAsync();
+        if (aliases) Assert.IsType<OptionsValidationException>(error);
+        else Assert.Null(error);
+    }
+
+    [Fact]
     public async Task Composition_rejects_duplicates_and_registration_after_build()
     {
         var builder = WebApplication.CreateSlimBuilder();
