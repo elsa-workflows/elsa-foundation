@@ -36,7 +36,7 @@ internal sealed class FakeRuntimeFeatureCatalog : IRuntimeFeatureCatalog
     }
 
     public IRuntimeFeatureCatalogSnapshot CurrentSnapshot => new Projection(
-        _snapshot.FeatureDescriptors.Select(descriptor => new RuntimeFeatureDescriptor { Id = descriptor.Id }).ToArray());
+        _snapshot.FeatureDescriptors.Select(descriptor => new RuntimeFeatureDescriptor { Id = descriptor.Id, DisplayName = descriptor.Id }).ToArray());
 
     private sealed record Projection(IReadOnlyList<RuntimeFeatureDescriptor> FeatureDescriptors) : IRuntimeFeatureCatalogSnapshot
     {

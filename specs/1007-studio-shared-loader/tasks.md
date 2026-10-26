@@ -3,15 +3,15 @@
 Issue: [#3356](https://github.com/elsa-workflows/elsa-foundation/issues/3356).
 Reviewed after [spec.md](spec.md) and [plan.md](plan.md); paths below are repository-relative.
 
-- [ ] T001 Align `Studio/Directory.Packages.props`, reached Studio extension imports, generator
+- [x] T001 Align `Studio/Directory.Packages.props`, reached Studio extension imports, generator
   references/namespaces, `Studio/nuget.config` and corresponding NuGet lock artifacts.
-- [ ] T002 Select the shared adapter/profile and dependency-aware failure logging in
+- [x] T002 Select the shared adapter/profile and dependency-aware failure logging in
   `Studio/src/apps/Elsa.Studio.Web/StudioFeatureAssemblies.cs`; remove observer/provider registration
   from `Program.cs`, retaining root Console Stream.
-- [ ] T003 Replace `StudioRuntimeFeatureCatalogRefresher` usage in `ElsaFeatureManagementApi.cs`
+- [x] T003 Replace `StudioRuntimeFeatureCatalogRefresher` usage in `ElsaFeatureManagementApi.cs`
   with the public runtime snapshot API. Remove it, `StudioNuplaneAssemblyProvider.cs`,
   `StudioNuplaneShellReloadObserver.cs` and obsolete mirror-only tests.
-- [ ] T004 Update `Studio/tests/Elsa.Studio.Tests/` public-interface doubles and add lifecycle
+- [x] T004 Update `Studio/tests/Elsa.Studio.Tests/` public-interface doubles and add lifecycle
   tests using the production profile: cold/install/update/removal, retained scope, failure/retry,
   cancellation/shutdown and unchanged no-op. Verify generated module manifest wire metadata.
 - [ ] T005 Run affected Studio suites and a disabled-auto-reload negative control, restore and

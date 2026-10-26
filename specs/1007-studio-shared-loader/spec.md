@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-26
 
-**Status**: In progress
+**Status**: Implemented — implementation PR [#3379](https://github.com/elsa-workflows/elsa-foundation/pull/3379)
 
 **Input**: [Task #3356](https://github.com/elsa-workflows/elsa-foundation/issues/3356),
 part of [Program #3340](https://github.com/elsa-workflows/elsa-foundation/issues/3340).
