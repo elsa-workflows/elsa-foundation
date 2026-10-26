@@ -31,6 +31,101 @@ public sealed class StimulusDeliverySnapshotTests
     }
 
     [Fact]
+    public void Source_capture_preserves_publication_attribution_separately_from_deduplicated_content_identity()
+    {
+        var source = Provenance();
+        var captured = Snapshot([new StimulusStartRecipient(Binding(), Pin, source)], []);
+        var restored = RoundTrip(captured);
+        Assert.True(restored.Starts[0].SourceProvenanceCaptured);
+        Assert.Equal(source, restored.Starts[0].SourceProvenance);
+        Assert.Equal("published-version", restored.Starts[0].SourceProvenance!.DefinitionVersionId);
+        Assert.Equal("version", restored.Starts[0].Executable.DefinitionVersionId);
+        Assert.Equal("published-label", restored.Starts[0].SourceProvenance!.ArtifactVersion);
+        Assert.Equal("1.0.0", restored.Starts[0].Executable.ArtifactVersion);
+        Assert.True(captured.IsEquivalentTo(restored));
+        Assert.False(captured.IsEquivalentTo(Snapshot([new StimulusStartRecipient(Binding(), Pin,
+            source with { SourceReferenceId = "another-reference" })], [])));
+        Assert.False(captured.IsEquivalentTo(Snapshot([Start()], [])));
+    }
+
+    [Fact]
+    public void Captured_null_and_uncaptured_legacy_source_are_distinct_wire_and_equality_states()
+    {
+        var binding = Binding() with { ActivationId = null, SlotId = null };
+        var absent = Snapshot([new StimulusStartRecipient(binding, Pin)], []);
+        var capturedNull = Snapshot([new StimulusStartRecipient(binding, Pin, null)], []);
+        Assert.False(RoundTrip(absent).Starts[0].SourceProvenanceCaptured);
+        Assert.True(RoundTrip(capturedNull).Starts[0].SourceProvenanceCaptured);
+        Assert.Null(RoundTrip(capturedNull).Starts[0].SourceProvenance);
+        Assert.False(absent.IsEquivalentTo(capturedNull));
+        var oldWire = JsonSerializer.SerializeToNode(absent, Web)!;
+        Assert.False(oldWire["starts"]![0]!.AsObject().ContainsKey("sourceCapture"));
+        var capturedWire = JsonSerializer.SerializeToNode(capturedNull, Web)!;
+        Assert.Equal(1, capturedWire["starts"]![0]!["sourceCapture"]!["version"]!.GetValue<int>());
+        Assert.True(capturedWire["starts"]![0]!["sourceCapture"]!.AsObject().ContainsKey("provenance"));
+        Assert.Null(capturedWire["starts"]![0]!["sourceCapture"]!["provenance"]);
+    }
+
+    [Theory]
+    [InlineData("sourceReferenceId")]
+    [InlineData("sourceKind")]
+    [InlineData("sourceId")]
+    [InlineData("sourceVersion")]
+    [InlineData("definitionId")]
+    [InlineData("definitionVersionId")]
+    [InlineData("artifactVersion")]
+    [InlineData("publicationId")]
+    [InlineData("slotId")]
+    public void Captured_provenance_requires_every_field_including_nullable_attribution(string field)
+    {
+        var wire = JsonSerializer.SerializeToNode(Snapshot([new StimulusStartRecipient(Binding(), Pin, Provenance())], []), Web)!;
+        Assert.True(wire["starts"]![0]!["sourceCapture"]!["provenance"]!.AsObject().Remove(field));
+        Assert.ThrowsAny<JsonException>(() => wire.Deserialize<StimulusDeliverySnapshot>(Web));
+    }
+
+    [Theory]
+    [InlineData("version")]
+    [InlineData("provenance")]
+    public void Present_source_capture_cannot_be_truncated_into_reference_less_authority(string field)
+    {
+        var wire = JsonSerializer.SerializeToNode(Snapshot([new StimulusStartRecipient(Binding(), Pin, Provenance())], []), Web)!;
+        Assert.True(wire["starts"]![0]!["sourceCapture"]!.AsObject().Remove(field));
+        Assert.ThrowsAny<JsonException>(() => wire.Deserialize<StimulusDeliverySnapshot>(Web));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(2)]
+    public void Unsupported_source_capture_versions_refuse_instead_of_becoming_uncaptured(int version)
+    {
+        var wire = JsonSerializer.SerializeToNode(Snapshot([new StimulusStartRecipient(Binding(), Pin, Provenance())], []), Web)!;
+        wire["starts"]![0]!["sourceCapture"]!["version"] = version;
+        Assert.ThrowsAny<JsonException>(() => wire.Deserialize<StimulusDeliverySnapshot>(Web));
+    }
+
+    [Theory]
+    [InlineData("activation")]
+    [InlineData("slot")]
+    [InlineData("blank-reference")]
+    [InlineData("blank-optional")]
+    [InlineData("missing-selected-reference")]
+    public void Source_capture_refuses_conflicting_or_malformed_selected_provenance(string defect)
+    {
+        var source = defect switch
+        {
+            "activation" => Provenance() with { PublicationId = "another-activation" },
+            "slot" => Provenance() with { SlotId = "another-slot" },
+            "blank-reference" => Provenance() with { SourceReferenceId = " " },
+            "blank-optional" => Provenance() with { SourceVersion = " " },
+            _ => null
+        };
+        Assert.ThrowsAny<ArgumentException>(() => new StimulusStartRecipient(Binding(), Pin, source));
+    }
+
+    private static WorkflowExecutableSourceProvenance Provenance() => new("source-reference", "definition", "published-definition",
+        "2", "published-definition", "published-version", "published-label", "activation", "slot");
+
+    [Fact]
     public void Empty_is_an_explicit_authoritative_snapshot_and_large_sets_are_never_truncated()
     {
         var empty = RoundTrip(Snapshot([], []));

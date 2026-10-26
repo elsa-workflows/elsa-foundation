@@ -119,6 +119,17 @@ RetainedDependency authority, rediscover a current publication or permit an arbi
 Current domain/security admission remains applicable; the cohort grants only its saved publication
 selection. Preserve normal shedding/duplicate behavior and safe diagnostics.
 
+Capture the existing `WorkflowExecutableSourceProvenance` selected by ordinary live-reference resolution,
+separately from deduplicated executable producer metadata. A versioned `SourceCapture` wrapper on each
+start entry distinguishes uncaptured older fixtures from captured provenance and an explicitly captured
+null for legitimate reference-less legacy. The original two-argument entry constructor remains uncaptured;
+uncaptured data cannot authorize a saved start. A present wrapper requires every provenance field,
+including nullable attribution, and unknown capture versions refuse. Shape validation does not prove that
+the reference was authoritative: selection/provider admission and retention must still establish that.
+This refines the unpublished family2 payload while publisher activation is disabled. Historical receipts
+and fixtures retain their original source/bytes; they do not qualify the refined wire or supported mixed
+writers. Quiescence and final-host qualification remain required before enabling the protocol.
+
 Add owed cohort start pins and their dependency closure to existing executable-GC roots and existing
 root-write/deletion lease protocol. Cohort acceptance holds/renews the relevant existing root-write leases through durable installation,
 and reference deletion performs its guarded final root recheck. They must coordinate: either

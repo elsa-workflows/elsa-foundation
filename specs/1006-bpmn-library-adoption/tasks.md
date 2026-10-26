@@ -98,6 +98,8 @@ the [storage receipt](evidence/broadcast-storage.md) completes finite provider t
 The [durable source-context receipt](evidence/broadcast-source-context.md) completes T048.
 The [initial root-set lease receipt](evidence/broadcast-retention-leases.md) qualifies only the generic
 capability needed by T049; authority/provider/retention integration remains open.
+The [source-attribution receipt](evidence/broadcast-source-attribution.md) qualifies captured data and
+storage preservation only; authoritative selection and saved-start admission remain open.
 Publisher authorization, recipient execution and all host delivery/recovery gates remain open.
 
 Execution order: T046 → T047 → T048 → T049 → T050 → T051. No new task is marked parallel:

@@ -50,6 +50,17 @@ public sealed class StimulusDeliveryScope
 public sealed class StimulusStartRecipient
 {
     public StimulusStartRecipient(WorkflowTriggerBinding binding, WorkflowExecutableIdentity executable)
+        : this(binding, executable, false, null) { }
+
+    /// <summary>Capture the ordinary start's exact source attribution; null explicitly captures reference-less legacy.</summary>
+    /// <remarks>The caller must resolve the ordinary authoritative source. This constructor validates shape and
+    /// selected activation/slot consistency; it grants no start authority or proof of reference-less eligibility.</remarks>
+    public StimulusStartRecipient(WorkflowTriggerBinding binding, WorkflowExecutableIdentity executable,
+        WorkflowExecutableSourceProvenance? sourceProvenance)
+        : this(binding, executable, true, sourceProvenance) { }
+
+    private StimulusStartRecipient(WorkflowTriggerBinding binding, WorkflowExecutableIdentity executable,
+        bool sourceProvenanceCaptured, WorkflowExecutableSourceProvenance? sourceProvenance)
     {
         ArgumentNullException.ThrowIfNull(binding);
         ArgumentNullException.ThrowIfNull(executable);
@@ -65,12 +76,33 @@ public sealed class StimulusStartRecipient
             throw new ArgumentException("A selected binding must be active and match its complete executable pin.", nameof(binding));
         if (binding.CreatedAt == default || binding.CreatedAt == DateTimeOffset.MaxValue)
             throw new ArgumentOutOfRangeException(nameof(binding));
+        if (sourceProvenanceCaptured)
+        {
+            if (sourceProvenance is null && (binding.ActivationId is not null || binding.SlotId is not null))
+                throw new ArgumentException("An explicitly selected publication cannot have reference-less provenance.", nameof(sourceProvenance));
+            if (sourceProvenance is not null)
+            {
+                foreach (var identity in new[] { sourceProvenance.SourceReferenceId, sourceProvenance.SourceKind,
+                             sourceProvenance.SourceId, sourceProvenance.DefinitionId, sourceProvenance.DefinitionVersionId,
+                             sourceProvenance.ArtifactVersion }) ArgumentException.ThrowIfNullOrWhiteSpace(identity);
+                foreach (var optional in new[] { sourceProvenance.SourceVersion, sourceProvenance.PublicationId, sourceProvenance.SlotId })
+                    if (optional is not null) ArgumentException.ThrowIfNullOrWhiteSpace(optional);
+                if (binding.ActivationId is not null && binding.ActivationId != sourceProvenance.PublicationId ||
+                    binding.SlotId is not null && binding.SlotId != sourceProvenance.SlotId)
+                    throw new ArgumentException("Captured provenance differs from the selected activation or slot.", nameof(sourceProvenance));
+            }
+        }
         Binding = binding with { Metadata = RuntimeModelMetadata.Snapshot(binding.Metadata) };
         Executable = executable;
+        SourceProvenanceCaptured = sourceProvenanceCaptured;
+        SourceProvenance = sourceProvenance;
     }
 
     public WorkflowTriggerBinding Binding { get; }
     public WorkflowExecutableIdentity Executable { get; }
+    /// <summary>False for the original constructor/uncaptured wire; such data cannot authorize a saved start.</summary>
+    public bool SourceProvenanceCaptured { get; }
+    public WorkflowExecutableSourceProvenance? SourceProvenance { get; }
 }
 
 /// <summary>Exact selected wait identity without copying its retained payload.</summary>
@@ -200,6 +232,8 @@ public sealed class StimulusDeliverySnapshot
         Scope.Partition == other.Scope.Partition && Scope.RunKind == other.Scope.RunKind && Scope.TestScope == other.Scope.TestScope &&
         Starts.Count == other.Starts.Count && Resumes.Count == other.Resumes.Count &&
         Starts.Zip(other.Starts).All(pair => pair.First.Executable == pair.Second.Executable &&
+            pair.First.SourceProvenanceCaptured == pair.Second.SourceProvenanceCaptured &&
+            pair.First.SourceProvenance == pair.Second.SourceProvenance &&
             pair.First.Binding with { Metadata = pair.Second.Binding.Metadata } == pair.Second.Binding &&
             RuntimeModelMetadata.AreEqual(pair.First.Binding.Metadata, pair.Second.Binding.Metadata)) &&
         Resumes.Zip(other.Resumes).All(pair => pair.First.WorkflowExecutionId == pair.Second.WorkflowExecutionId &&
@@ -247,15 +281,39 @@ internal sealed class StimulusStartRecipientJsonConverter : JsonConverter<Stimul
     {
         var wire = JsonSerializer.Deserialize<Wire>(ref reader, options) ?? throw new JsonException("A start recipient must be an object.");
         if (wire.Binding is null) throw new JsonException("A start recipient requires its saved binding.");
-        try { return new(wire.Binding.ToBinding(), wire.Executable); }
+        if (wire.SourceCapture is { Version: not 1 }) throw new JsonException("The source capture version is unsupported.");
+        try
+        {
+            return wire.SourceCapture is null ? new(wire.Binding.ToBinding(), wire.Executable) :
+                new(wire.Binding.ToBinding(), wire.Executable, wire.SourceCapture.Provenance?.ToProvenance());
+        }
         catch (ArgumentException exception) { throw new JsonException("The saved start recipient is invalid.", exception); }
     }
 
     public override void Write(Utf8JsonWriter writer, StimulusStartRecipient value, JsonSerializerOptions options) =>
-        JsonSerializer.Serialize(writer, new Wire(BindingWire.From(value.Binding), value.Executable), options);
+        JsonSerializer.Serialize(writer, new Wire(BindingWire.From(value.Binding), value.Executable,
+            value.SourceProvenanceCaptured ? new(1, value.SourceProvenance is null ? null : ProvenanceWire.From(value.SourceProvenance)) : null), options);
 
     private sealed record Wire([property: JsonRequired] BindingWire Binding,
-        [property: JsonRequired] WorkflowExecutableIdentity Executable);
+        [property: JsonRequired] WorkflowExecutableIdentity Executable,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SourceCaptureWire? SourceCapture = null);
+
+    private sealed record SourceCaptureWire([property: JsonRequired] int Version,
+        [property: JsonRequired, JsonIgnore(Condition = JsonIgnoreCondition.Never)] ProvenanceWire? Provenance);
+
+    private sealed record ProvenanceWire([property: JsonRequired] string SourceReferenceId,
+        [property: JsonRequired] string SourceKind, [property: JsonRequired] string SourceId,
+        [property: JsonRequired, JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? SourceVersion, [property: JsonRequired] string DefinitionId,
+        [property: JsonRequired] string DefinitionVersionId, [property: JsonRequired] string ArtifactVersion,
+        [property: JsonRequired, JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? PublicationId,
+        [property: JsonRequired, JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? SlotId)
+    {
+        internal WorkflowExecutableSourceProvenance ToProvenance() => new(SourceReferenceId, SourceKind, SourceId,
+            SourceVersion, DefinitionId, DefinitionVersionId, ArtifactVersion, PublicationId, SlotId);
+        internal static ProvenanceWire From(WorkflowExecutableSourceProvenance source) => new(source.SourceReferenceId,
+            source.SourceKind, source.SourceId, source.SourceVersion, source.DefinitionId, source.DefinitionVersionId,
+            source.ArtifactVersion, source.PublicationId, source.SlotId);
+    }
 
     private sealed record BindingWire([property: JsonRequired] string TriggerBindingId,
         [property: JsonRequired] string ArtifactId, [property: JsonRequired] string DefinitionId,

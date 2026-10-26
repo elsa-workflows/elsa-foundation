@@ -60,6 +60,69 @@ public sealed class StimulusDeliveryStoreTests
     }
 
     [Theory]
+    [InlineData(false, false)] [InlineData(false, true)]
+    [InlineData(true, false)] [InlineData(true, true)]
+    public async Task Source_capture_survives_saved_winner_restart_renew_retry_and_completion(bool ef, bool referenceLess)
+    {
+        await using var harness = await Harness.Create(ef);
+        var claim = await harness.Seed(); var source = new PostCommitDeliveryContext(claim, Scope);
+        var candidate = CapturedSnapshot(source, referenceLess);
+        var winner = await harness.Delivery.InstallAsync(source, candidate);
+        var reopened = harness.Reopen();
+        Assert.True(winner.IsEquivalentTo(await reopened.InstallAsync(source, Snapshot(source))));
+        harness.Clock.Advance(TimeSpan.FromSeconds(1));
+        var renewed = await harness.Claims.RenewClaimAsync(claim, Now.AddSeconds(1), TimeSpan.FromMinutes(2));
+        Assert.True(candidate.IsEquivalentTo(renewed!.Item.RecipientSnapshot));
+        harness.Clock.Advance(TimeSpan.FromSeconds(1));
+        await harness.Claims.RecordDeliveryResultAsync(claim, new(claim.OutboxItemId,
+            RuntimePostCommitOutboxStatus.FailedRetryable, Now.AddSeconds(2), "retry"));
+        harness.Clock.Advance(TimeSpan.FromSeconds(2));
+        var retried = Assert.Single(await harness.Claims.ClaimAsync(new("next", Now.AddSeconds(4), TimeSpan.FromMinutes(1), 1)));
+        harness.Clock.Advance(TimeSpan.FromSeconds(1));
+        await harness.Completion.CompleteClaimAsync(new(retried,
+            new(retried.OutboxItemId, RuntimePostCommitOutboxStatus.Delivered, Now.AddSeconds(5))));
+        var saved = (await harness.Lookup.FindDurableAsync(claim.OutboxItemId))!.RecipientSnapshot!;
+        Assert.True(candidate.IsEquivalentTo(saved));
+        Assert.All(saved.Starts, entry => Assert.True(entry.SourceProvenanceCaptured));
+        if (referenceLess) Assert.All(saved.Starts, entry => Assert.Null(entry.SourceProvenance));
+        else Assert.All(saved.Starts, entry =>
+        {
+            Assert.Equal("selected-publication-version", entry.SourceProvenance!.DefinitionVersionId);
+            Assert.Equal("version", entry.Executable.DefinitionVersionId);
+        });
+    }
+
+    [Theory]
+    [InlineData("capture-version")]
+    [InlineData("capture-provenance")]
+    [InlineData("source-reference")]
+    public async Task Corrupt_present_source_capture_refuses_through_actual_EF_reader(string defect)
+    {
+        await using var harness = await Harness.Create(true);
+        var source = new PostCommitDeliveryContext(await harness.Seed(), Scope);
+        await harness.Delivery.InstallAsync(source, CapturedSnapshot(source, false));
+        var row = await harness.Context!.RuntimePostCommitOutbox.SingleAsync();
+        var json = JsonNode.Parse(row.ContentJson)!;
+        var capture = json["recipientSnapshot"]!["starts"]![0]!["sourceCapture"]!.AsObject();
+        if (defect == "source-reference") Assert.True(capture["provenance"]!.AsObject().Remove("sourceReferenceId"));
+        else Assert.True(capture.Remove(defect == "capture-version" ? "version" : "provenance"));
+        row.ContentJson = json.ToJsonString(); await harness.Context.SaveChangesAsync(); harness.Context.ChangeTracker.Clear();
+        await Assert.ThrowsAsync<InvalidDataException>(() => harness.Lookup.FindDurableAsync(source.SourceOutboxItemId).AsTask());
+    }
+
+    // Constructed storage witnesses only; no authoritative reference selection/retention or host start is implied.
+    private static StimulusDeliverySnapshot CapturedSnapshot(PostCommitDeliveryContext source, bool referenceLess)
+    {
+        var entries = new[] { Start("binding-a"), Start("binding-b") }.Select(entry => new StimulusStartRecipient(
+            referenceLess ? entry.Binding with { ActivationId = null, SlotId = null } : entry.Binding, entry.Executable,
+            referenceLess ? null : new WorkflowExecutableSourceProvenance("reference-" + entry.Binding.TriggerBindingId,
+                "definition", "selected-definition", "2", "selected-definition", "selected-publication-version",
+                "selected-label", "activation", "slot"))).ToArray();
+        return new(1, source.SourceOutboxItemId, source.IntentFingerprint, StimulusDeliveryScope.From(Publisher, source.Scope),
+            Now, "event", "named", entries, []);
+    }
+
+    [Theory]
     [InlineData(false)] [InlineData(true)]
     public async Task Old_claim_content_cannot_erase_winner_on_renew_retry_reclaim_or_atomic_completion(bool ef)
     {
