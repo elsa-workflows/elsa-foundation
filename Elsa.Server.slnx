@@ -102,6 +102,9 @@
     <File Path="NuGet.config" />
   </Folder>
   <Folder Name="/tools/" />
+  <Folder Name="/tools/bpmn/">
+    <Project Path="tools/bpmn/DeliveryPreflight/DeliveryPreflight.csproj" />
+  </Folder>
   <Folder Name="/tools/ef/">
     <Project Path="tools/ef/Elsa.EntityFrameworkCore.Tooling/Elsa.EntityFrameworkCore.Tooling.csproj" />
   </Folder>

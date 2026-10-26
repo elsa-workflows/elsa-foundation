@@ -31,6 +31,8 @@ SQLite backup that includes committed WAL data, then inspect the private copy. T
 mode on the live database. The wrapper records observation times, whole-snapshot hashes and the reader's
 four relevant assembly hashes. The native reader refuses live WAL sidecars or changed snapshot hashes.
 
+The tool is registered in `Elsa.Server.slnx`; the generated solution-filter check passes.
+
 The small `tools/bpmn/DeliveryPreflight` command reuses `RuntimeSqliteDbContext` and the public
 `EfRuntimePostCommitOutboxStore.FindAsync` checked reader. That provider validates the declared family,
 lossless identities, delivery-state invariants and all projections. The tool checks each enumerated

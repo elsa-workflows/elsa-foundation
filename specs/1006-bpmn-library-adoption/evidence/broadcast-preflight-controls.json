@@ -8,7 +8,8 @@
     "e2e-tests/bpmn/Test-BpmnLibraryAdoption.ps1": "11ed70cf5f130515218e3e880270444de917530ff87ecff3ee0ef780d387ca0c",
     "tools/bpmn/DeliveryPreflight/Program.cs": "d9286b41d47e6d43f476d49f349efe4685cf5ceff0caf5013efd9e2e2df27fb7",
     "tools/bpmn/DeliveryPreflight/DeliveryPreflight.csproj": "d50c9f0f9497071646f5f0fe2981f5345817da5ca8b270229f48043433da924f",
-    "tools/bpmn/DeliveryPreflight/packages.lock.json": "1643841117e49662ffa4a9fb240b216e6e52d2e415706583851e44eb400a0264"
+    "tools/bpmn/DeliveryPreflight/packages.lock.json": "1643841117e49662ffa4a9fb240b216e6e52d2e415706583851e44eb400a0264",
+    "Elsa.Server.slnx": "63aeecab730a1bf4f8a3683dbb3f4231af0447e94662febafd9a35015d889fdb"
   },
   "checks": [
     {
@@ -35,6 +36,10 @@
       "providerCheckedOutboxRows": 10,
       "publishRows": 1,
       "classification": "LegacyDelivered"
+    },
+    {
+      "command": "dotnet run --project tools/maps/Elsa.Maps.Generator -- check",
+      "result": "Generated solution filters still describe the project graph."
     }
   ],
   "mutations": [
