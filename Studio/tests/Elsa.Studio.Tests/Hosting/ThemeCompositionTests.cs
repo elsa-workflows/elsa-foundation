@@ -167,6 +167,26 @@ public sealed class ThemeCompositionTests
         else Assert.Null(error);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Linked_parent_paths_cannot_hide_future_storage_collisions(bool sourceCollision)
+    {
+        await Assert.ThrowsAsync<OptionsValidationException>(async () =>
+        {
+            await using var host = await ThemeHost.StartAsync(configure: (options, root) =>
+            {
+                var state = Directory.CreateDirectory(Path.Combine(root, "state")).FullName;
+                var alias = OperatingSystem.IsWindows() ? "state" : "alias";
+                if (!OperatingSystem.IsWindows() && !Directory.Exists(Path.Combine(root, alias)))
+                    Directory.CreateSymbolicLink(Path.Combine(root, alias), state);
+                options.StoreFile = "state/themes.json";
+                if (sourceCollision) options.ThemesDirectory = Path.Combine(alias, "themes.json");
+                else options.AssetsDirectory = Path.Combine(alias, "themes.json");
+            });
+        });
+    }
+
     [Fact]
     public async Task Composition_rejects_duplicates_and_registration_after_build()
     {

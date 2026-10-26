@@ -4,6 +4,19 @@ namespace Elsa.Studio.Hosting.Themes;
 
 internal static class ThemeStoragePaths
 {
+    public static string Resolve(string path)
+    {
+        path = Path.TrimEndingDirectorySeparator(path);
+        var parent = Path.GetDirectoryName(path);
+        if (parent is null) return path;
+        var resolved = Path.Combine(Resolve(parent), Path.GetFileName(path));
+        FileSystemInfo entry = Directory.Exists(resolved) ? new DirectoryInfo(resolved) : new FileInfo(resolved);
+        // Resolve existing parent links as well as a final file link; GetFullPath alone is lexical.
+        return entry.Exists && entry.LinkTarget is not null
+            ? Resolve(entry.ResolveLinkTarget(returnFinalTarget: true)!.FullName)
+            : resolved;
+    }
+
     public static StringComparison ComparisonFor(string path)
     {
         if (OperatingSystem.IsWindows()) return StringComparison.OrdinalIgnoreCase;

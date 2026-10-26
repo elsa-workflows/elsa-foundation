@@ -96,7 +96,7 @@ internal sealed class ThemeDirectorySource
             // never an external source collection, even though the two JSON formats share a themes member.
             var comparison = ThemeStoragePaths.ComparisonFor(themePath);
             var files = Directory.EnumerateFiles(themePath, "*.json").Where(file =>
-                !string.Equals(Path.GetFullPath(file), _config.StoreFile, comparison));
+                !string.Equals(ThemeStoragePaths.Resolve(Path.GetFullPath(file)), ThemeStoragePaths.Resolve(_config.StoreFile), comparison));
             foreach (var file in files)
             {
                 try

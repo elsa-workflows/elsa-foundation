@@ -56,6 +56,32 @@ public sealed class ThemePersistenceTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Physical_aliases_cannot_reclassify_managed_state_as_directory_content(bool fileLink)
+    {
+        await using var host = await ThemeHost.StartAsync("ThemeManagement", configure: (options, root) =>
+        {
+            var state = Directory.CreateDirectory(Path.Combine(root, "state")).FullName;
+            options.StoreFile = "state/themes.json";
+            options.ThemesMode = StudioThemeSourceMode.DirectoryOnly;
+            options.ThemesDirectory = "sources";
+            if (OperatingSystem.IsWindows()) options.ThemesDirectory = "state"; // No link-creation privilege required on Windows.
+            else if (fileLink)
+            {
+                Directory.CreateDirectory(Path.Combine(root, "sources"));
+                var link = Path.Combine(root, "sources", "alias.json");
+                if (new FileInfo(link).LinkTarget is null) File.CreateSymbolicLink(link, Path.Combine(state, "themes.json"));
+            }
+            else if (!Directory.Exists(Path.Combine(root, "sources"))) Directory.CreateSymbolicLink(Path.Combine(root, "sources"), state);
+        });
+        await Save(host, Definition("managed-only", "Managed only"));
+        Assert.Empty((await Read(host))["directoryThemeIds"]!.AsArray());
+        using var deleted = await host.Client.DeleteAsync(Base + "/themes/managed-only");
+        deleted.EnsureSuccessStatusCode();
+    }
+
+    [Theory]
     [InlineData("BuiltInsOnly")]
     [InlineData("DirectoryOnly")]
     [InlineData("AddToBuiltIns")]

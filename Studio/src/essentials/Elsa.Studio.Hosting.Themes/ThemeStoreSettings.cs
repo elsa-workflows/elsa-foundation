@@ -5,8 +5,8 @@ namespace Elsa.Studio.Hosting.Themes;
 internal sealed record ThemeStoreSettings(string StoreFile, string AssetsDirectory, string? ThemesDirectory, string ThemesMode, string? DefaultThemeId)
 {
     public static ThemeStoreSettings Create(StudioThemeStoreOptions options, string contentRoot) => new(
-        Path.GetFullPath(options.StoreFile, contentRoot), Path.GetFullPath(options.AssetsDirectory, contentRoot),
-        string.IsNullOrWhiteSpace(options.ThemesDirectory) ? null : Path.GetFullPath(options.ThemesDirectory, contentRoot),
+        ThemeStoragePaths.Resolve(Path.GetFullPath(options.StoreFile, contentRoot)), ThemeStoragePaths.Resolve(Path.GetFullPath(options.AssetsDirectory, contentRoot)),
+        string.IsNullOrWhiteSpace(options.ThemesDirectory) ? null : ThemeStoragePaths.Resolve(Path.GetFullPath(options.ThemesDirectory, contentRoot)),
         Enum.IsDefined(options.ThemesMode) ? options.ThemesMode.ToString() : throw new OptionsValidationException(Options.DefaultName, typeof(StudioThemeStoreOptions), ["Themes:ThemesMode must be BuiltInsOnly, DirectoryOnly or AddToBuiltIns."]),
         options.DefaultThemeId);
 
