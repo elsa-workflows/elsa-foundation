@@ -15,8 +15,8 @@ Existing routes remain /_elsa/module-management/{registry,packages/upload,packag
 feeds,feeds/{name},retention-policy,prune}, /modularity/features and /modularity/features/apply, plus package
 /_content/{packageId}/{**assetPath}. Reads/mutations select the existing Api read/manage policies.
 
-Feature catalog/apply use shared Modularity.Core wire models. Invalid/duplicate/full-state/mandatory changes are400,
-stale revisions409, unsupported ownership read-only, and save/refresh/reload failures explicit. Do not claim a
+Feature catalog/apply use shared Modularity.Core wire models. Invalid/duplicate/incomplete-state requests are400; mandatory/dependency activation refusals and stale revisions are409,
+unsupported ownership is read-only, and save/refresh/reload failures explicit. Do not claim a
 reload failure rolled back an already committed file. Unchanged secret placeholders preserve stored values.
 
 Retention selects nullable keepNewestInactiveVersionsPerPackage in a Studio-owned policy section; explicit
