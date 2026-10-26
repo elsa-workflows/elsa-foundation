@@ -1,4 +1,4 @@
-# Specification Quality Checklist: Refuse concurrent captures into one variable
+# Specification Quality Checklist: Warn about writes to one variable whose order is not defined
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-10-22
