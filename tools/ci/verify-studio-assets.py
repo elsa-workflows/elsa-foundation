@@ -10,6 +10,8 @@ from pathlib import Path
 
 EXPECTED_ASSETS = (
     "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/index.html",
+    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/assets/index.js",
+    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/assets/index.css",
     "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/react.js",
     "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/react-dom.js",
     "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/react-dom-client.js",

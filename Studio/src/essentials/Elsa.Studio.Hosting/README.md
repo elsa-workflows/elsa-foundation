@@ -91,8 +91,10 @@ Same-path overlays with the standard bundle and arbitrary application PathBase a
 
 Source contributors build the Studio workspace frontend before .NET build/pack. The sole standard source
 trees are Client, StudioSdk and StudioUi beside this project; output is wwwroot/studio. Packing fails clearly
-when required index/SDK/vendor output is missing. This is a producer check, with no Node consumer build hook.
+when required index/application/stylesheet/SDK/vendor output is missing. This is a producer check, with no Node consumer build hook.
 Browser source/tool inputs are excluded from .NET content and packages.
+The reference Web project removes its obsolete generated wwwroot/studio subtree during build so existing
+checkouts adopt Hosting's payload without retaining a conflicting copy.
 
 Optional administration/themes and final thin distribution remain their separately scoped program leaves.
 The package declares no domain events, contributor contracts or scheduled tasks; its

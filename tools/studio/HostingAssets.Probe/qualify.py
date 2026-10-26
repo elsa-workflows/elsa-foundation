@@ -95,7 +95,8 @@ def main(args):
         feed = root / "feed"
         feed.mkdir()
         revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True).strip()
-        report.update(toolSourceRevision=revision, toolSha256=sha(Path(__file__).read_bytes()))
+        report.update(toolSourceRevision=revision, toolSha256=sha(Path(__file__).read_bytes()),
+                      browserDriverSha256=sha(Path(__file__).with_name("browser.mjs").read_bytes()))
         source_assets = {}
         producer = None
         if args.packages:

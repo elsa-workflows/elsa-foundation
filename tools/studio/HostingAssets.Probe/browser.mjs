@@ -16,7 +16,7 @@ try {
   for (const path of ["/", "/overview"]) {
     await page.goto(base + path);
     await page.getByRole("heading", { name: "Home", level: 2, exact: true }).waitFor({ state: "visible", timeout: 30000 });
-    await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Home", exact: true }).waitFor({ state: "visible" });
+    await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Home", exact: true }).waitFor({ state: "visible" });
   }
   const shared = await page.evaluate(async () => {
     const react = await import("react");

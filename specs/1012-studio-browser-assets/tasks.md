@@ -14,24 +14,24 @@ Inputs: [spec](spec.md), [plan](plan.md), [research](research.md), [asset contra
 Independent test: actual default package-only published consumer, full resource inventory and browser application/module route.
 
 - [x] T005 Build frontend into Hosting's existing Razor static-web-asset owner; add producer-only required-output pack checks in Elsa.Studio.Hosting.csproj without consumer frontend hooks.
-- [ ] T006 Update tools/ci/verify-studio-assets.py and its self-test for the new owner, preserving full module inventory; qualify frozen install and whole frontend build/test/typecheck/lint paths after the move.
-- [ ] T007 Create tools/studio/HostingAssets.Probe using actual production projects/archives, owned committed producer snapshot, explicit source/candidate hashes and complete archive/resource accounting. Accept a supplied artifact directory for later CI integration.
-- [ ] T008 Implement external Hosting+Dashboard consumer with public composition and selected shell, isolated source mapping/cache, locked restore/publish, denied frontend shims and hidden owned producer/feed/consumer source/cache.
-- [ ] T009 Verify every shell/module resource's published and HTTP bytes/MIME/cache/range, index/deep link/runtime/discovery and real unknown API/asset404; Chromium boots the actual application and selected module route with no missing import dependencies.
+- [x] T006 Update tools/ci/verify-studio-assets.py and its self-test for the new owner, preserving full module inventory; qualify frozen install and whole frontend build/test/typecheck/lint paths after the move.
+- [x] T007 Create tools/studio/HostingAssets.Probe using actual production projects/archives, owned committed producer snapshot, explicit source/candidate hashes and complete archive/resource accounting. Accept a supplied artifact directory for later CI integration.
+- [x] T008 Implement external Hosting+Dashboard consumer with public composition and selected shell, isolated source mapping/cache, locked restore/publish, denied frontend shims and hidden owned producer/feed/consumer source/cache.
+- [x] T009 Verify every shell/module resource's published and HTTP bytes/MIME/cache/range, index/deep link/runtime/discovery and real unknown API/asset404; Chromium boots the actual application and selected module route with no missing import dependencies.
 
 ## Phase3 — US2 shared module contracts
 
 Independent test: existing module clients compile against moved SDK/UI source facades and load using the published import map.
 
-- [ ] T010 Qualify complete affected frontend workspaces and Studio .NET project after active source-mirror updates, compare discovery/execution counts, and verify actual candidate host/SDK/module compatibility versions and shared React/SDK imports.
-- [ ] T011 Verify no frontend source/tool inputs leak into actual NuGet/publish output, no Web/Nuplane dependency or source/project reference enters the consumer graph, and the reference Web uses Hosting's one payload. Keep the original wrapper spike explicitly historical/bounded and runnable from the new source owner.
+- [x] T010 Qualify complete affected frontend workspaces and Studio .NET project after active source-mirror updates, compare discovery/execution counts, and verify actual candidate host/SDK/module compatibility versions and shared React/SDK imports.
+- [x] T011 Verify no frontend source/tool inputs leak into actual NuGet/publish output, no Web/Nuplane dependency or source/project reference enters the consumer graph, and the reference Web uses Hosting's one payload. Keep the original wrapper spike explicitly historical/bounded and runnable from the new source owner.
 
 ## Phase4 — US3 customization and negative controls
 
 Independent test: actual packaged server behavior and module resources remain with the direct-reference frontend opt-out.
 
-- [ ] T012 Extend the production probe for separately named fallback, rejected same-path overlay and direct Hosting ExcludeAssets="build;buildTransitive" custom frontend; verify server discovery and retained module assets after hiding inputs and denying frontend tools.
-- [ ] T013 Prove missing producer output is rejected specifically and a published missing vendor/SDK resource causes the expected HTTP/browser failure; restore exact inputs/bytes and complete the normal profiles again. Do not count controls or aborted attempts as green delivery checks.
+- [x] T012 Extend the production probe for separately named fallback, rejected same-path overlay and direct Hosting ExcludeAssets="build;buildTransitive" custom frontend; verify server discovery and retained module assets after hiding inputs and denying frontend tools.
+- [x] T013 Prove missing producer output is rejected specifically and a published missing vendor/SDK resource causes the expected HTTP/browser failure; restore exact inputs/bytes and complete the normal profiles again. Do not count controls or aborted attempts as green delivery checks.
 
 ## Phase5 — delivery qualification
 

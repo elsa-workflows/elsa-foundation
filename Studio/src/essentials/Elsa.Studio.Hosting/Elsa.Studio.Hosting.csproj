@@ -18,7 +18,7 @@
   </ItemGroup>
   <Target Name="VerifyStudioBrowserPayload" BeforeTargets="GenerateNuspec">
     <ItemGroup>
-      <RequiredStudioBrowserAsset Include="wwwroot/studio/index.html;wwwroot/studio/sdk/index.js;wwwroot/studio/vendor/react.js;wwwroot/studio/vendor/react-dom.js;wwwroot/studio/vendor/react-dom-client.js;wwwroot/studio/vendor/react-query.js;wwwroot/studio/vendor/lucide-react.js;wwwroot/studio/vendor/studio-ui.js" />
+      <RequiredStudioBrowserAsset Include="wwwroot/studio/index.html;wwwroot/studio/assets/index.js;wwwroot/studio/assets/index.css;wwwroot/studio/sdk/index.js;wwwroot/studio/vendor/react.js;wwwroot/studio/vendor/react-dom.js;wwwroot/studio/vendor/react-dom-client.js;wwwroot/studio/vendor/react-query.js;wwwroot/studio/vendor/lucide-react.js;wwwroot/studio/vendor/studio-ui.js" />
     </ItemGroup>
     <Error Condition="!Exists('%(RequiredStudioBrowserAsset.FullPath)')"
            Text="Missing prebuilt Studio browser asset: %(RequiredStudioBrowserAsset.Identity). Build the Studio frontend before packing Elsa.Studio.Hosting." />
