@@ -118,6 +118,7 @@ The [template reachability/dormancy receipt](evidence/broadcast-template-reachab
 The [native template-maintenance receipt](evidence/broadcast-template-native-maintenance.md) qualifies exact native material/reference maintenance and the actual native cohort-GC bridge. EF coordination, production-writer integration and qualified default GC still keep T049 open.
 The [EF template writer-fence receipt](evidence/broadcast-template-ef-writer-fences.md) qualifies native row/source CAS participation and captured publication scope, not conditional EF collection or upgraded-host recovery. EF maintenance, complete production handoffs and default qualification still keep T049 open.
 The [conditional EF template-maintenance receipt](evidence/broadcast-template-ef-maintenance.md) qualifies actual SQLite conditional collection, peer-writer/GC race orders and the native collector bridge. EF atomic save/reference handoffs, complete production writers and qualified default GC still keep T049 open.
+The [atomic EF template-admission receipt](evidence/broadcast-template-ef-atomic-admission.md) qualifies strict material/reference commit and persisted-winner adoption through the existing EF publication unit. Complete publication/draft-test handoffs, old-writer/quiescence gates and qualified default GC still keep T049 open.
 Publisher authorization, recipient execution and all host delivery/recovery gates remain open.
 
 Execution order: T046 → T047 → T048 → T049 → T050 → T051. No new task is marked parallel:

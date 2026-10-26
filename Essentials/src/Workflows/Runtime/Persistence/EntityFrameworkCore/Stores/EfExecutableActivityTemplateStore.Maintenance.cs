@@ -31,6 +31,28 @@ public sealed partial class EfExecutableActivityTemplateStore
         catch (InvalidOperationException) { return false; }
     }
 
+    /// <summary>Atomically creates or adopts template material and its unchanged live source reference.</summary>
+    /// <remarks>Returns the persisted winning reference; adoption cannot restore retirement or extend expiry.
+    /// Requires a clean context without a local, enlisted or ambient transaction.</remarks>
+    /// <exception cref="InvalidOperationException">The context has pending writes or a local, enlisted or ambient transaction; or no matching live reference can be established.</exception>
+    /// <exception cref="RuntimeArtifactEntityFrameworkPersistenceException">Provider/IO failure or unrequested cancellation; includes template identity and original cause.</exception>
+    public ValueTask<WorkflowExecutableSourceReference> SaveWithReferenceAsync(ExecutableActivityTemplate template,
+        WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(template); ArgumentNullException.ThrowIfNull(reference);
+        cancellationToken.ThrowIfCancellationRequested(); RequireMaintenanceBoundary();
+        var access = new MaintenanceAccess(AccessContext);
+        var sources = new EfWorkflowExecutableSourceReferenceStore(context, access, continuationCodec);
+        return new EfActivityPublicationRuntimeCommit(WithAccess(access), sources).CommitLiveReferenceAsync(template, reference, timeProvider, cancellationToken);
+    }
+
+    private void RequireMaintenanceBoundary()
+    {
+        if (context.Database.CurrentTransaction is not null || context.Database.GetEnlistedTransaction() is not null ||
+            System.Transactions.Transaction.Current is not null || context.ChangeTracker.HasChanges())
+            throw new InvalidOperationException("Template maintenance requires a clean context and its own transaction.");
+    }
+
     /// <summary>Conditionally removes an unchanged doomed reference within this provider's native material boundary.</summary>
     /// <exception cref="InvalidOperationException">The context has pending writes or a local, enlisted or ambient transaction.</exception>
     /// <exception cref="RuntimeArtifactEntityFrameworkPersistenceException">Provider/IO failure or unrequested cancellation; includes template identity and original cause.</exception>
@@ -60,9 +82,7 @@ public sealed partial class EfExecutableActivityTemplateStore
         WorkflowExecutableSourceReference? expectedReference, DateTimeOffset now, CancellationToken cancellationToken)
     {
         // Own the complete commit; do not flush or discard a caller's pending writes/transaction.
-        if (context.Database.CurrentTransaction is not null || context.Database.GetEnlistedTransaction() is not null ||
-            System.Transactions.Transaction.Current is not null || context.ChangeTracker.HasChanges())
-            throw new InvalidOperationException("Template maintenance requires a clean context and its own transaction.");
+        RequireMaintenanceBoundary();
         // Unchanged tracked reads are not write authority and must not collide with fresh physical snapshots.
         context.ChangeTracker.Clear();
         var access = new MaintenanceAccess(AccessContext);

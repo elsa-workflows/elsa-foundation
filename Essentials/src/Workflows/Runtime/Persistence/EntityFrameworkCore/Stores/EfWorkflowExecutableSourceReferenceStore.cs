@@ -86,10 +86,12 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
 
     /// <summary>
     /// Stages a create-only source reference in the caller's open transaction without saving. A live reference
-    /// already carrying the same identity and artifact is adopted and returns <c>false</c>: it is the one a
-    /// previous attempt of the same publication committed. Anything else under that id is a conflict.
+    /// already carrying the same identity and artifact is adopted with Created=false and its persisted payload:
+    /// it is the one a previous attempt committed. Strict live mode also checks the complete source payload
+    /// and expiry, except retry CreatedAt/PublishedAt timestamps. Anything else under that id is a conflict.
     /// </summary>
-    internal async Task<bool> StageCreateOrAdoptAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken)
+    internal async Task<(bool Created, WorkflowExecutableSourceReference Reference)> StageCreateOrAdoptAsync(
+        WorkflowExecutableSourceReference reference, CancellationToken cancellationToken, TimeProvider? liveClock = null)
     {
         Validate(reference);
         var scope = ScopeForWrite(reference);
@@ -98,15 +100,22 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             context,
             "saving",
             reference.SourceReferenceId,
-            () => RowsOf(scope, reference.SourceReferenceId).AsNoTracking().SingleOrDefaultAsync(cancellationToken));
+            () => liveClock is null ? RowsOf(scope, reference.SourceReferenceId).AsNoTracking().SingleOrDefaultAsync(cancellationToken)
+                : context.WorkflowExecutableSourceReferences.AsNoTracking().SingleOrDefaultAsync(row => row.Id == id, cancellationToken));
+        if (liveClock is not null && !reference.IsLive(liveClock.GetUtcNow()))
+            throw new InvalidOperationException("The proposed template source reference is no longer live.");
         if (existing is null)
         {
             await EfExecutableActivityTemplateStore.StageSourceTemplateFenceAsync(context, scope, reference.ArtifactId, cancellationToken);
             context.WorkflowExecutableSourceReferences.Add(ToEntity(reference, scope, id));
-            return true;
+            return (true, reference);
         }
 
         var current = Read(existing, scope, reference.SourceReferenceId);
+        if (liveClock is not null && (!current.IsLive(liveClock.GetUtcNow()) ||
+                !WorkflowExecutableSourceReferenceComparer.SameIdentity(current,
+                    reference with { CreatedAt = current.CreatedAt, PublishedAt = current.PublishedAt })))
+            throw new InvalidOperationException("The template source reference conflicts or is no longer live.");
         if (current.DeletedAt is not null || !SameArtifactBinding(current, reference))
             throw new InvalidOperationException(
                 $"Workflow executable source reference '{reference.SourceReferenceId}' already exists for different material; source references are create-only.");
@@ -116,7 +125,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         context.Attach(existing);
         existing.Revision = checked(existing.Revision + 1);
         context.Entry(existing).Property(row => row.Revision).IsModified = true;
-        return false;
+        return (false, current);
     }
 
     // Timestamps are deliberately excluded: a retry of the same publication may re-mint them, but it cannot

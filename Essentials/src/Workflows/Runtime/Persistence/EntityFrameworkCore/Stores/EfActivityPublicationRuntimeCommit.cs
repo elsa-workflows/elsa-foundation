@@ -61,6 +61,20 @@ public sealed class EfActivityPublicationRuntimeCommit
         WorkflowExecutableSourceReference reference,
         CancellationToken cancellationToken = default)
     {
+        var result = await CommitCoreAsync(template, reference, null, cancellationToken);
+        return result.Created;
+    }
+
+    internal async ValueTask<WorkflowExecutableSourceReference> CommitLiveReferenceAsync(ExecutableActivityTemplate template,
+        WorkflowExecutableSourceReference reference, TimeProvider clock, CancellationToken cancellationToken)
+    {
+        var result = await CommitCoreAsync(template, reference, clock, cancellationToken);
+        return result.Reference;
+    }
+
+    private async ValueTask<(bool Created, WorkflowExecutableSourceReference Reference)> CommitCoreAsync(
+        ExecutableActivityTemplate template, WorkflowExecutableSourceReference reference, TimeProvider? liveClock, CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(template);
         ArgumentNullException.ThrowIfNull(reference);
         cancellationToken.ThrowIfCancellationRequested();
@@ -80,18 +94,28 @@ public sealed class EfActivityPublicationRuntimeCommit
                 await using var transaction = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
                     context, "publishing", template.TemplateId, () => context.Database.BeginTransactionAsync(cancellationToken));
                 var createsTemplate = await capturedTemplates.StageCreateAsync(template, cancellationToken);
-                var createsReference = await capturedReferences.StageCreateOrAdoptAsync(reference, cancellationToken);
+                var source = await capturedReferences.StageCreateOrAdoptAsync(reference, cancellationToken, liveClock);
                 // Adoption must advance native material authority too: a stale collector must lose its
                 // template revision check even when this publication reuses an existing immutable row.
                 await capturedTemplates.StagePublicationFencesAsync(template, cancellationToken);
+                EnsureLive();
                 if (context.ChangeTracker.HasChanges())
                     await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
                         context, "publishing", template.TemplateId, () => context.SaveChangesAsync(cancellationToken));
+                EnsureLive();
                 await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
                     context, "publishing", template.TemplateId, () => transaction.CommitAsync(cancellationToken));
-                return createsTemplate || createsReference;
+                return (createsTemplate || source.Created, source.Reference);
+
+                void EnsureLive()
+                {
+                    if (liveClock is not null && (!reference.IsLive(liveClock.GetUtcNow()) || !source.Reference.IsLive(liveClock.GetUtcNow())))
+                        throw new InvalidOperationException("The template source reference expired before its commit.");
+                }
             }
-            catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch (RuntimeArtifactEntityFrameworkPersistenceException) { throw; }
+            catch (Exception exception) when (exception is IOException or OperationCanceledException || EfRelationalExceptionClassifier.IsProviderFailure(exception))
             {
                 if (Commits.ShouldRetry(context, exception))
                     throw;

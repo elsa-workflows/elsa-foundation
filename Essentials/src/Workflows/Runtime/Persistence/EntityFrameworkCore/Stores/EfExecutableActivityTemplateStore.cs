@@ -14,13 +14,19 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 public sealed partial class EfExecutableActivityTemplateStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    IRuntimeRecoveryContinuationCodec continuationCodec) : IExecutableActivityTemplateStore
+    IRuntimeRecoveryContinuationCodec continuationCodec,
+    TimeProvider? timeProvider) : IExecutableActivityTemplateStore
 {
+    public EfExecutableActivityTemplateStore(RuntimeDbContext context,
+        IPersistenceAccessContextAccessor accessContextAccessor, IRuntimeRecoveryContinuationCodec continuationCodec)
+        : this(context, accessContextAccessor, continuationCodec, TimeProvider.System) { }
+
     // Both retry only races SaveChanges reports; a provider failure raised any other way is normalized at once.
     private static readonly EfWriteRetry CreateRetry = new(EfWriteRetry.DefaultMaxAttempts, exception => EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey | EfWriteConflict.Transient));
     private static readonly EfWriteRetry DeleteRetry = new(EfWriteRetry.DefaultMaxAttempts, exception => EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Concurrency | EfWriteConflict.Transient));
     private const string ContinuationPurpose = "ef-runtime-template-page-v1";
     private readonly IRuntimeRecoveryContinuationCodec continuationCodec = continuationCodec;
+    private readonly TimeProvider timeProvider = timeProvider ?? TimeProvider.System;
 
     public async ValueTask SaveAsync(ExecutableActivityTemplate template, CancellationToken cancellationToken = default)
     {
@@ -57,7 +63,7 @@ public sealed partial class EfExecutableActivityTemplateStore(
     internal RuntimeDbContext Context => context;
     internal PersistenceAccessContext AccessContext => accessContextAccessor.Current;
     internal string PublicationScope => RequireScope();
-    internal EfExecutableActivityTemplateStore WithAccess(IPersistenceAccessContextAccessor accessor) => new(context, accessor, continuationCodec);
+    internal EfExecutableActivityTemplateStore WithAccess(IPersistenceAccessContextAccessor accessor) => new(context, accessor, continuationCodec, timeProvider);
 
     /// <summary>
     /// Stages the template and its hash claim in the caller's open transaction without saving. An identical
@@ -87,8 +93,12 @@ public sealed partial class EfExecutableActivityTemplateStore(
         if (current is not null)
         {
             var existing = Read(current, identity);
-            EnsureOwnedClaim(claim, identity);
-            EnsureMatchingIncarnation(current, claim!);
+            // Validate the existing physical pair before classifying a candidate with another hash as
+            // an immutable-content conflict. Its requested hash need not have a claim at all.
+            var existingIdentity = identity with { TemplateHash = existing.TemplateHash };
+            var existingClaim = existing.TemplateHash == identity.TemplateHash ? claim : await FindClaimRowAsync(existingIdentity, cancellationToken);
+            EnsureOwnedClaim(existingClaim, existingIdentity);
+            EnsureMatchingIncarnation(current, existingClaim!);
             EnsureSameIdentityAndContent(existing, template);
             return false;
         }
