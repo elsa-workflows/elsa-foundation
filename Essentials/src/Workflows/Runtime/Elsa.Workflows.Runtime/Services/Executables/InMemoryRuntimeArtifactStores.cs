@@ -6,7 +6,7 @@ internal sealed class InMemoryRuntimeArtifactStores
     public InMemoryRuntimeArtifactStores(TimeProvider clock)
     {
         Executables = new();
-        References = new(Executables);
+        References = new(Executables, clock);
         Templates = InMemoryExecutableActivityTemplateStore.CreateForMaintenance(Executables, References, clock);
     }
 

@@ -452,7 +452,7 @@ public sealed class EfWorkflowExecutableStore(
             cancellationToken);
     }
 
-    internal async ValueTask FenceRootWriteLeasesAsync(IReadOnlyList<WorkflowExecutableRootWriteLease> leases,
+    internal async ValueTask<IReadOnlyList<(WorkflowExecutableRootWriteLease Grant, DateTimeOffset ExpiresAt)>> FenceRootWriteLeasesAsync(IReadOnlyList<WorkflowExecutableRootWriteLease> leases,
         TimeProvider clock, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(leases); ArgumentNullException.ThrowIfNull(clock);
@@ -461,6 +461,7 @@ public sealed class EfWorkflowExecutableStore(
         if (leases.Count == 0 || leases.Select(lease => lease.ArtifactId).Distinct(StringComparer.Ordinal).Count() != leases.Count)
             throw new ArgumentException("An atomic executable fence requires distinct actual grants.", nameof(leases));
         var scope = RequireScope();
+        var deadlines = new List<(WorkflowExecutableRootWriteLease Grant, DateTimeOffset ExpiresAt)>();
         foreach (var lease in leases.OrderBy(lease => lease.ArtifactId, StringComparer.Ordinal))
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -489,8 +490,11 @@ public sealed class EfWorkflowExecutableStore(
             if (current is null || current.Token != lease.ConcurrencyToken || current.IncarnationId != row.IncarnationId ||
                 current.ExpiresAtUtcTicks <= clock.GetUtcNow().UtcTicks) throw Lost();
 
+            deadlines.Add((lease, new DateTimeOffset(current.ExpiresAtUtcTicks, TimeSpan.Zero)));
+
             Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableRootWriteLeaseLostException Lost() => new(lease.ArtifactId, lease.LeaseId);
         }
+        return deadlines.AsReadOnly();
     }
 
     internal async ValueTask<bool> ExecuteUnderDeletionGuardAsync(WorkflowExecutableDeletionGuard guard,

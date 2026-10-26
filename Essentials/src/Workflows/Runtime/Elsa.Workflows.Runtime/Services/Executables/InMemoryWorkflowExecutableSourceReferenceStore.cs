@@ -3,17 +3,20 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Services.Executables;
 
-public sealed class InMemoryWorkflowExecutableSourceReferenceStore : IWorkflowExecutableSourceReferenceStore
+public sealed partial class InMemoryWorkflowExecutableSourceReferenceStore : IWorkflowExecutableSourceReferenceStore
 {
     private readonly Dictionary<string, WorkflowExecutableSourceReference> _references = new(StringComparer.Ordinal);
     private readonly Lock _gate = new();
 
     private readonly InMemoryWorkflowExecutableStore? _executableStore;
+    private readonly TimeProvider _clock = TimeProvider.System;
     internal InMemoryWorkflowExecutableStore? FencedArtifactStore => _executableStore;
     public InMemoryWorkflowExecutableSourceReferenceStore() { }
-    public InMemoryWorkflowExecutableSourceReferenceStore(IWorkflowExecutableStore executableStore)
+    public InMemoryWorkflowExecutableSourceReferenceStore(IWorkflowExecutableStore executableStore) : this(executableStore, TimeProvider.System) { }
+    public InMemoryWorkflowExecutableSourceReferenceStore(IWorkflowExecutableStore executableStore, TimeProvider? clock)
     {
         _executableStore = executableStore as InMemoryWorkflowExecutableStore;
+        _clock = clock ?? TimeProvider.System;
     }
 
     public ValueTask<bool> TryDeleteDoomedAsync(WorkflowExecutableSourceReference expectedDoomedReference,

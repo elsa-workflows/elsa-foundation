@@ -118,6 +118,32 @@ public interface IWorkflowExecutableSourceReferenceReader
 public interface IWorkflowExecutableSourceReferenceWriter
 {
     ValueTask SaveAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default);
+
+    /// <summary>Whether fenced root-reference writes coordinate the exact selected executable store.</summary>
+    /// <remarks>Callers must qualify their selected store before invoking the fenced operation.</remarks>
+    bool CanWriteRootReferences(IWorkflowExecutableStore executables) => false;
+
+    /// <summary>Creates or adopts a live source reference while atomically fencing the complete root closure.</summary>
+    /// <remarks>The provider validates the root's full pin, exact complete dependency/grant set and current native
+    /// lease tokens/expiry. Grants are evidence to validate, not independent authority. Returns the persisted winner;
+    /// Source attribution is independent of the executable's producer metadata; the reference retains its ArtifactId.
+    /// Retry CreatedAt/PublishedAt timestamps may differ, but all other source identity, sidecars and expiry must match.
+    /// Adoption cannot restore retirement or renew expiry. Unsupported providers refuse without writes.</remarks>
+    /// <exception cref="NotSupportedException">The selected provider cannot fence root-reference publication.</exception>
+    /// <exception cref="ArgumentException">The reference/root/grant arguments are malformed or incomplete.</exception>
+    /// <exception cref="InvalidDataException">Persisted material or source projections are corrupt.</exception>
+    /// <exception cref="InvalidOperationException">The full pin/closure or live source conflicts, caller state is pending,
+    /// or a provider failure is contextualized with its original cause.</exception>
+    /// <exception cref="Exceptions.WorkflowExecutableRootWriteLeaseLostException">A current native grant cannot be proved.</exception>
+    /// <exception cref="OperationCanceledException">Requested cancellation propagates.</exception>
+    ValueTask<WorkflowExecutableSourceReference> SaveWithRootWriteLeasesAsync(WorkflowExecutableSourceReference reference,
+        WorkflowExecutableIdentity root, IReadOnlyList<WorkflowExecutableRootWriteLease> leases, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(reference); ArgumentNullException.ThrowIfNull(root); ArgumentNullException.ThrowIfNull(leases);
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromException<WorkflowExecutableSourceReference>(new NotSupportedException("Fenced source-reference publication is unavailable."));
+    }
+
     ValueTask<bool> RetireAsync(string sourceReferenceId, DateTimeOffset deletedAt, string? reason = null, CancellationToken cancellationToken = default);
     /// <summary>
     /// Atomically retires a live reference only when <paramref name="expectedLiveReference"/> is still the stored

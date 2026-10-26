@@ -10,13 +10,18 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
-public sealed class EfWorkflowExecutableSourceReferenceStore(
+public sealed partial class EfWorkflowExecutableSourceReferenceStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor access,
-    IRuntimeRecoveryContinuationCodec continuationCodec) : IWorkflowExecutableSourceReferenceStore
+    IRuntimeRecoveryContinuationCodec continuationCodec,
+    TimeProvider? timeProvider) : IWorkflowExecutableSourceReferenceStore
 {
+    public EfWorkflowExecutableSourceReferenceStore(RuntimeDbContext context, IPersistenceAccessContextAccessor access,
+        IRuntimeRecoveryContinuationCodec continuationCodec) : this(context, access, continuationCodec, TimeProvider.System) { }
+
     private const string ContinuationPurpose = "ef-runtime-source-reference-page-v1";
     private readonly IRuntimeRecoveryContinuationCodec continuationCodec = continuationCodec;
+    private readonly TimeProvider timeProvider = timeProvider ?? TimeProvider.System;
     public async ValueTask SaveAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default)
     {
         Validate(reference);
@@ -82,7 +87,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
     // Cohort acceptance must resolve publications in its own selected access boundary, even when a
     // caller supplies a native reader over this context with a different ambient accessor.
     internal EfWorkflowExecutableSourceReferenceStore WithAccess(IPersistenceAccessContextAccessor accessor) =>
-        new(context, accessor, continuationCodec);
+        new(context, accessor, continuationCodec, timeProvider);
 
     /// <summary>
     /// Stages a create-only source reference in the caller's open transaction without saving. A live reference
