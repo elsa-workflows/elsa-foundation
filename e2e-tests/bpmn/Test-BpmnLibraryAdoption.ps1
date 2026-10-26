@@ -6,14 +6,30 @@
     authenticated HTTP APIs and real catalog references; port fakes and library tests are insufficient.
     Writes a portable receipt when EvidencePath is supplied. A failed scenario remains a failure.
 #>
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName = "Host")]
 param(
-    [Parameter(Mandatory)][string] $BaseUrl,
+    [Parameter(Mandatory, ParameterSetName = "Host")][string] $BaseUrl,
+    [Parameter(Mandatory, ParameterSetName = "BroadcastPreflight")][string[]] $BroadcastPreflightDatabases,
+    [string] $Python = "python3",
     [string] $Username = "admin",
     [string] $Password = "Password123!",
     [string] $EvidencePath,
     [string] $SourceRevision = "unspecified"
 )
+if ($PSCmdlet.ParameterSetName -eq "BroadcastPreflight") {
+    $validatorProject = Join-Path $PSScriptRoot "../../tools/bpmn/DeliveryPreflight/DeliveryPreflight.csproj"
+    & dotnet build $validatorProject --nologo --verbosity quiet
+    if ($LASTEXITCODE -ne 0) { throw "The checked outbox preflight validator did not build." }
+    $preflightArgs = @("$PSScriptRoot/inspect_broadcast_delivery.py", "--source-revision", $SourceRevision)
+    foreach ($database in $BroadcastPreflightDatabases) { $preflightArgs += @("--database", $database) }
+    if ($EvidencePath) { $preflightArgs += @("--output", $EvidencePath) }
+    & $Python @preflightArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "Broadcast preflight did not qualify the supplied stores (exit $LASTEXITCODE). Responsibility remains owed; inspect its receipt."
+    }
+    return
+}
+
 . "$PSScriptRoot/../_ElsaCommon.ps1"
 $ctx = Connect-Elsa -BaseUrl $BaseUrl -Username $Username -Password $Password
 $receipts = [System.Collections.Generic.List[object]]::new()
