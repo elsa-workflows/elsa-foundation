@@ -166,6 +166,7 @@ public sealed class StudioHostingTests
     [InlineData("index")]
     [InlineData("root-prefix")]
     [InlineData("wildcard-prefix")]
+    [InlineData("ambiguous-root-prefix")]
     public void Invalid_registration_options_fail_early(string kind)
     {
         var builder = WebApplication.CreateSlimBuilder();
@@ -180,6 +181,7 @@ public sealed class StudioHostingTests
                 case "index": options.IndexFile = "../index.html"; break;
                 case "root-prefix": options.QueryTokenPathPrefixes = ["/"]; break;
                 case "wildcard-prefix": options.QueryTokenPathPrefixes = ["/hubs/*"]; break;
+                case "ambiguous-root-prefix": options.QueryTokenPathPrefixes = ["//"]; break;
             }
         }));
     }

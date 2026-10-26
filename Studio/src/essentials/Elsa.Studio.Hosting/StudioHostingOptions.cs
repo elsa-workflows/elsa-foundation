@@ -27,7 +27,7 @@ internal sealed record StudioHostingSettings(string ShellName, string? ShellsFil
         if (string.IsNullOrWhiteSpace(options.IndexFile) || Path.IsPathRooted(options.IndexFile) || options.IndexFile.Contains('\\') || options.IndexFile.Split('/').Any(part => part is "" or "." or "..") || options.IndexFile.Any(char.IsControl))
             throw new ArgumentException("Studio:Hosting:IndexFile must name a document within the static-file provider.");
         var prefixes = options.QueryTokenPathPrefixes ?? throw new ArgumentException("Studio:Hosting:QueryTokenPathPrefixes cannot be null.");
-        if (prefixes.Any(path => string.IsNullOrWhiteSpace(path) || !path.StartsWith('/') || path.Length < 2 || path.Contains('*') || path.Contains('?') || path.Contains('#') || path.Contains('\\') || path.Any(c => char.IsControl(c) || char.IsWhiteSpace(c)) || path.Split('/').Any(part => part is "." or "..")))
+        if (prefixes.Any(path => string.IsNullOrWhiteSpace(path) || !path.StartsWith('/') || path.StartsWith("//", StringComparison.Ordinal) || path.Length < 2 || path.Contains('*') || path.Contains('?') || path.Contains('#') || path.Contains('\\') || path.Any(c => char.IsControl(c) || char.IsWhiteSpace(c)) || path.Split('/').Any(part => part is "." or "..")))
             throw new ArgumentException("Studio:Hosting:QueryTokenPathPrefixes must contain explicit non-root paths without wildcards, query strings or traversal segments.");
         return new(options.ShellName, options.ShellsFile is null ? null : Path.GetFullPath(options.ShellsFile, environment.ContentRootPath), options.IndexFile, prefixes.ToArray(), configuration.GetValue("Studio:Auth:Enabled", false));
     }

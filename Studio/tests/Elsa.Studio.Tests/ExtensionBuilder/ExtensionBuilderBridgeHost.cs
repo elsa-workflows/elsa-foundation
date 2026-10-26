@@ -1,5 +1,6 @@
+using Elsa.Studio.Api.Authorization;
 using Elsa.Studio.ExtensionBuilder;
-using Elsa.Studio.Web;
+using Elsa.Studio.Hosting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -23,7 +24,7 @@ internal static class ExtensionBuilderBridgeHost
     {
         [ExtensionBuilderReadBearer] = [ExtensionBuilderPermissions.Read],
         [ExtensionBuilderManageBearer] = [ExtensionBuilderPermissions.Manage],
-        [ModuleReadBearer] = [StudioBridgeAuth.ModuleManagementReadPermission]
+        [ModuleReadBearer] = [StudioBridgeAuthorization.ModuleManagementReadPermission]
     };
 
     public static async Task<WebApplication> StartAsync(
@@ -44,8 +45,8 @@ internal static class ExtensionBuilderBridgeHost
         var app = builder.Build();
         if (pathBase is not null)
             app.UsePathBase(pathBase);
-        app.UseAuthentication();
-        app.UseAuthorization();
+        app.UseElsaStudio();
+        app.MapElsaStudio();
         app.MapStudioExtensionBuilderBridge();
 
         await app.StartAsync();
@@ -58,9 +59,6 @@ internal static class ExtensionBuilderBridgeHost
     /// </summary>
     public static IServiceCollection RouteBackendClientsThrough(this IServiceCollection services, RecordingBackend backend)
     {
-        foreach (var clientName in new[] { nameof(StudioExtensionBuilderRelayClient), nameof(StudioExtensionBuilderCapabilitiesClient), StudioBridgeAuthHandler.HttpClientName })
-            services.AddHttpClient(clientName).ConfigurePrimaryHttpMessageHandler(() => backend);
-
-        return services;
+        return services.RouteAllBackendClientsThrough(backend);
     }
 }

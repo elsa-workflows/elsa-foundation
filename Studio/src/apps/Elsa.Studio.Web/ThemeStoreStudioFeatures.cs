@@ -1,3 +1,4 @@
+using Elsa.Studio.Api.Authorization;
 using CShells.AspNetCore.Features;
 using CShells.Features;
 using Microsoft.AspNetCore.Routing;
@@ -26,7 +27,7 @@ public sealed class ThemeStoreCoreStudioFeature : IWebShellFeature
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
     {
-        endpoints.MapElsaThemeStoreCoreApi(StudioBridgeAuth.PolicyName);
+        endpoints.MapElsaThemeStoreCoreApi(StudioBridgeAuthorization.PolicyName);
     }
 }
 
@@ -44,7 +45,7 @@ public sealed class ThemePickerStudioFeature : IWebShellFeature
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
     {
-        endpoints.MapElsaThemePickerApi(StudioBridgeAuth.PolicyName);
+        endpoints.MapElsaThemePickerApi(StudioBridgeAuthorization.PolicyName);
     }
 }
 
@@ -62,6 +63,6 @@ public sealed class ThemeManagementStudioFeature : IWebShellFeature
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
     {
-        endpoints.MapElsaThemeManagementApi(StudioBridgeAuth.PolicyName);
+        endpoints.MapElsaThemeManagementApi(StudioBridgeAuthorization.PolicyName);
     }
 }
