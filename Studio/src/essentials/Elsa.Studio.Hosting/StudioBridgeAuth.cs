@@ -2,6 +2,7 @@ using System.Net;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using static Elsa.Studio.Api.Authorization.StudioBridgeAuthorization;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Elsa.Studio.Api.Authorization;
@@ -11,7 +12,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
-namespace Elsa.Studio.Web;
+namespace Elsa.Studio.Hosting;
 
 /// <summary>
 /// Browser-request authorization for the Studio management surface (ADR 0037). This is the single gate for every
@@ -48,35 +49,11 @@ namespace Elsa.Studio.Web;
 /// </summary>
 internal static class StudioBridgeAuth
 {
-    /// <summary>The authorization policy applied to bridge and Studio host-control endpoints. Stable seam a host can rebind.</summary>
-    public const string PolicyName = "StudioManagementBridge";
-
-    /// <summary>
-    /// Policy for host-control READ surfaces (bridge status/registry, Studio's own module/feature READ endpoints).
-    /// Requires <c>module-management:read</c>; a holder of <c>module-management:manage</c> satisfies it too (locally
-    /// expanded — Studio never relies on the backend to expand the implication).
-    /// </summary>
-    public const string ModuleManagementReadPolicyName = "StudioManagementBridge:ModuleManagement.Read";
-
-    /// <summary>
-    /// Policy for Studio's own module-management MUTATION endpoints (upload, delete, reconcile, prune, feed CRUD,
-    /// retention, feature apply). Requires <c>module-management:manage</c>. A mere authenticated session is not enough.
-    /// </summary>
-    public const string ModuleManagementManagePolicyName = "StudioManagementBridge:ModuleManagement.Manage";
-
-    // Host-control permission keys owned by the backend feature (mirrored here from
-    // Elsa.Modularity.Api.Authorization.ModuleManagementPermissionKeys). These string values are the stable
-    // identity-permission contract; Studio only needs the keys to check the user's permission claims.
-    public const string ModuleManagementReadPermission = "module-management:read";
-    public const string ModuleManagementManagePermission = "module-management:manage";
-
     /// <summary>
     /// The query-string parameter carrying the browser bearer on the console-stream hub handshake. See the class
     /// remarks for why a query credential is accepted at all and why it is scoped to the hub path only.
     /// </summary>
     public const string AccessTokenQueryParameterName = "access_token";
-
-    private const string AuthEnabledConfigurationKey = "Studio:Auth:Enabled";
 
     /// <summary>
     /// TTL, in seconds, of the in-memory bearer-introspection cache (<c>0</c> disables caching entirely). Every bridge
@@ -97,12 +74,12 @@ internal static class StudioBridgeAuth
     public static IServiceCollection AddStudioBridgeAuth(
         this IServiceCollection services,
         IConfiguration configuration,
-        params string[] queryTokenPathPrefixes)
+        StudioHostingSettings settings)
     {
         // When Studio auth is disabled/absent the shell boots anonymously; the gate must not break that path. When
         // enabled, an authenticated backend session is required. This mirrors how `auth.enabled` is derived for the
         // browser runtime config in Program.cs.
-        var authEnabled = configuration.GetValue(AuthEnabledConfigurationKey, defaultValue: false);
+        var authEnabled = settings.AuthEnabled;
         var backendBaseUrl = StudioBackendManagementOptions.ResolveServerBaseUrl(configuration);
 
         // Named client the handler uses to introspect the browser bearer. Short timeout so an unauthenticated request
@@ -119,6 +96,7 @@ internal static class StudioBridgeAuth
         var sessionCacheSeconds = configuration.GetValue(SessionCacheSecondsConfigurationKey, DefaultSessionCacheSeconds);
         var sessionCacheMaxEntries = configuration.GetValue(SessionCacheMaxEntriesConfigurationKey, DefaultSessionCacheMaxEntries);
         services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<StudioSessionTransport>();
         services.TryAddSingleton(serviceProvider => new StudioBridgeSessionCache(
             serviceProvider.GetRequiredService<TimeProvider>(),
             TimeSpan.FromSeconds(Math.Max(0, sessionCacheSeconds)),
@@ -131,8 +109,20 @@ internal static class StudioBridgeAuth
             {
                 schemeOptions.AuthEnabled = authEnabled;
                 schemeOptions.BackendBaseUrl = backendBaseUrl;
-                schemeOptions.QueryTokenPathPrefixes = queryTokenPathPrefixes;
+                schemeOptions.QueryTokenPathPrefixes = settings.QueryTokenPathPrefixes.ToArray();
             });
+
+        // Adding Studio's explicit scheme must not remove a host's single-scheme implicit default.
+        // Run after all ordinary scheme registrations so callers can configure application auth on either side of AddElsaStudio.
+        services.PostConfigure<AuthenticationOptions>(options =>
+        {
+            if (options.DefaultScheme is not null
+                || (AppContext.TryGetSwitch("Microsoft.AspNetCore.Authentication.SuppressAutoDefaultScheme", out var suppressed) && suppressed))
+                return;
+            var applicationSchemes = options.Schemes.Where(scheme => scheme.Name != SchemeName).Take(2).ToArray();
+            if (applicationSchemes.Length == 1)
+                options.DefaultScheme = applicationSchemes[0].Name;
+        });
 
         // The one decision point for every StudioBridgePermissionRequirement — the named policies below and the inline
         // policies Studio modules declare through RequireStudioBridgePermission. It captures authEnabled so that when
@@ -199,7 +189,7 @@ internal sealed class StudioBridgeAuthHandler(
     IOptionsMonitor<StudioBridgeAuthOptions> options,
     ILoggerFactory logger,
     UrlEncoder encoder,
-    IHttpClientFactory httpClientFactory,
+    StudioSessionTransport transport,
     StudioBridgeSessionCache sessionCache)
     : AuthenticationHandler<StudioBridgeAuthOptions>(options, logger, encoder)
 {
@@ -286,7 +276,7 @@ internal sealed class StudioBridgeAuthHandler(
 
     private async Task<BackendSession?> ReadBackendSessionAsync(string bearer, CancellationToken cancellationToken)
     {
-        var httpClient = httpClientFactory.CreateClient(HttpClientName);
+        var httpClient = transport.CreateClient();
         httpClient.BaseAddress ??= new Uri(Options.BackendBaseUrl!, UriKind.Absolute);
 
         using var request = new HttpRequestMessage(HttpMethod.Get, SessionPath);

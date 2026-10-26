@@ -1,3 +1,4 @@
+using Elsa.Studio.Api.Authorization;
 using System.Text.Json;
 using Elsa.Studio.Hosting;
 using System.Text.Json.Nodes;
@@ -29,25 +30,25 @@ internal static class ElsaModuleManagementApi
         var group = endpoints.MapGroup("/_elsa/module-management");
 
         group.MapGet("/registry", GetRegistryAsync)
-            .RequireAuthorization(StudioBridgeAuth.ModuleManagementReadPolicyName);
+            .RequireAuthorization(StudioBridgeAuthorization.ModuleManagementReadPolicyName);
         group.MapPost("/packages/upload", UploadPackageAsync)
-            .RequireAuthorization(StudioBridgeAuth.ModuleManagementManagePolicyName)
+            .RequireAuthorization(StudioBridgeAuthorization.ModuleManagementManagePolicyName)
             .Accepts<IFormFile>("multipart/form-data")
             .DisableAntiforgery();
         group.MapDelete("/packages/drop-folder/{fileName}", DeleteDropFolderPackageAsync)
-            .RequireAuthorization(StudioBridgeAuth.ModuleManagementManagePolicyName);
+            .RequireAuthorization(StudioBridgeAuthorization.ModuleManagementManagePolicyName);
         group.MapPost("/reconcile", TriggerReconcileAsync)
-            .RequireAuthorization(StudioBridgeAuth.ModuleManagementManagePolicyName);
+            .RequireAuthorization(StudioBridgeAuthorization.ModuleManagementManagePolicyName);
         group.MapPost("/prune", PrunePackagesAsync)
-            .RequireAuthorization(StudioBridgeAuth.ModuleManagementManagePolicyName);
+            .RequireAuthorization(StudioBridgeAuthorization.ModuleManagementManagePolicyName);
         group.MapPost("/feeds", AddFeedAsync)
-            .RequireAuthorization(StudioBridgeAuth.ModuleManagementManagePolicyName);
+            .RequireAuthorization(StudioBridgeAuthorization.ModuleManagementManagePolicyName);
         group.MapPut("/feeds/{name}", UpdateFeedAsync)
-            .RequireAuthorization(StudioBridgeAuth.ModuleManagementManagePolicyName);
+            .RequireAuthorization(StudioBridgeAuthorization.ModuleManagementManagePolicyName);
         group.MapDelete("/feeds/{name}", DeleteFeedAsync)
-            .RequireAuthorization(StudioBridgeAuth.ModuleManagementManagePolicyName);
+            .RequireAuthorization(StudioBridgeAuthorization.ModuleManagementManagePolicyName);
         group.MapPut("/retention-policy", UpdateRetentionPolicyAsync)
-            .RequireAuthorization(StudioBridgeAuth.ModuleManagementManagePolicyName);
+            .RequireAuthorization(StudioBridgeAuthorization.ModuleManagementManagePolicyName);
 
         return endpoints;
     }

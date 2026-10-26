@@ -1,3 +1,4 @@
+using Elsa.Studio.Api.Authorization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -21,9 +22,9 @@ internal static class ElsaFeatureManagementApi
         var group = endpoints.MapGroup("/modularity/features");
 
         group.MapGet("", GetFeaturesAsync)
-            .RequireAuthorization(StudioBridgeAuth.ModuleManagementReadPolicyName);
+            .RequireAuthorization(StudioBridgeAuthorization.ModuleManagementReadPolicyName);
         group.MapPost("/apply", ApplyFeaturesAsync)
-            .RequireAuthorization(StudioBridgeAuth.ModuleManagementManagePolicyName);
+            .RequireAuthorization(StudioBridgeAuthorization.ModuleManagementManagePolicyName);
         return endpoints;
     }
 

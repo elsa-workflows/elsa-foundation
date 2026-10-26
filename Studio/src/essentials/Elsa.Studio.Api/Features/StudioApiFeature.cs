@@ -24,6 +24,11 @@ public sealed class StudioApiFeature : IWebShellFeature
 
     public void ConfigureServices(IServiceCollection services)
     {
+        // CShells excludes root scheme/policy providers. Recreate standard shell-local infrastructure;
+        // the root's scheme/policy configuration still flows in, while handlers remain scoped.
+        services.AddAuthenticationCore();
+        services.AddAuthorization();
+
         services.AddElsaStudioApi(options =>
         {
             // Only propagate versions the shell feature explicitly overrode. StudioApiOptions defaults

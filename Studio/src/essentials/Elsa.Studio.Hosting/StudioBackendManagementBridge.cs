@@ -1,10 +1,11 @@
 using System.Text.Json;
+using Elsa.Studio.Api.Authorization;
 using Elsa.Studio.Api.Models;
 using Elsa.Studio.Api.Options;
 using Elsa.Studio.Api.Services;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-namespace Elsa.Studio.Web;
+namespace Elsa.Studio.Hosting;
 
 /// <summary>
 /// The Studio management bridge (ADR 0037): a Studio-owned server-side surface that reports the availability of the
@@ -24,9 +25,9 @@ internal static class StudioBackendManagementBridge
         var group = endpoints.MapGroup(StudioBackendManagementRoutes.RouteGroup);
 
         group.MapGet("/status", GetStatusAsync)
-            .RequireAuthorization(StudioBridgeAuth.ModuleManagementReadPolicyName);
+            .RequireAuthorization(StudioBridgeAuthorization.ModuleManagementReadPolicyName);
         group.MapGet("/registry", GetRegistryAsync)
-            .RequireAuthorization(StudioBridgeAuth.ModuleManagementReadPolicyName);
+            .RequireAuthorization(StudioBridgeAuthorization.ModuleManagementReadPolicyName);
 
         return endpoints;
     }
@@ -49,6 +50,25 @@ internal static class StudioBackendManagementBridge
     {
         var envelope = await client.GetRegistryAsync(cancellationToken);
         return Results.Ok(envelope);
+    }
+
+    /// <summary>
+    /// Registers the shared <see cref="StudioBackendManagementOptions"/> and the typed
+    /// <see cref="StudioBackendManagementClient"/> over <see cref="IHttpClientFactory"/>. When no backend base URL is
+    /// configured, no <c>BaseAddress</c> is set — the client still resolves and fails closed to <c>unconfigured</c>
+    /// without issuing any request. Studio modules that relay their own backend surface resolve the same options
+    /// instance for their clients.
+    /// </summary>
+    public static IServiceCollection AddStudioBackendManagementBridge(this IServiceCollection services, IConfiguration configuration)
+    {
+        var options = StudioBackendManagementOptions.FromConfiguration(configuration);
+        services.AddSingleton(options);
+        services.TryAddSingleton(TimeProvider.System);
+
+        services.AddHttpClient<StudioBackendManagementClient>(client =>
+            options.ConfigureBackendClient(client, StudioBackendManagementOptions.ReadRequestTimeout));
+
+        return services;
     }
 }
 
@@ -111,27 +131,5 @@ internal sealed class StudioBackendManagementClient(
     {
         var (status, registry) = await ProbeBackendAsync(ManagementRegistrySurface, cancellationToken);
         return StudioBackendManagementRegistryEnvelope.FromStatus(status, registry);
-    }
-}
-
-internal static class StudioBackendManagementBridgeServiceCollectionExtensions
-{
-    /// <summary>
-    /// Registers the shared <see cref="StudioBackendManagementOptions"/> and the typed
-    /// <see cref="StudioBackendManagementClient"/> over <see cref="IHttpClientFactory"/>. When no backend base URL is
-    /// configured, no <c>BaseAddress</c> is set — the client still resolves and fails closed to <c>unconfigured</c>
-    /// without issuing any request. Studio modules that relay their own backend surface resolve the same options
-    /// instance for their clients.
-    /// </summary>
-    public static IServiceCollection AddStudioBackendManagementBridge(this IServiceCollection services, IConfiguration configuration)
-    {
-        var options = StudioBackendManagementOptions.FromConfiguration(configuration);
-        services.AddSingleton(options);
-        services.TryAddSingleton(TimeProvider.System);
-
-        services.AddHttpClient<StudioBackendManagementClient>(client =>
-            options.ConfigureBackendClient(client, StudioBackendManagementOptions.ReadRequestTimeout));
-
-        return services;
     }
 }

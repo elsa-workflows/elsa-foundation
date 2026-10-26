@@ -1,7 +1,9 @@
+using Elsa.Studio.Api.Authorization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Elsa.Studio.Web;
+using Elsa.Studio.Hosting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
@@ -375,8 +377,8 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
         {
             ["Studio:Auth:Enabled"] = "false"
         });
-        builder.Services.AddSingleton(Hosting.HostingTestHost.CreateGate());
-        builder.Services.AddStudioBridgeAuth(builder.Configuration);
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?> { ["CShells:Shells:Default:Features:StudioApi"] = "true" });
+        builder.AddElsaStudio(options => options.ShellsFile = null);
         // The theme-management endpoints resolve ThemeConfigurationService per request; register it and its bound
         // ThemeConfiguration exactly as Program.cs does (no "Themes" section here, so it binds to defaults).
         builder.Configuration.GetSection("Themes").Bind(_themeConfig);
@@ -384,10 +386,10 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
         builder.Services.AddSingleton<ThemeConfigurationService>();
 
         _app = builder.Build();
-        _app.UseAuthentication();
-        _app.UseAuthorization();
-        _app.MapElsaThemeStoreCoreApi(StudioBridgeAuth.PolicyName);
-        _app.MapElsaThemeManagementApi(StudioBridgeAuth.PolicyName);
+        _app.UseElsaStudio();
+        _app.MapElsaStudio();
+        _app.MapElsaThemeStoreCoreApi(StudioBridgeAuthorization.PolicyName);
+        _app.MapElsaThemeManagementApi(StudioBridgeAuthorization.PolicyName);
 
         await _app.StartAsync();
         _client = _app.GetTestClient();
