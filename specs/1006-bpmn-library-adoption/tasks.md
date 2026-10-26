@@ -96,6 +96,8 @@ The [initial T046 preflight receipt](evidence/broadcast-preflight.md) records th
 inventory increment. The [Core contract receipt](evidence/broadcast-contracts.md) completes T046;
 the [storage receipt](evidence/broadcast-storage.md) completes finite provider task T047.
 The [durable source-context receipt](evidence/broadcast-source-context.md) completes T048.
+The [initial root-set lease receipt](evidence/broadcast-retention-leases.md) qualifies only the generic
+capability needed by T049; authority/provider/retention integration remains open.
 Publisher authorization, recipient execution and all host delivery/recovery gates remain open.
 
 Execution order: T046 → T047 → T048 → T049 → T050 → T051. No new task is marked parallel:
