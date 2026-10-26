@@ -242,8 +242,8 @@ Hosting boot/discovery/runtime/middleware and the scope/configuration cases; #33
 actual package-only/default/custom-frontend/custom-module/optional/auth/storage journeys. #3365 inventories the
 full dependency/asset closure and automates both qualification profiles. #3366 supplies final guidance and exit audit.
 
-Each implementation leaf needs its feature specification/plan/tasks before code, appropriate whole affected
-suites and a causal control. Final acceptance uses actual packed production libraries, not these planned signatures
+Feature implementation follows specification/plan/tasks before code; bug fixes follow the existing Quality Fix
+Routine. Run appropriate whole affected suites and a causal control. Final acceptance uses actual packed production libraries, not these planned signatures
 or temporary wrappers. Check missing module/secret/dependency/asset failures, selected non-default shell/path,
 atomic/revision/reload conflicts, cold unauthorized requests, request/reload overlap, optional capability absence,
 all theme modes and the direct-reference custom-frontend opt-out. Include current CI/main and artifact provenance.
