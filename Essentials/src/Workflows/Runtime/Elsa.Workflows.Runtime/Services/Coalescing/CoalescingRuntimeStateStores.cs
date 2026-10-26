@@ -474,6 +474,11 @@ public sealed class CoalescingActivityExecutionInspectionStore(
 {
     private readonly IActivityExecutionInspectionStore _inner = inner.Value;
 
+    public bool SupportsExecutionBrowsing => _inner.SupportsExecutionBrowsing;
+
+    public ValueTask<ActivityExecutionBrowsePage> BrowseAsync(ActivityExecutionBrowseQuery query, CancellationToken cancellationToken = default) =>
+        _inner.BrowseAsync(query, cancellationToken);
+
     public async ValueTask<ActivityExecutionInspectionProjection?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default)
     {
         if (sessionAccessor.Current is { } session && session.AppliesTo(workflowExecutionId) &&

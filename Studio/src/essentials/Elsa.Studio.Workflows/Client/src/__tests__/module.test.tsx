@@ -3259,6 +3259,7 @@ describe("workflows module", () => {
     expect(container.textContent).toContain("WriteLine");
     await click(container.querySelector(".wf-timeline-entry"));
     expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true");
+    await waitForText(container, "Activity Execution ID");
     expect(container.textContent).toContain("Activity Execution ID");
     expect(container.textContent).toContain("activity-execution-1");
     expect(container.textContent).toContain("BookmarksUnavailable");

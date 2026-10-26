@@ -575,7 +575,12 @@ function BoundaryStructurePane({
   return <HistoricalBoundaryLayout layout={frame.layout} />;
 }
 
-function HistoricalBoundaryLayout({ layout }: { layout: ActivityExecutionLayout }) {
+export function HistoricalBoundaryLayout({ layout, onSelectNode, selectedExecutableNodeId, statusByNode }: {
+  layout: ActivityExecutionLayout;
+  onSelectNode?(executableNodeId: string): void;
+  selectedExecutableNodeId?: string;
+  statusByNode?: ReadonlyMap<string, string>;
+}) {
   const positioned = layout.nodes.filter(node => node.hasPinnedGeometry);
   if (positioned.length === 0) {
     return (
@@ -585,7 +590,7 @@ function HistoricalBoundaryLayout({ layout }: { layout: ActivityExecutionLayout 
         </header>
         {layout.nodes.map(node => (
           <div className="wf-boundary-layout-list-row" key={node.executableNodeId}>
-            <span>{historicalNodeLabel(node)}</span>
+            {onSelectNode ? <button type="button" aria-pressed={selectedExecutableNodeId === node.executableNodeId} onClick={() => onSelectNode(node.executableNodeId)}>{historicalNodeLabel(node)}{statusByNode?.get(node.executableNodeId) ? ` · ${statusByNode.get(node.executableNodeId)}` : ""}</button> : <span>{historicalNodeLabel(node)}</span>}
           </div>
         ))}
       </div>
@@ -641,6 +646,14 @@ function HistoricalBoundaryLayout({ layout }: { layout: ActivityExecutionLayout 
                 key={node.executableNodeId}
                 className="wf-boundary-layout-node"
                 transform={`translate(${node.x} ${node.y})`}
+                role={onSelectNode ? "button" : undefined}
+                tabIndex={onSelectNode ? 0 : undefined}
+                aria-label={onSelectNode ? `${historicalNodeLabel(node)} · ${statusByNode?.get(node.executableNodeId) ?? "No recorded execution"}` : undefined}
+                aria-pressed={onSelectNode ? selectedExecutableNodeId === node.executableNodeId : undefined}
+                onClick={() => onSelectNode?.(node.executableNodeId)}
+                onKeyDown={event => {
+                  if (onSelectNode && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelectNode(node.executableNodeId); }
+                }}
               >
                 <title>{historicalNodeLabel(node)}</title>
                 <rect className="wf-boundary-layout-node-shape" width={nodeWidth} height={nodeHeight} rx="8" />
