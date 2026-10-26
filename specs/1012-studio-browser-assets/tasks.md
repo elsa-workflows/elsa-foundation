@@ -35,8 +35,8 @@ Independent test: actual packaged server behavior and module resources remain wi
 
 ## Phase5 — delivery qualification
 
-- [ ] T014 Run affected locked restore if references change, both architecture graphs/whole architecture suite/maps, complete Studio package inventory/full pack, actual Web smoke and required frontend/runtime checks; record precise scope and limitations in validation.md.
-- [ ] T015 Open and attach one draft PR for #3361 after push access is restored, map acceptance criteria to evidence, run independent correctness/standards/acceptance review to convergence, set the spec terminal status in the implementation PR, and obtain exact-head CI/formal review.
+- [x] T014 Run affected locked restore if references change, both architecture graphs/whole architecture suite/maps, complete Studio package inventory/full pack, actual Web smoke and required frontend/runtime checks; record precise scope and limitations in validation.md.
+- [ ] T015 Open and attach one draft PR for #3361 map acceptance criteria to evidence, run independent correctness/standards/acceptance review to convergence, set the spec terminal status in the implementation PR, and obtain exact-head CI/formal review.
 - [ ] T016 Verify actual reviewed merge/resulting main and candidate payload before closing #3361 or its parent; reconcile native Project63/Program3340 state and keep #3359/#3360 blockers separate.
 
 ## Dependencies and execution strategy

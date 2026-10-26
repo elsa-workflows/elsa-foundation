@@ -1,8 +1,8 @@
 # Validation history and local qualification
 
-This is not delivery evidence. Spec1012/#3361 remains incomplete; no PR/required CI/main acceptance is claimed. The Code Review/package-consumer steps have not run.
+Local implementation and qualification are complete through source commit31834b62f5a82571409a97b0cd82b671cd3c34a7. Remote PR gates and resulting-main acceptance remain outstanding. The earlier stopped checkpoints below are retained as history, not current status.
 
-## Implemented source ownership
+## Earlier source and stop checkpoints
 
 Client, StudioSdk and StudioUi moved from Web to Hosting (196 source files with rename tracking). Private npm identities and frontend contracts remain unchanged. Active workspace/lock, module-test/browser/example, stylelint/layout, Docker, npm-package workflow and asset-verifier paths now use Hosting. Historical consolidation maps, incident build attestations, nested historical workflows and completed specs are preserved. Web's134 obsolete generated shell files were removed; new generated output is Hosting-owned and ignored. Default .NET content excludes all three frontend source/tool trees.
 
@@ -38,7 +38,7 @@ The retained failing trace proves the revision mismatch is a batching assumption
 
 The scenario now explicitly awaits each intended save: created1, added input2, allowed null3, applied default4, Write line5, Delay6, reload6, conflict reports server7, recovery starts1. Exact revision assertions and final saved contract/graph/conflict/recovery assertions remain intact. No autosave/product implementation changed. Resumed typecheck, lint(0errors/56warnings) and build pass in order. The complete Chromium project passed406 cases with6skipped (412 total,5.4m; `/tmp/studio3361-resume-browser.log`).
 
-The first actual production probe invocation packed/restored/published all profiles and verified the standard resource inventory and real Home heading. Its browser driver then failed because it requested a Home button; the actual shell renders a Home navigation link. The driver was corrected to the existing accessible link contract. This unsuccessful probe is retained at `/private/var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/studio-hosting-assets-vbe4g8sa`; it is not counted as consumer acceptance. A complete corrected run is in progress.
+The first actual production probe invocation packed/restored/published all profiles and verified the standard resource inventory and real Home heading. Its browser driver then failed because it requested a Home button; the actual shell renders a Home navigation link. The driver was corrected to the existing accessible link contract. This unsuccessful probe is retained at `/private/var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/studio-hosting-assets-vbe4g8sa`; it is not counted as consumer acceptance. Corrected runs are recorded below.
 
 ## Production consumer and first review round
 
@@ -50,4 +50,20 @@ Independent round1: standards found none; acceptance found the required app JS/C
 
 The first architecture run passed589/590; its one failure located a stale SDK contribution link in the Runtime EXTENSION_POINTS.md. Correcting that active link produced590/590, and the maps check passed. The20-package whole Studio Release build/pack/inventory passed. A separately published actual reference Web also served all134 Hosting resources,14 selected modules, the real root/Home browser application and the runtime allowlist without a private management-key sentinel (`studio3361-web-kq16j7g4`). The initial Web smoke command used Consumer.dll by mistake; the corrected command used Elsa.Studio.Web.dll. This was a harness invocation failure, not a passed check or product startup defect.
 
-Whole affected .NET and repository gates are running again after the round1 project-file fixes. No exact-head CI/review/merge or main acceptance is claimed yet.
+## Final local qualification
+
+Independent round2 reviewed the full base2fd983021891056b092e69914073cfb4c38862af → head31834b62f5a82571409a97b0cd82b671cd3c34a7 diff. Correctness, standards and acceptance each reported no actionable findings. No implementation was delegated.
+
+After the project-file fixes:
+
+- Whole Studio Release build passed; whole Studio xUnit project passed511/511,0skipped,80s (`studio3361-review-fixes.trx`). Discovery504 =503 direct cases plus one eight-row runtime theory.
+- Both Release/Debug architecture graphs restored in locked mode. Whole architecture suite passed590/590,0skipped,32s. Discovery581 expands two runtime theories (six collectible-artifact rows and five capability-aggregation rows) by9 cases; no discovered case was omitted.
+- Generated-maps check passed without committed filter changes.
+- Full Studio Release pack/inventory passed with exactly20 expected packages at4.0.0-assets3361-candidate, correct license/icon metadata. No package was published remotely.
+- Asset-verifier self-test and actual26-entry check passed. Frontend typecheck/lint/build,3642 workspace cases and406 Chromium cases/6skipped remain the completed affected frontend evidence; these later fixes change producer checks, Web migration and documentation, not browser application code.
+- Actual production HostingAssets.Probe passed again from committed source31834b62f5a82571409a97b0cd82b671cd3c34a7: `studio-hosting-assets-nii19v_b`. Tool source and producer revision match; Python/browser driver hashes are recorded. Standard/fallback each140 resources, opt-out6, actual Chromium root/Home deep link and shared imports, package-only graph/isolated cache, hidden owned inputs, zero consumer frontend calls, all HTTP contracts and collision control passed.
+- Actual published reference Web passed after the fixes: `studio3361-web-y1x5r44h`,134 Hosting resources,14 modules, real Chromium Home/root/deep link, one Hosting-owned payload, no private management-key sentinel in runtime/discovery. All owned processes stopped. Tests never renamed the shared checkout or altered its runtime configuration.
+
+The source snapshot controls and browser reports live beneath `/private/var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/` at the named artifact directories. Reproduce normal/negative/normal production-consumer qualification with the committed probe's README. Producer missing-output and obsolete-Web controls used owned snapshots and actual project files; no wrapper library substituted for production.
+
+Exact-head GitHub CI, final PR review and merge/main/candidate acceptance remain delivery gates. Full backend/auth/custom-module/optional-addon combinations remain their separately scoped Program3340 consumer leaves; no release, deployment or publisher activation is included.

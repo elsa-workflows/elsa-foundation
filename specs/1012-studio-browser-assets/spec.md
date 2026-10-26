@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/codex/3361-studio-browser-assets`
 **Created**: 2026-10-26
-**Status**: Draft
+**Status**: Implemented
 **Input**: Program #3340 task #3361: deliver the complete standard Studio frontend through the selected reusable package, so custom host authors reference packages instead of copying source or building frontend assets.
 
 ## User Scenarios & Testing
