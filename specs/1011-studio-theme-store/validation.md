@@ -27,3 +27,31 @@ Web now references the optional package and calls AddElsaStudioThemes. Its copie
 Existing theme tests now use public composition plus test-owned JSON records, with host recreation for installed option changes. The previous directory-copy expectation is replaced by preservation of the original managed definition. Invalid modes fail through normal options startup validation. No production friend was added.
 
 Whole Studio project **539 passed, 0 failed/skipped**, `studio3360-web-adoption-fixed.trx` (1m07s). The first adoption run passed537 and failed two discovery fixtures that still constructed only the old host roster. They now compose the public theme addon exactly as Program does; the whole rerun passes.
+
+## Asset, concurrency, browser and package qualification
+
+Current complete Studio execution: **556 passed, 0 failed, 0 skipped**, `studio3360-typed-source-mode.trx` (1m16s). `--list-tests` lists549 entries:548 execute directly; `StudioModuleManifestProviderTests.GetModules_ProjectsModuleManifest` expands from one discovery entry to eight runtime data rows. Comparing result names accounts for the seven-case difference; no discovered case was omitted. The public options now use the canonical `StudioThemeSourceMode` enum, while legacy named configuration strings, trimming/casing and invalid blank/numeric/unknown rejection remain covered.
+
+Material tests cover PNG/WebP/JPEG round trips, alternate ContentRoot-relative paths, nonempty/2MiB bounds, invalid IDs/unrelated files, cancelled partial staging cleanup and an actual paused response overlapping deletion. Concurrent distinct theme/visibility writes preserve all committed edits and valid JSON. The private JSON reader permits owned atomic pathname replacement while retaining its opened document. Uploaded files are staged privately and published only after complete copy and cancellation checks.
+
+Causal controls ran against the whole Studio project and restored exact source bytes:
+
+| Removed behavior | Expected negative result | Restored result |
+| --- | --- | --- |
+| Managed-only visibility persistence | 3 no-copy failures /536 pass | 539/539 |
+| Strict material ID/inventory filter | 6 failures /549 pass | 555/555 after all three asset controls |
+| Theme endpoint authorization requirements | 1 authorization failure /554 pass | 555/555 |
+| Whole save/visibility mutation leases | 1 lost-update failure /554 pass | 555/555 |
+| Startup materialization of copied settings | 1 pre-first-request configuration-edit failure /555 pass | Final complete run556/556 |
+
+The first options negative control exposed a non-idempotent fixture callback, rather than proving the intended guard. The callback now seeds its source file only when absent, and a separate configuration-edit case proves startup copying causally. The immediate restored full run then stalled in the existing process-global ConsoleStream stress test: method-only stack evidence showed ConsoleStreamTee/SyncTextWriter/ConsoleLoggerProcessor contention. Its owned testhost was terminated; the aborted partial553-case result is not a pass. Clearing the remaining unused default console provider in a composition fixture and running the final normal suite produced the complete556/556 result above. No ConsoleStream production implementation changed.
+
+Frontend application suite: **579/579** across51 files. Restoring the old Appearance page causes exactly the empty-inventory case to fail (578 pass); byte restoration returns579/579. The Theme Builder deletion journey also passes against the real page/provider, retaining a real management-inventory selection when the selectable default is empty. Browser Chromium: **5/5**, covering all three source policies, empty Appearance and delete/reselection. These browser journeys use actual components and SDK clients with mocked HTTP transport; they do not substitute for the isolated consumer journeys on #3364. `pnpm typecheck`, `pnpm lint` (0 errors,56 existing warnings) and `pnpm build` passed in order. Initial browser failure was an ambiguous Colour mode locator; scoping it to the Appearance region fixed the fixture.
+
+`dotnet restore Elsa.Server.slnx --locked-mode` passed. Both CI graph configurations restored with `tools/architecture/restore-ci-project-graph.sh`; whole Architecture project **590/590**. Generated-maps `-- check` passed without solution-filter drift. Existing root restore/compiler/analyzer warnings remain visible in logs. Studio historically has no committed package lock files; none are invented by this extraction.
+
+Actual candidate packages Core/Api/Hosting/Themes at local version `4.0.0-theme3360-probe` were packed. An external Web SDK consumer has only one PackageReference, `Elsa.Studio.Hosting.Themes`, and uses public Add/Use/Map APIs with nondefault Authoring shell and source/store/material paths. With an isolated NuGet cache and explicit candidate source mapping, all four libraries restore as packages; Themes' nuspec and the complete restored graph contain no Web/Nuplane dependency. Published DLL hashes match the archives. After hiding producer feed, consumer sources and restore cache, the published host starts, resolves the theme assembly from its own output, serves independently selected management/core capabilities, preserves empty DirectoryOnly projection and writes managed visibility to the configured file. The first harness attempt compared macOS `/var` and `/private/var` aliases literally; resolving both paths corrected that assertion. The corrected complete probe passed. No browser payload is claimed from Hosting yet; #3361 owns it and #3364 owns final consumer combinations.
+
+Actual reference Web ran from an owned temporary working directory and ContentRoot with isolated Nuplane paths, empty package feed and unreachable backend. Discovery returned14 modules, registry/runtime responses succeeded without the management-key sentinel, all three selected theme capabilities returned200, and a management write used the configured theme store while preserving DirectoryOnly projection. It ran the real Program and addon, without a test-only host wrapper. No publisher, release or deployment was activated.
+
+Remaining: draft PR review, exact-head CI/formal review, actual reviewed merge/main audit and native board completion. #3359 remains stopped on its saved branch.

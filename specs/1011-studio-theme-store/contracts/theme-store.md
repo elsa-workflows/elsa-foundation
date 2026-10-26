@@ -2,7 +2,8 @@
 
 Namespace/package Elsa.Studio.Hosting.Themes:
 
-- StudioThemeStoreOptions: StoreFile=studio-theme-store.json, AssetsDirectory=theme-assets, ThemesDirectory=null, ThemesMode=AddToBuiltIns, DefaultThemeId=null.
+- StudioThemeStoreOptions: StoreFile=studio-theme-store.json, AssetsDirectory=theme-assets, ThemesDirectory=null, ThemesMode=StudioThemeSourceMode.AddToBuiltIns, DefaultThemeId=null.
+- StudioThemeSourceMode: BuiltInsOnly, DirectoryOnly, AddToBuiltIns. Legacy configuration and response strings retain these names; numeric/blank/unknown configuration values are invalid.
 - ThemeHostingExtensions.AddElsaStudioThemes(this StudioBuilder, Action<StudioThemeStoreOptions>? configure=null): StudioBuilder; bind Themes before callback, before Build, once per application.
 - Existing ThemeStoreCoreStudioFeature, ThemePickerStudioFeature and ThemeManagementStudioFeature keep IDs ThemeStoreCore/ThemePicker/ThemeManagement. Features are independently selected, with picker/management depending on core.
 

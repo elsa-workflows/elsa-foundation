@@ -42,7 +42,7 @@ export function AppearancePage({
     navModePreference,
     setNavModePreference
   } = useTheme();
-  const defaultThemeId = store.defaultThemeId ?? availableThemes[0]?.id;
+  const defaultThemeId = store.defaultThemeId || availableThemes[0]?.id;
   const modeOptions = appearanceModePreferences.filter(option => option === "system" || supportedModes.includes(option));
 
   return (
@@ -71,9 +71,9 @@ export function AppearancePage({
 
       <AppearanceCard
         title="Theme"
-        description="Classic is the default. Custom themes from the Theme Builder appear here when they are enabled."
+        description="Choose a theme for this browser from the options available in Studio."
       >
-        <RadioCardGroup
+        {availableThemes.length === 0 ? <p>No themes are available for selection.</p> : <RadioCardGroup
           ariaLabel="Theme"
           value={currentTheme.id}
           options={availableThemes.map(theme => ({
@@ -83,7 +83,7 @@ export function AppearancePage({
             swatches: getSupportedThemeModes(theme).map(mode => getThemeModeDefinition(theme, mode)?.primary).filter((color): color is string => Boolean(color))
           }))}
           onChange={setTheme}
-        />
+        />}
       </AppearanceCard>
 
       <AppearanceCard

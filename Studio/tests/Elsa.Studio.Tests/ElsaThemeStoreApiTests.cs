@@ -21,6 +21,7 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
     private WebApplication? _app;
     private bool _started;
     private readonly StudioThemeStoreOptions _themeConfig = new();
+    private string? _rawMode;
     private static readonly HashSet<string> BuiltInIds = new(StringComparer.OrdinalIgnoreCase) { "classic", "meridian", "drift", "schematic", "atelier", "elsa-cloud", "signal", "dusk" };
     private HttpClient _client = null!;
 
@@ -29,7 +30,7 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
     [InlineData("DirectoryOnly", "classic")]
     public async Task SourceModeRejectsDefaultFromExcludedSource(string mode, string themeId)
     {
-        _themeConfig.ThemesMode = mode;
+        _themeConfig.ThemesMode = Enum.Parse<StudioThemeSourceMode>(mode);
         await RestartHostAsync();
         var theme = CustomTheme();
         (await _client.PutAsJsonAsync($"/_elsa/theme-store/themes/{theme.Id}", theme)).EnsureSuccessStatusCode();
@@ -42,7 +43,7 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
     [Fact]
     public async Task BuiltInsOnlyDoesNotCountExcludedCustomThemesWhenDisablingLastSelectableTheme()
     {
-        _themeConfig.ThemesMode = "BuiltInsOnly";
+        _themeConfig.ThemesMode = StudioThemeSourceMode.BuiltInsOnly;
         await RestartHostAsync();
         var managed = CustomTheme();
         (await _client.PutAsJsonAsync($"/_elsa/theme-store/themes/{managed.Id}", managed)).EnsureSuccessStatusCode();
@@ -58,7 +59,7 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
     [Fact]
     public async Task DirectoryOnlyCanManageExcludedBuiltInVisibilityEvenWhenNoDirectoryThemeIsSelectable()
     {
-        _themeConfig.ThemesMode = "DirectoryOnly";
+        _themeConfig.ThemesMode = StudioThemeSourceMode.DirectoryOnly;
         await RestartHostAsync();
 
         foreach (var id in BuiltInIds)
@@ -80,7 +81,7 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
         var directoryJson = JsonSerializer.Serialize(new { themes = new[] { directory, managed with { Name = "Directory Wins" }, managed with { Id = "classic" } } }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         await File.WriteAllTextAsync(themesFile, directoryJson);
         _themeConfig.ThemesDirectory = themesFile;
-        _themeConfig.ThemesMode = mode;
+        _themeConfig.ThemesMode = Enum.Parse<StudioThemeSourceMode>(mode);
         _themeConfig.DefaultThemeId = directory.Id;
         await RestartHostAsync();
         var persistedBefore = await File.ReadAllTextAsync(Path.Combine(_contentRoot, "studio-theme-store.json"));
@@ -113,7 +114,7 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
         var path = Path.Combine(_contentRoot, "studio-theme-store.json");
         var store = await GetStoreAsync();
         await File.WriteAllTextAsync(path, JsonSerializer.Serialize(store with { ThemesMode = "AddToBuiltIns", DirectoryThemeIds = [managed.Id] }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
-        _themeConfig.ThemesMode = "DirectoryOnly";
+        _themeConfig.ThemesMode = StudioThemeSourceMode.DirectoryOnly;
         await RestartHostAsync();
 
         var response = await _client.PutAsJsonAsync("/_elsa/theme-store/default", new { ThemeId = managed.Id });
@@ -128,7 +129,7 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
     [InlineData("0")]
     public async Task InvalidSourceModeDoesNotBecomeAFileLoadingFallback(string mode)
     {
-        _themeConfig.ThemesMode = mode;
+        _rawMode = mode;
         var exception = await Assert.ThrowsAsync<OptionsValidationException>(RestartHostAsync);
 
         Assert.Contains("Themes:ThemesMode", exception.Message);
@@ -138,7 +139,7 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
     public async Task SourceModeAcceptsCaseInsensitiveConfigurationAndDefaultsToAddToBuiltIns()
     {
         Assert.Equal("AddToBuiltIns", (await GetStoreAsync()).ThemesMode);
-        _themeConfig.ThemesMode = " directoryonly ";
+        _rawMode = " directoryonly ";
         await RestartHostAsync();
         Assert.Equal("DirectoryOnly", (await GetStoreAsync()).ThemesMode);
     }
@@ -399,12 +400,13 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
             ["CShells:Shells:Default:Features:StudioApi"] = "true",
             ["CShells:Shells:Default:Features:ThemeManagement"] = "true"
         });
+        if (_rawMode is not null) builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?> { ["Themes:ThemesMode"] = _rawMode });
         builder.AddElsaStudio(options => options.ShellsFile = null).AddElsaStudioThemes(options =>
         {
             options.StoreFile = _themeConfig.StoreFile;
             options.AssetsDirectory = _themeConfig.AssetsDirectory;
             options.ThemesDirectory = _themeConfig.ThemesDirectory;
-            options.ThemesMode = _themeConfig.ThemesMode;
+            if (_rawMode is null) options.ThemesMode = _themeConfig.ThemesMode;
             options.DefaultThemeId = _themeConfig.DefaultThemeId;
         });
         _app = builder.Build();

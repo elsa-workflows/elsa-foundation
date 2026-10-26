@@ -16,7 +16,7 @@ public static class ThemeHostingExtensions
             throw new InvalidOperationException("AddElsaStudioThemes may only be called once per application.");
         var contentRoot = studio.Environment.ContentRootPath;
         studio.Services.AddOptions<StudioThemeStoreOptions>()
-            .Bind(studio.Configuration.GetSection("Themes"))
+            .Configure(options => ThemeStoreSettings.BindConfiguration(options, studio.Configuration.GetSection("Themes")))
             .Configure(options => configure?.Invoke(options))
             .ValidateOnStart();
         studio.Services.AddSingleton<IValidateOptions<StudioThemeStoreOptions>>(new ThemeOptionsValidator(contentRoot));

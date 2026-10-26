@@ -23,6 +23,7 @@ internal static class AtomicConfigWriter
         try
         {
             await File.WriteAllTextAsync(tempPath, contents, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             File.Move(tempPath, path, overwrite: true);
         }
         catch

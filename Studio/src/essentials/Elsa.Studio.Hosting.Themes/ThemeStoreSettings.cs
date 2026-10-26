@@ -7,15 +7,26 @@ internal sealed record ThemeStoreSettings(string StoreFile, string AssetsDirecto
     public static ThemeStoreSettings Create(StudioThemeStoreOptions options, string contentRoot) => new(
         Path.GetFullPath(options.StoreFile, contentRoot), Path.GetFullPath(options.AssetsDirectory, contentRoot),
         string.IsNullOrWhiteSpace(options.ThemesDirectory) ? null : Path.GetFullPath(options.ThemesDirectory, contentRoot),
-        NormalizeMode(options.ThemesMode) ?? throw new OptionsValidationException(Options.DefaultName, typeof(StudioThemeStoreOptions), ["Themes:ThemesMode must be BuiltInsOnly, DirectoryOnly or AddToBuiltIns."]),
+        Enum.IsDefined(options.ThemesMode) ? options.ThemesMode.ToString() : throw new OptionsValidationException(Options.DefaultName, typeof(StudioThemeStoreOptions), ["Themes:ThemesMode must be BuiltInsOnly, DirectoryOnly or AddToBuiltIns."]),
         options.DefaultThemeId);
 
-    public static string? NormalizeMode(string? mode) => mode?.Trim().ToUpperInvariant() switch
+    public static void BindConfiguration(StudioThemeStoreOptions options, IConfigurationSection section)
     {
-        "BUILTINSONLY" => "BuiltInsOnly",
-        "DIRECTORYONLY" => "DirectoryOnly",
-        "ADDTOBUILTINS" => "AddToBuiltIns",
-        _ => null
+        var keys = section.GetChildren().Select(child => child.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (keys.Contains(nameof(options.StoreFile))) options.StoreFile = section[nameof(options.StoreFile)]!;
+        if (keys.Contains(nameof(options.AssetsDirectory))) options.AssetsDirectory = section[nameof(options.AssetsDirectory)]!;
+        if (keys.Contains(nameof(options.ThemesDirectory))) options.ThemesDirectory = section[nameof(options.ThemesDirectory)];
+        if (keys.Contains(nameof(options.DefaultThemeId))) options.DefaultThemeId = section[nameof(options.DefaultThemeId)];
+        // Configuration keeps its legacy named strings. Enum binding would otherwise accept numeric "0".
+        if (keys.Contains(nameof(options.ThemesMode))) options.ThemesMode = ParseMode(section[nameof(options.ThemesMode)]);
+    }
+
+    private static StudioThemeSourceMode ParseMode(string? mode) => mode?.Trim().ToUpperInvariant() switch
+    {
+        "BUILTINSONLY" => StudioThemeSourceMode.BuiltInsOnly,
+        "DIRECTORYONLY" => StudioThemeSourceMode.DirectoryOnly,
+        "ADDTOBUILTINS" => StudioThemeSourceMode.AddToBuiltIns,
+        _ => (StudioThemeSourceMode)(-1)
     };
 }
 
@@ -24,7 +35,7 @@ internal sealed class ThemeOptionsValidator(string contentRoot) : IValidateOptio
     public ValidateOptionsResult Validate(string? name, StudioThemeStoreOptions options)
     {
         var errors = new List<string>();
-        if (ThemeStoreSettings.NormalizeMode(options.ThemesMode) is null)
+        if (!Enum.IsDefined(options.ThemesMode))
             errors.Add("Themes:ThemesMode must be BuiltInsOnly, DirectoryOnly or AddToBuiltIns.");
         if (string.IsNullOrWhiteSpace(options.StoreFile)) errors.Add("Themes:StoreFile must be a nonblank file path.");
         if (string.IsNullOrWhiteSpace(options.AssetsDirectory)) errors.Add("Themes:AssetsDirectory must be a nonblank directory path.");

@@ -120,9 +120,10 @@ public sealed class ThemePersistenceTests
     {
         options.StoreFile = "state/themes.json";
         options.ThemesDirectory = "sources/themes.json";
-        options.ThemesMode = mode;
+        options.ThemesMode = Enum.Parse<StudioThemeSourceMode>(mode);
         Directory.CreateDirectory(Path.Combine(root, "sources"));
-        File.WriteAllText(Path.Combine(root, "sources", "themes.json"), """{"themes":[]}""");
+        var source = Path.Combine(root, "sources", "themes.json");
+        if (!File.Exists(source)) File.WriteAllText(source, """{"themes":[]}""");
     }
     private static string StoreFile(ThemeHost host) => Path.Combine(host.Root, "state", "themes.json");
     private static string SourceFile(ThemeHost host) => Path.Combine(host.Root, "sources", "themes.json");
@@ -143,7 +144,7 @@ public sealed class ThemePersistenceTests
         response.EnsureSuccessStatusCode();
         return JsonNode.Parse(await response.Content.ReadAsStringAsync())!.AsObject();
     }
-    private static JsonObject Definition(string id, string name)
+    internal static JsonObject Definition(string id, string name)
     {
         var palette = new JsonObject();
         foreach (var token in new[] { "primary", "primaryForeground", "secondary", "secondaryForeground", "accent", "accentForeground",

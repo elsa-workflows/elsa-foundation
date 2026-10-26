@@ -72,7 +72,7 @@ public sealed class ThemeCompositionTests
             options.StoreFile = "state/managed.json";
             options.AssetsDirectory = "state/materials";
             options.ThemesDirectory = "sources/collection.json";
-            options.ThemesMode = " directoryonly ";
+            options.ThemesMode = StudioThemeSourceMode.DirectoryOnly;
             Directory.CreateDirectory(Path.Combine(root, "sources"));
             File.WriteAllText(Path.Combine(root, "sources", "collection.json"), """{"themes":[]}""");
         }, beforeComposition: builder => builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
@@ -81,7 +81,7 @@ public sealed class ThemeCompositionTests
         }));
         retained.StoreFile = "redirected.json";
         retained.AssetsDirectory = "redirected-assets";
-        retained.ThemesMode = "BuiltInsOnly";
+        retained.ThemesMode = StudioThemeSourceMode.BuiltInsOnly;
         using var read = await host.Client.GetAsync("/_elsa/theme-store");
         read.EnsureSuccessStatusCode();
         Assert.Equal("DirectoryOnly", (string?)JsonNode.Parse(await read.Content.ReadAsStringAsync())!["themesMode"]);
@@ -114,8 +114,8 @@ public sealed class ThemeCompositionTests
         {
             await using var host = await ThemeHost.StartAsync(configure: (options, root) =>
             {
-                if (kind == "mode") options.ThemesMode = "everything";
-                if (kind == "blank-mode") options.ThemesMode = "";
+                if (kind == "mode") options.ThemesMode = (StudioThemeSourceMode)(-1);
+                if (kind == "blank-mode") options.ThemesMode = (StudioThemeSourceMode)int.MaxValue;
                 if (kind == "blank-store") options.StoreFile = " ";
                 if (kind == "blank-assets") options.AssetsDirectory = " ";
                 if (kind == "store-directory") options.StoreFile = root;
@@ -127,9 +127,30 @@ public sealed class ThemeCompositionTests
     }
 
     [Fact]
+    public async Task Installed_choices_ignore_configuration_edits_before_the_first_request()
+    {
+        await using var host = await ThemeHost.StartAsync("ThemeManagement", beforeComposition: builder => builder.Configuration.AddInMemoryCollection(
+            new Dictionary<string, string?>
+            {
+                ["Themes:StoreFile"] = "state/installed.json", ["Themes:AssetsDirectory"] = "state/materials", ["Themes:ThemesMode"] = "DirectoryOnly"
+            }));
+        host.App.Configuration["Themes:StoreFile"] = "redirected.json";
+        host.App.Configuration["Themes:AssetsDirectory"] = "redirected-assets";
+        host.App.Configuration["Themes:ThemesMode"] = "BuiltInsOnly";
+        using var read = await host.Client.GetAsync("/_elsa/theme-store");
+        read.EnsureSuccessStatusCode();
+        Assert.Equal("DirectoryOnly", (string?)JsonNode.Parse(await read.Content.ReadAsStringAsync())!["themesMode"]);
+        using var write = await host.Client.PutAsJsonAsync("/_elsa/theme-store/themes/classic/visibility", new { enabled = true });
+        write.EnsureSuccessStatusCode();
+        Assert.True(File.Exists(Path.Combine(host.Root, "state", "installed.json")));
+        Assert.False(File.Exists(Path.Combine(host.Root, "redirected.json")));
+    }
+
+    [Fact]
     public async Task Composition_rejects_duplicates_and_registration_after_build()
     {
         var builder = WebApplication.CreateSlimBuilder();
+        builder.Logging.ClearProviders();
         var studio = builder.AddElsaStudio(options => options.ShellsFile = null);
         Assert.Same(studio, studio.AddElsaStudioThemes());
         Assert.Throws<InvalidOperationException>(() => studio.AddElsaStudioThemes());
@@ -146,7 +167,8 @@ internal sealed class ThemeHost : IAsyncDisposable
     public HttpClient Client { get; private set; } = null!;
 
     public static async Task<ThemeHost> StartAsync(string selection = "ThemeStoreCore", bool addThemes = true, bool auth = false,
-        Action<StudioThemeStoreOptions, string>? configure = null, Action<WebApplicationBuilder>? beforeComposition = null, Action<WebApplicationBuilder>? afterComposition = null)
+        Action<StudioThemeStoreOptions, string>? configure = null, Action<WebApplicationBuilder>? beforeComposition = null, Action<WebApplicationBuilder>? afterComposition = null,
+        Action<WebApplication>? configurePipeline = null)
     {
         var host = new ThemeHost();
         try
@@ -163,6 +185,7 @@ internal sealed class ThemeHost : IAsyncDisposable
             if (addThemes) studio.AddElsaStudioThemes(options => configure?.Invoke(options, host.Root));
             afterComposition?.Invoke(builder);
             host.App = builder.Build();
+            configurePipeline?.Invoke(host.App);
             host.App.UseElsaStudio();
             host.App.MapElsaStudio();
             await host.App.StartAsync();

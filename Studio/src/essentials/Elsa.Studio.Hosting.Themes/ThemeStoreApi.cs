@@ -11,6 +11,7 @@ internal static class ThemeStoreApi
     private const long MaxAssetSize = 2 * 1024 * 1024;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
     private static readonly Regex ThemeIdPattern = new("^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex AssetIdPattern = new("^[a-f0-9]{32}\\.(?:png|webp|jpe?g)$", RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
     private static readonly Regex TokenValuePattern = new("^(?:#[0-9a-f]{3,8}|oklch\\(\\s*(?:0?\\.\\d+|1(?:\\.0+)?|0)\\s+\\d*\\.?\\d+\\s+\\d*\\.?\\d+\\s*\\)|rgba?\\([\\d\\s.,%/]+\\)|hsla?\\([\\d\\s.,%/]+\\)|var\\(--[a-z0-9-]+\\))$", RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
     private static readonly Regex MaterialVariableNamePattern = new("^--studio-material-[a-z0-9-]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex MaterialVariableValuePattern = new("^[a-z0-9 .,%#()/+-]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
@@ -270,6 +271,7 @@ internal static class ThemeStoreApi
     private static async Task<IResult> UploadAssetAsync(
         HttpRequest request,
         [FromServices] ThemeStoreSettings environment,
+        [FromServices] StudioConfigurationMutationGate mutationGate,
         CancellationToken cancellationToken)
     {
         if (!request.HasFormContentType)
@@ -293,27 +295,41 @@ internal static class ThemeStoreApi
         var folder = GetAssetFolder(environment);
         Directory.CreateDirectory(folder);
         var path = Path.Combine(folder, id);
-        await using (var output = File.Create(path))
-            await file.CopyToAsync(output, cancellationToken);
-
-        var asset = new ThemeStoreAsset(id, Path.GetFileName(file.FileName), file.ContentType, file.Length, AssetUrl(request, id));
-        return Results.Ok(asset);
+        var temporary = Path.Combine(folder, $".{id}.{Guid.NewGuid():N}.upload");
+        try
+        {
+            // Incomplete uploads stay outside the published asset inventory. Only the final rename holds the gate.
+            await using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, FileOptions.Asynchronous))
+            {
+                await file.CopyToAsync(output, cancellationToken);
+                if (output.Length is 0 or > MaxAssetSize)
+                    return Results.BadRequest(new ThemeStoreErrorResponse("Texture assets must be non-empty and 2 MB or smaller."));
+            }
+            await using var mutation = await mutationGate.AcquireAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            File.Move(temporary, path);
+            var asset = new ThemeStoreAsset(id, Path.GetFileName(file.FileName), file.ContentType, new FileInfo(path).Length, AssetUrl(request, id));
+            return Results.Ok(asset);
+        }
+        finally { File.Delete(temporary); }
     }
 
-    private static IResult GetAssetContentAsync(string id, [FromServices] ThemeStoreSettings environment)
+    private static async Task<IResult> GetAssetContentAsync(string id, [FromServices] ThemeStoreSettings environment,
+        [FromServices] StudioConfigurationMutationGate mutationGate, CancellationToken cancellationToken)
     {
-        var safeId = Path.GetFileName(id);
-        var path = Path.Combine(GetAssetFolder(environment), safeId);
-        if (!File.Exists(path))
-            return Results.NotFound(new ThemeStoreErrorResponse($"Asset '{safeId}' was not found."));
-
-        var contentType = Path.GetExtension(safeId).ToLowerInvariant() switch
+        if (!AssetIdPattern.IsMatch(id)) return Results.BadRequest(new ThemeStoreErrorResponse("A valid material-asset ID is required."));
+        await using var mutation = await mutationGate.AcquireAsync(cancellationToken);
+        var path = Path.Combine(GetAssetFolder(environment), id);
+        try
         {
-            ".webp" => "image/webp",
-            ".jpg" or ".jpeg" => "image/jpeg",
-            _ => "image/png"
-        };
-        return Results.File(path, contentType);
+            // Own the opened file across result execution, so a concurrent unlink cannot replace the bytes being served.
+            var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 65536, FileOptions.Asynchronous);
+            return Results.Stream(stream, AssetContentType(id));
+        }
+        catch (Exception error) when (error is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return Results.NotFound(new ThemeStoreErrorResponse($"Asset '{id}' was not found."));
+        }
     }
 
     private static async Task<IResult> DeleteAssetAsync(
@@ -321,10 +337,12 @@ internal static class ThemeStoreApi
         [FromServices] ThemeStoreSettings environment,
         [FromServices] ThemeDirectorySource themeService,
         HttpRequest request,
+        [FromServices] StudioConfigurationMutationGate mutationGate,
         CancellationToken cancellationToken)
     {
-        var safeId = Path.GetFileName(id);
-        var path = Path.Combine(GetAssetFolder(environment), safeId);
+        if (!AssetIdPattern.IsMatch(id)) return Results.BadRequest(new ThemeStoreErrorResponse("A valid material-asset ID is required."));
+        await using var mutation = await mutationGate.AcquireAsync(cancellationToken);
+        var path = Path.Combine(GetAssetFolder(environment), id);
         if (File.Exists(path))
             File.Delete(path);
 
@@ -389,7 +407,7 @@ internal static class ThemeStoreApi
     {
         var path = GetStorePath(environment);
         var store = File.Exists(path)
-            ? JsonSerializer.Deserialize<ManagedThemeState>(await File.ReadAllTextAsync(path, cancellationToken), JsonOptions) ?? EmptyStore()
+            ? await ReadManagedStateAsync(path, cancellationToken)
             : EmptyStore();
 
         // Load custom themes from configured directory if available
@@ -430,6 +448,13 @@ internal static class ThemeStoreApi
     private static Task WriteStoreAsync(ThemeStoreSettings environment, ManagedThemeState store, CancellationToken cancellationToken) =>
         AtomicConfigWriter.WriteAtomicAsync(GetStorePath(environment), JsonSerializer.Serialize(store, JsonOptions) + Environment.NewLine, cancellationToken);
 
+    private static async Task<ManagedThemeState> ReadManagedStateAsync(string path, CancellationToken cancellationToken)
+    {
+        // A reader retains its original complete document while an owned atomic writer replaces the pathname.
+        await using var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 65536, FileOptions.Asynchronous);
+        return await JsonSerializer.DeserializeAsync<ManagedThemeState>(input, JsonOptions, cancellationToken) ?? EmptyStore();
+    }
+
     private static ManagedThemeState EmptyStore() => new([], "", []);
 
     private static bool IsSourceAllowed(ThemeStoreResponse store, string themeId, bool builtIn) => store.ThemesMode switch
@@ -456,6 +481,7 @@ internal static class ThemeStoreApi
             return [];
 
         return Directory.EnumerateFiles(folder)
+            .Where(path => AssetIdPattern.IsMatch(Path.GetFileName(path)))
             .Select(path =>
             {
                 var file = new FileInfo(path);
@@ -470,6 +496,13 @@ internal static class ThemeStoreApi
             .OrderBy(asset => asset.FileName, StringComparer.OrdinalIgnoreCase)
             .ToArray();
     }
+
+    private static string AssetContentType(string id) => Path.GetExtension(id).ToLowerInvariant() switch
+    {
+        ".webp" => "image/webp",
+        ".jpg" or ".jpeg" => "image/jpeg",
+        _ => "image/png"
+    };
 
     private static string? ValidateCustomTheme(StudioThemeDefinition? theme)
     {

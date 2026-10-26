@@ -154,7 +154,7 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     await run(async () => {
       const nextStore = await deleteTheme(api.host, draft.id);
       setStore(nextStore);
-      setSelectedThemeId(nextStore.defaultThemeId);
+      setSelectedThemeId(nextStore.defaultThemeId || nextStore.themes[0]?.id || "");
       await refreshThemes();
       window.dispatchEvent(new Event("elsa-studio:theme-store-changed"));
     }, "Theme deleted.");
@@ -279,7 +279,7 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       <div className="section-header">
         <div>
           <h2>Theme Builder</h2>
-          <p>{store.themes.length} definitions, {store.assets.length} material texture assets, default {store.defaultThemeId}</p>
+          <p>{store.themes.length} definitions, {store.assets.length} material texture assets, default {store.defaultThemeId || "not set"}</p>
         </div>
         <StudioToolbar>
           <StudioToolbarGroup>

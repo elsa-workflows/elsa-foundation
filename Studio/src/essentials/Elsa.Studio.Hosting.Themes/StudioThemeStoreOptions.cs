@@ -12,8 +12,8 @@ public sealed class StudioThemeStoreOptions
     /// <summary>Optional JSON collection file or directory of collections.</summary>
     public string? ThemesDirectory { get; set; }
 
-    /// <summary>BuiltInsOnly, DirectoryOnly or AddToBuiltIns (default); case-insensitive.</summary>
-    public string ThemesMode { get; set; } = "AddToBuiltIns";
+    /// <summary>Eligible theme sources. Defaults to AddToBuiltIns; configuration accepts case-insensitive names.</summary>
+    public StudioThemeSourceMode ThemesMode { get; set; } = StudioThemeSourceMode.AddToBuiltIns;
 
     /// <summary>Optional configured default, taking precedence over the managed default.</summary>
     public string? DefaultThemeId { get; set; }
