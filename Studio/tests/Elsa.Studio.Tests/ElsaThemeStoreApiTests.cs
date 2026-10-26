@@ -32,6 +32,32 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Fact]
+    public async Task BuiltInsOnlyDoesNotCountExcludedCustomThemesWhenDisablingLastSelectableTheme()
+    {
+        _themeConfig.ThemesMode = "BuiltInsOnly";
+        var managed = CustomTheme();
+        (await _client.PutAsJsonAsync($"/_elsa/theme-store/themes/{managed.Id}", managed)).EnsureSuccessStatusCode();
+        foreach (var id in ElsaThemeStoreApi.BuiltInThemeIds.Where(id => id != "classic"))
+            await SetVisibilityAsync(id, enabled: false);
+
+        var response = await _client.PutAsJsonAsync("/_elsa/theme-store/themes/classic/visibility", new { Enabled = false });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.DoesNotContain("classic", (await GetStoreAsync()).DisabledBuiltInThemeIds ?? []);
+    }
+
+    [Fact]
+    public async Task DirectoryOnlyCanManageExcludedBuiltInVisibilityEvenWhenNoDirectoryThemeIsSelectable()
+    {
+        _themeConfig.ThemesMode = "DirectoryOnly";
+
+        foreach (var id in ElsaThemeStoreApi.BuiltInThemeIds)
+            await SetVisibilityAsync(id, enabled: false);
+
+        Assert.Equal(ElsaThemeStoreApi.BuiltInThemeIds.Count, (await GetStoreAsync()).DisabledBuiltInThemeIds?.Length);
+    }
+
     [Theory]
     [InlineData("BuiltInsOnly", "")]
     [InlineData("DirectoryOnly", "directory-theme")]

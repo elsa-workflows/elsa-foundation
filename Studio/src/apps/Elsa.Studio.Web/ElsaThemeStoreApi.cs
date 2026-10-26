@@ -170,9 +170,9 @@ internal static class ElsaThemeStoreApi
                     return Results.BadRequest(new ThemeStoreErrorResponse("The default theme cannot be disabled. Pick another default theme first."));
 
                 disabled.Add(id);
-                var enabledBuiltInCount = BuiltInThemeIds.Count(builtIn => !disabled.Contains(builtIn));
-                var enabledCustomCount = store.Themes.Count(theme => theme.Source == "custom" && theme is { Enabled: true, Published: true });
-                if (enabledBuiltInCount + enabledCustomCount == 0)
+                var enabledBuiltInCount = BuiltInThemeIds.Count(builtIn => IsSourceAllowed(store, builtIn, true) && !disabled.Contains(builtIn));
+                var enabledCustomCount = store.Themes.Count(theme => theme.Source == "custom" && theme is { Enabled: true, Published: true } && IsSourceAllowed(store, theme.Id, false));
+                if (IsSourceAllowed(store, id, true) && enabledBuiltInCount + enabledCustomCount == 0)
                     return Results.BadRequest(new ThemeStoreErrorResponse("At least one selectable theme must remain enabled."));
             }
 
