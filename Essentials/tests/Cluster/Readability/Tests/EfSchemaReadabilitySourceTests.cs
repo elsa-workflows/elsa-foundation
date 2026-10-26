@@ -39,7 +39,9 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
         new(RuntimeArtifactEfModule.SchemaFamily, Runtime, [RuntimeArtifactEfModule.SchemaVersion]),
         new(RuntimeBackgroundActivityWorkEfModule.SchemaFamily, Runtime, [RuntimeBackgroundActivityWorkEfModule.SchemaVersion]),
         new(RuntimeOperationalStateEfModule.SchemaFamily, Runtime, [RuntimeOperationalStateEfModule.SchemaVersion]),
-        new(RuntimePostCommitOutboxEfModule.SchemaFamily, Runtime, [RuntimePostCommitOutboxEfModule.SchemaVersion]),
+        // The adoption's checked chain retains the legacy reader while adding the durable-cohort format.
+        // Keep the predecessor literal independent of the discovered declaration so losing that reader fails here.
+        new(RuntimePostCommitOutboxEfModule.SchemaFamily, Runtime, ["1.0.0", RuntimePostCommitOutboxEfModule.SchemaVersion]),
         new(RuntimeSchedulerPoisonEfModule.SchemaFamily, Runtime, [RuntimeSchedulerPoisonEfModule.SchemaVersion]),
         new(RuntimeTriggerBindingEfModule.SchemaFamily, Runtime, [RuntimeTriggerBindingEfModule.SchemaVersion]),
         new(RuntimeWorkflowAlterationEfModule.SchemaFamily, Runtime, [RuntimeWorkflowAlterationEfModule.SchemaVersion]),

@@ -32,6 +32,7 @@
     <ProjectReference Include="..\..\..\..\src\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
 
     <ProjectReference Include="..\..\..\..\src\Expressions\Elsa.Expressions\Elsa.Expressions.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Events\Elsa.Events\Elsa.Events.csproj" />
     <ProjectReference Include="..\..\..\..\src\Expressions\JavaScript\Elsa.Expressions.JavaScript\Elsa.Expressions.JavaScript.csproj" />
     <ProjectReference Include="..\..\..\..\src\Http\Elsa.Http\Elsa.Http.csproj" />
     <ProjectReference Include="..\..\..\..\src\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />

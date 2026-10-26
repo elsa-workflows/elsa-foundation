@@ -4,7 +4,9 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>Callback data for one exact call's contiguous prefix. The runtime validates source authority before invocation; constructing this data grants none.</summary>
-public sealed class RuntimeChildControlContext
+/// <remarks>An immutable callback envelope containing a live parent handle, not a durable or deeply immutable snapshot.
+/// Record copying keeps that handle and the readonly collection snapshots. Equality grants no authority or deduplication.</remarks>
+public sealed record RuntimeChildControlContext
 {
     public RuntimeChildControlContext(IRuntimeActivityExecutionContext parentContext, string callingActivityExecutionId,
         string callingExecutableNodeId, string? callingIterationId, IReadOnlyDictionary<string, string> childSchedulingMetadata,
@@ -55,4 +57,7 @@ public sealed class RuntimeChildControlContext
     public IReadOnlyList<RuntimeChildControlTransport> Batches { get; }
     /// <summary>Ordinary local call-leaf outcomes when the prefix ends terminal; these do not rewrite the called workflow's status.</summary>
     public IReadOnlyCollection<string> CompletionOutcomeNames { get; }
+
+    /// <summary>Keep the live execution handle and authored control data out of incidental diagnostics.</summary>
+    public override string ToString() => nameof(RuntimeChildControlContext);
 }

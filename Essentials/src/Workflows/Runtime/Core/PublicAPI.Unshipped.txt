@@ -1,4 +1,11 @@
 #nullable enable
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext!
+Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext.Equals(Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext? other) -> bool
+override Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext.operator !=(Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext? left, Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext.operator ==(Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext? left, Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext? right) -> bool
 Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableSourceReadException
 Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableSourceReadException.WorkflowExecutableSourceReadException(string! artifactId, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableReferenceScope requiredScope, System.Exception! innerException) -> void
 Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableSourceReadException.ArtifactId.get -> string!
