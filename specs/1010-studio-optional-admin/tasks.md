@@ -9,7 +9,7 @@ cadence is declared. One implementation leaf stays active; read-only research/re
 
 - [x] T001 Record spec/design/contracts/research/checklist in specs/1010-studio-optional-admin before code.
 - [ ] T002 Create Studio/src/essentials/Elsa.Studio.Hosting.Nuplane project/options/composition/README/public API tracking; add solution/project/lock inventory inputs without optional dependencies in base Hosting.
-- [ ] T003 Add installed managed-file source detection to Hosting's existing IOptions<StudioHostingOptions> snapshot when core registry/provider descriptors are replaced; cover public applied/read-only behavior.
+- [x] T003 Add installed managed-file source detection to Hosting's existing IOptions<StudioHostingOptions> snapshot when core registry/provider descriptors are replaced; cover public applied/read-only behavior.
 - [ ] T004 Register effective content-root Nuplane configuration/callback/feeds, fallback selection, shared discovery/reporting and root-owned admin/maintenance in the addon; test missing/ambiguous/callback feeds and optional absence.
 
 ## Phase2 — US1: public administration and distribution adoption

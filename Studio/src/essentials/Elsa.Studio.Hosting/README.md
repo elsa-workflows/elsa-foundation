@@ -87,3 +87,10 @@ private resolver implementations use existing CShells contracts. Public composit
 Api policy surface are tracked. Tests use public APIs/HTTP without a production friend; see
 [spec1008](https://github.com/elsa-workflows/elsa-foundation/blob/main/specs/1008-studio-base-hosting/quickstart.md)
 and [spec1009](https://github.com/elsa-workflows/elsa-foundation/blob/main/specs/1009-studio-auth-bridge/quickstart.md).
+
+When a host replaces the core `IShellBlueprintProvider` or `IShellRegistry` registration, applied
+`IOptions<StudioHostingOptions>.Value.ShellsFile` is null. Optional file administration must then treat the
+shell configuration as host-owned/read-only, even if a previously loaded file still exists. The selected shell
+and other installed options remain unchanged. Addons must also check actual configuration-provider ownership
+before writing; a file path alone does not establish that its values control the running shell.
+
