@@ -2,6 +2,29 @@
 
 This is incomplete work on #3359, not a delivery or completion receipt.
 
+## Owner-authorized resumption, 27 October
+
+The owner explicitly replied "Resume #3359 with this exception" to this leaf's three-failed-check request;
+receipt3359#issuecomment-6429394630 records that exception. Fresh exclusive claim6430037530 resumes it after
+#3361 delivered through normal Code Review approval/merge, both main CI runs and fresh main packages/consumer
+qualification. Verified main9e96273c8041476fe8bfb102c84019359c617b84 merged without conflict into saved4df4d1329
+at53094ea0b9ae4845de6bb333237f873bf21b6a7f. Standard browser source now belongs to Hosting; no old Web source
+path remains in active test/tool references. This is one implementation leaf, with no implementation delegation.
+
+The two prior failures were stale fixture expectations. Confirmed Nuplane execution verifies root/epoch/policy,
+recovers graph-use records under ownership, then freshly inspects/replans. The zero-retention case now asserts
+Preview Unknown/read-only, then execution Known/Completed, an actual Deleted outcome, removal of the obsolete
+directory, and successful active payload reads. The null-retention case asserts Unknown preview followed by
+Known/Completed with no delete/attempt and both original directories and payload bytes intact. Root/epoch/policy
+binding, genuine unknown/refusal and retained-generation protection tests remain unchanged. No local planner,
+production execution behavior, enrollment shortcut or upstream code was introduced.
+
+Whole Studio Release project passed566/566,0skipped,80s (`studio3359-owner-resume.trx`;
+`/tmp/studio3359-owner-resume.log`). Discovery559 expands the existing runtime eight-row module-manifest theory
+by7 cases; no discovered test was omitted. Machine load was2.35 on8cores before the check. Research/contract
+wording now distinguishes descriptive Preview from fresh owned execution. This clears the diagnosed failure,
+not the remaining module/feed/UI/package/review/main acceptance work listed below.
+
 ## Passed evidence
 
 - Protected feature-manifest adapter: whole Studio project 551 passed, 0 failed/skipped

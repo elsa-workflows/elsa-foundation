@@ -32,7 +32,9 @@ ChangedOrPending/AutoReload/reporting in the addon and distribution assembly sel
 ## Maintenance
 
 Decision: reuse PruneAsync with explicit registration, preview and exact supplied confirmation. Preserve full
-result facts; unknown protection/incomplete inventory are refusals even with Status=Preview. Null retention keeps
+result facts. Preview remains read-only and can report stale graph-use protection as Unknown. Confirmed execution
+performs verified recovery and freshly inspects/replans under ownership; protection or inventory that remains
+unknown/incomplete refuses deletion. A preview is not a frozen execution plan. Null retention keeps
 all; N counts inactive unprotected NuGet-version groups across feeds. Legacy count/age policy is incompatible and
 requires deliberate selection. Execute replans under ownership; confirmation binds root/epoch/retention rather than
 a fixed candidate digest. Enrollment remains operator-controlled and never inferred by a browser request.

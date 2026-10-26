@@ -21,7 +21,9 @@ reload failure rolled back an already committed file. Unchanged secret placehold
 
 Retention selects nullable keepNewestInactiveVersionsPerPackage in a Studio-owned policy section; explicit
 selection supersedes a legacy-policy refusal. Null retains all. Prune defaults Preview; Execute requires observed
-root/epoch/policy confirmation and complete known protection. Never enroll automatically, manufacture current
+root/epoch/policy confirmation and complete known protection established by its fresh owned inspection. Confirmed
+upstream graph-use recovery may turn an Unknown preview into a Known execution; Preview itself never recovers
+or deletes. Never enroll automatically, manufacture current
 confirmation, accept arbitrary paths, or call local Directory.Delete. Return actual refusal/partial/cancelled facts.
 
 Package bytes use stock immutable extracted installs under admitted ownership. Fresh in-admission preflight caps

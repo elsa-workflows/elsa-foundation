@@ -16,7 +16,7 @@ public sealed class PackageMaintenanceTests
     private const string RetentionUrl = "/_elsa/module-management/retention-policy";
 
     [Fact]
-    public async Task Stale_content_only_graph_uses_refuse_deletion_instead_of_claiming_known_protection()
+    public async Task Confirmed_execution_recovers_stale_content_uses_before_replanning_deletion()
     {
         await using var host = await AdministrationHost.StartAsync(nativeStore: true);
         var (old, active) = await Versions(host);
@@ -29,8 +29,10 @@ public sealed class PackageMaintenanceTests
         Assert.All(preview["candidates"]!.AsArray(), candidate => Assert.Equal("NotAttempted", (string?)candidate!["attempt"]));
         Assert.True(Directory.Exists(old));
         var execute = await Prune(host, Execute(preview));
-        Assert.Equal("Refused", (string?)execute["status"]);
-        Assert.True(Directory.Exists(old));
+        Assert.True((string?)execute["status"] == "Completed", execute.ToJsonString());
+        Assert.True((string?)execute["protectionKnowledge"] == "Known", execute.ToJsonString());
+        Assert.Contains(execute["candidates"]!.AsArray(), candidate => (string?)candidate!["physicalOutcome"] == "Deleted");
+        Assert.False(Directory.Exists(old));
         Assert.True(Directory.Exists(active));
         using var asset = await host.Client.GetAsync($"/_content/{PackageAssetTests.PackageId}/probe.txt");
         asset.EnsureSuccessStatusCode();
@@ -145,17 +147,22 @@ public sealed class PackageMaintenanceTests
     }
 
     [Fact]
-    public async Task Null_retention_does_not_override_unknown_protection_to_authorize_execution()
+    public async Task Null_retention_preserves_every_install_after_confirmed_use_recovery()
     {
         await using var host = await AdministrationHost.StartAsync(nativeStore: true);
         var (old, active) = await Versions(host);
         var preview = await Prune(host, new JsonObject());
         Assert.Null(preview["retention"]);
+        Assert.Equal("Unknown", (string?)preview["protectionKnowledge"]);
         var result = await Prune(host, Execute(preview));
-        Assert.Equal("Refused", (string?)result["status"]);
+        Assert.True((string?)result["status"] == "Completed", result.ToJsonString());
+        Assert.True((string?)result["protectionKnowledge"] == "Known", result.ToJsonString());
         Assert.DoesNotContain(result["candidates"]!.AsArray(), candidate => (string?)candidate!["attempt"] == "Completed");
+        Assert.DoesNotContain(result["candidates"]!.AsArray(), candidate => (string?)candidate!["physicalOutcome"] == "Deleted");
         Assert.True(Directory.Exists(old));
         Assert.True(Directory.Exists(active));
+        Assert.Equal("version one", await File.ReadAllTextAsync(Path.Combine(old, "staticwebassets", "probe.txt")));
+        Assert.Equal("version two", await File.ReadAllTextAsync(Path.Combine(active, "staticwebassets", "probe.txt")));
     }
 
     [Fact]

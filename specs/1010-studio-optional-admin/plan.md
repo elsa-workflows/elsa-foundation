@@ -87,7 +87,9 @@ is reported unsupported until an operator explicitly chooses the new policy. Do 
 Preview is the default. Return the upstream result's protection/inventory/diagnostic/candidate/attempt/outcome
 facts; Status=Preview alone does not permit Execute. Execute accepts the exact observed root/epoch/retention
 confirmation, never creates a fresh confirmation itself, and uses the selected persisted policy. Changed
-identity/epoch/policy refuses; upstream replans protection/candidates under ownership. Enrollment remains an
+identity/epoch/policy refuses; upstream performs verified graph-use recovery and freshly replans protection/candidates
+under ownership. An Unknown preview is descriptive; deletion still requires complete Known protection at execution.
+Enrollment remains an
 explicit trusted operator cutover through Nuplane's existing protocol/callback; no HTTP automatic enrollment.
 
 Update the frontend supported-policy model, preserving older Server registry data read-only. Remove synthetic
@@ -128,7 +130,7 @@ permit ownership through actual response execution. No garbage-collection or cro
   private module/feature endpoints, selected-file store/reloader/guard, atomic writer and bounded content adapter.
 - Studio/src/essentials/Elsa.Studio.Hosting/: preserve applied managed-file option semantics for replaced sources.
 - Studio/src/apps/Elsa.Studio.Web/: remove moved/replaced files/wiring; keep distribution roster and theme writer.
-- Web/Client/src/app/modules/: supported retention and explicit prune preview/confirmation UI/models/tests.
+- Hosting/Client/src/app/modules/: supported retention and explicit prune preview/confirmation UI/models/tests.
 - Studio/tests/Elsa.Studio.Tests/: replace moved-internal helper access with public HTTP/composition/native fixtures.
 - Relevant solution/lock/project inventory inputs and canonical hosting contract/docs updated with actual ownership.
 
