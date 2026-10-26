@@ -2,6 +2,7 @@ using Elsa.Workflows.Runtime.Core.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executables;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -10,12 +11,15 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 public sealed partial class StimulusDeliveryStoreTests
 {
-    [Fact]
-    public async Task Native_cohort_GC_keeps_template_material_through_absent_target_handoff_then_collects_after_sticky_retirement()
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Cohort_GC_keeps_template_material_through_absent_target_handoff_then_collects_after_sticky_retirement(bool ef)
     {
-        await using var harness = await Harness.Create(false);
+        await using var harness = await Harness.Create(ef);
         var artifacts = harness.Artifacts; var references = harness.References;
-        var templates = InMemoryExecutableActivityTemplateStore.CreateForMaintenance(artifacts, references, harness.Clock);
+        IExecutableActivityTemplateStore templates = ef
+            ? new EfExecutableActivityTemplateStore(harness.Context!, new Accessor(), new Codec())
+            : InMemoryExecutableActivityTemplateStore.CreateForMaintenance(artifacts, references, harness.Clock);
         Assert.True(templates.CanMaintainReferences(artifacts, references));
         var original = Material(Pin);
         ExecutableActivityTemplate Template(string id) => new(id, "hash-" + id, original.RootActivity,

@@ -1121,6 +1121,20 @@ public sealed class EfWorkflowExecutableStore(
         current.ExpiresAt > now &&
         state.Leases.All(x => x.Value.ExpiresAt <= now);
 
+    internal async Task<IReadOnlyCollection<WorkflowExecutable>> ReadMaintenanceArtifactsAsync(string scope, CancellationToken cancellationToken)
+    {
+        if (RequireScope() != scope) throw new InvalidOperationException("Template maintenance artifact scope changed.");
+        var rows = await EfExecutableActivityTemplateStore.ReadCheckedMaintenanceRowsAsync<WorkflowExecutableEntity>(context, scope, cancellationToken);
+        return rows.Select(row =>
+        {
+            var id = EfExecutableActivityTemplateStore.DecodeMaintenanceId(row.ArtifactId);
+            return Read(row, scope, id, CreateId(scope, id));
+        }).ToArray();
+    }
+
+    internal RuntimeDbContext Context => context;
+    internal PersistenceAccessContext AccessContext => accessContextAccessor.Current;
+
     // Privileged access to one partition bypasses the executable cache and lands here.
     private string RequireScope() => accessContextAccessor.Current.RequireScope(admitPrivileged: true).Value;
 

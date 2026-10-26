@@ -61,6 +61,22 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
     /// <summary>The context this store reads and stages through.</summary>
     internal RuntimeDbContext Context => context;
     internal PersistenceAccessContext AccessContext => access.Current;
+    internal async Task<(WorkflowExecutableSourceReferenceEntity Row, WorkflowExecutableSourceReference Value)?> ReadPhysicalMaintenanceSourceAsync(
+        string scope, string sourceReferenceId, CancellationToken cancellationToken)
+    {
+        if (RequireScope() != scope) throw new InvalidOperationException("Template maintenance source scope changed.");
+        var row = await context.WorkflowExecutableSourceReferences.AsNoTracking().SingleOrDefaultAsync(
+            candidate => candidate.Id == CreateId(scope, sourceReferenceId), cancellationToken);
+        return row is null ? null : (row, Read(row, scope, sourceReferenceId));
+    }
+
+    internal async Task<IReadOnlyCollection<WorkflowExecutableSourceReference>> ReadMaintenanceSourcesAsync(string scope, CancellationToken cancellationToken)
+    {
+        if (RequireScope() != scope) throw new InvalidOperationException("Template maintenance reference scope changed.");
+        var rows = await EfExecutableActivityTemplateStore.ReadCheckedMaintenanceRowsAsync<WorkflowExecutableSourceReferenceEntity>(context, scope, cancellationToken);
+        return rows.Select(row => Read(row, scope, EfExecutableActivityTemplateStore.DecodeMaintenanceId(row.SourceReferenceId))).ToArray();
+    }
+
     internal string ScopeForPublication(WorkflowExecutableSourceReference reference) => ScopeForWrite(reference);
 
     // Cohort acceptance must resolve publications in its own selected access boundary, even when a

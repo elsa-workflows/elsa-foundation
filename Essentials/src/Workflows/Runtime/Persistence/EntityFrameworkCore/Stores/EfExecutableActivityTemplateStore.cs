@@ -329,6 +329,7 @@ public sealed partial class EfExecutableActivityTemplateStore(
             Validate(value);
             if (value.TemplateId != Decode(row.TemplateId) || value.TemplateHash != row.TemplateHash)
                 throw new InvalidDataException("The persisted executable activity template projection is corrupt.");
+            ObservedMaterial.Add(value, new MaterialObservation(identity.Scope, row.IncarnationId));
             return value;
         }
         catch (InvalidDataException) { throw; }

@@ -1,0 +1,293 @@
+{
+  "schemaVersion": 1,
+  "task": "T049 conditional EF template/source maintenance and actual native/EF collector bridge; atomic handoffs/default qualification remain open",
+  "sourceParentCommit": "3dc906859adabecde538d07b7d29dbba0c54f818",
+  "filesSha256": {
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfExecutableActivityTemplateStore.Maintenance.cs": "231915b4527fa1927e90e259c57ac7331abcd6e3c3dcd7479e93de4b5da39dcf",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfExecutableActivityTemplateStore.cs": "926df67a44a5079615c01cc48a29f756905c6eae83a6d462881deee5355c2fc2",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableSourceReferenceStore.cs": "0fa1db851f7a57fee1b408baa4b6c17cc31fb317daa0a0fef6e384a48a44c346",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs": "613ddf3b92a222dd292b6f339085e04cb981c5293d4bebbab331334e11db7974",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeArtifactScopeTests.TemplateMaintenance.cs": "9d82f4b5b37d1b93e01d846c3b02a4b1e5af9fbf78d538200915f577c89512aa",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/StimulusDeliveryTemplateRetentionTests.cs": "e20d22579ba33aaf3acf774c2cfeb5ddcf16b97783a76ecb923c99184ad11261",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md": "54f16a99ed66e4d3ec532db2a2ef9b02c51b3d55ccb966e11f50ccba5240a11b",
+    "specs/1006-bpmn-library-adoption/tasks.md": "76d7456668c8bbd3cd3ca987515f17e3aab0accf8dc871194811c7bfea2c8643",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/ReusableActivityRuntimeStores.cs": "dee8c090fae0720703e750453b58e80464dfa5db2f5af2a7ba43bfe86caa1365",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableReferenceGarbageCollector.cs": "8c58da46ff1e9911c88566cae3b81b8fe76c30cfdc09715f15706c681cbc9a9b",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Configuration/RuntimeArtifactEntityConfigurations.cs": "27c2cc257c257afd4303f725296a9f2a5ef8b166e81a03a3e38737a08b2dc716",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "2fe5ff544aaa64721e69e90bf2c05a80e69bcb215472c18ee9ed2a7d5b4ca968"
+  },
+  "checks": [
+    {
+      "project": "Runtime EF",
+      "passed": 1404,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 41
+    },
+    {
+      "project": "Publishing EF",
+      "passed": 161,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 0
+    },
+    {
+      "project": "Publishing API",
+      "passed": 863,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 0
+    },
+    {
+      "project": "Publishing",
+      "passed": 61,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 0
+    }
+  ],
+  "newActualSqliteMaintenanceCases": 40,
+  "newActualEfCollectorCases": 1,
+  "focused": {
+    "passed": 42,
+    "failed": 0,
+    "skipped": 0
+  },
+  "discovery": {
+    "ef": {
+      "listed": 1404,
+      "uniqueDisplayNames": 1402,
+      "executed": 1404,
+      "deferredTheories": {},
+      "unmapped": []
+    },
+    "publishing-ef": {
+      "listed": 161,
+      "uniqueDisplayNames": 159,
+      "executed": 161,
+      "deferredTheories": {},
+      "unmapped": []
+    },
+    "publishing-api": {
+      "listed": 843,
+      "uniqueDisplayNames": 843,
+      "executed": 863,
+      "deferredTheories": {
+        "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.FirstPartyTriggerMatrix_ValidPublicationIndexesEveryCompleteBinding": 4,
+        "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.FirstPartyTriggerMatrix_InvalidPublicationPreservesSeededRegistration": 4,
+        "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.LegacyActionCatalogRow_RepublishProjectsTriggerAndPreservesPriorRegistrationOnFailure": 4,
+        "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.A_publish_time_literal_reader_refuses_a_secret_read_with_the_fixed_code": 10,
+        "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.A_literal_or_expression_on_a_credential_input_is_refused_by_the_credential_literal_rule_ahead_of_VF_ACT_011": 3
+      },
+      "unmapped": []
+    },
+    "publishing": {
+      "listed": 61,
+      "uniqueDisplayNames": 61,
+      "executed": 61,
+      "deferredTheories": {},
+      "unmapped": []
+    }
+  },
+  "mutations": [
+    {
+      "mutation": "captured-template-version-reloaded-after-discovery",
+      "exitCode": 1,
+      "failed": 6,
+      "passed": 36,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "workflow-wrapper-route-ignored",
+      "exitCode": 1,
+      "failed": 2,
+      "passed": 40,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "workflow-nested-routes-ignored",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 41,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "parent-closed-route-ignored",
+      "exitCode": 1,
+      "failed": 2,
+      "passed": 40,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "parent-direct-route-ignored",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 41,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "parent-metadata-route-ignored",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 41,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "parent-nested-routes-ignored",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 41,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "remaining-source-reference-guard-removed",
+      "exitCode": 1,
+      "failed": 7,
+      "passed": 35,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "source-snapshot-cas-removed",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 41,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "source-liveness-guard-removed",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 41,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "material-incarnation-observation-ignored",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 41,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "constructed-model-observation-forged",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 41,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "ambient-transaction-guard-removed",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 41,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "pending-writes-guard-removed",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 41,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "contradictory-scope-row-filtered-out",
+      "exitCode": 1,
+      "failed": 6,
+      "passed": 36,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "physical-page-traversal-truncated",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 41,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "ambiguous-workflow-template-identity-ignored",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 41,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "maintenance-capability-disabled",
+      "exitCode": 1,
+      "failed": 3,
+      "passed": 39,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    }
+  ],
+  "discardedMutationAttempt": "A draft parent-root mutation used an invalid property name and did not compile. Corrected to the actual Root property, rerun and counted only after behavioral assertion failure.",
+  "coreApiAdditions": 0,
+  "coreApiRemovals": 0,
+  "schemaChanges": false,
+  "generatedMapsCheck": "passed",
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "unchanged": true,
+  "reviewFixes": [
+    "Clear unchanged tracked reads only after refusing caller pending writes/local/enlisted/ambient transactions; fresh physical snapshots avoid identity-map conflicts.",
+    "Checked maintenance scope paging uses either projection to locate contradictory current-scope rows, then validates both and physical identity/payload; includes actual max-page-plus-one tail control.",
+    "Refuse ambiguous workflow/template identity before source/material deletion.",
+    "Document actual reader-object observation, transaction ownership and contextual failure semantics; catalog now distinguishes implemented conditional methods from unsupported atomic SaveWithReferenceAsync."
+  ],
+  "reviews": {
+    "correctness": "final restored source and source-bound receipt clean",
+    "standards": "final source/catalog/domain boundaries and source-bound receipt clean; catalog finding closed",
+    "acceptance": "finite source/control scope and final source-bound receipt clean",
+    "fullPrRounds": 0
+  },
+  "limits": [
+    "Actual SQLite conditional provider operations and existing collector composition only. Six actual second-context peer commits occur after collector discovery and before its transaction starts; no peer progress under held SQLite write transaction is claimed.",
+    "Reverse GC-wins control removes exact child then refuses actual parent publication without partial root, followed by valid material-recreation retry. Actual post-SQL/precommit provider failure rolls back and preserves SQLite cause.",
+    "Weak process-local scope/incarnation observation follows the actual reader model lifetime; it is neither persisted authority nor a cleanup ledger. Physical state/dependencies/references/CAS remain decisive; serialized copies refuse.",
+    "EF SaveWithReferenceAsync remains unsupported. Complete production publication/draft-test handoffs, old-writer/quiescence gates and qualified default cohort composition keep T049 open; publisher activation stays disabled and ordinary default GC reports false.",
+    "No process-kill, upgraded-host, Studio or production recovery proof. T050 exact bookmark/immutable input/schema activation, T051 actual host/fresh-provider recovery and other stories remain open.",
+    "Duplicate-semantics deletion/guards, final current host/Studio, full-PR review/exact-head checks/resulting-main and ADR0063 remain open. #2898/#2907/program production acceptance stays open; Orleans/task-runner deferred."
+  ],
+  "remoteParentChecks": {
+    "head": "3dc906859adabecde538d07b7d29dbba0c54f818",
+    "run": 40391898125,
+    "buildAndTest": "success",
+    "architecture": "success",
+    "generatedMaps": "success",
+    "fullTier": "not run: draft",
+    "gitGuardianIncident": "38996611 unresolved older public source-digest finding; no bypass",
+    "boundary": "Last pushed parent only; new source needs exact-head remote checks."
+  }
+}
