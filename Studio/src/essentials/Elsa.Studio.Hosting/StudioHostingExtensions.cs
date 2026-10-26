@@ -1,5 +1,6 @@
 using CShells.AspNetCore.Configuration;
 using Elsa.Studio.Api.Options;
+using Elsa.Studio.Api.Contracts;
 using CShells.AspNetCore.Extensions;
 using CShells.AspNetCore.Middleware;
 using CShells.AspNetCore.Resolution;
@@ -41,6 +42,7 @@ public static class StudioHostingExtensions
         settings = settings with { AuthEnabled = builder.Configuration.GetValue("Studio:Auth:Enabled", false) };
         builder.WebHost.UseStaticWebAssets();
         builder.Services.AddSingleton(settings);
+        builder.Services.TryAddScoped<IStudioModuleManifestProvider, SelectedShellModuleManifestProvider>();
         builder.Services.AddSingleton<IConfigurationRoot>(builder.Configuration);
         ServiceDescriptor? blueprintSource = null;
         ServiceDescriptor? shellRegistry = null;

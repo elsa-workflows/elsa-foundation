@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Nuplane.Admin;
 using Nuplane.Builder;
@@ -71,18 +72,25 @@ public sealed class AdministrationCompositionTests
 
 internal sealed class AdministrationHost : IAsyncDisposable
 {
-    public string Root { get; } = Directory.CreateTempSubdirectory("studio-admin-").FullName;
+    private readonly bool _keepFiles;
+    private AdministrationHost(string? root, bool keepFiles)
+    {
+        Root = root ?? Directory.CreateTempSubdirectory("studio-admin-").FullName;
+        _keepFiles = keepFiles;
+    }
+    public string Root { get; }
     public WebApplication App { get; private set; } = null!;
     public HttpClient Client { get; private set; } = null!;
     public string ShellsFile => Path.Combine(Root, "config", "studio-shells.json");
     public const string Credential = "private-feature-credential-sentinel";
 
-    public static async Task<AdministrationHost> StartAsync(Action<NuplaneBuilder>? configureNuplane = null, bool addAdministration = true, bool managedFeatures = false, Action<WebApplicationBuilder>? beforeStudio = null, Action<WebApplicationBuilder>? afterStudio = null, bool nativeStore = false, bool loadPackages = false, Action<WebApplication>? configurePipeline = null)
+    public static async Task<AdministrationHost> StartAsync(Action<NuplaneBuilder>? configureNuplane = null, bool addAdministration = true, bool managedFeatures = false, Action<WebApplicationBuilder>? beforeStudio = null, Action<WebApplicationBuilder>? afterStudio = null, bool nativeStore = false, bool loadPackages = false, Action<WebApplication>? configurePipeline = null, string? root = null, bool keepFiles = false)
     {
-        var host = new AdministrationHost();
+        var host = new AdministrationHost(root, keepFiles);
         try
         {
             var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { ContentRootPath = host.Root, EnvironmentName = Environments.Production });
+            builder.Logging.ClearProviders();
             builder.WebHost.UseTestServer();
             builder.Configuration.Sources.Clear();
             builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
@@ -121,8 +129,12 @@ internal sealed class AdministrationHost : IAsyncDisposable
                 Directory.CreateDirectory(Path.Combine(host.Root, "native-store", "installs"));
                 var maintenance = host.App.Services.GetRequiredService<INuplanePackageStoreMaintenanceOperations>();
                 var preview = await maintenance.PreviewEnrollmentAsync();
-                var enrolled = await maintenance.EnrollAsync(new("default", preview.RootIdentity!, 1, true, ["studio"], []));
-                Assert.Equal("Complete", enrolled.Status);
+                if (preview.Membership == "Unenrolled")
+                {
+                    var enrolled = await maintenance.EnrollAsync(new("default", preview.RootIdentity!, 1, true, ["studio"], []));
+                    Assert.Equal("Complete", enrolled.Status);
+                }
+                else Assert.Equal("Complete", preview.Membership);
             }
             await host.App.StartAsync();
             host.Client = host.App.GetTestClient();
@@ -138,7 +150,11 @@ internal sealed class AdministrationHost : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         Client?.Dispose();
-        if (App is not null) await App.DisposeAsync();
-        Directory.Delete(Root, recursive: true);
+        if (App is not null)
+        {
+            try { await App.StopAsync(); }
+            finally { await App.DisposeAsync(); }
+        }
+        if (!_keepFiles) Directory.Delete(Root, recursive: true);
     }
 }

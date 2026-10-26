@@ -5,6 +5,7 @@ using Elsa.Studio.Api.Features;
 using Elsa.Studio.Core.Attributes;
 using Elsa.Modularity.Nuplane.Extensions;
 using Elsa.Modularity.Core.Contracts;
+using Elsa.Modularity.Nuplane.Services;
 using Microsoft.Extensions.Options;
 using global::Nuplane;
 using global::Nuplane.Abstractions;
@@ -55,6 +56,7 @@ public static class NuplaneHostingExtensions
         studio.Services.AddNuplaneAdmin();
         studio.Services.AddNuplanePackageStoreMaintenance();
         studio.Services.AddSingleton<PackageContentReader>();
+        studio.Services.AddSingleton<ManagementConfigurationStore>();
         var configuration = studio.Configuration.GetSection("Nuplane");
         studio.Services.AddNuplane(configuration, nuplane =>
         {
@@ -87,6 +89,10 @@ public static class NuplaneHostingExtensions
         });
         studio.Services.PostConfigure<LockFileOptions>(value => value.Path = Resolve(contentRoot, value.Path));
         studio.Services.AddNuplaneFeatureCatalog();
+        // Retain shared feature/settings semantics while requiring native admission for installed metadata.
+        var manifestContributor = studio.Services.Single(service => service.ServiceType == typeof(IFeatureCatalogContributor)
+            && service.ImplementationType == typeof(PackageManifestFeatureCatalogContributor));
+        studio.Services[studio.Services.IndexOf(manifestContributor)] = ServiceDescriptor.Scoped<IFeatureCatalogContributor, ProtectedPackageManifestContributor>();
         studio.Services.AddSingleton<IShellFeatureConfigurationStore, ShellFeatureStore>();
         studio.Services.AddScoped<IShellReloader, SelectedShellReloader>();
         studio.Services.AddScoped<IFeatureActivationGuard, StudioFeatureGuard>();
@@ -117,6 +123,7 @@ public static class NuplaneHostingExtensions
         _ = endpoints.ServiceProvider.GetRequiredService<StudioNuplaneSettings>();
         FeatureManagementEndpoints.Map(endpoints);
         PackageAssetEndpoints.Map(endpoints);
+        PackageMaintenanceEndpoints.Map(endpoints);
         return endpoints;
     }
 

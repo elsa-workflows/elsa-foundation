@@ -13,6 +13,7 @@ using CShells.Lifecycle;
 using Elsa.Studio.Core.Attributes;
 using Elsa.Studio.Core.Events;
 using Elsa.Studio.Hosting;
+using Elsa.Studio.Api.Contracts;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -144,6 +145,50 @@ public sealed class StudioHostingTests
             cancellation.Cancel();
             await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await request);
             await scope.DisposedSignal.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        finally { host.Probe.Release.TrySetResult(); }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Root_manifest_consumers_retain_the_selected_generation_until_the_awaited_read_finishes(bool moduleRegistry)
+    {
+        await using var host = await HostingTestHost.StartAsync(withDefaultDecoy: true);
+        await using var rootScope = host.App.Services.CreateAsyncScope();
+        var manifests = rootScope.ServiceProvider.GetRequiredService<IStudioModuleManifestProvider>();
+        host.Probe.PauseNext = 1;
+        Task request = moduleRegistry ? manifests.GetModuleRegistry(CancellationToken.None) : manifests.GetModules(CancellationToken.None);
+        var retained = await host.Probe.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var registry = host.App.Services.GetRequiredService<IShellRegistry>();
+        var old = registry.GetActive("Authoring");
+        try
+        {
+            await registry.ReloadAsync("Authoring").WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.NotSame(old, registry.GetActive("Authoring"));
+            Assert.False(retained.Disposed);
+            var current = await manifests.GetModules(CancellationToken.None);
+            Assert.Contains(current.Modules, module => module.ShellFeatureName == "HostingConsumer");
+        }
+        finally { host.Probe.Release.TrySetResult(); }
+        await request.WaitAsync(TimeSpan.FromSeconds(10));
+        await retained.DisposedSignal.Task.WaitAsync(TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
+    public async Task Root_manifest_cancellation_releases_the_tracked_scope()
+    {
+        await using var host = await HostingTestHost.StartAsync();
+        await using var rootScope = host.App.Services.CreateAsyncScope();
+        host.Probe.PauseNext = 1;
+        using var cancellation = new CancellationTokenSource();
+        var pending = rootScope.ServiceProvider.GetRequiredService<IStudioModuleManifestProvider>().GetModuleRegistry(cancellation.Token);
+        var retained = await host.Probe.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        try
+        {
+            cancellation.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await pending);
+            await retained.DisposedSignal.Task.WaitAsync(TimeSpan.FromSeconds(10));
         }
         finally { host.Probe.Release.TrySetResult(); }
     }

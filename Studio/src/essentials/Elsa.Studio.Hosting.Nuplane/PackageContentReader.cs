@@ -15,6 +15,13 @@ internal sealed class PackageContentReader(INuplaneAdminOperations admin, IPacka
     // Our catalog lookups and content admissions must not race each other for the non-waiting native root lock.
     private readonly SemaphoreSlim _reads = new(1, 1);
 
+    public async Task<ActivePackagesSnapshot> GetPackagesAsync(CancellationToken cancellationToken)
+    {
+        await _reads.WaitAsync(cancellationToken);
+        try { return await admin.GetPackagesAsync(cancellationToken); }
+        finally { _reads.Release(); }
+    }
+
     public async Task<IAsyncDisposable?> TryAcquireResponseAsync(CancellationToken cancellationToken)
     {
         if (!await _requests.WaitAsync(0, cancellationToken)) return null;

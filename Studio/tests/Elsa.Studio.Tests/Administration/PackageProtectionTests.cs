@@ -85,7 +85,8 @@ public sealed class PackageProtectionTests
             queued = Enumerable.Range(0, 27).Select(_ => host.Client.GetAsync(AssetUrl)).ToArray();
             cancelled = host.Client.GetAsync(AssetUrl, cancellation.Token);
             await logs.WaitQueued(32).WaitAsync(TimeSpan.FromSeconds(30));
-            using var saturated = await host.Client.GetAsync(AssetUrl);
+            using var saturationTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var saturated = await host.Client.GetAsync(AssetUrl, saturationTimeout.Token);
             Assert.Equal(HttpStatusCode.ServiceUnavailable, saturated.StatusCode);
             Assert.Equal(TimeSpan.FromSeconds(1), saturated.Headers.RetryAfter!.Delta);
             cancellation.Cancel();
@@ -95,12 +96,21 @@ public sealed class PackageProtectionTests
             await logs.WaitQueued(33).WaitAsync(TimeSpan.FromSeconds(30));
             Assert.Equal(4, writes.Entered);
         }
-        finally { writes.Release.TrySetResult(); }
-        foreach (var task in first.Concat(queued).Concat(replacement is null ? [] : [replacement]))
+        finally
         {
-            using var response = await task;
-            response.EnsureSuccessStatusCode();
-            Assert.Equal("detached bytes", await response.Content.ReadAsStringAsync());
+            writes.Release.TrySetResult();
+            cancellation.Cancel();
+            if (cancelled is not null)
+            {
+                try { using var response = await cancelled; }
+                catch (OperationCanceledException) { }
+            }
+            foreach (var task in first.Concat(queued).Concat(replacement is null ? [] : [replacement]))
+            {
+                using var response = await task;
+                response.EnsureSuccessStatusCode();
+                Assert.Equal("detached bytes", await response.Content.ReadAsStringAsync());
+            }
         }
     }
 
