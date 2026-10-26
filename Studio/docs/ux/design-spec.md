@@ -34,7 +34,7 @@ code.
 3. **Tokens only.** Colour, radius, shadow, spacing and type come from `--studio-*` tokens.
    Colour lint is only partly true today: `pnpm lint:css` (`elsa/no-raw-color-literal`) covers
    `src/essentials/*/Client/src/**/*.css` and `Extensions/*/studio/*/Client/src/**/*.css`.
-   `.stylelintrc.json` ignores `**/Elsa.Studio.Web/Client/**`, so the app shell, `ui/forms`,
+   `.stylelintrc.json` ignores `**/Elsa.Studio.Hosting/Client/**`, so the app shell, `ui/forms`,
    `ui/layout`, `ui/feedback` and `app/styles.css` are **not** colour-linted. The disclosure kit
    CSS (`ui/disclosure/**/*.css`) is linted via `.stylelintrc.disclosure.json`. Module colour:
    `exists`. Shell/`ui` colour: review-only until coverage is extended (`target, phase 4`).
@@ -132,12 +132,12 @@ and token contract while keeping each resource's domain columns and operations:
 
 | Component | Status | Rule |
 |---|---|---|
-| Button (today) | `exists` | `ui/forms/Button` (`StudioButton`): variants `primary`, `default`, `ghost`; sizes `sm` / `md`. Focus ring is `--studio-focus` (there is no `--studio-ring`). See the [worked examples](../../src/apps/Elsa.Studio.Web/Client/src/app/ui/README.md#worked-examples). |
+| Button (today) | `exists` | `ui/forms/Button` (`StudioButton`): variants `primary`, `default`, `ghost`; sizes `sm` / `md`. Focus ring is `--studio-focus` (there is no `--studio-ring`). See the [worked examples](../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/README.md#worked-examples). |
 | Field (today) | `exists` | `ui/forms/Field` (`StudioField`) wraps a control with its label and optional description/meta. It is exported by the public `@elsa-workflows/studio-ui` package for host pages and independently bundled modules; see the UI README. |
 | Button (additions) | `target, phase 3` | Pressed state (`:active` translate) and a spinner while pending. |
 | Button (new variants) | `target, phase 4` | `outline` and `destructive` variants. Until they exist, use `default` / `ghost` and do not name `outline` or `destructive` in new call sites. |
 | Tabs | `exists` | `ui/layout/Tabs` (`StudioTabs`). Sentence case; overflow collapse is `target, phase 1`. |
-| DataGrid | `exists` | `ui/data-grid/DataGrid` (`StudioDataGrid`) supplies table semantics; with `onSelect`, its rows activate on click and Enter/Space. Without `onSelect`, rows have no activation handlers or tab stop. It does not isolate nested controls: callers must stop click and Enter/Space propagation for inner controls or use a guarded caller wrapper. Custom rows own their target guards; Workflow Definitions guards descendant clicks and uses the name link for keyboard entry. See the [worked examples](../../src/apps/Elsa.Studio.Web/Client/src/app/ui/README.md#worked-examples). |
+| DataGrid | `exists` | `ui/data-grid/DataGrid` (`StudioDataGrid`) supplies table semantics; with `onSelect`, its rows activate on click and Enter/Space. Without `onSelect`, rows have no activation handlers or tab stop. It does not isolate nested controls: callers must stop click and Enter/Space propagation for inner controls or use a guarded caller wrapper. Custom rows own their target guards; Workflow Definitions guards descendant clicks and uses the name link for keyboard entry. See the [worked examples](../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/README.md#worked-examples). |
 | Secrets inventory | `exists` (#3069) | Search by secret name or display name is server-backed and requests up to 100 records. Counts identify rows shown and loaded alongside the result total; a submitted search appears in the count so draft text cannot change its meaning. More matches than loaded means the result is partial; a full 100-row page with a total of 100 is complete. Type, store, scope and status facets apply only to loaded rows, and scope choices describe loaded results. |
 | DataGrid extras | `target, phase 4` | Sortable headers with an indicator; optional column picker persisted per grid; secondary actions in a ⋯ menu. |
 | Status | `exists` | `StatusChip` (filled) for run and definition status; `StatusPill` (outline) for low-emphasis metadata. Colours from the status tokens only. |
@@ -284,7 +284,7 @@ track the theme instead of a per-descriptor hex.
 - [ ] Before/after screenshots at 1600×1000 @2x, Classic Light and one dark theme.
 - [ ] Only `--studio-*` tokens. `pnpm lint:css` passes for module CSS it actually covers
       (`essentials` and `Extensions` Client CSS, plus `ui/disclosure/**/*.css`). Shell / other
-      `ui` colour is review-only until `Elsa.Studio.Web/Client` is no longer in
+      `ui` colour is review-only until `Elsa.Studio.Hosting/Client` is no longer in
       `.stylelintrc.json` `ignoreFiles`.
 - [ ] Keyboard and focus behaviour unchanged or better.
 - [ ] Axe: `pnpm test:browser -- expression-code-intelligence-accessibility.spec.ts` (Chromium

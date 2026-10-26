@@ -1,6 +1,6 @@
 # Elsa Foundation Studio
 
-Elsa Foundation Studio is a modular React studio shell hosted by ASP.NET Core. The repository owns the Studio module protocol, Vite React shell, TypeScript SDK, and sample class-library modules that contribute same-origin ESM assets and endpoints.
+Elsa Foundation Studio is a modular React studio shell hosted by ASP.NET Core. The standard browser source and prebuilt `/studio` assets belong to `src/essentials/Elsa.Studio.Hosting`; `src/apps/Elsa.Studio.Web` is the distribution composition root. Package consumers use Hosting without copying frontend source or running a frontend build. The repository owns the Studio module protocol, Vite React shell, TypeScript SDK, and sample class-library modules that contribute same-origin ESM assets and endpoints.
 
 For a current map of the host, shell, modules, routing, API boundaries, and authentication flow, see the [architecture tour](docs/architecture-tour.md).
 

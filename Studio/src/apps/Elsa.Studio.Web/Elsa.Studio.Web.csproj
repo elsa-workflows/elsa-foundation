@@ -26,10 +26,16 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Hosting owns this generated subtree now, including in existing checkouts. -->
+    <Content Remove="wwwroot/studio/**/*" />
     <Content Update="wwwroot/**/*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
+
+  <Target Name="RemoveObsoleteStudioBrowserOutput" BeforeTargets="PrepareForBuild">
+    <RemoveDir Directories="$(MSBuildProjectDirectory)/wwwroot/studio" />
+  </Target>
 
   <ItemGroup>
     <Content Update="nuplane-management.json">

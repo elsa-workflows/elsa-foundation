@@ -9,8 +9,8 @@ export default defineConfig({
   optimizeDeps: { include: ["lucide-react/dynamicIconImports"] },
   resolve: {
     alias: {
-      "@elsa-workflows/studio-sdk": resolve(__dirname, "../../src/apps/Elsa.Studio.Web/Client/src/sdk/index.ts"),
-      "@elsa-workflows/studio-ui": resolve(__dirname, "../../src/apps/Elsa.Studio.Web/StudioUi/src/index.ts"),
+      "@elsa-workflows/studio-sdk": resolve(__dirname, "../../src/essentials/Elsa.Studio.Hosting/Client/src/sdk/index.ts"),
+      "@elsa-workflows/studio-ui": resolve(__dirname, "../../src/essentials/Elsa.Studio.Hosting/StudioUi/src/index.ts"),
       "@xyflow/react": resolve(__dirname, "../../src/essentials/Elsa.Studio.Workflows/Client/node_modules/@xyflow/react")
     }
   },

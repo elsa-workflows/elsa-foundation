@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { StudioAiContributionApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { ThemeProvider } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
+import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import { WorkflowInstanceDetailsWorkbench, WorkflowInstances } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances";
 import type { IncidentStateSummary, WorkflowInstanceSummary } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
-import "../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import "../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";
 
 type FixtureRoute = { workflowExecutionId: string | null; returnTo: string | null };

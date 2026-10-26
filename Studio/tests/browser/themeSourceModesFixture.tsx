@@ -1,8 +1,8 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { createHttpClient, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { ThemeProvider, useTheme } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
-import { ThemeSwitcher } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeSwitcher";
+import { ThemeProvider, useTheme } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
+import { ThemeSwitcher } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeSwitcher";
 
 const context: StudioEndpointContext = { baseUrl: location.origin, http: createHttpClient(location.origin) };
 
