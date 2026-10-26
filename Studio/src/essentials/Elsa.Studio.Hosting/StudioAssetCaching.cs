@@ -1,4 +1,4 @@
-namespace Elsa.Studio.Web;
+namespace Elsa.Studio.Hosting;
 
 /// <summary>
 /// Module entry points (<c>module.js</c>, <c>module*.css</c>) and the shell's own bundles have stable, unhashed URLs,
@@ -18,9 +18,9 @@ internal static class StudioAssetCaching
 
     public static IApplicationBuilder UseStudioStaticFiles(this IApplicationBuilder app) => app.UseStaticFiles(RevalidatingStaticFiles);
 
-    public static IEndpointRouteBuilder MapStudioFallback(this IEndpointRouteBuilder endpoints)
+    public static IEndpointRouteBuilder MapStudioFallback(this IEndpointRouteBuilder endpoints, string indexFile)
     {
-        endpoints.MapFallbackToFile("studio/index.html", RevalidatingStaticFiles);
+        endpoints.MapFallbackToFile(indexFile, RevalidatingStaticFiles);
         return endpoints;
     }
 }

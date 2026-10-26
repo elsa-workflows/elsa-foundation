@@ -28,7 +28,7 @@ internal static class NuplaneStaticWebAssetsEndpoint
 
         // Before the lookups on purpose: a 404 is heuristically cacheable too, and an asset missing now may exist after
         // the next rebuild or package install.
-        StudioAssetCaching.ApplyRevalidation(response);
+        response.Headers.CacheControl = "no-cache";
 
         var staticWebAsset = environment.WebRootFileProvider.GetFileInfo($"_content/{packageId}/{assetPath}");
         if (staticWebAsset.Exists)

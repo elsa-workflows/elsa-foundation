@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Elsa.Studio.Hosting;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -10,6 +11,7 @@ namespace Elsa.Studio.Web;
 internal sealed class StudioShellFeatureConfigurationStore(
     IHostEnvironment environment,
     IConfigurationRoot configuration,
+    StudioConfigurationMutationGate mutationGate,
     ILogger<StudioShellFeatureConfigurationStore>? logger = null)
 {
     private const string FileName = "shells.json";
@@ -19,11 +21,6 @@ internal sealed class StudioShellFeatureConfigurationStore(
     {
         WriteIndented = true
     };
-
-    // Serializes read-modify-write cycles against shells.json across the process so concurrent saves
-    // can't interleave and clobber each other's revisions. Shared with the module-management writers
-    // via ConfigFileWriter so all mutations of on-disk shell/management config are mutually exclusive.
-    private static readonly SemaphoreSlim WriteGate = ConfigFileWriter.WriteGate;
 
     public async Task<StudioShellFeatureConfigurationSnapshot> LoadAsync(CancellationToken cancellationToken = default)
     {
@@ -40,45 +37,38 @@ internal sealed class StudioShellFeatureConfigurationStore(
         // the subsequent write are atomic with respect to other config mutations. Without this, two
         // concurrent saves could both read the same revision, both pass the conflict check, and the
         // second write would silently overwrite the first.
-        await WriteGate.WaitAsync(cancellationToken);
-        try
+        await using var mutation = await mutationGate.AcquireAsync(cancellationToken);
+        var document = await ReadDocumentAsync(cancellationToken);
+        var current = CreateSnapshot(document);
+        if (!string.Equals(current.Revision, expectedRevision, StringComparison.Ordinal))
+            throw new StudioFeatureCatalogRevisionConflictException(expectedRevision, current.Revision);
+
+        var featuresNode = GetFeaturesNode(document.Document, create: true);
+        featuresNode.Clear();
+
+        foreach (var feature in features.Where(feature => feature.Enabled).OrderBy(feature => feature.Id, StringComparer.OrdinalIgnoreCase))
         {
-            var document = await ReadDocumentAsync(cancellationToken);
-            var current = CreateSnapshot(document);
-            if (!string.Equals(current.Revision, expectedRevision, StringComparison.Ordinal))
-                throw new StudioFeatureCatalogRevisionConflictException(expectedRevision, current.Revision);
+            if (string.IsNullOrWhiteSpace(feature.Id))
+                continue;
 
-            var featuresNode = GetFeaturesNode(document.Document, create: true);
-            featuresNode.Clear();
+            var featureConfiguration = feature.Configuration.ValueKind is JsonValueKind.Object
+                ? JsonNode.Parse(feature.Configuration.GetRawText()) ?? new JsonObject()
+                : new JsonObject();
 
-            foreach (var feature in features.Where(feature => feature.Enabled).OrderBy(feature => feature.Id, StringComparer.OrdinalIgnoreCase))
-            {
-                if (string.IsNullOrWhiteSpace(feature.Id))
-                    continue;
-
-                var featureConfiguration = feature.Configuration.ValueKind is JsonValueKind.Object
-                    ? JsonNode.Parse(feature.Configuration.GetRawText()) ?? new JsonObject()
-                    : new JsonObject();
-
-                featuresNode[feature.Id] = featureConfiguration;
-            }
-
-            var json = document.Document.ToJsonString(JsonOptions);
-            await ConfigFileWriter.WriteAtomicAsync(document.Path, json + Environment.NewLine, cancellationToken);
-
-            // Reload the configuration root explicitly rather than relying solely on the
-            // reloadOnChange:true file watcher registered in Program.cs. The watcher fires
-            // asynchronously and is debounced, so without this deterministic reload a caller reading
-            // configuration immediately after SaveAsync could observe stale values. The redundant
-            // watcher reload that follows shortly after is harmless (it re-parses identical content).
-            configuration.Reload();
-
-            return CreateSnapshot(new StudioShellDocument(document.Path, document.Document));
+            featuresNode[feature.Id] = featureConfiguration;
         }
-        finally
-        {
-            WriteGate.Release();
-        }
+
+        var json = document.Document.ToJsonString(JsonOptions);
+        await ConfigFileWriter.WriteAtomicAsync(document.Path, json + Environment.NewLine, cancellationToken);
+
+        // Reload the configuration root explicitly rather than relying solely on the
+        // reloadOnChange:true file watcher registered in Program.cs. The watcher fires
+        // asynchronously and is debounced, so without this deterministic reload a caller reading
+        // configuration immediately after SaveAsync could observe stale values. The redundant
+        // watcher reload that follows shortly after is harmless (it re-parses identical content).
+        configuration.Reload();
+
+        return CreateSnapshot(new StudioShellDocument(document.Path, document.Document));
     }
 
     private async Task<StudioShellDocument> ReadDocumentAsync(CancellationToken cancellationToken)

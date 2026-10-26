@@ -175,6 +175,7 @@ public sealed class StudioShellFeatureConfigurationStoreTests : IDisposable
         return new StudioShellFeatureConfigurationStore(
             new TestHostEnvironment(_contentRoot),
             configuration,
+            Hosting.HostingTestHost.CreateGate(),
             logger ?? NullLogger<StudioShellFeatureConfigurationStore>.Instance);
     }
 

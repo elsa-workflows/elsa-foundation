@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Elsa.Studio.Api.Options;
 
-namespace Elsa.Studio.Web;
+namespace Elsa.Studio.Hosting;
 
 /// <summary>
 /// Builds the <c>/studio-runtime.js</c> body that seeds <c>window.__ELSA_STUDIO_RUNTIME__</c> in the browser.
@@ -17,7 +17,7 @@ internal static class StudioRuntimeScript
     public const string GlobalName = "window.__ELSA_STUDIO_RUNTIME__";
 
     /// <summary>Builds the browser runtime config object surfaced to the SPA. Contains no server-side secrets.</summary>
-    public static Dictionary<string, object?> BuildRuntimeConfig(IConfiguration configuration) =>
+    public static Dictionary<string, object?> BuildRuntimeConfig(IConfiguration configuration, bool authEnabled) =>
         new()
         {
             // This is the browser-facing URL. Server-side calls use Studio:BackendServerBaseUrl when supplied, with
@@ -27,7 +27,7 @@ internal static class StudioRuntimeScript
             // Surface the user-auth seam so the shell can attach real bearer tokens (and 401-refresh-retry) against the
             // backend identity endpoints. Omitted endpoints fall back to the SDK defaults (`/_elsa/identity/token`);
             // when Enabled is false the shell keeps booting anonymously.
-            ["auth"] = BuildAuthRuntimeConfig(configuration),
+            ["auth"] = BuildAuthRuntimeConfig(configuration, authEnabled),
             ["workflows"] = BuildWorkflowsRuntimeConfig(configuration),
             ["activityDefinitions"] = BuildActivityDefinitionsRuntimeConfig(configuration),
             ["attention"] = new Dictionary<string, object?>
@@ -38,14 +38,14 @@ internal static class StudioRuntimeScript
         };
 
     /// <summary>Renders the full <c>/studio-runtime.js</c> body.</summary>
-    public static string Render(IConfiguration configuration) =>
-        $"{GlobalName} = {JsonSerializer.Serialize(BuildRuntimeConfig(configuration))};";
+    public static string Render(IConfiguration configuration, bool authEnabled) =>
+        $"{GlobalName} = {JsonSerializer.Serialize(BuildRuntimeConfig(configuration, authEnabled))};";
 
-    private static Dictionary<string, object?> BuildAuthRuntimeConfig(IConfiguration configuration)
+    private static Dictionary<string, object?> BuildAuthRuntimeConfig(IConfiguration configuration, bool authEnabled)
     {
         var auth = new Dictionary<string, object?>
         {
-            ["enabled"] = configuration.GetValue("Studio:Auth:Enabled", defaultValue: false)
+            ["enabled"] = authEnabled
         };
 
         var tokenEndpoint = configuration["Studio:Auth:TokenEndpoint"];
