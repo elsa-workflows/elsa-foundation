@@ -41,6 +41,7 @@ public interface IWorkflowExecutableRootWriteLeaseManager
     /// <remarks>Provider and callback failures propagate with their original cause. Release failures are logged and
     /// do not replace the write result. Callbacks must honor cancellation and fence durable acceptance under current
     /// authority. The lease coordinator does not roll back a callback's durable effects.</remarks>
+    /// <exception cref="InvalidDataException">A provider returned contradictory grant material/ownership or an empty token; the unrelated grant is never used or released.</exception>
     /// <exception cref="InvalidOperationException">An exact pin or dependency graph cannot be validated; no write begins. The built-in manager reports WorkflowExecutableDependencyGraphException.</exception>
     /// <exception cref="Exceptions.WorkflowExecutableRootWriteLeaseUnavailableException">Material is missing or reserved for deletion; no write begins.</exception>
     /// <exception cref="Exceptions.WorkflowExecutableRootWriteLeaseLostException">A grant expires before the write, or renewal loses authority and cancels an active write.</exception>
@@ -57,4 +58,23 @@ public interface IWorkflowExecutableRootWriteLeaseManager
         cancellationToken.ThrowIfCancellationRequested();
         return ValueTask.FromException(new NotSupportedException("This lease manager cannot protect an atomic executable root set."));
     }
+    /// <summary>Protect an exact complete root set and expose its immutable actual provider grants to the atomic writer.</summary>
+    /// <remarks>The grants are data for provider fencing, not independent authority. The writer must atomically validate
+    /// current tokens/expiry and coordinate its durable commit against deletion. Renewal/cancellation cannot substitute
+    /// for that provider fence. Original overloads remain unchanged; legacy managers refuse before invoking a callback.</remarks>
+    /// <exception cref="NotSupportedException">The selected manager cannot expose complete grant authority.</exception>
+    /// <exception cref="Exceptions.WorkflowExecutableRootWriteLeaseUnavailableException">A root/closure artifact is missing or reserved.</exception>
+    /// <exception cref="Exceptions.WorkflowExecutableRootWriteLeaseLostException">A grant expires or renewal loses authority.</exception>
+    /// <exception cref="InvalidOperationException">The complete pin/dependency graph is invalid.</exception>
+    /// <exception cref="InvalidDataException">A provider returned contradictory material/ownership or an empty grant token; no callback begins.</exception>
+    /// <exception cref="OperationCanceledException">Requested cancellation propagates.</exception>
+    /// <exception cref="AggregateException">Concurrent provider/write/cancellation failures retain their distinct causes.</exception>
+    ValueTask ExecuteFencedAsync(IReadOnlyCollection<Models.WorkflowExecutableIdentity> roots, string leaseId,
+        Func<IReadOnlyList<Models.WorkflowExecutableRootWriteLease>, CancellationToken, ValueTask> write,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromException(new NotSupportedException("This lease manager cannot expose atomic root-set grants."));
+    }
+
 }

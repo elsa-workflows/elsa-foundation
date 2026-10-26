@@ -28,7 +28,7 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
         ArgumentException.ThrowIfNullOrWhiteSpace(leaseId);
         ArgumentNullException.ThrowIfNull(write);
 
-        await ExecuteLeasedAsync([artifactId], leaseId, write, cancellationToken);
+        await ExecuteLeasedAsync([artifactId], leaseId, (_, token) => write(token), cancellationToken);
     }
 
     public async ValueTask ExecuteAsync(
@@ -45,14 +45,14 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
         await ExecuteLeasedAsync(
             closure.Select(executable => executable.Identity.ArtifactId),
             leaseId,
-            write,
+            (_, token) => write(token),
             cancellationToken);
     }
 
     private async ValueTask ExecuteLeasedAsync(
         IEnumerable<string> artifactIds,
         string leaseId,
-        Func<CancellationToken, ValueTask> write,
+        Func<IReadOnlyList<WorkflowExecutableRootWriteLease>, CancellationToken, ValueTask> write,
         CancellationToken cancellationToken,
         bool verifyBeforeWrite = false)
     {
@@ -87,6 +87,9 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
                     cancellationToken);
                 if (lease is null)
                     throw new WorkflowExecutableRootWriteLeaseUnavailableException(artifactId, leaseId);
+                if (verifyBeforeWrite && (lease.ArtifactId != artifactId || lease.LeaseId != leaseId ||
+                    string.IsNullOrWhiteSpace(lease.ConcurrencyToken)))
+                    throw new InvalidDataException("The executable provider returned a grant for different material/ownership or without a token.");
                 leases.Add(lease);
             }
 
@@ -122,7 +125,7 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
             deadlineGuard = verifyBeforeWrite ? new LeaseDeadlineGuard(grantDeadlines, leaseId, timeProvider, writeCancellation) : null;
             renewalTask = RenewUntilStoppedAsync(leases, duration, renewalStop.Token, writeCancellation, deadlineGuard);
             deadlineGuard?.ThrowIfLost();
-            await write(writeCancellation.Token);
+            await write(Array.AsReadOnly(leases.ToArray()), writeCancellation.Token);
         }
         catch (Exception exception)
         {
@@ -167,10 +170,15 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
         return causes.Length == 1 ? causes[0] : new AggregateException("Executable retention lease and cancellation failures.", causes);
     }
 
-    public async ValueTask ExecuteAsync(
-        IReadOnlyCollection<WorkflowExecutableIdentity> roots,
-        string leaseId,
-        Func<CancellationToken, ValueTask> write,
+    public ValueTask ExecuteAsync(IReadOnlyCollection<WorkflowExecutableIdentity> roots, string leaseId,
+        Func<CancellationToken, ValueTask> write, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(write);
+        return ExecuteFencedAsync(roots, leaseId, (_, token) => write(token), cancellationToken);
+    }
+
+    public async ValueTask ExecuteFencedAsync(IReadOnlyCollection<WorkflowExecutableIdentity> roots, string leaseId,
+        Func<IReadOnlyList<WorkflowExecutableRootWriteLease>, CancellationToken, ValueTask> write,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(roots);

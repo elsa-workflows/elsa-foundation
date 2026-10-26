@@ -22,6 +22,91 @@ public sealed class WorkflowExecutableRootWriteLeaseManagerTests
 
     private readonly ManualTimerTimeProvider _timeProvider = new(new DateTimeOffset(2026, 6, 11, 12, 0, 0, TimeSpan.Zero));
 
+    [Theory]
+    [InlineData("artifact")] [InlineData("owner")] [InlineData("empty-token")]
+    public async Task Fenced_set_refuses_malformed_grants_without_using_or_releasing_an_unrelated_owner(string defect)
+    {
+        var inner = new InMemoryWorkflowExecutableStore(); await inner.SaveBatchAsync([Executable("a"), Executable("b"), Executable("other")]);
+        var now = _timeProvider.GetUtcNow();
+        var unrelated = (await inner.TryAcquireRootWriteLeaseAsync(defect == "artifact" ? "other" : "b", "unrelated-owner", now.Add(LeaseDuration), now))!;
+        var returned = defect == "artifact" ? unrelated with { LeaseId = "writer" } :
+            defect == "empty-token" ? unrelated with { LeaseId = "writer", ConcurrencyToken = "" } : unrelated;
+        var provider = new MalformedGrantStore(inner, returned); var called = false;
+        await Assert.ThrowsAsync<InvalidDataException>(() => NewManager(provider).ExecuteFencedAsync(
+            [Executable("a").Identity, Executable("b").Identity], "writer", (_, _) => { called = true; return ValueTask.CompletedTask; }).AsTask());
+        Assert.False(called); Assert.Empty(provider.Released.Where(lease => lease.ArtifactId != "a"));
+        Assert.NotNull(await inner.TryBeginDeletionAsync("a", "gc", now.Add(LeaseDuration), now));
+        Assert.True(await inner.RenewRootWriteLeaseAsync(unrelated, now.Add(LeaseDuration), now));
+    }
+
+    private sealed class MalformedGrantStore(IWorkflowExecutableStore inner, WorkflowExecutableRootWriteLease returned) : WorkflowExecutableStoreDecorator(inner)
+    {
+        public List<WorkflowExecutableRootWriteLease> Released { get; } = [];
+        public override ValueTask<WorkflowExecutableRootWriteLease?> TryAcquireRootWriteLeaseAsync(string artifactId, string leaseId,
+            DateTimeOffset expiresAt, DateTimeOffset now, CancellationToken cancellationToken = default) =>
+            artifactId == "b" ? ValueTask.FromResult<WorkflowExecutableRootWriteLease?>(returned) : base.TryAcquireRootWriteLeaseAsync(artifactId, leaseId, expiresAt, now, cancellationToken);
+        public override ValueTask ReleaseRootWriteLeaseAsync(WorkflowExecutableRootWriteLease lease, CancellationToken cancellationToken = default)
+        { Released.Add(lease); return base.ReleaseRootWriteLeaseAsync(lease, cancellationToken); }
+    }
+
+    [Fact]
+    public async Task Fenced_callback_receives_only_the_immutable_actual_complete_grants()
+    {
+        var store = new InMemoryWorkflowExecutableStore(); var dependency = Executable("dependency");
+        var first = Executable("first", dependency); var second = Executable("second", dependency);
+        await store.SaveBatchAsync([dependency, first, second]);
+        IReadOnlyList<WorkflowExecutableRootWriteLease>? captured = null;
+        await NewManager(store).ExecuteFencedAsync([second.Identity, first.Identity], "atomic-writer", async (grants, token) =>
+        {
+            captured = grants;
+            Assert.Equal(new[] { "dependency", "first", "second" }, grants.Select(grant => grant.ArtifactId));
+            Assert.Throws<NotSupportedException>(() => ((IList<WorkflowExecutableRootWriteLease>)grants).Clear());
+            Assert.Throws<NotSupportedException>(() => ((IList<WorkflowExecutableRootWriteLease>)grants)[0] = grants[0] with { ConcurrencyToken = "changed" });
+            foreach (var grant in grants)
+            {
+                Assert.Equal("atomic-writer", grant.LeaseId); Assert.False(string.IsNullOrWhiteSpace(grant.ConcurrencyToken));
+                var now = _timeProvider.GetUtcNow();
+                Assert.True(await store.RenewRootWriteLeaseAsync(grant, now.Add(LeaseDuration), now, token));
+            }
+            Assert.Equal("published", store.ExecuteUnderRootWriteLeases(grants, _timeProvider, () => "published", token));
+        });
+        foreach (var grant in captured!)
+            Assert.False(await store.RenewRootWriteLeaseAsync(grant, _timeProvider.GetUtcNow().Add(LeaseDuration), _timeProvider.GetUtcNow()));
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Legacy_manager_refuses_actual_grant_callback_without_using_its_old_overload(bool cancel)
+    {
+        var legacy = new LegacyRootManager(); IWorkflowExecutableRootWriteLeaseManager manager = legacy; var called = false;
+        var token = new CancellationToken(cancel);
+        Task Call() => manager.ExecuteFencedAsync([Executable("root").Identity], "writer", (_, _) => { called = true; return ValueTask.CompletedTask; }, token).AsTask();
+        if (cancel) await Assert.ThrowsAnyAsync<OperationCanceledException>(Call);
+        else await Assert.ThrowsAsync<NotSupportedException>(Call);
+        Assert.False(called); Assert.Equal(0, legacy.Calls);
+    }
+
+    [Theory]
+    [InlineData("expired")] [InlineData("released")] [InlineData("token")] [InlineData("guard")]
+    [InlineData("cancelled")] [InlineData("valid")]
+    public async Task Native_memory_commit_fence_checks_actual_tokens_and_fresh_time_before_publication(string scenario)
+    {
+        var store = new InMemoryWorkflowExecutableStore(); await store.SaveBatchAsync([Executable("a"), Executable("b")]);
+        var now = _timeProvider.GetUtcNow();
+        var first = (await store.TryAcquireRootWriteLeaseAsync("a", "writer", now.AddMinutes(1), now))!;
+        var last = (await store.TryAcquireRootWriteLeaseAsync("b", "writer", now.AddMinutes(1), now))!;
+        if (scenario is "released" or "guard") await store.ReleaseRootWriteLeaseAsync(last);
+        if (scenario == "guard") Assert.NotNull(await store.TryBeginDeletionAsync("b", "gc", now.AddMinutes(2), now));
+        if (scenario == "token") last = last with { ConcurrencyToken = "forged" };
+        if (scenario == "expired") _timeProvider.Advance(TimeSpan.FromMinutes(1));
+        var published = false; var cancellation = new CancellationToken(scenario == "cancelled");
+        void Publish() => store.ExecuteUnderRootWriteLeases(new[] { first, last }, _timeProvider, () => published = true, cancellation);
+        if (scenario == "valid") Publish();
+        else if (scenario == "cancelled") Assert.ThrowsAny<OperationCanceledException>(Publish);
+        else Assert.Throws<WorkflowExecutableRootWriteLeaseLostException>(Publish);
+        Assert.Equal(scenario == "valid", published);
+    }
+
     [Fact]
     public async Task ExecuteAsync_RenewsLeaseUntilWriteCompletes()
     {

@@ -450,6 +450,47 @@ public sealed class EfWorkflowExecutableStore(
             cancellationToken);
     }
 
+    internal async ValueTask FenceRootWriteLeasesAsync(IReadOnlyList<WorkflowExecutableRootWriteLease> leases,
+        TimeProvider clock, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(leases); ArgumentNullException.ThrowIfNull(clock);
+        if (context.Database.CurrentTransaction is null)
+            throw new InvalidOperationException("Executable root fencing requires the caller's owned acceptance transaction.");
+        if (leases.Count == 0 || leases.Select(lease => lease.ArtifactId).Distinct(StringComparer.Ordinal).Count() != leases.Count)
+            throw new ArgumentException("An atomic executable fence requires distinct actual grants.", nameof(leases));
+        var scope = RequireScope();
+        foreach (var lease in leases.OrderBy(lease => lease.ArtifactId, StringComparer.Ordinal))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var pair = await ReadPairAsync(context, scope, lease.ArtifactId, cancellationToken);
+            if (pair is null) throw Lost();
+            var row = new { Id = CreateId(scope, lease.ArtifactId), pair.Value.IncarnationId, pair.Value.Revision };
+            var state = pair.Value.State;
+            // Lock the actual coordination revision before checking current grant time. An acquirer must clear
+            // an expired deletion guard by this revision, so collection cannot overlap the accepted root commit.
+            var locked = await context.WorkflowExecutableCoordinations.Where(candidate => candidate.Id == row.Id &&
+                candidate.Revision == row.Revision && candidate.IncarnationId == row.IncarnationId)
+                .ExecuteUpdateAsync(update => update.SetProperty(candidate => candidate.Revision, row.Revision + 1), cancellationToken);
+            if (locked != 1) throw new DbUpdateConcurrencyException("Executable coordination changed before root acceptance.");
+            if (state.Guard is not null) throw Lost();
+            var grant = await FindLeaseAsync(context, scope, lease.ArtifactId, lease.LeaseId,
+                CreateLeaseId(scope, lease.ArtifactId, lease.LeaseId), cancellationToken, tracking: false);
+            var nowTicks = clock.GetUtcNow().UtcTicks; // Fresh after any blocked coordination/lease read.
+            if (grant is null || grant.Token != lease.ConcurrencyToken || grant.IncarnationId != row.IncarnationId ||
+                grant.ExpiresAtUtcTicks <= nowTicks) throw Lost();
+            var fenced = await context.WorkflowExecutableRootWriteLeases.Where(candidate => candidate.Id == grant.Id &&
+                candidate.Token == lease.ConcurrencyToken && candidate.IncarnationId == row.IncarnationId && candidate.ExpiresAtUtcTicks > nowTicks)
+                .ExecuteUpdateAsync(update => update.SetProperty(candidate => candidate.Revision, candidate => candidate.Revision + 1), cancellationToken);
+            if (fenced != 1) throw Lost();
+            var current = await FindLeaseAsync(context, scope, lease.ArtifactId, lease.LeaseId,
+                CreateLeaseId(scope, lease.ArtifactId, lease.LeaseId), cancellationToken, tracking: false);
+            if (current is null || current.Token != lease.ConcurrencyToken || current.IncarnationId != row.IncarnationId ||
+                current.ExpiresAtUtcTicks <= clock.GetUtcNow().UtcTicks) throw Lost();
+
+            Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableRootWriteLeaseLostException Lost() => new(lease.ArtifactId, lease.LeaseId);
+        }
+    }
+
     internal async ValueTask<bool> ExecuteUnderDeletionGuardAsync(WorkflowExecutableDeletionGuard guard,
         DateTimeOffset now, Func<ValueTask<bool>> write, CancellationToken cancellationToken)
     {
@@ -712,7 +753,7 @@ public sealed class EfWorkflowExecutableStore(
     /// <summary>
     /// Reads and validates the executable pair without tracking: its incarnation and coordination state, or null when absent.
     /// </summary>
-    private static async Task<(string IncarnationId, CoordinationState State)?> ReadPairAsync(
+    private static async Task<(string IncarnationId, CoordinationState State, long Revision)?> ReadPairAsync(
         RuntimeDbContext db,
         string scope,
         string artifactId,
@@ -746,7 +787,7 @@ public sealed class EfWorkflowExecutableStore(
                 return null;
             var state = coordination is null ? null : ReadCoordination(coordination, scope, artifactId, id);
             if (artifact is not null && state is not null && StringComparer.Ordinal.Equals(artifact, coordination!.IncarnationId))
-                return (artifact, state);
+                return (artifact, state, coordination.Revision);
             // A delete or create committed between the two reads; observe the pair once more before calling it corrupt.
             if (attempt > 0)
                 throw new InvalidDataException($"Workflow executable '{id}' has incomplete persisted state.");
@@ -842,10 +883,12 @@ public sealed class EfWorkflowExecutableStore(
         string artifactId,
         string leaseId,
         string id,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, bool tracking = true)
     {
+        var query = db.WorkflowExecutableRootWriteLeases.AsQueryable();
+        if (!tracking) query = query.AsNoTracking();
         var row = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
-            db, "reading", artifactId, () => db.WorkflowExecutableRootWriteLeases.SingleOrDefaultAsync(x => x.Id == id, cancellationToken));
+            db, "reading", artifactId, () => query.SingleOrDefaultAsync(x => x.Id == id, cancellationToken));
         if (row is null)
             return null;
         if (EfSchemaVersion.NotReadable(RuntimeArtifactEfModule.Chain, row.SchemaVersion) ||

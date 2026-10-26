@@ -26,6 +26,100 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 public sealed class EfRuntimeArtifactScopeTests
 {
     [Theory]
+    [InlineData("valid")] [InlineData("expired")] [InlineData("released")] [InlineData("token")]
+    [InlineData("replaced")] [InlineData("guard")] [InlineData("incarnation")]
+    [InlineData("live-grant-under-guard")]
+    [InlineData("stale-tracked-lease")] [InlineData("stale-tracked-coordination")]
+    [InlineData("after-coordination-lock")] [InlineData("after-lease-lock")]
+    [InlineData("no-transaction")] [InlineData("cancelled")]
+    public async Task Actual_EF_root_commit_fence_validates_current_grants_after_locks_and_rolls_back_refusals(string scenario)
+    {
+        var clock = new Microsoft.Extensions.Time.Testing.FakeTimeProvider(DateTimeOffset.UtcNow);
+        var delay = new RootFenceDelay(clock, scenario);
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a", delay);
+        await fixture.Executable.SaveBatchAsync([Executable("a"), Executable("b")]);
+        var now = clock.GetUtcNow();
+        var first = (await fixture.Executable.TryAcquireRootWriteLeaseAsync("a", "writer", now.AddMinutes(1), now))!;
+        var last = (await fixture.Executable.TryAcquireRootWriteLeaseAsync("b", "writer", now.AddMinutes(1), now))!;
+        if (scenario is "released" or "replaced" or "guard") await fixture.Executable.ReleaseRootWriteLeaseAsync(last);
+        if (scenario == "replaced") Assert.NotNull(await fixture.Executable.TryAcquireRootWriteLeaseAsync("b", "writer", now.AddMinutes(2), now));
+        if (scenario == "guard") Assert.NotNull(await fixture.Executable.TryBeginDeletionAsync("b", "gc", now.AddMinutes(2), now));
+        if (scenario == "live-grant-under-guard")
+        {
+            var current = await fixture.Context.WorkflowExecutableRootWriteLeases.AsNoTracking().SingleAsync(row => row.ArtifactId == EfRelationalIdentity.Encode("b"));
+            await fixture.Executable.ReleaseRootWriteLeaseAsync(last);
+            Assert.NotNull(await fixture.Executable.TryBeginDeletionAsync("b", "gc", now.AddMinutes(2), now));
+            // Construct contradictory persisted authority deliberately: a matching grant must never defeat a deletion guard.
+            fixture.Context.WorkflowExecutableRootWriteLeases.Add(current); await fixture.Context.SaveChangesAsync(); fixture.Context.ChangeTracker.Clear();
+        }
+        if (scenario == "token") last = last with { ConcurrencyToken = "forged" };
+        if (scenario == "incarnation")
+        {
+            var old = await fixture.Context.WorkflowExecutableRootWriteLeases.AsNoTracking().SingleAsync(row => row.ArtifactId == EfRelationalIdentity.Encode("b"));
+            Assert.True(await fixture.Executable.DeleteAsync("b")); await fixture.Executable.SaveAsync(Executable("b"));
+            fixture.Context.WorkflowExecutableRootWriteLeases.Add(old); await fixture.Context.SaveChangesAsync(); fixture.Context.ChangeTracker.Clear();
+        }
+        if (scenario == "stale-tracked-lease")
+        {
+            _ = await fixture.Context.WorkflowExecutableRootWriteLeases.SingleAsync(row => row.ArtifactId == EfRelationalIdentity.Encode("b"));
+            Assert.True(await fixture.Executable.RenewRootWriteLeaseAsync(first, now.AddMinutes(3), now));
+            Assert.True(await fixture.Executable.RenewRootWriteLeaseAsync(last, now.AddMinutes(3), now));
+            clock.Advance(TimeSpan.FromMinutes(2)); // The tracked deadline has lapsed; actual grants remain live.
+        }
+        if (scenario == "stale-tracked-coordination")
+        {
+            _ = await fixture.Context.WorkflowExecutableCoordinations.SingleAsync(row => row.ArtifactId == EfRelationalIdentity.Encode("b"));
+            await using var peer = database.Open("tenant-a");
+            await peer.Context.WorkflowExecutableCoordinations.Where(row => row.ArtifactId == EfRelationalIdentity.Encode("b"))
+                .ExecuteUpdateAsync(update => update.SetProperty(row => row.Revision, row => row.Revision + 1));
+        }
+        if (scenario == "expired") clock.Advance(TimeSpan.FromMinutes(1));
+        var before = await fixture.Context.WorkflowExecutableCoordinations.AsNoTracking().OrderBy(row => row.Id).Select(row => row.Revision).ToArrayAsync();
+        var published = false;
+        var shouldPublish = scenario is "valid" or "stale-tracked-lease" or "stale-tracked-coordination";
+        await using (var transaction = scenario == "no-transaction" ? null : await fixture.Context.Database.BeginTransactionAsync())
+        {
+            delay.Armed = true;
+            var token = new CancellationToken(scenario == "cancelled");
+            async Task Publish()
+            {
+                await fixture.Executable.FenceRootWriteLeasesAsync(new[] { first, last }, clock, token);
+                await fixture.Store.StageCreateOrAdoptAsync(Reference("accepted-root", "b"), token);
+                await fixture.Context.SaveChangesAsync(token); await transaction!.CommitAsync(token); published = true;
+            }
+            if (shouldPublish) await Publish();
+            else if (scenario == "no-transaction") await Assert.ThrowsAsync<InvalidOperationException>(Publish);
+            else if (scenario == "cancelled") await Assert.ThrowsAnyAsync<OperationCanceledException>(Publish);
+            else await Assert.ThrowsAsync<Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableRootWriteLeaseLostException>(Publish);
+            if (!published && transaction is not null) await transaction.RollbackAsync();
+        }
+        delay.Armed = false; fixture.Context.ChangeTracker.Clear();
+        Assert.Equal(shouldPublish, published);
+        Assert.Equal(shouldPublish, await fixture.Store.FindAsync("accepted-root") is not null);
+        var after = await fixture.Context.WorkflowExecutableCoordinations.AsNoTracking().OrderBy(row => row.Id).Select(row => row.Revision).ToArrayAsync();
+        Assert.Equal(shouldPublish ? before.Select(revision => revision + 1) : before, after);
+        if (scenario is "after-coordination-lock" or "after-lease-lock") Assert.Equal(1, delay.Delays);
+    }
+
+    private sealed class RootFenceDelay(Microsoft.Extensions.Time.Testing.FakeTimeProvider clock, string scenario) : DbCommandInterceptor
+    {
+        public bool Armed { get; set; }
+        public int Delays { get; private set; }
+        private int matchedUpdates;
+        public override ValueTask<int> NonQueryExecutedAsync(DbCommand command, CommandExecutedEventData eventData,
+            int result, CancellationToken cancellationToken = default)
+        {
+            var table = scenario == "after-coordination-lock" ? RuntimeArtifactEfModule.WorkflowExecutableCoordinationTableName :
+                scenario == "after-lease-lock" ? RuntimeArtifactEfModule.WorkflowExecutableRootWriteLeaseTableName : null;
+            if (Armed && Delays == 0 && table is not null && command.CommandText.TrimStart().StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase) &&
+                command.CommandText.Contains(table, StringComparison.Ordinal) && ++matchedUpdates == 2)
+            { Delays++; clock.Advance(TimeSpan.FromMinutes(1)); }
+            return ValueTask.FromResult(result);
+        }
+    }
+
+    [Theory]
     [InlineData(false, "valid")] [InlineData(true, "valid")]
     [InlineData(false, "wrong-token")] [InlineData(true, "wrong-token")]
     [InlineData(false, "replaced")] [InlineData(true, "replaced")]
