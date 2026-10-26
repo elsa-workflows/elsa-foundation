@@ -144,6 +144,17 @@ public sealed class StimulusDeliveryStartAuthorityTests
         Assert.Equal(0, legacy.Installs);
     }
 
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Legacy_retention_provider_refuses_instead_of_returning_no_roots(bool cancel)
+    {
+        var legacy = new LegacyDeliveryStore(); IStimulusDeliveryStore store = legacy;
+        var token = new CancellationToken(cancel);
+        if (cancel) await Assert.ThrowsAnyAsync<OperationCanceledException>(() => store.ListPinnedExecutableArtifactIdsAsync(token).AsTask());
+        else await Assert.ThrowsAsync<NotSupportedException>(() => store.ListPinnedExecutableArtifactIdsAsync().AsTask());
+        Assert.Equal(0, legacy.Installs);
+    }
+
     private sealed class LegacyDeliveryStore : IStimulusDeliveryStore
     {
         public int Installs { get; private set; }

@@ -8,6 +8,25 @@ public sealed class InMemoryWorkflowExecutableSourceReferenceStore : IWorkflowEx
     private readonly Dictionary<string, WorkflowExecutableSourceReference> _references = new(StringComparer.Ordinal);
     private readonly Lock _gate = new();
 
+    private readonly InMemoryWorkflowExecutableStore? _executableStore;
+    public InMemoryWorkflowExecutableSourceReferenceStore() { }
+    public InMemoryWorkflowExecutableSourceReferenceStore(IWorkflowExecutableStore executableStore)
+    {
+        _executableStore = executableStore as InMemoryWorkflowExecutableStore;
+    }
+
+    public ValueTask<bool> TryDeleteDoomedAsync(WorkflowExecutableSourceReference expectedDoomedReference,
+        DateTimeOffset now, WorkflowExecutableDeletionGuard deletionGuard, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(expectedDoomedReference); ArgumentNullException.ThrowIfNull(deletionGuard);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (expectedDoomedReference.ArtifactId != deletionGuard.ArtifactId)
+            throw new ArgumentException("The reference and deletion guard differ.", nameof(deletionGuard));
+        if (_executableStore is null) throw new NotSupportedException("The source store requires its native artifact store for guarded deletion.");
+        return ValueTask.FromResult(_executableStore.ExecuteUnderDeletionGuard(deletionGuard, now, () =>
+            TryDeleteDoomedAsync(expectedDoomedReference, now, cancellationToken).GetAwaiter().GetResult()));
+    }
+
     public ValueTask SaveAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(reference);

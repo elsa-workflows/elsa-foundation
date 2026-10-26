@@ -197,6 +197,17 @@ public sealed class InMemoryWorkflowExecutableStore : IWorkflowExecutableStore
         }
     }
 
+    internal bool ExecuteUnderDeletionGuard(WorkflowExecutableDeletionGuard guard, DateTimeOffset now, Func<bool> write)
+    {
+        lock (_gate)
+        {
+            RecoverExpiredState(guard.ArtifactId, now);
+            if (!_deletionGuards.TryGetValue(guard.ArtifactId, out var current) || current.Guard != guard ||
+                _rootWriteLeases.ContainsKey(guard.ArtifactId)) return false;
+            return write(); // Reference mutation shares the artifact gate with lease acquire/expiry and guard replacement.
+        }
+    }
+
     public ValueTask<WorkflowExecutable?> FindAsync(string artifactId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);

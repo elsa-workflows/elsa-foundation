@@ -104,6 +104,8 @@ The [compact saved-source receipt](evidence/broadcast-saved-source.md) qualifies
 read validation only; the dispatcher still refuses the new authority before duplicate lookup.
 The [shared ordinary selection receipt](evidence/broadcast-source-selection.md) qualifies capture using the
 existing authoritative selector; acceptance under root leases and retention remain open.
+The [retention-root receipt](evidence/broadcast-retention-roots.md) qualifies scoped cohort roots, execution
+deletion read guards and guarded reference cleanup; automatic fenced acceptance/admission remains open.
 Publisher authorization, recipient execution and all host delivery/recovery gates remain open.
 
 Execution order: T046 → T047 → T048 → T049 → T050 → T051. No new task is marked parallel:

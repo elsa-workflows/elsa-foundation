@@ -98,6 +98,57 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
             throw new InvalidOperationException("A durable source cannot be authorized inside a caller-owned transaction.");
     }
 
+    public async ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default)
+    {
+        PersistenceScope? retentionScope = null;
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            EnsureCommittedSourceBoundary();
+            var scope = accessContextAccessor.Current.RequireScope().Value;
+            retentionScope = new(scope);
+            var sources = await ReadRetentionSourcesAsync(context, scope, cancellationToken);
+            var roots = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var source in sources)
+            {
+                if (source.RecipientSnapshot is not { } cohort) continue;
+                foreach (var start in cohort.Starts)
+                {
+                    var key = source.Intent.IdempotencyKey ?? throw new InvalidDataException("A saved start cohort has no deterministic source key.");
+                    var target = KeyedWorkflowStartIdentity.For(key, start.Executable.ArtifactId).WorkflowExecutionId;
+                    if (source.Status != RuntimePostCommitOutboxStatus.Delivered ||
+                        !await EfExecutionLivenessStateStore.IsWorkflowExecutionDeletionTombstonedAsync(context, scope, target, cancellationToken))
+                        roots.Add(start.Executable.ArtifactId);
+                }
+            }
+            EnsureCommittedSourceBoundary();
+            return roots.Order(StringComparer.Ordinal).ToArray();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception) when (exception is IOException or OperationCanceledException || EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        { throw new StimulusDeliveryRetentionException(retentionScope, exception); }
+    }
+
+    // Finite same-scope pages; deliberate conservative traversal on rare GC/deletion paths. Do not use the current
+    // claim/publisher authorization read: delivered sources can outlive the publisher and an uncreated target.
+    internal static async ValueTask<IReadOnlyList<RuntimePostCommitOutboxItem>> ReadRetentionSourcesAsync(
+        RuntimeDbContext context, string scope, CancellationToken cancellationToken)
+    {
+        var sources = new List<RuntimePostCommitOutboxItem>();
+        string? after = null;
+        while (true)
+        {
+            var query = context.RuntimePostCommitOutbox.AsNoTracking().Where(row =>
+                row.ScopeKeyHash == EfRuntimeOperationalStoreSupport.Hash(scope) &&
+                row.ScopeKey == EfRuntimeOperationalStoreSupport.Encode(scope));
+            if (after is not null) query = query.Where(row => row.OutboxItemIdOrderKey.CompareTo(after) > 0);
+            var page = await query.OrderBy(row => row.OutboxItemIdOrderKey).Take(ProviderPageSize).ToArrayAsync(cancellationToken);
+            foreach (var row in page) sources.Add(ReadChecked(row, scope));
+            if (page.Length < ProviderPageSize) return sources;
+            after = page[^1].OutboxItemIdOrderKey;
+        }
+    }
+
     public async ValueTask<StimulusDeliverySnapshot> InstallAsync(PostCommitDeliveryContext source,
         StimulusDeliverySnapshot candidate, CancellationToken cancellationToken = default)
     {

@@ -144,6 +144,22 @@ public sealed class RuntimePostCommitOutboxItem
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public StimulusDeliverySnapshot? RecipientSnapshot { get; }
 
+    /// <summary>Whether unresolved stimulus delivery still needs this publisher or an exact recipient's execution/dedup state.</summary>
+    /// <remarks>Every status except Delivered is owed, including FailedFinal and Cancelled. Snapshot absence retains the
+    /// declared publisher; a selected start requires the original per-artifact key. Source rows themselves remain retained.</remarks>
+    public bool RetainsExecutionForStimulusDelivery(string workflowExecutionId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        if (Status == RuntimePostCommitOutboxStatus.Delivered || StimulusDeliveryProtocolVersion is null) return false;
+        if (Intent.WorkflowExecutionId == workflowExecutionId) return true;
+        if (RecipientSnapshot is not { } snapshot) return false;
+        if (snapshot.Resumes.Any(recipient => recipient.WorkflowExecutionId == workflowExecutionId)) return true;
+        if (snapshot.Starts.Count == 0) return false;
+        var key = Intent.IdempotencyKey ?? throw new InvalidDataException("A saved start cohort has no deterministic source key.");
+        return snapshot.Starts.Any(recipient => KeyedWorkflowStartIdentity.For(key, recipient.Executable.ArtifactId)
+            .WorkflowExecutionId == workflowExecutionId);
+    }
+
     /// <summary>Pure absent-to-whole transition; providers must pass their current authoritative source and publisher.</summary>
     public RuntimePostCommitOutboxItem InstallRecipientSnapshot(PostCommitDeliveryContext source,
         StimulusDeliverySnapshot candidate, WorkflowExecutionState publisher, PersistenceScope scope, DateTimeOffset observedAt)

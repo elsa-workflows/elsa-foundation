@@ -296,6 +296,34 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             Copy(row, moved, scope);
     }
 
+    public async ValueTask<bool> TryDeleteDoomedAsync(WorkflowExecutableSourceReference expectedDoomedReference,
+        DateTimeOffset now, WorkflowExecutableDeletionGuard deletionGuard, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(expectedDoomedReference); ArgumentNullException.ThrowIfNull(deletionGuard);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (expectedDoomedReference.ArtifactId != deletionGuard.ArtifactId)
+            throw new ArgumentException("The reference and deletion guard differ.", nameof(deletionGuard));
+        try
+        {
+            return await new EfWorkflowExecutableStore(context, access).ExecuteUnderDeletionGuardAsync(deletionGuard, now, async () =>
+            {
+                Validate(expectedDoomedReference);
+                var scope = RequireScope();
+                var row = await RowsOf(scope, expectedDoomedReference.SourceReferenceId).AsNoTracking().SingleOrDefaultAsync(cancellationToken);
+                if (row is null) return false;
+                var current = Read(row, scope, expectedDoomedReference.SourceReferenceId);
+                if (!WorkflowExecutableSourceReferenceComparer.SameSnapshot(current, expectedDoomedReference) || current.IsLive(now)) return false;
+                return await context.WorkflowExecutableSourceReferences.Where(candidate => candidate.Id == row.Id &&
+                    candidate.Revision == row.Revision && candidate.IncarnationId == row.IncarnationId)
+                    .ExecuteDeleteAsync(cancellationToken) == 1;
+            }, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (RuntimeArtifactEntityFrameworkPersistenceException) { throw; }
+        catch (Exception exception) when (exception is IOException or OperationCanceledException || EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("guarded reference cleanup", expectedDoomedReference.SourceReferenceId, exception); }
+    }
+
     public async ValueTask<bool> TryDeleteDoomedAsync(WorkflowExecutableSourceReference expectedDoomedReference, DateTimeOffset now, CancellationToken cancellationToken = default)
     {
         context.ChangeTracker.Clear();

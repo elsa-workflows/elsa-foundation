@@ -1,4 +1,9 @@
 using System.Data.Common;
+using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Configuration;
+using Elsa.Workflows.Runtime.Services.Executables;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Persistence.EntityFramework;
@@ -730,6 +735,217 @@ public sealed class StimulusDeliveryStoreTests
         Assert.Empty((await processor.ProcessAsync(new(10, "publisher", "publish"))).Items);
     }
 
+    [Theory]
+    [InlineData(false, RuntimePostCommitOutboxStatus.Delivering)] [InlineData(true, RuntimePostCommitOutboxStatus.Delivering)]
+    [InlineData(false, RuntimePostCommitOutboxStatus.FailedRetryable)] [InlineData(true, RuntimePostCommitOutboxStatus.FailedRetryable)]
+    [InlineData(false, RuntimePostCommitOutboxStatus.FailedFinal)] [InlineData(true, RuntimePostCommitOutboxStatus.FailedFinal)]
+    [InlineData(false, RuntimePostCommitOutboxStatus.Cancelled)] [InlineData(true, RuntimePostCommitOutboxStatus.Cancelled)]
+    public async Task Owed_cohort_retains_pins_publisher_and_exact_recipient_dedup_in_every_unresolved_status(
+        bool ef, RuntimePostCommitOutboxStatus status)
+    {
+        await using var harness = await Harness.Create(ef);
+        var source = new PostCommitDeliveryContext(await harness.Seed(), Scope);
+        await harness.Delivery.InstallAsync(source, Snapshot(source));
+        if (status != RuntimePostCommitOutboxStatus.Delivering)
+            await harness.Claims.RecordDeliveryResultAsync(source.Claim, new(source.SourceOutboxItemId, status, Now, status == RuntimePostCommitOutboxStatus.Cancelled ? null : "constructed failure"));
+        var startId = KeyedWorkflowStartIdentity.For("key", Pin.ArtifactId).WorkflowExecutionId;
+        await harness.Executions.SaveAsync(Publisher with { WorkflowExecutionId = startId, Status = WorkflowExecutionStatus.Completed });
+        await harness.Executions.SaveAsync(Publisher with { WorkflowExecutionId = "waiter", Status = WorkflowExecutionStatus.Completed });
+        Assert.Equal(new[] { Pin.ArtifactId }, await harness.Reopen().ListPinnedExecutableArtifactIdsAsync());
+        foreach (var id in new[] { "publisher", "waiter", startId })
+        {
+            Assert.False(await harness.Executions.DeleteAsync(id));
+            Assert.NotNull(await harness.Executions.FindAsync(id));
+            Assert.False(await harness.Executions.IsDeletionTombstonedAsync(id));
+        }
+        Assert.True((await harness.Lookup.FindAsync(source.SourceOutboxItemId))!.RecipientSnapshot!.IsEquivalentTo(Snapshot(source)));
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Delivered_cohort_outlives_publisher_and_absent_start_until_target_sticky_retirement(bool ef)
+    {
+        await using var harness = await Harness.Create(ef);
+        var source = new PostCommitDeliveryContext(await harness.Seed(), Scope);
+        await harness.Delivery.InstallAsync(source, Snapshot(source));
+        await harness.Claims.RecordDeliveryResultAsync(source.Claim, new(source.SourceOutboxItemId, RuntimePostCommitOutboxStatus.Delivered, Now));
+        Assert.True(await harness.Executions.DeleteAsync("publisher"));
+        var target = KeyedWorkflowStartIdentity.For("key", Pin.ArtifactId).WorkflowExecutionId;
+        Assert.Null(await harness.Executions.FindAsync(target));
+        Assert.False(await harness.Executions.IsDeletionTombstonedAsync(target));
+        Assert.Equal(new[] { Pin.ArtifactId }, await harness.Reopen().ListPinnedExecutableArtifactIdsAsync());
+        Assert.Empty(await harness.Reopen(new("foreign")).ListPinnedExecutableArtifactIdsAsync());
+        await harness.Executions.SaveAsync(Publisher with { WorkflowExecutionId = target, Status = WorkflowExecutionStatus.Completed });
+        Assert.Equal(new[] { Pin.ArtifactId }, await harness.Reopen().ListPinnedExecutableArtifactIdsAsync());
+        Assert.True(await harness.Executions.DeleteAsync(target));
+        Assert.True(await harness.Executions.IsDeletionTombstonedAsync(target));
+        Assert.Empty(await harness.Reopen().ListPinnedExecutableArtifactIdsAsync());
+        Assert.NotNull((await harness.Lookup.FindAsync(source.SourceOutboxItemId))!.RecipientSnapshot);
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Declared_source_retains_publisher_before_first_cohort_but_empty_delivered_source_releases_it(bool ef)
+    {
+        await using var harness = await Harness.Create(ef);
+        await harness.SeedPending();
+        Assert.False(await harness.Executions.DeleteAsync("publisher")); // Pending, before any claim.
+        var source = new PostCommitDeliveryContext(Assert.Single(await harness.Claims.ClaimAsync(new("owner", Now, TimeSpan.FromMinutes(1), 1))), Scope);
+        Assert.False(await harness.Executions.DeleteAsync("publisher"));
+        Assert.False(await harness.Executions.IsDeletionTombstonedAsync("publisher"));
+        await harness.Delivery.InstallAsync(source, Snapshot(source, true));
+        Assert.Empty(await harness.Delivery.ListPinnedExecutableArtifactIdsAsync());
+        Assert.False(await harness.Executions.DeleteAsync("publisher"));
+        await harness.Claims.RecordDeliveryResultAsync(source.Claim, new(source.SourceOutboxItemId, RuntimePostCommitOutboxStatus.Delivered, Now));
+        Assert.True(await harness.Executions.DeleteAsync("publisher"));
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Actual_GC_keeps_cohort_pin_dependency_and_retired_reference_through_absent_target_handoff(bool ef)
+    {
+        await using var harness = await Harness.Create(ef);
+        IWorkflowExecutableStore artifacts = ef ? new EfWorkflowExecutableStore(harness.Context!, new Accessor()) : new InMemoryWorkflowExecutableStore();
+        IWorkflowExecutableSourceReferenceStore references = ef ? new EfWorkflowExecutableSourceReferenceStore(harness.Context!, new Accessor(), new Codec()) :
+            new InMemoryWorkflowExecutableSourceReferenceStore(artifacts);
+        var dependency = Material(Pin with { ArtifactId = "dependency", ArtifactHash = "dependency-hash" });
+        await artifacts.SaveBatchAsync([dependency, Material(Pin, dependency)]);
+        var reference = new WorkflowExecutableSourceReference("selected", Pin.ArtifactId, "WorkflowDefinitionVersion", "version", "1",
+            Pin.DefinitionId, Pin.DefinitionVersionId, Pin.ArtifactVersion, Now, Now, WorkflowExecutableReferenceScope.Published);
+        await references.SaveAsync(reference); await references.RetireAsync(reference.SourceReferenceId, Now);
+        var source = new PostCommitDeliveryContext(await harness.Seed(), Scope);
+        await harness.Delivery.InstallAsync(source, Snapshot(source));
+        var gc = new WorkflowExecutableReferenceGarbageCollector(artifacts, references, new InMemoryExecutableActivityTemplateStore(),
+            harness.Executions, null, Options.Create(new WorkflowExecutableGarbageCollectionOptions { ArtifactCreationGracePeriod = TimeSpan.Zero }),
+            harness.Clock, NullLogger<WorkflowExecutableReferenceGarbageCollector>.Instance, harness.Delivery);
+        Assert.True(gc.SupportsStimulusDeliveryRetention);
+        Assert.False((await gc.SweepAsync()).DidWork);
+        await harness.Claims.RecordDeliveryResultAsync(source.Claim, new(source.SourceOutboxItemId, RuntimePostCommitOutboxStatus.Delivered, Now));
+        Assert.True(await harness.Executions.DeleteAsync("publisher"));
+        Assert.False((await gc.SweepAsync()).DidWork); // No target state yet; absence cannot drop the handoff root.
+        Assert.NotNull(await artifacts.FindAsync(Pin.ArtifactId)); Assert.NotNull(await artifacts.FindAsync("dependency"));
+        Assert.NotNull(await references.FindAsync("selected"));
+        var target = KeyedWorkflowStartIdentity.For("key", Pin.ArtifactId).WorkflowExecutionId;
+        await harness.Executions.SaveAsync(Publisher with { WorkflowExecutionId = target, Status = WorkflowExecutionStatus.Completed });
+        Assert.True(await harness.Executions.DeleteAsync(target));
+        var released = await gc.SweepAsync();
+        Assert.Equal(1, released.DeletedReferenceCount); Assert.Equal(2, released.DeletedArtifactCount);
+        Assert.Null(await references.FindAsync("selected")); Assert.Null(await artifacts.FindAsync("dependency"));
+    }
+
+    [Fact]
+    public async Task EF_retention_reads_all_source_pages_including_a_later_selected_cohort()
+    {
+        await using var harness = await Harness.Create(true);
+        var source = new PostCommitDeliveryContext(await harness.Seed(), Scope);
+        await harness.Delivery.InstallAsync(source, Snapshot(source));
+        var context = harness.Context!;
+        for (var index = 0; index <= RuntimeStorePageRequest.MaximumLimit; index++)
+        {
+            var item = Pending($"a-padding-{index:D5}", false);
+            await harness.SavePending(item);
+        }
+        await context.SaveChangesAsync(); context.ChangeTracker.Clear();
+        Assert.Equal(new[] { Pin.ArtifactId }, await harness.Reopen().ListPinnedExecutableArtifactIdsAsync());
+        Assert.False(await harness.Executions.DeleteAsync("publisher"));
+    }
+
+    private static WorkflowExecutable Material(WorkflowExecutableIdentity identity, params WorkflowExecutable[] dependencies) =>
+        new(identity, new ExecutableNode("node", "authored", "test/activity", "1.0.0",
+            new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { })),
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>()),
+            new Dictionary<string, WorkflowExecutableResumeTarget>(), Now, new Dictionary<string, string>(), inputContract: null,
+            dependencies: dependencies.Select(dependency => new WorkflowExecutableDependency(dependency.Identity.ArtifactId, dependency.Identity.ArtifactHash, ["node"])).ToArray(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
+
+    [Theory]
+    [InlineData(false, false)] [InlineData(false, true)]
+    [InlineData(true, false)] [InlineData(true, true)]
+    public async Task Retention_read_preserves_provider_failure_and_actual_scope_without_fabricating_a_source(bool ef, bool unrequestedCancellation)
+    {
+        Exception cause = unrequestedCancellation ? new OperationCanceledException("provider cancellation") : new IOException("provider read failed");
+        var fault = new RetentionReadFailure(cause);
+        await using var harness = await Harness.Create(ef, fault);
+        var source = new PostCommitDeliveryContext(await harness.Seed(), Scope);
+        await harness.Delivery.InstallAsync(source, Snapshot(source));
+        IStimulusDeliveryStore failed;
+        if (ef) { fault.Armed = true; failed = harness.Delivery; }
+        else failed = new InMemoryRuntimeCheckpointCommitStore(persistenceAccessContextAccessor: new FailedAccess(cause));
+        var failure = await Assert.ThrowsAsync<StimulusDeliveryRetentionException>(() => failed.ListPinnedExecutableArtifactIdsAsync().AsTask());
+        Assert.Same(cause, failure.InnerException); Assert.Equal(ef ? Scope : null, failure.Scope);
+        fault.Armed = false;
+        Assert.Equal(new[] { Pin.ArtifactId }, await harness.Delivery.ListPinnedExecutableArtifactIdsAsync());
+        using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => harness.Delivery.ListPinnedExecutableArtifactIdsAsync(cancellation.Token).AsTask());
+    }
+
+    private sealed class RetentionReadFailure(Exception cause) : DbCommandInterceptor
+    {
+        public bool Armed { get; set; }
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (Armed) throw cause;
+            return ValueTask.FromResult(result);
+        }
+    }
+
+    [Theory]
+    [InlineData(false, false)] [InlineData(false, true)]
+    [InlineData(true, false)] [InlineData(true, true)]
+    public async Task GC_reference_final_recheck_and_native_leases_order_competing_cohort_root_creation(bool ef, bool acceptanceFirst)
+    {
+        await using var harness = await Harness.Create(ef);
+        IWorkflowExecutableStore artifacts = ef ? new EfWorkflowExecutableStore(harness.Context!, new Accessor()) : new InMemoryWorkflowExecutableStore();
+        IWorkflowExecutableSourceReferenceStore references = ef ? new EfWorkflowExecutableSourceReferenceStore(harness.Context!, new Accessor(), new Codec()) :
+            new InMemoryWorkflowExecutableSourceReferenceStore(artifacts);
+        var publisher = Publisher with { PinnedExecutable = Pin with { ArtifactId = "publisher-artifact", ArtifactHash = "publisher-hash" } };
+        var dependency = Material(Pin with { ArtifactId = "dependency", ArtifactHash = "dependency-hash" });
+        await artifacts.SaveBatchAsync([Material(publisher.PinnedExecutable), dependency, Material(Pin, dependency)]);
+        var reference = new WorkflowExecutableSourceReference("selected", Pin.ArtifactId, "WorkflowDefinitionVersion", "version", "1",
+            Pin.DefinitionId, Pin.DefinitionVersionId, Pin.ArtifactVersion, Now, Now, WorkflowExecutableReferenceScope.Published);
+        await references.SaveAsync(reference); await references.RetireAsync(reference.SourceReferenceId, Now);
+        var source = new PostCommitDeliveryContext(await harness.Seed(publisher: publisher), Scope);
+        var options = Options.Create(new WorkflowExecutableGarbageCollectionOptions { ArtifactCreationGracePeriod = TimeSpan.Zero });
+        var leases = new WorkflowExecutableRootWriteLeaseManager(artifacts, options, harness.Clock);
+        var installed = false;
+        async ValueTask Accept()
+        {
+            await leases.ExecuteAsync(new[] { Pin }, "candidate-root", async token =>
+            {
+                await harness.Delivery.InstallAsync(source, Snapshot(source, publisher: publisher), token); installed = true;
+            });
+        }
+        var interleaving = new AtReferenceGuard(artifacts, acceptanceFirst, async () =>
+        {
+            if (acceptanceFirst) await Accept();
+            else await Assert.ThrowsAsync<WorkflowExecutableRootWriteLeaseUnavailableException>(() => Accept().AsTask());
+        });
+        var gc = new WorkflowExecutableReferenceGarbageCollector(interleaving, references, new InMemoryExecutableActivityTemplateStore(),
+            harness.Executions, null, options, harness.Clock, NullLogger<WorkflowExecutableReferenceGarbageCollector>.Instance, harness.Delivery);
+        await gc.SweepAsync();
+        Assert.Equal(1, interleaving.Interleavings); Assert.Equal(acceptanceFirst, installed);
+        Assert.Equal(acceptanceFirst, await references.FindAsync("selected") is not null);
+        Assert.Equal(acceptanceFirst, await artifacts.FindAsync(Pin.ArtifactId) is not null);
+        Assert.Equal(acceptanceFirst, await artifacts.FindAsync("dependency") is not null);
+        Assert.Equal(acceptanceFirst, (await harness.Lookup.FindAsync(source.SourceOutboxItemId))!.RecipientSnapshot is not null);
+    }
+
+    private sealed class AtReferenceGuard(IWorkflowExecutableStore inner, bool before, Func<ValueTask> interleave) : WorkflowExecutableStoreDecorator(inner)
+    {
+        public int Interleavings { get; private set; }
+        public override async ValueTask<WorkflowExecutableDeletionGuard?> TryBeginDeletionAsync(string artifactId, string operationId,
+            DateTimeOffset expiresAt, DateTimeOffset now, CancellationToken cancellationToken = default)
+        {
+            if (artifactId != Pin.ArtifactId || Interleavings != 0) return await base.TryBeginDeletionAsync(artifactId, operationId, expiresAt, now, cancellationToken);
+            Interleavings++;
+            if (before) await interleave();
+            var guard = await base.TryBeginDeletionAsync(artifactId, operationId, expiresAt, now, cancellationToken);
+            if (!before) { Assert.NotNull(guard); await interleave(); }
+            return guard;
+        }
+    }
+
     private sealed class LostFlushAcknowledgement(IRuntimeCheckpointCommitStore inner, bool armed) : IRuntimeCheckpointCommitStore
     {
         public List<string> FlushIds { get; } = [];
@@ -801,6 +1017,7 @@ public sealed class StimulusDeliveryStoreTests
         private readonly SqliteConnection? connection;
         private readonly InMemoryRuntimeCheckpointStoreState memory = new();
         private readonly InMemoryWorkflowExecutionStateStore publishers;
+        private readonly InMemoryExecutionLivenessStateStore liveness = new();
         private readonly List<RuntimeSqliteDbContext> contexts = [];
         public FakeTimeProvider Clock { get; } = new(Now);
         public RuntimeSqliteDbContext? Context { get; }
@@ -813,10 +1030,11 @@ public sealed class StimulusDeliveryStoreTests
         public ValueTask<WorkflowExecutionState?> FindPublisher() => Context is null ? publishers.FindAsync("publisher") :
             new EfWorkflowExecutionStateStore(Context, new Accessor(), new Codec()).FindAsync("publisher");
         public IStimulusDeliveryStore Delivery => (IStimulusDeliveryStore)Outbox;
+        public IWorkflowExecutionStateStore Executions => Context is null ? publishers : new EfWorkflowExecutionStateStore(Context, new Accessor(), new Codec());
         private Harness(SqliteConnection? connection, IInterceptor? interceptor)
         {
             this.connection = connection;
-            publishers = new(memory, null);
+            publishers = new(memory, liveness);
             if (connection is null)
                 Outbox = MemoryStore();
             else

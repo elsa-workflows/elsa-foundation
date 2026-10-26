@@ -27,6 +27,21 @@ public interface IStimulusDeliveryStore
     ValueTask<StimulusDeliverySnapshot> InstallAsync(PostCommitDeliveryContext source, StimulusDeliverySnapshot candidate,
         CancellationToken cancellationToken = default);
 
+    /// <summary>List scoped cohort start pins until delivery and the deterministic target's sticky retirement tombstone.</summary>
+    /// <remarks>Includes delivered sources after publisher deletion and uncreated targets. Absence never releases a pin.
+    /// Providers must traverse every finite source page and retain on unreadable authority. Legacy providers refuse.</remarks>
+    /// <exception cref="StimulusDeliveryRetentionException">Provider unavailability, including unrequested cancellation; preserve the cause and actual scope if known.</exception>
+    /// <exception cref="InvalidDataException">Persisted source/cohort or retirement authority is corrupt; retain material.</exception>
+    /// <exception cref="InvalidOperationException">Actual access or committed-boundary requirements cannot be established.</exception>
+    /// <exception cref="NotSupportedException">The selected provider lacks root enumeration; no empty-set fallback.</exception>
+    /// <exception cref="OperationCanceledException">Requested cancellation propagates.</exception>
+    ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromException<IReadOnlyCollection<string>>(new NotSupportedException(
+            "The selected provider cannot enumerate saved stimulus retention roots."));
+    }
+
     /// <summary>Reread an exact physical source and captured binding under its current claim and publisher scope.</summary>
     /// <remarks>Read-only provenance validation; it does not admit a start or replace reference/retention checks.
     /// Legacy implementations refuse before effects rather than falling back to intent-only or live matching.</remarks>

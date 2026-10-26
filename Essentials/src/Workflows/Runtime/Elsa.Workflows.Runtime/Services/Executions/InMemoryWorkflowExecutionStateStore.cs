@@ -198,6 +198,9 @@ public sealed class InMemoryWorkflowExecutionStateStore : InMemoryKeyedStateStor
     {
         WorkflowDispatchRecord[] links;
         lock (_checkpointState.SyncRoot)
+            if (_checkpointState.OutboxItems.Values.Any(source => source.RetainsExecutionForStimulusDelivery(state.WorkflowExecutionId)))
+                return true;
+        lock (_checkpointState.SyncRoot)
             links = _checkpointState.WorkflowDispatches.Values.Where(dispatch =>
                 dispatch.Mode == WorkflowDispatchMode.WaitForCompletion &&
                 (dispatch.Metadata.ContainsKey(RuntimeMetadataKeys.ChildControlConsumerKey) ||

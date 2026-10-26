@@ -20,6 +20,10 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
     private readonly IWorkflowExecutionStateStore _workflowExecutionStateStore = new InMemoryWorkflowExecutionStateStore();
 
     [Fact]
+    public void Legacy_collector_constructor_does_not_claim_saved_cohort_root_support() =>
+        Assert.False(NewGarbageCollector().SupportsStimulusDeliveryRetention);
+
+    [Fact]
     public async Task Sweep_RemovesExpiredReferencesThenTheirNowUnreferencedArtifacts_ButKeepsArtifactsWithALiveReference()
     {
         // Test (c). "kept" has a live Published reference; "doomed" has only an expired TestRun reference. One sweep

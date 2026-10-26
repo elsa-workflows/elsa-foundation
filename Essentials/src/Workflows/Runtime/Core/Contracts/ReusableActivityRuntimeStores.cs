@@ -99,6 +99,17 @@ public interface IWorkflowExecutableSourceReferenceWriter
         WorkflowExecutableSourceReference expectedDoomedReference,
         DateTimeOffset now,
         CancellationToken cancellationToken = default);
+    /// <summary>Compare-and-delete under the same artifact deletion guard used for the final retention-root read.</summary>
+    /// <remarks>The provider must atomically fence guard expiry/replacement against the physical reference deletion.
+    /// Unsupported legacy providers refuse; acquiring a guard followed by the unfenced overload is insufficient.</remarks>
+    /// <exception cref="NotSupportedException">Atomic artifact/reference guard coordination is unavailable; retain the reference.</exception>
+    /// <exception cref="InvalidDataException">Persisted material or reference authority is corrupt.</exception>
+    /// <exception cref="InvalidOperationException">Provider failure is contextualized at the provider's domain persistence boundary, preserving its cause.</exception>
+    /// <exception cref="OperationCanceledException">Requested cancellation propagates.</exception>
+    ValueTask<bool> TryDeleteDoomedAsync(WorkflowExecutableSourceReference expectedDoomedReference,
+        DateTimeOffset now, WorkflowExecutableDeletionGuard deletionGuard, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<bool>(new NotSupportedException("Guarded source-reference deletion is not supported."));
+
     ValueTask<IReadOnlyCollection<string>> DeleteExpiredOrRetiredAsync(
         WorkflowExecutableSourceReferenceCleanupBatch batch,
         DateTimeOffset now,

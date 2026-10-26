@@ -25,6 +25,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
     private readonly IExecutableActivityTemplateStore _activityTemplateStore;
     private readonly IWorkflowExecutionStateStore _workflowExecutionStateStore;
     private readonly IWorkflowDispatchRetentionRootStore? _workflowDispatchRootStore;
+    private readonly IStimulusDeliveryStore? _stimulusDeliveryStore;
     private readonly TimeProvider _timeProvider;
     private readonly TimeSpan _artifactCreationGracePeriod;
     private readonly TimeSpan _deletionGuardTimeout;
@@ -181,6 +182,19 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
         _logger = logger;
     }
 
+    public WorkflowExecutableReferenceGarbageCollector(
+        IWorkflowExecutableStore executableStore, IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IExecutableActivityTemplateStore activityTemplateStore, IWorkflowExecutionStateStore workflowExecutionStateStore,
+        IWorkflowDispatchRetentionRootStore? workflowDispatchRootStore, IOptions<WorkflowExecutableGarbageCollectionOptions> options,
+        TimeProvider timeProvider, ILogger<WorkflowExecutableReferenceGarbageCollector> logger, IStimulusDeliveryStore stimulusDeliveryStore)
+        : this(executableStore, sourceReferenceStore, activityTemplateStore, workflowExecutionStateStore,
+            workflowDispatchRootStore, options, timeProvider, logger)
+    {
+        _stimulusDeliveryStore = stimulusDeliveryStore ?? throw new ArgumentNullException(nameof(stimulusDeliveryStore));
+    }
+
+    public bool SupportsStimulusDeliveryRetention => _stimulusDeliveryStore is not null;
+
     public ValueTask<WorkflowExecutableReferenceSweepResult> SweepAsync(CancellationToken cancellationToken = default) =>
         SweepAsync(_timeProvider.GetUtcNow(), cancellationToken);
 
@@ -229,8 +243,34 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
             .ToArray();
         foreach (var reference in doomedReferences)
         {
-            if (await _sourceReferenceStore.TryDeleteDoomedAsync(reference, now, cancellationToken))
-                deletedReferenceIds.Add(reference.SourceReferenceId);
+            if (_stimulusDeliveryStore is null)
+            {
+                if (await _sourceReferenceStore.TryDeleteDoomedAsync(reference, now, cancellationToken))
+                    deletedReferenceIds.Add(reference.SourceReferenceId);
+                continue;
+            }
+            // Templates have no native deletion guard. Until that material boundary is composed, retain their
+            // references conservatively instead of asserting an artifact guard covers a different store.
+            if (!executables.Any(executable => executable.Identity.ArtifactId == reference.ArtifactId)) continue;
+            var guardNow = _timeProvider.GetUtcNow();
+            var guard = await _executableStore.TryBeginDeletionAsync(reference.ArtifactId, Guid.NewGuid().ToString("N"),
+                guardNow + _deletionGuardTimeout, guardNow, cancellationToken);
+            if (guard is null) continue;
+            try
+            {
+                var currentExecutables = await _executableStore.ListAllAsync(cancellationToken);
+                var currentRuntimeRoots = await ListRuntimeRootIdsAsync(cancellationToken);
+                if (ResolveProtectedClosure(currentExecutables, currentRuntimeRoots).Contains(reference.ArtifactId)) continue;
+                if (await _sourceReferenceStore.TryDeleteDoomedAsync(reference, now, guard, cancellationToken))
+                    deletedReferenceIds.Add(reference.SourceReferenceId);
+            }
+            catch (Exception exception)
+            {
+                if (exception is OperationCanceledException && cancellationToken.IsCancellationRequested) throw;
+                _logger.LogWarning(exception, "Reference GC retained source {SourceReferenceId} because guarded reachability/deletion failed",
+                    reference.SourceReferenceId);
+            }
+            finally { await CancelDeletionConservativelyAsync(guard); }
         }
 
         // Query 2 — form candidates outside the staging grace that no live root's complete dependency closure
@@ -311,6 +351,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
         var deletedActivityTemplateCount = 0;
         foreach (var templateId in unreferencedTemplateIds)
         {
+            if (_stimulusDeliveryStore is not null) continue; // Explicit conservative boundary; see guarded reference cleanup above.
             if (await _activityTemplateStore.DeleteAsync(templateId, cancellationToken))
                 deletedActivityTemplateCount++;
         }
@@ -383,6 +424,8 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
         var roots = (await _workflowExecutionStateStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken)).ToList();
         if (_workflowDispatchRootStore is not null)
             roots.AddRange(await _workflowDispatchRootStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
+        if (_stimulusDeliveryStore is not null)
+            roots.AddRange(await _stimulusDeliveryStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
         return roots;
     }
 

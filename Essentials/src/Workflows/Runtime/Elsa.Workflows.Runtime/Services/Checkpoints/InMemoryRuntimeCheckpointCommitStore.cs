@@ -453,6 +453,39 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         return item;
     }
 
+    public async ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default)
+    {
+        PersistenceScope? retentionScope = null;
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var scope = (_persistenceAccessContextAccessor?.Current ?? throw new InvalidOperationException(
+                "Stimulus retention requires explicit persistence access.")).RequireScope();
+            retentionScope = scope;
+            RuntimePostCommitOutboxItem[] sources;
+            lock (_state.SyncRoot) sources = _state.OutboxItems.Values.ToArray();
+            var roots = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var source in sources)
+            {
+                if (source.RecipientSnapshot is not { } cohort) continue;
+                if (source.StimulusDeliverySourceScope is null) throw new InvalidDataException("A retained cohort has no committed scope.");
+                if (source.StimulusDeliverySourceScope != scope) continue;
+                foreach (var start in cohort.Starts)
+                {
+                    var key = source.Intent.IdempotencyKey ?? throw new InvalidDataException("A saved start cohort has no deterministic source key.");
+                    var target = KeyedWorkflowStartIdentity.For(key, start.Executable.ArtifactId).WorkflowExecutionId;
+                    if (source.Status != RuntimePostCommitOutboxStatus.Delivered || _workflowExecutionStateStore is null ||
+                        !await _workflowExecutionStateStore.IsDeletionTombstonedAsync(target, cancellationToken))
+                        roots.Add(start.Executable.ArtifactId);
+                }
+            }
+            return roots.Order(StringComparer.Ordinal).ToArray();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception) when (exception is IOException or OperationCanceledException)
+        { throw new StimulusDeliveryRetentionException(retentionScope, exception); }
+    }
+
     public async ValueTask<StimulusDeliverySnapshot> InstallAsync(PostCommitDeliveryContext source,
         StimulusDeliverySnapshot candidate, CancellationToken cancellationToken = default)
     {

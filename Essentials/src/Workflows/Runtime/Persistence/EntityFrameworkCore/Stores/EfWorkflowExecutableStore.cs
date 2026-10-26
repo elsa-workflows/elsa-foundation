@@ -450,6 +450,41 @@ public sealed class EfWorkflowExecutableStore(
             cancellationToken);
     }
 
+    internal async ValueTask<bool> ExecuteUnderDeletionGuardAsync(WorkflowExecutableDeletionGuard guard,
+        DateTimeOffset now, Func<ValueTask<bool>> write, CancellationToken cancellationToken)
+    {
+        var scope = RequireScope();
+        return await Coordination.RunAsync(context, async () =>
+        {
+            context.ChangeTracker.Clear();
+            await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                var pair = await LoadPairAsync(scope, guard.ArtifactId, cancellationToken);
+                if (pair is null) return false;
+                var row = pair.Value.Coordination;
+                var state = ReadCoordination(row, scope, guard.ArtifactId, CreateId(scope, guard.ArtifactId));
+                if (!CanDelete(state, guard, now) || await HasLiveLeasesAsync(context, scope, guard.ArtifactId,
+                        row.IncarnationId, now, cancellationToken)) return false;
+                var id = row.Id; var revision = row.Revision; var incarnation = row.IncarnationId;
+                var changed = await write();
+                // An expired-guard acquirer must clear that guard by this same revision before accepting its lease.
+                // This touch and the physical reference mutation commit together; a late cleanup loses and rolls back.
+                var fenced = await context.WorkflowExecutableCoordinations.Where(candidate => candidate.Id == id &&
+                    candidate.Revision == revision && candidate.IncarnationId == incarnation)
+                    .ExecuteUpdateAsync(update => update.SetProperty(candidate => candidate.Revision, revision + 1), cancellationToken);
+                if (fenced != 1) throw new DbUpdateConcurrencyException("The source-reference deletion guard changed.");
+                await transaction.CommitAsync(cancellationToken);
+                context.ChangeTracker.Clear();
+                return changed;
+            }
+            catch
+            {
+                await RollbackQuietlyAsync(transaction); context.ChangeTracker.Clear(); throw;
+            }
+        }, _ => throw CoordinationDidNotSettle(guard.ArtifactId), cancellationToken);
+    }
+
     private async Task<bool> DeletePairAsync(
         string scope,
         string artifactId,
