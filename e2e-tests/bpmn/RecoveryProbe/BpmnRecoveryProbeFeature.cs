@@ -45,8 +45,20 @@ public class BpmnRecoveryProbeFeature : IShellFeature
         }
         public async ValueTask<StimulusDeliverySnapshot> InstallAsync(PostCommitDeliveryContext source, StimulusDeliverySnapshot candidate, CancellationToken cancellationToken = default)
         {
-            await control.CutAsync("before-install", source, cancellationToken, candidate);
-            var winner = await inner.InstallAsync(source, candidate, cancellationToken);
+            var attemptedProviderInstall = false;
+            StimulusDeliverySnapshot winner;
+            try
+            {
+                await control.CutAsync("before-install", source, cancellationToken, candidate);
+                attemptedProviderInstall = true;
+                winner = await inner.InstallAsync(source, candidate, cancellationToken);
+            }
+            catch (Exception exception)
+            {
+                try { await control.RecordRejectedProposalAsync(source, attemptedProviderInstall, exception, cancellationToken.IsCancellationRequested); }
+                catch { /* Missing evidence fails the runner; observation must never replace the actual refusal. */ }
+                throw;
+            }
             var current = await inner.ReadSourceAsync(source, cancellationToken);
             await control.CutAsync("after-cohort", current, cancellationToken);
             return winner;
@@ -110,6 +122,29 @@ internal sealed class RecoveryProbeControl(string directory)
         File.Move(temporary, Path.Combine(caseDirectory, "reached.json"));
         while (!File.Exists(Path.Combine(caseDirectory, "release")))
             await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
+    }
+
+    // An observation of the real refusal, never a provider/claim result used by application code.
+    public async ValueTask RecordRejectedProposalAsync(PostCommitDeliveryContext source, bool attemptedProviderInstall,
+        Exception exception, bool cancellationRequested)
+    {
+        var path = Path.Combine(directory, "plan.json");
+        if (!File.Exists(path)) return;
+        var plan = JsonSerializer.Deserialize<Plan>(await File.ReadAllTextAsync(path), Json);
+        if (plan is null || plan.Phase != "before-install" ||
+            !Regex.IsMatch(plan.CaseId, "^[a-z0-9-]{1,64}$", RegexOptions.CultureInvariant) ||
+            source.Intent.Payload?.GetProperty("eventName").GetString() != plan.EventName) return;
+        var caseDirectory = Path.Combine(directory, plan.CaseId);
+        if (!File.Exists(Path.Combine(caseDirectory, "reached.json"))) return;
+        var marker = new { SourceOutboxItemId = source.SourceOutboxItemId, source.Claim.OwnerId,
+            source.Claim.FencingToken, AttemptedProviderInstall = attemptedProviderInstall,
+            FailureType = exception.GetType().Name, InnerFailureType = exception.InnerException?.GetType().Name,
+            CancellationRequested = cancellationRequested, ObservedAtUtc = DateTimeOffset.UtcNow };
+        var temporary = Path.Combine(caseDirectory, "rejected.tmp");
+        if (File.Exists(temporary) || File.Exists(Path.Combine(caseDirectory, "rejected.json"))) return;
+        await using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        { await JsonSerializer.SerializeAsync(stream, marker, Json); stream.Flush(true); }
+        File.Move(temporary, Path.Combine(caseDirectory, "rejected.json"));
     }
 
     private sealed record Plan(string CaseId, string Phase, string EventName, string? TargetExecutionId = null);

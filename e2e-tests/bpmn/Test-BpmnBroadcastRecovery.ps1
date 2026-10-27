@@ -13,9 +13,12 @@ param(
     [Parameter(Mandatory)][string] $EvidencePath,
     [string] $Python = 'python3',
     [Parameter(Mandatory)][string] $SourceRevision,
-    [ValidateSet('after-cohort', 'after-resume', 'before-selection', 'empty-cohort')][string] $Phase = 'after-cohort'
+    [ValidateSet('after-cohort', 'after-resume', 'before-selection', 'empty-cohort', 'competing-proposal')][string] $Phase = 'after-cohort'
 )
 $ErrorActionPreference = 'Stop'
+$competing = $Phase -eq 'competing-proposal'
+$selectsAfterRestart = $Phase -in @('before-selection', 'competing-proposal')
+if ($competing -and $IsWindows) { throw 'This owned process-suspension race requires Unix signals.' }
 . "$PSScriptRoot/../_ServerLifecycle.ps1"
 . "$PSScriptRoot/../_ElsaCommon.ps1"
 # Verify assembly metadata and the full adjacent runtime closure before launching either build.
@@ -53,12 +56,29 @@ $settings = Get-Content -Raw $settingsPath | ConvertFrom-Json -AsHashtable
 $settings.CShells.Shells.default.Features.BpmnRecoveryProbe = @{ ControlDirectory = $control }
 $settings.CShells.Shells.default.Features.WorkflowsRuntimeResumption = @{ SweepIntervalSeconds = 1 }
 $settings | ConvertTo-Json -Depth 60 | Set-Content $settingsPath
-@{ caseId = $caseId; phase = if ($Phase -eq 'empty-cohort') { 'after-cohort' } else { $Phase }; eventName = $eventName } | ConvertTo-Json | Set-Content (Join-Path $control 'plan.json')
-$receipt = @{ sourceRevision = $SourceRevision; scenario = switch ($Phase) { 'after-resume' { 'partial-callback-and-rearm-before-source-ack' } 'before-selection' { 'delayed-first-selection-and-pre-start-wait-exclusion' } 'empty-cohort' { 'empty-saved-cohort-excludes-later-matches' } default { 'after-cohort-before-dispatch' } }; passed = $false;
+@{ caseId = $caseId; phase = if ($competing) { 'before-install' } elseif ($Phase -eq 'empty-cohort') { 'after-cohort' } else { $Phase }; eventName = $eventName } | ConvertTo-Json | Set-Content (Join-Path $control 'plan.json')
+$receipt = @{ sourceRevision = $SourceRevision; scenario = switch ($Phase) { 'after-resume' { 'partial-callback-and-rearm-before-source-ack' } 'before-selection' { 'delayed-first-selection-and-pre-start-wait-exclusion' } 'empty-cohort' { 'empty-saved-cohort-excludes-later-matches' } 'competing-proposal' { 'expired-old-prepared-proposal-cannot-replace-successor-winner' } default { 'after-cohort-before-dispatch' } }; passed = $false;
     probeAssemblySha256 = (Get-FileHash $ProbeAssembly).Hash.ToLowerInvariant(); normalAssemblySha256 = (Get-FileHash $NormalAssembly).Hash.ToLowerInvariant();
     sourceCommit = $sourceCommit; sourceFiles = $sourceManifest; probeBuild = $probeManifest; normalBuild = $normalManifest; readerSha256 = $readerHash; readerBuild = $readerManifest;
     cut = $null; stopped = $null; successorClaim = $null; recovered = $null; observations = @(); failures = @() }
-$client = $null; $pending = $null; $watch = $null
+$client = $null; $pending = $null; $watch = $null; $oldBroker = $null; $oldBrokerStop = $null
+$recoveryRoot = $root; $recoveryBase = $base; $sharedEnvironment = @{}
+if ($competing) {
+    $suffix = [guid]::NewGuid().ToString('N')
+    $oldNodeId = "bpmn-old-$suffix"; $peerNodeId = "bpmn-peer-$suffix"
+    $sharedEnvironment = @{
+        'ConnectionStrings__Elsa' = "Data Source=$(Join-Path $root 'elsa.db')"
+        'Elsa__Cluster__Membership__EntityFrameworkCore__Enabled' = 'true'
+        'Elsa__Cluster__Membership__EntityFrameworkCore__Provider' = 'Sqlite'
+        'Elsa__Cluster__Membership__EntityFrameworkCore__ConnectionString' = "Data Source=$(Join-Path $root 'membership.db')"
+        'Elsa__Cluster__Membership__HeartbeatInterval' = '00:00:01'
+        'Elsa__Cluster__Membership__ExpiryPeriod' = '00:00:04'
+        'Elsa__Cluster__Membership__SkewAllowance' = '00:00:00'
+    }
+    $settings.CShells.Shells.default.Features.FileSystemDistributedLocking = @{ LocksFolderPath = (Join-Path $root 'shared-locks') }
+    $settings | ConvertTo-Json -Depth 60 | Set-Content $settingsPath
+    $receipt.oldNodeId = $oldNodeId; $receipt.peerNodeId = $peerNodeId
+}
 function Import-Process([string] $Xml) {
     $import = Invoke-RestMethod "$($ctx.BaseUrl)/interchange/bpmn/import" -Method Post -WebSession $ctx.Session -ContentType 'application/json' -Body (@{ xml = $Xml } | ConvertTo-Json -Depth 30)
     if (-not $import.analysis.hostInventoryVerified -or -not $import.analysis.canExecute) { throw 'The actual catalog could not execute the imported fixture.' }
@@ -84,6 +104,12 @@ function Observe([string] $Name, [string[]] $ExtraIds) {
     if ($LASTEXITCODE -ne 0) { throw "The checked $Name observation failed." }
     return Get-Content -Raw $path | ConvertFrom-Json -AsHashtable -DateKind String
 }
+function Observe-Membership([string] $Name) {
+    $path = Join-Path $caseDirectory "$Name.json"
+    & $Python "$PSScriptRoot/inspect_broadcast_recovery.py" --membership --database (Join-Path $root 'membership.db') --reader $ReaderAssembly --marker $markerPath --output $path | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw 'The actual membership observation failed.' }
+    return Get-Content -Raw $path | ConvertFrom-Json -AsHashtable -DateKind String
+}
 function Same-Snapshot($Left, $Right) {
     if ($null -eq $Left -or $null -eq $Right) { return ($null -eq $Left -and $null -eq $Right) }
     $leftDocument = [System.Text.Json.JsonDocument]::Parse(($Left | ConvertTo-Json -Depth 60 -Compress))
@@ -92,8 +118,32 @@ function Same-Snapshot($Left, $Right) {
     finally { $leftDocument.Dispose(); $rightDocument.Dispose() }
 }
 try {
-    Start-OwnedElsaServer -BaseUrl $base -ContentRoot $root -AssemblyPath $ProbeAssembly
-    $probeProcess = $script:OwnedElsaServer.Process
+    if ($competing) {
+        Assert-OwnableAddress -BaseUrl $base
+        $oldEnvironment = @{} + $sharedEnvironment; $oldEnvironment.Elsa__Cluster__Membership__HostId = $oldNodeId
+        $environmentFile = Join-Path $control 'probe-environment.json'; $oldEnvironment | ConvertTo-Json | Set-Content $environmentFile
+        $oldBrokerStop = Join-Path $control 'stop-owned-probe'
+        $manifest = Join-Path $control 'owned-probe.json'
+        $start = [Diagnostics.ProcessStartInfo]::new(); $start.FileName = $Python; $start.UseShellExecute = $false
+        $start.RedirectStandardOutput = $true; $start.RedirectStandardError = $true
+        foreach ($argument in @("$PSScriptRoot/run_owned_broadcast_probe.py", '--assembly', $ProbeAssembly, '--content-root', $root,
+            '--base-url', $base, '--environment-file', $environmentFile, '--manifest', $manifest, '--stop-file', $oldBrokerStop)) { $start.ArgumentList.Add($argument) }
+        $oldBroker = [Diagnostics.Process]::Start($start); $oldBrokerOut = $oldBroker.StandardOutput.ReadToEndAsync(); $oldBrokerError = $oldBroker.StandardError.ReadToEndAsync()
+        $deadline = [DateTimeOffset]::UtcNow.AddSeconds(300)
+        while (-not (Test-Path $manifest) -or -not (Test-ElsaServerReady -BaseUrl $base)) {
+            if ($oldBroker.HasExited) { throw "Owned probe controller exited: $($oldBrokerError.GetAwaiter().GetResult())" }
+            if ([DateTimeOffset]::UtcNow -ge $deadline) { throw 'The owned probe did not become ready.' }
+            Start-Sleep -Milliseconds 200
+        }
+        $owned = Get-Content -Raw $manifest | ConvertFrom-Json -AsHashtable
+        $probeProcess = [Diagnostics.Process]::GetProcessById($owned.processId)
+        $registeredStart = [long]$owned.startEpochSeconds
+        $receipt.probeControllerProcessId = $oldBroker.Id
+        if ($probeProcess.Id -notin @(Get-PortListenerPid -Port ([Uri]$base).Port)) { throw 'The ready endpoint does not belong to the exact controller-owned process.' }
+    } else {
+        Start-OwnedElsaServer -BaseUrl $base -ContentRoot $root -AssemblyPath $ProbeAssembly
+        $probeProcess = $script:OwnedElsaServer.Process
+    }
     $ctx = Connect-Elsa -BaseUrl $base
     $waitXml = @"
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" id="defs" targetNamespace="urn:elsa:source-recovery"><signal id="signal" name="$eventName"/>
@@ -115,13 +165,13 @@ try {
     $waitRun = Invoke-Artifact -Ctx $ctx -ArtifactId $waitPublication.artifactId -SourceReferenceId $waitPublication.sourceReferenceId
     $null = Wait-Catches $waitRun.workflowExecutionId 2
     # Published before the snapshot; this start must survive a process restart with its original artifact-scoped key.
-    $parkName = if ($Phase -eq 'before-selection') { $eventName } else { "park-$eventName" }
+    $parkName = if ($selectsAfterRestart) { $eventName } else { "park-$eventName" }
     $startXml = @"
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" id="defs" targetNamespace="urn:elsa:source-recovery"><signal id="signal" name="$eventName"/><signal id="park" name="$parkName"/>
 <process id="selected-start" isExecutable="true"><startEvent id="receive"><signalEventDefinition signalRef="signal"/></startEvent><intermediateCatchEvent id="park"><signalEventDefinition signalRef="park"/></intermediateCatchEvent><endEvent id="end"/>
 <sequenceFlow id="first" sourceRef="receive" targetRef="park"/><sequenceFlow id="last" sourceRef="park" targetRef="end"/></process></definitions>
 "@
-    if ($Phase -eq 'before-selection') {
+    if ($selectsAfterRestart) {
         $startXml = $startXml.Replace("<signal id=`"park`" name=`"$parkName`"/>", '').Replace('signalRef="park"', 'signalRef="signal"')
     }
     $initialStartXml = if ($Phase -eq 'empty-cohort') { $startXml.Replace($eventName, "unmatched-$eventName") } else { $startXml }
@@ -150,8 +200,9 @@ try {
     }
     $marker = Get-Content -Raw $markerPath | ConvertFrom-Json -AsHashtable -DateKind String
     $receipt.cut = $marker
-    if ($Phase -eq 'before-selection') {
+    if ($selectsAfterRestart) {
         if ($null -ne $marker.snapshot) { throw 'Selection already occurred before the delayed-delivery cut.' }
+        if ($competing -and ($marker.proposal.starts.Count -ne 1 -or $marker.proposal.resumes.Count -ne 2)) { throw 'The original owner did not prepare its complete distinct proposal.' }
     } elseif ($Phase -eq 'empty-cohort') {
         if ($null -eq $marker.snapshot -or $marker.snapshot.starts.Count -ne 0 -or $marker.snapshot.resumes.Count -ne 0) { throw 'The empty recipient decision was not durably committed.' }
     } elseif ($marker.snapshot.starts.Count -ne 1 -or $marker.snapshot.resumes.Count -ne 2) { throw 'The actual persisted cohort is incomplete at the cut.' }
@@ -182,10 +233,24 @@ try {
     $lateRun = Invoke-Artifact -Ctx $ctx -ArtifactId $latePublication.artifactId -SourceReferenceId $latePublication.sourceReferenceId
     $null = Wait-Catches $lateRun.workflowExecutionId 2
     $lateStart = Import-Process ($startXml.Replace('id="selected-start"', 'id="late-start"'))
-    Stop-OwnedElsaServer
-    if (-not $probeProcess.HasExited) { throw 'The owned probe process remains live after termination.' }
+    if ($competing) {
+        if ($probeProcess.HasExited) { throw 'The owned first process exited before suspension.' }
+        $pausePath = Join-Path $caseDirectory 'paused.json'
+        & $Python "$PSScriptRoot/pause_owned_broadcast_host.py" --pid $probeProcess.Id --expected-start $registeredStart --assembly $ProbeAssembly --content-root $root --database (Join-Path $root 'elsa.db') --database (Join-Path $root 'membership.db') --output $pausePath
+        if ($LASTEXITCODE -ne 0) { throw 'The owned process could not be paused outside SQLite writes.' }
+        $receipt.paused = Get-Content -Raw $pausePath | ConvertFrom-Json -AsHashtable -DateKind String
+        $recoveryRoot = New-ElsaContentRoot -Prefix 'elsa-bpmn-competing-peer'
+        $recoveryBase = Resolve-ElsaServerBaseUrl
+    } else {
+        Stop-OwnedElsaServer
+        if (-not $probeProcess.HasExited) { throw 'The owned probe process remains live after termination.' }
+    }
     $stopped = Observe 'stopped' @($waitRun.workflowExecutionId, $lateRun.workflowExecutionId)
     $receipt.stopped = $stopped
+    if ($competing) {
+        $receipt.membershipBeforePeer = Observe-Membership 'membership-before-peer'
+        if (@($receipt.membershipBeforePeer.members | Where-Object hostId -eq $oldNodeId).Count -ne 1) { throw 'The old host did not publish its actual unique membership identity.' }
+    }
     if ($stopped.source.status -ne 'Delivering' -or $stopped.source.deliveryFencingToken -ne $marker.fencingToken -or $stopped.source.deliveringOwnerId -ne $marker.ownerId) { throw 'The stopped source lost its actual claim facts.' }
     if (-not (Same-Snapshot $stopped.source.snapshot $marker.snapshot)) { throw 'The physical source differs from the captured winner.' }
     if ($Phase -eq 'empty-cohort') {
@@ -197,7 +262,7 @@ try {
         $binding = @($stopped.matchingBindings | Where-Object artifactId -eq $lateStart.artifactId)
         if ($binding.Count -ne 1 -or -not $binding[0].isActive -or [DateTimeOffset]::Parse($binding[0].createdAt) -le [DateTimeOffset]::Parse($marker.capturedAtUtc)) { throw 'The later binding is not actually active/matching after the empty decision.' }
     }
-    if ($Phase -eq 'before-selection') {
+    if ($selectsAfterRestart) {
         if ($null -ne $stopped.source.snapshot) { throw 'The stopped source already selected recipients.' }
         foreach ($executionId in @($waitRun.workflowExecutionId, $lateRun.workflowExecutionId)) {
             $wf = @($stopped.workflows | Where-Object workflowExecutionId -eq $executionId)[0]
@@ -231,16 +296,19 @@ try {
         }
     }
     $null = $settings.CShells.Shells.default.Features.Remove('BpmnRecoveryProbe')
-    $settings | ConvertTo-Json -Depth 60 | Set-Content $settingsPath
+    $settings | ConvertTo-Json -Depth 60 | Set-Content (Join-Path $recoveryRoot 'shells.json')
+    # Never rewrite the paused host's configuration; its original shell must attempt its prepared proposal.
     # Begin the observer before startup: normal background delivery may reclaim and complete before readiness returns.
     $watchOutput = Join-Path $caseDirectory 'successor.json'
     $info = [Diagnostics.ProcessStartInfo]::new(); $info.FileName = $Python; $info.UseShellExecute = $false
     $info.RedirectStandardOutput = $true; $info.RedirectStandardError = $true
     foreach ($arg in @("$PSScriptRoot/inspect_broadcast_recovery.py", '--database', (Join-Path $root 'elsa.db'), '--reader', $ReaderAssembly, '--marker', $markerPath, '--output', $watchOutput, '--watch-claim', '--previous-fence', [string]$stopped.source.deliveryFencingToken, '--timeout', '180')) { $info.ArgumentList.Add($arg) }
     $watch = [Diagnostics.Process]::Start($info); $watchStdout = $watch.StandardOutput.ReadToEndAsync(); $watchStderr = $watch.StandardError.ReadToEndAsync()
-    Start-OwnedElsaServer -BaseUrl $base -ContentRoot $root -AssemblyPath $NormalAssembly
-    $receipt.normalProcessId = $script:OwnedElsaServer.Process.Id; $receipt.crashedProcessId = $probeProcess.Id
-    $ctx = Connect-Elsa -BaseUrl $base
+    $peerEnvironment = @{} + $sharedEnvironment
+    if ($competing) { $peerEnvironment.Elsa__Cluster__Membership__HostId = $peerNodeId }
+    Start-OwnedElsaServer -BaseUrl $recoveryBase -ContentRoot $recoveryRoot -AssemblyPath $NormalAssembly -Environment $peerEnvironment
+    $receipt.normalProcessId = $script:OwnedElsaServer.Process.Id; $receipt.crashedOrPausedProcessId = $probeProcess.Id
+    $ctx = Connect-Elsa -BaseUrl $recoveryBase
     $deadline = [DateTimeOffset]::UtcNow.AddSeconds(180)
     while (-not $watch.HasExited -and [DateTimeOffset]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 200 }
     if (-not $watch.HasExited) { throw 'Successor observation remains live beyond the fixture bound.' }
@@ -266,7 +334,7 @@ try {
         } while ([DateTimeOffset]::UtcNow -lt $deadline)
         if ($completed.Count -ne 2 -or $armed.Count -ne 2 -or @($finished.incidents).Count -ne 0) { throw 'Recovery did not complete only both saved callbacks and preserve rearmed listeners.' }
     }
-    if ($Phase -eq 'before-selection') {
+    if ($selectsAfterRestart) {
         $lateCompleted = Wait-WorkflowInstance -Ctx $ctx -ExecutionId $lateRun.workflowExecutionId -TimeoutSeconds 60
         if ($lateCompleted.instance.status -ne 'Completed' -or @($lateCompleted.incidents).Count -ne 0) { throw 'First delivery did not include the listener armed after publisher commit.' }
         $selectedSource = Observe 'selected-after-recovery' @($waitRun.workflowExecutionId, $lateRun.workflowExecutionId)
@@ -304,7 +372,7 @@ try {
     if ($after.source.status -ne 'Delivered' -or -not (Same-Snapshot $after.source.snapshot $selectedSource.source.snapshot)) { throw 'Recovery did not settle its complete immutable source cohort.' }
     $expectedArtifacts = @()
     if ($Phase -ne 'empty-cohort') { $expectedArtifacts += $selectedPublication.artifactId }
-    if ($Phase -eq 'before-selection') { $expectedArtifacts += $lateStart.artifactId }
+    if ($selectsAfterRestart) { $expectedArtifacts += $lateStart.artifactId }
     if ($after.source.selectedStarts.Count -ne $expectedArtifacts.Count) { throw 'The final source has an unexpected start set.' }
     foreach ($selectedStart in $after.source.selectedStarts) {
         $selected = @($after.allWorkflows | Where-Object artifactId -eq $selectedStart.artifactId)
@@ -343,7 +411,7 @@ try {
     $late = @($after.workflows | Where-Object workflowExecutionId -eq $lateRun.workflowExecutionId)[0]
     $lateInstance = Get-WorkflowInstance -Ctx $ctx -ExecutionId $lateRun.workflowExecutionId
     if (@($lateInstance.incidents).Count -ne 0) { throw 'The later listener acquired an incident during recovery.' }
-    if ($Phase -ne 'before-selection') {
+    if (-not $selectsAfterRestart) {
         if (@($after.allWorkflows | Where-Object artifactId -eq $lateStart.artifactId).Count -ne 0) { throw 'A later binding joined an already saved source.' }
         $lateBefore = @($stopped.workflows | Where-Object workflowExecutionId -eq $lateRun.workflowExecutionId)[0]
         if ($late.bookmarks.Count -ne 2 -or $late.status -ne $lateBefore.status -or
@@ -354,7 +422,7 @@ try {
         $parkedWait = @($keyedState.bookmarks | Where-Object { $_.executableNodeId -eq 'node-park' -and $_.activityStatus -eq 'Suspended' })
         if ($parkedWait.Count -ne 1 -or $parkedWait[0].generation -le 0 -or $keyedState.bookmarks.Count -ne 1) { throw 'A saved keyed start lacks its exact physical park registration.' }
         if ($Phase -eq 'after-resume' -and -not (Same-Snapshot $parkedWait[0] $receipt.startedParkBeforeCrash)) { throw 'Source retry changed the start accepted before the crash.' }
-        if ($Phase -eq 'before-selection') {
+        if ($selectsAfterRestart) {
             $oldWait = $stopped.workflows | ForEach-Object bookmarks | Where-Object bookmarkId -eq $parkedWait[0].bookmarkId
             $captured = @($after.source.selectedResumes | Where-Object { $_.workflowExecutionId -eq $keyedState.workflowExecutionId -and $_.bookmarkId -eq $parkedWait[0].bookmarkId })
             $original = @($after.source.selectedResumes)[0]
@@ -366,6 +434,35 @@ try {
     $publisherFinished = Wait-WorkflowInstance -Ctx $ctx -ExecutionId $marker.workflowExecutionId -TimeoutSeconds 60
     if ($publisherFinished.instance.status -ne 'Completed' -or @($publisherFinished.incidents).Count -ne 0) { throw 'The original source publisher did not complete cleanly.' }
     $receipt.observations += @{ originalWaiter = $finished; selectedStarts = $startedRuns; laterListener = $lateInstance; publisher = $publisherFinished }
+    if ($competing) {
+        if ($probeProcess.HasExited) { throw 'The old owned process exited before its stale proposal could be tested.' }
+        if (Same-Snapshot $marker.proposal $after.source.snapshot) { throw 'The successor did not choose a genuinely different full recipient set.' }
+        $receipt.winnerBeforeOldResume = $after
+        $receipt.membershipBeforeOldResume = Observe-Membership 'membership-before-old-resume'
+        $oldMember = @($receipt.membershipBeforeOldResume.members | Where-Object hostId -eq $oldNodeId)
+        $peerMember = @($receipt.membershipBeforeOldResume.members | Where-Object hostId -eq $peerNodeId)
+        if ($oldMember.Count -ne 1 -or $peerMember.Count -ne 1 -or -not $peerMember[0].isLive -or $oldMember[0].isLive -or $oldMember[0].incarnation -eq $peerMember[0].incarnation) { throw 'Distinct actual shared membership identities and natural old-member lapse were not proven.' }
+        New-Item -ItemType File (Join-Path $caseDirectory 'release') | Out-Null
+        & $Python "$PSScriptRoot/pause_owned_broadcast_host.py" --resume --pid $probeProcess.Id --expected-start $registeredStart --assembly $ProbeAssembly --content-root $root --output (Join-Path $caseDirectory 'resumed.json')
+        if ($LASTEXITCODE -ne 0) { throw 'The exact old owned process could not resume.' }
+        $rejectedPath = Join-Path $caseDirectory 'rejected.json'
+        $deadline = [DateTimeOffset]::UtcNow.AddSeconds(30)
+        while (-not (Test-Path $rejectedPath) -and [DateTimeOffset]::UtcNow -lt $deadline) {
+            if ($probeProcess.HasExited) { throw 'The old host exited without reporting its real proposal refusal.' }
+            Start-Sleep -Milliseconds 100
+        }
+        if (-not (Test-Path $rejectedPath)) { throw 'No actual stale proposal refusal was observed.' }
+        $rejected = Get-Content -Raw $rejectedPath | ConvertFrom-Json -AsHashtable -DateKind String
+        $staleTypes = @('RuntimePostCommitOutboxStaleClaimException')
+        if ($rejected.sourceOutboxItemId -ne $marker.sourceOutboxItemId -or $rejected.ownerId -ne $marker.ownerId -or
+            $rejected.fencingToken -ne $marker.fencingToken -or -not $rejected.attemptedProviderInstall -or $rejected.cancellationRequested -or
+            ($rejected.failureType -notin $staleTypes -and $rejected.innerFailureType -notin $staleTypes)) { throw 'The refusal does not prove the exact old source/claim lost authority.' }
+        $receipt.oldProposalRefusal = $rejected
+        $afterOld = Observe 'after-stale-owner' @($waitRun.workflowExecutionId, $lateRun.workflowExecutionId)
+        if (-not (Same-Snapshot $afterOld.source $after.source) -or -not (Same-Snapshot $afterOld.workflows $after.workflows) -or
+            -not (Same-Snapshot $afterOld.allWorkflows $after.allWorkflows)) { throw 'The resumed old candidate changed the winning source or recipients.' }
+        $receipt.afterOldResume = $afterOld
+    }
     if (-not (Same-Snapshot (Read-SourceManifest) $sourceManifest)) { throw 'The observed recovery source changed during execution.' }
     if (-not (Same-Snapshot (Read-BuildManifest $ProbeAssembly) $probeManifest) -or
         -not (Same-Snapshot (Read-BuildManifest $NormalAssembly) $normalManifest) -or
@@ -377,10 +474,28 @@ try {
     $receipt.failures += @{ type = $_.Exception.GetType().Name; message = $_.Exception.Message }
     throw
 } finally {
-    if ($watch -and -not $watch.HasExited) { $watch.Kill(); $watch.WaitForExit() }
-    if ($client) { $client.Dispose() }
-    Stop-OwnedElsaServer
+    $cleanupFailures = @()
+    $cleanupActions = @(
+        @{ name = 'source observer'; action = { if ($watch -and -not $watch.HasExited) { $watch.Kill(); $watch.WaitForExit() } } },
+        @{ name = 'HTTP client'; action = { if ($client) { $client.Dispose() } } },
+        @{ name = 'standard host'; action = { Stop-OwnedElsaServer } },
+        @{ name = 'probe controller'; action = {
+            if ($oldBroker) {
+                if (-not $oldBroker.HasExited) {
+                    New-Item -ItemType File -Force $oldBrokerStop | Out-Null
+                    if (-not $oldBroker.WaitForExit(20000)) { throw 'The exact probe controller did not finish owned cleanup.' }
+                }
+                if ($oldBroker.ExitCode -ne 0) { throw "The owned probe controller exited with code $($oldBroker.ExitCode)." }
+            }
+        } }
+    )
+    foreach ($cleanup in $cleanupActions) {
+        try { & $cleanup.action }
+        catch { $cleanupFailures += @{ phase = $cleanup.name; type = $_.Exception.GetType().Name; message = $_.Exception.Message } }
+    }
+    if ($cleanupFailures.Count -gt 0) { $receipt.passed = $false; $receipt.failures += $cleanupFailures }
     $receipt.capturedAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
     $receipt | ConvertTo-Json -Depth 80 | Set-Content -LiteralPath $EvidencePath
     Write-Host "Owned recovery evidence/logs retained at $root"
+    if ($cleanupFailures.Count -gt 0) { throw 'Owned recovery cleanup failed; all cleanup actions were attempted and failures were recorded.' }
 }

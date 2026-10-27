@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 using System.Reflection.PortableExecutable;
 using System.Reflection.Metadata;
 using System.Text.Json;
+using Elsa.Cluster.EntityFrameworkCore;
+using Elsa.Cluster.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
@@ -34,9 +36,28 @@ try
         Console.WriteLine(JsonSerializer.Serialize(new { ContainsRecoveryProbe = containsProbe, Files = manifest }, json));
         return 0;
     }
+    if (args.Length == 3 && args[0] == "--inspect-membership")
+    {
+        var membershipPath = Path.GetFullPath(args[1]);
+        await VerifySnapshotAsync(membershipPath, args[2]);
+        var membershipCs = new SqliteConnectionStringBuilder { DataSource = new Uri(membershipPath).AbsoluteUri + "?immutable=1", Mode = SqliteOpenMode.ReadOnly }.ToString();
+        await using var membershipConnection = new SqliteConnection(membershipCs); await membershipConnection.OpenAsync();
+        await using (var queryOnly = membershipConnection.CreateCommand()) { queryOnly.CommandText = "PRAGMA query_only=ON"; await queryOnly.ExecuteNonQueryAsync(); }
+        await using var membership = new ClusterMembershipSqliteDbContext(new DbContextOptionsBuilder<ClusterMembershipSqliteDbContext>().UseSqlite(membershipConnection).Options);
+        var members = (await membership.Members.AsNoTracking().ToListAsync()).Select(StoredMember.From).ToArray();
+        if (members.Any(member => !member.IsInterpretable)) throw new InvalidDataException("A fixture membership row is not interpretable.");
+        var now = DateTimeOffset.UtcNow;
+        await VerifySnapshotAsync(membershipPath, args[2]);
+        Console.WriteLine(JsonSerializer.Serialize(new { ProviderChecked = true, ReadOnly = true, ProviderKind = "entity-framework-core",
+            SnapshotSha256 = args[2], JudgedAtUtc = now, SkewAllowanceSeconds = 0,
+            Members = members.Select(member => new { member.Identity.HostId, Incarnation = member.Identity.Incarnation.Value,
+                Status = member.Status.ToString(), member.HeartbeatAt, member.ExpiryPeriod, member.ReportRevision,
+                member.IsInterpretable, member.IsCurrent, IsLive = member.IsLive(now, TimeSpan.Zero) }) }, json));
+        return 0;
+    }
     if (args.Length < 4) throw new ArgumentException("Expected snapshot, hash, scope, source ID and optional workflow IDs.");
     var path = Path.GetFullPath(args[0]);
-    await VerifyAsync();
+    await VerifySnapshotAsync(path, args[1]);
     var cs = new SqliteConnectionStringBuilder { DataSource = new Uri(path).AbsoluteUri + "?immutable=1", Mode = SqliteOpenMode.ReadOnly }.ToString();
     await using var connection = new SqliteConnection(cs); await connection.OpenAsync();
     await using (var command = connection.CreateCommand()) { command.CommandText = "PRAGMA query_only=ON"; await command.ExecuteNonQueryAsync(); }
@@ -98,7 +119,7 @@ try
             binding.ExecutableNodeId, binding.StimulusType, binding.StimulusHash, binding.IsActive, binding.CreatedAt }));
         continuation = page.NextContinuationToken;
     } while (continuation is not null);
-    await VerifyAsync();
+    await VerifySnapshotAsync(path, args[1]);
     Console.WriteLine(JsonSerializer.Serialize(new { ProviderChecked = true, ReadOnly = true, SnapshotSha256 = args[1],
         Source = new { source.OutboxItemId, source.Intent.WorkflowExecutionId, source.RecordedAt, Status = source.Status.ToString(), source.DeliveryAttemptCount,
             source.DeliveringOwnerId, source.DeliveryFencingToken, source.DeliveryVisibleAfter, source.DeliveredAt, source.LastFailureMessage, IntentPayload = intentPayload,
@@ -109,19 +130,20 @@ try
         AllWorkflows = all.Select(state => new { state.WorkflowExecutionId, state.PinnedExecutable.ArtifactId, Status = state.Status.ToString() }) }, json));
     return 0;
 
-    async Task VerifyAsync()
-    {
-        if (File.Exists(path + "-wal") || File.Exists(path + "-shm") || File.Exists(path + "-journal"))
-            throw new InvalidDataException("A private closed snapshot without live sidecars is required.");
-        await using var stream = File.OpenRead(path);
-        if (Convert.ToHexStringLower(await SHA256.HashDataAsync(stream)) != args[1])
-            throw new InvalidDataException("The private snapshot differs from its expected hash.");
-    }
 }
 catch (Exception exception)
 {
     Console.WriteLine(JsonSerializer.Serialize(new { ProviderChecked = false, Status = "ObservationUnavailable", FailureType = exception.GetType().Name }, json));
     return 2;
+}
+
+static async Task VerifySnapshotAsync(string path, string expectedHash)
+{
+    if (File.Exists(path + "-wal") || File.Exists(path + "-shm") || File.Exists(path + "-journal"))
+        throw new InvalidDataException("A private closed snapshot without live sidecars is required.");
+    await using var stream = File.OpenRead(path);
+    if (Convert.ToHexStringLower(await SHA256.HashDataAsync(stream)) != expectedHash)
+        throw new InvalidDataException("The private snapshot differs from its expected hash.");
 }
 
 internal sealed class ScopedAccess(PersistenceScope scope) : IPersistenceAccessContextAccessor

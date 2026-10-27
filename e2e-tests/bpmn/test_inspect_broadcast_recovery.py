@@ -5,7 +5,7 @@ These controls do not qualify host recovery. Test-BpmnBroadcastRecovery.ps1 supp
 import argparse, base64, hashlib, importlib.util, json, pathlib, sqlite3, subprocess, tempfile, unittest
 from contextlib import closing
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-READER = DATABASE = MARKER = None
+READER = DATABASE = MARKER = MEMBERSHIP = None
 EXPECTED_RESUMES, EXPECTED_STARTS = 2, 1
 spec=importlib.util.spec_from_file_location('recovery', ROOT/'e2e-tests/bpmn/inspect_broadcast_recovery.py'); recovery=importlib.util.module_from_spec(spec);spec.loader.exec_module(recovery)
 def encode(s): return base64.b64encode(s.encode('utf-16le')).decode()
@@ -46,6 +46,31 @@ class CheckedRecoveryReaderTests(unittest.TestCase):
    with closing(sqlite3.connect(self.db.as_uri()+'?mode=ro',uri=True,isolation_level=None)) as r:
     r.execute('begin');self.assertEqual(1,r.execute('select value from observation_control').fetchone()[0]);w.execute('update observation_control set value=2');w.commit();copy=self.db.with_name('pinned.sqlite');recovery.copy_snapshot(r,copy);r.execute('rollback')
    with closing(sqlite3.connect(copy)) as v:self.assertEqual(1,v.execute('select value from observation_control').fetchone()[0])
+class CheckedMembershipReaderTests(unittest.TestCase):
+ @classmethod
+ def setUpClass(cls):
+  if MEMBERSHIP is None: raise unittest.SkipTest('Supply an owned actual-host membership database explicitly.')
+ def setUp(self):
+  self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.db=pathlib.Path(self.tmp.name)/'membership.sqlite'
+  with closing(sqlite3.connect(MEMBERSHIP.as_uri()+'?mode=ro',uri=True)) as c: recovery.copy_snapshot(c,self.db)
+ def read(self, expected=None):
+  digest=hashlib.sha256(self.db.read_bytes()).hexdigest()
+  r=subprocess.run(['dotnet',str(READER),'--inspect-membership',str(self.db),expected or digest],capture_output=True,text=True,timeout=30)
+  return r.returncode,json.loads(r.stdout)
+ def assert_refused(self, **kwargs):
+  code,data=self.read(**kwargs);self.assertEqual(2,code);self.assertFalse(data['providerChecked']);self.assertEqual('ObservationUnavailable',data['status'])
+ def test_actual_membership_read_is_immutable(self):
+  before=hashlib.sha256(self.db.read_bytes()).hexdigest();code,data=self.read();self.assertEqual(0,code);self.assertTrue(data['providerChecked']);self.assertTrue(data['readOnly']);self.assertGreaterEqual(len(data['members']),2);self.assertTrue(all(m['isInterpretable'] for m in data['members']));self.assertEqual(before,hashlib.sha256(self.db.read_bytes()).hexdigest())
+ def test_wrong_hash_is_refused(self): self.assert_refused(expected='0'*64)
+ def test_live_sidecar_is_refused(self):
+  pathlib.Path(str(self.db)+'-wal').touch();self.assert_refused()
+ def test_uninterpretable_actual_row_is_refused(self):
+  with closing(sqlite3.connect(self.db)) as c:c.execute("update elsa_cluster_members set SchemaVersion='unrecognized'");c.commit()
+  self.assert_refused()
+ def test_missing_membership_table_is_refused(self):
+  with closing(sqlite3.connect(self.db)) as c:c.execute('drop table elsa_cluster_members');c.commit()
+  self.assert_refused()
+
 if __name__ == '__main__':
  parser = argparse.ArgumentParser(description=__doc__)
  parser.add_argument('--database', type=pathlib.Path, required=True)
@@ -53,9 +78,11 @@ if __name__ == '__main__':
  parser.add_argument('--reader', type=pathlib.Path, required=True)
  parser.add_argument('--expected-resumes', type=int, default=2)
  parser.add_argument('--expected-starts', type=int, default=1)
+ parser.add_argument('--membership-database', type=pathlib.Path)
  options, remaining = parser.parse_known_args()
  EXPECTED_RESUMES, EXPECTED_STARTS = options.expected_resumes, options.expected_starts
  READER = options.reader.resolve(strict=True)
  DATABASE = options.database.resolve(strict=True)
  MARKER = json.loads(options.marker.read_text())
+ MEMBERSHIP = options.membership_database.resolve(strict=True) if options.membership_database else None
  unittest.main(argv=[__file__, *remaining])

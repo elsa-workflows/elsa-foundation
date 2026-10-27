@@ -39,6 +39,21 @@ def observe(database: Path, reader: Path, marker: dict, extras: list[str]) -> di
         return read_snapshot(copy, reader, marker, extras)
 
 
+def observe_membership(database: Path, reader: Path) -> dict:
+    with tempfile.TemporaryDirectory(prefix="elsa-membership-recovery-read-") as directory:
+        copy = Path(directory) / "snapshot.sqlite"
+        with closing(sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)) as source:
+            source.execute("pragma query_only=ON"); copy_snapshot(source, copy)
+        digest = hashlib.sha256(copy.read_bytes()).hexdigest()
+        run = subprocess.run(["dotnet", str(reader), "--inspect-membership", str(copy), digest], text=True, capture_output=True, timeout=60)
+        result = json.loads(run.stdout)
+        if run.returncode or result.get("providerChecked") is not True:
+            raise ValueError("The actual membership reader refused the observation: " + str(result.get("failureType")))
+        if hashlib.sha256(copy.read_bytes()).hexdigest() != digest:
+            raise ValueError("The closed membership snapshot changed while being read.")
+        return result
+
+
 def watch_claim(database: Path, reader: Path, marker: dict, extras: list[str], timeout: float, previous_fence: int) -> dict:
     # A live read transaction pins the actual claimed view while backup copies it. WAL writers keep running.
     identity = base64.b64encode(marker["sourceOutboxItemId"].encode("utf-16le")).decode()
@@ -76,15 +91,22 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--extra-workflow", action="append", default=[])
     parser.add_argument("--watch-claim", action="store_true")
+    parser.add_argument("--membership", action="store_true")
     parser.add_argument("--previous-fence", type=int, default=0)
     parser.add_argument("--timeout", type=float, default=180)
     args = parser.parse_args()
     marker = json.loads(args.marker.read_text())
     try:
         database = args.database.resolve(strict=True); reader = args.reader.resolve(strict=True)
-        result = watch_claim(database, reader, marker, args.extra_workflow, args.timeout, args.previous_fence) if args.watch_claim else observe(database, reader, marker, args.extra_workflow)
+        if args.membership and args.watch_claim: raise ValueError("Membership mode cannot watch a source claim.")
+        if args.membership:
+            result = observe_membership(database, reader)
+        elif args.watch_claim:
+            result = watch_claim(database, reader, marker, args.extra_workflow, args.timeout, args.previous_fence)
+        else:
+            result = observe(database, reader, marker, args.extra_workflow)
         args.output.write_text(json.dumps(result, indent=2) + "\n")
-        print(json.dumps({"providerChecked": True, "status": result["source"]["status"], "fence": result["source"]["deliveryFencingToken"]}))
+        print(json.dumps({"providerChecked": True, "members": len(result["members"])} if args.membership else {"providerChecked": True, "status": result["source"]["status"], "fence": result["source"]["deliveryFencingToken"]}))
         return 0
     except (OSError, ValueError, sqlite3.Error, subprocess.SubprocessError, TimeoutError) as error:
         args.output.write_text(json.dumps({"providerChecked": False, "status": "ObservationUnavailable", "failureType": type(error).__name__, "reason": str(error)}, indent=2) + "\n")
