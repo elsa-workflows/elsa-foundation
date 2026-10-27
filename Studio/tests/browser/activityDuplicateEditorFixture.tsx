@@ -116,7 +116,7 @@ export function ActivityDuplicateEditorFixture() {
   } as unknown as StudioAiContributionApi), []);
 
   return (
-    <div className="activity-duplicate-editor" data-testid="activity-duplicate-editor">
+    <div className={`activity-duplicate-editor${instanceHost ? " wf-page wf-page--run-workbench" : ""}`} data-testid="activity-duplicate-editor">
       {instanceHost || motionFixture ? <div aria-label="Fixture runtime controls"><button onClick={() => { live.current.status = "Completed"; }}>Complete fixture execution</button>
         <button onClick={() => { live.current.disconnected = true; }}>Disconnect fixture reads</button><button onClick={() => { live.current.disconnected = false; }}>Reconnect fixture reads</button></div> : null}
       <QueryClientProvider client={queryClient}>

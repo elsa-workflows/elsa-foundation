@@ -71,6 +71,36 @@ code.
 | Designer header | `exists` | Save, the publication split control and Test Run are all visible. These domain controls do not use `StudioButton`. `WorkflowEditorToolbar` fills the publication action; Test Run uses the surface background with an accent border. |
 | Designer header primary | `exists` | The publication split control is the filled action, defaulting to Review & publish. Save is an icon action and Test Run is outlined. |
 
+## Live workflow execution (#3392)
+
+**Status: `exists`** in the shared definition-editor and instance-viewer implementation. The
+[program record](https://github.com/elsa-workflows/elsa-foundation/issues/3392) and its final
+qualification feature [#3399](https://github.com/elsa-workflows/elsa-foundation/issues/3399)
+own acceptance evidence. The [program charter](../../../docs/program-goals/unified-workflow-workspace.md)
+owns architectural boundaries; the [Studio guide](../../../website/docs/studio/README.md)
+explains the user journey.
+
+- Starting a Test Run attaches the exact captured draft to the existing canvas. The same inspector
+  switches between configuration and recorded run data. Selecting a graph node by click, Enter or
+  Space opens the same activity inspection. Interactive child controls retain their own keyboard behavior.
+- The standalone instance viewer follows an already-running instance through the same observer and
+  motion rules. Updates retain deliberate occurrence selection, nested scope and viewport. Repeated
+  executions require an exact choice; newly arriving rows never silently replace that choice.
+- Pause following pauses observation, with last-confirmed wording. Disconnection is explicit and
+  commands require current evidence. Automatic retries are bounded and never redispatch a workflow.
+  Stop remains pending until Runtime confirms a terminal execution state.
+- Returning to editing restores the separate draft. In-page historical snapshot inspection is read
+  only. Explicit reload restoration rechecks access, identity, expiry and the freshly loaded design;
+  a changed design offers the existing run viewer instead of attaching incompatible evidence.
+- Brief activity and supported connection pulses decorate existing canvas elements. Opening an
+  existing run, restoring an attachment or recovering observation establishes a baseline without
+  replaying prior updates. Fast local completion can show its first confirmed batch together.
+  Causal and occurrence evidence determines supported routes; timestamps alone do not. Unknown,
+  ambiguous, retry or unsupported traversal retains state cues. There is no recorded playback control.
+- Motion honors `prefers-reduced-motion`, leaves status text and keyboard controls available, and
+  uses bounded batches with no history queue. Capture policy, authorization, redaction and checkpoint
+  granularity are unchanged. The two entry points retain their existing authorized commands.
+
 ## Definition list consistency (#3070)
 
 **Status: `exists`** (accepted in [#3070](https://github.com/elsa-workflows/elsa-foundation/issues/3070)). The issue record carries the acceptance and delivery evidence.
@@ -300,7 +330,7 @@ track the theme instead of a per-descriptor hex.
 
 Use this short route to connect the existing patterns without turning them into a new framework:
 
-1. **Author:** From Home, create or resume the exact workflow draft. Configure an HTTP activity with its required fields visible and a configured optional HTTP header in the existing disclosure. Save, run the exact Test Run, then review and publish that same draft content; keep transient Test Run, durable published version and execution status distinct.
+1. **Author:** From Home, create or resume the exact workflow draft. Configure an HTTP activity with its required fields visible and a configured optional HTTP header in the existing disclosure. Save, run the exact Test Run, inspect its attached canvas and recorded activity data, then return to editing before reviewing and publishing the intended draft content; keep transient Test Run, durable published version and execution status distinct.
 2. **Operator:** From Needs attention, open the exact run and its activity evidence, choose only a supported next step, then return to the validated Runs query. The incident guide remains the source for evidence, permissions, confirmation, and retry timing.
 3. **Resources:** Create a disposable secret with the value masked, disclose optional configured metadata, and search by name. State shown, loaded, and server-total counts separately; local facets describe loaded rows only. Preserve entered values on a real failure and explain denied or unavailable states without implying full inventory coverage.
 4. **Feature settings:** Make separate Studio and Server passes. For each target, review the selected draft, cancel and verify it is unchanged, then complete its own Apply flow for a justified change to only that target. Keep each review/cancel/apply result bound to that target's draft and the observed visit; do not imply a broader persistence guarantee.
