@@ -28,8 +28,9 @@ model, forced checkpoint cadence, blanket payload capture or new workflow-model 
 execution-evidence and commit-journal ADRs are not dependencies. A consequential new observation
 contract requires an explicit decision before implementation.
 
-Following uses one editor-owned observer over existing Test Run, wait and runtime reads. Pausing
-observation leaves the workflow running and retains the deliberately inspected occurrence. A stop
+Following uses a shared serial runtime observer in both views. The editor's Test Run adapter also
+reconciles existing Publishing metadata and waits. Pausing observation leaves the workflow running
+and retains the deliberately inspected occurrence. A stop
 receipt remains pending until runtime confirms a terminal state. Historical snapshot inspection is
 read only; returning to editing restores the separate draft and its navigation.
 
