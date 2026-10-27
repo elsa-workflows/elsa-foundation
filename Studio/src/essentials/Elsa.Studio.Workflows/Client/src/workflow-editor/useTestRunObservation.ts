@@ -52,6 +52,7 @@ export function useTestRunObservation({ context, testRun, enabled = true, onRunV
   const currentKey = useRef(key); currentKey.current = key;
   const active = useRef(false); active.current = allowed;
   const request = useRef<AbortController | null>(null);
+  const waitsRequest = useRef<AbortController | null>(null);
   const forcedRefresh = useRef(0);
   const consumedRefresh = useRef(0);
   const refresh = useCallback(() => { forcedRefresh.current++; setRevision(value => value + 1); }, []);
@@ -66,6 +67,7 @@ export function useTestRunObservation({ context, testRun, enabled = true, onRunV
     const invalidate = (authorized: boolean) => {
       active.current = false;
       request.current?.abort(); request.current = null;
+      waitsRequest.current?.abort(); waitsRequest.current = null;
       setState(null);
       setSession(value => ({ authorized, revision: value.revision + 1 }));
     };
@@ -73,7 +75,7 @@ export function useTestRunObservation({ context, testRun, enabled = true, onRunV
     const start = () => invalidate(true);
     const visibility = () => setVisible(!document.hidden);
     const connect = () => setOnline(true);
-    const disconnect = () => { request.current?.abort(); setOnline(false); };
+    const disconnect = () => { request.current?.abort(); waitsRequest.current?.abort(); setOnline(false); };
     window.addEventListener(authSessionEndedEvent, end);
     window.addEventListener(authSessionStartedEvent, start);
     document.addEventListener("visibilitychange", visibility);
@@ -92,9 +94,17 @@ export function useTestRunObservation({ context, testRun, enabled = true, onRunV
     if (!active.current || currentKey.current !== key || testRunId !== view?.testRunId) return;
     const expectedKey = key;
     const expectedRequest = request.current;
-    const result = await getWorkflowTestRunWaits(context, testRunId);
-    if (active.current && currentKey.current === expectedKey && request.current === expectedRequest && !expectedRequest?.signal.aborted) {
-      setState(value => value?.key === expectedKey ? { ...value, waits: isTerminalExecution(value.details?.instance.status) ? [] : result.waits ?? [], waitsLoading: false, waitsError: "" } : value);
+    waitsRequest.current?.abort();
+    const controller = new AbortController(); waitsRequest.current = controller;
+    const isCurrent = () => active.current && currentKey.current === expectedKey && request.current === expectedRequest
+      && !expectedRequest?.signal.aborted && waitsRequest.current === controller && !controller.signal.aborted;
+    try {
+      const result = await getWorkflowTestRunWaits(context, testRunId, controller.signal);
+      if (isCurrent()) {
+        setState(value => value?.key === expectedKey ? { ...value, waits: isTerminalExecution(value.details?.instance.status) ? [] : result.waits ?? [], waitsLoading: false, waitsError: "" } : value);
+      }
+    } catch (error) {
+      if (isCurrent()) throw error;
     }
   }, [context, key, view?.testRunId]);
 
@@ -147,6 +157,8 @@ export function useTestRunObservation({ context, testRun, enabled = true, onRunV
         failures = 0;
       } catch (error) {
         if (!isCurrent()) return;
+        // A runtime failure must revoke its parallel waits read before retrying this observation.
+        waitsRequest.current?.abort();
         const unavailable = error instanceof ApiCapabilityUnavailableError || error instanceof ApiCapabilityVersionMismatchError || error instanceof AttachmentIdentityError;
         update(value => ({ ...value, status: unavailable ? "unavailable" : "disconnected", details: null,
           waits: [], waitsLoading: false, error: error instanceof AttachmentIdentityError ? error.message : unavailable ? "Live runtime state is unavailable on this host." : error instanceof Error ? error.message : "Execution observation disconnected." }));
@@ -157,13 +169,15 @@ export function useTestRunObservation({ context, testRun, enabled = true, onRunV
     };
     update(value => ({ ...value, status: value.details ? "connected" : "loading" }));
     void poll();
-    return () => { controller.abort(); if (timer !== undefined) window.clearTimeout(timer); };
+    return () => { controller.abort(); waitsRequest.current?.abort(); if (timer !== undefined) window.clearTimeout(timer); };
     // Read identity primitives so view-result updates do not restart the polling loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allowed, context, following, key, online, refreshWaits, revision, visible]);
 
   const current = allowed && state?.key === key ? state : null;
-  const status: TestRunObservationStatus = !allowed ? "unavailable" : !online ? "disconnected" : !visible || !following ? "paused" : current?.status ?? "loading";
+  const failed = current?.status === "disconnected" || current?.status === "unavailable" || current?.status === "expired";
+  const status: TestRunObservationStatus = !allowed ? "unavailable" : !online ? "disconnected" : failed ? current.status
+    : !visible || !following ? "paused" : current?.status ?? "loading";
   return {
     identity: key,
     status,

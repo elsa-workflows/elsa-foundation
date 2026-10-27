@@ -173,3 +173,32 @@ it("does not let a manual refresh's superseded waits restore older data", async 
   release({ waits: [{ waitId: "obsolete" }] }); await settle();
   expect(current.waits).toEqual([]);
 });
+
+it.each(["resolve", "reject"] as const)("discards an older waits %s after a failed runtime read and successful retry", async outcome => {
+  let resolveOld!: (value: { waits: unknown[] }) => void;
+  let rejectOld!: (error: Error) => void;
+  api.waits.mockImplementationOnce(() => new Promise((resolve, reject) => { resolveOld = resolve; rejectOld = reject; }));
+  api.instance.mockRejectedValueOnce(new Error("runtime temporarily unavailable"));
+  render(); await settle(); expect(current.status).toBe("disconnected");
+  expect(api.waits.mock.calls[0][2].aborted).toBe(true);
+  const confirmed = { waitId: "current-wait", nodeId: "node", label: "Continue", isAvailable: true, modes: [] };
+  api.waits.mockResolvedValue({ waits: [confirmed] });
+  await vi.advanceTimersByTimeAsync(4000); await settle();
+  expect(current.status).toBe("connected"); expect(current.waits).toEqual([confirmed]);
+  if (outcome === "resolve") resolveOld({ waits: [{ waitId: "obsolete-wait" }] });
+  else rejectOld(new Error("obsolete wait read failed"));
+  await settle();
+  expect(current.waits).toEqual([confirmed]); expect(current.waitsError).toBe("");
+});
+
+it.each(["disconnected", "unavailable", "expired"] as const)("keeps a manual refresh's %s state when following is paused", async expected => {
+  render(); await settle(); expect(current.revision).toBeGreaterThan(0);
+  flushSync(() => current.setFollowing(false)); expect(current.status).toBe("paused");
+  if (expected === "expired") api.run.mockResolvedValue({ ...view, status: "Expired" });
+  else api.run.mockRejectedValue(expected === "unavailable"
+    ? new ApiCapabilityUnavailableError(capabilityIds.publishing, "workflow-test-run-status") : new Error("server unavailable"));
+  flushSync(() => current.refresh()); await settle();
+  expect(current.status).toBe(expected); expect(current.details).toBeNull(); expect(current.waits).toEqual([]);
+  // The command surface accepts connected or explicitly paused confirmed observation only.
+  expect(current.status === "connected" || current.status === "paused" && !current.following && current.revision > 0).toBe(false);
+});

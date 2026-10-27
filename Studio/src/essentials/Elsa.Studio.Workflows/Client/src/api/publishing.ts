@@ -637,13 +637,13 @@ export async function stopWorkflowTestRun(context: StudioEndpointContext, testRu
   return context.http.requestJson<WorkflowTestRunView>(path, { method: "POST" });
 }
 
-export async function getWorkflowTestRunWaits(context: StudioEndpointContext, testRunId: string) {
+export async function getWorkflowTestRunWaits(context: StudioEndpointContext, testRunId: string, signal?: AbortSignal) {
   const path = await resolveCapabilityLink(
     context,
     capabilityIds.publishing,
     "workflow-test-run-waits",
     { testRunId });
-  return context.http.getJson<WorkflowTestRunWaitsView>(path);
+  return signal ? context.http.getJson<WorkflowTestRunWaitsView>(path, { signal }) : context.http.getJson<WorkflowTestRunWaitsView>(path);
 }
 
 export async function deliverWorkflowTestRunWaitEvent(

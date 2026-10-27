@@ -18,6 +18,11 @@ Keep the standalone run viewer as another entry point to shared inspection compo
 and animation honor checkpoint granularity, capture policy, authorization and redaction. Recorded
 playback is distinct from live state and never controls engine execution.
 
+The same live observation and confirmed-motion presentation also applies to the standalone
+workflow-instance viewer, including instances already running when opened directly. Share execution
+observation, exact scoped selection and motion between the two entry points; preserve each view's
+existing authorized controls and navigation. Qualification must cover both surfaces.
+
 No browser execution engine, debugger/breakpoints, arbitrary rewind, hot patching, new persistence
 model, forced checkpoint cadence, blanket payload capture or new workflow-model semantics. Proposed
 execution-evidence and commit-journal ADRs are not dependencies. A consequential new observation
