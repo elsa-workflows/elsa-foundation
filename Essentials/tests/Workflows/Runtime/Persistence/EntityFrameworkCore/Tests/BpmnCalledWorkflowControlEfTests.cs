@@ -169,7 +169,8 @@ public sealed partial class BpmnCalledWorkflowControlEfTests : IDisposable
         }
     }
 
-    private async Task<WorkflowExecutionHarness> StartAsync(PersistenceMode mode, CalledResumeCut cut, string generation)
+    private async Task<WorkflowExecutionHarness> StartAsync(PersistenceMode mode, CalledResumeCut cut, string generation,
+        CalledClaimCut? claimCut = null)
     {
         var host = WorkflowExecutionHarness.Create()
             .WithFeature(services => new Elsa.Events.EventsFeature().ConfigureServices(services))
@@ -181,7 +182,11 @@ public sealed partial class BpmnCalledWorkflowControlEfTests : IDisposable
                 services.AddLogging();
                 services.AddSingleton<TimeProvider>(_clock);
                 services.Replace(ServiceDescriptor.Scoped<IRuntimePostCommitIntentDispatcher>(provider =>
-                    new CalledResumeCutDispatcher(ActivatorUtilities.CreateInstance<RuntimePostCommitIntentDispatcher>(provider), cut, provider)));
+                {
+                    IRuntimePostCommitIntentDispatcher dispatcher = new CalledResumeCutDispatcher(
+                        ActivatorUtilities.CreateInstance<RuntimePostCommitIntentDispatcher>(provider), cut, provider);
+                    return claimCut is null ? dispatcher : new CalledClaimCutDispatcher(dispatcher, claimCut);
+                }));
                 services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
                 {
                     Provider = "Sqlite", ConnectionString = $"Data Source={_databasePath};Pooling=False",
