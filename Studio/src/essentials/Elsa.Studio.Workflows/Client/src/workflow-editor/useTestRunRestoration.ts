@@ -57,21 +57,22 @@ export function useTestRunRestoration({ context, definitionId, draft, testRun, o
   const notify = useRef(onRestore); notify.current = onRestore;
 
   useEffect(() => {
+    const invalidate = () => { generation.current++; request.current = false; };
     // A new authenticated endpoint object in this mounted editor revokes the old receipt, even at the same URL.
     if (previous.current.context !== context) {
       removeReceipt(previous.current.key); removeReceipt(key);
     }
     previous.current = { context, key };
-    generation.current++; request.current = false;
+    invalidate();
     setCandidate({ key, receipt: readReceipt(key) }); setState({ key, pending: false, message: "" });
     const revoke = () => {
-      generation.current++; request.current = false;
+      invalidate();
       removeReceipt(key); setCandidate({ key, receipt: null }); setState({ key, pending: false, message: "" });
     };
     window.addEventListener(authSessionEndedEvent, revoke);
     window.addEventListener(authSessionStartedEvent, revoke);
     return () => {
-      generation.current++;
+      invalidate();
       window.removeEventListener(authSessionEndedEvent, revoke);
       window.removeEventListener(authSessionStartedEvent, revoke);
     };
