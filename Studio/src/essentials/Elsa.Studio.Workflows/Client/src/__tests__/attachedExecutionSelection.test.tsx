@@ -166,3 +166,17 @@ it("keeps an unavailable scope blocked until an explicit reset", async () => {
   expect(current.execution).toBeNull(); expect(current.scopes).toEqual([]); expect(current.error).toContain("unavailable");
   flushSync(() => current.clear()); expect(current.error).toBe("");
 });
+
+it.each(["incidents", "bookmarks"] as const)("keeps exact attached selection when %s are unavailable in selected and ancestor responses", async collection => {
+  for (const value of tree.values()) Reflect.deleteProperty(value, collection);
+  mount();
+  expect(await current.choose(summary(), graph, labelFor)).toBe(true);
+  mount();
+  expect(current.execution?.activityExecutionId).toBe("write-4");
+  expect(current.scopes.map(item => item.execution.activityExecutionId)).toEqual(["root-1", "do-1", "body-4"]);
+  const count = collection === "incidents" ? "incidentCount" : "bookmarkCount";
+  const ids = collection === "incidents" ? "incidentIds" : "bookmarkIds";
+  expect(current.scopes.map(item => item.execution[count])).toEqual([null, null, null]);
+  expect(current.scopes.every(item => item.execution[ids] === undefined)).toBe(true);
+  expect(current.error).toBe("");
+});

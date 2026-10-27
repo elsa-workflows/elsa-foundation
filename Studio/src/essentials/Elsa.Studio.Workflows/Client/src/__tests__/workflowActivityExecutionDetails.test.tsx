@@ -1352,6 +1352,16 @@ it("retains confirmed evidence during a same-occurrence refresh and removes it i
   expect(container.textContent).not.toContain("reconciled value");
 });
 
+it.each([false, true])("keeps other evidence available when a partial response omits incidents (compact: %s)", async compact => {
+  const partial = inspection([], ["Confirmed outcome"]);
+  Reflect.deleteProperty(partial, "incidents");
+  vi.mocked(getActivityExecutionInspection).mockResolvedValue(partial);
+  const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} compact={compact} />);
+  await waitFor(() => expect(container.textContent).toContain("Incident details are unavailable for this execution."));
+  expect(container.textContent).toContain("Confirmed outcome");
+  expect(container.textContent).not.toContain("No incidents recorded for this execution.");
+});
+
 describe("WorkflowIncidentList", () => {
   it("renders a full stack trace disclosure when incident metadata includes one", () => {
     const stackTrace = "System.InvalidOperationException: No value\n   at Elsa.Tests.WriteLine.Execute()";

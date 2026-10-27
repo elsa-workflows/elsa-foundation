@@ -151,6 +151,8 @@ export function WorkflowActivityExecutionDetails({
 
   const catalogItem = activityCatalog.find(item => item.activityTypeKey === activity.activityType);
   const declaredInputs = readDeclaredActivityInputs(catalogItem?.inputs);
+  const incidentDetails = currentInspectionState.inspection?.incidents;
+  const recordedIncidents = Array.isArray(incidentDetails) ? incidentDetails : null;
   const activityLabel = resolveActivityLabel(
     executableNodeFacts?.presentation,
     catalogItem,
@@ -245,9 +247,9 @@ export function WorkflowActivityExecutionDetails({
       </section>
       {executionNavigation}
       {childExecutions}
-      {currentInspectionState.status === "ready" && (!compact || currentInspectionState.inspection?.incidents.length) ? <section className="wf-instance-section" aria-label="Activity incidents">
+      {currentInspectionState.status === "ready" && (!compact || recordedIncidents === null || recordedIncidents.length > 0) ? <section className="wf-instance-section" aria-label="Activity incidents">
         <h4>Incidents</h4>
-        {currentInspectionState.inspection?.incidents.length ? <ul>{currentInspectionState.inspection.incidents.map(incident => <li key={incident.incidentId}>
+        {recordedIncidents === null ? <p>Incident details are unavailable for this execution.</p> : recordedIncidents.length ? <ul>{recordedIncidents.map(incident => <li key={incident.incidentId}>
           <WorkflowStatusBadge status={incident.status} /><p>{incident.message}</p><small>{incident.failureType}</small>
         </li>)}</ul> : <p>No incidents recorded for this execution.</p>}
       </section> : null}
