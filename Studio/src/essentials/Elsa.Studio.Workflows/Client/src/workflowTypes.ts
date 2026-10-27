@@ -1278,7 +1278,10 @@ export interface ActivityExecutionStateSummary {
 export interface ActivityExecutionSchedulingProvenance {
   parentActivityExecutionId?: string | null;
   schedulingActivityExecutionId?: string | null;
+  branchId?: string | null;
   iterationId?: string | null;
+  executionPathId?: string | null;
+  executionScopeId?: string | null;
   schedulingCause?: string | null;
   metadata?: Record<string, string> | null;
 }

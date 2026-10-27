@@ -48,6 +48,8 @@ export type WorkflowEditorOperation = "idle" | "saving" | "promoting" | "publica
 
 export interface WorkflowTestRunState {
   draftSignature: string;
+  /** Presentation only: the first recorded batch belongs to a dispatch initiated in this mounted editor. */
+  startedHere?: boolean;
   /** Exact authoring and presentation snapshot sent for this run; never the later editable draft. */
   snapshot?: WorkflowDraft;
   /** In-memory dispatch authority; a matching id on another endpoint is a different run. */

@@ -539,7 +539,7 @@ export function useWorkflowOperations({
         setStatus("Expression validation is unavailable. Confirmation is required before this Test Run can proceed.");
         return null;
       }
-      startTestRun({ draftSignature, snapshot: draftSnapshot, endpointContext: context, view: nextTestRun, startLabel, workflowInputNames });
+      startTestRun({ draftSignature, startedHere: true, snapshot: draftSnapshot, endpointContext: context, view: nextTestRun, startLabel, workflowInputNames });
       setActiveRightPanelId("runtime");
       setInspectorCollapsed(false);
       setStatus(isRejectedTestRun(nextTestRun) ? "Test run rejected" : "Test run dispatched");
