@@ -6,6 +6,7 @@ import { getAvailabilityStateLabel } from "../activityAvailability";
 import { activityDragDataType } from "../workflow-editor/constants";
 import type { WorkflowNodeAvailabilityLookup } from "../workflow-editor/editorTypes";
 import { WorkflowNodeRuntimeBadges } from "../workflow-editor/WorkflowNodeRuntimeBadges";
+import { ExecutionActivityPulse, ExecutionSequencePulse } from "../workflow-editor/ExecutionMotionPulse";
 import { resolveNodeActivityVisual } from "../workflow-editor/workflowNodeVisual";
 import type { ChildSlot, WorkflowNodeData } from "../workflowAdapter";
 import "./sequenceDesigner.css";
@@ -162,7 +163,7 @@ export function SequenceDesigner({
                   availabilityLookup={availabilityLookup}
                 />
                 {index < nodes.length - 1 ? (
-                  <div className="wf-sequence-connector" aria-hidden="true"><ArrowDown size={15} /></div>
+                  <div className="wf-sequence-connector" aria-hidden="true"><ArrowDown size={15} /><ExecutionSequencePulse pulse={nodes[index + 1].data.incomingExecutionPulse} /></div>
                 ) : null}
               </div>
             ))}
@@ -248,6 +249,7 @@ function SequenceStep({
 
   return (
     <article className={`wf-sequence-item${selected ? " is-selected" : ""}${availability ? " wf-sequence-unavailable" : ""}${data.runtime ? " wf-sequence-runtime" : ""}${data.runtime?.hasBlockingIncident ? " faulted" : ""}`} role="listitem" data-icon={icon} data-tone={tone} title={availabilityLabel ?? undefined}>
+      <ExecutionActivityPulse pulse={data.executionPulse} status={data.runtime?.status} />
       <button
         type="button"
         className="wf-sequence-step"

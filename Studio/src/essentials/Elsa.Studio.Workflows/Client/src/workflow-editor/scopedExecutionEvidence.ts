@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ActivityExecutionStateSummary } from "../workflowTypes";
-import { browseActivityExecutions } from "../api/runtime";
+import { browseActivityExecutions, type ActivityExecutionBrowseEntry } from "../api/runtime";
 import { runtimeValueContextId } from "./RuntimeValueEvidence";
 
 /** One bounded exact read per visible node, with at most four requests in flight. */
@@ -9,6 +9,7 @@ export async function readVisibleActivityExecutions(context: StudioEndpointConte
   ancestorId: string | undefined, selectedExecution: ActivityExecutionStateSummary | undefined, signal: AbortSignal) {
   const nodes = [...new Set(executableNodeIds)];
   const activities: ActivityExecutionStateSummary[] = [];
+  const observations: ActivityExecutionBrowseEntry[] = [];
   let repeated = false;
   let failed = false;
   let index = 0;
@@ -22,12 +23,14 @@ export async function readVisibleActivityExecutions(context: StudioEndpointConte
         const execution = page.items[0]?.execution;
         if (page.totalCount > 1 && !exact) repeated = true;
         if ((page.totalCount === 1 || exact && execution?.activityExecutionId === exact)
-          && execution?.workflowExecutionId === workflowExecutionId && execution.executableNodeId === node) activities.push(execution);
+          && execution?.workflowExecutionId === workflowExecutionId && execution.executableNodeId === node) {
+          activities.push(execution); observations.push(page.items[0]);
+        }
       } catch { failed = true; }
     }
   };
   await Promise.all(Array.from({ length: Math.min(4, nodes.length) }, worker));
-  return { activities, repeated, failed };
+  return { activities, observations, repeated, failed };
 }
 
 /** Refreshes a visible scope without replacing the pinned graph, selected occurrence or confirmed batch. */
@@ -37,7 +40,7 @@ export function useScopedCanvasActivities(context: StudioEndpointContext, workfl
   const selectedId = selectedExecution?.activityExecutionId;
   const selectedNode = selectedExecution?.executableNodeId;
   const key = JSON.stringify([runtimeValueContextId(context), workflowExecutionId, ancestorId, nodeKey, selectedId]);
-  const [state, setState] = useState({ key, activities: [] as ActivityExecutionStateSummary[], repeated: false, failed: false, loading: true });
+  const [state, setState] = useState({ key, activities: [] as ActivityExecutionStateSummary[], observations: [] as ActivityExecutionBrowseEntry[], repeated: false, failed: false, loading: true });
   const requested = useRef(refreshKey); requested.current = refreshKey;
   const pump = useRef<(() => void) | null>(null);
   useEffect(() => {
@@ -45,7 +48,7 @@ export function useScopedCanvasActivities(context: StudioEndpointContext, workfl
     const controller = new AbortController();
     let running = false;
     let confirmed: number | null = null;
-    setState({ key, activities: [], repeated: false, failed: false, loading: true });
+    setState({ key, activities: [], observations: [], repeated: false, failed: false, loading: true });
     const load = async () => {
       if (running || controller.signal.aborted || confirmed === requested.current) return;
       running = true;
@@ -65,5 +68,5 @@ export function useScopedCanvasActivities(context: StudioEndpointContext, workfl
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ancestorId, context, includeRoot, key, nodeKey, selectedId, selectedNode, workflowExecutionId]);
   useEffect(() => { pump.current?.(); }, [refreshKey]);
-  return state.key === key ? state : { key, activities: [], repeated: false, failed: false, loading: true };
+  return state.key === key ? state : { key, activities: [], observations: [], repeated: false, failed: false, loading: true };
 }

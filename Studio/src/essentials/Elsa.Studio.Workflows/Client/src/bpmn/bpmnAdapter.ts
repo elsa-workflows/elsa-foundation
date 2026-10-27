@@ -32,6 +32,7 @@ export interface BpmnNodeData extends Record<string, unknown> {
   childSlots: ChildSlot[];
   runtimeNodeId?: string;
   runtime?: WorkflowRuntimeNodeOverlay;
+  executionPulse?: string;
   onEnterSlot?(slot: ChildSlot): void;
   onIncidentClick?(incidentId: string, targetNodeId?: string | null): void;
 }

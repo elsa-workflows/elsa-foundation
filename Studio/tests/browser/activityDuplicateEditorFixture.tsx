@@ -105,8 +105,9 @@ const expressionEditors: StudioExpressionEditorContribution[] = [{
 
 export function ActivityDuplicateEditorFixture() {
   const instanceHost = new URLSearchParams(window.location.search).get("host") === "instance";
+  const motionFixture = new URLSearchParams(window.location.search).has("execution-motion");
   const live = useRef({ status: "Running", disconnected: false });
-  const context = useMemo(() => createEditorContext(instanceHost ? live.current : undefined), [instanceHost]);
+  const context = useMemo(() => createEditorContext(instanceHost || motionFixture ? live.current : undefined), [instanceHost, motionFixture]);
   const activityHost = new URLSearchParams(window.location.search).get("host") === "activity";
   const ai = useMemo(() => ({
     promptActions: { list: () => [] },
@@ -116,7 +117,7 @@ export function ActivityDuplicateEditorFixture() {
 
   return (
     <div className="activity-duplicate-editor" data-testid="activity-duplicate-editor">
-      {instanceHost ? <div aria-label="Fixture runtime controls"><button onClick={() => { live.current.status = "Completed"; }}>Complete fixture execution</button>
+      {instanceHost || motionFixture ? <div aria-label="Fixture runtime controls"><button onClick={() => { live.current.status = "Completed"; }}>Complete fixture execution</button>
         <button onClick={() => { live.current.disconnected = true; }}>Disconnect fixture reads</button><button onClick={() => { live.current.disconnected = false; }}>Reconnect fixture reads</button></div> : null}
       <QueryClientProvider client={queryClient}>
         {instanceHost ? <WorkflowInstanceDetailsWorkbench context={context} ai={ai} workflowExecutionId="editor-execution" expressionEditors={expressionEditors} navigate={() => undefined} /> : activityHost
@@ -161,6 +162,7 @@ function ControlledActivityGraphFixture({ context }: { context: StudioEndpointCo
 function createEditorContext(live?: { status: string; disconnected: boolean }): StudioEndpointContext {
   const draft = editorDraft();
   const runCanvas = new URLSearchParams(window.location.search).get("run-canvas");
+  const motionFixture = new URLSearchParams(window.location.search).has("execution-motion");
   const catalog = [writeLineCatalog, flowchartActivity, sequenceActivity, forEachActivity];
   const compiled = (node: ActivityNode): object => ({
     executableNodeId: `exec-${node.nodeId}`, authoredActivityId: node.nodeId,
@@ -175,13 +177,21 @@ function createEditorContext(live?: { status: string; disconnected: boolean }): 
     getChildSlots(node, catalog).forEach(slot => slot.activities.forEach(child => visit(child, node.nodeId)));
   };
   visit(draft.state.rootActivity!, null);
+  const predecessors = new Map<string, string>();
+  for (const { node } of runtimeNodes) for (const slot of getChildSlots(node, catalog))
+    slot.activities.forEach((child, index) => { if (index > 0) predecessors.set(child.nodeId, slot.activities[index - 1].nodeId); });
   const records = runtimeNodes.flatMap(({ node, parent }) => Array.from({ length: runCanvas === "repeated" && node.nodeId === "write-one" ? 10 : 1 }, (_, index) => ({
     activityExecutionId: `activity-exec-${node.nodeId}${runCanvas === "repeated" && node.nodeId === "write-one" ? `-${index + 1}` : ""}`,
     workflowExecutionId: "editor-execution", executableNodeId: `exec-${node.nodeId}`, authoredActivityId: node.nodeId,
     activityType: catalog.find(item => item.activityVersionId === node.activityVersionId)?.activityTypeKey ?? "unknown", activityTypeVersion: "1.0.0",
     parentActivityExecutionId: parent ? `activity-exec-${parent}` : null,
+    ...(motionFixture ? { outcomeNames: ["Done"], provenance: { parentActivityExecutionId: parent ? `activity-exec-${parent}` : null,
+      schedulingActivityExecutionId: `activity-exec-${predecessors.get(node.nodeId) ?? parent}`,
+      schedulingCause: draft.state.rootActivity?.structure?.kind === "elsa.sequence.structure" ? "ActivityCompletion" : "continuation" } } : {}),
     scheduledAt: "2026-10-27T10:00:00Z", status: runCanvas === "incident" && node.nodeId === "write-two" ? "Faulted" : "Completed", metadata: {}, position: index + 1
   })));
+  const observedRecords = () => records.filter(record => !motionFixture || live?.status !== "Running" || record.authoredActivityId === draft.state.rootActivity?.nodeId || record.authoredActivityId === "write-one")
+    .map(record => live && !motionFixture ? { ...record, status: live.status } : record);
   const incident = { incidentId: "incident-write-two", workflowExecutionId: "editor-execution", activityExecutionId: "activity-exec-write-two",
     executableNodeId: "exec-write-two", severity: "Error", status: "Active", failureType: "ActivityFailed", message: "Second activity failed in its exact execution.",
     createdAt: "2026-10-27T10:00:00Z", isBlocking: true, metadata: {} };
@@ -267,21 +277,21 @@ function createEditorContext(live?: { status: string; disconnected: boolean }): 
         if (runCanvas && url.startsWith("/runtime/workflows/instances/editor-execution/activity-executions?")) {
           const query = new URL(url, "http://fixture").searchParams;
           const node = query.get("executableNodeId"), parent = query.get("parentActivityExecutionId"), ancestor = query.get("ancestorActivityExecutionId");
-          const filtered = records.map(record => live ? { ...record, status: live.status } : record).filter(record => (!node || record.executableNodeId === node) && (!parent || record.parentActivityExecutionId === parent)
+          const filtered = observedRecords().filter(record => (!node || record.executableNodeId === node) && (!parent || record.parentActivityExecutionId === parent)
             && (!ancestor || record.parentActivityExecutionId === ancestor));
           const anchor = query.get("anchorActivityExecutionId");
           const items = filtered.map((execution, index) => ({ execution, position: index + 1,
-            previousActivityExecutionId: filtered[index - 1]?.activityExecutionId ?? null, nextActivityExecutionId: filtered[index + 1]?.activityExecutionId ?? null }));
+            ...(motionFixture ? { attempt: null } : {}), previousActivityExecutionId: filtered[index - 1]?.activityExecutionId ?? null, nextActivityExecutionId: filtered[index + 1]?.activityExecutionId ?? null }));
           return { totalCount: items.length, previousCursor: null, nextCursor: null,
             items: query.get("limit") === "1" ? [anchor ? items.find(item => item.execution.activityExecutionId === anchor) : items.at(-1)].filter(Boolean) : items };
         }
         if (runCanvas && url.startsWith("/runtime/workflows/instances/editor-execution/activities/")) {
           const id = decodeURIComponent(url.split("/activities/")[1]);
-          const execution = records.find(record => record.activityExecutionId === id);
+          const execution = observedRecords().find(record => record.activityExecutionId === id);
           if (!execution) throw new Error("Unknown activity execution");
-          return { ...execution, ...(live ? { status: live.status } : {}), executionSequence: execution.position,
-            provenance: { parentActivityExecutionId: execution.parentActivityExecutionId, metadata: {} },
-            bookmarks: [], incidents: runCanvas === "incident" && execution.authoredActivityId === "write-two" ? [incident] : [], outcomeNames: live && live.status !== "Completed" ? [] : ["Done"], valueSnapshots: [{ name: "Text", inputKey: "text", subject: "ActivityInput",
+          return { ...execution, executionSequence: execution.position,
+            provenance: execution.provenance ?? { parentActivityExecutionId: execution.parentActivityExecutionId, metadata: {} },
+            bookmarks: [], incidents: runCanvas === "incident" && execution.authoredActivityId === "write-two" ? [incident] : [], outcomeNames: execution.status !== "Completed" ? [] : ["Done"], valueSnapshots: [{ name: "Text", inputKey: "text", subject: "ActivityInput",
               captureMode: "DiagnosticSnapshot", snapshot: { kind: "string", preview: `Current: ${execution.position}` },
               capturedAt: execution.scheduledAt, captureReason: "Captured by fixture policy", isSensitive: false, metadata: {} },
               ...(live?.status === "Completed" ? [{ name: "Receipt", outputKey: "receipt", subject: "ActivityOutput", captureMode: "DiagnosticSnapshot",

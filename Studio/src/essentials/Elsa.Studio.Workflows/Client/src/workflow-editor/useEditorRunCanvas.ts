@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Node } from "@xyflow/react";
+import type { Edge, Node } from "@xyflow/react";
 import { authSessionEndedEvent, authSessionStartedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { getExecutable, getExecutableInputSources, getWorkflowInstance } from "../api/runtime";
+import { getExecutable, getExecutableInputSources, getWorkflowInstance, type ActivityExecutionBrowseEntry } from "../api/runtime";
 import { ApiCapabilityUnavailableError, ApiCapabilityVersionMismatchError } from "../api/capabilities";
 import { buildExecutableActivityGraph, type ExecutableActivityGraph } from "../executableGraph";
 import type { ActivityCatalogItem, ActivityExecutionStateSummary, WorkflowInstanceDetails } from "../workflowTypes";
-import type { WorkflowNodeData } from "../workflowAdapter";
+import type { WorkflowEdgeData, WorkflowNodeData } from "../workflowAdapter";
 import { applyRuntimeOverlays } from "../workflowRuntimeOverlays";
 import { decorateWorkflowCanvasElements } from "./workflowAccessibility";
+import { decorateExecutionMotion, useConfirmedExecutionMotion } from "./executionMotion";
 import type { WorkflowTestRunState } from "./editorTypes";
 import { readVisibleActivityExecutions } from "./scopedExecutionEvidence";
 import { isRejectedTestRun } from "./editorHelpers";
@@ -22,17 +23,20 @@ interface RunCanvasEvidence {
   details: WorkflowInstanceDetails | null;
   graph: ExecutableActivityGraph | null;
   activities: ActivityExecutionStateSummary[];
+  observations: ActivityExecutionBrowseEntry[];
   observationRevision: number;
 }
 
 /** Adds observation to the existing canvas without changing its document, selection or viewport. */
-export function useEditorRunCanvas({ context, definitionId, testRun, draftSignature, catalog, nodes, selectedNodeId, onOpenIncident, ancestorId, selectedExecution, observation, snapshotView = false }: {
+export function useEditorRunCanvas({ context, definitionId, testRun, draftSignature, catalog, nodes, edges = [], mode, selectedNodeId, onOpenIncident, ancestorId, selectedExecution, observation, snapshotView = false }: {
   context: StudioEndpointContext;
   definitionId: string;
   testRun: WorkflowTestRunState | null;
   draftSignature: string;
   catalog: ActivityCatalogItem[];
   nodes: Node<WorkflowNodeData>[];
+  edges?: Edge<WorkflowEdgeData>[];
+  mode?: string;
   selectedNodeId: string | null;
   onOpenIncident?: WorkflowNodeData["onIncidentClick"];
   ancestorId?: string;
@@ -86,7 +90,7 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
     const previous = previousEvidence.current;
     const next: RunCanvasEvidence = previous?.key === key && previous.context === context
       ? { ...previous, loading: true, error: "" }
-      : { key, context, loading: true, error: "", repeated: false, details: null, graph: null, activities: [], observationRevision: 0 };
+      : { key, context, loading: true, error: "", repeated: false, details: null, graph: null, activities: [], observations: [], observationRevision: 0 };
     setEvidence(next);
     const load = async () => {
       try {
@@ -109,9 +113,9 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
           graphCache.current = { key: graphKey, context, catalog, graph };
         }
         const visible = (JSON.parse(nodeKey) as string[]).map(id => graph.factsByNodeId.get(id)).filter(item => item !== undefined);
-        const { activities, repeated, failed } = await readVisibleActivityExecutions(context, executionId, visible.map(fact => fact.executableNodeId), ancestorId, selectedExecution ?? undefined, controller.signal);
+        const { activities, observations, repeated, failed } = await readVisibleActivityExecutions(context, executionId, visible.map(fact => fact.executableNodeId), ancestorId, selectedExecution ?? undefined, controller.signal);
         if (failed && !controller.signal.aborted) throw new Error("Some visible execution evidence could not be loaded. Refresh to retry.");
-        if (!controller.signal.aborted) setEvidence({ ...next, loading: false, details, graph, activities, repeated, observationRevision });
+        if (!controller.signal.aborted) setEvidence({ ...next, loading: false, details, graph, activities, observations, repeated, observationRevision });
       } catch (error) {
         if (controller.signal.aborted) return;
         const message = error instanceof ApiCapabilityUnavailableError || error instanceof ApiCapabilityVersionMismatchError
@@ -138,8 +142,13 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
             ...(node.data.runtime ? { runtime: { ...node.data.runtime, selected: !!nodes[index].selected } } : {}) } })), []).nodes;
   }, [catalog, current, nodes, onOpenIncident, selectedNodeId]);
 
+  const motion = useConfirmedExecutionMotion({ identity: key, enabled: !!current?.details && attached && observation?.status === "connected" && !current.error,
+    ready: !!current && !current.loading, animateInitial: !!testRun?.startedHere, workflowExecutionId: executionId ?? "", mode,
+    nodes: shownNodes, edges, observations: current?.observations ?? [] });
+  const decorated = decorateExecutionMotion(shownNodes, edges, motion);
   return {
-    nodes: shownNodes,
+    nodes: decorated.nodes,
+    edges: decorated.edges,
     eligible,
     graph: current?.graph ?? null,
     details: current?.details ?? null,

@@ -3,6 +3,7 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { renderActivityIcon } from "../activityIconView";
 import { NodeSlotBadges } from "../workflow-editor/NodeSlotBadges";
 import { RuntimeIncidentAction } from "../workflow-editor/RuntimeIncidentAction";
+import { ExecutionActivityPulse } from "../workflow-editor/ExecutionMotionPulse";
 import { bpmnElementTypes, bpmnElementTypeLabel, isEventElementType, isGatewayElementType, isTerminateEndEvent } from "./bpmnTypes";
 import type { BpmnNodeData } from "./bpmnAdapter";
 
@@ -24,6 +25,7 @@ export function BpmnElementNode({ data, selected }: NodeProps) {
       data-runtime-node-id={nodeData.runtimeNodeId ?? nodeData.boundActivity?.nodeId ?? element.elementId}
       title={typeLabel}
     >
+      <ExecutionActivityPulse pulse={nodeData.executionPulse} status={nodeData.runtime?.status} />
       {acceptsInbound ? <Handle type="target" position={Position.Left} /> : null}
       {renderBpmnShape(nodeData)}
       {nodeData.runtime ? <RuntimeIncidentAction runtime={nodeData.runtime} onOpenIncident={nodeData.onIncidentClick} activityLabel={element.name?.trim() || nodeData.boundActivity?.label || typeLabel} className="wf-bpmn-incident-action" /> : null}

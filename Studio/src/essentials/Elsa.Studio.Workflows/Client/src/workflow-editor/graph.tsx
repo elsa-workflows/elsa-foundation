@@ -16,6 +16,7 @@ import { BpmnElementNode } from "../bpmn/BpmnElementNode";
 import { httpEndpointResponseBadge } from "../httpEndpointResponseMode";
 import type { WorkflowEdge } from "./editorTypes";
 import { resolveNodeActivityVisual } from "./workflowNodeVisual";
+import { ExecutionActivityPulse } from "./ExecutionMotionPulse";
 
 export const nodeTypes = { workflowActivity: WorkflowActivityNode, bpmnElement: BpmnElementNode };
 export const edgeTypes = { workflow: WorkflowFlowEdge };
@@ -43,6 +44,7 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
       title={[nodeData.label, nodeData.description].filter(Boolean).join(" — ")}
       aria-description={nodeData.description}
     >
+      <ExecutionActivityPulse pulse={nodeData.executionPulse} status={nodeData.runtime?.status} />
       {showFlowPorts && nodeData.acceptsInbound ? <Handle type="target" position={Position.Left} /> : null}
       {nodeData.isStartNode ? (
         <span className="wf-node-start-badge" title="Execution starts here">
@@ -149,6 +151,8 @@ export function WorkflowFlowEdge(props: EdgeProps<WorkflowEdge>) {
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       />
+      {props.data?.executionPulse ? <path key={props.data.executionPulse} className="wf-execution-edge-pulse" data-execution-pulse="connection"
+        d={path} pathLength={1} vectorEffect="non-scaling-stroke" aria-hidden="true" /> : null}
       {actions ? (
         <EdgeLabelRenderer>
           <div

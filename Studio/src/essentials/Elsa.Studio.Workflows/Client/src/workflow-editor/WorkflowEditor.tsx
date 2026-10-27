@@ -357,7 +357,7 @@ export function WorkflowEditor({
   });
   const {
     nodes: authoringNodes,
-    edges,
+    edges: authoringEdges,
     canvasRef,
     setReactFlowInstance,
     queueCanvasNodeFocus,
@@ -399,7 +399,7 @@ export function WorkflowEditor({
     enabled: Boolean(testRun?.snapshot && testRun.endpointContext === context && draft && testRun.draftSignature === getDraftSignature(draft)
       && testRun.view.definitionId === definitionId && testRun.snapshot.definitionId === definitionId) });
   const runScope = [...runSelection.scopes].reverse().find(item => item.execution.authoredActivityId === scopeOwner?.nodeId)?.execution;
-  const runCanvas: ReturnType<typeof useEditorRunCanvas> = useEditorRunCanvas({ context, definitionId, testRun, observation, snapshotView: editorDoc.pinned, draftSignature: editableDraft ? getDraftSignature(editableDraft) : "", catalog, nodes: authoringNodes, selectedNodeId,
+  const runCanvas: ReturnType<typeof useEditorRunCanvas> = useEditorRunCanvas({ context, definitionId, testRun, observation, snapshotView: editorDoc.pinned, draftSignature: editableDraft ? getDraftSignature(editableDraft) : "", catalog, nodes: authoringNodes, edges: authoringEdges, mode: scope?.slot.mode, selectedNodeId,
     ancestorId: runScope?.activityExecutionId, selectedExecution: runSelection.execution,
     onOpenIncident: (incidentId, targetNodeId) => {
       const incident = runCanvas.details?.incidents?.find(item => item.incidentId === incidentId);
@@ -418,6 +418,7 @@ export function WorkflowEditor({
       setInspectorView("run-data"); setActiveRightPanelId("inspector"); setInspectorCollapsed(false);
     } });
   const nodes = runCanvas.nodes;
+  const edges = runCanvas.edges;
   const selectEditorNode = (nodeId: string | null) => {
     select(nodeId);
     if (runCanvas.attached) { setInspectorView("run-data"); setActiveRightPanelId("inspector"); setInspectorCollapsed(false); }
