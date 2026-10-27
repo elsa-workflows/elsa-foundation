@@ -168,7 +168,8 @@ try
             source.DeliveringOwnerId, source.DeliveryFencingToken, source.DeliveryVisibleAfter, source.DeliveredAt, source.LastFailureMessage, IntentPayload = intentPayload,
             IntentFingerprint = RuntimeCheckpointCommitFingerprint.ComputeIntent(source.Intent), Snapshot = cohort,
             SelectedResumes = cohort?.Resumes.Select(entry => new { entry.WorkflowExecutionId, entry.BookmarkId, entry.ActivityExecutionId, entry.ExecutableNodeId, entry.CreatedAt, Generation = entry.RegistrationCapture?.Generation }),
-            SelectedStarts = cohort?.Starts.Select(entry => new { entry.Executable.ArtifactId, BindingCreatedAt = entry.Binding.CreatedAt,
+            SelectedStarts = cohort?.Starts.Select(entry => new { entry.Executable.ArtifactId, entry.Binding.TriggerBindingId, BindingCreatedAt = entry.Binding.CreatedAt,
+                StartKey = KeyedWorkflowStartIdentity.For(source.Intent.IdempotencyKey!, entry.Executable.ArtifactId).StartKey,
                 WorkflowExecutionId = KeyedWorkflowStartIdentity.For(source.Intent.IdempotencyKey!, entry.Executable.ArtifactId).WorkflowExecutionId }) }, Workflows = observations, MatchingBindings = bindings,
         AllWorkflows = all.Select(state => new { state.WorkflowExecutionId, state.PinnedExecutable.ArtifactId, Status = state.Status.ToString() }) }, json));
     return 0;

@@ -12,6 +12,7 @@ using Microsoft.EntityFrameworkCore;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Configuration;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workbench.RecoveryProbe;
 
@@ -21,6 +22,7 @@ namespace Elsa.Workbench.RecoveryProbe;
 public class BpmnRecoveryProbeFeature : IShellFeature
 {
     public string ControlDirectory { get; set; } = "";
+    public int? AdmissionStaticLimit { get; set; }
 
     public virtual void ConfigureServices(IServiceCollection services)
     {
@@ -28,10 +30,18 @@ public class BpmnRecoveryProbeFeature : IShellFeature
             throw new InvalidOperationException("The recovery probe requires an existing owned absolute control directory.");
         var control = new RecoveryProbeControl(ControlDirectory);
         services.AddSingleton(control);
+        if (AdmissionStaticLimit is { } limit)
+        {
+            if (limit <= 0) throw new InvalidOperationException("The owned admission limit must be positive.");
+            services.Replace(ServiceDescriptor.Singleton(new RuntimeAdmissionOptions { StaticLimit = limit }));
+        }
+        services.AddScoped<IWorkflowSchedulerDrainObserver>(provider => new ProbeLoadDrain(control,
+            provider.GetRequiredService<IRuntimeAdmissionController>(), provider.GetRequiredService<IRuntimeAdmissionLoadSignal>()));
         Decorate<IStimulusDeliveryStore>(services, (inner, provider) => new ProbeSources(inner, provider.GetRequiredService<RecoveryProbeControl>()));
         Decorate<IBookmarkResumeDispatcher>(services, (inner, provider) => new ProbeResumes(inner, provider.GetRequiredService<RecoveryProbeControl>()));
         Decorate<IWorkflowStartDispatcher>(services, (inner, provider) => new ProbeStarts(inner,
-            provider.GetRequiredService<IStimulusDeliveryStore>(), provider.GetRequiredService<RecoveryProbeControl>()));
+            provider.GetRequiredService<IStimulusDeliveryStore>(), provider.GetRequiredService<RecoveryProbeControl>(),
+            provider.GetRequiredService<IRuntimeAdmissionController>(), provider.GetRequiredService<IRuntimeAdmissionLoadSignal>()));
         Decorate<IWorkflowExecutableReferenceGarbageCollector>(services, (inner, provider) => new ProbeCollection(inner,
             provider.GetRequiredService<RecoveryProbeControl>(), provider.GetRequiredService<IOptions<WorkflowExecutableGarbageCollectionOptions>>(),
             provider.GetRequiredService<IPersistenceAccessContextAccessor>()));
@@ -55,6 +65,7 @@ public class BpmnRecoveryProbeFeature : IShellFeature
         public async ValueTask<PostCommitDeliveryContext> ReadSourceAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
         {
             var current = await inner.ReadSourceAsync(source, cancellationToken);
+            await control.WaitForActualLoadAsync(current, cancellationToken);
             if (current.Claim.Item.RecipientSnapshot is null)
                 await control.CutAsync("before-selection", current, cancellationToken);
             return current;
@@ -138,7 +149,8 @@ public class BpmnRecoveryProbeFeature : IShellFeature
         }
     }
 
-    private sealed class ProbeStarts(IWorkflowStartDispatcher inner, IStimulusDeliveryStore sources, RecoveryProbeControl control) : IWorkflowStartDispatcher
+    private sealed class ProbeStarts(IWorkflowStartDispatcher inner, IStimulusDeliveryStore sources, RecoveryProbeControl control,
+        IRuntimeAdmissionController admission, IRuntimeAdmissionLoadSignal load) : IWorkflowStartDispatcher
     {
         public bool CanDispatchSavedStimulus(IStimulusDeliveryStore selectedSources, IWorkflowExecutableStore material,
             IWorkflowExecutionStateStore executions) => inner.CanDispatchSavedStimulus(selectedSources, material, executions);
@@ -146,14 +158,37 @@ public class BpmnRecoveryProbeFeature : IShellFeature
             WorkflowExecutableReferenceScope requiredScope = WorkflowExecutableReferenceScope.Published,
             WorkflowExecutionCommandDispatchOptions? dispatchOptions = null, CancellationToken cancellationToken = default)
         {
+            var inFlightBefore = load.InFlightDispatches; var ambientBefore = load.HasAmbientCharge;
             var result = await inner.DispatchAsync(request, requiredScope, dispatchOptions, cancellationToken);
+            var observedStart = new { request.IdempotencyKey, request.WorkflowExecutionId, request.ArtifactId,
+                TriggerBindingId = request.StartAuthority?.StimulusDelivery?.TriggerBindingId,
+                Status = result.CommandDispatch.Status.ToString(), result.CommandDispatch.IsShed, InFlightBefore = inFlightBefore,
+                HadAmbientChargeBefore = ambientBefore, Limit = admission.Limit, Controller = admission.GetType().FullName };
+            if (request.StartAuthority?.StimulusDelivery is { } shedAuthority && result.CommandDispatch.IsShed)
+            {
+                var source = await sources.ReadSavedStartSourceAsync(shedAuthority, cancellationToken);
+                await control.CutAsync("after-shed", source, cancellationToken, observedStart: observedStart);
+            }
             if (request.StartAuthority?.StimulusDelivery is { } authority && !result.CommandDispatch.IsShed &&
                 result.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Accepted)
             {
                 var source = await sources.ReadSavedStartSourceAsync(authority, cancellationToken);
-                await control.CutAsync("after-start", source, cancellationToken, acceptedExecution: result.WorkflowExecutionId);
+                await control.CutAsync("after-start", source, cancellationToken, acceptedExecution: result.WorkflowExecutionId, observedStart: observedStart);
             }
             return result;
+        }
+    }
+
+    private sealed class ProbeLoadDrain(RecoveryProbeControl control, IRuntimeAdmissionController admission,
+        IRuntimeAdmissionLoadSignal load) : IWorkflowSchedulerDrainObserver
+    {
+        public async ValueTask OnDrainedAsync(WorkflowExecutionCommandEnvelope envelope, RuntimeSchedulerDrainResult result,
+            CancellationToken cancellationToken = default)
+        {
+            if (envelope.Command.Kind != WorkflowExecutionCommandKind.Start ||
+                !envelope.Metadata.TryGetValue("runtime.artifactId", out var artifactId)) return;
+            await control.HoldActualLoadAsync(envelope.WorkflowExecutionId,
+                artifactId, result.StopReason.ToString(), admission, load, cancellationToken);
         }
     }
 
@@ -177,6 +212,39 @@ public class BpmnRecoveryProbeFeature : IShellFeature
 internal sealed class RecoveryProbeControl(string directory)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+    public async ValueTask WaitForActualLoadAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken)
+    {
+        var path = Path.Combine(directory, "plan.json");
+        if (!File.Exists(path)) return;
+        var plan = JsonSerializer.Deserialize<Plan>(await File.ReadAllTextAsync(path, cancellationToken), Json);
+        if (plan?.Phase != "after-shed" || plan.LoadArtifactId is null || source.Intent.Kind != PublishStimulusConstants.PublishStimulusIntentKind ||
+            source.Intent.Payload?.GetProperty("eventName").GetString() != plan.EventName) return;
+        if (!Regex.IsMatch(plan.CaseId, "^[a-z0-9-]{1,64}$", RegexOptions.CultureInvariant)) throw new InvalidDataException("Invalid owned load case.");
+        while (!File.Exists(Path.Combine(directory, plan.CaseId, "load-held.json")))
+            await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
+    }
+    public async ValueTask HoldActualLoadAsync(string executionId, string artifactId, string stopReason,
+        IRuntimeAdmissionController admission, IRuntimeAdmissionLoadSignal load, CancellationToken cancellationToken)
+    {
+        var path = Path.Combine(directory, "plan.json");
+        if (!File.Exists(path)) return;
+        var plan = JsonSerializer.Deserialize<Plan>(await File.ReadAllTextAsync(path, cancellationToken), Json);
+        if (plan?.Phase != "after-shed" || plan.LoadArtifactId != artifactId) return;
+        if (!Regex.IsMatch(plan.CaseId, "^[a-z0-9-]{1,64}$", RegexOptions.CultureInvariant)) throw new InvalidDataException("Invalid owned load case.");
+        var caseDirectory = Path.Combine(directory, plan.CaseId); Directory.CreateDirectory(caseDirectory);
+        var token = Path.Combine(caseDirectory, "load-claimed");
+        try { using var claimed = new FileStream(token, FileMode.CreateNew, FileAccess.Write, FileShare.Read); claimed.Flush(true); }
+        catch (IOException) when (File.Exists(token)) { return; }
+        var temporary = Path.Combine(caseDirectory, "load-held.tmp");
+        await using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        { await JsonSerializer.SerializeAsync(stream, new { WorkflowExecutionId = executionId, ArtifactId = artifactId,
+            StopReason = stopReason, InFlightDispatches = load.InFlightDispatches, HasAmbientCharge = load.HasAmbientCharge,
+            Limit = admission.Limit, Controller = admission.GetType().FullName, CapturedAtUtc = DateTimeOffset.UtcNow }, Json, cancellationToken); stream.Flush(true); }
+        File.Move(temporary, Path.Combine(caseDirectory, "load-held.json"));
+        while (!File.Exists(Path.Combine(caseDirectory, "release-load")))
+            await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
+    }
+
     private async ValueTask<Plan?> CollectionPlanAsync(CancellationToken cancellationToken)
     {
         var path = Path.Combine(directory, "plan.json");
@@ -377,7 +445,7 @@ internal sealed class RecoveryProbeControl(string directory)
 
     public async ValueTask CutAsync(string phase, PostCommitDeliveryContext source, CancellationToken cancellationToken,
         StimulusDeliverySnapshot? proposal = null, string? acceptedExecution = null, string? acceptedBookmark = null,
-        string? providerEvent = null)
+        string? providerEvent = null, object? observedStart = null)
     {
         var path = Path.Combine(directory, "plan.json");
         if (!File.Exists(path) || source.Intent.Kind != PublishStimulusConstants.PublishStimulusIntentKind) return;
@@ -395,7 +463,7 @@ internal sealed class RecoveryProbeControl(string directory)
             source.SourceCommitId, source.IntentFingerprint, Scope = source.Scope.Value, source.Claim.OwnerId,
             source.Claim.FencingToken, source.Claim.VisibleAfter, source.Intent.WorkflowExecutionId,
             Snapshot = source.Claim.Item.RecipientSnapshot, Proposal = proposal, AcceptedExecution = acceptedExecution,
-            AcceptedBookmark = acceptedBookmark, CapturedAtUtc = DateTimeOffset.UtcNow };
+            AcceptedBookmark = acceptedBookmark, ObservedStart = observedStart, CapturedAtUtc = DateTimeOffset.UtcNow };
         var temporary = Path.Combine(caseDirectory, "reached.tmp");
         await using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
         { await JsonSerializer.SerializeAsync(stream, marker, Json, cancellationToken); stream.Flush(true); }
@@ -427,5 +495,5 @@ internal sealed class RecoveryProbeControl(string directory)
         File.Move(temporary, Path.Combine(caseDirectory, "rejected.json"));
     }
 
-    private sealed record Plan(string CaseId, string Phase, string EventName, string? TargetExecutionId = null);
+    private sealed record Plan(string CaseId, string Phase, string EventName, string? TargetExecutionId = null, string? LoadArtifactId = null);
 }

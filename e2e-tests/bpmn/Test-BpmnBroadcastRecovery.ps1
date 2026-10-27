@@ -13,9 +13,10 @@ param(
     [Parameter(Mandatory)][string] $EvidencePath,
     [string] $Python = 'python3',
     [Parameter(Mandatory)][string] $SourceRevision,
-    [ValidateSet('after-cohort', 'after-resume', 'before-selection', 'empty-cohort', 'competing-proposal', 'competing-empty-proposal', 'competing-empty-winner', 'after-start', 'after-fanout', 'after-source-commit', 'renewed-claim', 'republished-cohort')][string] $Phase = 'after-cohort'
+    [ValidateSet('after-cohort', 'after-resume', 'before-selection', 'empty-cohort', 'competing-proposal', 'competing-empty-proposal', 'competing-empty-winner', 'after-start', 'after-fanout', 'after-source-commit', 'renewed-claim', 'republished-cohort', 'same-artifact-shed')][string] $Phase = 'after-cohort'
 )
 $ErrorActionPreference = 'Stop'
+$sameArtifactShed = $Phase -eq 'same-artifact-shed'
 $republishedCohort = $Phase -eq 'republished-cohort'
 $renewedClaim = $Phase -eq 'renewed-claim'
 $committedAck = $Phase -eq 'after-source-commit'
@@ -70,8 +71,8 @@ if ($republishedCohort) {
     }
 }
 $settings | ConvertTo-Json -Depth 60 | Set-Content $settingsPath
-@{ caseId = $caseId; phase = if ($competing) { 'before-install' } elseif ($Phase -eq 'empty-cohort') { 'after-cohort' } else { $Phase }; eventName = $eventName } | ConvertTo-Json | Set-Content (Join-Path $control 'plan.json')
-$receipt = @{ sourceRevision = $SourceRevision; scenario = switch ($Phase) { 'after-resume' { 'partial-callback-and-rearm-before-source-ack' } 'after-start' { 'one-of-two-starts-parked-before-remaining-start-and-resumes' } 'after-fanout' { 'all-recipient-effects-completed-before-source-ack-write' } 'after-source-commit' { 'committed-source-completion-before-provider-return-loss' } 'renewed-claim' { 'real-pre-dispatch-claim-renewal-then-crash-and-standard-takeover' } 'republished-cohort' { 'saved-old-publication-retained-through-real-collection-and-republish' } 'before-selection' { 'delayed-first-selection-and-pre-start-wait-exclusion' } 'empty-cohort' { 'empty-saved-cohort-excludes-later-matches' } 'competing-proposal' { 'expired-old-prepared-proposal-cannot-replace-successor-winner' } 'competing-empty-proposal' { 'expired-old-empty-proposal-cannot-replace-populated-successor-winner' } 'competing-empty-winner' { 'expired-old-populated-proposal-cannot-replace-empty-successor-winner' } default { 'after-cohort-before-dispatch' } }; passed = $false;
+@{ caseId = $caseId; phase = if ($competing) { 'before-install' } elseif ($Phase -eq 'empty-cohort' -or $sameArtifactShed) { 'after-cohort' } else { $Phase }; eventName = $eventName } | ConvertTo-Json | Set-Content (Join-Path $control 'plan.json')
+$receipt = @{ sourceRevision = $SourceRevision; scenario = switch ($Phase) { 'after-resume' { 'partial-callback-and-rearm-before-source-ack' } 'after-start' { 'one-of-two-starts-parked-before-remaining-start-and-resumes' } 'after-fanout' { 'all-recipient-effects-completed-before-source-ack-write' } 'after-source-commit' { 'committed-source-completion-before-provider-return-loss' } 'renewed-claim' { 'real-pre-dispatch-claim-renewal-then-crash-and-standard-takeover' } 'republished-cohort' { 'saved-old-publication-retained-through-real-collection-and-republish' } 'same-artifact-shed' { 'real-capacity-shed-then-same-artifact-key-reuse-and-recovery' } 'before-selection' { 'delayed-first-selection-and-pre-start-wait-exclusion' } 'empty-cohort' { 'empty-saved-cohort-excludes-later-matches' } 'competing-proposal' { 'expired-old-prepared-proposal-cannot-replace-successor-winner' } 'competing-empty-proposal' { 'expired-old-empty-proposal-cannot-replace-populated-successor-winner' } 'competing-empty-winner' { 'expired-old-populated-proposal-cannot-replace-empty-successor-winner' } default { 'after-cohort-before-dispatch' } }; passed = $false;
     probeAssemblySha256 = (Get-FileHash $ProbeAssembly).Hash.ToLowerInvariant(); normalAssemblySha256 = (Get-FileHash $NormalAssembly).Hash.ToLowerInvariant();
     sourceCommit = $sourceCommit; sourceFiles = $sourceManifest; probeBuild = $probeManifest; normalBuild = $normalManifest; readerSha256 = $readerHash; readerBuild = $readerManifest;
     cut = $null; stopped = $null; successorClaim = $null; recovered = $null; observations = @(); failures = @() }
@@ -112,6 +113,7 @@ function Wait-Catches([string] $ExecutionId, [int] $Count) {
 }
 function Observe([string] $Name, [string[]] $ExtraIds, [string] $Marker = $markerPath) {
     $path = Join-Path $caseDirectory "$Name.json"
+    if ($sameArtifactShed -and $receipt.loadWorkflowId) { $ExtraIds = @($ExtraIds) + @($receipt.loadWorkflowId) }
     $arguments = @("$PSScriptRoot/inspect_broadcast_recovery.py", '--database', (Join-Path $root 'elsa.db'), '--reader', $ReaderAssembly, '--marker', $Marker, '--output', $path)
     foreach ($id in $ExtraIds) { $arguments += @('--extra-workflow', $id) }
     & $Python @arguments | Out-Host
@@ -136,6 +138,56 @@ function Same-Snapshot($Left, $Right) {
     $rightDocument = [System.Text.Json.JsonDocument]::Parse(($Right | ConvertTo-Json -Depth 60 -Compress))
     try { return [System.Text.Json.JsonElement]::DeepEquals($leftDocument.RootElement, $rightDocument.RootElement) }
     finally { $leftDocument.Dispose(); $rightDocument.Dispose() }
+}
+function Assert-SameArtifactCohort($Observation, $Publications) {
+    $entries = @($Observation.source.selectedStarts)
+    if ($Publications.Count -ne 2 -or @($Publications.artifactId | Sort-Object -Unique).Count -ne 1 -or
+        @($Publications.publicationId | Sort-Object -Unique).Count -ne 2 -or @($Publications.sourceReferenceId | Sort-Object -Unique).Count -ne 2 -or
+        $entries.Count -ne 2 -or @($entries.artifactId | Sort-Object -Unique).Count -ne 1 -or
+        @($entries.workflowExecutionId | Sort-Object -Unique).Count -ne 1 -or @($entries.startKey | Sort-Object -Unique).Count -ne 1 -or
+        @($entries.triggerBindingId | Sort-Object -Unique).Count -ne 2 -or $Observation.source.snapshot.starts.Count -ne 2) {
+        throw 'The saved publications do not retain two binding entries and one artifact-scoped key/execution.'
+    }
+    $capturedIds = @()
+    foreach ($entry in $Observation.source.snapshot.starts) {
+        $captured = $entry.sourceCapture.provenance
+        $published = @($Publications | Where-Object sourceReferenceId -eq $captured.sourceReferenceId)
+        if ($entry.sourceCapture.version -ne 1 -or $published.Count -ne 1 -or $captured.publicationId -ne $published[0].publicationId -or
+            $entry.binding.activationId -ne $captured.publicationId -or $entry.binding.slotId -ne $captured.slotId -or
+            $entry.executable.artifactId -ne $published[0].artifactId -or $entry.executable.artifactHash -ne $published[0].artifactHash -or
+            $captured.definitionVersionId -ne $published[0].definitionVersionId) { throw 'A saved alias binding does not retain its exact public publication provenance.' }
+        $capturedIds += $captured.sourceReferenceId
+    }
+    if (@($capturedIds | Sort-Object -Unique).Count -ne 2) { throw 'The two alias bindings collapsed onto one publication source.' }
+}
+function Assert-ActualSameArtifactShed($Initial, $Shed, $Marker, $Load) {
+    $attempt = $Marker.observedStart; $entries = @($Initial.source.selectedStarts)
+    foreach ($key in @('idempotencyKey', 'workflowExecutionId', 'artifactId', 'triggerBindingId', 'status', 'isShed', 'inFlightBefore', 'hadAmbientChargeBefore', 'limit', 'controller')) {
+        if (-not $attempt.ContainsKey($key)) { throw "The actual shed observation omits $key." }
+    }
+    if (-not $Load.hasAmbientCharge -or $Load.inFlightDispatches -lt 1 -or $Load.limit -ne 1 -or
+        -not $attempt.isShed -or $attempt.status -ne 'Deferred' -or $attempt.hadAmbientChargeBefore -or $attempt.inFlightBefore -lt 1 -or $attempt.limit -ne 1 -or $attempt.controller -ne $Load.controller -or
+        $attempt.idempotencyKey -ne $entries[0].startKey -or $attempt.workflowExecutionId -ne $entries[0].workflowExecutionId -or $attempt.artifactId -ne $entries[0].artifactId -or $attempt.triggerBindingId -ne $entries[0].triggerBindingId -or
+        $Shed.source.outboxItemId -ne $Initial.source.outboxItemId -or $Marker.sourceOutboxItemId -ne $Initial.source.outboxItemId -or
+        $Initial.source.deliveryFencingToken -ne 1 -or $Shed.source.deliveryFencingToken -ne 2 -or $Marker.fencingToken -ne 2 -or
+        $Shed.source.status -ne 'Delivering' -or $Shed.source.deliveringOwnerId -eq $Initial.source.deliveringOwnerId -or $Shed.source.deliveringOwnerId -ne $Marker.ownerId -or
+        $Shed.source.intentFingerprint -ne $Initial.source.intentFingerprint -or @($Shed.allWorkflows | Where-Object artifactId -eq $entries[0].artifactId).Count -ne 0 -or
+        @($Shed.workflows | Where-Object { $_.workflowExecutionId -eq $attempt.workflowExecutionId -and $_.exists }).Count -ne 0 -or
+        -not (Same-Snapshot $Shed.source.snapshot $Initial.source.snapshot)) { throw 'The real first binding was not shed under held capacity without a target or key consumption.' }
+}
+function Assert-ActualSameArtifactAccepted($Initial, $Shed, $ShedMarker, $Accepted, $Marker, [DateTimeOffset] $LoadReleasedAt, [DateTimeOffset] $LoadRespondedAt) {
+    $first = $ShedMarker.observedStart; $next = $Marker.observedStart; $entries = @($Initial.source.selectedStarts)
+    foreach ($key in @('idempotencyKey', 'workflowExecutionId', 'artifactId', 'triggerBindingId', 'status', 'isShed', 'inFlightBefore', 'hadAmbientChargeBefore', 'limit', 'controller')) {
+        if (-not $next.ContainsKey($key)) { throw "The actual accepted-start observation omits $key." }
+    }
+    if ($next.isShed -or $next.status -ne 'Accepted' -or $next.hadAmbientChargeBefore -or $next.inFlightBefore -ne 0 -or $next.limit -ne 1 -or $next.controller -ne $first.controller -or
+        $next.idempotencyKey -ne $first.idempotencyKey -or $next.workflowExecutionId -ne $first.workflowExecutionId -or $next.artifactId -ne $first.artifactId -or $next.triggerBindingId -ne $entries[1].triggerBindingId -or
+        $Accepted.source.outboxItemId -ne $Initial.source.outboxItemId -or $Marker.sourceOutboxItemId -ne $Initial.source.outboxItemId -or
+        $Marker.fencingToken -ne 2 -or $Marker.ownerId -ne $Shed.source.deliveringOwnerId -or -not (Same-Snapshot $Accepted.source $Shed.source) -or
+        @($Accepted.allWorkflows | Where-Object artifactId -eq $next.artifactId).Count -ne 1 -or
+        [DateTimeOffset]::Parse($ShedMarker.capturedAtUtc) -gt $LoadReleasedAt -or $LoadReleasedAt -gt $LoadRespondedAt -or $LoadRespondedAt -gt [DateTimeOffset]::Parse($Marker.capturedAtUtc)) {
+        throw 'The later binding did not reuse the same unconsumed key after the real load command returned.'
+    }
 }
 function Assert-RepublishedCollectionState($Observation, $Original, $Replacement, $Control, [bool] $AfterCollection) {
     foreach ($required in @('observedMaterial', 'observedTemplates', 'observedSourceReferences', 'matchingBindings', 'allWorkflows', 'executionRootArtifactIds', 'dispatchRootArtifactIds')) {
@@ -250,6 +302,13 @@ try {
         $collectionControl = Import-Process ($startXml.Replace('id="selected-start"', 'id="collection-control"').Replace($eventName, "unmatched-control-$eventName"))
         $receipt.collectionControlPublication = $collectionControl
     }
+    if ($sameArtifactShed) {
+        $alias = Invoke-RestMethod "$base/publishing/workflows/$($selectedPublication.versionId)/publish" -Method Post -WebSession $ctx.Session -ContentType 'application/json' -Body (@{ action = 'SideBySide'; slotName = 'same-artifact-alias' } | ConvertTo-Json)
+        if ($alias.artifactId -ne $selectedPublication.artifactId -or $alias.sourceReferenceId -eq $selectedPublication.sourceReferenceId -or $alias.publicationId -eq $selectedPublication.publicationId) { throw 'The public alias did not produce distinct eligible bindings of the exact same artifact.' }
+        $loadXml = $waitXml.Replace('id="waiter"', 'id="actual-load"').Replace($eventName, "load-$eventName")
+        $loadPublication = Import-Process $loadXml
+        $receipt.sameArtifactPublications = @($selectedPublication, $alias); $receipt.loadPublication = $loadPublication
+    }
     $publisherXml = @"
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" id="defs" targetNamespace="urn:elsa:source-recovery"><signal id="signal" name="$eventName"/>
 <process id="publisher" isExecutable="true"><startEvent id="start"/><intermediateThrowEvent id="send"><signalEventDefinition signalRef="signal"/></intermediateThrowEvent><endEvent id="end"/>
@@ -318,7 +377,7 @@ try {
         }
     } elseif ($Phase -eq 'empty-cohort') {
         if ($null -eq $marker.snapshot -or $marker.snapshot.starts.Count -ne 0 -or $marker.snapshot.resumes.Count -ne 0) { throw 'The empty recipient decision was not durably committed.' }
-    } elseif ($marker.snapshot.starts.Count -ne $(if ($partialStart) { 2 } else { 1 }) -or $marker.snapshot.resumes.Count -ne 2) { throw 'The actual persisted cohort is incomplete at the cut.' }
+    } elseif ($marker.snapshot.starts.Count -ne $(if ($partialStart -or $sameArtifactShed) { 2 } else { 1 }) -or $marker.snapshot.resumes.Count -ne 2) { throw 'The actual persisted cohort is incomplete at the cut.' }
     if ($completeFanout) {
         $completed = Wait-WorkflowInstance -Ctx $ctx -ExecutionId $waitRun.workflowExecutionId -TimeoutSeconds 30
         if ($completed.instance.status -ne 'Completed' -or @($completed.incidents).Count -ne 0) { throw 'Full fan-out acceptance did not establish completed recipient callbacks/join.' }
@@ -519,7 +578,7 @@ try {
     foreach ($start in $stopped.source.selectedStarts) {
         $target = @($stopped.workflows | Where-Object workflowExecutionId -eq $start.workflowExecutionId)
         if ($target.Count -ne 1) { throw 'The exact selected keyed target observation is unavailable.' }
-        if ($Phase -in @('after-cohort', 'renewed-claim', 'republished-cohort') -or ($partialStart -and $start.workflowExecutionId -ne $marker.acceptedExecution)) {
+        if ($Phase -in @('after-cohort', 'renewed-claim', 'republished-cohort', 'same-artifact-shed') -or ($partialStart -and $start.workflowExecutionId -ne $marker.acceptedExecution)) {
             if ($target[0].exists -or @($stopped.allWorkflows | Where-Object artifactId -eq $start.artifactId).Count -ne 0) { throw 'A selected start ran before its dispatch cut.' }
         } else {
             $park = @($target[0].bookmarks | Where-Object { $_.executableNodeId -eq 'node-park' -and $_.activityStatus -eq 'Suspended' })
@@ -527,6 +586,77 @@ try {
             $receipt.startedParkBeforeCrash = $park[0]
             if ($partialStart) { $receipt.acceptedStartBeforeCrash = $target[0] }
         }
+    }
+    if ($sameArtifactShed) {
+        $receipt.initialCut = $marker; $receipt.initialStopped = $stopped; $receipt.initialProcessId = $probeProcess.Id
+        $entries = @($stopped.source.selectedStarts)
+        Assert-SameArtifactCohort $stopped $receipt.sameArtifactPublications
+        $shedCase = 'same-shed-' + [guid]::NewGuid().ToString('N'); $shedDirectory = Join-Path $control $shedCase
+        @{ caseId = $shedCase; phase = 'after-shed'; eventName = $eventName; loadArtifactId = $loadPublication.artifactId } | ConvertTo-Json | Set-Content (Join-Path $control 'plan.json')
+        $settings.CShells.Shells.default.Features.BpmnRecoveryProbe.AdmissionStaticLimit = 1
+        $settings | ConvertTo-Json -Depth 60 | Set-Content $settingsPath
+        Start-OwnedElsaServer -BaseUrl $base -ContentRoot $root -AssemblyPath $ProbeAssembly
+        $probeProcess = $script:OwnedElsaServer.Process; $receipt.capacityProbeProcessId = $probeProcess.Id
+        $ctx = Connect-Elsa -BaseUrl $base
+        $client.Dispose()
+        $handler = [System.Net.Http.HttpClientHandler]::new(); $handler.CookieContainer = $ctx.Session.Cookies
+        $client = [System.Net.Http.HttpClient]::new($handler); $client.Timeout = [TimeSpan]::FromMinutes(5)
+        $loadContent = [System.Net.Http.StringContent]::new((@{ sourceReferenceId = $loadPublication.sourceReferenceId } | ConvertTo-Json), [Text.Encoding]::UTF8, 'application/json')
+        $loadPending = $client.PostAsync("$base/runtime/workflows/executables/$($loadPublication.artifactId)/execute", $loadContent)
+        $loadMarkerPath = Join-Path $shedDirectory 'load-held.json'; $deadline = [DateTimeOffset]::UtcNow.AddSeconds(40)
+        while (-not (Test-Path $loadMarkerPath)) {
+            if ($probeProcess.HasExited -or $loadPending.IsCompleted -or [DateTimeOffset]::UtcNow -ge $deadline) { throw 'The actual separately admitted workflow command did not hold its real admission charge.' }
+            Start-Sleep -Milliseconds 100
+        }
+        $loadMarker = Get-Content -Raw $loadMarkerPath | ConvertFrom-Json -AsHashtable -DateKind String
+        $receipt.actualLoadMarker = $loadMarker; $receipt.loadWorkflowId = $loadMarker.workflowExecutionId
+        $loadApi = Get-WorkflowInstance -Ctx $ctx -ExecutionId $loadMarker.workflowExecutionId
+        if ($loadMarker.artifactId -ne $loadPublication.artifactId -or -not $loadMarker.hasAmbientCharge -or $loadMarker.inFlightDispatches -lt 1 -or
+            $loadMarker.limit -ne 1 -or @($loadApi.activities | Where-Object { $_.executableNodeId -like 'node-wait*' -and $_.status -eq 'Suspended' }).Count -ne 2 -or @($loadApi.incidents).Count -ne 0) { throw 'The real admitted load command did not durably park both waits while holding capacity.' }
+        $receipt.actualLoadApiWhileHeld = $loadApi
+        $shedMarkerPath = Join-Path $shedDirectory 'reached.json'; $deadline = [DateTimeOffset]::UtcNow.AddSeconds(180)
+        while (-not (Test-Path $shedMarkerPath)) {
+            if ($probeProcess.HasExited -or $loadPending.IsCompleted -or [DateTimeOffset]::UtcNow -ge $deadline) { throw 'Recovered source delivery did not encounter the real held admission capacity.' }
+            Start-Sleep -Milliseconds 100
+        }
+        $caseDirectory = $shedDirectory; $markerPath = $shedMarkerPath
+        $shedMarker = Get-Content -Raw $markerPath | ConvertFrom-Json -AsHashtable -DateKind String
+        $shed = Observe 'actual-shed' @($waitRun.workflowExecutionId, $lateRun.workflowExecutionId)
+        $attempt = $shedMarker.observedStart
+        Assert-ActualSameArtifactShed $stopped $shed $shedMarker $loadMarker
+        if ($loadPending.IsCompleted) { throw 'The actual load command stopped holding capacity before the shed observation.' }
+        $receipt.actualShedMarker = $shedMarker; $receipt.actualShed = $shed
+        $acceptedCase = 'same-accepted-' + [guid]::NewGuid().ToString('N')
+        @{ caseId = $acceptedCase; phase = 'after-start'; eventName = $eventName } | ConvertTo-Json | Set-Content (Join-Path $control 'plan.json')
+        $receipt.actualLoadReleasedAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
+        New-Item -ItemType File (Join-Path $shedDirectory 'release-load') | Out-Null
+        $loadResponse = $loadPending.GetAwaiter().GetResult()
+        if (-not $loadResponse.IsSuccessStatusCode) { throw 'The real capacity-load workflow command did not complete admission normally after release.' }
+        $receipt.actualLoadAdmission = $loadResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json -AsHashtable -DateKind String
+        if ($receipt.actualLoadAdmission.workflowExecutionId -ne $loadMarker.workflowExecutionId) { throw 'The released load response belongs to another actual workflow.' }
+        $receipt.actualLoadRespondedAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
+        New-Item -ItemType File (Join-Path $shedDirectory 'release') | Out-Null
+        $caseDirectory = Join-Path $control $acceptedCase; $markerPath = Join-Path $caseDirectory 'reached.json'
+        $deadline = [DateTimeOffset]::UtcNow.AddSeconds(40)
+        while (-not (Test-Path $markerPath)) {
+            if ($probeProcess.HasExited -or [DateTimeOffset]::UtcNow -ge $deadline) { throw 'The later binding did not reuse the shed artifact key after actual load release.' }
+            Start-Sleep -Milliseconds 100
+        }
+        $marker = Get-Content -Raw $markerPath | ConvertFrom-Json -AsHashtable -DateKind String
+        $accepted = Observe 'same-key-accepted' @($waitRun.workflowExecutionId, $lateRun.workflowExecutionId)
+        $next = $marker.observedStart
+        Assert-ActualSameArtifactAccepted $receipt.initialStopped $shed $shedMarker $accepted $marker ([DateTimeOffset]::Parse($receipt.actualLoadReleasedAtUtc)) ([DateTimeOffset]::Parse($receipt.actualLoadRespondedAtUtc))
+        $keyed = @($accepted.workflows | Where-Object workflowExecutionId -eq $entries[0].workflowExecutionId)[0]
+        $acceptedApi = Get-WorkflowInstance -Ctx $ctx -ExecutionId $keyed.workflowExecutionId
+        $chosen = @($accepted.source.snapshot.starts | Where-Object { $_.binding.triggerBindingId -eq $next.triggerBindingId })[0]
+        if (-not $keyed.exists -or $keyed.bookmarks.Count -ne 1 -or $keyed.bookmarks[0].executableNodeId -ne 'node-park' -or
+            $chosen.sourceCapture.version -ne 1 -or -not (Same-Snapshot $keyed.pinnedSource $chosen.sourceCapture.provenance) -or $acceptedApi.activityNextContinuationToken -or @($acceptedApi.incidents).Count -ne 0) { throw 'The accepted same-key execution lacks its real parked state or exact accepted binding provenance.' }
+        $receipt.sameKeyAccepted = $accepted; $receipt.sameKeyAcceptedApi = $acceptedApi; $receipt.sameKeyAcceptedState = $keyed; $receipt.sameKeyAcceptedMarker = $marker
+        Stop-OwnedElsaServer
+        if (-not $probeProcess.HasExited) { throw 'The owned capacity probe did not terminate.' }
+        $stopped = Observe 'same-key-stopped' @($waitRun.workflowExecutionId, $lateRun.workflowExecutionId)
+        if (-not (Same-Snapshot $stopped.source $accepted.source)) { throw 'The source changed before the second owned crash.' }
+        $receipt.cut = $marker; $receipt.stopped = $stopped
     }
     $null = $settings.CShells.Shells.default.Features.Remove('BpmnRecoveryProbe')
     $settings | ConvertTo-Json -Depth 60 | Set-Content (Join-Path $recoveryRoot 'shells.json')
@@ -658,7 +788,8 @@ try {
             $receipt.completedRecipientApiAfterRecovery += @{ workflowExecutionId = $identity; instance = $api.instance; activities = $api.activities }
         }
     }
-    if ($after.source.selectedStarts.Count -ne $expectedArtifacts.Count) { throw 'The final source has an unexpected start set.' }
+    $expectedStartEntries = if ($sameArtifactShed) { 2 } else { $expectedArtifacts.Count }
+    if ($after.source.selectedStarts.Count -ne $expectedStartEntries -or @($after.source.selectedStarts | ForEach-Object artifactId | Sort-Object -Unique).Count -ne $expectedArtifacts.Count) { throw 'The final source has an unexpected binding-entry or unique-artifact start set.' }
     foreach ($selectedStart in $after.source.selectedStarts) {
         $selected = @($after.allWorkflows | Where-Object artifactId -eq $selectedStart.artifactId)
         if ($selectedStart.artifactId -notin $expectedArtifacts -or $selected.Count -ne 1 -or $selected[0].workflowExecutionId -ne $selectedStart.workflowExecutionId) { throw 'A saved start did not produce exactly its original deterministic keyed execution.' }
@@ -730,6 +861,14 @@ try {
             $originalWait = @($originalWorkflow.bookmarks | Where-Object bookmarkId -eq $original.bookmarkId)[0]
             if ($null -ne $oldWait -or $captured.Count -ne 0 -or $parkedWait[0].stimulusType -ne $originalWait.stimulusType -or $parkedWait[0].stimulusHash -ne $originalWait.stimulusHash) { throw 'The matching wait created by a selected start was not excluded from its own source.' }
         }
+    }
+    if ($sameArtifactShed) {
+        $state = @($after.workflows | Where-Object workflowExecutionId -eq $receipt.sameKeyAcceptedState.workflowExecutionId)[0]
+        $api = Get-WorkflowInstance -Ctx $ctx -ExecutionId $state.workflowExecutionId
+        if ($after.source.deliveryFencingToken -ne 3 -or -not (Same-Snapshot $state $receipt.sameKeyAcceptedState) -or
+            -not (Same-Snapshot $api.instance $receipt.sameKeyAcceptedApi.instance) -or -not (Same-Snapshot $api.activities $receipt.sameKeyAcceptedApi.activities) -or
+            @($api.incidents).Count -ne 0 -or $api.activityNextContinuationToken -or @($after.allWorkflows | Where-Object artifactId -eq $selectedPublication.artifactId).Count -ne 1) { throw 'Standard recovery changed or reinvoked the sole already accepted same-artifact execution.' }
+        $receipt.sameKeyRecoveredApi = $api; $receipt.sameKeyRecoveredState = $state
     }
     if ($republishedCohort) {
         $originalStart = @($after.source.selectedStarts | Where-Object artifactId -eq $selectedPublication.artifactId)
