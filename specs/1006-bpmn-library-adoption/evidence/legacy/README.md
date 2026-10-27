@@ -74,3 +74,26 @@ The source/control/export run passed **1/1, zero failures/skips**. The overlay a
 ## Remaining acceptance
 
 Gate A preserves the old writer's real data before deletion. The fresh upgraded-host readability/outcome and same-node lookup witnesses above now exist. Actual late-fault absorption and duplicate queued completion/fault callbacks after pruning/provider restart are separately qualified in the linked evidence. MI/listener-specific remaining replay/fault cases, native parent qualification and combined-outcome durability remain open; running binary rollback is unsupported. Library tests and synthetic probes cannot substitute for those witnesses. The public authoring fingerprint and Studio journeys remain separate gates.
+
+## Supplemental actual typed MI/listener fault checkpoints
+
+Two additional captures, [parallel-mi-outcome](parallel-mi-outcome.json) and [listener-rearm-outcome](listener-rearm-outcome.json), were made on 27 October 2026 from the same exact old base `d81a4c88a2924708ea8afcc2db20b8a77b84f703` with the test-only [outcome-wait capture overlay](outcome-wait-capture.patch), SHA-256 `fdcfc6365c407bad175eaa0473ea047ae4f6af02e2a24bfd0ed4e0bb45d2b17f`. All 12,312 base files were compared: only the capture test changes, plus its added test-only CLR leaf. Old production source, writer and package/build pins are unchanged. Standalone patch application reconstructs both test files exactly outside the working repository.
+
+The real typed leaf suspends through the ordinary runtime and returns a typed fault when normally resumed. The identical leaf source is retained in the upgraded test assembly; native Event behavior is not altered. The MI boundary has three actual Suspended invocations with distinct nonblank token/iteration identities, exact parent/live-work/bookmark links. The listener boundary has a prior Completed invocation and a different current Suspended invocation at the same node and null iteration, after a real normal completion/rearm. Actual committed concrete EF reads and online-backup rereads retain their original coherence checks. No private state, fault, incident or callback is fabricated.
+
+Fresh **old-host** controls over separate copies normally resume one selected wait with `fault`. Both controls pass and record the genuine child `LEGACY-OUTCOME-FAULT`, original incident facts, and Faulted workflow. The old parent reports `bpmn.child.faulted`; the released adapter's new unhandled-work verdict is `bpmn.work.faulted`, while preserving the actual child fault. The leaf also contains a cancel branch; no old cancellation execution or parent cancellation callback is claimed from that unused branch.
+
+Reproduce in a separate exact-base checkout, with a new empty output directory:
+
+```sh
+git checkout --detach d81a4c88a2924708ea8afcc2db20b8a77b84f703
+git apply /absolute/path/to/outcome-wait-capture.patch
+ELSA_BPMN_CAPTURE_SOURCE=d81a4c88a2924708ea8afcc2db20b8a77b84f703 \
+ELSA_BPMN_CAPTURE_PATCH_FILE=/absolute/path/to/outcome-wait-capture.patch \
+ELSA_BPMN_CAPTURE_PATCH_SHA256=fdcfc6365c407bad175eaa0473ea047ae4f6af02e2a24bfd0ed4e0bb45d2b17f \
+ELSA_BPMN_CAPTURE_DIRECTORY=/absolute/new-empty-output-directory \
+dotnet test Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj \
+  -c Release -p:RestoreLockedMode=true --filter FullyQualifiedName~Actual_legacy_outcome_wait_checkpoint
+```
+
+Export passes **2/0/0**, retains CreateNew guards and never overwrites the prior six artifacts. Both new SQLite integrity checks and raw/compressed digests pass. The [upgraded fault receipt](../legacy-outcome-fault-replay.md) distinguishes terminal queue purge from the live-workflow processed-callback replay guard.
