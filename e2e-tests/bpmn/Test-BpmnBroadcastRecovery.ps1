@@ -13,9 +13,12 @@ param(
     [Parameter(Mandatory)][string] $EvidencePath,
     [string] $Python = 'python3',
     [Parameter(Mandatory)][string] $SourceRevision,
-    [ValidateSet('after-cohort', 'after-resume', 'before-selection', 'empty-cohort', 'competing-proposal', 'competing-empty-proposal', 'competing-empty-winner', 'after-start', 'after-fanout', 'after-source-commit', 'renewed-claim', 'republished-cohort', 'same-artifact-shed')][string] $Phase = 'after-cohort'
+    [ValidateSet('after-cohort', 'after-resume', 'before-selection', 'empty-cohort', 'competing-proposal', 'competing-empty-proposal', 'competing-empty-winner', 'after-start', 'after-fanout', 'after-source-commit', 'renewed-claim', 'republished-cohort', 'same-artifact-shed', 'local-scope', 'correlation-scope')][string] $Phase = 'after-cohort'
 )
 $ErrorActionPreference = 'Stop'
+$localScope = $Phase -eq 'local-scope'
+$correlationScope = $Phase -eq 'correlation-scope'
+$scopedEligibility = $localScope -or $correlationScope
 $sameArtifactShed = $Phase -eq 'same-artifact-shed'
 $republishedCohort = $Phase -eq 'republished-cohort'
 $renewedClaim = $Phase -eq 'renewed-claim'
@@ -30,6 +33,7 @@ $selectsAfterRestart = $Phase -in @('before-selection', 'competing-proposal', 'c
 if ($competing -and $IsWindows) { throw 'This owned process-suspension race requires Unix signals.' }
 . "$PSScriptRoot/../_ServerLifecycle.ps1"
 . "$PSScriptRoot/../_ElsaCommon.ps1"
+. "$PSScriptRoot/../stimuli/_StimuliCommon.ps1"
 . "$PSScriptRoot/../runtime-alterations/_AlterationCommon.ps1"
 # Verify assembly metadata and the full adjacent runtime closure before launching either build.
 function Read-BuildManifest([string] $Assembly) {
@@ -41,7 +45,7 @@ $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $sourceCommit = (& git -C $repository rev-parse HEAD).Trim()
 if (-not $SourceRevision.StartsWith($sourceCommit, [StringComparison]::Ordinal)) { throw 'The candidate revision must name the current full source commit, with an optional explicit worktree suffix.' }
 function Read-SourceManifest {
-    $files = & git -C $repository ls-files --cached --others --exclude-standard -- Essentials/src/Activities/Bpmn Essentials/src/Activities/Primitives Essentials/src/Workflows/Runtime Essentials/apps/Elsa.Workbench e2e-tests/bpmn tools/bpmn/DeliveryRecoveryRead e2e-tests/_ElsaCommon.ps1 e2e-tests/_ServerLifecycle.ps1 e2e-tests/runtime-alterations/_AlterationCommon.ps1
+    $files = & git -C $repository ls-files --cached --others --exclude-standard -- Essentials/src/Activities/Bpmn Essentials/src/Activities/Primitives Essentials/src/Workflows/Runtime Essentials/apps/Elsa.Workbench e2e-tests/bpmn tools/bpmn/DeliveryRecoveryRead e2e-tests/_ElsaCommon.ps1 e2e-tests/_ServerLifecycle.ps1 e2e-tests/runtime-alterations/_AlterationCommon.ps1 e2e-tests/stimuli/_StimuliCommon.ps1
     if ($LASTEXITCODE -ne 0) { throw 'The source manifest could not be enumerated.' }
     return @($files | Sort-Object -Unique | ForEach-Object {
         $path = Join-Path $repository $_
@@ -59,6 +63,8 @@ $base = Resolve-ElsaServerBaseUrl
 $control = Join-Path $root 'recovery-control'; New-Item -ItemType Directory $control | Out-Null
 $caseId = $Phase + '-' + [guid]::NewGuid().ToString('N')
 $eventName = 'bpmn-source-recovery-' + [guid]::NewGuid().ToString('N')
+$correlationA = 'A-' + [guid]::NewGuid().ToString('N'); $correlationB = 'B-' + [guid]::NewGuid().ToString('N')
+$releaseName = 'release-' + $eventName
 $caseDirectory = Join-Path $control $caseId
 $markerPath = Join-Path $caseDirectory 'reached.json'
 $settingsPath = Join-Path $root 'shells.json'
@@ -71,8 +77,8 @@ if ($republishedCohort) {
     }
 }
 $settings | ConvertTo-Json -Depth 60 | Set-Content $settingsPath
-@{ caseId = $caseId; phase = if ($competing) { 'before-install' } elseif ($Phase -eq 'empty-cohort' -or $sameArtifactShed) { 'after-cohort' } else { $Phase }; eventName = $eventName } | ConvertTo-Json | Set-Content (Join-Path $control 'plan.json')
-$receipt = @{ sourceRevision = $SourceRevision; scenario = switch ($Phase) { 'after-resume' { 'partial-callback-and-rearm-before-source-ack' } 'after-start' { 'one-of-two-starts-parked-before-remaining-start-and-resumes' } 'after-fanout' { 'all-recipient-effects-completed-before-source-ack-write' } 'after-source-commit' { 'committed-source-completion-before-provider-return-loss' } 'renewed-claim' { 'real-pre-dispatch-claim-renewal-then-crash-and-standard-takeover' } 'republished-cohort' { 'saved-old-publication-retained-through-real-collection-and-republish' } 'same-artifact-shed' { 'real-capacity-shed-then-same-artifact-key-reuse-and-recovery' } 'before-selection' { 'delayed-first-selection-and-pre-start-wait-exclusion' } 'empty-cohort' { 'empty-saved-cohort-excludes-later-matches' } 'competing-proposal' { 'expired-old-prepared-proposal-cannot-replace-successor-winner' } 'competing-empty-proposal' { 'expired-old-empty-proposal-cannot-replace-populated-successor-winner' } 'competing-empty-winner' { 'expired-old-populated-proposal-cannot-replace-empty-successor-winner' } default { 'after-cohort-before-dispatch' } }; passed = $false;
+@{ caseId = $caseId; phase = if ($competing) { 'before-install' } elseif ($Phase -eq 'empty-cohort' -or $sameArtifactShed -or $scopedEligibility) { 'after-cohort' } else { $Phase }; eventName = $eventName } | ConvertTo-Json | Set-Content (Join-Path $control 'plan.json')
+$receipt = @{ sourceRevision = $SourceRevision; scenario = switch ($Phase) { 'after-resume' { 'partial-callback-and-rearm-before-source-ack' } 'after-start' { 'one-of-two-starts-parked-before-remaining-start-and-resumes' } 'after-fanout' { 'all-recipient-effects-completed-before-source-ack-write' } 'after-source-commit' { 'committed-source-completion-before-provider-return-loss' } 'renewed-claim' { 'real-pre-dispatch-claim-renewal-then-crash-and-standard-takeover' } 'republished-cohort' { 'saved-old-publication-retained-through-real-collection-and-republish' } 'same-artifact-shed' { 'real-capacity-shed-then-same-artifact-key-reuse-and-recovery' } 'local-scope' { 'local-publisher-only-resume-and-real-test-scope-isolation' } 'correlation-scope' { 'correlation-narrows-resumes-not-starts-and-real-test-scope-isolation' } 'before-selection' { 'delayed-first-selection-and-pre-start-wait-exclusion' } 'empty-cohort' { 'empty-saved-cohort-excludes-later-matches' } 'competing-proposal' { 'expired-old-prepared-proposal-cannot-replace-successor-winner' } 'competing-empty-proposal' { 'expired-old-empty-proposal-cannot-replace-populated-successor-winner' } 'competing-empty-winner' { 'expired-old-populated-proposal-cannot-replace-empty-successor-winner' } default { 'after-cohort-before-dispatch' } }; passed = $false;
     probeAssemblySha256 = (Get-FileHash $ProbeAssembly).Hash.ToLowerInvariant(); normalAssemblySha256 = (Get-FileHash $NormalAssembly).Hash.ToLowerInvariant();
     sourceCommit = $sourceCommit; sourceFiles = $sourceManifest; probeBuild = $probeManifest; normalBuild = $normalManifest; readerSha256 = $readerHash; readerBuild = $readerManifest;
     cut = $null; stopped = $null; successorClaim = $null; recovered = $null; observations = @(); failures = @() }
@@ -94,10 +100,29 @@ if ($competing) {
     $settings | ConvertTo-Json -Depth 60 | Set-Content $settingsPath
     $receipt.oldNodeId = $oldNodeId; $receipt.peerNodeId = $peerNodeId
 }
-function Import-Process([string] $Xml) {
+function Set-ImportedInput($Value, [string] $NodeId, [string] $Key, $Literal) {
+    $count = 0
+    if ($Value -is [System.Collections.IDictionary]) {
+        if ($Value.nodeId -eq $NodeId -and $Value.Contains('activityVersionId')) {
+            $Value.inputs = @($Value.inputs | Where-Object referenceKey -ne $Key) + @(New-LiteralInput -ReferenceKey $Key -Value $Literal)
+            $count++
+        }
+        foreach ($child in $Value.Values) { $count += Set-ImportedInput $child $NodeId $Key $Literal }
+    } elseif ($Value -is [System.Collections.IList]) {
+        foreach ($child in $Value) { $count += Set-ImportedInput $child $NodeId $Key $Literal }
+    }
+    return $count
+}
+function Import-Process([string] $Xml, [hashtable] $NativeInputs = @{}) {
     $import = Invoke-RestMethod "$($ctx.BaseUrl)/interchange/bpmn/import" -Method Post -WebSession $ctx.Session -ContentType 'application/json' -Body (@{ xml = $Xml } | ConvertTo-Json -Depth 30)
     if (-not $import.analysis.hostInventoryVerified -or -not $import.analysis.canExecute) { throw 'The actual catalog could not execute the imported fixture.' }
-    $definition = Submit-Workflow -Ctx $ctx -Name "BpmnSourceRecovery-$([guid]::NewGuid().ToString('N'))" -RootActivity $import.processNode
+    $rootNode = $import.processNode | ConvertTo-Json -Depth 60 | ConvertFrom-Json -AsHashtable -DateKind String
+    foreach ($entry in $NativeInputs.GetEnumerator()) {
+        foreach ($input in $entry.Value.GetEnumerator()) {
+            if ((Set-ImportedInput $rootNode $entry.Key $input.Key $input.Value) -ne 1) { throw "Expected exactly one imported native node $($entry.Key) for input $($input.Key)." }
+        }
+    }
+    $definition = Submit-Workflow -Ctx $ctx -Name "BpmnSourceRecovery-$([guid]::NewGuid().ToString('N'))" -RootActivity $rootNode
     return Publish-WorkflowVersion -Ctx $ctx -VersionId $definition.version.id
 }
 function Wait-Catches([string] $ExecutionId, [int] $Count) {
@@ -114,6 +139,7 @@ function Wait-Catches([string] $ExecutionId, [int] $Count) {
 function Observe([string] $Name, [string[]] $ExtraIds, [string] $Marker = $markerPath) {
     $path = Join-Path $caseDirectory "$Name.json"
     if ($sameArtifactShed -and $receipt.loadWorkflowId) { $ExtraIds = @($ExtraIds) + @($receipt.loadWorkflowId) }
+    if ($scopedEligibility) { $ExtraIds = @($ExtraIds) + @($receipt.excludedWorkflowIds) }
     $arguments = @("$PSScriptRoot/inspect_broadcast_recovery.py", '--database', (Join-Path $root 'elsa.db'), '--reader', $ReaderAssembly, '--marker', $Marker, '--output', $path)
     foreach ($id in $ExtraIds) { $arguments += @('--extra-workflow', $id) }
     & $Python @arguments | Out-Host
@@ -138,6 +164,117 @@ function Same-Snapshot($Left, $Right) {
     $rightDocument = [System.Text.Json.JsonDocument]::Parse(($Right | ConvertTo-Json -Depth 60 -Compress))
     try { return [System.Text.Json.JsonElement]::DeepEquals($leftDocument.RootElement, $rightDocument.RootElement) }
     finally { $leftDocument.Dispose(); $rightDocument.Dispose() }
+}
+function Assert-ScopedEligibility($Observation, $Profile, $Marker) {
+    $payload = $Observation.source.intentPayload; $cohort = $Observation.source.snapshot
+    $local = $Profile.kind -eq 'local-scope'
+    $selected = @($Observation.workflows | Where-Object workflowExecutionId -eq $Profile.selectedWorkflowId)
+    if (-not $Observation.ContainsKey('observedAtUtc') -or $null -eq $cohort -or $selected.Count -ne 1 -or -not $selected[0].exists -or
+        $selected[0].runKind -ne 2 -or $null -ne $selected[0].testScope -or $cohort.resumes.Count -ne 2 -or
+        @($cohort.resumes | Where-Object workflowExecutionId -ne $Profile.selectedWorkflowId).Count -ne 0 -or
+        @($cohort.resumes.bookmarkId | Sort-Object -Unique).Count -ne 2 -or $selected[0].bookmarks.Count -ne 2 -or
+        $payload.isLocalEvent -ne $local -or $payload.correlationId -ne $Profile.correlationA -or
+        ($local -and ($Observation.source.workflowExecutionId -ne $Profile.selectedWorkflowId -or $cohort.starts.Count -ne 0)) -or
+        (-not $local -and ($Observation.source.workflowExecutionId -eq $Profile.selectedWorkflowId -or $cohort.starts.Count -ne 1))) {
+        throw 'The actual source did not preserve its declared local/correlation selection and exact two waits.'
+    }
+    foreach ($wait in $selected[0].bookmarks) {
+        if ($wait.stimulusType -ne $payload.stimulusType -or $wait.stimulusHash -ne $payload.stimulusHash -or $wait.activityStatus -ne 'Suspended' -or
+            $wait.metadata['runtime.correlationId'] -ne $Profile.correlationA -or $wait.bookmarkId -notin @($cohort.resumes.bookmarkId)) { throw 'A selected wait is not a physically armed matching eligible generation.' }
+    }
+    $bindings = @($Observation.matchingBindings | Where-Object artifactId -eq $Profile.nativeStartPublication.artifactId)
+    if ($bindings.Count -ne 1 -or -not $bindings[0].isActive -or $bindings[0].correlationScope -ne $Profile.correlationB -or
+        $Profile.correlationA -eq $Profile.correlationB -or
+        (-not $local -and $cohort.starts[0].binding.triggerBindingId -ne $bindings[0].triggerBindingId)) {
+        throw 'The actual differently correlated published native start does not prove unfiltered start eligibility.'
+    }
+    $excluded = @($Observation.workflows | Where-Object workflowExecutionId -eq $Profile.excludedPublishedWorkflowId)
+    if ($excluded.Count -ne 1 -or $excluded[0].runKind -ne 2 -or $excluded[0].testScope -or $excluded[0].bookmarks.Count -ne 2) { throw 'The preexisting excluded published listener is unavailable.' }
+    $expectedExcludedCorrelation = if ($local) { $null } else { $Profile.correlationB }
+    foreach ($wait in $excluded[0].bookmarks) {
+        if ($wait.stimulusType -ne $payload.stimulusType -or $wait.stimulusHash -ne $payload.stimulusHash -or $wait.activityStatus -ne 'Suspended' -or
+            $wait.metadata['runtime.correlationId'] -ne $expectedExcludedCorrelation) { throw 'The excluded published waits do not establish target/correlation exclusion.' }
+    }
+    if ($Profile.testRuns.Count -ne 2 -or @($Profile.testRuns.testRunId | Sort-Object -Unique).Count -ne 2) { throw 'Two distinct actual test scopes are required.' }
+    foreach ($test in $Profile.testRuns) {
+        $actual = @($Observation.workflows | Where-Object workflowExecutionId -eq $test.workflowExecutionId)
+        if ($actual.Count -ne 1 -or -not $actual[0].exists -or $actual[0].runKind -ne 1 -or $actual[0].testScope.scopeId -ne $test.testRunId -or
+            $actual[0].testScopeState -ne 'Open' -or [DateTimeOffset]::Parse($actual[0].testScope.expiresAt) -le [DateTimeOffset]::Parse($Observation.observedAtUtc) -or
+            -not (Same-Snapshot $actual[0].partition $selected[0].partition) -or ($actual[0].tenantId -and $actual[0].tenantId -ne $Marker.scope) -or
+            $actual[0].bookmarks.Count -ne 2 -or $actual[0].testRunDeliveryReceipts.Count -ne 0) { throw 'A supposedly isolated real test run is missing, expired, foreign or already delivered.' }
+        foreach ($wait in $actual[0].bookmarks) {
+            if ($wait.stimulusType -ne $payload.stimulusType -or $wait.stimulusHash -ne $payload.stimulusHash -or $wait.activityStatus -ne 'Suspended' -or
+                $wait.metadata['runtime.correlationId'] -ne $Profile.correlationA -or $test.workflowExecutionId -in @($cohort.resumes.workflowExecutionId)) { throw 'The live isolated test waits are not physically matching excluded candidates.' }
+        }
+    }
+}
+function Assert-PrivateScopeWaits($Waits, $Workflow) {
+    $active = @($Waits.waits | Where-Object { $_.isAvailable -and $_.driverId -eq 'Elsa.Event' })
+    if ($active.Count -ne 2 -or @($active.waitId | Sort-Object -Unique).Count -ne 2 -or
+        @($active | Where-Object waitId -notin @($Workflow.bookmarks.bookmarkId)).Count -ne 0) {
+        throw 'The official scoped wait API does not expose the exact two live test waits.'
+    }
+}
+function Assert-PrivateDeliveryFacts($Before, $Observed, [string] $TestWorkflowId, [string[]] $ConsumedWaitIds, [string] $DeliveryId) {
+    $ordinal = $ConsumedWaitIds.Count
+    $aBefore = @($Before.workflows | Where-Object workflowExecutionId -eq $TestWorkflowId)[0]
+    $a = @($Observed.workflows | Where-Object workflowExecutionId -eq $TestWorkflowId)[0]
+    if ($a.bookmarks.Count -ne (2 - $ordinal) -or $a.testRunDeliveryReceipts.Count -ne $ordinal -or
+        -not $a.testRunDeliveryReceipts.ContainsKey("runtime.testDrive.delivery.$deliveryId") -or -not (Same-Snapshot $observed.source $Before.source)) { throw 'Scoped delivery did not durably consume exactly one owned wait and receipt without changing the normal source.' }
+    if (@($a.bookmarks | Where-Object bookmarkId -in $consumedWaitIds).Count -ne 0) { throw 'Scoped delivery consumed a sibling instead of retiring the exact requested wait.' }
+    foreach ($remaining in $aBefore.bookmarks | Where-Object bookmarkId -notin $consumedWaitIds) {
+        $currentWait = @($a.bookmarks | Where-Object bookmarkId -eq $remaining.bookmarkId)
+        if ($currentWait.Count -ne 1 -or -not (Same-Snapshot $currentWait[0] $remaining)) { throw 'A private delivery changed the other original wait generation or facts.' }
+    }
+    foreach ($consumed in $aBefore.bookmarks | Where-Object bookmarkId -in $consumedWaitIds) {
+        $originalActivity = @($aBefore.testActivities | Where-Object activityExecutionId -eq $consumed.activityExecutionId)
+        $completedActivity = @($a.testActivities | Where-Object activityExecutionId -eq $consumed.activityExecutionId)
+        if ($originalActivity.Count -ne 1 -or $completedActivity.Count -ne 1 -or $completedActivity[0].status -ne 'Completed' -or
+            $completedActivity[0].attemptCount -ne ($originalActivity[0].attemptCount + 1) -or @($completedActivity[0].bookmarkIds).Count -ne 0) { throw 'The exact requested test activity did not complete one callback attempt and retire its wait.' }
+    }
+    foreach ($old in $Before.workflows | Where-Object workflowExecutionId -ne $TestWorkflowId) {
+        $current = @($observed.workflows | Where-Object workflowExecutionId -eq $old.workflowExecutionId)[0]
+        if (-not (Same-Snapshot $old $current)) { throw 'A private test event changed another test scope or a normal workflow.' }
+    }
+}
+function Invoke-PrivateScopeProof($Profile, $Before, [string] $SelectedId, [string] $LateId) {
+    $testA = $Profile.testRuns[0]; $testB = $Profile.testRuns[1]
+    $aBefore = @($Before.workflows | Where-Object workflowExecutionId -eq $testA.workflowExecutionId)[0]
+    $waits = Invoke-RestMethod "$($ctx.BaseUrl)/publishing/workflow-test-runs/$($testA.testRunId)/waits" -WebSession $ctx.Session
+    $receipt.privateScopeWaits = $waits
+    $active = @($waits.waits | Where-Object { $_.isAvailable -and $_.driverId -eq 'Elsa.Event' } | Sort-Object waitId)
+    Assert-PrivateScopeWaits $waits $aBefore
+    $receipt.privateScopeDeliveries = @(); $ordinal = 0; $consumedWaitIds = @()
+    foreach ($wait in $active) {
+        $ordinal++; $deliveryId = [guid]::NewGuid().ToString('D')
+        $body = @{ waitId = $wait.waitId; deliveryId = $deliveryId; modeId = 'event'; data = @{ payload = @{ fixture = $caseId; ordinal = $ordinal } } } | ConvertTo-Json -Depth 15
+        $response = Invoke-RestMethod "$($ctx.BaseUrl)/publishing/workflow-test-runs/$($testA.testRunId)/events" -Method Post -WebSession $ctx.Session -ContentType 'application/json' -Body $body
+        if ($response.status -notin @('Delivered', 'AlreadyDelivered', 'Pending')) { throw 'The official test event API refused the live owned wait.' }
+        $deadline = [DateTimeOffset]::UtcNow.AddSeconds(30)
+        do {
+            $observed = Observe "private-$ordinal" @($SelectedId, $LateId)
+            $a = @($observed.workflows | Where-Object workflowExecutionId -eq $testA.workflowExecutionId)[0]
+            if ($a.bookmarks.Count -eq (2 - $ordinal) -and $a.testRunDeliveryReceipts.Count -eq $ordinal) { break }
+            Start-Sleep -Milliseconds 100
+        } while ([DateTimeOffset]::UtcNow -lt $deadline)
+        $consumedWaitIds += $wait.waitId
+        Assert-PrivateDeliveryFacts $Before $observed $testA.workflowExecutionId $consumedWaitIds $deliveryId
+        $api = Get-WorkflowInstance -Ctx $ctx -ExecutionId $testA.workflowExecutionId
+        if ($api.activityNextContinuationToken -or @($api.incidents).Count -ne 0) { throw 'The private test event API observation is incomplete or faulted.' }
+        $receipt.privateScopeDeliveries += @{ waitId = $wait.waitId; deliveryId = $deliveryId; response = $response; observation = $observed; api = $api }
+        if ($ordinal -eq 1) {
+            $retry = Invoke-RestMethod "$($ctx.BaseUrl)/publishing/workflow-test-runs/$($testA.testRunId)/events" -Method Post -WebSession $ctx.Session -ContentType 'application/json' -Body $body
+            $afterRetry = Observe 'private-first-retry' @($SelectedId, $LateId)
+            $retryApi = Get-WorkflowInstance -Ctx $ctx -ExecutionId $testA.workflowExecutionId
+            if ($retry.status -ne 'AlreadyDelivered' -or -not (Same-Snapshot $afterRetry.source $observed.source) -or
+                -not (Same-Snapshot $afterRetry.workflows $observed.workflows) -or -not (Same-Snapshot $api.instance $retryApi.instance) -or
+                -not (Same-Snapshot $api.activities $retryApi.activities) -or $retryApi.activityNextContinuationToken -or @($retryApi.incidents).Count -ne 0) { throw 'A repeated scoped delivery changed its durable receipt or callback facts.' }
+            $receipt.privateScopeRetry = @{ response = $retry; observation = $afterRetry; api = $retryApi }
+        }
+    }
+    $finishedTest = Wait-WorkflowInstance -Ctx $ctx -ExecutionId $testA.workflowExecutionId -TimeoutSeconds 30
+    if ($finishedTest.instance.status -ne 'Completed' -or @($finishedTest.incidents).Count -ne 0) { throw 'The two actual private test callbacks did not complete their library join.' }
+    $receipt.privateScopeCompleted = $finishedTest
 }
 function Assert-SameArtifactCohort($Observation, $Publications) {
     $entries = @($Observation.source.selectedStarts)
@@ -280,8 +417,28 @@ try {
         $waitXml = $waitXml.Replace('sourceRef="wait-b" targetRef="join"', 'sourceRef="wait-b" targetRef="wait-b"')
         $waitXml = $waitXml.Replace('<sequenceFlow id="finish" sourceRef="join" targetRef="end"/>', '')
     }
+    $plainWaitXml = $waitXml
+    $waitInputs = @{}
+    if ($correlationScope) { $waitInputs = @{ 'node-wait-a' = @{ CorrelationId = $correlationA }; 'node-wait-b' = @{ CorrelationId = $correlationA } } }
     $initialWaitXml = if ($unmatchedInitial) { $waitXml.Replace($eventName, "unmatched-$eventName") } else { $waitXml }
-    $waitPublication = Import-Process $initialWaitXml
+    if ($scopedEligibility) {
+        $sequenceVersion = Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Sequence.Activities.Sequence'
+        $eventVersion = Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Primitives.Activities.Event'
+        $publishVersion = Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Primitives.Activities.PublishEvent'
+    }
+    if ($localScope) {
+        $parallelVersion = Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Parallel.Activities.Parallel'
+        $ownA = New-EventWaitNode -NodeId 'node-wait-a' -EventVersionId $eventVersion -EventName $eventName
+        $ownB = New-EventWaitNode -NodeId 'node-wait-b' -EventVersionId $eventVersion -EventName $eventName
+        $gate = New-EventWaitNode -NodeId 'send-gate' -EventVersionId $eventVersion -EventName $releaseName
+        $send = New-ActivityNode -NodeId 'node-send' -VersionId $publishVersion -Inputs @(
+            (New-LiteralInput -ReferenceKey EventName -Value $eventName), (New-LiteralInput -ReferenceKey IsLocalEvent -Value $true))
+        $sender = New-ActivityNode -NodeId sender -VersionId $sequenceVersion -Structure (New-SequenceStructure -Activities @($gate, $send))
+        $rootNode = New-ActivityNode -NodeId root -VersionId $parallelVersion -Structure (New-ParallelStructure -Branches @(
+            @{ name = 'own-a'; activity = $ownA }, @{ name = 'own-b'; activity = $ownB }, @{ name = 'sender'; activity = $sender }))
+        $definition = Submit-Workflow -Ctx $ctx -Name "LocalPublisher-$caseId" -RootActivity $rootNode
+        $waitPublication = Publish-WorkflowVersion -Ctx $ctx -VersionId $definition.version.id
+    } else { $waitPublication = Import-Process $initialWaitXml $waitInputs }
     $waitRun = Invoke-Artifact -Ctx $ctx -ArtifactId $waitPublication.artifactId -SourceReferenceId $waitPublication.sourceReferenceId
     $null = Wait-Catches $waitRun.workflowExecutionId 2
     # Published before the snapshot; this start must survive a process restart with its original artifact-scoped key.
@@ -295,7 +452,39 @@ try {
         $startXml = $startXml.Replace("<signal id=`"park`" name=`"$parkName`"/>", '').Replace('signalRef="park"', 'signalRef="signal"')
     }
     $initialStartXml = if ($unmatchedInitial) { $startXml.Replace($eventName, "unmatched-$eventName") } else { $startXml }
-    $selectedPublication = Import-Process $initialStartXml
+    if ($scopedEligibility) {
+        $sequenceVersion = Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Sequence.Activities.Sequence'
+        $eventVersion = Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Primitives.Activities.Event'
+        $nativeStart = New-ActivityNode -NodeId 'receive' -VersionId $eventVersion -Inputs @(
+            (New-LiteralInput -ReferenceKey EventName -Value $eventName), (New-LiteralInput -ReferenceKey CanStartWorkflow -Value $true),
+            (New-LiteralInput -ReferenceKey CorrelationId -Value $correlationB))
+        $nativePark = New-EventWaitNode -NodeId 'node-park' -EventVersionId $eventVersion -EventName "park-$eventName"
+        $nativeRoot = New-ActivityNode -NodeId root -VersionId $sequenceVersion -Structure (New-SequenceStructure -Activities @($nativeStart, $nativePark))
+        $nativeDefinition = Submit-Workflow -Ctx $ctx -Name "NativeScopeStart-$caseId" -RootActivity $nativeRoot
+        $selectedPublication = Publish-WorkflowVersion -Ctx $ctx -VersionId $nativeDefinition.version.id
+        $excludedCorrelation = if ($localScope) { $null } else { $correlationB }
+        $excludedInputs = if ($localScope) { @{} } else { @{ 'node-wait-a' = @{ CorrelationId = $correlationB }; 'node-wait-b' = @{ CorrelationId = $correlationB } } }
+        $excludedPublication = Import-Process ($plainWaitXml.Replace('id="waiter"', 'id="excluded-waiter"')) $excludedInputs
+        $excludedRun = Invoke-Artifact -Ctx $ctx -ArtifactId $excludedPublication.artifactId -SourceReferenceId $excludedPublication.sourceReferenceId
+        $null = Wait-Catches $excludedRun.workflowExecutionId 2
+        $testInputs = if ($localScope) { @{} } else { $waitInputs }
+        $testPublication = Import-Process ($plainWaitXml.Replace('id="waiter"', 'id="test-waiter"')) $testInputs
+        $scopeRuns = @()
+        foreach ($ordinal in 1..3) {
+            $testRun = Invoke-RestMethod "$base/publishing/workflows/$($testPublication.versionId)/test-runs" -Method Post -WebSession $ctx.Session -ContentType 'application/json' -Body '{}'
+            if (-not $testRun.workflowExecutionId) { throw 'The real TestRun API did not create an isolated waiting execution.' }
+            $null = Wait-Catches $testRun.workflowExecutionId 2
+            $scopeRuns += $testRun
+        }
+        if ($scopeRuns[0].testRunId -eq $scopeRuns[1].testRunId -or $scopeRuns[0].workflowExecutionId -eq $scopeRuns[1].workflowExecutionId) { throw 'The two real TestRun scopes are not distinct.' }
+        $receipt.excludedWorkflowIds = @($excludedRun.workflowExecutionId, $scopeRuns[0].workflowExecutionId, $scopeRuns[1].workflowExecutionId, $scopeRuns[2].workflowExecutionId)
+        $receipt.privateScopeTestRun = $scopeRuns[2]
+        $receipt.scopeProfile = @{ kind = $Phase; correlationA = if ($localScope) { $null } else { $correlationA }; correlationB = $correlationB;
+            selectedWorkflowId = $waitRun.workflowExecutionId; excludedPublishedWorkflowId = $excludedRun.workflowExecutionId;
+            testRuns = @($scopeRuns[0], $scopeRuns[1]); nativeStartPublication = $selectedPublication }
+    } else {
+        $selectedPublication = Import-Process $initialStartXml
+    }
     $secondInitialPublication = $null
     if ($partialStart) { $secondInitialPublication = Import-Process ($startXml.Replace('id="selected-start"', 'id="second-start"')) }
     if ($republishedCohort) {
@@ -314,11 +503,23 @@ try {
 <process id="publisher" isExecutable="true"><startEvent id="start"/><intermediateThrowEvent id="send"><signalEventDefinition signalRef="signal"/></intermediateThrowEvent><endEvent id="end"/>
 <sequenceFlow id="begin" sourceRef="start" targetRef="send"/><sequenceFlow id="finish" sourceRef="send" targetRef="end"/></process></definitions>
 "@
-    $publisher = Import-Process $publisherXml
+    if ($localScope) { $publisher = $waitPublication }
+    elseif ($correlationScope) {
+        $send = New-ActivityNode -NodeId 'node-send' -VersionId $publishVersion -Inputs @(
+            (New-LiteralInput -ReferenceKey EventName -Value $eventName), (New-LiteralInput -ReferenceKey CorrelationId -Value $correlationA))
+        $definition = Submit-Workflow -Ctx $ctx -Name "CorrelatedPublisher-$caseId" -RootActivity $send
+        $publisher = Publish-WorkflowVersion -Ctx $ctx -VersionId $definition.version.id
+    }
+    else { $publisher = Import-Process $publisherXml }
     $handler = [System.Net.Http.HttpClientHandler]::new(); $handler.CookieContainer = $ctx.Session.Cookies
     $client = [System.Net.Http.HttpClient]::new($handler); $client.Timeout = [TimeSpan]::FromMinutes(5)
     $content = [System.Net.Http.StringContent]::new((@{ sourceReferenceId = $publisher.sourceReferenceId } | ConvertTo-Json), [Text.Encoding]::UTF8, 'application/json')
-    $pending = $client.PostAsync("$base/runtime/workflows/executables/$($publisher.artifactId)/execute", $content)
+    if ($localScope) {
+        $releaseContent = [System.Net.Http.StringContent]::new((@{ stimulusType = 'Event'; stimulusHash = (Get-EventHash $releaseName); mode = 'ResumeOnly'; input = @{ release = $caseId } } | ConvertTo-Json), [Text.Encoding]::UTF8, 'application/json')
+        $pending = $client.PostAsync("$base/runtime/workflows/stimuli", $releaseContent)
+    } else {
+        $pending = $client.PostAsync("$base/runtime/workflows/executables/$($publisher.artifactId)/execute", $content)
+    }
     if ($renewedClaim) {
         $initialMarkerPath = Join-Path $caseDirectory 'initial-claim.json'
         $deadline = [DateTimeOffset]::UtcNow.AddSeconds(40)
@@ -377,7 +578,32 @@ try {
         }
     } elseif ($Phase -eq 'empty-cohort') {
         if ($null -eq $marker.snapshot -or $marker.snapshot.starts.Count -ne 0 -or $marker.snapshot.resumes.Count -ne 0) { throw 'The empty recipient decision was not durably committed.' }
-    } elseif ($marker.snapshot.starts.Count -ne $(if ($partialStart -or $sameArtifactShed) { 2 } else { 1 }) -or $marker.snapshot.resumes.Count -ne 2) { throw 'The actual persisted cohort is incomplete at the cut.' }
+    } elseif ($marker.snapshot.starts.Count -ne $(if ($localScope) { 0 } elseif ($partialStart -or $sameArtifactShed) { 2 } else { 1 }) -or $marker.snapshot.resumes.Count -ne 2) { throw 'The actual persisted cohort is incomplete at the cut.' }
+    if ($scopedEligibility) {
+        $scopeBefore = Observe 'scope-before-crash' @($waitRun.workflowExecutionId)
+        Assert-ScopedEligibility $scopeBefore $receipt.scopeProfile $marker
+        $receipt.scopeEligibilityBeforePrivateDelivery = $scopeBefore
+        $receipt.originalTestRunWaitsBeforeCrash = @()
+        foreach ($test in $receipt.scopeProfile.testRuns) {
+            $view = Invoke-RestMethod "$base/publishing/workflow-test-runs/$($test.testRunId)/waits" -WebSession $ctx.Session
+            $workflow = @($scopeBefore.workflows | Where-Object workflowExecutionId -eq $test.workflowExecutionId)[0]
+            Assert-PrivateScopeWaits $view $workflow
+            $receipt.originalTestRunWaitsBeforeCrash += @{ workflowExecutionId = $test.workflowExecutionId; view = $view }
+        }
+        # Publishing currently owns process-local TestRun handles. Prove private driving while the real
+        # original API handle is live; never reconstruct a lost handle or claim restart support for it.
+        $privateProfile = @{ testRuns = @($receipt.privateScopeTestRun, $receipt.scopeProfile.testRuns[1]) }
+        Invoke-PrivateScopeProof $privateProfile $scopeBefore $waitRun.workflowExecutionId $waitRun.workflowExecutionId
+        $scopeBefore = Observe 'scope-after-private-before-crash' @($waitRun.workflowExecutionId)
+        Assert-ScopedEligibility $scopeBefore $receipt.scopeProfile $marker
+        $receipt.scopeBeforeCrash = $scopeBefore
+        $receipt.excludedApiBeforeCrash = @()
+        foreach ($id in $receipt.excludedWorkflowIds) {
+            $api = Get-WorkflowInstance -Ctx $ctx -ExecutionId $id
+            if ($api.activityNextContinuationToken -or @($api.incidents).Count -ne 0) { throw 'The preexisting excluded listener API observation is incomplete or faulted.' }
+            $receipt.excludedApiBeforeCrash += @{ workflowExecutionId = $id; instance = $api.instance; activities = $api.activities }
+        }
+    }
     if ($completeFanout) {
         $completed = Wait-WorkflowInstance -Ctx $ctx -ExecutionId $waitRun.workflowExecutionId -TimeoutSeconds 30
         if ($completed.instance.status -ne 'Completed' -or @($completed.incidents).Count -ne 0) { throw 'Full fan-out acceptance did not establish completed recipient callbacks/join.' }
@@ -467,7 +693,7 @@ try {
     $lateWaitXml = $waitXml.Replace('id="waiter"', 'id="late-waiter"')
     $lateStartXml = $startXml.Replace('id="selected-start"', 'id="late-start"')
     if ($emptyWinner) { $lateWaitXml = $lateWaitXml.Replace($eventName, "unmatched-later-$eventName"); $lateStartXml = $lateStartXml.Replace($eventName, "unmatched-later-$eventName") }
-    $latePublication = Import-Process $lateWaitXml
+    $latePublication = Import-Process $lateWaitXml $(if ($correlationScope) { $waitInputs } else { @{} })
     $lateRun = Invoke-Artifact -Ctx $ctx -ArtifactId $latePublication.artifactId -SourceReferenceId $latePublication.sourceReferenceId
     $null = Wait-Catches $lateRun.workflowExecutionId 2
     $lateStart = Import-Process $lateStartXml
@@ -578,7 +804,7 @@ try {
     foreach ($start in $stopped.source.selectedStarts) {
         $target = @($stopped.workflows | Where-Object workflowExecutionId -eq $start.workflowExecutionId)
         if ($target.Count -ne 1) { throw 'The exact selected keyed target observation is unavailable.' }
-        if ($Phase -in @('after-cohort', 'renewed-claim', 'republished-cohort', 'same-artifact-shed') -or ($partialStart -and $start.workflowExecutionId -ne $marker.acceptedExecution)) {
+        if ($Phase -in @('after-cohort', 'renewed-claim', 'republished-cohort', 'same-artifact-shed', 'local-scope', 'correlation-scope') -or ($partialStart -and $start.workflowExecutionId -ne $marker.acceptedExecution)) {
             if ($target[0].exists -or @($stopped.allWorkflows | Where-Object artifactId -eq $start.artifactId).Count -ne 0) { throw 'A selected start ran before its dispatch cut.' }
         } else {
             $park = @($target[0].bookmarks | Where-Object { $_.executableNodeId -eq 'node-park' -and $_.activityStatus -eq 'Suspended' })
@@ -773,7 +999,7 @@ try {
     if ($committedAck -and -not (Same-Snapshot $after.source $stopped.source)) { throw 'The committed source did not retain its entire original delivery record.' }
     if ($after.source.status -ne 'Delivered' -or -not (Same-Snapshot $after.source.snapshot $selectedSource.source.snapshot)) { throw 'Recovery did not settle its complete immutable source cohort.' }
     $expectedArtifacts = @()
-    if (-not $unmatchedInitial -and -not $emptyWinner) { $expectedArtifacts += $selectedPublication.artifactId }
+    if (-not $unmatchedInitial -and -not $emptyWinner -and -not $localScope) { $expectedArtifacts += $selectedPublication.artifactId }
     if ($selectsAfterRestart) { $expectedArtifacts += $lateStart.artifactId }
     if ($partialStart) { $expectedArtifacts += $secondInitialPublication.artifactId }
     if ($completeFanout) {
@@ -861,6 +1087,19 @@ try {
             $originalWait = @($originalWorkflow.bookmarks | Where-Object bookmarkId -eq $original.bookmarkId)[0]
             if ($null -ne $oldWait -or $captured.Count -ne 0 -or $parkedWait[0].stimulusType -ne $originalWait.stimulusType -or $parkedWait[0].stimulusHash -ne $originalWait.stimulusHash) { throw 'The matching wait created by a selected start was not excluded from its own source.' }
         }
+    }
+    if ($scopedEligibility) {
+        $receipt.excludedApiAfterRecovery = @()
+        foreach ($beforeApi in $receipt.excludedApiBeforeCrash) {
+            $id = $beforeApi.workflowExecutionId
+            $old = @($receipt.scopeBeforeCrash.workflows | Where-Object workflowExecutionId -eq $id)[0]
+            $current = @($after.workflows | Where-Object workflowExecutionId -eq $id)[0]
+            $api = Get-WorkflowInstance -Ctx $ctx -ExecutionId $id
+            if (-not (Same-Snapshot $old $current) -or -not (Same-Snapshot $beforeApi.instance $api.instance) -or
+                -not (Same-Snapshot $beforeApi.activities $api.activities) -or $api.activityNextContinuationToken -or @($api.incidents).Count -ne 0) { throw 'Normal scoped source delivery changed an excluded published or TestRun listener.' }
+            $receipt.excludedApiAfterRecovery += @{ workflowExecutionId = $id; instance = $api.instance; activities = $api.activities }
+        }
+        $receipt.scopeAfterRecovery = $after
     }
     if ($sameArtifactShed) {
         $state = @($after.workflows | Where-Object workflowExecutionId -eq $receipt.sameKeyAcceptedState.workflowExecutionId)[0]

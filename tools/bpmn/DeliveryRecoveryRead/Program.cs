@@ -115,7 +115,7 @@ try
             var observed = await bookmarks.ObserveAsync(id, bookmark.BookmarkId) ?? throw new InvalidDataException("A closed snapshot's wait disappeared.");
             var activity = await activities.FindAsync(id, bookmark.ActivityExecutionId);
             waits.Add(new { bookmark.BookmarkId, bookmark.ActivityExecutionId, bookmark.ExecutableNodeId, bookmark.StimulusType,
-                bookmark.StimulusHash, observed.Generation, bookmark.CreatedAt, bookmark.ExpiresAt,
+                bookmark.StimulusHash, bookmark.ResumeTargetId, observed.Generation, bookmark.CreatedAt, bookmark.ExpiresAt, bookmark.Metadata,
                 ActivityStatus = activity?.Status.ToString(), AttemptCount = activity?.Attempts?.Count });
         }
         var selectedActivities = new List<object>();
@@ -125,8 +125,17 @@ try
             selectedActivities.Add(new { selected.ActivityExecutionId, Status = activity?.Status.ToString(),
                 BookmarkIds = activity?.BookmarkIds, AttemptCount = activity?.Attempts?.Count });
         }
+        var testScope = state?.TestScope is { } isolated
+            ? await new EfWorkflowTestScopeStore(context, access, new NoPaging()).FindAsync(isolated.ScopeId) : null;
+        if (state?.TestScope is not null && (testScope is null || !WorkflowTestScope.ContextEquals(testScope.Scope, state.TestScope))) throw new InvalidDataException("The observed test execution has no authoritative scope record.");
+        var testActivities = state?.TestScope is null ? null : (await activities.ListAllAsync(id)).Select(activity => new {
+            activity.Execution.ActivityExecutionId, activity.Execution.ExecutableNodeId, Status = activity.Status.ToString(),
+            AttemptCount = activity.Attempts?.Count, activity.BookmarkIds }).ToArray();
         observations.Add(new { WorkflowExecutionId = id, Exists = state is not null, Status = state?.Status.ToString(),
-            PinnedExecutable = state?.PinnedExecutable, PinnedSource = state?.PinnedSource, RunKind = state?.RunKind, Bookmarks = waits, SelectedActivities = selectedActivities });
+            PinnedExecutable = state?.PinnedExecutable, PinnedSource = state?.PinnedSource, RunKind = state?.RunKind,
+            state?.TenantId, state?.Partition, state?.TestScope, TestScopeState = testScope?.State.ToString(),
+            TestActivities = testActivities, TestRunDeliveryReceipts = state?.SystemMetadata.Where(item => item.Key.StartsWith(TestRunDeliveryReceipt.ReceiptPrefix, StringComparison.Ordinal)).ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal),
+            Bookmarks = waits, SelectedActivities = selectedActivities });
     }
     var all = await executions.ListAsync();
     // Observe declared stimulus fields and the actual checked binding index; these reads grant no dispatch authority.
@@ -140,7 +149,7 @@ try
     {
         var page = await bindingStore.ListByStimulusAsync(new(stimulusType, stimulusHash, continuationToken: continuation));
         bindings.AddRange(page.Items.Select(binding => new { binding.TriggerBindingId, binding.ArtifactId,
-            binding.ExecutableNodeId, binding.StimulusType, binding.StimulusHash, binding.IsActive, binding.CreatedAt }));
+            binding.ExecutableNodeId, binding.StimulusType, binding.StimulusHash, binding.CorrelationScope, binding.IsActive, binding.CreatedAt }));
         continuation = page.NextContinuationToken;
     } while (continuation is not null);
     var material = new EfWorkflowExecutableStore(context, access);
@@ -163,7 +172,7 @@ try
     await VerifySnapshotAsync(path, args[1]);
     Console.WriteLine(JsonSerializer.Serialize(new { ProviderChecked = true, ReadOnly = true, SnapshotSha256 = args[1],
         ObservedMaterial = observedMaterial, ObservedTemplates = observedTemplates, ObservedSourceReferences = observedReferences, ExecutionRootArtifactIds = executionRootIds, DispatchRootArtifactIds = dispatchRootIds,
-        Source = new { source.OutboxItemId, source.Intent.WorkflowExecutionId, source.RecordedAt, Status = source.Status.ToString(), source.DeliveryAttemptCount,
+        ObservedAtUtc = DateTimeOffset.UtcNow, Source = new { source.OutboxItemId, source.Intent.WorkflowExecutionId, source.RecordedAt, Status = source.Status.ToString(), source.DeliveryAttemptCount,
             ContentSha256 = sourceContentSha256, RowRevision = sourceRow.Revision, StorageSchemaVersion = sourceRow.SchemaVersion,
             source.DeliveringOwnerId, source.DeliveryFencingToken, source.DeliveryVisibleAfter, source.DeliveredAt, source.LastFailureMessage, IntentPayload = intentPayload,
             IntentFingerprint = RuntimeCheckpointCommitFingerprint.ComputeIntent(source.Intent), Snapshot = cohort,
