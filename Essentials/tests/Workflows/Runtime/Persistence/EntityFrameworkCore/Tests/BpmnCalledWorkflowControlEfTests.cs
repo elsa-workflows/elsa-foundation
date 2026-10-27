@@ -299,6 +299,7 @@ public sealed partial class BpmnCalledWorkflowControlEfTests : IDisposable
     }
 
     private sealed record CalledControlObservation(string WorkflowExecutionId, string CallingActivityExecutionId, long[] Ordinals);
+    private sealed record CalledControlVerdict(string WorkflowExecutionId, RuntimeStructuralContinuationKind Kind, string[] ScheduledNodes, string[] CancelledActivities);
 
     private sealed class ObservedCalledBpmnRuntime(IBpmnProcessRuntime inner, CalledResumeCut observation) : IBpmnProcessRuntime
     {
@@ -307,11 +308,15 @@ public sealed partial class BpmnCalledWorkflowControlEfTests : IDisposable
         public ValueTask<RuntimeStructuralContinuation> FaultAsync(IRuntimeActivityExecutionContext context, ActivityChildFaultedContext fault) => inner.FaultAsync(context, fault);
         public ValueTask<RuntimeStructuralContinuation> SignalAsync(IRuntimeActivityExecutionContext context, ActivityChildNotifiedContext signal) => inner.SignalAsync(context, signal);
         public ValueTask<RuntimeStructuralContinuation> OutcomeAsync(IRuntimeActivityExecutionContext context, ActivityChildOutcomeContext outcome) => inner.OutcomeAsync(context, outcome);
-        public ValueTask<RuntimeStructuralContinuation> ControlAsync(IRuntimeActivityExecutionContext context, RuntimeChildControlContext control)
+        public async ValueTask<RuntimeStructuralContinuation> ControlAsync(IRuntimeActivityExecutionContext context, RuntimeChildControlContext control)
         {
             observation.ControlCalls.Enqueue(new(context.WorkflowExecutionId, control.CallingActivityExecutionId,
                 control.Batches.Select(batch => batch.Batch.Ordinal).ToArray()));
-            return inner.ControlAsync(context, control);
+            var result = await inner.ControlAsync(context, control);
+            observation.ControlVerdicts.Enqueue(new(context.WorkflowExecutionId, result.Kind,
+                context.GetChildActivityScheduleRequests().Select(request => request.ExecutableNodeId).ToArray(),
+                context.GetChildSubtreeCancellationRequests().Select(request => request.ChildActivityExecutionId).ToArray()));
+            return result;
         }
     }
 
@@ -319,6 +324,9 @@ public sealed partial class BpmnCalledWorkflowControlEfTests : IDisposable
     {
         public ConcurrentQueue<RuntimePostCommitIntent> ObservedIntents { get; } = new();
         public ConcurrentQueue<CalledControlObservation> ControlCalls { get; } = new();
+        public ConcurrentQueue<CalledControlVerdict> ControlVerdicts { get; } = new();
+        public bool HoldNotifications { get; set; }
+        public RuntimePostCommitIntent? LastHeldNotification { get; set; }
         public bool RefuseDelivery { get; init; }
         public bool LoseAcknowledgement { get; init; }
         public bool CallerCommittedBeforeAcknowledgement { get; set; }
@@ -344,6 +352,11 @@ public sealed partial class BpmnCalledWorkflowControlEfTests : IDisposable
         private void CheckBefore(RuntimePostCommitIntent intent)
         {
             cut.ObservedIntents.Enqueue(intent);
+            if (cut.HoldNotifications && intent.Kind == NotifyControlIntentKind)
+            {
+                cut.LastHeldNotification = intent;
+                throw new TimeoutException("Controlled delayed nonterminal control before dispatch.");
+            }
             if (!cut.RefuseDelivery || intent.Kind != DispatchWorkflowConstants.ResumeParentIntentKind) return;
             cut.LastIntent = intent;
             throw new TimeoutException("Controlled outage before actual called-workflow terminal delivery.");
