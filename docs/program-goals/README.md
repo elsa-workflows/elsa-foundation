@@ -35,7 +35,6 @@ Do not invent a named program-goal bucket just because one is missing. Propose c
 | [BPMN Engine](bpmn-engine.md) | Active; owner exception, 14 October | BPMN composite, interchange, shared `valence-works/bpmn` core | Sipke | #2735 switch to `Bpmn.Semantics`; #2736 refuse degraded imports |
 | [Elsa 3.8/3.9 Parity](elsa3-parity.md) | Active; owner exception, 15 October | Identity administration, then tenancy, Elsa 3 import, operations, modules | Sipke | Program #2771, ADR 0085; Phase 1 users and roles |
 | [Studio Expression Developer Experience](studio-expression-developer-experience.md) | Active; owner authorization, 23 October | Studio activity-input code authoring and Foundation expression tooling | Sipke | Program #2310; plan #2367 and the permission-hash fix first; milestones 2 and 3 wait on the #3204 read-model ADR |
-| [Unified Workflow Authoring and Execution](unified-workflow-workspace.md) | Active; owner authorization, 27 October | Studio workflow editor, execution inspection and Test Run interaction | Sipke | Program #3392; attach Test Runs, share exact inspection, then following, motion and qualification |
 
 The Active table above is the complete list of active programs. The
 [19 October owner amendment to ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus) replaced the
@@ -58,6 +57,7 @@ superseded.
 | [Groundwork Persistence Readiness](groundwork-persistence-readiness.md) | Completed |
 | [EF Core Persistence](ef-core-persistence.md) | Completed |
 | [Studio Hosting and Package Reuse](studio-hosting-package-reuse.md) | Completed; Program #3340 / final delivery receipt |
+| [Unified Workflow Authoring and Execution](unified-workflow-workspace.md) | Delivered; Program #3392 / final qualification #3399 |
 | [Zero-EF Persistence](zero-ef-persistence.md) | Superseded |
 | [Constitution Readiness](constitution-readiness.md) | Parked |
 | [Code Reality And Test Maturity](code-reality-and-test-maturity.md) | Folded into Elsa 4 Simplification |

@@ -65,7 +65,7 @@ import {
   formatWorkflowRunLoadError
 } from "./editorHelpers";
 import { runDetailMinInspectorWidth, useRunDetailLayout, type RunDetailLayoutMode } from "./useRunDetailLayout";
-import { decorateWorkflowCanvasElements } from "./workflowAccessibility";
+import { activateWorkflowCanvasNode, decorateWorkflowCanvasElements } from "./workflowAccessibility";
 import { AdvancedSection } from "@elsa-workflows/studio-ui";
 import { RunWorkflowPicker } from "./RunWorkflowPicker";
 import { WorkflowListIdentity } from "./WorkflowListIdentity";
@@ -1996,7 +1996,10 @@ function WorkflowInstanceCanvas({
       ) : null}
       {executionBreadcrumb}
       {(scoped.loading || scoped.failed || scoped.repeated) ? <p className="wf-instance-note" role="status">{scoped.loading ? "Loading visible execution evidence…" : scoped.failed ? "Some visible execution evidence could not be loaded. Refresh to retry." : "Some activities ran more than once. Choose an occurrence to inspect."}</p> : null}
-      <div className="wf-instance-canvas">
+      <div className="wf-instance-canvas" onKeyDownCapture={event => activateWorkflowCanvasNode(event, nodeId => {
+        const node = canvas.nodes.find(candidate => candidate.id === nodeId);
+        if (node) onSelectActivity(nodeRuntimeId(node));
+      })}>
         {!definitionVersion ? (
           <div className="wf-empty">
             The workflow run loaded, but its pinned executable graph could not be resolved.

@@ -63,6 +63,7 @@ import { useTestRunRestoration } from "./useTestRunRestoration";
 import { usePinnedEditorDocument } from "./usePinnedEditorDocument";
 import { useEditorRunCanvas } from "./useEditorRunCanvas";
 import { useAttachedExecutionSelection } from "./useAttachedExecutionSelection";
+import { activateWorkflowCanvasNode } from "./workflowAccessibility";
 import { useDraftValidations } from "./useDraftValidations";
 import { useExecutableArtifactExport } from "./useExecutableArtifactExport";
 import { combineValidationErrors, detectStructuralValidationErrors } from "../draftValidation";
@@ -1484,7 +1485,11 @@ export function WorkflowEditor({
               "aria-label": "Workflow canvas",
               onDragOver: onCanvasDragOver,
               onDragLeave: onCanvasDragLeave,
-              onDrop: onCanvasDrop
+              onDrop: onCanvasDrop,
+              onKeyDownCapture: event => activateWorkflowCanvasNode(event, nodeId => {
+                closeActivityContextMenu();
+                selectEditorNode(nodeId);
+              })
             }}
             edgeActions={edgeActions}
             availabilityLookup={availabilityLookup}
