@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Data.Common;
 using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Events;
 using Elsa.Activities.Runtime.Contracts;
@@ -13,6 +14,7 @@ using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 using Elsa.Workflows.Runtime.Services.Scheduler;
 using Elsa.Workflows.Runtime.Services.Values;
 using Elsa.Workflows.Runtime.Services.WorkHandlers;
@@ -93,9 +95,13 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         var payloadCapturePolicy = serviceProvider.GetService<IRuntimePayloadCapturePolicy>() ?? new DefaultRuntimePayloadCapturePolicy();
 
         // Burst-cached pinned-executable read.
-        var executable = await PinnedExecutableRead.FindAsync(serviceProvider, resumePayload.PinnedExecutable.ArtifactId, cancellationToken);
+        var executable = await ReadResumeStateAsync(() => PinnedExecutableRead.FindAsync(serviceProvider, resumePayload.PinnedExecutable.ArtifactId, cancellationToken), resumePayload, cancellationToken);
         if (executable is null)
+        {
+            if (resumePayload.ExpectedBookmarkResume is not null)
+                throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.material-unavailable", "The saved wait's executable is unavailable.");
             throw new WorkflowExecutableNotFoundException(resumePayload.PinnedExecutable.ArtifactId);
+        }
 
         SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(workItem, resumePayload.PinnedExecutable, executable.Identity);
 
@@ -109,17 +115,47 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         if (!StringComparer.Ordinal.Equals(resumeTarget.ExecutableNodeId, resumePayload.ExecutableNodeId))
             throw new InvalidOperationException($"ResumeBookmark scheduler work item '{workItem.WorkItemId}' references executable node '{resumePayload.ExecutableNodeId}', but resume target '{resumePayload.ResumeTargetId}' points at executable node '{resumeTarget.ExecutableNodeId}'.");
 
-        var state = await activityExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, resumePayload.ActivityExecutionId, cancellationToken);
+        var state = await ReadResumeStateAsync(() => activityExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, resumePayload.ActivityExecutionId, cancellationToken), resumePayload, cancellationToken);
         if (state is null)
+        {
+            if (resumePayload.ExpectedBookmarkResume is not null)
+                throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.owner-unavailable", "The saved wait's owning activity is unavailable.");
             throw new InvalidOperationException($"ResumeBookmark scheduler work item '{workItem.WorkItemId}' references missing activity execution '{resumePayload.ActivityExecutionId}' for workflow execution '{workItem.WorkflowExecutionId}'.");
+        }
 
         if (!StringComparer.Ordinal.Equals(state.Execution.ExecutableNodeId, resumePayload.ExecutableNodeId))
             throw new InvalidOperationException($"ResumeBookmark scheduler work item '{workItem.WorkItemId}' references executable node '{resumePayload.ExecutableNodeId}', but activity execution '{resumePayload.ActivityExecutionId}' belongs to executable node '{state.Execution.ExecutableNodeId}'.");
 
-        var bookmark = await bookmarkStateStore.FindAsync(workItem.WorkflowExecutionId, resumePayload.BookmarkId, cancellationToken);
+        var bookmark = await ReadResumeStateAsync(() => bookmarkStateStore.FindAsync(workItem.WorkflowExecutionId, resumePayload.BookmarkId, cancellationToken), resumePayload, cancellationToken);
         var deliveryMetadata = ResolveTriggerDeliveryMetadata(workItem, resumePayload, state);
 
         var hasClaimedResume = TryResolveClaimedResume(state, workItem, deliveryMetadata, out var claimedDelivery, out var claimedAttempt);
+        if (!hasClaimedResume && resumePayload.ExpectedBookmarkResume is { } expected)
+        {
+            var executions = serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>();
+            var physicalExecutions = executions.GetType() == typeof(CoalescingWorkflowExecutionStateStore)
+                ? serviceProvider.GetService<CoalescingInner<IWorkflowExecutionStateStore>>()?.Value : executions;
+            var physicalActivities = activityExecutionStateStore.GetType() == typeof(CoalescingActivityExecutionStateStore)
+                ? serviceProvider.GetService<CoalescingInner<IActivityExecutionStateStore>>()?.Value : activityExecutionStateStore;
+            var checkpoints = serviceProvider.GetRequiredService<IRuntimeCheckpointCommitStore>();
+            var canAdmit = physicalExecutions is not null && physicalActivities is not null &&
+                await ReadResumeStateAsync(() => ValueTask.FromResult(checkpoints.CanCommitExactBookmarkResume(bookmarkStateStore, physicalExecutions, physicalActivities)), resumePayload, cancellationToken);
+            if (!canAdmit)
+                throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.admission-unsupported", "The selected stores cannot atomically admit an exact saved wait.");
+            if (expected.RegistrationCapture is not { } capture || expected.WorkflowExecutionId != workItem.WorkflowExecutionId ||
+                expected.BookmarkId != resumePayload.BookmarkId || expected.ActivityExecutionId != resumePayload.ActivityExecutionId ||
+                expected.ExecutableNodeId != resumePayload.ExecutableNodeId || expected.ResumeTargetId != resumePayload.ResumeTargetId ||
+                expected.StimulusType != resumePayload.StimulusType || expected.StimulusHash != resumePayload.StimulusHash ||
+                !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(capture.Executable, resumePayload.PinnedExecutable))
+                throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.capture-invalid", "The exact saved wait does not match its queued resume.");
+            var observed = await ReadResumeStateAsync(() => bookmarkStateStore.ObserveAsync(workItem.WorkflowExecutionId, resumePayload.BookmarkId, cancellationToken), resumePayload, cancellationToken);
+            var access = await ReadResumeStateAsync(() => ValueTask.FromResult(serviceProvider.GetService<IPersistenceAccessContextAccessor>()?.Current), resumePayload, cancellationToken)
+                ?? throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.scope-unavailable", "Exact resume persistence access is unavailable.");
+            var execution = await ReadResumeStateAsync(() => executions.FindAsync(workItem.WorkflowExecutionId, cancellationToken), resumePayload, cancellationToken)
+                ?? throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.owner-unavailable", "The saved wait's owning execution is unavailable.");
+            access.EnsureTenantScope(execution.TenantId);
+            if (!expected.MatchesAdmission(observed, execution, state, access.RequireScope(), _timeProvider.GetUtcNow())) return;
+        }
         if ((bookmark is not null || hasClaimedResume) &&
             state.Status is not (ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled or ActivityExecutionStatus.Recovered) &&
             serviceProvider.GetServices<IEventHandler<ActivityResumeValidating>>().Any())
@@ -164,8 +200,28 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         if (!TryResolveTypedTriggerDelivery(state, bookmark, resumePayload, deliveryMetadata, workItem, out var triggerDelivery))
             return;
 
-        var siblingBookmarks = await LoadOwnedSiblingBookmarksAsync(bookmarkStateStore, workItem, state, bookmark, cancellationToken);
+        var siblingBookmarks = await LoadOwnedSiblingBookmarksAsync(bookmarkStateStore, workItem, resumePayload, state, bookmark, cancellationToken);
         await ResumeActivityAsync(serviceProvider, checkpointCommitter, activityFaultIncidentRecorder, bookmarkConsumptionCheckpointService, schedulerWorkQueue, durableValueStateStore, payloadCapturePolicy, workItem, resumePayload, bookmark, siblingBookmarks, executable, executableNode, state, triggerDelivery!, null, cancellationToken);
+    }
+
+    private static async ValueTask<T> ReadResumeStateAsync<T>(Func<ValueTask<T>> read, RuntimeResumeBookmarkCommandPayload payload, CancellationToken cancellationToken)
+    {
+        try { return await read(); }
+        catch (Exception exception) when (payload.ExpectedBookmarkResume is not null && IsUnavailableRead(exception, cancellationToken))
+        {
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.read-unavailable", "Exact saved wait state is unavailable.", exception);
+        }
+    }
+
+    private static bool IsUnavailableRead(Exception exception, CancellationToken cancellationToken)
+    {
+        if (exception is InvalidDataException or JsonException or ArgumentException or NotSupportedException or RuntimeSchedulerWorkUnavailableException or RuntimeCheckpointInconsistentDurabilityException) return false;
+        if (exception is OperationCanceledException) return !cancellationToken.IsCancellationRequested;
+        if (exception is IOException or DbException or TimeoutException) return true;
+        // Provider adapters preserve their original cause behind a contextual InvalidOperationException. Bare
+        // scope/contract refusals remain distinct; immutable corruption never becomes an availability retry.
+        return exception is InvalidOperationException && exception.InnerException is { } inner &&
+            (IsUnavailableRead(inner, cancellationToken) || inner is InvalidOperationException { InnerException: null });
     }
 
     private async ValueTask ResumeActivityAsync(
@@ -201,15 +257,22 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 resumePayload,
                 state,
                 triggerDelivery);
-            await bookmarkConsumptionCheckpointService.CommitAsync(
-                BookmarkConsumptionCheckpointRequest.ForInitialTriggerClaim(
-                    workItem,
-                    resumePayload,
-                    bookmarkToConsume,
-                    activationClaim.State,
-                    activationClaim.Attempt.AttemptId,
-                    siblingBookmarks),
-                cancellationToken);
+            try
+            {
+                await ReadResumeStateAsync(() => bookmarkConsumptionCheckpointService.CommitAsync(
+                    BookmarkConsumptionCheckpointRequest.ForInitialTriggerClaim(
+                        workItem,
+                        resumePayload,
+                        bookmarkToConsume,
+                        activationClaim.State,
+                        activationClaim.Attempt.AttemptId,
+                        siblingBookmarks),
+                    cancellationToken), resumePayload, cancellationToken);
+            }
+            catch (BookmarkResumeSupersededException) when (resumePayload.ExpectedBookmarkResume is not null)
+            {
+                return; // The atomic admission lost; do not invoke a callback or consume a replacement wait.
+            }
             resumeAttempt = activationClaim.Attempt;
             executionState = activationClaim.State;
         }
@@ -541,6 +604,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
     private static async ValueTask<IReadOnlyCollection<BookmarkState>> LoadOwnedSiblingBookmarksAsync(
         IBookmarkStateStore bookmarkStateStore,
         RuntimeSchedulerWorkItem workItem,
+        RuntimeResumeBookmarkCommandPayload resumePayload,
         ActivityExecutionState state,
         BookmarkState selectedBookmark,
         CancellationToken cancellationToken)
@@ -557,7 +621,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             if (!registrations.TryGetValue(bookmarkId, out var registration))
                 throw new InvalidOperationException($"VF-ACT-008: Activity invocation '{state.InvocationId}' owns bookmark '{bookmarkId}' without a matching trigger registration.");
 
-            var sibling = await bookmarkStateStore.FindAsync(workItem.WorkflowExecutionId, bookmarkId, cancellationToken);
+            var sibling = await ReadResumeStateAsync(() => bookmarkStateStore.FindAsync(workItem.WorkflowExecutionId, bookmarkId, cancellationToken), resumePayload, cancellationToken);
             if (sibling is null)
                 continue;
             if (!StringComparer.Ordinal.Equals(sibling.WorkflowExecutionId, workItem.WorkflowExecutionId) ||

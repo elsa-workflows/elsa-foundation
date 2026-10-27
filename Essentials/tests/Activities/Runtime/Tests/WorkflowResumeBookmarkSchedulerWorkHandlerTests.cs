@@ -32,7 +32,9 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
     private readonly InMemoryIncidentStateStore _incidentStateStore = new();
     private readonly InMemoryActivityExecutionInspectionStore _inspectionStore = new();
     private readonly InMemoryDurableValueStateStore _durableValueStateStore = new();
-    private readonly InMemoryRuntimeCheckpointCommitStore _checkpointWriter;
+    private readonly InMemoryRuntimeCheckpointStoreState _checkpointState = new();
+    private InMemoryRuntimeCheckpointCommitStore _checkpointWriter;
+    private IWorkflowExecutionStateStore? _exactWorkflowStates;
 
     public WorkflowResumeBookmarkSchedulerWorkHandlerTests()
     {
@@ -44,7 +46,8 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
             incidentStateStore: _incidentStateStore,
             operationalStateStore: null,
             schedulerStateStore: null,
-            activityExecutionInspectionWriter: _inspectionStore);
+            activityExecutionInspectionWriter: _inspectionStore,
+            state: _checkpointState);
     }
 
     private WorkflowResumeBookmarkSchedulerWorkHandler NewHandler(ServiceProvider provider) =>
@@ -60,7 +63,8 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
 
     private ServiceProvider NewProvider(
         IActivityActivator activityActivator,
-        IBookmarkLifecycleObserver? bookmarkLifecycleObserver = null)
+        IBookmarkLifecycleObserver? bookmarkLifecycleObserver = null,
+        Action<IServiceCollection>? configure = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton<IActivityActivator>(activityActivator);
@@ -68,7 +72,8 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         services.AddSingleton<IWorkflowExecutableStore>(_ => _executableStore);
         services.AddSingleton<IActivityExecutionStateStore>(_ => _activityStateStore);
         services.AddSingleton<IWorkflowExecutionStateStore>(_ =>
-            CanonicalWorkflowStateTestData.EnsureRunning(new InMemoryWorkflowExecutionStateStore()));
+            _exactWorkflowStates ?? CanonicalWorkflowStateTestData.EnsureRunning(new InMemoryWorkflowExecutionStateStore()));
+        if (_exactWorkflowStates is not null) services.AddSingleton<IPersistenceAccessContextAccessor, ExactAccess>();
         services.AddSingleton<IBookmarkStateStore>(_ => _bookmarkStateStore);
         services.AddSingleton<IWorkflowSchedulerWorkQueue>(_ => _schedulerWorkQueue);
         services.AddSingleton<IDurableValueStateStore>(_ => _durableValueStateStore);
@@ -93,6 +98,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         services.AddSingleton<IRuntimeDurableValueStorageDriver, JsonRuntimeDurableValueStorageDriver>();
         services.AddSingleton<IRuntimeDurableValueStorageDriverRegistry, RuntimeDurableValueStorageDriverRegistry>();
         services.AddSingleton<RuntimeOutputCaptureProjector>();
+        configure?.Invoke(services);
         return services.BuildServiceProvider();
     }
 

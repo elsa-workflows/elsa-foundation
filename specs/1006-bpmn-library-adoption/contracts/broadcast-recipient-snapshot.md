@@ -182,6 +182,42 @@ owner question is required now. Delivered legacy sends retain their prior result
 private-state v1 and the frozen authoring contract are unchanged. Running binary rollback remains
 unsupported where a new outbox family has been written.
 
+## Exact bookmark admission
+
+A saved resume freezes the provider-observed physical bookmark generation as well as its existing
+identity/CreatedAt/expiry, complete metadata and payload fingerprint (never the retained payload), plus
+the recipient's full executable pin, pinned source and trusted tenant/partition/run/test facts. Native
+storage uses a monotonic generation per replacement; EF uses its persisted revision, including the
+fresh revision on delete/recreate. A copied data carrier grants no independent authority; source-validated persisted captures remain
+transportable across fresh provider contexts.
+The original resume-entry constructor/wire remains uncaptured and cannot authorize this exact path.
+
+The captured entry travels with an opted-in resume command into an additive
+`RuntimeCheckpointCommit.ExpectedBookmarkResume` condition. Admission is the existing initial trigger
+claim checkpoint: validate the exact current bookmark generation/content and recipient pin/scope,
+consume the selected wait and claim the activity attempt in that same atomic boundary, before invoking
+its callback. The workflow and owning activity invocation must still be eligible (not terminal, cancelled
+or superseded). Admission uses trusted provider time for bookmark/test-scope expiry and rechecks it
+after awaited reads/fencing and immediately before durable acceptance. A second lookup before enqueue alone is insufficient. A changed/retired wait produces no
+callback, replacement consumption or new incident; unavailable authority retains/retries the work.
+Existing committed replay wins before new predicates are evaluated. New conditional commits include
+the condition in replay identity; commits without it preserve their original fingerprint exactly.
+
+Native conditional commits share the coherent checkpoint/ownership gates; the selected native bookmark
+and activity stores bind their raw save/delete and bulk cleanup routes to that same checkpoint write gate. Unsupported/mixed provider tuples
+refuse before state changes. EF predicates use the actual scoped context, validate checked bookmark and
+execution rows, and fence their revisions inside the existing checkpoint transaction; a lost race rolls
+back every participant/marker/outbox change. Dirty caller state is never cleared/flushed by observation.
+Coalescing cannot fold or drop the condition: it must cross a mandatory physical checkpoint boundary,
+forward support explicitly and preserve replay. Older providers default to refusing this new capability.
+
+Ordinary resume signatures/payloads retain their behavior. The source-owned router must validate the
+persisted captured entry and derive its input from the immutable intent before choosing this path;
+the eventual queued command uses the accepted handoff and does not require an already-ACKed source's
+expired claim. Selection, source-row acceptance, exact dispatch and scheduler consumption remain separate
+boundaries, all required before publisher activation. This unpublished family-2 refinement requires the
+same stopped-writer admission; no compatibility with older preview family-2 writers is inferred.
+
 ## Quiescent upgrade admission and recovery holds
 
 Unmarked means no recipient protocol, no committed source-scope witness and no cohort. T048 scope-only

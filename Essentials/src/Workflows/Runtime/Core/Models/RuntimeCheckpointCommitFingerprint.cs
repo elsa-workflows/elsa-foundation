@@ -3,6 +3,7 @@ using System.Buffers.Binary;
 using System.Globalization;
 using System.Numerics;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -10,6 +11,30 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 public static class RuntimeCheckpointCommitFingerprint
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions ExactBookmarkOptions = ExactOptions();
+
+    private static JsonSerializerOptions ExactOptions()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        options.Converters.Add(new ExactOpaqueStringWriter());
+        return options;
+    }
+
+    // Only new conditional replay identities use this encoding. Historical checkpoint bytes remain untouched.
+    private sealed class ExactOpaqueStringWriter : JsonConverter<string>
+    {
+        public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => throw new NotSupportedException();
+        public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options) => writer.WriteStringValue(Encode(value));
+        public override void WriteAsPropertyName(Utf8JsonWriter writer, string value, JsonSerializerOptions options) => writer.WritePropertyName(Encode(value));
+        private static string Encode(string value)
+        {
+            var bytes = new byte[checked(value.Length * sizeof(char))];
+            for (var index = 0; index < value.Length; index++)
+                BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(index * sizeof(char), sizeof(char)), value[index]);
+            return Convert.ToBase64String(bytes);
+        }
+    }
+
 
     /// <summary>
     /// Identifies an immutable persisted intent for a delivery-state extension. This is separate from
@@ -237,7 +262,9 @@ public static class RuntimeCheckpointCommitFingerprint
             commit.Metadata
         };
 
-        var element = JsonSerializer.SerializeToElement(payload, SerializerOptions);
+        var element = commit.ExpectedBookmarkResume is null
+            ? JsonSerializer.SerializeToElement(payload, SerializerOptions)
+            : JsonSerializer.SerializeToElement(new { ExactBookmarkResumeVersion = 1, Payload = payload, commit.ExpectedBookmarkResume }, ExactBookmarkOptions);
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
             WriteCanonical(element, writer);

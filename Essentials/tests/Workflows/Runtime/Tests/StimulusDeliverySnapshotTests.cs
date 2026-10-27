@@ -350,6 +350,81 @@ public sealed class StimulusDeliverySnapshotTests
 
     private static StimulusDeliverySnapshot RoundTrip(StimulusDeliverySnapshot snapshot) =>
         JsonSerializer.Deserialize<StimulusDeliverySnapshot>(JsonSerializer.Serialize(snapshot, Web), Web)!;
+
+    [Fact]
+    public void Exact_resume_capture_round_trips_immutable_generation_pin_scope_source_and_registration_facts()
+    {
+        var metadata = new Dictionary<string, string> { ["activation"] = "selected", ["slot"] = "pinned" };
+        var original = Bookmark() with { Metadata = metadata };
+        var captured = StimulusResumeRecipient.From(new BookmarkStateObservation(original, 7),
+            Workflow() with { WorkflowExecutionId = "waiter", PinnedSource = Provenance() }, new("tenant"));
+        metadata["activation"] = "changed";
+        var snapshot = Snapshot([], [captured]); var wire = JsonSerializer.SerializeToNode(snapshot, Web)!;
+        Assert.DoesNotContain("not copied", wire.ToJsonString());
+        var restored = RoundTrip(snapshot).Resumes.Single();
+        Assert.True(snapshot.IsEquivalentTo(RoundTrip(snapshot))); Assert.Equal(7, restored.RegistrationCapture!.Generation);
+        Assert.Equal(Pin, restored.RegistrationCapture.Executable); Assert.Equal(Provenance(), restored.RegistrationCapture.PinnedSource);
+        Assert.Equal("selected", restored.RegistrationCapture.Metadata["activation"]);
+        Assert.True(restored.Matches(original with { Metadata = new Dictionary<string, string> { ["activation"] = "selected", ["slot"] = "pinned" } }));
+        Assert.False(restored.Matches(original));
+        Assert.False(snapshot.IsEquivalentTo(Snapshot([], [Wait()])));
+        Assert.False(JsonSerializer.SerializeToNode(Wait(), Web)!.AsObject().ContainsKey("registrationCapture"));
+    }
+
+    [Theory]
+    [InlineData("version")] [InlineData("generation")] [InlineData("executable")] [InlineData("scope")]
+    [InlineData("pinnedSource")] [InlineData("metadata")] [InlineData("payloadFingerprint")]
+    public void Exact_resume_capture_requires_every_field_including_explicit_null_source(string field)
+    {
+        var wire = JsonSerializer.SerializeToNode(CapturedWait(), Web)!;
+        wire["registrationCapture"]!.AsObject().Remove(field);
+        Assert.ThrowsAny<JsonException>(() => wire.Deserialize<StimulusResumeRecipient>(Web));
+    }
+
+    [Theory]
+    [InlineData("version", "0")] [InlineData("version", "2")] [InlineData("generation", "0")]
+    [InlineData("metadata", "null")] [InlineData("metadata", "{\"activation\":null}")]
+    [InlineData("payloadFingerprint", "\"short\"")] [InlineData("executable", "null")]
+    public void Exact_resume_capture_refuses_malformed_facts_without_falling_back_to_legacy(string field, string replacement)
+    {
+        var wire = JsonSerializer.SerializeToNode(CapturedWait(), Web)!;
+        wire["registrationCapture"]![field] = JsonNode.Parse(replacement);
+        Assert.ThrowsAny<JsonException>(() => wire.Deserialize<StimulusResumeRecipient>(Web));
+    }
+
+    [Fact]
+    public void Exact_resume_capture_refuses_present_null_duplicate_capture_and_duplicate_metadata_keys()
+    {
+        var wire = JsonSerializer.SerializeToNode(CapturedWait(), Web)!;
+        var json = wire.ToJsonString();
+        Assert.ThrowsAny<JsonException>(() => JsonSerializer.Deserialize<StimulusResumeRecipient>(json.Replace("\"generation\":7", "\"generation\":7,\"generation\":8"), Web));
+        Assert.ThrowsAny<JsonException>(() => JsonSerializer.Deserialize<StimulusResumeRecipient>(json.Replace("\"metadata\":{}", "\"metadata\":{\"x\":\"a\",\"x\":\"b\"}"), Web));
+        Assert.ThrowsAny<JsonException>(() => JsonSerializer.Deserialize<StimulusResumeRecipient>(json.Insert(json.LastIndexOf('}'), ",\"registrationCapture\":null"), Web));
+        wire["registrationCapture"] = null;
+        Assert.ThrowsAny<JsonException>(() => wire.Deserialize<StimulusResumeRecipient>(Web));
+    }
+
+    [Fact]
+    public void Exact_checkpoint_fingerprint_includes_opaque_condition_but_legacy_null_keeps_old_wire()
+    {
+        var legacy = new RuntimeCheckpointCommit("commit", new("checkpoint", "name", "waiter", Now, [], new Dictionary<string, string>()),
+            new(null, null, [], [], [], [], []), [], new Dictionary<string, string>());
+        Assert.False(JsonSerializer.SerializeToNode(legacy, Web)!.AsObject().ContainsKey("expectedBookmarkResume"));
+        // Compiled parent 678a519 writer over this exact historical envelope.
+        Assert.Equal("af976cb76bbef3f226bc15cbbdae5d8b330ec98ae9f287ff18e15aadc2df1f1a", RuntimeCheckpointCommitFingerprint.Compute(legacy));
+        var captured = legacy with { ExpectedBookmarkResume = CapturedWait() };
+        Assert.NotEqual(RuntimeCheckpointCommitFingerprint.Compute(legacy), RuntimeCheckpointCommitFingerprint.Compute(captured));
+        var left = captured with { ExpectedBookmarkResume = CapturedWait(new Dictionary<string, string> { ["opaque"] = "\ud800" }) };
+        var right = captured with { ExpectedBookmarkResume = CapturedWait(new Dictionary<string, string> { ["opaque"] = "\ud801" }) };
+        Assert.NotEqual(RuntimeCheckpointCommitFingerprint.Compute(left), RuntimeCheckpointCommitFingerprint.Compute(right));
+        var differentKey = captured with { ExpectedBookmarkResume = CapturedWait(new Dictionary<string, string> { ["\ud800"] = "value" }) };
+        var otherKey = captured with { ExpectedBookmarkResume = CapturedWait(new Dictionary<string, string> { ["\ud801"] = "value" }) };
+        Assert.NotEqual(RuntimeCheckpointCommitFingerprint.Compute(differentKey), RuntimeCheckpointCommitFingerprint.Compute(otherKey));
+    }
+
+    private static StimulusResumeRecipient CapturedWait(IReadOnlyDictionary<string, string>? metadata = null) =>
+        StimulusResumeRecipient.From(new BookmarkStateObservation(Bookmark() with { Metadata = metadata ?? new Dictionary<string, string>() }, 7),
+            Workflow() with { WorkflowExecutionId = "waiter" }, new("tenant"));
     private static StimulusDeliverySnapshot Snapshot(IReadOnlyList<StimulusStartRecipient> starts, IReadOnlyList<StimulusResumeRecipient> resumes) =>
         new(1, Context().SourceOutboxItemId, Context().IntentFingerprint, Scope(), Now, "event", "named", starts, resumes);
     private static StimulusDeliveryScope Scope() => StimulusDeliveryScope.From(Workflow(), new PersistenceScope("tenant"));

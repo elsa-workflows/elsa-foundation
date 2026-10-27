@@ -170,6 +170,8 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
                 .ToArray(),
             Metadata: metadata)
         {
+            ExpectedBookmarkResume = request.TransitionKind == BookmarkResumeCheckpointTransitionKind.InitialTriggerClaim
+                ? request.ResumePayload.ExpectedBookmarkResume : null,
             RetainSchedulerWork = request.TransitionKind is
                 BookmarkResumeCheckpointTransitionKind.InitialTriggerClaim or
                 BookmarkResumeCheckpointTransitionKind.RedeliveryClaim

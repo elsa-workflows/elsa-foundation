@@ -292,7 +292,8 @@ public static class RuntimeCoreServiceCollectionExtensions
             throw new InvalidOperationException("The configured workflow dispatch store does not provide atomic parent cancellation resolution."));
         services.TryAddScoped(serviceProvider => ActivatorUtilities.CreateInstance<InMemoryRuntimeCheckpointCommitStore>(
             serviceProvider, serviceProvider.GetRequiredService<IWorkflowExecutableStore>(),
-            serviceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>(), serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>()));
+            serviceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>(), serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
+            ResolveUnderlyingStore<IActivityExecutionStateStore>(serviceProvider, typeof(CoalescingActivityExecutionStateStore))));
         services.TryAddScoped<IRuntimeCheckpointCommitStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddScoped<IRuntimePostCommitOutboxStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddScoped<IPostCommitOutboxLookupStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());

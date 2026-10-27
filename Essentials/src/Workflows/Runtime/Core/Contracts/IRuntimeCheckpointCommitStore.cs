@@ -4,6 +4,14 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 public interface IRuntimeCheckpointCommitStore
 {
+    /// <summary>Whether this implementation can atomically enforce exact physical bookmark resume conditions.</summary>
+    /// <remarks>Callers must qualify selected stores; legacy providers and decorators refuse by default.</remarks>
+    bool SupportsExactBookmarkResume => false;
+
+    /// <summary>Qualify the selected physical bookmark/execution/activity stores for exact resume checkpoints.</summary>
+    bool CanCommitExactBookmarkResume(IBookmarkStateStore bookmarks, IWorkflowExecutionStateStore physicalExecutions,
+        IActivityExecutionStateStore activities) => false;
+
     /// <summary>
     /// Commits one provider-facing checkpoint. An existing equivalent commit marker takes replay precedence. For a
     /// new commit, <see cref="RuntimeCheckpointCommit.ExpectedFence"/> must be validated atomically with every state

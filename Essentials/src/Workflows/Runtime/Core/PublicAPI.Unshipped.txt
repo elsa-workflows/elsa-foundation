@@ -9186,3 +9186,35 @@ Elsa.Workflows.Runtime.Core.Contracts.IStimulusDeliveryStore.CanRetainExecutable
 Elsa.Workflows.Runtime.Core.Contracts.IStimulusDeliveryStore.ListPinnedExecutableArtifactIdsAsync(Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore! executables, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableSourceReferenceStore! references, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! executions, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyCollection<string!>!>
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.GetMaterialStore() -> Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore!
 Elsa.Workflows.Runtime.Core.Contracts.IStimulusDeliveryStore.EnsureOrdinaryCollectionAllowedAsync(Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitOutboxStore! outbox, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore! executables, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableSourceReferenceStore! references, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! executions, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.Contracts.IBookmarkStateStore.ObserveAsync(string! workflowExecutionId, string! bookmarkId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.BookmarkStateObservation?>
+Elsa.Workflows.Runtime.Core.Models.BookmarkStateObservation
+Elsa.Workflows.Runtime.Core.Models.BookmarkStateObservation.BookmarkStateObservation(Elsa.Workflows.Runtime.Core.Models.BookmarkState! state, long generation) -> void
+Elsa.Workflows.Runtime.Core.Models.BookmarkStateObservation.BookmarkStateObservation(Elsa.Workflows.Runtime.Core.Models.BookmarkState! state, long generation, Elsa.Workflows.Runtime.Core.Models.PersistenceScope? scope) -> void
+Elsa.Workflows.Runtime.Core.Models.BookmarkStateObservation.Generation.get -> long
+Elsa.Workflows.Runtime.Core.Models.BookmarkStateObservation.Scope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope?
+Elsa.Workflows.Runtime.Core.Models.BookmarkStateObservation.State.get -> Elsa.Workflows.Runtime.Core.Models.BookmarkState!
+Elsa.Workflows.Runtime.Core.Models.StimulusResumeCapture
+Elsa.Workflows.Runtime.Core.Models.StimulusResumeCapture.Executable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
+Elsa.Workflows.Runtime.Core.Models.StimulusResumeCapture.Generation.get -> long
+Elsa.Workflows.Runtime.Core.Models.StimulusResumeCapture.Metadata.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Elsa.Workflows.Runtime.Core.Models.StimulusResumeCapture.PayloadFingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.Models.StimulusResumeCapture.PinnedSource.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceProvenance?
+Elsa.Workflows.Runtime.Core.Models.StimulusResumeCapture.Scope.get -> Elsa.Workflows.Runtime.Core.Models.StimulusDeliveryScope!
+Elsa.Workflows.Runtime.Core.Models.StimulusResumeCapture.StimulusResumeCapture(long generation, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! executable, Elsa.Workflows.Runtime.Core.Models.StimulusDeliveryScope! scope, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceProvenance? pinnedSource, System.Collections.Generic.IReadOnlyDictionary<string!, string!>! metadata, string! payloadFingerprint) -> void
+Elsa.Workflows.Runtime.Core.Models.StimulusResumeRecipient.MatchesExecution(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState! execution, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope) -> bool
+Elsa.Workflows.Runtime.Core.Models.StimulusResumeRecipient.RegistrationCapture.get -> Elsa.Workflows.Runtime.Core.Models.StimulusResumeCapture?
+Elsa.Workflows.Runtime.Core.Models.StimulusResumeRecipient.StimulusResumeRecipient(string! workflowExecutionId, string! bookmarkId, string! activityExecutionId, string! executableNodeId, string! resumeTargetId, string! stimulusType, string! stimulusHash, System.DateTimeOffset createdAt, System.DateTimeOffset? expiresAt, Elsa.Workflows.Runtime.Core.Models.StimulusResumeCapture? registrationCapture) -> void
+const Elsa.Workflows.Runtime.Core.Models.StimulusResumeCapture.CurrentVersion = 1 -> int
+static Elsa.Workflows.Runtime.Core.Models.StimulusResumeRecipient.From(Elsa.Workflows.Runtime.Core.Models.BookmarkStateObservation! observation, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState! execution, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope) -> Elsa.Workflows.Runtime.Core.Models.StimulusResumeRecipient!
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore.CanCommitExactBookmarkResume(Elsa.Workflows.Runtime.Core.Contracts.IBookmarkStateStore! bookmarks, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! physicalExecutions, Elsa.Workflows.Runtime.Core.Contracts.IActivityExecutionStateStore! activities) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore.SupportsExactBookmarkResume.get -> bool
+Elsa.Workflows.Runtime.Core.Exceptions.BookmarkResumeSupersededException
+Elsa.Workflows.Runtime.Core.Exceptions.BookmarkResumeSupersededException.BookmarkId.get -> string!
+Elsa.Workflows.Runtime.Core.Exceptions.BookmarkResumeSupersededException.BookmarkResumeSupersededException(string! workflowExecutionId, string! bookmarkId) -> void
+Elsa.Workflows.Runtime.Core.Exceptions.BookmarkResumeSupersededException.WorkflowExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.EnsureExactBookmarkResumeShape() -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.ExpectedBookmarkResume.get -> Elsa.Workflows.Runtime.Core.Models.StimulusResumeRecipient?
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.ExpectedBookmarkResume.init -> void
+Elsa.Workflows.Runtime.Core.Models.StimulusResumeRecipient.MatchesAdmission(Elsa.Workflows.Runtime.Core.Models.BookmarkStateObservation? observation, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState? execution, Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState? activity, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, System.DateTimeOffset observedAt) -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeResumeBookmarkCommandPayload.ExpectedBookmarkResume.get -> Elsa.Workflows.Runtime.Core.Models.StimulusResumeRecipient?
+Elsa.Workflows.Runtime.Core.Models.RuntimeResumeBookmarkCommandPayload.ExpectedBookmarkResume.init -> void

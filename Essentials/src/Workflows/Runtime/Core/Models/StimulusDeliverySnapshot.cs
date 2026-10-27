@@ -112,6 +112,12 @@ public sealed class StimulusResumeRecipient
     public StimulusResumeRecipient(string workflowExecutionId, string bookmarkId, string activityExecutionId,
         string executableNodeId, string resumeTargetId, string stimulusType, string stimulusHash,
         DateTimeOffset createdAt, DateTimeOffset? expiresAt)
+        : this(workflowExecutionId, bookmarkId, activityExecutionId, executableNodeId, resumeTargetId, stimulusType, stimulusHash, createdAt, expiresAt, null) { }
+
+    /// <summary>Capture exact provider generation and immutable recipient facts; this data alone grants no admission.</summary>
+    public StimulusResumeRecipient(string workflowExecutionId, string bookmarkId, string activityExecutionId,
+        string executableNodeId, string resumeTargetId, string stimulusType, string stimulusHash,
+        DateTimeOffset createdAt, DateTimeOffset? expiresAt, StimulusResumeCapture? registrationCapture)
     {
         foreach (var identity in new[] { workflowExecutionId, bookmarkId, activityExecutionId, executableNodeId,
                      resumeTargetId, stimulusType, stimulusHash })
@@ -128,7 +134,11 @@ public sealed class StimulusResumeRecipient
         StimulusHash = stimulusHash;
         CreatedAt = createdAt;
         ExpiresAt = expiresAt;
+        RegistrationCapture = registrationCapture;
     }
+
+    /// <summary>Null for the original wire; uncaptured entries cannot authorize exact resume admission.</summary>
+    public StimulusResumeCapture? RegistrationCapture { get; }
 
     public string WorkflowExecutionId { get; }
     public string BookmarkId { get; }
@@ -148,6 +158,42 @@ public sealed class StimulusResumeRecipient
             bookmark.CreatedAt, bookmark.ExpiresAt);
     }
 
+    /// <summary>Freeze an observed physical wait without copying its retained payload.</summary>
+    public static StimulusResumeRecipient From(BookmarkStateObservation observation, WorkflowExecutionState execution, PersistenceScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(observation); ArgumentNullException.ThrowIfNull(execution); ArgumentNullException.ThrowIfNull(scope);
+        var bookmark = observation.State;
+        if (observation.Scope is { } observedScope && observedScope != scope)
+            throw new ArgumentException("The observation belongs to another physical scope.", nameof(scope));
+        if (bookmark.WorkflowExecutionId != execution.WorkflowExecutionId)
+            throw new ArgumentException("The observed bookmark belongs to another execution.", nameof(execution));
+        return new(bookmark.WorkflowExecutionId, bookmark.BookmarkId, bookmark.ActivityExecutionId, bookmark.ExecutableNodeId,
+            bookmark.ResumeTargetId, bookmark.StimulusType, bookmark.StimulusHash, bookmark.CreatedAt, bookmark.ExpiresAt,
+            new(observation.Generation, execution.PinnedExecutable, StimulusDeliveryScope.From(execution, scope), execution.PinnedSource,
+                bookmark.Metadata, StimulusResumeCapture.Fingerprint(bookmark)));
+    }
+
+    /// <summary>Compare captured pin, source and scope; this is a condition, not independent authority.</summary>
+    public bool MatchesExecution(WorkflowExecutionState execution, PersistenceScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(execution); ArgumentNullException.ThrowIfNull(scope);
+        return WorkflowExecutionId == execution.WorkflowExecutionId && RegistrationCapture is { } capture && capture.Matches(execution, scope);
+    }
+
+    /// <summary>Pure exact wait/owner eligibility predicate; providers must apply it atomically and use their trusted clock.</summary>
+    public bool MatchesAdmission(BookmarkStateObservation? observation, WorkflowExecutionState? execution,
+        ActivityExecutionState? activity, PersistenceScope scope, DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        return RegistrationCapture is { } capture && observation is not null && observation.Generation == capture.Generation &&
+            (observation.Scope is null || observation.Scope == scope) && Matches(observation.State) &&
+            execution is not null && !execution.Status.IsTerminal() && MatchesExecution(execution, scope) &&
+            activity is { Status: ActivityExecutionStatus.Suspended, SupersededByActivityExecutionId: null, SupersededAt: null } &&
+            activity.Execution.WorkflowExecutionId == WorkflowExecutionId && activity.Execution.ActivityExecutionId == ActivityExecutionId &&
+            activity.Execution.ExecutableNodeId == ExecutableNodeId && activity.BookmarkIds.Contains(BookmarkId, StringComparer.Ordinal) &&
+            (ExpiresAt is null || ExpiresAt > observedAt) && (capture.Scope.TestScope is null || !capture.Scope.TestScope.IsExpired(observedAt));
+    }
+
     /// <summary>Exact saved registration identity; expiration and authorization remain dispatcher decisions.</summary>
     public bool Matches(BookmarkState bookmark)
     {
@@ -155,7 +201,8 @@ public sealed class StimulusResumeRecipient
         return WorkflowExecutionId == bookmark.WorkflowExecutionId && BookmarkId == bookmark.BookmarkId &&
                ActivityExecutionId == bookmark.ActivityExecutionId && ExecutableNodeId == bookmark.ExecutableNodeId &&
                ResumeTargetId == bookmark.ResumeTargetId && StimulusType == bookmark.StimulusType &&
-               StimulusHash == bookmark.StimulusHash && CreatedAt == bookmark.CreatedAt && ExpiresAt == bookmark.ExpiresAt;
+               StimulusHash == bookmark.StimulusHash && CreatedAt == bookmark.CreatedAt && ExpiresAt == bookmark.ExpiresAt &&
+               (RegistrationCapture is null || RegistrationCapture.Matches(bookmark));
     }
 }
 
@@ -253,7 +300,9 @@ public sealed class StimulusDeliverySnapshot
             pair.First.BookmarkId == pair.Second.BookmarkId && pair.First.ActivityExecutionId == pair.Second.ActivityExecutionId &&
             pair.First.ExecutableNodeId == pair.Second.ExecutableNodeId && pair.First.ResumeTargetId == pair.Second.ResumeTargetId &&
             pair.First.StimulusType == pair.Second.StimulusType && pair.First.StimulusHash == pair.Second.StimulusHash &&
-            pair.First.CreatedAt == pair.Second.CreatedAt && pair.First.ExpiresAt == pair.Second.ExpiresAt);
+            pair.First.CreatedAt == pair.Second.CreatedAt && pair.First.ExpiresAt == pair.Second.ExpiresAt &&
+            (pair.First.RegistrationCapture is null ? pair.Second.RegistrationCapture is null :
+                pair.First.RegistrationCapture.IsEquivalentTo(pair.Second.RegistrationCapture)));
 
     /// <summary>Exact publisher and recipient execution/dedup dependencies under the original source's per-artifact key.</summary>
     public IReadOnlyList<string> GetExecutionDependencies(RuntimePostCommitIntent intent)
@@ -333,7 +382,7 @@ internal sealed class StimulusStartRecipientJsonConverter : JsonConverter<Stimul
     private sealed record SourceCaptureWire([property: JsonRequired] int Version,
         [property: JsonRequired, JsonIgnore(Condition = JsonIgnoreCondition.Never)] ProvenanceWire? Provenance);
 
-    private sealed record ProvenanceWire([property: JsonRequired] string SourceReferenceId,
+    internal sealed record ProvenanceWire([property: JsonRequired] string SourceReferenceId,
         [property: JsonRequired] string SourceKind, [property: JsonRequired] string SourceId,
         [property: JsonRequired, JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? SourceVersion, [property: JsonRequired] string DefinitionId,
         [property: JsonRequired] string DefinitionVersionId, [property: JsonRequired] string ArtifactVersion,
@@ -392,19 +441,26 @@ internal sealed class StimulusResumeRecipientJsonConverter : JsonConverter<Stimu
 
     public override StimulusResumeRecipient Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        var wire = JsonSerializer.Deserialize<Wire>(ref reader, options) ?? throw new JsonException("A resume recipient must be an object.");
+        using var document = JsonDocument.ParseValue(ref reader);
+        if (document.RootElement.ValueKind != JsonValueKind.Object) throw new JsonException("A resume recipient must be an object.");
+        var captures = document.RootElement.EnumerateObject().Where(property => property.Name.Equals("registrationCapture", StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (captures.Length > 1 || captures.Any(property => property.Value.ValueKind == JsonValueKind.Null))
+            throw new JsonException("A present registration capture cannot be null or duplicated.");
+        var wire = document.RootElement.Deserialize<Wire>(options) ?? throw new JsonException("A resume recipient must be an object.");
         try { return new(wire.WorkflowExecutionId, wire.BookmarkId, wire.ActivityExecutionId, wire.ExecutableNodeId,
-            wire.ResumeTargetId, wire.StimulusType, wire.StimulusHash, wire.CreatedAt, wire.ExpiresAt); }
+            wire.ResumeTargetId, wire.StimulusType, wire.StimulusHash, wire.CreatedAt, wire.ExpiresAt, wire.RegistrationCapture); }
         catch (ArgumentException exception) { throw new JsonException("The saved resume recipient is invalid.", exception); }
     }
 
     public override void Write(Utf8JsonWriter writer, StimulusResumeRecipient value, JsonSerializerOptions options) =>
         JsonSerializer.Serialize(writer, new Wire(value.WorkflowExecutionId, value.BookmarkId, value.ActivityExecutionId,
-            value.ExecutableNodeId, value.ResumeTargetId, value.StimulusType, value.StimulusHash, value.CreatedAt, value.ExpiresAt), options);
+            value.ExecutableNodeId, value.ResumeTargetId, value.StimulusType, value.StimulusHash, value.CreatedAt, value.ExpiresAt,
+            value.RegistrationCapture), options);
 
     private sealed record Wire([property: JsonRequired] string WorkflowExecutionId, [property: JsonRequired] string BookmarkId,
         [property: JsonRequired] string ActivityExecutionId, [property: JsonRequired] string ExecutableNodeId,
         [property: JsonRequired] string ResumeTargetId, [property: JsonRequired] string StimulusType,
         [property: JsonRequired] string StimulusHash, [property: JsonRequired] DateTimeOffset CreatedAt,
-        [property: JsonRequired] DateTimeOffset? ExpiresAt);
+        [property: JsonRequired] DateTimeOffset? ExpiresAt,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] StimulusResumeCapture? RegistrationCapture = null);
 }

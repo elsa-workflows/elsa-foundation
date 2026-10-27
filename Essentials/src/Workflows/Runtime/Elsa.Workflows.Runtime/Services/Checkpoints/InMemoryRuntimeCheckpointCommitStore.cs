@@ -6,6 +6,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Alterations;
 using Elsa.Workflows.Runtime.Services.Dispatch;
 using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Services.Bookmarks;
+using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Coalescing;
 
@@ -144,10 +146,23 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         _schedulerWorkQueue = schedulerWorkQueue;
         _alterationStore = alterationStore;
         _persistenceAccessContextAccessor = persistenceAccessContextAccessor;
+        if (bookmarkStateStore is InMemoryBookmarkStateStore bookmarks) bookmarks.BindCheckpointState(_state);
+        if (activityExecutionStateStore is InMemoryActivityExecutionStateStore activities) activities.BindCheckpointState(_state);
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(commit);
+        try { return await CommitWithParticipantsAsync(commit, decision, cancellationToken); }
+        catch (Exception exception) when (commit.ExpectedBookmarkResume is not null && exception is
+            WorkflowExecutableRootWriteLeaseUnavailableException or WorkflowExecutableRootWriteLeaseLostException)
+        {
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.admission-unavailable", "Exact bookmark root admission is unavailable.", exception);
+        }
+    }
+
+    private async ValueTask<RuntimeCheckpointCommitStoreResult> CommitWithParticipantsAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(commit);
         ArgumentNullException.ThrowIfNull(decision);
@@ -208,11 +223,57 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         }, cancellationToken);
     }
 
+    private InMemoryWorkflowExecutionStateStore? ExactResumeExecutions => _retentionExecutions ?? _workflowExecutionStateStore as InMemoryWorkflowExecutionStateStore;
+
+    bool IRuntimeCheckpointCommitStore.SupportsExactBookmarkResume =>
+        _bookmarkStateStore is InMemoryBookmarkStateStore bookmarks && bookmarks.Coordinates(_state) &&
+        _activityExecutionStateStore is InMemoryActivityExecutionStateStore activities && activities.Coordinates(_state) &&
+        ExactResumeExecutions is { } executions && ReferenceEquals(executions.CheckpointState, _state) &&
+        _operationalStateStore is InMemoryExecutionLivenessStateStore ownership && ReferenceEquals(executions.ExecutionLivenessStateStore, ownership);
+
+    bool IRuntimeCheckpointCommitStore.CanCommitExactBookmarkResume(IBookmarkStateStore bookmarks,
+        IWorkflowExecutionStateStore physicalExecutions, IActivityExecutionStateStore activities) =>
+        ((IRuntimeCheckpointCommitStore)this).SupportsExactBookmarkResume && ReferenceEquals(bookmarks, _bookmarkStateStore) &&
+        ReferenceEquals(physicalExecutions, ExactResumeExecutions) && ReferenceEquals(activities, _activityExecutionStateStore);
+
+    private async ValueTask ValidateExactBookmarkResumeAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
+    {
+        if (commit.ExpectedBookmarkResume is not { } expected) return;
+        commit.EnsureExactBookmarkResumeShape();
+        if (!((IRuntimeCheckpointCommitStore)this).SupportsExactBookmarkResume)
+            throw new NotSupportedException("Exact bookmark resume requires one coherent native checkpoint/execution/activity/bookmark boundary.");
+        var access = _persistenceAccessContextAccessor?.Current ?? throw new NotSupportedException("Exact bookmark resume requires explicit persistence access.");
+        var scope = access.RequireScope();
+        var observed = await _bookmarkStateStore!.ObserveAsync(expected.WorkflowExecutionId, expected.BookmarkId, cancellationToken);
+        if (observed is null) throw new BookmarkResumeSupersededException(expected.WorkflowExecutionId, expected.BookmarkId);
+        var execution = await ExactResumeExecutions!.FindAsync(expected.WorkflowExecutionId, cancellationToken);
+        var activity = await _activityExecutionStateStore!.FindAsync(expected.WorkflowExecutionId, expected.ActivityExecutionId, cancellationToken);
+        if (execution is null || activity is null)
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.owner-unavailable", "The saved wait's owning execution is unavailable.");
+        access.EnsureTenantScope(execution.TenantId);
+        if (!expected.MatchesAdmission(observed, execution, activity, scope, _timeProvider.GetUtcNow()))
+            throw new BookmarkResumeSupersededException(expected.WorkflowExecutionId, expected.BookmarkId);
+        if (execution!.TestScope is { } testScope)
+        {
+            try { EnsureOpenScope(testScope, _timeProvider.GetUtcNow()); }
+            catch (TestScopeAdmissionException) { throw new BookmarkResumeSupersededException(expected.WorkflowExecutionId, expected.BookmarkId); }
+        }
+    }
+
+    private void EnsureExactBookmarkDeadline(RuntimeCheckpointCommit commit)
+    {
+        if (commit.ExpectedBookmarkResume is not { } expected) return;
+        var now = _timeProvider.GetUtcNow();
+        if (expected.ExpiresAt <= now || expected.RegistrationCapture?.Scope.TestScope?.IsExpired(now) == true)
+            throw new BookmarkResumeSupersededException(expected.WorkflowExecutionId, expected.BookmarkId);
+    }
+
     private async ValueTask<RuntimeCheckpointCommitStoreResult> CommitNewAsync(
         RuntimeCheckpointCommit commit,
         RuntimeCheckpointPersistenceDecision decision,
         CancellationToken cancellationToken)
     {
+        await ValidateExactBookmarkResumeAsync(commit, cancellationToken);
         await EnsureExpectedFenceAsync(commit, cancellationToken);
         await EnsureBackgroundActivityAdmissionsAreFencedAndLiveAsync(commit, cancellationToken);
 
@@ -232,6 +293,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         await ValidateAlterationJobTerminalChangeAsync(commit, cancellationToken);
         await ExecuteWithWorkflowExecutionRootWriteLeaseAsync(commit, async ct =>
         {
+            EnsureExactBookmarkDeadline(commit);
             // Fence-checked consume first: a claim-lost outcome throws before any other state is mutated, so a stale
             // claimant's commit persists nothing.
             await ApplyConsumedSchedulerWorkItemsAsync(commit.StateChanges.ConsumedSchedulerWorkItems, ct);

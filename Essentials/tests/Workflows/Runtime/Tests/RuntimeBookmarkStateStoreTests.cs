@@ -22,7 +22,7 @@ public sealed class RuntimeBookmarkStateStoreTests
         await store.SaveAsync(second);
         await store.SaveAsync(otherWorkflow);
 
-        Assert.Equal(first, await store.FindAsync("wfexec-1", "bookmark-1"));
+        Assert.Equal(JsonSerializer.Serialize(first), JsonSerializer.Serialize(await store.FindAsync("wfexec-1", "bookmark-1")));
         var firstPage = await store.ListPageAsync(new BookmarkStatePageQuery("wfexec-1", limit: 1));
         var secondPage = await store.ListPageAsync(new BookmarkStatePageQuery("wfexec-1", limit: 1, firstPage.NextContinuationToken));
         Assert.Equal("bookmark-1", Assert.Single(firstPage.Items).BookmarkId);
