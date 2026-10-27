@@ -111,7 +111,9 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
     const incidents = (current.details.incidents ?? []).filter(incident => incident.activityExecutionId && executionIds.has(incident.activityExecutionId));
     return decorateWorkflowCanvasElements(
       applyRuntimeOverlays(nodes, current.activities, incidents, selectedNodeId, catalog, current.graph)
-        .map(node => ({ ...node, data: { ...node.data, onIncidentClick: onOpenIncident } })), []).nodes;
+        .map((node, index) => ({ ...node, selected: nodes[index].selected,
+          data: { ...node.data, onIncidentClick: onOpenIncident,
+            ...(node.data.runtime ? { runtime: { ...node.data.runtime, selected: !!nodes[index].selected } } : {}) } })), []).nodes;
   }, [catalog, current, nodes, onOpenIncident, selectedNodeId]);
 
   return {

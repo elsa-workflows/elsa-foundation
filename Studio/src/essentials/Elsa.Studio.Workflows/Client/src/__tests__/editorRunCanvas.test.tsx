@@ -93,6 +93,14 @@ describe("execution attached to the editor canvas", () => {
     expect(props.testRun!.snapshot).toBe(snapshot);
   });
 
+  it("preserves every selected canvas node when execution evidence is attached", async () => {
+    render({ nodes: [nodes[0], { ...nodes[0], id: "another-node", selected: true }] });
+    await settle();
+    expect(latest.nodes.map(node => node.selected)).toEqual([true, true]);
+    expect(latest.nodes.map(node => node.domAttributes?.["aria-pressed"])).toEqual([true, true]);
+    expect(latest.nodes[0].data.runtime?.selected).toBe(true);
+  });
+
   it("returns to authoring and can reattach without dispatching or changing the canvas", async () => {
     render(); await settle();
     click("Return to editing");
