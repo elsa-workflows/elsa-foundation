@@ -97,7 +97,7 @@ it("clears live evidence while offline and reconnects the same execution", async
   expect(current.status).toBe("disconnected"); expect(current.details).toBeNull();
   await vi.advanceTimersByTimeAsync(10000); expect(api.run).toHaveBeenCalledTimes(1);
   flushSync(() => window.dispatchEvent(new Event("online"))); await settle();
-  expect(current.status).toBe("connected"); expect(api.instance).toHaveBeenLastCalledWith(context, "run");
+  expect(current.status).toBe("connected"); expect(api.instance).toHaveBeenLastCalledWith(context, "run", expect.any(AbortSignal));
 });
 
 it("discards a late result when another run replaces the attachment", async () => {
@@ -110,7 +110,7 @@ it("discards a late result when another run replaces the attachment", async () =
   release(view); await settle();
   expect(current.details?.instance.workflowExecutionId).toBe("run-2");
   expect(notified.mock.calls.every(([value]) => value.testRunId === "test-2")).toBe(true);
-  expect(api.instance).not.toHaveBeenCalledWith(context, "run");
+  expect(api.instance.mock.calls.some(([endpoint, id]) => endpoint === context && id === "run")).toBe(false);
 });
 
 it("rejects pending same-run evidence when authorization refreshes without logout", async () => {

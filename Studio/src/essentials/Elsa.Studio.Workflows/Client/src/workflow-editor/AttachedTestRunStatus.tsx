@@ -11,7 +11,7 @@ export function AttachedTestRunStatus({ view, canvas, onOpenDetails, onOpenRun }
   onOpenRun(): void;
 }) {
   const observationLabel = canvas.observationStatus === "disconnected" ? "Execution observation disconnected"
-    : canvas.observationStatus === "paused" ? "Observation paused. The workflow continues."
+    : canvas.observationStatus === "paused" ? "Observation paused · last confirmed state"
     : canvas.observationStatus === "expired" ? "Test Run expired"
     : canvas.observationStatus === "unavailable" ? "Execution observation unavailable"
     : canvas.observationStatus === "loading" ? "Connecting to execution…" : "Execution on this canvas";

@@ -1,25 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { authSessionEndedEvent, authSessionStartedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { ApiCapabilityUnavailableError, ApiCapabilityVersionMismatchError } from "../api/capabilities";
+import { useCallback, useEffect, useRef } from "react";
+import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { getWorkflowTestRun, getWorkflowTestRunWaits } from "../api/publishing";
-import { getWorkflowInstance } from "../api/runtime";
 import type { WorkflowInstanceDetails, WorkflowTestRunView, WorkflowTestRunWait } from "../workflowTypes";
 import type { WorkflowTestRunState } from "./editorTypes";
-import { runtimeValueContextId } from "./RuntimeValueEvidence";
+import { ExecutionObservationIdentityError, isTerminalExecution, readObservedExecution, useExecutionObservation } from "./useExecutionObservation";
+export { isTerminalExecution } from "./useExecutionObservation";
+export type { ExecutionObservationStatus as TestRunObservationStatus } from "./useExecutionObservation";
 
-export type TestRunObservationStatus = "loading" | "connected" | "paused" | "disconnected" | "unavailable" | "expired";
-interface Observation {
-  key: string;
-  status: TestRunObservationStatus;
-  details: WorkflowInstanceDetails | null;
-  waits: WorkflowTestRunWait[];
-  waitsLoading: boolean;
-  waitsError: string;
-  error: string;
-  revision: number;
-}
-class AttachmentIdentityError extends Error {}
-
+interface TestRunEvidence { details: WorkflowInstanceDetails | null; waits: WorkflowTestRunWait[]; waitsError: string; waitsLoading: boolean }
 function matchesAttachment(view: WorkflowTestRunView, refreshed: WorkflowTestRunView) {
   return refreshed.testRunId === view.testRunId && refreshed.definitionId === view.definitionId
     && refreshed.definitionVersionId === view.definitionVersionId
@@ -27,172 +15,76 @@ function matchesAttachment(view: WorkflowTestRunView, refreshed: WorkflowTestRun
     && (!view.workflowExecutionId || refreshed.workflowExecutionId === view.workflowExecutionId);
 }
 
-export function isTerminalExecution(status?: string) {
-  return status === "Completed" || status === "Faulted" || status === "Cancelled";
-}
-
-/** One observer for the editor canvas and wait controls. Reads never dispatch another execution. */
+/** Test Run metadata and commands adapt the shared runtime observer without a second polling loop. */
 export function useTestRunObservation({ context, testRun, enabled = true, onRunViewUpdated }: {
   context: StudioEndpointContext;
   testRun: WorkflowTestRunState | null;
   enabled?: boolean;
   onRunViewUpdated?(view: WorkflowTestRunView): void;
 }) {
-  const [revision, setRevision] = useState(0);
-  const [session, setSession] = useState({ authorized: true, revision: 0 });
-  const [visible, setVisible] = useState(() => !document.hidden);
-  const [online, setOnline] = useState(() => navigator.onLine);
-  const [state, setState] = useState<Observation | null>(null);
-  const notify = useRef(onRunViewUpdated); notify.current = onRunViewUpdated;
   const view = testRun?.view;
-  const key = JSON.stringify([runtimeValueContextId(context), view?.testRunId, view?.artifactId, view?.workflowExecutionId, session.revision]);
-  const [followChoice, setFollowChoice] = useState<{ key: string; following: boolean } | null>(null);
-  const following = followChoice?.key === key ? followChoice.following : true;
-  const allowed = enabled && session.authorized && (!testRun?.endpointContext || testRun.endpointContext === context);
-  const currentKey = useRef(key); currentKey.current = key;
-  const active = useRef(false); active.current = allowed;
-  const request = useRef<AbortController | null>(null);
-  const waitsRequest = useRef<AbortController | null>(null);
-  const forcedRefresh = useRef(0);
-  const consumedRefresh = useRef(0);
-  const refresh = useCallback(() => { forcedRefresh.current++; setRevision(value => value + 1); }, []);
-  const isCurrent = useCallback(() => active.current && currentKey.current === key, [key]);
-  const acceptView = (refreshed: WorkflowTestRunView) => {
-    if (!isCurrent() || !view || !matchesAttachment(view, refreshed)) return false;
-    notify.current?.(refreshed);
-    return true;
-  };
-
-  useEffect(() => {
-    const invalidate = (authorized: boolean) => {
-      active.current = false;
-      request.current?.abort(); request.current = null;
-      waitsRequest.current?.abort(); waitsRequest.current = null;
-      setState(null);
-      setSession(value => ({ authorized, revision: value.revision + 1 }));
-    };
-    const end = () => invalidate(false);
-    const start = () => invalidate(true);
-    const visibility = () => setVisible(!document.hidden);
-    const connect = () => setOnline(true);
-    const disconnect = () => { request.current?.abort(); waitsRequest.current?.abort(); setOnline(false); };
-    window.addEventListener(authSessionEndedEvent, end);
-    window.addEventListener(authSessionStartedEvent, start);
-    document.addEventListener("visibilitychange", visibility);
-    window.addEventListener("online", connect);
-    window.addEventListener("offline", disconnect);
-    return () => {
-      window.removeEventListener(authSessionEndedEvent, end);
-      window.removeEventListener(authSessionStartedEvent, start);
-      document.removeEventListener("visibilitychange", visibility);
-      window.removeEventListener("online", connect);
-      window.removeEventListener("offline", disconnect);
-    };
-  }, []);
-
+  const notify = useRef(onRunViewUpdated); notify.current = onRunViewUpdated;
+  const manualWaits = useRef<AbortController | null>(null);
+  const observation = useExecutionObservation<TestRunEvidence>({ context,
+    identity: JSON.stringify(["test-run", view?.testRunId, view?.artifactId, view?.workflowExecutionId]),
+    enabled: enabled && !!view && (!testRun?.endpointContext || testRun.endpointContext === context),
+    read: async scope => {
+      manualWaits.current?.abort();
+      if (view?.expiresAt && Date.parse(view.expiresAt) <= Date.now()) return { value: null, expired: true, terminal: true };
+      const refreshed = await getWorkflowTestRun(context, view!.testRunId, scope.signal);
+      if (!scope.isCurrent()) return { value: null, terminal: true };
+      if (!view || !matchesAttachment(view, refreshed)) throw new ExecutionObservationIdentityError("The Test Run identity did not match this attachment.");
+      if (scope.isCurrent()) notify.current?.(refreshed);
+      if (refreshed.status === "Expired" || refreshed.expiresAt && Date.parse(refreshed.expiresAt) <= Date.now())
+        return { value: null, expired: true, terminal: true };
+      const waitController = new AbortController();
+      const abortWaits = () => waitController.abort();
+      scope.signal.addEventListener("abort", abortWaits, { once: true });
+      const waitsTask = getWorkflowTestRunWaits(context, view.testRunId, waitController.signal).then(
+        result => ({ waits: result.waits ?? [], waitsError: "" }),
+        error => ({ waits: [], waitsError: error instanceof Error ? error.message : "Waiting triggers could not be loaded." }));
+      try {
+        const details = refreshed.workflowExecutionId ? await readObservedExecution(context, refreshed.workflowExecutionId, refreshed.artifactId, scope.signal) : null;
+        // Runtime confirmation is useful even when waiting-trigger details are still loading.
+        const terminal = details ? isTerminalExecution(details.instance.status) : ["Stopped", "Rejected", "DispatchRejected"].includes(refreshed.status);
+        scope.publish(previous => ({ details, waits: terminal ? [] : previous?.waits ?? [], waitsError: previous?.waitsError ?? "", waitsLoading: !terminal && (!previous || previous.waitsLoading) }));
+        if (terminal) return { value: { details, waits: [], waitsError: "", waitsLoading: false }, terminal };
+        const waits = await waitsTask;
+        return { value: { details, ...waits, waitsLoading: false }, terminal };
+      } finally {
+        scope.signal.removeEventListener("abort", abortWaits); waitController.abort();
+      }
+    }
+  });
+  const isCurrent = observation.isCurrent;
+  const revision = observation.revision;
+  const updateValue = observation.updateValue;
+  const readIdentity = JSON.stringify([observation.identity, revision]);
+  const latestRead = useRef(readIdentity); latestRead.current = readIdentity;
+  useEffect(() => () => { manualWaits.current?.abort(); }, [observation.identity]);
   const refreshWaits = useCallback(async (testRunId: string) => {
-    if (!active.current || currentKey.current !== key || testRunId !== view?.testRunId) return;
-    const expectedKey = key;
-    const expectedRequest = request.current;
-    waitsRequest.current?.abort();
-    const controller = new AbortController(); waitsRequest.current = controller;
-    const isCurrent = () => active.current && currentKey.current === expectedKey && request.current === expectedRequest
-      && !expectedRequest?.signal.aborted && waitsRequest.current === controller && !controller.signal.aborted;
+    if (!isCurrent() || testRunId !== view?.testRunId) return;
+    manualWaits.current?.abort();
+    const controller = new AbortController(); manualWaits.current = controller;
     try {
       const result = await getWorkflowTestRunWaits(context, testRunId, controller.signal);
-      if (isCurrent()) {
-        setState(value => value?.key === expectedKey ? { ...value, waits: isTerminalExecution(value.details?.instance.status) ? [] : result.waits ?? [], waitsLoading: false, waitsError: "" } : value);
-      }
+      if (isCurrent() && latestRead.current === readIdentity && manualWaits.current === controller && !controller.signal.aborted)
+        updateValue(value => ({ ...value, waits: isTerminalExecution(value.details?.instance.status) ? [] : result.waits ?? [], waitsError: "", waitsLoading: false }));
     } catch (error) {
-      if (isCurrent()) throw error;
+      if (isCurrent() && latestRead.current === readIdentity && manualWaits.current === controller && !controller.signal.aborted) throw error;
     }
-  }, [context, key, view?.testRunId]);
-
-  useEffect(() => {
-    if (!allowed || !view) return;
-    if (!visible || !online) return;
-    if (!following && forcedRefresh.current === consumedRefresh.current) return;
-    consumedRefresh.current = forcedRefresh.current;
-    const controller = new AbortController(); request.current = controller;
-    const isCurrent = () => active.current && currentKey.current === key && request.current === controller && !controller.signal.aborted;
-    let timer: number | undefined;
-    let failures = 0;
-    const update = (recipe: (value: Observation) => Observation) => {
-      if (!isCurrent()) return;
-      setState(value => recipe(value?.key === key ? value : {
-        key, status: "loading", details: null, waits: [], waitsLoading: true, waitsError: "", error: "", revision: 0
-      }));
-    };
-    const poll = async () => {
-      let terminal = false;
-      try {
-        const refreshed = await getWorkflowTestRun(context, view.testRunId);
-        if (!isCurrent()) return;
-        if (!matchesAttachment(view, refreshed)) {
-          throw new AttachmentIdentityError("The Test Run identity did not match this attachment.");
-        }
-        notify.current?.(refreshed);
-        if (refreshed.status === "Expired" || refreshed.expiresAt && Date.parse(refreshed.expiresAt) <= Date.now()) {
-          update(value => ({ ...value, status: "expired", details: null, waits: [], waitsLoading: false, error: "This Test Run has expired." }));
-          return;
-        }
-        terminal = ["Stopped", "Rejected", "DispatchRejected"].includes(refreshed.status);
-        // Prepared triggers can gain their execution identity through this existing read operation.
-        const executionId = refreshed.workflowExecutionId;
-        const waitsTask = refreshWaits(view.testRunId).catch(error => {
-          update(value => ({ ...value, waits: [], waitsLoading: false, waitsError: error instanceof Error ? error.message : "Waiting triggers could not be loaded." }));
-        });
-        if (executionId) {
-          const details = await getWorkflowInstance(context, executionId);
-          if (!isCurrent()) return;
-          if (details.instance.workflowExecutionId !== executionId || refreshed.artifactId && details.instance.artifactId !== refreshed.artifactId) {
-            throw new AttachmentIdentityError("Runtime evidence identity did not match this Test Run.");
-          }
-          // A stopped Test Run receipt acknowledges the command; only runtime confirms its execution ended.
-          terminal = isTerminalExecution(details.instance.status);
-          update(value => ({ ...value, status: "connected", details, ...(terminal ? { waits: [] } : {}), error: "", revision: value.revision + 1 }));
-        } else update(value => ({ ...value, status: "connected", details: null, error: "", revision: value.revision + 1 }));
-        await waitsTask;
-        if (!isCurrent()) return;
-        failures = 0;
-      } catch (error) {
-        if (!isCurrent()) return;
-        // A runtime failure must revoke its parallel waits read before retrying this observation.
-        waitsRequest.current?.abort();
-        const unavailable = error instanceof ApiCapabilityUnavailableError || error instanceof ApiCapabilityVersionMismatchError || error instanceof AttachmentIdentityError;
-        update(value => ({ ...value, status: unavailable ? "unavailable" : "disconnected", details: null,
-          waits: [], waitsLoading: false, error: error instanceof AttachmentIdentityError ? error.message : unavailable ? "Live runtime state is unavailable on this host." : error instanceof Error ? error.message : "Execution observation disconnected." }));
-        if (unavailable) return;
-        failures++;
-      }
-      if (isCurrent() && !terminal && following) timer = window.setTimeout(() => { void poll(); }, failures ? Math.min(30000, 2000 * 2 ** failures) : 2000);
-    };
-    update(value => ({ ...value, status: value.details ? "connected" : "loading" }));
-    void poll();
-    return () => { controller.abort(); waitsRequest.current?.abort(); if (timer !== undefined) window.clearTimeout(timer); };
-    // Read identity primitives so view-result updates do not restart the polling loop.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allowed, context, following, key, online, refreshWaits, revision, visible]);
-
-  const current = allowed && state?.key === key ? state : null;
-  const failed = current?.status === "disconnected" || current?.status === "unavailable" || current?.status === "expired";
-  const status: TestRunObservationStatus = !allowed ? "unavailable" : !online ? "disconnected" : failed ? current.status
-    : !visible || !following ? "paused" : current?.status ?? "loading";
+  }, [context, isCurrent, readIdentity, updateValue, view?.testRunId]);
   return {
-    identity: key,
-    status,
-    details: status === "connected" || status === "paused" ? current?.details ?? null : null,
-    waits: status === "connected" || status === "paused" ? current?.waits ?? [] : [],
-    waitsLoading: current?.waitsLoading ?? status === "loading",
-    waitsError: current?.waitsError ?? "",
-    error: !session.authorized ? "Sign in again to observe this Test Run." : !online ? "Execution observation disconnected. Reconnect to refresh." : current?.error ?? "",
-    revision: current?.revision ?? 0,
-    following,
-    setFollowing: (value: boolean) => setFollowChoice({ key, following: value }),
-    refresh,
+    ...observation,
+    details: observation.value?.details ?? null,
+    waits: observation.value?.waits ?? [],
+    waitsLoading: observation.value?.waitsLoading ?? observation.status === "loading",
+    waitsError: observation.value?.waitsError ?? "",
     refreshWaits,
-    acceptView,
-    isCurrent
+    acceptView: (refreshed: WorkflowTestRunView) => {
+      if (!isCurrent() || !view || !matchesAttachment(view, refreshed)) return false;
+      notify.current?.(refreshed); return true;
+    }
   };
 }
 

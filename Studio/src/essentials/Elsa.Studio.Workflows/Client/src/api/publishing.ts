@@ -619,13 +619,13 @@ export async function getWorkflowDraftTestRunOptions(
   return context.http.postJson<WorkflowDraftTestRunOptionsView>(path, wireRequest);
 }
 
-export async function getWorkflowTestRun(context: StudioEndpointContext, testRunId: string) {
+export async function getWorkflowTestRun(context: StudioEndpointContext, testRunId: string, signal?: AbortSignal) {
   const path = await resolveCapabilityLink(
     context,
     capabilityIds.publishing,
     "workflow-test-run-status",
     { testRunId });
-  return context.http.getJson<WorkflowTestRunView>(path);
+  return signal ? context.http.getJson<WorkflowTestRunView>(path, { signal }) : context.http.getJson<WorkflowTestRunView>(path);
 }
 
 export async function stopWorkflowTestRun(context: StudioEndpointContext, testRunId: string) {

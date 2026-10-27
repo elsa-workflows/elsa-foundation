@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Node } from "@xyflow/react";
 import { authSessionEndedEvent, authSessionStartedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { browseActivityExecutions, getExecutable, getExecutableInputSources, getWorkflowInstance } from "../api/runtime";
+import { getExecutable, getExecutableInputSources, getWorkflowInstance } from "../api/runtime";
 import { ApiCapabilityUnavailableError, ApiCapabilityVersionMismatchError } from "../api/capabilities";
 import { buildExecutableActivityGraph, type ExecutableActivityGraph } from "../executableGraph";
 import type { ActivityCatalogItem, ActivityExecutionStateSummary, WorkflowInstanceDetails } from "../workflowTypes";
@@ -9,6 +9,7 @@ import type { WorkflowNodeData } from "../workflowAdapter";
 import { applyRuntimeOverlays } from "../workflowRuntimeOverlays";
 import { decorateWorkflowCanvasElements } from "./workflowAccessibility";
 import type { WorkflowTestRunState } from "./editorTypes";
+import { readVisibleActivityExecutions } from "./scopedExecutionEvidence";
 import { isRejectedTestRun } from "./editorHelpers";
 import { isTerminalExecution, type TestRunObservation } from "./useTestRunObservation";
 
@@ -108,22 +109,8 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
           graphCache.current = { key: graphKey, context, catalog, graph };
         }
         const visible = (JSON.parse(nodeKey) as string[]).map(id => graph.factsByNodeId.get(id)).filter(item => item !== undefined);
-        const activities: ActivityExecutionStateSummary[] = [];
-        let repeated = false;
-        let index = 0;
-        const worker = async () => {
-          while (index < visible.length && !controller.signal.aborted) {
-            const fact = visible[index++];
-            const exact: string | undefined = selectedExecution?.workflowExecutionId === executionId && selectedExecution.executableNodeId === fact.executableNodeId ? selectedExecution.activityExecutionId : undefined;
-            const page = await browseActivityExecutions(context, executionId, { executableNodeId: fact.executableNodeId,
-              ...(ancestorId ? { ancestorActivityExecutionId: ancestorId } : {}), ...(exact ? { anchorActivityExecutionId: exact } : {}), limit: 1 }, controller.signal);
-            const execution = page.items[0]?.execution;
-            // A repeated node has no selected occurrence yet. Do not paint a global latest result.
-            if (page.totalCount > 1 && !exact) repeated = true;
-            if ((page.totalCount === 1 || exact && execution?.activityExecutionId === exact) && execution?.workflowExecutionId === executionId && execution.executableNodeId === fact.executableNodeId) activities.push(execution);
-          }
-        };
-        await Promise.all(Array.from({ length: Math.min(4, visible.length) }, worker));
+        const { activities, repeated, failed } = await readVisibleActivityExecutions(context, executionId, visible.map(fact => fact.executableNodeId), ancestorId, selectedExecution ?? undefined, controller.signal);
+        if (failed && !controller.signal.aborted) throw new Error("Some visible execution evidence could not be loaded. Refresh to retry.");
         if (!controller.signal.aborted) setEvidence({ ...next, loading: false, details, graph, activities, repeated, observationRevision });
       } catch (error) {
         if (controller.signal.aborted) return;

@@ -47,7 +47,7 @@ function TestRunCommands({ context, testRun, stimulusEditors, onWaitDraftUpdated
   const [stopping, setStopping] = useState(false);
   const [stopError, setStopError] = useState("");
   const [deliveryFeedback, setDeliveryFeedback] = useState<{ waitId: string; view: WorkflowTestRunWaitEventView } | null>(null);
-  const canInteract = observation.status === "connected" || observation.status === "paused" && !observation.following && observation.revision > 0;
+  const canInteract = observation.canInteract;
 
   const stop = async () => {
     if (!canInteract || stopping) return;
@@ -78,7 +78,7 @@ function TestRunCommands({ context, testRun, stimulusEditors, onWaitDraftUpdated
       {stopError ? <p className="wf-test-drive-error" role="alert">{stopError}</p> : null}
       {testRun.view.status === "Stopped" && execution && !isTerminalExecution(execution.status) ? <p role="status">Stop requested. Waiting for runtime confirmation.</p> : null}
       {execution && executionState ? <p className="wf-test-run-execution-state" role="status"><strong>Execution</strong> {executionState}{execution.subStatus ? ` · ${execution.subStatus}` : ""}</p> : null}
-      {observation.status === "paused" ? <p role="status">Observation paused. The workflow continues.</p> : null}
+      {observation.status === "paused" ? <p role="status">Observation paused · last confirmed state</p> : null}
       {["disconnected", "unavailable", "expired"].includes(observation.status) ? <button type="button" onClick={observation.refresh}>Reconnect execution</button> : null}
       {executionError ? <p className="wf-test-drive-error" role="status">{executionError}</p> : null}
       <div className="wf-test-run-waits">
