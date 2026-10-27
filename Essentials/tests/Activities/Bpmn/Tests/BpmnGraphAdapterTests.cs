@@ -15,10 +15,15 @@ public sealed class BpmnGraphAdapterTests
         var executable = host.NewExecutable([host.NewProbeNode("node-orphan")],
             [F.StartEvent(), F.EndEvent()], [F.Flow("start-end", "start", "end")]);
 
-        Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(executable.RootActivity));
+        var boundary = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(executable.RootActivity));
+        Assert.Contains(F.ProcessNodeId, boundary.Message, StringComparison.Ordinal);
+        var original = Assert.IsType<global::Bpmn.Semantics.BpmnExecutionException>(boundary.InnerException);
+        Assert.Contains("node-orphan", original.Message, StringComparison.Ordinal);
         var run = await host.RunAsync(executable);
 
         Assert.Equal(ActivityExecutionStatus.Faulted, run.State(F.ProcessNodeId).Status);
+        Assert.Equal(typeof(BpmnHostException).FullName, run.State(F.ProcessNodeId).Fault!.ExceptionType);
+        Assert.Contains(F.ProcessNodeId, run.State(F.ProcessNodeId).Fault!.Message, StringComparison.Ordinal);
         run.AssertDidNotRun("node-orphan");
     }
 }

@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Collections.Concurrent;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Activities.Bpmn.Models;
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Models;
@@ -10,7 +12,7 @@ using F = Elsa.Activities.Bpmn.Tests.BpmnRuntimeFixture;
 
 namespace Elsa.Activities.Bpmn.Tests;
 
-public sealed class BpmnCombinedOutcomeTests
+public sealed partial class BpmnCombinedOutcomeTests
 {
     [Theory]
     [InlineData(true, false)]
@@ -18,7 +20,9 @@ public sealed class BpmnCombinedOutcomeTests
     [InlineData(true, true)]
     public async Task Ordered_signals_then_original_fault_commit_one_verdict_without_leaking_unissued_work(bool interrupting, bool routingFault)
     {
-        await using var host = await F.CreateAsync(Enumerable.Range(0, 40).Select(index => $"combined-{index}"));
+        var outcomes = new ConcurrentQueue<ObservedCombinedOutcome>();
+        var applications = new ConcurrentQueue<ObservedCommandApplication>();
+        await using var host = await CreateObservedHostAsync(outcomes, applications);
         var child = new ExecutableNode("node-reporter", "authored-reporter", typeof(SignallingFaultActivity).FullName!, "1.0.0",
             "test/clr", JsonSerializer.SerializeToElement(new { type = "clr" }), new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>());
         var graph = host.NewExecutable(routingFault ? [child] : [child, host.NewProbeNode("node-handler")],
@@ -32,6 +36,11 @@ public sealed class BpmnCombinedOutcomeTests
 
         var run = await host.RunAsync(graph);
 
+        var application = Assert.Single(applications);
+        Assert.Equal(routingFault || !interrupting ? RuntimeStructuralContinuationKind.Fault : RuntimeStructuralContinuationKind.Defer, application.Verdict);
+        Assert.Equal(interrupting && !routingFault ? new[] { "node-handler" } : Array.Empty<string>(), application.ScheduledNodes);
+        Assert.Equal(0, application.CancellationCount);
+        Assert.Single(outcomes);
         var reporter = run.State("node-reporter");
         Assert.Equal(ActivityExecutionStatus.Faulted, reporter.Status);
         Assert.Equal("test.bpmn.original", reporter.Fault!.Code);
@@ -43,6 +52,7 @@ public sealed class BpmnCombinedOutcomeTests
             Assert.Equal("bpmn.gateway.no-flow-selected", run.State(F.ProcessNodeId).Fault!.Code);
             run.AssertDidNotRun("node-handler");
             Assert.NotEqual(IncidentStatus.Resolved, original.Status);
+            Assert.NotEqual(IncidentResolutionActionKinds.AbsorbFault, original.ResolutionOutcome?.ActionKind);
         }
         else if (interrupting)
         {
@@ -50,13 +60,17 @@ public sealed class BpmnCombinedOutcomeTests
             run.AssertCompleted(F.ProcessNodeId);
             Assert.Single(run.States("node-handler")); // The second signal for the retired handle is consumed.
             Assert.Equal(IncidentStatus.Resolved, original.Status);
+            Assert.Equal(IncidentResolutionActionKinds.AbsorbFault, original.ResolutionOutcome!.ActionKind);
+            Assert.Equal(IncidentResolutionSystemSources.StructuralFaultAbsorption, original.ResolutionOutcome.SystemSource);
         }
         else
         {
             Assert.Equal(ActivityExecutionStatus.Faulted, run.State(F.ProcessNodeId).Status);
+            Assert.Equal("bpmn.work.faulted", run.State(F.ProcessNodeId).Fault!.Code);
             Assert.NotEqual(WorkflowExecutionStatus.Completed, run.WorkflowState!.Status);
             run.AssertDidNotRun("node-handler"); // Starts held by both signal evaluations are withdrawn on final Fault.
             Assert.NotEqual(IncidentStatus.Resolved, original.Status);
+            Assert.NotEqual(IncidentResolutionActionKinds.AbsorbFault, original.ResolutionOutcome?.ActionKind);
         }
         Assert.Empty(await host.BookmarksAsync());
     }
@@ -66,9 +80,8 @@ public sealed class SignallingFaultActivity : StructuralActivity, IRuntimeStruct
 {
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
     {
-        var escalation = JsonSerializer.SerializeToElement(new { code = "notice" });
-        context.RequestParentNotification("bpmn.escalation", escalation);
-        context.RequestParentNotification("bpmn.escalation", escalation);
+        for (var ordinal = 1; ordinal <= 2; ordinal++)
+            context.RequestParentNotification("bpmn.escalation", JsonSerializer.SerializeToElement(new { code = "notice", ordinal }));
         return ValueTask.FromResult(RuntimeStructuralContinuation.Faulted(new ActivityFault("test.bpmn.original", "original child fault")));
     }
 }
