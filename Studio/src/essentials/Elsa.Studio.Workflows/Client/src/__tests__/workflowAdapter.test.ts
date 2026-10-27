@@ -366,6 +366,33 @@ describe("workflow adapter", () => {
     ]);
   });
 
+  it.each([
+    { kind: "parallel", name: "Parallel.Branch", collection: "branches", labelProperty: "name", template: "Parallel.Branch[{name}]", labels: ["Parallel.Branch[Left]", "Parallel.Branch[Right]"] },
+    { kind: "switch", name: "Switch.Case", collection: "cases", labelProperty: "match", template: "Switch.Case[{match}]", labels: ["Switch.Case[Left]", "Switch.Case[Right]"] }
+  ])("distinguishes native $kind collection slots using the declared item label", ({ kind, name, collection, labelProperty, template, labels }) => {
+    const item: ActivityCatalogItem = {
+      ...writeLine,
+      activityVersionId: `native-${kind}`,
+      designFacets: [{ kind: `elsa.${kind}.structure`, schemaVersion: "1.0.0", payload: {
+        mode: "sequence", supportsScopedVariables: false,
+        slots: [{ name, property: collection, displayName: "Branches", cardinality: "single",
+          collectionProperty: collection, childProperty: "activity", labelProperty, slotNameTemplate: template }],
+        initialPayload: { [collection]: [] }
+      } }]
+    };
+    const root: ActivityNode = { nodeId: "parallel", activityVersionId: item.activityVersionId, inputs: [], outputs: [],
+      structure: { kind: `elsa.${kind}.structure`, schemaVersion: "1.0.0", payload: { [collection]: [
+        { [labelProperty]: "Left", activity: node("left") },
+        { [labelProperty]: "Right", activity: node("right") }
+      ] } } };
+    const slots = getChildSlots(root, item);
+    expect(slots.map(slot => slot.label)).toEqual(labels);
+    expect(new Set(slots.map(slot => slot.id)).size).toBe(2);
+    expect(slots.map(slot => slot.activities.map(activity => activity.nodeId))).toEqual([["left"], ["right"]]);
+    const changed = replaceSlotActivities(root, slots[1], [node("right-new")]);
+    expect(getChildSlots(changed, item).map(slot => slot.activities.map(activity => activity.nodeId))).toEqual([["left"], ["right-new"]]);
+  });
+
   it("resolves explicit designer support for flowchart and sequence activities", () => {
     expect(getActivityDesignerSupport(createActivityNode(flowchartActivity, "flowchart"), flowchartActivity)).toBe("flowchart");
     expect(getActivityDesignerSupport(createActivityNode(sequenceActivity, "sequence"), sequenceActivity)).toBe("sequence");

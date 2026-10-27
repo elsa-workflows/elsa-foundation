@@ -572,6 +572,7 @@ function readSlotActivities(value: unknown, cardinality: ChildSlot["cardinality"
 function formatCollectionSlotLabel(descriptor: StructureDesignSlotDescriptor, index: number, labelValue?: string) {
   if (descriptor.slotNameTemplate) {
     return descriptor.slotNameTemplate
+      .replaceAll(`{${descriptor.labelProperty ?? "label"}}`, labelValue ?? String(index + 1))
       .replaceAll("{name}", descriptor.name)
       .replaceAll("{displayName}", descriptor.displayName)
       .replaceAll("{label}", labelValue ?? String(index + 1))
