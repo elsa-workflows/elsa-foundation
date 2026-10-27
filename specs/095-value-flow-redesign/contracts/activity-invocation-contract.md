@@ -73,7 +73,9 @@ Fault(normalizedFault)
 Cancel(reason)
 ```
 
-- `Complete` carries one complete typed result and one authored successful outcome.
+- `Complete` carries one complete typed result and one authored outcome selection: unspecified (the default `Done`),
+  one or more declared outcome names, or explicitly empty (ADR 0045 §6 amendment, D-4). A selection of more than one
+  name is valid only for an activity whose contract declares multi-outcome completion.
 - `Suspend` carries one immutable private state document and one or more typed trigger registrations.
 - `Fault` carries normalized persistable fault information, never an arbitrary serialized exception.
 - `Cancel` is distinct from both failure and successful authored outcomes.
@@ -255,7 +257,7 @@ allocated, stable member key when applicable, and the pinned contract fingerprin
 | `VF-ACT-003` | Required input absent after binding normalization |
 | `VF-ACT-004` | Input type/nullability violation |
 | `VF-ACT-005` | Input, state, or result is nonpersistable under durable policy |
-| `VF-ACT-006` | Result projection or authored outcome is not declared by the contract |
+| `VF-ACT-006` | Result projection or selected outcome is not declared by the contract or the node's pinned outcome set, and no fallback outcome is configured |
 | `VF-ACT-007` | Attempt requested after committed completion |
 | `VF-ACT-008` | Trigger type or identity does not match suspended state |
 | `VF-ACT-009` | Persisted invocation document version is incompatible and cannot be upcast |
