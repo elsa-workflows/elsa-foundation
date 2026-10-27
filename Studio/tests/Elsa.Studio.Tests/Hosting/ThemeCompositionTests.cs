@@ -110,6 +110,9 @@ public sealed class ThemeCompositionTests
     [InlineData("source-store")]
     [InlineData("store-assets")]
     [InlineData("assets-below-store")]
+    [InlineData("store-below-assets")]
+    [InlineData("linked-store-below-assets")]
+    [InlineData("store-below-root-assets")]
     [InlineData("store-file-ancestor")]
     [InlineData("assets-file-ancestor")]
     public async Task Invalid_typed_theme_choices_fail_during_startup(string kind)
@@ -127,6 +130,19 @@ public sealed class ThemeCompositionTests
                 if (kind == "source-store") options.ThemesDirectory = options.StoreFile;
                 if (kind == "store-assets") options.AssetsDirectory = options.StoreFile;
                 if (kind == "assets-below-store") options.AssetsDirectory = Path.Combine(options.StoreFile, "materials");
+                if (kind == "store-below-root-assets") options.AssetsDirectory = Path.GetPathRoot(root)!;
+                if (kind is "store-below-assets" or "linked-store-below-assets")
+                {
+                    options.AssetsDirectory = "state/materials";
+                    var assets = Directory.CreateDirectory(Path.Combine(root, options.AssetsDirectory)).FullName;
+                    var storeParent = options.AssetsDirectory;
+                    if (kind == "linked-store-below-assets" && !OperatingSystem.IsWindows())
+                    {
+                        storeParent = "materials-alias";
+                        if (!Directory.Exists(Path.Combine(root, storeParent))) Directory.CreateSymbolicLink(Path.Combine(root, storeParent), assets);
+                    }
+                    options.StoreFile = Path.Combine(storeParent, "00000000000000000000000000000000.png");
+                }
                 if (kind is "store-file-ancestor" or "assets-file-ancestor")
                 {
                     File.WriteAllText(Path.Combine(root, "blocked-parent"), "owned");

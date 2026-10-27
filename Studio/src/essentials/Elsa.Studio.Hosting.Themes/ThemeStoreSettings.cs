@@ -52,6 +52,10 @@ internal sealed class ThemeOptionsValidator(string contentRoot) : IValidateOptio
                         Path.TrimEndingDirectorySeparator(applied.StoreFile) + Path.DirectorySeparatorChar,
                         ThemeStoragePaths.ComparisonFor(applied.StoreFile)))
                     errors.Add("Themes:AssetsDirectory must not equal or descend from the writable StoreFile.");
+                if (applied.StoreFile.StartsWith(
+                        Path.EndsInDirectorySeparator(applied.AssetsDirectory) ? applied.AssetsDirectory : applied.AssetsDirectory + Path.DirectorySeparatorChar,
+                        ThemeStoragePaths.ComparisonFor(applied.AssetsDirectory)))
+                    errors.Add("Themes:StoreFile must be outside the writable AssetsDirectory.");
                 if (applied.ThemesDirectory is { } source && SamePath(source, applied.StoreFile))
                     errors.Add("Themes:ThemesDirectory must not be the writable StoreFile.");
             }
