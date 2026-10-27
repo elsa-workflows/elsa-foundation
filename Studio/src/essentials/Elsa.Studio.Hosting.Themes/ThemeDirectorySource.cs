@@ -70,9 +70,10 @@ internal sealed class ThemeDirectorySource
 
         var themes = new List<StudioThemeDefinition>();
 
-        if (File.Exists(themePath) && themePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+        if (File.Exists(themePath))
         {
-            // Single JSON file containing theme collection
+            // An explicitly configured collection remains JSON when a file link resolves
+            // to a physical target with a different extension. Directory scans still filter .json.
             _logger.LogInformation("Loading themes from file: {Path}", themePath);
             try
             {
