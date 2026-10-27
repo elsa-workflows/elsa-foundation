@@ -38,7 +38,7 @@ reference DLLs must match the candidate archives and its version stamp.
 | Proof | Executed boundary |
 | --- | --- |
 | Archive verifier | Exact 22 Studio identities, common version/license/icon; six public dependency boundaries; required producer assets and every generated public payload, including CSS and lazy chunks |
-| Archive controls | Original/restored success; genuine dependency/framework omission, missing vendor/CSS/chunk, empty entry and changed SDK failures; originals immutable |
+| Archive controls | Original/restored success; genuine dependency/framework omission, exclusive/empty dependency ranges, missing vendor/CSS/chunk, empty entry and changed SDK failures; originals immutable |
 | [API closure](ApiPackageClosure.Probe/README.md) | Isolated package-only restore/publish/run; precise missing-Core dependency control and restoration |
 | [Hosting assets](HostingAssets.Probe/README.md) | Actual standard/fallback shell, custom frontend opt-out and collision; vendor/runtime faults and restoration; archive/cache/publish/HTTP/browser observations |
 | [Composition](Composition.Probe/README.md) | Four external custom-module/optional profiles, separate actual Web, cold auth, managed theme restart and actual network stream across native replacement |
@@ -54,6 +54,10 @@ refusal, missing reports, tool mismatches and unrun cases fail the aggregate.
 The printed root contains `report.json`, complete child reports/logs, candidates,
 isolated graphs and owned published processes' observations. `evidence/index.json`
 maps retained receipts, graphs, screenshots and private mutant archives to hashes;
+Every archive child receipt referenced by the aggregate is retained and hash-checked,
+including original, fault and restored JSON. Literal project pins must retain the
+SDK-generated inclusive minimum without an upper bound; other range forms fail
+the archive contract.
 CI uploads these and the original product candidates, without caches or full
 published/source trees. The initial archive verifier also writes a failed receipt
 when its check fails before consumer execution. Existing publisher holds and

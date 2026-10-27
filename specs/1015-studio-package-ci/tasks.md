@@ -32,7 +32,7 @@
 ## Phase 5: Integrated Verification and Delivery
 
 - [ ] T009 Run the complete frozen actual-archive/consumer/control orchestration, retain source/tool/archive/report/cleanup observations and finalize runnable commands in tool READMEs and `specs/1015-studio-package-ci/validation.md`.
-- [ ] T010 Run applicable whole tooling checks, affected .NET fixtures if changed, required architecture graph/whole guard/discovery and generated maps; reconcile results in `specs/1015-studio-package-ci/validation.md` without repeating unrelated suites.
+- [x] T010 Run applicable whole tooling checks, affected .NET fixtures if changed, required architecture graph/whole guard/discovery and generated maps; reconcile results in `specs/1015-studio-package-ci/validation.md` without repeating unrelated suites.
 - [ ] T011 Converge independent correctness/standards/acceptance review within6rounds, terminalize spec/remove checklist and pass actual exact-head CI/Full tier/Studio on `.github/workflows/studio-ci.yml` and the final diff.
 - [ ] T012 Complete reviewed delivery, verify resulting-main Linux CI/candidate proof, then reconcile issue/Project/claim with receipts in `specs/1015-studio-package-ci/validation.md`; leave3366and ancestors open until their own exit criteria pass.
 

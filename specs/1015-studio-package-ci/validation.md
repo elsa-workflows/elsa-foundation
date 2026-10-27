@@ -31,3 +31,21 @@ New no-update guard bite uses the unchanged actual8083published consumer in fres
 The development aggregate includes successful real normal/control/restored adapter/pruning execution; no fixture relocation or generated-manifest assumption change is needed. The archive and child-result guard self-tests pass. Existing publisher tests pass17/17 and image-tag self-test passes. Evidence retention was exercised against the completed development root:504receipts/graphs/logs/screenshots/generated consumer programs and9private mutant archives, about21MB, with a hash index; caches/published/source trees are excluded. Syntax/diff-whitespace checks pass.
 
 Workflow wiring now covers all owned probe inputs, explicitly stamps producer revisions, packs2matching root Modularity candidates separately from22Studio, publishes the matching actual Web, installs Chromium in the executing job, runs the aggregate and retains candidate/receipt artifacts on failure as well. It preserves validation contents:read, the existing publisher files/guards, package IDs/pins/version policy and the image build without publishing. Actual hosted Linux execution, final frozen aggregate/evidence retention, architecture/maps/review/head/main remain pending.
+
+
+## Frozen orchestration and independent review round 1
+
+The complete default command produced a committed snapshot from `367989143389788b44cf8231bb0bb5b46788bae3` and passed all 16 aggregate observations: `/private/var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/studio-consumer-ci-28wihbdu/report.json`; log `/tmp/studio3365-frozen-qualification.log`. This is frozen local proof for that revision, not final delivery of subsequent fixes.
+
+Round 1 used three independent correctness, standards and acceptance reviewers. Two P2 findings survived verification: dependency ranges excluded the required pin, and retention omitted archive child JSON. Standards found no actionable violations. Round receipt: https://github.com/elsa-workflows/elsa-foundation/pull/3404#issuecomment-6448056241.
+
+Both were reproduced against genuine candidates. The previous guard accepts all 22 packages when Hosting's CShells.AspNetCore dependency is changed to `(0.0.31,)` or `(0.0.31,0.0.31)`. The fixed guard rejects each with its exact dependency version/assets diagnostic and accepts restored originals. The supported contract now requires the inclusive, unbounded minimum generated from literal project pins; it does not discard range syntax. The genuine control matrix now includes these two cases: 10 precise fault failures plus original/restored successes, all passed at `/tmp/studio3365-round1-archive-controls/report.json`.
+
+The prior retained evidence index misses all 10 archive child JSON receipts. The fixed collector retains and hash-checks every referenced receipt; changed receipt bytes fail retention, and restored bytes pass. Causal results: `/tmp/studio3365-round1-bites.json`. Existing completed producer and consumer reports are used as real retention inputs; none is relabelled as a new product execution.
+
+Whole architecture validation initially passed 589/590 and failed the workflow locked-restore rule: the new Modularity pack command lacked `RestoreLockedMode=true`. Hosted architecture also failed that revision. The flag is fixed; these failures remain failures rather than being counted as green gates. Final architecture/maps, frozen fixes, clean review, exact-head Linux/Full-tier and resulting-main checks remain pending.
+
+
+The corrected whole architecture project passes **590/590, zero failed/skipped**, with runtime/discovery comparison recorded locally. Generated solution filters pass `Elsa.Maps.Generator -- check` without changes. This is a workflow lock-policy correction, not a timing failure; the initial failure remains recorded. No C# product or fixture changes require repeating unrelated local .NET suites. The final CI run will execute the complete Studio project and new package matrix.
+
+The spec is terminalized in the implementation PR as required by spec lifecycle; its status becomes true on merge. Delivery tasks stay pending until their actual reviewed-head and resulting-main evidence exists.

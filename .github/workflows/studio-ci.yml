@@ -215,7 +215,7 @@ jobs:
       - name: Pack matching lightweight Modularity candidates without publishing
         run: |
           for module in Core Nuplane; do
-            dotnet pack "Essentials/src/Modularity/$module/Elsa.Modularity.$module.csproj" -c Release \
+            dotnet pack "Essentials/src/Modularity/$module/Elsa.Modularity.$module.csproj" -c Release -p:RestoreLockedMode=true \
               "-p:Version=$STUDIO_PACKAGE_VERSION" "-p:SourceRevisionId=$GITHUB_SHA" \
               -o "$RUNNER_TEMP/studio-modularity-nuget"
           done

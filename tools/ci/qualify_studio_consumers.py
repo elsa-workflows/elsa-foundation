@@ -188,7 +188,7 @@ class Qualification:
                                       "--controls-output", str(self.root / "archive-controls")])
         archive_controls = self.record("archive-controls", 0, self.root / "archive-controls")
         result_gate(0, archive_controls, sha(verifier))
-        expected_controls = {"api-core-omitted", "console-runtime-omitted", "framework-omitted", "vendor-missing", "module-css-missing", "lazy-chunk-missing", "entry-empty", "sdk-changed"}
+        expected_controls = {"api-core-omitted", "console-runtime-omitted", "framework-omitted", "vendor-missing", "module-css-missing", "lazy-chunk-missing", "entry-empty", "sdk-changed", "dependency-exclusive-minimum", "dependency-empty-range"}
         check(set(archive_controls["observations"]) == expected_controls | {"positive", "restored"}, "Archive control matrix is incomplete")
         check(all(archive_controls["observations"][name]["expectedFailureObserved"] and archive_controls["observations"][name]["status"] == "failed" for name in expected_controls), "Archive failure was not observed precisely")
         api = PROBES / "ApiPackageClosure.Probe/qualify.py"
@@ -276,7 +276,12 @@ class Qualification:
                 selected.append(path)
         archive_report = self.root / "archive-controls/report.json"
         if archive_report.exists():
-            mutations = json.loads(archive_report.read_text()).get("mutations", {})
+            archive_data = json.loads(archive_report.read_text())
+            for row in archive_data.get("observations", {}).values():
+                receipt = Path(row["report"]).resolve()
+                check(receipt.is_relative_to(self.root) and receipt.is_file() and sha(receipt) == row["reportSha256"], "Archive child receipt is missing, changed or outside this run")
+                selected.append(receipt)
+            mutations = archive_data.get("mutations", {})
             for label, row in mutations.items():
                 selected.append(self.root / "archive-controls" / label / Path(self.packages[row["package"]]["path"]).name)
         api = self.root / "api-omission/report.json"

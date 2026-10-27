@@ -259,10 +259,14 @@ def _verify_payload(path: Path, assets: dict[str, Path], contract=None) -> dict:
                 raise ValueError(f"Required dependency set mismatch in {path.name}; expected={sorted(expected)}, actual={sorted(actual)}.")
             for name, version in expected.items():
                 node = actual[name.lower()]
-                minimum = node.attrib.get("version", "").lstrip("[(").split(",", 1)[0].rstrip("])")
+                # A literal project pin packs as an inclusive, unbounded minimum.
+                # Accept its two NuGet spellings only; removing delimiters would
+                # also accept exclusive or impossible ranges that exclude the pin.
+                packed_version = "".join(node.attrib.get("version", "").split())
+                expected_ranges = {version, f"[{version},)"}
                 excluded = {part.strip().lower() for part in node.attrib.get("exclude", "").split(",")}
                 included = {part.strip().lower() for part in node.attrib.get("include", "all").split(",")}
-                if minimum != version or excluded & {"all", "compile", "runtime"} or not ("all" in included or {"compile", "runtime"} <= included):
+                if packed_version not in expected_ranges or excluded & {"all", "compile", "runtime"} or not ("all" in included or {"compile", "runtime"} <= included):
                     raise ValueError(f"Required dependency version/assets mismatch in {path.name}: {name}, expected {version}, actual={node.attrib}.")
             framework_root = next((node for node in document.iter() if _local_name(node.tag) == "frameworkReferences"), None)
             framework_groups = [] if framework_root is None else list(framework_root)
@@ -357,6 +361,8 @@ def _payload_self_test() -> None:
             payload = {resource: source.read_bytes()}
             if fault == "dependency": group.remove(dependency)
             elif fault == "version": dependency.set("version", "0.0.0")
+            elif fault == "exclusive-version": dependency.set("version", "(4.0.0-preview.1,)")
+            elif fault == "empty-version-range": dependency.set("version", "(4.0.0-preview.1,4.0.0-preview.1)")
             elif fault == "runtime": dependency.set("exclude", "Runtime")
             elif fault == "duplicate": group.append(ElementTree.fromstring(ElementTree.tostring(dependency)))
             elif fault == "target": group.set("targetFramework", "net9.0")
@@ -370,6 +376,7 @@ def _payload_self_test() -> None:
                 for name, body in payload.items(): archive.writestr(name, body)
 
         for fault, diagnostic in [("dependency", "Required dependency set"), ("version", "Required dependency version/assets"),
+                                  ("exclusive-version", "Required dependency version/assets"), ("empty-version-range", "Required dependency version/assets"),
                                   ("runtime", "Required dependency version/assets"), ("duplicate", "Required dependency set"),
                                   ("target", "Required dependency group"), ("framework", "Required framework dependency"),
                                   ("missing", "Static asset set"), ("empty", "Empty or mismatched static asset"),
@@ -532,6 +539,18 @@ def qualify_archive_controls(root: Path, package_dir: Path, output: Path, versio
 
     try:
         run("positive", original)
+        def change_dependency_range(payload, empty):
+            name = next(name for name in payload if name.lower().endswith(".nuspec"))
+            document = ElementTree.fromstring(payload[name])
+            nodes = [node for node in document.iter() if _local_name(node.tag) == "dependency" and node.attrib.get("id") == "CShells.AspNetCore"]
+            if len(nodes) != 1:
+                raise ValueError("Expected exactly one CShells.AspNetCore dependency.")
+            pin = nodes[0].attrib["version"].lstrip("[").split(",", 1)[0]
+            nodes[0].set("version", f"({pin},{pin})" if empty else f"({pin},)")
+            payload[name] = ElementTree.tostring(document)
+        for label, empty in [("dependency-exclusive-minimum", False), ("dependency-empty-range", True)]:
+            feed, name = mutation_feed(label, "Elsa.Studio.Hosting", lambda payload: change_dependency_range(payload, empty))
+            run(label, feed, ["Required dependency version/assets mismatch", name, "CShells.AspNetCore"])
         for label, package, dependency in [("api-core-omitted", "Elsa.Studio.Api", "Elsa.Studio.Core"),
                                            ("console-runtime-omitted", "Elsa.Studio.ConsoleStream", "ConsoleLogStreaming.AspNetCore")]:
             feed, name = mutation_feed(label, package, lambda payload: omit_dependency(payload, dependency))
