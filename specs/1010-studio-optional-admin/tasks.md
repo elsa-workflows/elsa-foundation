@@ -42,9 +42,9 @@ Independent test: real enrolled native installs, retained shell scope, actual pr
 
 ## Phase5 — Qualification and reviewed delivery
 
-- [ ] T018 Run whole affected .NET projects and discovery accounting; use mutation controls for revisions/mandatory auth/preview/asset admission and bounds, restoring sources exactly.
-- [ ] T019 Run affected locked restores, architecture/maps/inventory checks, actual candidate pack/dependency inspection and isolated reference Web smoke; update canonical hosting contract/README with actual profiles and retired code.
-- [ ] T020 Set spec Implemented with completed draft independent review; post exact-head evidence and request external review after required build/test gate; preserve no-release/publisher boundary.
+- [x] T018 Run whole affected .NET projects and discovery accounting; use mutation controls for revisions/mandatory auth/preview/asset admission and bounds, restoring sources exactly.
+- [x] T019 Run affected locked restores, architecture/maps/inventory checks, actual candidate pack/dependency inspection and isolated reference Web smoke; update canonical hosting contract/README with actual profiles and retired code.
+- [x] T020 Set spec Implemented after completed draft independent review and prepare exact-head gate evidence; preserve no-release/publisher boundary. Remote review/delivery transitions are recorded on PR3386 before T021 can complete.
 - [ ] T021 Verify reviewed merge and actual resulting main, close #3359/parent feature as appropriate and reconcile Program #3340 board/hierarchy/evidence.
 
 ## Dependencies and execution

@@ -1,8 +1,41 @@
-# In-progress validation checkpoint
+# Qualification evidence
 
-This is incomplete work on #3359, not a delivery or completion receipt.
+Local implementation qualification is complete. PR3386 remote review/CI/merge and resulting-main verification remain outstanding; this is not a delivery receipt.
 
-## Current checkpoint — Web adoption and maintenance UI qualified locally
+## Current delivery candidate
+
+Code source17e63d67eddba85d081bf1e6bb3c8784a03dbfe2 passed independent review round2 on all3 lenses,
+against base9e96273c8041476fe8bfb102c84019359c617b84. Round1's2 P2 findings are fixed and causally tested.
+Local Debug and fresh owned Release Studio projects each pass570/570,0skipped. Studio discovery563 expands
+one8-row runtime theory by7; no test omitted. Modularity discovery/execution each398, including24 custom display
+names (not24 missing cases). Architecture590/590, both locked restores and maps checks pass. Frontend source
+unchanged since its3654 unit passes, configured typecheck/lint/build, Chromium maintenance3/3 and visual check.
+The separate broad Host tsc failure remains91 diagnostics identical to its isolated baseline, not a green gate.
+
+The actual21 Studio archives at4.0.0-admin3359 pass identity/version/license/icon inventory and verifier self-tests.
+Actual Core/Api/Hosting/Hosting.Nuplane plus2 Modularity archives were restored into a fresh isolated consumer
+with a single Hosting.Nuplane PackageReference. It locked-restored, published and ran a41-package closure with
+no project/Web/backend API/identity/cluster/Attention references and no frontend tooling invocation. Published
+candidate DLL hashes match the archives. During runtime, the owned producer, both feeds, consumer source and
+NuGet cache were renamed unavailable. Public registry/feed/retention/features/modules/runtime/shell checks pass;
+ordinary protection remains Unknown/EnrollmentRequired, with no implicit enrollment. Afterward the owned
+folders were restored to qualify reference Web. The final repeat of5 fresh consumer journeys returns200 on all
+35 operations. The original pre-review consumer's one503 is preserved as historical, unreproduced on this
+corrected candidate; no cause or retroactive first-attempt success is asserted.
+
+Owned artifacts: /private/var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/studio3359-candidate-nak7wmje.
+Reports: report.json, repeat-journeys.json, web-smoke-report.json, web-browser-report.json. Actual reference Web
+published from that snapshot serves134 canonical Hosting resources,14 modules and20 feature rows through the
+public addon. Chromium root/deep-link Home and shared React/SDK/UI identities pass with no page errors or missing
+assets. Background reconciliation/auth were disabled only in this owned smoke profile. The first Web harness
+incorrectly requested generated .br/.gz sidecars as public resources and received404; the corrected check uses
+canonical producer resource URLs, preserving the134-resource contract. All owned processes stop in finally.
+
+Remaining gates: final metadata review, exact-head required CI, separate application review/merge, actual resulting
+main audit and issue/board reconciliation. Full combined consumer/optional matrix and CI integration remain
+#3363–#3365. No release/deploy/publisher activation occurred. Program #3340 remains unfinished.
+
+## Web adoption and maintenance UI checkpoint
 
 The owner granted a new #3359 exception after the Web adoption three-attempt stop, recorded at
 3359#issuecomment-6431700996. Exclusive resumption claim6431701224 owns this work. The first resumed attempt
