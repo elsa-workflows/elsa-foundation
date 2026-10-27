@@ -16,7 +16,7 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>Generic source-context boundary only; no publisher or recipient execution is enabled by these controls.</summary>
-public sealed class RuntimePostCommitDurableSourceTests
+public sealed partial class RuntimePostCommitDurableSourceTests
 {
     private const string Kind = "Test.RequiredSource";
     private static readonly DateTimeOffset Now = new(2026, 10, 26, 2, 0, 0, TimeSpan.Zero);

@@ -38,13 +38,14 @@ public static class RuntimePostCommitOutboxItems
         ArgumentNullException.ThrowIfNull(contributions);
         var materialized = contributions.ToArray();
         ValidateContributions(materialized);
-        var required = materialized.FirstOrDefault(item => item.IntentKind == intent.Kind)?.RequiresDurableSource == true;
+        var contribution = materialized.FirstOrDefault(item => item.IntentKind == intent.Kind);
+        var required = contribution?.RequiresDurableSource == true;
         if (required && sourceScope is null)
             throw new RuntimePostCommitSourceBoundaryException(null, intent.Kind,
                 new InvalidOperationException("A required-source write needs authoritative persistence scope."), false);
         return new(OutboxItemId(commit.CommitId, intent), intent, RuntimePostCommitOutboxStatus.Pending,
             intent.RecordedAt, AvailableAt(commit, intent), ResolveRetryPolicy(intent.Kind, materialized),
-            0, null, null, null, null, commit.Metadata, 0, null, null, required ? sourceScope : null, null);
+            0, null, null, null, null, commit.Metadata, 0, null, contribution?.StimulusDeliveryProtocolVersion, required ? sourceScope : null, null);
     }
 
     /// <summary>
@@ -107,7 +108,8 @@ public static class RuntimePostCommitOutboxItems
             if (group.Any(contribution =>
                     contribution.HandlerType != first.HandlerType ||
                     !contribution.RetryPolicy.IsEquivalentTo(first.RetryPolicy) ||
-                    contribution.RequiresDurableSource != first.RequiresDurableSource))
+                    contribution.RequiresDurableSource != first.RequiresDurableSource ||
+                    contribution.StimulusDeliveryProtocolVersion != first.StimulusDeliveryProtocolVersion))
             {
                 throw new InvalidOperationException(
                     $"Runtime post-commit intent kind '{group.Key}' has conflicting handler or retry-policy contributions.");

@@ -84,7 +84,10 @@ In-memory and EF providers use their existing checkpoint/outbox authority. EF st
 snapshot in the row's existing ContentJson and uses its revision concurrency token with claim fencing.
 Use declared outbox family 2.0.0 with an explicit 1.0.0 upcast preserving absence; ordinary predecessor
 writes omit all new-only fields while the existing gate still observes 1.0.0. Publisher protocol
-acceptance checks the shared schema dormancy contract before effects. The supported fleet/hold/
+acceptance checks the shared schema dormancy contract on the final enriched checkpoint before effects.
+A later enricher cannot add publication past an earlier check. Materialized post-commit work prevents a
+successful Skip. Mixed declared/materialized representations are validated together before canonical
+folding; unrepresented or conflicting work refuses rather than disappearing. The supported fleet/hold/
 finalization protocol advances the same host to 2.0.0; storage never force-finalizes or restamps new
 protocol data as 1.0.0. Backfill uses the family's declared checked revision-CAS row rewriter. Old readers
 must refuse the new stamp, rather than discard an unknown JSON member and rewrite it. Unknown cohort

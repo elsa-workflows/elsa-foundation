@@ -70,7 +70,7 @@ public sealed class RuntimePostCommitIntentDispatcher : IRuntimePostCommitIntent
                      .GroupBy(contribution => contribution.IntentKind, StringComparer.Ordinal)
                      .OrderBy(group => group.Key, StringComparer.Ordinal))
         {
-            if (group.Select(item => item.RequiresDurableSource).Distinct().Count() != 1)
+            if (group.Select(item => (item.RequiresDurableSource, item.StimulusDeliveryProtocolVersion)).Distinct().Count() != 1)
                 throw new InvalidOperationException("One intent kind cannot have competing durable-source requirements.");
             var distinctTypes = group
                 .Select(contribution => contribution.HandlerType)

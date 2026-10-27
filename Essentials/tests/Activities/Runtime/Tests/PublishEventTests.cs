@@ -111,26 +111,6 @@ public sealed class PublishEventTests
         Assert.Empty(buffer.TakePublishStimuli(WorkflowExecutionId, ActivityExecutionId));
     }
 
-    [Fact]
-    public async Task Handler_RoutesStartAndResume_WithCarriedValues()
-    {
-        var router = new RecordingStimulusRouter();
-        var buffer = new PublishStimulusStagingBuffer(new FakeTimeProvider(Now));
-        var payload = JsonSerializer.SerializeToElement(new { orderId = 7 });
-        buffer.StagePublishStimulus(new PublishStimulusRequest(WorkflowExecutionId, ActivityExecutionId, "order.placed", "corr-1", payload));
-        var intent = Assert.Single(buffer.TakePublishStimuli(WorkflowExecutionId, ActivityExecutionId));
-
-        await new PublishStimulusExecutor(router).HandleAsync(intent);
-
-        var dispatch = Assert.Single(router.Requests);
-        Assert.Equal(StimulusRoutingMode.StartAndResume, dispatch.Mode);
-        Assert.True(dispatch.ResumeAllMatchingBookmarks);
-        Assert.Equal(EventStimulus.StimulusType, dispatch.StimulusType);
-        Assert.Equal(EventStimulus.Hash("order.placed"), dispatch.StimulusHash);
-        Assert.Equal("corr-1", dispatch.CorrelationId);
-        Assert.Equal(payload.GetRawText(), dispatch.Input!.Value.GetRawText());
-        Assert.Equal(intent.IdempotencyKey, dispatch.IdempotencyKey);
-    }
 
     [Fact]
     public async Task LocalEvent_StagesAndCarriesTheLocalFlag_ThroughToTheIntent()
@@ -149,39 +129,15 @@ public sealed class PublishEventTests
         Assert.True(ReadPayload(intent).IsLocalEvent);
     }
 
-    /// <summary>
-    /// A local publish must not wake sibling instances or fire a published message start (#1117): the handler
-    /// routes ResumeOnly and pins the target to the publishing execution — taken from the intent (the runtime's
-    /// own record of who committed the send), never from the activity-authored payload.
-    /// </summary>
-    [Fact]
-    public async Task Handler_RoutesLocalEvent_ResumeOnly_TargetedAtThePublishingExecution()
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Handler_Intent_only_signature_refuses_before_old_router_effects(bool local)
     {
-        var router = new RecordingStimulusRouter();
-        var buffer = new PublishStimulusStagingBuffer(new FakeTimeProvider(Now));
-        buffer.StagePublishStimulus(new PublishStimulusRequest(WorkflowExecutionId, ActivityExecutionId, "order.placed", isLocalEvent: true));
+        var router = new RecordingStimulusRouter(); var buffer = new PublishStimulusStagingBuffer(new FakeTimeProvider(Now));
+        buffer.StagePublishStimulus(new PublishStimulusRequest(WorkflowExecutionId, ActivityExecutionId, "e", isLocalEvent: local));
         var intent = Assert.Single(buffer.TakePublishStimuli(WorkflowExecutionId, ActivityExecutionId));
-
-        await new PublishStimulusExecutor(router).HandleAsync(intent);
-
-        var dispatch = Assert.Single(router.Requests);
-        Assert.Equal(StimulusRoutingMode.ResumeOnly, dispatch.Mode);
-        Assert.Equal(WorkflowExecutionId, dispatch.TargetWorkflowExecutionId);
-    }
-
-    [Fact]
-    public async Task Handler_LeavesBroadcastPublishUntargeted()
-    {
-        var router = new RecordingStimulusRouter();
-        var buffer = new PublishStimulusStagingBuffer(new FakeTimeProvider(Now));
-        buffer.StagePublishStimulus(new PublishStimulusRequest(WorkflowExecutionId, ActivityExecutionId, "order.placed"));
-        var intent = Assert.Single(buffer.TakePublishStimuli(WorkflowExecutionId, ActivityExecutionId));
-
-        await new PublishStimulusExecutor(router).HandleAsync(intent);
-
-        var dispatch = Assert.Single(router.Requests);
-        Assert.Equal(StimulusRoutingMode.StartAndResume, dispatch.Mode);
-        Assert.Null(dispatch.TargetWorkflowExecutionId);
+        await Assert.ThrowsAsync<RuntimePostCommitSourceBoundaryException>(() => new PublishStimulusExecutor(router).HandleAsync(intent).AsTask());
+        Assert.Empty(router.Requests);
     }
 
     [Fact]
@@ -199,7 +155,7 @@ public sealed class PublishEventTests
     [Fact]
     public async Task Handler_FailsAsTransient_WhenAdmissionShedsAStart()
     {
-        var router = new RecordingStimulusRouter(
+        var router = new SavedResultRouter(
             StimulusStartOutcome.Started("binding-1", "artifact-1", "wfexec-started"),
             StimulusStartOutcome.Shed("binding-2", "artifact-2", TimeSpan.FromSeconds(1)));
         var buffer = new PublishStimulusStagingBuffer(new FakeTimeProvider(Now));
@@ -207,11 +163,11 @@ public sealed class PublishEventTests
         var intent = Assert.Single(buffer.TakePublishStimuli(WorkflowExecutionId, ActivityExecutionId));
 
         var exception = await Assert.ThrowsAsync<RuntimePostCommitDeliveryException>(async () =>
-            await new PublishStimulusExecutor(router).HandleAsync(intent));
+            await ((IRuntimePostCommitDurableSourceIntentHandler)new PublishStimulusExecutor(router)).HandleAsync(ConstructedSource(intent)));
 
         Assert.Equal(PostCommitFailureKind.Transient, exception.Kind);
         Assert.Equal("publish-stimulus-start-shed", exception.Code);
-        Assert.Single(router.Requests);
+        Assert.Single(router.Sources);
     }
 
     /// <summary>
@@ -237,7 +193,14 @@ public sealed class PublishEventTests
         var intent = Assert.Single(buffer.TakePublishStimuli(WorkflowExecutionId, ActivityExecutionId));
 
         return await Assert.ThrowsAsync<RuntimePostCommitDeliveryException>(async () =>
-            await new PublishStimulusExecutor(new ThrowingStimulusRouter(failure)).HandleAsync(intent));
+            await ((IRuntimePostCommitDurableSourceIntentHandler)new PublishStimulusExecutor(new ThrowingStimulusRouter(failure))).HandleAsync(ConstructedSource(intent)));
+    }
+
+    private static PostCommitDeliveryContext ConstructedSource(RuntimePostCommitIntent intent)
+    {
+        var item = new RuntimePostCommitOutboxItem("commit:" + intent.IntentId, intent, RuntimePostCommitOutboxStatus.Delivering,
+            Now, Now, RuntimePostCommitRetryPolicy.None, 0, "owner", Now, null, null, null, 1, Now.AddMinutes(1), 1, new("tenant"), null);
+        return new(new(item, "owner", 1, Now, Now.AddMinutes(1)), new("tenant"));
     }
 
     private static async ValueTask<IActivityCompletionTransition> ExecuteAsync(PublishEvent activity)
@@ -263,10 +226,20 @@ public sealed class PublishEventTests
         public void StagePublishStimulus(PublishStimulusRequest request) => Requests.Add(request);
     }
 
+    private sealed class SavedResultRouter(params StimulusStartOutcome[] starts) : IStimulusRouter
+    {
+        public List<PostCommitDeliveryContext> Sources { get; } = [];
+        public ValueTask<StimulusRoutingResult> RouteAsync(StimulusDispatchRequest request, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Old routing must never handle a saved send.");
+        public ValueTask<StimulusRoutingResult> RouteSourceAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
+        { Sources.Add(source); return ValueTask.FromResult(new StimulusRoutingResult(starts, [])); }
+    }
+
     private sealed class ThrowingStimulusRouter(Exception failure) : IStimulusRouter
     {
         public ValueTask<StimulusRoutingResult> RouteAsync(StimulusDispatchRequest request, CancellationToken cancellationToken = default) =>
-            throw failure;
+            throw new InvalidOperationException("Old routing must never handle a saved send.");
+        public ValueTask<StimulusRoutingResult> RouteSourceAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default) => throw failure;
     }
 
     private sealed class FakeTimeProvider(DateTimeOffset now) : TimeProvider

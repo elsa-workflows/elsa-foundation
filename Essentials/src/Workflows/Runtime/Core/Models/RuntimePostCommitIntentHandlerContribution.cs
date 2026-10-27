@@ -20,8 +20,16 @@ public sealed class RuntimePostCommitIntentHandlerContribution
 
     public RuntimePostCommitIntentHandlerContribution(string intentKind, Type handlerType,
         RuntimePostCommitRetryPolicy retryPolicy, bool requiresDurableSource)
+        : this(intentKind, handlerType, retryPolicy, requiresDurableSource, null) { }
+
+    /// <summary>Declares a producer's recipient protocol at commit time; no recipients are selected here.</summary>
+    public RuntimePostCommitIntentHandlerContribution(string intentKind, Type handlerType,
+        RuntimePostCommitRetryPolicy retryPolicy, bool requiresDurableSource, int? stimulusDeliveryProtocolVersion)
     {
         RuntimePostCommitIntent.ValidateKind(intentKind, nameof(intentKind));
+        if (stimulusDeliveryProtocolVersion is not null &&
+            (stimulusDeliveryProtocolVersion != StimulusDeliverySnapshot.CurrentVersion || !requiresDurableSource))
+            throw new ArgumentException("A supported recipient protocol requires explicit durable source delivery.", nameof(stimulusDeliveryProtocolVersion));
         ArgumentNullException.ThrowIfNull(handlerType);
         ArgumentNullException.ThrowIfNull(retryPolicy);
 
@@ -35,12 +43,14 @@ public sealed class RuntimePostCommitIntentHandlerContribution
         if (requiresDurableSource && !typeof(IRuntimePostCommitDurableSourceIntentHandler).IsAssignableFrom(handlerType))
             throw new ArgumentException("A required-source contribution needs the explicit context handler contract.", nameof(handlerType));
         RequiresDurableSource = requiresDurableSource;
+        StimulusDeliveryProtocolVersion = stimulusDeliveryProtocolVersion;
         IntentKind = intentKind;
         HandlerType = handlerType;
         RetryPolicy = retryPolicy;
     }
 
     public bool RequiresDurableSource { get; }
+    public int? StimulusDeliveryProtocolVersion { get; }
     public string IntentKind { get; }
     public Type HandlerType { get; }
     public RuntimePostCommitRetryPolicy RetryPolicy { get; }

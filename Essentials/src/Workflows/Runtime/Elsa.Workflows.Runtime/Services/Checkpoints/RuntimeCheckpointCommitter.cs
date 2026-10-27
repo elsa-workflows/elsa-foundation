@@ -89,6 +89,9 @@ public sealed class RuntimeCheckpointCommitter
         foreach (var enricher in _enrichers)
             commit = await enricher.EnrichAsync(commit, cancellationToken);
 
+        foreach (var enricher in _enrichers)
+            await enricher.ValidateFinalAsync(commit, cancellationToken);
+
         // The checkpoint-commit span wraps the fenced commit path. StartCheckpointCommit returns null when tracing
         // is inactive, so no allocation and no semantic change; when active it only introduces Activity.Current (trace
         // context, not service location). No new awaits are inserted between the fenced awaits below — attribute writes
@@ -129,7 +132,7 @@ public sealed class RuntimeCheckpointCommitter
                 throw new InvalidOperationException(
                     $"Mandatory runtime checkpoint '{commit.Checkpoint.CheckpointId}' cannot be skipped by the persistence policy.");
 
-            if (commit.PostCommitIntents.Count > 0)
+            if (commit.PostCommitIntents.Count > 0 || commit.StateChanges.PostCommitOutbox.Count > 0)
                 return RuntimeCheckpointCommitResult.Failure(
                     commit,
                     decision,
@@ -150,7 +153,7 @@ public sealed class RuntimeCheckpointCommitter
 
         var stateChanges = commit.StateChanges;
         if (postCommitOutbox.Count > 0)
-            stateChanges = stateChanges.WithPostCommitOutbox(postCommitOutbox);
+            stateChanges = stateChanges.WithPostCommitOutbox(stateChanges.PostCommitOutbox.Concat(postCommitOutbox).ToArray());
         if (consumedWorkItems.Count > 0)
             stateChanges = stateChanges.WithConsumedSchedulerWorkItems(consumedWorkItems);
         var commitToPersist = ReferenceEquals(stateChanges, commit.StateChanges)
@@ -160,6 +163,11 @@ public sealed class RuntimeCheckpointCommitter
         // The structural checkpoint rules are applied here, to the exact commit the store receives, rather than inside
         // any store: every store is handed an already-validated commit, so the rules cannot differ between providers.
         RuntimeCheckpointCommitValidator.Validate(commitToPersist);
+
+        // Validate materialized and declared responsibilities together before canonical folding. Extra or conflicting
+        // materialized work must refuse rather than disappear; equivalent representations retain the ordinary one-row form.
+        if (postCommitOutbox.Count > 0 && commit.StateChanges.PostCommitOutbox.Count > 0)
+            commitToPersist = commitToPersist with { StateChanges = commitToPersist.StateChanges.WithPostCommitOutbox(postCommitOutbox) };
 
         // #1254: the store deletes the claimed item inside this call, but MarkConsumedDurably can only run once it
         // returns. A claim renewal firing in between finds nothing and would read that as a successor having stolen the
@@ -172,11 +180,11 @@ public sealed class RuntimeCheckpointCommitter
         {
             storeResult = await _checkpointCommitStore.CommitAsync(commitToPersist, decision, cancellationToken);
 
-            if (storeResult.PendingPostCommitWorkIds.Count != postCommitOutbox.Count)
+            if (storeResult.PendingPostCommitWorkIds.Count != commitToPersist.StateChanges.PostCommitOutbox.Count)
                 throw new InvalidOperationException(
                     $"Checkpoint commit store persisted {storeResult.PendingPostCommitWorkIds.Count} post-commit outbox item(s) " +
                     $"for commit '{commit.CommitId}' (workflow execution '{commit.WorkflowExecutionId}') but the checkpoint carried " +
-                    $"{postCommitOutbox.Count}. The continuation work would be silently dropped; the store must durably record every " +
+                    $"{commitToPersist.StateChanges.PostCommitOutbox.Count}. The continuation work would be silently dropped; the store must durably record every " +
                     "post-commit outbox item it is handed.");
 
             if (storeResult.ConsumedSchedulerWorkItemIds.Count != consumedWorkItems.Count)
