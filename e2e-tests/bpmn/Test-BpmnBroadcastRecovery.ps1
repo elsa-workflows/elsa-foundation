@@ -13,9 +13,10 @@ param(
     [Parameter(Mandatory)][string] $EvidencePath,
     [string] $Python = 'python3',
     [Parameter(Mandatory)][string] $SourceRevision,
-    [ValidateSet('after-cohort', 'after-resume', 'before-selection', 'empty-cohort', 'competing-proposal', 'competing-empty-proposal', 'competing-empty-winner', 'after-start', 'after-fanout', 'after-source-commit', 'renewed-claim', 'republished-cohort', 'same-artifact-shed', 'local-scope', 'correlation-scope')][string] $Phase = 'after-cohort'
+    [ValidateSet('after-cohort', 'after-resume', 'before-selection', 'empty-cohort', 'competing-proposal', 'competing-empty-proposal', 'competing-empty-winner', 'after-start', 'after-fanout', 'after-source-commit', 'renewed-claim', 'republished-cohort', 'same-artifact-shed', 'local-scope', 'correlation-scope', 'collected-proposal')][string] $Phase = 'after-cohort'
 )
 $ErrorActionPreference = 'Stop'
+$collectionWins = $Phase -eq 'collected-proposal'
 $localScope = $Phase -eq 'local-scope'
 $correlationScope = $Phase -eq 'correlation-scope'
 $scopedEligibility = $localScope -or $correlationScope
@@ -29,7 +30,7 @@ $emptyProposal = $Phase -eq 'competing-empty-proposal'
 $emptyWinner = $Phase -eq 'competing-empty-winner'
 $competing = $Phase -in @('competing-proposal', 'competing-empty-proposal', 'competing-empty-winner')
 $unmatchedInitial = $Phase -eq 'empty-cohort' -or $emptyProposal
-$selectsAfterRestart = $Phase -in @('before-selection', 'competing-proposal', 'competing-empty-proposal')
+$selectsAfterRestart = $Phase -in @('before-selection', 'competing-proposal', 'competing-empty-proposal', 'collected-proposal')
 if ($competing -and $IsWindows) { throw 'This owned process-suspension race requires Unix signals.' }
 . "$PSScriptRoot/../_ServerLifecycle.ps1"
 . "$PSScriptRoot/../_ElsaCommon.ps1"
@@ -71,14 +72,14 @@ $settingsPath = Join-Path $root 'shells.json'
 $settings = Get-Content -Raw $settingsPath | ConvertFrom-Json -AsHashtable
 $settings.CShells.Shells.default.Features.BpmnRecoveryProbe = @{ ControlDirectory = $control }
 $settings.CShells.Shells.default.Features.WorkflowsRuntimeResumption = @{ SweepIntervalSeconds = 1 }
-if ($republishedCohort) {
+if ($republishedCohort -or $collectionWins) {
     $settings.CShells.Shells.default.Features.WorkflowsRuntimeReferenceGarbageCollection = @{
         SweepIntervalMinutes = 0.02; MaxBackoffIntervalMinutes = 0.1; ArtifactCreationGracePeriodMinutes = 0
     }
 }
 $settings | ConvertTo-Json -Depth 60 | Set-Content $settingsPath
-@{ caseId = $caseId; phase = if ($competing) { 'before-install' } elseif ($Phase -eq 'empty-cohort' -or $sameArtifactShed -or $scopedEligibility) { 'after-cohort' } else { $Phase }; eventName = $eventName } | ConvertTo-Json | Set-Content (Join-Path $control 'plan.json')
-$receipt = @{ sourceRevision = $SourceRevision; scenario = switch ($Phase) { 'after-resume' { 'partial-callback-and-rearm-before-source-ack' } 'after-start' { 'one-of-two-starts-parked-before-remaining-start-and-resumes' } 'after-fanout' { 'all-recipient-effects-completed-before-source-ack-write' } 'after-source-commit' { 'committed-source-completion-before-provider-return-loss' } 'renewed-claim' { 'real-pre-dispatch-claim-renewal-then-crash-and-standard-takeover' } 'republished-cohort' { 'saved-old-publication-retained-through-real-collection-and-republish' } 'same-artifact-shed' { 'real-capacity-shed-then-same-artifact-key-reuse-and-recovery' } 'local-scope' { 'local-publisher-only-resume-and-real-test-scope-isolation' } 'correlation-scope' { 'correlation-narrows-resumes-not-starts-and-real-test-scope-isolation' } 'before-selection' { 'delayed-first-selection-and-pre-start-wait-exclusion' } 'empty-cohort' { 'empty-saved-cohort-excludes-later-matches' } 'competing-proposal' { 'expired-old-prepared-proposal-cannot-replace-successor-winner' } 'competing-empty-proposal' { 'expired-old-empty-proposal-cannot-replace-populated-successor-winner' } 'competing-empty-winner' { 'expired-old-populated-proposal-cannot-replace-empty-successor-winner' } default { 'after-cohort-before-dispatch' } }; passed = $false;
+@{ caseId = $caseId; phase = if ($competing -or $collectionWins) { 'before-install' } elseif ($Phase -eq 'empty-cohort' -or $sameArtifactShed -or $scopedEligibility) { 'after-cohort' } else { $Phase }; eventName = $eventName; observeCollection = $collectionWins; holdRejectedProposal = $collectionWins } | ConvertTo-Json | Set-Content (Join-Path $control 'plan.json')
+$receipt = @{ sourceRevision = $SourceRevision; scenario = switch ($Phase) { 'collected-proposal' { 'real-collection-before-cohort-acceptance-refuses-then-reselects-after-restart' } 'after-resume' { 'partial-callback-and-rearm-before-source-ack' } 'after-start' { 'one-of-two-starts-parked-before-remaining-start-and-resumes' } 'after-fanout' { 'all-recipient-effects-completed-before-source-ack-write' } 'after-source-commit' { 'committed-source-completion-before-provider-return-loss' } 'renewed-claim' { 'real-pre-dispatch-claim-renewal-then-crash-and-standard-takeover' } 'republished-cohort' { 'saved-old-publication-retained-through-real-collection-and-republish' } 'same-artifact-shed' { 'real-capacity-shed-then-same-artifact-key-reuse-and-recovery' } 'local-scope' { 'local-publisher-only-resume-and-real-test-scope-isolation' } 'correlation-scope' { 'correlation-narrows-resumes-not-starts-and-real-test-scope-isolation' } 'before-selection' { 'delayed-first-selection-and-pre-start-wait-exclusion' } 'empty-cohort' { 'empty-saved-cohort-excludes-later-matches' } 'competing-proposal' { 'expired-old-prepared-proposal-cannot-replace-successor-winner' } 'competing-empty-proposal' { 'expired-old-empty-proposal-cannot-replace-populated-successor-winner' } 'competing-empty-winner' { 'expired-old-populated-proposal-cannot-replace-empty-successor-winner' } default { 'after-cohort-before-dispatch' } }; passed = $false;
     probeAssemblySha256 = (Get-FileHash $ProbeAssembly).Hash.ToLowerInvariant(); normalAssemblySha256 = (Get-FileHash $NormalAssembly).Hash.ToLowerInvariant();
     sourceCommit = $sourceCommit; sourceFiles = $sourceManifest; probeBuild = $probeManifest; normalBuild = $normalManifest; readerSha256 = $readerHash; readerBuild = $readerManifest;
     cut = $null; stopped = $null; successorClaim = $null; recovered = $null; observations = @(); failures = @() }
@@ -164,6 +165,40 @@ function Same-Snapshot($Left, $Right) {
     $rightDocument = [System.Text.Json.JsonDocument]::Parse(($Right | ConvertTo-Json -Depth 60 -Compress))
     try { return [System.Text.Json.JsonElement]::DeepEquals($leftDocument.RootElement, $rightDocument.RootElement) }
     finally { $leftDocument.Dispose(); $rightDocument.Dispose() }
+}
+function Assert-CollectedProposalState($Observation, $Marker, $Publication, [bool] $Collected) {
+    foreach ($key in @('observedMaterial', 'observedSourceReferences', 'allWorkflows', 'executionRootArtifactIds', 'dispatchRootArtifactIds', 'workflows', 'source', 'observedAtUtc')) {
+        if (-not $Observation.ContainsKey($key) -or $null -eq $Observation[$key]) { throw "The checked collected-proposal observation omits $key." }
+    }
+    $proposal = $Marker.proposal; $source = $Observation.source
+    $entries = @($proposal.starts | Where-Object { $_.executable.artifactId -eq $Publication.artifactId -and $_.executable.artifactHash -eq $Publication.artifactHash -and
+        $_.sourceCapture.version -eq 1 -and $_.sourceCapture.provenance.sourceReferenceId -eq $Publication.sourceReferenceId -and
+        $_.binding.triggerBindingId -and $_.sourceCapture.provenance.publicationId -eq $Publication.publicationId })
+    $material = @($Observation.observedMaterial | Where-Object { $_.identity.artifactId -eq $Publication.artifactId })
+    $reference = @($Observation.observedSourceReferences | Where-Object sourceReferenceId -eq $Publication.sourceReferenceId)
+    if ($null -ne $source.snapshot -or $source.status -ne 'Delivering' -or $source.deliveryFencingToken -ne $Marker.fencingToken -or
+        $source.deliveringOwnerId -ne $Marker.ownerId -or $source.outboxItemId -ne $Marker.sourceOutboxItemId -or
+        [DateTimeOffset]::Parse($source.deliveryVisibleAfter) -le [DateTimeOffset]::Parse($Observation.observedAtUtc) -or
+        $proposal.sourceOutboxItemId -ne $source.outboxItemId -or $proposal.intentFingerprint -ne $source.intentFingerprint -or
+        $proposal.scope.persistenceScope.value -ne $Marker.scope -or
+        $proposal.starts.Count -ne 1 -or $entries.Count -ne 1 -or $proposal.resumes.Count -ne 2 -or
+        $material.Count -ne $(if ($Collected) { 0 } else { 1 }) -or $reference.Count -ne $(if ($Collected) { 0 } else { 1 }) -or
+        (-not $Collected -and (-not $reference[0].deletedAt -or $reference[0].artifactId -ne $Publication.artifactId)) -or
+        @($Observation.allWorkflows | Where-Object artifactId -eq $Publication.artifactId).Count -ne 0 -or
+        @($Observation.executionRootArtifactIds | Where-Object { $_ -eq $Publication.artifactId }).Count -ne 0 -or
+        @($Observation.dispatchRootArtifactIds | Where-Object { $_ -eq $Publication.artifactId }).Count -ne 0) {
+        throw 'The actual nonauthoritative prepared proposal, retired target and unexpired source do not establish this collection order.'
+    }
+}
+function Assert-CollectedProposalRefusal($Collected, $Refused, $Marker, $Rejection, $Publication) {
+    $expectedDiagnostic = "Executable dependency '$($Publication.artifactId)@$($Publication.artifactHash)' is missing. Path: $($Publication.artifactId)@$($Publication.artifactHash)."
+    if (-not $Rejection.attemptedProviderInstall -or $Rejection.cancellationRequested -or $Rejection.isUnavailable -ne $false -or
+        $Rejection.failureType -ne 'StimulusDeliveryBoundaryException' -or $Rejection.innerFailureType -ne 'WorkflowExecutableDependencyGraphException' -or
+        $Rejection.dependencyGraphFailure -ne 'MissingArtifact' -or $Rejection.dependencyGraphDiagnostic -ne $expectedDiagnostic -or
+        $Rejection.sourceOutboxItemId -ne $Marker.sourceOutboxItemId -or $Rejection.ownerId -ne $Marker.ownerId -or $Rejection.fencingToken -ne $Marker.fencingToken -or
+        [DateTimeOffset]::Parse($Refused.source.deliveryVisibleAfter) -le [DateTimeOffset]::Parse($Rejection.observedAtUtc) -or
+        -not (Same-Snapshot $Collected.source $Refused.source) -or -not (Same-Snapshot $Collected.workflows $Refused.workflows) -or
+        -not (Same-Snapshot $Collected.allWorkflows $Refused.allWorkflows)) { throw 'A collected proposal did not refuse at the real provider before any effect with its original live claim.' }
 }
 function Assert-ScopedEligibility($Observation, $Profile, $Marker) {
     $payload = $Observation.source.intentPayload; $cohort = $Observation.source.snapshot
@@ -572,7 +607,7 @@ try {
     }
     if ($selectsAfterRestart -or $emptyWinner) {
         if ($null -ne $marker.snapshot) { throw 'Selection already occurred before the delayed-delivery cut.' }
-        if ($competing) {
+        if ($competing -or $collectionWins) {
             $proposalStarts = if ($emptyProposal) { 0 } else { 1 }; $proposalResumes = if ($emptyProposal) { 0 } else { 2 }
             if ($null -eq $marker.proposal -or $marker.proposal.starts.Count -ne $proposalStarts -or $marker.proposal.resumes.Count -ne $proposalResumes) { throw 'The original owner did not prepare its complete distinct proposal.' }
         }
@@ -689,6 +724,11 @@ try {
         $controlSlot = Invoke-RestMethod "$base/publishing/workflows/$controlDefinitionId/slots/default" -Method Delete -WebSession $ctx.Session
         $receipt.republication = @{ original = $selectedPublication; replacement = $replacement; replacementVersionId = $replacementVersion.id; controlUnpublishedSlot = $controlSlot }
     }
+    if ($collectionWins) {
+        $definitionId = [Uri]::EscapeDataString($selectedPublication.definitionId)
+        $unpublished = Invoke-RestMethod "$base/publishing/workflows/$definitionId/slots/default" -Method Delete -WebSession $ctx.Session
+        $receipt.collectedPublication = $selectedPublication; $receipt.collectedPublicationSlot = $unpublished
+    }
     # These recipients are created after publisher commit. They join only if selection has not yet happened.
     $lateWaitXml = $waitXml.Replace('id="waiter"', 'id="late-waiter"')
     $lateStartXml = $startXml.Replace('id="selected-start"', 'id="late-start"')
@@ -723,6 +763,37 @@ try {
         if ([int]$receipt.originalRetiredApiAdmission.StatusCode -ne 409) { throw 'Ordinary public admission unexpectedly authorized the retired original source.' }
         # Store only the bounded public response, never cookies/headers/session objects in evidence.
         $receipt.originalRetiredApiAdmission = @{ statusCode = [int]$receipt.originalRetiredApiAdmission.StatusCode; body = $receipt.originalRetiredApiAdmission.Content }
+    }
+    if ($collectionWins) {
+        $beforeCollection = Observe 'proposal-before-collection' @($waitRun.workflowExecutionId, $lateRun.workflowExecutionId)
+        Assert-CollectedProposalState $beforeCollection $marker $selectedPublication $false
+        $receipt.beforeCollection = $beforeCollection
+        $receipt.collectionReleasedAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
+        New-Item -ItemType File (Join-Path $caseDirectory 'run-collection') | Out-Null
+        $deadline = [DateTimeOffset]::UtcNow.AddSeconds(30)
+        do {
+            $collected = Observe 'proposal-after-collection' @($waitRun.workflowExecutionId, $lateRun.workflowExecutionId)
+            $sweeps = @(Get-ChildItem $caseDirectory -Filter 'collection-*.json' | ForEach-Object { Get-Content -Raw $_.FullName | ConvertFrom-Json -AsHashtable -DateKind String })
+            $useful = @($sweeps | Where-Object { $_.result.deletedArtifactCount -gt 0 -and $_.result.deletedReferenceCount -gt 0 -and
+                $_.supportsStimulusDeliveryRetention -and $_.artifactCreationGracePeriodSeconds -eq 0 -and $_.scope -eq $marker.scope -and
+                [DateTimeOffset]::Parse($_.startedAtUtc) -ge [DateTimeOffset]::Parse($receipt.collectionReleasedAtUtc) })
+            $material = @($collected.observedMaterial | Where-Object { $_.identity.artifactId -eq $selectedPublication.artifactId })
+            if ($material.Count -eq 0 -and $useful.Count -gt 0) { break }
+            Start-Sleep -Milliseconds 100
+        } while ([DateTimeOffset]::UtcNow -lt $deadline)
+        if ($material.Count -ne 0 -or $useful.Count -eq 0) { throw 'The real selected zero-grace collector did not remove the retired proposed target.' }
+        Assert-CollectedProposalState $collected $marker $selectedPublication $true
+        if (-not (Same-Snapshot $beforeCollection.source $collected.source) -or -not (Same-Snapshot $beforeCollection.workflows $collected.workflows)) { throw 'Collection changed the source or a proposed recipient before acceptance.' }
+        $receipt.afterCollection = $collected; $receipt.actualCollectionSweeps = $useful
+        New-Item -ItemType File (Join-Path $caseDirectory 'release') | Out-Null
+        $rejectedPath = Join-Path $caseDirectory 'rejected.json'
+        $deadline = [DateTimeOffset]::UtcNow.AddSeconds(30)
+        while (-not (Test-Path $rejectedPath) -and [DateTimeOffset]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 100 }
+        if (-not (Test-Path $rejectedPath)) { throw 'The collected prepared proposal did not report its actual provider refusal.' }
+        $rejected = Get-Content -Raw $rejectedPath | ConvertFrom-Json -AsHashtable -DateKind String
+        $refused = Observe 'collected-proposal-refused' @($waitRun.workflowExecutionId, $lateRun.workflowExecutionId)
+        Assert-CollectedProposalRefusal $collected $refused $marker $rejected $selectedPublication
+        $receipt.collectedProposalRefusal = $rejected; $receipt.afterProposalRefusal = $refused
     }
     if ($completeFanout) {
         $fanout = Observe 'fanout-before-crash' @($waitRun.workflowExecutionId, $lateRun.workflowExecutionId)
@@ -964,7 +1035,7 @@ try {
         $lateCompleted = Wait-WorkflowInstance -Ctx $ctx -ExecutionId $lateRun.workflowExecutionId -TimeoutSeconds 60
         if ($lateCompleted.instance.status -ne 'Completed' -or @($lateCompleted.incidents).Count -ne 0) { throw 'First delivery did not include the listener armed after publisher commit.' }
         $selectedSource = Observe 'selected-after-recovery' @($waitRun.workflowExecutionId, $lateRun.workflowExecutionId)
-        $expectedStarts = if ($emptyProposal) { 1 } else { 2 }; $expectedResumes = if ($emptyProposal) { 2 } else { 4 }
+        $expectedStarts = if ($emptyProposal -or $collectionWins) { 1 } else { 2 }; $expectedResumes = if ($emptyProposal) { 2 } else { 4 }
         if ($selectedSource.source.selectedStarts.Count -ne $expectedStarts -or $selectedSource.source.selectedResumes.Count -ne $expectedResumes) { throw 'Initial selection did not capture the complete delivery-time cohort.' }
         foreach ($before in $stopped.workflows | Where-Object { $_.workflowExecutionId -eq $lateRun.workflowExecutionId -or (-not $emptyProposal -and $_.workflowExecutionId -eq $waitRun.workflowExecutionId) }) {
             foreach ($wait in $before.bookmarks) {
@@ -999,7 +1070,7 @@ try {
     if ($committedAck -and -not (Same-Snapshot $after.source $stopped.source)) { throw 'The committed source did not retain its entire original delivery record.' }
     if ($after.source.status -ne 'Delivered' -or -not (Same-Snapshot $after.source.snapshot $selectedSource.source.snapshot)) { throw 'Recovery did not settle its complete immutable source cohort.' }
     $expectedArtifacts = @()
-    if (-not $unmatchedInitial -and -not $emptyWinner -and -not $localScope) { $expectedArtifacts += $selectedPublication.artifactId }
+    if (-not $unmatchedInitial -and -not $emptyWinner -and -not $localScope -and -not $collectionWins) { $expectedArtifacts += $selectedPublication.artifactId }
     if ($selectsAfterRestart) { $expectedArtifacts += $lateStart.artifactId }
     if ($partialStart) { $expectedArtifacts += $secondInitialPublication.artifactId }
     if ($completeFanout) {

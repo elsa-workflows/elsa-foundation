@@ -5,6 +5,8 @@ using System.Text.RegularExpressions;
 using CShells.Features;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
+using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
@@ -82,7 +84,7 @@ public class BpmnRecoveryProbeFeature : IShellFeature
             }
             catch (Exception exception)
             {
-                try { await control.RecordRejectedProposalAsync(source, attemptedProviderInstall, exception, cancellationToken.IsCancellationRequested); }
+                try { await control.RecordRejectedProposalAsync(source, attemptedProviderInstall, exception, cancellationToken.IsCancellationRequested, cancellationToken); }
                 catch { /* Missing evidence fails the runner; observation must never replace the actual refusal. */ }
                 throw;
             }
@@ -250,7 +252,7 @@ internal sealed class RecoveryProbeControl(string directory)
         var path = Path.Combine(directory, "plan.json");
         if (!File.Exists(path)) return null;
         var plan = JsonSerializer.Deserialize<Plan>(await File.ReadAllTextAsync(path, cancellationToken), Json);
-        if (plan?.Phase != "republished-cohort") return null;
+        if (plan is null || plan.Phase != "republished-cohort" && !plan.ObserveCollection) return null;
         if (!Regex.IsMatch(plan.CaseId, "^[a-z0-9-]{1,64}$", RegexOptions.CultureInvariant))
             throw new InvalidDataException("The owned collection case name is invalid.");
         return plan;
@@ -474,7 +476,7 @@ internal sealed class RecoveryProbeControl(string directory)
 
     // An observation of the real refusal, never a provider/claim result used by application code.
     public async ValueTask RecordRejectedProposalAsync(PostCommitDeliveryContext source, bool attemptedProviderInstall,
-        Exception exception, bool cancellationRequested)
+        Exception exception, bool cancellationRequested, CancellationToken cancellationToken)
     {
         var path = Path.Combine(directory, "plan.json");
         if (!File.Exists(path)) return;
@@ -487,13 +489,20 @@ internal sealed class RecoveryProbeControl(string directory)
         var marker = new { SourceOutboxItemId = source.SourceOutboxItemId, source.Claim.OwnerId,
             source.Claim.FencingToken, AttemptedProviderInstall = attemptedProviderInstall,
             FailureType = exception.GetType().Name, InnerFailureType = exception.InnerException?.GetType().Name,
-            CancellationRequested = cancellationRequested, ObservedAtUtc = DateTimeOffset.UtcNow };
+            CancellationRequested = cancellationRequested, IsUnavailable = (exception as StimulusDeliveryBoundaryException)?.IsUnavailable,
+            DependencyGraphFailure = (exception.InnerException as WorkflowExecutableDependencyGraphException)?.Kind.ToString(),
+            DependencyGraphDiagnostic = exception.InnerException is WorkflowExecutableDependencyGraphException { Kind: WorkflowExecutableDependencyGraphFailureKind.MissingArtifact } missing
+                ? missing.Message : null, ObservedAtUtc = DateTimeOffset.UtcNow };
         var temporary = Path.Combine(caseDirectory, "rejected.tmp");
         if (File.Exists(temporary) || File.Exists(Path.Combine(caseDirectory, "rejected.json"))) return;
         await using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
         { await JsonSerializer.SerializeAsync(stream, marker, Json); stream.Flush(true); }
         File.Move(temporary, Path.Combine(caseDirectory, "rejected.json"));
+        // Preserve the actual failed provider attempt before the processor records a result or retries.
+        // The observer never changes that exception or supplies an application verdict.
+        while (plan.HoldRejectedProposal && !File.Exists(Path.Combine(caseDirectory, "release-rejection")))
+            await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
     }
 
-    private sealed record Plan(string CaseId, string Phase, string EventName, string? TargetExecutionId = null, string? LoadArtifactId = null);
+    private sealed record Plan(string CaseId, string Phase, string EventName, string? TargetExecutionId = null, string? LoadArtifactId = null, bool ObserveCollection = false, bool HoldRejectedProposal = false);
 }
