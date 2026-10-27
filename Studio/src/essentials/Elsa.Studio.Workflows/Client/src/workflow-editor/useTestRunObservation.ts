@@ -25,6 +25,8 @@ export function useTestRunObservation({ context, testRun, enabled = true, onRunV
   const view = testRun?.view;
   const notify = useRef(onRunViewUpdated); notify.current = onRunViewUpdated;
   const manualWaits = useRef<AbortController | null>(null);
+  const pollingWaits = useRef<AbortController | null>(null);
+  const waitsRevision = useRef(0);
   const observation = useExecutionObservation<TestRunEvidence>({ context,
     identity: JSON.stringify(["test-run", view?.testRunId, view?.artifactId, view?.workflowExecutionId]),
     enabled: enabled && !!view && (!testRun?.endpointContext || testRun.endpointContext === context),
@@ -38,6 +40,8 @@ export function useTestRunObservation({ context, testRun, enabled = true, onRunV
       if (refreshed.status === "Expired" || refreshed.expiresAt && Date.parse(refreshed.expiresAt) <= Date.now())
         return { value: null, expired: true, terminal: true };
       const waitController = new AbortController();
+      pollingWaits.current = waitController;
+      const expectedWaitsRevision = ++waitsRevision.current;
       const abortWaits = () => waitController.abort();
       scope.signal.addEventListener("abort", abortWaits, { once: true });
       const waitsTask = getWorkflowTestRunWaits(context, view.testRunId, waitController.signal).then(
@@ -50,9 +54,12 @@ export function useTestRunObservation({ context, testRun, enabled = true, onRunV
         scope.publish(previous => ({ details, waits: terminal ? [] : previous?.waits ?? [], waitsError: previous?.waitsError ?? "", waitsLoading: !terminal && (!previous || previous.waitsLoading) }));
         if (terminal) return { value: { details, waits: [], waitsError: "", waitsLoading: false }, terminal };
         const waits = await waitsTask;
-        return { value: { details, ...waits, waitsLoading: false }, terminal };
+        const value = { details, ...waits, waitsLoading: false };
+        // A command refresh may already have confirmed consumption while this poll's waits were pending.
+        return { value, terminal, reconcile: previous => expectedWaitsRevision === waitsRevision.current ? value : previous };
       } finally {
         scope.signal.removeEventListener("abort", abortWaits); waitController.abort();
+        if (pollingWaits.current === waitController) pollingWaits.current = null;
       }
     }
   });
@@ -65,13 +72,15 @@ export function useTestRunObservation({ context, testRun, enabled = true, onRunV
   const refreshWaits = useCallback(async (testRunId: string) => {
     if (!isCurrent() || testRunId !== view?.testRunId) return;
     manualWaits.current?.abort();
+    pollingWaits.current?.abort();
+    const expectedWaitsRevision = ++waitsRevision.current;
     const controller = new AbortController(); manualWaits.current = controller;
     try {
       const result = await getWorkflowTestRunWaits(context, testRunId, controller.signal);
-      if (isCurrent() && latestRead.current === readIdentity && manualWaits.current === controller && !controller.signal.aborted)
+      if (isCurrent() && expectedWaitsRevision === waitsRevision.current && latestRead.current === readIdentity && manualWaits.current === controller && !controller.signal.aborted)
         updateValue(value => ({ ...value, waits: isTerminalExecution(value.details?.instance.status) ? [] : result.waits ?? [], waitsError: "", waitsLoading: false }));
     } catch (error) {
-      if (isCurrent() && latestRead.current === readIdentity && manualWaits.current === controller && !controller.signal.aborted) throw error;
+      if (isCurrent() && expectedWaitsRevision === waitsRevision.current && latestRead.current === readIdentity && manualWaits.current === controller && !controller.signal.aborted) throw error;
     }
   }, [context, isCurrent, readIdentity, updateValue, view?.testRunId]);
   return {

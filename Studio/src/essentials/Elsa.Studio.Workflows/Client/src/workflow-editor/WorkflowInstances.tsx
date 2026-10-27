@@ -877,6 +877,8 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
   const rememberedExecutions = useRef(new Map<string, ActivityExecutionStateSummary>());
   const loadedBrowserContext = useRef<string | null>(null);
   const loadingBrowserContext = useRef<string | null>(null);
+  const failedMetadataContext = useRef<string | null>(null);
+  const [metadataRevision, setMetadataRevision] = useState(0);
   const reloadDetailsRequested = useRef(false);
   const data = loadedBrowserContext.current === browserContext && observation.status !== "unavailable" ? loadedData : null;
   const hasLoadedData = loadedData !== null;
@@ -995,6 +997,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
   const resetJournals = journals.reset;
   const load = useCallback(async (details: WorkflowInstanceDetails, preserveCanvas = false) => {
     const generation = ++loadGeneration.current;
+    failedMetadataContext.current = null;
     scopeRequest.current?.abort();
     setScopeNavigation(current => current.context === browserContext && current.loading
       ? { context: browserContext, loading: false, error: "Execution scope resolution was interrupted by refresh. Retry the scope." } : current);
@@ -1109,6 +1112,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
       );
     } catch (e) {
       if (generation !== loadGeneration.current) return;
+      failedMetadataContext.current = browserContext;
       setData(null);
       setError(formatWorkflowRunLoadError(e, workflowExecutionId));
       setState("failed");
@@ -1130,11 +1134,16 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
       return;
     }
     if (loadedBrowserContext.current !== browserContext || reloadDetailsRequested.current) {
+      if (failedMetadataContext.current === browserContext && !reloadDetailsRequested.current) return;
       if (loadingBrowserContext.current === browserContext) return;
-      const preserveCanvas = loadedBrowserContext.current === browserContext;
+      const preserveCanvas = loadedBrowserContext.current === browserContext && hasLoadedData;
       reloadDetailsRequested.current = false;
       loadingBrowserContext.current = browserContext;
-      void load(details, preserveCanvas).finally(() => { if (loadingBrowserContext.current === browserContext) loadingBrowserContext.current = null; });
+      void load(details, preserveCanvas).finally(() => {
+        if (loadingBrowserContext.current !== browserContext) return;
+        loadingBrowserContext.current = null;
+        if (reloadDetailsRequested.current) setMetadataRevision(value => value + 1);
+      });
       return;
     }
     // Reconcile data without rebuilding the pinned graph, resetting scopes or moving the viewport.
@@ -1142,7 +1151,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
       ? { ...current, details } : current);
     setBrowserEvidence(current => current.context === browserContext ? { ...current, items: current.items
       .map(item => details.activities.find(fresh => fresh.activityExecutionId === item.activityExecutionId) ?? item) } : current);
-  }, [browserContext, hasLoadedData, load, observation.error, observation.revision, observation.value, state, workflowExecutionId]);
+  }, [browserContext, hasLoadedData, load, metadataRevision, observation.error, observation.revision, observation.value, workflowExecutionId]);
 
   const goBack = () => {
     navigate(getRunHistoryBackLocation(initialReturnTo));
@@ -1497,6 +1506,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
     labelFor={labelForExecution} onSelect={selectBrowserExecution} onEnter={enterChildExecution}
     onIncident={openExecutionIssues}
     renderDetails={(execution, navigation, children) => <WorkflowActivityExecutionDetails context={context} activity={execution}
+      refreshKey={evidenceRevision}
       activityCatalog={data.activityCatalog} executableNodeFacts={findExecutableNodeFacts(data.executableGraph, execution)}
       expressionEditors={expressionEditors} focusInputKey={focusInputKey} onSelectEvidence={selectActivityExecution}
       executionNavigation={navigation} childExecutions={children} />}
@@ -1539,7 +1549,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
         <button type="button" onClick={refreshWorkspace}><RotateCcw size={14} /> Refresh</button>
         <button type="button" aria-pressed={observation.following} onClick={() => observation.setFollowing(!observation.following)}
           title="Follow recorded updates without changing the inspected occurrence. Pausing observation does not stop execution.">{observation.following ? "Pause following" : "Follow execution"}</button>
-        <span role="status">{observation.status === "connected" ? "Execution on this canvas" : observation.status === "paused" ? "Observation paused · last confirmed state"
+        <span role="status">{observation.status === "connected" ? data ? "Execution on this canvas" : `Execution ${observation.value?.instance.status ?? "observed"}` : observation.status === "paused" ? "Observation paused · last confirmed state"
           : observation.status === "disconnected" ? "Execution observation disconnected · last confirmed evidence" : observation.status === "loading" ? "Connecting to execution…" : "Execution observation unavailable"}</span>
         {observation.error ? <span role="status">{observation.error}</span> : null}
         {data && instanceAction ? (
@@ -1973,7 +1983,7 @@ function WorkflowInstanceCanvas({
         <ScopeBreadcrumb className="wf-instance-breadcrumb" frames={frames} onNavigate={onNavigateToScope} />
       ) : null}
       {executionBreadcrumb}
-      {(scoped.loading || scoped.failed || scoped.repeated) ? <p className="wf-instance-note" role="status">{scoped.loading ? "Loading visible execution evidence…" : scoped.failed ? "Some visible execution evidence could not be loaded. Refresh to retry." : "Some activities ran more than once. Choose an occurrence in Run data."}</p> : null}
+      {(scoped.loading || scoped.failed || scoped.repeated) ? <p className="wf-instance-note" role="status">{scoped.loading ? "Loading visible execution evidence…" : scoped.failed ? "Some visible execution evidence could not be loaded. Refresh to retry." : "Some activities ran more than once. Choose an occurrence to inspect."}</p> : null}
       <div className="wf-instance-canvas">
         {!definitionVersion ? (
           <div className="wf-empty">

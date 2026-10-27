@@ -28,6 +28,7 @@ for (const theme of ["light", "dark"]) {
     await page.getByRole("button", { name: "Complete fixture execution", exact: true }).click();
     await expect(node).toHaveAccessibleName(/Run state: Completed\. Selected/);
     await expect(page.getByText("Current: 1", { exact: true })).toBeVisible();
+    await expect(page.getByText("Completion receipt: 1", { exact: true })).toBeVisible();
     expect(await viewport.getAttribute("style")).toBe(transform);
     expect(page.url()).toBe(route);
   });
@@ -45,6 +46,7 @@ for (const theme of ["light", "dark"]) {
     await page.getByRole("button", { name: "Complete fixture execution", exact: true }).click();
     await expect(node).toHaveAccessibleName(/Run state: Completed\. Selected/);
     await expect(page.getByText("Current: 4", { exact: true })).toBeVisible();
+    await expect(page.getByText("Completion receipt: 4", { exact: true })).toBeVisible();
     await expect(page.getByText("Current: 10", { exact: true })).toHaveCount(0);
   });
 }

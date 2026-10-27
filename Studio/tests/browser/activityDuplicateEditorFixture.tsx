@@ -281,9 +281,12 @@ function createEditorContext(live?: { status: string; disconnected: boolean }): 
           if (!execution) throw new Error("Unknown activity execution");
           return { ...execution, ...(live ? { status: live.status } : {}), executionSequence: execution.position,
             provenance: { parentActivityExecutionId: execution.parentActivityExecutionId, metadata: {} },
-            bookmarks: [], incidents: runCanvas === "incident" && execution.authoredActivityId === "write-two" ? [incident] : [], outcomeNames: ["Done"], valueSnapshots: [{ name: "Text", inputKey: "text", subject: "ActivityInput",
+            bookmarks: [], incidents: runCanvas === "incident" && execution.authoredActivityId === "write-two" ? [incident] : [], outcomeNames: live && live.status !== "Completed" ? [] : ["Done"], valueSnapshots: [{ name: "Text", inputKey: "text", subject: "ActivityInput",
               captureMode: "DiagnosticSnapshot", snapshot: { kind: "string", preview: `Current: ${execution.position}` },
-              capturedAt: execution.scheduledAt, captureReason: "Captured by fixture policy", isSensitive: false, metadata: {} }] };
+              capturedAt: execution.scheduledAt, captureReason: "Captured by fixture policy", isSensitive: false, metadata: {} },
+              ...(live?.status === "Completed" ? [{ name: "Receipt", outputKey: "receipt", subject: "ActivityOutput", captureMode: "DiagnosticSnapshot",
+                snapshot: { kind: "string", preview: `Completion receipt: ${execution.position}` }, capturedAt: execution.scheduledAt,
+                captureReason: "Captured on completion", isSensitive: false, metadata: {} }] : [])] };
         }
         if (runCanvas && url === "/publishing/test-runs/editor-test") return runView;
         if (runCanvas && url === "/publishing/test-runs/editor-test/waits") return { waits: [] };

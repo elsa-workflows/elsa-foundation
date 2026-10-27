@@ -202,3 +202,16 @@ it.each(["disconnected", "unavailable", "expired"] as const)("keeps a manual ref
   // The command surface accepts connected or explicitly paused confirmed observation only.
   expect(current.status === "connected" || current.status === "paused" && !current.following && current.revision > 0).toBe(false);
 });
+
+it.each(["resolve", "reject"] as const)("does not restore a consumed wait when a prior healthy poll's waits %s later", async outcome => {
+  const wait = { waitId: "consumed", nodeId: "node", label: "Continue", isAvailable: true, modes: [] };
+  api.waits.mockResolvedValue({ waits: [wait] }); render(); await settle();
+  let resolveOld!: (value: { waits: typeof wait[] }) => void;
+  let rejectOld!: (error: Error) => void;
+  api.waits.mockImplementationOnce(() => new Promise((resolve, reject) => { resolveOld = resolve; rejectOld = reject; }));
+  await vi.advanceTimersByTimeAsync(2000); await settle(); expect(current.waits).toEqual([wait]);
+  api.waits.mockResolvedValue({ waits: [] });
+  await current.refreshWaits("test"); await settle(); expect(current.waits).toEqual([]);
+  if (outcome === "resolve") resolveOld({ waits: [wait] }); else rejectOld(new Error("superseded wait read failed"));
+  await settle(); expect(current.waits).toEqual([]); expect(current.waitsError).toBe("");
+});

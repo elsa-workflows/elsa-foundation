@@ -12,7 +12,7 @@ export interface ExecutionObservationReadScope<T> {
   isCurrent(): boolean;
   publish(recipe: (previous: T | null) => T): void;
 }
-interface ReadResult<T> { value: T | null; terminal: boolean; expired?: boolean }
+interface ReadResult<T> { value: T | null; terminal: boolean; expired?: boolean; reconcile?(previous: T | null): T | null }
 interface Observation<T> { key: string; status: ExecutionObservationStatus; value: T | null; error: string; revision: number }
 
 export function isTerminalExecution(status?: string) {
@@ -105,7 +105,7 @@ export function useExecutionObservation<T>({ context, identity, enabled = true, 
         if (!current()) return;
         terminal = result.terminal || !!result.expired;
         failures = 0;
-        setState(value => ({ key, value: result.expired ? null : result.value, status: result.expired ? "expired" : "connected",
+        setState(value => ({ key, value: result.expired ? null : result.reconcile ? result.reconcile(value?.key === key ? value.value : null) : result.value, status: result.expired ? "expired" : "connected",
           error: result.expired ? "This Test Run has expired." : "", revision: (value?.key === key ? value.revision : 0) + (published ? 0 : 1) }));
       } catch (error) {
         if (!current()) return;

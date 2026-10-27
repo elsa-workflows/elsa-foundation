@@ -404,10 +404,11 @@ const searchStatusVariants = [
 for (const variant of searchStatusVariants) {
   test(`search refresh keeps prior results truthful through failure, retry, and empty success (${variant.name})`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: variant.width, height: variant.height });
+    const clockStart = new Date("2026-10-20T12:00:00Z");
+    // Install before application timers and pause at a future target, independent of protocol latency.
+    await page.clock.install({ time: new Date(clockStart.getTime() - 60_000) });
     await openSecondPage(page, browseUrl.replace("/?", `/?theme=${variant.theme}&`));
     await expect(page.locator(".wf-pagination")).toBeVisible();
-    const clockStart = new Date("2026-10-20T12:00:00Z");
-    await page.clock.install({ time: clockStart });
     await page.clock.pauseAt(clockStart);
     await page.evaluate(() => {
       (window as Window & { workflowBrowseTestControl?: { deferNext(searchTerm: string): void } })
