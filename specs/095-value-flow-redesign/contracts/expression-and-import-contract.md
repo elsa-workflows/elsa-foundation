@@ -55,7 +55,7 @@ pinned as part of the consumer invocation's complete input snapshot.
   "language": "JavaScript",
   "source": "args.subtotal + args.tax",
   "resultType": { "alias": "Decimal", "collection": "None" },
-  "capabilityProfile": "binding-pure-v1",
+  "capabilityProfile": "binding-readonly-v2",
   "parameters": [
     {
       "name": "subtotal",
@@ -106,23 +106,44 @@ Both engines MUST materialize dynamic `Any` parameters consistently from fresh `
 `JsonElement` forms. Mutation of the engine-local object MUST NOT write workflow state and SHOULD be
 prevented/frozen where supported.
 
-The `binding-pure-v1` capability profile permits deterministic value transforms only. It forbids:
+The `binding-readonly-v2` capability profile (ADR 0083 amendment, epic #3052 decisions D-1, D-5, D-6
+and D-11; it replaces `binding-pure-v1`) permits value transforms that read workflow values and never
+change engine-owned workflow state. They need not be deterministic.
+
+It permits:
+
+- the current time, random values and GUID generation. Evaluators run in UTC with the invariant culture, and
+  time comes from the host's `TimeProvider`;
+- functions implemented in .NET that are registered for this profile and exchange only JSON values with
+  the expression. Their effect profile (`Repeatable`, `External`) drives diagnostics and persistence,
+  and never refusal.
+
+It forbids:
 
 - ambient `variables`, `input`, `output`, or `ExpressionExecutionContext` objects;
 - `getVariable`, `setVariable`, named variable getters/setters, `getInput`, `getOutput`, and
   `getOutputFrom` host functions;
 - workflow/activity/instance identity not declared as a parameter;
-- configuration, environment, filesystem, network, process, reflection, and service access;
-- current time, GUID generation, random generation, or other nondeterminism unless supplied as a
-  pinned parameter or separately ratified deterministic capability;
-- workflow variable mutation or activity output publication;
-- registration of mutable host functions through evaluation events, filters, preprocessors, or
-  postprocessors; and
+- live .NET objects crossing into the expression. Whether and how that can be switched on is analysis
+  A-1 on epic #3052;
+- any change to engine-owned workflow state: variable mutation, workflow output publication,
+  correlation or instance-name changes, and outcome selection;
+- functions not registered for this profile, added through evaluation events, filters,
+  preprocessors, or postprocessors; and
 - nonpersistable results in durable execution.
+
+The first two forbidden items stay until
+[ADR 0089](../../../docs/adr/0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md)
+(proposed, decision D-7) is accepted. It lets `variables.X` and `getVariable('X')` read through
+publish-resolved declarations.
+
+A result of `undefined` is an error unless the workflow selects the undefined-as-null policy (ADR 0045 §2
+amendment, D-11). Under that policy, an `undefined` result and every `undefined`-valued object property
+materialize as `null`.
 
 JavaScript/Liquid extension registration MUST declare the capability profiles in which it is allowed.
 The evaluator builds its processor/filter set from that allowlist. A global extension registration
-cannot silently join the pure profile.
+cannot silently join a capability profile.
 
 Stateful scripts, configuration-dependent scripts, or scripts with workflow-visible side effects are
 activities. They receive plain inputs, return a typed result, and use a separate graph-visible `Set`

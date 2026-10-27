@@ -1,6 +1,8 @@
 # JavaScript Bindings Accept Expressions and Statement Bodies
 
 Status: revised (2026-10-19), implementation [#3009](https://github.com/elsa-workflows/elsa-foundation/issues/3009).
+Amended (2026-10-27, [epic #3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052) decisions D-1 and
+D-11): new capability profile `binding-readonly-v2`, and the undefined-as-null policy. See *Amendment* below.
 
 This replaces the unimplemented 5 August proposal for host-selected grammars in
 [spec 146](../../specs/146-javascript-binding-grammar/spec.md), following the owner's request to
@@ -38,10 +40,45 @@ form because its intent is clearer. A bare object always retains expression sema
 statement body returning an object, use `return { total: 42 };`.
 
 Both forms remain strict, use the same read-only `args` and visible-variable snapshot, and have
-identical deterministic sandbox restrictions, cancellation, execution limits and JSON result
-materialization. They retain the `binding-pure-v1` capability profile. Statements introduce local
-computation, not permission to change workflow state or access services. A result of `undefined`
-remains an error with guidance to produce or return a value.
+identical sandbox restrictions, cancellation, execution limits and JSON result materialization. They
+share one capability profile, `binding-readonly-v2` (see the amendment below; originally
+`binding-pure-v1`). Statements introduce local computation, not permission to change workflow
+state. A result of `undefined` remains an error with guidance to produce or return a value, unless
+the workflow selects the undefined-as-null policy (amendment below).
+
+## Amendment (epic #3052, decisions D-1 and D-11, 2026-10-27)
+
+**Capability profile `binding-readonly-v2` replaces `binding-pure-v1`.**
+[ADR 0045 §5](0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md#5-make-expressions-serialized-explicit-and-pure),
+as amended for D-1, D-5 and D-6, no longer requires bindings to be deterministic. `binding-pure-v1` forbids time,
+randomness and GUIDs by definition, so it is retired rather than redefined. A profile name must always mean the same
+behaviour.
+- **The new name says what still holds:** a binding reads, it never changes engine-owned workflow state.
+- **It allows** the current time (UTC, invariant culture, from the host's `TimeProvider`), random values and GUIDs.
+- **It also allows functions implemented in .NET** that are registered for the profile and exchange only JSON values
+  with the script (D-5). A function's effect profile is guidance, not a reason to refuse it (D-6).
+- **Spec 095's expression contract defines the profile in full.** That definition is amended alongside this ADR.
+
+The profile is part of the expression definition, so changing it changes expression fingerprints and artifact hashes
+([ADR 0038](0038-artifact-hash-is-purely-behavioral-and-executables-are-content-addressed.md)). Elsa 4 has no
+released executables yet, so there is no compatibility path for `binding-pure-v1`: executables published before the
+change are republished.
+
+**Undefined-as-null (D-11).** The paragraph above keeps an `undefined` result an error by default.
+[ADR 0045 §2](0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md#2-compile-role-specific-input-bindings),
+as amended for D-10 and D-11, adds a visible workflow policy, pinned in the executable.
+- **Under it,** an `undefined` result materializes as `null`, and an `undefined`-valued object property is kept as
+  `null` at every depth.
+- **The policy applies after the form is selected and the source has run,** at the JavaScript-to-workflow boundary.
+  It never changes which form is selected, the source, or how JavaScript evaluates.
+- **Both forms behave the same** under it: an expression whose value is `undefined`, and a statement body that
+  returns `undefined` or ends with an `undefined` completion value.
+
+*Left to the implementing specs* (S-1 and S-2 on the epic):
+- **renaming the profile constant** and removing the replay justification that `Inline` derives from
+  `binding-pure-v1`;
+- **the registration API** that marks a function as allowed in `binding-readonly-v2`;
+- **the editor guidance** shown for an `undefined` result when the policy is not selected.
 
 The JavaScript editor keeps a single language choice. The expanded editor explains that users can
 write an expression or statements returning a value. Validation uses the same parser selection as
