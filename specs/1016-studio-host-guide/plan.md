@@ -45,11 +45,11 @@ Pre-design and post-design checks pass; there is no unresolved architecture or t
 3. Assert Elsa libraries are packages, no ProjectReference, selected published DLL bytes match candidate archives, and source/runtime configuration remain application-owned. Hide only this run's source/feed/cache, start the published host in Production, observe standard UI/module/discovery/runtime and assets with the existing browser observer, then stop only owned processes.
 4. Trace every migration/optional handoff to accepted code/receipts, check links, execute required architecture/maps and complete three independent review lenses. No implementation delegation.
 5. Final reviewed-head hosted checks must pass. Download/audit actual candidate artifacts and validate the sample against final candidates when available; preserve actual producer revision separately from reviewed source.
-6. After reviewed merge, verify actual resulting main CI/Studio/CodeQL, fresh artifact and sample. Then close3366,3350,3343,3340 and read back all30 native/board records. No release/deployment/publisher activation.
+6. After reviewed merge, verify actual resulting main CI/Studio/CodeQL, fresh artifact and sample. Then close #3366, #3350, #3343 and #3340 and read back all 30 native/board records. No release/deployment/publisher activation.
 
 ## Workflow Notes
 
-Spec number1016 follows the current/archive maximum1015 and all19 open PR trees checked in `/tmp/studio3366-number-reservation.json`. Exclusive claim6449693324. The mandatory git feature hook ran exactly once with Issue Bus branch naming. The installed resolver selects the core spec/plan templates; no `specify` CLI is required. Optional auto-commit hooks are disabled by git configuration and skipped; context-update hooks are disabled. The ignored `.specify/feature.json` pointer selects this feature independently from the branch number. Research agents are unnecessary because no unknown or technology choice remains; only the mandatory independent review lenses delegate.
+Spec number 1016 follows the current/archive maximum 1015 and all 19 open PR trees checked in `/tmp/studio3366-number-reservation.json`. Exclusive claim 6449693324. The mandatory git feature hook ran exactly once with Issue Bus branch naming. The installed resolver selects the core spec/plan templates; no `specify` CLI is required. Optional auto-commit hooks are disabled by git configuration and skipped; context-update hooks are disabled. The ignored `.specify/feature.json` pointer selects this feature independently from the branch number. Research agents are unnecessary because no unknown or technology choice remains; only the mandatory independent review lenses delegate.
 
 ## Complexity Tracking
 

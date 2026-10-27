@@ -31,13 +31,17 @@
 
 ## Phase 5: Integrated Verification and Delivery
 
-- [ ] T009 Run the complete frozen actual-archive/consumer/control orchestration, retain source/tool/archive/report/cleanup observations and finalize runnable commands in tool READMEs and `specs/1015-studio-package-ci/validation.md`.
+- [x] T009 Run the complete frozen actual-archive/consumer/control orchestration, retain source/tool/archive/report/cleanup observations and finalize runnable commands in tool READMEs and `specs/1015-studio-package-ci/validation.md`.
 - [x] T010 Run applicable whole tooling checks, affected .NET fixtures if changed, required architecture graph/whole guard/discovery and generated maps; reconcile results in `specs/1015-studio-package-ci/validation.md` without repeating unrelated suites.
-- [ ] T011 Converge independent correctness/standards/acceptance review within6rounds, terminalize spec/remove checklist and pass actual exact-head CI/Full tier/Studio on `.github/workflows/studio-ci.yml` and the final diff.
-- [ ] T012 Complete reviewed delivery, verify resulting-main Linux CI/candidate proof, then reconcile issue/Project/claim with receipts in `specs/1015-studio-package-ci/validation.md`; leave3366and ancestors open until their own exit criteria pass.
+- [x] T011 Converge independent correctness/standards/acceptance review within6rounds, terminalize spec/remove checklist and pass actual exact-head CI/Full tier/Studio on `.github/workflows/studio-ci.yml` and the final diff.
+- [x] T012 Complete reviewed delivery, verify resulting-main Linux CI/candidate proof, then reconcile issue/Project/claim with receipts in `specs/1015-studio-package-ci/validation.md`; leave3366and ancestors open until their own exit criteria pass.
 
 ## Dependencies and Execution Strategy
 
 T001 -> T002 -> T003/T004 establishes the minimal archive guard. T005 depends on that artifact contract; T006/T007 extend its precise controls. T008 wires the complete matrix. T009/T010 precede final T011/T012 delivery. MVP is US1's actual complete/fault/restored archive proof; subsequent profiles are added incrementally rather than accepting a partial full-task pass.
 
 Source inspection and separate profile-read audits can be independent, but shared build/server work runs serially with the build-slot wrapper. There is no implementation delegation. Only the mandatory independent review lenses run in parallel. No tests of documentation text, synthetic replacement product packages, arbitrary exit1 controls or unavailable-native skips.
+
+## Final record reconciliation
+
+T009, T011, T012 were delivered through [the reviewed delivery receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3404#issuecomment-6449658674) and merged commit `e1bbbe4d733f842b0aa2c501d03ca15c134684ae`, verified as an ancestor of current main. #3366 reconciles these previously stale checkboxes from actual delivery/main/candidate evidence; it does not invent a new execution or formal approval. The current organization protocol governs review/merge authorization.
