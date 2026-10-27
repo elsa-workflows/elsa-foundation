@@ -1,6 +1,6 @@
 # Unified Workflow Authoring and Execution
 
-- **Status:** Active; owner authorized planning and implementation on 27 October 2026.
+- **Status:** Delivered through the five features below; final CI, resulting-main verification and closure receipts are recorded on [Program #3392](https://github.com/elsa-workflows/elsa-foundation/issues/3392).
 - **Area:** Studio workflow authoring, runtime inspection and existing Test Run controls.
 - **Steward:** Sipke Schoorstra; one claimed delivery feature at a time.
 - **Kanban:** [GitHub Project 64](https://github.com/orgs/elsa-workflows/projects/64/views/1).

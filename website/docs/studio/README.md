@@ -22,6 +22,8 @@ Open a workflow instance from **Runs** to inspect its current status and follow 
 
 Both views show brief visual cues for newly recorded activity changes. Sequence connectors and supported Flowchart connections animate only when the recorded evidence establishes that route. Updates can arrive together, and missing evidence does not imply that an activity or connection never executed. Other structures retain their supported activity-state cues. Reduced-motion preferences suppress the new motion; status text and inspection remain available.
 
+BPMN connections and external execution boundaries do not gain inferred traversal animation. A dispatched child workflow is a separate execution; inspect its own run for the evidence it exposes. Custom activities and external providers retain their existing pinned structure and available evidence, without expanding their internal execution onto the parent canvas.
+
 Captured values depend on the server's capture policy and your access. Missing, unavailable or redacted values stay explicitly identified. Following a run does not enable additional data capture or provide engine pause, rewind or recorded playback.
 
 ## What Studio looks like
