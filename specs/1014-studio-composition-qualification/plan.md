@@ -25,7 +25,8 @@ The [management-key boundary](../../docs/adr/0037-studio-management-bridge-keeps
 ## Project Structure
 
 - `Studio/tests/Elsa.Studio.Tests/Administration/{PackageAssetTests,AdministrationCompositionTests}.cs`: minimal private fixture mapping seam and actual native filter regression.
-- `Studio/src/essentials/Elsa.Studio.Hosting.Nuplane/PackageAssetEndpoints.cs`: only a reproduced ownership correction.
+- `Studio/src/essentials/Elsa.Studio.Hosting.Nuplane/PackageAssetEndpoints.cs`: reproduced ownership correction.
+- `Extensions/ConsoleStream/studio/Elsa.Studio.ConsoleStream/Elsa.Studio.ConsoleStream.csproj`: restore declared existing runtime dependencies after actual external-host startup exposed their suppressed nuspec metadata.
 - `tools/studio/Composition.Probe/`: reusable owned qualification/fixture templates and browser/network driver. Reuse established proof primitives; no alternate product host implementation. Existing HostingAssets/Api probes remain canonical for their current scopes.
 - `specs/1014-studio-composition-qualification/`: plan, research/report model/quickstart/tasks and evidence. Existing public contracts are linked, not duplicated.
 
