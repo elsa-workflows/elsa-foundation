@@ -139,6 +139,18 @@ PR delivery and verification on resulting main and candidate packages. This supe
 session boundary; the sequencing and parked-work boundaries above remain. Releases, deployments and publisher
 activation are not included. The remaining decisions in this ADR apply.
 
+**Owner amendment, 27 October 2026:** [Unified Workflow Authoring and Execution #3392](../program-goals/unified-workflow-workspace.md)
+is authorized as an active program. The owner approved the investigated single-workspace concept,
+instructed planning and implementation, and requested a durable program with epics, features and tasks
+where useful, without unnecessary overhead or SpecKit unless needed. Sequencing: attach existing draft
+Test Runs to the editor, share exact activity inspection, integrate following and existing wait/stop
+commands, then add evidence-supported motion and qualify the complete experience. Run beside the active
+programs, displace none, coordinate shared Studio paths and reactivate no parked backlog. Feature issues
+own acceptance criteria and task checklists; this program uses that lightweight plan instead of a
+SpecKit artifact tree. Consequential new runtime observation contracts still require an explicit design
+decision. Execution ownership, persistence policy, model semantics, capture policy and authorization are
+preserved. Releases, deployments and publisher activation are not included. The remaining decisions apply.
+
 ### D1 — Risk-based testing
 
 - Test observable behaviour at the cheapest level that proves it; unit-test logic that carries real risk.

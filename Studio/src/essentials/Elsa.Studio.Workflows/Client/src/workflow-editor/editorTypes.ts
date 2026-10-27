@@ -1,6 +1,6 @@
 import type React from "react";
 import type { Edge } from "@xyflow/react";
-import type { StudioActivityDescriptor, StudioWorkflowContextConnection, StudioTestStimulusActionResult } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityDescriptor, StudioWorkflowContextConnection, StudioTestStimulusActionResult, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ActivityAvailabilityDiagnosticEntry, ActivityCatalogItem, ActivityNode, WorkflowDefinitionDetails, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowInstanceDetails, WorkflowTestRunView } from "../workflowTypes";
 import type { getChildSlots, ScopeFrame, WorkflowEdgeData } from "../workflowAdapter";
 import type { WorkflowRunInputDrafts } from "../workflowRunInputs";
@@ -48,6 +48,10 @@ export type WorkflowEditorOperation = "idle" | "saving" | "promoting" | "publica
 
 export interface WorkflowTestRunState {
   draftSignature: string;
+  /** Exact authoring and presentation snapshot sent for this run; never the later editable draft. */
+  snapshot?: WorkflowDraft;
+  /** In-memory dispatch authority; a matching id on another endpoint is a different run. */
+  endpointContext?: StudioEndpointContext;
   view: WorkflowTestRunView;
   startLabel?: string;
   workflowInputNames?: string[];

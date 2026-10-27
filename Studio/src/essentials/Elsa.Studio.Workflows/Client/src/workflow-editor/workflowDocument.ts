@@ -73,6 +73,7 @@ export type WorkflowDocumentAction =
   // single container child needs multi-frame hops, so there is no single-frame "enter slot" transition.
   | { type: "scopeNavigated"; frames: ScopeFrame[]; selectedNodeId: string | null }
   | { type: "testRunStarted"; testRun: WorkflowTestRunState }
+  | { type: "testRunResultUpdated"; testRun: WorkflowTestRunState }
   | { type: "testRunViewUpdated"; view: WorkflowTestRunState["view"] }
   | { type: "testRunWaitDraftUpdated"; waitId: string; state: WorkflowTestRunWaitDraftState }
   | { type: "testRunCleared" }
@@ -105,8 +106,13 @@ export function workflowDocumentReducer(state: WorkflowDocumentState, action: Wo
       return { ...state, frames: action.frames, selectedNodeId: action.selectedNodeId };
     case "testRunStarted":
       return { ...state, testRun: action.testRun };
+    case "testRunResultUpdated":
+      return state.testRun?.view.testRunId === action.testRun.view.testRunId
+        && state.testRun?.endpointContext === action.testRun.endpointContext
+        ? { ...state, testRun: { ...state.testRun, ...action.testRun } } : state;
     case "testRunViewUpdated":
-      return state.testRun ? { ...state, testRun: { ...state.testRun, view: action.view } } : state;
+      return state.testRun?.view.testRunId === action.view.testRunId
+        ? { ...state, testRun: { ...state.testRun, view: action.view } } : state;
     case "testRunWaitDraftUpdated":
       return state.testRun ? {
         ...state,
@@ -155,6 +161,9 @@ export function useWorkflowDocument() {
     },
     startTestRun(testRun: WorkflowTestRunState) {
       dispatch({ type: "testRunStarted", testRun });
+    },
+    updateTestRunResult(testRun: WorkflowTestRunState) {
+      dispatch({ type: "testRunResultUpdated", testRun });
     },
     updateTestRunView(view: WorkflowTestRunState["view"]) {
       dispatch({ type: "testRunViewUpdated", view });
