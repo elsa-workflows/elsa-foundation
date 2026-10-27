@@ -3564,7 +3564,7 @@
   gap: 5px;
   border-radius: 999px;
   background: var(--wf-accent-soft);
-  color: var(--wf-accent);
+  color: color-mix(in srgb, var(--studio-accent) 65%, var(--studio-text));
   font-size: 12px;
   font-weight: 700;
   padding: 3px 8px;
@@ -3572,7 +3572,7 @@
 
 .wf-status {
   background: var(--wf-success-soft);
-  color: var(--wf-success);
+  color: var(--studio-success-fg);
 }
 
 .wf-test-run-status {
@@ -3582,7 +3582,7 @@
 .wf-editor-actions .wf-test-run-trigger {
   border-color: color-mix(in srgb, var(--wf-success) 34%, var(--wf-border));
   background: var(--wf-success-soft);
-  color: var(--wf-success);
+  color: var(--studio-success-fg);
   font-weight: 700;
 }
 
@@ -5054,7 +5054,13 @@ button.wf-node-slot-badge:focus-visible {
 }
 
 .wf-validation.ok {
-  color: var(--wf-success);
+  color: var(--studio-success-fg);
+}
+
+.wf-editor .react-flow__attribution a,
+.wf-page .react-flow__attribution a,
+.wf-tokens .react-flow__attribution a {
+  color: var(--studio-text-muted);
 }
 
 .wf-inspector-content {
