@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/codex/3360-studio-theme-store`
 **Created**: 2026-10-26
-**Status**: Draft
+**Status**: Implemented — staged in the implementation PR; reviewed delivery and resulting-main gates remain pending
 **Input**: Program #3340 task #3360: extract the existing optional theme capability so custom Studio hosts can reference packages instead of copying Web classes. Include the accepted #3380 follow-ups recorded on #3360.
 
 ## User Scenarios & Testing

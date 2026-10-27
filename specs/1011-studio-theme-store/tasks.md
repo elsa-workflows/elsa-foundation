@@ -36,7 +36,7 @@ Independent test: alternate ContentRoot/store/source/assets, round-trip import/e
 ## Phase5 — qualification and delivery
 
 - [x] T013 Run whole affected .NET projects/discovery accounting and risk-based restored mutation controls for source persistence, feature/auth gates, installed options and asset validation.
-- [ ] T014 Validate affected locked restore, architecture/maps/inventory, actual package closure and reference Web smoke; update canonical contract/README with final APIs/profiles.
+- [x] T014 Validate affected locked restore, architecture/maps/inventory, actual package closure and reference Web smoke; update canonical contract/README with final APIs/profiles.
 - [ ] T015 Set spec Implemented after independent correctness/standards/acceptance draft review; open and attach one PR for #3360 with exact-head evidence and required CI/external review.
 - [ ] T016 Verify actual reviewed merge/resulting main and candidate artifacts, then close #3360/parent feature as appropriate and reconcile Program #3340/Project63 evidence.
 
