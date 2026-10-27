@@ -76,6 +76,21 @@ it("aborts an old scope and ignores its late result", async () => {
   expect(oldSignal?.aborted).toBe(true);
   await vi.waitFor(() => expect(onResolve).toHaveBeenLastCalledWith(expect.objectContaining({ activityExecutionId: "execution-4" })));
 });
+it("finishes slow same-query history reads before reconciling the newest live revision", async () => {
+  const releases: Array<(value: ActivityExecutionBrowsePage) => void> = [];
+  vi.mocked(browseActivityExecutions).mockImplementation(() => new Promise(resolve => releases.push(resolve)));
+  navigator(); await vi.waitFor(() => expect(releases).toHaveLength(1));
+  for (let revision = 1; revision <= 5; revision++) navigator({ refreshKey: revision });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(browseActivityExecutions).toHaveBeenCalledTimes(1);
+  expect(vi.mocked(browseActivityExecutions).mock.calls[0][3]?.aborted).toBe(false);
+  releases[0](page());
+  await vi.waitFor(() => expect(container.textContent).toContain("Execution 10 of 10"));
+  await vi.waitFor(() => expect(releases).toHaveLength(2));
+  releases[1]({ ...page(), totalCount: 11 });
+  await vi.waitFor(() => expect(container.textContent).toContain("Execution 10 of 11"));
+  expect(browseActivityExecutions).toHaveBeenCalledTimes(2);
+});
 it("distinguishes unsupported, denied and failed contexts without retained rows", async () => {
   vi.mocked(supportsActivityExecutionBrowsing).mockResolvedValue(false); navigator();
   await vi.waitFor(() => expect(container.textContent).toContain("unavailable on this host")); expect(browseActivityExecutions).not.toHaveBeenCalled();
@@ -113,6 +128,18 @@ it("does not let a delayed neighbor override a newer explicit selection", async 
   await vi.waitFor(() => expect(container.textContent).toContain("Execution 80 of 100"));
   release(page([entry(50)])); await new Promise(resolve => setTimeout(resolve, 0));
   expect(onSelect).not.toHaveBeenCalledWith(expect.objectContaining({ activityExecutionId: "execution-50" }));
+});
+it("keeps a requested exact neighbor pending across live revisions", async () => {
+  let release!: (value: ActivityExecutionBrowsePage) => void;
+  vi.mocked(browseActivityExecutions).mockImplementation(async (_context, _run, request) => request?.anchorActivityExecutionId === "execution-50"
+    ? new Promise(resolve => { release = resolve; }) : { ...page([entry(51)]), totalCount: 100 });
+  navigator({ selectedActivityExecutionId: "execution-51" });
+  await vi.waitFor(() => expect(container.textContent).toContain("Execution 51 of 100"));
+  click("Previous activity execution");
+  await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+  navigator({ selectedActivityExecutionId: "execution-51", refreshKey: 1 });
+  release(page([entry(50)]));
+  await vi.waitFor(() => expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ activityExecutionId: "execution-50" })));
 });
 it("removes inspected values when a subsequent history page confirms denial", async () => {
   flushSync(() => root.render(<ActivityExecutionInspectionPanel context={context} workflowExecutionId="run" nodeId="ordinary-node" nodeLabel="Ordinary"

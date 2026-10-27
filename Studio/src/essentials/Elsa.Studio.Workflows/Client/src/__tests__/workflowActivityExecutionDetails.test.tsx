@@ -1352,6 +1352,42 @@ it("retains confirmed evidence during a same-occurrence refresh and removes it i
   expect(container.textContent).not.toContain("reconciled value");
 });
 
+it("lets a slow occurrence inspection finish and coalesces intervening live revisions", async () => {
+  const releases: Array<(value: ActivityExecutionInspection) => void> = [];
+  vi.mocked(getActivityExecutionInspection).mockImplementation(() => new Promise(resolve => releases.push(resolve)));
+  const props = { context, activity, activityCatalog: catalog };
+  const container = render(<WorkflowActivityExecutionDetails {...props} />);
+  for (let revision = 1; revision <= 5; revision++) rerender(<WorkflowActivityExecutionDetails {...props} refreshKey={revision} />);
+  expect(getActivityExecutionInspection).toHaveBeenCalledTimes(1);
+  expect(vi.mocked(getActivityExecutionInspection).mock.calls[0][3]?.aborted).toBe(false);
+  releases[0](inspection([], ["First confirmed outcome"]));
+  await waitFor(() => expect(container.textContent).toContain("First confirmed outcome"));
+  await waitFor(() => expect(getActivityExecutionInspection).toHaveBeenCalledTimes(2));
+  releases[1](inspection([], ["Newest confirmed outcome"]));
+  await waitFor(() => expect(container.textContent).toContain("Newest confirmed outcome"));
+  expect(getActivityExecutionInspection).toHaveBeenCalledTimes(2);
+});
+
+it.each(["occurrence", "workflow", "endpoint"])("cancels a queued inspection when its %s identity changes", async change => {
+  let release!: (value: ActivityExecutionInspection) => void;
+  vi.mocked(getActivityExecutionInspection).mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+  const props = { context, activity, activityCatalog: catalog };
+  const container = render(<WorkflowActivityExecutionDetails {...props} />);
+  rerender(<WorkflowActivityExecutionDetails {...props} refreshKey={1} />);
+  const oldSignal = vi.mocked(getActivityExecutionInspection).mock.calls[0][3];
+  const nextActivity = { ...activity, ...(change === "occurrence" ? { activityExecutionId: "new-occurrence" }
+    : change === "workflow" ? { workflowExecutionId: "new-run" } : {}) };
+  vi.mocked(getActivityExecutionInspection).mockResolvedValue({ ...inspection([], ["Current context outcome"]),
+    activityExecutionId: nextActivity.activityExecutionId, workflowExecutionId: nextActivity.workflowExecutionId });
+  rerender(<WorkflowActivityExecutionDetails {...props} context={change === "endpoint" ? { ...context } : context} activity={nextActivity} refreshKey={1} />);
+  expect(oldSignal?.aborted).toBe(true);
+  await waitFor(() => expect(container.textContent).toContain("Current context outcome"));
+  release(inspection([], ["Obsolete context outcome"]));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(container.textContent).not.toContain("Obsolete context outcome");
+  expect(getActivityExecutionInspection).toHaveBeenCalledTimes(2);
+});
+
 it.each([false, true])("keeps other evidence available when a partial response omits incidents (compact: %s)", async compact => {
   const partial = inspection([], ["Confirmed outcome"]);
   Reflect.deleteProperty(partial, "incidents");

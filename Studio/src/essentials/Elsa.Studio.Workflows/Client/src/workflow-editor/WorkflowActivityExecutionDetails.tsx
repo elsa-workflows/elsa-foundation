@@ -85,6 +85,8 @@ export function WorkflowActivityExecutionDetails({
   });
   const [copyStatus, setCopyStatus] = useState("");
 
+  const requestedRevision = useRef(refreshKey); requestedRevision.current = refreshKey;
+  const refreshInspection = useRef<(() => void) | null>(null);
   useEffect(() => {
     setCopyStatus("");
     if (!selectedActivityExecutionId || !selectedWorkflowExecutionId) {
@@ -95,36 +97,38 @@ export function WorkflowActivityExecutionDetails({
     const controller = new AbortController();
     const activityExecutionId = selectedActivityExecutionId;
     const workflowExecutionId = selectedWorkflowExecutionId;
-    setInspectionState(previous => previous.status === "ready" && previous.activityExecutionId === activityExecutionId
-      && previous.workflowExecutionId === workflowExecutionId && previous.contextIdentity === selectedContextIdentity ? previous
-      : { activityExecutionId, workflowExecutionId, contextIdentity: selectedContextIdentity, status: "loading", inspection: null, error: "" });
-
-    getActivityExecutionInspection(context, workflowExecutionId, activityExecutionId, controller.signal).then(
-      inspection => {
-        if (controller.signal.aborted) return;
-        if (inspection.workflowExecutionId !== workflowExecutionId || inspection.activityExecutionId !== activityExecutionId) {
-          setInspectionState({ activityExecutionId, workflowExecutionId, contextIdentity: selectedContextIdentity,
-            status: "failed", inspection: null, error: "Execution evidence identity did not match the selected occurrence." });
-          return;
-        }
-        if (!controller.signal.aborted) setInspectionState({ activityExecutionId, workflowExecutionId, contextIdentity: selectedContextIdentity, status: "ready", inspection, error: "" });
-      },
-      error => {
-        if (!controller.signal.aborted) {
-          setInspectionState({
-            activityExecutionId,
-            workflowExecutionId,
-            contextIdentity: selectedContextIdentity,
-            status: "failed",
-            inspection: null,
-            error: error instanceof Error ? error.message : String(error)
-          });
-        }
-      }
-    );
-
-    return () => controller.abort();
-  }, [context, refreshKey, selectedActivityExecutionId, selectedContextIdentity, selectedWorkflowExecutionId]);
+    let running = false;
+    let confirmed: number | null = null;
+    const load = async () => {
+      if (running || controller.signal.aborted || confirmed === requestedRevision.current) return;
+      running = true;
+      try {
+        do {
+          const revision = requestedRevision.current;
+          setInspectionState(previous => previous.status === "ready" && previous.activityExecutionId === activityExecutionId
+            && previous.workflowExecutionId === workflowExecutionId && previous.contextIdentity === selectedContextIdentity ? previous
+            : { activityExecutionId, workflowExecutionId, contextIdentity: selectedContextIdentity, status: "loading", inspection: null, error: "" });
+          try {
+            const inspection = await getActivityExecutionInspection(context, workflowExecutionId, activityExecutionId, controller.signal);
+            if (controller.signal.aborted) return;
+            if (inspection.workflowExecutionId !== workflowExecutionId || inspection.activityExecutionId !== activityExecutionId) {
+              setInspectionState({ activityExecutionId, workflowExecutionId, contextIdentity: selectedContextIdentity,
+                status: "failed", inspection: null, error: "Execution evidence identity did not match the selected occurrence." });
+            } else setInspectionState({ activityExecutionId, workflowExecutionId, contextIdentity: selectedContextIdentity, status: "ready", inspection, error: "" });
+          } catch (error) {
+            if (controller.signal.aborted) return;
+            setInspectionState({ activityExecutionId, workflowExecutionId, contextIdentity: selectedContextIdentity,
+              status: "failed", inspection: null, error: error instanceof Error ? error.message : String(error) });
+          }
+          confirmed = revision;
+        } while (confirmed !== requestedRevision.current);
+      } finally { running = false; }
+    };
+    const start = () => { void load(); }; refreshInspection.current = start; start();
+    return () => { controller.abort(); if (refreshInspection.current === start) refreshInspection.current = null; };
+  }, [context, selectedActivityExecutionId, selectedContextIdentity, selectedWorkflowExecutionId]);
+  // Live revisions coalesce behind the current exact read; identity changes still cancel it immediately.
+  useEffect(() => { refreshInspection.current?.(); }, [refreshKey]);
 
   const currentInspectionState: ActivityExecutionInspectionState =
     inspectionState.activityExecutionId === selectedActivityExecutionId &&
