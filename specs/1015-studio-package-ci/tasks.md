@@ -11,9 +11,9 @@
 
 **Goal/test**: Genuine complete packages pass; precise dependency/resource faults fail and restored originals pass.
 
-- [ ] T002 [US1] Inspect actual nuspec/resource payloads and canonical inventory/producer ownership before refining `tools/ci/verify_studio_nuget_packages.py`; preserve frozen consolidation identities.
-- [ ] T003 [US1] Add required dependency/static-content verification and meaningful failure/restoration self-tests in `tools/ci/verify_studio_nuget_packages.py`, deriving resource paths from `tools/ci/verify-studio-assets.py`.
-- [ ] T004 [US1] Execute genuine candidate complete/dependency/missing/empty/changed-resource/restored controls and retain original hashes/diagnostics in `specs/1015-studio-package-ci/validation.md`.
+- [x] T002 [US1] Inspect actual nuspec/resource payloads and canonical inventory/producer ownership before refining `tools/ci/verify_studio_nuget_packages.py`; preserve frozen consolidation identities.
+- [x] T003 [US1] Add required dependency/static-content verification and meaningful failure/restoration self-tests in `tools/ci/verify_studio_nuget_packages.py`, deriving resource paths from `tools/ci/verify-studio-assets.py`.
+- [x] T004 [US1] Execute genuine candidate complete/dependency/missing/empty/changed-resource/restored controls and retain original hashes/diagnostics in `specs/1015-studio-package-ci/validation.md`.
 
 ## Phase 3: US2 - Consumer and Causal-Control Automation
 
