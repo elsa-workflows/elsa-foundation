@@ -84,8 +84,40 @@ internal static class PackageAssetEndpoints
     private static bool IsInstalledPath(string? path, string? root)
     {
         if (path is null || root is null) return false;
-        return Path.GetFullPath(path).StartsWith(Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)) + Path.DirectorySeparatorChar,
-            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+        try
+        {
+            var actual = ResolveLinks(path, 0);
+            var installed = ResolveLinks(root, 0);
+            // Case folding on macOS is conservative on its optional case-sensitive volumes: an
+            // ambiguous alias takes the protected path rather than becoming deployed-file authority.
+            var comparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+                ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            var prefix = Path.EndsInDirectorySeparator(installed) ? installed : installed + Path.DirectorySeparatorChar;
+            return string.Equals(actual, installed, comparison)
+                || actual.StartsWith(prefix, comparison);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            // An unresolvable physical identity cannot establish the immutable deployed-file profile.
+            return true;
+        }
+    }
+
+    private static string ResolveLinks(string path, int depth)
+    {
+        if (depth > 32) throw new IOException("The physical path has too many linked ancestors.");
+        var full = Path.GetFullPath(path);
+        var current = Path.GetPathRoot(full)!;
+        foreach (var component in full[current.Length..].Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var next = Path.Combine(current, component);
+            FileSystemInfo info = Directory.Exists(next) ? new DirectoryInfo(next) : new FileInfo(next);
+            current = info.LinkTarget is null ? next
+                : ResolveLinks(info.ResolveLinkTarget(returnFinalTarget: true)?.FullName
+                    ?? throw new IOException("A physical path link could not be resolved."), depth + 1);
+        }
+        // A not-yet-created install root retains its resolved existing ancestors and missing suffix.
+        return Path.TrimEndingDirectorySeparator(current);
     }
 
     private static IResult DeployedFile(IFileInfo file) => file.PhysicalPath is { Length: > 0 } physical

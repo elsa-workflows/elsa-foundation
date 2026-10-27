@@ -34,6 +34,33 @@ Release project then passed567/567,0skipped,77s (`studio3359-provider-provenance
 asserts the original file bytes are unchanged after refusal. Existing optional missing-file and feature-source
 behavior remains covered by that whole run. No public API or caller's configuration source was replaced.
 
+The addon now maps registry/upload/drop-file deletion/reconciliation/feed CRUD alongside its existing native
+maintenance and shared feature-management endpoints. Registry metadata uses the existing admitted reader for
+root/build manifests and NuSpecs, with the1MiB preflight, protected reads, bounded XML parsing and per-package
+diagnostics; there is no physical-path byte fallback. Root manifest queries reuse Hosting's tracked selected-shell
+adapter. Uploads use the frozen effective directory selection; pending feed edits do not redirect them. Conditional
+feed writes share the configuration lease and preserve unrelated JSON/unknown directory-role fields.
+
+New public endpoint tests passed27/27: registry without Web identity, valid/invalid/malformed upload and staged-file
+cleanup, pending-directory upload/delete, concurrent feed/retention writes, duplicate/not-found no-write behavior,
+overlaid source refusal, callback cache-only upload without desired discovery, source-only selection refusal,
+anonymous denial on every administration route, and native/ordinary/oversized/linked NuSpec metadata. The initial
+targeted attempt located an uncaught malformed multipart error; it now returns400. A second attempt used JSON
+against the multipart-only route in its auth fixture; correcting the fixture's request format produced the27-case
+pass. These failed attempts are not counted as passes. The initial addon compile also required the correct public
+Nuplane.Abstractions.ActivePackage import; the corrected addon build passed with0warnings/errors.
+
+A physical deployed-file provider could bypass ordinary-store admission through a directory symlink alias.
+The public regression reproduced200/payload instead of503. Physical deployed paths now resolve linked ancestors
+before comparison to the configured install root, with unresolved identity routed through protected admission;
+the regression then passed. Host-owned nonphysical static providers retain their existing trusted immutable
+content boundary. This classifies deployed content only; native content identity/traversal/read authority still
+belongs to Nuplane. Whole Studio project subsequently passed595/595,0skipped,85s
+(`studio3359-module-and-alias-whole.trx`); discovery588 expands the same8-row runtime theory by7, none omitted.
+
+Web still uses the old private adapters at this checkpoint. Their adoption/removal, old helper-test retirement,
+maintenance UI, final package/CI/review/main gates remain incomplete; no duplicate source is accepted as delivery.
+
 ## Passed evidence
 
 - Protected feature-manifest adapter: whole Studio project 551 passed, 0 failed/skipped

@@ -28,7 +28,10 @@ internal sealed class ManagementConfigurationStore(StudioNuplaneSettings setting
         }
     }
 
-    public async Task MutateAsync(string prefix, Action<JsonObject> mutate, CancellationToken cancellationToken)
+    public Task MutateAsync(string prefix, Action<JsonObject> mutate, CancellationToken cancellationToken) =>
+        MutateIfAsync(prefix, document => { mutate(document); return true; }, cancellationToken);
+
+    public async Task<bool> MutateIfAsync(string prefix, Func<JsonObject, bool> mutate, CancellationToken cancellationToken)
     {
         await using var lease = await gate.AcquireAsync(cancellationToken);
         if (!CanWrite(prefix))
@@ -36,9 +39,10 @@ internal sealed class ManagementConfigurationStore(StudioNuplaneSettings setting
         var document = File.Exists(settings.ManagementFile)
             ? JsonNode.Parse(await File.ReadAllTextAsync(settings.ManagementFile, cancellationToken), new JsonNodeOptions { PropertyNameCaseInsensitive = true })?.AsObject() ?? new JsonObject()
             : new JsonObject();
-        mutate(document);
+        if (!mutate(document)) return false;
         await AtomicConfigWriter.WriteAtomicAsync(settings.ManagementFile, document.ToJsonString(JsonOptions) + Environment.NewLine, cancellationToken);
         configuration.Reload();
+        return true;
     }
 
     public Task SaveRetentionAsync(int? count, CancellationToken cancellationToken) => MutateAsync(RetentionPrefix, document =>

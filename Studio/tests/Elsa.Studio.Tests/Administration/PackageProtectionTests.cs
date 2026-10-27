@@ -162,6 +162,24 @@ public sealed class PackageProtectionTests
     }
 
     [Fact]
+    public async Task A_deployed_file_alias_cannot_bypass_ordinary_store_admission()
+    {
+        await using var host = await AdministrationHost.StartAsync(nuplane => nuplane.AddDirectoryFeed("ordinary", "feed", feed => { feed.Watch = false; feed.IncludeAll(); }));
+        PackageAssetTests.Pack(host, "1.0.0", "aliased-unprotected-package-sentinel");
+        await PackageAssetTests.Reconcile(host);
+        var package = Assert.Single((await host.App.Services.GetRequiredService<INuplaneAdminOperations>().GetPackagesAsync(CancellationToken.None)).Packages);
+        var installRoot = host.App.Services.GetRequiredService<IOptions<Nuplane.Feeds.Configuration.FeedResolutionOptions>>().Value.PackageInstallRoot!;
+        var alias = Path.Combine(host.Root, "install-alias");
+        Directory.CreateSymbolicLink(alias, installRoot);
+        var relative = Path.GetRelativePath(installRoot, package.InstallPath);
+        using var physical = new PhysicalFileProvider(Path.Combine(alias, relative, "staticwebassets"));
+        host.App.Environment.WebRootFileProvider = new MappedFile(physical.GetFileInfo("probe.txt"));
+        using var response = await host.Client.GetAsync(AssetUrl);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.DoesNotContain("aliased-unprotected-package-sentinel", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task Archive_install_shapes_refuse_instead_of_using_an_ordinary_reader()
     {
         await using var host = await AdministrationHost.StartAsync(nativeStore: true, afterStudio: builder =>

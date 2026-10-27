@@ -122,6 +122,7 @@ public static class NuplaneHostingExtensions
     {
         _ = endpoints.ServiceProvider.GetRequiredService<StudioNuplaneSettings>();
         FeatureManagementEndpoints.Map(endpoints);
+        ModuleManagementEndpoints.Map(endpoints);
         PackageAssetEndpoints.Map(endpoints);
         PackageMaintenanceEndpoints.Map(endpoints);
         return endpoints;
