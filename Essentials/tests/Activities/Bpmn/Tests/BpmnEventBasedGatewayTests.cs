@@ -96,7 +96,7 @@ public sealed class BpmnEventBasedGatewayTests
         var loserChild = resumed.State("node-delay");
         Assert.Equal(ActivityExecutionStatus.Cancelled, loserChild.Status);
         Assert.Equal("ParentCancelled", loserChild.SubStatus);
-        Assert.Equal(BpmnExecutionEngine.EventGatewayRaceCancellationReason, loserChild.Metadata[RuntimeMetadataKeys.ScopeCancellationReason]);
+        Assert.Equal("bpmn.event-based-gateway.superseded-by-first-catch", loserChild.Metadata[RuntimeMetadataKeys.ScopeCancellationReason]);
         var remainingBookmark = Assert.Single(await fixture.BookmarksAsync());
         Assert.Equal(EventStimulus.Hash("all-done"), remainingBookmark.StimulusHash);
     }

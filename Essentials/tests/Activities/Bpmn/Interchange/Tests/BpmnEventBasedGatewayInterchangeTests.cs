@@ -60,9 +60,9 @@ public sealed class BpmnEventBasedGatewayInterchangeTests
         Assert.Equal(BpmnElementTypes.EventBasedGateway, gateway.ElementType);
         Assert.Equal(2, reimported.SequenceFlows.Count(flow => flow.SourceRef == "gw"));
 
-        // The round-tripped structure still satisfies the frozen graph rules.
-        var graph = BpmnGraph.From(BridgeToExecutableNode(reimported));
-        Assert.Equal(BpmnElementFamilies.EventBasedGateway, BpmnElementFamilies.Resolve(gateway));
+        // The round-tripped authored structure still binds to the released graph.
+        var graph = BpmnGraphAdapter.Build(BridgeToExecutableNode(reimported));
+        Assert.Equal(BpmnElementFamilies.EventBasedGateway, BpmnElementFamilies.Resolve(graph.GetRequiredElement(gateway.ElementId)));
         Assert.NotNull(graph);
     }
 
@@ -91,7 +91,7 @@ public sealed class BpmnEventBasedGatewayInterchangeTests
         Assert.Equal(BpmnElementTypes.EventBasedGateway, gateway.ElementType);
 
         // Graph validation runs on the analyze/commit path via BpmnGraph.From; the non-catch targets are rejected deterministically.
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(BridgeToExecutableNode(structure)));
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(BridgeToExecutableNode(structure)));
         Assert.Contains("must target an intermediate catch event", exception.Message);
     }
 

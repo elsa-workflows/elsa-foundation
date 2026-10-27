@@ -107,8 +107,8 @@ public sealed class BpmnCollaborationInterchangeTests
         Assert.Contains(result.Analysis.Issues, issue => issue.Severity == BpmnImportIssueSeverity.Info && issue.ElementId == "mf-confirm");
 
         // Tripwire 1: the graph still validates with pools/message flows populated (they are metadata the validator ignores).
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(buyerStructure)));
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(sellerStructure)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(buyerStructure)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(sellerStructure)));
     }
 
     [Fact]

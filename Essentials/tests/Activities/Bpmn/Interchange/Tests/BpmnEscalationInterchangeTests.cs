@@ -80,7 +80,7 @@ public sealed class BpmnEscalationInterchangeTests
         Assert.Equal("E1", end.EventDefinitions.Single().Properties[BpmnEventDefinitionProperties.Code]);
 
         // Validate-representable: the imported parent graph satisfies the frozen escalation rules.
-        var graph = BpmnGraph.From(BridgeToExecutableNode(structure));
+        var graph = BpmnGraphAdapter.Build(BridgeToExecutableNode(structure));
         Assert.Equal(3, graph.AttachedEscalationBoundaries("host").Count);
     }
 
@@ -102,7 +102,7 @@ public sealed class BpmnEscalationInterchangeTests
         Assert.Equal("E1", nested.Elements.Single(element => element.ElementId == "e2").EventDefinitions.Single().Properties[BpmnEventDefinitionProperties.Code]);
 
         // The round-tripped structure still validates.
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(reimported)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(reimported)));
     }
 
     [Fact]
@@ -217,7 +217,7 @@ public sealed class BpmnEscalationInterchangeTests
         Assert.Contains(result.Analysis.Issues, issue => issue.Severity == BpmnImportIssueSeverity.Dropped && issue.ElementId == "b-all-2");
 
         // Validate-representable: the surviving graph builds.
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(structure)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(structure)));
     }
 
     private static void AssertBoundaries(BpmnAuthoredStructure structure)

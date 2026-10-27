@@ -87,12 +87,12 @@ public sealed class BpmnEventDefinitionPublishParityTests
 
         var node = BridgeToExecutableNode(structure);
 
-        // BpmnGraph.From enforces the frozen graph rules: the catch event must bind its synthesized child,
+        // The released graph enforces binding rules after host translation: the catch event must bind its synthesized child,
         // and the event-defined starts must be pure (no child). Both come straight from the import.
-        var graph = BpmnGraph.From(node);
+        var graph = BpmnGraphAdapter.Build(node);
         Assert.Equal(3, graph.StartEvents.Count);
         var catchEvent = graph.Elements.Single(element => element.ElementId == "catch-msg");
-        Assert.Equal("node-catch-msg", catchEvent.ChildNodeId);
+        Assert.Equal("node-catch-msg", catchEvent.BindingRef);
 
         // The real extractor recognizes the trigger node and emits one binding per event-defined start.
         var executable = new WorkflowExecutable(

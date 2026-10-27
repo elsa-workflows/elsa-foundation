@@ -7,14 +7,13 @@ namespace Elsa.Activities.Bpmn.Models;
 /// element that binds a child: the bound child runs <see cref="Cardinality"/> times (cardinality mode) or
 /// once per item of <see cref="CollectionVariable"/> (collection mode), either <see cref="IsSequential"/>
 /// (one instance at a time) or in parallel (all instances up front). Exactly one of
-/// <see cref="Cardinality"/> XOR <see cref="CollectionVariable"/> is set — <see cref="BpmnGraph"/> rejects
+/// <see cref="Cardinality"/> XOR <see cref="CollectionVariable"/> is set — the released graph rejects
 /// any other shape. Each instance receives a per-iteration frame seeding a zero-based <c>loopIndex</c> (and,
 /// in collection mode, the item under <see cref="ItemVariable"/>).
 /// </summary>
 /// <remarks>
-/// Collection mode is authoring-modeled but <b>not executable in this slice</b> (its per-instance item read
-/// needs a container-variable read seam that structural evaluations do not yet expose); the graph validator
-/// rejects it and the importer degrades it. Cardinality mode is fully executable.
+/// Collection mode reads declared container-scoped values through the host's variable snapshot.
+/// Unavailable or incompatible collections are refused before scheduling iterations.
 /// </remarks>
 public sealed record BpmnLoopCharacteristics
 {

@@ -69,7 +69,7 @@ public sealed class BpmnCompensationInterchangeTests
         Assert.Equal("host", throwEvent.EventDefinitions.Single().Properties[BpmnEventDefinitionProperties.ActivityRef]);
 
         // Validate-representable: the imported structure satisfies the frozen graph rules.
-        var graph = BpmnGraph.From(BridgeToExecutableNode(structure));
+        var graph = BpmnGraphAdapter.Build(BridgeToExecutableNode(structure));
         Assert.NotNull(graph.AttachedCompensationBoundary("host"));
     }
 
@@ -91,7 +91,7 @@ public sealed class BpmnCompensationInterchangeTests
         Assert.Equal("host", reimported.Elements.Single(element => element.ElementId == "throw").EventDefinitions.Single().Properties[BpmnEventDefinitionProperties.ActivityRef]);
 
         // The round-tripped structure still validates.
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(reimported)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(reimported)));
     }
 
     [Fact]
@@ -123,7 +123,7 @@ public sealed class BpmnCompensationInterchangeTests
 
         var end = reimported.Elements.Single(element => element.ElementId == "end");
         Assert.Equal(BpmnEventDefinitionTypes.Compensation, end.EventDefinitions.Single().Type);
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(reimported)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(reimported)));
     }
 
     [Fact]
@@ -151,7 +151,7 @@ public sealed class BpmnCompensationInterchangeTests
         Assert.DoesNotContain(structure.Elements, element => element.ElementId == "cb");
         Assert.Contains(result.Analysis.Issues, issue =>
             issue.Severity == BpmnImportIssueSeverity.Dropped && issue.ElementId == "cb" && issue.Message.Contains("no association", StringComparison.Ordinal));
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(structure)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(structure)));
     }
 
     [Fact]
@@ -177,7 +177,7 @@ public sealed class BpmnCompensationInterchangeTests
         Assert.DoesNotContain(structure.Elements, element => element.ElementId == "orphan");
         Assert.Contains(result.Analysis.Issues, issue =>
             issue.Severity == BpmnImportIssueSeverity.Dropped && issue.ElementId == "orphan" && issue.Message.Contains("referenced by no compensation boundary", StringComparison.Ordinal));
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(structure)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(structure)));
     }
 
     [Fact]
@@ -219,7 +219,7 @@ public sealed class BpmnCompensationInterchangeTests
         Assert.Contains(structure.SequenceFlows, flow => flow.FlowId == "f2");
         Assert.Contains(result.Analysis.Issues, issue =>
             issue.Severity == BpmnImportIssueSeverity.Dropped && issue.ElementId == "cb" && issue.Message.Contains("flow-less", StringComparison.Ordinal));
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(structure)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(structure)));
     }
 
     [Fact]
@@ -266,7 +266,7 @@ public sealed class BpmnCompensationInterchangeTests
         Assert.Empty(end.EventDefinitions); // degraded to a none end event.
         Assert.Contains(result.Analysis.Issues, issue =>
             issue.Severity == BpmnImportIssueSeverity.Degraded && issue.ElementId == "end");
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(structure)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(structure)));
     }
 
     private static ExecutableNode BridgeToExecutableNode(BpmnAuthoredStructure structure)

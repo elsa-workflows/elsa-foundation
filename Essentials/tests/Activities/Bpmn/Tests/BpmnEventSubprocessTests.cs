@@ -314,7 +314,7 @@ public sealed class BpmnEventSubprocessTests
         Assert.Equal("AbsorbFault", incident.ResolutionOutcome!.ActionKind);
         Assert.NotNull(incident.ResolvedAt);
         Assert.Equal("actexec-bpmn", incident.Metadata[RuntimeMetadataKeys.FaultAbsorbedBy]);
-        Assert.Equal(BpmnExecutionEngine.EventSubprocessErrorAbsorptionReason, incident.Metadata[RuntimeMetadataKeys.FaultAbsorptionReason]);
+        Assert.Equal("bpmn.event-subprocess.error-absorbed", incident.Metadata[RuntimeMetadataKeys.FaultAbsorptionReason]);
     }
 
     [Fact]

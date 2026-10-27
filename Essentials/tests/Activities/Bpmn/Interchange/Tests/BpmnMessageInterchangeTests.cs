@@ -78,7 +78,7 @@ public sealed class BpmnMessageInterchangeTests
         Assert.Equal(BpmnDocumentImporter.DefaultEventActivityVersionId, receiveChild.ActivityVersionId);
 
         // Validate-representable: the imported graph satisfies the frozen + new message rules.
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(structure)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(structure)));
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public sealed class BpmnMessageInterchangeTests
         var reimported = _importer.Import(xml).ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
         Assert.Equal("order-shipped", reimported.Elements.Single(element => element.ElementId == "throw-msg").EventDefinitions.Single().Properties[BpmnEventDefinitionProperties.Name]);
         AssertPublishSendChild(reimported, reimported.Elements.Single(element => element.ElementId == "send").ChildNodeId!, "order-shipped");
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(reimported)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(reimported)));
     }
 
     [Fact]
@@ -146,7 +146,7 @@ public sealed class BpmnMessageInterchangeTests
         Assert.Empty(end.EventDefinitions); // degraded to a none end
         Assert.Null(end.ChildNodeId);
         Assert.Contains(result.Analysis.Issues, issue => issue.Severity == BpmnImportIssueSeverity.Degraded && issue.ElementId == "e");
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(structure)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(structure)));
     }
 
     [Fact]
@@ -173,7 +173,7 @@ public sealed class BpmnMessageInterchangeTests
         Assert.Null(structure.Elements.Single(element => element.ElementId == "receive").ChildNodeId);
         Assert.Contains(result.Analysis.Issues, issue => issue.Severity == BpmnImportIssueSeverity.Info && issue.ElementId == "send");
         Assert.Contains(result.Analysis.Issues, issue => issue.Severity == BpmnImportIssueSeverity.Info && issue.ElementId == "receive");
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(structure)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(structure)));
     }
 
     [Fact]

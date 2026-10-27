@@ -146,7 +146,7 @@ public sealed class BpmnMultiInstanceTests
         Assert.All(instances, state =>
         {
             Assert.Equal(ActivityExecutionStatus.Cancelled, state.Status);
-            Assert.Equal(BpmnExecutionEngine.BoundaryHostInterruptedReason, state.Metadata[RuntimeMetadataKeys.ScopeCancellationReason]);
+            Assert.Equal("bpmn.boundary.host-interrupted", state.Metadata[RuntimeMetadataKeys.ScopeCancellationReason]);
         });
         Assert.Empty(await fixture.BookmarksAsync());
     }
@@ -201,7 +201,7 @@ public sealed class BpmnMultiInstanceTests
         var incident = Assert.Single(await fixture.Provider.GetRequiredService<IIncidentStateStore>()
             .ListAsync(WorkflowExecutionHarness.WorkflowExecutionId));
         Assert.Equal(IncidentStatus.Resolved, incident.Status);
-        Assert.Equal(BpmnExecutionEngine.ErrorBoundaryAbsorptionReason, incident.Metadata[RuntimeMetadataKeys.FaultAbsorptionReason]);
+        Assert.Equal("bpmn.boundary.error-absorbed", incident.Metadata[RuntimeMetadataKeys.FaultAbsorptionReason]);
     }
 
     [Fact]

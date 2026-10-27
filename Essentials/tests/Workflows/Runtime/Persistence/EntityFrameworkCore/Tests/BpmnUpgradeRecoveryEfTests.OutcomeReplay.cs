@@ -101,7 +101,7 @@ public sealed partial class BpmnUpgradeRecoveryEfTests
                 Assert.True(incident.IsBlocking);
                 Assert.Equal(IncidentResolutionActionKinds.FaultWorkflow, incident.ResolutionOutcome!.ActionKind);
                 Assert.Equal(1, continuing.PrivateState!.StateVersion);
-                AssertLegacyReaderParses(continuing);
+                AssertLegacyWireContract(continuing, priorState);
                 Assert.Equal(priorState.GetProperty("activeChildren").GetArrayLength() - 1,
                     continuing.PrivateState.Value.InlineValue!.Value.GetProperty("activeChildren").GetArrayLength());
                 Assert.DoesNotContain(continuing.PrivateState!.Value.InlineValue!.Value.GetProperty("activeChildren").EnumerateArray(),

@@ -83,7 +83,7 @@ public sealed class BpmnEventSubprocessInterchangeTests
         Assert.False(escStart.CancelActivity); // isInterrupting="false"
 
         // Validate-representable: the imported graph builds and indexes the escalation catcher.
-        var graph = BpmnGraph.From(BridgeToExecutableNode(structure));
+        var graph = BpmnGraphAdapter.Build(BridgeToExecutableNode(structure));
         var catcher = Assert.Single(graph.EventSubprocesses);
         Assert.Equal(BpmnEventSubprocessTriggerKind.Escalation, catcher.TriggerKind);
         Assert.NotNull(graph.EscalationEventSubprocess("E1"));
@@ -105,7 +105,7 @@ public sealed class BpmnEventSubprocessInterchangeTests
         Assert.Equal("E1", escStart.EventDefinitions.Single().Properties[BpmnEventDefinitionProperties.Code]);
         Assert.False(escStart.CancelActivity);
 
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(reimported)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(reimported)));
     }
 
     [Fact]
@@ -152,10 +152,10 @@ public sealed class BpmnEventSubprocessInterchangeTests
         Assert.Contains(structure.Activities, activity => activity.NodeId == "node-es-listener");
 
         // The imported graph builds and indexes the external-trigger catcher with the listener bound.
-        var graph = BpmnGraph.From(BridgeToExecutableNode(structure));
+        var graph = BpmnGraphAdapter.Build(BridgeToExecutableNode(structure));
         var catcher = Assert.Single(graph.EventSubprocesses);
         Assert.True(catcher.IsExternalTrigger);
-        Assert.Equal("node-es-listener", catcher.ListenerNodeId);
+        Assert.Equal("node-es-listener", catcher.ListenerBindingRef);
         Assert.Equal(interrupting, catcher.Interrupting);
 
         // Export: the body start's definition + isInterrupting round-trip; the listener node is NOT exported (synthesized).
@@ -173,7 +173,7 @@ public sealed class BpmnEventSubprocessInterchangeTests
         var reimported = Import(xml);
         var reEs = reimported.Elements.Single(element => element.ElementId == "es");
         Assert.Equal("node-es-listener", reEs.ListenerNodeId);
-        var reGraph = BpmnGraph.From(BridgeToExecutableNode(reimported));
+        var reGraph = BpmnGraphAdapter.Build(BridgeToExecutableNode(reimported));
         Assert.True(Assert.Single(reGraph.EventSubprocesses).IsExternalTrigger);
     }
 
@@ -223,11 +223,11 @@ public sealed class BpmnEventSubprocessInterchangeTests
         var errStart = ReadNested(reimported, es.ChildNodeId!).Elements.Single(element => element.ElementId == "es-err-start");
         Assert.Equal(BpmnEventDefinitionTypes.Error, errStart.EventDefinitions.Single().Type);
 
-        var graph = BpmnGraph.From(BridgeToExecutableNode(reimported));
+        var graph = BpmnGraphAdapter.Build(BridgeToExecutableNode(reimported));
         var catcher = Assert.Single(graph.EventSubprocesses);
         Assert.Equal(BpmnEventSubprocessTriggerKind.Error, catcher.TriggerKind);
         Assert.True(catcher.Interrupting);
-        Assert.NotNull(graph.ErrorEventSubprocess());
+        Assert.NotNull(graph.ErrorEventSubprocess(null));
     }
 
     [Fact]
@@ -259,7 +259,7 @@ public sealed class BpmnEventSubprocessInterchangeTests
         Assert.Contains(structure.Elements, element => element.ElementId == "es-1");
         Assert.DoesNotContain(structure.Elements, element => element.ElementId == "es-2");
         Assert.Contains(result.Analysis.Issues, issue => issue.Severity == BpmnImportIssueSeverity.Dropped && issue.ElementId == "es-2");
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(structure)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(structure)));
     }
 
     private static string EventSubprocessDoc(string id, string body) => $"""
@@ -282,7 +282,7 @@ public sealed class BpmnEventSubprocessInterchangeTests
             issue.Severity == BpmnImportIssueSeverity.Dropped && issue.ElementId == elementId && issue.Message.Contains(expectedFinding, StringComparison.Ordinal));
 
         // The surviving graph is validate-representable.
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(structure)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(structure)));
     }
 
     private BpmnAuthoredStructure Import(string document) =>

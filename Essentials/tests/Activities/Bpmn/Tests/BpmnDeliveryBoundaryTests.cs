@@ -17,20 +17,6 @@ namespace Elsa.Activities.Bpmn.Tests;
 /// <summary>Synthetic delivery regression controls; actual old-state recovery is tested separately against frozen EF stores.</summary>
 public sealed class BpmnDeliveryBoundaryTests
 {
-    [Fact]
-    public async Task Original_reader_explicitly_refuses_an_actual_new_host_v2_checkpoint()
-    {
-        await using var host = await F.CreateAsync(["reader-parent", "reader-child"]);
-        var executable = host.NewExecutable([F.EventWaitNode("node-child", "wait")],
-            [F.StartEvent(), F.Task("work", "node-child"), F.EndEvent()],
-            [F.Flow("start-work", "start", "work"), F.Flow("work-end", "work", "end")],
-            [F.NodeResumeTarget("node-child", Elsa.Activities.Primitives.Activities.Event.ResumeTargetId)]);
-        var run = await host.RunAsync(executable);
-        var parent = run.State(F.ProcessNodeId);
-        Assert.Equal(2, parent.PrivateState!.StateVersion);
-        Assert.Throws<Elsa.Activities.Bpmn.Exceptions.BpmnExecutionException>(() => BpmnStatePersister.LoadState(parent));
-    }
-
     [Theory]
     [InlineData("element")]
     [InlineData("duplicate-token")]

@@ -32,7 +32,11 @@ internal static class BpmnGraphAdapter
         {
             throw;
         }
-        catch (Exception exception) when (exception is JsonException or InvalidOperationException or ArgumentException or global::Bpmn.Semantics.BpmnExecutionException)
+        catch (global::Bpmn.Semantics.BpmnExecutionException exception)
+        {
+            throw new BpmnHostException($"BPMN executable node '{node.ExecutableNodeId}' could not be bound to the library graph: {exception.Message}", exception);
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException or ArgumentException)
         {
             throw new BpmnHostException($"BPMN executable node '{node.ExecutableNodeId}' could not be bound to the library graph.", exception);
         }

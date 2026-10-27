@@ -76,9 +76,9 @@ public sealed class BpmnBoundaryEventInterchangeTests
         Assert.Contains(structure.Activities, child => child.NodeId == "node-b-msg" && child.ActivityVersionId == "Elsa.Event");
 
         // Validate-representable: the imported structure satisfies the frozen graph rules.
-        var graph = BpmnGraph.From(BridgeToExecutableNode(structure));
+        var graph = BpmnGraphAdapter.Build(BridgeToExecutableNode(structure));
         Assert.Equal(2, graph.AttachedCatchBoundaries("host").Count);
-        Assert.NotNull(graph.AttachedErrorBoundary("host"));
+        Assert.NotNull(graph.AttachedErrorBoundary("host", null));
     }
 
     [Fact]
@@ -104,7 +104,7 @@ public sealed class BpmnBoundaryEventInterchangeTests
         Assert.Equal("host", message.AttachedToRef);
 
         // The round-tripped structure still validates.
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(reimported)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(reimported)));
     }
 
     [Fact]

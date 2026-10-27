@@ -112,7 +112,7 @@ public sealed partial class BpmnUpgradeRecoveryEfTests
                 if (scenario == "listener-rearm" && defect is null)
                 {
                     Assert.True(continuing.PrivateState.CommittedAt > parent.PrivateState.CommittedAt);
-                    AssertLegacyReaderParses(continuing);
+                    AssertLegacyWireContract(continuing, original);
                 }
                 var resumedCount = 0;
                 foreach (var bookmark in defect == "active-element-mismatch" ? bookmarks.Where(bookmark => bookmark.ActivityExecutionId == damagedHandle) : bookmarks)
@@ -123,7 +123,7 @@ public sealed partial class BpmnUpgradeRecoveryEfTests
                         var updated = await store.FindAsync(WorkflowExecutionHarness.WorkflowExecutionId, parent.InvocationId);
                         Assert.True(updated!.PrivateState!.CommittedAt > parent.PrivateState.CommittedAt);
                         Assert.True(updated.PrivateState.Value.InlineValue!.Value.GetProperty("sequence").GetInt32() > original.GetProperty("sequence").GetInt32());
-                        AssertLegacyReaderParses(updated);
+                        AssertLegacyWireContract(updated, original);
                     }
                 }
             }
@@ -145,7 +145,7 @@ public sealed partial class BpmnUpgradeRecoveryEfTests
                 Assert.Equal(original.GetProperty("pendingFault").GetProperty("message").GetString(), resumed.Fault.Message);
                 Assert.Equal(1, resumed.PrivateState!.StateVersion);
                 Assert.True(resumed.PrivateState.Value.InlineValue!.Value.TryGetProperty("activeChildren", out _));
-                AssertLegacyReaderParses(resumed);
+                AssertLegacyWireContract(resumed, original);
             }
             if (defect == "active-element-mismatch")
             {
@@ -366,37 +366,35 @@ public sealed partial class BpmnUpgradeRecoveryEfTests
         public ValueTask<RuntimeStructuralContinuation> OutcomeAsync(IRuntimeActivityExecutionContext context, ActivityChildOutcomeContext outcome) => inner.OutcomeAsync(context, outcome);
     }
 
-    // Historical parse control while the original v1 reader still exists. This does not claim that
-    // rolling an upgraded execution back to the old engine is safe after released pruning.
-    private static void AssertLegacyReaderParses(ActivityExecutionState continuing)
+    // The retired old-reader parse control remains reproducible at the pre-deletion commit.
+    // Current CI checks actual continuing v1 against its captured wire fields; no rollback after
+    // released pruning is claimed. Actual old/current process controls are retained separately.
+    private static void AssertLegacyWireContract(ActivityExecutionState continuing, JsonElement captured)
     {
-        var legacy = Elsa.Activities.Bpmn.Internal.BpmnStatePersister.LoadState(continuing);
-        Assert.NotNull(legacy);
-        var read = JsonSerializer.SerializeToNode(legacy, new JsonSerializerOptions(JsonSerializerDefaults.Web));
-        var written = JsonNode.Parse(continuing.PrivateState!.Value.InlineValue!.Value.GetRawText());
-        AssertLegacyFields(read, written);
-    }
-
-    private static void AssertLegacyFields(JsonNode? read, JsonNode? written)
-    {
-        if (read is JsonObject source)
+        var document = Assert.IsType<ActivityPrivateState>(continuing.PrivateState);
+        Assert.Equal(1, document.StateVersion);
+        Assert.Equal("Elsa.Bpmn.ExecutionState", document.Value.Type.Alias);
+        Assert.Equal(1, document.Value.Type.SchemaVersion);
+        var written = document.Value.InlineValue!.Value;
+        foreach (var property in captured.EnumerateObject())
+            Assert.True(written.TryGetProperty(property.Name, out _), $"Captured v1 field '{property.Name}' was lost.");
+        Assert.False(written.TryGetProperty("activeWork", out _));
+        Assert.Equal(JsonValueKind.Array, written.GetProperty("activeChildren").ValueKind);
+        foreach (var token in written.GetProperty("tokens").EnumerateArray())
         {
-            var target = Assert.IsType<JsonObject>(written);
-            foreach (var (key, value) in source)
-            {
-                Assert.True(target.ContainsKey(key), $"Legacy reader field '{key}' was lost by the v1 writer.");
-                AssertLegacyFields(value, target[key]);
-            }
+            Assert.True(token.TryGetProperty("producingActivityExecutionId", out _));
+            Assert.False(token.TryGetProperty("producingWorkHandle", out _));
         }
-        else if (read is JsonArray sourceArray)
+        // For retained records, every original field remains represented even as values and
+        // collection membership legitimately advance through execution and released pruning.
+        foreach (var collection in new[] { "tokens", "activeChildren", "races", "loops", "compensables", "compensationRuns", "diagnostics" })
         {
-            var targetArray = Assert.IsType<JsonArray>(written);
-            Assert.Equal(sourceArray.Count, targetArray.Count);
-            for (var index = 0; index < sourceArray.Count; index++)
-                AssertLegacyFields(sourceArray[index], targetArray[index]);
+            var fields = captured.GetProperty(collection).EnumerateArray().SelectMany(record => record.EnumerateObject().Select(property => property.Name))
+                .ToHashSet(StringComparer.Ordinal);
+            foreach (var record in written.GetProperty(collection).EnumerateArray())
+                foreach (var field in fields)
+                    Assert.True(record.TryGetProperty(field, out _), $"Captured v1 {collection} field '{field}' was lost.");
         }
-        else
-            Assert.True(JsonNode.DeepEquals(read, written), $"Legacy reader changed a persisted v1 field: {read} / {written}.");
     }
 
     private static async Task ResumeAsync(BpmnRuntimeFixture host, string node)
