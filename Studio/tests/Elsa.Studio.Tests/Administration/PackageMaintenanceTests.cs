@@ -2,7 +2,9 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
 using Nuplane.Admin;
 using CShells.Lifecycle;
 using Nuplane.Loading;
@@ -214,6 +216,53 @@ public sealed class PackageMaintenanceTests
         using var result = await host.Client.PutAsJsonAsync(RetentionUrl, new { keepNewestInactiveVersionsPerPackage = 1 });
         Assert.Equal(HttpStatusCode.Conflict, result.StatusCode);
         Assert.Equal(before, await File.ReadAllBytesAsync(file));
+    }
+
+    [Fact]
+    public async Task A_derived_json_provider_cannot_claim_management_file_ownership()
+    {
+        PhysicalFileProvider? files = null;
+        try
+        {
+            await using var host = await AdministrationHost.StartAsync(
+                beforeStudio: builder => File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"),
+                    """{"preserve":"unrelated","Studio":{"PackageManagement":{"RetentionPolicy":{"KeepNewestInactiveVersionsPerPackage":0}}}}"""),
+                afterStudio: builder =>
+                {
+                    var original = Assert.Single(builder.Configuration.Sources.OfType<JsonConfigurationSource>());
+                    builder.Configuration.Sources.Remove(original);
+                    files = new PhysicalFileProvider(builder.Environment.ContentRootPath);
+                    ((IConfigurationBuilder)builder.Configuration).Add(new SyntheticJsonSource
+                    {
+                        FileProvider = files,
+                        Path = "nuplane-management.json"
+                    });
+                });
+            var file = Path.Combine(host.Root, "nuplane-management.json");
+            var before = await File.ReadAllBytesAsync(file);
+            Assert.Equal("99", host.App.Configuration["Studio:PackageManagement:RetentionPolicy:KeepNewestInactiveVersionsPerPackage"]);
+            using var response = await host.Client.PutAsJsonAsync(RetentionUrl, new { keepNewestInactiveVersionsPerPackage = 1 });
+            Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+            Assert.Equal(before, await File.ReadAllBytesAsync(file));
+        }
+        finally { files?.Dispose(); }
+    }
+
+    private sealed class SyntheticJsonSource : JsonConfigurationSource
+    {
+        public override IConfigurationProvider Build(IConfigurationBuilder builder)
+        {
+            EnsureDefaults(builder);
+            return new SyntheticJsonProvider(this);
+        }
+    }
+
+    private sealed class SyntheticJsonProvider(JsonConfigurationSource source) : JsonConfigurationProvider(source)
+    {
+        public override void Load(Stream stream) => Data = new Dictionary<string, string?>
+        {
+            ["Studio:PackageManagement:RetentionPolicy:KeepNewestInactiveVersionsPerPackage"] = "99"
+        };
     }
 
     private static async Task SavePolicy(AdministrationHost host, int? count)

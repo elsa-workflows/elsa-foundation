@@ -25,6 +25,15 @@ by7 cases; no discovered test was omitted. Machine load was2.35 on8cores before 
 wording now distinguishes descriptive Preview from fresh owned execution. This clears the diagnosed failure,
 not the remaining module/feed/UI/package/review/main acceptance work listed below.
 
+The public ownership regression proved a derived JSON provider could replace the managed source, advertise the
+same physical path, and supply synthetic retention99 while a save wrongly returned200 and wrote the file. The
+single-case pre-fix check failed as intended (expected409, observed200). ConfigurationOwnership now admits only
+the standard JsonConfigurationProvider/JsonConfigurationSource/PhysicalFileProvider combination; unsupported
+custom implementations remain readable but cannot claim writable ownership from path metadata. Whole Studio
+Release project then passed567/567,0skipped,77s (`studio3359-provider-provenance-fixed.trx`). The regression also
+asserts the original file bytes are unchanged after refusal. Existing optional missing-file and feature-source
+behavior remains covered by that whole run. No public API or caller's configuration source was replaced.
+
 ## Passed evidence
 
 - Protected feature-manifest adapter: whole Studio project 551 passed, 0 failed/skipped
