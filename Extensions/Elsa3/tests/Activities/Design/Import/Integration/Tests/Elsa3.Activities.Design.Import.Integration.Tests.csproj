@@ -66,6 +66,7 @@
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Workflows\Publishing\Persistence\EntityFrameworkCore\Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
+    <ProjectReference Include="../../../../../../../../Essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj" />
     <!-- The EF activation switch publishes through the recurring-schedule projection this feature prepares. -->
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />

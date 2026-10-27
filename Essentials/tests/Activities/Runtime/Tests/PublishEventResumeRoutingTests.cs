@@ -3,11 +3,8 @@ using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Primitives.Services;
 using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
-using Elsa.Cluster.Core.Contracts;
-using Elsa.Cluster.InProcess;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
-using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
@@ -44,12 +41,8 @@ public sealed class PublishEventResumeRoutingTests
     public async Task PublishEvent_resumes_the_waiting_event(string? payloadJson, bool isLocalEvent)
     {
         var identity = new WorkflowExecutableIdentity("artifact-wait", "definition-wait", "version-wait", "1.0.0", "sha256:wait");
-        await using var harness = WorkflowExecutionHarness.Create().ConfigureServices(services =>
-        {
-            services.AddWorkflowStimulusRouter();
-            services.AddSingleton<IPersistenceAccessContextAccessor, Access>();
-            services.AddSingleton<ISchemaDormancyCheck>(new SchemaDormancyCheck(observed: new PublishStimulusSourcePipelineTests.Observed("finalized")));
-        }).Build(identity, "wfexec-wait", ["actexec-wait"]);
+        await using var harness = WorkflowExecutionHarness.Create()
+            .ConfigureServices(NativeStimulusDeliveryTestServices.Configure).Build(identity, "wfexec-wait", ["actexec-wait"]);
         await harness.RunAsync(EventWaitExecutable.Create(identity, EventName));
         var payload = payloadJson is null ? (JsonElement?)null : JsonDocument.Parse(payloadJson).RootElement.Clone();
         using var scope = harness.Services.CreateScope(); var services = scope.ServiceProvider;
@@ -76,8 +69,4 @@ public sealed class PublishEventResumeRoutingTests
         Assert.Equal(expected, delivered.ValueKind == JsonValueKind.Undefined ? "null" : delivered.GetRawText());
     }
 
-    private sealed class Access : IPersistenceAccessContextAccessor
-    {
-        public PersistenceAccessContext Current => PersistenceAccessContext.Scoped(new(PersistenceScope.DefaultValue));
-    }
 }
