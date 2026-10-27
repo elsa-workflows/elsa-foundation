@@ -53,7 +53,7 @@ Confirmed by the owner on 2026-10-23, after Frans van Ek's review.
 |---|----------|-----|
 | D-1 | **A warning, not a refusal, for every declared variable write, with all writers reported at once.** Captures and intrinsic writes (Set, Merge, Reduce) are checked together by the existing `ValueFlow/ConcurrentWrite` rule, which becomes a warning, including for the intrinsic writes it refuses today. There is one finding per variable, keeping today's path and type id. It names every node that writes that variable without a defined order, says that the last commit wins, and says how to make the result deterministic: order the branches, capture into separate variables, or combine them with one write after the join. | Elsa gives guardrails and diagnostics and does not restrict what the engineer builds. Static analysis sees only declared writes (not script `setVariable`, C# activities, or writes decided at run time), so a refusal would promise more than the engine can keep. Reporting every writer avoids a fix-one, republish, find-the-next loop. The type id stays because Studio and tests match on it. |
 | D-2 | **Each structure declares how its children relate in time.** For any two of its children, a structure states whether one always runs before the other, whether their order is not defined (they can be in flight together), whether they are mutually exclusive, or that it does not say. Every built-in structure declares this fully, BPMN included. In this spec only the warning uses the declaration; the ordering rules move to it later (#3282). | Structures are pluggable, and BPMN is missed today because the validator does not know it. The structure's author is the only one who knows its semantics. Describing the whole time relation now costs little and avoids a second declaration for ordering later. |
-| D-2a | **Flowchart order follows its ports.** Paths that leave one node through the same outcome port are unordered (an implicit fork). All outbound paths of a node with the `parallelFork` or `inclusiveFork` policy are unordered. Paths that leave different ports of any other node are mutually exclusive, because an activity completes with one outcome. Nodes on one path are ordered, and branches that start at different trigger entries stay exclusive as today. | It matches what the engine does: it schedules the outbound connections whose port matches the completed outcome, or all of them under `parallelFork`. No built-in activity completes with more than one outcome. With a warning, an exotic multi-outcome activity costs at most a missed warning; #3285 stays open as a separate runtime guard. |
+| D-2a | **Flowchart order follows its ports.** Paths that leave one node through the same outcome port are unordered (an implicit fork). All outbound paths of a node with the `parallelFork` or `inclusiveFork` policy are unordered. Paths that leave different ports of any other node are mutually exclusive, unless the node's activity contract allows several outcomes per completion (decision D-4 on epic #3052, PR #3389); then they are unordered, as under `inclusiveFork`. Nodes on one path are ordered, and branches that start at different trigger entries stay exclusive as today. | It matches what the engine does: it schedules the outbound connections whose port matches the completed outcome, or all of them under `parallelFork`. No built-in activity declares multi-outcome completion yet, so this changes no warning today. D-4 makes multi-outcome completion an explicit part of the activity contract, which is what lets the analysis tell the two cases apart. |
 | D-2b | **A structure that declares nothing is treated as unordered.** The warning then says that the structure does not declare how its children are ordered, so a module author knows the fix is to declare it. | With a warning, erring towards reporting costs little. A silent "sequential" default would hide real races in third-party structures. |
 | D-3 | **Reported where the author is; publication never blocks on it.** The warning appears in workflow draft validation, in graph activity draft validation and in graph activity compilation diagnostics. Workflow executable compilation adds no check, because it has no warning channel and nothing to block. | A warning belongs where the author can act on it. The publication gates stay unchanged. |
 | D-4 | **Merge and Reduce are warned about like Set.** They are not exempt. | They overwrite today. Exempting them by name would hide a lost contribution. When real merge strategies exist, a strategy that declares itself order-independent can be exempted by that work. |
@@ -66,7 +66,7 @@ All are sub-issues of epic #3052 and out of scope here.
 - [#3282](https://github.com/elsa-workflows/elsa-foundation/issues/3282): the value-flow ordering rules and the expression picker take ordering from the structures' declarations (D-2) instead of hard-coded structure kinds.
 - [#3283](https://github.com/elsa-workflows/elsa-foundation/issues/3283): reconciled workflow versions pass the full draft validation gate.
 - [#3284](https://github.com/elsa-workflows/elsa-foundation/issues/3284): workflow executable compilation reports every error in one refusal.
-- [#3285](https://github.com/elsa-workflows/elsa-foundation/issues/3285): the runtime enforces one outcome per activity completion. This spec no longer depends on it.
+- [#3285](https://github.com/elsa-workflows/elsa-foundation/issues/3285): activities select their outcomes explicitly, several per completion (D-4). This spec no longer depends on it; D-2a already treats a multi-outcome node as unordered.
 - [#3290](https://github.com/elsa-workflows/elsa-foundation/issues/3290): inspection shows each variable's write history and the winning write.
 - [#3291](https://github.com/elsa-workflows/elsa-foundation/issues/3291): inspection shows a commit-ordered journal and compares two instances.
 - [#3292](https://github.com/elsa-workflows/elsa-foundation/issues/3292): the runtime traces a write that overwrites another open branch's write.
@@ -128,8 +128,10 @@ a sequential Flowchart path, Flowchart decision outcomes and a loop body; none r
 3. **Given** a loop whose body captures into `result`, **When** it is validated, **Then** no warning is reported.
 4. **Given** a Flowchart path `A → B` where A and B both capture into `result`, **When** it is validated, **Then**
    no warning is reported.
-5. **Given** a Flowchart node whose two outcome ports lead to two nodes that each capture into `result`, **When** it
-   is validated, **Then** no warning is reported.
+5. **Given** a Flowchart node whose activity selects one outcome per completion, and whose two outcome ports lead to
+   two nodes that each capture into `result`, **When** it is validated, **Then** no warning is reported. (If the
+   activity's contract allows several outcomes per completion, the two paths are unordered and the warning is
+   reported, per D-2a.)
 
 ---
 
@@ -218,7 +220,8 @@ variable from them report the warning without any change to the validator.
   same validation or compilation pass.
 - **FR-003**: Writes whose order is defined, or of which only one can run, MUST NOT be reported: consecutive steps, a
   Flowchart path, If arms, Switch cases, loop iterations, Flowchart paths that leave different outcome ports of a
-  node without a fork policy, and BPMN exclusive gateway branches.
+  node without a fork policy, and BPMN exclusive gateway branches. A node or structure that may select several
+  outcomes in one completion (D-4) is not exclusive: its selected paths are unordered.
 - **FR-004**: The warning MUST appear in workflow draft validation, in graph activity draft validation and in graph
   activity compilation diagnostics.
 - **FR-005**: For a graph activity, the rule MUST cover captures into the activity's own variables from its body
