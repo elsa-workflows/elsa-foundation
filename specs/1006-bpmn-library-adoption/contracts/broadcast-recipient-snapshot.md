@@ -286,3 +286,7 @@ proof remain distinct gates until their evidence exists.
 Library tests, synthetic cohort JSON and direct-provider CAS controls support these gates but do not
 replace actual upgraded-host recovery or final Studio compatibility evidence. T045, T024, T029,
 production #2898/#2907 and ADR0063 acceptance keep their separate existing gates.
+
+## Current qualification checkpoint
+
+[Current broadcast reconciliation](../evidence/broadcast-delivery-reconciliation.md) records completed T049/T050/T051 implementation and owned-host/native/fresh-EF qualification against the gates above. Redrive preservation is qualified at the shared model boundary; the existing public detached StartChild redrive operation explicitly refuses named-event publish, so no named-event host redrive API is claimed or introduced. The historical source-bound receipts stay unchanged. This checkpoint does not close T045/T024/T029, actual historical upgraded-host/final Studio compatibility, semantic writer deletion, final review/protected delivery/resulting-main, ADR0063 or production #2898/#2907/program acceptance.

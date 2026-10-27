@@ -58,6 +58,42 @@ public sealed class StimulusDeliveryOutboxModelTests
         Assert.False(first.IsEquivalentTo(null));
     }
 
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public void Generic_redrive_preserves_empty_or_populated_cohort_and_fences_the_old_claim(bool populated)
+    {
+        // This is the shared model transition, not an exposed PublishStimulus redrive API.
+        var data = populated ? Snapshot(starts: [Start("saved")], resumes: [Wait(Now)]) : Snapshot();
+        // Constructed witness data tests preservation only; it grants no runtime admission authority.
+        var snapshot = new StimulusDeliverySnapshot(data.Version, data.SourceOutboxItemId, data.IntentFingerprint,
+            data.Scope, data.SelectedAt, data.StimulusType, data.StimulusHash, data.Starts, data.Resumes, 1);
+        var original = Item(1, snapshot);
+        var claim = RuntimePostCommitOutboxClaimTransitions.Claim(original, new("first", Now, TimeSpan.FromMinutes(1), 1));
+        var failed = RuntimePostCommitOutboxClaimTransitions.Complete(claim.Item, claim,
+            new(claim.OutboxItemId, RuntimePostCommitOutboxStatus.FailedFinal, Now.AddSeconds(1), "constructed model failure"));
+        var redriven = RuntimePostCommitOutboxClaimTransitions.RedriveFailedFinal(failed, Now.AddSeconds(2));
+
+        Assert.Equal(RuntimePostCommitOutboxStatus.Pending, redriven.Status);
+        Assert.Equal(failed.OutboxItemId, redriven.OutboxItemId);
+        Assert.Equal(RuntimeCheckpointCommitFingerprint.ComputeIntent(failed.Intent), RuntimeCheckpointCommitFingerprint.ComputeIntent(redriven.Intent));
+        Assert.Equal(failed.StimulusDeliveryProtocolVersion, redriven.StimulusDeliveryProtocolVersion);
+        Assert.Equal(failed.StimulusDeliverySourceScope, redriven.StimulusDeliverySourceScope);
+        Assert.True(snapshot.IsEquivalentTo(redriven.RecipientSnapshot));
+        Assert.Equal(failed.DeliveryFencingToken + 1, redriven.DeliveryFencingToken);
+        Assert.Equal(0, redriven.DeliveryAttemptCount);
+        Assert.Null(redriven.DeliveringOwnerId);
+        Assert.Null(redriven.DeliveryVisibleAfter);
+        Assert.Throws<Elsa.Workflows.Runtime.Core.Exceptions.RuntimePostCommitOutboxStaleClaimException>(() =>
+            RuntimePostCommitOutboxClaimTransitions.Complete(redriven, claim,
+                new(claim.OutboxItemId, RuntimePostCommitOutboxStatus.Delivered, Now.AddSeconds(3))));
+        Assert.True(snapshot.IsEquivalentTo(redriven.RecipientSnapshot));
+
+        var next = RuntimePostCommitOutboxClaimTransitions.Claim(redriven, new("second", Now.AddSeconds(3), TimeSpan.FromMinutes(1), 1));
+        var completed = RuntimePostCommitOutboxClaimTransitions.Complete(next.Item, next,
+            new(next.OutboxItemId, RuntimePostCommitOutboxStatus.Delivered, Now.AddSeconds(4)));
+        Assert.True(snapshot.IsEquivalentTo(completed.RecipientSnapshot));
+    }
+
     private static RuntimePostCommitOutboxItem Item(int? protocol, StimulusDeliverySnapshot? snapshot) => new("commit:send", Intent,
         RuntimePostCommitOutboxStatus.Pending, Now, Now, null, 0, null, null, null, null, null, 0, null, protocol, protocol is null ? null : new("tenant"), snapshot);
     private static StimulusDeliverySnapshot Snapshot(string source = "commit:send", IReadOnlyList<StimulusStartRecipient>? starts = null,
