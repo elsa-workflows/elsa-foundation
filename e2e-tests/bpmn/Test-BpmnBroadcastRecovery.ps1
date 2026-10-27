@@ -13,9 +13,10 @@ param(
     [Parameter(Mandatory)][string] $EvidencePath,
     [string] $Python = 'python3',
     [Parameter(Mandatory)][string] $SourceRevision,
-    [ValidateSet('after-cohort', 'after-resume', 'before-selection', 'empty-cohort', 'competing-proposal', 'competing-empty-proposal', 'competing-empty-winner', 'after-start')][string] $Phase = 'after-cohort'
+    [ValidateSet('after-cohort', 'after-resume', 'before-selection', 'empty-cohort', 'competing-proposal', 'competing-empty-proposal', 'competing-empty-winner', 'after-start', 'after-fanout')][string] $Phase = 'after-cohort'
 )
 $ErrorActionPreference = 'Stop'
+$completeFanout = $Phase -eq 'after-fanout'
 $partialStart = $Phase -eq 'after-start'
 $emptyProposal = $Phase -eq 'competing-empty-proposal'
 $emptyWinner = $Phase -eq 'competing-empty-winner'
@@ -62,7 +63,7 @@ $settings.CShells.Shells.default.Features.BpmnRecoveryProbe = @{ ControlDirector
 $settings.CShells.Shells.default.Features.WorkflowsRuntimeResumption = @{ SweepIntervalSeconds = 1 }
 $settings | ConvertTo-Json -Depth 60 | Set-Content $settingsPath
 @{ caseId = $caseId; phase = if ($competing) { 'before-install' } elseif ($Phase -eq 'empty-cohort') { 'after-cohort' } else { $Phase }; eventName = $eventName } | ConvertTo-Json | Set-Content (Join-Path $control 'plan.json')
-$receipt = @{ sourceRevision = $SourceRevision; scenario = switch ($Phase) { 'after-resume' { 'partial-callback-and-rearm-before-source-ack' } 'after-start' { 'one-of-two-starts-parked-before-remaining-start-and-resumes' } 'before-selection' { 'delayed-first-selection-and-pre-start-wait-exclusion' } 'empty-cohort' { 'empty-saved-cohort-excludes-later-matches' } 'competing-proposal' { 'expired-old-prepared-proposal-cannot-replace-successor-winner' } 'competing-empty-proposal' { 'expired-old-empty-proposal-cannot-replace-populated-successor-winner' } 'competing-empty-winner' { 'expired-old-populated-proposal-cannot-replace-empty-successor-winner' } default { 'after-cohort-before-dispatch' } }; passed = $false;
+$receipt = @{ sourceRevision = $SourceRevision; scenario = switch ($Phase) { 'after-resume' { 'partial-callback-and-rearm-before-source-ack' } 'after-start' { 'one-of-two-starts-parked-before-remaining-start-and-resumes' } 'after-fanout' { 'all-recipient-effects-completed-before-source-ack-write' } 'before-selection' { 'delayed-first-selection-and-pre-start-wait-exclusion' } 'empty-cohort' { 'empty-saved-cohort-excludes-later-matches' } 'competing-proposal' { 'expired-old-prepared-proposal-cannot-replace-successor-winner' } 'competing-empty-proposal' { 'expired-old-empty-proposal-cannot-replace-populated-successor-winner' } 'competing-empty-winner' { 'expired-old-populated-proposal-cannot-replace-empty-successor-winner' } default { 'after-cohort-before-dispatch' } }; passed = $false;
     probeAssemblySha256 = (Get-FileHash $ProbeAssembly).Hash.ToLowerInvariant(); normalAssemblySha256 = (Get-FileHash $NormalAssembly).Hash.ToLowerInvariant();
     sourceCommit = $sourceCommit; sourceFiles = $sourceManifest; probeBuild = $probeManifest; normalBuild = $normalManifest; readerSha256 = $readerHash; readerBuild = $readerManifest;
     cut = $null; stopped = $null; successorClaim = $null; recovered = $null; observations = @(); failures = @() }
@@ -216,6 +217,23 @@ try {
     } elseif ($Phase -eq 'empty-cohort') {
         if ($null -eq $marker.snapshot -or $marker.snapshot.starts.Count -ne 0 -or $marker.snapshot.resumes.Count -ne 0) { throw 'The empty recipient decision was not durably committed.' }
     } elseif ($marker.snapshot.starts.Count -ne $(if ($partialStart) { 2 } else { 1 }) -or $marker.snapshot.resumes.Count -ne 2) { throw 'The actual persisted cohort is incomplete at the cut.' }
+    if ($completeFanout) {
+        $completed = Wait-WorkflowInstance -Ctx $ctx -ExecutionId $waitRun.workflowExecutionId -TimeoutSeconds 30
+        if ($completed.instance.status -ne 'Completed' -or @($completed.incidents).Count -ne 0) { throw 'Full fan-out acceptance did not establish completed recipient callbacks/join.' }
+        foreach ($start in $marker.snapshot.starts) {
+            $selected = Observe 'fanout-starts' @($waitRun.workflowExecutionId)
+            $keyed = @($selected.source.selectedStarts | Where-Object artifactId -eq $start.executable.artifactId)
+            if ($keyed.Count -ne 1) { throw 'The full fan-out source did not identify one exact saved keyed target.' }
+            $deadline = [DateTimeOffset]::UtcNow.AddSeconds(30)
+            do {
+                $api = Get-WorkflowInstance -Ctx $ctx -ExecutionId $keyed[0].workflowExecutionId
+                $park = @($api.activities | Where-Object { $_.executableNodeId -eq 'node-park' -and $_.status -eq 'Suspended' })
+                if ($park.Count -eq 1) { break }
+                Start-Sleep -Milliseconds 100
+            } while ([DateTimeOffset]::UtcNow -lt $deadline)
+            if ($park.Count -ne 1 -or @($api.incidents).Count -ne 0) { throw 'A full fan-out saved start did not actually park before source acknowledgment loss.' }
+        }
+    }
     if ($partialStart) {
         $acceptedSource = Observe 'accepted-start' @($waitRun.workflowExecutionId)
         $acceptedStart = @($acceptedSource.source.selectedStarts | Where-Object workflowExecutionId -eq $marker.acceptedExecution)
@@ -275,6 +293,18 @@ try {
     $lateRun = Invoke-Artifact -Ctx $ctx -ArtifactId $latePublication.artifactId -SourceReferenceId $latePublication.sourceReferenceId
     $null = Wait-Catches $lateRun.workflowExecutionId 2
     $lateStart = Import-Process $lateStartXml
+    if ($completeFanout) {
+        $fanout = Observe 'fanout-before-crash' @($waitRun.workflowExecutionId, $lateRun.workflowExecutionId)
+        $receipt.completedFanoutBeforeCrash = $fanout
+        $recipientIds = @(@($fanout.source.selectedResumes | ForEach-Object workflowExecutionId) + @($fanout.source.selectedStarts | ForEach-Object workflowExecutionId) | Sort-Object -Unique)
+        if ($recipientIds.Count -ne 2 -or $waitRun.workflowExecutionId -notin $recipientIds) { throw 'The full fan-out observation does not cover both exact recipient workflows.' }
+        $receipt.completedRecipientApiBeforeCrash = @()
+        foreach ($identity in $recipientIds) {
+            $api = Get-WorkflowInstance -Ctx $ctx -ExecutionId $identity
+            if ($api.activityNextContinuationToken -or @($api.incidents).Count -ne 0) { throw 'The full fan-out recipient API observation is incomplete or faulted.' }
+            $receipt.completedRecipientApiBeforeCrash += @{ workflowExecutionId = $identity; instance = $api.instance; activities = $api.activities }
+        }
+    }
     if ($competing) {
         if ($probeProcess.HasExited) { throw 'The owned first process exited before suspension.' }
         $pausePath = Join-Path $caseDirectory 'paused.json'
@@ -328,7 +358,9 @@ try {
         $wf = @($stopped.workflows | Where-Object workflowExecutionId -eq $recipient.workflowExecutionId)[0]
         $actual = @($wf.bookmarks | Where-Object bookmarkId -eq $recipient.bookmarkId)
         $activity = @($wf.selectedActivities | Where-Object activityExecutionId -eq $recipient.activityExecutionId)
-        if ($Phase -eq 'after-resume' -and $recipient.bookmarkId -eq $marker.acceptedBookmark) {
+        if ($completeFanout) {
+            if ($actual.Count -ne 0 -or $activity.Count -ne 1 -or $activity[0].status -ne 'Completed' -or $wf.status -ne 'Completed') { throw 'A supposedly completed full fan-out recipient still owes its callback before the crash.' }
+        } elseif ($Phase -eq 'after-resume' -and $recipient.bookmarkId -eq $marker.acceptedBookmark) {
             if ($actual.Count -ne 0 -or $activity.Count -ne 1 -or $activity[0].status -ne 'Completed') { throw 'The accepted callback was not durably completed before crash.' }
             $rearmed = @($wf.bookmarks | Where-Object bookmarkId -eq $receipt.rearmedWait.bookmarkId)
             if ($rearmed.Count -ne 1 -or -not (Same-Snapshot $rearmed[0] $receipt.rearmedWait)) { throw 'The completed callback rearm changed before crash.' }
@@ -435,6 +467,18 @@ try {
     if (-not $unmatchedInitial -and -not $emptyWinner) { $expectedArtifacts += $selectedPublication.artifactId }
     if ($selectsAfterRestart) { $expectedArtifacts += $lateStart.artifactId }
     if ($partialStart) { $expectedArtifacts += $secondInitialPublication.artifactId }
+    if ($completeFanout) {
+        $receipt.completedRecipientApiAfterRecovery = @()
+        foreach ($beforeApi in $receipt.completedRecipientApiBeforeCrash) {
+            $identity = $beforeApi.workflowExecutionId
+            $beforeState = @($stopped.workflows | Where-Object workflowExecutionId -eq $identity)[0]
+            $afterState = @($after.workflows | Where-Object workflowExecutionId -eq $identity)[0]
+            $api = Get-WorkflowInstance -Ctx $ctx -ExecutionId $identity
+            if (-not (Same-Snapshot $beforeState $afterState) -or $api.activityNextContinuationToken -or @($api.incidents).Count -ne 0 -or
+                -not (Same-Snapshot $beforeApi.instance $api.instance) -or -not (Same-Snapshot $beforeApi.activities $api.activities)) { throw 'Source acknowledgment recovery changed or reinvoked an already completed fan-out recipient.' }
+            $receipt.completedRecipientApiAfterRecovery += @{ workflowExecutionId = $identity; instance = $api.instance; activities = $api.activities }
+        }
+    }
     if ($after.source.selectedStarts.Count -ne $expectedArtifacts.Count) { throw 'The final source has an unexpected start set.' }
     foreach ($selectedStart in $after.source.selectedStarts) {
         $selected = @($after.allWorkflows | Where-Object artifactId -eq $selectedStart.artifactId)

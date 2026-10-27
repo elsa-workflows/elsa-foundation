@@ -24,6 +24,8 @@ public class BpmnRecoveryProbeFeature : IShellFeature
         Decorate<IBookmarkResumeDispatcher>(services, (inner, provider) => new ProbeResumes(inner, provider.GetRequiredService<RecoveryProbeControl>()));
         Decorate<IWorkflowStartDispatcher>(services, (inner, provider) => new ProbeStarts(inner,
             provider.GetRequiredService<IStimulusDeliveryStore>(), provider.GetRequiredService<RecoveryProbeControl>()));
+        Decorate<IRuntimePostCommitIntentDispatcher>(services, (inner, provider) => new ProbeIntents(inner,
+            provider.GetRequiredService<IStimulusDeliveryStore>(), provider.GetRequiredService<RecoveryProbeControl>()));
     }
 
     private static void Decorate<T>(IServiceCollection services, Func<T, IServiceProvider, T> decorate) where T : class
@@ -76,6 +78,23 @@ public class BpmnRecoveryProbeFeature : IShellFeature
         public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) => inner.ListPinnedExecutableArtifactIdsAsync(cancellationToken);
         public ValueTask<PostCommitDeliveryContext> ReadSavedStartSourceAsync(WorkflowExecutableStimulusDeliveryAuthority authority, CancellationToken cancellationToken = default) =>
             inner.ReadSavedStartSourceAsync(authority, cancellationToken);
+    }
+
+    private sealed class ProbeIntents(IRuntimePostCommitIntentDispatcher inner, IStimulusDeliveryStore sources,
+        RecoveryProbeControl control) : IRuntimePostCommitIntentDispatcher
+    {
+        public bool RequiresDurableSource(string intentKind) => inner.RequiresDurableSource(intentKind);
+        public ValueTask DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default) =>
+            inner.DispatchAsync(intent, cancellationToken);
+        public async ValueTask DispatchAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
+        {
+            await inner.DispatchAsync(source, cancellationToken);
+            if (source.Intent.Kind == PublishStimulusConstants.PublishStimulusIntentKind)
+            {
+                var current = await sources.ReadSourceAsync(source, cancellationToken);
+                await control.CutAsync("after-fanout", current, cancellationToken);
+            }
+        }
     }
 
     private sealed class ProbeStarts(IWorkflowStartDispatcher inner, IStimulusDeliveryStore sources, RecoveryProbeControl control) : IWorkflowStartDispatcher
