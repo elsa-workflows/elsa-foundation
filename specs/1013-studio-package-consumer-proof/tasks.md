@@ -32,9 +32,13 @@ Independent test: normal/fault/restored outcomes are0/1/0 for both omission kind
 
 ## Phase6 — Review and resulting-main delivery
 
-- [ ] T010 Open/attach one draft PR for #3363, independently review correctness/standards/acceptance to convergence, set terminal spec status/remove process checklist in that implementation PR, and obtain exact-head CI/formal review.
-- [ ] T011 Verify reviewed merge/resulting main and real candidate/control outcomes, then reconcile #3363/Program3340/Project63 and release the exact claim.
+- [x] T010 Open/attach one draft PR for #3363, independently review correctness/standards/acceptance to convergence, set terminal spec status/remove process checklist in that implementation PR, and complete exact-head CI and the current organization-authorized review/merge path.
+- [x] T011 Verify reviewed merge/resulting main and real candidate/control outcomes, then reconcile #3363/Program3340/Project63 and release the exact claim.
 
 ## Dependencies and execution
 
 T001→T002→T003→T004→T005→T006→T007→T008→T009→T010→T011. US1 retains the smallest working positive before US2 changes one input; every restored profile is fresh. One implementation worker/leaf, no parallel implementation. Independent read-only reviewers operate only after the complete diff is frozen; documentation/artifact inspection can be independent of running owned consumers. No new test project or unrelated local solution/frontend rerun is required for a Python/JavaScript qualification-only change.
+
+## Final record reconciliation
+
+T010, T011 were delivered through [the reviewed delivery receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3391#issuecomment-6442490345) and merged commit `26f0893468320500d56fa26dc3fcd42db63a36ba`, verified as an ancestor of current main. #3366 reconciles these previously stale checkboxes from actual delivery/main/candidate evidence; it does not invent a new execution or formal approval. The current organization protocol governs review/merge authorization.

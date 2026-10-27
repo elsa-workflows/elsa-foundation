@@ -36,6 +36,8 @@ var token = timeout.Token;
 var services = host.Services;
 var registry = services.GetRequiredService<IShellRegistry>();
 var runtimeCatalog = services.GetRequiredService<IRuntimeFeatureCatalog>();
+// CShells.Nuplane 0.0.31 identifies the lifecycle observer through this public participant contract.
+// Requalify this lookup when reshaping fixtures or upgrading the adapter; do not copy its coordinator.
 var observer = services.GetServices<INuplaneObserver>().Single(value => value is IShellGenerationBuildParticipant);
 var completed = new List<string>();
 
