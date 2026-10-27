@@ -29,6 +29,8 @@ import { WorkflowPropertiesView } from "../WorkflowPropertiesView";
 import { loadActivityIconRegistry } from "../activityIconView";
 import { weaverUnavailableTitle } from "./constants";
 
+const AttachedRunActivityInspector = React.lazy(async () => ({ default: (await import("./AttachedRunActivityInspector")).AttachedRunActivityInspector }));
+
 void loadActivityIconRegistry().catch(() => undefined);
 import type { CanvasView, WorkflowDesignerPanelContext, WorkflowEditorError, WorkflowEditorOperation, WorkflowEditorPanelTab, WorkflowErrorInput, WorkflowTestDriveSetupState } from "./editorTypes";
 import type { WorkflowNodeActions, WorkflowSlotNavigation } from "./contexts";
@@ -57,6 +59,7 @@ import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
 import { ValidationPanel, WorkflowRuntimePanel } from "./editorPanels";
 import { AttachedTestRunStatus } from "./AttachedTestRunStatus";
 import { useEditorRunCanvas } from "./useEditorRunCanvas";
+import { useAttachedExecutionSelection } from "./useAttachedExecutionSelection";
 import { useDraftValidations } from "./useDraftValidations";
 import { useExecutableArtifactExport } from "./useExecutableArtifactExport";
 import { combineValidationErrors, detectStructuralValidationErrors } from "../draftValidation";
@@ -201,6 +204,7 @@ export function WorkflowEditor({
   const themeLayout = useStudioThemeLayout();
   const [activeRightPanelId, setActiveRightPanelId] = useState("inspector");
   const [testDriveSetup, setTestDriveSetup] = useState<WorkflowTestDriveSetupState | null>(null);
+  const [inspectorView, setInspectorView] = useState<"configuration" | "run-data">("configuration");
   const [activeInspectorTabId, setActiveInspectorTabId] = useState<ActivityInspectorTabId>("inputs");
   const [canvasView, setCanvasView] = useState<CanvasView>("designer");
   const [httpTestRequestActivityId, setHttpTestRequestActivityId] = useState<string | null>(null);
@@ -390,9 +394,34 @@ export function WorkflowEditor({
     onPaletteDragEnd,
     onPalettePointerDown
   } = canvas;
-  const runCanvas = useEditorRunCanvas({ context, definitionId, testRun, draftSignature: draft ? getDraftSignature(draft) : "", catalog, nodes: authoringNodes, selectedNodeId,
-    onOpenIncident: () => { setActiveRightPanelId("runtime"); setInspectorCollapsed(false); } });
+  const runSelection = useAttachedExecutionSelection({ context, attachmentId: JSON.stringify([testRun?.view.testRunId, testRun?.view.artifactId, testRun?.draftSignature]),
+    workflowExecutionId: testRun?.view.workflowExecutionId ?? "", nodeId: inspectedNode?.nodeId ?? null,
+    enabled: Boolean(testRun?.snapshot && testRun.endpointContext === context && draft && testRun.draftSignature === getDraftSignature(draft)
+      && testRun.view.definitionId === definitionId && testRun.snapshot.definitionId === definitionId) });
+  const runScope = [...runSelection.scopes].reverse().find(item => item.execution.authoredActivityId === scopeOwner?.nodeId)?.execution;
+  const runCanvas: ReturnType<typeof useEditorRunCanvas> = useEditorRunCanvas({ context, definitionId, testRun, draftSignature: draft ? getDraftSignature(draft) : "", catalog, nodes: authoringNodes, selectedNodeId,
+    ancestorId: runScope?.activityExecutionId, selectedExecution: runSelection.execution,
+    onOpenIncident: (incidentId, targetNodeId) => {
+      const incident = runCanvas.details?.incidents?.find(item => item.incidentId === incidentId);
+      const execution = runCanvas.activities.find(item => item.activityExecutionId === incident?.activityExecutionId);
+      const nodeId = targetNodeId ?? (execution ? authoringNodes.find(node => (node.data.runtimeNodeId ?? node.id) === execution.authoredActivityId)?.id : null);
+      if (execution && nodeId && runCanvas.graph) {
+        runSelection.queue(execution, runCanvas.graph, value => {
+          const item = catalog.find(candidate => candidate.activityTypeKey === value.activityType);
+          return item ? getActivityDisplay(item) : value.activityType;
+        }, execution.authoredActivityId);
+        select(nodeId);
+      } else {
+        select(nodeId ?? null);
+        runSelection.unavailable();
+      }
+      setInspectorView("run-data"); setActiveRightPanelId("inspector"); setInspectorCollapsed(false);
+    } });
   const nodes = runCanvas.nodes;
+  const selectEditorNode = (nodeId: string | null) => {
+    select(nodeId);
+    if (runCanvas.attached) { setInspectorView("run-data"); setActiveRightPanelId("inspector"); setInspectorCollapsed(false); }
+  };
   const selectedCanvasNodeIds = useMemo(() => {
     const selected = nodes.filter(node => node.selected).map(node => node.id);
     return selected.length > 0 ? selected : (selectedNodeId ? [selectedNodeId] : []);
@@ -1070,7 +1099,19 @@ export function WorkflowEditor({
       title: "Inspector",
       order: 0,
       icon: <ListTree size={15} />,
-      render: () => selectedBpmnElement && !selectedNode ? (
+      render: () => <>
+        {runCanvas.eligible ? <div className="wf-attached-inspector-views"><PanelTabList label="Activity view" activeTabId={inspectorView} onSelect={value => setInspectorView(value as "configuration" | "run-data")}
+          tabs={[{ id: "configuration", title: "Configuration", order: 0, icon: null, render: () => null }, { id: "run-data", title: "Run data", order: 1, icon: null, render: () => null }]} /></div> : null}
+        {inspectorView === "run-data" && runCanvas.eligible ? <React.Suspense fallback={<p role="status">Loading activity inspection…</p>}>
+          <AttachedRunActivityInspector context={context} canvas={runCanvas} selection={runSelection} activityId={inspectedNode?.nodeId ?? null}
+            ownerId={scopeOwner?.nodeId ?? null} catalog={catalog} expressionEditors={expressionEditors} onEnter={execution => {
+              const root = draft.state.rootActivity;
+              const node = root ? findActivityNode(root, execution.authoredActivityId, catalogByVersion) : null;
+              const firstChild = node ? getChildSlots(node, catalogByVersion)[0]?.activities[0] : null;
+              const path = root ? findNodeScopePath(root, firstChild?.nodeId ?? execution.authoredActivityId, activity => { const item = catalogByVersion.get(activity.activityVersionId); return item ? getActivityDisplay(item) : activity.nodeId; }, catalogByVersion) : null;
+              if (path) navigateToScope(path, firstChild?.nodeId ?? execution.authoredActivityId);
+            }} />
+        </React.Suspense> : selectedBpmnElement && !selectedNode ? (
         <BpmnElementInspector
           element={selectedBpmnElement}
           outboundFlows={selectedBpmnElementFlows}
@@ -1130,7 +1171,8 @@ export function WorkflowEditor({
             onOpen: () => { if (inspectedNode) setHttpTestRequestActivityId(inspectedNode.nodeId); }
           } : undefined}
         />
-      )
+      )}
+      </>
     },
     {
       id: "runtime",
@@ -1385,7 +1427,7 @@ export function WorkflowEditor({
               selectedNodeId={selectedNodeId}
               readOnly={!canAddActivitiesToCanvas}
               canvasRef={canvasRef}
-              onSelect={select}
+              onSelect={selectEditorNode}
               onChangeSteps={(edit, nextStatus) => {
                 // An open picker targets a row by index; once rows change, that index may name another step.
                 setCompensationPick(null);
@@ -1411,7 +1453,7 @@ export function WorkflowEditor({
               readOnly={!canAddActivitiesToCanvas}
               canvasRef={canvasRef}
               availabilityLookup={availabilityLookup}
-              onSelect={select}
+              onSelect={selectEditorNode}
               onInsert={openSequenceInsertMenu}
               onDropActivity={(versionId, index) => {
                 const activity = paletteCatalog.find(item => item.activityVersionId === versionId);
@@ -1464,7 +1506,7 @@ export function WorkflowEditor({
               },
               onNodeClick: (_, node) => {
                 closeActivityContextMenu();
-                select(node.id);
+                selectEditorNode(node.id);
               },
               onNodeContextMenu: isUnsupportedDesigner ? undefined : (event, node) => {
                 event.preventDefault();

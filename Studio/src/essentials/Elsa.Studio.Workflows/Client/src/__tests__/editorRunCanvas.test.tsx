@@ -122,7 +122,28 @@ describe("execution attached to the editor canvas", () => {
     api.browse.mockResolvedValue({ totalCount: 10, items: [{ execution: activity }] });
     render(); await settle();
     expect(latest.nodes[0].data.runtime).toBeUndefined();
-    expect(container.textContent).toContain("Open the run to choose an occurrence.");
+    expect(container.textContent).toContain("Choose an occurrence in Run data.");
+  });
+
+  it("uses the exact selected ancestor instead of painting another parallel branch", async () => {
+    api.browse.mockImplementation(async (_context, _run, query) => ({ totalCount: 1, items: [{ execution: {
+      ...activity, activityExecutionId: query.ancestorActivityExecutionId === "body-4" ? "branch-4" : "branch-10",
+      status: query.ancestorActivityExecutionId === "body-4" ? "Completed" : "Faulted"
+    } }] }));
+    render({ ancestorId: "body-4" }); await settle();
+    expect(latest.activities.map(item => item.activityExecutionId)).toEqual(["branch-4"]);
+    expect(latest.nodes[0].data.runtime?.status).toBe("Completed");
+  });
+
+  it("paints a repeated activity only for the explicitly anchored occurrence", async () => {
+    const chosen = { ...activity, activityExecutionId: "activity-4" };
+    api.browse.mockImplementation(async (_context, _run, query) => ({ totalCount: 10, items: [{ execution:
+      query.anchorActivityExecutionId === "activity-4" ? chosen : { ...activity, activityExecutionId: "activity-10", status: "Faulted" }
+    }] }));
+    render({ ancestorId: "body-4", selectedExecution: chosen }); await settle();
+    expect(latest.activities.map(item => item.activityExecutionId)).toEqual(["activity-4"]);
+    expect(latest.nodes[0].data.runtime?.status).toBe("Completed");
+    expect(api.browse).toHaveBeenCalledWith(context, "run-1", { executableNodeId: "exec-write", ancestorActivityExecutionId: "body-4", anchorActivityExecutionId: "activity-4", limit: 1 }, expect.any(AbortSignal));
   });
 
   it("does not rely on the bounded first activity page to determine node uniqueness", async () => {

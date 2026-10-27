@@ -40,6 +40,9 @@ internal static class PackageAssetEndpoints
             }
             var tag = new EntityTagHeaderValue('"' + Convert.ToHexString(SHA256.HashData(content.Bytes)).ToLowerInvariant() + '"');
             var result = Results.File(content.Bytes, ContentType(path), lastModified: content.LastModified, entityTag: tag, enableRangeProcessing: true);
+            // A host filter can replace the result without executing it. The response still owns cleanup;
+            // the result's finally retains early release, and the shared lease disposes idempotently.
+            context.Response.RegisterForDisposeAsync(lease);
             return new PayloadResult(result, lease);
         }
         catch (PackageContentSizeException error)

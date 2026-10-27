@@ -2,6 +2,9 @@ using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
+using Elsa.Studio.Hosting.Nuplane;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Nuplane.Admin;
 using Nuplane.Reconciliation;
@@ -11,6 +14,40 @@ namespace Elsa.Studio.Tests.Administration;
 public sealed class PackageAssetTests
 {
     internal const string PackageId = "Acme.StudioAdmin";
+
+    [Fact]
+    public async Task Replacing_admitted_results_in_a_host_filter_releases_response_permits()
+    {
+        var replaced = 0;
+        await using var host = await AdministrationHost.StartAsync(nativeStore: true, mapAdministration: endpoints =>
+            endpoints.MapGroup("").AddEndpointFilter(async (context, next) =>
+            {
+                var result = await next(context);
+                if (!context.HttpContext.Request.Query.ContainsKey("replace")) return result;
+                // Refusals cannot stand in for a successful admitted payload in this ownership regression.
+                Assert.False(result is IStatusCodeHttpResult { StatusCode: >= 400 });
+                Interlocked.Increment(ref replaced);
+                return Results.NoContent();
+            }).MapElsaStudioNuplane());
+        Pack(host, "1.0.0", "admitted package payload");
+        await Reconcile(host);
+        var path = $"/_content/{PackageId}/probe.txt";
+        using (var initial = await host.Client.GetAsync(path))
+        {
+            initial.EnsureSuccessStatusCode();
+            Assert.Equal("admitted package payload", await initial.Content.ReadAsStringAsync());
+        }
+        for (var index = 0; index < 4; index++)
+        {
+            using var response = await host.Client.GetAsync(path + "?replace=true");
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        }
+        Assert.Equal(4, replaced);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var ordinary = await host.Client.GetAsync(path, timeout.Token);
+        ordinary.EnsureSuccessStatusCode();
+        Assert.Equal("admitted package payload", await ordinary.Content.ReadAsStringAsync());
+    }
 
     [Fact]
     public async Task Native_package_bytes_preserve_mime_ranges_and_conditional_revalidation()

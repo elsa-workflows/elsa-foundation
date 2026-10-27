@@ -129,3 +129,20 @@ it("preserves recorded sub-millisecond scheduling chronology before hash sequenc
   const later = { ...execution(100), scheduledAt: "2026-10-25T10:00:00.0000002Z" };
   expect(latestActivityExecution([earlier, later])?.activityExecutionId).toBe("execution-100");
 });
+
+
+it("requires a deliberate occurrence choice for repeated editor activities", async () => {
+  navigator({ selectedActivityExecutionId: undefined, requireExplicitSelection: true });
+  await vi.waitFor(() => expect(container.textContent).toContain("10 recorded executions"));
+  expect(onResolve).toHaveBeenLastCalledWith(null);
+  expect(container.textContent).toContain("Choose a recorded execution");
+  click("10 recorded executions"); click("Execution 9");
+  expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ activityExecutionId: "execution-9" }));
+});
+
+it("resolves an unambiguous editor occurrence without widening its scope", async () => {
+  vi.mocked(browseActivityExecutions).mockResolvedValue({ items: [entry(4)], totalCount: 1, previousCursor: null, nextCursor: null });
+  navigator({ selectedActivityExecutionId: undefined, requireExplicitSelection: true, ancestorActivityExecutionId: "branch-4" });
+  await vi.waitFor(() => expect(onResolve).toHaveBeenCalledWith(expect.objectContaining({ activityExecutionId: "execution-4" })));
+  expect(browseActivityExecutions).toHaveBeenCalledWith(context, "run", expect.objectContaining({ ancestorActivityExecutionId: "branch-4" }), expect.any(AbortSignal));
+});

@@ -3,6 +3,7 @@
 - **Status:** Active; owner authorized planning and implementation on 27 October 2026.
 - **Area:** Studio workflow authoring, runtime inspection and existing Test Run controls.
 - **Steward:** Sipke Schoorstra; one claimed delivery feature at a time.
+- **Kanban:** [GitHub Project 64](https://github.com/orgs/elsa-workflows/projects/64/views/1).
 - **Charter, decisions and progress:** [Program #3392](https://github.com/elsa-workflows/elsa-foundation/issues/3392).
 
 ## Outcome and boundaries
@@ -33,8 +34,9 @@ contract requires an explicit decision before implementation.
 | #3394 | [Integrated qualification #3399](https://github.com/elsa-workflows/elsa-foundation/issues/3399) | All delivery features |
 
 Acceptance criteria and task checklists live on their owning feature issues. The native sub-issue
-hierarchy and blocking relationships are the control surface; no board, separate PRD or SpecKit tree
-is required. Promote checklist tasks only for independent ownership or a material dependency. Add an
+hierarchy, blocking relationships and the owner-requested Kanban board are the control surface; no
+separate PRD or SpecKit tree is required. Board columns are To do, In progress, In review, Blocked and
+Done. Keep them aligned with delivery status; Done requires verified merge. Promote checklist tasks only for independent ownership or a material dependency. Add an
 ADR or focused contract note only when a concrete decision needs one. The owner's explicit lightweight
 workflow choice supersedes the usual SpecKit artifact sequence for this program.
 
