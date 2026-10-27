@@ -103,3 +103,34 @@ for #3359. The earlier owner exception was explicitly scoped to #3356. No branch
 Remaining work includes module registry/upload/delete/feed extraction, all remaining admitted nuspec/registry
 reads, Web adoption and obsolete-code removal, maintenance UI/runtime qualification, causal controls, package and
 CI qualification, independent/external review and resulting-main verification. The program goal remains active.
+
+
+## Web adoption checkpoint — stopped on a new three-attempt sequence
+
+Web now composes AddElsaStudioNuplane/MapElsaStudioNuplane, keeps only its distribution module roster,
+and references the addon instead of direct Nuplane packages. The management file is authoritative for the
+Nuplane setup, with explicit fresh-template retain-all policy; duplicated appsettings setup and copied shared
+contract identities were removed. Four obsolete server adapters and their private helper tests were removed.
+Public HTTP/native tests replace those helpers; host caching tests retain deployed-file cases while native
+PackageAssetTests owns package cache/range/revalidation coverage. Public selected-blueprint boolean/object
+configuration coverage and the round-trip no-temp-file assertion were added.
+
+This adoption is unqualified. Three consecutive targeted-check attempts failed:
+
+1. Compilation found StudioAssetCachingTests still calling removed MapNuplaneStaticWebAssets. Its fake package
+   reader was retired in favor of the existing real native-store public test; host caching cases remain.
+2. 23 passed, 1 failed: lifecycle fixture mixed imperative AddShell with Hosting's configuration blueprint provider.
+   The fixture was migrated to configuration features and a configured reload-failure switch.
+3. 23 passed, 1 failed: lifecycle fixture's first activated generation has no registered string service from First.dll.
+   The failing line is StudioPackageLifecycleTests' first GetRequiredService<string>(); no assertions were relaxed.
+
+Log: /tmp/studio3359-web-adoption-targeted.log; TRX: studio3359-web-adoption-targeted.trx.
+The likely fixture boundary is feed registration timing: its feed-directory override is appended after addon
+composition, while configured directory feeds are registered during composition. This is not yet proven or fixed.
+No fourth attempt or further implementation was made. The organization three-failed-check stop rule requires a
+new owner exception for this sequence; the previously granted #3359 exception covered the saved recovery tests.
+The prior 595/595 whole-project pass applies only to pre-adoption commit4a4fc68, not this checkpoint.
+
+Still required: qualify Web/lifecycle adoption and shared Modularity replacement suites, maintenance UI, truthful
+post-save reload errors, package/architecture/maps/CI gates, independent review and delivery/main verification.
+No branch pushed, PR opened or leaf marked Done. Program #3340 remains unfinished.

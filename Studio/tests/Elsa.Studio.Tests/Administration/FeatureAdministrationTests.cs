@@ -28,10 +28,31 @@ public sealed class FeatureAdministrationTests
         Assert.DoesNotContain(AdministrationHost.Credential, await response.Content.ReadAsStringAsync());
         var stored = JsonNode.Parse(await File.ReadAllTextAsync(host.ShellsFile))!;
         Assert.Equal("unrelated", (string?)stored["preserve"]);
+        Assert.Equal([host.ShellsFile], Directory.GetFiles(Path.GetDirectoryName(host.ShellsFile)!));
         Assert.Equal(AdministrationHost.Credential, (string?)stored["CShells"]!["Shells"]!["Authoring"]!["Features"]!["Configured"]!["Credential"]);
         Assert.NotNull(stored["CShells"]!["Shells"]!["Default"]!["Features"]!["StudioApi"]);
         Assert.Same(decoy, registry.GetActive("Default"));
         Assert.Equal(AdministrationHost.Credential, host.App.Configuration["CShells:Shells:Authoring:Features:Configured:Credential"]);
+    }
+
+    [Fact]
+    public async Task Public_store_reads_boolean_and_object_feature_configuration_from_the_selected_blueprint()
+    {
+        await using var host = await AdministrationHost.StartAsync(managedFeatures: true, beforeStudio: builder =>
+        {
+            var path = Path.Combine(builder.Environment.ContentRootPath, "config", "studio-shells.json");
+            var document = JsonNode.Parse(File.ReadAllText(path))!;
+            var features = document["CShells"]!["Shells"]!["Authoring"]!["Features"]!;
+            features["On"] = true;
+            features["Off"] = false;
+            features["Configured"]!["Size"] = 10;
+            File.WriteAllText(path, document.ToJsonString());
+        });
+        var store = host.App.Services.GetRequiredService<IShellFeatureConfigurationStore>();
+        var snapshot = await store.LoadAsync();
+        Assert.Contains("On", snapshot.Features.Keys);
+        Assert.DoesNotContain("Off", snapshot.Features.Keys);
+        Assert.Equal(10, snapshot.Features["Configured"].GetProperty("Size").GetInt32());
     }
 
     [Fact]

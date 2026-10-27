@@ -139,7 +139,7 @@ public static class NuplaneHostingExtensions
         var before = studio.Services.ToHashSet();
         nuplane.AddDirectoryFeed(StudioNuplaneSettings.FallbackFeedName, Path.Combine(studio.Environment.ContentRootPath, "packages"), directory =>
         {
-            directory.Watch = false; // Upload already reconciles; direct fallback-folder copies use manual reconciliation.
+            directory.Watch = false; // Uploads reconcile; direct copies need manual or configured periodic reconciliation.
             directory.IncludeAll();
         });
         var source = studio.Services.Single(service => !before.Contains(service) && service.ServiceType == typeof(IDesiredPackageSource));
