@@ -22,6 +22,8 @@ public class BpmnRecoveryProbeFeature : IShellFeature
         services.AddSingleton(control);
         Decorate<IStimulusDeliveryStore>(services, (inner, provider) => new ProbeSources(inner, provider.GetRequiredService<RecoveryProbeControl>()));
         Decorate<IBookmarkResumeDispatcher>(services, (inner, provider) => new ProbeResumes(inner, provider.GetRequiredService<RecoveryProbeControl>()));
+        Decorate<IWorkflowStartDispatcher>(services, (inner, provider) => new ProbeStarts(inner,
+            provider.GetRequiredService<IStimulusDeliveryStore>(), provider.GetRequiredService<RecoveryProbeControl>()));
     }
 
     private static void Decorate<T>(IServiceCollection services, Func<T, IServiceProvider, T> decorate) where T : class
@@ -74,6 +76,25 @@ public class BpmnRecoveryProbeFeature : IShellFeature
         public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) => inner.ListPinnedExecutableArtifactIdsAsync(cancellationToken);
         public ValueTask<PostCommitDeliveryContext> ReadSavedStartSourceAsync(WorkflowExecutableStimulusDeliveryAuthority authority, CancellationToken cancellationToken = default) =>
             inner.ReadSavedStartSourceAsync(authority, cancellationToken);
+    }
+
+    private sealed class ProbeStarts(IWorkflowStartDispatcher inner, IStimulusDeliveryStore sources, RecoveryProbeControl control) : IWorkflowStartDispatcher
+    {
+        public bool CanDispatchSavedStimulus(IStimulusDeliveryStore selectedSources, IWorkflowExecutableStore material,
+            IWorkflowExecutionStateStore executions) => inner.CanDispatchSavedStimulus(selectedSources, material, executions);
+        public async ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(WorkflowExecutionStartDispatchRequest request,
+            WorkflowExecutableReferenceScope requiredScope = WorkflowExecutableReferenceScope.Published,
+            WorkflowExecutionCommandDispatchOptions? dispatchOptions = null, CancellationToken cancellationToken = default)
+        {
+            var result = await inner.DispatchAsync(request, requiredScope, dispatchOptions, cancellationToken);
+            if (request.StartAuthority?.StimulusDelivery is { } authority && !result.CommandDispatch.IsShed &&
+                result.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Accepted)
+            {
+                var source = await sources.ReadSavedStartSourceAsync(authority, cancellationToken);
+                await control.CutAsync("after-start", source, cancellationToken, acceptedExecution: result.WorkflowExecutionId);
+            }
+            return result;
+        }
     }
 
     private sealed class ProbeResumes(IBookmarkResumeDispatcher inner, RecoveryProbeControl control) : IBookmarkResumeDispatcher

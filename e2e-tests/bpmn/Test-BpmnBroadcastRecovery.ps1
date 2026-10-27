@@ -13,9 +13,10 @@ param(
     [Parameter(Mandatory)][string] $EvidencePath,
     [string] $Python = 'python3',
     [Parameter(Mandatory)][string] $SourceRevision,
-    [ValidateSet('after-cohort', 'after-resume', 'before-selection', 'empty-cohort', 'competing-proposal', 'competing-empty-proposal', 'competing-empty-winner')][string] $Phase = 'after-cohort'
+    [ValidateSet('after-cohort', 'after-resume', 'before-selection', 'empty-cohort', 'competing-proposal', 'competing-empty-proposal', 'competing-empty-winner', 'after-start')][string] $Phase = 'after-cohort'
 )
 $ErrorActionPreference = 'Stop'
+$partialStart = $Phase -eq 'after-start'
 $emptyProposal = $Phase -eq 'competing-empty-proposal'
 $emptyWinner = $Phase -eq 'competing-empty-winner'
 $competing = $Phase -in @('competing-proposal', 'competing-empty-proposal', 'competing-empty-winner')
@@ -61,7 +62,7 @@ $settings.CShells.Shells.default.Features.BpmnRecoveryProbe = @{ ControlDirector
 $settings.CShells.Shells.default.Features.WorkflowsRuntimeResumption = @{ SweepIntervalSeconds = 1 }
 $settings | ConvertTo-Json -Depth 60 | Set-Content $settingsPath
 @{ caseId = $caseId; phase = if ($competing) { 'before-install' } elseif ($Phase -eq 'empty-cohort') { 'after-cohort' } else { $Phase }; eventName = $eventName } | ConvertTo-Json | Set-Content (Join-Path $control 'plan.json')
-$receipt = @{ sourceRevision = $SourceRevision; scenario = switch ($Phase) { 'after-resume' { 'partial-callback-and-rearm-before-source-ack' } 'before-selection' { 'delayed-first-selection-and-pre-start-wait-exclusion' } 'empty-cohort' { 'empty-saved-cohort-excludes-later-matches' } 'competing-proposal' { 'expired-old-prepared-proposal-cannot-replace-successor-winner' } 'competing-empty-proposal' { 'expired-old-empty-proposal-cannot-replace-populated-successor-winner' } 'competing-empty-winner' { 'expired-old-populated-proposal-cannot-replace-empty-successor-winner' } default { 'after-cohort-before-dispatch' } }; passed = $false;
+$receipt = @{ sourceRevision = $SourceRevision; scenario = switch ($Phase) { 'after-resume' { 'partial-callback-and-rearm-before-source-ack' } 'after-start' { 'one-of-two-starts-parked-before-remaining-start-and-resumes' } 'before-selection' { 'delayed-first-selection-and-pre-start-wait-exclusion' } 'empty-cohort' { 'empty-saved-cohort-excludes-later-matches' } 'competing-proposal' { 'expired-old-prepared-proposal-cannot-replace-successor-winner' } 'competing-empty-proposal' { 'expired-old-empty-proposal-cannot-replace-populated-successor-winner' } 'competing-empty-winner' { 'expired-old-populated-proposal-cannot-replace-empty-successor-winner' } default { 'after-cohort-before-dispatch' } }; passed = $false;
     probeAssemblySha256 = (Get-FileHash $ProbeAssembly).Hash.ToLowerInvariant(); normalAssemblySha256 = (Get-FileHash $NormalAssembly).Hash.ToLowerInvariant();
     sourceCommit = $sourceCommit; sourceFiles = $sourceManifest; probeBuild = $probeManifest; normalBuild = $normalManifest; readerSha256 = $readerHash; readerBuild = $readerManifest;
     cut = $null; stopped = $null; successorClaim = $null; recovered = $null; observations = @(); failures = @() }
@@ -180,6 +181,8 @@ try {
     }
     $initialStartXml = if ($unmatchedInitial) { $startXml.Replace($eventName, "unmatched-$eventName") } else { $startXml }
     $selectedPublication = Import-Process $initialStartXml
+    $secondInitialPublication = $null
+    if ($partialStart) { $secondInitialPublication = Import-Process ($startXml.Replace('id="selected-start"', 'id="second-start"')) }
     $publisherXml = @"
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" id="defs" targetNamespace="urn:elsa:source-recovery"><signal id="signal" name="$eventName"/>
 <process id="publisher" isExecutable="true"><startEvent id="start"/><intermediateThrowEvent id="send"><signalEventDefinition signalRef="signal"/></intermediateThrowEvent><endEvent id="end"/>
@@ -212,7 +215,21 @@ try {
         }
     } elseif ($Phase -eq 'empty-cohort') {
         if ($null -eq $marker.snapshot -or $marker.snapshot.starts.Count -ne 0 -or $marker.snapshot.resumes.Count -ne 0) { throw 'The empty recipient decision was not durably committed.' }
-    } elseif ($marker.snapshot.starts.Count -ne 1 -or $marker.snapshot.resumes.Count -ne 2) { throw 'The actual persisted cohort is incomplete at the cut.' }
+    } elseif ($marker.snapshot.starts.Count -ne $(if ($partialStart) { 2 } else { 1 }) -or $marker.snapshot.resumes.Count -ne 2) { throw 'The actual persisted cohort is incomplete at the cut.' }
+    if ($partialStart) {
+        $acceptedSource = Observe 'accepted-start' @($waitRun.workflowExecutionId)
+        $acceptedStart = @($acceptedSource.source.selectedStarts | Where-Object workflowExecutionId -eq $marker.acceptedExecution)
+        if ($acceptedStart.Count -ne 1) { throw 'The accepted start marker is not one exact saved keyed recipient.' }
+        $deadline = [DateTimeOffset]::UtcNow.AddSeconds(30)
+        do {
+            $acceptedApi = Get-WorkflowInstance -Ctx $ctx -ExecutionId $marker.acceptedExecution
+            $parked = @($acceptedApi.activities | Where-Object { $_.executableNodeId -eq 'node-park' -and $_.status -eq 'Suspended' })
+            if ($parked.Count -eq 1) { break }
+            Start-Sleep -Milliseconds 100
+        } while ([DateTimeOffset]::UtcNow -lt $deadline)
+        if ($parked.Count -ne 1 -or $acceptedApi.activityNextContinuationToken -or @($acceptedApi.incidents).Count -ne 0) { throw 'Start acceptance did not establish an actual parked child and complete observation.' }
+        $receipt.acceptedStartApiBeforeCrash = $acceptedApi
+    }
     if ($Phase -eq 'after-resume') {
         $accepted = Observe 'accepted' @($waitRun.workflowExecutionId)
         $recipient = @($accepted.source.selectedResumes | Where-Object { $_.bookmarkId -eq $marker.acceptedBookmark -and $_.workflowExecutionId -eq $marker.acceptedExecution })
@@ -320,12 +337,13 @@ try {
     foreach ($start in $stopped.source.selectedStarts) {
         $target = @($stopped.workflows | Where-Object workflowExecutionId -eq $start.workflowExecutionId)
         if ($target.Count -ne 1) { throw 'The exact selected keyed target observation is unavailable.' }
-        if ($Phase -eq 'after-cohort') {
-            if ($target[0].exists -or @($stopped.allWorkflows | Where-Object artifactId -eq $selectedPublication.artifactId).Count -ne 0) { throw 'A selected start ran before the post-cohort crash.' }
+        if ($Phase -eq 'after-cohort' -or ($partialStart -and $start.workflowExecutionId -ne $marker.acceptedExecution)) {
+            if ($target[0].exists -or @($stopped.allWorkflows | Where-Object artifactId -eq $start.artifactId).Count -ne 0) { throw 'A selected start ran before its dispatch cut.' }
         } else {
             $park = @($target[0].bookmarks | Where-Object { $_.executableNodeId -eq 'node-park' -and $_.activityStatus -eq 'Suspended' })
             if (-not $target[0].exists -or $park.Count -ne 1 -or $target[0].bookmarks.Count -ne 1) { throw 'Partial delivery did not durably start and park the original keyed target.' }
             $receipt.startedParkBeforeCrash = $park[0]
+            if ($partialStart) { $receipt.acceptedStartBeforeCrash = $target[0] }
         }
     }
     $null = $settings.CShells.Shells.default.Features.Remove('BpmnRecoveryProbe')
@@ -416,6 +434,7 @@ try {
     $expectedArtifacts = @()
     if (-not $unmatchedInitial -and -not $emptyWinner) { $expectedArtifacts += $selectedPublication.artifactId }
     if ($selectsAfterRestart) { $expectedArtifacts += $lateStart.artifactId }
+    if ($partialStart) { $expectedArtifacts += $secondInitialPublication.artifactId }
     if ($after.source.selectedStarts.Count -ne $expectedArtifacts.Count) { throw 'The final source has an unexpected start set.' }
     foreach ($selectedStart in $after.source.selectedStarts) {
         $selected = @($after.allWorkflows | Where-Object artifactId -eq $selectedStart.artifactId)
@@ -473,6 +492,13 @@ try {
         $parkedWait = @($keyedState.bookmarks | Where-Object { $_.executableNodeId -eq 'node-park' -and $_.activityStatus -eq 'Suspended' })
         if ($parkedWait.Count -ne 1 -or $parkedWait[0].generation -le 0 -or $keyedState.bookmarks.Count -ne 1) { throw 'A saved keyed start lacks its exact physical park registration.' }
         if ($Phase -eq 'after-resume' -and -not (Same-Snapshot $parkedWait[0] $receipt.startedParkBeforeCrash)) { throw 'Source retry changed the start accepted before the crash.' }
+        if ($partialStart -and $selectedStart.workflowExecutionId -eq $marker.acceptedExecution) {
+            $afterApi = Get-WorkflowInstance -Ctx $ctx -ExecutionId $selectedStart.workflowExecutionId
+            if (-not (Same-Snapshot $keyedState $receipt.acceptedStartBeforeCrash) -or $afterApi.activityNextContinuationToken -or
+                -not (Same-Snapshot $afterApi.activities $receipt.acceptedStartApiBeforeCrash.activities) -or
+                -not (Same-Snapshot $afterApi.instance $receipt.acceptedStartApiBeforeCrash.instance) -or @($afterApi.incidents).Count -ne 0) { throw 'Retry changed or reinvoked the already parked exact keyed start.' }
+            $receipt.acceptedStartApiAfterRecovery = $afterApi
+        }
         if ($selectsAfterRestart) {
             $oldWait = $stopped.workflows | ForEach-Object bookmarks | Where-Object bookmarkId -eq $parkedWait[0].bookmarkId
             $captured = @($after.source.selectedResumes | Where-Object { $_.workflowExecutionId -eq $keyedState.workflowExecutionId -and $_.bookmarkId -eq $parkedWait[0].bookmarkId })
