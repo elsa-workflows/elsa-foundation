@@ -13,7 +13,7 @@ param(
     [Parameter(Mandatory)][string] $EvidencePath,
     [string] $Python = 'python3',
     [Parameter(Mandatory)][string] $SourceRevision,
-    [ValidateSet('after-cohort', 'after-resume')][string] $Phase = 'after-cohort'
+    [ValidateSet('after-cohort', 'after-resume', 'before-selection')][string] $Phase = 'after-cohort'
 )
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/../_ServerLifecycle.ps1"
@@ -54,7 +54,7 @@ $settings.CShells.Shells.default.Features.BpmnRecoveryProbe = @{ ControlDirector
 $settings.CShells.Shells.default.Features.WorkflowsRuntimeResumption = @{ SweepIntervalSeconds = 1 }
 $settings | ConvertTo-Json -Depth 60 | Set-Content $settingsPath
 @{ caseId = $caseId; phase = $Phase; eventName = $eventName } | ConvertTo-Json | Set-Content (Join-Path $control 'plan.json')
-$receipt = @{ sourceRevision = $SourceRevision; scenario = if ($Phase -eq 'after-resume') { 'partial-callback-and-rearm-before-source-ack' } else { 'after-cohort-before-dispatch' }; passed = $false;
+$receipt = @{ sourceRevision = $SourceRevision; scenario = switch ($Phase) { 'after-resume' { 'partial-callback-and-rearm-before-source-ack' } 'before-selection' { 'delayed-first-selection-and-pre-start-wait-exclusion' } default { 'after-cohort-before-dispatch' } }; passed = $false;
     probeAssemblySha256 = (Get-FileHash $ProbeAssembly).Hash.ToLowerInvariant(); normalAssemblySha256 = (Get-FileHash $NormalAssembly).Hash.ToLowerInvariant();
     sourceCommit = $sourceCommit; sourceFiles = $sourceManifest; probeBuild = $probeManifest; normalBuild = $normalManifest; readerSha256 = $readerHash; readerBuild = $readerManifest;
     cut = $null; stopped = $null; successorClaim = $null; recovered = $null; observations = @(); failures = @() }
@@ -85,6 +85,7 @@ function Observe([string] $Name, [string[]] $ExtraIds) {
     return Get-Content -Raw $path | ConvertFrom-Json -AsHashtable -DateKind String
 }
 function Same-Snapshot($Left, $Right) {
+    if ($null -eq $Left -or $null -eq $Right) { return ($null -eq $Left -and $null -eq $Right) }
     $leftDocument = [System.Text.Json.JsonDocument]::Parse(($Left | ConvertTo-Json -Depth 60 -Compress))
     $rightDocument = [System.Text.Json.JsonDocument]::Parse(($Right | ConvertTo-Json -Depth 60 -Compress))
     try { return [System.Text.Json.JsonElement]::DeepEquals($leftDocument.RootElement, $rightDocument.RootElement) }
@@ -113,11 +114,15 @@ try {
     $waitRun = Invoke-Artifact -Ctx $ctx -ArtifactId $waitPublication.artifactId -SourceReferenceId $waitPublication.sourceReferenceId
     $null = Wait-Catches $waitRun.workflowExecutionId 2
     # Published before the snapshot; this start must survive a process restart with its original artifact-scoped key.
+    $parkName = if ($Phase -eq 'before-selection') { $eventName } else { "park-$eventName" }
     $startXml = @"
-<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" id="defs" targetNamespace="urn:elsa:source-recovery"><signal id="signal" name="$eventName"/><signal id="park" name="park-$eventName"/>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" id="defs" targetNamespace="urn:elsa:source-recovery"><signal id="signal" name="$eventName"/><signal id="park" name="$parkName"/>
 <process id="selected-start" isExecutable="true"><startEvent id="receive"><signalEventDefinition signalRef="signal"/></startEvent><intermediateCatchEvent id="park"><signalEventDefinition signalRef="park"/></intermediateCatchEvent><endEvent id="end"/>
 <sequenceFlow id="first" sourceRef="receive" targetRef="park"/><sequenceFlow id="last" sourceRef="park" targetRef="end"/></process></definitions>
 "@
+    if ($Phase -eq 'before-selection') {
+        $startXml = $startXml.Replace("<signal id=`"park`" name=`"$parkName`"/>", '').Replace('signalRef="park"', 'signalRef="signal"')
+    }
     $selectedPublication = Import-Process $startXml
     $publisherXml = @"
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" id="defs" targetNamespace="urn:elsa:source-recovery"><signal id="signal" name="$eventName"/>
@@ -143,7 +148,9 @@ try {
     }
     $marker = Get-Content -Raw $markerPath | ConvertFrom-Json -AsHashtable -DateKind String
     $receipt.cut = $marker
-    if ($marker.snapshot.starts.Count -ne 1 -or $marker.snapshot.resumes.Count -ne 2) { throw 'The actual persisted cohort is incomplete at the cut.' }
+    if ($Phase -eq 'before-selection') {
+        if ($null -ne $marker.snapshot) { throw 'Selection already occurred before the delayed-delivery cut.' }
+    } elseif ($marker.snapshot.starts.Count -ne 1 -or $marker.snapshot.resumes.Count -ne 2) { throw 'The actual persisted cohort is incomplete at the cut.' }
     if ($Phase -eq 'after-resume') {
         $accepted = Observe 'accepted' @($waitRun.workflowExecutionId)
         $recipient = @($accepted.source.selectedResumes | Where-Object { $_.bookmarkId -eq $marker.acceptedBookmark -and $_.workflowExecutionId -eq $marker.acceptedExecution })
@@ -166,7 +173,7 @@ try {
         $receipt.partialBeforeCrash = $partial; $receipt.rearmedWait = $newWait[0]
         $receipt.acceptedRecipient = $recipient; $receipt.partialApi = $partialInstance
     }
-    # A listener and a different publication created after selection must not join this source on recovery.
+    # These recipients are created after publisher commit. They join only if selection has not yet happened.
     $latePublication = Import-Process ($waitXml.Replace('id="waiter"', 'id="late-waiter"'))
     $lateRun = Invoke-Artifact -Ctx $ctx -ArtifactId $latePublication.artifactId -SourceReferenceId $latePublication.sourceReferenceId
     $null = Wait-Catches $lateRun.workflowExecutionId 2
@@ -177,6 +184,18 @@ try {
     $receipt.stopped = $stopped
     if ($stopped.source.status -ne 'Delivering' -or $stopped.source.deliveryFencingToken -ne $marker.fencingToken -or $stopped.source.deliveringOwnerId -ne $marker.ownerId) { throw 'The stopped source lost its actual claim facts.' }
     if (-not (Same-Snapshot $stopped.source.snapshot $marker.snapshot)) { throw 'The physical source differs from the captured winner.' }
+    if ($Phase -eq 'before-selection') {
+        if ($null -ne $stopped.source.snapshot) { throw 'The stopped source already selected recipients.' }
+        foreach ($executionId in @($waitRun.workflowExecutionId, $lateRun.workflowExecutionId)) {
+            $wf = @($stopped.workflows | Where-Object workflowExecutionId -eq $executionId)[0]
+            if ($wf.bookmarks.Count -ne 2 -or @($wf.bookmarks | Where-Object activityStatus -ne 'Suspended').Count -ne 0) { throw 'A waiting recipient changed before first selection.' }
+        }
+        $later = @($stopped.workflows | Where-Object workflowExecutionId -eq $lateRun.workflowExecutionId)[0]
+        if (@($later.bookmarks | Where-Object { [DateTimeOffset]::Parse($_.createdAt) -le [DateTimeOffset]::Parse($stopped.source.recordedAt) }).Count -ne 0) { throw 'The delayed listeners were not created after the source commit.' }
+        foreach ($artifactId in @($selectedPublication.artifactId, $lateStart.artifactId)) {
+            if (@($stopped.allWorkflows | Where-Object artifactId -eq $artifactId).Count -ne 0) { throw 'A signal start ran before initial recipient selection.' }
+        }
+    }
     foreach ($recipient in $stopped.source.selectedResumes) {
         $wf = @($stopped.workflows | Where-Object workflowExecutionId -eq $recipient.workflowExecutionId)[0]
         $actual = @($wf.bookmarks | Where-Object bookmarkId -eq $recipient.bookmarkId)
@@ -216,7 +235,7 @@ try {
     $successor = Get-Content -Raw $watchOutput | ConvertFrom-Json -AsHashtable -DateKind String
     $receipt.successorClaim = $successor
     if ($successor.source.deliveryFencingToken -le $stopped.source.deliveryFencingToken -or $successor.source.deliveringOwnerId -eq $stopped.source.deliveringOwnerId) { throw 'No distinct successor source claim was proven.' }
-    if ($Phase -eq 'after-cohort') {
+    if ($Phase -ne 'after-resume') {
         $finished = Wait-WorkflowInstance -Ctx $ctx -ExecutionId $waitRun.workflowExecutionId -TimeoutSeconds 60
         if ($finished.instance.status -ne 'Completed' -or @($finished.incidents).Count -ne 0) { throw 'Normal-host recovery did not complete the original catches/join cleanly.' }
     } else {
@@ -231,21 +250,49 @@ try {
         } while ([DateTimeOffset]::UtcNow -lt $deadline)
         if ($completed.Count -ne 2 -or $armed.Count -ne 2 -or @($finished.incidents).Count -ne 0) { throw 'Recovery did not complete only both saved callbacks and preserve rearmed listeners.' }
     }
-    $keyedId = $stopped.source.selectedStarts[0].workflowExecutionId
+    if ($Phase -eq 'before-selection') {
+        $lateCompleted = Wait-WorkflowInstance -Ctx $ctx -ExecutionId $lateRun.workflowExecutionId -TimeoutSeconds 60
+        if ($lateCompleted.instance.status -ne 'Completed' -or @($lateCompleted.incidents).Count -ne 0) { throw 'First delivery did not include the listener armed after publisher commit.' }
+        $selectedSource = Observe 'selected-after-recovery' @($waitRun.workflowExecutionId, $lateRun.workflowExecutionId)
+        if ($selectedSource.source.selectedStarts.Count -ne 2 -or $selectedSource.source.selectedResumes.Count -ne 4) { throw 'Initial selection did not capture the complete delivery-time cohort.' }
+        foreach ($before in $stopped.workflows | Where-Object { $_.workflowExecutionId -in @($waitRun.workflowExecutionId, $lateRun.workflowExecutionId) }) {
+            foreach ($wait in $before.bookmarks) {
+                $captured = @($selectedSource.source.selectedResumes | Where-Object { $_.workflowExecutionId -eq $before.workflowExecutionId -and $_.bookmarkId -eq $wait.bookmarkId -and $_.generation -eq $wait.generation })
+                if ($captured.Count -ne 1) { throw 'First delivery omitted or substituted a wait armed before selection.' }
+            }
+        }
+        $lateBinding = @($selectedSource.source.selectedStarts | Where-Object artifactId -eq $lateStart.artifactId)
+        if ($lateBinding.Count -ne 1 -or [DateTimeOffset]::Parse($lateBinding[0].bindingCreatedAt) -le [DateTimeOffset]::Parse($stopped.source.recordedAt)) { throw 'The selected later start binding was not created after publisher commit.' }
+        $receipt.firstSelected = $selectedSource
+    } else { $selectedSource = $stopped }
+    $startedRuns = @()
+    foreach ($selectedStart in $selectedSource.source.selectedStarts) {
+        $keyedId = $selectedStart.workflowExecutionId
+        $deadline = [DateTimeOffset]::UtcNow.AddSeconds(30)
+        do {
+            $started = Get-WorkflowInstance -Ctx $ctx -ExecutionId $keyedId
+            $parked = @($started.activities | Where-Object { $_.executableNodeId -eq 'node-park' -and $_.status -eq 'Suspended' })
+            if ($parked.Count -eq 1) { break }
+            Start-Sleep -Milliseconds 100
+        } while ([DateTimeOffset]::UtcNow -lt $deadline)
+        if ($parked.Count -ne 1 -or @($started.incidents).Count -ne 0) { throw 'An exact saved keyed start did not reach its parked child.' }
+        $startedRuns += $started
+    }
     $deadline = [DateTimeOffset]::UtcNow.AddSeconds(30)
     do {
-        $started = Get-WorkflowInstance -Ctx $ctx -ExecutionId $keyedId
-        $parked = @($started.activities | Where-Object { $_.executableNodeId -eq 'node-park' -and $_.status -eq 'Suspended' })
-        if ($parked.Count -eq 1) { break }
+        $after = Observe 'recovered' @($waitRun.workflowExecutionId, $lateRun.workflowExecutionId)
+        if ($after.source.status -eq 'Delivered') { break }
         Start-Sleep -Milliseconds 100
     } while ([DateTimeOffset]::UtcNow -lt $deadline)
-    if ($parked.Count -ne 1 -or @($started.incidents).Count -ne 0) { throw 'The exact saved keyed start did not reach its parked child.' }
-    $after = Observe 'recovered'  @($waitRun.workflowExecutionId, $lateRun.workflowExecutionId)
     $receipt.recovered = $after
-    if ($after.source.status -ne 'Delivered' -or -not (Same-Snapshot $after.source.snapshot $stopped.source.snapshot)) { throw 'Recovery did not settle the original immutable source cohort.' }
-    $selected = @($after.allWorkflows | Where-Object artifactId -eq $selectedPublication.artifactId)
-    if ($selected.Count -ne 1 -or $after.source.selectedStarts.Count -ne 1 -or
-        $selected[0].workflowExecutionId -ne $after.source.selectedStarts[0].workflowExecutionId) { throw 'The saved start did not produce exactly its original deterministic keyed execution.' }
+    if ($after.source.status -ne 'Delivered' -or -not (Same-Snapshot $after.source.snapshot $selectedSource.source.snapshot)) { throw 'Recovery did not settle its complete immutable source cohort.' }
+    $expectedArtifacts = @($selectedPublication.artifactId)
+    if ($Phase -eq 'before-selection') { $expectedArtifacts += $lateStart.artifactId }
+    if ($after.source.selectedStarts.Count -ne $expectedArtifacts.Count) { throw 'The final source has an unexpected start set.' }
+    foreach ($selectedStart in $after.source.selectedStarts) {
+        $selected = @($after.allWorkflows | Where-Object artifactId -eq $selectedStart.artifactId)
+        if ($selectedStart.artifactId -notin $expectedArtifacts -or $selected.Count -ne 1 -or $selected[0].workflowExecutionId -ne $selectedStart.workflowExecutionId) { throw 'A saved start did not produce exactly its original deterministic keyed execution.' }
+    }
     foreach ($recipient in $after.source.selectedResumes) {
         $wf = @($after.workflows | Where-Object workflowExecutionId -eq $recipient.workflowExecutionId)[0]
         $activity = @($wf.selectedActivities | Where-Object activityExecutionId -eq $recipient.activityExecutionId)
@@ -266,20 +313,32 @@ try {
             if ($current.Count -ne 1 -or $current[0].bookmarkId -eq $recipient.bookmarkId -or $current[0].generation -eq $recipient.generation -or $current[0].activityStatus -ne 'Suspended') { throw 'A saved recipient did not leave exactly one later physical wait.' }
         }
     }
-    if (@($after.allWorkflows | Where-Object artifactId -eq $lateStart.artifactId).Count -ne 0) { throw 'A later binding joined an already saved source.' }
     $late = @($after.workflows | Where-Object workflowExecutionId -eq $lateRun.workflowExecutionId)[0]
-    $lateBefore = @($stopped.workflows | Where-Object workflowExecutionId -eq $lateRun.workflowExecutionId)[0]
-    if ($late.bookmarks.Count -ne 2 -or $late.status -ne $lateBefore.status -or
-        -not (Same-Snapshot $late.bookmarks $lateBefore.bookmarks)) { throw 'The old source changed a later exact wait or activity/generation.' }
     $lateInstance = Get-WorkflowInstance -Ctx $ctx -ExecutionId $lateRun.workflowExecutionId
-    if (@($lateInstance.incidents).Count -ne 0) { throw 'The later listener acquired an incident during old-source recovery.' }
-    $keyedState = @($after.workflows | Where-Object workflowExecutionId -eq $keyedId)[0]
-    $parkedWait = @($keyedState.bookmarks | Where-Object { $_.executableNodeId -eq 'node-park' -and $_.activityStatus -eq 'Suspended' })
-    if ($parkedWait.Count -ne 1 -or $parkedWait[0].generation -le 0 -or $keyedState.bookmarks.Count -ne 1) { throw 'The saved keyed start lacks its exact physical park registration.' }
-    if ($Phase -eq 'after-resume' -and -not (Same-Snapshot $parkedWait[0] $receipt.startedParkBeforeCrash)) { throw 'Source retry changed the start that was already accepted before the crash.' }
+    if (@($lateInstance.incidents).Count -ne 0) { throw 'The later listener acquired an incident during recovery.' }
+    if ($Phase -ne 'before-selection') {
+        if (@($after.allWorkflows | Where-Object artifactId -eq $lateStart.artifactId).Count -ne 0) { throw 'A later binding joined an already saved source.' }
+        $lateBefore = @($stopped.workflows | Where-Object workflowExecutionId -eq $lateRun.workflowExecutionId)[0]
+        if ($late.bookmarks.Count -ne 2 -or $late.status -ne $lateBefore.status -or
+            -not (Same-Snapshot $late.bookmarks $lateBefore.bookmarks)) { throw 'The old source changed a later exact wait or activity/generation.' }
+    } elseif ($late.status -ne 'Completed' -or $late.bookmarks.Count -ne 0) { throw 'The delayed delivery-time listener did not complete and retire its waits.' }
+    foreach ($selectedStart in $after.source.selectedStarts) {
+        $keyedState = @($after.workflows | Where-Object workflowExecutionId -eq $selectedStart.workflowExecutionId)[0]
+        $parkedWait = @($keyedState.bookmarks | Where-Object { $_.executableNodeId -eq 'node-park' -and $_.activityStatus -eq 'Suspended' })
+        if ($parkedWait.Count -ne 1 -or $parkedWait[0].generation -le 0 -or $keyedState.bookmarks.Count -ne 1) { throw 'A saved keyed start lacks its exact physical park registration.' }
+        if ($Phase -eq 'after-resume' -and -not (Same-Snapshot $parkedWait[0] $receipt.startedParkBeforeCrash)) { throw 'Source retry changed the start accepted before the crash.' }
+        if ($Phase -eq 'before-selection') {
+            $oldWait = $stopped.workflows | ForEach-Object bookmarks | Where-Object bookmarkId -eq $parkedWait[0].bookmarkId
+            $captured = @($after.source.selectedResumes | Where-Object { $_.workflowExecutionId -eq $keyedState.workflowExecutionId -and $_.bookmarkId -eq $parkedWait[0].bookmarkId })
+            $original = @($after.source.selectedResumes)[0]
+            $originalWorkflow = @($stopped.workflows | Where-Object workflowExecutionId -eq $original.workflowExecutionId)[0]
+            $originalWait = @($originalWorkflow.bookmarks | Where-Object bookmarkId -eq $original.bookmarkId)[0]
+            if ($null -ne $oldWait -or $captured.Count -ne 0 -or $parkedWait[0].stimulusType -ne $originalWait.stimulusType -or $parkedWait[0].stimulusHash -ne $originalWait.stimulusHash) { throw 'The matching wait created by a selected start was not excluded from its own source.' }
+        }
+    }
     $publisherFinished = Wait-WorkflowInstance -Ctx $ctx -ExecutionId $marker.workflowExecutionId -TimeoutSeconds 60
     if ($publisherFinished.instance.status -ne 'Completed' -or @($publisherFinished.incidents).Count -ne 0) { throw 'The original source publisher did not complete cleanly.' }
-    $receipt.observations += @{ originalWaiter = $finished; selectedStart = $started; laterListener = $lateInstance; publisher = $publisherFinished }
+    $receipt.observations += @{ originalWaiter = $finished; selectedStarts = $startedRuns; laterListener = $lateInstance; publisher = $publisherFinished }
     if (-not (Same-Snapshot (Read-SourceManifest) $sourceManifest)) { throw 'The observed recovery source changed during execution.' }
     if (-not (Same-Snapshot (Read-BuildManifest $ProbeAssembly) $probeManifest) -or
         -not (Same-Snapshot (Read-BuildManifest $NormalAssembly) $normalManifest) -or

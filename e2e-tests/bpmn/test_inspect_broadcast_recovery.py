@@ -6,6 +6,7 @@ import argparse, base64, hashlib, importlib.util, json, pathlib, sqlite3, subpro
 from contextlib import closing
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 READER = DATABASE = MARKER = None
+EXPECTED_RESUMES, EXPECTED_STARTS = 2, 1
 spec=importlib.util.spec_from_file_location('recovery', ROOT/'e2e-tests/bpmn/inspect_broadcast_recovery.py'); recovery=importlib.util.module_from_spec(spec);spec.loader.exec_module(recovery)
 def encode(s): return base64.b64encode(s.encode('utf-16le')).decode()
 class CheckedRecoveryReaderTests(unittest.TestCase):
@@ -25,7 +26,7 @@ class CheckedRecoveryReaderTests(unittest.TestCase):
  def mutate(self, operation):
   with closing(sqlite3.connect(self.db)) as c: operation(c);c.commit()
  def test_actual_source_and_generation_read_is_immutable(self):
-  before=hashlib.sha256(self.db.read_bytes()).hexdigest();code,data=self.read();self.assertEqual(0,code);self.assertTrue(data['providerChecked']);self.assertEqual('Delivered',data['source']['status']);self.assertEqual(2,len(data['source']['selectedResumes']));self.assertEqual(1,len(data['source']['selectedStarts']));self.assertEqual(before,hashlib.sha256(self.db.read_bytes()).hexdigest())
+  before=hashlib.sha256(self.db.read_bytes()).hexdigest();code,data=self.read();self.assertEqual(0,code);self.assertTrue(data['providerChecked']);self.assertEqual('Delivered',data['source']['status']);self.assertEqual(EXPECTED_RESUMES,len(data['source']['selectedResumes']));self.assertEqual(EXPECTED_STARTS,len(data['source']['selectedStarts']));self.assertEqual(before,hashlib.sha256(self.db.read_bytes()).hexdigest())
  def test_wrong_expected_hash_is_refused(self): self.assert_refused(expected='0'*64)
  def test_present_live_sidecar_is_refused(self):
   pathlib.Path(str(self.db)+'-wal').touch();self.assert_refused()
@@ -50,7 +51,10 @@ if __name__ == '__main__':
  parser.add_argument('--database', type=pathlib.Path, required=True)
  parser.add_argument('--marker', type=pathlib.Path, required=True)
  parser.add_argument('--reader', type=pathlib.Path, required=True)
+ parser.add_argument('--expected-resumes', type=int, default=2)
+ parser.add_argument('--expected-starts', type=int, default=1)
  options, remaining = parser.parse_known_args()
+ EXPECTED_RESUMES, EXPECTED_STARTS = options.expected_resumes, options.expected_starts
  READER = options.reader.resolve(strict=True)
  DATABASE = options.database.resolve(strict=True)
  MARKER = json.loads(options.marker.read_text())
