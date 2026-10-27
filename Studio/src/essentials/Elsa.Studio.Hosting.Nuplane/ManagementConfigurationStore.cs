@@ -36,11 +36,26 @@ internal sealed class ManagementConfigurationStore(StudioNuplaneSettings setting
         await using var lease = await gate.AcquireAsync(cancellationToken);
         if (!CanWrite(prefix))
             throw new ConfigurationReadOnlyException("The management file is not the exclusive configuration source for this setting.");
-        var document = File.Exists(settings.ManagementFile)
-            ? JsonNode.Parse(await File.ReadAllTextAsync(settings.ManagementFile, cancellationToken), new JsonNodeOptions { PropertyNameCaseInsensitive = true })?.AsObject() ?? new JsonObject()
-            : new JsonObject();
+        JsonObject document;
+        try
+        {
+            document = File.Exists(settings.ManagementFile)
+                ? JsonNode.Parse(await File.ReadAllTextAsync(settings.ManagementFile, cancellationToken),
+                    new JsonNodeOptions { PropertyNameCaseInsensitive = true },
+                    new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true }) as JsonObject
+                    ?? throw new StudioHostingException("Studio management configuration must be a JSON object.")
+                : new JsonObject();
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
+        {
+            throw new StudioHostingException("Could not read Studio management configuration.", error);
+        }
         if (!mutate(document)) return false;
-        await AtomicConfigWriter.WriteAtomicAsync(settings.ManagementFile, document.ToJsonString(JsonOptions) + Environment.NewLine, cancellationToken);
+        try { await AtomicConfigWriter.WriteAtomicAsync(settings.ManagementFile, document.ToJsonString(JsonOptions) + Environment.NewLine, cancellationToken); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            throw new StudioHostingException("Could not save Studio management configuration.", error);
+        }
         AtomicConfigWriter.ReloadAfterSave(configuration, "Studio management configuration");
         return true;
     }

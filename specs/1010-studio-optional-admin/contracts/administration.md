@@ -17,7 +17,7 @@ feeds,feeds/{name},retention-policy,prune}, /modularity/features and /modularity
 
 Feature catalog/apply use shared Modularity.Core wire models. Invalid/duplicate/incomplete-state requests are400; mandatory/dependency activation refusals and stale revisions are409,
 unsupported ownership is read-only, and save/refresh/reload failures explicit. Do not claim a
-reload failure rolled back an already committed file. Unchanged secret placeholders preserve stored values.
+reload failure rolled back an already committed file. Unchanged secret placeholders preserve stored values. Guards receive the effective selected-shell Configuration separately from Features; its leaf values follow IConfiguration string semantics. Management JSON accepts the same comments/trailing commas as AddJsonFile.
 
 Retention selects nullable keepNewestInactiveVersionsPerPackage in a Studio-owned policy section; explicit
 selection supersedes a legacy-policy refusal. Null retains all. Prune defaults Preview; Execute requires observed

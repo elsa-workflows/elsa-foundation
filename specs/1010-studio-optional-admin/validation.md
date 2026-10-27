@@ -174,3 +174,35 @@ The prior 595/595 whole-project pass applies only to pre-adoption commit4a4fc68,
 Still required: qualify Web/lifecycle adoption and shared Modularity replacement suites, maintenance UI, truthful
 post-save reload errors, package/architecture/maps/CI gates, independent review and delivery/main verification.
 No branch pushed, PR opened or leaf marked Done. Program #3340 remains unfinished.
+
+
+## Draft review round1 and corrected qualification
+
+Exact diff9e96273c8041476fe8bfb102c84019359c617b84..2dd78e8bef28b1ae21e28e52314f8dc3369204dc
+was reviewed independently for correctness, standards and acceptance. Two P2 findings survived: management
+writes rejected comments/trailing commas accepted by AddJsonFile, and activation guards saw stale file-only
+shell Configuration when a provider overlaid it. The suspected undeclared-secret leak was discarded after
+inspection of the existing shared masker's fail-closed undeclared-key behavior.
+
+Public regressions reproduced3/3 failures:2 management mutations threw JsonException; a guard rejecting effective
+limit99 wrongly returned200 against the file's limit7. The corrected targeted4/4 passes, and the entire Studio
+project passes570/570,0skipped,101s (studio3359-review1-whole.trx). The guard now sees effective IConfiguration
+values separately from feature secrets; leaves follow IConfiguration string semantics. Managed reads/writes
+wrap IO/JSON failures in StudioHostingException. Failed shell replacement now logs the underlying failure on the
+trusted server while retaining the generic saved-state response. A fixture compilation typo before the causal
+run was corrected; compilation refusal was not counted as a behavioral red.
+
+The author qualification also found the new package missing from the inventory. Fixed ind3f718a4d; exact21
+archives and verifier self-tests pass. A verifier invocation from Studio without --root failed for an incorrect
+working directory, not the artifact; the corrected repository-root invocation passes. The owned Release producer
+at2dd78e8be built with0warnings/errors and passed567/567; revised candidate proof follows the review fixes.
+Full workspace frontend unit3654 passed across19 executed test scripts, plus typecheck/lint/build and Chromium3.
+Mandatory/revision/preflight mutation controls each produce a behavioral red and restore green with byte-exact
+source restoration; initial constant-false harness mutation failed compilation and was replaced by a compilable
+control. Existing managed-source/provider-alias regressions also retain their red/green evidence.
+
+The first isolated candidate restores/locked-restores/publishes with only the Nuplane addon referenced,
+matching actual candidate DLL hashes and denying frontend tooling. Its first feature apply returned503; the
+response body was not retained by that initial harness. A fresh diagnostic apply and a full sequence replay
+both returned200. This original failure is retained as unresolved until the revised candidate/journey qualifies;
+no first-attempt success or complete consumer acceptance is claimed. All owned processes stop in finally.

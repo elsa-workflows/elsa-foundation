@@ -28,9 +28,9 @@ internal sealed class ShellFeatureStore(
         if (options.Value.ShellsFile is { } file && ConfigurationOwnership.IsExclusive(configuration, file, Prefix))
         {
             var document = await ReadAsync(file, cancellationToken);
-            return Snapshot(Features(document), settings, ShellConfiguration(document));
+            return Snapshot(Features(document), settings, ShellConfiguration());
         }
-        return Snapshot(null, settings);
+        return Snapshot(null, settings, options.Value.ShellsFile is null ? default : ShellConfiguration());
     }
 
     public async Task<ShellFeatureConfigurationSnapshot> SaveAsync(string expectedRevision, IReadOnlyList<FeatureConfigurationChange> features, CancellationToken cancellationToken = default)
@@ -44,7 +44,7 @@ internal sealed class ShellFeatureStore(
             throw new ConfigurationReadOnlyException("Code-first feature configurators control this shell; local feature administration is read-only.");
         var document = await ReadAsync(file, cancellationToken);
         var node = Features(document);
-        var current = Snapshot(node, settings, ShellConfiguration(document));
+        var current = Snapshot(node, settings, ShellConfiguration());
         if (!string.Equals(current.Revision, expectedRevision, StringComparison.Ordinal))
             throw new FeatureCatalogRevisionConflictException(expectedRevision, current.Revision);
         node.Clear();
@@ -60,7 +60,7 @@ internal sealed class ShellFeatureStore(
             throw new StudioHostingException($"Could not persist feature configuration for Studio shell '{ShellName}'.", error);
         }
         AtomicConfigWriter.ReloadAfterSave(configuration, $"Feature configuration for Studio shell '{ShellName}'");
-        return Snapshot(node, await ComposeAsync(cancellationToken), ShellConfiguration(document));
+        return Snapshot(node, await ComposeAsync(cancellationToken), ShellConfiguration());
     }
 
     private async Task<ShellSettings> ComposeAsync(CancellationToken cancellationToken)
@@ -105,9 +105,22 @@ internal sealed class ShellFeatureStore(
 
     private JsonObject Shell(JsonObject document) => Child(Child(Child(document, "CShells"), "Shells"), ShellName);
     private JsonObject Features(JsonObject document) => Child(Shell(document), "Features");
-    private JsonElement ShellConfiguration(JsonObject document) =>
-        Shell(document).FirstOrDefault(pair => string.Equals(pair.Key, "Configuration", StringComparison.OrdinalIgnoreCase)).Value is JsonObject node
-            ? JsonSerializer.SerializeToElement(node) : default;
+    private JsonElement ShellConfiguration()
+    {
+        // Hosting's installed configuration provider composes this section. Features are deliberately separate.
+        var section = configuration.GetSection($"CShells:Shells:{ShellName}:Configuration");
+        return section.Exists() ? JsonSerializer.SerializeToElement(ConfigurationNode(section)) : default;
+    }
+
+    private static JsonNode? ConfigurationNode(IConfigurationSection section)
+    {
+        var children = section.GetChildren().ToArray();
+        // IConfiguration values are strings, including numeric/boolean values from JSON or environment overlays.
+        if (children.Length == 0) return JsonValue.Create(section.Value);
+        if (children.Select((child, index) => child.Key == index.ToString(System.Globalization.CultureInfo.InvariantCulture)).All(value => value))
+            return new JsonArray(children.Select(ConfigurationNode).ToArray());
+        return new JsonObject(children.Select(child => KeyValuePair.Create(child.Key, ConfigurationNode(child))));
+    }
 
     private JsonObject Child(JsonObject parent, string key) =>
         parent.FirstOrDefault(pair => string.Equals(pair.Key, key, StringComparison.OrdinalIgnoreCase)).Value as JsonObject

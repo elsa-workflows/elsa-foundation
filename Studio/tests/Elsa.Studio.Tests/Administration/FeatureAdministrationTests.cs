@@ -63,8 +63,26 @@ public sealed class FeatureAdministrationTests
             afterStudio: builder => builder.Services.AddSingleton<IFeatureActivationGuard>(guard));
         using var response = await host.Client.PostAsJsonAsync("/modularity/features/apply", Request(await Catalog(host)));
         response.EnsureSuccessStatusCode();
-        Assert.Equal(7, guard.Configuration.GetProperty("Widget").GetProperty("Limit").GetInt32());
+        Assert.Equal(host.App.Configuration["CShells:Shells:Authoring:Configuration:Widget:Limit"], guard.Configuration.GetProperty("Widget").GetProperty("Limit").ToString());
         Assert.DoesNotContain(AdministrationHost.Credential, guard.Configuration.GetRawText());
+    }
+
+    [Fact]
+    public async Task Activation_guard_rejects_the_effective_shell_configuration_override_before_writing()
+    {
+        var guard = new ConfigurationGuard(refuseLimit99: true);
+        await using var host = await AdministrationHost.StartAsync(managedFeatures: true, afterStudio: builder =>
+        {
+            builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?> { ["CShells:Shells:Authoring:Configuration:Widget:Limit"] = "99" });
+            builder.Services.AddSingleton<IFeatureActivationGuard>(guard);
+        });
+        var before = await File.ReadAllBytesAsync(host.ShellsFile);
+        using var response = await host.Client.PostAsJsonAsync("/modularity/features/apply", Request(await Catalog(host)));
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains("effective-limit-99", await response.Content.ReadAsStringAsync());
+        Assert.Equal("99", guard.Configuration.GetProperty("Widget").GetProperty("Limit").ToString());
+        Assert.DoesNotContain(AdministrationHost.Credential, guard.Configuration.GetRawText());
+        Assert.Equal(before, await File.ReadAllBytesAsync(host.ShellsFile));
     }
 
     [Fact]
@@ -167,13 +185,14 @@ public sealed class FeatureAdministrationTests
     };
 
     private static JsonObject Configuration(JsonObject request) => request["features"]!.AsArray().Single(feature => (string?)feature!["id"] == "Configured")!["configuration"]!.AsObject();
-    private sealed class ConfigurationGuard : IFeatureActivationGuard
+    private sealed class ConfigurationGuard(bool refuseLimit99 = false) : IFeatureActivationGuard
     {
         public JsonElement Configuration { get; private set; }
         public Task<FeatureActivationDecision> EvaluateAsync(FeatureActivationContext context, CancellationToken cancellationToken = default)
         {
             Configuration = context.Shell.Configuration.Clone();
-            return Task.FromResult(FeatureActivationDecision.Allowed);
+            return Task.FromResult(refuseLimit99 && Configuration.GetProperty("Widget").GetProperty("Limit").ToString() == "99"
+                ? FeatureActivationDecision.Refused(new FeatureActivationRefusal("Configured", "effective-limit-99")) : FeatureActivationDecision.Allowed);
         }
     }
 
