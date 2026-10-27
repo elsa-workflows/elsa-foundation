@@ -307,6 +307,14 @@ Fields: `WorkflowExecutionId`, request `Type`, complete request `ValueEnvelope`,
 and `CapturedAt`. It is owned by the workflow execution record and cannot be mutated after the start
 checkpoint.
 
+Admission completes the request from the pinned contract before the start checkpoint (ADR 0045 §2 amendment, D-10):
+- an omitted member takes its declared default;
+- an omitted optional member without a default materializes as `null` when its type is nullable, and as its type's
+  default otherwise;
+- an omitted required member refuses admission.
+
+A later read of a declared member therefore always finds a value.
+
 ### `ActivityExecutionState` (logical invocation)
 
 Durable aggregate for one logical invocation of one executable node. The existing

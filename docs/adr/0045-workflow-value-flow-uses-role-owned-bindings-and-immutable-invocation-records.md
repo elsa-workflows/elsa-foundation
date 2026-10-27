@@ -93,6 +93,45 @@ Publication normalizes every input to a concrete binding. Required omissions fai
 pinned defaults and optional `null` values become explicit literal bindings. Missing dynamic values
 never silently become `default(T)`.
 
+**Amendment (epic #3052, decisions D-10 and D-11, 2026-10-27): null, omitted values and `undefined`.**
+These rules apply to native and imported workflows alike. Where a workflow needs Elsa 3 behaviour, it says so through
+a visible policy, never through where it came from.
+
+- **Requiredness and nullability are separate properties** of an activity input and of a workflow-request member. A
+  member can be required and nullable, or optional and non-nullable.
+- **Explicit `null` is a value, not an absence.** It is accepted for every nullable target: activity inputs,
+  variables, workflow outputs and the values of the `Set` / `SetOutput` intrinsics. The intrinsics' current refusal of
+  an explicit null for a nullable target is a defect to fix.
+- **`null` for a non-nullable target** fails with `VF-ACT-004`, unless an explicit *default-on-null* policy applies.
+  That policy substitutes the target's default instead of failing. Where it is set (for the workflow, per input, or
+  both) and which default it uses (declared or type default) is settled in the implementing spec. It is visible in
+  the workflow and pinned in the executable.
+- **An omitted member** takes its declared default first.
+  - An optional member without a declared default materializes as `null` when its type is nullable, and otherwise as
+    its type's default. This is defined behaviour from the contract, not a silent fallback.
+  - An omitted required activity input still fails publication (`VF-ACT-003`).
+  - An omitted required workflow-request member is refused when the workflow instance is admitted, before the start
+    checkpoint, not when a later step reads it.
+- **An undeclared name is not an omitted optional member.** Reading a value no contract declares remains an error.
+  The sentence above about missing dynamic values keeps applying to it.
+- **`undefined` (D-11).** By default the JavaScript-to-workflow boundary keeps its standard materialization: a
+  binding whose result is `undefined` is an error ([ADR 0083](0083-javascript-binding-grammar-is-pinned-at-publish.md)),
+  and an object property whose value is `undefined` is dropped. A workflow may select the *undefined-as-null* policy:
+  - an `undefined` result materializes as `null`;
+  - an `undefined`-valued object property is kept as `null`, at every depth;
+  - the policy acts only at the boundary. It does not change JavaScript's own semantics, and it does not rewrite a
+    string an explicit `JSON.stringify` produced;
+  - an input binding that produces no value and a script activity that completes without returning a value remain
+    distinct cases, each defined by the implementing spec.
+- **Both policies are recorded on the workflow and pinned in the executable,** so they take part in its artifact hash
+  ([ADR 0038](0038-artifact-hash-is-purely-behavioral-and-executables-are-content-addressed.md)).
+  - A host or importer chooses them; the workflow carries the result.
+  - The Elsa 3 converter feature has one option that selects the policies Elsa 3 parity needs, and it records them on
+    every workflow it converts.
+  - A converted workflow that is later edited, exported or run on a host without the converter keeps behaving the
+    same.
+  - This replaces the converted-definition marker considered for issues #3170 and #3172.
+
 ### 3. Materialize and pin inputs before activation
 
 For durable execution, the runtime evaluates an invocation's bindings, validates type and
