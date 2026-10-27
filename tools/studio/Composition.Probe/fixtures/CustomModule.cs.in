@@ -1,0 +1,12 @@
+using CShells.Features;
+using Elsa.Studio.Core.Attributes;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Acme.Studio.Composition;
+
+[ShellFeature("AcmeComposition", DisplayName = "Acme module")]
+[StudioModule("composition", "Acme module", "navigation", "routes")]
+public class CustomStudioFeature : IShellFeature
+{
+    public virtual void ConfigureServices(IServiceCollection services) => services.AddSingleton("__MARKER__");
+}

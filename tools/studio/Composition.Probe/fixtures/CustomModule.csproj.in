@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Description>Owned external Studio composition qualification fixture.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Elsa.Studio.Core" Version="__PRODUCT_VERSION__" />
+    <PackageReference Include="CShells.Abstractions" Version="__CSHELLS_VERSION__" />
+  </ItemGroup>
+</Project>

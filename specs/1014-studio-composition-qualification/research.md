@@ -1,0 +1,9 @@
+# Research: Existing composition seams
+
+- **Decision:** extend actual native `AdministrationHost`/`PackageAssetTests` for the filter scenario. Its enrollment and real package reader are essential; an unenrolled store fails before obtaining the result whose permit could leak. The existing `ResponseLease` already disposes idempotently. Only `PayloadResult.ExecuteAsync` currently releases successful payloads.
+- **Decision:** reuse actual `HostingAssets.Probe` patterns and public `StudioModuleAttribute`/CShells feature contracts. Manifest paths use declaring assembly name/slug and version defaults to informational version. A test-owned UI module can depend on Core/CShells without Web/Hosting; add public web abstractions only if it maps owned endpoints.
+- **Decision:** use actual root Console Stream public Add/Map/early-hook APIs and network SignalR, not just DI descriptors. Existing module and storm tests establish APIs, not reload acceptance. Public shell registry/scopes and versioned module values prove actual generation changes; retained scopes remain observable.
+- **Decision:** a recording loopback backend follows the existing authenticated/anonymous session DTO and permission keys. It is the controlled external dependency, while Studio hosting/auth remain actual product libraries. No new identity/backend implementation is introduced.
+- **Decision:** preserve existing public Theme Store feature/mode/managed-source contracts through restart and browser observations. No filesystem recovery expansion or general writer helper is included.
+
+These are adopted existing technologies/contracts, not new technology choices. Source inspection and prerequisite proofs resolve the research questions; no research agent or additional design decision is needed. Alternatives such as source-project consumers, wrapper libraries, scripted reload success or implicit native enrollment cannot establish this task's acceptance.
