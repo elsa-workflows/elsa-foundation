@@ -174,8 +174,11 @@ function createEditorContext(): StudioEndpointContext {
     workflowExecutionId: "editor-execution", executableNodeId: `exec-${node.nodeId}`, authoredActivityId: node.nodeId,
     activityType: catalog.find(item => item.activityVersionId === node.activityVersionId)?.activityTypeKey ?? "unknown", activityTypeVersion: "1.0.0",
     parentActivityExecutionId: parent ? `activity-exec-${parent}` : null,
-    scheduledAt: "2026-10-27T10:00:00Z", status: "Completed", metadata: {}, position: index + 1
+    scheduledAt: "2026-10-27T10:00:00Z", status: runCanvas === "incident" && node.nodeId === "write-two" ? "Faulted" : "Completed", metadata: {}, position: index + 1
   })));
+  const incident = { incidentId: "incident-write-two", workflowExecutionId: "editor-execution", activityExecutionId: "activity-exec-write-two",
+    executableNodeId: "exec-write-two", severity: "Error", status: "Active", failureType: "ActivityFailed", message: "Second activity failed in its exact execution.",
+    createdAt: "2026-10-27T10:00:00Z", isBlocking: true, metadata: {} };
   const runView = { testRunId: "editor-test", definitionId: draft.definitionId, definitionVersionId: "draft-1", artifactId: "editor-artifact", workflowExecutionId: "editor-execution", status: "Dispatched" };
   return {
     baseUrl: "browser-activity-duplicate-editor",
@@ -246,7 +249,7 @@ function createEditorContext(): StudioEndpointContext {
         }
         if (runCanvas && url === "/runtime/workflows/instances/editor-execution") return {
           instance: { workflowExecutionId: "editor-execution", artifactId: "editor-artifact", status: "Completed", activityCount: 3 },
-          activities: [], incidents: [], persistenceMode: "Balanced", inspectionGranularity: "boundary-level"
+          activities: [], incidents: runCanvas === "incident" ? [incident] : [], persistenceMode: "Balanced", inspectionGranularity: "boundary-level"
         };
         if (runCanvas && url === "/runtime/workflows/executables/editor-artifact") return {
           artifactId: "editor-artifact", rootActivity: compiled(draft.state.rootActivity!)
@@ -268,7 +271,7 @@ function createEditorContext(): StudioEndpointContext {
           if (!execution) throw new Error("Unknown activity execution");
           return { ...execution, executionSequence: execution.position,
             provenance: { parentActivityExecutionId: execution.parentActivityExecutionId, metadata: {} },
-            bookmarks: [], incidents: [], outcomeNames: ["Done"], valueSnapshots: [{ name: "Text", inputKey: "text", subject: "ActivityInput",
+            bookmarks: [], incidents: runCanvas === "incident" && execution.authoredActivityId === "write-two" ? [incident] : [], outcomeNames: ["Done"], valueSnapshots: [{ name: "Text", inputKey: "text", subject: "ActivityInput",
               captureMode: "DiagnosticSnapshot", snapshot: { kind: "string", preview: `Current: ${execution.position}` },
               capturedAt: execution.scheduledAt, captureReason: "Captured by fixture policy", isSensitive: false, metadata: {} }] };
         }

@@ -31,7 +31,7 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
   catalog: ActivityCatalogItem[];
   nodes: Node<WorkflowNodeData>[];
   selectedNodeId: string | null;
-  onOpenIncident?(): void;
+  onOpenIncident?: WorkflowNodeData["onIncidentClick"];
   ancestorId?: string;
   selectedExecution?: ActivityExecutionStateSummary | null;
 }) {
@@ -120,7 +120,7 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
     return decorateWorkflowCanvasElements(
       applyRuntimeOverlays(nodes, current.activities, incidents, selectedNodeId, catalog, current.graph)
         .map((node, index) => ({ ...node, selected: nodes[index].selected,
-          data: { ...node.data, onIncidentClick: onOpenIncident,
+          data: { ...node.data, onIncidentClick: onOpenIncident ? (incidentId: string, targetNodeId?: string | null) => onOpenIncident(incidentId, targetNodeId === null ? null : targetNodeId ?? node.id) : undefined,
             ...(node.data.runtime ? { runtime: { ...node.data.runtime, selected: !!nodes[index].selected } } : {}) } })), []).nodes;
   }, [catalog, current, nodes, onOpenIncident, selectedNodeId]);
 

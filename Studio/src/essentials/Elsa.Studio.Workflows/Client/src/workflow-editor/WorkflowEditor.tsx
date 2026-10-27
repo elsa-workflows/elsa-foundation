@@ -399,9 +399,24 @@ export function WorkflowEditor({
     enabled: Boolean(testRun?.snapshot && testRun.endpointContext === context && draft && testRun.draftSignature === getDraftSignature(draft)
       && testRun.view.definitionId === definitionId && testRun.snapshot.definitionId === definitionId) });
   const runScope = [...runSelection.scopes].reverse().find(item => item.execution.authoredActivityId === scopeOwner?.nodeId)?.execution;
-  const runCanvas = useEditorRunCanvas({ context, definitionId, testRun, draftSignature: draft ? getDraftSignature(draft) : "", catalog, nodes: authoringNodes, selectedNodeId,
+  const runCanvas: ReturnType<typeof useEditorRunCanvas> = useEditorRunCanvas({ context, definitionId, testRun, draftSignature: draft ? getDraftSignature(draft) : "", catalog, nodes: authoringNodes, selectedNodeId,
     ancestorId: runScope?.activityExecutionId, selectedExecution: runSelection.execution,
-    onOpenIncident: () => { setInspectorView("run-data"); setActiveRightPanelId("inspector"); setInspectorCollapsed(false); } });
+    onOpenIncident: (incidentId, targetNodeId) => {
+      const incident = runCanvas.details?.incidents?.find(item => item.incidentId === incidentId);
+      const execution = runCanvas.activities.find(item => item.activityExecutionId === incident?.activityExecutionId);
+      const nodeId = targetNodeId ?? (execution ? authoringNodes.find(node => (node.data.runtimeNodeId ?? node.id) === execution.authoredActivityId)?.id : null);
+      if (execution && nodeId && runCanvas.graph) {
+        runSelection.queue(execution, runCanvas.graph, value => {
+          const item = catalog.find(candidate => candidate.activityTypeKey === value.activityType);
+          return item ? getActivityDisplay(item) : value.activityType;
+        }, execution.authoredActivityId);
+        select(nodeId);
+      } else {
+        select(nodeId ?? null);
+        runSelection.unavailable();
+      }
+      setInspectorView("run-data"); setActiveRightPanelId("inspector"); setInspectorCollapsed(false);
+    } });
   const nodes = runCanvas.nodes;
   const selectEditorNode = (nodeId: string | null) => {
     select(nodeId);

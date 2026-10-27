@@ -129,11 +129,35 @@ it("revokes selection on sign-out and does not reuse it after sign-in", async ()
   expect(current.execution).toBeNull();
 });
 
+it("rejects an in-flight selection when authorization refreshes without a sign-out", async () => {
+  mount(); let release!: (value: ActivityExecutionInspection) => void;
+  api.inspect.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+  const task = current.choose(summary(), graph, labelFor);
+  await vi.waitFor(() => expect(api.inspect).toHaveBeenCalledTimes(1));
+  flushSync(() => window.dispatchEvent(new Event(authSessionStartedEvent)));
+  expect(current.execution).toBeNull();
+  release(tree.get("write-4")!);
+  expect(await task).toBe(false);
+  mount(); expect(current.execution).toBeNull(); expect(current.scopes).toEqual([]);
+});
+
 it("rejects foreign-run selections and clears evidence across backend contexts", async () => {
   mount(); expect(await current.choose({ ...summary(), workflowExecutionId: "other" }, graph, labelFor)).toBe(false);
   await current.choose(summary(), graph, labelFor); mount();
   mount({ workflowExecutionId: "replacement-run" }); expect(current.execution).toBeNull(); expect(current.scopes).toEqual([]);
   mount({ context: {} as StudioEndpointContext }); expect(current.execution).toBeNull(); expect(current.scopes).toEqual([]);
+});
+
+it("binds an incident selection after its different canvas activity becomes selected", async () => {
+  mount(); await current.choose(summary(), graph, labelFor); mount();
+  const target = summary("body-4", "body", "do-1");
+  flushSync(() => {
+    current.queue(target, graph, labelFor, "body");
+    props = { ...props, nodeId: "body" };
+    root!.render(<SelectionProbe />);
+  });
+  await vi.waitFor(() => expect(current.execution?.activityExecutionId).toBe("body-4"));
+  expect(current.execution?.activityExecutionId).not.toBe("write-4");
 });
 
 it("keeps an unavailable scope blocked until an explicit reset", async () => {

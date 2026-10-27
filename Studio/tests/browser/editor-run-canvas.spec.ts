@@ -66,6 +66,24 @@ for (const theme of ["light", "dark"]) {
     expect(page.url()).toBe(route);
   });
 
+  test(`opens a second activity's incident while another activity is selected (${theme})`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 950 });
+    await page.goto(`/?mode=activity-duplicate-editor&run-canvas=incident&theme=${theme}`);
+    const canvas = page.getByLabel("Workflow canvas", { exact: true });
+    const first = canvas.getByRole("button", { name: /^Notify buyer\. Node ID:/ });
+    const second = canvas.getByRole("button", { name: /^Write Line\. Node ID: write-two/ });
+    await page.getByRole("button", { name: "Test Run", exact: true }).click();
+    await page.getByRole("button", { name: "Start Test Run", exact: true }).click();
+    await expect(second).toHaveAccessibleName(/Run state: Faulted/);
+    await first.click();
+    await expect(first).toHaveAccessibleName(/Selected/);
+    await canvas.getByRole("button", { name: /^Open incidents for Write Line/ }).click();
+    const inspector = page.getByLabel("Inspector panel", { exact: true });
+    await expect(inspector.getByText("Second activity failed in its exact execution.", { exact: true })).toBeVisible();
+    await expect(second).toHaveAccessibleName(/Selected/);
+    await expect(first).toHaveAccessibleName(/Not selected/);
+  });
+
   test(`keeps attached-run controls within a narrow editor (${theme})`, async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 1000 });
     await page.goto(`/?mode=activity-duplicate-editor&run-canvas=repeated&theme=${theme}`);
