@@ -1,0 +1,42 @@
+{
+  "passed": true,
+  "controls": [
+    {
+      "name": "actual-frozen-capture",
+      "exitCode": 0,
+      "databaseSha256": "d0fcbe5132a0ae93f50e67c3186fa95ea7994caf892feb98e038bb5e2bff43b4",
+      "outputSha256": "1f5564329cc98fcdacf081ad604e91dabb5d66f9317460f3185bd6b2e3152e5d",
+      "unchanged": true
+    },
+    {
+      "name": "wrong-snapshot-hash",
+      "exitCode": 2,
+      "databaseSha256": "d0fcbe5132a0ae93f50e67c3186fa95ea7994caf892feb98e038bb5e2bff43b4",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "foreign-captured-pin",
+      "exitCode": 2,
+      "databaseSha256": "d0fcbe5132a0ae93f50e67c3186fa95ea7994caf892feb98e038bb5e2bff43b4",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "owed-orphan-hidden-behind-canonical-source",
+      "exitCode": 2,
+      "databaseSha256": "4cff4bf8c2961d11c7983b23f15d2d4ce8a9e8cd0a93033aebe3ec3a07e6f27f",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "legacy-dispatch-acquires-control-declaration",
+      "exitCode": 2,
+      "databaseSha256": "ff268eeab41d78e0423a284c8dcb7977719fe97a7991c56bd8651e665aa2e176",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    }
+  ],
+  "originalCaptureUnchanged": true,
+  "scope": "default"
+}

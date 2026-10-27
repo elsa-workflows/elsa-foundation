@@ -14,11 +14,12 @@ import tempfile
 from test_called_snapshot_reader import create_orphan, digest, freeze_private_copy
 
 
-def remove_capability(database, parent_id):
+def remove_capability(database, parent_id, calling_id):
     decode = lambda value: base64.b64decode(value).decode('utf-16-le')
     with closing(sqlite3.connect(database)) as connection:
         matches = [(identity, json.loads(content)) for identity, content in connection.execute('SELECT Id, ContentJson FROM elsa_runtime_workflow_dispatch')
-                   if decode(json.loads(content)['parentWorkflowExecutionId']) == parent_id]
+                   if decode(json.loads(content)['parentWorkflowExecutionId']) == parent_id
+                   and decode(json.loads(content)['parentActivityExecutionId']) == calling_id]
         if len(matches) != 1:
             raise RuntimeError('Exactly one actual opted-in dispatch must identify the private control.')
         identity, wire = matches[0]
@@ -37,7 +38,8 @@ def main():
     parser.add_argument('--database', type=Path, required=True)
     parser.add_argument('--sha256', required=True, help='Expected uncompressed real runtime snapshot hash.')
     parser.add_argument('--api-receipt', type=Path, required=True)
-    parser.add_argument('--phase', choices=['coded', 'escalation-parked', 'escalation-recovered', 'escalation-finished'], required=True)
+    parser.add_argument('--phase', choices=['coded', 'escalation-parked', 'escalation-recovered', 'escalation-finished',
+                                           'concurrent-prepared', 'concurrent-selected', 'concurrent-recovered', 'concurrent-finished'], required=True)
     parser.add_argument('--scope', default='default')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
@@ -67,6 +69,12 @@ def main():
             if expected == 0:
                 if not observed.get('readOnly') or observed.get('snapshotSha256') != before or len(observed['calledWorkflows']) != len(api['cases']):
                     raise RuntimeError('The complete actual public cases were not checked.')
+                if args.phase == 'concurrent-prepared':
+                    for case in observed['calledWorkflows']:
+                        semantic = next(state for state in case['parentActivities'] if state['execution']['executableNodeId'] == 'parent-bpmn')['privateState']['value']['inlineValue']
+                        tokens = [work['tokenId'] for work in semantic['activeWork'] if work['nodeId'] == 'node-call']
+                        if len(tokens) != 2 or case['selected']['call']['provenance']['executionPathId'] != tokens[1] or case['other']['call']['provenance']['executionPathId'] != tokens[0]:
+                            raise RuntimeError('The checked actual selector did not choose the second semantic token.')
             elif observed.get('status') != 'ObservationUnavailable' or observed.get('failureType') != 'InvalidDataException':
                 raise RuntimeError('The private invalid fixture missed the expected checked boundary.')
             records.append({'name': name, 'exitCode': result.returncode, 'databaseSha256': before,
@@ -81,7 +89,8 @@ def main():
         orphan = root / 'orphan.sqlite'; shutil.copy2(baseline, orphan)
         run('owed-orphan-hidden-behind-canonical-source', create_orphan(orphan), args.api_receipt, 2)
         undeclared = root / 'undeclared.sqlite'; shutil.copy2(baseline, undeclared)
-        run('actual-dispatch-loses-consumer-declaration', remove_capability(undeclared, api['cases'][0]['parentWorkflowExecutionId']), args.api_receipt, 2)
+        calling_id = next(state['activityExecutionId'] for state in api['cases'][0]['parent']['activities'] if state['executableNodeId'] == 'node-call')
+        run('actual-dispatch-loses-consumer-declaration', remove_capability(undeclared, api['cases'][0]['parentWorkflowExecutionId'], calling_id), args.api_receipt, 2)
     if args.database.read_bytes() != original:
         raise RuntimeError('The original actual snapshot changed.')
     args.output.write_text(json.dumps({'passed': True, 'phase': args.phase, 'controls': records,

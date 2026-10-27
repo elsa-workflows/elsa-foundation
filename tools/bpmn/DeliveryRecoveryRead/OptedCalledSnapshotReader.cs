@@ -18,6 +18,8 @@ internal static partial class OptedCalledSnapshotReader
 
     internal static async Task<IReadOnlyList<object>> ReadAsync(string snapshot, string scopeName, string receiptPath, string phase)
     {
+        if (phase.StartsWith("concurrent-", StringComparison.Ordinal))
+            return await ReadConcurrentAsync(snapshot, scopeName, receiptPath, phase);
         if (phase.StartsWith("escalation-", StringComparison.Ordinal))
             return await ReadEscalationsAsync(snapshot, scopeName, receiptPath, phase);
         Require(phase == "coded", "Unknown opted-in observation phase.");
