@@ -6,8 +6,8 @@
 ## Phase 1: Setup and Foundational Ownership Regression
 
 - [x] T001 Validate prerequisites, exclusive claim, spec numbering, branch hook, specification/checklist and plan/report model in `specs/1014-studio-composition-qualification/`.
-- [ ] T002 Reproduce four replaced admitted results and a blocked ordinary asset request using `Studio/tests/Elsa.Studio.Tests/Administration/PackageAssetTests.cs` and the minimal private mapping seam in `AdministrationCompositionTests.cs`.
-- [ ] T003 Correct confirmed response-lifetime ownership in `Studio/src/essentials/Elsa.Studio.Hosting.Nuplane/PackageAssetEndpoints.cs`; prove the same regression fails before/passes after while retaining idempotent early cleanup and bounded admission.
+- [x] T002 Reproduce four replaced admitted results and a blocked ordinary asset request using `Studio/tests/Elsa.Studio.Tests/Administration/PackageAssetTests.cs` and the minimal private mapping seam in `AdministrationCompositionTests.cs`.
+- [x] T003 Correct confirmed response-lifetime ownership in `Studio/src/essentials/Elsa.Studio.Hosting.Nuplane/PackageAssetEndpoints.cs`; prove the same regression fails before/passes after while retaining idempotent early cleanup and bounded admission.
 
 ## Phase 2: US1 - Independent Module and Consumer
 
