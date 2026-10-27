@@ -96,7 +96,8 @@ Browser source/tool inputs are excluded from .NET content and packages.
 The reference Web project removes its obsolete generated wwwroot/studio subtree during build so existing
 checkouts adopt Hosting's payload without retaining a conflicting copy.
 
-Optional administration/themes and final thin distribution remain their separately scoped program leaves.
+Optional administration/themes are separate public packages; the thin reference distribution composes the same APIs.
+See the [standalone package-host recipe and migration guide](../../../docs/custom-hosting.md) for explicit candidate versions/preview sources, module selection and supported limits.
 The package declares no domain events, contributor contracts or scheduled tasks; its
 private resolver implementations use existing CShells contracts. Public composition/options/coordination and
 Api policy surface are tracked. Tests use public APIs/HTTP without a production friend; see

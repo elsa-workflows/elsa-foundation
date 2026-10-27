@@ -2,6 +2,8 @@
 
 Elsa Foundation Studio is a modular React studio shell hosted by ASP.NET Core. The standard browser source and prebuilt `/studio` assets belong to `src/essentials/Elsa.Studio.Hosting`; `src/apps/Elsa.Studio.Web` is the distribution composition root. Package consumers use Hosting without copying frontend source or running a frontend build. The repository owns the Studio module protocol, Vite React shell, TypeScript SDK, and sample class-library modules that contribute same-origin ESM assets and endpoints.
 
+For a runnable package-only starting point, supported optional capabilities and migration from copied Web infrastructure, see [custom Studio hosting](docs/custom-hosting.md).
+
 For a current map of the host, shell, modules, routing, API boundaries, and authentication flow, see the [architecture tour](docs/architecture-tour.md).
 
 For operator guidance on current run health and following incidents to exact runtime evidence, see [Workflow run incidents](docs/workflow-run-incidents.md).
@@ -16,7 +18,7 @@ The host is composed from independently enabled Studio capabilities:
 
 - `Elsa.Studio.Core` defines manifests, diagnostics, and the manifest collection event.
 - `Elsa.Studio.Api` exposes `GET /_elsa/studio/modules`.
-- `Elsa.Studio.Web` hosts the root-mounted Vite shell.
+- `Elsa.Studio.Hosting` serves the prebuilt root-mounted browser; `Elsa.Studio.Web` selects the distribution modules and optional capabilities.
 - `Elsa.Studio.Dashboard` owns `/dashboard`, the Dashboard Widget slot, host-owned frames, loading, refresh, layout, and scoped preferences.
 - `Elsa.Studio.Attention` contributes the ordinary wide/full Attention widget.
 - `Elsa.Studio.Workflows.Dashboard` contributes workflow portfolio and run-health widgets.
@@ -28,7 +30,7 @@ The shell UX is adapted from [`elsa-workflows/elsa-foundation-designer`](https:/
 
 ## Modular features (CShells)
 
-Studio is a modular monolith built on [CShells](https://www.cshells.io/). Each module is a class library that exposes a CShells *feature* (`IShellFeature` / `IWebShellFeature`) instead of being hardwired into the host. The host (`Elsa.Studio.Web`) does not call module-specific registration methods — it enables features per shell from `appsettings.json`:
+Studio is a modular monolith built on [CShells](https://www.cshells.io/). Each module is a class library exposing a CShells feature (`IShellFeature` / `IWebShellFeature`). The application chooses its feature assemblies and enables feature IDs per shell in the configured `shells.json`; public Hosting/addon calls compose the common infrastructure:
 
 ```json
 {

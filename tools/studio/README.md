@@ -1,5 +1,7 @@
 # Studio package qualification
 
+Developers starting an application should use the [small package-host sample](PackageHost.Sample/README.md) and [custom-host guide](../../Studio/docs/custom-hosting.md). The tools below qualify producer artifacts; they are not consumer prerequisites.
+
 Run from the repository root with the supported .NET 10/native profile, Python 3,
 the built Studio producer frontend and Studio's Playwright Chromium installation.
 Commit inputs before a frozen run:
