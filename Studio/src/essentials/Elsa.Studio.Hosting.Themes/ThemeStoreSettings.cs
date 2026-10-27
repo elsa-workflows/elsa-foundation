@@ -46,6 +46,8 @@ internal sealed class ThemeOptionsValidator(string contentRoot) : IValidateOptio
                 var applied = ThemeStoreSettings.Create(options, contentRoot);
                 if (Directory.Exists(applied.StoreFile)) errors.Add("Themes:StoreFile names an existing directory.");
                 if (File.Exists(applied.AssetsDirectory)) errors.Add("Themes:AssetsDirectory names an existing file.");
+                if (HasFileAncestor(applied.StoreFile)) errors.Add("Themes:StoreFile has an existing file in its containing path.");
+                if (HasFileAncestor(applied.AssetsDirectory)) errors.Add("Themes:AssetsDirectory has an existing file in its containing path.");
                 if (SamePath(applied.StoreFile, applied.AssetsDirectory) || applied.AssetsDirectory.StartsWith(
                         Path.TrimEndingDirectorySeparator(applied.StoreFile) + Path.DirectorySeparatorChar,
                         ThemeStoragePaths.ComparisonFor(applied.StoreFile)))
@@ -63,4 +65,11 @@ internal sealed class ThemeOptionsValidator(string contentRoot) : IValidateOptio
 
     private static bool SamePath(string first, string second) => string.Equals(first, second,
         ThemeStoragePaths.ComparisonFor(first));
+
+    private static bool HasFileAncestor(string path)
+    {
+        for (var parent = Path.GetDirectoryName(path); parent is not null; parent = Path.GetDirectoryName(parent))
+            if (File.Exists(parent)) return true;
+        return false;
+    }
 }
