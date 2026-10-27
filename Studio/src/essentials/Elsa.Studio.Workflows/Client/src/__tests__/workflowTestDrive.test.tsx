@@ -89,18 +89,24 @@ describe("workflow Test Run setup", () => {
     await settle();
     expect(onStart).not.toHaveBeenCalled();
 
+    let completeSetup!: () => void;
+    publishingMocks.getOptions.mockImplementationOnce(() => new Promise(resolve => { completeSetup = () => resolve({ options: [customOption] }); }));
     const refresh = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Refresh setup")!;
     flushSync(() => refresh.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-    await settle();
-
+    await vi.waitFor(() => expect(completeSetup).toBeTypeOf("function"));
     expect(invalidate).toHaveBeenCalledOnce();
     expect(publishingMocks.getOptions).toHaveBeenCalledTimes(2);
-    expect(container.textContent).not.toContain("Test Run setup is unavailable");
-    expect(container.querySelector<HTMLButtonElement>("button[type='submit']")?.disabled).toBe(false);
+    expect(container.querySelector<HTMLButtonElement>("button[type='submit']")?.disabled).toBe(true);
+    expect(onStart).not.toHaveBeenCalled();
+    completeSetup();
+    // Recovery is confirmed by rendered readiness, rather than assuming one event-loop turn settles React.
+    await vi.waitFor(() => {
+      expect(container.textContent).not.toContain("Test Run setup is unavailable");
+      expect(container.querySelector<HTMLButtonElement>("button[type='submit']")?.disabled).toBe(false);
+    });
     changeValue(container.querySelector<HTMLInputElement>(".wf-run-input-list input")!, "order-1");
     flushSync(() => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
-    await settle();
-    expect(onStart).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(onStart).toHaveBeenCalledTimes(1));
   });
 
   it("preserves the actual start-options request error", async () => {
