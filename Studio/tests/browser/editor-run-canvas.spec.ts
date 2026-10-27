@@ -28,6 +28,7 @@ for (const theme of ["light", "dark"]) {
     expect(page.url()).toBe(location);
     await page.getByRole("button", { name: "Show execution", exact: true }).click();
     await expect(node).toHaveAccessibleName(/Run state: Completed/);
+    const capturedPosition = await node.evaluate(element => (element as HTMLElement).style.transform);
     const box = (await node.boundingBox())!;
     await page.mouse.move(box.x + box.width / 2, box.y + 20);
     await page.mouse.down();
@@ -35,6 +36,31 @@ for (const theme of ["light", "dark"]) {
     await page.mouse.up();
     await expect(page.getByText("The design changed. Run overlays are hidden.")).toBeVisible();
     await expect(node).toHaveAccessibleName(/State: authoring/);
+    const editedPosition = await node.evaluate(element => (element as HTMLElement).style.transform);
+    expect(editedPosition).not.toBe(capturedPosition);
+    await page.getByRole("button", { name: "Inspect captured snapshot", exact: true }).click();
+    await expect(page.getByText("Captured snapshot · read only. Your draft edits are preserved.", { exact: true })).toBeVisible();
+    await expect(node).toHaveAccessibleName(/Run state: Completed/);
+    await expect.poll(() => node.evaluate(element => (element as HTMLElement).style.transform)).toBe(capturedPosition);
+    await node.click();
+    await page.keyboard.press("Delete");
+    await page.keyboard.press("ControlOrMeta+d");
+    await expect(node).toHaveCount(1);
+    await expect.poll(() => node.evaluate(element => (element as HTMLElement).style.transform)).toBe(capturedPosition);
+    await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    const inspector = page.getByLabel("Inspector panel", { exact: true });
+    await inspector.getByRole("tab", { name: "Configuration", exact: true }).click();
+    await expect(inspector.locator("fieldset[disabled]")).toHaveCount(1);
+    await page.getByRole("tab", { name: "Code", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Apply", exact: true })).toBeDisabled();
+    await expect(page.locator('.studio-code-editor[data-readonly="true"]')).toHaveCount(1);
+    await page.getByRole("tab", { name: "Designer", exact: true }).click();
+    await page.getByRole("button", { name: "Return to editing", exact: true }).click();
+    await expect(node).toHaveAccessibleName(/State: authoring/);
+    await expect.poll(() => node.evaluate(element => (element as HTMLElement).style.transform)).toBe(editedPosition);
+    expect(await viewport.getAttribute("style")).toBe(transform);
+    expect(page.url()).toBe(location);
   });
 
   test(`inspects an explicit repeated occurrence in the same editor (${theme})`, async ({ page }) => {

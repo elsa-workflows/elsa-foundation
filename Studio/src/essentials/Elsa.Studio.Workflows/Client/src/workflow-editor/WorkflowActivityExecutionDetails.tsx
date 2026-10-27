@@ -95,7 +95,9 @@ export function WorkflowActivityExecutionDetails({
     const controller = new AbortController();
     const activityExecutionId = selectedActivityExecutionId;
     const workflowExecutionId = selectedWorkflowExecutionId;
-    setInspectionState({ activityExecutionId, workflowExecutionId, contextIdentity: selectedContextIdentity, status: "loading", inspection: null, error: "" });
+    setInspectionState(previous => previous.status === "ready" && previous.activityExecutionId === activityExecutionId
+      && previous.workflowExecutionId === workflowExecutionId && previous.contextIdentity === selectedContextIdentity ? previous
+      : { activityExecutionId, workflowExecutionId, contextIdentity: selectedContextIdentity, status: "loading", inspection: null, error: "" });
 
     getActivityExecutionInspection(context, workflowExecutionId, activityExecutionId, controller.signal).then(
       inspection => {

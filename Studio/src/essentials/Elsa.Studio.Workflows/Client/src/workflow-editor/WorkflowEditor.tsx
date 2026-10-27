@@ -58,6 +58,8 @@ import { PanelTabList, compareWorkflowPanelTabs } from "./PanelTabList";
 import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
 import { ValidationPanel, WorkflowRuntimePanel } from "./editorPanels";
 import { AttachedTestRunStatus } from "./AttachedTestRunStatus";
+import { useTestRunObservation } from "./useTestRunObservation";
+import { usePinnedEditorDocument } from "./usePinnedEditorDocument";
 import { useEditorRunCanvas } from "./useEditorRunCanvas";
 import { useAttachedExecutionSelection } from "./useAttachedExecutionSelection";
 import { useDraftValidations } from "./useDraftValidations";
@@ -181,19 +183,9 @@ export function WorkflowEditor({
 
   // The interdependent draft/scope/selection/test-run/artifact cluster now lives in an explicit reducer,
   // so each mutation (below) declares the transition it makes instead of cascading loose setState calls.
-  const editorDoc = useWorkflowDocument();
-  const { draft, frames, selectedNodeId, testRun, publishedArtifactId } = editorDoc.state;
-  const {
-    loadDraft,
-    replaceDraftByBatch,
-    editDraft,
-    editDraftAndSelect,
-    select,
-    navigateToScope,
-    resetToRoot,
-    startTestRun,
-    setPublishedArtifact
-  } = editorDoc;
+  const editableDoc = useWorkflowDocument();
+  const { draft: editableDraft, testRun, publishedArtifactId } = editableDoc.state;
+  const observation = useTestRunObservation({ context, testRun, onRunViewUpdated: editableDoc.updateTestRunView });
   const [error, setErrorState] = useState<WorkflowEditorError | null>(null);
   const setError = useCallback((value: WorkflowErrorInput) => setErrorState(normalizeWorkflowError(value)), []);
   const [status, setStatus] = useState("");
@@ -214,11 +206,11 @@ export function WorkflowEditor({
     recommendation?: RecommendedActivityDefinition | null;
   } | null>(null);
 
-  const { resetHistory, undo, redo, canUndoNow, canRedoNow } = useDraftHistory({ draft, restoreDraft: loadDraft });
+  const { resetHistory, undo, redo, canUndoNow, canRedoNow } = useDraftHistory({ draft: editableDraft, restoreDraft: editableDoc.loadDraft });
 
   // Draft persistence (serialised save queue + debounced autosave) and the definition data load both live
   // in dedicated hooks; `markSaved`/`reload` let the loader seed the save baseline and reload after promote.
-  const { saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, setAutosavePaused, markSaved } = useWorkflowPersistence({ context, draft, autosaveEnabledByDefault, editDraft, setStatus, setError });
+  const { saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, setAutosavePaused, markSaved } = useWorkflowPersistence({ context, draft: editableDraft, autosaveEnabledByDefault, editDraft: editableDoc.editDraft, setStatus, setError });
   const {
     details,
     setDetails,
@@ -232,12 +224,16 @@ export function WorkflowEditor({
     descriptorStatus,
     reload,
     reloadExpressionDescriptors
-  } = useWorkflowEditorData({ context, definitionId, resetHistory, loadDraft, markSaved, setError });
+  } = useWorkflowEditorData({ context, definitionId, resetHistory, loadDraft: editableDoc.loadDraft, markSaved, setError });
   const retryLoad = useCallback(() => {
     void reload().catch(e => setError(describeWorkflowError(e, "Could not load the workflow editor.")));
   }, [reload, setError]);
-  // Debounced name/description save; edits are optimistic and flushed on unmount.
-  const { updateDefinitionMeta } = useDefinitionMetadata({ context, details, setDetails, setStatus });
+  const editorDoc = usePinnedEditorDocument({ document: editableDoc, context, definitionId, catalog });
+  const { draft, frames, selectedNodeId } = editorDoc.state;
+  const { loadDraft, replaceDraftByBatch, editDraft, editDraftAndSelect, select, navigateToScope, resetToRoot, startTestRun, setPublishedArtifact } = editorDoc;
+  // Debounced metadata saves still belong to the editable definition.
+  const { updateDefinitionMeta: updateEditableDefinitionMeta } = useDefinitionMetadata({ context, details, setDetails, setStatus });
+  const updateDefinitionMeta: typeof updateEditableDefinitionMeta = (...args) => { if (editorDoc.canEdit()) updateEditableDefinitionMeta(...args); };
 
   // Resolve the current scope + selection (designer mode, selected activity, descriptor/availability,
   // scoped-variable analysis) from the raw draft/frames/selection and the loaded catalog + descriptors.
@@ -260,8 +256,9 @@ export function WorkflowEditor({
     isFlowchartDesigner,
     isBpmnDesigner,
     selectedBpmnElement,
-    canAddActivitiesToCanvas
+    canAddActivitiesToCanvas: scopeAllowsAuthoring
   } = useWorkflowScope({ context, draft, frames, selectedNodeId, catalog, activityDescriptors, availabilityDiagnostics });
+  const canAddActivitiesToCanvas = scopeAllowsAuthoring && !editorDoc.pinned;
   const inlineSteps = authorsInline(themeLayout, isBpmnDesigner);
   const availableDesignerPanels = filterGraphAuthoringContributions(workflowDesignerPanels, "workflow-definition");
   const sidePanelLayout = useSidePanelLayout(undefined, {
@@ -298,7 +295,7 @@ export function WorkflowEditor({
       (activity.description ?? "").toLowerCase().includes(term));
     return groupActivityPalette(matches);
   }, [paletteCatalog, paletteSearch, paletteGroups]);
-  const busy = operation !== "idle";
+  const busy = operation !== "idle" || editorDoc.pinned;
   const canRunTest = !!draft?.state.rootActivity && !busy;
 
   // Draft validation surface (#453): fetch server-derived validations after the draft settles (when the
@@ -347,6 +344,7 @@ export function WorkflowEditor({
     isBpmnDesigner,
     // A compensation scope's steps change only through its step list, never by a palette drop on the canvas.
     canAddActivitiesToCanvas: canAddActivitiesToCanvas && scope?.slot.id !== compensationStepsSlotId,
+    readOnly: editorDoc.pinned,
     selectedNodeId,
     editDraft,
     editDraftAndSelect,
@@ -399,7 +397,7 @@ export function WorkflowEditor({
     enabled: Boolean(testRun?.snapshot && testRun.endpointContext === context && draft && testRun.draftSignature === getDraftSignature(draft)
       && testRun.view.definitionId === definitionId && testRun.snapshot.definitionId === definitionId) });
   const runScope = [...runSelection.scopes].reverse().find(item => item.execution.authoredActivityId === scopeOwner?.nodeId)?.execution;
-  const runCanvas: ReturnType<typeof useEditorRunCanvas> = useEditorRunCanvas({ context, definitionId, testRun, draftSignature: draft ? getDraftSignature(draft) : "", catalog, nodes: authoringNodes, selectedNodeId,
+  const runCanvas: ReturnType<typeof useEditorRunCanvas> = useEditorRunCanvas({ context, definitionId, testRun, observation, snapshotView: editorDoc.pinned, draftSignature: editableDraft ? getDraftSignature(editableDraft) : "", catalog, nodes: authoringNodes, selectedNodeId,
     ancestorId: runScope?.activityExecutionId, selectedExecution: runSelection.execution,
     onOpenIncident: (incidentId, targetNodeId) => {
       const incident = runCanvas.details?.incidents?.find(item => item.incidentId === incidentId);
@@ -590,7 +588,7 @@ export function WorkflowEditor({
     updateTestDriveResult
   } = useWorkflowOperations({
     context,
-    draft,
+    draft: editableDraft,
     details,
     catalog,
     busy,
@@ -628,7 +626,7 @@ export function WorkflowEditor({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (canvasView !== "designer") return;
+      if (canvasView !== "designer" || editorDoc.pinned) return;
       if (!(event.metaKey || event.ctrlKey)) return;
       const clipboardShortcut = matchActivityClipboardShortcut(event);
       if (clipboardShortcut === "copy") {
@@ -660,7 +658,7 @@ export function WorkflowEditor({
 
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [canvasView, copySelectedActivities, duplicateSelectedActivities, pasteCopiedActivities, undo, redo]);
+  }, [canvasView, copySelectedActivities, duplicateSelectedActivities, editorDoc.pinned, pasteCopiedActivities, undo, redo]);
 
   // Enter a slot from the inspector list or a canvas slot badge, along the planned frame path: a slot
   // holding a single canvas container is descended THROUGH (the canvas shows the container's contents),
@@ -1124,6 +1122,7 @@ export function WorkflowEditor({
         <InspectorPanel
           key={inspectedNode?.nodeId ?? "no-activity"}
           context={context}
+          readOnly={editorDoc.pinned}
           draftId={draft.id}
           expressionTooling={resolvedExpressionTooling}
           expressionEditorSessionScope={expressionEditorSessionScope}
@@ -1179,7 +1178,7 @@ export function WorkflowEditor({
       title: "Runtime",
       order: 5,
       icon: <Play size={15} />,
-      render: () => <WorkflowRuntimePanel testRun={testRun} context={context} currentDraftSignature={draft ? getDraftSignature(draft) : ""} stimulusEditors={testStimulusEditors} publishedEquivalent={publishedEquivalent} onOpenRun={openWorkflowRun} activityLabels={activityLabels} onRunViewUpdated={editorDoc.updateTestRunView} onWaitDraftUpdated={editorDoc.updateTestRunWaitDraft} />
+      render: () => <WorkflowRuntimePanel testRun={testRun} context={context} observation={observation} currentDraftSignature={draft ? getDraftSignature(draft) : ""} stimulusEditors={testStimulusEditors} publishedEquivalent={publishedEquivalent} onOpenRun={openWorkflowRun} activityLabels={activityLabels} onRunViewUpdated={editorDoc.updateTestRunView} onWaitDraftUpdated={editorDoc.updateTestRunWaitDraft} />
     },
     {
       id: "test-drive",
@@ -1234,11 +1233,11 @@ export function WorkflowEditor({
         busy={busy}
         autosaveEnabled={autosaveEnabled}
         onAutosaveChange={setAutosaveEnabled}
-        canUndo={canUndoNow}
-        canRedo={canRedoNow}
-        canAutoLayout={canAutoLayout}
-        onUndo={undo}
-        onRedo={redo}
+        canUndo={canUndoNow && !editorDoc.pinned}
+        canRedo={canRedoNow && !editorDoc.pinned}
+        canAutoLayout={canAutoLayout && !editorDoc.pinned}
+        onUndo={() => { if (!editorDoc.pinned) undo(); }}
+        onRedo={() => { if (!editorDoc.pinned) redo(); }}
         onAutoLayout={autoLayout}
         onBack={onBack}
         onSave={() => void save()}
@@ -1249,7 +1248,9 @@ export function WorkflowEditor({
         runStatus={renderedTestRun ? (
           <AttachedTestRunStatus
             view={renderedTestRun}
-            canvas={runCanvas}
+            canvas={{ ...runCanvas,
+              attach: () => { if (!runCanvas.stale || editorDoc.showSnapshot()) { runCanvas.attach(); setInspectorView("run-data"); setActiveRightPanelId("inspector"); setInspectorCollapsed(false); } },
+              detach: () => { editorDoc.returnToEditing(); runCanvas.detach(); } }}
             onOpenRun={() => { if (renderedTestRun.workflowExecutionId) openWorkflowRun(renderedTestRun.workflowExecutionId); }}
             onOpenDetails={() => {
               setActiveRightPanelId("runtime");
@@ -1264,14 +1265,14 @@ export function WorkflowEditor({
               ...(findRisksAction ? [{
                 label: "Review risks",
                 icon: <Sparkles size={15} />,
-                disabled: !aiProviderAvailable,
+                disabled: busy || !aiProviderAvailable,
                 title: aiProviderAvailable ? "Ask Weaver to review this draft for risks" : weaverUnavailableTitle,
                 onSelect: () => dispatchAiAction(ai, findRisksAction, { definition: details.definition, draft })
               }] : []),
               ...(proposeUpdateAction ? [{
                 label: "Propose update",
                 icon: <Sparkles size={15} />,
-                disabled: !aiProviderAvailable,
+                disabled: busy || !aiProviderAvailable,
                 title: aiProviderAvailable ? "Ask Weaver to propose a reviewed update" : weaverUnavailableTitle,
                 onSelect: () => dispatchAiAction(ai, proposeUpdateAction, { definition: details.definition, draft })
               }] : [])
@@ -1414,9 +1415,9 @@ export function WorkflowEditor({
             />
           </div>
           {canvasView === "code" ? (
-            <WorkflowCodeView draft={draft} onApply={applyEditedJson} />
+            <WorkflowCodeView draft={editableDraft ?? draft} inspectionSnapshot={editorDoc.pinned ? draft : undefined} onApply={applyEditedJson} />
           ) : canvasView === "properties" ? (
-            <WorkflowPropertiesView details={details} draft={draft} context={context} onStateChange={updateDraftState} onDefinitionMetaChange={updateDefinitionMeta} />
+            <fieldset className="wf-snapshot-properties" disabled={editorDoc.pinned}><WorkflowPropertiesView details={details} draft={draft} context={context} onStateChange={updateDraftState} onDefinitionMetaChange={updateDefinitionMeta} /></fieldset>
           ) : (
           <>
           <ScopeBreadcrumb frames={visibleFrames} onNavigate={next => navigateToScope(next, null)} />
@@ -1508,17 +1509,17 @@ export function WorkflowEditor({
                 closeActivityContextMenu();
                 selectEditorNode(node.id);
               },
-              onNodeContextMenu: isUnsupportedDesigner ? undefined : (event, node) => {
+              onNodeContextMenu: isUnsupportedDesigner || editorDoc.pinned ? undefined : (event, node) => {
                 event.preventDefault();
                 const selectedIds = nodes.filter(candidate => candidate.selected).map(candidate => candidate.id);
                 const nodeIds = selectedIds.includes(node.id) ? selectedIds : [node.id];
                 if (!selectedIds.includes(node.id)) select(node.id);
                 openActivityContextMenu(event.clientX, event.clientY, nodeIds);
               },
-              onNodeDragStop: isUnsupportedDesigner ? undefined : commitLayout,
+              onNodeDragStop: isUnsupportedDesigner || editorDoc.pinned ? undefined : commitLayout,
               nodesConnectable: canCreateActivityFromPort,
-              nodesDraggable: !isUnsupportedDesigner,
-              deleteKeyCode: isUnsupportedDesigner ? null : ["Backspace", "Delete"]
+              nodesDraggable: !isUnsupportedDesigner && !editorDoc.pinned,
+              deleteKeyCode: isUnsupportedDesigner || editorDoc.pinned ? null : ["Backspace", "Delete"]
             }}
             overlays={<>
             {insideEmptySlot ? (

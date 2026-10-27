@@ -14,6 +14,7 @@ import { formatDate } from "../workflowFormatting";
 import { isRejectedTestRun } from "./editorHelpers";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { LazyWorkflowTestRunControls } from "./lazyTestDriveUi";
+import type { TestRunObservation } from "./useTestRunObservation";
 
 /**
  * Renders the unified draft-validation surface (issue #453). `errors` (server-derived + reconciled +
@@ -122,7 +123,7 @@ export function TestRunStatus({
   );
 }
 
-export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, stimulusEditors, publishedEquivalent, onOpenRun, activityLabels, onRunViewUpdated, onWaitDraftUpdated }: {
+export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, stimulusEditors, publishedEquivalent, onOpenRun, activityLabels, onRunViewUpdated, onWaitDraftUpdated, observation }: {
   testRun: WorkflowTestRunState | WorkflowTestRunView | null;
   context?: StudioEndpointContext;
   currentDraftSignature?: string;
@@ -132,6 +133,7 @@ export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, 
   activityLabels?: ValidationActivityLabels;
   onRunViewUpdated?(view: WorkflowTestRunView): void;
   onWaitDraftUpdated?(waitId: string, draftState: WorkflowTestRunWaitDraftState): void;
+  observation?: TestRunObservation;
 }) {
   if (!testRun) {
     return (
@@ -218,6 +220,7 @@ export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, 
             stimulusEditors={stimulusEditors ?? []}
             onRunViewUpdated={onRunViewUpdated}
             onWaitDraftUpdated={onWaitDraftUpdated}
+            observation={observation}
           />
         ) : null}
       </section>

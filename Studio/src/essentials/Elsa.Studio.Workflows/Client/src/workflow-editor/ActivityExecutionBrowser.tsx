@@ -206,7 +206,8 @@ export function ActivityExecutionInspectionPanel({ context, workflowExecutionId,
   onIncident(execution: ActivityExecutionStateSummary): void;
   renderDetails(execution: ActivityExecutionStateSummary, navigation: React.ReactNode, children: React.ReactNode): React.ReactNode;
 }) {
-  const key = `${runtimeValueContextId(context)}:${workflowExecutionId}:${nodeId}:${ancestorId ?? ""}:${exactId ?? ""}:${refreshKey}`;
+  // A refresh of this same exact selection must not unmount its expanded evidence while the read is pending.
+  const key = `${runtimeValueContextId(context)}:${workflowExecutionId}:${nodeId}:${ancestorId ?? ""}:${exactId ?? ""}`;
   const [resolved, setResolved] = useState<{ key: string; execution: ActivityExecutionStateSummary | null } | null>(null);
   const [supported, setSupported] = useState<{ context: StudioEndpointContext; value: boolean } | null>(null);
   useEffect(() => {

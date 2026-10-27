@@ -191,6 +191,7 @@ function createEditorContext(): StudioEndpointContext {
                 { id: "elsa.api.publishing", contractVersion: "1", links: [
                   { rel: "workflow-draft-test-run-options", href: "publishing/draft-options" },
                   { rel: "workflow-draft-test-runs", href: "publishing/draft-runs" },
+                  { rel: "workflow-test-run-status", href: "publishing/test-runs/{testRunId}", templated: true },
                   { rel: "workflow-test-run-waits", href: "publishing/test-runs/{testRunId}/waits", templated: true }
                 ] },
                 { id: "elsa.api.runtime", contractVersion: "1", links: [
@@ -275,6 +276,7 @@ function createEditorContext(): StudioEndpointContext {
               captureMode: "DiagnosticSnapshot", snapshot: { kind: "string", preview: `Current: ${execution.position}` },
               capturedAt: execution.scheduledAt, captureReason: "Captured by fixture policy", isSensitive: false, metadata: {} }] };
         }
+        if (runCanvas && url === "/publishing/test-runs/editor-test") return runView;
         if (runCanvas && url === "/publishing/test-runs/editor-test/waits") return { waits: [] };
         throw new Error(`Unexpected editor fixture request: ${url}`);
       },

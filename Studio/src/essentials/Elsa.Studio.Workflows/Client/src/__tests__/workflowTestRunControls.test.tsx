@@ -33,7 +33,7 @@ beforeEach(() => {
   publishingMocks.getWaits.mockReset();
   publishingMocks.stop.mockReset();
   publishingMocks.getWaits.mockResolvedValue({ waits: [customWait] });
-  publishingMocks.getRun.mockResolvedValue({ ...testRun.view, status: "DispatchAccepted", workflowExecutionId: "execution-2" });
+  publishingMocks.getRun.mockResolvedValue({ ...testRun.view, status: "DispatchAccepted", workflowExecutionId: "execution-1" });
   publishingMocks.getInstance.mockResolvedValue({ instance: { workflowExecutionId: "execution-1", status: "Running" } });
   publishingMocks.stop.mockResolvedValue(testRun.view);
 });
@@ -87,6 +87,7 @@ describe("Workflow Test Run controls", () => {
     const { input: restoredInput, form: restoredForm } = await waitForCustomEditor(restored);
     expect(restoredInput.value).toBe('{"orderId":"wait-123"}');
     publishingMocks.getWaits.mockResolvedValue({ waits: [] });
+    publishingMocks.getRun.mockResolvedValue({ ...testRun.view, activityCount: 5 });
     flushSync(() => restoredForm.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
     await vi.waitFor(() => expect(restored.textContent).toContain("Event delivered"));
     expect(publishingMocks.deliver).toHaveBeenCalledTimes(2);
@@ -95,18 +96,19 @@ describe("Workflow Test Run controls", () => {
     expect(firstRequest).toMatchObject({ waitId: "wait-1", modeId: "custom-wake", data: { orderId: "wait-123" } });
     expect(firstRequest.deliveryId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
     expect(secondRequest.deliveryId).toBe(firstRequest.deliveryId);
-    expect(onRunViewUpdated).toHaveBeenCalledWith(expect.objectContaining({ workflowExecutionId: "execution-2" }));
+    expect(onRunViewUpdated).toHaveBeenCalledWith(expect.objectContaining({ workflowExecutionId: "execution-1", activityCount: 5 }));
     expect(restored.textContent).toContain("Event delivered");
   });
 
   it("stops a Test Run and refreshes its view", async () => {
     const stoppedView = { ...testRun.view, status: "Stopped" };
     publishingMocks.stop.mockResolvedValue(testRun.view);
-    publishingMocks.getRun.mockResolvedValue(stoppedView);
     const onRunViewUpdated = vi.fn();
     const container = render({ stimulusEditors: [], onRunViewUpdated });
 
     const button = [...container.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === "Stop Test Run")!;
+    await vi.waitFor(() => expect(button.disabled).toBe(false));
+    publishingMocks.getRun.mockResolvedValue(stoppedView);
     flushSync(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     await vi.waitFor(() => expect(onRunViewUpdated).toHaveBeenCalledWith(stoppedView));
     expect(publishingMocks.stop).toHaveBeenCalledWith(expect.anything(), "test-run-1");
@@ -116,14 +118,14 @@ describe("Workflow Test Run controls", () => {
   it("shows Waiting for an active wait and refreshes the wait list while the root is Running", async () => {
     publishingMocks.getInstance.mockResolvedValue({ instance: { workflowExecutionId: "execution-1", status: "Running" } });
     const container = render({ stimulusEditors: [] });
-    // Wait for the observable state after both the waits-list and execution effects settle.
+    // One observer loads both sources; mounting controls must not duplicate the initial wait read.
     await vi.waitFor(() => {
       const text = container.querySelector(".wf-test-run-execution-state")?.textContent;
       expect(text).toBeTruthy();
       expect(text).toContain("Waiting");
     });
     const initialWaitReads = publishingMocks.getWaits.mock.calls.length;
-    expect(initialWaitReads).toBeGreaterThanOrEqual(2);
+    expect(initialWaitReads).toBe(1);
 
     await vi.waitFor(() => expect(publishingMocks.getWaits.mock.calls.length).toBeGreaterThan(initialWaitReads), { timeout: 5000, interval: 50 });
   });

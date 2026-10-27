@@ -1333,6 +1333,25 @@ it("rejects mismatched execution evidence before resolving any value payload", a
   expect(getActivityExecutionValuePayload).not.toHaveBeenCalled();
 });
 
+it("retains confirmed evidence during a same-occurrence refresh and removes it immediately for another occurrence", async () => {
+  vi.mocked(getActivityExecutionValuePayload).mockResolvedValue({ payload: "confirmed value" } as Awaited<ReturnType<typeof getActivityExecutionValuePayload>>);
+  vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([valueEvidence()]));
+  const props = { context, activity, activityCatalog: catalog };
+  const container = render(<WorkflowActivityExecutionDetails {...props} />);
+  await waitFor(() => expect(container.textContent).toContain("confirmed value"));
+  const value = container.querySelector(".wf-input-inspection-value");
+  let release!: (value: ActivityExecutionInspection) => void;
+  vi.mocked(getActivityExecutionInspection).mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+  rerender(<WorkflowActivityExecutionDetails {...props} refreshKey={1} />);
+  expect(container.textContent).toContain("confirmed value");
+  expect(container.querySelector(".wf-input-inspection-value")).toBe(value);
+  vi.mocked(getActivityExecutionValuePayload).mockResolvedValue({ payload: "reconciled value" } as Awaited<ReturnType<typeof getActivityExecutionValuePayload>>);
+  release(inspection([valueEvidence({ evidenceId: "new-evidence" })]));
+  await waitFor(() => expect(container.textContent).toContain("reconciled value"));
+  rerender(<WorkflowActivityExecutionDetails {...props} activity={{ ...activity, activityExecutionId: "another-occurrence" }} refreshKey={1} />);
+  expect(container.textContent).not.toContain("reconciled value");
+});
+
 describe("WorkflowIncidentList", () => {
   it("renders a full stack trace disclosure when incident metadata includes one", () => {
     const stackTrace = "System.InvalidOperationException: No value\n   at Elsa.Tests.WriteLine.Execute()";

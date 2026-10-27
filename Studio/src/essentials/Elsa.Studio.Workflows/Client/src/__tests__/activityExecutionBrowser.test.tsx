@@ -146,3 +146,20 @@ it("resolves an unambiguous editor occurrence without widening its scope", async
   await vi.waitFor(() => expect(onResolve).toHaveBeenCalledWith(expect.objectContaining({ activityExecutionId: "execution-4" })));
   expect(browseActivityExecutions).toHaveBeenCalledWith(context, "run", expect.objectContaining({ ancestorActivityExecutionId: "branch-4" }), expect.any(AbortSignal));
 });
+
+it("keeps the inspected occurrence mounted during refresh and clears it when the exact read becomes unavailable", async () => {
+  const panel = (refreshKey: number) => flushSync(() => root.render(<ActivityExecutionInspectionPanel context={context} workflowExecutionId="run"
+    nodeId="ordinary-node" nodeLabel="Activity" exactId="execution-10" seed={null} refreshKey={refreshKey}
+    labelFor={value => value.activityExecutionId} onSelect={onSelect} onEnter={vi.fn()} onIncident={vi.fn()}
+    renderDetails={(value, navigation) => <section><p data-evidence="">{value.activityExecutionId}</p>{navigation}</section>} />));
+  panel(0); await vi.waitFor(() => expect(container.querySelector("[data-evidence]")?.textContent).toBe("execution-10"));
+  let release!: (value: ActivityExecutionBrowsePage) => void;
+  vi.mocked(browseActivityExecutions).mockImplementation(() => new Promise(resolve => { release = resolve; }));
+  const evidence = container.querySelector("[data-evidence]");
+  panel(1);
+  expect(container.querySelector("[data-evidence]")).toBe(evidence);
+  await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+  release(page([]));
+  await vi.waitFor(() => expect(container.querySelector("[data-evidence]")).toBeNull());
+  expect(onSelect).not.toHaveBeenCalled();
+});

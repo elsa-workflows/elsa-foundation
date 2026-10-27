@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Node } from "@xyflow/react";
 import { authSessionEndedEvent, authSessionStartedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { browseActivityExecutions, getExecutable, getExecutableInputSources, getWorkflowInstance } from "../api/runtime";
@@ -10,6 +10,7 @@ import { applyRuntimeOverlays } from "../workflowRuntimeOverlays";
 import { decorateWorkflowCanvasElements } from "./workflowAccessibility";
 import type { WorkflowTestRunState } from "./editorTypes";
 import { isRejectedTestRun } from "./editorHelpers";
+import type { TestRunObservation } from "./useTestRunObservation";
 
 interface RunCanvasEvidence {
   key: string;
@@ -23,7 +24,7 @@ interface RunCanvasEvidence {
 }
 
 /** Adds observation to the existing canvas without changing its document, selection or viewport. */
-export function useEditorRunCanvas({ context, definitionId, testRun, draftSignature, catalog, nodes, selectedNodeId, onOpenIncident, ancestorId, selectedExecution }: {
+export function useEditorRunCanvas({ context, definitionId, testRun, draftSignature, catalog, nodes, selectedNodeId, onOpenIncident, ancestorId, selectedExecution, observation, snapshotView = false }: {
   context: StudioEndpointContext;
   definitionId: string;
   testRun: WorkflowTestRunState | null;
@@ -34,11 +35,16 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
   onOpenIncident?: WorkflowNodeData["onIncidentClick"];
   ancestorId?: string;
   selectedExecution?: ActivityExecutionStateSummary | null;
+  observation?: TestRunObservation;
+  snapshotView?: boolean;
 }) {
   const [dismissedRunId, setDismissedRunId] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
   const [authorized, setAuthorized] = useState(true);
+  const [authorizationVersion, setAuthorizationVersion] = useState(0);
   const [evidence, setEvidence] = useState<RunCanvasEvidence | null>(null);
+  const previousEvidence = useRef(evidence); previousEvidence.current = evidence;
+  const graphCache = useRef<{ key: string; context: StudioEndpointContext; catalog: ActivityCatalogItem[]; graph: ExecutableActivityGraph } | null>(null);
   const runId = testRun?.view.testRunId;
   const executionId = testRun?.view.workflowExecutionId;
   const artifactId = testRun?.view.artifactId;
@@ -46,14 +52,15 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
   const stale = Boolean(testRun && (testRun.draftSignature !== draftSignature || testRun.view.definitionId !== definitionId || snapshot?.definitionId !== definitionId));
   const authorityChanged = Boolean(testRun?.endpointContext && testRun.endpointContext !== context);
   const eligible = Boolean(snapshot && executionId && artifactId && testRun?.endpointContext === context && testRun && !isRejectedTestRun(testRun.view));
-  const attached = eligible && !stale && dismissedRunId !== runId && authorized;
+  const attached = eligible && (!stale || snapshotView) && dismissedRunId !== runId && authorized;
   const nodeKey = JSON.stringify([...new Set(nodes.map(node => node.data.runtimeNodeId ?? node.id))].sort());
-  const key = JSON.stringify([runId, executionId, artifactId, nodeKey, revision, ancestorId, selectedExecution?.activityExecutionId]);
-  const refresh = useCallback(() => setRevision(value => value + 1), []);
+  const key = JSON.stringify([runId, executionId, artifactId, nodeKey, authorizationVersion, observation?.identity, ancestorId, selectedExecution?.activityExecutionId]);
+  const refreshObservation = observation?.refresh;
+  const refresh = useCallback(() => { setRevision(value => value + 1); refreshObservation?.(); }, [refreshObservation]);
 
   useEffect(() => {
-    const revoke = () => setAuthorized(false);
-    const restore = () => { setAuthorized(true); refresh(); };
+    const revoke = () => { setAuthorized(false); setEvidence(null); graphCache.current = null; };
+    const restore = () => { setAuthorized(true); setEvidence(null); graphCache.current = null; setAuthorizationVersion(value => value + 1); refresh(); };
     window.addEventListener(authSessionEndedEvent, revoke);
     window.addEventListener(authSessionStartedEvent, restore);
     return () => {
@@ -65,23 +72,31 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
   useEffect(() => {
     if (!attached || !executionId || !artifactId) return;
     const controller = new AbortController();
-    const next: RunCanvasEvidence = { key, context, loading: true, error: "", repeated: false, details: null, graph: null, activities: [] };
+    const previous = previousEvidence.current;
+    const next: RunCanvasEvidence = previous?.key === key && previous.context === context
+      ? { ...previous, loading: true, error: "" }
+      : { key, context, loading: true, error: "", repeated: false, details: null, graph: null, activities: [] };
     setEvidence(next);
     const load = async () => {
       try {
-        const details = await getWorkflowInstance(context, executionId);
+        const details = observation?.details ?? await getWorkflowInstance(context, executionId);
         if (controller.signal.aborted) return;
         if (details.instance.workflowExecutionId !== executionId || details.instance.artifactId !== artifactId) {
           throw new Error("This execution does not match the Test Run snapshot.");
         }
-        const executable = await getExecutable(context, artifactId, details.instance.sourceReferenceId);
-        if (controller.signal.aborted) return;
-        if (executable.artifactId !== artifactId) throw new Error("The Test Run executable could not be verified.");
-        const sourceId = executable.chosenReference?.sourceReferenceId ?? details.instance.sourceReferenceId;
-        const sources = sourceId ? await getExecutableInputSources(context, artifactId, sourceId).catch(() => null) : null;
-        if (controller.signal.aborted) return;
-        const graph = buildExecutableActivityGraph(executable.rootActivity, catalog, sources?.authoredInputs ?? [], sources?.compiledInputs ?? [],
-          sources?.accessState ?? sources?.access ?? "unavailable", executable.chosenReference?.activityPresentation ?? []);
+        const graphKey = JSON.stringify([artifactId, details.instance.sourceReferenceId, authorizationVersion, observation?.identity]);
+        let graph = graphCache.current?.key === graphKey && graphCache.current.context === context && graphCache.current.catalog === catalog ? graphCache.current.graph : null;
+        if (!graph) {
+          const executable = await getExecutable(context, artifactId, details.instance.sourceReferenceId);
+          if (controller.signal.aborted) return;
+          if (executable.artifactId !== artifactId) throw new Error("The Test Run executable could not be verified.");
+          const sourceId = executable.chosenReference?.sourceReferenceId ?? details.instance.sourceReferenceId;
+          const sources = sourceId ? await getExecutableInputSources(context, artifactId, sourceId).catch(() => null) : null;
+          if (controller.signal.aborted) return;
+          graph = buildExecutableActivityGraph(executable.rootActivity, catalog, sources?.authoredInputs ?? [], sources?.compiledInputs ?? [],
+            sources?.accessState ?? sources?.access ?? "unavailable", executable.chosenReference?.activityPresentation ?? []);
+          graphCache.current = { key: graphKey, context, catalog, graph };
+        }
         const visible = (JSON.parse(nodeKey) as string[]).map(id => graph.factsByNodeId.get(id)).filter(item => item !== undefined);
         const activities: ActivityExecutionStateSummary[] = [];
         let repeated = false;
@@ -110,7 +125,9 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
     };
     void load();
     return () => controller.abort();
-  }, [ancestorId, artifactId, attached, catalog, context, executionId, key, nodeKey, selectedExecution]);
+    // Observation revision advances only after a verified read; keep a deliberately selected occurrence.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ancestorId, artifactId, attached, authorizationVersion, catalog, context, executionId, key, nodeKey, observation?.revision, revision, selectedExecution]);
 
   const current = attached && evidence?.key === key && evidence.context === context ? evidence : null;
   const shownNodes = useMemo(() => {
@@ -130,13 +147,15 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
     graph: current?.graph ?? null,
     details: current?.details ?? null,
     activities: current?.activities ?? [],
-    refreshKey: revision,
+    refreshKey: revision + (observation?.revision ?? 0),
+    observationStatus: observation?.status,
     attached,
     stale,
+    snapshotView,
     loading: attached && (!current || current.loading),
-    error: authorityChanged ? "This Test Run belongs to another backend session." : !authorized ? "Sign in again to inspect execution evidence." : current?.error ?? "",
+    error: authorityChanged ? "This Test Run belongs to another backend session." : !authorized ? "Sign in again to inspect execution evidence." : current?.error || observation?.error || "",
     repeated: current?.repeated ?? false,
-    status: current?.details?.instance.status,
+    status: observation?.waits.length ? "Waiting" : current?.details?.instance.status,
     granularity: current?.details?.inspectionGranularity,
     refresh,
     detach: () => setDismissedRunId(runId ?? null),
