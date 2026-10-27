@@ -35,10 +35,14 @@
 
 - [x] T011 Run actual normal/specific negative/restored profiles; retain full tool/source/archive/cache/publish and audit/native-admission observations, bounded failures and process cleanup in tool README and `validation.md`.
 - [x] T012 Run affected whole Studio suites/discovery, architecture/discovery and generated maps; perform applicable syntax/locked-restore checks and reconcile counts in `validation.md`.
-- [ ] T013 Converge independent review within the normal six-round cap, ready PR/full head CI, complete authorized reviewed delivery and verify actual resulting main/candidates; terminalize spec/remove checklist and reconcile issue/board/claim.
+- [x] T013 Converge independent review within the normal six-round cap, ready PR/full head CI, complete authorized reviewed delivery and verify actual resulting main/candidates; terminalize spec/remove checklist and reconcile issue/board/claim.
 
 ## Dependencies and Execution Strategy
 
 T001 -> T002 -> T003 establishes the concrete product correction. T004/T005 precede T006/T007, then T008/T009/T010 establish their individual journeys. T011 integrates every profile; T012 precedes final T013 delivery. Refine private fixture details from actual execution without widening these outcomes.
 
 One implementation session and shared build-slot wrapper remain authoritative. Independent HTTP/browser inspections could run separately by profile, but build/server qualification runs serially for clear ownership. Only the required independent correctness/standards/acceptance review lenses run as parallel review agents; no implementation delegation. Deliver a minimal module journey first, then optional/security/lifecycle/state profiles, then aggregate and reviewed-main proof.
+
+## Final record reconciliation
+
+T013 were delivered through [the reviewed delivery receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3402#issuecomment-6446433253) and merged commit `7ecd6965dd4fb2e0fe45174b6fc32ffdd866470b`, verified as an ancestor of current main. #3366 reconciles these previously stale checkboxes from actual delivery/main/candidate evidence; it does not invent a new execution or formal approval. The current organization protocol governs review/merge authorization.

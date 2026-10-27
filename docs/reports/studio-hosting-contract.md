@@ -1,11 +1,12 @@
 # Studio hosting extraction contract
 
-Selected implementation target for [#3355](https://github.com/elsa-workflows/elsa-foundation/issues/3355),
-[Program #3340](https://github.com/elsa-workflows/elsa-foundation/issues/3340). Source baseline:
-`621d9492357cdee5adcef4c5b866555ce1c9e298`. These signatures/boundaries are the contract to implement,
-not a claim that the new production packages already exist.
+**Implementation status:** The accepted M0 contract is implemented by the public Hosting, Hosting.Nuplane and Hosting.Themes packages. The source-linked disposition below records the extraction choices. Use the [runnable custom-host guide](../../Studio/docs/custom-hosting.md) for current consumer setup and the [program ledger](../program-goals/studio-hosting-package-reuse.md) for reviewed source, actual candidate/runtime and resulting-main receipts. Historical implementation sequencing below is not a publication claim.
 
-## Work-unit plan and gates
+Accepted M0 selection for [#3355](https://github.com/elsa-workflows/elsa-foundation/issues/3355),
+[Program #3340](https://github.com/elsa-workflows/elsa-foundation/issues/3340). Source baseline:
+`621d9492357cdee5adcef4c5b866555ce1c9e298`. The following sections retain the accepted boundaries and original implementation sequence; current implementation and consumer proof are linked above.
+
+## M0 work-unit plan and gates
 
 This is architecture development after the three completed qualification spikes. Cover every Web C# file,
 frontend ownership category, package direction, small consumer API and configuration/storage/lifetime seam.
@@ -127,7 +128,7 @@ any intended intermediate-package/PrivateAssets graph separately. A separately n
 supported customization; normal same-path overlays collide in the SDK. Preserve actual caching behavior against
 emitted filenames, not an assumption that every bundle is hashed.
 
-## Public composition API to implement
+## Public composition API
 
 Keep the public surface limited to consumer composition, configuration and required framework feature types.
 The target entry points are:
@@ -149,7 +150,7 @@ provides BuiltInsOnly, DirectoryOnly and AddToBuiltIns for typed callbacks/valid
 cache, store implementation, reload observer, generic writer or duplicate feature-management contracts.
 
 A basic custom host using Dashboard is this target code, with references to Hosting and the existing Dashboard
-package. It is normative planned API usage; it becomes executable product code in the implementation/consumer leaves.
+package. It is the accepted composition shape, now exercised by the standalone sample and independent consumer qualification.
 
 ```csharp
 using CShells.DependencyInjection;
