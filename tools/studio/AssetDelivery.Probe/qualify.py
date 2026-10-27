@@ -109,10 +109,10 @@ def main() -> None:
     check(not subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all", "--", "Studio", "Extensions"], cwd=REPO, text=True).strip(), "Commit frontend input changes before archive qualification")
     source_revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True).strip()
     inputs = {
-        "Hosting": (REPO / "Studio/src/apps/Elsa.Studio.Web/wwwroot", "/"),
+        "Hosting": (REPO / "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot", "/"),
         "Dashboard": (REPO / "Studio/src/essentials/Elsa.Studio.Dashboard/wwwroot", "_content/Elsa.Studio.Dashboard"),
     }
-    check((inputs["Hosting"][0] / "studio/vendor/react.js").is_file(), "Build the actual Web shell first.")
+    check((inputs["Hosting"][0] / "studio/vendor/react.js").is_file(), "Build the actual Hosting browser shell first.")
     check((inputs["Dashboard"][0] / "studio/modules/dashboard/module.js").is_file(), "Build Dashboard first.")
     feed = root / "feed"
     feed.mkdir()

@@ -244,7 +244,7 @@ function projectEffectiveFeature(feature: Pick<DraftFeature, "id" | "enabled" | 
 export function createApplyPayload(revision: string, features: DraftFeature[]) {
   return {
     revision,
-    features: features.map(projectEffectiveFeature)
+    features: features.filter(feature => feature.sourceKind !== "manifest-error").map(projectEffectiveFeature)
   };
 }
 

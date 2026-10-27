@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StudioActivityDescriptor, StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
-import { builtInPropertyEditors } from "../../../../../apps/Elsa.Studio.Web/Client/src/app/propertyEditors";
+import { builtInPropertyEditors } from "../../../../../essentials/Elsa.Studio.Hosting/Client/src/app/propertyEditors";
 import { IntrinsicInspector } from "../IntrinsicInspector";
 import { createActivityNode } from "../workflowAdapter";
 import { readIntrinsicDescriptor } from "../intrinsicActivities";

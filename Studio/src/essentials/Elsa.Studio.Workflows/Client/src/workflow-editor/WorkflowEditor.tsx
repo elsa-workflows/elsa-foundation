@@ -54,7 +54,9 @@ import { WorkflowEditorToolbar } from "./WorkflowEditorToolbar";
 import { ConnectMenu } from "./graph";
 import { PanelTabList, compareWorkflowPanelTabs } from "./PanelTabList";
 import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
-import { ValidationPanel, TestRunStatus, WorkflowRuntimePanel } from "./editorPanels";
+import { ValidationPanel, WorkflowRuntimePanel } from "./editorPanels";
+import { AttachedTestRunStatus } from "./AttachedTestRunStatus";
+import { useEditorRunCanvas } from "./useEditorRunCanvas";
 import { useDraftValidations } from "./useDraftValidations";
 import { useExecutableArtifactExport } from "./useExecutableArtifactExport";
 import { combineValidationErrors, detectStructuralValidationErrors } from "../draftValidation";
@@ -350,7 +352,7 @@ export function WorkflowEditor({
     setError
   });
   const {
-    nodes,
+    nodes: authoringNodes,
     edges,
     canvasRef,
     setReactFlowInstance,
@@ -388,6 +390,9 @@ export function WorkflowEditor({
     onPaletteDragEnd,
     onPalettePointerDown
   } = canvas;
+  const runCanvas = useEditorRunCanvas({ context, definitionId, testRun, draftSignature: draft ? getDraftSignature(draft) : "", catalog, nodes: authoringNodes, selectedNodeId,
+    onOpenIncident: () => { setActiveRightPanelId("runtime"); setInspectorCollapsed(false); } });
+  const nodes = runCanvas.nodes;
   const selectedCanvasNodeIds = useMemo(() => {
     const selected = nodes.filter(node => node.selected).map(node => node.id);
     return selected.length > 0 ? selected : (selectedNodeId ? [selectedNodeId] : []);
@@ -565,6 +570,7 @@ export function WorkflowEditor({
     flushPendingSave,
     reload,
     startTestRun,
+    updateTestRunResult: editorDoc.updateTestRunResult,
     setPublishedArtifact,
     setOperation,
     setStatus,
@@ -1199,9 +1205,10 @@ export function WorkflowEditor({
         canRun={canRunTest}
         runTitle={draft.state.rootActivity ? "Run a transient test of the current design" : "Add a root activity before running"}
         runStatus={renderedTestRun ? (
-          <TestRunStatus
-            testRun={renderedTestRun}
-            stale={Boolean(testRun && draft && testRun.draftSignature !== getDraftSignature(draft))}
+          <AttachedTestRunStatus
+            view={renderedTestRun}
+            canvas={runCanvas}
+            onOpenRun={() => { if (renderedTestRun.workflowExecutionId) openWorkflowRun(renderedTestRun.workflowExecutionId); }}
             onOpenDetails={() => {
               setActiveRightPanelId("runtime");
               setInspectorCollapsed(false);

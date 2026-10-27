@@ -322,6 +322,12 @@ for (const theme of ["light", "dark"]) {
 }
 
 async function seriousViolations(page: Page) {
+  // Contrast is meaningful after the existing finite entrance animation has settled.
+  await page.evaluate(async () => {
+    await Promise.all(document.getAnimations()
+      .filter(animation => animation.playState === "running" && Number.isFinite(animation.effect?.getComputedTiming().iterations))
+      .map(animation => animation.finished.catch(() => undefined)));
+  });
   await page.addScriptTag({ content: axe.source });
   return page.evaluate(async () => {
     const result = await (window as Window & {

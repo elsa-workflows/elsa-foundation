@@ -186,7 +186,7 @@ authenticated transport and returns the original `Response`, preserving real
 status, headers, and text body. Do not fall back to browser `fetch` when that
 transport is absent. The request runs as the current Studio identity, so
 endpoint authorization still applies; do not treat it as an alternate
-credential channel. See the [Studio SDK contribution guide](../../../../../Studio/src/apps/Elsa.Studio.Web/Client/src/sdk/README.md)
+credential channel. See the [Studio SDK contribution guide](../../../../../Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/README.md)
 and its `Workflow Test Run stimulus editor Contributions` section.
 
 Current built-in identities are `Elsa.HttpEndpoint` / `http-request`,

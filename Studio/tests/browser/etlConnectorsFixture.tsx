@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { createEndpointContext } from "@elsa-workflows/studio-sdk";
-import { DialogHost } from "../../src/apps/Elsa.Studio.Web/Client/src/app/ui/dialog/DialogHost";
-import { dialogs } from "../../src/apps/Elsa.Studio.Web/Client/src/app/dialogs";
-import { ThemeProvider } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
+import { DialogHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/dialog/DialogHost";
+import { dialogs } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/dialogs";
+import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import { EtlDefinitionsPage } from "../../../Extensions/Etl/studio/Elsa.Studio.Etl/Client/src/EtlDefinitionsPage";
 import { EtlPublishedSelectionEditor } from "../../../Extensions/Etl/studio/Elsa.Studio.Etl/Client/src/EtlPublishedSelectionEditor";
-import "../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import "../../../Extensions/Etl/studio/Elsa.Studio.Etl/Client/src/styles.css";
 
 const endpoint = createEndpointContext(`${window.location.origin}/fixture-etl`);

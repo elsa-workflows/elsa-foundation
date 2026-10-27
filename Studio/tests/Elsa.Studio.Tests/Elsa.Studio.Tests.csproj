@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\essentials\Elsa.Studio.Api\Elsa.Studio.Api.csproj" />
     <ProjectReference Include="../../src/essentials/Elsa.Studio.Hosting/Elsa.Studio.Hosting.csproj" />
+    <ProjectReference Include="../../src/essentials/Elsa.Studio.Hosting.Themes/Elsa.Studio.Hosting.Themes.csproj" />
     <ProjectReference Include="..\..\..\Extensions\ConsoleStream\studio\Elsa.Studio.ConsoleStream\Elsa.Studio.ConsoleStream.csproj" />
     <ProjectReference Include="..\..\src\essentials\Elsa.Studio.Core\Elsa.Studio.Core.csproj" />
     <ProjectReference Include="..\..\..\Extensions\Diagnostics.OpenTelemetry\studio\Elsa.Studio.Diagnostics.OpenTelemetry\Elsa.Studio.Diagnostics.OpenTelemetry.csproj" />
@@ -40,6 +41,10 @@
     <ProjectReference Include="..\..\src\apps\Elsa.Studio.Web\Elsa.Studio.Web.csproj" />
     <ProjectReference Include="../../../tools/studio/HostingReuse.Probe/Fixtures/First/First.csproj" />
     <ProjectReference Include="../../../tools/studio/HostingReuse.Probe/Fixtures/Second/Second.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/essentials/Elsa.Studio.Hosting.Nuplane/Elsa.Studio.Hosting.Nuplane.csproj" />
   </ItemGroup>
 
   <ItemGroup>

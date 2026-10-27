@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { DialogHost } from "../../src/apps/Elsa.Studio.Web/Client/src/app/ui/dialog/DialogHost";
-import { dialogs } from "../../src/apps/Elsa.Studio.Web/Client/src/app/dialogs";
+import { DialogHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/dialog/DialogHost";
+import { dialogs } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/dialogs";
 import { setDialogs } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/dialogs";
-import { ThemeProvider } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
+import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import { WorkflowInstances } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances";
-import "../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import "../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";
 
 setDialogs(dialogs);

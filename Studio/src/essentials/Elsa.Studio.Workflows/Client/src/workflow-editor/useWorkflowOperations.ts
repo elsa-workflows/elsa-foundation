@@ -61,6 +61,7 @@ interface WorkflowOperationsParams {
   flushPendingSave(): Promise<void>;
   reload(options?: { shouldLoadDraft(): boolean }): Promise<void>;
   startTestRun(testRun: WorkflowTestRunState): void;
+  updateTestRunResult?(testRun: WorkflowTestRunState): void;
   setPublishedArtifact(id: string | null): void;
   setOperation(operation: WorkflowEditorOperation): void;
   setStatus(value: string): void;
@@ -83,6 +84,7 @@ export function useWorkflowOperations({
   flushPendingSave,
   reload,
   startTestRun,
+  updateTestRunResult,
   setPublishedArtifact,
   setOperation,
   setStatus,
@@ -513,6 +515,7 @@ export function useWorkflowOperations({
     onStarted?: (view: WorkflowTestRunView) => Promise<void>,
     acknowledgeUnavailableExpressionValidation = false
   ): Promise<WorkflowTestRunView | null> => {
+    draftSnapshot = structuredClone(draftSnapshot);
     const draftSignature = getDraftSignature(draftSnapshot);
     setStatus("Preparing test run...");
     try {
@@ -536,7 +539,7 @@ export function useWorkflowOperations({
         setStatus("Expression validation is unavailable. Confirmation is required before this Test Run can proceed.");
         return null;
       }
-      startTestRun({ draftSignature, view: nextTestRun, startLabel, workflowInputNames });
+      startTestRun({ draftSignature, snapshot: draftSnapshot, endpointContext: context, view: nextTestRun, startLabel, workflowInputNames });
       setActiveRightPanelId("runtime");
       setInspectorCollapsed(false);
       setStatus(isRejectedTestRun(nextTestRun) ? "Test run rejected" : "Test run dispatched");
@@ -567,15 +570,16 @@ export function useWorkflowOperations({
   ) => dispatchTestRun(draftSnapshot, inputs, start, startLabel, workflowInputNames, onStarted), [dispatchTestRun]);
 
   const updateTestDriveResult = useCallback((draftSignature: string, view: WorkflowTestRunView, startLabel: string, workflowInputNames: string[], driverActionResult?: WorkflowTestRunState["driverActionResult"], driverActionError?: string) => {
-    startTestRun({
+    (updateTestRunResult ?? startTestRun)({
       draftSignature,
+      endpointContext: context,
       view,
       startLabel,
       workflowInputNames,
       ...(driverActionResult ? { driverActionResult } : {}),
       ...(driverActionError ? { driverActionError } : {})
     });
-  }, [startTestRun]);
+  }, [context, startTestRun, updateTestRunResult]);
 
   const confirmUnavailableExpressionValidation = useCallback(async () => {
     const pending = expressionValidationWarning;
