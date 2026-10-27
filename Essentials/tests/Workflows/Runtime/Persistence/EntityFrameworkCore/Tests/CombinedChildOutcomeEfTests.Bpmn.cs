@@ -192,10 +192,24 @@ public sealed partial class CombinedChildOutcomeEfTests
     {
         var timer = Stopwatch.StartNew();
         BpmnCombinedSnapshot? last = null;
-        bool HasRequiredCut(BpmnCombinedSnapshot snapshot) =>
-            snapshot.Reporter.Metadata.GetValueOrDefault(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId) == workId &&
-            snapshot.Activities.Any(state => state.Execution.ExecutableNodeId == CombinedChildOutcomeEfFixture.AfterNodeId && state.Status == ActivityExecutionStatus.Suspended) &&
-            snapshot.Bookmarks.Count == 1 && snapshot.Bookmarks.Single().State.ActivityExecutionId == CombinedChildOutcomeEfFixture.AfterActivityExecutionId;
+        bool HasRequiredCut(BpmnCombinedSnapshot snapshot)
+        {
+            if (snapshot.Reporter.Metadata.GetValueOrDefault(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId) != workId ||
+                snapshot.Bookmarks.Count != 1)
+                return false;
+            var wait = snapshot.Bookmarks.Single().State;
+            // Suspension precedes CreateBookmark in a separate checkpoint. Require both sides of
+            // the actual bookmark-created checkpoint, rejecting an earlier-activity/later-wait read.
+            return wait.ActivityExecutionId == CombinedChildOutcomeEfFixture.AfterActivityExecutionId &&
+                snapshot.Activities.Any(state => state.InvocationId == wait.ActivityExecutionId &&
+                    state.Execution.ExecutableNodeId == CombinedChildOutcomeEfFixture.AfterNodeId &&
+                    state.Status == ActivityExecutionStatus.Suspended && state.SubStatus == "BookmarkWaiting" &&
+                    state.BookmarkIds.Contains(wait.BookmarkId, StringComparer.Ordinal) &&
+                    state.Metadata.GetValueOrDefault(RuntimeMetadataKeys.BookmarkId) == wait.BookmarkId &&
+                    state.Metadata.GetValueOrDefault(RuntimeMetadataKeys.CreateBookmarkSchedulerWorkItemId) ==
+                        wait.Metadata.GetValueOrDefault(RuntimeMetadataKeys.SchedulerWorkItemId) &&
+                    !string.IsNullOrWhiteSpace(state.Metadata.GetValueOrDefault(RuntimeMetadataKeys.CreateBookmarkSchedulerWorkItemId)));
+        }
         while (timer.Elapsed < TimeSpan.FromSeconds(30))
         {
             last = await ReadBpmnSnapshotAsync(harness);
@@ -231,7 +245,8 @@ public sealed partial class CombinedChildOutcomeEfTests
     private static void AssertBpmnSnapshotEqual(BpmnCombinedSnapshot expected, BpmnCombinedSnapshot actual)
     {
         Assert.True(JsonElement.DeepEquals(JsonSerializer.SerializeToElement(expected), JsonSerializer.SerializeToElement(actual)),
-            "Combined-outcome retry changed durable activity, exact physical wait or original incident facts.");
+            "Combined-outcome retry changed durable activity, exact physical wait or original incident facts. Expected: " +
+            JsonSerializer.Serialize(expected) + " Actual: " + JsonSerializer.Serialize(actual));
     }
 
     private static string BpmnIncidentCore(IncidentState incident) => JsonSerializer.Serialize(new

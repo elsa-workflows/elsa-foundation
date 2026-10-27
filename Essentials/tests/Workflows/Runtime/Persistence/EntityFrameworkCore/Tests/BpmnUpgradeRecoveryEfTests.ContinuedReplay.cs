@@ -155,11 +155,13 @@ public sealed partial class BpmnUpgradeRecoveryEfTests
                 WorkItems.Enqueue(work);
         }
     }
-    private sealed class CapturedCallbackHandler(IWorkflowSchedulerWorkHandler inner, ContinuedCallbackCapture capture) : IWorkflowSchedulerWorkHandler
+    private sealed class CapturedCallbackHandler(IWorkflowSchedulerWorkHandler inner, ContinuedCallbackCapture capture) : IWorkflowSchedulerWorkHandler, IRuntimePipelineWorkHandler
     {
         public string Name => inner.Name;
         public bool CanHandle(RuntimeSchedulerWorkItem work) => inner.CanHandle(work);
         public ValueTask HandleAsync(RuntimeSchedulerWorkItem work, CancellationToken cancellationToken = default)
         { capture.Observe(work); return inner.HandleAsync(work, cancellationToken); }
+        public ValueTask HandleAsync(RuntimeSchedulerWorkItem work, IRuntimePipelineContext pipelineContext, CancellationToken cancellationToken = default)
+        { capture.Observe(work); return ((IRuntimePipelineWorkHandler)inner).HandleAsync(work, pipelineContext, cancellationToken); }
     }
 }
