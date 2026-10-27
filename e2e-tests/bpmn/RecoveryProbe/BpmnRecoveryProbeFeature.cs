@@ -90,8 +90,9 @@ public class BpmnRecoveryProbeFeature : IShellFeature
     private sealed class ProbeIntents(IRuntimePostCommitIntentDispatcher inner, IStimulusDeliveryStore sources,
         RecoveryProbeControl control, RuntimeDbContext context) : IRuntimePostCommitIntentDispatcher, IDisposable
     {
+        private readonly IDisposable? initialClaimObserver = control.ArmInitialClaimCut(context);
         private IDisposable? completionObserver;
-        public void Dispose() => completionObserver?.Dispose();
+        public void Dispose() { initialClaimObserver?.Dispose(); completionObserver?.Dispose(); }
         public bool RequiresDurableSource(string intentKind) => inner.RequiresDurableSource(intentKind);
         public ValueTask DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default) =>
             inner.DispatchAsync(intent, cancellationToken);
@@ -147,6 +148,99 @@ public class BpmnRecoveryProbeFeature : IShellFeature
 internal sealed class RecoveryProbeControl(string directory)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+    // This diagnostic holds the first real claim save before the processor can renew it. Raw marker
+    // fields are observations only; the independent checked reader must prove the committed source.
+    public IDisposable? ArmInitialClaimCut(RuntimeDbContext context)
+    {
+        var path = Path.Combine(directory, "plan.json");
+        if (!File.Exists(path)) return null;
+        var plan = JsonSerializer.Deserialize<Plan>(File.ReadAllText(path), Json);
+        return plan?.Phase == "renewed-claim" ? new InitialClaimCut(context, this, plan) : null;
+    }
+
+    private sealed class InitialClaimCut
+        : IObserver<DiagnosticListener>, IObserver<KeyValuePair<string, object?>>, IDisposable
+    {
+        private readonly object gate = new();
+        private readonly List<IDisposable> subscriptions = new();
+        private IDisposable? allListeners;
+        private bool disposed;
+        private readonly RuntimeDbContext context;
+        private readonly RecoveryProbeControl control;
+        private readonly Plan plan;
+        public InitialClaimCut(RuntimeDbContext context, RecoveryProbeControl control, Plan plan)
+        {
+            this.context = context; this.control = control; this.plan = plan;
+            allListeners = DiagnosticListener.AllListeners.Subscribe(this);
+        }
+        public void OnNext(DiagnosticListener listener)
+        {
+            if (listener.Name != DbLoggerCategory.Name) return;
+            lock (gate)
+            {
+                if (disposed) return;
+                subscriptions.Add(listener.Subscribe((IObserver<KeyValuePair<string, object?>>)this,
+                    name => name == CoreEventId.SaveChangesCompleted.Name));
+            }
+        }
+        public void OnNext(KeyValuePair<string, object?> value)
+        {
+            if (value.Key != CoreEventId.SaveChangesCompleted.Name || value.Value is not SaveChangesCompletedEventData data ||
+                !ReferenceEquals(data.Context, context)) return;
+            lock (gate) { if (disposed) return; }
+            // ClaimAsync saves without an enclosing transaction. A transactional save is not commit evidence.
+            if (context.Database.CurrentTransaction is not null || System.Transactions.Transaction.Current is not null) return;
+            foreach (var entry in context.ChangeTracker.Entries<RuntimePostCommitOutboxEntity>())
+            {
+                var row = entry.Entity;
+                if (row.Status != (int)RuntimePostCommitOutboxStatus.Delivering) continue;
+                using var document = JsonDocument.Parse(row.ContentJson);
+                var item = document.RootElement;
+                if (item.GetProperty("deliveryFencingToken").GetInt64() != 1 || !item.TryGetProperty("stimulusDeliveryProtocolVersion", out var protocol) || protocol.ValueKind != JsonValueKind.Number || protocol.GetInt32() != 1 ||
+                    item.TryGetProperty("recipientSnapshot", out _)) continue;
+                var intent = item.GetProperty("intent");
+                if (EfRelationalIdentity.Decode(intent.GetProperty("kind").GetString()!) != PublishStimulusConstants.PublishStimulusIntentKind ||
+                    intent.GetProperty("payload").GetProperty("eventName").GetString() != plan.EventName) continue;
+                Dispose();
+                var marker = new { plan.CaseId, Phase = "after-claim", ProviderEvent = "EF.SaveChangesCompleted",
+                    SourceOutboxItemId = EfRelationalIdentity.Decode(item.GetProperty("outboxItemId").GetString()!),
+                    Scope = EfRelationalIdentity.Decode(row.ScopeKey), OwnerId = EfRelationalIdentity.Decode(item.GetProperty("deliveringOwnerId").GetString()!),
+                    FencingToken = item.GetProperty("deliveryFencingToken").GetInt64(), VisibleAfter = item.GetProperty("deliveryVisibleAfter").GetDateTimeOffset(),
+                    WorkflowExecutionId = EfRelationalIdentity.Decode(intent.GetProperty("workflowExecutionId").GetString()!),
+                    Snapshot = (object?)null, CapturedAtUtc = DateTimeOffset.UtcNow };
+                control.HoldInitialClaimAsync(plan.CaseId, marker).GetAwaiter().GetResult();
+                return;
+            }
+        }
+        public void OnError(Exception error) { }
+        public void OnCompleted() { }
+        public void Dispose()
+        {
+            List<IDisposable> owned;
+            lock (gate)
+            {
+                if (disposed) return;
+                disposed = true; owned = new(subscriptions); subscriptions.Clear();
+                if (allListeners is { } all) owned.Add(all);
+                allListeners = null;
+            }
+            foreach (var subscription in owned) subscription.Dispose();
+        }
+    }
+
+    private async Task HoldInitialClaimAsync(string caseId, object marker)
+    {
+        if (!Regex.IsMatch(caseId, "^[a-z0-9-]{1,64}$", RegexOptions.CultureInvariant))
+            throw new InvalidDataException("The owned recovery case name is invalid.");
+        var caseDirectory = Path.Combine(directory, caseId); Directory.CreateDirectory(caseDirectory);
+        var temporary = Path.Combine(caseDirectory, "initial-claim.tmp");
+        await using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        { await JsonSerializer.SerializeAsync(stream, marker, Json); stream.Flush(true); }
+        File.Move(temporary, Path.Combine(caseDirectory, "initial-claim.json"));
+        while (!File.Exists(Path.Combine(caseDirectory, "release-initial-claim")))
+            await Task.Delay(TimeSpan.FromMilliseconds(100));
+    }
+
     // TransactionCommitted is diagnostic only; a separate checked reader proves the physical commit.
     public async ValueTask<IDisposable?> ArmCommittedSourceCutAsync(RuntimeDbContext context, PostCommitDeliveryContext source,
         CancellationToken cancellationToken)
@@ -225,7 +319,7 @@ internal sealed class RecoveryProbeControl(string directory)
         if (!File.Exists(path) || source.Intent.Kind != PublishStimulusConstants.PublishStimulusIntentKind) return;
         var plan = JsonSerializer.Deserialize<Plan>(await File.ReadAllTextAsync(path, cancellationToken), Json)
             ?? throw new InvalidDataException("The owned recovery plan is empty.");
-        if (plan.Phase != phase || source.Intent.Payload?.GetProperty("eventName").GetString() != plan.EventName ||
+        if ((plan.Phase != phase && !(plan.Phase == "renewed-claim" && phase == "after-cohort")) || source.Intent.Payload?.GetProperty("eventName").GetString() != plan.EventName ||
             plan.TargetExecutionId is { } target && target != acceptedExecution) return;
         if (!Regex.IsMatch(plan.CaseId, "^[a-z0-9-]{1,64}$", RegexOptions.CultureInvariant))
             throw new InvalidDataException("The owned recovery case name is invalid.");

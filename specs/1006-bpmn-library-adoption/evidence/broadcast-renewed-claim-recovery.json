@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "task": "T051 bounded actual same-source unexpired pre-dispatch claim renewal and subsequent standard-host recovery; overall qualification remains open",
+  "sourceParentCommit": "1e5f9fa2e0dd4626cf8456032db0dd853f01182e",
+  "filesSha256": {
+    "e2e-tests/bpmn/RecoveryProbe/BpmnRecoveryProbeFeature.cs": "bd066c95040dc5ce314efa38f4395e8557eef33ca96b75e094028a4624de5dc8",
+    "e2e-tests/bpmn/RecoveryProbe/README.md": "f983a8dd75a2daca98d9ad89d2979bca4894d6b4c8ced503d9db5e8298cc28a0",
+    "e2e-tests/bpmn/Test-BpmnBroadcastRecovery.ps1": "b96325cd832a80581c5d5ac3a84084812a17ad6e79f9c614005a83ed80a8d261",
+    "e2e-tests/bpmn/Test-BpmnClaimRenewalControls.ps1": "5795eada949061fa8f99a81516679a67e51354d7369dea12ac714ea90e281678"
+  },
+  "hostReceiptsSha256": {
+    "broadcast-renewed-claim-host.json": "85b5f4aa9a165141866b7c9c35c91d41672aa4f96abb892d926f208c803ac5c6",
+    "broadcast-renewed-claim-after-cohort.json": "1c200d12134cc3d857847df3be14e10e09cd2c5e1d0f15b7d1ae7ed4a18c7523",
+    "broadcast-renewed-claim-after-source-commit.json": "08cc4d300762faf5a35be26e73110eb2c008c9f279d82e6e0e32100f69df6251"
+  },
+  "sourceBindingsCheckedPerCase": 1380,
+  "checks": [
+    {
+      "name": "actual pre-dispatch renewal then owned crash/standard takeover",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "actual post-cohort and committed-completion regressions",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "actual extracted acceptance guard, positive fixture and eight invalid-input controls",
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "checked source reader controls",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "owned process controls",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "actual cleanup failure controls",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "separate locked probe and standard host builds",
+      "passed": 2,
+      "failed": 0
+    }
+  ],
+  "renewal": {
+    "initialClaimDiagnostic": "EF.SaveChangesCompleted",
+    "actualContextAndEncodedSourceFilter": true,
+    "noEnclosingTransactionAtDiagnostic": true,
+    "separateCheckedInitialClaimBeforeRelease": true,
+    "entireInitialCheckedProjectionUnchangedWhileHeld": true,
+    "manualRenewalOrClockOrSourceWrites": false,
+    "sameCommitSpecificSourceIntentOwnerAndFence": true,
+    "physicalRevisionBeforeAndAfter": [
+      2,
+      4
+    ],
+    "actualDeadlineExtensionSeconds": 3.164655,
+    "releaseAndCohortCutBeforeInitialExpiry": true,
+    "secondsBetweenCohortCutAndInitialExpiry": 56.767361,
+    "successorFenceAfterOwnedCrash": 2,
+    "savedCohortPreserved": true,
+    "continuousHandlerRenewalQualified": false,
+    "expiredClaimRevivalQualified": false,
+    "redriveQualified": false
+  },
+  "reviewFindingsFixed": [
+    "omitted recipientSnapshot must not be read as a required present-null field; fixed before the first actual host run",
+    "exact commit-specific source ID and unexpired release/cohort-cut proof guards added before final source-bound qualification"
+  ],
+  "supportingQualification": {
+    "deliveredCommit": "fc5948641590f4f74d79e234a2a3f8f91f5b81d6",
+    "receipt": "broadcast-competing-proposal-recovery.json",
+    "architecturePassed": 590,
+    "ServerLockedRestoreAndMapCheckPassed": true,
+    "inheritedNotRerun": true,
+    "reason": "test-only feature/observer/scenario changes; no production or project graph changes"
+  },
+  "reviews": {
+    "type": "three independent component source/actual/portable audits; not full PR",
+    "remainingActionable": []
+  },
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "productionSourceChanged": false,
+  "remainingGates": [
+    "supported redrive proof, remaining T051 scopes/same-artifact/retention/GC/republish",
+    "remaining T045/native-composite, historical upgraded-host recovery and final current Studio",
+    "legacy writer/duplicate semantics deletion and guards, full-PR review, required exact-head checks/protected merge/resulting-main",
+    "separate ADR0063 and independent production #2898/#2907/program evidence; Orleans/task-runner deferred"
+  ],
+  "fullPrRounds": 0
+}

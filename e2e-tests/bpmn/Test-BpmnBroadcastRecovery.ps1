@@ -13,9 +13,10 @@ param(
     [Parameter(Mandatory)][string] $EvidencePath,
     [string] $Python = 'python3',
     [Parameter(Mandatory)][string] $SourceRevision,
-    [ValidateSet('after-cohort', 'after-resume', 'before-selection', 'empty-cohort', 'competing-proposal', 'competing-empty-proposal', 'competing-empty-winner', 'after-start', 'after-fanout', 'after-source-commit')][string] $Phase = 'after-cohort'
+    [ValidateSet('after-cohort', 'after-resume', 'before-selection', 'empty-cohort', 'competing-proposal', 'competing-empty-proposal', 'competing-empty-winner', 'after-start', 'after-fanout', 'after-source-commit', 'renewed-claim')][string] $Phase = 'after-cohort'
 )
 $ErrorActionPreference = 'Stop'
+$renewedClaim = $Phase -eq 'renewed-claim'
 $committedAck = $Phase -eq 'after-source-commit'
 $completeFanout = $Phase -in @('after-fanout', 'after-source-commit')
 $partialStart = $Phase -eq 'after-start'
@@ -64,7 +65,7 @@ $settings.CShells.Shells.default.Features.BpmnRecoveryProbe = @{ ControlDirector
 $settings.CShells.Shells.default.Features.WorkflowsRuntimeResumption = @{ SweepIntervalSeconds = 1 }
 $settings | ConvertTo-Json -Depth 60 | Set-Content $settingsPath
 @{ caseId = $caseId; phase = if ($competing) { 'before-install' } elseif ($Phase -eq 'empty-cohort') { 'after-cohort' } else { $Phase }; eventName = $eventName } | ConvertTo-Json | Set-Content (Join-Path $control 'plan.json')
-$receipt = @{ sourceRevision = $SourceRevision; scenario = switch ($Phase) { 'after-resume' { 'partial-callback-and-rearm-before-source-ack' } 'after-start' { 'one-of-two-starts-parked-before-remaining-start-and-resumes' } 'after-fanout' { 'all-recipient-effects-completed-before-source-ack-write' } 'after-source-commit' { 'committed-source-completion-before-provider-return-loss' } 'before-selection' { 'delayed-first-selection-and-pre-start-wait-exclusion' } 'empty-cohort' { 'empty-saved-cohort-excludes-later-matches' } 'competing-proposal' { 'expired-old-prepared-proposal-cannot-replace-successor-winner' } 'competing-empty-proposal' { 'expired-old-empty-proposal-cannot-replace-populated-successor-winner' } 'competing-empty-winner' { 'expired-old-populated-proposal-cannot-replace-empty-successor-winner' } default { 'after-cohort-before-dispatch' } }; passed = $false;
+$receipt = @{ sourceRevision = $SourceRevision; scenario = switch ($Phase) { 'after-resume' { 'partial-callback-and-rearm-before-source-ack' } 'after-start' { 'one-of-two-starts-parked-before-remaining-start-and-resumes' } 'after-fanout' { 'all-recipient-effects-completed-before-source-ack-write' } 'after-source-commit' { 'committed-source-completion-before-provider-return-loss' } 'renewed-claim' { 'real-pre-dispatch-claim-renewal-then-crash-and-standard-takeover' } 'before-selection' { 'delayed-first-selection-and-pre-start-wait-exclusion' } 'empty-cohort' { 'empty-saved-cohort-excludes-later-matches' } 'competing-proposal' { 'expired-old-prepared-proposal-cannot-replace-successor-winner' } 'competing-empty-proposal' { 'expired-old-empty-proposal-cannot-replace-populated-successor-winner' } 'competing-empty-winner' { 'expired-old-populated-proposal-cannot-replace-empty-successor-winner' } default { 'after-cohort-before-dispatch' } }; passed = $false;
     probeAssemblySha256 = (Get-FileHash $ProbeAssembly).Hash.ToLowerInvariant(); normalAssemblySha256 = (Get-FileHash $NormalAssembly).Hash.ToLowerInvariant();
     sourceCommit = $sourceCommit; sourceFiles = $sourceManifest; probeBuild = $probeManifest; normalBuild = $normalManifest; readerSha256 = $readerHash; readerBuild = $readerManifest;
     cut = $null; stopped = $null; successorClaim = $null; recovered = $null; observations = @(); failures = @() }
@@ -103,9 +104,9 @@ function Wait-Catches([string] $ExecutionId, [int] $Count) {
     } while ([DateTimeOffset]::UtcNow -lt $deadline)
     throw 'Expected exact waits were not durably suspended before the cut.'
 }
-function Observe([string] $Name, [string[]] $ExtraIds) {
+function Observe([string] $Name, [string[]] $ExtraIds, [string] $Marker = $markerPath) {
     $path = Join-Path $caseDirectory "$Name.json"
-    $arguments = @("$PSScriptRoot/inspect_broadcast_recovery.py", '--database', (Join-Path $root 'elsa.db'), '--reader', $ReaderAssembly, '--marker', $markerPath, '--output', $path)
+    $arguments = @("$PSScriptRoot/inspect_broadcast_recovery.py", '--database', (Join-Path $root 'elsa.db'), '--reader', $ReaderAssembly, '--marker', $Marker, '--output', $path)
     foreach ($id in $ExtraIds) { $arguments += @('--extra-workflow', $id) }
     & $Python @arguments | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "The checked $Name observation failed." }
@@ -129,6 +130,22 @@ function Same-Snapshot($Left, $Right) {
     $rightDocument = [System.Text.Json.JsonDocument]::Parse(($Right | ConvertTo-Json -Depth 60 -Compress))
     try { return [System.Text.Json.JsonElement]::DeepEquals($leftDocument.RootElement, $rightDocument.RootElement) }
     finally { $leftDocument.Dispose(); $rightDocument.Dispose() }
+}
+function Assert-ActualClaimRenewal($Initial, $InitialMarker, $Renewed, $Marker, [DateTimeOffset] $ReleasedAt) {
+    $initialDeadline = [DateTimeOffset]::Parse($Initial.source.deliveryVisibleAfter)
+    $cutAt = [DateTimeOffset]::Parse($Marker.capturedAtUtc)
+    if ($Initial.source.outboxItemId -ne $InitialMarker.sourceOutboxItemId -or
+        $Renewed.source.outboxItemId -ne $Initial.source.outboxItemId -or $Marker.sourceOutboxItemId -ne $Initial.source.outboxItemId -or
+        $InitialMarker.scope -ne $Marker.scope -or $Renewed.source.workflowExecutionId -ne $Initial.source.workflowExecutionId -or
+        $Renewed.source.deliveringOwnerId -ne $Initial.source.deliveringOwnerId -or $Marker.ownerId -ne $Initial.source.deliveringOwnerId -or
+        $Renewed.source.deliveryFencingToken -ne $Initial.source.deliveryFencingToken -or $Marker.fencingToken -ne $Initial.source.deliveryFencingToken -or
+        $Renewed.source.intentFingerprint -ne $Initial.source.intentFingerprint -or
+        $Renewed.source.rowRevision -le $Initial.source.rowRevision -or
+        [DateTimeOffset]::Parse($Renewed.source.deliveryVisibleAfter) -lt $initialDeadline.AddSeconds(2) -or
+        $Renewed.source.deliveryVisibleAfter -ne $Marker.visibleAfter -or $Renewed.source.status -ne 'Delivering' -or
+        $ReleasedAt -ge $initialDeadline -or $cutAt -ge $initialDeadline -or $cutAt -lt $ReleasedAt) {
+        throw 'The actual processor did not renew the same unexpired physical claim before selecting recipients.'
+    }
 }
 try {
     if ($competing) {
@@ -201,6 +218,30 @@ try {
     $client = [System.Net.Http.HttpClient]::new($handler); $client.Timeout = [TimeSpan]::FromMinutes(5)
     $content = [System.Net.Http.StringContent]::new((@{ sourceReferenceId = $publisher.sourceReferenceId } | ConvertTo-Json), [Text.Encoding]::UTF8, 'application/json')
     $pending = $client.PostAsync("$base/runtime/workflows/executables/$($publisher.artifactId)/execute", $content)
+    if ($renewedClaim) {
+        $initialMarkerPath = Join-Path $caseDirectory 'initial-claim.json'
+        $deadline = [DateTimeOffset]::UtcNow.AddSeconds(40)
+        while (-not (Test-Path $initialMarkerPath)) {
+            if ($probeProcess.HasExited) { throw 'The owned probe exited before its actual claim save.' }
+            if ([DateTimeOffset]::UtcNow -ge $deadline) { throw 'The initial claim cut was not reached.' }
+            Start-Sleep -Milliseconds 100
+        }
+        $initialMarker = Get-Content -Raw $initialMarkerPath | ConvertFrom-Json -AsHashtable -DateKind String
+        $initial = Observe 'initial-claim-live' @($waitRun.workflowExecutionId) $initialMarkerPath
+        if ($initialMarker.providerEvent -ne 'EF.SaveChangesCompleted' -or $initial.source.status -ne 'Delivering' -or
+            $initial.source.deliveryFencingToken -ne 1 -or $initial.source.deliveringOwnerId -ne $initialMarker.ownerId -or
+            $initial.source.deliveryVisibleAfter -ne $initialMarker.visibleAfter -or $null -ne $initial.source.snapshot) {
+            throw 'The independent checked reader did not prove the actual first claim before renewal.'
+        }
+        $receipt.initialClaimMarker = $initialMarker; $receipt.initialClaimLive = $initial
+        # A short real delay makes renewal distinguishable without changing the clock or waiting for lease loss.
+        Start-Sleep -Seconds 2
+        $beforeRelease = Observe 'initial-claim-before-release' @($waitRun.workflowExecutionId) $initialMarkerPath
+        if (-not (Same-Snapshot $initial.source $beforeRelease.source)) { throw 'The held claim changed before the processor could renew it.' }
+        $receipt.initialClaimBeforeRelease = $beforeRelease
+        $receipt.initialClaimReleasedAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
+        New-Item -ItemType File (Join-Path $caseDirectory 'release-initial-claim') | Out-Null
+    }
     $deadline = [DateTimeOffset]::UtcNow.AddSeconds(40)
     $publisherResponseRead = $false
     while (-not (Test-Path $markerPath)) {
@@ -215,6 +256,11 @@ try {
     }
     $marker = Get-Content -Raw $markerPath | ConvertFrom-Json -AsHashtable -DateKind String
     $receipt.cut = $marker
+    if ($renewedClaim) {
+        $renewed = Observe 'renewed-claim-live' @($waitRun.workflowExecutionId)
+        Assert-ActualClaimRenewal $initial $initialMarker $renewed $marker ([DateTimeOffset]::Parse($receipt.initialClaimReleasedAtUtc))
+        $receipt.renewedClaimLive = $renewed
+    }
     if ($committedAck) {
         $liveCommitted = Observe 'committed-source-live' @($waitRun.workflowExecutionId)
         if ($marker.providerEvent -ne 'EF.TransactionCommitted' -or $liveCommitted.source.status -ne 'Delivered' -or
@@ -387,7 +433,7 @@ try {
     foreach ($start in $stopped.source.selectedStarts) {
         $target = @($stopped.workflows | Where-Object workflowExecutionId -eq $start.workflowExecutionId)
         if ($target.Count -ne 1) { throw 'The exact selected keyed target observation is unavailable.' }
-        if ($Phase -eq 'after-cohort' -or ($partialStart -and $start.workflowExecutionId -ne $marker.acceptedExecution)) {
+        if ($Phase -in @('after-cohort', 'renewed-claim') -or ($partialStart -and $start.workflowExecutionId -ne $marker.acceptedExecution)) {
             if ($target[0].exists -or @($stopped.allWorkflows | Where-Object artifactId -eq $start.artifactId).Count -ne 0) { throw 'A selected start ran before its dispatch cut.' }
         } else {
             $park = @($target[0].bookmarks | Where-Object { $_.executableNodeId -eq 'node-park' -and $_.activityStatus -eq 'Suspended' })
