@@ -3,10 +3,7 @@ using Elsa.Studio.ConsoleStream;
 using Elsa.Studio.ConsoleStream.Extensions;
 using Elsa.Studio.Web;
 using Elsa.Studio.Hosting;
-using Nuplane;
-using Nuplane.Admin;
-using Nuplane.Loading.Hosting.Builder;
-using Nuplane.Sources.Directory.Configuration;
+using Elsa.Studio.Hosting.Nuplane;
 
 // Install the console stream capture hook before the host is created so that, when the ConsoleStream
 // feature is enabled in shells.json, all process stdout is captured from startup instead of only from
@@ -15,10 +12,9 @@ ConsoleStreamHookInstaller.InstallConsoleStreamHookIfEnabled(args);
 
 var builder = WebApplication.CreateBuilder(args);
 var studio = builder.AddElsaStudio(options => options.QueryTokenPathPrefixes = [ConsoleStreamStudioServiceCollectionExtensions.HubPath]);
-builder.Configuration.AddJsonFile("nuplane-management.json", optional: true, reloadOnChange: true);
+studio.AddElsaStudioNuplane(options => options.DirectoryFeedName ??= "studio-local-packages");
 var configuration = builder.Configuration;
 ConsoleStreamHookInstaller.InstallConsoleStreamHookIfEnabled(configuration);
-var nuplaneConfiguration = configuration.GetSection("Nuplane");
 
 // Theme configuration. Bound from the "Themes" section, which the Configuration API populates from
 // appsettings.json, environment variables (Themes__ThemesDirectory, etc.), and any other registered source.
@@ -27,14 +23,6 @@ configuration.GetSection("Themes").Bind(themeConfig);
 _ = themeConfig.GetThemesMode();
 builder.Services.AddSingleton(themeConfig);
 builder.Services.AddSingleton<ThemeConfigurationService>();
-
-builder.Services.AddNuplaneAdmin();
-builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
-{
-    nuplane.AddDirectoryFeedsFromConfiguration(nuplaneConfiguration);
-    nuplane.AutoloadPackages(nuplaneConfiguration.GetSection("Loading"));
-});
-builder.Services.AddSingleton<StudioShellFeatureConfigurationStore>();
 
 studio.ConfigureShells(shells => shells.WithStudioFeatureAssemblies());
 
@@ -50,9 +38,7 @@ var app = builder.Build();
 app.UseElsaStudio();
 app.MapElsaStudio();
 
-app.MapElsaModuleManagementApi();
-app.MapElsaFeatureManagementApi();
+app.MapElsaStudioNuplane();
 app.MapConsoleStreamStudioIfEnabled(configuration, StudioBridgeAuthorization.PolicyName);
-app.MapNuplaneStaticWebAssets();
 
 app.Run();

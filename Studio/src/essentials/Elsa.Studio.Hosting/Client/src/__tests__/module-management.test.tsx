@@ -397,13 +397,13 @@ describe("module management page", () => {
     expect(container.textContent).toContain("Add feed");
     expect(container.textContent).toContain("Retention");
     expect(container.textContent).toContain("Reconcile");
-    expect(container.textContent).toContain("Prune old versions");
+    expect(container.textContent).toContain("Preview cleanup");
     expect(container.textContent).toContain("Change ledger");
     expect(container.textContent).toContain("Feed registration changes require restart");
     const operationsPanel = container.querySelector("[aria-label='Studio feed operations']");
     const retentionPanel = container.querySelector("[aria-label='Studio retention settings']");
     expect(operationsPanel?.textContent).toContain("Reconcile");
-    expect(operationsPanel?.textContent).toContain("Prune old versions");
+    expect(operationsPanel?.textContent).toContain("Preview cleanup");
     expect(operationsPanel?.textContent).not.toContain("Retention");
     expect(retentionPanel?.textContent).toContain("Retention");
     expect(retentionPanel?.textContent).toContain("Save retention");
@@ -999,8 +999,8 @@ function studioRegistry() {
       includePatterns: ["*"],
       directory: { watch: true, debounceWindow: "00:00:01" }
     }],
-    retentionPolicy: { retainLastNVersions: 3, retainYoungerThanDays: 30, mode: "Automatic", protectLastKnownGood: true },
-    capabilities: { canUploadPackages: true, canManageFeeds: true, canReconcile: true, canPrunePackages: true, feedChangesRequireRestart: true },
+    retentionPolicy: { keepNewestInactiveVersionsPerPackage: null, status: "Supported" },
+    capabilities: { canUploadPackages: true, canManageFeeds: true, canReconcile: true, canPrunePackages: true, canManageRetentionPolicy: true, feedChangesRequireRestart: true },
     diagnostics: []
   };
 }

@@ -135,10 +135,13 @@ export interface ModuleManagementFeed {
 }
 
 export interface ModuleManagementRetentionPolicy {
+  keepNewestInactiveVersionsPerPackage?: number | null;
+  status?: string;
+  // Older Server payloads remain visible but never become a native maintenance policy.
   retainLastNVersions?: number | null;
   retainYoungerThanDays?: number | null;
-  mode: string;
-  protectLastKnownGood: boolean;
+  mode?: string;
+  protectLastKnownGood?: boolean;
 }
 
 export interface ModuleManagementCapabilities {
@@ -146,6 +149,7 @@ export interface ModuleManagementCapabilities {
   canManageFeeds: boolean;
   canReconcile: boolean;
   canPrunePackages: boolean;
+  canManageRetentionPolicy?: boolean;
   feedChangesRequireRestart: boolean;
 }
 
@@ -273,12 +277,7 @@ function defaultBackendRegistryDetail(status: BackendRegistryUnavailableKind): s
 }
 
 export function defaultRetentionPolicy(): ModuleManagementRetentionPolicy {
-  return {
-    retainLastNVersions: 3,
-    retainYoungerThanDays: 30,
-    mode: "Automatic",
-    protectLastKnownGood: true
-  };
+  return { keepNewestInactiveVersionsPerPackage: null, status: "Supported" };
 }
 
 export function normalizeModuleManagementRegistry(value?: Partial<ModuleManagementRegistryResponse> | null): ModuleManagementRegistryResponse {
@@ -531,7 +530,9 @@ export async function updateFeed(context: StudioEndpointContext, feedName: strin
 }
 
 export async function saveRetentionPolicy(context: StudioEndpointContext, policy: ModuleManagementRetentionPolicy) {
-  return context.http.putJson("/_elsa/module-management/retention-policy", policy);
+  return context.http.putJson("/_elsa/module-management/retention-policy", {
+    keepNewestInactiveVersionsPerPackage: policy.keepNewestInactiveVersionsPerPackage ?? null
+  });
 }
 
 export async function postJson(context: StudioEndpointContext, url: string, body: unknown) {
@@ -612,12 +613,11 @@ function normalizeFeed(feed: Partial<ModuleManagementFeed>): ModuleManagementFee
 }
 
 function normalizeRetentionPolicy(policy?: Partial<ModuleManagementRetentionPolicy> | null): ModuleManagementRetentionPolicy {
-  const defaults = defaultRetentionPolicy();
+  const legacy = policy?.retainLastNVersions !== undefined || policy?.retainYoungerThanDays !== undefined || policy?.mode !== undefined;
   return {
-    retainLastNVersions: policy?.retainLastNVersions ?? defaults.retainLastNVersions,
-    retainYoungerThanDays: policy?.retainYoungerThanDays ?? defaults.retainYoungerThanDays,
-    mode: policy?.mode ?? defaults.mode,
-    protectLastKnownGood: policy?.protectLastKnownGood ?? defaults.protectLastKnownGood
+    ...policy,
+    keepNewestInactiveVersionsPerPackage: policy?.keepNewestInactiveVersionsPerPackage ?? null,
+    status: policy?.status ?? (legacy ? "LegacyUnsupported" : "Unavailable")
   };
 }
 
@@ -627,6 +627,7 @@ function normalizeCapabilities(capabilities?: Partial<ModuleManagementCapabiliti
     canManageFeeds: capabilities?.canManageFeeds ?? false,
     canReconcile: capabilities?.canReconcile ?? false,
     canPrunePackages: capabilities?.canPrunePackages ?? false,
+    canManageRetentionPolicy: capabilities?.canManageRetentionPolicy ?? false,
     feedChangesRequireRestart: capabilities?.feedChangesRequireRestart ?? false
   };
 }

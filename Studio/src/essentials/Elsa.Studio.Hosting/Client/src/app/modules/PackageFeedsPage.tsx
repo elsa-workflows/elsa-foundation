@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { PackagePlus, Pencil, RefreshCcw, Scissors, Trash2, X } from "lucide-react";
+import { PackagePlus, Pencil, RefreshCcw, Trash2, X } from "lucide-react";
 import { useDialogFocus } from "../../sdk";
 import type { ElsaStudioModuleApi } from "../../sdk";
 import { SkeletonRows, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
@@ -18,6 +18,7 @@ import {
   type ModuleManagementRegistryResponse,
   type ModuleManagementRetentionPolicy
 } from "./moduleManagementApi";
+import { PackageMaintenance } from "./PackageMaintenance";
 import { BackendRegistryUnavailable, HostMutationsUnavailable } from "./BackendRegistryUnavailable";
 import { readActiveRegistry, useHostOperations, useModuleManagementRegistries } from "./useModuleManagement";
 
@@ -79,6 +80,8 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
         <>
           {activeHost.mutationsAvailable ? null : <HostMutationsUnavailable host={activeHost} />}
           <PackageFeedsWorkbench
+            key={activeHost.id}
+            api={api}
             host={activeHost}
             registry={registry}
             busy={isPending}
@@ -90,7 +93,6 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
             onDeleteFeed={feedName => confirmAndDeleteFeed(feedName)}
             onSaveRetention={policy => runHostOperation(() => saveRetentionPolicy(activeHost.context, policy), `Updated ${activeHost.label} retention policy.`)}
             onReconcile={() => runHostOperation(() => postJson(activeHost.context, "/_elsa/module-management/reconcile", {}), `Reconciled ${activeHost.label}. Reload may be required.`)}
-            onPrune={() => runHostOperation(() => postJson(activeHost.context, "/_elsa/module-management/prune", { dryRun: false }), `Pruned eligible package versions for ${activeHost.label}.`)}
           />
         </>
       ) : unavailable ? (
@@ -103,6 +105,7 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
 }
 
 function PackageFeedsWorkbench({
+  api,
   host,
   registry,
   busy,
@@ -111,9 +114,9 @@ function PackageFeedsWorkbench({
   onUpdateFeed,
   onDeleteFeed,
   onSaveRetention,
-  onReconcile,
-  onPrune
+  onReconcile
 }: {
+  api: ElsaStudioModuleApi;
   host: HostModel;
   registry: ModuleManagementRegistryResponse;
   busy: boolean;
@@ -123,16 +126,15 @@ function PackageFeedsWorkbench({
   onDeleteFeed(feedName: string): void;
   onSaveRetention(policy: ModuleManagementRetentionPolicy): void;
   onReconcile(): void;
-  onPrune(): void;
 }) {
   const [addFeedDialogOpen, setAddFeedDialogOpen] = useState(false);
   const [editingFeed, setEditingFeed] = useState<ModuleManagementFeed | null>(null);
-  const [retentionDraft, setRetentionDraft] = useState<ModuleManagementRetentionPolicy>(() => registry.retentionPolicy ?? defaultRetentionPolicy());
+  const [retentionDraft, setRetentionDraft] = useState<ModuleManagementRetentionPolicy>(() => editableRetention(registry.retentionPolicy));
   const effectiveRetentionPolicy = registry.retentionPolicy ?? defaultRetentionPolicy();
   const retentionDirty = !retentionPolicyEquals(retentionDraft, effectiveRetentionPolicy);
 
   useEffect(() => {
-    setRetentionDraft(effectiveRetentionPolicy);
+    setRetentionDraft(editableRetention(effectiveRetentionPolicy));
   }, [registry.retentionPolicy]);
 
   function addDraftFeed(feedDraft: FeedDraft) {
@@ -219,11 +221,11 @@ function PackageFeedsWorkbench({
                 <RefreshCcw size={15} />
                 Reconcile
               </button>
-              <button type="button" className="studio-button" disabled={busy || !canMutate || !registry.capabilities.canPrunePackages} onClick={onPrune}>
-                <Scissors size={15} />
-                Prune old versions
-              </button>
             </div>
+            <PackageMaintenance
+              key={`${host.id}:${effectiveRetentionPolicy.status}:${effectiveRetentionPolicy.keepNewestInactiveVersionsPerPackage}`}
+              api={api} host={host} registry={registry} disabled={busy || !canMutate || retentionDirty}
+            />
           </section>
 
           <section className="package-feeds-panel" aria-label={`${host.label} retention settings`}>
@@ -232,41 +234,27 @@ function PackageFeedsWorkbench({
                 <h3>Retention</h3>
               </div>
             </div>
-            <div className="modules-form two-column">
+            {effectiveRetentionPolicy.status !== "Supported" ? (
+              <StudioAlert tone="warning">
+                {effectiveRetentionPolicy.status === "LegacyUnsupported"
+                  ? `The older count/age policy is read-only and cannot be used for native maintenance. Last versions: ${effectiveRetentionPolicy.retainLastNVersions ?? "unspecified"}; younger than days: ${effectiveRetentionPolicy.retainYoungerThanDays ?? "unspecified"}. Select and save an inactive-version policy to continue.`
+                  : "This host does not report a supported maintenance policy."}
+              </StudioAlert>
+            ) : null}
+            <p>Manual cleanup only. Leave the count blank to retain every install. Active and protected versions remain retained.</p>
+            <div className="modules-form">
               <label>
-                <span>Last versions</span>
+                <span>Inactive versions to keep per package</span>
                 <input
-                  type="number"
-                  min="0"
-                  value={retentionDraft.retainLastNVersions ?? ""}
-                  onChange={event => setRetentionDraft({ ...retentionDraft, retainLastNVersions: numberOrNull(event.target.value) })}
+                  type="number" min="0" step="1"
+                  disabled={busy || !canMutate || !registry.capabilities.canManageRetentionPolicy}
+                  value={retentionDraft.keepNewestInactiveVersionsPerPackage ?? ""}
+                  onChange={event => setRetentionDraft({ ...retentionDraft, keepNewestInactiveVersionsPerPackage: numberOrNull(event.target.value) })}
                 />
               </label>
-              <label>
-                <span>Younger than days</span>
-                <input
-                  type="number"
-                  min="0"
-                  value={retentionDraft.retainYoungerThanDays ?? ""}
-                  onChange={event => setRetentionDraft({ ...retentionDraft, retainYoungerThanDays: numberOrNull(event.target.value) })}
-                />
-              </label>
-              <label>
-                <span>Mode</span>
-                <select value={retentionDraft.mode} onChange={event => setRetentionDraft({ ...retentionDraft, mode: event.target.value })}>
-                  <option value="Automatic">Automatic</option>
-                  <option value="ManualOnly">Manual only</option>
-                </select>
-              </label>
-              <label className="modules-checkbox">
-                <input
-                  type="checkbox"
-                  checked={retentionDraft.protectLastKnownGood}
-                  onChange={event => setRetentionDraft({ ...retentionDraft, protectLastKnownGood: event.target.checked })}
-                />
-                Protect last-known-good
-              </label>
-              <button type="button" className="studio-button" disabled={busy || !canMutate || !retentionDirty} onClick={() => onSaveRetention(retentionDraft)}>Save retention</button>
+              <button type="button" className="studio-button"
+                disabled={busy || !canMutate || !registry.capabilities.canManageRetentionPolicy || !retentionDirty || !validRetention(retentionDraft)}
+                onClick={() => onSaveRetention(retentionDraft)}>Save retention</button>
             </div>
           </section>
         </aside>
@@ -276,7 +264,7 @@ function PackageFeedsWorkbench({
         host={host}
         retentionDirty={retentionDirty}
         feedChangesRequireRestart={registry.capabilities.feedChangesRequireRestart}
-        onDiscardRetention={() => setRetentionDraft(effectiveRetentionPolicy)}
+        onDiscardRetention={() => setRetentionDraft(editableRetention(effectiveRetentionPolicy))}
       />
     </div>
   );
@@ -427,9 +415,15 @@ function createFeedFromDraft(feedDraft: FeedDraft): ModuleManagementFeed {
   };
 }
 
+function editableRetention(policy: ModuleManagementRetentionPolicy): ModuleManagementRetentionPolicy {
+  return policy.status === "Supported" ? policy : defaultRetentionPolicy();
+}
+
+function validRetention(policy: ModuleManagementRetentionPolicy) {
+  const count = policy.keepNewestInactiveVersionsPerPackage;
+  return count === null || (count !== undefined && Number.isSafeInteger(count) && count >= 0);
+}
+
 function retentionPolicyEquals(left: ModuleManagementRetentionPolicy, right: ModuleManagementRetentionPolicy) {
-  return left.retainLastNVersions === right.retainLastNVersions &&
-    left.retainYoungerThanDays === right.retainYoungerThanDays &&
-    left.mode === right.mode &&
-    left.protectLastKnownGood === right.protectLastKnownGood;
+  return left.status === right.status && left.keepNewestInactiveVersionsPerPackage === right.keepNewestInactiveVersionsPerPackage;
 }
