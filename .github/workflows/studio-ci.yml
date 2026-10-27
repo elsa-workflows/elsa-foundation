@@ -105,7 +105,8 @@ jobs:
   browser-tests:
     name: Studio browser tests (Chromium)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Cold Chromium installation and the complete browser suite share this job budget.
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4

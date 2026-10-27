@@ -315,13 +315,13 @@ export async function listWorkflowInstances(context: StudioEndpointContext, requ
   } satisfies WorkflowInstanceListPage;
 }
 
-export async function getWorkflowInstance(context: StudioEndpointContext, workflowExecutionId: string) {
+export async function getWorkflowInstance(context: StudioEndpointContext, workflowExecutionId: string, signal?: AbortSignal) {
   const path = await resolveCapabilityLink(
     context,
     capabilityIds.runtime,
     "workflow-instance",
     { workflowExecutionId });
-  return mapWorkflowInstanceDetails(await context.http.getJson<WorkflowInstanceDetails>(path));
+  return mapWorkflowInstanceDetails(await (signal ? context.http.getJson<WorkflowInstanceDetails>(path, { signal }) : context.http.getJson<WorkflowInstanceDetails>(path)));
 }
 
 export async function getActivityExecutionInspection(

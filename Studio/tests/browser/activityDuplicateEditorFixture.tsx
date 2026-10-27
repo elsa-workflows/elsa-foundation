@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type {
   StudioActivityDefinitionImplementationEditorProps,
@@ -8,6 +8,7 @@ import type {
 } from "@elsa-workflows/studio-sdk";
 import { ActivityGraphImplementationEditor } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityGraphImplementationEditor";
 import { WorkflowEditor } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditor";
+import { WorkflowInstanceDetailsWorkbench } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances";
 import {
   flowchartActivity,
   flowchartNode,
@@ -103,7 +104,9 @@ const expressionEditors: StudioExpressionEditorContribution[] = [{
 }];
 
 export function ActivityDuplicateEditorFixture() {
-  const context = useMemo(() => createEditorContext(), []);
+  const instanceHost = new URLSearchParams(window.location.search).get("host") === "instance";
+  const live = useRef({ status: "Running", disconnected: false });
+  const context = useMemo(() => createEditorContext(instanceHost ? live.current : undefined), [instanceHost]);
   const activityHost = new URLSearchParams(window.location.search).get("host") === "activity";
   const ai = useMemo(() => ({
     promptActions: { list: () => [] },
@@ -113,8 +116,10 @@ export function ActivityDuplicateEditorFixture() {
 
   return (
     <div className="activity-duplicate-editor" data-testid="activity-duplicate-editor">
+      {instanceHost ? <div aria-label="Fixture runtime controls"><button onClick={() => { live.current.status = "Completed"; }}>Complete fixture execution</button>
+        <button onClick={() => { live.current.disconnected = true; }}>Disconnect fixture reads</button><button onClick={() => { live.current.disconnected = false; }}>Reconnect fixture reads</button></div> : null}
       <QueryClientProvider client={queryClient}>
-        {activityHost
+        {instanceHost ? <WorkflowInstanceDetailsWorkbench context={context} ai={ai} workflowExecutionId="editor-execution" expressionEditors={expressionEditors} navigate={() => undefined} /> : activityHost
           ? <ControlledActivityGraphFixture context={context} />
           : <WorkflowEditor
               context={context}
@@ -153,7 +158,7 @@ function ControlledActivityGraphFixture({ context }: { context: StudioEndpointCo
   />;
 }
 
-function createEditorContext(): StudioEndpointContext {
+function createEditorContext(live?: { status: string; disconnected: boolean }): StudioEndpointContext {
   const draft = editorDraft();
   const runCanvas = new URLSearchParams(window.location.search).get("run-canvas");
   const catalog = [writeLineCatalog, flowchartActivity, sequenceActivity, forEachActivity];
@@ -161,7 +166,8 @@ function createEditorContext(): StudioEndpointContext {
     executableNodeId: `exec-${node.nodeId}`, authoredActivityId: node.nodeId,
     activityType: catalog.find(item => item.activityVersionId === node.activityVersionId)?.activityTypeKey ?? "unknown",
     activityTypeVersion: "1.0.0", inputBindings: [], structureKind: node.structure?.kind,
-    childSlots: getChildSlots(node, catalog).map(slot => ({ name: slot.id, activities: slot.activities.map(compiled) }))
+    childSlots: getChildSlots(node, catalog).map(slot => ({ name: `${catalog.find(item => item.activityVersionId === node.activityVersionId)?.activityTypeKey.split(".").at(-1)}.${slot.id.split(":").at(-1)!.replace(/^./, value => value.toUpperCase())}`, activities: slot.activities.map(compiled) })),
+    ...(node.structure?.kind === "elsa.flowchart.structure" ? { connections: node.structure.payload.connections } : {})
   });
   const runtimeNodes: Array<{ node: ActivityNode; parent: string | null }> = [];
   const visit = (node: ActivityNode, parent: string | null) => {
@@ -184,6 +190,7 @@ function createEditorContext(): StudioEndpointContext {
     baseUrl: "browser-activity-duplicate-editor",
     http: {
       getJson: async (url: string) => {
+        if (live?.disconnected && url.startsWith("/runtime/")) throw new Error("Fixture connection dropped");
         if (url === "/capabilities") {
           return {
             capabilities: [
@@ -191,6 +198,7 @@ function createEditorContext(): StudioEndpointContext {
                 { id: "elsa.api.publishing", contractVersion: "1", links: [
                   { rel: "workflow-draft-test-run-options", href: "publishing/draft-options" },
                   { rel: "workflow-draft-test-runs", href: "publishing/draft-runs" },
+                  { rel: "workflow-test-run-status", href: "publishing/test-runs/{testRunId}", templated: true },
                   { rel: "workflow-test-run-waits", href: "publishing/test-runs/{testRunId}/waits", templated: true }
                 ] },
                 { id: "elsa.api.runtime", contractVersion: "1", links: [
@@ -248,16 +256,18 @@ function createEditorContext(): StudioEndpointContext {
           };
         }
         if (runCanvas && url === "/runtime/workflows/instances/editor-execution") return {
-          instance: { workflowExecutionId: "editor-execution", artifactId: "editor-artifact", status: "Completed", activityCount: 3 },
+          instance: { workflowExecutionId: "editor-execution", artifactId: "editor-artifact", definitionId: "definition-1", definitionVersionId: "draft-1",
+            createdAt: "2026-10-27T10:00:00Z", status: live?.status ?? "Completed", activityCount: 3 },
           activities: [], incidents: runCanvas === "incident" ? [incident] : [], persistenceMode: "Balanced", inspectionGranularity: "boundary-level"
         };
         if (runCanvas && url === "/runtime/workflows/executables/editor-artifact") return {
-          artifactId: "editor-artifact", rootActivity: compiled(draft.state.rootActivity!)
+          artifactId: "editor-artifact", rootActivity: compiled(draft.state.rootActivity!),
+          ...(live ? { chosenReference: { sourceReferenceId: "fixture-reference", activityPresentation: draft.activityPresentation?.map(item => ({ ...item, executableNodeId: `exec-${item.nodeId}` })) } } : {})
         };
         if (runCanvas && url.startsWith("/runtime/workflows/instances/editor-execution/activity-executions?")) {
           const query = new URL(url, "http://fixture").searchParams;
           const node = query.get("executableNodeId"), parent = query.get("parentActivityExecutionId"), ancestor = query.get("ancestorActivityExecutionId");
-          const filtered = records.filter(record => (!node || record.executableNodeId === node) && (!parent || record.parentActivityExecutionId === parent)
+          const filtered = records.map(record => live ? { ...record, status: live.status } : record).filter(record => (!node || record.executableNodeId === node) && (!parent || record.parentActivityExecutionId === parent)
             && (!ancestor || record.parentActivityExecutionId === ancestor));
           const anchor = query.get("anchorActivityExecutionId");
           const items = filtered.map((execution, index) => ({ execution, position: index + 1,
@@ -269,12 +279,16 @@ function createEditorContext(): StudioEndpointContext {
           const id = decodeURIComponent(url.split("/activities/")[1]);
           const execution = records.find(record => record.activityExecutionId === id);
           if (!execution) throw new Error("Unknown activity execution");
-          return { ...execution, executionSequence: execution.position,
+          return { ...execution, ...(live ? { status: live.status } : {}), executionSequence: execution.position,
             provenance: { parentActivityExecutionId: execution.parentActivityExecutionId, metadata: {} },
-            bookmarks: [], incidents: runCanvas === "incident" && execution.authoredActivityId === "write-two" ? [incident] : [], outcomeNames: ["Done"], valueSnapshots: [{ name: "Text", inputKey: "text", subject: "ActivityInput",
+            bookmarks: [], incidents: runCanvas === "incident" && execution.authoredActivityId === "write-two" ? [incident] : [], outcomeNames: live && live.status !== "Completed" ? [] : ["Done"], valueSnapshots: [{ name: "Text", inputKey: "text", subject: "ActivityInput",
               captureMode: "DiagnosticSnapshot", snapshot: { kind: "string", preview: `Current: ${execution.position}` },
-              capturedAt: execution.scheduledAt, captureReason: "Captured by fixture policy", isSensitive: false, metadata: {} }] };
+              capturedAt: execution.scheduledAt, captureReason: "Captured by fixture policy", isSensitive: false, metadata: {} },
+              ...(live?.status === "Completed" ? [{ name: "Receipt", outputKey: "receipt", subject: "ActivityOutput", captureMode: "DiagnosticSnapshot",
+                snapshot: { kind: "string", preview: `Completion receipt: ${execution.position}` }, capturedAt: execution.scheduledAt,
+                captureReason: "Captured on completion", isSensitive: false, metadata: {} }] : [])] };
         }
+        if (runCanvas && url === "/publishing/test-runs/editor-test") return runView;
         if (runCanvas && url === "/publishing/test-runs/editor-test/waits") return { waits: [] };
         throw new Error(`Unexpected editor fixture request: ${url}`);
       },

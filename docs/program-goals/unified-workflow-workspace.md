@@ -18,10 +18,29 @@ Keep the standalone run viewer as another entry point to shared inspection compo
 and animation honor checkpoint granularity, capture policy, authorization and redaction. Recorded
 playback is distinct from live state and never controls engine execution.
 
+The same live observation and confirmed-motion presentation also applies to the standalone
+workflow-instance viewer, including instances already running when opened directly. Share execution
+observation, exact scoped selection and motion between the two entry points; preserve each view's
+existing authorized controls and navigation. Qualification must cover both surfaces.
+
 No browser execution engine, debugger/breakpoints, arbitrary rewind, hot patching, new persistence
 model, forced checkpoint cadence, blanket payload capture or new workflow-model semantics. Proposed
 execution-evidence and commit-journal ADRs are not dependencies. A consequential new observation
 contract requires an explicit decision before implementation.
+
+Following uses a shared serial runtime observer in both views. The editor's Test Run adapter also
+reconciles existing Publishing metadata and waits. Pausing observation leaves the workflow running
+and retains the deliberately inspected occurrence. A stop
+receipt remains pending until runtime confirms a terminal state. Historical snapshot inspection is
+read only; returning to editing restores the separate draft and its navigation.
+
+Reload recovery is explicit and tab scoped: retain only run/artifact references and a SHA-256 digest
+of the executed design, with no authored inputs, captured values or credentials in browser storage.
+Restore rechecks current authorization, exact run identity, expiry and the freshly loaded design.
+When the saved design differs, the prior editor snapshot cannot be reconstructed after reload; offer
+the existing run viewer instead. Session/endpoint changes revoke recovery references. Recovery and
+reconnection never dispatch another execution. In-page draft changes retain the full captured editor
+snapshot in memory for inspection.
 
 ## Delivery plan
 

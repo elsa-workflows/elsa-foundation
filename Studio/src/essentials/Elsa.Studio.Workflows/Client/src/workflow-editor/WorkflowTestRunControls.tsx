@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import type {
   StudioEndpointContext,
   StudioTestStimulusEditorContribution,
@@ -11,10 +11,8 @@ import type {
   WorkflowTestRunWait,
   WorkflowTestRunWaitEventView,
 } from "../workflowTypes";
-import { deliverWorkflowTestRunWaitEvent, getWorkflowTestRun, getWorkflowTestRunWaits, stopWorkflowTestRun } from "../api/publishing";
-import { ApiCapabilityUnavailableError, ApiCapabilityVersionMismatchError } from "../api/capabilities";
-import { getWorkflowInstance } from "../api/runtime";
-import type { WorkflowInstanceSummary } from "../workflowTypes";
+import { deliverWorkflowTestRunWaitEvent, getWorkflowTestRun, stopWorkflowTestRun } from "../api/publishing";
+import { isTerminalExecution, useTestRunObservation, type TestRunObservation } from "./useTestRunObservation";
 import type { WorkflowTestRunState, WorkflowTestRunWaitDraftState } from "./editorTypes";
 
 export function WorkflowTestRunControls({
@@ -22,82 +20,37 @@ export function WorkflowTestRunControls({
   testRun,
   stimulusEditors,
   onRunViewUpdated,
-  onWaitDraftUpdated
+  onWaitDraftUpdated,
+  observation
 }: {
   context: StudioEndpointContext;
   testRun: WorkflowTestRunState;
   stimulusEditors: StudioTestStimulusEditorContribution[];
   onRunViewUpdated(view: WorkflowTestRunView): void;
   onWaitDraftUpdated?(waitId: string, draftState: WorkflowTestRunWaitDraftState): void;
+  observation?: TestRunObservation;
 }) {
-  const [waits, setWaits] = useState<WorkflowTestRunWait[]>([]);
-  const [loading, setLoading] = useState(false);
+  const localObservation = useTestRunObservation({ context, testRun, enabled: !observation, onRunViewUpdated });
+  return <TestRunCommands key={(observation ?? localObservation).identity} context={context} testRun={testRun} stimulusEditors={stimulusEditors}
+    onWaitDraftUpdated={onWaitDraftUpdated} observation={observation ?? localObservation} />;
+}
+
+function TestRunCommands({ context, testRun, stimulusEditors, onWaitDraftUpdated, observation }: {
+  context: StudioEndpointContext;
+  testRun: WorkflowTestRunState;
+  stimulusEditors: StudioTestStimulusEditorContribution[];
+  onWaitDraftUpdated?(waitId: string, draftState: WorkflowTestRunWaitDraftState): void;
+  observation: TestRunObservation;
+}) {
+  const { waits, waitsLoading: loading, waitsError, error: executionError, refreshWaits } = observation;
+  const execution = observation.details?.instance;
   const [stopping, setStopping] = useState(false);
   const [stopError, setStopError] = useState("");
-  const [waitsError, setWaitsError] = useState("");
   const [deliveryFeedback, setDeliveryFeedback] = useState<{ waitId: string; view: WorkflowTestRunWaitEventView } | null>(null);
-  const [execution, setExecution] = useState<WorkflowInstanceSummary | null>(null);
-  const [executionError, setExecutionError] = useState("");
-
-  const refreshWaits = useCallback(async (testRunId: string) => {
-    setWaitsError("");
-    const result = await getWorkflowTestRunWaits(context, testRunId);
-    setWaits(Array.isArray(result.waits) ? result.waits : []);
-  }, [context]);
-
-  useEffect(() => {
-    let current = true;
-    setLoading(true);
-    setWaitsError("");
-    getWorkflowTestRunWaits(context, testRun.view.testRunId).then(result => {
-      if (current) setWaits(Array.isArray(result.waits) ? result.waits : []);
-    }).catch(error => {
-      if (current) setWaitsError(error instanceof Error ? error.message : "Waiting triggers could not be loaded.");
-    }).finally(() => current && setLoading(false));
-    return () => { current = false; };
-  }, [context, testRun.view.testRunId, testRun.view.workflowExecutionId]);
-
-  useEffect(() => {
-    const executionId = testRun.view.workflowExecutionId;
-    if (!executionId) {
-      setExecution(null);
-      setExecutionError("");
-      return;
-    }
-    let current = true;
-    let timer: number | undefined;
-    let lastStatus: string | null = null;
-    const refreshExecution = async () => {
-      try {
-        const result = await getWorkflowInstance(context, executionId);
-        if (!current) return;
-        setExecution(result.instance);
-        setExecutionError("");
-        if (lastStatus !== result.instance.status || result.instance.status === "Running" || result.instance.status === "Suspended") {
-          void refreshWaits(testRun.view.testRunId).catch(error => setWaitsError(error instanceof Error ? error.message : "Waiting triggers could not be refreshed."));
-        }
-        lastStatus = result.instance.status;
-        if (!["Completed", "Faulted", "Cancelled"].includes(result.instance.status)) {
-          timer = window.setTimeout(() => { void refreshExecution(); }, 2000);
-        }
-      } catch (error) {
-        if (!current) return;
-        if (error instanceof ApiCapabilityUnavailableError || error instanceof ApiCapabilityVersionMismatchError) {
-          setExecutionError("Live runtime state is unavailable on this host.");
-          return;
-        }
-        setExecutionError(error instanceof Error ? error.message : "Runtime state could not be loaded.");
-        timer = window.setTimeout(() => { void refreshExecution(); }, 4000);
-      }
-    };
-    void refreshExecution();
-    return () => {
-      current = false;
-      if (timer !== undefined) window.clearTimeout(timer);
-    };
-  }, [context, refreshWaits, testRun.view.testRunId, testRun.view.workflowExecutionId]);
+  const canInteract = observation.canInteract;
 
   const stop = async () => {
+    if (!canInteract || stopping) return;
     setStopping(true);
     setStopError("");
     try {
@@ -107,8 +60,8 @@ export function WorkflowTestRunControls({
     }
     try {
       const refreshed = await getWorkflowTestRun(context, testRun.view.testRunId);
-      onRunViewUpdated(refreshed);
-      await refreshWaits(testRun.view.testRunId);
+      observation.acceptView(refreshed);
+      if (observation.isCurrent()) observation.refresh();
     } catch (error) {
       setStopError(current => current || (error instanceof Error ? error.message : "The Test Run status could not be refreshed."));
     } finally {
@@ -116,19 +69,23 @@ export function WorkflowTestRunControls({
     }
   };
 
-  const canStop = !["Rejected", "DispatchRejected", "Stopped"].includes(testRun.view.status);
-  const executionState = waits.length > 0 ? "Waiting" : execution ? runtimeStateLabel(execution.status) : null;
+  const canStop = !["Rejected", "DispatchRejected", "Stopped", "Expired"].includes(testRun.view.status) && !isTerminalExecution(execution?.status);
+  const executionState = execution && isTerminalExecution(execution.status) ? runtimeStateLabel(execution.status)
+    : waits.length > 0 ? "Waiting" : execution ? runtimeStateLabel(execution.status) : null;
   return (
     <section className="wf-test-run-controls" aria-label="Test Run controls">
-      {canStop ? <button type="button" onClick={() => { void stop(); }} disabled={stopping}>{stopping ? "Stopping…" : "Stop Test Run"}</button> : null}
+      {canStop ? <button type="button" onClick={() => { void stop(); }} disabled={stopping || !canInteract}>{stopping ? "Stopping…" : "Stop Test Run"}</button> : null}
       {stopError ? <p className="wf-test-drive-error" role="alert">{stopError}</p> : null}
+      {testRun.view.status === "Stopped" && execution && !isTerminalExecution(execution.status) ? <p role="status">Stop requested. Waiting for runtime confirmation.</p> : null}
       {execution && executionState ? <p className="wf-test-run-execution-state" role="status"><strong>Execution</strong> {executionState}{execution.subStatus ? ` · ${execution.subStatus}` : ""}</p> : null}
+      {observation.status === "paused" ? <p role="status">Observation paused · last confirmed state</p> : null}
+      {["disconnected", "unavailable", "expired"].includes(observation.status) ? <button type="button" onClick={observation.refresh}>Reconnect execution</button> : null}
       {executionError ? <p className="wf-test-drive-error" role="status">{executionError}</p> : null}
       <div className="wf-test-run-waits">
-        <header><h4>Waiting triggers</h4><button type="button" onClick={() => { void refreshWaits(testRun.view.testRunId).catch(error => setWaitsError(error instanceof Error ? error.message : "Waiting triggers could not be refreshed.")); }} disabled={loading || stopping}>Refresh</button></header>
+        <header><h4>Waiting triggers</h4><button type="button" onClick={() => { observation.refresh(); }} disabled={loading || stopping}>Refresh</button></header>
         {waitsError ? <p className="wf-test-drive-error" role="alert">{waitsError}</p> : null}
         {loading ? <p role="status">Loading waiting triggers…</p> : null}
-        {!loading && waits.length === 0 ? <p>No supported waits are active on this Test Run.</p> : null}
+        {canInteract && !loading && waits.length === 0 ? <p>No supported waits are active on this Test Run.</p> : null}
         {waits.map(wait => <WaitCard
           key={wait.waitId}
           context={context}
@@ -136,11 +93,13 @@ export function WorkflowTestRunControls({
           wait={wait}
           savedState={testRun.waitDrafts?.[wait.waitId]}
           stimulusEditors={stimulusEditors}
-          disabled={stopping}
+          disabled={stopping || !canInteract}
           onDraftStateChange={state => onWaitDraftUpdated?.(wait.waitId, state)}
           onDelivered={(view, runView) => {
+            if (!observation.isCurrent()) return;
+            if (runView && !observation.acceptView(runView)) return;
             setDeliveryFeedback({ waitId: wait.waitId, view });
-            if (runView) onRunViewUpdated(runView);
+            observation.refresh();
           }}
           refreshWaits={refreshWaits}
         />)}
@@ -201,7 +160,7 @@ function WaitCard({
     event.preventDefault();
     setValidationError("");
     setDeliveryError("");
-    if (!wait.isAvailable || !mode || needsEditor) return;
+    if (disabled || deliveryPending || !wait.isAvailable || !mode || needsEditor) return;
     let data: unknown;
     try {
       const error = editorContext ? editor?.validate(editorContext) : undefined;
