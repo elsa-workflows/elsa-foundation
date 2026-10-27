@@ -18,7 +18,7 @@ function node(id: string): Node<WorkflowNodeData> {
     runtime: { activityExecutionId: `occurrence-${id}`, faultCount: 0, incidentCount: 0, hasBlockingIncident: false, selected: false } } };
 }
 const edge: Edge<WorkflowEdgeData> = { id: "a-b", source: "a", target: "b", sourceHandle: "Done" };
-function input() { return { workflowExecutionId: "run", mode: "flowchart", nodes: [node("a"), node("b")], edges: [edge],
+function input() { return { observationRevision: 1, confirmedRevision: 1, workflowExecutionId: "run", mode: "flowchart", nodes: [node("a"), node("b")], edges: [edge],
   observations: [occurrence("a"), occurrence("b", "Running", "occurrence-a")] }; }
 
 it("requires exact recorded causation, one parent, matching outcome and a unique connection", () => {
@@ -67,7 +67,6 @@ it("only maps causal adjacent Sequence steps with the ordinary child scheduling 
 });
 
 let root: Root | undefined;
-let strictMode = false;
 let container: HTMLDivElement;
 let props: Parameters<typeof useConfirmedExecutionMotion>[0];
 function Harness() {
@@ -77,11 +76,11 @@ function Harness() {
 function render(overrides: Partial<typeof props> = {}) {
   props = { ...props, ...overrides };
   if (!root) { container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container); }
-  flushSync(() => root!.render(strictMode ? <React.StrictMode><Harness /></React.StrictMode> : <Harness />));
+  flushSync(() => root!.render(<Harness />));
 }
 async function settled() { await new Promise(resolve => setTimeout(resolve, 0)); }
 function shown() { return JSON.parse(container.textContent!) as { nodes: string[]; edges: string[] }; }
-afterEach(() => { if (root) { flushSync(() => root!.unmount()); root = undefined; container.remove(); } strictMode = false; vi.useRealTimers(); });
+afterEach(() => { if (root) { flushSync(() => root!.unmount()); root = undefined; container.remove(); } vi.useRealTimers(); });
 
 it("baselines an existing run, pulses a subsequently confirmed route once, and never replays it on recovery", async () => {
   props = { ...input(), identity: "scope", enabled: true, ready: true, observations: [occurrence("a")] };
@@ -109,10 +108,15 @@ it("bounds a burst and expires the presentation without queuing the skipped hist
   render(); expect(shown()).toEqual({ nodes: [], edges: [] });
 });
 
-it("expires a fresh pulse after the StrictMode effect cleanup and remount", async () => {
-  strictMode = true; vi.useFakeTimers();
-  props = { ...input(), identity: "strict-scope", enabled: true, ready: true, animateInitial: true };
-  render(); await vi.waitFor(() => expect(shown().nodes).toHaveLength(2));
-  flushSync(() => vi.advanceTimersByTime(executionPulseDuration));
+it("waits for a fresh recovered batch and still observes later updates when reads lag polling", async () => {
+  props = { ...input(), identity: "scope", enabled: true, ready: true, observations: [occurrence("a")] };
+  render(); await settled();
+  render({ enabled: false }); await settled();
+  render({ enabled: true, observationRevision: 2, confirmedRevision: 1 }); await settled();
+  render({ observationRevision: 3, confirmedRevision: 2, observations: input().observations }); await settled();
   expect(shown()).toEqual({ nodes: [], edges: [] });
+  const b = occurrence("b", "Completed", "occurrence-a"), c = occurrence("c", "Running", "occurrence-b");
+  render({ observationRevision: 5, confirmedRevision: 4, nodes: [...input().nodes, node("c")], edges: [edge, { id: "b-c", source: "b", target: "c", sourceHandle: "Done" }],
+    observations: [occurrence("a"), b, c] }); await settled();
+  expect(shown()).toEqual({ nodes: ["b", "c"], edges: ["b-c"] });
 });

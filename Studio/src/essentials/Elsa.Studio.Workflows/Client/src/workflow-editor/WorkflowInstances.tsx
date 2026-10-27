@@ -54,7 +54,7 @@ import { buildBpmnCanvas, type BpmnNodeData } from "../bpmn/bpmnAdapter";
 import { CopyValueButton } from "./executableShared";
 import { useDialogFocus } from "./useDialogFocus";
 import { getDialogs } from "./dialogs";
-import { isTerminalExecution, readObservedExecution, useExecutionObservation } from "./useExecutionObservation";
+import { isTerminalExecution, readObservedExecution, useExecutionObservation, type ExecutionObservationStatus } from "./useExecutionObservation";
 export { formatSnapshotPayload } from "./RuntimeValueEvidence";
 import type { InstanceInspectorTab, WorkflowEditorPanelTab, WorkflowInstanceInspectionData } from "./editorTypes";
 import {
@@ -1576,7 +1576,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
           ) : null}
           <WorkflowInstanceCanvas
             observationIdentity={observation.identity}
-            observationConnected={observation.status === "connected"}
+            observationStatus={observation.status}
             onSelectExecutionSummary={selectBrowserExecution}
             onExecutionsObserved={rememberObservedExecutions}
             context={context}
@@ -1875,7 +1875,7 @@ function sourceAccessFromError(error: unknown) {
 }
 
 function WorkflowInstanceCanvas({
-  observationIdentity, observationConnected, context, executionScope, boundaryLayout, refreshKey, scopeLoading, executionBreadcrumb, onSelectExecutionSummary,
+  observationIdentity, observationStatus, context, executionScope, boundaryLayout, refreshKey, scopeLoading, executionBreadcrumb, onSelectExecutionSummary,
   onExecutionsObserved,
   definitionVersion,
   definitionVersionError,
@@ -1896,7 +1896,7 @@ function WorkflowInstanceCanvas({
   operator
  }: {
   observationIdentity: string;
-  observationConnected: boolean;
+  observationStatus: ExecutionObservationStatus;
   context: StudioEndpointContext;
   executionScope?: ActivityExecutionStateSummary;
   boundaryLayout?: ActivityExecutionLayout;
@@ -1947,7 +1947,8 @@ function WorkflowInstanceCanvas({
   const canvas = buildInstanceCanvas(definitionVersion, activityCatalog, { ...details, incidents: shownIncidents }, selectedEvidenceId,
     frames, onNavigateToScope, onOpenIncident, shownActivities, executableGraph, journalOf);
   const motion = useConfirmedExecutionMotion({ identity: JSON.stringify([observationIdentity, scopeKey, executionScope?.activityExecutionId, selectedEvidenceId]),
-    enabled: observationConnected && !inactive && !scopeLoading && !scoped.failed && !boundaryLayout,
+    observationStatus, enabled: !inactive && !scopeLoading && !scoped.failed && !boundaryLayout,
+    observationRevision: refreshKey, confirmedRevision: scoped.confirmedRevision,
     ready: !scoped.loading, workflowExecutionId: details.instance.workflowExecutionId,
     mode: canvas.mode === "sequence" ? "sequence" : (definitionVersion?.state.rootActivity ? resolveScope(definitionVersion.state.rootActivity, frames, activityCatalog)?.slot.mode : undefined),
     nodes: canvas.nodes, edges: canvas.edges, observations: scoped.observations });

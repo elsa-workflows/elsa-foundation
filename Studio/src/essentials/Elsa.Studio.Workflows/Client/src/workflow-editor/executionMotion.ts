@@ -3,6 +3,7 @@ import type { Edge, Node } from "@xyflow/react";
 import type { ActivityExecutionBrowseEntry } from "../api/runtime";
 import type { WorkflowEdgeData, WorkflowNodeData } from "../workflowAdapter";
 import type { ActivityExecutionStateSummary } from "../workflowTypes";
+import type { ExecutionObservationStatus } from "./useExecutionObservation";
 
 const maxVisibleMotionNodes = 512;
 export const maxExecutionPulses = 48;
@@ -81,26 +82,40 @@ export function confirmedExecutionMotionFrame({ workflowExecutionId, mode, nodes
   return frame;
 }
 
-type MotionState = { identity: string; token: number; nodePulses: Record<string, string>; edgePulses: Record<string, string>; incomingPulses: Record<string, string> };
-const emptyMotion: MotionState = { identity: "", token: 0, nodePulses: {}, edgePulses: {}, incomingPulses: {} };
+type MotionState = { identity: string; token: number; expiresAt: number; nodePulses: Record<string, string>; edgePulses: Record<string, string>; incomingPulses: Record<string, string> };
+const emptyMotion: MotionState = { identity: "", token: 0, expiresAt: 0, nodePulses: {}, edgePulses: {}, incomingPulses: {} };
 
 /** Pulses newly confirmed updates; it is neither a history queue nor a clock for workflow execution. */
-export function useConfirmedExecutionMotion({ identity, enabled, ready, animateInitial = false, workflowExecutionId, ...input }: MotionInput & {
-  identity: string; enabled: boolean; ready: boolean; animateInitial?: boolean;
+export function useConfirmedExecutionMotion({ identity, enabled, ready, animateInitial = false, observationStatus = "connected", observationRevision, confirmedRevision, workflowExecutionId, ...input }: MotionInput & {
+  identity: string; enabled: boolean; ready: boolean; animateInitial?: boolean; observationStatus?: ExecutionObservationStatus;
+  observationRevision: number; confirmedRevision: number | null;
 }) {
+  const observing = enabled && observationStatus === "connected";
   const frame = JSON.stringify(confirmedExecutionMotionFrame({ ...input, workflowExecutionId }));
   const tracker = useRef<{ identity: string; signatures: Map<string, string>; occurrences: Set<string>; eligibleTargets: Set<string> } | null>(null);
+  const continuity = useRef<{ identity: string; minimumRevision: number; suspendedAt: number | null } | null>(null);
   const [state, setState] = useState(emptyMotion);
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const sequence = useRef(0);
   const initialRun = useRef<string | null>(null);
   useEffect(() => {
-    if (!enabled || tracker.current?.identity !== identity) {
+    if (continuity.current?.identity !== identity)
+      continuity.current = { identity, minimumRevision: observationRevision, suspendedAt: null };
+    const connection = continuity.current;
+    if (!observing || tracker.current?.identity !== identity) {
       tracker.current = null;
-      clearTimeout(timer.current);
       setState(previous => previous.identity ? emptyMotion : previous);
     }
-    if (!enabled || !ready) return;
+    if (!observing) {
+      if (observationStatus !== "loading") { connection.suspendedAt = observationRevision; initialRun.current = workflowExecutionId; }
+      return;
+    }
+    if (connection.suspendedAt !== null) {
+      connection.minimumRevision = Math.max(connection.minimumRevision, connection.suspendedAt + 1);
+      connection.suspendedAt = null;
+    }
+    // Reconnection can publish Runtime before the retained canvas batch has caught up. Baseline only
+    // a read started after that observation boundary; it need not catch every later polling tick.
+    if (!ready || confirmedRevision === null || confirmedRevision < connection.minimumRevision) return;
     const current = JSON.parse(frame) as MotionFrame;
     const previous = tracker.current;
     const firstBatch = animateInitial && initialRun.current !== workflowExecutionId;
@@ -116,15 +131,20 @@ export function useConfirmedExecutionMotion({ identity, enabled, ready, animateI
     if (!changedNodes.length && !changedEdges.length) return;
     const token = ++sequence.current;
     const pulse = `${identity}:${token}`;
-    clearTimeout(timer.current);
-    setState({ identity, token,
+    setState({ identity, token, expiresAt: Date.now() + executionPulseDuration,
       nodePulses: Object.fromEntries(changedNodes.slice(0, maxExecutionPulses).map(node => [node.nodeId, pulse])),
       edgePulses: Object.fromEntries(changedEdges.slice(0, maxExecutionPulses).map(edge => [edge.edgeId, pulse])),
       incomingPulses: Object.fromEntries(changedEdges.slice(0, maxExecutionPulses).map(edge => [edge.targetNodeId, pulse])) });
-    timer.current = setTimeout(() => setState(value => value.identity === identity && value.token === token ? emptyMotion : value), executionPulseDuration);
-  }, [animateInitial, enabled, frame, identity, ready, workflowExecutionId]);
-  useEffect(() => () => clearTimeout(timer.current), []);
-  return state.identity === identity && enabled ? state : emptyMotion;
+  }, [animateInitial, confirmedRevision, frame, identity, observationRevision, observationStatus, observing, ready, workflowExecutionId]);
+  useEffect(() => {
+    if (!state.identity) return;
+    const expire = () => setState(value => value.identity === state.identity && value.token === state.token ? emptyMotion : value);
+    const remaining = state.expiresAt - Date.now();
+    if (remaining <= 0) { expire(); return; }
+    const timer = setTimeout(expire, remaining);
+    return () => clearTimeout(timer);
+  }, [state.expiresAt, state.identity, state.token]);
+  return state.identity === identity && observing && state.expiresAt > Date.now() ? state : emptyMotion;
 }
 
 export function decorateExecutionMotion(nodes: Node<WorkflowNodeData>[], edges: Edge<WorkflowEdgeData>[], motion: ReturnType<typeof useConfirmedExecutionMotion>) {

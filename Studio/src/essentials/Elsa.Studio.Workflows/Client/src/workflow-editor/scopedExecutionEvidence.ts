@@ -40,7 +40,7 @@ export function useScopedCanvasActivities(context: StudioEndpointContext, workfl
   const selectedId = selectedExecution?.activityExecutionId;
   const selectedNode = selectedExecution?.executableNodeId;
   const key = JSON.stringify([runtimeValueContextId(context), workflowExecutionId, ancestorId, nodeKey, selectedId]);
-  const [state, setState] = useState({ key, activities: [] as ActivityExecutionStateSummary[], observations: [] as ActivityExecutionBrowseEntry[], repeated: false, failed: false, loading: true });
+  const [state, setState] = useState({ key, activities: [] as ActivityExecutionStateSummary[], observations: [] as ActivityExecutionBrowseEntry[], confirmedRevision: null as number | null, repeated: false, failed: false, loading: true });
   const requested = useRef(refreshKey); requested.current = refreshKey;
   const pump = useRef<(() => void) | null>(null);
   useEffect(() => {
@@ -48,7 +48,7 @@ export function useScopedCanvasActivities(context: StudioEndpointContext, workfl
     const controller = new AbortController();
     let running = false;
     let confirmed: number | null = null;
-    setState({ key, activities: [], observations: [], repeated: false, failed: false, loading: true });
+    setState({ key, activities: [], observations: [], confirmedRevision: null, repeated: false, failed: false, loading: true });
     const load = async () => {
       if (running || controller.signal.aborted || confirmed === requested.current) return;
       running = true;
@@ -58,7 +58,7 @@ export function useScopedCanvasActivities(context: StudioEndpointContext, workfl
           const result = await readVisibleActivityExecutions(context, workflowExecutionId, JSON.parse(nodeKey) as string[], ancestorId, selectedExecution, controller.signal);
           if (controller.signal.aborted) return;
           confirmed = revision;
-          setState({ key, ...result, loading: false });
+          setState({ key, ...result, loading: false, confirmedRevision: revision });
         } while (confirmed !== requested.current);
       } finally { running = false; }
     };
@@ -68,5 +68,5 @@ export function useScopedCanvasActivities(context: StudioEndpointContext, workfl
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ancestorId, context, includeRoot, key, nodeKey, selectedId, selectedNode, workflowExecutionId]);
   useEffect(() => { pump.current?.(); }, [refreshKey]);
-  return state.key === key ? state : { key, activities: [], observations: [], repeated: false, failed: false, loading: true };
+  return state.key === key ? state : { key, activities: [], observations: [], confirmedRevision: null, repeated: false, failed: false, loading: true };
 }

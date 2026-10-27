@@ -142,8 +142,9 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
             ...(node.data.runtime ? { runtime: { ...node.data.runtime, selected: !!nodes[index].selected } } : {}) } })), []).nodes;
   }, [catalog, current, nodes, onOpenIncident, selectedNodeId]);
 
-  const motion = useConfirmedExecutionMotion({ identity: key, enabled: !!current?.details && attached && observation?.status === "connected" && !current.error,
-    ready: !!current && !current.loading, animateInitial: !!testRun?.startedHere, workflowExecutionId: executionId ?? "", mode,
+  const motion = useConfirmedExecutionMotion({ identity: key, enabled: attached && !current?.error, observationStatus: observation?.status ?? "unavailable",
+    observationRevision: observation?.revision ?? 0, confirmedRevision: current?.observationRevision ?? null,
+    ready: !!current?.details && !current.loading, animateInitial: !!testRun?.startedHere, workflowExecutionId: executionId ?? "", mode,
     nodes: shownNodes, edges, observations: current?.observations ?? [] });
   const decorated = decorateExecutionMotion(shownNodes, edges, motion);
   return {
