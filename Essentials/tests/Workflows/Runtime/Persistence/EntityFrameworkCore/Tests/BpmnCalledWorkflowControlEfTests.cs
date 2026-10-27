@@ -1,6 +1,8 @@
 using System.Text.Json;
+using System.Collections.Concurrent;
 using CShells.Lifecycle;
 using Elsa.Activities.Bpmn;
+using Elsa.Activities.Bpmn.Contracts;
 using Elsa.Activities.Bpmn.Models;
 using Elsa.Activities.DispatchWorkflow.Runtime;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
@@ -26,7 +28,7 @@ using F = Elsa.Activities.Bpmn.Tests.BpmnRuntimeFixture;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>Actual dispatched BPMN roots and caller control delivery through SQLite and reopened providers.</summary>
-public sealed class BpmnCalledWorkflowControlEfTests : IDisposable
+public sealed partial class BpmnCalledWorkflowControlEfTests : IDisposable
 {
     private const string ParentExecutionId = "called-control-ef-parent";
     private const string DispatchNodeId = "node-call";
@@ -186,6 +188,10 @@ public sealed class BpmnCalledWorkflowControlEfTests : IDisposable
                     RecoveryContinuationSigningKey = "called-control-ef-recovery-signing-key-32",
                     HierarchyCursorSigningKey = "called-control-ef-hierarchy-signing-key-32"
                 }).AddEfModuleMigrations<RuntimeDbContext>("Sqlite");
+                var runtime = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IBpmnProcessRuntime));
+                services.Remove(runtime);
+                services.Add(new ServiceDescriptor(typeof(IBpmnProcessRuntime), provider => new ObservedCalledBpmnRuntime(
+                    (IBpmnProcessRuntime)ActivatorUtilities.CreateInstance(provider, runtime.ImplementationType!), cut), runtime.Lifetime));
             })
             .WithPersistenceMode(mode)
             .Build(WorkflowExecutionHarness.Identity, ParentExecutionId,
@@ -292,8 +298,27 @@ public sealed class BpmnCalledWorkflowControlEfTests : IDisposable
             File.Delete(file);
     }
 
+    private sealed record CalledControlObservation(string WorkflowExecutionId, string CallingActivityExecutionId, long[] Ordinals);
+
+    private sealed class ObservedCalledBpmnRuntime(IBpmnProcessRuntime inner, CalledResumeCut observation) : IBpmnProcessRuntime
+    {
+        public ValueTask<RuntimeStructuralContinuation> StartAsync(IRuntimeActivityExecutionContext context) => inner.StartAsync(context);
+        public ValueTask<RuntimeStructuralContinuation> CompleteAsync(IRuntimeActivityExecutionContext context, ActivityChildCompletedContext completion) => inner.CompleteAsync(context, completion);
+        public ValueTask<RuntimeStructuralContinuation> FaultAsync(IRuntimeActivityExecutionContext context, ActivityChildFaultedContext fault) => inner.FaultAsync(context, fault);
+        public ValueTask<RuntimeStructuralContinuation> SignalAsync(IRuntimeActivityExecutionContext context, ActivityChildNotifiedContext signal) => inner.SignalAsync(context, signal);
+        public ValueTask<RuntimeStructuralContinuation> OutcomeAsync(IRuntimeActivityExecutionContext context, ActivityChildOutcomeContext outcome) => inner.OutcomeAsync(context, outcome);
+        public ValueTask<RuntimeStructuralContinuation> ControlAsync(IRuntimeActivityExecutionContext context, RuntimeChildControlContext control)
+        {
+            observation.ControlCalls.Enqueue(new(context.WorkflowExecutionId, control.CallingActivityExecutionId,
+                control.Batches.Select(batch => batch.Batch.Ordinal).ToArray()));
+            return inner.ControlAsync(context, control);
+        }
+    }
+
     private sealed class CalledResumeCut
     {
+        public ConcurrentQueue<RuntimePostCommitIntent> ObservedIntents { get; } = new();
+        public ConcurrentQueue<CalledControlObservation> ControlCalls { get; } = new();
         public bool RefuseDelivery { get; init; }
         public bool LoseAcknowledgement { get; init; }
         public bool CallerCommittedBeforeAcknowledgement { get; set; }
@@ -318,6 +343,7 @@ public sealed class BpmnCalledWorkflowControlEfTests : IDisposable
         }
         private void CheckBefore(RuntimePostCommitIntent intent)
         {
+            cut.ObservedIntents.Enqueue(intent);
             if (!cut.RefuseDelivery || intent.Kind != DispatchWorkflowConstants.ResumeParentIntentKind) return;
             cut.LastIntent = intent;
             throw new TimeoutException("Controlled outage before actual called-workflow terminal delivery.");
