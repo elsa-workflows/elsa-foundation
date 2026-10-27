@@ -4,7 +4,7 @@
 
 ## Summary
 
-Extract the existing server theme capability into optional Elsa.Studio.Hosting.Themes using the package/API boundaries already settled by #3355. Keep the existing three feature identities, routes, JSON appearance format, host policy and frontend validator. Separate managed persistence from directory-enriched read state before adopting the library in Web. Include the accepted #3380 persistence, empty-selection and startup-validation follow-ups. #3359 remains stopped on its saved branch.
+Extract the existing server theme capability into optional Elsa.Studio.Hosting.Themes using the package/API boundaries already settled by #3355. Keep the existing three feature identities, routes, JSON appearance format, host policy and frontend validator. Separate managed persistence from directory-enriched read state before adopting the library in Web. Include the accepted #3380 persistence, empty-selection and startup-validation follow-ups. #3359 and #3361 are delivered on verified main08712740d. Integrate both optional addons while preserving Hosting ownership of the prebuilt browser shell.
 
 ## Technical Context
 
@@ -27,7 +27,7 @@ Pre-design and post-design: PASS. Framework6.1.0 and Elsa6.3.0 (as currently pin
 - `Studio/src/essentials/Elsa.Studio.Hosting.Themes/`: composition/options/tracked public API, private directory/store/API/model/writer implementation, README.
 - `Studio/src/apps/Elsa.Studio.Web/`: replace theme registration with the public addon call; remove moved implementations and update assembly roster.
 - `Studio/tests/Elsa.Studio.Tests/`: public-host theme test fixtures and JSON test models; no internal production access.
-- Existing Web Client theme files: retain ownership until #3361 moves the whole frontend; adjust only source/default/selection behavior and tests here.
+- Existing Hosting/Client theme files: retain browser ownership in Hosting after #3361; preserve source/default/selection behavior and tests here.
 - `specs/1011-studio-theme-store/`: spec, plan, research, data model, contract, quickstart, checklist and tasks.
 
 ## Design

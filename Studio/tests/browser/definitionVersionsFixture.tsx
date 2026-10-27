@@ -1,11 +1,11 @@
 import { useMemo } from "react";
 import { AnonymousAuthProvider, type StudioAiContributionApi, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { WorkflowManagementPage } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/pages";
-import { ShellFrame, getStudioNavigation } from "../../src/apps/Elsa.Studio.Web/Client/src/app/App";
-import { ThemeProvider } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
-import { writeAppearancePreferences } from "../../src/apps/Elsa.Studio.Web/Client/src/app/themes/appearance";
+import { ShellFrame, getStudioNavigation } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/App";
+import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
+import { writeAppearancePreferences } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
 import { setDialogs } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/dialogs";
-import "../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import type { WorkflowDefinitionSummary } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
 
 type DefinitionFixtureOverrides = Pick<WorkflowDefinitionSummary, "id" | "name" | "description">

@@ -1,14 +1,14 @@
 import React from "react";
-import { UserMenu } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/UserMenu";
-import { ShellFrame, getStudioNavigation } from "../../src/apps/Elsa.Studio.Web/Client/src/app/App";
-import { StudioAuthBoundary, createStudioAuthManager } from "../../src/apps/Elsa.Studio.Web/Client/src/app/auth/studioAuth";
-import { ThemeProvider } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
-import { ThemeSwitcher } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeSwitcher";
-import { AgentLauncher } from "../../src/apps/Elsa.Studio.Web/Client/src/app/agent/AgentLauncher";
-import type { AgentSessionIndicatorSession } from "../../src/apps/Elsa.Studio.Web/Client/src/app/agent/AgentSessionIndicator";
-import { writeAppearancePreferences } from "../../src/apps/Elsa.Studio.Web/Client/src/app/themes/appearance";
-import type { StudioNavigationContribution } from "../../src/apps/Elsa.Studio.Web/Client/src/sdk";
-import "../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css";
+import { UserMenu } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/UserMenu";
+import { ShellFrame, getStudioNavigation } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/App";
+import { StudioAuthBoundary, createStudioAuthManager } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/auth/studioAuth";
+import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
+import { ThemeSwitcher } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeSwitcher";
+import { AgentLauncher } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/agent/AgentLauncher";
+import type { AgentSessionIndicatorSession } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/agent/AgentSessionIndicator";
+import { writeAppearancePreferences } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
+import type { StudioNavigationContribution } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/sdk";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 
 const fixtureQuery = new URLSearchParams(window.location.search);
 const dark = fixtureQuery.get("theme") === "dark";

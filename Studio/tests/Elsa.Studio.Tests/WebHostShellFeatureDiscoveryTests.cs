@@ -3,12 +3,14 @@ using CShells.DependencyInjection;
 using CShells.Features;
 using Elsa.Studio.Web;
 using Microsoft.Extensions.Configuration;
+using Microsoft.AspNetCore.Builder;
+using Elsa.Modularity.Core.Contracts;
+using Elsa.Studio.Hosting;
+using Elsa.Studio.Hosting.Nuplane;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyModel;
 using Nuplane.Loading;
-using Elsa.Studio.Hosting;
 using Elsa.Studio.Hosting.Themes;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Logging;
 
 namespace Elsa.Studio.Tests;
@@ -65,10 +67,18 @@ public sealed class WebHostShellFeatureDiscoveryTests : IAsyncLifetime
     // Reads the host's own shells.json through the store Feature Management uses, so "enabled" means exactly what it means at runtime.
     private static async Task<HashSet<string>> ReadEnabledFeaturesAsync()
     {
-        var environment = new TestHostEnvironment(Path.Join(AppContext.BaseDirectory, "WebHost"));
-        var store = new StudioShellFeatureConfigurationStore(environment, new ConfigurationBuilder().Build(), Hosting.HostingTestHost.CreateGate());
-        var snapshot = await store.LoadAsync();
-        return snapshot.Features.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var root = Directory.CreateTempSubdirectory("studio-discovery-").FullName;
+        try
+        {
+            File.Copy(Path.Join(AppContext.BaseDirectory, "WebHost", "shells.json"), Path.Join(root, "shells.json"));
+            var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { ContentRootPath = root });
+            builder.AddElsaStudio().AddElsaStudioNuplane()
+                .ConfigureShells(shells => shells.WithStudioFeatureAssemblies());
+            await using var app = builder.Build();
+            var snapshot = await app.Services.GetRequiredService<IShellFeatureConfigurationStore>().LoadAsync();
+            return snapshot.Features.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+        finally { Directory.Delete(root, recursive: true); }
     }
 
     // The Web host's deps.json (copied beside the tests by Mvc.Testing) lists the projects the host is built from, so this

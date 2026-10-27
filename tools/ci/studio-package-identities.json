@@ -8,6 +8,7 @@
     { "id": "Elsa.Studio.Core", "project": "Studio/src/essentials/Elsa.Studio.Core/Elsa.Studio.Core.csproj" },
     { "id": "Elsa.Studio.Hosting", "project": "Studio/src/essentials/Elsa.Studio.Hosting/Elsa.Studio.Hosting.csproj", "introduced_after_consolidation": true },
     { "id": "Elsa.Studio.Hosting.Themes", "project": "Studio/src/essentials/Elsa.Studio.Hosting.Themes/Elsa.Studio.Hosting.Themes.csproj", "introduced_after_consolidation": true },
+    { "id": "Elsa.Studio.Hosting.Nuplane", "project": "Studio/src/essentials/Elsa.Studio.Hosting.Nuplane/Elsa.Studio.Hosting.Nuplane.csproj", "introduced_after_consolidation": true },
     { "id": "Elsa.Studio.Dashboard", "project": "Studio/src/essentials/Elsa.Studio.Dashboard/Elsa.Studio.Dashboard.csproj" },
     { "id": "Elsa.Studio.Workflows", "project": "Studio/src/essentials/Elsa.Studio.Workflows/Elsa.Studio.Workflows.csproj" },
     { "id": "Elsa.Studio.Attention", "project": "Extensions/Attention/studio/Elsa.Studio.Attention/Elsa.Studio.Attention.csproj" },

@@ -73,4 +73,4 @@ Managed theme state; directory collection; merged management inventory; selectab
 
 ## Assumptions and Scope
 
-This is the already authorized #3360 leaf under Program #3340. #3359 remains stopped and unchanged. Storage is host-owned local presentation state, following the existing Theme Store ownership ADR. No distributed store, theme backend, new built-in theme, release/deploy/publisher activation or unrelated program is introduced. Final isolated consumer combinations remain #3364; this leaf proves its focused public package/host integration.
+This is the already authorized #3360 leaf under Program #3340. #3359 and #3361 are delivered; the integrated reference composition uses both optional packages and Hosting-owned browser assets. Storage is host-owned local presentation state, following the existing Theme Store ownership ADR. No distributed store, theme backend, new built-in theme, release/deploy/publisher activation or unrelated program is introduced. Final isolated consumer combinations remain #3364; this leaf proves its focused public package/host integration.

@@ -79,6 +79,13 @@ describe("feature management module", () => {
     });
   });
 
+  it("omits package diagnostics while retaining unknown configured features in the full desired state", () => {
+    const diagnostic = { ...feature("Broken.Package:1.0.0", false, {}), sourceKind: "manifest-error", readError: "Protected metadata is unavailable." };
+    const payload = createApplyPayload("rev-1", [feature("UnknownConfigured", true, { value: 1 }), diagnostic]);
+
+    expect(payload.features).toEqual([{ id: "UnknownConfigured", enabled: true, configuration: { value: 1 } }]);
+  });
+
   it("enabling a feature cascades to its transitive dependencies", () => {
     const draft = [
       feature("Api", false, {}, [], { dependencies: ["FastEndpoints"] }),

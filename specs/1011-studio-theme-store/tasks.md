@@ -36,10 +36,10 @@ Independent test: alternate ContentRoot/store/source/assets, round-trip import/e
 ## Phase5 — qualification and delivery
 
 - [x] T013 Run whole affected .NET projects/discovery accounting and risk-based restored mutation controls for source persistence, feature/auth gates, installed options and asset validation.
-- [x] T014 Validate affected locked restore, architecture/maps/inventory, actual package closure and reference Web smoke; update canonical contract/README with final APIs/profiles.
+- [ ] T014 Validate affected locked restore, architecture/maps/inventory, actual package closure and reference Web smoke; update canonical contract/README with final APIs/profiles.
 - [ ] T015 Set spec Implemented after independent correctness/standards/acceptance draft review; open and attach one PR for #3360 with exact-head evidence and required CI/external review.
 - [ ] T016 Verify actual reviewed merge/resulting main and candidate artifacts, then close #3360/parent feature as appropriate and reconcile Program #3340/Project63 evidence.
 
 ## Dependencies and execution
 
-T001 → T002–004 → T005–006 → T007–009 → T010–012 → T013–016. Public feature composition is the common foundation; managed persistence and configured assets/browser outcomes must all complete before delivery. Read-only research and independent PR review can be parallel; implementation remains one worker. No new issues are generated for this existing leaf. #3359 remains stopped on its saved branch; #3364 owns final multi-package external consumers.
+T001 → T002–004 → T005–006 → T007–009 → T010–012 → T013–016. Public feature composition is the common foundation; managed persistence and configured assets/browser outcomes must all complete before delivery. Read-only research and independent PR review can be parallel; implementation remains one worker. No new issues are generated for this existing leaf. #3359/#3361 are delivered and integrated from verified main; #3364 owns final multi-package external consumers.

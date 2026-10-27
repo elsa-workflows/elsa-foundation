@@ -8,7 +8,7 @@ import { moduleCssContractPlugin } from "./vite.module.css-contract";
  *
  * Every module is built as a single ESM `module.js` that is loaded at runtime by the
  * host and marks the host-provided dependencies `external` so they resolve through the
- * import map (`Elsa.Studio.Web/Client/index.html`) to one shared copy. This removes the
+ * import map (`Elsa.Studio.Hosting/Client/index.html`) to one shared copy. This removes the
  * ~9x copy-paste between the per-module `vite.config.ts` files.
  *
  * @param root           The module client directory (pass `__dirname`).

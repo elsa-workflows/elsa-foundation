@@ -14,7 +14,7 @@ import type {
   StudioExpressionToolingResult,
   StudioExpressionValidationResult
 } from "@elsa-workflows/studio-sdk";
-import { builtInPropertyEditors } from "../../../../../apps/Elsa.Studio.Web/Client/src/app/propertyEditors";
+import { builtInPropertyEditors } from "../../../../../essentials/Elsa.Studio.Hosting/Client/src/app/propertyEditors";
 import { ActivityPropertiesPanel } from "../ActivityPropertiesPanel";
 import { createObjectExpressionEditorContribution } from "../objectExpressionEditor";
 import type { ActivityNode, WorkflowDefinitionState } from "../workflowTypes";

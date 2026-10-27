@@ -8,12 +8,6 @@
 
   <ItemGroup>
     <PackageReference Include="CShells.AspNetCore" />
-    <PackageReference Include="CShells.Nuplane" />
-    <PackageReference Include="Elsa.Specifications.PackageManifests" />
-    <PackageReference Include="Nuplane" />
-    <PackageReference Include="Nuplane.Admin" />
-    <PackageReference Include="Nuplane.Loading" />
-    <PackageReference Include="Nuplane.Sources.Directory" />
   </ItemGroup>
 
   <ItemGroup>
@@ -26,10 +20,16 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Hosting owns this generated subtree now, including in existing checkouts. -->
+    <Content Remove="wwwroot/studio/**/*" />
     <Content Update="wwwroot/**/*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
+
+  <Target Name="RemoveObsoleteStudioBrowserOutput" BeforeTargets="PrepareForBuild">
+    <RemoveDir Directories="$(MSBuildProjectDirectory)/wwwroot/studio" />
+  </Target>
 
   <ItemGroup>
     <Content Update="nuplane-management.json">
@@ -44,6 +44,7 @@
     <ProjectReference Include="..\..\essentials\Elsa.Studio.Api\Elsa.Studio.Api.csproj" />
     <ProjectReference Include="../../essentials/Elsa.Studio.Hosting/Elsa.Studio.Hosting.csproj" />
     <ProjectReference Include="../../essentials/Elsa.Studio.Hosting.Themes/Elsa.Studio.Hosting.Themes.csproj" />
+    <ProjectReference Include="../../essentials/Elsa.Studio.Hosting.Nuplane/Elsa.Studio.Hosting.Nuplane.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\ConsoleStream\studio\Elsa.Studio.ConsoleStream\Elsa.Studio.ConsoleStream.csproj"/>
     <ProjectReference Include="..\..\essentials\Elsa.Studio.Core\Elsa.Studio.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Diagnostics.OpenTelemetry\studio\Elsa.Studio.Diagnostics.OpenTelemetry\Elsa.Studio.Diagnostics.OpenTelemetry.csproj"/>

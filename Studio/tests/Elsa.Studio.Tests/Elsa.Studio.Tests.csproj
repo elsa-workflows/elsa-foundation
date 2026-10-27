@@ -44,6 +44,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../src/essentials/Elsa.Studio.Hosting.Nuplane/Elsa.Studio.Hosting.Nuplane.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
 

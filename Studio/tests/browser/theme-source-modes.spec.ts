@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { builtInThemeDefinitions, cloneThemeDefinition } from "../../src/apps/Elsa.Studio.Web/Client/src/app/themes/presets";
+import { builtInThemeDefinitions, cloneThemeDefinition } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/presets";
 
 const directory = { ...cloneThemeDefinition(builtInThemeDefinitions[0]), id: "directory-theme", name: "Directory Theme", source: "custom", enabled: true, published: true };
 const managed = { ...directory, id: "managed-theme", name: "Managed Theme" };

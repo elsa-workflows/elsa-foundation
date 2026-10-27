@@ -13,12 +13,12 @@ import {
   Search
 } from "lucide-react";
 import { ExternalLink } from "lucide-react";
-import { ThemeProvider } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
-import { writeAppearancePreferences } from "../../src/apps/Elsa.Studio.Web/Client/src/app/themes/appearance";
-import { getNavigationSection, getTopLevelNavigationItems } from "../../src/apps/Elsa.Studio.Web/Client/src/app/App";
-import type { StudioNavigationContribution } from "../../src/apps/Elsa.Studio.Web/Client/src/sdk";
-import elsaLogo from "../../src/apps/Elsa.Studio.Web/Client/src/assets/images/icon.png";
-import "../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css";
+import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
+import { writeAppearancePreferences } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
+import { getNavigationSection, getTopLevelNavigationItems } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/App";
+import type { StudioNavigationContribution } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/sdk";
+import elsaLogo from "../../src/essentials/Elsa.Studio.Hosting/Client/src/assets/images/icon.png";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 
 const navigation: StudioNavigationContribution[] = [
   { id: "dashboard", label: "Dashboard", path: "/dashboard", order: 0 },
