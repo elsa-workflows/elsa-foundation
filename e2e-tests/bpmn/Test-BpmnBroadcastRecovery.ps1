@@ -13,9 +13,10 @@ param(
     [Parameter(Mandatory)][string] $EvidencePath,
     [string] $Python = 'python3',
     [Parameter(Mandatory)][string] $SourceRevision,
-    [ValidateSet('after-cohort', 'after-resume', 'before-selection', 'empty-cohort', 'competing-proposal', 'competing-empty-proposal', 'competing-empty-winner', 'after-start', 'after-fanout', 'after-source-commit', 'renewed-claim')][string] $Phase = 'after-cohort'
+    [ValidateSet('after-cohort', 'after-resume', 'before-selection', 'empty-cohort', 'competing-proposal', 'competing-empty-proposal', 'competing-empty-winner', 'after-start', 'after-fanout', 'after-source-commit', 'renewed-claim', 'republished-cohort')][string] $Phase = 'after-cohort'
 )
 $ErrorActionPreference = 'Stop'
+$republishedCohort = $Phase -eq 'republished-cohort'
 $renewedClaim = $Phase -eq 'renewed-claim'
 $committedAck = $Phase -eq 'after-source-commit'
 $completeFanout = $Phase -in @('after-fanout', 'after-source-commit')
@@ -63,9 +64,14 @@ $settingsPath = Join-Path $root 'shells.json'
 $settings = Get-Content -Raw $settingsPath | ConvertFrom-Json -AsHashtable
 $settings.CShells.Shells.default.Features.BpmnRecoveryProbe = @{ ControlDirectory = $control }
 $settings.CShells.Shells.default.Features.WorkflowsRuntimeResumption = @{ SweepIntervalSeconds = 1 }
+if ($republishedCohort) {
+    $settings.CShells.Shells.default.Features.WorkflowsRuntimeReferenceGarbageCollection = @{
+        SweepIntervalMinutes = 0.02; MaxBackoffIntervalMinutes = 0.1; ArtifactCreationGracePeriodMinutes = 0
+    }
+}
 $settings | ConvertTo-Json -Depth 60 | Set-Content $settingsPath
 @{ caseId = $caseId; phase = if ($competing) { 'before-install' } elseif ($Phase -eq 'empty-cohort') { 'after-cohort' } else { $Phase }; eventName = $eventName } | ConvertTo-Json | Set-Content (Join-Path $control 'plan.json')
-$receipt = @{ sourceRevision = $SourceRevision; scenario = switch ($Phase) { 'after-resume' { 'partial-callback-and-rearm-before-source-ack' } 'after-start' { 'one-of-two-starts-parked-before-remaining-start-and-resumes' } 'after-fanout' { 'all-recipient-effects-completed-before-source-ack-write' } 'after-source-commit' { 'committed-source-completion-before-provider-return-loss' } 'renewed-claim' { 'real-pre-dispatch-claim-renewal-then-crash-and-standard-takeover' } 'before-selection' { 'delayed-first-selection-and-pre-start-wait-exclusion' } 'empty-cohort' { 'empty-saved-cohort-excludes-later-matches' } 'competing-proposal' { 'expired-old-prepared-proposal-cannot-replace-successor-winner' } 'competing-empty-proposal' { 'expired-old-empty-proposal-cannot-replace-populated-successor-winner' } 'competing-empty-winner' { 'expired-old-populated-proposal-cannot-replace-empty-successor-winner' } default { 'after-cohort-before-dispatch' } }; passed = $false;
+$receipt = @{ sourceRevision = $SourceRevision; scenario = switch ($Phase) { 'after-resume' { 'partial-callback-and-rearm-before-source-ack' } 'after-start' { 'one-of-two-starts-parked-before-remaining-start-and-resumes' } 'after-fanout' { 'all-recipient-effects-completed-before-source-ack-write' } 'after-source-commit' { 'committed-source-completion-before-provider-return-loss' } 'renewed-claim' { 'real-pre-dispatch-claim-renewal-then-crash-and-standard-takeover' } 'republished-cohort' { 'saved-old-publication-retained-through-real-collection-and-republish' } 'before-selection' { 'delayed-first-selection-and-pre-start-wait-exclusion' } 'empty-cohort' { 'empty-saved-cohort-excludes-later-matches' } 'competing-proposal' { 'expired-old-prepared-proposal-cannot-replace-successor-winner' } 'competing-empty-proposal' { 'expired-old-empty-proposal-cannot-replace-populated-successor-winner' } 'competing-empty-winner' { 'expired-old-populated-proposal-cannot-replace-empty-successor-winner' } default { 'after-cohort-before-dispatch' } }; passed = $false;
     probeAssemblySha256 = (Get-FileHash $ProbeAssembly).Hash.ToLowerInvariant(); normalAssemblySha256 = (Get-FileHash $NormalAssembly).Hash.ToLowerInvariant();
     sourceCommit = $sourceCommit; sourceFiles = $sourceManifest; probeBuild = $probeManifest; normalBuild = $normalManifest; readerSha256 = $readerHash; readerBuild = $readerManifest;
     cut = $null; stopped = $null; successorClaim = $null; recovered = $null; observations = @(); failures = @() }
@@ -130,6 +136,38 @@ function Same-Snapshot($Left, $Right) {
     $rightDocument = [System.Text.Json.JsonDocument]::Parse(($Right | ConvertTo-Json -Depth 60 -Compress))
     try { return [System.Text.Json.JsonElement]::DeepEquals($leftDocument.RootElement, $rightDocument.RootElement) }
     finally { $leftDocument.Dispose(); $rightDocument.Dispose() }
+}
+function Assert-RepublishedCollectionState($Observation, $Original, $Replacement, $Control, [bool] $AfterCollection) {
+    foreach ($required in @('observedMaterial', 'observedTemplates', 'observedSourceReferences', 'matchingBindings', 'allWorkflows', 'executionRootArtifactIds', 'dispatchRootArtifactIds')) {
+        if (-not $Observation.ContainsKey($required)) { throw "The checked retention inventory omits $required." }
+    }
+    if (@($Observation.observedMaterial | Where-Object { -not $_.ContainsKey('dependencies') -or -not $_.ContainsKey('templateHashReferences') }).Count -ne 0 -or
+        @($Observation.observedTemplates | Where-Object { -not $_.ContainsKey('directDependencies') -or -not $_.ContainsKey('closedTemplates') -or -not $_.ContainsKey('templateHashReferences') }).Count -ne 0) {
+        throw 'The checked retention inventory omits an indirect dependency projection.'
+    }
+    $oldMaterial = @($Observation.observedMaterial | Where-Object { $_.identity.artifactId -eq $Original.artifactId })
+    $newMaterial = @($Observation.observedMaterial | Where-Object { $_.identity.artifactId -eq $Replacement.artifactId })
+    $controlMaterial = @($Observation.observedMaterial | Where-Object { $_.identity.artifactId -eq $Control.artifactId })
+    $oldRefs = @($Observation.observedSourceReferences | Where-Object artifactId -eq $Original.artifactId)
+    $newRefs = @($Observation.observedSourceReferences | Where-Object artifactId -eq $Replacement.artifactId)
+    $controlRefs = @($Observation.observedSourceReferences | Where-Object artifactId -eq $Control.artifactId)
+    if ($oldMaterial.Count -ne 1 -or $newMaterial.Count -ne 1 -or $oldMaterial[0].identity.artifactHash -ne $Original.artifactHash -or
+        $oldRefs.Count -ne 1 -or $oldRefs[0].sourceReferenceId -ne $Original.sourceReferenceId -or -not $oldRefs[0].deletedAt -or
+        $newRefs.Count -ne 1 -or $newRefs[0].sourceReferenceId -ne $Replacement.sourceReferenceId -or $newRefs[0].deletedAt -or
+        @($Observation.matchingBindings | Where-Object { $_.artifactId -eq $Original.artifactId -and $_.isActive }).Count -ne 0 -or
+        @($Observation.matchingBindings | Where-Object { $_.artifactId -eq $Replacement.artifactId -and $_.isActive }).Count -ne 1 -or
+        @($Observation.allWorkflows | Where-Object { $_.artifactId -in @($Original.artifactId, $Replacement.artifactId, $Control.artifactId) }).Count -ne 0 -or
+        $Original.artifactId -in $Observation.executionRootArtifactIds -or $Original.artifactId -in $Observation.dispatchRootArtifactIds -or
+        @($Observation.observedTemplates | Where-Object { $_.templateId -eq $Original.artifactId -or @($_.directDependencies).Count -ne 0 -or
+            @($_.closedTemplates).Count -ne 0 -or @($_.templateHashReferences).Count -ne 0 }).Count -ne 0 -or
+        @($Observation.observedMaterial | Where-Object { @($_.dependencies).Count -ne 0 -or @($_.templateHashReferences).Count -ne 0 }).Count -ne 0) {
+        throw 'The old publication is not an unstarted saved-cohort root with retired-only references and a distinct active replacement.'
+    }
+    if ($AfterCollection) {
+        if ($controlMaterial.Count -ne 0 -or $controlRefs.Count -ne 0) { throw 'Actual collection left the unrooted control material or reference behind.' }
+    } elseif ($controlMaterial.Count -ne 1 -or $controlRefs.Count -ne 1 -or -not $controlRefs[0].deletedAt) {
+        throw 'The unrooted control was not physically present and retired before actual collection.'
+    }
 }
 function Assert-ActualClaimRenewal($Initial, $InitialMarker, $Renewed, $Marker, [DateTimeOffset] $ReleasedAt) {
     $initialDeadline = [DateTimeOffset]::Parse($Initial.source.deliveryVisibleAfter)
@@ -208,6 +246,10 @@ try {
     $selectedPublication = Import-Process $initialStartXml
     $secondInitialPublication = $null
     if ($partialStart) { $secondInitialPublication = Import-Process ($startXml.Replace('id="selected-start"', 'id="second-start"')) }
+    if ($republishedCohort) {
+        $collectionControl = Import-Process ($startXml.Replace('id="selected-start"', 'id="collection-control"').Replace($eventName, "unmatched-control-$eventName"))
+        $receipt.collectionControlPublication = $collectionControl
+    }
     $publisherXml = @"
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" id="defs" targetNamespace="urn:elsa:source-recovery"><signal id="signal" name="$eventName"/>
 <process id="publisher" isExecutable="true"><startEvent id="start"/><intermediateThrowEvent id="send"><signalEventDefinition signalRef="signal"/></intermediateThrowEvent><endEvent id="end"/>
@@ -345,6 +387,23 @@ try {
         $unpublished = Invoke-RestMethod "$base/publishing/workflows/$definitionId/slots/default" -Method Delete -WebSession $ctx.Session
         $receipt.withdrawal = @{ plan = $terminal.Json; cancelledInstance = $cancelled; publicationSlot = $unpublished }
     }
+    if ($republishedCohort) {
+        $replacementXml = $startXml.Replace('id="selected-start"', 'id="replacement-start"').Replace('<intermediateCatchEvent id="park"', '<intermediateCatchEvent id="replacement-park"').Replace('targetRef="park"', 'targetRef="replacement-park"').Replace('sourceRef="park"', 'sourceRef="replacement-park"')
+        $replacementImport = Invoke-RestMethod "$base/interchange/bpmn/import" -Method Post -WebSession $ctx.Session -ContentType 'application/json' -Body (@{ xml = $replacementXml } | ConvertTo-Json -Depth 30)
+        if (-not $replacementImport.analysis.hostInventoryVerified -or -not $replacementImport.analysis.canExecute) { throw 'The actual host cannot execute the replacement definition.' }
+        $replacementVersion = Invoke-RestMethod "$base/design/workflows/versions/ingest" -Method Post -WebSession $ctx.Session -ContentType 'application/json' -Body (@{
+            operationKey = "republish-$caseId"; definitionId = $selectedPublication.definitionId;
+            state = @{ variables = @(); inputs = @(); outputs = @(); strategyOptions = $null; rootActivity = $replacementImport.processNode }
+        } | ConvertTo-Json -Depth 40)
+        $replacement = Invoke-RestMethod "$base/publishing/workflows/$($replacementVersion.id)/publish" -Method Post -WebSession $ctx.Session -ContentType 'application/json' -Body (@{
+            action = 'Replace'; slotName = 'default'; expectedPublicationId = $selectedPublication.publicationId
+        } | ConvertTo-Json)
+        if ($replacement.definitionId -ne $selectedPublication.definitionId -or $replacement.artifactId -eq $selectedPublication.artifactId -or
+            $replacement.publicationId -eq $selectedPublication.publicationId -or $replacement.sourceReferenceId -eq $selectedPublication.sourceReferenceId) { throw 'The public replacement did not create a distinct artifact/publication in the original definition slot.' }
+        $controlDefinitionId = [Uri]::EscapeDataString($collectionControl.definitionId)
+        $controlSlot = Invoke-RestMethod "$base/publishing/workflows/$controlDefinitionId/slots/default" -Method Delete -WebSession $ctx.Session
+        $receipt.republication = @{ original = $selectedPublication; replacement = $replacement; replacementVersionId = $replacementVersion.id; controlUnpublishedSlot = $controlSlot }
+    }
     # These recipients are created after publisher commit. They join only if selection has not yet happened.
     $lateWaitXml = $waitXml.Replace('id="waiter"', 'id="late-waiter"')
     $lateStartXml = $startXml.Replace('id="selected-start"', 'id="late-start"')
@@ -353,6 +412,33 @@ try {
     $lateRun = Invoke-Artifact -Ctx $ctx -ArtifactId $latePublication.artifactId -SourceReferenceId $latePublication.sourceReferenceId
     $null = Wait-Catches $lateRun.workflowExecutionId 2
     $lateStart = Import-Process $lateStartXml
+    if ($republishedCohort) {
+        $beforeCollection = Observe 'republished-before-collection' @($waitRun.workflowExecutionId, $lateRun.workflowExecutionId)
+        Assert-RepublishedCollectionState $beforeCollection $selectedPublication $replacement $collectionControl $false
+        $receipt.beforeCollection = $beforeCollection
+        $receipt.collectionReleasedAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
+        New-Item -ItemType File (Join-Path $caseDirectory 'run-collection') | Out-Null
+        $deadline = [DateTimeOffset]::UtcNow.AddSeconds(30)
+        do {
+            $collected = Observe 'republished-after-collection' @($waitRun.workflowExecutionId, $lateRun.workflowExecutionId)
+            $completedSweeps = @(Get-ChildItem $caseDirectory -Filter 'collection-*.json' | ForEach-Object { Get-Content -Raw $_.FullName | ConvertFrom-Json -AsHashtable -DateKind String })
+            $usefulSweeps = @($completedSweeps | Where-Object { $_.result.deletedArtifactCount -gt 0 -and $_.result.deletedReferenceCount -gt 0 -and
+                $_.supportsStimulusDeliveryRetention -and $_.artifactCreationGracePeriodSeconds -eq 0 -and $_.scope -eq $marker.scope -and
+                [DateTimeOffset]::Parse($_.startedAtUtc) -ge [DateTimeOffset]::Parse($receipt.collectionReleasedAtUtc) })
+            $controlStillExists = @($collected.observedMaterial | Where-Object { $_.identity.artifactId -eq $collectionControl.artifactId }).Count -ne 0
+            if (-not $controlStillExists -and $usefulSweeps.Count -gt 0) { break }
+            if ($probeProcess.HasExited) { throw 'The owned probe exited before its actual reference collector ran.' }
+            Start-Sleep -Milliseconds 200
+        } while ([DateTimeOffset]::UtcNow -lt $deadline)
+        if ($controlStillExists -or $usefulSweeps.Count -eq 0) { throw 'A real zero-grace selected collector did not delete the unrelated unrooted control.' }
+        Assert-RepublishedCollectionState $collected $selectedPublication $replacement $collectionControl $true
+        if (-not (Same-Snapshot $collected.source $beforeCollection.source)) { throw 'Collection changed the owed source or its saved cohort before dispatch.' }
+        $receipt.afterCollection = $collected; $receipt.actualCollectionSweeps = $usefulSweeps
+        $receipt.originalRetiredApiAdmission = Invoke-WebRequest "$base/runtime/workflows/executables/$($selectedPublication.artifactId)/execute" -Method Post -WebSession $ctx.Session -ContentType 'application/json' -Body (@{ sourceReferenceId = $selectedPublication.sourceReferenceId } | ConvertTo-Json) -SkipHttpErrorCheck
+        if ([int]$receipt.originalRetiredApiAdmission.StatusCode -ne 409) { throw 'Ordinary public admission unexpectedly authorized the retired original source.' }
+        # Store only the bounded public response, never cookies/headers/session objects in evidence.
+        $receipt.originalRetiredApiAdmission = @{ statusCode = [int]$receipt.originalRetiredApiAdmission.StatusCode; body = $receipt.originalRetiredApiAdmission.Content }
+    }
     if ($completeFanout) {
         $fanout = Observe 'fanout-before-crash' @($waitRun.workflowExecutionId, $lateRun.workflowExecutionId)
         $receipt.completedFanoutBeforeCrash = $fanout
@@ -433,7 +519,7 @@ try {
     foreach ($start in $stopped.source.selectedStarts) {
         $target = @($stopped.workflows | Where-Object workflowExecutionId -eq $start.workflowExecutionId)
         if ($target.Count -ne 1) { throw 'The exact selected keyed target observation is unavailable.' }
-        if ($Phase -in @('after-cohort', 'renewed-claim') -or ($partialStart -and $start.workflowExecutionId -ne $marker.acceptedExecution)) {
+        if ($Phase -in @('after-cohort', 'renewed-claim', 'republished-cohort') -or ($partialStart -and $start.workflowExecutionId -ne $marker.acceptedExecution)) {
             if ($target[0].exists -or @($stopped.allWorkflows | Where-Object artifactId -eq $start.artifactId).Count -ne 0) { throw 'A selected start ran before its dispatch cut.' }
         } else {
             $park = @($target[0].bookmarks | Where-Object { $_.executableNodeId -eq 'node-park' -and $_.activityStatus -eq 'Suspended' })
@@ -644,6 +730,16 @@ try {
             $originalWait = @($originalWorkflow.bookmarks | Where-Object bookmarkId -eq $original.bookmarkId)[0]
             if ($null -ne $oldWait -or $captured.Count -ne 0 -or $parkedWait[0].stimulusType -ne $originalWait.stimulusType -or $parkedWait[0].stimulusHash -ne $originalWait.stimulusHash) { throw 'The matching wait created by a selected start was not excluded from its own source.' }
         }
+    }
+    if ($republishedCohort) {
+        $originalStart = @($after.source.selectedStarts | Where-Object artifactId -eq $selectedPublication.artifactId)
+        if ($originalStart.Count -ne 1 -or @($after.allWorkflows | Where-Object artifactId -eq $replacement.artifactId).Count -ne 0 -or
+            @($after.allWorkflows | Where-Object artifactId -eq $collectionControl.artifactId).Count -ne 0) { throw 'Recovery selected the replacement or collection control instead of the saved original.' }
+        $originalState = @($after.workflows | Where-Object workflowExecutionId -eq $originalStart[0].workflowExecutionId)[0]
+        if ($originalState.pinnedExecutable.artifactId -ne $selectedPublication.artifactId -or $originalState.pinnedExecutable.artifactHash -ne $selectedPublication.artifactHash -or
+            $originalState.pinnedSource.sourceReferenceId -ne $selectedPublication.sourceReferenceId -or $originalState.pinnedSource.publicationId -ne $selectedPublication.publicationId -or
+            $originalState.pinnedSource.definitionVersionId -ne $selectedPublication.definitionVersionId) { throw 'The recovered saved start did not retain its exact original artifact and publication provenance.' }
+        $receipt.recoveredOriginalPublication = $originalState
     }
     $publisherFinished = Wait-WorkflowInstance -Ctx $ctx -ExecutionId $marker.workflowExecutionId -TimeoutSeconds 60
     if ($publisherFinished.instance.status -ne 'Completed' -or @($publisherFinished.incidents).Count -ne 0) { throw 'The original source publisher did not complete cleanly.' }

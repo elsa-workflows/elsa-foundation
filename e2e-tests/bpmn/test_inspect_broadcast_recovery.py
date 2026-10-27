@@ -38,6 +38,16 @@ class CheckedRecoveryReaderTests(unittest.TestCase):
   def change(c):
    text=c.execute('select ContentJson from elsa_runtime_post_commit_outbox where OutboxItemId=?',(encode(MARKER['sourceOutboxItemId']),)).fetchone()[0]; item=json.loads(text);item['recipientSnapshot']['intentFingerprint']='changed';c.execute('update elsa_runtime_post_commit_outbox set ContentJson=? where OutboxItemId=?',(json.dumps(item),encode(MARKER['sourceOutboxItemId'])))
   self.mutate(change);self.assert_refused()
+ def test_changed_material_projection_is_refused(self):
+  def change(c):
+   row=c.execute('select Id from elsa_runtime_workflow_executable limit 1').fetchone();self.assertIsNotNone(row)
+   self.assertEqual(1,c.execute('update elsa_runtime_workflow_executable set ArtifactId=? where Id=?',(encode('different-material'),row[0])).rowcount)
+  self.mutate(change);self.assert_refused()
+ def test_changed_source_reference_projection_is_refused(self):
+  def change(c):
+   row=c.execute('select Id from elsa_runtime_workflow_executable_source_reference limit 1').fetchone();self.assertIsNotNone(row)
+   self.assertEqual(1,c.execute('update elsa_runtime_workflow_executable_source_reference set ArtifactId=? where Id=?',(encode('different-reference-artifact'),row[0])).rowcount)
+  self.mutate(change);self.assert_refused()
  def test_missing_publisher_is_refused(self):
   self.mutate(lambda c:c.execute('delete from elsa_runtime_workflow_execution_state where WorkflowExecutionId=?',(encode(MARKER['workflowExecutionId']),)));self.assert_refused()
  def test_pinned_wal_view_preserves_claim_despite_new_writer(self):

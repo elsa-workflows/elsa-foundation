@@ -143,8 +143,26 @@ try
             binding.ExecutableNodeId, binding.StimulusType, binding.StimulusHash, binding.IsActive, binding.CreatedAt }));
         continuation = page.NextContinuationToken;
     } while (continuation is not null);
+    var material = new EfWorkflowExecutableStore(context, access);
+    var references = new EfWorkflowExecutableSourceReferenceStore(context, access, new NoPaging());
+    var observedMaterial = (await material.ListAllAsync()).Select(item => new { item.Identity, item.CreatedAt, item.Dependencies,
+        TemplateHashReferences = item.NodesById.Values.Select(node => node.Metadata).Prepend(item.CompatibilityMetadata)
+            .Where(metadata => metadata.TryGetValue("activity.templateHash", out var hash) && !string.IsNullOrWhiteSpace(hash))
+            .Select(metadata => metadata["activity.templateHash"]).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray() }).ToArray();
+    var observedTemplates = (await new EfExecutableActivityTemplateStore(context, access, new NoPaging()).ListAllAsync())
+        .Select(template => new { template.TemplateId, template.TemplateHash, template.DirectDependencies, template.ClosedTemplates,
+            TemplateHashReferences = template.NodesById.Values.Select(node => node.Metadata).Prepend(template.CompatibilityMetadata)
+                .Where(metadata => metadata.TryGetValue("activity.templateHash", out var hash) && !string.IsNullOrWhiteSpace(hash))
+                .Select(metadata => metadata["activity.templateHash"]).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray() }).ToArray();
+    var observedReferences = (await references.ListAllAsync()).Select(reference => new { reference.SourceReferenceId, reference.ArtifactId,
+        reference.SourceKind, reference.SourceVersion, reference.DefinitionId, reference.DefinitionVersionId,
+        reference.ArtifactVersion, Scope = reference.Scope.ToString(), reference.CreatedAt, reference.PublishedAt,
+        reference.ExpiresAt, reference.DeletedAt, reference.DeletedReason, reference.ActivationId, reference.SlotId }).ToArray();
+    var executionRootIds = await executions.ListPinnedExecutableArtifactIdsAsync();
+    var dispatchRootIds = await new EfWorkflowDispatchStore(context, access).ListPinnedExecutableArtifactIdsAsync();
     await VerifySnapshotAsync(path, args[1]);
     Console.WriteLine(JsonSerializer.Serialize(new { ProviderChecked = true, ReadOnly = true, SnapshotSha256 = args[1],
+        ObservedMaterial = observedMaterial, ObservedTemplates = observedTemplates, ObservedSourceReferences = observedReferences, ExecutionRootArtifactIds = executionRootIds, DispatchRootArtifactIds = dispatchRootIds,
         Source = new { source.OutboxItemId, source.Intent.WorkflowExecutionId, source.RecordedAt, Status = source.Status.ToString(), source.DeliveryAttemptCount,
             ContentSha256 = sourceContentSha256, RowRevision = sourceRow.Revision, StorageSchemaVersion = sourceRow.SchemaVersion,
             source.DeliveringOwnerId, source.DeliveryFencingToken, source.DeliveryVisibleAfter, source.DeliveredAt, source.LastFailureMessage, IntentPayload = intentPayload,

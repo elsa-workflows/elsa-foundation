@@ -10,6 +10,8 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Workflows.Runtime.Core.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Workbench.RecoveryProbe;
 
@@ -30,6 +32,9 @@ public class BpmnRecoveryProbeFeature : IShellFeature
         Decorate<IBookmarkResumeDispatcher>(services, (inner, provider) => new ProbeResumes(inner, provider.GetRequiredService<RecoveryProbeControl>()));
         Decorate<IWorkflowStartDispatcher>(services, (inner, provider) => new ProbeStarts(inner,
             provider.GetRequiredService<IStimulusDeliveryStore>(), provider.GetRequiredService<RecoveryProbeControl>()));
+        Decorate<IWorkflowExecutableReferenceGarbageCollector>(services, (inner, provider) => new ProbeCollection(inner,
+            provider.GetRequiredService<RecoveryProbeControl>(), provider.GetRequiredService<IOptions<WorkflowExecutableGarbageCollectionOptions>>(),
+            provider.GetRequiredService<IPersistenceAccessContextAccessor>()));
         Decorate<IRuntimePostCommitIntentDispatcher>(services, (inner, provider) => new ProbeIntents(inner,
             provider.GetRequiredService<IStimulusDeliveryStore>(), provider.GetRequiredService<RecoveryProbeControl>(),
             provider.GetRequiredService<RuntimeDbContext>()));
@@ -85,6 +90,30 @@ public class BpmnRecoveryProbeFeature : IShellFeature
         public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) => inner.ListPinnedExecutableArtifactIdsAsync(cancellationToken);
         public ValueTask<PostCommitDeliveryContext> ReadSavedStartSourceAsync(WorkflowExecutableStimulusDeliveryAuthority authority, CancellationToken cancellationToken = default) =>
             inner.ReadSavedStartSourceAsync(authority, cancellationToken);
+    }
+
+    private sealed class ProbeCollection(IWorkflowExecutableReferenceGarbageCollector inner, RecoveryProbeControl control,
+        IOptions<WorkflowExecutableGarbageCollectionOptions> options, IPersistenceAccessContextAccessor access) : IWorkflowExecutableReferenceGarbageCollector
+    {
+        public bool SupportsStimulusDeliveryRetention => inner.SupportsStimulusDeliveryRetention;
+        public async ValueTask<WorkflowExecutableReferenceSweepResult> SweepAsync(CancellationToken cancellationToken = default)
+        {
+            await control.WaitForCollectionAsync(cancellationToken);
+            var startedAt = DateTimeOffset.UtcNow;
+            var result = await inner.SweepAsync(cancellationToken);
+            await control.RecordCollectionAsync(startedAt, result, options.Value.ArtifactCreationGracePeriod,
+                inner.GetType().FullName!, SupportsStimulusDeliveryRetention, access.Current.RequireScope().Value, cancellationToken);
+            return result;
+        }
+        public async ValueTask<WorkflowExecutableReferenceSweepResult> SweepAsync(DateTimeOffset now, CancellationToken cancellationToken = default)
+        {
+            await control.WaitForCollectionAsync(cancellationToken);
+            var startedAt = DateTimeOffset.UtcNow;
+            var result = await inner.SweepAsync(now, cancellationToken);
+            await control.RecordCollectionAsync(startedAt, result, options.Value.ArtifactCreationGracePeriod,
+                inner.GetType().FullName!, SupportsStimulusDeliveryRetention, access.Current.RequireScope().Value, cancellationToken);
+            return result;
+        }
     }
 
     private sealed class ProbeIntents(IRuntimePostCommitIntentDispatcher inner, IStimulusDeliveryStore sources,
@@ -148,6 +177,41 @@ public class BpmnRecoveryProbeFeature : IShellFeature
 internal sealed class RecoveryProbeControl(string directory)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+    private async ValueTask<Plan?> CollectionPlanAsync(CancellationToken cancellationToken)
+    {
+        var path = Path.Combine(directory, "plan.json");
+        if (!File.Exists(path)) return null;
+        var plan = JsonSerializer.Deserialize<Plan>(await File.ReadAllTextAsync(path, cancellationToken), Json);
+        if (plan?.Phase != "republished-cohort") return null;
+        if (!Regex.IsMatch(plan.CaseId, "^[a-z0-9-]{1,64}$", RegexOptions.CultureInvariant))
+            throw new InvalidDataException("The owned collection case name is invalid.");
+        return plan;
+    }
+    public async ValueTask WaitForCollectionAsync(CancellationToken cancellationToken)
+    {
+        if (await CollectionPlanAsync(cancellationToken) is not { } plan) return;
+        // Do not erase the staging grace while normal publication is still creating its first durable root.
+        // The runner releases this scheduling gate only after all publications and retirements finish.
+        while (!File.Exists(Path.Combine(directory, plan.CaseId, "run-collection")))
+            await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
+    }
+    public async ValueTask RecordCollectionAsync(DateTimeOffset startedAt, WorkflowExecutableReferenceSweepResult result,
+        TimeSpan grace, string collector, bool supportsRetention, string scope, CancellationToken cancellationToken)
+    {
+        if (await CollectionPlanAsync(cancellationToken) is not { } plan) return;
+        var caseDirectory = Path.Combine(directory, plan.CaseId);
+        var name = "collection-" + Guid.NewGuid().ToString("N");
+        var temporary = Path.Combine(caseDirectory, name + ".tmp");
+        await using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        {
+            await JsonSerializer.SerializeAsync(stream, new { StartedAtUtc = startedAt, CompletedAtUtc = DateTimeOffset.UtcNow,
+                Result = result, ArtifactCreationGracePeriodSeconds = grace.TotalSeconds, Collector = collector,
+                SupportsStimulusDeliveryRetention = supportsRetention, Scope = scope }, Json, cancellationToken);
+            stream.Flush(true);
+        }
+        File.Move(temporary, Path.Combine(caseDirectory, name + ".json"));
+    }
+
     // This diagnostic holds the first real claim save before the processor can renew it. Raw marker
     // fields are observations only; the independent checked reader must prove the committed source.
     public IDisposable? ArmInitialClaimCut(RuntimeDbContext context)
@@ -319,7 +383,7 @@ internal sealed class RecoveryProbeControl(string directory)
         if (!File.Exists(path) || source.Intent.Kind != PublishStimulusConstants.PublishStimulusIntentKind) return;
         var plan = JsonSerializer.Deserialize<Plan>(await File.ReadAllTextAsync(path, cancellationToken), Json)
             ?? throw new InvalidDataException("The owned recovery plan is empty.");
-        if ((plan.Phase != phase && !(plan.Phase == "renewed-claim" && phase == "after-cohort")) || source.Intent.Payload?.GetProperty("eventName").GetString() != plan.EventName ||
+        if ((plan.Phase != phase && !(plan.Phase is "renewed-claim" or "republished-cohort" && phase == "after-cohort")) || source.Intent.Payload?.GetProperty("eventName").GetString() != plan.EventName ||
             plan.TargetExecutionId is { } target && target != acceptedExecution) return;
         if (!Regex.IsMatch(plan.CaseId, "^[a-z0-9-]{1,64}$", RegexOptions.CultureInvariant))
             throw new InvalidDataException("The owned recovery case name is invalid.");
