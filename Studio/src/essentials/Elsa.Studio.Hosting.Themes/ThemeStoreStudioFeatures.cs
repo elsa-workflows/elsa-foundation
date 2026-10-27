@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
-namespace Elsa.Studio.Web;
+namespace Elsa.Studio.Hosting.Themes;
 
 internal static class ThemeStoreFeatureNames
 {
@@ -19,13 +19,13 @@ internal static class ThemeStoreFeatureNames
     DisplayName = "Theme Store core",
     Description = "Hosts the Studio Theme Store API and shared theme services."
 )]
-public sealed class ThemeStoreCoreStudioFeature : IWebShellFeature
+public class ThemeStoreCoreStudioFeature : IWebShellFeature
 {
-    public void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
     }
 
-    public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
+    public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
     {
         endpoints.MapElsaThemeStoreCoreApi(StudioBridgeAuthorization.PolicyName);
     }
@@ -37,13 +37,13 @@ public sealed class ThemeStoreCoreStudioFeature : IWebShellFeature
     Description = "Enables the Studio top-bar theme picker.",
     DependsOn = [ThemeStoreFeatureNames.Core]
 )]
-public sealed class ThemePickerStudioFeature : IWebShellFeature
+public class ThemePickerStudioFeature : IWebShellFeature
 {
-    public void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
     }
 
-    public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
+    public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
     {
         endpoints.MapElsaThemePickerApi(StudioBridgeAuthorization.PolicyName);
     }
@@ -55,13 +55,13 @@ public sealed class ThemePickerStudioFeature : IWebShellFeature
     Description = "Enables the Studio Theme Builder management surface.",
     DependsOn = [ThemeStoreFeatureNames.Core]
 )]
-public sealed class ThemeManagementStudioFeature : IWebShellFeature
+public class ThemeManagementStudioFeature : IWebShellFeature
 {
-    public void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
     }
 
-    public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
+    public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
     {
         endpoints.MapElsaThemeManagementApi(StudioBridgeAuthorization.PolicyName);
     }

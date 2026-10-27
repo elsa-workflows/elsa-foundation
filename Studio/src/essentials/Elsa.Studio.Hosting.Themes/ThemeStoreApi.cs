@@ -4,15 +4,14 @@ using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 
-namespace Elsa.Studio.Web;
+namespace Elsa.Studio.Hosting.Themes;
 
-internal static class ElsaThemeStoreApi
+internal static class ThemeStoreApi
 {
-    private const string StoreFileName = "studio-theme-store.json";
-    private const string AssetFolderName = "theme-assets";
     private const long MaxAssetSize = 2 * 1024 * 1024;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
     private static readonly Regex ThemeIdPattern = new("^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex AssetIdPattern = new("^[a-f0-9]{32}\\.(?:png|webp|jpe?g)$", RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
     private static readonly Regex TokenValuePattern = new("^(?:#[0-9a-f]{3,8}|oklch\\(\\s*(?:0?\\.\\d+|1(?:\\.0+)?|0)\\s+\\d*\\.?\\d+\\s+\\d*\\.?\\d+\\s*\\)|rgba?\\([\\d\\s.,%/]+\\)|hsla?\\([\\d\\s.,%/]+\\)|var\\(--[a-z0-9-]+\\))$", RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
     private static readonly Regex MaterialVariableNamePattern = new("^--studio-material-[a-z0-9-]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex MaterialVariableValuePattern = new("^[a-z0-9 .,%#()/+-]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
@@ -94,20 +93,21 @@ internal static class ElsaThemeStoreApi
     }
 
     private static async Task<IResult> GetThemeStoreAsync(
-        [FromServices] IWebHostEnvironment environment,
-        [FromServices] ThemeConfigurationService themeService,
+        [FromServices] ThemeStoreSettings environment,
+        [FromServices] ThemeDirectorySource themeService,
         HttpRequest request,
         CancellationToken cancellationToken)
     {
-        var store = await ReadStoreAsync(environment, themeService, request, cancellationToken);
+        var snapshot = await ReadStoreAsync(environment, themeService, request, cancellationToken);
+        var store = snapshot.View;
         return Results.Ok(ToResponse(store));
     }
 
     private static async Task<IResult> SaveThemeAsync(
         string id,
         [FromBody] StudioThemeDefinition theme,
-        [FromServices] IWebHostEnvironment environment,
-        [FromServices] ThemeConfigurationService themeService,
+        [FromServices] ThemeStoreSettings environment,
+        [FromServices] ThemeDirectorySource themeService,
         HttpRequest request,
         [FromServices] StudioConfigurationMutationGate mutationGate,
         CancellationToken cancellationToken)
@@ -122,12 +122,13 @@ internal static class ElsaThemeStoreApi
             return Results.BadRequest(new ThemeStoreErrorResponse(validationError));
 
         await using var mutation = await mutationGate.AcquireAsync(cancellationToken);
-        var store = await ReadStoreAsync(environment, themeService, request, cancellationToken);
-        var themes = store.Themes.Where(x => !StringComparer.OrdinalIgnoreCase.Equals(x.Id, theme.Id)).ToList();
+        var snapshot = await ReadStoreAsync(environment, themeService, request, cancellationToken);
+        var store = snapshot.View;
+        var themes = (snapshot.Managed.Themes ?? []).Where(x => !StringComparer.OrdinalIgnoreCase.Equals(x.Id, theme.Id)).ToList();
         themes.Add(theme with { Source = "custom" });
-        store = store with { Themes = themes.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToArray() };
-        await WriteStoreAsync(environment, store, cancellationToken);
-        return Results.Ok(ToResponse(store));
+        var managed = snapshot.Managed with { Themes = themes.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToArray() };
+        await WriteStoreAsync(environment, managed, cancellationToken);
+        return Results.Ok(ToResponse((await ReadStoreAsync(environment, themeService, request, cancellationToken)).View));
     }
 
     /// <summary>
@@ -139,8 +140,8 @@ internal static class ElsaThemeStoreApi
     private static async Task<IResult> SetThemeVisibilityAsync(
         string id,
         [FromBody] ThemeVisibilityRequest request,
-        [FromServices] IWebHostEnvironment environment,
-        [FromServices] ThemeConfigurationService themeService,
+        [FromServices] ThemeStoreSettings environment,
+        [FromServices] ThemeDirectorySource themeService,
         HttpRequest httpRequest,
         [FromServices] StudioConfigurationMutationGate mutationGate,
         CancellationToken cancellationToken)
@@ -151,7 +152,8 @@ internal static class ElsaThemeStoreApi
             return Results.BadRequest(new ThemeStoreErrorResponse("Only built-in themes use the visibility endpoint. Save custom themes with their enabled flag instead."));
 
         await using var mutation = await mutationGate.AcquireAsync(cancellationToken);
-        var store = await ReadStoreAsync(environment, themeService, httpRequest, cancellationToken);
+        var snapshot = await ReadStoreAsync(environment, themeService, httpRequest, cancellationToken);
+        var store = snapshot.View;
         var disabled = new HashSet<string>(store.DisabledBuiltInThemeIds ?? [], StringComparer.OrdinalIgnoreCase);
 
         if (request.Enabled)
@@ -170,22 +172,23 @@ internal static class ElsaThemeStoreApi
                 return Results.BadRequest(new ThemeStoreErrorResponse("At least one selectable theme must remain enabled."));
         }
 
-        store = store with { DisabledBuiltInThemeIds = disabled.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray() };
-        await WriteStoreAsync(environment, store, cancellationToken);
-        return Results.Ok(ToResponse(store));
+        var managed = snapshot.Managed with { DisabledBuiltInThemeIds = disabled.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray() };
+        await WriteStoreAsync(environment, managed, cancellationToken);
+        return Results.Ok(ToResponse((await ReadStoreAsync(environment, themeService, httpRequest, cancellationToken)).View));
     }
 
     private static async Task<IResult> DuplicateThemeAsync(
         string id,
         [FromBody] ThemeDuplicateRequest request,
-        [FromServices] IWebHostEnvironment environment,
-        [FromServices] ThemeConfigurationService themeService,
+        [FromServices] ThemeStoreSettings environment,
+        [FromServices] ThemeDirectorySource themeService,
         HttpRequest httpRequest,
         [FromServices] StudioConfigurationMutationGate mutationGate,
         CancellationToken cancellationToken)
     {
         await using var mutation = await mutationGate.AcquireAsync(cancellationToken);
-        var store = await ReadStoreAsync(environment, themeService, httpRequest, cancellationToken);
+        var snapshot = await ReadStoreAsync(environment, themeService, httpRequest, cancellationToken);
+        var store = snapshot.View;
         var source = store.Themes.FirstOrDefault(theme => StringComparer.OrdinalIgnoreCase.Equals(theme.Id, id));
         if (source is null)
             return Results.NotFound(new ThemeStoreErrorResponse($"Theme '{id}' was not found."));
@@ -203,38 +206,41 @@ internal static class ElsaThemeStoreApi
         if (ValidateCustomTheme(duplicate) is { } validationError)
             return Results.BadRequest(new ThemeStoreErrorResponse(validationError));
 
-        store = store with { Themes = store.Themes.Concat([duplicate]).OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToArray() };
-        await WriteStoreAsync(environment, store, cancellationToken);
+        var managed = snapshot.Managed with { Themes = (snapshot.Managed.Themes ?? []).Concat([duplicate]).OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToArray() };
+        await WriteStoreAsync(environment, managed, cancellationToken);
         return Results.Ok(duplicate);
     }
 
     private static async Task<IResult> DeleteThemeAsync(
         string id,
-        [FromServices] IWebHostEnvironment environment,
-        [FromServices] ThemeConfigurationService themeService,
+        [FromServices] ThemeStoreSettings environment,
+        [FromServices] ThemeDirectorySource themeService,
         HttpRequest request,
         [FromServices] StudioConfigurationMutationGate mutationGate,
         CancellationToken cancellationToken)
     {
         await using var mutation = await mutationGate.AcquireAsync(cancellationToken);
-        var store = await ReadStoreAsync(environment, themeService, request, cancellationToken);
+        var snapshot = await ReadStoreAsync(environment, themeService, request, cancellationToken);
+        var store = snapshot.View;
         var theme = store.Themes.FirstOrDefault(x => StringComparer.OrdinalIgnoreCase.Equals(x.Id, id));
         if (theme is null)
             return Results.NotFound(new ThemeStoreErrorResponse($"Theme '{id}' was not found."));
         if (theme.Source != "custom")
             return Results.BadRequest(new ThemeStoreErrorResponse("Built-in themes cannot be deleted."));
 
-        var themes = store.Themes.Where(x => !StringComparer.OrdinalIgnoreCase.Equals(x.Id, id)).ToArray();
-        var defaultThemeId = StringComparer.OrdinalIgnoreCase.Equals(store.DefaultThemeId, id) ? "" : store.DefaultThemeId;
-        store = store with { Themes = themes, DefaultThemeId = defaultThemeId };
-        await WriteStoreAsync(environment, store, cancellationToken);
-        return Results.Ok(ToResponse(store));
+        if ((store.DirectoryThemeIds ?? []).Contains(id, StringComparer.OrdinalIgnoreCase))
+            return Results.Conflict(new ThemeStoreErrorResponse("This theme is supplied by the configured directory. Remove it from that source before deleting managed state."));
+        var themes = (snapshot.Managed.Themes ?? []).Where(x => !StringComparer.OrdinalIgnoreCase.Equals(x.Id, id)).ToArray();
+        var defaultThemeId = StringComparer.OrdinalIgnoreCase.Equals(snapshot.Managed.DefaultThemeId, id) ? "" : snapshot.Managed.DefaultThemeId;
+        var managed = snapshot.Managed with { Themes = themes, DefaultThemeId = defaultThemeId };
+        await WriteStoreAsync(environment, managed, cancellationToken);
+        return Results.Ok(ToResponse((await ReadStoreAsync(environment, themeService, request, cancellationToken)).View));
     }
 
     private static async Task<IResult> SetDefaultThemeAsync(
         [FromBody] ThemeDefaultRequest request,
-        [FromServices] IWebHostEnvironment environment,
-        [FromServices] ThemeConfigurationService themeService,
+        [FromServices] ThemeStoreSettings environment,
+        [FromServices] ThemeDirectorySource themeService,
         HttpRequest httpRequest,
         [FromServices] StudioConfigurationMutationGate mutationGate,
         CancellationToken cancellationToken)
@@ -245,7 +251,8 @@ internal static class ElsaThemeStoreApi
         if (!ThemeIdPattern.IsMatch(request.ThemeId))
             return Results.BadRequest(new ThemeStoreErrorResponse("Theme ID must be kebab-case and between 3 and 64 characters."));
 
-        var store = await ReadStoreAsync(environment, themeService, httpRequest, cancellationToken);
+        var snapshot = await ReadStoreAsync(environment, themeService, httpRequest, cancellationToken);
+        var store = snapshot.View;
         var theme = store.Themes.FirstOrDefault(x => StringComparer.OrdinalIgnoreCase.Equals(x.Id, request.ThemeId));
         if (theme is null && !BuiltInThemeIds.Contains(request.ThemeId))
             return Results.NotFound(new ThemeStoreErrorResponse($"Theme '{request.ThemeId}' was not found."));
@@ -256,14 +263,15 @@ internal static class ElsaThemeStoreApi
         if (theme is null && (store.DisabledBuiltInThemeIds ?? []).Contains(request.ThemeId, StringComparer.OrdinalIgnoreCase))
             return Results.BadRequest(new ThemeStoreErrorResponse("Default theme must be enabled. Re-enable the built-in theme first."));
 
-        store = store with { DefaultThemeId = request.ThemeId };
-        await WriteStoreAsync(environment, store, cancellationToken);
-        return Results.Ok(ToResponse(store));
+        var managed = snapshot.Managed with { DefaultThemeId = request.ThemeId };
+        await WriteStoreAsync(environment, managed, cancellationToken);
+        return Results.Ok(ToResponse((await ReadStoreAsync(environment, themeService, httpRequest, cancellationToken)).View));
     }
 
     private static async Task<IResult> UploadAssetAsync(
         HttpRequest request,
-        [FromServices] IWebHostEnvironment environment,
+        [FromServices] ThemeStoreSettings environment,
+        [FromServices] StudioConfigurationMutationGate mutationGate,
         CancellationToken cancellationToken)
     {
         if (!request.HasFormContentType)
@@ -287,48 +295,67 @@ internal static class ElsaThemeStoreApi
         var folder = GetAssetFolder(environment);
         Directory.CreateDirectory(folder);
         var path = Path.Combine(folder, id);
-        await using (var output = File.Create(path))
-            await file.CopyToAsync(output, cancellationToken);
-
-        var asset = new ThemeStoreAsset(id, Path.GetFileName(file.FileName), file.ContentType, file.Length, AssetUrl(request, id));
-        return Results.Ok(asset);
+        var temporary = Path.Combine(folder, $".{id}.{Guid.NewGuid():N}.upload");
+        try
+        {
+            // Incomplete uploads stay outside the published asset inventory. Only the final rename holds the gate.
+            await using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, FileOptions.Asynchronous))
+            {
+                await file.CopyToAsync(output, cancellationToken);
+                if (output.Length is 0 or > MaxAssetSize)
+                    return Results.BadRequest(new ThemeStoreErrorResponse("Texture assets must be non-empty and 2 MB or smaller."));
+            }
+            await using var mutation = await mutationGate.AcquireAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            File.Move(temporary, path);
+            var asset = new ThemeStoreAsset(id, Path.GetFileName(file.FileName), file.ContentType, new FileInfo(path).Length, AssetUrl(request, id));
+            return Results.Ok(asset);
+        }
+        finally { File.Delete(temporary); }
     }
 
-    private static IResult GetAssetContentAsync(string id, [FromServices] IWebHostEnvironment environment)
+    private static async Task<IResult> GetAssetContentAsync(string id, [FromServices] ThemeStoreSettings environment,
+        [FromServices] ThemeDirectorySource themeService,
+        [FromServices] StudioConfigurationMutationGate mutationGate, CancellationToken cancellationToken)
     {
-        var safeId = Path.GetFileName(id);
-        var path = Path.Combine(GetAssetFolder(environment), safeId);
-        if (!File.Exists(path))
-            return Results.NotFound(new ThemeStoreErrorResponse($"Asset '{safeId}' was not found."));
-
-        var contentType = Path.GetExtension(safeId).ToLowerInvariant() switch
+        if (!AssetIdPattern.IsMatch(id)) return Results.BadRequest(new ThemeStoreErrorResponse("A valid material-asset ID is required."));
+        await using var mutation = await mutationGate.AcquireAsync(cancellationToken);
+        var path = Path.Combine(GetAssetFolder(environment), id);
+        if (themeService.IsSourceFile(path)) return Results.NotFound(new ThemeStoreErrorResponse($"Asset '{id}' was not found."));
+        try
         {
-            ".webp" => "image/webp",
-            ".jpg" or ".jpeg" => "image/jpeg",
-            _ => "image/png"
-        };
-        return Results.File(path, contentType);
+            // Own the opened file across result execution, so a concurrent unlink cannot replace the bytes being served.
+            var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 65536, FileOptions.Asynchronous);
+            return Results.Stream(stream, AssetContentType(id));
+        }
+        catch (Exception error) when (error is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return Results.NotFound(new ThemeStoreErrorResponse($"Asset '{id}' was not found."));
+        }
     }
 
     private static async Task<IResult> DeleteAssetAsync(
         string id,
-        [FromServices] IWebHostEnvironment environment,
-        [FromServices] ThemeConfigurationService themeService,
+        [FromServices] ThemeStoreSettings environment,
+        [FromServices] ThemeDirectorySource themeService,
         HttpRequest request,
+        [FromServices] StudioConfigurationMutationGate mutationGate,
         CancellationToken cancellationToken)
     {
-        var safeId = Path.GetFileName(id);
-        var path = Path.Combine(GetAssetFolder(environment), safeId);
+        if (!AssetIdPattern.IsMatch(id)) return Results.BadRequest(new ThemeStoreErrorResponse("A valid material-asset ID is required."));
+        await using var mutation = await mutationGate.AcquireAsync(cancellationToken);
+        var path = Path.Combine(GetAssetFolder(environment), id);
+        if (themeService.IsSourceFile(path)) return Results.NotFound(new ThemeStoreErrorResponse($"Asset '{id}' was not found."));
         if (File.Exists(path))
             File.Delete(path);
 
-        return Results.Ok(ToResponse(await ReadStoreAsync(environment, themeService, request, cancellationToken)));
+        return Results.Ok(ToResponse((await ReadStoreAsync(environment, themeService, request, cancellationToken)).View));
     }
 
     private static async Task<IResult> ImportThemePackAsync(
         [FromBody] ThemePack pack,
-        [FromServices] IWebHostEnvironment environment,
-        [FromServices] ThemeConfigurationService themeService,
+        [FromServices] ThemeStoreSettings environment,
+        [FromServices] ThemeDirectorySource themeService,
         HttpRequest request,
         [FromServices] StudioConfigurationMutationGate mutationGate,
         CancellationToken cancellationToken)
@@ -348,40 +375,42 @@ internal static class ElsaThemeStoreApi
         }
 
         await using var mutation = await mutationGate.AcquireAsync(cancellationToken);
-        var store = await ReadStoreAsync(environment, themeService, request, cancellationToken);
+        var snapshot = await ReadStoreAsync(environment, themeService, request, cancellationToken);
+        var store = snapshot.View;
         var imported = themes.Select(theme => theme with { Source = "custom" }).ToArray();
         var importedIds = imported.Select(theme => theme.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        store = store with
+        var managed = snapshot.Managed with
         {
-            Themes = store.Themes.Where(theme => !importedIds.Contains(theme.Id)).Concat(imported).OrderBy(theme => theme.Name, StringComparer.OrdinalIgnoreCase).ToArray()
+            Themes = (snapshot.Managed.Themes ?? []).Where(theme => !importedIds.Contains(theme.Id)).Concat(imported).OrderBy(theme => theme.Name, StringComparer.OrdinalIgnoreCase).ToArray()
         };
-        await WriteStoreAsync(environment, store, cancellationToken);
-        return Results.Ok(ToResponse(store));
+        await WriteStoreAsync(environment, managed, cancellationToken);
+        return Results.Ok(ToResponse((await ReadStoreAsync(environment, themeService, request, cancellationToken)).View));
     }
 
     private static async Task<IResult> ExportThemePackAsync(
-        [FromServices] IWebHostEnvironment environment,
-        [FromServices] ThemeConfigurationService themeService,
+        [FromServices] ThemeStoreSettings environment,
+        [FromServices] ThemeDirectorySource themeService,
         HttpRequest request,
         string? themeId,
         CancellationToken cancellationToken)
     {
-        var store = await ReadStoreAsync(environment, themeService, request, cancellationToken);
+        var snapshot = await ReadStoreAsync(environment, themeService, request, cancellationToken);
+        var store = snapshot.View;
         var themes = string.IsNullOrWhiteSpace(themeId)
             ? store.Themes
             : store.Themes.Where(theme => StringComparer.OrdinalIgnoreCase.Equals(theme.Id, themeId)).ToArray();
         return Results.Ok(new ThemePack(1, themes, store.Assets));
     }
 
-    private static async Task<ThemeStoreResponse> ReadStoreAsync(
-        IWebHostEnvironment environment,
-        ThemeConfigurationService themeService,
+    private static async Task<ThemeReadSnapshot> ReadStoreAsync(
+        ThemeStoreSettings environment,
+        ThemeDirectorySource themeService,
         HttpRequest request,
         CancellationToken cancellationToken)
     {
         var path = GetStorePath(environment);
         var store = File.Exists(path)
-            ? JsonSerializer.Deserialize<ThemeStoreResponse>(await File.ReadAllTextAsync(path, cancellationToken), JsonOptions) ?? EmptyStore()
+            ? await ReadManagedStateAsync(path, cancellationToken)
             : EmptyStore();
 
         // Load custom themes from configured directory if available
@@ -392,14 +421,14 @@ internal static class ElsaThemeStoreApi
             .ToList();
 
         // Merge directory themes with persisted themes (directory themes take precedence by ID).
-        // Reserved built-in IDs are dropped earlier in ThemeConfigurationService with a warning.
+        // Reserved built-in IDs are dropped earlier in ThemeDirectorySource with a warning.
         var directoryThemeIds = new HashSet<string>(configResult.Themes.Select(t => t.Id), StringComparer.OrdinalIgnoreCase);
         customThemes = customThemes.Where(t => !directoryThemeIds.Contains(t.Id)).Concat(configResult.Themes).ToList();
 
         // Use configured default if available
         var defaultThemeId = !string.IsNullOrWhiteSpace(configResult.DefaultThemeId)
             ? configResult.DefaultThemeId
-            : store.DefaultThemeId;
+            : store.DefaultThemeId ?? "";
 
         // A default naming a retired built-in or a deleted theme is reported as unset, like the retired
         // disabled-built-in ids below, rather than as a default the client silently falls back from.
@@ -407,26 +436,29 @@ internal static class ElsaThemeStoreApi
             && !customThemes.Any(t => StringComparer.OrdinalIgnoreCase.Equals(t.Id, defaultThemeId)))
             defaultThemeId = "";
 
-        return new ThemeStoreResponse(
+        return new ThemeReadSnapshot(store, new ThemeStoreResponse(
             Themes: customThemes.ToArray(),
             DefaultThemeId: defaultThemeId,
-            Assets: ListAssets(environment, request),
+            Assets: ListAssets(environment, themeService, request),
             DisabledBuiltInThemeIds: (store.DisabledBuiltInThemeIds ?? [])
                 .Where(BuiltInThemeIds.Contains)
                 .ToArray(),
             ThemesMode: configResult.ThemesMode,
             DirectoryThemeIds: directoryThemeIds.ToArray()
-        );
+        ));
     }
 
-    private static Task WriteStoreAsync(IWebHostEnvironment environment, ThemeStoreResponse store, CancellationToken cancellationToken)
+    private static Task WriteStoreAsync(ThemeStoreSettings environment, ManagedThemeState store, CancellationToken cancellationToken) =>
+        AtomicConfigWriter.WriteAtomicAsync(GetStorePath(environment), JsonSerializer.Serialize(store, JsonOptions) + Environment.NewLine, cancellationToken);
+
+    private static async Task<ManagedThemeState> ReadManagedStateAsync(string path, CancellationToken cancellationToken)
     {
-        // Source policy belongs to host configuration. Never persist a filtered response or that policy.
-        var persisted = store with { Assets = [], ThemesMode = null, DirectoryThemeIds = null };
-        return ConfigFileWriter.WriteAtomicAsync(GetStorePath(environment), JsonSerializer.Serialize(persisted, JsonOptions) + Environment.NewLine, cancellationToken);
+        // A reader retains its original complete document while an owned atomic writer replaces the pathname.
+        await using var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 65536, FileOptions.Asynchronous);
+        return await JsonSerializer.DeserializeAsync<ManagedThemeState>(input, JsonOptions, cancellationToken) ?? EmptyStore();
     }
 
-    private static ThemeStoreResponse EmptyStore() => new([], "", []);
+    private static ManagedThemeState EmptyStore() => new([], "", []);
 
     private static bool IsSourceAllowed(ThemeStoreResponse store, string themeId, bool builtIn) => store.ThemesMode switch
     {
@@ -445,13 +477,15 @@ internal static class ElsaThemeStoreApi
         return available ? store : store with { DefaultThemeId = "" };
     }
 
-    private static ThemeStoreAsset[] ListAssets(IWebHostEnvironment environment, HttpRequest request)
+    private static ThemeStoreAsset[] ListAssets(ThemeStoreSettings environment, ThemeDirectorySource themeService, HttpRequest request)
     {
         var folder = GetAssetFolder(environment);
         if (!Directory.Exists(folder))
             return [];
 
         return Directory.EnumerateFiles(folder)
+            .Where(path => AssetIdPattern.IsMatch(Path.GetFileName(path)))
+            .Where(path => !themeService.IsSourceFile(path))
             .Select(path =>
             {
                 var file = new FileInfo(path);
@@ -466,6 +500,13 @@ internal static class ElsaThemeStoreApi
             .OrderBy(asset => asset.FileName, StringComparer.OrdinalIgnoreCase)
             .ToArray();
     }
+
+    private static string AssetContentType(string id) => Path.GetExtension(id).ToLowerInvariant() switch
+    {
+        ".webp" => "image/webp",
+        ".jpg" or ".jpeg" => "image/jpeg",
+        _ => "image/png"
+    };
 
     private static string? ValidateCustomTheme(StudioThemeDefinition? theme)
     {
@@ -572,9 +613,9 @@ internal static class ElsaThemeStoreApi
 
     private static string AssetUrl(HttpRequest request, string id) => $"{request.Scheme}://{request.Host}/_elsa/theme-store/assets/{Uri.EscapeDataString(id)}/content";
 
-    private static string GetStorePath(IWebHostEnvironment environment) => Path.Combine(environment.ContentRootPath, StoreFileName);
+    private static string GetStorePath(ThemeStoreSettings environment) => environment.StoreFile;
 
-    private static string GetAssetFolder(IWebHostEnvironment environment) => Path.Combine(environment.ContentRootPath, AssetFolderName);
+    private static string GetAssetFolder(ThemeStoreSettings environment) => environment.AssetsDirectory;
 }
 
 internal sealed record ThemeStoreResponse(
@@ -708,3 +749,11 @@ internal sealed record StudioThemeModeDefinition(
 }
 
 internal sealed record StudioThemeModeMaterial(Dictionary<string, string>? TextureAssets, Dictionary<string, string>? CssVariables, int? TextureSize);
+
+// Persistence is intentionally not a response DTO: source enrichment and projected defaults never become managed authority.
+internal sealed record ManagedThemeState(StudioThemeDefinition[] Themes, string DefaultThemeId, string[]? DisabledBuiltInThemeIds = null)
+{
+    // Keep the existing on-disk empty-assets shape; asset metadata/URLs are derived from the owned directory.
+    public ThemeStoreAsset[] Assets => [];
+}
+internal sealed record ThemeReadSnapshot(ManagedThemeState Managed, ThemeStoreResponse View);

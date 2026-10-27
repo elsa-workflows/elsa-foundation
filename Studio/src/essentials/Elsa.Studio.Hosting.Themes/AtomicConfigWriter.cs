@@ -1,12 +1,11 @@
-namespace Elsa.Studio.Web;
+namespace Elsa.Studio.Hosting.Themes;
 
 /// <summary>
-/// Shared helpers for mutating the host's on-disk JSON configuration files (shells.json,
-/// nuplane-management.json) crash-safely. Writes go to a sibling temp file that is then atomically
+/// Private helper for replacing the managed theme JSON store. Writes go to a sibling temp file that is atomically
 /// moved into place, so a process crash mid-write can never leave a truncated or half-written config
 /// file behind — readers observe either the old or the new content, never a partial one.
 /// </summary>
-internal static class ConfigFileWriter
+internal static class AtomicConfigWriter
 {
     /// <summary>
     /// Writes <paramref name="contents"/> to <paramref name="path"/> atomically: the payload is first
@@ -23,6 +22,7 @@ internal static class ConfigFileWriter
         try
         {
             await File.WriteAllTextAsync(tempPath, contents, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             File.Move(tempPath, path, overwrite: true);
         }
         catch

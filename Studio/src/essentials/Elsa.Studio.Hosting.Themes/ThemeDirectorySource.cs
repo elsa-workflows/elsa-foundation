@@ -1,51 +1,60 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
-namespace Elsa.Studio.Web;
+namespace Elsa.Studio.Hosting.Themes;
 
 /// <summary>
 /// Loads and manages custom theme configuration from filesystem and configuration sources.
 /// Built-in themes remain in the frontend (presets.ts) for backward compatibility.
 /// </summary>
-internal sealed class ThemeConfigurationService
+internal sealed class ThemeDirectorySource
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
-    private readonly ThemeConfiguration _config;
-    private readonly IWebHostEnvironment _environment;
-    private readonly ILogger<ThemeConfigurationService> _logger;
+    private readonly ThemeStoreSettings _config;
+    private readonly ILogger<ThemeDirectorySource> _logger;
 
-    public ThemeConfigurationService(
-        ThemeConfiguration config,
-        IWebHostEnvironment environment,
-        ILogger<ThemeConfigurationService> logger)
+    public ThemeDirectorySource(
+        ThemeStoreSettings config,
+        ILogger<ThemeDirectorySource> logger)
     {
         _config = config;
-        _environment = environment;
         _logger = logger;
+    }
+
+    public bool IsSourceFile(string path)
+    {
+        if (_config.ThemesDirectory is not { } source) return false;
+        var resolvedPath = ThemeStoragePaths.Resolve(Path.GetFullPath(path));
+        var comparison = ThemeStoragePaths.ComparisonFor(resolvedPath);
+        if (File.Exists(source))
+            return string.Equals(ThemeStoragePaths.Resolve(source), resolvedPath, comparison);
+        return Directory.Exists(source) && Directory.EnumerateFiles(source, "*.json").Any(file =>
+            string.Equals(ThemeStoragePaths.Resolve(Path.GetFullPath(file)), resolvedPath, comparison));
     }
 
     /// <summary>
     /// Loads custom themes from the configured directory.
     /// Returns theme definitions and the configured default theme ID.
     /// </summary>
-    public async Task<ThemeConfigurationResult> LoadThemesAsync(CancellationToken cancellationToken = default)
+    public async Task<DirectoryThemesResult> LoadThemesAsync(CancellationToken cancellationToken = default)
     {
         // Validate outside the file-loading fallback: invalid host policy must remain an explicit error.
-        var themesMode = _config.GetThemesMode();
+        var themesMode = _config.ThemesMode;
         try
         {
             var customThemes = await LoadCustomThemesAsync(cancellationToken);
 
-            return new ThemeConfigurationResult(
+            return new DirectoryThemesResult(
                 Themes: customThemes.OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase).ToArray(),
                 DefaultThemeId: _config.DefaultThemeId ?? "",
                 ThemesMode: themesMode
             );
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error loading custom themes from directory.");
-            return new ThemeConfigurationResult(
+            return new DirectoryThemesResult(
                 Themes: [],
                 DefaultThemeId: _config.DefaultThemeId ?? "",
                 ThemesMode: themesMode
@@ -62,9 +71,7 @@ internal sealed class ThemeConfigurationService
         if (string.IsNullOrWhiteSpace(_config.ThemesDirectory))
             return [];
 
-        var themePath = Path.IsPathRooted(_config.ThemesDirectory)
-            ? _config.ThemesDirectory
-            : Path.Combine(_environment.ContentRootPath, _config.ThemesDirectory);
+        var themePath = _config.ThemesDirectory;
 
         if (!File.Exists(themePath) && !Directory.Exists(themePath))
         {
@@ -74,9 +81,10 @@ internal sealed class ThemeConfigurationService
 
         var themes = new List<StudioThemeDefinition>();
 
-        if (File.Exists(themePath) && themePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+        if (File.Exists(themePath))
         {
-            // Single JSON file containing theme collection
+            // An explicitly configured collection remains JSON when a file link resolves
+            // to a physical target with a different extension. Directory scans still filter .json.
             _logger.LogInformation("Loading themes from file: {Path}", themePath);
             try
             {
@@ -86,6 +94,7 @@ internal sealed class ThemeConfigurationService
                     themes.AddRange(DropReservedBuiltInIds(response.Themes, themePath));
                 _logger.LogInformation("Loaded {Count} custom themes from file", themes.Count);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Error loading themes from file {Path}", themePath);
@@ -95,7 +104,11 @@ internal sealed class ThemeConfigurationService
         {
             // Directory of individual .json files
             _logger.LogInformation("Loading themes from directory: {Path}", themePath);
-            var files = Directory.EnumerateFiles(themePath, "*.json");
+            // A host may keep its writable store inside the source directory. It is managed state,
+            // never an external source collection, even though the two JSON formats share a themes member.
+            var comparison = ThemeStoragePaths.ComparisonFor(themePath);
+            var files = Directory.EnumerateFiles(themePath, "*.json").Where(file =>
+                !string.Equals(ThemeStoragePaths.Resolve(Path.GetFullPath(file)), ThemeStoragePaths.Resolve(_config.StoreFile), comparison));
             foreach (var file in files)
             {
                 try
@@ -105,6 +118,7 @@ internal sealed class ThemeConfigurationService
                     if (response?.Themes != null)
                         themes.AddRange(DropReservedBuiltInIds(response.Themes, file));
                 }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "Error loading theme file {File}", file);
@@ -125,7 +139,7 @@ internal sealed class ThemeConfigurationService
         {
             if (theme is null)
                 continue;
-            if (ElsaThemeStoreApi.BuiltInThemeIds.Contains(theme.Id))
+            if (ThemeStoreApi.BuiltInThemeIds.Contains(theme.Id))
             {
                 _logger.LogWarning(
                     "Skipping custom theme '{ThemeId}' from {Source}: that ID is reserved for a built-in theme.",
@@ -139,7 +153,7 @@ internal sealed class ThemeConfigurationService
     }
 }
 
-internal sealed record ThemeConfigurationResult(
+internal sealed record DirectoryThemesResult(
     StudioThemeDefinition[] Themes,
     string DefaultThemeId,
     string ThemesMode);
