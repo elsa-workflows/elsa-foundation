@@ -49,6 +49,9 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   sourcePorts: WorkflowPortDescriptor[];
   suppressFlowPorts?: boolean;
   runtime?: WorkflowRuntimeNodeOverlay;
+  /** Short presentation cues derived only from confirmed occurrence evidence. */
+  executionPulse?: string;
+  incomingExecutionPulse?: string;
   /** Runtime activity identity for canvases whose visible node id is a different domain element id. */
   runtimeNodeId?: string;
   description?: string;
@@ -79,6 +82,7 @@ export interface WorkflowPortDescriptor {
 
 export interface WorkflowEdgeData extends Record<string, unknown> {
   vertices?: XYPosition[];
+  executionPulse?: string;
 }
 
 export interface WorkflowRuntimeNodeOverlay {

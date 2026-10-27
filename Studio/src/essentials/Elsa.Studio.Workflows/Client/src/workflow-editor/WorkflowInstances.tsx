@@ -43,6 +43,7 @@ import { WorkflowInstanceInspectionFacts, WorkflowInstanceInspectionNote } from 
 import { nodeTypes, edgeTypes } from "./graph";
 import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
 import { ReadOnlyWorkflowSequence } from "./ReadOnlyWorkflowSequence";
+import { decorateExecutionMotion, useConfirmedExecutionMotion } from "./executionMotion";
 import { CompensationScopeDesigner, type CompensationOperatorControls } from "../graph-authoring/CompensationScopeDesigner";
 import { compensationStepsSlotId } from "../compensationScope";
 import { deriveCompensationRuntime, type CompensationJournalSource, type CompensationScopeRuntime } from "../compensationRuntime";
@@ -53,7 +54,7 @@ import { buildBpmnCanvas, type BpmnNodeData } from "../bpmn/bpmnAdapter";
 import { CopyValueButton } from "./executableShared";
 import { useDialogFocus } from "./useDialogFocus";
 import { getDialogs } from "./dialogs";
-import { isTerminalExecution, readObservedExecution, useExecutionObservation } from "./useExecutionObservation";
+import { isTerminalExecution, readObservedExecution, useExecutionObservation, type ExecutionObservationStatus } from "./useExecutionObservation";
 export { formatSnapshotPayload } from "./RuntimeValueEvidence";
 import type { InstanceInspectorTab, WorkflowEditorPanelTab, WorkflowInstanceInspectionData } from "./editorTypes";
 import {
@@ -1574,6 +1575,8 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
             </div>
           ) : null}
           <WorkflowInstanceCanvas
+            observationIdentity={observation.identity}
+            observationStatus={observation.status}
             onSelectExecutionSummary={selectBrowserExecution}
             onExecutionsObserved={rememberObservedExecutions}
             context={context}
@@ -1872,7 +1875,7 @@ function sourceAccessFromError(error: unknown) {
 }
 
 function WorkflowInstanceCanvas({
-  context, executionScope, boundaryLayout, refreshKey, scopeLoading, executionBreadcrumb, onSelectExecutionSummary,
+  observationIdentity, observationStatus, context, executionScope, boundaryLayout, refreshKey, scopeLoading, executionBreadcrumb, onSelectExecutionSummary,
   onExecutionsObserved,
   definitionVersion,
   definitionVersionError,
@@ -1891,7 +1894,9 @@ function WorkflowInstanceCanvas({
   inactive = false,
   journals,
   operator
-}: {
+ }: {
+  observationIdentity: string;
+  observationStatus: ExecutionObservationStatus;
   context: StudioEndpointContext;
   executionScope?: ActivityExecutionStateSummary;
   boundaryLayout?: ActivityExecutionLayout;
@@ -1941,6 +1946,13 @@ function WorkflowInstanceCanvas({
   }) : details.incidents;
   const canvas = buildInstanceCanvas(definitionVersion, activityCatalog, { ...details, incidents: shownIncidents }, selectedEvidenceId,
     frames, onNavigateToScope, onOpenIncident, shownActivities, executableGraph, journalOf);
+  const motion = useConfirmedExecutionMotion({ identity: JSON.stringify([observationIdentity, scopeKey, executionScope?.activityExecutionId, selectedEvidenceId]),
+    observationStatus, enabled: !inactive && !scopeLoading && !scoped.failed && !boundaryLayout,
+    observationRevision: refreshKey, confirmedRevision: scoped.confirmedRevision,
+    ready: !scoped.loading, workflowExecutionId: details.instance.workflowExecutionId,
+    mode: canvas.mode === "sequence" ? "sequence" : (definitionVersion?.state.rootActivity ? resolveScope(definitionVersion.state.rootActivity, frames, activityCatalog)?.slot.mode : undefined),
+    nodes: canvas.nodes, edges: canvas.edges, observations: scoped.observations });
+  const animatedCanvas = decorateExecutionMotion(canvas.nodes, canvas.edges, motion);
   // Spec 260: a live scope's rows come from its journal; read it once the shown occurrence is known.
   const shownScopeExecutionId = canvas.mode === "compensation" ? canvas.compensation?.runtime.scopeActivityExecutionId : undefined;
   const shownScopeStatus = shownScopeExecutionId ? associationActivities.find(activity => activity.activityExecutionId === shownScopeExecutionId)?.status : undefined;
@@ -2003,7 +2015,7 @@ function WorkflowInstanceCanvas({
           <CompensationScopeDesigner
             key={scopeKey}
             owner={canvas.compensation.owner}
-            nodes={canvas.nodes}
+            nodes={animatedCanvas.nodes}
             selectedNodeId={null}
             readOnly
             runtime={canvas.compensation.runtime}
@@ -2016,7 +2028,7 @@ function WorkflowInstanceCanvas({
         ) : definitionVersion && canvas.mode === "sequence" ? (
           <ReadOnlyWorkflowSequence
             key={scopeKey}
-            nodes={canvas.nodes}
+            nodes={animatedCanvas.nodes}
             onSelectActivity={onSelectActivity}
             onSelectEvidence={onSelectEvidence}
             focusNodeId={focusCanvasNodeId}
@@ -2025,8 +2037,8 @@ function WorkflowInstanceCanvas({
         ) : canvas.nodes.length > 0 ? (
           <ReadOnlyWorkflowFlow
             key={scopeKey}
-            nodes={canvas.nodes}
-            edges={canvas.edges}
+            nodes={animatedCanvas.nodes}
+            edges={animatedCanvas.edges}
             onInit={setFlowInstance}
             onSelectActivity={onSelectActivity}
             onSelectEvidence={onSelectEvidence}

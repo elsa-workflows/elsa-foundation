@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type {
   ActivityExecutionInspection,
+  ActivityExecutionAttempt,
   ActivityStateView,
   ActivityExecutionHierarchyPage,
   ActivityExecutionLayout,
@@ -371,7 +372,7 @@ export function supportsActivityExecutionInspection(context: StudioEndpointConte
 
 export interface ActivityExecutionBrowseEntry {
   iterationPosition?: number | null;
-  attempt?: { attemptNumber: number } | null;
+  attempt?: Pick<ActivityExecutionAttempt, "attemptNumber"> & Partial<ActivityExecutionAttempt> | null;
   execution: import("../workflowTypes").ActivityExecutionStateSummary & { executionSequence: number };
   position: number;
   previousActivityExecutionId: string | null;
