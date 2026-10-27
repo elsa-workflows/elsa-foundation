@@ -19,15 +19,15 @@
 
 **Goal/test**: Every required existing proof executes automatically and only its precise intended negative qualifies as a control.
 
-- [ ] T005 [US2] Add `tools/ci/qualify_studio_consumers.py` to run actual API and Hosting normal/control/restored profiles, read full reports and verify provenance, precise diagnostics, denials and immutable original inputs.
-- [ ] T006 [US2] Integrate `tools/studio/Composition.Probe/` and strengthen genuine-reconcile/update observation before accepting its disabled-reload failure; mutation-test rejection of a no-update/wrong control.
-- [ ] T007 [US2] Automate normal/causal-control/restored shared-contract and admitted-reader protection using `tools/studio/HostingReuse.Probe/` and its StorePruning profile, preserving supported-native failures and fixture assumptions.
+- [x] T005 [US2] Add `tools/ci/qualify_studio_consumers.py` to run actual API and Hosting normal/control/restored profiles, read full reports and verify provenance, precise diagnostics, denials and immutable original inputs.
+- [x] T006 [US2] Integrate `tools/studio/Composition.Probe/` and strengthen genuine-reconcile/update observation before accepting its disabled-reload failure; mutation-test rejection of a no-update/wrong control.
+- [x] T007 [US2] Automate normal/causal-control/restored shared-contract and admitted-reader protection using `tools/studio/HostingReuse.Probe/` and its StorePruning profile, preserving supported-native failures and fixture assumptions.
 
 ## Phase 4: US3 - Workflow Ownership
 
 **Goal/test**: Owned changes select complete validation without activating publishers or changing identities/version policy.
 
-- [ ] T008 [US3] Wire same-version actual candidates/reference publish, Chromium/native prerequisites, owned-input triggers and retained evidence into `.github/workflows/studio-ci.yml`; verify existing publisher guards and unchanged permissions/identity records.
+- [x] T008 [US3] Wire same-version actual candidates/reference publish, Chromium/native prerequisites, owned-input triggers and retained evidence into `.github/workflows/studio-ci.yml`; verify existing publisher guards and unchanged permissions/identity records.
 
 ## Phase 5: Integrated Verification and Delivery
 
