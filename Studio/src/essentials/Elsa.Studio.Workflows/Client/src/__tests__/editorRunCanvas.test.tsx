@@ -161,10 +161,16 @@ describe("execution attached to the editor canvas", () => {
     render({ observation: { ...observation, revision: 2 } });
     expect(latest.nodes[0].data.runtime?.status).toBe("Completed");
     await vi.waitFor(() => expect(api.browse).toHaveBeenCalledTimes(2));
+    const pendingSignal = api.browse.mock.calls[1][3] as AbortSignal;
+    render({ observation: { ...observation, revision: 3 } });
+    expect(pendingSignal.aborted).toBe(false);
+    expect(api.browse).toHaveBeenCalledTimes(2);
     release({ totalCount: 11, items: [{ execution: chosen }] }); await settle();
+    await vi.waitFor(() => expect(api.browse).toHaveBeenCalledTimes(3));
+    await settle();
     expect(latest.activities[0].activityExecutionId).toBe("activity-4");
     expect(latest.graph).toBe(graph); expect(api.executable).toHaveBeenCalledTimes(1);
-    expect(latest.refreshKey).toBe(2);
+    expect(latest.refreshKey).toBe(3);
     expect(api.browse).toHaveBeenLastCalledWith(context, "run-1", { executableNodeId: "exec-write", ancestorActivityExecutionId: "body-4", anchorActivityExecutionId: "activity-4", limit: 1 }, expect.any(AbortSignal));
   });
 

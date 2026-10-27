@@ -47,7 +47,7 @@ function TestRunCommands({ context, testRun, stimulusEditors, onWaitDraftUpdated
   const [stopping, setStopping] = useState(false);
   const [stopError, setStopError] = useState("");
   const [deliveryFeedback, setDeliveryFeedback] = useState<{ waitId: string; view: WorkflowTestRunWaitEventView } | null>(null);
-  const canInteract = observation.status === "connected";
+  const canInteract = observation.status === "connected" || observation.status === "paused" && !observation.following && observation.revision > 0;
 
   const stop = async () => {
     if (!canInteract || stopping) return;
@@ -70,13 +70,15 @@ function TestRunCommands({ context, testRun, stimulusEditors, onWaitDraftUpdated
   };
 
   const canStop = !["Rejected", "DispatchRejected", "Stopped", "Expired"].includes(testRun.view.status) && !isTerminalExecution(execution?.status);
-  const executionState = waits.length > 0 ? "Waiting" : execution ? runtimeStateLabel(execution.status) : null;
+  const executionState = execution && isTerminalExecution(execution.status) ? runtimeStateLabel(execution.status)
+    : waits.length > 0 ? "Waiting" : execution ? runtimeStateLabel(execution.status) : null;
   return (
     <section className="wf-test-run-controls" aria-label="Test Run controls">
       {canStop ? <button type="button" onClick={() => { void stop(); }} disabled={stopping || !canInteract}>{stopping ? "Stopping…" : "Stop Test Run"}</button> : null}
       {stopError ? <p className="wf-test-drive-error" role="alert">{stopError}</p> : null}
+      {testRun.view.status === "Stopped" && execution && !isTerminalExecution(execution.status) ? <p role="status">Stop requested. Waiting for runtime confirmation.</p> : null}
       {execution && executionState ? <p className="wf-test-run-execution-state" role="status"><strong>Execution</strong> {executionState}{execution.subStatus ? ` · ${execution.subStatus}` : ""}</p> : null}
-      {observation.status === "paused" ? <p role="status">Execution observation paused while this view is inactive.</p> : null}
+      {observation.status === "paused" ? <p role="status">Observation paused. The workflow continues.</p> : null}
       {["disconnected", "unavailable", "expired"].includes(observation.status) ? <button type="button" onClick={observation.refresh}>Reconnect execution</button> : null}
       {executionError ? <p className="wf-test-drive-error" role="status">{executionError}</p> : null}
       <div className="wf-test-run-waits">

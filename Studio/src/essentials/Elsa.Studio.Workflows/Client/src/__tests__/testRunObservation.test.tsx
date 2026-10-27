@@ -55,6 +55,31 @@ it("stops automatic observation at a confirmed terminal state and refreshes with
   await vi.advanceTimersByTimeAsync(10000); expect(api.instance).toHaveBeenCalledTimes(2);
 });
 
+it("keeps observing an accepted stop until runtime confirms cancellation", async () => {
+  api.run.mockResolvedValue({ ...view, status: "Stopped" });
+  api.waits.mockResolvedValue({ waits: [{ waitId: "old-wait", nodeId: "node", label: "Continue", isAvailable: true, modes: [] }] });
+  render(); await settle(); expect(current.details?.instance.status).toBe("Running");
+  api.instance.mockResolvedValue(details("Cancelled"));
+  await vi.advanceTimersByTimeAsync(2000); await settle();
+  expect(current.details?.instance.status).toBe("Cancelled"); expect(api.instance).toHaveBeenCalledTimes(2);
+  expect(current.waits).toEqual([]);
+  await vi.advanceTimersByTimeAsync(10000); expect(api.instance).toHaveBeenCalledTimes(2);
+});
+
+it("pauses observation without stopping execution, permits one refresh, then resumes following explicitly", async () => {
+  render(); await settle();
+  flushSync(() => current.setFollowing(false)); expect(current.status).toBe("paused");
+  expect(current.details?.instance.status).toBe("Running");
+  await vi.advanceTimersByTimeAsync(10000); expect(api.run).toHaveBeenCalledTimes(1);
+  api.instance.mockResolvedValue(details("Suspended"));
+  flushSync(() => current.refresh()); await settle();
+  expect(current.details?.instance.status).toBe("Suspended"); expect(current.following).toBe(false);
+  await vi.advanceTimersByTimeAsync(10000); expect(api.run).toHaveBeenCalledTimes(2);
+  flushSync(() => current.setFollowing(true)); await settle();
+  expect(current.status).toBe("connected"); expect(api.run).toHaveBeenCalledTimes(3);
+  await vi.advanceTimersByTimeAsync(2000); expect(api.run).toHaveBeenCalledTimes(4);
+});
+
 it("does not poll a hidden view, and reconciles immediately when it becomes visible", async () => {
   render(); await settle();
   vi.spyOn(document, "hidden", "get").mockReturnValue(true);

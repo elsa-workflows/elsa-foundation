@@ -11,9 +11,9 @@ export function usePinnedEditorDocument({ document, context, definitionId, catal
   document: WorkflowDocumentApi; context: StudioEndpointContext; definitionId: string; catalog: ActivityCatalogItem[];
 }) {
   const run = document.state.testRun;
-  const [authorized, setAuthorized] = useState(true);
-  const key = JSON.stringify([runtimeValueContextId(context), definitionId, run?.view.testRunId, run?.view.artifactId, run?.draftSignature]);
-  const valid = Boolean(authorized && run?.snapshot && run.endpointContext === context && run.snapshot.definitionId === definitionId
+  const [session, setSession] = useState({ authorized: true, revision: 0 });
+  const key = JSON.stringify([runtimeValueContextId(context), definitionId, run?.view.testRunId, run?.view.artifactId, run?.draftSignature, session.revision]);
+  const valid = Boolean(session.authorized && run?.snapshot && run.endpointContext === context && run.snapshot.definitionId === definitionId
     && run.view.definitionId === definitionId && !isRejectedTestRun(run.view)
     && getDraftSignature(run.snapshot) === run.draftSignature);
   const [presentation, setPresentation] = useState<{ key: string; active: boolean; frames: ScopeFrame[]; selectedNodeId: string | null } | null>(null);
@@ -21,8 +21,8 @@ export function usePinnedEditorDocument({ document, context, definitionId, catal
   const readOnly = useRef(pinned); readOnly.current = pinned;
   const currentKey = useRef(key); currentKey.current = key;
   useEffect(() => {
-    const end = () => { readOnly.current = true; setAuthorized(false); setPresentation(null); };
-    const start = () => { readOnly.current = true; setAuthorized(true); setPresentation(null); };
+    const end = () => { readOnly.current = true; setSession(value => ({ authorized: false, revision: value.revision + 1 })); setPresentation(null); };
+    const start = () => { readOnly.current = true; setSession(value => ({ authorized: true, revision: value.revision + 1 })); setPresentation(null); };
     window.addEventListener(authSessionEndedEvent, end);
     window.addEventListener(authSessionStartedEvent, start);
     return () => {

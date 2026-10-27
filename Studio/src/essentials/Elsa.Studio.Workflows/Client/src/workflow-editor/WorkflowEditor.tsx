@@ -505,7 +505,7 @@ export function WorkflowEditor({
 
   // Weaver's graph-operation batch apply/undo, dispatched via window events, funnels through the document
   // reducer's batch transition.
-  useWorkflowGraphOperationBatch({ draft, details, catalog, replaceDraftByBatch, setStatus, setError });
+  useWorkflowGraphOperationBatch({ draft: editableDraft, details, catalog, replaceDraftByBatch, canEdit: editorDoc.canEdit, setStatus, setError });
 
   useEffect(() => {
     if (!draft?.state.rootActivity || catalog.length === 0) return;

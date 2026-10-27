@@ -10,7 +10,7 @@ import { applyRuntimeOverlays } from "../workflowRuntimeOverlays";
 import { decorateWorkflowCanvasElements } from "./workflowAccessibility";
 import type { WorkflowTestRunState } from "./editorTypes";
 import { isRejectedTestRun } from "./editorHelpers";
-import type { TestRunObservation } from "./useTestRunObservation";
+import { isTerminalExecution, type TestRunObservation } from "./useTestRunObservation";
 
 interface RunCanvasEvidence {
   key: string;
@@ -21,6 +21,7 @@ interface RunCanvasEvidence {
   details: WorkflowInstanceDetails | null;
   graph: ExecutableActivityGraph | null;
   activities: ActivityExecutionStateSummary[];
+  observationRevision: number;
 }
 
 /** Adds observation to the existing canvas without changing its document, selection or viewport. */
@@ -43,6 +44,7 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
   const [authorized, setAuthorized] = useState(true);
   const [authorizationVersion, setAuthorizationVersion] = useState(0);
   const [evidence, setEvidence] = useState<RunCanvasEvidence | null>(null);
+  const [observationRevision, setObservationRevision] = useState(observation?.revision ?? 0);
   const previousEvidence = useRef(evidence); previousEvidence.current = evidence;
   const graphCache = useRef<{ key: string; context: StudioEndpointContext; catalog: ActivityCatalogItem[]; graph: ExecutableActivityGraph } | null>(null);
   const runId = testRun?.view.testRunId;
@@ -69,13 +71,21 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
     };
   }, [refresh]);
 
+  // Finish a bounded read before following the newest revision. A slow host must not starve forever
+  // because another polling tick cancels its in-flight canvas requests. Identity/scope changes still abort.
+  useEffect(() => {
+    if (observation?.status === "connected" && !evidence?.loading && observationRevision !== observation.revision) {
+      setObservationRevision(observation.revision);
+    }
+  }, [evidence?.loading, observation?.revision, observation?.status, observationRevision]);
+
   useEffect(() => {
     if (!attached || !executionId || !artifactId) return;
     const controller = new AbortController();
     const previous = previousEvidence.current;
     const next: RunCanvasEvidence = previous?.key === key && previous.context === context
       ? { ...previous, loading: true, error: "" }
-      : { key, context, loading: true, error: "", repeated: false, details: null, graph: null, activities: [] };
+      : { key, context, loading: true, error: "", repeated: false, details: null, graph: null, activities: [], observationRevision: 0 };
     setEvidence(next);
     const load = async () => {
       try {
@@ -114,7 +124,7 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
           }
         };
         await Promise.all(Array.from({ length: Math.min(4, visible.length) }, worker));
-        if (!controller.signal.aborted) setEvidence({ ...next, loading: false, details, graph, activities, repeated });
+        if (!controller.signal.aborted) setEvidence({ ...next, loading: false, details, graph, activities, repeated, observationRevision });
       } catch (error) {
         if (controller.signal.aborted) return;
         const message = error instanceof ApiCapabilityUnavailableError || error instanceof ApiCapabilityVersionMismatchError
@@ -127,7 +137,7 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
     return () => controller.abort();
     // Observation revision advances only after a verified read; keep a deliberately selected occurrence.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ancestorId, artifactId, attached, authorizationVersion, catalog, context, executionId, key, nodeKey, observation?.revision, revision, selectedExecution]);
+  }, [ancestorId, artifactId, attached, authorizationVersion, catalog, context, executionId, key, nodeKey, observationRevision, revision, selectedExecution]);
 
   const current = attached && evidence?.key === key && evidence.context === context ? evidence : null;
   const shownNodes = useMemo(() => {
@@ -147,15 +157,18 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
     graph: current?.graph ?? null,
     details: current?.details ?? null,
     activities: current?.activities ?? [],
-    refreshKey: revision + (observation?.revision ?? 0),
+    refreshKey: revision + (current?.observationRevision ?? 0),
     observationStatus: observation?.status,
+    following: observation?.following,
+    setFollowing: observation?.setFollowing,
     attached,
     stale,
     snapshotView,
     loading: attached && (!current || current.loading),
     error: authorityChanged ? "This Test Run belongs to another backend session." : !authorized ? "Sign in again to inspect execution evidence." : current?.error || observation?.error || "",
     repeated: current?.repeated ?? false,
-    status: observation?.waits.length ? "Waiting" : current?.details?.instance.status,
+    status: isTerminalExecution(observation?.details?.instance.status) ? observation?.details?.instance.status
+      : observation?.waits.length ? "Waiting" : observation?.details?.instance.status ?? current?.details?.instance.status,
     granularity: current?.details?.inspectionGranularity,
     refresh,
     detach: () => setDismissedRunId(runId ?? null),

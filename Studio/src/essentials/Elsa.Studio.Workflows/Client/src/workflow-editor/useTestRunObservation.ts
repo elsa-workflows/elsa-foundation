@@ -46,11 +46,15 @@ export function useTestRunObservation({ context, testRun, enabled = true, onRunV
   const notify = useRef(onRunViewUpdated); notify.current = onRunViewUpdated;
   const view = testRun?.view;
   const key = JSON.stringify([runtimeValueContextId(context), view?.testRunId, view?.artifactId, view?.workflowExecutionId, session.revision]);
+  const [followChoice, setFollowChoice] = useState<{ key: string; following: boolean } | null>(null);
+  const following = followChoice?.key === key ? followChoice.following : true;
   const allowed = enabled && session.authorized && (!testRun?.endpointContext || testRun.endpointContext === context);
   const currentKey = useRef(key); currentKey.current = key;
   const active = useRef(false); active.current = allowed;
   const request = useRef<AbortController | null>(null);
-  const refresh = useCallback(() => setRevision(value => value + 1), []);
+  const forcedRefresh = useRef(0);
+  const consumedRefresh = useRef(0);
+  const refresh = useCallback(() => { forcedRefresh.current++; setRevision(value => value + 1); }, []);
   const isCurrent = useCallback(() => active.current && currentKey.current === key, [key]);
   const acceptView = (refreshed: WorkflowTestRunView) => {
     if (!isCurrent() || !view || !matchesAttachment(view, refreshed)) return false;
@@ -85,18 +89,20 @@ export function useTestRunObservation({ context, testRun, enabled = true, onRunV
   }, []);
 
   const refreshWaits = useCallback(async (testRunId: string) => {
-    if (!active.current || testRunId !== view?.testRunId) return;
+    if (!active.current || currentKey.current !== key || testRunId !== view?.testRunId) return;
     const expectedKey = key;
     const expectedRequest = request.current;
     const result = await getWorkflowTestRunWaits(context, testRunId);
     if (active.current && currentKey.current === expectedKey && request.current === expectedRequest && !expectedRequest?.signal.aborted) {
-      setState(value => value?.key === expectedKey ? { ...value, waits: result.waits ?? [], waitsLoading: false, waitsError: "" } : value);
+      setState(value => value?.key === expectedKey ? { ...value, waits: isTerminalExecution(value.details?.instance.status) ? [] : result.waits ?? [], waitsLoading: false, waitsError: "" } : value);
     }
   }, [context, key, view?.testRunId]);
 
   useEffect(() => {
     if (!allowed || !view) return;
     if (!visible || !online) return;
+    if (!following && forcedRefresh.current === consumedRefresh.current) return;
+    consumedRefresh.current = forcedRefresh.current;
     const controller = new AbortController(); request.current = controller;
     const isCurrent = () => active.current && currentKey.current === key && request.current === controller && !controller.signal.aborted;
     let timer: number | undefined;
@@ -132,8 +138,9 @@ export function useTestRunObservation({ context, testRun, enabled = true, onRunV
           if (details.instance.workflowExecutionId !== executionId || refreshed.artifactId && details.instance.artifactId !== refreshed.artifactId) {
             throw new AttachmentIdentityError("Runtime evidence identity did not match this Test Run.");
           }
-          terminal ||= isTerminalExecution(details.instance.status);
-          update(value => ({ ...value, status: "connected", details, error: "", revision: value.revision + 1 }));
+          // A stopped Test Run receipt acknowledges the command; only runtime confirms its execution ended.
+          terminal = isTerminalExecution(details.instance.status);
+          update(value => ({ ...value, status: "connected", details, ...(terminal ? { waits: [] } : {}), error: "", revision: value.revision + 1 }));
         } else update(value => ({ ...value, status: "connected", details: null, error: "", revision: value.revision + 1 }));
         await waitsTask;
         if (!isCurrent()) return;
@@ -146,26 +153,28 @@ export function useTestRunObservation({ context, testRun, enabled = true, onRunV
         if (unavailable) return;
         failures++;
       }
-      if (isCurrent() && !terminal) timer = window.setTimeout(() => { void poll(); }, failures ? Math.min(30000, 2000 * 2 ** failures) : 2000);
+      if (isCurrent() && !terminal && following) timer = window.setTimeout(() => { void poll(); }, failures ? Math.min(30000, 2000 * 2 ** failures) : 2000);
     };
     update(value => ({ ...value, status: value.details ? "connected" : "loading" }));
     void poll();
     return () => { controller.abort(); if (timer !== undefined) window.clearTimeout(timer); };
     // Read identity primitives so view-result updates do not restart the polling loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allowed, context, key, online, refreshWaits, revision, visible]);
+  }, [allowed, context, following, key, online, refreshWaits, revision, visible]);
 
   const current = allowed && state?.key === key ? state : null;
-  const status: TestRunObservationStatus = !allowed ? "unavailable" : !online ? "disconnected" : !visible ? "paused" : current?.status ?? "loading";
+  const status: TestRunObservationStatus = !allowed ? "unavailable" : !online ? "disconnected" : !visible || !following ? "paused" : current?.status ?? "loading";
   return {
     identity: key,
     status,
     details: status === "connected" || status === "paused" ? current?.details ?? null : null,
-    waits: status === "connected" ? current?.waits ?? [] : [],
-    waitsLoading: current?.waitsLoading ?? true,
+    waits: status === "connected" || status === "paused" ? current?.waits ?? [] : [],
+    waitsLoading: current?.waitsLoading ?? status === "loading",
     waitsError: current?.waitsError ?? "",
     error: !session.authorized ? "Sign in again to observe this Test Run." : !online ? "Execution observation disconnected. Reconnect to refresh." : current?.error ?? "",
     revision: current?.revision ?? 0,
+    following,
+    setFollowing: (value: boolean) => setFollowChoice({ key, following: value }),
     refresh,
     refreshWaits,
     acceptView,

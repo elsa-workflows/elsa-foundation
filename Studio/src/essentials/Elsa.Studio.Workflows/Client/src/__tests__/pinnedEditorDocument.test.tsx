@@ -2,11 +2,13 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { authSessionEndedEvent, authSessionStartedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import type { WorkflowDraft } from "../workflowTypes";
+import type { WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
 import type { ScopeFrame } from "../workflowAdapter";
 import { useWorkflowDocument, type WorkflowDocumentApi } from "../workflow-editor/workflowDocument";
 import { usePinnedEditorDocument } from "../workflow-editor/usePinnedEditorDocument";
 import { getDraftSignature } from "../workflow-editor/editorHelpers";
+import { useWorkflowGraphOperationBatch } from "../workflow-editor/useWorkflowGraphOperationBatch";
+import { workflowGraphOperationApplyEvent, workflowGraphOperationUndoEvent } from "../workflowGraphOperationBatch";
 import { writeLine } from "./fixtures";
 
 const snapshot: WorkflowDraft = { id: "draft", definitionId: "definition", state: { rootActivity: { nodeId: "write", activityVersionId: writeLine.activityVersionId, inputs: [], outputs: [] } }, layout: [], validationErrors: [] };
@@ -20,6 +22,9 @@ let container: HTMLDivElement;
 function Probe() {
   editable = useWorkflowDocument();
   workspace = usePinnedEditorDocument({ document: editable, context: currentContext, definitionId: "definition", catalog: [writeLine] });
+  const bridge = { draft: editable.state.draft, details: { definition: { id: "definition" } } as WorkflowDefinitionDetails,
+    catalog: [writeLine], replaceDraftByBatch: workspace.replaceDraftByBatch, canEdit: workspace.canEdit, setStatus: () => {}, setError: () => {} };
+  useWorkflowGraphOperationBatch(bridge);
   return null;
 }
 beforeEach(() => {
@@ -80,4 +85,38 @@ it("invalidates historical presentation when an endpoint or authorization sessio
 it("requires the stored snapshot's exact signature before presenting it", () => {
   flushSync(() => editable.startTestRun({ ...editable.state.testRun!, snapshot: changed }));
   expect(workspace.showSnapshot()).toBe(false); expect(workspace.pinned).toBe(false);
+});
+
+it("rejects delayed authoring callbacks from an earlier authorization session", () => {
+  const oldEdit = workspace.editDraft;
+  flushSync(() => window.dispatchEvent(new Event(authSessionStartedEvent)));
+  flushSync(() => oldEdit(() => changed)); expect(editable.state.draft).toBe(snapshot);
+  flushSync(() => workspace.editDraft(() => changed)); expect(editable.state.draft).toBe(changed);
+});
+
+it("rejects queued graph apply and undo while inspecting, without consuming the editable undo point", () => {
+  const apply = () => {
+    const respond = vi.fn();
+    flushSync(() => window.dispatchEvent(new CustomEvent(workflowGraphOperationApplyEvent, { detail: { respond,
+      batch: { schemaVersion: "elsa.workflow-graph-operation-batch.v1", workflowDefinitionId: "definition", operations: [
+        { id: "position", kind: "set-designer-position", parameters: { activityId: "write", x: 100, y: 200 } }
+      ] } } })));
+    return respond.mock.calls[0][0];
+  };
+  const undo = (undoToken: string) => {
+    const respond = vi.fn();
+    flushSync(() => window.dispatchEvent(new CustomEvent(workflowGraphOperationUndoEvent, { detail: { respond, undoToken } })));
+    return respond.mock.calls[0][0];
+  };
+  const result = apply(); expect(result.ok).toBe(true);
+  const actual = editable.state.draft!;
+  flushSync(() => editable.startTestRun({ snapshot: actual, draftSignature: getDraftSignature(actual), endpointContext: context,
+    view: { testRunId: "new-test", definitionId: "definition", definitionVersionId: "draft:1", status: "DispatchAccepted" } }));
+  flushSync(() => workspace.showSnapshot());
+  expect(apply()).toMatchObject({ ok: false, message: expect.stringContaining("Return to editing") });
+  expect(undo(result.result.undoToken)).toMatchObject({ ok: false, message: expect.stringContaining("Return to editing") });
+  expect(editable.state.draft).toBe(actual);
+  flushSync(() => workspace.returnToEditing());
+  expect(undo(result.result.undoToken).ok).toBe(true);
+  expect(editable.state.draft?.layout).toEqual(snapshot.layout);
 });
