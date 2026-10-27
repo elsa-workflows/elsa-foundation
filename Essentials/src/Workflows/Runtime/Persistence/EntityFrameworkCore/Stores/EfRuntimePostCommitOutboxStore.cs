@@ -270,7 +270,7 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
                     StimulusDeliverySnapshot? result = null;
                     await retentionLeases.ExecuteFencedAsync(roots, "stimulus:" + source.SourceOutboxItemId + ":" + Guid.NewGuid().ToString("N"), async (grants, token) =>
                     {
-                        await retentionSources.ValidateCapturedAsync(candidate.Starts, token);
+                        await retentionSources.ValidateCapturedInScopeAsync(candidate.Starts, scope, token);
                         await using var transaction = await context.Database.BeginTransactionAsync(token);
                         try
                         {
@@ -364,6 +364,38 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
         var touched = await context.ExecutionLivenessStates.Where(candidate => candidate.Id == row.Id && candidate.Revision == row.Revision)
             .ExecuteUpdateAsync(update => update.SetProperty(candidate => candidate.Revision, row.Revision + 1), cancellationToken);
         if (touched != 1) throw new DbUpdateConcurrencyException("Cohort execution ownership changed before acceptance.");
+    }
+
+    async ValueTask<PostCommitDeliveryContext> IStimulusDeliveryStore.ReadSourceAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(source); cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            var access = accessContextAccessor.Current; var scope = access.RequireScope(); access.EnsureScope(source.Scope);
+            EnsureCommittedSourceBoundary();
+            if (context.ChangeTracker.HasChanges()) throw new InvalidOperationException("Canonical stimulus source reads require a clean context.");
+            var row = await LoadAsync(scope.Value, source.SourceOutboxItemId, tracking: false, cancellationToken)
+                ?? throw new InvalidDataException("The exact stimulus source is missing.");
+            var current = ReadChecked(row, scope.Value, source.SourceOutboxItemId);
+            var publisherRow = await context.WorkflowExecutionStates.AsNoTracking().SingleOrDefaultAsync(
+                candidate => candidate.Id == EfWorkflowExecutionStateStore.CreateId(scope.Value, current.Intent.WorkflowExecutionId), cancellationToken)
+                ?? throw new InvalidDataException("The authoritative stimulus publisher is missing.");
+            var publisher = EfWorkflowExecutionStateStore.ReadChecked(publisherRow, scope.Value, current.Intent.WorkflowExecutionId);
+            access.EnsureTenantScope(publisher.TenantId);
+            row = await LoadAsync(scope.Value, source.SourceOutboxItemId, tracking: false, cancellationToken)
+                ?? throw new InvalidDataException("The stimulus source was removed during publisher validation.");
+            current = ReadChecked(row, scope.Value, source.SourceOutboxItemId);
+            EnsureCommittedSourceBoundary();
+            if (context.ChangeTracker.HasChanges() || accessContextAccessor.Current.RequireScope() != scope)
+                throw new InvalidOperationException("The canonical stimulus source access boundary changed during validation.");
+            return current.OpenStimulusDeliverySource(source, publisher, scope, timeProvider.GetUtcNow());
+        }
+        catch (RuntimePostCommitOutboxStaleClaimException) { throw; }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception)
+        { throw new StimulusDeliveryBoundaryException(source.SourceOutboxItemId, exception,
+            EfRelationalExceptionClassifier.IsProviderFailure(exception) ||
+            exception is not (InvalidDataException or InvalidOperationException or ArgumentException or NotSupportedException)); }
     }
 
     public async ValueTask<PostCommitDeliveryContext> ReadSavedStartSourceAsync(WorkflowExecutableStimulusDeliveryAuthority authority,

@@ -9,6 +9,10 @@ namespace Elsa.Workflows.Runtime.Services.Executions;
 
 public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
 {
+    bool IWorkflowStartDispatcher.CanDispatchSavedStimulus(IStimulusDeliveryStore sources, IWorkflowExecutableStore material,
+        IWorkflowExecutionStateStore executions) => ReferenceEquals(sources, _stimulusDeliveryStore) &&
+        ReferenceEquals(material, _executableStore) && ReferenceEquals(executions, _workflowExecutionStateStore);
+
     private readonly IWorkflowExecutableStore _executableStore;
     private readonly WorkflowExecutableStartSourceResolver _startSourceResolver;
     private readonly IWorkflowExecutionActorProvider _agentProvider;

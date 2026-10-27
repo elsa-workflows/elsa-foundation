@@ -654,6 +654,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             var access = _persistenceAccessContextAccessor?.Current ?? throw new InvalidOperationException("Recipient installation requires explicit persistence access.");
             var scope = access.RequireScope(); access.EnsureScope(source.Scope);
             if (_retentionMaterial is null || _retentionSources is null || _rootWriteLeaseManager is null ||
+                _retentionReferences is not InMemoryWorkflowExecutableSourceReferenceStore nativeReferences ||
                 _retentionExecutions is null || !ReferenceEquals(_retentionExecutions.CheckpointState, _state) ||
                 _operationalStateStore is not InMemoryExecutionLivenessStateStore ownership ||
                 !ReferenceEquals(_retentionExecutions.ExecutionLivenessStateStore, ownership))
@@ -674,7 +675,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             StimulusDeliverySnapshot? result = null;
             await _rootWriteLeaseManager.ExecuteFencedAsync(roots, "stimulus:" + source.SourceOutboxItemId + ":" + Guid.NewGuid().ToString("N"), async (grants, token) =>
             {
-                await _retentionSources.ValidateCapturedAsync(candidate.Starts, token);
+                await _retentionSources.ValidateCapturedInScopeAsync(candidate.Starts, scope, token);
                 result = await _state.ExecuteWriteGateAsync(async gateToken =>
                 {
                     var currentPublisher = await _retentionExecutions.FindAsync(source.Intent.WorkflowExecutionId, gateToken) ??
@@ -693,9 +694,11 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                         foreach (var id in dependencies)
                             if (await _retentionExecutions.IsDeletionTombstonedAsync(id, ownershipToken))
                                 throw new InvalidDataException("A saved cohort execution dependency was retired before acceptance.");
-                        return _retentionMaterial.ExecuteUnderRootWriteLeases(grants, _timeProvider, () =>
+                        return _retentionMaterial.ExecuteUnderRootWriteLeases(grants, _timeProvider, () => nativeReferences.ExecuteUnderReferenceGate(currentReferences =>
                         {
                             ownershipToken.ThrowIfCancellationRequested();
+                            WorkflowExecutableStartSourceResolver.ValidateCapturedUnderReferenceGate(candidate.Starts,
+                                currentReferences.Values.ToArray(), scope, _timeProvider.GetUtcNow());
                             lock (_state.SyncRoot)
                             {
                                 var current = Source();
@@ -707,7 +710,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                                 _state.OutboxItems[source.SourceOutboxItemId] = installed;
                                 return winner;
                             }
-                        }, ownershipToken);
+                        }), ownershipToken);
                     }, gateToken);
                 }, token);
             }, cancellationToken);
@@ -727,6 +730,37 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                 exception is WorkflowExecutableRootWriteLeaseLostException or WorkflowExecutableRootWriteLeaseUnavailableException ||
                 exception is not (InvalidDataException or InvalidOperationException or ArgumentException or NotSupportedException or WorkflowExecutableReferenceRejectedException));
         }
+    }
+
+    async ValueTask<PostCommitDeliveryContext> IStimulusDeliveryStore.ReadSourceAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(source); cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            return await _state.ExecuteWriteGateAsync(async ct =>
+            {
+                var access = _persistenceAccessContextAccessor?.Current ?? throw new InvalidOperationException("Canonical stimulus source reads require explicit persistence access.");
+                var scope = access.RequireScope(); access.EnsureScope(source.Scope);
+                if (_retentionExecutions is null || !ReferenceEquals(_retentionExecutions.CheckpointState, _state))
+                    throw new NotSupportedException("Canonical stimulus sources require the actual physical native publisher store.");
+                RuntimePostCommitOutboxItem initial;
+                lock (_state.SyncRoot)
+                    initial = _state.OutboxItems.GetValueOrDefault(source.SourceOutboxItemId) ?? throw new InvalidDataException("The exact stimulus source is missing.");
+                var publisher = await _retentionExecutions.FindAsync(initial.Intent.WorkflowExecutionId, ct)
+                    ?? throw new InvalidDataException("The authoritative stimulus publisher is missing.");
+                access.EnsureTenantScope(publisher.TenantId);
+                lock (_state.SyncRoot)
+                {
+                    var current = _state.OutboxItems.GetValueOrDefault(source.SourceOutboxItemId) ?? throw new InvalidDataException("The stimulus source was removed.");
+                    return current.OpenStimulusDeliverySource(source, publisher, scope, _timeProvider.GetUtcNow());
+                }
+            }, cancellationToken);
+        }
+        catch (RuntimePostCommitOutboxStaleClaimException) { throw; }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception)
+        { throw new StimulusDeliveryBoundaryException(source.SourceOutboxItemId, exception,
+            exception is not (InvalidDataException or InvalidOperationException or ArgumentException or NotSupportedException)); }
     }
 
     public async ValueTask<PostCommitDeliveryContext> ReadSavedStartSourceAsync(WorkflowExecutableStimulusDeliveryAuthority authority,

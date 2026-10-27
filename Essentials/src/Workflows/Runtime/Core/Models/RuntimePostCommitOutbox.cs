@@ -185,6 +185,26 @@ public sealed class RuntimePostCommitOutboxItem
             DeliveryVisibleAfter, StimulusDeliveryProtocolVersion, StimulusDeliverySourceScope, candidate);
     }
 
+    /// <summary>Validate a provider's canonical source and current claim before selection or saved-recipient effects.</summary>
+    /// <remarks>Only providers supply authoritative physical data, publisher and time. The returned context grants no
+    /// independent authority; an absent cohort permits selection, while a prior data-only cohort refuses.</remarks>
+    public PostCommitDeliveryContext OpenStimulusDeliverySource(PostCommitDeliveryContext expected,
+        WorkflowExecutionState publisher, PersistenceScope scope, DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(expected); ArgumentNullException.ThrowIfNull(publisher); ArgumentNullException.ThrowIfNull(scope);
+        ValidateStimulusSource(expected.SourceOutboxItemId, expected.IntentFingerprint, expected.Scope,
+            expected.Claim.OwnerId, expected.Claim.FencingToken, publisher, scope, observedAt);
+        if (expected.Claim.Item.RecipientSnapshot is { } observedWinner && !observedWinner.IsEquivalentTo(RecipientSnapshot))
+            throw new InvalidDataException("A previously observed immutable cohort was removed or replaced.");
+        var source = new PostCommitDeliveryContext(new(this, expected.Claim.OwnerId, expected.Claim.FencingToken,
+            DeliveryStartedAt ?? throw new InvalidDataException("The physical source has no claim start."), DeliveryVisibleAfter!.Value), scope);
+        if (RecipientSnapshot is { } snapshot &&
+            (snapshot.RetentionAcceptanceVersion != StimulusDeliverySnapshot.CurrentRetentionAcceptanceVersion ||
+             !snapshot.MatchesSource(source) || !snapshot.Scope.Matches(publisher, scope)))
+            throw new InvalidDataException("The saved cohort has no matching verified source/publisher acceptance.");
+        return source;
+    }
+
     /// <summary>Pure validation of compact saved-start provenance against a provider's current physical source/publisher.</summary>
     /// <remarks>The returned context is not independent authorization. Providers supply scoped physical data and trusted
     /// time; reference eligibility, executable retention and recipient admission remain separate requirements.</remarks>

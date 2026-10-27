@@ -1,0 +1,353 @@
+{
+  "schemaVersion": 1,
+  "task": "T050 source-owned routing component; publisher activation and host acceptance remain open",
+  "sourceParentCommit": "482aa79e6a26a96db28f82ed8672222a3ffa5ac9",
+  "filesSha256": {
+    "Essentials/src/Activities/Primitives/ActivitiesPrimitivesFeature.cs": "8bf3423a35f479263b2057969214527dedd9d16381aba73c50d88a5238572ba4",
+    "Essentials/src/Activities/Primitives/Services/PublishStimulusExecutor.cs": "f3458ae210672f626c25f40cba3ec016900e71bbbc13c895606a494629cb2e06",
+    "Essentials/src/Activities/Primitives/Services/PublishStimulusIntentAdapter.cs": "be071c53164865bed974e35c8f8524d118f4e2b536b8c3fb71c3e1876e909c80",
+    "Essentials/src/Workflows/Runtime/Api/WorkflowsRuntimeTriggersFeature.cs": "e8c394cbd0badca170a03996ddc153c9a14fd4533fd3eb25713680d5738f1f48",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IBookmarkResumeDispatcher.cs": "d5bbc873ba1a72d0ef97f8fb4de642ab7ece5489dedc4a0bb259d51bafad0020",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IStimulusDeliveryIntentAdapter.cs": "31c3738d7be80996a610d03cdeb968f63610f1f35d8b4a3cf4f530606fc5d188",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IStimulusDeliveryStore.cs": "28b4ae6974e25eeef0db577f264c386bc3bcdb3c01a73dbf5c5e11e0aebe840d",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IStimulusRouter.cs": "333f631872eab9484676751037b06a7240b0f2d439387a4023fa4478354f8b08",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IWorkflowStartDispatcher.cs": "d80890f28f4c9f7247efd16562d98ec9bdf641f64d7c6219767efd02faee651c",
+    "Essentials/src/Workflows/Runtime/Core/Exceptions/StimulusDeliveryIntentException.cs": "45a1f21f70faedac7d820b308675de683ea6c1f07cc551ccaba5542e435889b3",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimePostCommitOutbox.cs": "a5aa243e85d115c0ad61364fd21c76c031cd17b3e1b673b953c2a9cb50cc06df",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "4dc4f9ccacf5da2d7be2685627d685a6c7598d0c1eacdb978e6b3309ddd74a91",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md": "0cb92cbdc9d99e67fd5a6f84a6d18e13ffea4ded47d8181a480c4d120a80ffc1",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj": "3554d2d51733e2e16c89b820b77fb3035dced1d7264e65f53da8191a7d91ab32",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs": "cff509d25359b4512ebdaa3e04605b679fb059adc2172a6135ba5007142557b1",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Extensions/StimulusRoutingServiceCollectionExtensions.cs": "c99cb572a3148562e464c131e20edce608849e7213b4b1ac150c996ee38383b5",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/PublicAPI.Shipped.txt": "3c3b422dddb1efeb0fc5b228608fd8682452b2a9507d4031894bce3c4dedadbd",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/PublicAPI.Unshipped.txt": "d9efdb002145a4660404054356bafe8520768536e797a57a9e9939364f030d3a",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Bookmarks/BookmarkResumeDispatcher.cs": "d4bf82799248f6e889a1acf3d383cb91c553805b53d4e1f8658188ef379357d2",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/InMemoryRuntimeCheckpointCommitStore.cs": "cadc77d7efcb475a8ec737c5c3923701eb73dd9ed95c97e4e62ce59ebe7939e9",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/WorkflowExecutableStartSourceResolver.cs": "62e989bb50473e87205e82dec14b23126bb5319cc611fd8bddd2730e39df15ad",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/WorkflowStartDispatcher.cs": "d6364b632aa96bdd11fb0d5e671c1d914699c75f5ae0ca8ba512598633067c1c",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Triggers/StimulusDeliveryFailures.cs": "36c5dbbacb0bc63695cc014661bfa58262d74985ca4e63511f1e1f74e9473d58",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Triggers/StimulusDeliveryServices.cs": "a4c0640a07667eaac15c55e0151cd846c433fa4fb6a2006610a1824740d3ecde",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Triggers/StimulusRouter.Saved.cs": "be5349ed1da2dba4b19980daca4e2b525cdf16d715b39591637125a4b5da8a0e",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Triggers/StimulusRouter.cs": "9c23c8ec42d009c68c06333387fd3981b22dd39cd3ded8a2b854532beec6808a",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/packages.lock.json": "0b364e0d33ca74cd89929fa3753256902c9519863c81d906d0d427fc58fda5f0",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Configuration/RuntimeArtifactEntityConfigurations.cs": "27c2cc257c257afd4303f725296a9f2a5ef8b166e81a03a3e38737a08b2dc716",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimePostCommitOutboxStore.cs": "d224a89077fcaae97177bdc7bdf0989e3c0df4ac51fb040b9c33e16c63435d67",
+    "Essentials/tests/Activities/Runtime/Tests/PublishStimulusIntentAdapterTests.cs": "130120fdf43471abe3a5f3536efad20cd3b6ff6a697299172f9aa33d1e00e05e",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/CanonicalStimulusSourceReadTests.cs": "9510b9ba452438b08714ef2f9f5baa95c032abcd01b61432358cdda5fae29b4e",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfSourceOwnedStimulusRouterTests.cs": "d2cd3272c3bb6dc61fcf7a09520a93ebf402753f1caa869af6f068183e60c06c",
+    "Essentials/tests/Workflows/Runtime/Tests/SourceOwnedStimulusRouterTests.cs": "a1ad0354ee2bbbad283c31d4c72dc699cf0d16f0d1f62bf0dd764c4d8a38fb12",
+    "docs/reports/evidence/bpmn-extraction-baseline/activity-contract-fingerprint.json": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+    "specs/1006-bpmn-library-adoption/contracts/broadcast-recipient-snapshot.md": "f168ed7f0d38c8e6be4b00bce20ec8e5ed4c1e039c81dbc1480789e45d3e111b",
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-source-owned-routing.md": "d4d1fa64cf2eb10ebfd21222de4785e32b1d96a0fc3fb61fee3421322950d102",
+    "specs/1006-bpmn-library-adoption/tasks.md": "0f898735cdecaa27b74bcf3d11a7125574e30f734ad28ee804b1480db795b418"
+  },
+  "checks": [
+    {
+      "project": "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+      "passed": 3033,
+      "failed": 0,
+      "skipped": 0,
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+        "--no-restore"
+      ],
+      "trxSha256": "ebb197ee2e0b270e5ab633a6cac123daba90fc021705af651820803f323f0594",
+      "discovery": {
+        "listed": 3022,
+        "executed": 3033,
+        "deferredTheoryCaseExpansion": {
+          "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_failure_that_is_not_a_rule_refusal_leaves_the_execution_running": 4,
+          "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_refused_commit_faults_the_execution_with_only_its_state_and_an_incident": 2,
+          "Elsa.Workflows.Runtime.Tests.ValueEnvelopeEncryptionPredicateTests.Only_a_present_value_under_a_policy_that_requires_encryption_matches": 8
+        },
+        "unmatchedExecutedCases": 0,
+        "unmatchedDiscoveredCases": 0,
+        "executedCaseNamesSha256": "4b2d652291a668709b962fbce60e2990720a4840cc902c45d70eb2caf33d2e99",
+        "command": [
+          "dotnet",
+          "test",
+          "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+          "--no-build",
+          "--list-tests"
+        ]
+      }
+    },
+    {
+      "project": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+      "passed": 1649,
+      "failed": 0,
+      "skipped": 0,
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+        "--no-restore"
+      ],
+      "trxSha256": "e8ed7f7a984a58531ae75502820118a39152917af0c0d7b0d2b2cf26c4c98689",
+      "discovery": {
+        "listed": 1649,
+        "executed": 1649,
+        "deferredTheoryCaseExpansion": {},
+        "unmatchedExecutedCases": 0,
+        "unmatchedDiscoveredCases": 0,
+        "executedCaseNamesSha256": "02cc183138b93dfbbdc37b0036594f9c8e8546a4c7fb5e03b26f67d23d9c7dac",
+        "command": [
+          "dotnet",
+          "test",
+          "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+          "--no-build",
+          "--list-tests"
+        ]
+      }
+    },
+    {
+      "project": "Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj",
+      "passed": 695,
+      "failed": 0,
+      "skipped": 0,
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj",
+        "--no-restore"
+      ],
+      "trxSha256": "a9615bc31d50599a7f07aa3098cdf947f775282b7f5672a689ac6181064a949d",
+      "discovery": {
+        "listed": 693,
+        "executed": 695,
+        "deferredTheoryCaseExpansion": {
+          "Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_resolver_that_throws_while_the_activation_is_live_reports_ResolverFailed_without_what_it_threw": 2,
+          "Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_context_without_one_partition_refuses_before_the_resolver_is_called": 2
+        },
+        "unmatchedExecutedCases": 0,
+        "unmatchedDiscoveredCases": 0,
+        "executedCaseNamesSha256": "46373a224327b47686562315222dc9bd40b937248626eb3fd394d33c543985b9",
+        "command": [
+          "dotnet",
+          "test",
+          "Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj",
+          "--no-build",
+          "--list-tests"
+        ]
+      }
+    }
+  ],
+  "newCases": {
+    "router": 43,
+    "canonical": 22,
+    "efRouter": 4,
+    "adapter": 15
+  },
+  "newCasesTotal": 84,
+  "supplementary": [
+    {
+      "check": "Public API file/analyzer ownership and Runtime dependency guards",
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "2e1770d925fdf890d61ed8ee33e38c04de74a0d46fc37b8f9f88f51eeb3d71a7"
+    },
+    {
+      "check": "Runtime Core engine shape guards",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "d44502e339ac7dfb67a5f617f2c17fdcb27e0f2532781437fad322ef1e3bb49d"
+    }
+  ],
+  "lockedRestore": "Runtime owning assembly and dependencies --locked-mode passed",
+  "generatedMaps": "Generator -- check passed; no solution-filter changes",
+  "publicApi": {
+    "RuntimeCore": {
+      "added": [
+        "Elsa.Workflows.Runtime.Core.Contracts.IBookmarkResumeDispatcher.CanDispatchSavedStimulus(Elsa.Workflows.Runtime.Core.Contracts.IStimulusDeliveryStore! sources, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore! material, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! executions) -> bool",
+        "Elsa.Workflows.Runtime.Core.Contracts.IBookmarkResumeDispatcher.DispatchAsync(Elsa.Workflows.Runtime.Core.Models.PostCommitDeliveryContext! source, string! workflowExecutionId, string! bookmarkId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.BookmarkResumeDispatchResult!>",
+        "Elsa.Workflows.Runtime.Core.Contracts.IStimulusDeliveryIntentAdapter",
+        "Elsa.Workflows.Runtime.Core.Contracts.IStimulusDeliveryIntentAdapter.CreateRequest(Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntent! intent) -> Elsa.Workflows.Runtime.Core.Models.StimulusDispatchRequest!",
+        "Elsa.Workflows.Runtime.Core.Contracts.IStimulusDeliveryIntentAdapter.IntentKind.get -> string!",
+        "Elsa.Workflows.Runtime.Core.Contracts.IStimulusDeliveryStore.ReadSourceAsync(Elsa.Workflows.Runtime.Core.Models.PostCommitDeliveryContext! source, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.PostCommitDeliveryContext!>",
+        "Elsa.Workflows.Runtime.Core.Contracts.IStimulusRouter.RouteSourceAsync(Elsa.Workflows.Runtime.Core.Models.PostCommitDeliveryContext! source, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.StimulusRoutingResult!>",
+        "Elsa.Workflows.Runtime.Core.Contracts.IWorkflowStartDispatcher.CanDispatchSavedStimulus(Elsa.Workflows.Runtime.Core.Contracts.IStimulusDeliveryStore! sources, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore! material, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! executions) -> bool",
+        "Elsa.Workflows.Runtime.Core.Exceptions.StimulusDeliveryIntentException",
+        "Elsa.Workflows.Runtime.Core.Exceptions.StimulusDeliveryIntentException.IntentId.get -> string!",
+        "Elsa.Workflows.Runtime.Core.Exceptions.StimulusDeliveryIntentException.IntentKind.get -> string!",
+        "Elsa.Workflows.Runtime.Core.Exceptions.StimulusDeliveryIntentException.StimulusDeliveryIntentException(string! intentId, string! intentKind, System.Exception! innerException) -> void",
+        "Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem.OpenStimulusDeliverySource(Elsa.Workflows.Runtime.Core.Models.PostCommitDeliveryContext! expected, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState! publisher, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, System.DateTimeOffset observedAt) -> Elsa.Workflows.Runtime.Core.Models.PostCommitDeliveryContext!"
+      ],
+      "removed": []
+    },
+    "Runtime": {
+      "parentCompileControl": "482aa79e6a26a96db28f82ed8672222a3ffa5ac9",
+      "existingParentDeclarations": 1872,
+      "added": [
+        "Elsa.Workflows.Runtime.Extensions.StimulusRoutingServiceCollectionExtensions",
+        "Elsa.Workflows.Runtime.Services.Executions.WorkflowExecutableStartSourceResolver.CaptureInScopeAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowTriggerBinding! binding, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! executable, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.StimulusStartRecipient!>",
+        "Elsa.Workflows.Runtime.Services.Executions.WorkflowExecutableStartSourceResolver.ValidateCapturedInScopeAsync(System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.StimulusStartRecipient!>! recipients, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask",
+        "static Elsa.Workflows.Runtime.Extensions.StimulusRoutingServiceCollectionExtensions.AddWorkflowStimulusRouter(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!"
+      ],
+      "removed": [],
+      "baselineDeclarations": 1876,
+      "sourceRestored": true
+    }
+  },
+  "schema": "unchanged",
+  "frozenAuthoringSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "mutations": [
+    {
+      "mutation": "reselect-already-saved-cohort",
+      "suite": "router",
+      "failed": 16,
+      "passed": 27,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "deduplicate-same-artifact-bindings",
+      "suite": "router",
+      "failed": 3,
+      "passed": 40,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "truncate-matching-waits",
+      "suite": "router",
+      "failed": 3,
+      "passed": 40,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "treat-non-shed-refusal-as-delivered",
+      "suite": "router",
+      "failed": 2,
+      "passed": 41,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "decode-equivalent-caller-input-instead-of-physical-input",
+      "suite": "router",
+      "failed": 1,
+      "passed": 42,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "omit-exact-wait-condition-from-mailbox-command",
+      "suite": "router",
+      "failed": 3,
+      "passed": 40,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "omit-last-await-source-revalidation",
+      "suite": "router",
+      "failed": 1,
+      "passed": 42,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "discard-contextual-provider-cause",
+      "suite": "router",
+      "failed": 2,
+      "passed": 41,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "ignore-installed-resume-scope-correlation",
+      "suite": "router",
+      "failed": 12,
+      "passed": 31,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "omit-native-final-reference-tenant-validation",
+      "suite": "router",
+      "failed": 1,
+      "passed": 42,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "allow-previously-observed-cohort-removal",
+      "suite": "source",
+      "failed": 1,
+      "passed": 25,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "omit-EF-source-reread-after-publisher-read",
+      "suite": "source",
+      "failed": 1,
+      "passed": 25,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "accept-unknown-or-duplicate-routing-fields",
+      "suite": "adapter",
+      "failed": 5,
+      "passed": 10,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    }
+  ],
+  "mutatedSourcesRestored": {
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Triggers/StimulusRouter.Saved.cs": true,
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Triggers/StimulusDeliveryServices.cs": true,
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Bookmarks/BookmarkResumeDispatcher.cs": true,
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Triggers/StimulusDeliveryFailures.cs": true,
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/InMemoryRuntimeCheckpointCommitStore.cs": true,
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimePostCommitOutbox.cs": true,
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimePostCommitOutboxStore.cs": true,
+    "Essentials/src/Activities/Primitives/Services/PublishStimulusIntentAdapter.cs": true
+  },
+  "reviews": {
+    "correctness": "clean final independent component source review",
+    "standards": "clean final independent component source/API review; distinct scoped method names preserve default-literal calls",
+    "acceptance": "clean final independent component source/tests review;14 actual provider-installed full-cohort controls close last gap",
+    "fullPrRoundsUsed": 0,
+    "fullPrRoundBound": 6
+  },
+  "scope": {
+    "canonicalNativeAndEfSourceReadersQualified": true,
+    "sourceOwnedRoutingComponentQualified": true,
+    "actualDefaultDispatchersQualified": true,
+    "recordingMailboxOnlyForRoutingCases": true,
+    "owningNamedEventProjectionQualified": true,
+    "publisherEnabled": false,
+    "quiescentUpgradeAdmissionQualified": false,
+    "durableHostRecoveryQualified": false,
+    "currentStudioQualified": false,
+    "librarySwitchPerformed": false,
+    "legacyWriterDeleted": false,
+    "programComplete": false
+  },
+  "limits": [
+    "The routing fixtures record mailbox acceptance/deduplication without running callbacks. Native memory is not crash durable.",
+    "Fresh EF contexts prove persisted cohort reuse across actual provider instances; this is not host-process restart or upgraded-host recovery.",
+    "Publisher executor/staging remain unchanged. Actual quiescent preflight and T050 activation/T051 host recovery remain open.",
+    "Historical legacy and Studio captures are not restamped as current-host acceptance. #2898/#2907 and program production acceptance remain open; Orleans/task-runner follow-up deferred."
+  ]
+}

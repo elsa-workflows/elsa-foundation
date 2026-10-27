@@ -47,6 +47,7 @@ public class ActivitiesPrimitivesFeature : IShellFeature
         // accessor the invoke handler drains); the post-commit handler routes the staged stimulus in StartAndResume
         // mode. Registered additively per the AddRuntimePostCommitIntentHandler pattern (a distinct intent kind).
         services.TryAddSingleton<PublishStimulusStagingBuffer>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IStimulusDeliveryIntentAdapter, PublishStimulusIntentAdapter>());
         services.TryAddSingleton<IPublishStimulusStager>(
             serviceProvider => serviceProvider.GetRequiredService<PublishStimulusStagingBuffer>());
         services.TryAddSingleton<IPublishStimulusStagingAccessor>(

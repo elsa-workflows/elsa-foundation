@@ -213,7 +213,8 @@ public static class RuntimeCoreServiceCollectionExtensions
             ServiceDescriptor.Singleton<IBookmarkStateStore, InMemoryBookmarkStateStore>());
         services.TryAddScoped<IBookmarkStimulusLookup, BookmarkStimulusLookup>();
         services.TryAddSingleton<IBookmarkResumeResolver, BookmarkResumeResolver>();
-        services.TryAddScoped<IBookmarkResumeDispatcher, BookmarkResumeDispatcher>();
+        services.TryAddScoped<StimulusDeliveryServices>();
+        services.TryAddScoped<IBookmarkResumeDispatcher>(BookmarkResumeDispatcher.Create);
         services.TryAddScoped<IBookmarkConsumptionCheckpointService, BookmarkConsumptionCheckpointService>();
         // Fan-in notifier over IBookmarkLifecycleObserver contributions. Singleton is safe because the
         // observers themselves register as singletons that open their own scopes (mirroring RouteTableTriggerIndexObserver).

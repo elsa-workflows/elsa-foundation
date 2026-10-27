@@ -1,6 +1,7 @@
 using CShells.Features;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.Extensions.DependencyInjection;
@@ -45,18 +46,10 @@ public sealed class WorkflowsRuntimeTriggersFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        // Durable trigger index over PUBLISHED artifacts. In-memory default; a durable persistence feature
-        // (EF Core) swaps the store via its own registration, so this stays a TryAdd.
-        services.TryAddSingleton<IWorkflowTriggerBindingStore, InMemoryWorkflowTriggerBindingStore>();
+        // Host-neutral routing owns its default stores/lookup and preserves selected durable replacements.
+        services.AddWorkflowStimulusRouter();
         services.TryAddSingleton<IWorkflowTriggerBindingExtractor, WorkflowTriggerBindingExtractor>();
         services.TryAddScoped<IWorkflowTriggerIndexer, WorkflowTriggerIndexer>();
 
-        // Cross-execution bookmark stimulus index, bridged onto the same bookmark state store the runtime
-        // already owns so there is no second index document to keep consistent.
-        BookmarkStateStoreBackend.TryRegisterDefaultStimulusIndex(services);
-        services.TryAddScoped<IGlobalBookmarkStimulusLookup, GlobalBookmarkStimulusLookup>();
-
-        // The routing spine: start + fan-in resume over the two indexes and the runtime dispatchers.
-        services.TryAddScoped<IStimulusRouter, StimulusRouter>();
     }
 }

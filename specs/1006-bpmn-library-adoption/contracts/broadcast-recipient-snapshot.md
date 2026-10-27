@@ -184,6 +184,21 @@ unsupported where a new outbox family has been written.
 
 ## Exact bookmark admission
 
+The source-owned router first reads the provider's canonical current source through `ReadSourceAsync`.
+That operation verifies the exact immutable intent, committed physical scope, current persisted claim
+and trusted expiry, and authoritative publisher facts. Absence permits first selection; a present
+cohort requires its original verified retention witness. Re-read after awaited publisher lookup;
+dirty/caller-owned transactions and unsupported providers refuse without clearing or flushing caller
+state. This read does not install or authorize a recipient by itself.
+
+The generic Runtime path obtains a `StimulusDispatchRequest` only through a named adapter for the
+canonical persisted intent's exact kind. The owning Primitives adapter understands the publish payload;
+Core does not. Caller-authored source/request input cannot override the persisted input. Saved resume
+dispatch similarly resolves the exact persisted entry and immutable request through those ports,
+then carries only the captured wait condition into the existing queued command. No serialized source
+claim is required for the later accepted callback. Legacy router/dispatcher overloads default to
+refusal for this source-owned capability; ordinary external stimulus delivery keeps its existing path.
+
 A saved resume freezes the provider-observed physical bookmark generation as well as its existing
 identity/CreatedAt/expiry, complete metadata and payload fingerprint (never the retained payload), plus
 the recipient's full executable pin, pinned source and trusted tenant/partition/run/test facts. Native

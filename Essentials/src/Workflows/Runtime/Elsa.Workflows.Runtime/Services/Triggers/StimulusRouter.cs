@@ -33,13 +33,19 @@ namespace Elsa.Workflows.Runtime.Services.Triggers;
 /// on dispatch envelopes, but the router does not own a correlation subsystem.
 /// </para>
 /// </remarks>
-public sealed class StimulusRouter : IStimulusRouter
+public sealed partial class StimulusRouter : IStimulusRouter
 {
     private readonly IWorkflowTriggerBindingStore _triggerBindingStore;
     private readonly IGlobalBookmarkStimulusLookup _globalBookmarkStimulusLookup;
     private readonly IWorkflowStartDispatcher _startDispatcher;
     private readonly IBookmarkResumeDispatcher _resumeDispatcher;
     private readonly TimeProvider _timeProvider;
+    private readonly StimulusDeliveryServices? _delivery;
+
+    internal StimulusRouter(IWorkflowTriggerBindingStore triggerBindingStore, IGlobalBookmarkStimulusLookup globalBookmarkStimulusLookup,
+        IWorkflowStartDispatcher startDispatcher, IBookmarkResumeDispatcher resumeDispatcher, TimeProvider timeProvider,
+        StimulusDeliveryServices delivery) : this(triggerBindingStore, globalBookmarkStimulusLookup, startDispatcher, resumeDispatcher, timeProvider)
+        => _delivery = delivery;
 
     public StimulusRouter(
         IWorkflowTriggerBindingStore triggerBindingStore,

@@ -7,6 +7,10 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </summary>
 public interface IWorkflowStartDispatcher
 {
+    /// <summary>Qualify the actual source/material/execution services for saved stimulus starts; legacy dispatchers refuse.</summary>
+    bool CanDispatchSavedStimulus(IStimulusDeliveryStore sources, IWorkflowExecutableStore material,
+        IWorkflowExecutionStateStore executions) => false;
+
     /// <summary>
     /// Dispatches a start of the stored artifact. Ordinary new starts are gated on Source References and refused
     /// with a <see cref="Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableReferenceRejectedException"/> when the

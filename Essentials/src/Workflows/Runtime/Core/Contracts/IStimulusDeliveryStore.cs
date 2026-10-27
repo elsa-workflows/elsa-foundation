@@ -14,6 +14,21 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </remarks>
 public interface IStimulusDeliveryStore
 {
+    /// <summary>Read the canonical physical source before selection or a saved-recipient effect.</summary>
+    /// <remarks>The provider revalidates immutable intent, committed scope, current persisted owner/fence/expiry
+    /// and publisher facts. An absent cohort permits first selection; a present cohort must be retention accepted.
+    /// This read grants no independent recipient authority. Dirty or caller-owned transactions refuse.</remarks>
+    /// <exception cref="StimulusDeliveryBoundaryException">Missing, legacy, contradictory or unavailable source/support;
+    /// retains source identity/cause and distinguishes unavailable dependencies.</exception>
+    /// <exception cref="RuntimePostCommitOutboxStaleClaimException">The persisted source no longer admits this claim.</exception>
+    /// <exception cref="OperationCanceledException">Requested cancellation propagates.</exception>
+    ValueTask<PostCommitDeliveryContext> ReadSourceAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(source); cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromException<PostCommitDeliveryContext>(new StimulusDeliveryBoundaryException(source.SourceOutboxItemId,
+            new NotSupportedException("The selected provider cannot read canonical stimulus delivery sources."), false));
+    }
+
     /// <summary>Proves ordinary collection is still safe for the actual selected physical outbox/material/reference/execution boundary.</summary>
     /// <remarks>Called on every ordinary sweep and its guarded final reads. Protocol/cohort data refuses ordinary
     /// fallback, including when access or composition changed after the collector was resolved. No absent-capability
