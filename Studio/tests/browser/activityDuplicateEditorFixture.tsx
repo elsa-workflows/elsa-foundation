@@ -163,6 +163,19 @@ function createEditorContext(): StudioEndpointContext {
     activityTypeVersion: "1.0.0", inputBindings: [], structureKind: node.structure?.kind,
     childSlots: getChildSlots(node, catalog).map(slot => ({ name: slot.id, activities: slot.activities.map(compiled) }))
   });
+  const runtimeNodes: Array<{ node: ActivityNode; parent: string | null }> = [];
+  const visit = (node: ActivityNode, parent: string | null) => {
+    runtimeNodes.push({ node, parent });
+    getChildSlots(node, catalog).forEach(slot => slot.activities.forEach(child => visit(child, node.nodeId)));
+  };
+  visit(draft.state.rootActivity!, null);
+  const records = runtimeNodes.flatMap(({ node, parent }) => Array.from({ length: runCanvas === "repeated" && node.nodeId === "write-one" ? 10 : 1 }, (_, index) => ({
+    activityExecutionId: `activity-exec-${node.nodeId}${runCanvas === "repeated" && node.nodeId === "write-one" ? `-${index + 1}` : ""}`,
+    workflowExecutionId: "editor-execution", executableNodeId: `exec-${node.nodeId}`, authoredActivityId: node.nodeId,
+    activityType: catalog.find(item => item.activityVersionId === node.activityVersionId)?.activityTypeKey ?? "unknown", activityTypeVersion: "1.0.0",
+    parentActivityExecutionId: parent ? `activity-exec-${parent}` : null,
+    scheduledAt: "2026-10-27T10:00:00Z", status: "Completed", metadata: {}, position: index + 1
+  })));
   const runView = { testRunId: "editor-test", definitionId: draft.definitionId, definitionVersionId: "draft-1", artifactId: "editor-artifact", workflowExecutionId: "editor-execution", status: "Dispatched" };
   return {
     baseUrl: "browser-activity-duplicate-editor",
@@ -180,6 +193,7 @@ function createEditorContext(): StudioEndpointContext {
                 { id: "elsa.api.runtime", contractVersion: "1", links: [
                   { rel: "workflow-instance", href: "runtime/workflows/instances/{workflowExecutionId}", templated: true },
                   { rel: "workflow-executable", href: "runtime/workflows/executables/{artifactId}", templated: true },
+                  { rel: "activity-execution", href: "runtime/workflows/instances/{workflowExecutionId}/activities/{activityExecutionId}", templated: true },
                   { rel: "activity-executions", href: "runtime/workflows/instances/{workflowExecutionId}/activity-executions", templated: true }
                 ] }
               ] : []),
@@ -238,12 +252,25 @@ function createEditorContext(): StudioEndpointContext {
           artifactId: "editor-artifact", rootActivity: compiled(draft.state.rootActivity!)
         };
         if (runCanvas && url.startsWith("/runtime/workflows/instances/editor-execution/activity-executions?")) {
-          const id = new URL(url, "http://fixture").searchParams.get("executableNodeId")!;
-          return { totalCount: runCanvas === "repeated" ? 10 : 1, items: [{ execution: {
-            activityExecutionId: `activity-${id}`, workflowExecutionId: "editor-execution", executableNodeId: id,
-            authoredActivityId: id.replace(/^exec-/, ""), activityType: writeLine.activityTypeKey, activityTypeVersion: "1.0.0",
-            scheduledAt: "2026-10-27T10:00:00Z", status: "Completed", metadata: {}
-          } }] };
+          const query = new URL(url, "http://fixture").searchParams;
+          const node = query.get("executableNodeId"), parent = query.get("parentActivityExecutionId"), ancestor = query.get("ancestorActivityExecutionId");
+          const filtered = records.filter(record => (!node || record.executableNodeId === node) && (!parent || record.parentActivityExecutionId === parent)
+            && (!ancestor || record.parentActivityExecutionId === ancestor));
+          const anchor = query.get("anchorActivityExecutionId");
+          const items = filtered.map((execution, index) => ({ execution, position: index + 1,
+            previousActivityExecutionId: filtered[index - 1]?.activityExecutionId ?? null, nextActivityExecutionId: filtered[index + 1]?.activityExecutionId ?? null }));
+          return { totalCount: items.length, previousCursor: null, nextCursor: null,
+            items: query.get("limit") === "1" ? [anchor ? items.find(item => item.execution.activityExecutionId === anchor) : items.at(-1)].filter(Boolean) : items };
+        }
+        if (runCanvas && url.startsWith("/runtime/workflows/instances/editor-execution/activities/")) {
+          const id = decodeURIComponent(url.split("/activities/")[1]);
+          const execution = records.find(record => record.activityExecutionId === id);
+          if (!execution) throw new Error("Unknown activity execution");
+          return { ...execution, executionSequence: execution.position,
+            provenance: { parentActivityExecutionId: execution.parentActivityExecutionId, metadata: {} },
+            bookmarks: [], incidents: [], outcomeNames: ["Done"], valueSnapshots: [{ name: "Text", inputKey: "text", subject: "ActivityInput",
+              captureMode: "DiagnosticSnapshot", snapshot: { kind: "string", preview: `Current: ${execution.position}` },
+              capturedAt: execution.scheduledAt, captureReason: "Captured by fixture policy", isSensitive: false, metadata: {} }] };
         }
         if (runCanvas && url === "/publishing/test-runs/editor-test/waits") return { waits: [] };
         throw new Error(`Unexpected editor fixture request: ${url}`);

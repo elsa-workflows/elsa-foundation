@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Node } from "@xyflow/react";
 import { authSessionEndedEvent, authSessionStartedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { browseActivityExecutions, getExecutable, getWorkflowInstance } from "../api/runtime";
+import { browseActivityExecutions, getExecutable, getExecutableInputSources, getWorkflowInstance } from "../api/runtime";
 import { ApiCapabilityUnavailableError, ApiCapabilityVersionMismatchError } from "../api/capabilities";
 import { buildExecutableActivityGraph, type ExecutableActivityGraph } from "../executableGraph";
 import type { ActivityCatalogItem, ActivityExecutionStateSummary, WorkflowInstanceDetails } from "../workflowTypes";
@@ -23,7 +23,7 @@ interface RunCanvasEvidence {
 }
 
 /** Adds observation to the existing canvas without changing its document, selection or viewport. */
-export function useEditorRunCanvas({ context, definitionId, testRun, draftSignature, catalog, nodes, selectedNodeId, onOpenIncident }: {
+export function useEditorRunCanvas({ context, definitionId, testRun, draftSignature, catalog, nodes, selectedNodeId, onOpenIncident, ancestorId, selectedExecution }: {
   context: StudioEndpointContext;
   definitionId: string;
   testRun: WorkflowTestRunState | null;
@@ -32,6 +32,8 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
   nodes: Node<WorkflowNodeData>[];
   selectedNodeId: string | null;
   onOpenIncident?(): void;
+  ancestorId?: string;
+  selectedExecution?: ActivityExecutionStateSummary | null;
 }) {
   const [dismissedRunId, setDismissedRunId] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
@@ -46,7 +48,7 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
   const eligible = Boolean(snapshot && executionId && artifactId && testRun?.endpointContext === context && testRun && !isRejectedTestRun(testRun.view));
   const attached = eligible && !stale && dismissedRunId !== runId && authorized;
   const nodeKey = JSON.stringify([...new Set(nodes.map(node => node.data.runtimeNodeId ?? node.id))].sort());
-  const key = JSON.stringify([runId, executionId, artifactId, nodeKey, revision]);
+  const key = JSON.stringify([runId, executionId, artifactId, nodeKey, revision, ancestorId, selectedExecution?.activityExecutionId]);
   const refresh = useCallback(() => setRevision(value => value + 1), []);
 
   useEffect(() => {
@@ -75,7 +77,11 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
         const executable = await getExecutable(context, artifactId, details.instance.sourceReferenceId);
         if (controller.signal.aborted) return;
         if (executable.artifactId !== artifactId) throw new Error("The Test Run executable could not be verified.");
-        const graph = buildExecutableActivityGraph(executable.rootActivity, catalog);
+        const sourceId = executable.chosenReference?.sourceReferenceId ?? details.instance.sourceReferenceId;
+        const sources = sourceId ? await getExecutableInputSources(context, artifactId, sourceId).catch(() => null) : null;
+        if (controller.signal.aborted) return;
+        const graph = buildExecutableActivityGraph(executable.rootActivity, catalog, sources?.authoredInputs ?? [], sources?.compiledInputs ?? [],
+          sources?.accessState ?? sources?.access ?? "unavailable", executable.chosenReference?.activityPresentation ?? []);
         const visible = (JSON.parse(nodeKey) as string[]).map(id => graph.factsByNodeId.get(id)).filter(item => item !== undefined);
         const activities: ActivityExecutionStateSummary[] = [];
         let repeated = false;
@@ -83,11 +89,13 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
         const worker = async () => {
           while (index < visible.length && !controller.signal.aborted) {
             const fact = visible[index++];
-            const page = await browseActivityExecutions(context, executionId, { executableNodeId: fact.executableNodeId, limit: 1 }, controller.signal);
+            const exact: string | undefined = selectedExecution?.workflowExecutionId === executionId && selectedExecution.executableNodeId === fact.executableNodeId ? selectedExecution.activityExecutionId : undefined;
+            const page = await browseActivityExecutions(context, executionId, { executableNodeId: fact.executableNodeId,
+              ...(ancestorId ? { ancestorActivityExecutionId: ancestorId } : {}), ...(exact ? { anchorActivityExecutionId: exact } : {}), limit: 1 }, controller.signal);
             const execution = page.items[0]?.execution;
             // A repeated node has no selected occurrence yet. Do not paint a global latest result.
-            if (page.totalCount > 1) repeated = true;
-            else if (page.totalCount === 1 && execution?.workflowExecutionId === executionId && execution.executableNodeId === fact.executableNodeId) activities.push(execution);
+            if (page.totalCount > 1 && !exact) repeated = true;
+            if ((page.totalCount === 1 || exact && execution?.activityExecutionId === exact) && execution?.workflowExecutionId === executionId && execution.executableNodeId === fact.executableNodeId) activities.push(execution);
           }
         };
         await Promise.all(Array.from({ length: Math.min(4, visible.length) }, worker));
@@ -102,7 +110,7 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
     };
     void load();
     return () => controller.abort();
-  }, [artifactId, attached, catalog, context, executionId, key, nodeKey]);
+  }, [ancestorId, artifactId, attached, catalog, context, executionId, key, nodeKey, selectedExecution]);
 
   const current = attached && evidence?.key === key && evidence.context === context ? evidence : null;
   const shownNodes = useMemo(() => {
@@ -119,6 +127,10 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
   return {
     nodes: shownNodes,
     eligible,
+    graph: current?.graph ?? null,
+    details: current?.details ?? null,
+    activities: current?.activities ?? [],
+    refreshKey: revision,
     attached,
     stale,
     loading: attached && (!current || current.loading),
