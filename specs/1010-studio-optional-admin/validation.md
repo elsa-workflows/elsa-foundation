@@ -266,3 +266,20 @@ shell/registry/write200. Both owned containers stop in finally and are removed. 
 The application code remains the clean17e63d67e candidate. These CI/Docker inputs require a further exact-head
 independent review and fresh remote gates. Earlier CI failures/cancellations are not counted as current passes;
 merge and resulting-main verification remain outstanding.
+
+
+## Draft review round4 path-trigger correction
+
+Round4 reviewed032f68d15244bf6d68ab6ff12dfd29a9046806cd against the same base. Standards/acceptance
+were clean; correctness found one P2: the newly compiled Modularity libraries/build inputs were absent from the
+Studio pull-request path filter, so a change to those inputs could skip validation of the addon/image. This
+survives because the backend solution does not compile the Studio addon.
+
+The filter now covers Modularity Core/Nuplane, their analyzer, version props/targets, actual root NuGet.Config
+casing and Docker context exclusions, while preserving narrow scope for unrelated backend work. The temporary
+picomatch check against concrete input files reproduces8 uncovered inputs before the fix, then covers all9
+required examples and excludes all3 unrelated runtime/docs examples afterward. Logs:
+/tmp/studio3359-path-filter-{before,fixed}.log. The obsolete wrong-case root NuGet.config filter was removed;
+Studio/NuGet.config remains covered by Studio/**. This only changes triggers; the already qualified CI commands,
+actual image and application code are unchanged. No further whole-suite repetition is claimed or needed for
+this pure filter correction. Exact-head independent review and fresh remote gates remain outstanding.

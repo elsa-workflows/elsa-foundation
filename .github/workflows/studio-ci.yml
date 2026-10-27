@@ -5,7 +5,8 @@ name: Studio CI
 # is source history only; this workflow owns validation in the consolidated repository.
 #
 # Pull requests run it only when they change Studio, a Studio extension, the Weaver extension the Studio solution
-# references, shared build configuration, or this workflow and its tooling (spec 263, FR-026). None of its checks is a
+# references, the two shared Modularity libraries it compiles, shared build configuration, or this workflow and its
+# tooling (spec 263, FR-026). None of its checks is a
 # required status check, so the path filter cannot leave a required check waiting. Every push to main runs it in full.
 # That a backend change can still break the Studio API clients is tracked separately (#3177).
 on:
@@ -15,8 +16,15 @@ on:
       - 'Studio/**'
       - 'Extensions/*/studio/**'
       - 'Extensions/Weaver/**'
+      - 'Essentials/src/Modularity/Core/**'
+      - 'Essentials/src/Modularity/Nuplane/**'
+      - 'Essentials/build/Analyzers/**'
+      - 'VersionLines.props'
+      - 'PackageVersioning.props'
+      - 'PackageRanges.targets'
+      - 'NuGet.Config'
+      - '.dockerignore'
       - 'global.json'
-      - 'NuGet.config'
       - 'Directory.Packages.props'
       - 'Directory.Build.props'
       - '.editorconfig'
