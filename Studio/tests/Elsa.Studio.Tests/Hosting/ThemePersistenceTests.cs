@@ -10,6 +10,32 @@ public sealed class ThemePersistenceTests
     private const string Base = "/_elsa/theme-store";
 
     [Theory]
+    [InlineData("snapshot-20261027")]
+    [InlineData("collection.data")]
+    public async Task A_json_named_source_link_loads_its_collection_when_the_target_has_another_extension(string targetName)
+    {
+        await using var host = await ThemeHost.StartAsync("ThemeManagement", configure: (options, root) =>
+        {
+            var target = Path.Combine(root, targetName);
+            File.WriteAllText(target, new JsonObject
+            {
+                ["themes"] = new JsonArray(Definition("linked-source", "Linked source"))
+            }.ToJsonString());
+            var source = Path.Combine(root, "themes.json");
+            if (OperatingSystem.IsWindows()) File.Copy(target, source, overwrite: true);
+            else if (!File.Exists(source)) File.CreateSymbolicLink(source, target);
+            options.ThemesDirectory = "themes.json";
+            options.ThemesMode = StudioThemeSourceMode.DirectoryOnly;
+            options.DefaultThemeId = "linked-source";
+        });
+
+        var response = await Read(host);
+        Assert.Contains("linked-source", response["directoryThemeIds"]!.AsArray().Select(id => id!.GetValue<string>()));
+        Assert.Equal("Linked source", (string?)Theme(response, "linked-source")["name"]);
+        Assert.Equal("linked-source", (string?)response["defaultThemeId"]);
+    }
+
+    [Theory]
     [InlineData(".", "studio-theme-store.json")]
     [InlineData("state", "state/themes.json")]
     public async Task A_source_directory_containing_the_managed_store_does_not_adopt_it(string source, string store)
