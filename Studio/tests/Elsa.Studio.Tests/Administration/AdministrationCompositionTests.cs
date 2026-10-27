@@ -3,6 +3,7 @@ using Elsa.Studio.Hosting;
 using Elsa.Studio.Hosting.Nuplane;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -84,7 +85,7 @@ internal sealed class AdministrationHost : IAsyncDisposable
     public string ShellsFile => Path.Combine(Root, "config", "studio-shells.json");
     public const string Credential = "private-feature-credential-sentinel";
 
-    public static async Task<AdministrationHost> StartAsync(Action<NuplaneBuilder>? configureNuplane = null, bool addAdministration = true, bool managedFeatures = false, Action<WebApplicationBuilder>? beforeStudio = null, Action<WebApplicationBuilder>? afterStudio = null, bool nativeStore = false, bool loadPackages = false, Action<WebApplication>? configurePipeline = null, string? root = null, bool keepFiles = false, Action<StudioNuplaneOptions>? configureAdministration = null)
+    public static async Task<AdministrationHost> StartAsync(Action<NuplaneBuilder>? configureNuplane = null, bool addAdministration = true, bool managedFeatures = false, Action<WebApplicationBuilder>? beforeStudio = null, Action<WebApplicationBuilder>? afterStudio = null, bool nativeStore = false, bool loadPackages = false, Action<WebApplication>? configurePipeline = null, string? root = null, bool keepFiles = false, Action<StudioNuplaneOptions>? configureAdministration = null, Action<IEndpointRouteBuilder>? mapAdministration = null)
     {
         var host = new AdministrationHost(root, keepFiles);
         try
@@ -123,7 +124,11 @@ internal sealed class AdministrationHost : IAsyncDisposable
             configurePipeline?.Invoke(host.App);
             host.App.UseElsaStudio();
             host.App.MapElsaStudio();
-            if (addAdministration) host.App.MapElsaStudioNuplane();
+            if (addAdministration)
+            {
+                if (mapAdministration is null) host.App.MapElsaStudioNuplane();
+                else mapAdministration(host.App);
+            }
             if (nativeStore)
             {
                 Directory.CreateDirectory(Path.Combine(host.Root, "native-store", "installs"));
