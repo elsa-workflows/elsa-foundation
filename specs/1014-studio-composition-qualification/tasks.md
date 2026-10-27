@@ -13,7 +13,7 @@
 
 **Goal/test**: An external published host renders a real packaged module's contribution and direct link.
 
-- [ ] T004 [US1] Add test-owned module/browser fixture templates using existing Core/CShells/SDK contracts under `tools/studio/Composition.Probe/`; document its navigation/route contributions and versioned generation witness.
+- [x] T004 [US1] Add test-owned module/browser fixture templates using existing Core/CShells/SDK contracts under `tools/studio/Composition.Probe/`; document its navigation/route contributions and versioned generation witness.
 - [ ] T005 [US1] Implement actual candidate packing, private package-only locked restore/publish/hidden-input/tool-audit and four host compositions in `tools/studio/Composition.Probe/qualify.py`, reusing established probe patterns.
 - [ ] T006 [US1] Verify custom discovery, archive/cache/publish assets, shared imports, rendered contribution/direct link and the specific missing-module-asset/restoration guard in `tools/studio/Composition.Probe/browser.mjs` and qualifier.
 
