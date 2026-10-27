@@ -239,3 +239,30 @@ matching actual candidate DLL hashes and denying frontend tooling. Its first fea
 response body was not retained by that initial harness. A fresh diagnostic apply and a full sequence replay
 both returned200. This original failure is retained as unresolved until the revised candidate/journey qualifies;
 no first-attempt success or complete consumer acceptance is claimed. All owned processes stop in finally.
+
+
+## CI artifact and Docker correction
+
+Studio CI40439484268/job121976386439 on0e763da9f passed a0-warning build and570/570 tests, then failed
+packNU5104: default stable Studio1.0.0 referenced Modularity4.0.0-dev. The PR returned to draft before new
+pushes; the failure remains recorded and was reproduced locally in the owned producer. This is an artifact
+version-input defect, not a reason to suppress the warning or change publication policy.
+
+The dotnet CI job now uses4.0.0-studio-ci.<run_id>.<run_attempt> consistently through build/test/pack, requires
+that version in artifact verification and passes it to its existing local image build. No publisher, package
+identity or release workflow changed. Local reproduction with4.0.0-studio-ci.3359.1 passes locked restore,
+build, whole570/570 tests, pack, exact21/version verification and isolated Api consumer. Logs:
+/tmp/studio3359-ci-{restore,build,pack,inventory,api-closure}.log and ci-cohort-tests.log. The initial optional
+Python YAML parser was unavailable; the native Ruby parser checks the actual workflow syntax instead.
+
+The original Dockerfile also failed a real build because it omitted the two new Modularity library source
+folders. It now copies only Core/Nuplane and their root build/version/analyzer inputs; it does not copy backend
+API/identity/cluster implementations. The corrected actual image builds at the same CI artifact version.
+Image IDsha256:2dc9b68e824ac5c51bb3e03300ff38d4461e0481d9a6e7b01c7647051c0e5a52 runs asUID1654:
+with default auth, shell200 and administration registry/retention write401; with explicit demo auth disabled,
+shell/registry/write200. Both owned containers stop in finally and are removed. Report:
+/tmp/studio3359-image-smoke-report.json; before/fixed build logs and runtime logs remain in /tmp/studio3359-*.
+
+The application code remains the clean17e63d67e candidate. These CI/Docker inputs require a further exact-head
+independent review and fresh remote gates. Earlier CI failures/cancellations are not counted as current passes;
+merge and resulting-main verification remain outstanding.
