@@ -71,7 +71,9 @@ def omit_core_dependency(package, originals):
 
 
 def qualify(args):
-    root = Path(tempfile.mkdtemp(prefix="studio-api-closure-")).resolve()
+    root = args.output.resolve() if args.output else Path(tempfile.mkdtemp(prefix="studio-api-closure-")).resolve()
+    if args.output:
+        root.mkdir(parents=True, exist_ok=False)
     feed, consumer, cache, published = [root / name for name in ("feed", "consumer", "cache", "published")]
     feed.mkdir()
     consumer.mkdir()
@@ -249,6 +251,7 @@ app.Run();
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", type=Path, help="New owned artifact directory")
     parser.add_argument("--packages", help="Existing candidate artifact directory; otherwise pack Core and Api")
     parser.add_argument("--version", default="4.0.0-reuse-probe", help="Local producer version when packing")
     parser.add_argument("--omit-api-core-dependency", action="store_true", help="Negative control: omit Core from a private unsigned Api nuspec copy; the expected product failure still exits 1")

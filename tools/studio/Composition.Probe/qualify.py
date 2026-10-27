@@ -52,6 +52,23 @@ def qualify(args):
             streams[label] = journeys.live_stream(p, "stream-" + label, control=control)
             p.report["results"]["liveStream"] = streams
             p.save()
+        # A no-op reconciliation is not evidence for an AutoReload=false control.
+        # Exercise that precise false-green risk through the same actual native host.
+        p.report.update(stage="controlGuard:no-update")
+        p.save()
+        try:
+            journeys.live_stream(p, "stream-no-update", control=True, update=False)
+        except RuntimeError as error:
+            observation = json.loads((p.root / "stream-no-update-reconcile.json").read_text())
+            outcome = observation["outcome"]
+            run = outcome.get("runResult") or {}
+            check(str(error) == journeys.EXPECTED_UPDATE_ERROR and observation["httpStatus"] == 200
+                  and outcome.get("outcomeCode") == 0 and run.get("isDegraded") is False
+                  and not (run.get("changeSet") or {}).get("updated"), "No-update guard failed for an unrelated reason")
+            p.report["results"]["noUpdateControlGuard"] = {"status": "failed", "stage": "expected-package-update",
+                                                          "expectedFailureObserved": True, "observation": observation}
+        else:
+            raise RuntimeError("No-update reconciliation was incorrectly accepted as the disabled-reload control")
         for name, profile in p.profiles.items():
             check(not profile["audit"].exists() or not profile["audit"].read_text().strip(), name + " invoked consumer frontend tooling")
             p.report["profiles"][name].update(status="qualified", frontendInvocations=0)
