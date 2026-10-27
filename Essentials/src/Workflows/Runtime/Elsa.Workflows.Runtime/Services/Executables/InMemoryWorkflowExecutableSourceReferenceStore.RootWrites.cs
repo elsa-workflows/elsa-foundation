@@ -6,7 +6,7 @@ namespace Elsa.Workflows.Runtime.Services.Executables;
 public sealed partial class InMemoryWorkflowExecutableSourceReferenceStore
 {
     public bool CanWriteRootReferences(IWorkflowExecutableStore executables) =>
-        _executableStore is not null && ReferenceEquals(executables, _executableStore);
+        _executableStore is not null && ReferenceEquals(executables?.GetMaterialStore(), _executableStore);
 
     public ValueTask<WorkflowExecutableSourceReference> SaveWithRootWriteLeasesAsync(WorkflowExecutableSourceReference reference,
         WorkflowExecutableIdentity root, IReadOnlyList<WorkflowExecutableRootWriteLease> leases, CancellationToken cancellationToken = default)

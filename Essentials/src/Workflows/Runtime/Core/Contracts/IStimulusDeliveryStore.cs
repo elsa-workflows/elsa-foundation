@@ -14,6 +14,48 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </remarks>
 public interface IStimulusDeliveryStore
 {
+    /// <summary>Proves ordinary collection is still safe for the actual selected physical outbox/material/reference/execution boundary.</summary>
+    /// <remarks>Called on every ordinary sweep and its guarded final reads. Protocol/cohort data refuses ordinary
+    /// fallback, including when access or composition changed after the collector was resolved. No absent-capability
+    /// or narrower-query fallback is permitted. This is not an old-writer or publisher-activation preflight.</remarks>
+    /// <exception cref="NotSupportedException">The selected source boundary or capability is unsupported.</exception>
+    /// <exception cref="StimulusDeliveryRetentionException">Protocol obligations or provider failure require retaining material; preserves cause.</exception>
+    /// <exception cref="InvalidDataException">Visible source authority is corrupt.</exception>
+    /// <exception cref="InvalidOperationException">The committed access boundary cannot be established.</exception>
+    /// <exception cref="OperationCanceledException">Requested cancellation propagates.</exception>
+    ValueTask EnsureOrdinaryCollectionAllowedAsync(IRuntimePostCommitOutboxStore outbox, IWorkflowExecutableStore executables,
+        IWorkflowExecutableSourceReferenceStore references, IWorkflowExecutionStateStore executions, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(outbox); ArgumentNullException.ThrowIfNull(executables);
+        ArgumentNullException.ThrowIfNull(references); ArgumentNullException.ThrowIfNull(executions); cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromException(new NotSupportedException("Ordinary collection cannot prove the absence of stimulus protocol obligations."));
+    }
+
+    /// <summary>Whether retention coordinates these actual selected outbox, material, reference and physical execution stores.</summary>
+    /// <remarks>Structural maintenance capability only; this is not publisher rollout or legacy-writer readiness.
+    /// Callers must qualify their selected stores. Unsupported providers report false.</remarks>
+    /// <exception cref="StimulusDeliveryRetentionException">A synchronous provider/access failure prevents qualification; preserves its cause.</exception>
+    bool CanRetainExecutables(IRuntimePostCommitOutboxStore outbox, IWorkflowExecutableStore executables,
+        IWorkflowExecutableSourceReferenceStore references, IWorkflowExecutionStateStore executions) => false;
+
+    /// <summary>Reads owed cohort roots for the selected physical material boundary, rather than a delivery scope.</summary>
+    /// <remarks>Native material is shared: maintenance includes every committed source scope sharing that material.
+    /// EF material is scoped: maintenance requires the same actual context and scope. This is a maintenance read,
+    /// not recipient selection. Legacy providers refuse rather than substitute a narrower scoped root set.</remarks>
+    /// <exception cref="NotSupportedException">The selected physical boundary cannot be established.</exception>
+    /// <exception cref="StimulusDeliveryRetentionException">Provider failure; retains actual scope/cause when known.</exception>
+    /// <exception cref="InvalidDataException">Source or retirement authority is corrupt; retain material.</exception>
+    /// <exception cref="InvalidOperationException">A committed access boundary cannot be established.</exception>
+    /// <exception cref="OperationCanceledException">Requested cancellation propagates.</exception>
+    ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(IWorkflowExecutableStore executables,
+        IWorkflowExecutableSourceReferenceStore references, IWorkflowExecutionStateStore executions,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(executables); ArgumentNullException.ThrowIfNull(references); ArgumentNullException.ThrowIfNull(executions);
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromException<IReadOnlyCollection<string>>(new NotSupportedException("Physical stimulus retention is unavailable."));
+    }
+
     /// <exception cref="StimulusDeliveryBoundaryException">
     /// The exact persisted source, publisher scope or snapshot cannot be read/validated. Include its source ID and
     /// preserve the original cause. Temporary dependency failures, including unrequested provider cancellation,

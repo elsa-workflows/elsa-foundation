@@ -7,8 +7,9 @@ namespace Elsa.Workflows.Runtime.Services.Executables;
 /// <summary>
 /// Preserves direct reads while invalidating shared-cache entries after provider-authoritative mutations.
 /// </summary>
-public sealed class InvalidatingWorkflowExecutableStore : WorkflowExecutableStoreDecorator
+public sealed class InvalidatingWorkflowExecutableStore : WorkflowExecutableStoreDecorator, IWorkflowExecutableStore
 {
+    IWorkflowExecutableStore IWorkflowExecutableStore.GetMaterialStore() => Inner.GetMaterialStore();
     private readonly WorkflowExecutableCache _cache;
     private readonly string? _partition;
 

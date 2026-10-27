@@ -2,6 +2,8 @@ using Elsa.Workflows.Runtime.Core.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Services.Coalescing;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -24,8 +26,12 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
     private readonly IWorkflowExecutableSourceReferenceStore _sourceReferenceStore;
     private readonly IExecutableActivityTemplateStore _activityTemplateStore;
     private readonly IWorkflowExecutionStateStore _workflowExecutionStateStore;
+    private readonly IWorkflowExecutionStateStore _physicalWorkflowExecutions;
     private readonly IWorkflowDispatchRetentionRootStore? _workflowDispatchRootStore;
     private readonly IStimulusDeliveryStore? _stimulusDeliveryStore;
+    private readonly IStimulusDeliveryStore? _ordinaryCollectionGuard;
+    private readonly IRuntimePostCommitOutboxStore? _ordinaryOutbox;
+    private readonly bool _requiresOrdinaryProof;
     private readonly TimeProvider _timeProvider;
     private readonly TimeSpan _artifactCreationGracePeriod;
     private readonly TimeSpan _deletionGuardTimeout;
@@ -175,6 +181,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
         _sourceReferenceStore = sourceReferenceStore;
         _activityTemplateStore = activityTemplateStore;
         _workflowExecutionStateStore = workflowExecutionStateStore;
+        _physicalWorkflowExecutions = workflowExecutionStateStore;
         _workflowDispatchRootStore = workflowDispatchRootStore;
         _timeProvider = timeProvider;
         _artifactCreationGracePeriod = artifactCreationGracePeriod;
@@ -194,6 +201,58 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
     }
 
     public bool SupportsStimulusDeliveryRetention => _stimulusDeliveryStore is not null;
+
+    internal static WorkflowExecutableReferenceGarbageCollector Create(IServiceProvider sp)
+    {
+        var material = sp.GetRequiredService<IWorkflowExecutableStore>();
+        var references = sp.GetRequiredService<IWorkflowExecutableSourceReferenceStore>();
+        var templates = sp.GetRequiredService<IExecutableActivityTemplateStore>();
+        var executions = sp.GetRequiredService<IWorkflowExecutionStateStore>();
+        var physicalExecutions = executions.GetType() == typeof(CoalescingWorkflowExecutionStateStore)
+            ? sp.GetService<CoalescingInner<IWorkflowExecutionStateStore>>()?.Value : executions;
+        var dispatch = sp.GetService<IWorkflowDispatchRetentionRootStore>();
+        var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<WorkflowExecutableGarbageCollectionOptions>>();
+        var clock = sp.GetRequiredService<TimeProvider>();
+        var logger = sp.GetRequiredService<ILogger<WorkflowExecutableReferenceGarbageCollector>>();
+        var delivery = sp.GetService<IStimulusDeliveryStore>();
+        var outbox = sp.GetService<IRuntimePostCommitOutboxStore>();
+        var physicalOutbox = outbox?.GetType() == typeof(CoalescingRuntimePostCommitOutboxStore)
+            ? sp.GetService<CoalescingInner<IRuntimePostCommitOutboxStore>>()?.Value : outbox;
+        if (physicalExecutions is not null && physicalOutbox is not null && delivery is not null &&
+            templates.CanMaintainReferences(material, references) && references.CanWriteRootReferences(material) &&
+            delivery.CanRetainExecutables(physicalOutbox, material, references, physicalExecutions))
+            return new WorkflowExecutableReferenceGarbageCollector(material, references, templates, executions, dispatch,
+                options, clock, logger, delivery, physicalExecutions);
+        return new WorkflowExecutableReferenceGarbageCollector(material, references, templates, executions, dispatch,
+            options, clock, logger, delivery ?? physicalOutbox as IStimulusDeliveryStore, physicalOutbox, physicalExecutions ?? executions);
+    }
+
+    private WorkflowExecutableReferenceGarbageCollector(
+        IWorkflowExecutableStore executableStore, IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IExecutableActivityTemplateStore activityTemplateStore, IWorkflowExecutionStateStore workflowExecutionStateStore,
+        IWorkflowDispatchRetentionRootStore? workflowDispatchRootStore, IOptions<WorkflowExecutableGarbageCollectionOptions> options,
+        TimeProvider timeProvider, ILogger<WorkflowExecutableReferenceGarbageCollector> logger,
+        IStimulusDeliveryStore? ordinaryCollectionGuard, IRuntimePostCommitOutboxStore? ordinaryOutbox, IWorkflowExecutionStateStore physicalWorkflowExecutions)
+        : this(executableStore, sourceReferenceStore, activityTemplateStore, workflowExecutionStateStore,
+            workflowDispatchRootStore, options, timeProvider, logger)
+    {
+        _ordinaryCollectionGuard = ordinaryCollectionGuard;
+        _ordinaryOutbox = ordinaryOutbox;
+        _requiresOrdinaryProof = true;
+        _physicalWorkflowExecutions = physicalWorkflowExecutions;
+    }
+
+    internal WorkflowExecutableReferenceGarbageCollector(
+        IWorkflowExecutableStore executableStore, IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IExecutableActivityTemplateStore activityTemplateStore, IWorkflowExecutionStateStore workflowExecutionStateStore,
+        IWorkflowDispatchRetentionRootStore? workflowDispatchRootStore, IOptions<WorkflowExecutableGarbageCollectionOptions> options,
+        TimeProvider timeProvider, ILogger<WorkflowExecutableReferenceGarbageCollector> logger,
+        IStimulusDeliveryStore stimulusDeliveryStore, IWorkflowExecutionStateStore physicalWorkflowExecutions)
+        : this(executableStore, sourceReferenceStore, activityTemplateStore, workflowExecutionStateStore,
+            workflowDispatchRootStore, options, timeProvider, logger, stimulusDeliveryStore)
+    {
+        _physicalWorkflowExecutions = physicalWorkflowExecutions ?? throw new ArgumentNullException(nameof(physicalWorkflowExecutions));
+    }
 
     public ValueTask<WorkflowExecutableReferenceSweepResult> SweepAsync(CancellationToken cancellationToken = default) =>
         SweepAsync(_timeProvider.GetUtcNow(), cancellationToken);
@@ -236,7 +295,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
             .ToArray();
         foreach (var reference in doomedReferences)
         {
-            if (_stimulusDeliveryStore is null)
+            if (_stimulusDeliveryStore is null && !_requiresOrdinaryProof)
             {
                 if (await _sourceReferenceStore.TryDeleteDoomedAsync(reference, now, cancellationToken))
                     deletedReferenceIds.Add(reference.SourceReferenceId);
@@ -362,7 +421,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
         var deletedActivityTemplateCount = 0;
         foreach (var templateId in unreferencedTemplateIds)
         {
-            if (_stimulusDeliveryStore is not null)
+            if (_stimulusDeliveryStore is not null || _requiresOrdinaryProof)
             {
                 if (!_activityTemplateStore.CanMaintainReferences(_executableStore, _sourceReferenceStore)) continue;
                 try
@@ -487,11 +546,19 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
 
     private async ValueTask<IReadOnlyCollection<string>> ListRuntimeRootIdsAsync(CancellationToken cancellationToken)
     {
-        var roots = (await _workflowExecutionStateStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken)).ToList();
+        if (_requiresOrdinaryProof)
+        {
+            if (_ordinaryCollectionGuard is null || _ordinaryOutbox is null)
+                throw new NotSupportedException("Ordinary GC has no proved physical outbox boundary.");
+            await _ordinaryCollectionGuard.EnsureOrdinaryCollectionAllowedAsync(_ordinaryOutbox, _executableStore, _sourceReferenceStore, _physicalWorkflowExecutions, cancellationToken);
+        }
+        var roots = new List<string>();
+        if (_stimulusDeliveryStore is not null)
+            roots.AddRange(await _stimulusDeliveryStore.ListPinnedExecutableArtifactIdsAsync(
+                _executableStore, _sourceReferenceStore, _physicalWorkflowExecutions, cancellationToken));
+        roots.AddRange(await _workflowExecutionStateStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
         if (_workflowDispatchRootStore is not null)
             roots.AddRange(await _workflowDispatchRootStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
-        if (_stimulusDeliveryStore is not null)
-            roots.AddRange(await _stimulusDeliveryStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
         return roots;
     }
 

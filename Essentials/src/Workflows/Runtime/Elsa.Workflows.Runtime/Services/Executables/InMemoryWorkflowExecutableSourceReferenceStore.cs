@@ -15,7 +15,7 @@ public sealed partial class InMemoryWorkflowExecutableSourceReferenceStore : IWo
     public InMemoryWorkflowExecutableSourceReferenceStore(IWorkflowExecutableStore executableStore) : this(executableStore, TimeProvider.System) { }
     public InMemoryWorkflowExecutableSourceReferenceStore(IWorkflowExecutableStore executableStore, TimeProvider? clock)
     {
-        _executableStore = executableStore as InMemoryWorkflowExecutableStore;
+        _executableStore = executableStore?.GetMaterialStore() as InMemoryWorkflowExecutableStore;
         _clock = clock ?? TimeProvider.System;
     }
 

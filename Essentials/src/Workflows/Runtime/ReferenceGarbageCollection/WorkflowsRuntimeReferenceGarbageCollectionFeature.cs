@@ -61,18 +61,8 @@ public sealed class WorkflowsRuntimeReferenceGarbageCollectionFeature : IShellFe
             options.ArtifactCreationGracePeriod = TimeSpan.FromMinutes(ArtifactCreationGracePeriodMinutes);
         });
 
-        // The cohort constructor remains an explicit preview until template material fencing is complete.
-        // Do not let greedy constructor selection silently disable ordinary template cleanup in every host.
-        // Publisher activation must require SupportsStimulusDeliveryRetention, which this composition refuses.
-        services.TryAddScoped<IWorkflowExecutableReferenceGarbageCollector>(sp => new WorkflowExecutableReferenceGarbageCollector(
-            sp.GetRequiredService<IWorkflowExecutableStore>(),
-            sp.GetRequiredService<IWorkflowExecutableSourceReferenceStore>(),
-            sp.GetRequiredService<IExecutableActivityTemplateStore>(),
-            sp.GetRequiredService<IWorkflowExecutionStateStore>(),
-            sp.GetService<IWorkflowDispatchRetentionRootStore>(),
-            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<WorkflowExecutableGarbageCollectionOptions>>(),
-            sp.GetRequiredService<TimeProvider>(),
-            sp.GetRequiredService<ILogger<WorkflowExecutableReferenceGarbageCollector>>()));
+        // The repo-owned pump shares Runtime's qualified selection; registering either feature first is equivalent.
+        services.TryAddScoped<IWorkflowExecutableReferenceGarbageCollector>(WorkflowExecutableReferenceGarbageCollector.Create);
         services.AddSingleton<IRecurringTask>(sp => new WorkflowExecutableReferenceGarbageCollectionPumpTask(
             sp.GetRequiredService<IPersistenceScopeRunner>(),
             sp.GetRequiredService<IOptions<WorkflowExecutableReferenceGarbageCollectionOptions>>(),

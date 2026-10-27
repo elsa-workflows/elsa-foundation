@@ -28,7 +28,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
 
     [Theory]
     [InlineData(false)] [InlineData(true)]
-    public async Task Default_DI_keeps_ordinary_template_cleanup_and_refuses_unqualified_saved_cohort_support(bool pumpFirst)
+    public async Task Default_DI_selects_qualified_cohort_retention_and_keeps_ordinary_template_cleanup(bool pumpFirst)
     {
         var services = new ServiceCollection().AddLogging();
         if (pumpFirst) new WorkflowsRuntimeReferenceGarbageCollectionFeature().ConfigureServices(services);
@@ -47,7 +47,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
         Assert.True(await references.RetireAsync("ordinary-ref", _now));
         var collector = runtime.GetRequiredService<IWorkflowExecutableReferenceGarbageCollector>();
 
-        Assert.False(collector.SupportsStimulusDeliveryRetention);
+        Assert.True(collector.SupportsStimulusDeliveryRetention);
         var result = await collector.SweepAsync(_now);
         Assert.Equal(1, result.DeletedReferenceCount); Assert.Equal(1, result.DeletedActivityTemplateCount);
         Assert.Null(await templates.FindAsync(template.TemplateId)); Assert.Null(await references.FindAsync("ordinary-ref"));

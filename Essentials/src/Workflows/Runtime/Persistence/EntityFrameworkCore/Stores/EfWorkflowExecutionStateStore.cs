@@ -21,6 +21,8 @@ public sealed class EfWorkflowExecutionStateStore(
     IRuntimeRecoveryContinuationCodec continuationCodec,
     TimeProvider? timeProvider = null) : IWorkflowExecutionStateStore, IWorkflowHealthQuery
 {
+    internal RuntimeDbContext Context => context;
+    internal PersistenceAccessContext AccessContext => accessContextAccessor.Current;
     private const string HistoryCursorPurpose = "ef-runtime-workflow-execution-history-v1";
     private const string HealthCursorPurpose = "ef-runtime-workflow-execution-health-history-v1";
     private const string CaptureCursorPurpose = "ef-runtime-workflow-execution-capture-v1";

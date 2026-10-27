@@ -69,6 +69,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     private readonly InMemoryWorkflowExecutableStore? _retentionMaterial;
     private readonly InMemoryWorkflowExecutionStateStore? _retentionExecutions;
     private readonly WorkflowExecutableStartSourceResolver? _retentionSources;
+    private readonly IWorkflowExecutableSourceReferenceStore? _retentionReferences;
 
     /// <summary>
     /// Creates the in-memory commit store. Backing stores are optional for direct test construction. The runtime DI
@@ -100,7 +101,8 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     {
         ArgumentNullException.ThrowIfNull(executableStore); ArgumentNullException.ThrowIfNull(sourceReferenceStore);
         _retentionSources = new(sourceReferenceStore, _timeProvider);
-        if (executableStore is InMemoryWorkflowExecutableStore material &&
+        _retentionReferences = sourceReferenceStore;
+        if (executableStore.GetMaterialStore() is InMemoryWorkflowExecutableStore material &&
             sourceReferenceStore is InMemoryWorkflowExecutableSourceReferenceStore references &&
             ReferenceEquals(references.FencedArtifactStore, material)) _retentionMaterial = material;
         _retentionExecutions = (workflowExecutionStateStore?.GetType() == typeof(CoalescingWorkflowExecutionStateStore)
@@ -490,7 +492,62 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         return item;
     }
 
-    public async ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default)
+    ValueTask IStimulusDeliveryStore.EnsureOrdinaryCollectionAllowedAsync(IRuntimePostCommitOutboxStore outbox, IWorkflowExecutableStore executables,
+        IWorkflowExecutableSourceReferenceStore references, IWorkflowExecutionStateStore executions, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(outbox); cancellationToken.ThrowIfCancellationRequested();
+        if (!MatchesRetentionStores(outbox, executables, references, executions))
+            throw new NotSupportedException("Ordinary collection requires its actual native material/outbox/reference/execution boundary.");
+        lock (_state.SyncRoot)
+            foreach (var source in _state.OutboxItems.Values)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (source.StimulusDeliveryProtocolVersion is not null || source.StimulusDeliverySourceScope is not null || source.RecipientSnapshot is not null)
+                    throw new StimulusDeliveryRetentionException(null, new InvalidOperationException("Ordinary collection cannot serve saved stimulus protocol data."));
+            }
+        return ValueTask.CompletedTask;
+    }
+
+    bool IStimulusDeliveryStore.CanRetainExecutables(IRuntimePostCommitOutboxStore outbox, IWorkflowExecutableStore executables,
+        IWorkflowExecutableSourceReferenceStore references, IWorkflowExecutionStateStore executions)
+    {
+        if (!MatchesRetentionStores(outbox, executables, references, executions) || _persistenceAccessContextAccessor is null) return false;
+        try { _persistenceAccessContextAccessor.Current.RequireScope(); return true; }
+        catch (InvalidOperationException) { return false; }
+        catch (Exception exception) when (exception is IOException or OperationCanceledException)
+        { throw new StimulusDeliveryRetentionException(null, exception); }
+    }
+
+    private bool MatchesRetentionStores(IRuntimePostCommitOutboxStore outbox, IWorkflowExecutableStore executables,
+        IWorkflowExecutableSourceReferenceStore references, IWorkflowExecutionStateStore executions) =>
+        ReferenceEquals(outbox, this) && _retentionMaterial is not null && _retentionExecutions is not null &&
+        ReferenceEquals(executables.GetMaterialStore(), _retentionMaterial) && ReferenceEquals(references, _retentionReferences) &&
+        ReferenceEquals(executions, _retentionExecutions) && ReferenceEquals(_retentionExecutions.CheckpointState, _state) &&
+        _operationalStateStore is InMemoryExecutionLivenessStateStore ownership &&
+        ReferenceEquals(_retentionExecutions.ExecutionLivenessStateStore, ownership);
+
+    async ValueTask<IReadOnlyCollection<string>> IStimulusDeliveryStore.ListPinnedExecutableArtifactIdsAsync(
+        IWorkflowExecutableStore executables, IWorkflowExecutableSourceReferenceStore references,
+        IWorkflowExecutionStateStore executions, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(executables); ArgumentNullException.ThrowIfNull(references); ArgumentNullException.ThrowIfNull(executions);
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            if (!((IStimulusDeliveryStore)this).CanRetainExecutables(this, executables, references, executions))
+                throw new NotSupportedException("Physical stimulus retention requires its actual native stores.");
+            return await ReadPinnedExecutableArtifactIdsAsync(allMaterialScopes: true, cancellationToken);
+        }
+        catch (StimulusDeliveryRetentionException exception) when (cancellationToken.IsCancellationRequested && exception.InnerException is OperationCanceledException)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exception.InnerException!).Throw(); throw;
+        }
+    }
+
+    public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) =>
+        ReadPinnedExecutableArtifactIdsAsync(allMaterialScopes: false, cancellationToken);
+
+    private async ValueTask<IReadOnlyCollection<string>> ReadPinnedExecutableArtifactIdsAsync(bool allMaterialScopes, CancellationToken cancellationToken)
     {
         PersistenceScope? retentionScope = null;
         try
@@ -506,13 +563,14 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             {
                 if (source.RecipientSnapshot is not { } cohort) continue;
                 if (source.StimulusDeliverySourceScope is null) throw new InvalidDataException("A retained cohort has no committed scope.");
-                if (source.StimulusDeliverySourceScope != scope) continue;
+                if (!allMaterialScopes && source.StimulusDeliverySourceScope != scope) continue;
                 foreach (var start in cohort.Starts)
                 {
                     var key = source.Intent.IdempotencyKey ?? throw new InvalidDataException("A saved start cohort has no deterministic source key.");
                     var target = KeyedWorkflowStartIdentity.For(key, start.Executable.ArtifactId).WorkflowExecutionId;
-                    if (source.Status != RuntimePostCommitOutboxStatus.Delivered || _workflowExecutionStateStore is null ||
-                        !await _workflowExecutionStateStore.IsDeletionTombstonedAsync(target, cancellationToken))
+                    var executions = allMaterialScopes ? _retentionExecutions : _workflowExecutionStateStore;
+                    if (source.Status != RuntimePostCommitOutboxStatus.Delivered || executions is null ||
+                        !await executions.IsDeletionTombstonedAsync(target, cancellationToken))
                         roots.Add(start.Executable.ArtifactId);
                 }
             }

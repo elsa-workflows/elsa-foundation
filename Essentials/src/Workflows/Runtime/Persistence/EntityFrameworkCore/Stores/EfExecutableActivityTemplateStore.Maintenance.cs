@@ -20,7 +20,7 @@ public sealed partial class EfExecutableActivityTemplateStore
 
     public bool CanMaintainReferences(IWorkflowExecutableStore executables, IWorkflowExecutableSourceReferenceStore references)
     {
-        if (executables is not EfWorkflowExecutableStore artifacts || references is not EfWorkflowExecutableSourceReferenceStore sources ||
+        if (executables?.GetMaterialStore() is not EfWorkflowExecutableStore artifacts || references is not EfWorkflowExecutableSourceReferenceStore sources ||
             !ReferenceEquals(context, artifacts.Context) || !ReferenceEquals(context, sources.Context)) return false;
         try
         {

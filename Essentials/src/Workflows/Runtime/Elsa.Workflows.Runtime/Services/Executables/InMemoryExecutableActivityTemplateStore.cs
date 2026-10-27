@@ -23,7 +23,7 @@ public sealed class InMemoryExecutableActivityTemplateStore : IExecutableActivit
     private InMemoryExecutableActivityTemplateStore(IWorkflowExecutableStore executables,
         IWorkflowExecutableSourceReferenceStore references, TimeProvider? clock = null)
     {
-        _executables = executables as InMemoryWorkflowExecutableStore;
+        _executables = executables.GetMaterialStore() as InMemoryWorkflowExecutableStore;
         _references = references as InMemoryWorkflowExecutableSourceReferenceStore;
         _clock = clock ?? TimeProvider.System;
     }
@@ -37,7 +37,7 @@ public sealed class InMemoryExecutableActivityTemplateStore : IExecutableActivit
     }
 
     public bool CanMaintainReferences(IWorkflowExecutableStore executables, IWorkflowExecutableSourceReferenceStore references) =>
-        _executables is not null && _references is not null && ReferenceEquals(executables, _executables) &&
+        _executables is not null && _references is not null && ReferenceEquals(executables?.GetMaterialStore(), _executables) &&
         ReferenceEquals(references, _references) && ReferenceEquals(_references.FencedArtifactStore, _executables);
 
     public ValueTask SaveAsync(ExecutableActivityTemplate template, CancellationToken cancellationToken = default)

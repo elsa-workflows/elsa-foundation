@@ -542,18 +542,9 @@ public static class RuntimeCoreServiceCollectionExtensions
         // configure the policy and schedule the collector through the separate sweeper feature.
         services.AddOptions<WorkflowExecutableGarbageCollectionOptions>();
         services.TryAddScoped<IWorkflowExecutableRootWriteLeaseManager, WorkflowExecutableRootWriteLeaseManager>();
-        // The cohort constructor remains an explicit preview until template material fencing is complete.
-        // Do not let greedy constructor selection silently disable ordinary template cleanup in every host.
-        // Publisher activation must require SupportsStimulusDeliveryRetention, which this composition refuses.
-        services.TryAddScoped<IWorkflowExecutableReferenceGarbageCollector>(sp => new WorkflowExecutableReferenceGarbageCollector(
-            sp.GetRequiredService<IWorkflowExecutableStore>(),
-            sp.GetRequiredService<IWorkflowExecutableSourceReferenceStore>(),
-            sp.GetRequiredService<IExecutableActivityTemplateStore>(),
-            sp.GetRequiredService<IWorkflowExecutionStateStore>(),
-            sp.GetService<IWorkflowDispatchRetentionRootStore>(),
-            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<WorkflowExecutableGarbageCollectionOptions>>(),
-            sp.GetRequiredService<TimeProvider>(),
-            sp.GetRequiredService<ILogger<WorkflowExecutableReferenceGarbageCollector>>()));
+        // Cohort maintenance is selected only for the actual provider tuple. Publisher rollout still
+        // separately requires protocol/old-writer preflight; a GC capability is not that authorization.
+        services.TryAddScoped<IWorkflowExecutableReferenceGarbageCollector>(WorkflowExecutableReferenceGarbageCollector.Create);
 
         if (!hadExplicitActivityExecutionContracts && RuntimeActivityExecutionStoreBackend.Find(services) is null)
         {

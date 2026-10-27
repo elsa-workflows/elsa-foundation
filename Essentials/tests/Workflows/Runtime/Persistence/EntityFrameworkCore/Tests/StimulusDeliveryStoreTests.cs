@@ -931,7 +931,8 @@ public sealed partial class StimulusDeliveryStoreTests
             Assert.True(await references.RetireAsync("selected-reference", Now));
         });
         var gc = new WorkflowExecutableReferenceGarbageCollector(interleaving, references, new InMemoryExecutableActivityTemplateStore(),
-            harness.Executions, null, options, harness.Clock, NullLogger<WorkflowExecutableReferenceGarbageCollector>.Instance, harness.Delivery);
+            harness.Executions, null, options, harness.Clock, NullLogger<WorkflowExecutableReferenceGarbageCollector>.Instance,
+            new ObservedMaterialRetention(harness.Delivery, interleaving, artifacts));
         await gc.SweepAsync(); await gc.SweepAsync();
         Assert.Equal(1, interleaving.Interleavings); Assert.Equal(acceptanceFirst, installed);
         Assert.Equal(acceptanceFirst, await references.FindAsync("selected") is not null);
@@ -940,8 +941,9 @@ public sealed partial class StimulusDeliveryStoreTests
         Assert.Equal(acceptanceFirst, (await harness.Lookup.FindAsync(source.SourceOutboxItemId))!.RecipientSnapshot is not null);
     }
 
-    private sealed class AtReferenceGuard(IWorkflowExecutableStore inner, bool before, Func<ValueTask> interleave) : WorkflowExecutableStoreDecorator(inner)
+    private sealed class AtReferenceGuard(IWorkflowExecutableStore inner, bool before, Func<ValueTask> interleave) : WorkflowExecutableStoreDecorator(inner), IWorkflowExecutableStore
     {
+        IWorkflowExecutableStore IWorkflowExecutableStore.GetMaterialStore() => Inner.GetMaterialStore();
         public int Interleavings { get; private set; }
         public override async ValueTask<WorkflowExecutableDeletionGuard?> TryBeginDeletionAsync(string artifactId, string operationId,
             DateTimeOffset expiresAt, DateTimeOffset now, CancellationToken cancellationToken = default)
@@ -952,6 +954,21 @@ public sealed partial class StimulusDeliveryStoreTests
             var guard = await base.TryBeginDeletionAsync(artifactId, operationId, expiresAt, now, cancellationToken);
             if (!before) { Assert.NotNull(guard); await interleave(); }
             return guard;
+        }
+    }
+
+    // The guard observer is an owned test decorator. Retention still reads the actual provider's
+    // physical boundary, while conditional deletion exercises the original real guard through the observer.
+    private sealed class ObservedMaterialRetention(IStimulusDeliveryStore inner, IWorkflowExecutableStore observer,
+        IWorkflowExecutableStore physical) : IStimulusDeliveryStore
+    {
+        public ValueTask<StimulusDeliverySnapshot> InstallAsync(PostCommitDeliveryContext source, StimulusDeliverySnapshot candidate,
+            CancellationToken cancellationToken = default) => inner.InstallAsync(source, candidate, cancellationToken);
+        public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(IWorkflowExecutableStore executables,
+            IWorkflowExecutableSourceReferenceStore references, IWorkflowExecutionStateStore executions, CancellationToken cancellationToken = default)
+        {
+            Assert.Same(observer, executables);
+            return inner.ListPinnedExecutableArtifactIdsAsync(physical, references, executions, cancellationToken);
         }
     }
 
@@ -1074,7 +1091,7 @@ public sealed partial class StimulusDeliveryStoreTests
         private Harness(SqliteConnection? connection, IInterceptor? interceptor, bool referenceLess)
         {
             this.connection = connection; this.referenceLess = referenceLess;
-            memoryReferences = new(memoryArtifacts);
+            memoryReferences = new(memoryArtifacts, Clock);
             publishers = new(memory, liveness);
             if (connection is null)
                 Outbox = MemoryStore();
@@ -1085,14 +1102,14 @@ public sealed partial class StimulusDeliveryStoreTests
             }
         }
         public IWorkflowExecutableStore Artifacts => Context is null ? memoryArtifacts : new EfWorkflowExecutableStore(Context, new Accessor());
-        public IWorkflowExecutableSourceReferenceStore References => Context is null ? memoryReferences : new EfWorkflowExecutableSourceReferenceStore(Context, new Accessor(), new Codec());
+        public IWorkflowExecutableSourceReferenceStore References => Context is null ? memoryReferences : new EfWorkflowExecutableSourceReferenceStore(Context, new Accessor(), new Codec(), Clock);
         private InMemoryRuntimeCheckpointCommitStore MemoryStore(PersistenceScope? scope = null) =>
             new(memoryArtifacts, memoryReferences, publishers, operationalStateStore: liveness, state: memory,
                 persistenceAccessContextAccessor: new Accessor(scope), timeProvider: Clock,
                 rootWriteLeaseManager: Observe(new WorkflowExecutableRootWriteLeaseManager(memoryArtifacts,
                     Options.Create(new WorkflowExecutableGarbageCollectionOptions()), Clock)));
         private EfRuntimePostCommitOutboxStore EfStore(RuntimeSqliteDbContext context, PersistenceScope? scope = null) =>
-            new(context, new Accessor(scope), Clock, new EfWorkflowExecutableSourceReferenceStore(context, new Accessor(scope), new Codec()),
+            new(context, new Accessor(scope), Clock, new EfWorkflowExecutableSourceReferenceStore(context, new Accessor(scope), new Codec(), Clock),
                 Observe(new WorkflowExecutableRootWriteLeaseManager(new EfWorkflowExecutableStore(context, new Accessor(scope)),
                     Options.Create(new WorkflowExecutableGarbageCollectionOptions()), Clock)));
         private IWorkflowExecutableRootWriteLeaseManager Observe(IWorkflowExecutableRootWriteLeaseManager inner) => new ObservedRootManager(inner, this);
@@ -1113,6 +1130,12 @@ public sealed partial class StimulusDeliveryStoreTests
             var context = new RuntimeSqliteDbContext(options.Options); contexts.Add(context); return context;
         }
         public IStimulusDeliveryStore Reopen(PersistenceScope? scope = null) => connection is null ? MemoryStore(scope) : EfStore(Open(), scope);
+        public IStimulusDeliveryStore WithRetentionAccess(IPersistenceAccessContextAccessor access) => Context is null
+            ? new InMemoryRuntimeCheckpointCommitStore(memoryArtifacts, memoryReferences, publishers, operationalStateStore: liveness,
+                state: memory, persistenceAccessContextAccessor: access, timeProvider: Clock,
+                rootWriteLeaseManager: new WorkflowExecutableRootWriteLeaseManager(memoryArtifacts, Options.Create(new WorkflowExecutableGarbageCollectionOptions()), Clock))
+            : new EfRuntimePostCommitOutboxStore(Context, access, Clock, References,
+                new WorkflowExecutableRootWriteLeaseManager(Artifacts, Options.Create(new WorkflowExecutableGarbageCollectionOptions()), Clock));
         public IStimulusDeliveryStore Unsupported(bool legacyManager) => Context is null
             ? legacyManager
                 ? new InMemoryRuntimeCheckpointCommitStore(memoryArtifacts, memoryReferences, publishers, operationalStateStore: liveness,

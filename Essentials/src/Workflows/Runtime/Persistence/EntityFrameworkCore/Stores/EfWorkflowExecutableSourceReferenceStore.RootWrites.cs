@@ -14,7 +14,7 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore
 {
     public bool CanWriteRootReferences(IWorkflowExecutableStore executables)
     {
-        if (executables is not EfWorkflowExecutableStore artifacts || !ReferenceEquals(context, artifacts.Context)) return false;
+        if (executables?.GetMaterialStore() is not EfWorkflowExecutableStore artifacts || !ReferenceEquals(context, artifacts.Context)) return false;
         try { return RequireScope() == artifacts.AccessContext.RequireScope(admitPrivileged: true).Value; }
         catch (InvalidOperationException) { return false; }
     }

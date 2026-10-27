@@ -30,6 +30,7 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
     private readonly TimeProvider timeProvider;
     private readonly WorkflowExecutableStartSourceResolver? retentionSources;
     private readonly IWorkflowExecutableRootWriteLeaseManager? retentionLeases;
+    private readonly EfWorkflowExecutableSourceReferenceStore? retentionReferences;
 
     public EfRuntimePostCommitOutboxStore(RuntimeDbContext context, IPersistenceAccessContextAccessor accessContextAccessor)
         : this(context, accessContextAccessor, TimeProvider.System) { }
@@ -50,12 +51,80 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
         ArgumentNullException.ThrowIfNull(sourceReferenceStore); ArgumentNullException.ThrowIfNull(rootWriteLeaseManager);
         if (sourceReferenceStore is EfWorkflowExecutableSourceReferenceStore references && ReferenceEquals(references.Context, context))
         {
+            retentionReferences = references;
             retentionSources = new(references.WithAccess(accessContextAccessor), this.timeProvider);
             retentionLeases = rootWriteLeaseManager;
         }
     }
 
     private const int ProviderPageSize = RuntimeStorePageRequest.MaximumLimit;
+
+    async ValueTask IStimulusDeliveryStore.EnsureOrdinaryCollectionAllowedAsync(IRuntimePostCommitOutboxStore outbox, IWorkflowExecutableStore executables,
+        IWorkflowExecutableSourceReferenceStore references, IWorkflowExecutionStateStore executions, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(outbox); cancellationToken.ThrowIfCancellationRequested();
+        if (!ReferenceEquals(outbox, this) || executables.GetMaterialStore() is not EfWorkflowExecutableStore material ||
+            references is not EfWorkflowExecutableSourceReferenceStore selectedReferences || executions is not EfWorkflowExecutionStateStore states ||
+            !ReferenceEquals(material.Context, context) || !ReferenceEquals(selectedReferences.Context, context) || !ReferenceEquals(states.Context, context))
+            throw new NotSupportedException("Ordinary collection requires its actual EF material/outbox/reference/execution context.");
+        PersistenceScope? scope = null;
+        try
+        {
+            EnsureCommittedSourceBoundary();
+            if (context.ChangeTracker.HasChanges()) throw new InvalidOperationException("Ordinary collection requires a clean context.");
+            scope = accessContextAccessor.Current.RequireScope();
+            if (material.AccessContext.RequireScope() != scope || selectedReferences.AccessContext.RequireScope() != scope || states.AccessContext.RequireScope() != scope)
+                throw new NotSupportedException("Ordinary collection requires one actual EF material/outbox/reference/execution scope.");
+            var sources = await ReadRetentionSourcesAsync(context, scope.Value, cancellationToken);
+            if (sources.Any(source => source.StimulusDeliveryProtocolVersion is not null || source.StimulusDeliverySourceScope is not null || source.RecipientSnapshot is not null))
+                throw new StimulusDeliveryRetentionException(scope, new InvalidOperationException("Ordinary collection cannot serve saved stimulus protocol data."));
+            EnsureCommittedSourceBoundary();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (StimulusDeliveryRetentionException) { throw; }
+        catch (Exception exception) when (exception is IOException or OperationCanceledException || EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        { throw new StimulusDeliveryRetentionException(scope, exception); }
+    }
+
+    bool IStimulusDeliveryStore.CanRetainExecutables(IRuntimePostCommitOutboxStore outbox, IWorkflowExecutableStore executables,
+        IWorkflowExecutableSourceReferenceStore references, IWorkflowExecutionStateStore executions)
+    {
+        if (!ReferenceEquals(outbox, this) || executables?.GetMaterialStore() is not EfWorkflowExecutableStore material ||
+            references is not EfWorkflowExecutableSourceReferenceStore selectedReferences ||
+            executions is not EfWorkflowExecutionStateStore states ||
+            retentionReferences is null || retentionLeases is null ||
+            !ReferenceEquals(material.Context, context) || !ReferenceEquals(selectedReferences.Context, context) ||
+            !ReferenceEquals(states.Context, context)) return false;
+        try
+        {
+            var scope = accessContextAccessor.Current.RequireScope();
+            return material.AccessContext.RequireScope() == scope && selectedReferences.AccessContext.RequireScope() == scope &&
+                   retentionReferences.AccessContext.RequireScope() == scope &&
+                   states.AccessContext.RequireScope() == scope;
+        }
+        catch (InvalidOperationException) { return false; }
+        catch (Exception exception) when (exception is IOException or OperationCanceledException || EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        { throw new StimulusDeliveryRetentionException(null, exception); }
+    }
+
+    async ValueTask<IReadOnlyCollection<string>> IStimulusDeliveryStore.ListPinnedExecutableArtifactIdsAsync(
+        IWorkflowExecutableStore executables, IWorkflowExecutableSourceReferenceStore references,
+        IWorkflowExecutionStateStore executions, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(executables); ArgumentNullException.ThrowIfNull(references); ArgumentNullException.ThrowIfNull(executions);
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            if (!((IStimulusDeliveryStore)this).CanRetainExecutables(this, executables, references, executions))
+                throw new NotSupportedException("Physical stimulus retention requires the actual EF stores, context and scope.");
+            if (context.ChangeTracker.HasChanges()) throw new InvalidOperationException("Physical stimulus retention requires a clean context.");
+            return await ListPinnedExecutableArtifactIdsAsync(cancellationToken);
+        }
+        catch (StimulusDeliveryRetentionException exception) when (cancellationToken.IsCancellationRequested && exception.InnerException is OperationCanceledException)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exception.InnerException!).Throw(); throw;
+        }
+    }
 
     public async ValueTask SavePendingAsync(
         RuntimePostCommitOutboxItem item,
@@ -154,17 +223,20 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
         RuntimeDbContext context, string scope, CancellationToken cancellationToken)
     {
         var sources = new List<RuntimePostCommitOutboxItem>();
+        var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
+        var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
         string? after = null;
         while (true)
         {
             var query = context.RuntimePostCommitOutbox.AsNoTracking().Where(row =>
-                row.ScopeKeyHash == EfRuntimeOperationalStoreSupport.Hash(scope) &&
-                row.ScopeKey == EfRuntimeOperationalStoreSupport.Encode(scope));
-            if (after is not null) query = query.Where(row => row.OutboxItemIdOrderKey.CompareTo(after) > 0);
-            var page = await query.OrderBy(row => row.OutboxItemIdOrderKey).Take(ProviderPageSize).ToArrayAsync(cancellationToken);
+                row.ScopeKeyHash == scopeHash || row.ScopeKey == scopeKey);
+            // Either scope projection can reveal a corrupt owned row. Page by the actual unique physical
+            // key, so contradictory/duplicate logical-order projections cannot hide a source at a page seam.
+            if (after is not null) query = query.Where(row => row.Id.CompareTo(after) > 0);
+            var page = await query.OrderBy(row => row.Id).Take(ProviderPageSize).ToArrayAsync(cancellationToken);
             foreach (var row in page) sources.Add(ReadChecked(row, scope));
             if (page.Length < ProviderPageSize) return sources;
-            after = page[^1].OutboxItemIdOrderKey;
+            after = page[^1].Id;
         }
     }
 
