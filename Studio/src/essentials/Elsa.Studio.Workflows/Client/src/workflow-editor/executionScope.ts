@@ -23,6 +23,8 @@ export type IncidentActivityInspection = Pick<ActivityExecutionInspection,
 >;
 
 export function activityExecutionSummaryFromInspection(inspection: IncidentActivityInspection): ActivityExecutionStateSummary {
+  const bookmarks = Array.isArray(inspection.bookmarks) ? inspection.bookmarks : null;
+  const incidents = Array.isArray(inspection.incidents) ? inspection.incidents : null;
   return {
     activityExecutionId: inspection.activityExecutionId,
     workflowExecutionId: inspection.workflowExecutionId,
@@ -35,10 +37,10 @@ export function activityExecutionSummaryFromInspection(inspection: IncidentActiv
     scheduledAt: inspection.scheduledAt,
     startedAt: inspection.startedAt,
     completedAt: inspection.completedAt,
-    bookmarkCount: inspection.bookmarks.length,
-    bookmarkIds: inspection.bookmarks.map(bookmark => bookmark.bookmarkId),
-    incidentCount: inspection.incidents.length,
-    incidentIds: inspection.incidents.map(incident => incident.incidentId),
+    bookmarkCount: bookmarks?.length ?? null,
+    bookmarkIds: bookmarks?.map(bookmark => bookmark.bookmarkId),
+    incidentCount: incidents?.length ?? null,
+    incidentIds: incidents?.map(incident => incident.incidentId),
     metadata: inspection.metadata
   };
 }
