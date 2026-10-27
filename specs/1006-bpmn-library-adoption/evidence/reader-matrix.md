@@ -34,3 +34,7 @@ one semantic work token; unrelated duplicate claims are refused. The same valida
 legacy stopped-handle restoration. Superseded records are excluded from the adapter's live snapshot.
 Synthetic positive/broken-lineage boundary controls supplement the actual corruption witness; they
 do not claim complete operator-alteration qualification.
+
+## Continued MI/listener callback replay
+
+The [continued callback receipt](continued-legacy-callback-replay.md) adds exact normal continuation, pruning and duplicate scheduler-callback consumption across fresh providers for both original `parallel-mi` and `listener-rearm` databases. It checks preexisting token/work/parent identity, unchanged unrelated activity facts and physical wait generations, and completed-history versus current same-node/null-iteration identity. This closes those bounded replay witnesses, not remaining T017 fault/cancel cases, complete combined/native/control qualification, full-process Workbench recovery, current Studio or running rollback. The old captures and their source identities remain unchanged.

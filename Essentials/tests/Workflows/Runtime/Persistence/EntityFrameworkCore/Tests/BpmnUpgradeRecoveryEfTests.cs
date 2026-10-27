@@ -19,7 +19,7 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>Consumes frozen databases from the preview host; this test never invokes their old writer.</summary>
-public sealed class BpmnUpgradeRecoveryEfTests
+public sealed partial class BpmnUpgradeRecoveryEfTests
 {
     [Theory]
     [InlineData("resolved-race")]
@@ -310,7 +310,7 @@ public sealed class BpmnUpgradeRecoveryEfTests
         Assert.Equal(receipt.RootElement.GetProperty("databaseSha256").GetString(), Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(database))));
     }
 
-    private static async Task<BpmnRuntimeFixture> OpenHostAsync(string database, IEnumerable<string> ids, CallbackObservations? observations = null)
+    private static async Task<BpmnRuntimeFixture> OpenHostAsync(string database, IEnumerable<string> ids, CallbackObservations? observations = null, ContinuedCallbackCapture? capture = null)
     {
         var host = await BpmnRuntimeFixture.CreateAsync(ids, services =>
         {
@@ -322,6 +322,14 @@ public sealed class BpmnUpgradeRecoveryEfTests
                 HierarchyCursorSigningKey = "legacy-bpmn-hierarchy-fixture-key-32"
             }).AddEfModuleMigrations<RuntimeDbContext>("Sqlite");
             new Elsa.Workflows.Runtime.Resumption.WorkflowsRuntimeResumptionFeature().ConfigureServices(services);
+            if (capture is not null)
+            {
+                var selected = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
+                    descriptor.ImplementationType == typeof(Elsa.Activities.Runtime.Services.WorkflowParentActivityCompletionSchedulerWorkHandler));
+                services.Remove(selected);
+                services.Add(new ServiceDescriptor(typeof(IWorkflowSchedulerWorkHandler), provider => new CapturedCallbackHandler(
+                    (IWorkflowSchedulerWorkHandler)ActivatorUtilities.CreateInstance(provider, selected.ImplementationType!), capture), selected.Lifetime));
+            }
             if (observations is not null)
             {
                 var original = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IBpmnProcessRuntime));
