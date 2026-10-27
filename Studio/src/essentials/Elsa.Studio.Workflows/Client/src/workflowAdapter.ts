@@ -527,8 +527,8 @@ function getFacetChildSlots(structure: ActivityNodeStructure, facet: StructureDe
 
       return collection.flatMap((item, index) => {
         if (!isRecord(item)) return [];
-        const labelValue = descriptor.labelProperty ? readOptionalString(item[descriptor.labelProperty]) : undefined;
-        return [createChildSlot(structure.kind, descriptor, item[childProperty], facet.payload.mode, index, labelValue)];
+        const labelValue = descriptor.labelProperty ? item[descriptor.labelProperty] : undefined;
+        return [createChildSlot(structure.kind, descriptor, item[childProperty], facet.payload.mode, index, typeof labelValue === "string" ? labelValue : undefined)];
       });
     }
 
@@ -570,16 +570,19 @@ function readSlotActivities(value: unknown, cardinality: ChildSlot["cardinality"
 }
 
 function formatCollectionSlotLabel(descriptor: StructureDesignSlotDescriptor, index: number, labelValue?: string) {
+  const ordinal = String(index + 1);
   if (descriptor.slotNameTemplate) {
-    return descriptor.slotNameTemplate
-      .replaceAll(`{${descriptor.labelProperty ?? "label"}}`, labelValue ?? String(index + 1))
-      .replaceAll("{name}", descriptor.name)
-      .replaceAll("{displayName}", descriptor.displayName)
-      .replaceAll("{label}", labelValue ?? String(index + 1))
-      .replaceAll("{index}", String(index + 1));
+    // One pass keeps authored braces and dollar replacement tokens literal.
+    return descriptor.slotNameTemplate.replace(/\{([^{}]+)\}/g, (token, key: string) => {
+      if (key === descriptor.labelProperty || key === "label") return labelValue ?? ordinal;
+      if (key === "name") return descriptor.name;
+      if (key === "displayName") return descriptor.displayName;
+      if (key === "index") return ordinal;
+      return token;
+    });
   }
 
-  return labelValue ? `${descriptor.displayName}: ${labelValue}` : `${descriptor.displayName} ${index + 1}`;
+  return labelValue ? `${descriptor.displayName}: ${labelValue}` : `${descriptor.displayName} ${ordinal}`;
 }
 
 function resolveCatalogItem(activity: ActivityNode, catalog: ActivityCatalogLookup): ActivityCatalogItem | undefined {
@@ -590,9 +593,9 @@ function resolveCatalogItem(activity: ActivityNode, catalog: ActivityCatalogLook
 }
 
 function findCollectionItemIndex(collection: unknown[], slot: ChildSlot) {
-  if (slot.labelProperty && slot.collectionItemLabel) {
+  if (slot.labelProperty && slot.collectionItemLabel !== undefined) {
     const matches = collection
-      .map((item, index) => isRecord(item) && readOptionalString(item[slot.labelProperty!]) === slot.collectionItemLabel ? index : -1)
+      .map((item, index) => isRecord(item) && item[slot.labelProperty!] === slot.collectionItemLabel ? index : -1)
       .filter(index => index >= 0);
     if (matches.length === 1) return matches[0];
   }

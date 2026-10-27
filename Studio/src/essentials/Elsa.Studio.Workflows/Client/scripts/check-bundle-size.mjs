@@ -68,11 +68,15 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 // packaging. Re-baselined with the usual sub-0.5 kB entry margin and ~1.5 kB landing margins. The
 // diagnostic half stays off the entry: the misplaced-trigger check and the panel's fault types are
 // reached through the deferred validation surface.
+// Unified execution qualification (#3399) adds readable status foregrounds and literal collection-slot
+// labels to the shared adapter. Against the same workspace dependencies, the parent measured upgrades
+// at 375.22 kB and the corrected implementation measures 375.51 kB. Keep the existing heavy-surface
+// exclusion checks and give this shared code/CSS growth 0.5 kB of budget; no deferred surface moved eager.
 const budgets = {
   entryJavaScript: 127_500,
   stylesheet: 185_000,
   definitionsLandingTotal: 384_500,
-  upgradeLandingTotal: 375_500,
+  upgradeLandingTotal: 376_000,
   individualChunk: 500_000
 };
 
