@@ -1,0 +1,63 @@
+{
+  "passed": true,
+  "stage": "HandlerB",
+  "controls": [
+    {
+      "name": "actual-compensation-stage",
+      "exitCode": 0,
+      "databaseSha256": "ed7a7f81235b9d01e54714b4d4337a61e8bfde9bd1ac4bc2e27c905e151427d9",
+      "outputSha256": "eac48c92159fb5e8e1180c3cdf6a9fc06e48c3bf100e1932defea53d4222667f",
+      "unchanged": true
+    },
+    {
+      "name": "wrong-snapshot-hash",
+      "exitCode": 2,
+      "databaseSha256": "ed7a7f81235b9d01e54714b4d4337a61e8bfde9bd1ac4bc2e27c905e151427d9",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "foreign-complete-api-pin",
+      "exitCode": 2,
+      "databaseSha256": "ed7a7f81235b9d01e54714b4d4337a61e8bfde9bd1ac4bc2e27c905e151427d9",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "foreign-original-handler-identity",
+      "exitCode": 2,
+      "databaseSha256": "ed7a7f81235b9d01e54714b4d4337a61e8bfde9bd1ac4bc2e27c905e151427d9",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "actual-handler-loses-scheduling-association",
+      "exitCode": 2,
+      "databaseSha256": "064542fd0bbe133761acd9c15f598c7380db3ee03fcb5bd93dfc15180c279af5",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "owed-physical-orphan-hidden-behind-canonical-source",
+      "exitCode": 2,
+      "databaseSha256": "b3e462c45f74501c8c9cc8327baf6400817e6bcb464e4cd483a9378c01b6e65a",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "actual-handler-loses-semantic-token",
+      "exitCode": 2,
+      "databaseSha256": "0fefe83335d9ca748c71c2a9b35c74b835f73618da26ddb7db30b7829ae0765c",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "actual-replay-pending-order-reversed",
+      "exitCode": 2,
+      "databaseSha256": "ce509fd6c1b4bbccd552ed1c5dc810c6ee744d3262a053252dcff3016f75c5c4",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    }
+  ],
+  "originalSnapshotUnchanged": true
+}
